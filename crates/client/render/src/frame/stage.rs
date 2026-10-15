@@ -27,14 +27,13 @@ pub mod STAGE_AT {
     pub const LOW_SPEC: usize = 59;
     pub const EDGE_WIDTH: usize = 60;
     pub const RIM_INTENSITY: usize = 61;
-    pub const SHADOWS: usize = 62;
-    pub const AO_STRENGTH: usize = 63;
-    pub const SCREEN_AO: usize = 64;
+    pub const AO_STRENGTH: usize = 62;
+    pub const SCREEN_AO: usize = 63;
     /// How much of the clouds shows, none to all.
-    pub const CLOUDS: usize = 65;
+    pub const CLOUDS: usize = 64;
     /// 1 to colour each ray's cell by the nodes its descent asked, not by
     /// what it met.
-    pub const RAY_STEPS: usize = 66;
+    pub const RAY_STEPS: usize = 65;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

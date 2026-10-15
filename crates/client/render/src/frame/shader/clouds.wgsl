@@ -90,7 +90,7 @@ fn sheet(s: Sheet, dir: vec3f, t: f32, footprint: f32, reach: f32) -> Layer {
   let field = cloud_opacity_finer(p + vec2f(f32(s.salt % CLOUD_TILE_UNITS)), footprint * s.softer, s.finer);
   out.opacity = s.opacity * field * weather(p, s.salt) * reach_fade(t, reach);
   let up = up_at(world);
-  out.color = CLOUD_ALBEDO * surface_light(-sign(dot(dir, up)) * up, up, 1.0, light_of(world)) * out.opacity;
+  out.color = CLOUD_ALBEDO * surface_light(-sign(dot(dir, up)) * up, up, light_of(world)) * out.opacity;
   return out;
 }
 

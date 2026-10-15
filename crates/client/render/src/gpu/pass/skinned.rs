@@ -1,8 +1,7 @@
 // pxl-render/gpu/pass/skinned.rs
 
 //! Actors: each model's mesh block skinned by each actor's joint palette. A
-//! case of the variant picker draws one actor in a pass of its own, with a
-//! blank shadow map.
+//! case of the variant picker draws one actor in a pass of its own.
 
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};

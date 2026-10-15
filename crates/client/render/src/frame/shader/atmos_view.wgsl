@@ -68,17 +68,13 @@ fn ground_bounce(up: vec3f, l: Light) -> vec3f {
 // The share that keeps its direction; the rest, an up-facing face's, reaches
 // every face alike. Directed alone, a wall turned from the sun read as a toy's.
 const DIRECTED: f32 = 0.25;
-// What a cast shadow takes of the sun; all of it left the shade as dark.
-const SHADOW_DEPTH: f32 = 0.5;
 
 // A matte face of albedo one, over pi, Lambert as three's standard material at
 // roughness 1: every lit pass's, and the Earth's past the terrain.
-fn surface_light(n: vec3f, up: vec3f, lit: f32, l: Light) -> vec3f {
-  // Turned from the sun, a face reads no shadow map.
-  let shaded = select(1.0, mix(1.0, lit, SHADOW_DEPTH), dot(n, frame_sun_dir()) > 0.0);
-  let alike = l.sun * max(dot(up, frame_sun_dir()), 0.0) * shaded + l.other * max(dot(up, frame_other_dir()), 0.0) + l.fill;
+fn surface_light(n: vec3f, up: vec3f, l: Light) -> vec3f {
+  let alike = l.sun * max(dot(up, frame_sun_dir()), 0.0) + l.other * max(dot(up, frame_other_dir()), 0.0) + l.fill;
   let hemi = mix(ground_bounce(up, l), l.fill, dot(n, up) * 0.5 + 0.5);
-  let directed = l.sun * max(dot(n, frame_sun_dir()), 0.0) * lit + l.other * max(dot(n, frame_other_dir()), 0.0) + hemi;
+  let directed = l.sun * max(dot(n, frame_sun_dir()), 0.0) + l.other * max(dot(n, frame_other_dir()), 0.0) + hemi;
   return mix(alike, directed, DIRECTED) / PI;
 }
 
@@ -170,8 +166,8 @@ fn city_shown(lights: f32, up: vec3f) -> vec3f {
 // Doubled, picked by eye beside the original; the cities are not its to scale.
 const EARTH_GAIN: f32 = 2.0;
 
-// Lit by the terrain's own light, so the drawn edge is no seam; no shadow map
-// reaches it. It comes in over the octave to the earth layer's reach, where
+// Lit by the terrain's own light, so the drawn edge is no seam. It comes in
+// over the octave to the earth layer's reach, where
 // the terrain ends seen from the globe; nearer, the ground is the voxels' or
 // the air's alone.
 fn beyond(air: Air) -> vec3f {
@@ -180,7 +176,7 @@ fn beyond(air: Air) -> vec3f {
   if (air.ground && shown > 0.0) {
     let n = air.normal;
     let face = earth_face(n, air.octaves);
-    light += air.end * shown * (EARTH_GAIN * face.rgb * surface_light(n, n, 1.0, light_at(land_radius(), n)) + city_shown(face.a, n));
+    light += air.end * shown * (EARTH_GAIN * face.rgb * surface_light(n, n, light_at(land_radius(), n)) + city_shown(face.a, n));
   }
   return light;
 }

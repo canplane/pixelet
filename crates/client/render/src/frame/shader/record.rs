@@ -66,7 +66,6 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_ground",
             "shade",
             "finish",
-            "shadow",
             "ao_map",
             "faces",
             "paint",
@@ -86,7 +85,6 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_ground",
             "shade",
             "finish",
-            "shadow",
             "ao_map",
             "place",
             "decor"
@@ -105,7 +103,6 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_ground",
             "shade",
             "finish",
-            "shadow",
             "ao_map",
             "place",
             "skinned"
@@ -146,7 +143,6 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_ground",
             "shade",
             "finish",
-            "shadow",
             "ao_map",
             "faces",
             "lattice",
@@ -174,7 +170,6 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_ground",
             "shade",
             "finish",
-            "shadow",
             "ao_map",
             "impostor"
         ),
@@ -226,9 +221,9 @@ pub fn source(kind: u32) -> &'static str {
     }
 }
 
-pub const FRAME_FLOATS: usize = 88;
+pub const FRAME_FLOATS: usize = 72;
 /// Frame uniform field offsets in floats, in frame.wgsl's order.
-pub const FRAME_AT: [usize; 19] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84, 87];
+pub const FRAME_AT: [usize; 16] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 52, 60, 64, 68, 71];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_SKY: u32 = 13;
@@ -431,27 +426,12 @@ const fn air(stages: [u32; 10]) -> [[u32; 3]; 10] {
 const AIR: [[u32; 3]; 10] = air([FRAGMENT; 10]);
 /// Laid out where atmos_view.wgsl declares it and nothing reads it.
 const AIR_UNREAD: [[u32; 3]; 10] = air([NONE; 10]);
-const LIT_FRAME: [[u32; 3]; 14] = {
+const LIT_FRAME: [[u32; 3]; 12] = {
     // The air in the vertex stage, where each point's lights and veil are
     // worked out; a fragment reads only its words. The sky's views and the
     // Earth's picture are the sky pass's, laid out unread.
     let a = air([BOTH, VERTEX, NONE, VERTEX, VERTEX, NONE, NONE, NONE, VERTEX, VERTEX]);
-    [
-        [0, BOTH, UNIFORM],
-        [1, FRAGMENT, DEPTH],
-        [2, FRAGMENT, SAMPLER_COMPARISON],
-        [7, FRAGMENT, TEXTURE],
-        a[0],
-        a[1],
-        a[2],
-        a[3],
-        a[4],
-        a[5],
-        a[6],
-        a[7],
-        a[8],
-        a[9],
-    ]
+    [[0, BOTH, UNIFORM], [7, FRAGMENT, TEXTURE], a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9]]
 };
 /// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
 const CLOUD_GROUP: [[u32; 3]; 14] = {
@@ -486,12 +466,12 @@ fn box_groups() -> Vec<Vec<u32>> {
     g0.extend([[3, VERTEX, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
     vec![group(&g0)]
 }
-/// The lit pass's frame, shadow, occlusion, air and layers, all read where
+/// The lit pass's frame, occlusion, air and layers, all read where
 /// a pixel is painted; then the lane, the sky's words, the looks and the
 /// eye's place.
 fn screen_groups() -> Vec<u32> {
     let a = air([FRAGMENT, FRAGMENT, NONE, FRAGMENT, FRAGMENT, NONE, NONE, NONE, FRAGMENT, FRAGMENT]);
-    let mut g = vec![[0, FRAGMENT, UNIFORM], [1, FRAGMENT, DEPTH], [2, FRAGMENT, SAMPLER_COMPARISON], [7, FRAGMENT, TEXTURE]];
+    let mut g = vec![[0, FRAGMENT, UNIFORM], [7, FRAGMENT, TEXTURE]];
     g.extend(a);
     g.extend([[3, FRAGMENT, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
     g.extend([[19, FRAGMENT, UNIFORM], [20, FRAGMENT, STORAGE], [21, FRAGMENT, UNIFORM]]);

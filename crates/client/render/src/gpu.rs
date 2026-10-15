@@ -13,7 +13,6 @@ pub mod layers;
 pub mod pass;
 pub mod pipeline;
 pub mod renderer;
-pub mod shadow;
 pub mod sheet;
 #[path = "gpu/span.spec.rs"]
 pub mod span_spec;

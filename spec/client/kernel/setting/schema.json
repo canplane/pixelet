@@ -215,17 +215,6 @@
       "costs": ["", "low", "high"],
       "section": "lighting"
     },
-    "shadows": {
-      "$doc": [
-        "The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world drawn once more",
-        "from the sun each frame, depth only, and a 3x3 compare per fragment;",
-        "16 MB of map on a desktop, 4 on a phone."
-      ],
-      "kind": "toggle",
-      "default": false,
-      "section": "lighting",
-      "cost": "high"
-    },
     "resolution": {
       "$doc": [
         "The pixels the world is filled at, the GPU's largest cost: two to a",

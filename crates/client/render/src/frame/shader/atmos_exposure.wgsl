@@ -11,7 +11,7 @@ fn noon() -> f32 {
 @fragment
 fn fs(v: TableOut) -> @location(0) vec4f {
   let up = frame_up();
-  let land = dot(surface_light(up, up, 1.0, light_unexposed(land_radius(), up)), LUMA);
+  let land = dot(surface_light(up, up, light_unexposed(land_radius(), up)), LUMA);
   let stops = log2(max(land, 1e-30) / noon());
   let shown = clamp(stops * atmos_shown_fall(), -atmos_night_stops(), 0.0);
   return vec4f(log2(atmos_exposure()) + shown - stops, 0.0, 0.0, 1.0);

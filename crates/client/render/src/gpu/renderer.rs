@@ -35,7 +35,6 @@ use crate::gpu::pass::model::{frame_layout, FrameGroups, Stage};
 use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::shadow::Shadow;
 use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
@@ -58,15 +57,14 @@ const LOW_SPEC: usize = FRAME_AT[4];
 const EDGE_WIDTH: usize = FRAME_AT[5];
 const RIM_INTENSITY: usize = FRAME_AT[6];
 const VIEWPORT: usize = FRAME_AT[7];
-const SHADOW_STRENGTH: usize = FRAME_AT[8];
-const VIGNETTE: usize = FRAME_AT[10];
-const AO_STRENGTH: usize = FRAME_AT[11];
-const SCREEN_AO: usize = FRAME_AT[12];
-const OTHER: usize = FRAME_AT[14];
-const PLANET: usize = FRAME_AT[15];
-const GLOBE: usize = FRAME_AT[16];
-const UP: usize = FRAME_AT[17];
-const CELL: usize = FRAME_AT[18];
+const VIGNETTE: usize = FRAME_AT[8];
+const AO_STRENGTH: usize = FRAME_AT[9];
+const SCREEN_AO: usize = FRAME_AT[10];
+const OTHER: usize = FRAME_AT[11];
+const PLANET: usize = FRAME_AT[12];
+const GLOBE: usize = FRAME_AT[13];
+const UP: usize = FRAME_AT[14];
+const CELL: usize = FRAME_AT[15];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_FLOATS: usize = 16;
@@ -254,13 +252,12 @@ pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
     }
 }
 
-pub fn frame_group(g: &Gpu, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32; 5], air: [u32; AIR_WORDS]) -> u32 {
+pub fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: [u32; 5], air: [u32; AIR_WORDS]) -> u32 {
     let id = object();
-    let mut e = [0u32; 20 + AIR_WORDS];
+    let mut e = [0u32; 10 + AIR_WORDS];
     e[..5].copy_from_slice(&buffer_entry(0, frame));
-    e[5..15].copy_from_slice(&shadow);
-    e[15..20].copy_from_slice(&ao);
-    e[20..].copy_from_slice(&air);
+    e[5..10].copy_from_slice(&ao);
+    e[10..].copy_from_slice(&air);
     g.bind_group(id, layout, &e);
     id
 }
@@ -1087,13 +1084,13 @@ const CASE_TARGET: V3 = [0.0, 0.0, 0.55];
 const CASE_FOV_DEG: f64 = 35.0;
 
 impl Case {
-    fn new(g: &Gpu, pipelines: &mut Pipelines, shadow: &Shadow, ao: &ScreenAo, air: [u32; AIR_WORDS], align: u32) -> Case {
+    fn new(g: &Gpu, pipelines: &mut Pipelines, ao: &ScreenAo, air: [u32; AIR_WORDS], align: u32) -> Case {
         let frame_buffer = object();
         g.buffer(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let layout = frame_layout(g, pipelines);
         Case {
             frame_buffer,
-            frames: FrameGroups::new(g, layout, frame_buffer, shadow.entries(1), ao.blank_entry(7), air),
+            frames: FrameGroups::new(g, layout, frame_buffer, ao.blank_entry(7), air),
             skinned: SkinnedPass::new(g, pipelines, align),
         }
     }
@@ -1120,7 +1117,6 @@ pub struct Renderer {
     draws_bytes: u32,
     bind_group: u32,
     models: FrameGroups,
-    shadow: Shadow,
     ao: ScreenAo,
     screen_ao: bool,
     atmosphere: Atmosphere,
@@ -1147,7 +1143,6 @@ impl Renderer {
         g.buffer(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let sky_buffer = object();
         g.buffer(sky_buffer, word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let shadow = Shadow::new(g);
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buffer);
         let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer);
         let air = atmosphere.entries();
@@ -1167,7 +1162,7 @@ impl Renderer {
         g.bind_group(sky_group, sky_built.layouts[0], &sky_entries);
         let draws_buffer = object();
         g.buffer(draws_buffer, DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        let models = FrameGroups::new(g, frame_layout(g, &mut pipelines), frame_buffer, shadow.entries(1), ao.blank_entry(7), air);
+        let models = FrameGroups::new(g, frame_layout(g, &mut pipelines), frame_buffer, ao.blank_entry(7), air);
         let query_set = if device.timestamps {
             let q = object();
             g.query_set(q, 2 * GPU_SPAN_NAMES.len() as u32);
@@ -1197,7 +1192,6 @@ impl Renderer {
             draws_bytes: DRAWS_INITIAL * 4,
             bind_group: 0,
             models,
-            shadow,
             ao,
             screen_ao: false,
             atmosphere,
@@ -1214,12 +1208,10 @@ impl Renderer {
     }
 
     /// What a block's face is painted by, wherever it is drawn from
-    /// (paint.wgsl): the frame, the shadow, the layers, the occlusion and
-    /// the air.
-    fn lit_entries(&self, frame: u32, shadow: [u32; 10]) -> Vec<u32> {
-        let mut e = Vec::with_capacity(35 + AIR_WORDS);
+    /// (paint.wgsl): the frame, the layers, the occlusion and the air.
+    fn lit_entries(&self, frame: u32) -> Vec<u32> {
+        let mut e = Vec::with_capacity(25 + AIR_WORDS);
         e.extend(buffer_entry(0, frame));
-        e.extend(shadow);
         e.extend([4, resource::VIEW, self.layers.view, 0, 0]);
         e.extend(buffer_entry(5, self.layers.table));
         e.extend([6, resource::SAMPLER, self.layers.sampler, 0, 0]);
@@ -1231,18 +1223,18 @@ impl Renderer {
     /// The ghost boxes' group 0: what a block's face is painted by, and the draws.
     fn box_groups(&mut self, g: &Gpu) {
         release(self.bind_group);
-        let mut e = self.lit_entries(self.frame_buffer, self.shadow.entries(1));
+        let mut e = self.lit_entries(self.frame_buffer);
         e.extend(buffer_entry(3, self.draws_buffer));
         self.bind_group = object();
         g.bind_group(self.bind_group, self.ghost[0].layouts[0], &e);
-        let lit = self.lit_entries(self.frame_buffer, self.shadow.entries(1));
+        let lit = self.lit_entries(self.frame_buffer);
         self.screen.lit(g, lit);
     }
 
     /// The occlusion map is a new object, so every lit pass's group 0 is remade.
     fn rebind(&mut self, g: &Gpu) {
         self.box_groups(g);
-        self.models.rebind(g, self.frame_buffer, self.shadow.entries(1), self.ao.entry(7));
+        self.models.rebind(g, self.frame_buffer, self.ao.entry(7));
     }
 
     fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32]) {
@@ -1476,7 +1468,7 @@ impl Renderer {
             targets(g, s);
             let slot = handle_slot(id) as usize;
             if self.cases[slot].is_none() {
-                self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, &self.ao, self.atmosphere.entries(), self.align));
+                self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.ao, self.atmosphere.entries(), self.align));
             }
             let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
             case.skinned.set_skin(g, model, image);
@@ -1505,7 +1497,6 @@ impl Renderer {
             u[CAMERA_POS + 2] = (CASE_EYE[2] + actor[2]) as f32;
             u[VIEWPORT] = s.width as f32;
             u[VIEWPORT + 1] = s.height as f32;
-            u[SHADOW_STRENGTH] = 0.0;
             u[VIGNETTE] = 0.0;
             u[SCREEN_AO] = 0.0;
             // No planet: the case is a room of its own.

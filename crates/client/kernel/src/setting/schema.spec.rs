@@ -211,29 +211,25 @@ pub enum SettingKey {
     /// screen-space pass; screen, N8AO's screen-space pass, the costliest of
     /// the three. AO_MODES says each.
     ao = 10,
-    /// The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world drawn once more
-    /// from the sun each frame, depth only, and a 3x3 compare per fragment;
-    /// 16 MB of map on a desktop, 4 on a phone.
-    shadows = 11,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 12,
+    resolution = 11,
     /// Where the camera and the pointer are, read live (profiler/summary.rs, its view section).
-    view_overlay = 13,
+    view_overlay = 12,
     /// The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
-    performance_overlay = 14,
+    performance_overlay = 13,
     /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs).
-    world_gizmo = 15,
-    person = 16,
-    pet = 17,
+    world_gizmo = 14,
+    person = 15,
+    pet = 16,
     /// How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each.
-    rays = 18,
+    rays = 17,
     /// Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl).
-    ray_steps = 19,
+    ray_steps = 18,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 20] = [
+    pub const ALL: [SettingKey; 19] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -245,7 +241,6 @@ impl SettingKey {
         SettingKey::edge_shade,
         SettingKey::rim_light,
         SettingKey::ao,
-        SettingKey::shadows,
         SettingKey::resolution,
         SettingKey::view_overlay,
         SettingKey::performance_overlay,
@@ -274,7 +269,6 @@ impl SettingKey {
             SettingKey::edge_shade => SettingKind::Toggle,
             SettingKey::rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
-            SettingKey::shadows => SettingKind::Toggle,
             SettingKey::resolution => SettingKind::Choice,
             SettingKey::view_overlay => SettingKind::Toggle,
             SettingKey::performance_overlay => SettingKind::Toggle,
@@ -300,7 +294,6 @@ impl SettingKey {
             SettingKey::edge_shade => "edge_shade",
             SettingKey::rim_light => "rim_light",
             SettingKey::ao => "ao",
-            SettingKey::shadows => "shadows",
             SettingKey::resolution => "resolution",
             SettingKey::view_overlay => "view_overlay",
             SettingKey::performance_overlay => "performance_overlay",
@@ -352,7 +345,6 @@ pub struct Settings {
     pub edge_shade: bool,
     pub rim_light: bool,
     pub ao: AoMode,
-    pub shadows: bool,
     pub resolution: ResolutionMode,
     pub view_overlay: bool,
     pub performance_overlay: bool,
@@ -377,7 +369,6 @@ impl Settings {
         edge_shade: true,
         rim_light: true,
         ao: AoMode::corner,
-        shadows: false,
         resolution: ResolutionMode::auto,
         view_overlay: false,
         performance_overlay: false,
@@ -403,7 +394,6 @@ impl Settings {
             SettingKey::edge_shade => self.edge_shade as u32,
             SettingKey::rim_light => self.rim_light as u32,
             SettingKey::ao => self.ao as u32,
-            SettingKey::shadows => self.shadows as u32,
             SettingKey::resolution => self.resolution as u32,
             SettingKey::view_overlay => self.view_overlay as u32,
             SettingKey::performance_overlay => self.performance_overlay as u32,
@@ -439,7 +429,6 @@ impl Settings {
                 Some(o) => self.ao = o,
                 None => return false,
             },
-            SettingKey::shadows if value <= 1 => self.shadows = value == 1,
             SettingKey::resolution => match ResolutionMode::of(value) {
                 Some(o) => self.resolution = o,
                 None => return false,

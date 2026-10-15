@@ -234,5 +234,5 @@ fn paint(s: Surface) -> vec3f {
   let n = normalize(s.normal);
   let k = frame_ao_strength() * occlusion(s.local_pos, s.box_scale, s.cell, s.normal, s.faces);
   let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
-  return shade(base, n, s.world_pos, sun_lit(s.world_pos, n), open * s.screen_open, s.seen);
+  return shade(base, n, s.world_pos, open * s.screen_open, s.seen);
 }

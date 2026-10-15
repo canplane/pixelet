@@ -28,17 +28,17 @@ pub struct FrameGroups {
 }
 
 impl FrameGroups {
-    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, shadow: [u32; 10], ao: [u32; 5], air: [u32; AIR_WORDS]) -> FrameGroups {
+    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, ao: [u32; 5], air: [u32; AIR_WORDS]) -> FrameGroups {
         FrameGroups {
-            frame: frame_group(g, layout, frame_buffer, shadow, ao, air),
+            frame: frame_group(g, layout, frame_buffer, ao, air),
             layout,
             air,
         }
     }
 
-    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, shadow: [u32; 10], ao: [u32; 5]) {
+    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, ao: [u32; 5]) {
         self.release();
-        *self = FrameGroups::new(g, self.layout, frame_buffer, shadow, ao, self.air);
+        *self = FrameGroups::new(g, self.layout, frame_buffer, ao, self.air);
     }
 
     pub fn release(&self) {
