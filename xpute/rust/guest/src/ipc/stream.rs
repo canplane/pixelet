@@ -99,14 +99,22 @@ impl Stream {
         fit
     }
 
+    /// A record of `n` words for its writer to fill; none where an open
+    /// transaction no longer fits it, which drops the transaction, as a
+    /// record past the range does.
+    #[track_caller]
+    pub fn reserve(&mut self, op: u32, n: usize) -> Option<&mut [u32]> {
+        if self.mark.is_some() && (self.spilled || self.left() < (2 + n) * WORD) {
+            self.spilled = true;
+            return None;
+        }
+        Some(self.open(op, n))
+    }
+
     #[track_caller]
     pub fn record(&mut self, op: u32, args: &[u32], tail: &[u32], bytes: Option<&[u8]>) {
-        if self.mark.is_some() && (self.spilled || !self.fits(args.len() + tail.len(), bytes.map(<[u8]>::len), 0)) {
-            self.spilled = true;
-            return;
-        }
         let n = record_words(args.len() + tail.len(), bytes.map(<[u8]>::len)) - 2;
-        let w = self.open(op, n);
+        let Some(w) = self.reserve(op, n) else { return };
         w[..args.len()].copy_from_slice(args);
         w[args.len()..args.len() + tail.len()].copy_from_slice(tail);
         if let Some(b) = bytes {

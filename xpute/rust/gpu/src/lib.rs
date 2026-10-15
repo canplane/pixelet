@@ -11,3 +11,5 @@ pub mod spec;
 
 #[path = "enum.spec.rs"]
 pub mod enums;
+
+pub mod encode;

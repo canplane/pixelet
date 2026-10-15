@@ -42,6 +42,7 @@ Golden records under `spec/golden/` hold the languages to each other wherever by
 ```text
 rust/kit  ·  ts/kit  ·  cpp/kit                the same kit, in each language
 rust/guest  ·  cpp/guest  ·  ts/host               the guest end, in each language · the host end
+rust/gpu  ·  ts/gpu  ·  cpp/gpu                WebGPU's calls, which a guest writes and a host runs
 rust/conformance  ·  cpp/conformance              a guest in each, and the contract's traces
 ts/conformance                                    the host that runs the traces against them
 spec                                              numbers all of them are generated from

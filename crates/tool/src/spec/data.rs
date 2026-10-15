@@ -562,6 +562,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             let logical = [
                 ("apps/web/src/", "@pxl/web/"),
                 ("xpute/ts/host/src/", "@xpute/host/"),
+                ("xpute/ts/gpu/src/", "@xpute/gpu/"),
                 ("xpute/ts/conformance/src/", "@xpute/conformance/"),
             ]
             .iter()

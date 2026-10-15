@@ -1,4 +1,4 @@
-// xpute/ts/gpu/src/enum.spec.ts
+// @xpute/gpu/enum.spec.ts
 //
 // GENERATED from spec/gpu/enum.json — do not edit.
 //

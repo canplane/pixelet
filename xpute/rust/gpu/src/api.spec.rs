@@ -7,6 +7,7 @@
 // an op, a count and the op's words in the order each op's doc gives; bytes go as a count
 // and padded words, as the stream lays them. Objects are the guest's handles (abi/handle).
 // An optional field holds NONE where unset. Render and compute sit side by side.
+// A transaction (ipc/stream) that does not commit drops its records, not the handles they took: objects are made outside one.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
@@ -49,7 +50,7 @@ pub mod op {
     pub const PIPELINE_LAYOUT: u32 = 7;
     /// id, layout, entries' count, then each entry's RESOURCE_ENTRY_WORDS: binding, kind (RESOURCE_KIND), the object's id, offset, size or NONE (a buffer's; 0 for the others).
     pub const BIND_GROUP: u32 = 8;
-    /// id, layout or NONE for an automatic one; vertex: module, entry (bytes), buffers' count, each: stride, step (VERTEX_STEP_MODE), attributes' count, each: format (VERTEX_FORMAT), offset, location; primitive: topology (PRIMITIVE_TOPOLOGY), strip index format (INDEX_FORMAT) or NONE, front face (FRONT_FACE), cull (CULL_MODE), unclipped depth (0 or 1); depth-stencil: format or NONE for none, then depth write (0 or 1), compare, stencil front and back each compare, fail, depth fail and pass (STENCIL_OPERATION), read mask, write mask, bias (i32), slope scale and clamp (f32 bits); multisample: count, mask, alpha to coverage (0 or 1); fragment: module or NONE for none, then entry (bytes), targets' count, each: format, blend color op, src, dst and alpha op, src, dst (BLEND_OPERATION, BLEND_FACTOR) or NONE in the color op for no blending, write mask (COLOR_WRITE).
+    /// id, layout or NONE for an automatic one; vertex: module, entry (bytes), buffers' count, each: stride, step (VERTEX_STEP_MODE), attributes' count, each: format (VERTEX_FORMAT), offset, location; primitive: topology (PRIMITIVE_TOPOLOGY), strip index format (INDEX_FORMAT) or NONE, front face (FRONT_FACE), cull (CULL_MODE), unclipped depth (0 or 1); depth-stencil: format or NONE for none, the rest present either way: depth write (0 or 1), compare, stencil front and back each compare, fail, depth fail and pass (STENCIL_OPERATION), read mask, write mask, bias (i32), slope scale and clamp (f32 bits); multisample: count, mask, alpha to coverage (0 or 1); fragment: module or NONE for none, the rest present either way (no bytes, no targets): entry (bytes), targets' count, each: format, blend color op, src, dst and alpha op, src, dst (BLEND_OPERATION, BLEND_FACTOR) or NONE in the color op for no blending and the five after it present either way, write mask (COLOR_WRITE).
     pub const RENDER_PIPELINE: u32 = 9;
     /// id, layout or NONE, module, entry (bytes).
     pub const COMPUTE_PIPELINE: u32 = 10;
@@ -81,7 +82,7 @@ pub mod op {
     pub const CLEAR_BUFFER: u32 = 23;
     /// encoder, query set, first, count, buffer, offset.
     pub const RESOLVE_QUERY_SET: u32 = 24;
-    /// id, encoder, color attachments' count, each: view, resolve view or NONE, load (LOAD_OP), store (STORE_OP), clear r, g, b, a (f32 bits); depth-stencil: view or NONE for none, then depth load, store, clear (f32 bits), read only (0 or 1), stencil load, store, clear, read only; timestamps: query set or NONE, begin index or NONE, end index or NONE; occlusion query set or NONE.
+    /// id, encoder, color attachments' count, each: view, resolve view or NONE, load (LOAD_OP), store (STORE_OP), clear r, g, b, a (f32 bits); depth-stencil: view or NONE for none, the rest present either way: depth load, store, clear (f32 bits), read only (0 or 1), stencil load, store, clear, read only; timestamps: query set or NONE, begin index or NONE, end index or NONE; occlusion query set or NONE.
     pub const RENDER_PASS: u32 = 25;
     /// id, encoder; timestamps: query set or NONE, begin index or NONE, end index or NONE.
     pub const COMPUTE_PASS: u32 = 26;
@@ -113,9 +114,9 @@ pub mod op {
     pub const DISPATCH: u32 = 39;
     /// pass, buffer, offset.
     pub const DISPATCH_INDIRECT: u32 = 40;
-    /// pass.
+    /// pass: ended, and let go with the record.
     pub const END: u32 = 41;
-    /// encoders' count, that many encoders, each finished and gone.
+    /// encoders' count, that many encoders, each finished and let go with the record.
     pub const SUBMIT: u32 = 42;
     /// buffer, offset, size, address, word, ticket: once the bytes are copied to the address the host writes ticket | DONE at the word, where the ticket still stands.
     pub const READ_BUFFER: u32 = 43;
@@ -125,7 +126,7 @@ pub mod op {
     pub const CONFIGURE: u32 = 45;
     /// surface, width, height.
     pub const RESIZE: u32 = 46;
-    /// surface, view id: the surface's texture for this turn, as a view.
+    /// id, surface: the surface's texture for this turn, as a view.
     pub const CURRENT: u32 = 47;
     /// address, words: the host writes there the device's limits (LIMIT_NAME, a word each), then its features (FEATURE_NAME, a bit each, in words), then STATUS.
     pub const DEVICE: u32 = 48;

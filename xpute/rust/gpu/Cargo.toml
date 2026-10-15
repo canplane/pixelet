@@ -6,3 +6,7 @@ publish.workspace = true
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies]
+xpute-guest = { path = "../guest" }
+xpute-kit = { path = "../kit" }
