@@ -574,6 +574,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
 
     struct Row {
         name: String,
+        value: String,
         doc: Vec<String>,
         seed: String,
         counts: [Vec<u32>; 2],
@@ -618,8 +619,10 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         if sizes.is_empty() {
             return Err(at("variants"));
         }
+        let value = k.get("value").and_then(Node::num).map(js_num).ok_or(at("value"))?;
         rows.push(Row {
             name: name.clone(),
+            value,
             doc: k.lines_at("$doc").unwrap_or_default(),
             seed: seed.to_string(),
             counts: shares.map(|share| poisson_thresholds(density * f64::from(block * block) * share)),
@@ -667,6 +670,8 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "/// A decor as the ground grows it, in u32 alone.",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
             "pub struct Decor {",
+            "    /// What a placed one is stored as.",
+            "    pub value: u32,",
             "    /// Its scatter: changing it reshuffles every one the ground grows.",
             "    pub seed: u32,",
             "    /// A block's counts, born at the top zoom and born finer.",
@@ -697,6 +702,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         sizes.resize(variants_max, "[0, 0, 0]".into());
         portable.extend([
             "    Decor {".to_string(),
+            format!("        value: {},", r.value),
             format!("        seed: {},", r.seed),
             format!("        counts: [{}],", counts.collect::<Vec<_>>().join(", ")),
             format!("        orientation: Orientation::{},", r.orientation),

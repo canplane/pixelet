@@ -38,14 +38,17 @@ impl<'w> Surfaces<'w> {
         })
     }
 
+    /// The cell `g` at its zoom, where it has ground and was read: its
+    /// face's look and its top, in blocks.
+    pub fn ground(&self, g: [i64; 2]) -> Option<(GroundId, i32)> {
+        let grid = self.window.grid()?;
+        let i = grid.index(g)?;
+        grid.top(i).map(|t| (grid.face(i), t))
+    }
+
     /// The look of the tile's cell `at`, as `at` gives it.
     pub fn look(&self, at: [i64; 2]) -> Option<GroundId> {
         self.at(at).map(|s| s.block)
-    }
-
-    /// A cell's side, in units.
-    pub(super) fn side(&self) -> f64 {
-        self.side
     }
 
     /// Its cells' zoom.

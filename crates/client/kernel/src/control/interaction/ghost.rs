@@ -90,7 +90,7 @@ pub fn ghost() -> Ghost {
             Some((d.at, m))
         }
         (Some(b), Some(c), None) => {
-            let (variant, turn) = user_decor_pick(&c, b.row.variants);
+            let (variant, turn) = user_decor_pick(&c, b);
             Some(b.stand(real(&c), variant, turn, 1.0))
         }
         _ => None,

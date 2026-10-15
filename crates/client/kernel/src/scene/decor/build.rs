@@ -13,7 +13,6 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use std::collections::TryReserveError;
 
-use crate::decor::strike::reach;
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::meta::placed;
 use crate::layer::object::store::{EntryAt, Store};
@@ -79,18 +78,9 @@ impl<'s> DecorBuild<'s> {
     pub fn build(scratch: &'s mut DecorScratch, decors: &[Decor], ground: Option<&Ground>, hide: Option<DecorHide>, store: &Store, grows: bool, at: PyramidChunk) -> Option<DecorBuild<'s>> {
         let (cell_zoom, chunk) = (at.cell_zoom(), at.region());
         scratch.clear();
-        // The ground every decor grows on, read once for all of them, and
-        // what placed decor claims about the chunk, as far as a box standing
-        // in it reaches past it: the world as drawn, as the chunk's mesh is.
+        // The ground every decor grows on, read once for all of them: the
+        // world as drawn, as the chunk's mesh is.
         let world = World::now().previewed();
-        if grows && ground.is_some() {
-            let r = reach();
-            let about = Aabb {
-                min: chunk.min.map(|v| v - r),
-                max: chunk.max.map(|v| v + r),
-            };
-            world.placed_claims(&about, &mut scratch.placed).ok()?;
-        }
         let mut each = |mut face: Option<(&mut Surfaces, &Ground)>| -> Result<(), TryReserveError> {
             for decor in decors {
                 if decor.row.variants == 0 {
@@ -144,12 +134,12 @@ impl<'s> DecorBuild<'s> {
 
     /// What the ground grows here, where the chunks draw its footing.
     fn grown(scratch: &mut DecorScratch, world: &World, face: &mut Surfaces, decor: &Decor, first: usize, ground: &Ground, chunk: Aabb) -> Result<(), TryReserveError> {
-        let (mut candidates, placed) = (core::mem::take(&mut scratch.candidates), core::mem::take(&mut scratch.placed));
-        let grew = grow(world, face, decor, ground.node, ground.cell, ground.origin, chunk, &placed, &mut candidates, |i: Instance| {
+        let mut candidates = core::mem::take(&mut scratch.candidates);
+        let grew = grow(world, face, decor, ground.node, ground.cell, ground.origin, chunk, &mut candidates, |i: Instance| {
             let Meta::Decor(m) = i.meta;
             scratch.push(first + m.variant as usize, i)
         });
-        (scratch.candidates, scratch.placed) = (candidates, placed);
+        scratch.candidates = candidates;
         grew
     }
 

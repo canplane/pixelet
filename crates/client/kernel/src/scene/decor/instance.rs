@@ -15,9 +15,6 @@ pub use pxl_render::gpu::pass::decor::GROUPS as DECOR_GROUPS;
 pub struct DecorScratch {
     pub(crate) instances: Vec<crate::layer::instance::Instance>,
     pub(crate) candidates: Vec<pxl_spec::procedural::Candidate>,
-    /// What placed decor claims about the chunk, read once for every decor
-    /// it grows (`World::placed_claims`).
-    pub(crate) placed: Vec<pxl_spec::space::coord::aabb::Aabb>,
     pub(crate) groups: Vec<u16>,
     pub(crate) counts: [u32; DECOR_GROUPS],
     pub(crate) group_count: usize,
@@ -32,7 +29,6 @@ impl Default for DecorScratch {
         DecorScratch {
             instances: Vec::new(),
             candidates: Vec::new(),
-            placed: Vec::new(),
             groups: Vec::new(),
             counts: [0; DECOR_GROUPS],
             group_count: 0,

@@ -9,26 +9,24 @@
 //! may differ at a chunk's edge.
 
 use pxl_spec::space::layer::lattice::{demand_reach, Cells};
-use std::collections::TryReserveError;
 
 use pxl_spec::block::decor::{Decor, DECORS};
-use pxl_spec::block::Block;
 use pxl_spec::block::DecorId;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::wrap_cell;
-use pxl_spec::space::coord::zoom::{base_of, cube, index_of, units};
+use pxl_spec::space::coord::zoom::{cube, index_of, units};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use super::ray::Ray;
-use super::scatter::{grown_at, ring};
+use super::scatter::{grown_at, grown_of, ring, Asked};
 use super::surface::Surfaces;
 use super::world::World;
 use crate::decor::strike::{reach, strike};
-use crate::layer::instance::{Instance, Meta, Source};
+use crate::layer::instance::{Instance, Meta};
 use crate::layer::object::meta::placed;
 use crate::layer::Query;
 use crate::model::registry::Models;
@@ -51,41 +49,15 @@ pub(super) struct Strike<'a> {
     /// The cell met last, whose neighbors are struck already.
     last: Option<[i64; 2]>,
     pub(super) best: Option<(f64, Instance)>,
-    /// What placed decor claims about the candidate struck last.
-    placed: Vec<Aabb>,
 }
 
 impl<'a> World<'a> {
-    /// Whether the ground grows `i`, a candidate of `decor`, on `face`, as
-    /// the chunks drawing its cells draw it: every block of its box void,
-    /// and every one under its base ground `decor` grows on, each asked of
-    /// the world's one query at the face's cells; and no placed decor claims
-    /// its room, told from
-    /// `placed`, the boxes placed decor claims about it (`placed_claims`).
-    /// Air placed in it or under it is no void.
-    pub fn grows(&self, face: &mut Surfaces, decor: &Decor, i: &Instance, placed: &[Aabb]) -> bool {
-        let (Source::Ground([x, y, z]), Meta::Decor(m)) = (i.source, i.meta) else { return false };
-        let [w, d, h] = decor.row.cells(m.variant, m.turn).map(i64::from);
-        let unit = units(GROUND.cell());
-        let (side, cell) = (face.side(), face.cell());
-        let block = |v: f64| (v / side).floor() as i64;
-        (0..d).all(|j| {
-            (0..w).all(|k| {
-                let base = base_of(GROUND.cell(), [x + k, y + j, z]);
-                let [bx, by, floor] = [i64::from(base[0]), i64::from(base[1]), i64::from(base[2])].map(q3::to_real).map(|v| v + unit / 2.0);
-                // The base's cell up and down: the box's blocks void, and
-                // the one under it ground the decor grows on.
-                let [cx, cy] = [bx, by].map(block);
-                let at = |z: f64| self.block((cell, [cx, cy, block(z)])).value().flatten();
-                matches!(at(floor - unit), Some(Block::Ground(g, _)) if decor.row.allows(g)) && (0..h).all(|n| at(floor + n as f64 * unit).is_none())
-            })
-        }) && claim(i).is_some_and(|c| !placed.iter().any(|p| p.shares(c)))
-    }
-
-    /// `grows` for one candidate, what placed decor claims read about it
-    /// alone into `placed`; not where the heap refused it room.
-    fn grows_alone(&self, face: &mut Surfaces, decor: &Decor, i: &Instance, placed: &mut Vec<Aabb>) -> bool {
-        claim(i).is_some_and(|c| self.placed_claims(&c, placed).is_ok()) && self.grows(face, decor, i, placed)
+    /// Whether the ground grows `i`, a candidate of `decor` standing on
+    /// `face`, as the chunks drawing its cells draw it (pxl-portable
+    /// `grows`): its box void, the ground under it one it grows on, and no
+    /// placed decor claiming its room.
+    pub fn grows(&self, face: &Surfaces, decor: &Decor, i: &Instance) -> bool {
+        grown_of(i).is_some_and(|g| pxl_portable::scatter::grows(&mut Asked::new(self, face), decor.row, face.cell(), &g))
     }
 
     /// What the ground stands on the leaf `cell`, each decor's, handed to
@@ -95,7 +67,7 @@ impl<'a> World<'a> {
     fn grown_in(&self, cell: [i64; 2], mut each: impl FnMut(&mut Surfaces, &Decor, Instance) -> bool) -> bool {
         let node = (GROUND.cell_zoom(LEAF_ZOOM), cell);
         self.surfaces(node, GROUND.grid_zoom(LEAF_ZOOM), ring(&DECORS), |face| {
-            DECORS.iter().any(|decor| grown_at(face, decor, cell).is_some_and(|i| each(face, decor, i)))
+            DECORS.iter().any(|decor| grown_at(&mut Asked::new(self, face), decor, cell).is_some_and(|i| each(face, decor, i)))
         })
         .exact()
         .unwrap_or(false)
@@ -109,19 +81,6 @@ impl<'a> World<'a> {
             true
         });
         met
-    }
-
-    /// The boxes placed decor claims that share room with `space`, into
-    /// `out`: what every candidate whose box lies in `space` is told from
-    /// (`grows`), the store walked once for all of them.
-    pub fn placed_claims(&self, space: &Aabb, out: &mut Vec<Aabb>) -> Result<(), TryReserveError> {
-        out.clear();
-        let mut grown = Ok(());
-        self.each_placed_claim(space, |c, _| {
-            grown = out.try_reserve(1).map(|()| out.push(c));
-            grown.is_err()
-        });
-        grown
     }
 
     /// Each placed decor whose box shares room with `space`, with that box,
@@ -145,9 +104,9 @@ impl<'a> World<'a> {
 
     /// A decor the ground grows on the leaves whose box shares room with `space`.
     pub fn grown_claim(&self, space: &Aabb) -> Option<Instance> {
-        let (mut met, mut placed) = (None, Vec::new());
+        let mut met = None;
         self.each_grown_over(space, |face, decor, i| {
-            met = Some(i).filter(|i| self.grows_alone(face, decor, i, &mut placed));
+            met = Some(i).filter(|i| self.grows(face, decor, i));
             met.is_some()
         });
         met
@@ -206,7 +165,6 @@ impl<'a> World<'a> {
             held,
             last: None,
             best: None,
-            placed: Vec::new(),
         })
     }
 
@@ -276,14 +234,12 @@ impl<'a> World<'a> {
     }
 
     fn grown_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i64; 2]) {
-        let mut placed = core::mem::take(&mut s.placed);
         self.grown_in(cell, |face, decor, i| {
-            if self.grows_alone(face, decor, &i, &mut placed) {
+            if self.grows(face, decor, &i) {
                 meet(s, ray, i);
             }
             false
         });
-        s.placed = placed;
     }
 }
 
