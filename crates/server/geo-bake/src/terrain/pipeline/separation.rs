@@ -13,9 +13,10 @@ use xpute_kit::math::scalar::round;
 use crate::separation::Line;
 use crate::terrain::pipeline::overture::policy::segment_type;
 
-/// None where they do not fit a record: refused rather than cut, since a
-/// missing line is a gap in a road.
-pub fn bake_separation(lines: &[Line], tile_min: G3857) -> Option<Separation> {
+/// All of them: a tile whose lines a record's room does not hold is refused
+/// where it is encoded rather than cut, since a missing line is a gap in a
+/// road.
+pub fn bake_separation(lines: &[Line], tile_min: G3857) -> Separation {
     let mut separation = Builder::default();
     for row in lines {
         let kind = segment_type(&row.subtype, row.class.as_deref());
@@ -33,7 +34,7 @@ pub fn bake_separation(lines: &[Line], tile_min: G3857) -> Option<Separation> {
             separation.push(local[a..=b].iter().copied(), width_code, kind, row.form, row.clear);
         }
     }
-    separation.fits().then(|| separation.finish())
+    separation.finish()
 }
 
 fn runs_within(points: &[([f64; 2], i16)], reach: f64) -> Vec<[usize; 2]> {

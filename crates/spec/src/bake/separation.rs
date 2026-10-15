@@ -67,10 +67,12 @@ impl Form {
     }
 }
 
-/// A resident record's room for lines and their points, about 43 KiB, chosen
-/// from what a record can spend, not from the data; each lane whole cache lines.
-pub const MAX_LINES: usize = 1023;
-pub const MAX_POINTS: usize = 6144;
+/// A resident record's room for lines and their points: the most a tile of
+/// the format-10 set holds with the fold keeping every line its width keeps,
+/// lines at z12 010331021012 and points at z15 010332102302331
+/// (2026-10-15); a tile past either fails its bake (`Separation::fits`).
+pub const MAX_LINES: usize = 1973;
+pub const MAX_POINTS: usize = 4260;
 
 /// Points a leaf of `Separation::boxes` covers, and children a node has: a ray
 /// cast 20–25% faster than at 8 and twice 16's, for 16 KiB a record (measured
@@ -90,6 +92,11 @@ pub const fn boxes_for(points: usize) -> usize {
 }
 
 pub const MAX_BOXES: usize = boxes_for(MAX_POINTS);
+
+/// Whether a record's room holds `lines` lines of `points` points.
+pub const fn holds(lines: usize, points: usize) -> bool {
+    lines <= MAX_LINES && points <= MAX_POINTS
+}
 
 /// Holds no point.
 const EMPTY: [i16; 4] = [i16::MAX, i16::MAX, i16::MIN, i16::MIN];
@@ -127,6 +134,13 @@ pub struct Line<'a> {
 }
 
 impl Separation {
+    /// Refused, with its lines and points, where a record's room does not
+    /// hold it (`holds`).
+    pub fn fits(&self) -> Result<(), [usize; 2]> {
+        let size = [self.len(), self.points.len()];
+        if holds(size[0], size[1]) { Ok(()) } else { Err(size) }
+    }
+
     pub fn len(&self) -> usize {
         self.width.len()
     }
@@ -348,8 +362,9 @@ pub fn footprint(width: f64) -> f64 {
     f64::from(ways::footprint(width as f32))
 }
 
-/// Lines one zoom coarser, at `z`: half a cell wide or more, simplified to
-/// half a cell, widest first within a record.
+/// Lines one zoom coarser, at `z`: every one half a cell wide or more,
+/// simplified to half a cell; a record holding more than a tile's room is
+/// refused where it is encoded, never cut here.
 pub fn fold_separation(children: [&Separation; 4], zoom: Zoom) -> Separation {
     let n = f64::from(TILE_CELLS);
     // The parent's half cell of height, in leaf cells.
@@ -368,21 +383,10 @@ pub fn fold_separation(children: [&Separation; 4], zoom: Zoom) -> Separation {
             lines.push((kept, width, line.kind, line.form, line.clear));
         }
     }
-    let mut widest: Vec<usize> = (0..lines.len()).collect();
-    widest.sort_by_key(|&i| std::cmp::Reverse(lines[i].1));
-    let (mut admitted, mut separation, mut points) = (vec![false; lines.len()], 0, 0);
-    for i in widest {
-        if separation < MAX_LINES && points + lines[i].0.len() <= MAX_POINTS {
-            admitted[i] = true;
-            separation += 1;
-            points += lines[i].0.len();
-        }
-    }
     let mut out = Builder::default();
-    for (line, _) in lines.into_iter().zip(admitted).filter(|(_, a)| *a) {
+    for line in lines {
         out.push(line.0, line.1, line.2, line.3, line.4);
     }
-    debug_assert!(out.fits());
     out.finish()
 }
 
@@ -453,10 +457,6 @@ impl Builder {
         self.clear.push(clear);
     }
 
-    pub fn fits(&self) -> bool {
-        self.width.len() <= MAX_LINES && self.points.len() <= MAX_POINTS
-    }
-
     pub fn finish(mut self) -> Separation {
         self.starts.push(self.points.len() as u32);
         let mut boxes = vec![EMPTY; boxes_for(self.points.len())];
@@ -519,8 +519,7 @@ pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
         && lanes.clear.len() == n
         && starts.len() == n + 1
         && lanes.tops.len() == points.len()
-        && n <= MAX_LINES
-        && points.len() <= MAX_POINTS
+        && holds(n, points.len())
         && starts.first() == Some(&0)
         && starts.last() == Some(&(points.len() as u32))
         && starts.windows(2).all(|w| w[0] <= w[1])
