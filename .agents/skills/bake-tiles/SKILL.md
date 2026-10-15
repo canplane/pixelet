@@ -159,10 +159,12 @@ that, worked back from how far each thing draws:
    not the objects. With `deno task dev:tile` up — not `dev`, which proxies
    every route to the live deployment:
 
-   The set holds a tile flat under the name the dev server is asked by:
+   The set holds a tile flat under the name the dev server is asked by,
+   under the version its declaration names:
 
    ```bash
-   curl -s localhost:3001/tile/terrain/dev/<name> | zstd -dcq | shasum
+   v=$(curl -s localhost:3001/tile/source | jq -r .version.terrain)
+   curl -s localhost:3001/tile/terrain/$v/<name> | zstd -dcq | shasum
    zstd -dcq ./out/terrain/<name> | shasum
    ```
 
