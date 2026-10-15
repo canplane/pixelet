@@ -4,7 +4,8 @@
 //! the pyramid by pxl-portable's descent, the one the CPU's cast runs, over
 //! the world as the GPU holds it; and the ground a held tile is drawn from,
 //! its cells' heights off the samples it was handed (`heights_cs`) and their
-//! bound's levels (`bound_cs`), which the CPU reads back. Each entry is a
+//! bound's levels (`bound_cs`), which the CPU reads back; and the decor the
+//! ground grows in the eye's windows (`decor_cs`). Each entry is a
 //! module of its own. The harness's entries are behind its feature
 //! (`harness`).
 
@@ -19,10 +20,13 @@ use pxl_portable::caves::Cave;
 use pxl_portable::cube::{object, sentinel, Ground};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
+use pxl_portable::decor::{Decor, COUNTS};
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
-use pxl_portable::window::{self, Squares, ELE_AT, HEIGHTS_AT, LEVELS_AT, SLOTS, SQUARE, SQUARE_WORDS, WAYS_AT};
+use pxl_portable::scatter::{self, drawn, Grounds, GROWN_AT, GROWN_WORDS, PLACED_BLOCK, SQUARE_BLOCKS};
+use pxl_portable::window::{self, Squares, ELE_AT, HEIGHTS_AT, LEVELS_AT, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS, WAYS_AT};
 use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
+use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
 
 /// The eye a cast is from (pxl-kernel view/lens.rs `gpu_cast`).
@@ -54,8 +58,6 @@ fn cut(e: IVec4) -> Cut {
 }
 
 const VOID: u32 = sentinel::void as u32;
-/// A block's word when what is placed answered it, over its value.
-const PLACED_BLOCK: u32 = 1 << 16;
 const PLACED_AIR: u32 = PLACED_BLOCK | object::air as u32;
 const UNKNOWN: u32 = sentinel::unknown as u32;
 
@@ -368,6 +370,57 @@ impl Query for World<'_> {
     }
 }
 
+/// The world as decor's growth asks it on the GPU (pxl-portable `scatter`):
+/// the cast's, and the catalog's rows as handed.
+struct Growing<'a> {
+    world: World<'a>,
+    rows: &'a [Decor],
+}
+
+impl Lanes for Growing<'_> {
+    fn heap(&self, slot: u32) -> u32 {
+        self.world.heap(slot)
+    }
+    fn data(&self, slot: u32) -> u32 {
+        self.world.data(slot)
+    }
+}
+
+/// A cell off the window drawing it, and a block asked by the cast's
+/// descent, from a node started as the CPU's world starts one (pxl-kernel
+/// query/node.rs `World::start`): its caves and what is placed found down
+/// its line from the top.
+impl Grounds for Growing<'_> {
+    type At = At;
+
+    fn rows(&self) -> &[Decor] {
+        self.rows
+    }
+
+    fn face(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
+        let (c, _) = ground::Held::cell(&mut self.world, cell, [g[0], g[1], 0]);
+        (c.look, c.top, c.grounded())
+    }
+
+    fn start(&mut self, zoom: u32, c: [i32; 3]) -> At {
+        At {
+            cave: Cave::of(zoom, c),
+            placed: placed::cursor(&self.world, PLACED, zoom, c),
+        }
+    }
+
+    fn block(&mut self, at: &At, from: u32, zoom: u32, c: [i32; 3]) -> u32 {
+        let mut at = *at;
+        let mut z = from;
+        while z < zoom {
+            z += 1;
+            let s = zoom - z;
+            at = self.world.child(&at, z, [c[0] >> s, c[1] >> s, c[2] >> s]);
+        }
+        self.world.node(&mut at, zoom, c, [zoom, zoom], 0.0).block[0]
+    }
+}
+
 /// The lane's cell for a ray: the value it stopped on, its kind (ground or
 /// placed) and the face it entered through, then how far as f32 bits, then
 /// the nodes its descent asked about; where it met nothing, the first two
@@ -475,4 +528,216 @@ pub fn bound_cs(
         window::join(&Fresh { ground: under, base }, 0, 0, j, [id.x, id.y])
     };
     ground[(base + LEVELS_AT + window::level_at(j) + id.y * side + id.x) as usize] = w as u32;
+}
+
+/// Decor the ground grows in the eye's windows, one candidate a thread: `x`
+/// its index in its block, `y` the block among those meeting its square
+/// (pxl-portable `scatter::block_of`), `z` the window's zoom over the first
+/// one's, its slot and the kind. Each one that stands, stands on its cell
+/// and grows there (`scatter::stands`, `stand`, `grows`) is appended to
+/// `out` after its count (`scatter::GROWN_AT`, `GROWN_WORDS`), where it is
+/// drawn at that window's zoom, the one the rays ask at its distance
+/// (`scatter::drawn_at`). A kind is grown at a zoom where bit
+/// `zoom − FIRST_CELL` of its `shown` word is set; the kinds are the
+/// catalog's rows as handed (`rows`).
+#[spirv(compute(threads(8, 8, 1)))]
+pub fn decor_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shown: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] out: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] rows: &[Decor],
+) {
+    let kinds = rows.len() as u32;
+    let (kind, square) = (id.z % kinds, id.z / kinds);
+    let (cell, slot) = (FIRST_CELL + square / SLOTS, square % SLOTS);
+    if id.x >= COUNTS as u32 || id.y >= SQUARE_BLOCKS || cell > LEAF_CELL || at(shown, kind) >> (cell - FIRST_CELL) & 1 == 0 {
+        return;
+    }
+    let held = at(window, (cell - FIRST_CELL) * SLOTS + slot);
+    if held.z == 0 {
+        return;
+    }
+    // The square's leaf cells.
+    let s = LEAF_CELL - cell;
+    let first = [(held.x << SQUARE_SHIFT) << s, (held.y << SQUARE_SHIFT) << s];
+    let region = [first, [first[0] + (SQUARE << s) as i32, first[1] + (SQUARE << s) as i32]];
+    let mut world = Growing {
+        world: World {
+            window,
+            ground,
+            shards,
+            overwrites,
+            eye,
+        },
+        rows,
+    };
+    // Only where the rays ask this zoom (`scatter::drawn_at`): the square
+    // as its heights' bound has it, then each decor where it stands.
+    let detail = Detail {
+        tau: eye.right_tau.w,
+        range: [eye.across_range.z, eye.across_range.w],
+    };
+    let origin = [eye.origin.x, eye.origin.y, eye.origin.z];
+    let heights = ground::bound_of(world.world.level(cell, slot, window::LEVELS, [0, 0]));
+    if !scatter::meets_band(detail, origin, region, heights, cell) {
+        return;
+    }
+    let decor = &rows[kind as usize];
+    let zoom = GROUND.read_zoom(cell);
+    let (c, here) = scatter::candidate_of(decor, zoom, region, id.y, id.x);
+    if !here || !scatter::stands(decor, zoom, &c) {
+        return;
+    }
+    let (g, here) = scatter::stand(&mut world, decor, cell, &c);
+    if !here || !scatter::drawn_at(detail, origin, g.at, cell) || !scatter::grows(&mut world, decor, cell, &g) {
+        return;
+    }
+    // SAFETY: an atomic add on the buffer's first word, its count.
+    let n = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut out[0], 1) };
+    let i = (GROWN_AT + GROWN_WORDS * n) as usize;
+    if i + 3 < out.len() {
+        out[i] = kind | g.variant << 8 | g.turn << 16;
+        out[i + 1] = g.at[0] as u32;
+        out[i + 2] = g.at[1] as u32;
+        out[i + 3] = g.at[2] as u32;
+    }
+}
+
+/// The records `out` holds, placed decor's and what `decor_cs` grew: the
+/// count, held to the records' room.
+fn records(grown: &[u32]) -> u32 {
+    let room = (grown.len() as u32 - GROWN_AT) / GROWN_WORDS;
+    let n = at(grown, 0);
+    if n < room {
+        n
+    } else {
+        room
+    }
+}
+
+/// Each record sized for the screen (pxl-portable `scatter::drawn`): a
+/// model where its group's extent spans `MODEL_PX` at its distance, a
+/// sprite down to `SPRITE_PX`, else nothing, or nothing where it is the
+/// decor left out; its region written into its first word and counted.
+#[spirv(compute(threads(64, 1, 1)))]
+pub fn decor_count_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] params: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] rows: &[Decor],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] grown: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] regions: &mut [u32],
+) {
+    if id.x >= records(grown) {
+        return;
+    }
+    let i = (GROWN_AT + GROWN_WORDS * id.x) as usize;
+    let w = grown[i];
+    let (kind, variant) = (w & 0xff, (w >> 8) & 0xff);
+    let corner = [grown[i + 1] as i32, grown[i + 2] as i32, grown[i + 3] as i32];
+    let group = scatter::first_group(rows, kind) + variant;
+    let hide = drawn::HIDE as usize;
+    let hidden = params[hide + 3] != 0 && corner[0] == params[hide] as i32 && corner[1] == params[hide + 1] as i32 && corner[2] == params[hide + 2] as i32;
+    let d = scatter::distance([eye.origin.x, eye.origin.y, eye.origin.z], corner);
+    let d = if d > 1e-3 { d } else { 1e-3 };
+    let px = f32::from_bits(params[(drawn::EXTENTS + group) as usize]) / (d * f32::from_bits(params[drawn::UPP as usize]));
+    let region = if hidden {
+        drawn::NONE
+    } else if px >= f32::from_bits(params[drawn::MODEL_PX as usize]) {
+        2 * group
+    } else if px >= f32::from_bits(params[drawn::SPRITE_PX as usize]) {
+        2 * group + 1
+    } else {
+        drawn::NONE
+    };
+    grown[i] = w & ((1 << drawn::REGION_SHIFT) - 1) | region << drawn::REGION_SHIFT;
+    if region != drawn::NONE {
+        // SAFETY: an atomic add on the region's count, a word of the buffer.
+        unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut regions[region as usize], 1) };
+    }
+}
+
+/// Each region laid after the one before (`decor_count_cs`'s counts), its
+/// first slot kept for `decor_place_cs` and added to its draw uniform's
+/// index, and its indirect args: a model region's indexed by its group's
+/// mesh (`meshes`, its index count, none while it loads), a sprite region's
+/// a strip of four corners an instance.
+#[spirv(compute(threads(1, 1, 1)))]
+pub fn decor_args_cs(
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] meshes: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] regions: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] args: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] uniforms: &mut [u32],
+) {
+    let (mut first, mut r) = (0, 0);
+    while r < drawn::REGIONS {
+        let n = regions[r as usize];
+        regions[(drawn::REGIONS + r) as usize] = first;
+        uniforms[(r * drawn::UNIFORM_WORDS + drawn::UNIFORM_INDEX) as usize] += first;
+        let a = (drawn::ARGS_WORDS * r) as usize;
+        if r % 2 == 0 {
+            args[a] = at(meshes, r / 2);
+            args[a + 1] = n;
+            args[a + 2] = 0;
+            args[a + 3] = 0;
+            args[a + 4] = 0;
+        } else {
+            args[a] = 4;
+            args[a + 1] = n;
+            args[a + 2] = 0;
+            args[a + 3] = 0;
+            args[a + 4] = 0;
+        }
+        first += n;
+        r += 1;
+    }
+}
+
+/// Each record its region drew a slot of: its box's base middle about the
+/// anchor, its heading and scale, in the lanes the decor and impostor
+/// shaders read, and the slot its own in the index list.
+#[spirv(compute(threads(64, 1, 1)))]
+pub fn decor_place_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] params: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] rows: &[Decor],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] grown: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] regions: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] block: &mut [u32],
+) {
+    if id.x >= records(grown) {
+        return;
+    }
+    let i = GROWN_AT + GROWN_WORDS * id.x;
+    let w = at(grown, i);
+    let region = w >> drawn::REGION_SHIFT;
+    if region == drawn::NONE {
+        return;
+    }
+    // SAFETY: an atomic add on the region's next slot, a word of the buffer.
+    let slot = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut regions[(drawn::REGIONS + region) as usize], 1) };
+    let (kind, variant, turn) = (w & 0xff, (w >> 8) & 0xff, (w >> 16) & 0xff);
+    let [across, deep, _] = rows[kind as usize].cells(variant, turn);
+    let room = block.len() as u32 / (drawn::LANES + 1);
+    if slot >= room {
+        return;
+    }
+    let anchor = drawn::ANCHOR as usize;
+    let i = i as usize;
+    // X about the anchor the short way round: leaf cells wrap at 2^24.
+    let x = (((grown[i + 1] as i32).wrapping_sub(params[anchor] as i32)) << 8 >> 8) as f32 + across as f32 / 2.0;
+    let y = (grown[i + 2] as i32).wrapping_sub(params[anchor + 1] as i32) as f32 + deep as f32 / 2.0;
+    let z = (grown[i + 3] as i32).wrapping_sub(params[anchor + 2] as i32) as f32;
+    let (room, slot) = (room as usize, slot as usize);
+    block[slot] = x.to_bits();
+    block[room + slot] = y.to_bits();
+    block[2 * room + slot] = z.to_bits();
+    block[3 * room + slot] = ((turn % 4) as f32 * core::f32::consts::FRAC_PI_2).to_bits();
+    block[4 * room + slot] = 1.0f32.to_bits();
+    block[drawn::LANES as usize * room + slot] = slot as u32;
 }

@@ -451,28 +451,12 @@ impl Ground {
 
     /// A way: decor faces along it and no pier stands on it.
     pub const fn transport(self) -> bool {
-        matches!(
-            self,
-            Ground::footway
-                | Ground::cycleway
-                | Ground::bridleway
-                | Ground::track
-                | Ground::pedestrian
-                | Ground::living_street
-                | Ground::residential_road
-                | Ground::road
-                | Ground::secondary
-                | Ground::primary
-                | Ground::trunk
-                | Ground::motorway
-                | Ground::platform
-                | Ground::tram
-                | Ground::light_rail
-                | Ground::subway
-                | Ground::monorail
-                | Ground::rail
-                | Ground::aeroway
-        )
+        Ground::transports(self as u32)
+    }
+
+    /// Whether a look read into a word is a way (`transport`).
+    pub const fn transports(value: u32) -> bool {
+        matches!(value, 37..=55)
     }
 }
 

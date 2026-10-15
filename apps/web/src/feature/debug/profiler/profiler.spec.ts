@@ -188,22 +188,15 @@ export const SUMMARY = {
     initial: 4 as number,
     WORDS: 5 as number,
   },
-  held: {
-    AT: 309 as number,
-    decor_blocks: 0 as number,
-    decor_instances: 1 as number,
-    decor_bytes: 2 as number,
-    WORDS: 3 as number,
-  },
   fetch: {
-    AT: 312 as number,
+    AT: 309 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   peak: {
-    AT: 315 as number,
+    AT: 312 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -216,13 +209,13 @@ export const SUMMARY = {
     WORDS: 9 as number,
   },
   steps: {
-    AT: 324 as number,
+    AT: 321 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   quality: {
-    AT: 485 as number,
+    AT: 482 as number,
     step: 0 as number,
     star: 1 as number,
     frames_held: 2 as number,
@@ -232,7 +225,7 @@ export const SUMMARY = {
   },
   /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at. */
   view: {
-    AT: 490 as number,
+    AT: 487 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -249,7 +242,7 @@ export const SUMMARY = {
     cell_want: 13 as number,
     WORDS: 14 as number,
   },
-  WORDS: 504 as number,
+  WORDS: 501 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

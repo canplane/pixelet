@@ -7,19 +7,14 @@
 //! (`World::grows`), which way it faces and how high it stands its face's
 //! (`World::surfaces`).
 
-use std::collections::TryReserveError;
-
 use pxl_portable::placed;
 use pxl_portable::scatter::{self as portable, Grounds, Grown, ALIGN_NEIGHBOR_RADIUS, PLACED_BLOCK};
 use pxl_spec::block::cube::sentinel;
 use pxl_spec::block::decor::Decor;
 use pxl_spec::block::Block;
-use pxl_spec::procedural::{scatter, scatter_at, Candidate};
-use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::zoom::{count, index, Zoom};
-use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::procedural::scatter_at;
+use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use super::surface::Surfaces;
 use super::world::World;
@@ -35,14 +30,14 @@ pub fn ring(decors: &[Decor]) -> u32 {
 /// The world as decor's growth asks it on the CPU (pxl-portable
 /// `Grounds`): the ground's cells off `face`, read once about what is
 /// asked, the world's one query, and what is placed.
-pub struct Asked<'a, 'w, 'f> {
+pub(super) struct Asked<'a, 'w, 'f> {
     world: &'a World<'w>,
     face: &'a Surfaces<'f>,
     lanes: store::Lanes<'a>,
 }
 
 impl<'a, 'w, 'f> Asked<'a, 'w, 'f> {
-    pub fn new(world: &'a World<'w>, face: &'a Surfaces<'f>) -> Asked<'a, 'w, 'f> {
+    pub(super) fn new(world: &'a World<'w>, face: &'a Surfaces<'f>) -> Asked<'a, 'w, 'f> {
         Asked {
             world,
             face,
@@ -61,6 +56,12 @@ impl placed::Lanes for Asked<'_, '_, '_> {
 }
 
 impl Grounds for Asked<'_, '_, '_> {
+    type At = super::node::At;
+
+    fn rows(&self) -> &[pxl_portable::decor::Decor] {
+        &pxl_portable::decor::DECORS
+    }
+
     /// Off `face`, whose cells are at `cell`; none past what it read.
     fn face(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
         debug_assert_eq!(cell, self.face.cell());
@@ -70,9 +71,18 @@ impl Grounds for Asked<'_, '_, '_> {
         }
     }
 
+    fn start(&mut self, zoom: Zoom, c: [i32; 3]) -> Self::At {
+        self.world.start((zoom, c.map(i64::from)))
+    }
+
     /// Void where the world holds nothing there.
-    fn block(&mut self, zoom: Zoom, c: [i32; 3]) -> u32 {
-        match self.world.block((zoom, c.map(i64::from))).value().flatten() {
+    fn block(&mut self, at: &Self::At, from: Zoom, zoom: Zoom, c: [i32; 3]) -> u32 {
+        let mut at = *at;
+        for z in from + 1..=zoom {
+            let s = zoom - z;
+            at = self.world.child(&at, (0..3).map(|i| (((c[i] >> s) & 1) as usize) << i).sum());
+        }
+        match self.world.drawn(&mut at).value().flatten() {
             Some(Block::Ground(g, _)) => u32::from(g),
             Some(Block::Placed(v)) => PLACED_BLOCK | v,
             None => u32::from(sentinel::void),
@@ -80,50 +90,13 @@ impl Grounds for Asked<'_, '_, '_> {
     }
 }
 
-/// What the ground grows of `decor` in `region`, on the node `node` of grid
-/// cells at `cell` read into `face` (`World::surfaces`, `ring` about it),
-/// whose first leaf cell's corner lies at `origin`: each candidate stands
-/// and faces as its cells say, and grows where its footing does
-/// (pxl-portable `stand`, `grows`), so what is grown is what is drawn. A
-/// tree coarser than a leaf's stands on the grass the view sees, not on leaf
-/// cells it cannot. `candidates` is the caller's room.
-#[allow(clippy::too_many_arguments)]
-pub fn grow<E: From<TryReserveError>>(
-    world: &World,
-    face: &Surfaces,
-    decor: &Decor,
-    node: Node<2>,
-    cell: Zoom,
-    origin: [i64; 2],
-    region: Aabb,
-    candidates: &mut Vec<Candidate>,
-    mut sink: impl FnMut(Instance) -> Result<(), E>,
-) -> Result<(), E> {
-    let zoom = GROUND.read_zoom(cell);
-    let (own, atom) = (GROUND.cell_zoom(zoom), GROUND.cell_zoom(LEAF_ZOOM));
-    let per = i64::from(count(atom, own));
-    let min = [index(atom, origin[0]), index(atom, origin[1])];
-    let span = i64::from(GROUND.read_side(node.0, cell)) * per;
-    let leaves = [min, [min[0] + span, min[1] + span]].map(|c| c.map(|v| v as i32));
-    scatter(decor.row, zoom, leaves, candidates)?;
-    let mut asked = Asked::new(world, face);
-    for candidate in candidates.iter() {
-        let Some(g) = portable::stand(&mut asked, decor.row, own, candidate) else { continue };
-        // In the region holding the cell it stands on.
-        let at = [f64::from(g.at[0]) + 0.5, f64::from(g.at[1]) + 0.5, f64::from(g.at[2])];
-        if (0..2).all(|k| (region.min[k]..region.max[k]).contains(&at[k])) && region.min[2] < at[2] && at[2] <= region.max[2] && portable::grows(&mut asked, decor.row, own, &g) {
-            sink(instance(decor, &g))?;
-        }
-    }
-    Ok(())
-}
-
 /// What the ground stands of `decor` in the leaf `cell` on `face`, the
 /// leaf's ground read about it (`World::grown_in`): the leaf scatter, cell
 /// by cell, which a region grows the same (pxl-spec procedural.test.rs).
-pub fn grown_at(asked: &mut Asked, decor: &Decor, cell: [i64; 2]) -> Option<Instance> {
+pub(super) fn grown_at(asked: &mut Asked, decor: &Decor, cell: [i64; 2]) -> Option<Instance> {
     let candidate = scatter_at(decor.row, cell.map(|v| v as i32))?;
-    portable::stand(asked, decor.row, GROUND.cell(), &candidate).map(|g| instance(decor, &g))
+    let (g, here) = portable::stand(asked, decor.row, GROUND.cell(), &candidate);
+    here.then(|| instance(decor, &g))
 }
 
 /// Decor standing as `g`, as an instance: its box's min corner a leaf

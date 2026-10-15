@@ -4,12 +4,8 @@
 //! where a tile's bridge piers stand (pxl-portable ways.rs). Pure functions
 //! of the world and a seed, so every reader agrees.
 
-use std::collections::TryReserveError;
-
-use pxl_portable::decor::Decor;
-
 use crate::space::coord::adapter::epsg3857::u_per_m;
-use crate::space::coord::zoom::{units, Zoom};
+use crate::space::coord::zoom::units;
 use crate::space::layer::lattice::TILE_CELLS;
 use crate::space::layer::tile::Tile;
 
@@ -18,48 +14,9 @@ pub use pxl_portable::caves::{node_seed, Cave, CAVE_COARSEST};
 use pxl_portable::ways::{Stations, INTERVAL_M};
 use pxl_portable::LEAF_CELL;
 
-// ---- scatter: what stands in a region, by portable's ----
+// ---- scatter: portable's, for the CPU's readers of one cell ----
 
 pub use pxl_portable::scatter::{before, each_candidate, meet, pose, scatter_at, side_of, Candidate, ALIGN_NEIGHBOR_RADIUS};
-
-/// What stands at `z` in `region` (leaf cells, `[min, max)`), by its cell, as
-/// `scatter_at` keeps each. Each candidate claims the square `side_of` gives
-/// it, from its cell up, which holds its box however it turns; of two whose
-/// squares meet, the one `before` the other stands.
-pub fn scatter(decor: &Decor, zoom: Zoom, region: [[i32; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
-    out.clear();
-    let reach = decor.widest() as i32 - 1;
-    let around = [region[0].map(|v| v - reach), region[1].map(|v| v + reach)];
-    let mut grown = Ok(());
-    each_candidate(decor, zoom, around, |c| {
-        if grown.is_ok() {
-            grown = out.try_reserve(1).map(|()| out.push(c));
-        }
-    });
-    grown?;
-    out.sort_unstable_by(|a, b| a.cell.cmp(&b.cell).then(a.born.cmp(&b.born)).then(a.seed.cmp(&b.seed)));
-    // Survivors go past the end, then the whole is let go of.
-    let n = out.len();
-    for i in 0..n {
-        let c = out[i];
-        if !(0..2).all(|k| (region[0][k]..region[1][k]).contains(&c.cell[k])) {
-            continue;
-        }
-        let side = side_of(decor, &c);
-        // Only a candidate within `reach` before it on x, or its own side past, can meet it.
-        let from = out[..n].partition_point(|d| d.cell[0] < c.cell[0] - reach);
-        let beaten = out[from..n]
-            .iter()
-            .take_while(|d| d.cell[0] < c.cell[0] + side)
-            .any(|d| before(d, &c) && meet(d, side_of(decor, d), &c, side));
-        if !beaten {
-            out.try_reserve(1)?;
-            out.push(c);
-        }
-    }
-    out.drain(..n);
-    Ok(())
-}
 
 // ---- piers ----
 

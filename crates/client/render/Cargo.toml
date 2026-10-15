@@ -14,6 +14,8 @@ libm.workspace = true
 xpute-guest = { path = "../../../xpute/rust/guest" }
 xpute-kit = { path = "../../../xpute/rust/kit" }
 pxl-spec = { path = "../../spec" }
+# The GPU's decor pass's bounds and the record it writes (gpu/renderer.rs).
+pxl-portable = { path = "../../portable" }
 
 # The device's GPU, where the kernel draws itself (gpu/api/device.rs): what the
 # browser's WebGPU is to the page, a Metal or Vulkan device behind the same

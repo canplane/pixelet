@@ -5,7 +5,6 @@
 //! nothing of the kernel on its own.
 
 use crate::laid;
-use crate::scene::decor::build::DecorHide;
 use crate::scene::frame::Frame;
 use crate::sched::tick::TickContext;
 use crate::view::frame::pose::{globe, view_resize};
@@ -156,6 +155,7 @@ pub fn stage_render() {
             window: crate::scene::cast::window(),
             shards: crate::scene::cast::shards(),
             overwrites: crate::scene::cast::overwrites(),
+            decor: crate::scene::decor::drawn::frame(),
         }),
         text: text_raster,
         billboards: billboard_sheet(),
@@ -227,8 +227,7 @@ pub fn visible_step(ctx: &mut TickContext) {
     {
         let k = kernel();
         let edits = crate::layer::object::preview::current();
-        let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
-        crate::scene::decor::cell::step(&pxl_spec::block::decor::DECORS, &k.objects, &frame, &mut k.draw, hide, &ctx.budget);
+        crate::scene::decor::drawn::step(&k.objects, frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
         crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
     }
     crate::scene::place::step(ctx, &frame);

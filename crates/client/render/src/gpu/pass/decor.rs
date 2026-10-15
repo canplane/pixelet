@@ -7,10 +7,11 @@
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::PIPELINE_DECOR_PREPASS;
-use crate::gpu::api::{object, release, Gpu};
-use crate::gpu::api_spec::{address, compare, filter, format};
+use crate::gpu::api::{buffer_entry, object, release, Gpu};
+use crate::gpu::api_spec::{address, compare, filter, format, resource};
+use crate::gpu::grown::Drawn;
 use crate::gpu::pass::impostor::Extent;
-use crate::gpu::pass::model::{draw_models, put_instances, DrawUniforms, ModelDraw, Stage};
+use crate::gpu::pass::model::{bind_mesh, draw_models, put_instances, DrawUniforms, ModelDraw, Stage};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{skin_group, Blocks, Draws};
 
@@ -48,6 +49,10 @@ pub struct DecorPass {
     uniforms: DrawUniforms,
     groups: [Group; GROUPS],
     skins: [Skin; GROUPS],
+    /// The GPU's decor's bind groups (gpu/grown.rs), each with the buffer it
+    /// binds: its regions' draw uniforms and its block.
+    grown_uniforms: (u32, u32),
+    grown_block: (u32, u32),
 }
 
 impl DecorPass {
@@ -62,6 +67,8 @@ impl DecorPass {
             uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
             groups: [Group::default(); GROUPS],
             skins: [Skin::default(); GROUPS],
+            grown_uniforms: (0, 0),
+            grown_block: (0, 0),
         }
     }
 
@@ -151,4 +158,59 @@ impl DecorPass {
             })
         });
     }
+
+    /// The GPU's decor's bind groups, made again only where its buffers were.
+    pub fn prepare_grown(&mut self, g: &Gpu, grown: Option<Drawn>) {
+        let Some(d) = grown else { return };
+        self.grown_uniforms = uniform_group(g, self.grown_uniforms, d.uniforms, self.lit.layouts[1]);
+        self.grown_block = block_group(g, self.grown_block, d.block, self.lit.layouts[3]);
+    }
+
+    /// The models the GPU grew, an indirect draw a group whose model is held
+    /// (pxl-portable `scatter::drawn`, a group's models its region `2·group`).
+    pub fn draw_grown(&mut self, g: &Gpu, pass: u32, grown: Option<Drawn>, blocks: &Blocks, stage: Stage, (frame, bound): (u32, &mut u32)) {
+        let Some(d) = grown.filter(|_| self.grown_block.1 != 0) else { return };
+        let pipeline = match stage {
+            Stage::Lit => self.lit.pipeline,
+            Stage::Prepass => self.prepass.pipeline,
+        };
+        g.set_pipeline(pass, pipeline);
+        if *bound != frame {
+            g.set_bind_group(pass, 0, frame, &[]);
+            *bound = frame;
+        }
+        g.set_bind_group(pass, 3, self.grown_block.1, &[]);
+        let mut mesh_bound = 0;
+        for group in 0..pxl_portable::scatter::GROUPS {
+            let Some((model, vertex_cnt, index_cnt, skin)) = self.model_of(g, group, blocks) else { continue };
+            g.set_bind_group(pass, 1, self.grown_uniforms.1, &[d.uniform_at(2 * group)]);
+            g.set_bind_group(pass, 2, skin, &[]);
+            bind_mesh(g, pass, &self.lit, &mut mesh_bound, model, vertex_cnt, index_cnt);
+            g.draw_indexed_indirect(pass, d.args, d.args_at(2 * group));
+        }
+    }
+}
+
+/// A bind group over the GPU's decor block `block` in `layout`, `held` kept
+/// while it binds that block.
+pub(crate) fn block_group(g: &Gpu, held: (u32, u32), block: u32, layout: u32) -> (u32, u32) {
+    if held.0 == block {
+        return held;
+    }
+    release(held.1);
+    let id = object();
+    g.bind_group(id, layout, &buffer_entry(0, block));
+    (block, id)
+}
+
+/// A bind group over the GPU's decor's draw uniforms `uniforms` in `layout`,
+/// a draw's uniform at a dynamic offset, `held` kept while it binds them.
+pub(crate) fn uniform_group(g: &Gpu, held: (u32, u32), uniforms: u32, layout: u32) -> (u32, u32) {
+    if held.0 == uniforms {
+        return held;
+    }
+    release(held.1);
+    let id = object();
+    g.bind_group(id, layout, &[0, resource::BUFFER, uniforms, 0, DRAW_UNIFORM_BYTES]);
+    (uniforms, id)
 }

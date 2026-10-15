@@ -3,7 +3,7 @@
 //! Pipelines made once each. Bind group layouts are shared by their words, so a
 //! bind group made for one pipeline serves every one declaring the same group.
 
-use crate::frame::shader::record::{pipeline as record_of, source, HEAD, SHADERS};
+use crate::frame::shader::record::{pipeline as record_of, source, HEAD, PIPELINES, SHADERS};
 use crate::gpu::api::{object, Gpu};
 
 pub const GROUPS: usize = 4;
@@ -17,7 +17,9 @@ pub struct Built {
     pub lanes: usize,
 }
 
-const LAYOUTS: usize = 32;
+/// The most distinct group layouts there are: every pipeline's groups, and
+/// a compute shader's one.
+const LAYOUTS: usize = PIPELINES as usize * GROUPS + SHADERS as usize;
 const BUILT: usize = 48;
 
 pub struct Pipelines {

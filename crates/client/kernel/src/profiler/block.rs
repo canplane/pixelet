@@ -155,19 +155,6 @@ words!(SheetBlock, SUMMARY::sheet::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct HeldBlock {
-    pub decor_blocks: f64,
-    pub decor_instances: f64,
-    pub decor_bytes: f64,
-}
-
-words!(HeldBlock, SUMMARY::held::WORDS,
-    decor_blocks => SUMMARY::held::decor_blocks,
-    decor_instances => SUMMARY::held::decor_instances, decor_bytes => SUMMARY::held::decor_bytes,
-);
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FetchBlock {
     pub queued: f64,
     pub running: f64,

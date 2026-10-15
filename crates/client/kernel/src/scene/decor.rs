@@ -2,6 +2,6 @@
 
 //! What the world grows on its own: trees, cars, boats, trains.
 
-pub mod build;
 pub mod cell;
+pub mod drawn;
 pub mod instance;

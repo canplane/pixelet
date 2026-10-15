@@ -115,7 +115,7 @@ export interface ProfilerReport {
   t: f64;
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
-  sections: Record<"counters" | "sheet" | "held" | "fetch" | "quality" | "view", Record<string, f64>>;
+  sections: Record<"counters" | "sheet" | "fetch" | "quality" | "view", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   peak: Record<string, f64> | null;
   tasks: TaskSummary[];
@@ -258,7 +258,6 @@ export function profilerReportRead(): ProfilerReport {
     sections: {
       counters: section(s, SUMMARY.counters),
       sheet: section(s, SUMMARY.sheet),
-      held: section(s, SUMMARY.held),
       fetch: section(s, SUMMARY.fetch),
       quality: section(s, SUMMARY.quality),
       view: section(s, SUMMARY.view),

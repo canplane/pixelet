@@ -73,7 +73,7 @@ const SINGLE_BLOCKS: usize = 3;
 /// the surfaces), so overflowing the renderer's table is a bug, not a load.
 /// The renderer frees a list's blocks before taking its uploads, so it never
 /// holds more.
-const MAX_LIVE_BLOCKS: usize = crate::scene::decor::cell::BLOCKS_MAX + MODELS_MAX + crate::scene::actor::ACTORS_MAX + crate::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
+const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::scene::actor::ACTORS_MAX + crate::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
 
 pub const BLOCK_SLOTS: usize = pxl_render::gpu::renderer::block_slots(MAX_LIVE_BLOCKS);
 

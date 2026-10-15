@@ -250,11 +250,6 @@
       "used_px": 1,
       "initial": 1
     },
-    "held": {
-      "decor_blocks": 1,
-      "decor_instances": 1,
-      "decor_bytes": 1
-    },
     "fetch": {
       "queued": 1,
       "running": 1,

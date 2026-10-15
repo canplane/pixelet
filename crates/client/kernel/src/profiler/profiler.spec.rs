@@ -298,16 +298,8 @@ pub mod SUMMARY {
         pub const WORDS: u32 = 5;
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
-    pub mod held {
-        pub const AT: u32 = 309;
-        pub const decor_blocks: u32 = 0;
-        pub const decor_instances: u32 = 1;
-        pub const decor_bytes: u32 = 2;
-        pub const WORDS: u32 = 3;
-        pub const KEYS: &[&str] = &["AT", "decor_blocks", "decor_instances", "decor_bytes", "WORDS"];
-    }
     pub mod fetch {
-        pub const AT: u32 = 312;
+        pub const AT: u32 = 309;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -315,7 +307,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 315;
+        pub const AT: u32 = 312;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -329,14 +321,14 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "present", "dt_ms", "sched_ms", "chunks_ms", "gpu_ms", "draw_calls", "triangles", "q_terrain", "q_place", "WORDS"];
     }
     pub mod steps {
-        pub const AT: u32 = 324;
+        pub const AT: u32 = 321;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 485;
+        pub const AT: u32 = 482;
         pub const step: u32 = 0;
         pub const star: u32 = 1;
         pub const frames_held: u32 = 2;
@@ -347,7 +339,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at.
     pub mod view {
-        pub const AT: u32 = 490;
+        pub const AT: u32 = 487;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -382,8 +374,8 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 504;
-    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "sheet", "held", "fetch", "peak", "steps", "quality", "view", "WORDS"];
+    pub const WORDS: u32 = 501;
+    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "sheet", "fetch", "peak", "steps", "quality", "view", "WORDS"];
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count.

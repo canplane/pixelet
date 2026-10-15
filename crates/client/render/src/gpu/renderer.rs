@@ -26,6 +26,7 @@ use crate::gpu::api_spec::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFOR
 use crate::gpu::api_spec::{dimension, format, load, resource, surface_role};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
 use crate::gpu::clouds::{self, CloudPass};
+use crate::gpu::grown::{DecorFrame, Drawn, Grown};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::{Layers, Mips};
 use crate::gpu::pass::badges::BadgePass;
@@ -41,6 +42,7 @@ use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURN
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
+use pxl_portable::scatter::GROUPS;
 use pxl_spec::block::window::{BACK_WORDS, ELE_AT, HEIGHTS_AT, LEVELS, SQUARE, SQUARE_WORDS, WAYS_AT};
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_kit::status::bug::OrBug;
@@ -147,6 +149,9 @@ pub struct Cast<'a> {
     /// Each shard the service area serves: its tile zoom, x and y, a spare.
     pub shards: &'a [[i32; 4]],
     pub overwrites: Overwrites<'a>,
+    /// The decor the GPU grows and draws over the same world, none where
+    /// decor is off (gpu/grown.rs).
+    pub decor: Option<DecorFrame<'a>>,
 }
 
 pub const CAST_EYE_WORDS: usize = 28;
@@ -763,6 +768,7 @@ struct CastBuffers {
     overwrites: u32,
     overwrite_room: usize,
     overwrite_revision: Option<u32>,
+    grown: Grown,
 }
 
 /// A square on the GPU, in bytes.
@@ -915,7 +921,7 @@ impl ScreenCellsPass {
 
     /// The lane for this frame: the GPU's cast where an eye casts, its eye
     /// handed over first; else a lane of no cells.
-    fn prepare(&mut self, g: &Gpu, pipelines: &mut Pipelines, cast: Option<Cast>) {
+    fn prepare(&mut self, g: &Gpu, pipelines: &mut Pipelines, cast: Option<Cast>, meshes: &[u32; GROUPS as usize]) {
         let s = stage_lane();
         let steps = u32::from(s[STAGE_AT::RAY_STEPS] != 0.0);
         // The eye's whole units wrap: a block's place is read off their low bits.
@@ -951,6 +957,7 @@ impl ScreenCellsPass {
                 overwrites: 0,
                 overwrite_room: 0,
                 overwrite_revision: None,
+                grown: Grown::new(g, pipelines),
             };
             self.cast = Some(c);
         }
@@ -1005,6 +1012,8 @@ impl ScreenCellsPass {
         if regroup || c.group == 0 {
             c.group = cast_group(g, c, ground, self.lane);
         }
+        let world = [c.eye, c.window, ground, c.shards, c.overwrites];
+        c.grown.prepare(g, cast.decor, meshes, world, regroup);
         g.write_buffer(self.lane, 0, bytes(&[c.across[0], c.across[1], steps, 0]));
     }
 
@@ -1036,7 +1045,8 @@ impl ScreenCellsPass {
         c.fresh_len = 0;
     }
 
-    /// The GPU's cast into the lane, a ray a cell, where it runs.
+    /// The GPU's cast into the lane, a ray a cell, where it runs; then the
+    /// decor the ground grows over the same world, a candidate a thread.
     fn dispatch(&self, g: &Gpu, encoder: u32) {
         let Some(c) = &self.cast else { return };
         let pass = object();
@@ -1044,8 +1054,14 @@ impl ScreenCellsPass {
         g.set_pipeline(pass, c.built.pipeline);
         g.set_bind_group(pass, 0, c.group, &[]);
         g.dispatch(pass, c.across[0].div_ceil(CAST_WORKGROUP), c.across[1].div_ceil(CAST_WORKGROUP), 1);
+        c.grown.dispatch(g, pass);
         g.end(pass);
         release(pass);
+    }
+
+    /// The decor the GPU grew this frame, as the draws read it.
+    fn grown(&self) -> Option<Drawn> {
+        self.cast.as_ref().and_then(|c| c.grown.drawn())
     }
 
     /// Returns the group 0 it leaves bound.
@@ -1332,6 +1348,7 @@ impl Renderer {
     fn draw_opaque(&mut self, g: &Gpu, pass: u32, draws: &Draws, b: &mut Blocks, stage: Stage) -> u32 {
         let mut bound = 0;
         self.decor.draw(g, pass, draws, b, stage, (self.models.frame, &mut bound));
+        self.decor.draw_grown(g, pass, self.screen.grown(), b, stage, (self.models.frame, &mut bound));
         self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, stage, (self.models.frame, &mut bound));
         bound
     }
@@ -1379,7 +1396,10 @@ impl Renderer {
         self.puck.prepare_zone(g, &draws, b);
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
-        self.screen.prepare(g, &mut self.pipelines, cast);
+        let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
+        self.screen.prepare(g, &mut self.pipelines, cast, &meshes);
+        self.decor.prepare_grown(g, self.screen.grown());
+        self.impostor.prepare_grown(g, self.screen.grown());
         self.prepare_cases(g, &draws, uniforms, input.cases);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
@@ -1415,6 +1435,7 @@ impl Renderer {
         let mut bound = self.screen.draw(g, pass);
         // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
         self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, (self.models.frame, &mut bound));
+        self.impostor.draw_grown(g, pass, self.screen.grown(), GROUPS, (self.models.frame, &mut bound));
         // At the far plane after the opaque world, so only empty pixels run the sky shader.
         g.set_pipeline(pass, self.sky_built.pipeline);
         g.set_bind_group(pass, 0, self.sky_group, &[]);

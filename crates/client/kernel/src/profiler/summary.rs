@@ -11,7 +11,7 @@ use crate::io::request::{counts, credits};
 use crate::layer::Base as _;
 use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
-use crate::profiler::block::{FetchBlock, FramesBlock, HeldBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::profiler::block::{FetchBlock, FramesBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::profiler::frame::FrameSample;
 use crate::profiler::frame::{missed, overran};
 use crate::profiler::log::window_baseline;
@@ -190,17 +190,6 @@ fn side(out: &mut [f64]) {
             shelves: sheet.shelves as f64,
             used_px: sheet.used_px as f64,
             initial: pxl_render::gpu::sheet::shelf::INITIAL_SIZE as f64,
-        },
-    );
-
-    let (decor_blocks, decor_instances) = crate::scene::decor::cell::counts();
-    put(
-        out,
-        SUMMARY::held::AT,
-        &HeldBlock {
-            decor_blocks: decor_blocks as f64,
-            decor_instances: decor_instances as f64,
-            decor_bytes: crate::scene::decor::cell::bytes() as f64,
         },
     );
 

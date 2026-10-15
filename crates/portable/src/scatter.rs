@@ -14,12 +14,13 @@
 
 use xpute_kit::math::rng::{derive_seed_u32, SplitMix32};
 
+use crate::cast::{Detail, SPLIT};
 use crate::caves::node_seed;
 use crate::cube::{sentinel, Ground};
 use crate::decor::{Counts, Decor, Orientation, BLOCK, DECORS};
 use crate::lattice::GROUND;
 use crate::placed::{self, Lanes, PLACED};
-use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, UNIT_ZOOM};
+use crate::{Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, UNIT_ZOOM};
 
 const BLOCK_SHIFT: u32 = BLOCK.trailing_zeros();
 const _: () = assert!(BLOCK.is_power_of_two(), "a block's side is a power of two, so a uniform cell in it is a draw's top bits");
@@ -123,17 +124,100 @@ pub const SQUARE_BLOCKS: u32 = {
     sum
 };
 
-/// Candidate `i` of the `n`-th block meeting `region` (`block_of`), where
-/// the block bears one that many and it lies in `region`.
-pub fn candidate_of(decor: &Decor, zoom: Zoom, region: [[i32; 2]; 2], n: u32, i: u32) -> Option<Candidate> {
+/// The most decor of every kind one square grows: a block bears no more
+/// than its counts' thresholds, and no more blocks than `SQUARE_BLOCKS`
+/// meet a square.
+pub const SQUARE_GROWN: u32 = {
+    let (mut sum, mut k) = (0, 0);
+    while k < DECORS.len() {
+        let [top, finer] = DECORS[k].counts;
+        sum += if top.len > finer.len { top.len } else { finer.len };
+        k += 1;
+    }
+    sum * SQUARE_BLOCKS
+};
+
+const _: () = assert!(size_of::<Decor>().is_multiple_of(4), "a row is whole words, as a GPU reads the table");
+
+/// What the GPU's decor pass writes, a record a decor it grows after a
+/// count and its pad: its kind, variant and turn, a byte each, then its
+/// box's min corner in leaf cells.
+pub const GROWN_AT: u32 = 4;
+pub const GROWN_WORDS: u32 = 4;
+
+/// Every variant of every kind, numbered kind by kind in the catalog's
+/// order: a decor's draw group (`first_group`).
+pub const GROUPS: u32 = {
+    let (mut sum, mut k) = (0, 0);
+    while k < DECORS.len() {
+        sum += DECORS[k].variants;
+        k += 1;
+    }
+    sum
+};
+
+/// The draw group of `rows`' kind `kind`'s first variant.
+pub fn first_group(rows: &[Decor], kind: u32) -> u32 {
+    let (mut first, mut k) = (0, 0);
+    while k < kind {
+        first += rows[k as usize].variants;
+        k += 1;
+    }
+    first
+}
+
+/// How the GPU draws what it grows: each record sized for the screen, a
+/// model or a sprite, into its group's region, models at `2·group` and
+/// sprites past it; the regions laid end to end in one decor block, in the
+/// layout the decor and impostor shaders read (lanes x, y, z, spin, scale,
+/// `DRAWN_LANES` a slot, then the index list), each region's draw a set of
+/// indirect args.
+pub mod drawn {
+    use super::GROUPS;
+
+    pub const REGIONS: u32 = 2 * GROUPS;
+    /// A record drawn as nothing.
+    pub const NONE: u32 = 0xff;
+    /// What a record's first word holds past its kind, variant and turn:
+    /// its region, once sized.
+    pub const REGION_SHIFT: u32 = 24;
+    pub const LANES: u32 = 5;
+    /// Each region's indirect args, `ARGS_WORDS` a region: a model's
+    /// indexed, a sprite's a strip of four corners an instance; its first
+    /// instance 0, which a device without `indirect-first-instance` holds
+    /// every indirect draw to.
+    pub const ARGS_WORDS: u32 = 5;
+    /// Each region's draw uniform, `UNIFORM_WORDS` apart (every device's
+    /// dynamic offset alignment), its index list's first slot at
+    /// `UNIFORM_INDEX` within it: the lanes' base, to which the args pass
+    /// adds the region's first slot once the regions are laid out.
+    pub const UNIFORM_WORDS: u32 = 64;
+    pub const UNIFORM_INDEX: u32 = 7;
+    /// The frame's words: a pixel's units at one unit's distance, the
+    /// model's and the sprite's floors in pixels, the anchor the lanes'
+    /// positions are about (unit cells, X wrapping), the left-out decor's
+    /// corner and whether there is one, then each group's extent.
+    pub const UPP: u32 = 0;
+    pub const MODEL_PX: u32 = 1;
+    pub const SPRITE_PX: u32 = 2;
+    pub const ANCHOR: u32 = 4;
+    pub const HIDE: u32 = 8;
+    pub const EXTENTS: u32 = 12;
+    pub const PARAM_WORDS: u32 = EXTENTS + GROUPS;
+}
+
+/// Candidate `i` of the `n`-th block meeting `region` (`block_of`); false
+/// unless the block bears one that many and it lies in `region`.
+pub fn candidate_of(decor: &Decor, zoom: Zoom, region: [[i32; 2]; 2], n: u32, i: u32) -> (Candidate, bool) {
+    const NONE: Candidate = Candidate { cell: [0; 2], born: 0, seed: 0 };
     let (born, b, here) = block_of(zoom, region, n);
     if !here {
-        return None;
+        return (NONE, false);
     }
     let (block, shift) = block_seed(decor, born, b);
     let mut draws = SplitMix32::new(block);
     if i >= decor.counts[usize::from(born != GROUND.top())].of(draws.next_u32()) {
-        return None;
+        return (NONE, false);
     }
     // Two draws a candidate before it.
     let mut k = 0;
@@ -144,11 +228,12 @@ pub fn candidate_of(decor: &Decor, zoom: Zoom, region: [[i32; 2]; 2], n: u32, i:
     let x = (b[0] << shift) + (draws.next_u32() >> (32 - shift)) as i32;
     let y = (b[1] << shift) + (draws.next_u32() >> (32 - shift)) as i32;
     let [min, max] = region;
-    (min[0] <= x && x < max[0] && min[1] <= y && y < max[1]).then_some(Candidate {
+    let c = Candidate {
         cell: [x, y],
         born,
         seed: derive_seed_u32(block, i),
-    })
+    };
+    (c, min[0] <= x && x < max[0] && min[1] <= y && y < max[1])
 }
 
 /// Whether `a` stands before `b` where both would claim a cell: the one born
@@ -242,14 +327,33 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
 pub const PLACED_BLOCK: u32 = 1 << 16;
 
 /// What growing decor asks of the world, as either side holds it: the
-/// ground's cells, the world's one query, and what is placed (`Lanes`).
+/// ground's cells, the world's one query by a descent, what is placed
+/// (`Lanes`), and the catalog's rows where it reads them.
 pub trait Grounds: Lanes {
+    /// What a descent hands a node: what its ancestors found.
+    type At: Copy;
+    /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
+    /// reads them from a buffer, never a table it copies.
+    fn rows(&self) -> &[Decor];
     /// The ground's cell `g` at `cell`, as a grid reads it: its face's look
     /// and its top, in blocks of `cell`; false where it has no ground.
     fn face(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool);
-    /// What is in the block `c` of `zoom`, the world's one query's answer:
-    /// `void`, the ground's value, or `PLACED_BLOCK` over what is placed.
-    fn block(&mut self, zoom: Zoom, c: [i32; 3]) -> u32;
+    /// The node `c` of `zoom` with what its line from the root found: where
+    /// a descent starts.
+    fn start(&mut self, zoom: Zoom, c: [i32; 3]) -> Self::At;
+    /// What is in the block `c` of `zoom` under the node of `from` that `at`
+    /// was handed for, a child a zoom down from it, the world's one query's
+    /// answer: `void`, the ground's value, or `PLACED_BLOCK` over what is
+    /// placed.
+    fn block(&mut self, at: &Self::At, from: Zoom, zoom: Zoom, c: [i32; 3]) -> u32;
+}
+
+/// Zooms over the blocks `[lo, hi]` of `zoom` to the node holding them
+/// all: the bits the corners differ in, on the axis they differ most; more
+/// than `zoom` where no node does, the world having a root a node of zoom 0.
+fn holding(lo: [i32; 3], hi: [i32; 3]) -> u32 {
+    let d = (lo[0] ^ hi[0]) | (lo[1] ^ hi[1]) | (lo[2] ^ hi[2]);
+    32 - (d as u32).leading_zeros()
 }
 
 /// Decor the ground grows, where it stands: its variant, its heading in
@@ -263,45 +367,56 @@ pub struct Grown {
 
 /// Where candidate `c` of `decor` stands on the ground's cells at `cell`, as
 /// those cells draw it: on its cell's top, facing as its cells' looks vote
-/// (`pose`); none where its cell has no ground. Whether its footing holds
+/// (`pose`); false where its cell has no ground. Whether its footing holds
 /// there is `grows`'.
-pub fn stand(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate) -> Option<Grown> {
+pub fn stand(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate) -> (Grown, bool) {
     let s = LEAF_CELL - cell;
     let at = [c.cell[0] >> s, c.cell[1] >> s];
     let (_, top, here) = q.face(cell, at);
     if !here {
-        return None;
+        return (Grown { variant: 0, turn: 0, at: [0; 3] }, false);
     }
     let (variant, turn) = pose(decor, c, |[dx, dy]| {
         let (look, _, here) = q.face(cell, [at[0] + dx, at[1] + dy]);
-        here && look < 256 && Ground::of(look as u8).is_some_and(Ground::transport)
+        here && Ground::transports(look)
     });
-    Some(Grown {
+    let g = Grown {
         variant,
         turn,
         at: [c.cell[0], c.cell[1], top * (1 << s)],
-    })
+    };
+    (g, true)
 }
 
 /// Whether `decor` standing as `g` grows on the ground's cells at `cell`:
 /// every block of its box void and every one under its base ground it grows
-/// on, each asked of the world's one query at `cell`, air placed in it or
-/// under it no void; and no placed decor claims its room (`claimed`).
+/// on, each asked of the world's one query at `cell` down from the node
+/// holding them all, descended to once; air placed in it or under it no
+/// void; and no placed decor claims its room (`claimed`).
 pub fn grows(q: &mut impl Grounds, decor: &Decor, cell: Zoom, g: &Grown) -> bool {
     let s = LEAF_CELL - cell;
-    let [w, d, h] = decor.cells(g.variant, g.turn).map(|n| n as i32);
+    let [w, d, h] = decor.cells(g.variant, g.turn);
+    let (w, d, h) = (w as i32, d as i32, h as i32);
     let [x0, y0, z] = g.at;
-    let mut by = y0 >> s;
-    while by <= (y0 + d - 1) >> s {
-        let mut bx = x0 >> s;
-        while bx <= (x0 + w - 1) >> s {
-            let under = q.block(cell, [bx, by, (z - 1) >> s]);
-            if under & PLACED_BLOCK != 0 || !decor.allows(under) {
-                return false;
-            }
-            let mut bz = z >> s;
-            while bz <= (z + h - 1) >> s {
-                if q.block(cell, [bx, by, bz]) != sentinel::void as u32 {
+    let lo = [x0 >> s, y0 >> s, (z - 1) >> s];
+    let hi = [(x0 + w - 1) >> s, (y0 + d - 1) >> s, (z + h - 1) >> s];
+    let k = holding(lo, hi);
+    let held = k <= cell;
+    let start = q.start(if held { cell - k } else { cell }, if held { [lo[0] >> k, lo[1] >> k, lo[2] >> k] } else { lo });
+    // The box's columns, each from the block under its base up: one ask a
+    // block, down from the node holding the box, or from its own root where
+    // none does (`holding`).
+    let mut by = lo[1];
+    while by <= hi[1] {
+        let mut bx = lo[0];
+        while bx <= hi[0] {
+            let mut bz = lo[2];
+            while bz <= hi[2] {
+                let c = [bx, by, bz];
+                let (at, from) = if held { (start, cell - k) } else { (q.start(cell, c), cell) };
+                let v = q.block(&at, from, cell, c);
+                let holds = if bz == lo[2] { v & PLACED_BLOCK == 0 && decor.allows(v) } else { v == sentinel::void as u32 };
+                if !holds {
                     return false;
                 }
                 bz += 1;
@@ -311,6 +426,56 @@ pub fn grows(q: &mut impl Grounds, decor: &Decor, cell: Zoom, g: &Grown) -> bool
         by += 1;
     }
     !claimed(q, g.at, [w, d, h])
+}
+
+/// How far decor standing at `at` (leaf cells) lies from `origin` (Q3
+/// steps), in units: from its cell's middle at its base, X round the world
+/// as the steps wrap.
+pub fn distance(origin: [i32; 3], at: [i32; 3]) -> f32 {
+    let half = 1 << (FRAC_W - 1);
+    let step = |v: i32, o: i32, mid: i32| (v.wrapping_shl(FRAC_W).wrapping_add(mid).wrapping_sub(o)) as f32 / (1 << FRAC_W) as f32;
+    let [dx, dy, dz] = [step(at[0], origin[0], half), step(at[1], origin[1], half), step(at[2], origin[2], 0)];
+    libm::sqrtf(dx * dx + dy * dy + dz * dz)
+}
+
+/// Whether decor standing at `at` is drawn at `cell` for an eye at
+/// `origin`: the zoom the rays ask at its distance (`Detail::at`), so each
+/// decor is drawn at one zoom, where the rays draw the ground about it.
+pub fn drawn_at(detail: Detail, origin: [i32; 3], at: [i32; 3], cell: Zoom) -> bool {
+    detail.at(distance(origin, at)) == cell
+}
+
+/// Whether the square of leaf cells `region`, its heights within `[lo, hi]`
+/// (leaf cells), may hold decor drawn at `cell` for an eye at `origin`
+/// (`drawn_at`): some of it nearer than where the rays ask a coarser zoom,
+/// and some farther than where they ask a finer one.
+pub fn meets_band(detail: Detail, origin: [i32; 3], region: [[i32; 2]; 2], [lo, hi]: [i32; 2], cell: Zoom) -> bool {
+    if cell < detail.range[0] || cell > detail.range[1] {
+        return false;
+    }
+    let [min, max] = region;
+    // The nearest and farthest a span of leaf cells `[a, b)` (`[a, b]` up)
+    // lies from the eye on an axis, in units, as the steps wrap.
+    let unit = (1 << FRAC_W) as f32;
+    let span = |a: i32, b: i32, o: i32| {
+        let (a, b) = (a.wrapping_shl(FRAC_W).wrapping_sub(o) as f32 / unit, b.wrapping_shl(FRAC_W).wrapping_sub(o) as f32 / unit);
+        let near = if a > 0.0 {
+            a
+        } else if b < 0.0 {
+            -b
+        } else {
+            0.0
+        };
+        (near, if -a > b { -a } else { b })
+    };
+    let (nx, fx) = span(min[0], max[0], origin[0]);
+    let (ny, fy) = span(min[1], max[1], origin[1]);
+    let (nz, fz) = span(lo, hi, origin[2]);
+    let near = libm::sqrtf(nx * nx + ny * ny + nz * nz) * detail.tau;
+    let far = (libm::sqrtf(fx * fx + fy * fy + fz * fz) + 1.0) * detail.tau;
+    // Where the rays ask `cell`: [split / 2 · 2^(UNIT_ZOOM − cell), twice that).
+    let from = SPLIT / 2.0 * (1u32 << (UNIT_ZOOM - cell)) as f32;
+    (cell == detail.range[0] || near < 2.0 * from) && (cell == detail.range[1] || far >= from)
 }
 
 /// Placed decor's tag (`node_seed`).
@@ -325,11 +490,11 @@ pub fn placed_pose(decor: &Decor, corner: [i32; 3]) -> (u32, u32) {
     (variant, draws.next_u32() >> 30)
 }
 
-/// The catalog's row a stored value names; false for one not decor.
-pub fn row_of(value: u32) -> (u32, bool) {
+/// The row of `rows` a stored value names; false for one not decor.
+pub fn row_of(rows: &[Decor], value: u32) -> (u32, bool) {
     let mut k = 0;
-    while k < DECORS.len() {
-        if DECORS[k].value == value {
+    while k < rows.len() {
+        if rows[k].value == value {
             return (k as u32, true);
         }
         k += 1;
@@ -363,7 +528,7 @@ const CLAIM_ZOOM: Zoom = UNIT_ZOOM - 3;
 /// Whether placed decor claims a cell of the box from `at` (unit cells),
 /// `cells` a side: one whose corner, posed as placed (`placed_pose`), holds
 /// a box meeting it.
-pub fn claimed(lanes: &impl Lanes, at: [i32; 3], cells: [i32; 3]) -> bool {
+pub fn claimed(lanes: &impl Grounds, at: [i32; 3], cells: [i32; 3]) -> bool {
     let lo = [at[0] - CLAIM_REACH[0], at[1] - CLAIM_REACH[1], at[2] - CLAIM_REACH[2]];
     let hi = [at[0] + cells[0] - 1, at[1] + cells[1] - 1, at[2] + cells[2] - 1];
     let s = UNIT_ZOOM - CLAIM_ZOOM;
@@ -373,7 +538,8 @@ pub fn claimed(lanes: &impl Lanes, at: [i32; 3], cells: [i32; 3]) -> bool {
         while n[1] <= hi[1] >> s {
             n[0] = lo[0] >> s;
             while n[0] <= hi[0] >> s {
-                if placed::cursor(lanes, PLACED, CLAIM_ZOOM, n).holds() && claimed_in(lanes, n, lo, hi, at, cells) {
+                let node = placed::cursor(lanes, PLACED, CLAIM_ZOOM, n);
+                if node.holds() && claimed_in(lanes, n, node, lo, hi, at, cells) {
                     return true;
                 }
                 n[0] += 1;
@@ -386,8 +552,9 @@ pub fn claimed(lanes: &impl Lanes, at: [i32; 3], cells: [i32; 3]) -> bool {
 }
 
 /// `claimed`, over the corners in `[lo, hi]` within the node `n` at
-/// `CLAIM_ZOOM`, each a placed decor's leaf or not.
-fn claimed_in(lanes: &impl Lanes, n: [i32; 3], lo: [i32; 3], hi: [i32; 3], at: [i32; 3], cells: [i32; 3]) -> bool {
+/// `CLAIM_ZOOM`, holding `node`, each a placed decor's leaf or not, stepped
+/// down from it.
+fn claimed_in(lanes: &impl Grounds, n: [i32; 3], node: placed::Held, lo: [i32; 3], hi: [i32; 3], at: [i32; 3], cells: [i32; 3]) -> bool {
     let s = UNIT_ZOOM - CLAIM_ZOOM;
     let first = [lo[0].max(n[0] << s), lo[1].max(n[1] << s), lo[2].max(n[2] << s)];
     let last = [hi[0].min((n[0] << s) + (1 << s) - 1), hi[1].min((n[1] << s) + (1 << s) - 1), hi[2].min((n[2] << s) + (1 << s) - 1)];
@@ -397,11 +564,17 @@ fn claimed_in(lanes: &impl Lanes, n: [i32; 3], lo: [i32; 3], hi: [i32; 3], at: [
         while u[1] <= last[1] {
             u[0] = first[0];
             while u[0] <= last[0] {
-                let held = placed::cursor(lanes, PLACED, UNIT_ZOOM, u);
+                let mut held = node;
+                let mut z = CLAIM_ZOOM;
+                while z < UNIT_ZOOM {
+                    z += 1;
+                    let t = UNIT_ZOOM - z;
+                    held = placed::child(lanes, held, z, [u[0] >> t, u[1] >> t, u[2] >> t]);
+                }
                 if held.holds() && !held.folded() && held.zoom() == UNIT_ZOOM {
-                    let (k, decor) = row_of(lanes.data(held.slot()) & 0xffff);
+                    let (k, decor) = row_of(lanes.rows(), lanes.data(held.slot()) & 0xffff);
                     if decor {
-                        let d = &DECORS[k as usize];
+                        let d = &lanes.rows()[k as usize];
                         let (variant, turn) = placed_pose(d, u);
                         let [w, e, h] = d.cells(variant, turn);
                         let (w, e, h) = (w as i32, e as i32, h as i32);

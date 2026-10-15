@@ -23,6 +23,7 @@ pub const COUNTS: usize = 36;
 /// How a decor the ground grows faces: any way, or along the road or rail its
 /// cell lies on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
 pub enum Orientation {
     random,
     along_transport,
@@ -32,13 +33,16 @@ pub enum Orientation {
 /// ⌈P(N ≤ k) · 2^32⌉, as many as fall under 2^32, and a draw bears as many as
 /// it reaches (pxl-portable scatter.rs `Counts::of`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
 pub struct Counts {
     pub len: u32,
     pub at: [u32; COUNTS],
 }
 
-/// A decor as the ground grows it, in u32 alone.
+/// A decor as the ground grows it, in 32-bit words alone, laid out as a
+/// GPU reads the table from a buffer of these words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
 pub struct Decor {
     /// What a placed one is stored as.
     pub value: u32,

@@ -142,7 +142,7 @@ impl World<'_> {
     /// the service area, air over its tile's bound, else its cell off the
     /// tile drawing that zoom's cells, with the ring about it, and the caves'
     /// value.
-    fn drawn(&self, at: &mut At) -> Answer<Option<Block>> {
+    pub(super) fn drawn(&self, at: &mut At) -> Answer<Option<Block>> {
         let (zoom, b) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
         let placed = placed::over(&self.objects.lanes(), at.placed, self.cut(self.carve), self.cut(self.hide), zoom, b.map(|v| v as i32), true);

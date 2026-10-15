@@ -42,7 +42,16 @@ pub const SHADER_BOUND: u32 = 27;
 /// generated with the cast from pxl-portable's `ground::height`: its one
 /// compute entry.
 pub const SHADER_HEIGHTS: u32 = 28;
-pub const SHADERS: u32 = 29;
+/// The decor the ground grows in the eye's windows, generated with the cast
+/// from pxl-portable's `scatter`: its one compute entry.
+pub const SHADER_GROWN: u32 = 29;
+/// What `SHADER_GROWN` and placed decor leave, sized for the screen and
+/// counted a draw region each; the regions laid out with their indirect
+/// args; each drawn into the decor block: pxl-portable `scatter::drawn`.
+pub const SHADER_GROWN_COUNT: u32 = 30;
+pub const SHADER_GROWN_ARGS: u32 = 31;
+pub const SHADER_GROWN_PLACE: u32 = 32;
+pub const SHADERS: u32 = 33;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -154,6 +163,10 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_CAST => include_str!(concat!(env!("OUT_DIR"), "/shader/cast.gen.wgsl")),
         SHADER_BOUND => include_str!(concat!(env!("OUT_DIR"), "/shader/bound.gen.wgsl")),
         SHADER_HEIGHTS => include_str!(concat!(env!("OUT_DIR"), "/shader/heights.gen.wgsl")),
+        SHADER_GROWN => include_str!(concat!(env!("OUT_DIR"), "/shader/decor.gen.wgsl")),
+        SHADER_GROWN_COUNT => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_count.gen.wgsl")),
+        SHADER_GROWN_ARGS => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_args.gen.wgsl")),
+        SHADER_GROWN_PLACE => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_place.gen.wgsl")),
         SHADER_MIPS => wgsl!("mips"),
         SHADER_SHEET => wgsl!("sheet"),
         SHADER_IMPOSTOR => wgsl!(

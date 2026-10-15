@@ -1,0 +1,125 @@
+// pxl-kernel/scene/decor/drawn.rs
+
+//! What the GPU's decor takes each frame (pxl-render gpu/grown.rs), which
+//! grows what the ground grows and draws it with placed decor: what only
+//! the CPU knows, handed over and never read back. Each kind's zooms where
+//! it is a sprite's worth, a pixel's size and the tiers' floors, the anchor
+//! the decor block is drawn about, the decor the eraser leaves out, each
+//! variant's extent, and placed decor as records.
+
+use pxl_portable::scatter::{drawn, row_of};
+use pxl_portable::LEAF_CELL;
+use pxl_render::gpu::grown::DecorFrame;
+use pxl_spec::block::decor::DECORS;
+use pxl_spec::space::camera::grid::{px_per_unit, split_distance, REFERENCE_FOV_DEG, REFERENCE_VIEWPORT_H};
+use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::zoom::{index_of, Zoom, UNIT_ZOOM};
+use xpute_guest::global::Global;
+
+use crate::layer::object::meta::user_decor_pick;
+use crate::layer::object::store::{EntryAt, Store};
+use crate::layer::terrain::window::FIRST_CELL;
+use crate::setting::store::settings_store;
+use crate::view::frame::pose::units_per_px_at;
+
+/// A decor is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
+/// down to `DECOR_SPRITE_PX`. No fade: the edge is per instance, so it staggers.
+pub fn decor_gone_px() -> f64 {
+    crate::param::DECOR_MODEL_PX
+}
+
+pub fn decor_sprite_px() -> f64 {
+    crate::param::DECOR_SPRITE_PX
+}
+
+/// Whether a decor `extent_u` wide is a sprite's worth anywhere cells of
+/// `cell_zoom` are drawn: as it spans where that zoom begins, at the
+/// reference view.
+fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
+    extent_u / split_distance(cell_zoom) * px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) >= decor_sprite_px()
+}
+
+/// The frame's hand-over, kept so a settled frame asks the heap for nothing.
+struct Handed {
+    on: bool,
+    shown: [u32; DECORS.len()],
+    params: [u32; drawn::PARAM_WORDS as usize],
+    placed: Vec<[u32; 4]>,
+    translation: [f32; 3],
+}
+
+static HANDED: Global<Handed> = Global::new();
+
+fn handed() -> &'static mut Handed {
+    HANDED.get(|| Handed {
+        on: false,
+        shown: [0; DECORS.len()],
+        params: [0; drawn::PARAM_WORDS as usize],
+        placed: Vec::new(),
+        translation: [0.0; 3],
+    })
+}
+
+/// Leaf cells round the world, as the GPU's X wraps.
+const ROUND: i64 = 1 << LEAF_CELL;
+
+/// This frame's hand-over for an eye at `eye`: placed decor out to where the
+/// largest is a sprite's worth, less the placed decor `hide` names, and the
+/// ground's decor at `scattered` left out.
+pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i64; 3]>) {
+    let h = handed();
+    h.on = settings_store().decor;
+    if !h.on {
+        return;
+    }
+    for (k, d) in DECORS.iter().enumerate() {
+        h.shown[k] = (FIRST_CELL..=LEAF_CELL).filter(|&c| decor_shown(d.extent(), c)).fold(0, |w, c| w | 1 << (c - FIRST_CELL));
+    }
+    let anchor = eye.map(libm::floor);
+    let p = &mut h.params;
+    p.fill(0);
+    p[drawn::UPP as usize] = (units_per_px_at(1.0) as f32).to_bits();
+    p[drawn::MODEL_PX as usize] = (decor_gone_px() as f32).to_bits();
+    p[drawn::SPRITE_PX as usize] = (decor_sprite_px() as f32).to_bits();
+    let at = drawn::ANCHOR as usize;
+    p[at] = (anchor[0] as i64).rem_euclid(ROUND) as u32;
+    p[at + 1] = anchor[1] as i64 as u32;
+    p[at + 2] = anchor[2] as i64 as u32;
+    if let Some([x, y, z]) = scattered {
+        let at = drawn::HIDE as usize;
+        p[at..at + 4].copy_from_slice(&[x.rem_euclid(ROUND) as u32, y as u32, z as u32, 1]);
+    }
+    let extents = DECORS.iter().flat_map(|d| d.variants.iter().map(|v| v.extent() as f32));
+    for (k, e) in extents.enumerate() {
+        p[drawn::EXTENTS as usize + k] = e.to_bits();
+    }
+    h.translation = [0, 1, 2].map(|k| (anchor[k] - eye[k]) as f32);
+    let reach = DECORS.iter().map(|d| d.extent()).fold(0.0, f64::max) / (decor_sprite_px() * units_per_px_at(1.0));
+    let around = Aabb {
+        min: eye.map(|v| v - reach),
+        max: eye.map(|v| v + reach),
+    };
+    h.placed.clear();
+    let placed = &mut h.placed;
+    store.entries_in(&around, &mut |e| {
+        let (k, decor) = row_of(&pxl_portable::decor::DECORS, e.state);
+        if !decor || hide == Some(e.id()) {
+            return;
+        }
+        let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
+        let [x, y, z] = index_of(UNIT_ZOOM, &e.corner());
+        placed.push([k | variant << 8 | turn << 16, x.rem_euclid(ROUND) as u32, y as u32, z as u32]);
+    });
+}
+
+/// The hand-over `step` made, none where decor is off.
+pub fn frame() -> Option<DecorFrame<'static>> {
+    let h = handed();
+    h.on.then_some(DecorFrame {
+        shown: &h.shown,
+        params: &h.params,
+        placed: &h.placed,
+        translation: h.translation,
+    })
+}

@@ -180,6 +180,12 @@ pub fn draw_models<'a>(
 
 #[allow(clippy::too_many_arguments)]
 pub fn draw_model(g: &Gpu, pass: u32, lit: &Built, bound: &mut u32, mesh: u32, vertex_cnt: u32, index_cnt: u32, instances: u32) {
+    bind_mesh(g, pass, lit, bound, mesh, vertex_cnt, index_cnt);
+    g.draw_indexed(pass, index_cnt, instances, 0, 0);
+}
+
+/// A mesh's vertex lanes and indices bound, unless `bound` is it already.
+pub fn bind_mesh(g: &Gpu, pass: u32, lit: &Built, bound: &mut u32, mesh: u32, vertex_cnt: u32, index_cnt: u32) {
     if *bound != mesh {
         let mut at = 0;
         for lane in 0..lit.lanes {
@@ -190,5 +196,4 @@ pub fn draw_model(g: &Gpu, pass: u32, lit: &Built, bound: &mut u32, mesh: u32, v
         g.set_index_buffer(pass, mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, index_cnt * 4);
         *bound = mesh;
     }
-    g.draw_indexed(pass, index_cnt, instances, 0, 0);
 }

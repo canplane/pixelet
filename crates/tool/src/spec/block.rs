@@ -398,9 +398,12 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         ),
         String::new(),
         "        /// A way: decor faces along it and no pier stands on it.".into(),
+        "        pub const fn transport(self) -> bool { Ground::transports(self as u32) }".into(),
+        String::new(),
+        "        /// Whether a look read into a word is a way (`transport`).".into(),
         format!(
-            "        pub const fn transport(self) -> bool {{ matches!(self, {}) }}",
-            named(&ground).filter(|e| e.transport).map(|e| format!("Ground::{}", e.name)).collect::<Vec<_>>().join(" | ")
+            "        pub const fn transports(value: u32) -> bool {{ matches!(value, {}) }}",
+            runs(named(&ground).filter(|e| e.transport).map(|e| e.value)).join(" | ")
         ),
     ]);
     rs.extend(["    }".to_string(), String::new()]);
@@ -653,6 +656,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "/// How a decor the ground grows faces: any way, or along the road or rail its",
             "/// cell lies on.",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+            "#[repr(u32)]",
             "pub enum Orientation {",
             "    random,",
             "    along_transport,",
@@ -662,13 +666,16 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "/// ⌈P(N ≤ k) · 2^32⌉, as many as fall under 2^32, and a draw bears as many as",
             "/// it reaches (pxl-portable scatter.rs `Counts::of`).",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+            "#[repr(C)]",
             "pub struct Counts {",
             "    pub len: u32,",
             "    pub at: [u32; COUNTS],",
             "}",
             "",
-            "/// A decor as the ground grows it, in u32 alone.",
+            "/// A decor as the ground grows it, in 32-bit words alone, laid out as a",
+            "/// GPU reads the table from a buffer of these words.",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+            "#[repr(C)]",
             "pub struct Decor {",
             "    /// What a placed one is stored as.",
             "    pub value: u32,",

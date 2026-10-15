@@ -8,6 +8,7 @@ pub mod api;
 pub mod api_spec;
 pub mod atmosphere;
 pub mod clouds;
+pub mod grown;
 pub mod image_map;
 pub mod layers;
 pub mod pass;

@@ -25,7 +25,7 @@ mod world;
 
 pub use block::Surface;
 pub use ray::{asked, Detail, Hit, Ray, Struck};
-pub use scatter::{grow, ring};
+pub use scatter::ring;
 pub use support::{over, under};
 pub use surface::Surfaces;
 pub use world::World;
