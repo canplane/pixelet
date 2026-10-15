@@ -218,7 +218,7 @@ pub fn pending_step() -> RenderEdits {
     // material whatever its sub-cell bytes, so the cell goes whole anyway.
     let size = match (&object, active_tool) {
         (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
-        (_, ActiveTool::Decor) => units(Decor::of(ui.decor_id).cell_zoom()),
+        (_, ActiveTool::Decor) => units(Decor::of(ui.decor_id).row.cell_zoom()),
         (_, ActiveTool::Marker) => MARKER_SIZE,
         _ if digging || scattered => units(GROUND.cell()),
         _ => object_size_of(ui.object_tier),

@@ -479,7 +479,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
                 .collect()
         })
         .unwrap_or_default();
-    let table = decor_table(&spec, &ground_names()?)?;
+    let (portable, table) = decor_table(&spec, &ground_looks()?)?;
 
     let mut ts = vec!["// @pxl/web/catalog/block/decor.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
@@ -489,7 +489,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
     ts.extend(["} as const satisfies Record<string, number>;", "", "export type DecorId = keyof typeof decor;"].map(String::from));
 
     let mut rs = vec!["// pxl-spec/block/decor.spec.rs".to_string()];
-    rs.extend(head);
+    rs.extend(head.iter().cloned());
     rs.extend(doc.iter().map(|l| format!("// {l}")));
     rs.push("//".into());
     rs.extend(casing_note());
@@ -524,51 +524,210 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
         .map(String::from),
     );
     rs.extend(table);
+    let mut row = vec!["// pxl-portable/decor.spec.rs".to_string()];
+    row.extend(head);
+    row.extend(
+        [
+            "// The decors as the GPU reads them too: how the ground grows each one, the",
+            "// looks it stands on and the boxes its variants claim, in the catalog's",
+            "// order. pxl-spec block/decor.spec.rs adds their models over each row.",
+            "#![allow(non_camel_case_types)]",
+        ]
+        .map(String::from),
+    );
+    row.extend(portable);
     Ok(vec![
         Output::new("apps/web/src/catalog/block/decor.spec.ts", file(&ts)),
         Output::new("crates/spec/src/block/decor.spec.rs", file(&unwrapped(rs, "pub mod decors {"))),
+        Output::new("crates/portable/src/decor.spec.rs", file(&row)),
     ])
 }
 
-/// The ground's looks by name, what a decor may stand on.
-fn ground_names() -> Result<Vec<String>, String> {
+/// The ground's looks by name and number, what a decor may stand on.
+fn ground_looks() -> Result<Vec<(String, u32)>, String> {
     let spec = read(CUBE_JSON)?;
-    Ok(named(&entries(spec.get("ground").ok_or("no ground")?, "ground")?).map(|e| e.name.to_string()).collect())
+    Ok(named(&entries(spec.get("ground").ok_or("no ground")?, "ground")?).map(|e| (e.name.to_string(), e.value)).collect())
 }
 
-/// The decors' table: each one's models and how the ground grows it, in the
-/// catalog's order, which is the order its variants are numbered in.
-fn decor_table(spec: &Node, looks: &[String]) -> Result<Vec<String>, String> {
+/// The decors' table, in the catalog's order, which is the order their
+/// variants are numbered in: in pxl-portable every number the GPU reads too
+/// (how the ground grows each one, its looks, its boxes), in pxl-spec its
+/// models over that row.
+fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec<String>), String> {
     const ASSET: &str = "crate::asset::ingested::Asset";
+    let scatter = spec.get("scatter").ok_or(format!("{DECOR_JSON}: no scatter"))?;
+    let whole = |key: &str| {
+        scatter
+            .get(key)
+            .and_then(Node::num)
+            .filter(|n| n.fract() == 0.0 && (1.0..=f64::from(u16::MAX)).contains(n))
+            .map(|n| n as u32)
+            .ok_or(format!("{DECOR_JSON}: scatter.{key}"))
+    };
+    let (block, kept) = (whole("block")?, whole("kept")?);
+    if !block.is_power_of_two() || kept < 2 {
+        return Err(format!("{DECOR_JSON}: scatter.block is a power of two and scatter.kept at least 2"));
+    }
+    // A block's mean count: at the top all it bears, finer all but what the
+    // zoom over it kept.
+    let shares = [1.0, 1.0 - 1.0 / f64::from(kept)];
+
+    struct Row {
+        name: String,
+        doc: Vec<String>,
+        seed: String,
+        counts: [Vec<u32>; 2],
+        orientation: String,
+        on: [u32; 8],
+        scale_steps: i32,
+        sizes: Vec<String>,
+        models: Vec<String>,
+    }
+    let mut rows = Vec::new();
+    for (name, k) in spec.get("decors").ok_or(format!("{DECOR_JSON}: no decors"))?.entries() {
+        let at = |field: &str| format!("{DECOR_JSON}: {name}.{field}");
+        let seed = k.str_at("seed").ok_or(at("seed"))?;
+        u32::from_str_radix(seed.trim_start_matches("0x"), 16).map_err(|e| format!("{}: {e}", at("seed")))?;
+        let density = k.get("density").and_then(Node::num).filter(|d| *d > 0.0).ok_or(at("density"))?;
+        let orientation = k.str_at("orientation").filter(|o| matches!(*o, "random" | "along_transport")).ok_or(at("orientation"))?;
+        let mut on = [0u32; 8];
+        for l in k.get("on").and_then(Node::arr).ok_or(at("on"))? {
+            let v = l
+                .str()
+                .and_then(|l| looks.iter().find(|(g, _)| g == l))
+                .map(|(_, v)| *v)
+                .filter(|v| *v < 256)
+                .ok_or(format!("{}: {l:?} is no ground look", at("on")))?;
+            on[(v >> 5) as usize] |= 1 << (v & 31);
+        }
+        let scale_steps = match k.get("scale_steps") {
+            None => 0.0,
+            Some(n) => n.num().filter(|n| n.fract() == 0.0 && (f64::from(i8::MIN)..=f64::from(i8::MAX)).contains(n)).ok_or(at("scale_steps"))?,
+        };
+        let (mut sizes, mut models) = (Vec::new(), Vec::new());
+        for v in k.get("variants").and_then(Node::arr).ok_or(at("variants"))? {
+            let size = v.get("size").and_then(Node::arr).filter(|s| s.len() == 3).map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
+            match (v.str_at("model"), v.str_at("skin"), size.flatten()) {
+                (Some(m), Some(s), Some(size)) if size.iter().all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u16::MAX)) => {
+                    sizes.push(format!("[{}]", size.iter().map(|&n| js_num(n)).collect::<Vec<_>>().join(", ")));
+                    models.push(format!("Variant {{ model: {ASSET}::{}, skin: {ASSET}::{} }}", rs_ident(m), rs_ident(s)));
+                }
+                _ => return Err(at("variants")),
+            }
+        }
+        if sizes.is_empty() {
+            return Err(at("variants"));
+        }
+        rows.push(Row {
+            name: name.clone(),
+            doc: k.lines_at("$doc").unwrap_or_default(),
+            seed: seed.to_string(),
+            counts: shares.map(|share| poisson_thresholds(density * f64::from(block * block) * share)),
+            orientation: orientation.to_string(),
+            on,
+            scale_steps: scale_steps as i32,
+            sizes,
+            models,
+        });
+    }
+    let variants_max = rows.iter().map(|r| r.sizes.len()).max().unwrap_or(1);
+    let counts_max = rows.iter().flat_map(|r| r.counts.iter().map(Vec::len)).max().unwrap_or(1);
+
+    let mut portable: Vec<String> = vec![String::new()];
+    portable.extend(rs_doc(&scatter.lines_at("$doc").unwrap_or_default(), "", "///"));
+    portable.extend([
+        format!("pub const BLOCK: u32 = {block};"),
+        format!("pub const KEPT: u32 = {kept};"),
+        String::new(),
+        "/// The most variants a kind has.".into(),
+        format!("pub const VARIANTS: usize = {variants_max};"),
+        "/// The most thresholds a kind's counts hold.".into(),
+        format!("pub const COUNTS: usize = {counts_max};"),
+    ]);
+    portable.extend(
+        [
+            "",
+            "/// How a decor the ground grows faces: any way, or along the road or rail its",
+            "/// cell lies on.",
+            "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+            "pub enum Orientation {",
+            "    random,",
+            "    along_transport,",
+            "}",
+            "",
+            "/// A block's Poisson count as thresholds on a u32 draw: the k-th is",
+            "/// ⌈P(N ≤ k) · 2^32⌉, as many as fall under 2^32, and a draw bears as many as",
+            "/// it reaches (pxl-portable scatter.rs `Counts::of`).",
+            "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+            "pub struct Counts {",
+            "    pub len: u32,",
+            "    pub at: [u32; COUNTS],",
+            "}",
+            "",
+            "/// A decor as the ground grows it, in u32 alone.",
+            "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
+            "pub struct Decor {",
+            "    /// Its scatter: changing it reshuffles every one the ground grows.",
+            "    pub seed: u32,",
+            "    /// A block's counts, born at the top zoom and born finer.",
+            "    pub counts: [Counts; 2],",
+            "    pub orientation: Orientation,",
+            "    /// The looks it may stand on, a bit each.",
+            "    pub on: [u32; 8],",
+            "    /// Its cell: a unit's zoom, this many coarser.",
+            "    pub scale_steps: i32,",
+            "    pub variants: u32,",
+            "    /// Each variant's box, in its kind's cells; none past `variants`.",
+            "    pub sizes: [[u32; 3]; VARIANTS],",
+            "}",
+            "",
+            "#[rustfmt::skip]",
+        ]
+        .map(String::from),
+    );
+    portable.push(format!("pub const DECORS: [Decor; {}] = [", rows.len()));
+    for r in &rows {
+        portable.push(format!("    // {}", r.name));
+        let counts = r.counts.iter().map(|c| {
+            let mut at: Vec<String> = c.iter().map(|t| t.to_string()).collect();
+            at.resize(counts_max, "0".into());
+            format!("Counts {{ len: {}, at: [{}] }}", c.len(), at.join(", "))
+        });
+        let mut sizes = r.sizes.clone();
+        sizes.resize(variants_max, "[0, 0, 0]".into());
+        portable.extend([
+            "    Decor {".to_string(),
+            format!("        seed: {},", r.seed),
+            format!("        counts: [{}],", counts.collect::<Vec<_>>().join(", ")),
+            format!("        orientation: Orientation::{},", r.orientation),
+            format!("        on: [{}],", r.on.map(|w| format!("{w:#010x}")).join(", ")),
+            format!("        scale_steps: {},", r.scale_steps),
+            format!("        variants: {},", r.models.len()),
+            format!("        sizes: [{}],", sizes.join(", ")),
+            "    },".to_string(),
+        ]);
+    }
+    portable.push("];".into());
+
     let mut rs: Vec<String> = [
         "",
-        "/// How a decor the ground grows faces: any way, or along the road or rail its",
-        "/// cell lies on.",
-        "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
-        "#[allow(non_camel_case_types)]",
-        "pub enum Orientation {",
-        "    random,",
-        "    along_transport,",
-        "}",
+        "/// How it grows, one row with the GPU's.",
+        "pub use pxl_portable::decor::Orientation;",
         "",
-        "/// A model, its pack's colormap, and the box it claims in its kind's cells.",
+        "/// A model and its pack's colormap.",
         "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
         "pub struct Variant {",
         "    pub model: crate::asset::ingested::Asset,",
         "    pub skin: crate::asset::ingested::Asset,",
-        "    pub size: [u32; 3],",
         "}",
         "",
-        "/// A decor: its id, its models, and how the ground grows it.",
+        "/// A decor: its id, its row (how the ground grows it and the boxes its",
+        "/// variants claim, pxl-portable decor.spec.rs) and its variants' models, in",
+        "/// the row's order.",
         "#[derive(Clone, Copy, Debug, PartialEq)]",
         "pub struct Decor {",
         "    pub id: DecorId,",
-        "    pub seed: u64,",
-        "    pub density: f64,",
-        "    pub orientation: Orientation,",
-        "    pub on: &'static [crate::bake::tile::terrain::GroundId],",
-        "    /// Its cell: a unit's zoom, this many coarser.",
-        "    pub scale_steps: i8,",
+        "    pub row: &'static pxl_portable::decor::Decor,",
         "    pub variants: &'static [Variant],",
         "}",
         "",
@@ -586,62 +745,39 @@ fn decor_table(spec: &Node, looks: &[String]) -> Result<Vec<String>, String> {
         rs.push(format!("    pub {field}: {ty},"));
     }
     rs.extend(["}".to_string(), String::new()]);
-    let decors = spec.get("decors").ok_or(format!("{DECOR_JSON}: no decors"))?.entries();
-    rs.push(format!("pub const DECORS: [Decor; {}] = [", decors.len()));
-    for (name, k) in decors {
-        let at = |field: &str| format!("{DECOR_JSON}: {name}.{field}");
-        if let Some(doc) = k.lines_at("$doc") {
-            rs.extend(doc.iter().map(|l| format!("    // {l}").trim_end().to_string()));
-        }
-        let seed = k.str_at("seed").ok_or(at("seed"))?;
-        u64::from_str_radix(seed.trim_start_matches("0x"), 16).map_err(|e| format!("{}: {e}", at("seed")))?;
-        let density = k.get("density").and_then(Node::num).ok_or(at("density"))?;
-        let orientation = k.str_at("orientation").filter(|o| matches!(*o, "random" | "along_transport")).ok_or(at("orientation"))?;
-        let on = k.get("on").and_then(Node::arr).ok_or(at("on"))?;
-        let on = on
-            .iter()
-            .map(|l| {
-                l.str()
-                    .filter(|l| looks.iter().any(|g| g == l))
-                    .map(|l| format!("crate::block::cube::ground::{l}"))
-                    .ok_or(format!("{}: {l:?} is no ground look", at("on")))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let scale_steps = match k.get("scale_steps") {
-            None => 0.0,
-            Some(n) => n.num().filter(|n| n.fract() == 0.0 && (f64::from(i8::MIN)..=f64::from(i8::MAX)).contains(n)).ok_or(at("scale_steps"))?,
-        };
-        let variants = k.get("variants").and_then(Node::arr).ok_or(at("variants"))?;
-        let variants = variants
-            .iter()
-            .map(|v| {
-                let size = v.get("size").and_then(Node::arr).filter(|s| s.len() == 3).map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
-                match (v.str_at("model"), v.str_at("skin"), size.flatten()) {
-                    (Some(m), Some(s), Some(size)) if size.iter().all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u32::MAX)) => Ok(format!(
-                        "Variant {{ model: {ASSET}::{}, skin: {ASSET}::{}, size: [{}] }}",
-                        rs_ident(m),
-                        rs_ident(s),
-                        size.iter().map(|&n| js_num(n)).collect::<Vec<_>>().join(", ")
-                    )),
-                    _ => Err(at("variants")),
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+    rs.push(format!("pub const DECORS: [Decor; {}] = [", rows.len()));
+    for (i, r) in rows.iter().enumerate() {
+        rs.extend(r.doc.iter().map(|l| format!("    // {l}").trim_end().to_string()));
         rs.extend([
             "    Decor {".to_string(),
-            format!("        id: DecorId::{name},"),
-            format!("        seed: {seed},"),
-            format!("        density: {},", if density.fract() == 0.0 { format!("{}.0", js_num(density)) } else { js_num(density) }),
-            format!("        orientation: Orientation::{orientation},"),
-            format!("        on: &[{}],", on.join(", ")),
-            format!("        scale_steps: {},", js_num(scale_steps)),
+            format!("        id: DecorId::{},", r.name),
+            format!("        row: &pxl_portable::decor::DECORS[{i}],"),
             "        variants: &[".to_string(),
         ]);
-        rs.extend(variants.iter().map(|v| format!("            {v},")));
+        rs.extend(r.models.iter().map(|v| format!("            {v},")));
         rs.extend(["        ],".to_string(), "    },".to_string()]);
     }
     rs.push("];".into());
-    Ok(rs)
+    Ok((portable, rs))
+}
+
+/// A Poisson count of mean `mean` as thresholds on a u32 draw: ⌈P(N ≤ k) ·
+/// 2^32⌉ for each k whose is under 2^32. libm, so every host writes the same.
+fn poisson_thresholds(mean: f64) -> Vec<u32> {
+    const WORD: f64 = 4_294_967_296.0;
+    let mut out = Vec::new();
+    let (mut p, mut k) = (libm::exp(-mean), 0.0);
+    let mut cumulative = p;
+    loop {
+        let t = libm::ceil(cumulative * WORD);
+        if t >= WORD || p == 0.0 {
+            return out;
+        }
+        out.push(t as u32);
+        k += 1.0;
+        p *= mean / k;
+        cumulative += p;
+    }
 }
 
 /// The lines of `rs` with the module `open` opens taken off, its body one

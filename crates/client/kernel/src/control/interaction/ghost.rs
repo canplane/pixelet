@@ -80,7 +80,7 @@ pub fn ghost() -> Ghost {
     // Placing back an erased scattered decor restores that instance; the ghost
     // shows it.
     let restored = match (active_tool, &hovered) {
-        (ActiveTool::Decor, Some(h)) => restores_scattered(h, units(Decor::of(ui.decor_id).cell_zoom()), ui.decor_id),
+        (ActiveTool::Decor, Some(h)) => restores_scattered(h, units(Decor::of(ui.decor_id).row.cell_zoom()), ui.decor_id),
         _ => None,
     };
     // Where it would stand, and what it would carry.
@@ -90,7 +90,7 @@ pub fn ghost() -> Ghost {
             Some((d.at, m))
         }
         (Some(b), Some(c), None) => {
-            let (variant, turn) = user_decor_pick(&c, b.variant_count());
+            let (variant, turn) = user_decor_pick(&c, b.row.variants);
             Some(b.stand(real(&c), variant, turn, 1.0))
         }
         _ => None,

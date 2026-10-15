@@ -11,63 +11,22 @@ use pxl_spec::space::layer::lattice::Cells;
 use std::collections::TryReserveError;
 
 use pxl_spec::block::cube::Ground;
-use pxl_spec::block::decor::{Decor, Orientation};
-use pxl_spec::procedural::{scatter, scatter_at, Candidate};
+use pxl_spec::block::decor::Decor;
+use pxl_spec::procedural::{pose, scatter, scatter_at, Candidate, ALIGN_NEIGHBOR_RADIUS};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{count, index, units, Zoom};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
 
 use super::surface::Surfaces;
 use super::world::World;
 use crate::layer::instance::{Instance, Meta, Source};
 
-// A fixed radius (O(1) reads, no flood fill), enough to outvote a one-cell
-// stairstep jog in a straight run; it does not resolve curves.
-const ALIGN_NEIGHBOR_RADIUS: i64 = 3;
-
-/// A plurality vote of transport cells along each axis about `at`: a quarter
-/// turn if horizontal wins, else none (a tie or isolated cell has no real
-/// answer). `flip` adds a half, as two-way traffic faces both ways.
-fn transport_aligned_turn(face: &Surfaces, [x, y]: [i64; 2], flip: bool) -> u32 {
-    let way = |x: i64, y: i64| u32::from(face.look([x, y]).and_then(Ground::of).is_some_and(Ground::transport));
-    let (mut horizontal_votes, mut vertical_votes) = (0, 0);
-    for d in 1..=ALIGN_NEIGHBOR_RADIUS {
-        horizontal_votes += way(x - d, y) + way(x + d, y);
-        vertical_votes += way(x, y - d) + way(x, y + d);
-    }
-    u32::from(horizontal_votes > vertical_votes) + 2 * u32::from(flip)
-}
-
-struct Rng(SplitMix64);
-
-impl Rng {
-    fn new(seed: u64) -> Rng {
-        Rng(SplitMix64::new(seed))
-    }
-
-    fn unit(&mut self) -> f64 {
-        u32_to_unit(self.0.next_u32())
-    }
-}
-
-/// The variant a candidate draws, its seed's first draw.
-fn variant_of(decor: &Decor, rng: &mut Rng) -> u32 {
-    ((rng.unit() * decor.variant_count() as f64).floor() as u32).min(decor.variant_count() - 1)
-}
-
-/// The square a candidate claims, which holds its box however it turns.
-fn side_of(decor: &Decor, c: &Candidate) -> i64 {
-    let [x, y, _] = decor.variants[variant_of(decor, &mut Rng::new(c.seed)) as usize].size;
-    i64::from(x.max(y))
-}
-
 /// Cells about a node its decor reads: the faces a turn is voted from, and
 /// the widest box's footing past the cell it stands in.
 pub fn ring(decors: &[Decor]) -> u32 {
-    decors.iter().map(|d| i64::from(d.widest())).fold(ALIGN_NEIGHBOR_RADIUS, i64::max) as u32
+    decors.iter().map(|d| d.row.widest()).fold(ALIGN_NEIGHBOR_RADIUS as u32, u32::max)
 }
 
 /// What the ground grows of `decor` in `region`, on the node `node` of grid
@@ -99,19 +58,12 @@ pub fn grow<E: From<TryReserveError>>(
     let per = i64::from(count(atom, own));
     let min = [index(atom, origin[0]), index(atom, origin[1])];
     let span = i64::from(GROUND.read_side(node.0, cell)) * per;
-    scatter(
-        decor.seed,
-        decor.density,
-        zoom,
-        [min, [min[0] + span, min[1] + span]],
-        i64::from(decor.widest()),
-        |c| side_of(decor, c),
-        candidates,
-    )?;
+    let leaves = [min, [min[0] + span, min[1] + span]].map(|c| c.map(|v| v as i32));
+    scatter(decor.row, zoom, leaves, candidates)?;
     let (x0, y0) = GROUND.read_at(node, cell);
     let unit = units(atom);
     for &candidate in candidates.iter() {
-        let at = [0, 1].map(|k| i64::from([x0, y0][k]) + (candidate.cell[k] - min[k]).div_euclid(per));
+        let at = [0, 1].map(|k| i64::from([x0, y0][k]) + (i64::from(candidate.cell[k]) - min[k]).div_euclid(per));
         let Some(i) = stand(decor, face, candidate, at) else { continue };
         let Source::Ground([gx, gy, z]) = i.source else { continue };
         // In the region holding the cell it stands on.
@@ -127,7 +79,7 @@ pub fn grow<E: From<TryReserveError>>(
 /// leaf's ground read about it (`World::grown_in`): the leaf scatter, cell
 /// by cell, which a region grows the same (pxl-spec procedural.test.rs).
 pub fn grown_at(face: &Surfaces, decor: &Decor, cell: [i64; 2]) -> Option<Instance> {
-    let candidate = scatter_at(decor.seed, decor.density, cell, i64::from(decor.widest()), |c| side_of(decor, c))?;
+    let candidate = scatter_at(decor.row, cell.map(|v| v as i32))?;
     let (x0, y0) = GROUND.read_at((GROUND.cell_zoom(LEAF_ZOOM), cell), GROUND.grid_zoom(LEAF_ZOOM));
     stand(decor, face, candidate, [x0, y0].map(i64::from))
 }
@@ -136,17 +88,10 @@ pub fn grown_at(face: &Surfaces, decor: &Decor, cell: [i64; 2]) -> Option<Instan
 /// none where the cell has no ground.
 fn stand(decor: &Decor, face: &Surfaces, candidate: Candidate, at: [i64; 2]) -> Option<Instance> {
     let top = face.at(at)?.top;
-    let mut rng = Rng::new(candidate.seed);
-    let variant = variant_of(decor, &mut rng);
-    let turn = match decor.orientation {
-        Orientation::along_transport => {
-            let flip = rng.unit() < 0.5;
-            transport_aligned_turn(face, at, flip)
-        }
-        Orientation::random => (rng.unit() * 4.0) as u32,
-    };
+    let way = |[x, y]: [i32; 2]| face.look([at[0] + i64::from(x), at[1] + i64::from(y)]).and_then(Ground::of).is_some_and(Ground::transport);
+    let (variant, turn) = pose(decor.row, &candidate, way);
     let unit = units(GROUND.cell_zoom(LEAF_ZOOM));
-    let [gx, gy] = candidate.cell;
+    let [gx, gy] = candidate.cell.map(i64::from);
     let (stands, meta) = decor.stand([gx as f64 * unit, gy as f64 * unit, top], variant, turn, 1.0);
     Some(Instance {
         id: decor.value(),

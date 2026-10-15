@@ -30,8 +30,8 @@ fn room(tool: PlacementTool, corner: &Q3, object_size: f64) -> Aabb {
         PlacementTool::Marker => cell(of_side(MARKER_SIZE)),
         PlacementTool::Decor(id) => {
             let decor = Decor::of(id);
-            let (variant, turn) = user_decor_pick(corner, decor.variant_count());
-            let (at, m) = decor.stand(cell(decor.cell_zoom()).min, variant, turn, 1.0);
+            let (variant, turn) = user_decor_pick(corner, decor.row.variants);
+            let (at, m) = decor.stand(cell(decor.row.cell_zoom()).min, variant, turn, 1.0);
             decor.claim(at, &m)
         }
     }

@@ -35,7 +35,7 @@ pub fn placed(e: &Entry) -> Option<Instance> {
         return None;
     }
     let decor = Decor::of(decor_id_from_num(e.state));
-    let (variant, turn) = user_decor_pick(&e.corner(), decor.variant_count());
+    let (variant, turn) = user_decor_pick(&e.corner(), decor.row.variants);
     let (at, meta) = decor.stand(e.cube().min, variant, turn, 1.0);
     Some(Instance {
         id: decor.value(),

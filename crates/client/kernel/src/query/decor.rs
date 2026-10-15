@@ -65,7 +65,7 @@ impl<'a> World<'a> {
     /// Air placed in it or under it is no void.
     pub fn grows(&self, face: &mut Surfaces, decor: &Decor, i: &Instance, placed: &[Aabb]) -> bool {
         let (Source::Ground([x, y, z]), Meta::Decor(m)) = (i.source, i.meta) else { return false };
-        let [w, d, h] = decor.variants[m.variant as usize].cells(m.turn).map(i64::from);
+        let [w, d, h] = decor.row.cells(m.variant, m.turn).map(i64::from);
         let unit = units(GROUND.cell());
         let (side, cell) = (face.side(), face.cell());
         let block = |v: f64| (v / side).floor() as i64;
@@ -77,7 +77,7 @@ impl<'a> World<'a> {
                 // the one under it ground the decor grows on.
                 let [cx, cy] = [bx, by].map(block);
                 let at = |z: f64| self.block((cell, [cx, cy, block(z)])).value().flatten();
-                matches!(at(floor - unit), Some(Block::Ground(g, _)) if decor.allows(g)) && (0..h).all(|n| at(floor + n as f64 * unit).is_none())
+                matches!(at(floor - unit), Some(Block::Ground(g, _)) if decor.row.allows(g)) && (0..h).all(|n| at(floor + n as f64 * unit).is_none())
             })
         }) && claim(i).is_some_and(|c| !placed.iter().any(|p| p.shares(c)))
     }

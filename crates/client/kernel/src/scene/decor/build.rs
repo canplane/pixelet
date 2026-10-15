@@ -93,15 +93,15 @@ impl<'s> DecorBuild<'s> {
         }
         let mut each = |mut face: Option<(&mut Surfaces, &Ground)>| -> Result<(), TryReserveError> {
             for decor in decors {
-                if decor.variant_count() == 0 {
+                if decor.row.variants == 0 {
                     continue;
                 }
                 // Past what a block holds, the decors after have none.
                 let first = scratch.group_count;
-                if first + decor.variant_count() as usize > DECOR_GROUPS {
+                if first + decor.row.variants as usize > DECOR_GROUPS {
                     break;
                 }
-                scratch.group_count += decor.variant_count() as usize;
+                scratch.group_count += decor.row.variants as usize;
                 if !decor_shown(decor.extent(), cell_zoom) {
                     continue;
                 }

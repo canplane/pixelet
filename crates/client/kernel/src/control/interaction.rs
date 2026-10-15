@@ -156,7 +156,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         hover.approach = None;
         let placement_size = match ui.active_tool {
             ActiveTool::Object => object_size_of(ui.object_tier),
-            ActiveTool::Decor => units(Decor::of(ui.decor_id).cell_zoom()),
+            ActiveTool::Decor => units(Decor::of(ui.decor_id).row.cell_zoom()),
             _ => MARKER_SIZE,
         };
         // A decor met in front of the pick is what the new cube goes flush against.
@@ -241,7 +241,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         // The slot may have filled since the last hover update.
         ActiveTool::Decor => {
             if !is_placement_blocked(PlacementTool::Decor(ui.decor_id), &hovered, object_size) {
-                place_decor(&hovered, units(Decor::of(ui.decor_id).cell_zoom()), ui.decor_id);
+                place_decor(&hovered, units(Decor::of(ui.decor_id).row.cell_zoom()), ui.decor_id);
             }
         }
         // It waits there for its words, which the shell asks for.

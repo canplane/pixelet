@@ -5,7 +5,7 @@
 
 use std::collections::TryReserveError;
 
-use xpute_kit::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
+use pxl_portable::decor::Decor;
 use xpute_kit::math::scalar::round;
 
 use crate::bake::separation::{slab_depth, Crossing, Occupies, STACKED_DECK_HEADROOM_M};
@@ -14,88 +14,26 @@ use crate::bake::way::half_cells;
 use crate::block::cube::Ground;
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::Zoom;
-use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use crate::space::layer::tile::{Tile, LEAF_ZOOM};
+use crate::space::layer::lattice::TILE_CELLS;
+use crate::space::layer::tile::Tile;
 
 /// A node's seed and the caves, one source with the GPU's (pxl-portable).
 pub use pxl_portable::caves::{node_seed, Cave, CAVE_COARSEST};
 
-// ---- scatter: a Poisson process on the leaf cell lattice ----
+// ---- scatter: what stands in a region, by portable's ----
 
-const BLOCK: i64 = 16; // a block's side, in its birth zoom's cells
-const KEPT: f64 = 0.25; // a zoom keeps one in four of the next finer's
+pub use pxl_portable::scatter::{before, each_candidate, meet, pose, scatter_at, side_of, Candidate, ALIGN_NEIGHBOR_RADIUS};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Candidate {
-    pub cell: [i64; 2], // the leaf cell it stands at, at every zoom
-    pub born: Zoom,     // the coarsest zoom it stands at
-    pub seed: u64,      // its own draws: variant, heading, size
-}
-
-/// A Poisson process, never a grid: a block at zoom m bears a Poisson count
-/// of candidates born there, each at a uniform leaf cell, and a candidate born
-/// at m stands at every zoom from m finer. A cell at any zoom then holds `density`.
-fn each_candidate(tag: u64, density: f64, zoom: Zoom, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
-    for born in (GROUND.top()..=zoom).rev() {
-        let side = BLOCK * i64::from(GROUND.finest_in(born));
-        let share = if born == GROUND.top() { 1.0 } else { 1.0 - KEPT };
-        let mean = density * (BLOCK * BLOCK) as f64 * share;
-        let blocks = |k: usize| min[k].div_euclid(side)..=(max[k] - 1).div_euclid(side);
-        for by in blocks(1) {
-            for bx in blocks(0) {
-                // A tag's two words folded into the u32 `node_seed` takes.
-                let block = u64::from(node_seed((tag ^ tag >> 32) as u32, (born, [bx as i32, by as i32])));
-                let mut draws = SplitMix64::new(block);
-                let mut unit = || u32_to_unit(draws.next_u32());
-                for i in 0..poisson(mean, unit()) {
-                    let cell = [bx * side + (unit() * side as f64) as i64, by * side + (unit() * side as f64) as i64];
-                    if (0..2).all(|k| (min[k]..max[k]).contains(&cell[k])) {
-                        each(Candidate {
-                            cell,
-                            born,
-                            seed: derive_seed_u64(block, i),
-                        });
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// The count whose cumulative Poisson probability first reaches `u`.
-fn poisson(mean: f64, u: f64) -> u64 {
-    let (mut k, mut p) = (0, libm::exp(-mean));
-    let mut cumulative = p;
-    while u >= cumulative && p > 0.0 {
-        k += 1;
-        p *= mean / k as f64;
-        cumulative += p;
-    }
-    k
-}
-
-/// Whether `a` stands before `b` where both would claim a cell: the one born
-/// coarser, so a zoom keeps what it had, then the lower seed.
-fn before(a: &Candidate, b: &Candidate) -> bool {
-    (a.born, a.seed) < (b.born, b.seed)
-}
-
-/// Whether the squares `side` gives two candidates, from their cells up, share a cell.
-fn meet(a: &Candidate, b: &Candidate, side: &impl Fn(&Candidate) -> i64) -> bool {
-    let (sa, sb) = (side(a), side(b));
-    (0..2).all(|k| a.cell[k] < b.cell[k] + sb && b.cell[k] < a.cell[k] + sa)
-}
-
-/// What stands at `z` in `region` (leaf cells, `[min, max)`), by its cell.
-/// Each candidate claims the square `side` gives it, from its cell up, which
-/// holds its box however it turns, `widest` the largest; of two whose squares
-/// meet, the one `before` the other stands.
-pub fn scatter(tag: u64, density: f64, zoom: Zoom, region: [[i64; 2]; 2], widest: i64, side: impl Fn(&Candidate) -> i64, out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
+/// What stands at `z` in `region` (leaf cells, `[min, max)`), by its cell, as
+/// `scatter_at` keeps each. Each candidate claims the square `side_of` gives
+/// it, from its cell up, which holds its box however it turns; of two whose
+/// squares meet, the one `before` the other stands.
+pub fn scatter(decor: &Decor, zoom: Zoom, region: [[i32; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
     out.clear();
-    let reach = widest - 1;
+    let reach = decor.widest() as i32 - 1;
     let around = [region[0].map(|v| v - reach), region[1].map(|v| v + reach)];
     let mut grown = Ok(());
-    each_candidate(tag, density, zoom, around, |c| {
+    each_candidate(decor, zoom, around, |c| {
         if grown.is_ok() {
             grown = out.try_reserve(1).map(|()| out.push(c));
         }
@@ -109,9 +47,13 @@ pub fn scatter(tag: u64, density: f64, zoom: Zoom, region: [[i64; 2]; 2], widest
         if !(0..2).all(|k| (region[0][k]..region[1][k]).contains(&c.cell[k])) {
             continue;
         }
+        let side = side_of(decor, &c);
         // Only a candidate within `reach` before it on x, or its own side past, can meet it.
         let from = out[..n].partition_point(|d| d.cell[0] < c.cell[0] - reach);
-        let beaten = out[from..n].iter().take_while(|d| d.cell[0] < c.cell[0] + side(&c)).any(|d| before(d, &c) && meet(d, &c, &side));
+        let beaten = out[from..n]
+            .iter()
+            .take_while(|d| d.cell[0] < c.cell[0] + side)
+            .any(|d| before(d, &c) && meet(d, side_of(decor, d), &c, side));
         if !beaten {
             out.try_reserve(1)?;
             out.push(c);
@@ -119,22 +61,6 @@ pub fn scatter(tag: u64, density: f64, zoom: Zoom, region: [[i64; 2]; 2], widest
     }
     out.drain(..n);
     Ok(())
-}
-
-/// What stands in one leaf cell on the leaves, as `scatter` keeps it.
-pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2], widest: i64, side: impl Fn(&Candidate) -> i64) -> Option<Candidate> {
-    let mut best: Option<Candidate> = None;
-    each_candidate(tag, density, LEAF_ZOOM, [cell, [cell[0] + 1, cell[1] + 1]], |c| {
-        if best.is_none_or(|b| before(&c, &b)) {
-            best = Some(c);
-        }
-    });
-    let best = best?;
-    let reach = widest - 1;
-    let around = [cell.map(|v| v - reach), cell.map(|v| v + widest)];
-    let mut beaten = false;
-    each_candidate(tag, density, LEAF_ZOOM, around, |d| beaten |= before(&d, &best) && meet(&d, &best, &side));
-    (!beaten).then_some(best)
 }
 
 // ---- piers ----
