@@ -85,8 +85,6 @@ pub fn stage_write() {
     // unit of distance, square on.
     let tau = crate::view::lens::tau();
     s[STAGE_AT::LOD_CELL] = crate::view::lens::cell_angle(tau);
-    let grid = crate::view::observation::observation().and_then(|o| crate::view::lens::grid_step(&o, tau)).unwrap_or([0.0; 2]);
-    s[STAGE_AT::CAMERA_GRID..STAGE_AT::CAMERA_GRID + 2].copy_from_slice(&grid);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
@@ -225,7 +223,6 @@ pub fn visible_step(ctx: &mut TickContext) {
     let draw = laid().is_some_and(|k| {
         let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
         k.scene.begin(&mut k.draw, &k.models, frame.eye);
-        crate::scene::indicator::camera_gizmo::draw(&mut k.draw, settings_store().camera_gizmo);
         animating
     });
     {

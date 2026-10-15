@@ -7,10 +7,6 @@
       }
     },
     "debug": {
-      "camera_gizmo": {
-        "label": "Camera Gizmo",
-        "description": "Overlays the camera grid the rays are cast through, one ray a cell, and colors the world by its drawn cells against the zoom the grid asks there: green at it, blue finer, red coarser."
-      },
       "rays": {
         "label": "Rays",
         "description": "Who casts the rays the screen draws, and how many.",

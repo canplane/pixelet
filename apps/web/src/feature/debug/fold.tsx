@@ -14,7 +14,7 @@ import { cornerPanel } from "@/shared/ui/corner-card.ts";
 import { alpha, color } from "@/shared/ui/theme.ts";
 import { gauge } from "./profiler/gauge.tsx";
 
-export type FoldName = "view" | "performance" | "world_gizmo" | "camera_gizmo";
+export type FoldName = "view" | "performance" | "world_gizmo";
 
 export const useOpenFold = create<{ open: FoldName | null }>(() => ({ open: null }));
 

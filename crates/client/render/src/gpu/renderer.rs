@@ -14,8 +14,8 @@ use xpute_guest::mem::heap::{alloc, free};
 use xpute_kit::math::scalar::round;
 
 use crate::frame::draw::{
-    uniform_of, Lists, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
-    PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
+    uniform_of, Lists, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON,
+    PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::frame::screen_cells::SCREEN_CELLS_MAX;
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS};
@@ -67,8 +67,6 @@ const PLANET: usize = FRAME_AT[15];
 const GLOBE: usize = FRAME_AT[16];
 const UP: usize = FRAME_AT[17];
 const CELL: usize = FRAME_AT[18];
-const GIZMO: usize = FRAME_AT[19];
-const GRID: usize = FRAME_AT[21];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_FLOATS: usize = 16;
@@ -631,29 +629,19 @@ struct DebugPass {
     faces: Built,
     frame_group: u32,
     sets: Vec<(u32, u32)>,
-    grid: Built,
-    grid_group: u32,
 }
 
 impl DebugPass {
-    fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> DebugPass {
+    fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> DebugPass {
         let built = pipelines.build(g, PIPELINE_DEBUG, format::CANVAS);
         let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, format::CANVAS);
         let frame_group = object();
         g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
-        let grid = pipelines.build(g, PIPELINE_CAMERA_GRID, format::CANVAS);
-        let grid_group = object();
-        let mut entries = [0u32; 10];
-        entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
-        entries[5..].copy_from_slice(&buffer_entry(19, sky_buffer));
-        g.bind_group(grid_group, grid.layouts[0], &entries);
         DebugPass {
             built,
             faces,
             frame_group,
             sets: Vec::new(),
-            grid,
-            grid_group,
         }
     }
 
@@ -672,8 +660,7 @@ impl DebugPass {
     /// `depth` is the world's, which nothing reads after this.
     #[allow(clippy::too_many_arguments)]
     fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
-        let grid = draws.of(PIPELINE_CAMERA_GRID).len() > 0;
-        if draws.of(PIPELINE_DEBUG).len() == 0 && !grid {
+        if draws.of(PIPELINE_DEBUG).len() == 0 {
             return;
         }
         // Each set held: its own uniform and bind group, its line vertices and its face vertices.
@@ -712,11 +699,6 @@ impl DebugPass {
             g.set_vertex_buffer(pass, 0, block, 0, lines * 28);
             // A segment an instance: its two vertices, read as one.
             g.draw(pass, 6, lines / 2, 0, 0);
-        }
-        if grid {
-            g.set_pipeline(pass, self.grid.pipeline);
-            g.set_bind_group(pass, 0, self.grid_group, &[]);
-            g.draw(pass, 3, 1, 0, 0);
         }
         g.end(pass);
         release(pass);
@@ -1202,7 +1184,7 @@ impl Renderer {
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
             puck: PuckPass::new(g, &mut pipelines, frame_buffer, air),
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
-            debug: DebugPass::new(g, &mut pipelines, frame_buffer, sky_buffer),
+            debug: DebugPass::new(g, &mut pipelines, frame_buffer),
             screen: ScreenCellsPass::new(g, &mut pipelines, sky_buffer),
             pipelines,
             frame_buffer,
@@ -1300,8 +1282,6 @@ impl Renderer {
         }
         u[EDGE_STRENGTH] = s[STAGE_AT::EDGE_STRENGTH] as f32;
         u[CELL] = s[STAGE_AT::LOD_CELL] as f32;
-        u[GRID] = s[STAGE_AT::CAMERA_GRID] as f32;
-        u[GRID + 1] = s[STAGE_AT::CAMERA_GRID + 1] as f32;
         u[ENV..ENV + 24].copy_from_slice(&env[0..24]);
         u[OTHER..OTHER + 8].copy_from_slice(&env[ENV_OTHER_LIGHT..ENV_OTHER_LIGHT + 8]);
         u[LOW_SPEC] = s[STAGE_AT::LOW_SPEC] as f32;
@@ -1399,7 +1379,6 @@ impl Renderer {
         }
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
-        self.frame[GIZMO] = if draws.of(PIPELINE_CAMERA_GRID).len() > 0 { 1.0 } else { 0.0 };
         g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
         let b = blocks();
         self.decor.prepare(g, &draws, uniforms, b);

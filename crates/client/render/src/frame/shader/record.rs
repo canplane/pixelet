@@ -28,22 +28,21 @@ pub const SHADER_SHEET: u32 = 20;
 pub const SHADER_IMPOSTOR: u32 = 21;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
-pub const SHADER_CAMERA_GRID: u32 = 24;
-pub const SHADER_BADGE_REGION: u32 = 25;
+pub const SHADER_BADGE_REGION: u32 = 24;
 /// The camera grid's cells drawn straight to the screen (frame/screen_cells.rs).
-pub const SHADER_SCREEN_CELLS: u32 = 26;
+pub const SHADER_SCREEN_CELLS: u32 = 25;
 /// The eye's rays cast on the GPU into the screen's lane, generated from
 /// pxl-portable's descent (script/portable-wgsl.ts): its one compute entry.
-pub const SHADER_CAST: u32 = 27;
+pub const SHADER_CAST: u32 = 26;
 /// Each newly held terrain frame's bound over its cells' heights, a level a
 /// dispatch, generated with the cast from pxl-portable's `ground::join`: its
 /// one compute entry.
-pub const SHADER_BOUND: u32 = 28;
+pub const SHADER_BOUND: u32 = 27;
 /// Each newly held terrain frame's cells' heights off its samples,
 /// generated with the cast from pxl-portable's `ground::height`: its one
 /// compute entry.
-pub const SHADER_HEIGHTS: u32 = 29;
-pub const SHADERS: u32 = 30;
+pub const SHADER_HEIGHTS: u32 = 28;
+pub const SHADERS: u32 = 29;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -133,7 +132,6 @@ pub fn source(kind: u32) -> &'static str {
             "sky"
         ),
         SHADER_DEBUG => wgsl!("frame", "globe", "encode", "debug"),
-        SHADER_CAMERA_GRID => wgsl!("frame", "globe", "encode", "sky_words", "camera_grid"),
         SHADER_SCREEN_CELLS => wgsl!(
             "frame",
             "globe",
@@ -230,7 +228,7 @@ pub fn source(kind: u32) -> &'static str {
 
 pub const FRAME_FLOATS: usize = 92;
 /// Frame uniform field offsets in floats, in frame.wgsl's order.
-pub const FRAME_AT: [usize; 22] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84, 87, 88, 89, 90];
+pub const FRAME_AT: [usize; 20] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84, 87, 88];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_SKY: u32 = 13;
@@ -267,8 +265,8 @@ pub const PIPELINES: u32 = 42;
 pub use crate::gpu::api_spec::record::*;
 
 use crate::frame::draw::{
-    PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON,
-    PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
+    PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
+    PIPELINE_SKINNED,
 };
 use crate::mesh::ghost::BOX_WORDS;
 
@@ -573,15 +571,6 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             },
             &[lane(12, 0, F32X3)],
             &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM]])],
-        ),
-        PIPELINE_CAMERA_GRID => record(
-            Head {
-                depth_compare: ALWAYS,
-                blend: ALPHA,
-                ..blended(SHADER_CAMERA_GRID, CULL_NONE, 0, 0.0)
-            },
-            &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], [19, FRAGMENT, UNIFORM]])],
         ),
         PIPELINE_SCREEN_CELLS => record(
             Head {

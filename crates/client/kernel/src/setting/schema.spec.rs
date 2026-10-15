@@ -224,18 +224,16 @@ pub enum SettingKey {
     performance_overlay = 14,
     /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs).
     world_gizmo = 15,
-    /// The camera grid over the screen, the one the rays are cast through, a cell a ray (scene/indicator/camera_gizmo.rs).
-    camera_gizmo = 16,
-    person = 17,
-    pet = 18,
+    person = 16,
+    pet = 17,
     /// How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each.
-    rays = 19,
+    rays = 18,
     /// Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl).
-    ray_steps = 20,
+    ray_steps = 19,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 21] = [
+    pub const ALL: [SettingKey; 20] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -252,7 +250,6 @@ impl SettingKey {
         SettingKey::view_overlay,
         SettingKey::performance_overlay,
         SettingKey::world_gizmo,
-        SettingKey::camera_gizmo,
         SettingKey::person,
         SettingKey::pet,
         SettingKey::rays,
@@ -282,7 +279,6 @@ impl SettingKey {
             SettingKey::view_overlay => SettingKind::Toggle,
             SettingKey::performance_overlay => SettingKind::Toggle,
             SettingKey::world_gizmo => SettingKind::Toggle,
-            SettingKey::camera_gizmo => SettingKind::Toggle,
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
             SettingKey::rays => SettingKind::Choice,
@@ -309,7 +305,6 @@ impl SettingKey {
             SettingKey::view_overlay => "view_overlay",
             SettingKey::performance_overlay => "performance_overlay",
             SettingKey::world_gizmo => "world_gizmo",
-            SettingKey::camera_gizmo => "camera_gizmo",
             SettingKey::person => "person",
             SettingKey::pet => "pet",
             SettingKey::rays => "rays",
@@ -331,7 +326,7 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::surface_follow | SettingKey::camera_gizmo | SettingKey::rays | SettingKey::ray_steps)
+        matches!(self, SettingKey::surface_follow | SettingKey::rays | SettingKey::ray_steps)
     }
 
     /// A choice's option a development build only offers.
@@ -362,7 +357,6 @@ pub struct Settings {
     pub view_overlay: bool,
     pub performance_overlay: bool,
     pub world_gizmo: bool,
-    pub camera_gizmo: bool,
     pub person: u8,
     pub pet: u8,
     pub rays: RayDensity,
@@ -388,7 +382,6 @@ impl Settings {
         view_overlay: false,
         performance_overlay: false,
         world_gizmo: false,
-        camera_gizmo: false,
         person: 1,
         pet: 5,
         rays: RayDensity::half,
@@ -415,7 +408,6 @@ impl Settings {
             SettingKey::view_overlay => self.view_overlay as u32,
             SettingKey::performance_overlay => self.performance_overlay as u32,
             SettingKey::world_gizmo => self.world_gizmo as u32,
-            SettingKey::camera_gizmo => self.camera_gizmo as u32,
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
             SettingKey::rays => self.rays as u32,
@@ -455,7 +447,6 @@ impl Settings {
             SettingKey::view_overlay if value <= 1 => self.view_overlay = value == 1,
             SettingKey::performance_overlay if value <= 1 => self.performance_overlay = value == 1,
             SettingKey::world_gizmo if value <= 1 => self.world_gizmo = value == 1,
-            SettingKey::camera_gizmo if value <= 1 => self.camera_gizmo = value == 1,
             SettingKey::person => match u8::try_from(value) {
                 Ok(n) => self.person = n,
                 Err(_) => return false,

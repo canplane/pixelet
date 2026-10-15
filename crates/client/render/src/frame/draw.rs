@@ -41,8 +41,6 @@ pub const PIPELINE_PUCK_BEACON: u32 = 7;
 pub const PIPELINE_BADGE: u32 = 8;
 /// Line segments: handle, line vertex count, face vertex count.
 pub const PIPELINE_DEBUG: u32 = 9;
-/// The camera grid over the screen: (0, 0, 0, uniform, pipeline); listed is shown.
-pub const PIPELINE_CAMERA_GRID: u32 = 38;
 /// Decor drawn as sprites where a variant is too small on screen for its model.
 pub const PIPELINE_IMPOSTOR: u32 = 34;
 /// Rewrite record: handle, address, byte offset, length.

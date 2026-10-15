@@ -175,29 +175,21 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, the one the rays are cast through, a cell a ray (scene/indicator/camera_gizmo.rs). */
-  camera_gizmo: {
-    key: 16 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
-    dev: true,
-  },
   person: {
-    key: 17 as number,
+    key: 16 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 18 as number,
+    key: 17 as number,
     kind: "index",
     default: 5 as number,
     section: "character",
   },
   /** How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each. */
   rays: {
-    key: 19 as number,
+    key: 18 as number,
     kind: "choice",
     default: "half",
     options: ["cells", "half", "full"],
@@ -206,7 +198,7 @@ export const SETTINGS = {
   },
   /** Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl). */
   ray_steps: {
-    key: 20 as number,
+    key: 19 as number,
     kind: "toggle",
     default: false,
     section: "debug",
@@ -364,13 +356,13 @@ export const SETTINGS_SHIPPED = {
     section: "debug",
   },
   person: {
-    key: 17 as number,
+    key: 16 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 18 as number,
+    key: 17 as number,
     kind: "index",
     default: 5 as number,
     section: "character",

@@ -87,12 +87,6 @@ pub fn grid_across(o: &Observation, tau: Tau) -> Option<[u32; 2]> {
     Lens::of(o).map(|l| l.across(tau))
 }
 
-/// The camera grid's cell at `tau`, its angles across and up the screen;
-/// none without a screen.
-pub fn grid_step(o: &Observation, tau: Tau) -> Option<[f64; 2]> {
-    Lens::of(o).map(|l| l.step(l.across(tau)))
-}
-
 /// The eye's words `gpu_cast` writes.
 pub const EYE_WORDS: usize = 20;
 

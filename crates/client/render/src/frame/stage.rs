@@ -32,12 +32,9 @@ pub mod STAGE_AT {
     pub const SCREEN_AO: usize = 64;
     /// How much of the clouds shows, none to all.
     pub const CLOUDS: usize = 65;
-    /// The camera grid's cell as the last cast's rays went through it, its
-    /// angles across and up the screen (2).
-    pub const CAMERA_GRID: usize = 66;
     /// 1 to colour each ray's cell by the nodes its descent asked, not by
     /// what it met.
-    pub const RAY_STEPS: usize = 68;
+    pub const RAY_STEPS: usize = 66;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();
