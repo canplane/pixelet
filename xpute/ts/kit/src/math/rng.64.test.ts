@@ -1,6 +1,6 @@
-// @xpute/kit/math/rng.test.ts
+// @xpute/kit/math/rng.64.test.ts
 
-/** Holds the TypeScript side to golden/math/rng.tsv, which every language's stream must match. */
+/** Holds the TypeScript side to golden/math/rng.64.tsv, which every language's stream must match. */
 
 import { assertEquals } from "@std/assert";
 
@@ -8,7 +8,7 @@ import { Golden } from "@xpute/kit/golden.ts";
 import { derive_seed_u64, make_rng, mix64, u32_to_unit } from "@xpute/kit/math/rng.ts";
 
 Deno.test("rng computes what the record holds", async () => {
-  const v = await Golden.load("golden/math/rng.tsv");
+  const v = await Golden.load("golden/math/rng.64.tsv");
   v.each("", (k) => {
     const seed = v.u64(`${k}.seed`);
     assertEquals(mix64(seed), v.u64(`${k}.mix64`), `${k}.mix64`);

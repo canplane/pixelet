@@ -1,4 +1,4 @@
-// cpp/kit/math/rng.test.cpp
+// cpp/kit/math/rng.64.test.cpp
 
 #include <bit>
 #include <string>
@@ -10,7 +10,7 @@
 using namespace xpute;
 
 XPUTE_TEST(rng_computes_what_the_record_holds) {
-    Golden v = Golden::load("spec/golden/math/rng.tsv");
+    Golden v = Golden::load("spec/golden/math/rng.64.tsv");
     v.each("", [&v](const std::string &k) {
         std::uint64_t seed = v.u64(k + ".seed");
         XPUTE_CHECK_EQ(mix64(seed), v.u64(k + ".mix64"), (k + ".mix64").c_str());

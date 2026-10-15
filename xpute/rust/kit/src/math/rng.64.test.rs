@@ -1,9 +1,10 @@
-// xpute-kit/math/rng.test.rs
+// xpute-kit/math/rng.64.test.rs
 
 use super::*;
 use crate::golden::Golden;
+use crate::math::rng::u32_to_unit;
 
-const GOLDEN: &str = include_str!("../../../../spec/golden/math/rng.tsv");
+const GOLDEN: &str = include_str!("../../../../spec/golden/math/rng.64.tsv");
 
 #[test]
 fn rng_computes_what_the_record_holds() {
