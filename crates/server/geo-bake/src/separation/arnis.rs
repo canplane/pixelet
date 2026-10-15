@@ -382,7 +382,7 @@ fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run>
                 ends,
                 clipped,
                 nodes,
-                half: half_cells(s.piece.width() / CELL_U),
+                half: half_cells((s.piece.width() / CELL_U) as f32),
                 width_u: s.piece.width(),
             });
         }
@@ -472,12 +472,12 @@ impl Obstacles {
                 "road" => {
                     let class = row.class.as_deref().unwrap_or("");
                     let headroom = if is_non_vehicular(class) || class == "track" { PATH_HEADROOM_M } else { ROAD_HEADROOM_M };
-                    let half = half_cells(way_width(row) / CELL_U);
+                    let half = half_cells((way_width(row) / CELL_U) as f32);
                     add(&mut out, &way.line.points, &row.ends, half, units.c(headroom));
                 }
                 "rail" if !row.is_subway() => {
                     let headroom = if row.class.as_deref() == Some("tram") { ROAD_HEADROOM_M } else { RAIL_HEADROOM_M };
-                    add(&mut out, &way.line.points, &row.ends, half_cells(way_width(row) / CELL_U), units.c(headroom));
+                    add(&mut out, &way.line.points, &row.ends, half_cells((way_width(row) / CELL_U) as f32), units.c(headroom));
                 }
                 _ => {}
             }
@@ -490,7 +490,7 @@ impl Obstacles {
                 _ => continue,
             };
             // as wide as the ground draws it, where Arnis clears its centerline
-            add(&mut out, points, &[], half_cells(waterway_width(class).unwrap_or(0.0) / CELL_U), units.c(headroom));
+            add(&mut out, points, &[], half_cells((waterway_width(class).unwrap_or(0.0) / CELL_U) as f32), units.c(headroom));
         }
         out
     }
@@ -852,7 +852,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                 }
                 if let Some(&(lower, lower_layer)) = separation.get(&cell_key(c)) {
                     if lower_layer < layer {
-                        need = need.max(lower + units.c(STACKED_DECK_HEADROOM_M));
+                        need = need.max(lower + units.c(f64::from(STACKED_DECK_HEADROOM_M)));
                     }
                 }
                 if need > ground {
@@ -1066,7 +1066,7 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, un
                 }
                 if let Some(&(lower, lower_layer)) = separation.get(&cell_key(c)) {
                     if lower_layer < effective_layer(r) {
-                        floor = floor.max(lower + units.c(STACKED_DECK_HEADROOM_M));
+                        floor = floor.max(lower + units.c(f64::from(STACKED_DECK_HEADROOM_M)));
                     }
                 }
             }

@@ -22,6 +22,7 @@ pub mod lattice;
 pub mod mask;
 pub mod placed;
 pub mod scatter;
+pub mod ways;
 pub mod window;
 
 /// Every size is a zoom (pxl-spec space/coord/zoom.rs).

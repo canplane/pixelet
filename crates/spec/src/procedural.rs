@@ -1,17 +1,13 @@
 // pxl-spec/procedural.rs
 
-//! What the client makes and the bake never stores: scattered decor, bridge
-//! piers. Pure functions of the world and a seed, so every reader agrees.
+//! What the client makes and the bake never stores: scattered decor, and
+//! where a tile's bridge piers stand (pxl-portable ways.rs). Pure functions
+//! of the world and a seed, so every reader agrees.
 
 use std::collections::TryReserveError;
 
 use pxl_portable::decor::Decor;
-use xpute_kit::math::scalar::round;
 
-use crate::bake::separation::{slab_depth, Crossing, Occupies, STACKED_DECK_HEADROOM_M};
-use crate::bake::tile::terrain::GroundId;
-use crate::bake::way::half_cells;
-use crate::block::cube::Ground;
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::TILE_CELLS;
@@ -19,6 +15,7 @@ use crate::space::layer::tile::Tile;
 
 /// A node's seed and the caves, one source with the GPU's (pxl-portable).
 pub use pxl_portable::caves::{node_seed, Cave, CAVE_COARSEST};
+use pxl_portable::ways::{Stations, INTERVAL_M};
 
 // ---- scatter: what stands in a region, by portable's ----
 
@@ -65,33 +62,6 @@ pub fn scatter(decor: &Decor, zoom: Zoom, region: [[i32; 2]; 2], out: &mut Vec<C
 
 // ---- piers ----
 
-// From louis-e/arnis `c96872e`, Copyright (c) 2022-2026 Louis Erbkamm, under
-// the Apache License, Version 2.0 (THIRD_PARTY_NOTICES.md); changed to stand
-// on a deck's line rather than place blocks.
-//
-// A bridge the source names no structure for is Arnis's beam bridge
-// (`pier_interval`, `place_pier_bent`): a bent every 8 m, 12 m once its half
-// width passes two cells, of one-cell columns.
-pub(crate) const BEAM_PILLAR_INTERVAL_M: f64 = 8.0;
-const WIDE_BEAM_PIER_INTERVAL_M: f64 = 12.0;
-
-/// Arnis's `LOWER_DECK_GAP`, a block short of the stacked headroom: a deck at
-/// least this far under a pier's blocks it.
-const LOWER_DECK_GAP_M: f64 = STACKED_DECK_HEADROOM_M - 1.0;
-
-/// Arnis's `place_pillar`: a deck this near the ground rests on it.
-const PIER_MIN_RISE_M: f64 = 2.0;
-
-/// A bent's columns across the deck, from its line: the middle, both edges,
-/// or both and the middle, by its half width in cells.
-fn bent(half: i32) -> &'static [i32] {
-    match half {
-        ..=2 => &[0],
-        3..=4 => &[-1, 1],
-        _ => &[-1, 0, 1],
-    }
-}
-
 /// A tile's cells in the world, so a station is the world's and not a tile's.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Frame {
@@ -107,49 +77,18 @@ impl Frame {
             cell: side / f64::from(TILE_CELLS),
         }
     }
-}
 
-/// Whether `at` is in the pier at the station nearest `near` on `[a, a + d)`,
-/// in the tile's cells; half-open, so a joint's station is one segment's.
-pub fn pier_covers(frame: Frame, width: f64, a: [f64; 2], d: [f64; 2], near: [f64; 2], at: [f64; 2]) -> bool {
-    let k = if d[0].abs() >= d[1].abs() { 0 } else { 1 };
-    if d[k] == 0.0 {
-        return false;
+    /// Where its piers may stand, in its cells (pxl-portable ways.rs
+    /// `Stations`): each beam's lattice of stations, at its spacing in
+    /// ground metres where the tile lies, and where its corner falls in it.
+    pub fn stations(self) -> Stations {
+        let corner = self.corner.map(|v| v / self.cell);
+        let step = INTERVAL_M.map(|m| f64::from(m) * u_per_m(self.corner[1]) / self.cell);
+        Stations {
+            step: step.map(|s| s as f32),
+            phase: step.map(|s| corner.map(|c| c.rem_euclid(s) as f32)),
+        }
     }
-    let half = half_cells(width);
-    let step_m = if half <= 2 { BEAM_PILLAR_INTERVAL_M } else { WIDE_BEAM_PIER_INTERVAL_M };
-    let lattice = step_m * u_per_m(frame.corner[1]);
-    let station = round((frame.corner[k] + near[k] * frame.cell) / lattice) * lattice;
-    let t = ((station - frame.corner[k]) / frame.cell - a[k]) / d[k];
-    if !(0.0..1.0).contains(&t) {
-        return false;
-    }
-    let len = libm::hypot(d[0], d[1]);
-    let dir = [d[0] / len, d[1] / len];
-    let rel = [at[0] - (a[0] + d[0] * t), at[1] - (a[1] + d[1] * t)];
-    let along = (rel[0] * dir[0] + rel[1] * dir[1]).abs();
-    let across = rel[0] * dir[1] - rel[1] * dir[0];
-    // an edge column stands a cell in from the edge
-    along <= 0.5 && bent(half).iter().any(|&side| (across - f64::from(side * (half - 1).max(0))).abs() <= 0.5)
-}
-
-/// None under a deck `PIER_MIN_RISE_M` or less over the ground, on a way at
-/// grade or over a deck `LOWER_DECK_GAP_M` or more under its own (Arnis
-/// `place_pillar`, `support_blocked`), none where the terrain gives no surface
-/// to stand on; water stops none.
-pub fn pier_stands(pier: [i32; 2], cell: GroundId, column: impl IntoIterator<Item = Crossing>, ground: i32, u_per_m: f64) -> Option<[i32; 2]> {
-    if Ground::of(cell).is_none_or(Ground::transport) {
-        return None;
-    }
-    let surface = pier[1] + slab_depth(u_per_m);
-    if f64::from(surface - pier[0]) <= PIER_MIN_RISE_M * u_per_m {
-        return None;
-    }
-    let gap = round(LOWER_DECK_GAP_M * u_per_m) as i32;
-    let lower = column
-        .into_iter()
-        .any(|o| matches!(o.occupies(ground, u_per_m), Occupies::Over { slab, .. } if slab[1] <= surface - gap));
-    (!lower).then_some(pier)
 }
 
 #[cfg(test)]

@@ -5,14 +5,13 @@
 //! grid, each cell a block shifted up to its height (`bicubic`); then the caves, the ways off the ground and what is
 //! placed, each written over the one before. `at` answers one block.
 
-use fnv::FnvHashMap;
+use pxl_portable::ways::{self, Columns, Segment, Stations};
 
-use crate::bake::separation::{Crossing, Occupies};
 use crate::bake::tile::terrain::GroundId;
-use crate::block::cube::{ground, sentinel, Ground};
+use crate::block::cube::sentinel;
 use crate::block::limit::at_edge;
 use crate::block::Block;
-use crate::procedural::{pier_stands, Frame};
+use crate::procedural::Frame;
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::{units, Zoom, SHARD_ZOOM};
 use crate::space::hierarchy::tree::ancestor_of;
@@ -20,9 +19,6 @@ use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_portable::area::wall;
 use pxl_portable::ground::{blocks, face_height, fold, Cell};
 use pxl_portable::wrap_index;
-
-/// A building's concrete: nothing in the catalog is a pier's own.
-const PIER: GroundId = ground::building;
 
 // A composition's workspace grows with what stands in the chunk, so it is the
 // heap's. Growth asks for room first; a refused one ends, what is drawn stays
@@ -122,18 +118,19 @@ fn read_row(around: &Around<impl Cells>, y: i64, x0: i64, out: &mut [(u32, i32)]
     }
 }
 
-/// A deck's slab or a pier in one cell: `lo` up to `hi` exclusive, in
-/// blocks.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Slab {
-    lo: i32,
-    hi: i32,
-    block: GroundId,
+/// Where a tile the ways are read from lies under a grid: the grid's first
+/// column's corner in its cells, a column's side there, and its piers'
+/// stations.
+#[derive(Clone, Copy, Debug, Default)]
+struct Place {
+    origin: [f64; 2],
+    step: f64,
+    stations: Stations,
 }
 
 /// A window of the ground's grid at one zoom, each cell a block shifted up
 /// to its height and what its top block shows, and the ways off the ground
-/// read from the same tiles, written in 3D where they are. Coarser than the
+/// read from the same tiles, each block asked of them where it is. Coarser than the
 /// leaves a cell folds the cells under it in 2D, its height their mean, its
 /// look their majority and its color theirs (`fold`).
 pub struct Grid {
@@ -151,18 +148,21 @@ pub struct Grid {
     /// The looks it folds, four of the cells one zoom finer; its own look
     /// four times where it folds none.
     fold: Vec<[GroundId; 4]>,
-    /// The ways off the ground by block: a deck's slab or a pier its block, a
-    /// bore's air none, and the ground about a bore the way's, so a cave
-    /// written under it never opens into it.
-    ways: FnvHashMap<[i64; 3], Option<GroundId>>,
+    /// The ways off the ground, as the one rule asks them of a block
+    /// (pxl-portable ways.rs `block`): each cell's segments with the point
+    /// each starts at, cell by cell and a cell's in its lines' points' order,
+    /// a cell's first at `starts`; the tile a cell's are read from, the own
+    /// `0` and the one beside at `q` `1 + beside_index(q)`, and where each
+    /// lies; units of height a ground metre on the own tile.
+    over: Vec<(u32, u32, Segment)>,
+    starts: Vec<u32>,
+    source: Vec<u8>,
+    places: [Place; 9],
+    per_m: f32,
     /// What a read works in, kept between reads: each cell's look as read,
-    /// the drawn tile's cells the window folds, the lines over each cell, a
-    /// cell's decks and piers, and the bores' air with its way.
+    /// and the drawn tile's cells the window folds.
     look: Vec<GroundId>,
     cells: Vec<(u32, i32)>,
-    crossing: Vec<(usize, usize, Crossing)>,
-    slabs: Vec<Slab>,
-    bores: Vec<([i64; 3], GroundId)>,
 }
 
 impl Default for Grid {
@@ -175,12 +175,13 @@ impl Default for Grid {
             top: Vec::new(),
             face: Vec::new(),
             fold: Vec::new(),
-            ways: FnvHashMap::default(),
+            over: Vec::new(),
+            starts: Vec::new(),
+            source: Vec::new(),
+            places: [Place::default(); 9],
+            per_m: 0.0,
             look: Vec::new(),
             cells: Vec::new(),
-            crossing: Vec::new(),
-            slabs: Vec::new(),
-            bores: Vec::new(),
         }
     }
 }
@@ -269,128 +270,70 @@ impl Grid {
         }
     }
 
-    /// Each cell's ways off the lines of the tile its height is read from:
-    /// a way at grade recolors its face, a bore takes the ground out over its
-    /// floor, and a deck and its pier stand over the ground.
+    /// Each cell's segments off the lines of the tile its height is read
+    /// from, for the one rule to ask: a way at grade recolors its face, a
+    /// bore takes the ground out over its floor, and a deck and its pier
+    /// stand over the ground.
     fn ways(&mut self, around: &Around<impl Cells>, tile_first: [i64; 2], k: i32) -> Result<(), Refused> {
-        let mut crossing = core::mem::take(&mut self.crossing);
-        crossing.clear();
-        let span = i64::from(self.span);
+        let mut over = core::mem::take(&mut self.over);
+        over.clear();
+        let (span, n) = (i64::from(self.span), (self.span * self.span) as usize);
+        fit(&mut self.source, n, 0)?;
+        let source = &mut self.source;
+        let places = &mut self.places;
         let rel = [self.first[0] - tile_first[0], self.first[1] - tile_first[1]];
         // A cell's side and its first's corner, in the drawn tile's cells.
         let step = if k >= 0 { f64::from(1 << k) } else { 1.0 / f64::from(1 << -k) };
         let corner = rel.map(|v| v as f64 * step);
         let quadrant = |c: [i64; 2]| ancestor_of([0, 1].map(|a| ((rel[a] + c[a]) as f64 * step).floor() as i64), GROUND.tile_cell_shamt());
         let beside = |q: [i64; 2]| if q == [0, 0] { None } else { around.beside[beside_index(q[0], q[1])].as_ref() };
-        let mut read = |s: &TileSource, q: [i64; 2], reads: &dyn Fn([i64; 2]) -> bool| -> Result<(), Refused> {
+        let mut read = |s: &TileSource, q: [i64; 2], at: usize, reads: &dyn Fn([i64; 2]) -> bool| -> Result<(), Refused> {
             let n = f64::from(s.n);
             let origin = [0, 1].map(|a| (s.origin[a] as f64 + corner[a] - (q[a] * i64::from(TILE_CELLS)) as f64) / n);
+            places[at] = Place {
+                origin,
+                step: step / n,
+                stations: s.frame.stations(),
+            };
             let mut grown = Ok(());
-            s.tile.separation.crossing_grid(Some(s.frame), origin, step / n, [span, span], |cx, cy, d, o| {
+            s.tile.separation.segments_over(origin, step / n, [span, span], |cx, cy, p| {
                 if grown.is_ok() && reads(quadrant([cx, cy])) {
-                    grown = try_push(&mut crossing, ((cy * span + cx) as usize, d, o));
+                    let col = (cy * span + cx) as usize;
+                    source[col] = at as u8;
+                    grown = try_push(&mut over, (col as u32, p as u32, s.tile.separation.segment(p)));
                 }
             });
             grown
         };
         // A cell with no tile beside is read from the own tile, as its height is.
-        read(&around.own, [0, 0], &|q| beside(q).is_none())?;
+        read(&around.own, [0, 0], 0, &|q| beside(q).is_none())?;
         for qy in -1..=1 {
             for qx in -1..=1 {
                 if let Some(s) = beside([qx, qy]) {
-                    read(s, [qx, qy], &|q| q == [qx, qy])?;
+                    read(s, [qx, qy], 1 + beside_index(qx, qy), &|q| q == [qx, qy])?;
                 }
             }
         }
-        let built = self.ways_of(&mut crossing, u_per_m(around.own.frame.corner[1]));
-        self.crossing = crossing;
-        built
-    }
-
-    /// The ways over each cell, written by block: a deck's slab and its
-    /// pier, lowest first so a higher one keeps what two share, over a
-    /// bore's air; then about each bore's air the way's block where the
-    /// ground is.
-    fn ways_of(&mut self, crossing: &mut Vec<(usize, usize, Crossing)>, per_m: f64) -> Result<(), Refused> {
-        // A line over a cell is all its segments sweep there; a station is
-        // one segment's, so the pier is either's.
-        crossing.sort_by_key(|a| (a.0, a.1));
-        crossing.dedup_by(|b, a| {
-            let same = (a.0, a.1) == (b.0, b.1);
-            if same {
-                (a.2.low, a.2.top, a.2.pier) = (a.2.low.min(b.2.low), a.2.top.max(b.2.top), a.2.pier || b.2.pier);
+        // A cell's segments in the order its lines' points run.
+        over.sort_by_key(|o| (o.0, o.1));
+        fit(&mut self.starts, n + 1, 0)?;
+        let mut at = 0;
+        for (col, start) in self.starts[..=n].iter_mut().enumerate() {
+            while at < over.len() && (over[at].0 as usize) < col {
+                at += 1;
             }
-            same
-        });
-        let (cell, span) = (self.cell, i64::from(self.span));
-        let in_blocks = |v: [i32; 2]| v.map(|v| blocks(cell, v as f32));
-        let mut ways = core::mem::take(&mut self.ways);
-        let mut slabs = core::mem::take(&mut self.slabs);
-        let mut bores = core::mem::take(&mut self.bores);
-        ways.clear();
-        bores.clear();
-        let mut i = 0;
-        let mut built = Ok(());
-        while built.is_ok() && i < crossing.len() {
-            let (col, first) = (crossing[i].0, i);
-            let at = [self.first[0] + col as i64 % span, self.first[1] + col as i64 / span];
-            slabs.clear();
-            while i < crossing.len() && crossing[i].0 == col {
-                let o = crossing[i].2;
-                i += 1;
-                // Bedrock wins over a way, as it does over the ground's face.
-                if !Ground::grounds(u32::from(o.kind)) || self.look[col] == sentinel::unknown {
-                    continue;
-                }
-                let ground = self.face_height(col);
-                match o.occupies(ground, per_m) {
-                    // An approach's look, laid into the cells by the bake (bake/way.rs `lay`).
-                    Occupies::Grade => {}
-                    Occupies::Under { span } => {
-                        let [lo, hi] = in_blocks(span);
-                        for z in lo..hi {
-                            built = built.and_then(|()| try_push(&mut bores, ([at[0], at[1], i64::from(z)], o.kind)));
-                        }
-                    }
-                    Occupies::Over { slab, pier } => {
-                        let [lo, hi] = in_blocks(slab);
-                        built = built.and_then(|()| try_push(&mut slabs, Slab { lo, hi, block: o.kind }));
-                        let lines = crossing[first..].iter().take_while(|c| c.0 == col).map(|c| c.2);
-                        if let Some([lo, hi]) = pier.and_then(|p| pier_stands(p, self.look[col], lines, ground, per_m)).map(in_blocks) {
-                            built = built.and_then(|()| try_push(&mut slabs, Slab { lo, hi, block: PIER }));
-                        }
-                    }
-                }
-            }
-            for &(b, _) in bores.iter().rev().take_while(|(b, _)| [b[0], b[1]] == at) {
-                built = built.and_then(|()| put(&mut ways, b, None));
-            }
-            slabs.sort_by_key(|o| (o.lo, o.hi));
-            for o in &slabs {
-                for z in o.lo..o.hi {
-                    built = built.and_then(|()| put(&mut ways, [at[0], at[1], i64::from(z)], Some(o.block)));
-                }
-            }
+            *start = at as u32;
         }
-        // About a bore's air, where the ground is, the way's block.
-        for &(b, way) in &bores {
-            for d in NEAR {
-                let at = [b[0] + d[0], b[1] + d[1], b[2] + d[2]];
-                let ground = self.index([at[0], at[1]]).and_then(|j| self.block(j, at[2] as i32)).is_some();
-                if ground && !ways.contains_key(&at) {
-                    built = built.and_then(|()| put(&mut ways, at, Some(way)));
-                }
-            }
-        }
-        (self.ways, self.slabs, self.bores) = (ways, slabs, bores);
-        built
+        self.over = over;
+        self.per_m = u_per_m(around.own.frame.corner[1]) as f32;
+        Ok(())
     }
 
     /// The cell `[x, y]` at its zoom, as an index, if the window holds it.
     pub fn index(&self, at: [i64; 2]) -> Option<usize> {
-        let span = i64::from(self.span);
         let [x, y] = [at[0] - self.first[0], at[1] - self.first[1]];
-        ((0..span).contains(&x) && (0..span).contains(&y)).then(|| (y * span + x) as usize)
+        let span = i64::from(self.span);
+        ((0..span).contains(&x) && (0..span).contains(&y)).then(|| self.local([x as i32, y as i32])).flatten()
     }
 
     /// Whether cell `i` has ground: a look, or the bedrock walling the
@@ -409,10 +352,18 @@ impl Grid {
         self.face[i]
     }
 
-    /// What the ways write in block `b`: a deck's, a pier's or a bore's
-    /// block, or a bore's air; none where they write nothing.
+    /// What the ways write in block `b` (pxl-portable ways.rs `block`): a
+    /// deck's, a pier's or a bore's block, or a bore's air; none where they
+    /// write nothing or the window does not hold it.
     fn way(&self, b: [i64; 3]) -> Option<Option<GroundId>> {
-        self.ways.get(&b).copied()
+        let i = self.index([b[0], b[1]])?;
+        let z = b[2] as i32;
+        let local = [(b[0] - self.first[0]) as i32, (b[1] - self.first[1]) as i32, z];
+        match ways::block(self, local, self.block(i, z).is_some()) {
+            ways::NOTHING => None,
+            ways::AIR => Some(None),
+            g => Some(Some(g as GroundId)),
+        }
     }
 
     /// Cell `i`'s face in leaf cells, as its top draws it: what the ways
@@ -443,15 +394,6 @@ fn byte(look: u32) -> GroundId {
     look as GroundId
 }
 
-/// `b` written as `block` into `ways`, room asked for first.
-fn put(ways: &mut FnvHashMap<[i64; 3], Option<GroundId>>, b: [i64; 3], block: Option<GroundId>) -> Result<(), Refused> {
-    if ways.len() == ways.capacity() {
-        ways.try_reserve(ways.len().max(16))?;
-    }
-    ways.insert(b, block);
-    Ok(())
-}
-
 impl Grid {
     /// The column `c` as the ground's one rule takes it (pxl-portable
     /// `Cell`, `ground::node`); none outside the grid.
@@ -471,5 +413,63 @@ impl Grid {
     }
 }
 
-/// The six blocks across a block's faces.
-const NEAR: [[i64; 3]; 6] = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+/// The window's columns as the ways' one rule reads them, counted from its
+/// first; a column it does not hold has no segment.
+impl Columns for Grid {
+    fn cell(&self) -> Zoom {
+        self.cell
+    }
+
+    fn per_m(&self) -> f32 {
+        self.per_m
+    }
+
+    fn count(&self, c: [i32; 2]) -> u32 {
+        self.local(c).map_or(0, |i| self.starts[i + 1] - self.starts[i])
+    }
+
+    fn segment(&self, c: [i32; 2], k: u32) -> Segment {
+        self.over[(self.starts[self.local(c).unwrap_or(0)] + k) as usize].2
+    }
+
+    fn center(&self, c: [i32; 2]) -> [f32; 2] {
+        let p = self.place(c);
+        [0, 1].map(|a| (p.origin[a] + (f64::from(c[a]) + 0.5) * p.step) as f32)
+    }
+
+    fn side(&self, c: [i32; 2]) -> f32 {
+        self.place(c).step as f32
+    }
+
+    fn stations(&self, c: [i32; 2]) -> Stations {
+        self.place(c).stations
+    }
+
+    fn look(&self, c: [i32; 2]) -> u32 {
+        self.local(c).map_or(u32::from(sentinel::void), |i| u32::from(self.look[i]))
+    }
+
+    fn face(&self, c: [i32; 2]) -> i32 {
+        self.local(c).map_or(0, |i| self.face_height(i))
+    }
+
+    /// The segment starts at the point after the one before it, and is not
+    /// its line's first.
+    fn joins(&self, c: [i32; 2], k: u32) -> bool {
+        let at = (self.starts[self.local(c).unwrap_or(0)] + k) as usize;
+        k > 0 && self.over[at].1 == self.over[at - 1].1 + 1 && self.over[at].2.first == 0
+    }
+}
+
+impl Grid {
+    /// The column `c` counted from the first, as an index, if held.
+    fn local(&self, c: [i32; 2]) -> Option<usize> {
+        let span = self.span as i32;
+        ((0..span).contains(&c[0]) && (0..span).contains(&c[1])).then(|| (c[1] * span + c[0]) as usize)
+    }
+
+    /// Where column `c`'s segments' tile lies.
+    fn place(&self, c: [i32; 2]) -> &Place {
+        &self.places[usize::from(self.local(c).map_or(0, |i| self.source[i]))]
+    }
+}

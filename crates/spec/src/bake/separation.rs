@@ -10,44 +10,38 @@ use std::borrow::Cow;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
+use pxl_portable::ways::{self, Segment, Stations};
+
 use super::{malformed, way};
-use crate::procedural::{pier_covers, Frame};
+use crate::procedural::Frame;
 use crate::space::coord::zoom::Zoom;
 use crate::space::hierarchy::tree::child_of;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use xpute_kit::math::scalar::round;
 
-/// Points are in eighths of the tile's cell, which an `i16` holds far past the tile's edge.
-pub const POINT_SCALE: f64 = 8.0;
+/// Points are in eighths of the tile's cell, which an `i16` holds far past
+/// the tile's edge (pxl-portable ways.rs).
+pub const POINT_SCALE: f64 = ways::POINT_SCALE as f64;
 
 /// The farthest past half its width the client draws a line, in its tile's
 /// cells; the bake sizes a line's tile and extent by it.
-pub const LINE_PAST: f64 = 1.0;
+pub const LINE_PAST: f64 = ways::LINE_PAST as f64;
 
 /// The widest a way is drawn, in its tile's cells: what a line's width byte
 /// holds. The ground draws a way no wider, so it is one width on and off a
 /// bridge, and how far past a tile anything drawn on it can come from is bounded.
 pub const WIDEST: f64 = u8::MAX as f64 / POINT_SCALE;
 
-/// A deck's slab under its surface, in ground metres: Arnis's `DECK_STRUCTURE_DEPTH`.
-pub const DECK_THICKNESS_M: f64 = 2.0;
-
-/// Clear height a deck keeps over a deck under it, in ground metres: Arnis's
-/// `STACKED_DECK_HEADROOM`.
-pub const STACKED_DECK_HEADROOM_M: f64 = 6.0;
-
-/// A deck's slab in units of height, at least one.
-pub fn slab_depth(u_per_m: f64) -> i32 {
-    (round(DECK_THICKNESS_M * u_per_m) as i32).max(1)
-}
+/// What a line over a column is and occupies there (pxl-portable ways.rs).
+pub use pxl_portable::ways::{Crossing, Occupies, Occupy, STACKED_DECK_HEADROOM_M};
 
 /// What a line is, from the source's flags alone; the byte is the wire's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Form {
-    Bridge = 0,   // a slab under its surface
-    Tunnel = 1,   // its clear height and shell over its surface
-    Approach = 2, // a bridge's or a tunnel's approach on the ground: an embankment or a cutting
+    Bridge = ways::BRIDGE as u8,     // a slab under its surface
+    Tunnel = ways::TUNNEL as u8,     // its clear height and shell over its surface
+    Approach = ways::APPROACH as u8, // a bridge's or a tunnel's approach on the ground: an embankment or a cutting
 }
 
 impl Form {
@@ -112,7 +106,7 @@ pub struct Separation {
     pub clear: Cow<'static, [u8]>,        // a bore's clear space over its surface, in leaf cells: solved
     /// Derived: a tree of boxes over the points in order, each the segments it
     /// covers widened by their reach, in points; what `crossing_point` and
-    /// `crossing_grid` walk.
+    /// `segments_over` walk.
     pub boxes: Cow<'static, [[i16; 4]]>,
 }
 
@@ -130,56 +124,6 @@ pub struct Line<'a> {
     pub kind: u8,
     pub form: Form,
     pub clear: u8,
-}
-
-/// A line over one column: the lowest and highest its road surface runs
-/// across the column, in leaf cells, and whether its pier's section covers it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Crossing {
-    pub low: f64,
-    pub top: f64,
-    pub kind: u8,
-    pub form: Form,
-    pub pier: bool,
-    pub clear: u8,
-}
-
-/// What a line occupies of one column, in leaf cells, each `[lo, hi)`; the
-/// paint and the query both use it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Occupies {
-    /// The way on the ground; the column's top cell is its surface.
-    Grade,
-    /// A slab under the surface, and a pier
-    /// from the ground to the slab where its section covers the column.
-    Over { slab: [i32; 2], pier: Option<[i32; 2]> },
-    /// Air from the surface up; the cell under it is the way's.
-    Under { span: [i32; 2] },
-}
-
-impl Crossing {
-    /// `u_per_m`: units of height a ground metre on the column's tile.
-    pub fn occupies(&self, ground: i32, u_per_m: f64) -> Occupies {
-        // all the surface sweeps across the column, so a slab or a bore steps down to the
-        // next column's without a gap however steep it runs
-        let (low, top) = (round(self.low) as i32, round(self.top) as i32);
-        match self.form {
-            Form::Bridge => {
-                let lo = low - slab_depth(u_per_m);
-                Occupies::Over {
-                    slab: [lo, top],
-                    pier: (self.pier && lo > ground).then_some([ground, lo]),
-                }
-            }
-            Form::Tunnel => Occupies::Under {
-                span: [low, top + i32::from(self.clear)],
-            },
-            // a way on the ground moves the ground with it: filled up to it, cut down to it
-            Form::Approach if top > ground => Occupies::Over { slab: [ground, top], pier: None },
-            Form::Approach if top < ground => Occupies::Under { span: [low, ground] },
-            Form::Approach => Occupies::Grade,
-        }
-    }
 }
 
 impl Separation {
@@ -208,10 +152,12 @@ impl Separation {
         (0..self.len()).map(|d| self.line(d))
     }
 
-    /// Every line over each column of a grid: column (i, j) the square of side
-    /// `step` about `origin + (i + ½, j + ½) · step` in the tile's cells. A
-    /// column at a joint is reported for both segments; the caller joins them.
-    pub fn crossing_grid(&self, frame: Option<Frame>, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Crossing)) {
+    /// Each segment that may be over a column of a grid, by the point it
+    /// starts at, with the column: column (i, j) the square of side `step`
+    /// about `origin + (i + ½, j + ½) · step` in the tile's cells, a segment
+    /// over it where the column's center is within its way's reach of its
+    /// box. Row by row, each segment's in turn, in the points' order.
+    pub fn segments_over(&self, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize)) {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - 0.5;
         let far = [0, 1].map(|k| origin[k] + size[k] as f64 * step);
         let area = [origin[0], origin[1], far[0], far[1]].map(|v| v * POINT_SCALE);
@@ -231,22 +177,36 @@ impl Separation {
             };
             for j in range(1) {
                 for i in range(0) {
-                    let at = [origin[0] + (i as f64 + 0.5) * step, origin[1] + (j as f64 + 0.5) * step];
-                    if let Some(over) = line.crossing_segment(frame, s, at, step) {
-                        each(i, j, d, over);
-                    }
+                    each(i, j, p);
                 }
             }
         }
     }
 
+    /// The segment that starts at point `p`, as the one rule reads it.
+    pub fn segment(&self, p: usize) -> Segment {
+        let d = self.starts.partition_point(|&s| s as usize <= p) - 1;
+        self.line(d).segment(p - self.starts[d] as usize)
+    }
+
+    /// Every line over each column of a grid (`segments_over`), each segment
+    /// its own crossing, piers at the stations of the tile at `frame`.
+    pub fn crossing_grid(&self, frame: Frame, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Crossing)) {
+        let stations = frame.stations();
+        self.segments_over(origin, step, size, |i, j, p| {
+            let at = [origin[0] + (i as f64 + 0.5) * step, origin[1] + (j as f64 + 0.5) * step];
+            if let Some(over) = crossing_at(&self.segment(p), at, step, &stations) {
+                each(i, j, p, over);
+            }
+        });
+    }
+
     /// Every line over the column of side `side` about `at`.
-    pub fn crossing_point(&self, frame: Option<Frame>, at: [f64; 2], side: f64) -> impl Iterator<Item = Crossing> + '_ {
-        Near::new(&self.boxes, self.points.len(), [at[0], at[1], at[0], at[1]].map(|v| v * POINT_SCALE)).filter_map(move |i| {
-            let d = self.starts.partition_point(|&s| s as usize <= i) - 1;
-            let line = self.line(d);
-            let s = i - self.starts[d] as usize;
-            (s + 1 < line.points.len()).then(|| line.crossing_segment(frame, s, at, side)).flatten()
+    pub fn crossing_point(&self, frame: Frame, at: [f64; 2], side: f64) -> impl Iterator<Item = Crossing> + '_ {
+        let stations = frame.stations();
+        Near::new(&self.boxes, self.points.len(), [at[0], at[1], at[0], at[1]].map(|v| v * POINT_SCALE)).filter_map(move |p| {
+            let d = self.starts.partition_point(|&s| s as usize <= p) - 1;
+            (p + 1 < self.starts[d + 1] as usize).then(|| crossing_at(&self.segment(p), at, side, &stations)).flatten()
         })
     }
 
@@ -330,7 +290,7 @@ impl Line<'_> {
     }
 
     pub fn reach(&self) -> f64 {
-        way::reach(self.width_cells())
+        f64::from(way::reach(self.width_cells() as f32))
     }
 
     pub fn footprint(&self) -> f64 {
@@ -348,38 +308,29 @@ impl Line<'_> {
         b
     }
 
-    /// What segment `s` is over the column of side `side` about `at`, if the
-    /// line covers `at`: the surface it runs through across the column, and,
-    /// given where the tile lies, whether `at` is inside the section of a pier
-    /// at a station of this segment.
-    fn crossing_segment(&self, frame: Option<Frame>, s: usize, at: [f64; 2], side: f64) -> Option<Crossing> {
-        let (a, b) = (self.point(s), self.point(s + 1));
-        let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
-        let len2 = dx * dx + dy * dy;
-        let t = along(a, [dx, dy], at);
-        // a line ends square where it begins and ends, as the ground cuts a way, so the
-        // next line and the paint start where it stops; its joints stay round
-        if (s == 0 && t < 0.0) || (s + 2 == self.points.len() && t > 1.0) {
-            return None;
+    /// Segment `s`, from point `s` to the next, as the one rule reads it: a
+    /// line ends square at its first and last.
+    pub fn segment(&self, s: usize) -> Segment {
+        let byte = |v: i16| f32::from(v) / ways::POINT_SCALE;
+        let [a, b] = [self.points[s], self.points[s + 1]].map(|p| p.map(byte));
+        Segment {
+            a,
+            b,
+            tops: [f32::from(self.tops[s]), f32::from(self.tops[s + 1])],
+            width: f32::from(self.width) / ways::POINT_SCALE,
+            kind: u32::from(self.kind),
+            form: u32::from(self.form.byte()),
+            clear: u32::from(self.clear),
+            first: u32::from(s == 0),
+            last: u32::from(s + 2 == self.points.len()),
         }
-        let t = t.clamp(0.0, 1.0);
-        let near = [a[0] + dx * t, a[1] + dy * t];
-        if !way::covers(self.width_cells(), libm::hypot(at[0] - near[0], at[1] - near[1])) {
-            return None;
-        }
-        // the column's square spans this much of the segment either side of `t`
-        let reach = if len2 > 0.0 { side / 2.0 * (dx.abs() + dy.abs()) / len2 } else { 0.0 };
-        let z = |t: f64| f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t.clamp(0.0, 1.0);
-        let (z0, z1) = (z(t - reach), z(t + reach));
-        Some(Crossing {
-            low: z0.min(z1),
-            top: z0.max(z1),
-            kind: self.kind,
-            form: self.form,
-            pier: self.form != Form::Tunnel && frame.is_some_and(|f| pier_covers(f, self.width_cells(), a, [dx, dy], near, at)),
-            clear: self.clear,
-        })
     }
+}
+
+/// What segment `s` is over the column of side `side` about `at` in its
+/// tile's cells (pxl-portable ways.rs `crossing`).
+fn crossing_at(s: &Segment, at: [f64; 2], side: f64, stations: &Stations) -> Option<Crossing> {
+    ways::crossing(s, at.map(|v| v as f32), side as f32, stations)
 }
 
 /// Where the nearest point of the line from `a` along `d` to `p` lies, as a
@@ -394,7 +345,7 @@ fn along(a: [f64; 2], d: [f64; 2], p: [f64; 2]) -> f64 {
 }
 
 pub fn footprint(width: f64) -> f64 {
-    width / 2.0 + LINE_PAST
+    f64::from(ways::footprint(width as f32))
 }
 
 /// Lines one zoom coarser, at `z`: half a cell wide or more, simplified to
@@ -629,7 +580,7 @@ fn build_boxes(starts: &[u32], points: &[[i16; 2]], width: &[u8], out: &mut [[i1
                 continue;
             }
             // Within reach of the segment is within its box widened by the reach.
-            let r = (way::reach(f64::from(width[d]) / POINT_SCALE) * POINT_SCALE).ceil() as i32;
+            let r = (f64::from(way::reach(f32::from(width[d]) / ways::POINT_SCALE)) * POINT_SCALE).ceil() as i32;
             let (a, c) = (points[i], points[i + 1]);
             let lo = |k: usize| (i32::from(a[k].min(c[k])) - r).max(i32::from(i16::MIN)) as i16;
             let hi = |k: usize| (i32::from(a[k].max(c[k])) + r).min(i32::from(i16::MAX)) as i16;
