@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/camera_grid.wgsl
 
 // The camera grid fixed to the screen, the one the rays were cast through
-// (`pxl-kernel view/sight.rs` `Lens`): from one edge of the view to the
+// (`pxl-kernel view/lens.rs` `Lens`): from one edge of the view to the
 // other, a cell at each step of angle across and up (`frame_grid`).
 
 const COLOR = vec4f(1.0, 1.0, 1.0, 0.55);

@@ -81,8 +81,7 @@ fn linear_of(word: u32) -> vec3f {
 }
 
 // What a look reads as on a block coarser than the ground's cell: its
-// layer's mean where the pack is drawn, else its swatch (`mesh/chunk.rs`
-// `layer_color`).
+// layer's mean where the pack is drawn, else its swatch.
 fn far(l: vec2u) -> vec3f {
   return linear_of(select(l.x, l.y, frame_low_spec() < 0.5));
 }
@@ -92,8 +91,7 @@ struct Drawn {
   taps: vec4f,
 };
 
-// What the block a cell's ray met is drawn as, as a chunk's mesh draws it
-// (`mesh/chunk.rs` `drawn`): at the ground's cell or finer, its swatch and
+// What the block a cell's ray met is drawn as: at the ground's cell or finer, its swatch and
 // its layer in all four taps; coarser, one colour, a ground fold's the mean
 // of the looks it folds where its face's own is among them.
 fn drawn(c: vec4u) -> Drawn {

@@ -168,7 +168,7 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs). */
+  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
   world_gizmo: {
     key: 15 as number,
     kind: "toggle",
@@ -356,7 +356,7 @@ export const SETTINGS_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs). */
+  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
   world_gizmo: {
     key: 15 as number,
     kind: "toggle",

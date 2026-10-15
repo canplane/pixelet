@@ -18,5 +18,5 @@ distinct" instance count. `companion.rs`'s `Figure` (person + pet) is the
 only instance today.
 
 The person's chat line is no Actor of its own: it is a billboard label as a
-marker's is, laid out with them (`../../chunk/place.rs`), and the companion
+marker's is, laid out with them (`../place.rs`), and the companion
 only hands down where it is said from (`../../billboard/chat.rs` `speak_from`).

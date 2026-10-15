@@ -40,7 +40,7 @@ pub fn cell_at(r: f32) -> Zoom {
 
 /// The direction through a cell of the camera grid whose middle is at the
 /// tangents `tx` across and `ty` up from the optical axis: the camera grid's
-/// cells at equal steps of angle (pxl-kernel view/sight.rs `Lens`), the
+/// cells at equal steps of angle (pxl-kernel view/lens.rs `Lens`), the
 /// tangents stated once by the CPU, since a tangent of an angle is libm's in
 /// f64 on the CPU and a WGSL has none.
 pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f32) -> [f32; 3] {

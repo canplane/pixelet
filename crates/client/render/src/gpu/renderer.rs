@@ -140,7 +140,7 @@ pub struct GroundFrames<'a> {
 /// eye, its lane's tangents, the terrain's tiles as the GPU holds them, and
 /// what is placed.
 pub struct Cast<'a> {
-    /// The eye as seven vec4s (pxl-kernel view/sight.rs `gpu_cast`, scene/
+    /// The eye as seven vec4s (pxl-kernel view/lens.rs `gpu_cast`, scene/
     /// cast.rs `eye`): its origin in Q3 steps, forward and the reach, right
     /// and τ, up, the lane's cells across and up with the zooms a block is
     /// asked at, and a preview's cut to air and its left-out leaf.

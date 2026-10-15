@@ -222,7 +222,7 @@ pub enum SettingKey {
     view_overlay = 13,
     /// The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
     performance_overlay = 14,
-    /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs).
+    /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs).
     world_gizmo = 15,
     /// The camera grid over the screen, the one the rays are cast through, a cell a ray (scene/indicator/camera_gizmo.rs).
     camera_gizmo = 16,

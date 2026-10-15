@@ -40,7 +40,7 @@ struct Frame {
   // How far the chunks that cast reach, a share of the shadow map's half width.
   shadow_rim: f32,
   // The camera grid's cell as the rays were cast through it, its angles
-  // across and up the screen (`pxl-kernel view/sight.rs` `Lens::step`).
+  // across and up the screen (`pxl-kernel view/lens.rs` `Lens::step`).
   grid: vec2f,
 };
 

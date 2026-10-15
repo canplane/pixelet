@@ -24,7 +24,7 @@ use pxl_portable::{at, mask, wrap_index, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::spirv;
 
-/// The eye a cast is from (pxl-kernel view/sight.rs `gpu_cast`).
+/// The eye a cast is from (pxl-kernel view/lens.rs `gpu_cast`).
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Eye {

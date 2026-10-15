@@ -500,7 +500,7 @@ impl Grid {
 const NEAR: [[i64; 3]; 6] = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
 
 /// Whether shading a block's faces reads the block at `o` about it
-/// (`pxl-render mesh/chunk.rs` `mask`): every one beside it and over and
+/// (pxl-portable `mask.rs` `mask`): every one beside it and over and
 /// under those, the two over and under it, and the four at its corners and
 /// over them; not the four under its corners, which no face's shading reads.
 pub fn shades([x, y, z]: [i64; 3]) -> bool {

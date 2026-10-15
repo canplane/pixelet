@@ -4,10 +4,8 @@
 //
 // What each line of the world gizmo is drawn in, so the lines and the
 // shell's legend of them read one look: the frame's marks about the focus
-// (scene/indicator/frame_gizmo.rs) and the coverage's over the ground
-// (scene/indicator/coverage_gizmo.rs). Each #rrggbb in sRGB, with its
-// opacity, and dashed where a dashed line draws it: a ring of the frame, a
-// stretch of the coverage.
+// (scene/indicator/frame_gizmo.rs). Each #rrggbb in sRGB, with its opacity,
+// and dashed where a dashed line draws it: a ring of the frame.
 
 export const frame = {
   focus: {
@@ -27,43 +25,5 @@ export const frame = {
   },
   up: {
     rgb: 0x0000ff,
-  },
-} as const;
-
-export const coverage = {
-  drawn: {
-    rgb: 0xffffff,
-    alpha: 0.4 as number,
-    dashed: false,
-  },
-  drawn_from_floor: {
-    rgb: 0x00ffff,
-    alpha: 0.6 as number,
-    dashed: false,
-  },
-  unbuilt: {
-    rgb: 0xffff00,
-    alpha: 0.6 as number,
-    dashed: true,
-  },
-  floor_only: {
-    rgb: 0xff00ff,
-    alpha: 0.6 as number,
-    dashed: true,
-  },
-  no_tile: {
-    rgb: 0xff0000,
-    alpha: 0.6 as number,
-    dashed: true,
-  },
-  tile: {
-    rgb: 0xff9500,
-    alpha: 0.9 as number,
-    dashed: false,
-  },
-  shard: {
-    rgb: 0x7cff7c,
-    alpha: 1 as number,
-    dashed: false,
   },
 } as const;
