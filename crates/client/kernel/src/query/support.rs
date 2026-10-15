@@ -70,14 +70,13 @@ impl<'w, 'a> Upright<'w, 'a> {
         }
     }
 
-    /// The box of the first block the ray from the height `z`, up or down,
-    /// stops at (`until`).
-    fn ray(&mut self, z: f64, up: bool, until: Until) -> Option<Aabb> {
-        let (sign, reach) = if up { (1.0, REACH.max[2] - z) } else { (-1.0, z - REACH.min[2]) };
+    /// The box of the first block the ray from the height `z` to the height
+    /// `to`, up or down, stops at (`until`).
+    fn ray(&mut self, z: f64, to: f64, until: Until) -> Option<Aabb> {
         let ray = Ray {
             origin: [self.at[0], self.at[1], z],
-            direction: [0.0, 0.0, sign],
-            reach: reach.max(0.0),
+            direction: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
+            reach: (to - z).abs(),
         };
         let (answer, _) = self.world.along(&ray, Detail::Zoom(self.zoom), until, None);
         if let Some(l) = answer.lack() {
@@ -89,24 +88,24 @@ impl<'w, 'a> Upright<'w, 'a> {
     /// The top of what fills at the height `z`: the bottom of the first block
     /// that does not fill from `z` up, `z` where its own does not.
     fn lift(&mut self, z: f64) -> f64 {
-        self.ray(z, true, Until::Air).map_or(REACH.max[2], |b| b.min[2].max(z))
+        self.ray(z, REACH.max[2], Until::Air).map_or(REACH.max[2], |b| b.min[2].max(z))
     }
 
     /// The top of the highest solid under `z`, over the reach's floor: the
     /// ray down from `z`, which starts in the block over it.
     fn below(&mut self, z: f64) -> Option<f64> {
-        self.ray(z, false, Until::Fills).map(|b| b.max[2]).filter(|&t| t > REACH.min[2])
+        self.ray(z, REACH.min[2], Until::Fills).map(|b| b.max[2]).filter(|&t| t > REACH.min[2])
     }
 
-    /// The bottom of the lowest solid over `z`: the ray up from `z`, which
-    /// starts in the block at `z` and so meets none at it.
-    fn above(&mut self, z: f64) -> Option<f64> {
-        self.ray(z, true, Until::Fills).map(|b| b.min[2]).filter(|&b| b < REACH.max[2])
+    /// The bottom of the lowest solid over `z` and under `to`: the ray up
+    /// from `z`, which starts in the block at `z` and so meets none at it.
+    fn above(&mut self, z: f64, to: f64) -> Option<f64> {
+        self.ray(z, to, Until::Fills).map(|b| b.min[2]).filter(|&b| b < to)
     }
 
     /// The top of the highest solid, within the reach.
     fn highest(&mut self) -> Option<f64> {
-        self.ray(REACH.max[2], false, Until::Fills).map(|b| b.max[2].min(REACH.max[2]))
+        self.ray(REACH.max[2], REACH.min[2], Until::Fills).map(|b| b.max[2].min(REACH.max[2]))
     }
 
     /// The cell's ground's top, in units.
@@ -185,7 +184,7 @@ impl<'a> World<'a> {
             t if t > z => Some(t.min(REACH.max[2])),
             t => c.below(t),
         };
-        let up = c.above(z).map(|a| c.lift(a));
+        let up = c.above(z, REACH.max[2]).map(|a| c.lift(a));
         let nearest = [down, up, c.surface()].into_iter().flatten().min_by(|a, b| (a - z).abs().total_cmp(&(b - z).abs()));
         c.done(nearest)
     }
@@ -194,7 +193,7 @@ impl<'a> World<'a> {
     pub fn ceiling_over(&self, at: &Q3) -> Answer<Option<f64>> {
         let z = q3::to_real(i64::from(at[2]));
         let mut c = Upright::new(self, xy(at), LEAF_ZOOM);
-        let over = c.above(z);
+        let over = c.above(z, REACH.max[2]);
         c.done(over)
     }
 
@@ -242,12 +241,10 @@ impl<'a> World<'a> {
         let point = |t: f64, end: [f64; 2], blocked: [bool; 2]| [0, 1].map(|k| if blocked[k] { end[k] } else { [sx, sy][k] + way[k] * t });
         let mut at = [sx, sy].map(|v| libm::floor(v / s));
         // Out of what fills its own cell first: only what is over that is a ceiling.
-        let mut ceiling;
-        (floor, ceiling) = {
+        floor = {
             let mut c = Upright::new(self, center(at), LEAF_ZOOM);
             let f = c.lift(floor);
-            let over = c.above(f);
-            c.done((f, over)).exact()?
+            c.done(f).exact()?
         };
         // Amanatides and Woo's traversal: the share of `way` at each axis's next edge.
         loop {
@@ -262,8 +259,8 @@ impl<'a> World<'a> {
             into[k] += way[k].signum();
             // Short of the edge by less than a position's fraction, so the cell it ends in is this one.
             let short = edge(k) - way[k].signum() * s * 1e-6;
-            match self.step(ceiling, floor, center(into), falls) {
-                Some(Some((top, over))) => (at, floor, ceiling) = (into, top, over),
+            match self.step(center(at), floor, center(into), falls) {
+                Some(Some(top)) => (at, floor) = (into, top),
                 // Slid along: this axis stays in its cell, the other goes on.
                 Some(None) => (end[k], blocked[k]) = (short, true),
                 None => {
@@ -276,12 +273,14 @@ impl<'a> World<'a> {
         Some(gather(end[0], end[1], floor))
     }
 
-    /// Into the leaf cell at `to`, the feet at `floor` under the cell left's
-    /// `ceiling`: up over what fills the walker's cell, a cell tall, while
-    /// under it, then down onto the floor if it `falls`; the floor and the
-    /// ceiling over it there, none where the ceiling stops it, the outer none
-    /// where `to` is not held at the leaf.
-    fn step(&self, ceiling: Option<f64>, floor: f64, to: [f64; 2], falls: bool) -> Option<Option<(f64, Option<f64>)>> {
+    /// From the leaf cell at `from` into the one at `to`, the feet at
+    /// `floor`: up over what fills the walker's cell, a cell tall, while
+    /// what is over `floor` in the cell left does not stop it there, then
+    /// down onto the floor if it `falls`; the floor there, none where the
+    /// cell left's ceiling stops it, the outer none where `to` or the cell
+    /// left is not held at the leaf. The ceiling is asked only as high as the
+    /// climb, never past it.
+    fn step(&self, from: [f64; 2], floor: f64, to: [f64; 2], falls: bool) -> Option<Option<f64>> {
         // Past the service area is a wall, slid along as any.
         if !self.within(&world::at(q3::from_real(to[0]), q3::from_real(to[1]), 0)) {
             return Some(None);
@@ -289,13 +288,16 @@ impl<'a> World<'a> {
         let cell = units(GROUND.cell());
         let mut c = Upright::new(self, to, LEAF_ZOOM);
         let mut z = c.lift(floor);
-        let moved = if z > floor && ceiling.is_some_and(|top| top < z + cell) {
-            None
+        let moved = if z > floor {
+            let mut left = Upright::new(self, from, LEAF_ZOOM);
+            let stopped = left.above(floor, z + cell).is_some();
+            left.done(()).exact()?;
+            (!stopped).then_some(z)
         } else {
-            if z == floor && falls {
+            if falls {
                 z = c.below(z).unwrap_or(z);
             }
-            Some((z, c.above(z)))
+            Some(z)
         };
         c.done(moved).exact()
     }
