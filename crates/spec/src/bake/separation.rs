@@ -138,7 +138,11 @@ impl Separation {
     /// hold it (`holds`).
     pub fn fits(&self) -> Result<(), [usize; 2]> {
         let size = [self.len(), self.points.len()];
-        if holds(size[0], size[1]) { Ok(()) } else { Err(size) }
+        if holds(size[0], size[1]) {
+            Ok(())
+        } else {
+            Err(size)
+        }
     }
 
     pub fn len(&self) -> usize {

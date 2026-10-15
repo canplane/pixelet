@@ -9,13 +9,14 @@ use std::collections::TryReserveError;
 use pxl_portable::decor::Decor;
 
 use crate::space::coord::adapter::epsg3857::u_per_m;
-use crate::space::coord::zoom::Zoom;
+use crate::space::coord::zoom::{units, Zoom};
 use crate::space::layer::lattice::TILE_CELLS;
 use crate::space::layer::tile::Tile;
 
 /// A node's seed and the caves, one source with the GPU's (pxl-portable).
 pub use pxl_portable::caves::{node_seed, Cave, CAVE_COARSEST};
 use pxl_portable::ways::{Stations, INTERVAL_M};
+use pxl_portable::LEAF_CELL;
 
 // ---- scatter: what stands in a region, by portable's ----
 
@@ -80,13 +81,15 @@ impl Frame {
 
     /// Where its piers may stand, in its cells (pxl-portable ways.rs
     /// `Stations`): each beam's lattice of stations, at its spacing in
-    /// ground metres where the tile lies, and where its corner falls in it.
+    /// ground metres where the tile lies, and where its corner falls in it;
+    /// and the leaf cells its cell spans.
     pub fn stations(self) -> Stations {
         let corner = self.corner.map(|v| v / self.cell);
         let step = INTERVAL_M.map(|m| f64::from(m) * u_per_m(self.corner[1]) / self.cell);
         Stations {
             step: step.map(|s| s as f32),
             phase: step.map(|s| corner.map(|c| c.rem_euclid(s) as f32)),
+            leaf: (self.cell / units(LEAF_CELL)) as f32,
         }
     }
 }

@@ -61,8 +61,8 @@ fn segments(d: &Separation) -> Vec<Segment> {
     (0..d.len()).flat_map(|k| (d.starts[k] as usize..d.starts[k + 1] as usize - 1).map(|p| d.segment(p))).collect()
 }
 
-/// A frame two u a cell at the origin, where nothing stands.
-const NOWHERE: Frame = Frame { corner: [0.0, 0.0], cell: 2.0 };
+/// A leaf tile's frame at the origin: a u a cell.
+const NOWHERE: Frame = Frame { corner: [0.0, 0.0], cell: 1.0 };
 
 fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Separation {
     let mut b = Builder::default();
@@ -95,9 +95,9 @@ fn a_narrow_line_along_a_diagonal_is_one_band() {
 
 #[test]
 fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() {
-    // Two u a cell; a narrow deck's bent is the one cell at its station.
+    // A u a cell; a narrow deck's bent is the one cell at its station.
     let frame = NOWHERE;
-    let station = f64::from(BEAM_PILLAR_INTERVAL_M) * u_per_m(0.0) / 2.0;
+    let station = f64::from(BEAM_PILLAR_INTERVAL_M) * u_per_m(0.0);
     let d = one(&[[1.0, 3.0], [41.0, 3.0]], &[20, 20], 4.0);
     let piers: Vec<f64> = (0..42).map(|x| f64::from(x) + 0.5).filter(|&x| d.crossing_point(frame, [x, 3.0], 1.0).any(|o| o.pier == 1)).collect();
     let expected: Vec<f64> = (0..42)

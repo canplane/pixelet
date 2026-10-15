@@ -6,11 +6,14 @@
 //! GPU's descent (pxl-spec bake/separation.rs keeps the lines, solved
 //! offline). A block is asked of the lines over its column, each visit of a
 //! line its own crossing: the run of its segments, one after another, that
-//! are over the column. Index loops, no `Option<bool>`, words for tags.
+//! are over the column. What is under half a block in any dimension at a
+//! zoom is absent there, as the fold drops a line under half a cell wide: a
+//! slab or a bore fills a block where it holds half its height or more, and
+//! a pier, a leaf cell square, stands only in columns no more than two leaf
+//! cells wide. Index loops, no `Option<bool>`, words for tags.
 
 use crate::cube::{sentinel, Ground};
-use crate::ground::blocks;
-use crate::Zoom;
+use crate::{Zoom, LEAF_CELL};
 
 /// Points are eighths of the tile's cell.
 pub const POINT_SCALE: f32 = 8.0;
@@ -157,13 +160,15 @@ impl Segment {
 /// Where a tile's piers may stand: the bents' lattice along each axis, a
 /// step of `step[w]` cells for the narrow (`w` 0) and the wide (1) beam, and
 /// where the tile's corner lies inside a step, `phase[w][axis]`, so a station
-/// is the world's and not the tile's. Made once a tile in doubles (pxl-spec
-/// procedural.rs `Frame::stations`), as a corner is far past where a float
-/// holds a cell.
+/// is the world's and not the tile's; and the leaf cells a tile's cell
+/// spans a side, which a pier's section is measured in. Made once a tile in
+/// doubles (pxl-spec procedural.rs `Frame::stations`), as a corner is far
+/// past where a float holds a cell.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Stations {
     pub step: [f32; 2],
     pub phase: [[f32; 2]; 2],
+    pub leaf: f32,
 }
 
 /// A bent's spacing for the narrow beam (`w` 0) and the wide (1), metres.
@@ -179,14 +184,19 @@ fn bent(half: i32) -> ([i32; 3], u32) {
     }
 }
 
-/// Whether `at` is in the pier at the station nearest `near` on `[a, a + d)`,
-/// in the tile's cells; half-open, so a joint's station is one segment's.
-pub fn pier_covers(st: &Stations, width: f32, a: [f32; 2], d: [f32; 2], near: [f32; 2], at: [f32; 2]) -> bool {
+/// Whether the column of `side` about `at` holds the pier at the station
+/// nearest `near` on `[a, a + d)`, in the tile's cells; half-open, so a
+/// joint's station is one segment's. A pier is a leaf cell square, its bent
+/// laid out in leaf cells: a column more than two leaf cells wide holds none,
+/// as it is under half of it; one of two holds it where one of its four leaf
+/// cells does.
+pub fn pier_covers(st: &Stations, width: f32, a: [f32; 2], d: [f32; 2], near: [f32; 2], at: [f32; 2], side: f32) -> bool {
     let k = if d[0].abs() >= d[1].abs() { 0 } else { 1 };
-    if d[k] == 0.0 {
+    let leaves = side * st.leaf;
+    if d[k] == 0.0 || leaves > 2.0 {
         return false;
     }
-    let half = half_cells(width);
+    let half = half_cells(width * st.leaf);
     let w = if half <= 2 { 0 } else { 1 };
     let (step, phase) = (st.step[w], st.phase[w][k]);
     let station = libm::rintf((phase + near[k]) / step) * step - phase;
@@ -196,18 +206,28 @@ pub fn pier_covers(st: &Stations, width: f32, a: [f32; 2], d: [f32; 2], near: [f
     }
     let len = libm::hypotf(d[0], d[1]);
     let dir = [d[0] / len, d[1] / len];
-    let rel = [at[0] - (a[0] + d[0] * t), at[1] - (a[1] + d[1] * t)];
-    let along = (rel[0] * dir[0] + rel[1] * dir[1]).abs();
-    let across = rel[0] * dir[1] - rel[1] * dir[0];
+    let foot = [a[0] + d[0] * t, a[1] + d[1] * t];
+    // A leaf cell, and the centers of the leaf cells the column holds: its
+    // own where it is one or finer, else its four.
+    let leaf = 1.0 / st.leaf;
+    let (off, m) = if leaves >= 2.0 { (leaf / 2.0, 4) } else { (0.0, 1) };
     let (sides, n) = bent(half);
-    // an edge column stands a cell in from the edge
     let mut covered = false;
-    let mut i = 0;
-    while i < n as usize {
-        covered |= (across - (sides[i] * (half - 1).max(0)) as f32).abs() <= 0.5;
-        i += 1;
+    let mut j = 0;
+    while j < m {
+        let p = [at[0] + if j & 1 == 0 { -off } else { off }, at[1] + if j & 2 == 0 { -off } else { off }];
+        let rel = [p[0] - foot[0], p[1] - foot[1]];
+        let along = (rel[0] * dir[0] + rel[1] * dir[1]).abs();
+        let across = rel[0] * dir[1] - rel[1] * dir[0];
+        // an edge column stands a leaf cell in from the edge
+        let mut i = 0;
+        while i < n as usize {
+            covered |= along <= leaf / 2.0 && (across - (sides[i] * (half - 1).max(0)) as f32 * leaf).abs() <= leaf / 2.0;
+            i += 1;
+        }
+        j += 1;
     }
-    along <= 0.5 && covered
+    covered
 }
 
 /// A segment over one column: the lowest and highest its road surface runs
@@ -248,7 +268,7 @@ pub fn crossing(s: &Segment, at: [f32; 2], side: f32, st: &Stations) -> Option<C
         top: z0.max(z1),
         kind: s.kind,
         form: s.form,
-        pier: u32::from(s.form != TUNNEL && pier_covers(st, s.width, a, d, near, at)),
+        pier: u32::from(s.form != TUNNEL && pier_covers(st, s.width, a, d, near, at, side)),
         clear: s.clear,
     })
 }
@@ -363,14 +383,16 @@ fn writes<C: Columns>(cols: &C, c: [i32; 2], x: &Crossing) -> bool {
     Ground::grounds(x.kind) && cols.look(c) != sentinel::unknown as u32
 }
 
-/// The leaf cells `[lo, hi)` as blocks of the grid's zoom.
-fn in_blocks(cell: Zoom, v: [i32; 2]) -> [i32; 2] {
-    [blocks(cell, v[0] as f32), blocks(cell, v[1] as f32)]
-}
-
-/// Whether `z` is in `[lo, hi)`.
-fn within(z: i32, [lo, hi]: [i32; 2]) -> bool {
-    lo <= z && z < hi
+/// Whether the leaf cells `[lo, hi)` fill block `z` of the grid's zoom: half
+/// its height or more, so a run thinner than half a block fills none.
+pub fn fills(cell: Zoom, [lo, hi]: [i32; 2], z: i32) -> bool {
+    let d = cell as i32 - LEAF_CELL as i32;
+    if d >= 0 {
+        let leaf = z >> d;
+        return lo <= leaf && leaf < hi;
+    }
+    let s = 1 << -d;
+    2 * (hi.min((z + 1) * s) - lo.max(z * s)) >= s
 }
 
 /// Whether a run is empty, as a pier none stands for is.
@@ -422,8 +444,7 @@ fn bore<C: Columns>(cols: &C, c: [i32; 2], z: [i32; 2]) -> u32 {
         k = next;
         if let Some(x) = x.filter(|x| writes(cols, c, x)) {
             let o = occupies(&x, face, per_m);
-            let air = in_blocks(cell, o.span);
-            if o.what == Occupy::Under && (within(z[0], air) || within(z[1], air)) {
+            if o.what == Occupy::Under && (fills(cell, o.span, z[0]) || fills(cell, o.span, z[1])) {
                 return x.kind;
             }
         }
@@ -444,7 +465,8 @@ const NEAR: [[i32; 2]; 5] = [[0, -1], [-1, 0], [0, 0], [1, 0], [0, 1]];
 pub fn block<C: Columns>(cols: &C, b: [i32; 3], ground: bool) -> u32 {
     let (c, cell) = ([b[0], b[1]], cols.cell());
     let (face, per_m) = (cols.face(c), cols.per_m());
-    // The highest slab or pier over `b`, by its run's ends, then its look.
+    // The highest slab or pier over `b`, by its run's ends in leaf cells,
+    // then its look.
     let (mut best, mut look, mut air) = ([i32::MIN, i32::MIN], NOTHING, false);
     let mut k = 0;
     while k < cols.count(c) {
@@ -453,17 +475,15 @@ pub fn block<C: Columns>(cols: &C, b: [i32; 3], ground: bool) -> u32 {
         if let Some(x) = x.filter(|x| writes(cols, c, x)) {
             let o = occupies(&x, face, per_m);
             match o.what {
-                Occupy::Under => air |= within(b[2], in_blocks(cell, o.span)),
+                Occupy::Under => air |= fills(cell, o.span, b[2]),
                 Occupy::Over => {
-                    let slab = in_blocks(cell, o.span);
-                    if within(b[2], slab) && at_or_after(slab, best) {
-                        (best, look) = (slab, x.kind);
+                    if fills(cell, o.span, b[2]) && at_or_after(o.span, best) {
+                        (best, look) = (o.span, x.kind);
                     }
                     if !empty(o.pier) {
                         let pier = pier_stands(cols, c, o.pier, face, per_m);
-                        let run = in_blocks(cell, pier);
-                        if !empty(pier) && within(b[2], run) && at_or_after(run, best) {
-                            (best, look) = (run, PIER);
+                        if !empty(pier) && fills(cell, pier, b[2]) && at_or_after(pier, best) {
+                            (best, look) = (pier, PIER);
                         }
                     }
                 }
