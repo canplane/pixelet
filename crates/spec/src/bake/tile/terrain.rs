@@ -28,6 +28,12 @@ pub const WAYS_SHIFT: u32 = (TILE_CELLS / WAYS_ACROSS).trailing_zeros();
 const WAYS_LEVELS: u32 = WAYS_ACROSS.trailing_zeros();
 pub const WAYS_LANE: usize = ways_at(WAYS_LEVELS + 1) as usize;
 
+/// The most entries a window's square holds of the ways: one a segment and
+/// a square of the bound (`WAYS_SHIFT`) its footprint reaches. The densest
+/// square of the format-10 set, z15 010332102333322 (2026-10-15); a tile
+/// past it fails its bake (`ways_fit`).
+pub const WAYS_SQUARE_SEGMENTS: usize = 1068;
+
 /// Where level `k` of the ways' bound begins, the squares level 0, in entries.
 const fn ways_at(k: u32) -> u32 {
     let n = WAYS_ACROSS * WAYS_ACROSS;
@@ -107,6 +113,24 @@ pub fn ways_of(separation: &Separation, ways: &mut [[i16; 2]]) {
             }
         }
     }
+}
+
+/// Whether every square of `square` cells a side a tile is cut into holds
+/// its ways' entries within `WAYS_SQUARE_SEGMENTS`; the first that does not,
+/// its place in squares and its count, where one does not.
+pub fn ways_fit(separation: &Separation, square: u32) -> Result<(), ([u32; 2], usize)> {
+    let mut entries = [0usize; (WAYS_ACROSS * WAYS_ACROSS) as usize];
+    separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, _, _| entries[k] += 1);
+    let (bins, squares) = (square >> WAYS_SHIFT, TILE_CELLS / square);
+    for qy in 0..squares {
+        for qx in 0..squares {
+            let n: usize = (0..bins * bins).map(|b| entries[((qy * bins + b / bins) * WAYS_ACROSS + qx * bins + b % bins) as usize]).sum();
+            if n > WAYS_SQUARE_SEGMENTS {
+                return Err(([qx, qy], n));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// A tile's cells, the levels as far as they are made over them.
