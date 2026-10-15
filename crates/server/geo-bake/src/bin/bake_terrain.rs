@@ -16,11 +16,12 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use postgres::Client;
-use pxl_spec::bake::tile::terrain::{self, TerrainTile};
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::elevation::Raster;
+use pxl_geo_bake::pyramid::Base as _;
 use pxl_geo_bake::separation;
 use pxl_geo_bake::terrain::absent::Absence;
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf, has_ground};
@@ -98,8 +99,9 @@ fn run() -> Result<(), String> {
                             store: held,
                         };
                         let terrain = bake_leaf(reader, tile)?;
-                        let packed = pack(&terrain::encode(&terrain).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
-                        set.write(Tile::new(LEAF_ZOOM, tile), &packed)?;
+                        let at = Tile::new(LEAF_ZOOM, tile);
+                        let packed = pack(&terrain.encode().map_err(|e| format!("{}: {e}", at.name()))?, Level::Stored).map_err(|e| e.to_string())?;
+                        set.write(at, &packed)?;
                         Ok(Done::Wrote { bytes: packed.len() as u64, items: 0 })
                     },
                 )?;

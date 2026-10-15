@@ -286,7 +286,9 @@ fn fold_band<L: Base>(set: &Staged<'_>, rows: &[&[Tile]], absent: &impl Absent<L
                     e.insert(set.read::<L>(p)?);
                 }
             }
-            let after = fold_parent(parent, |p| held.get(&p).and_then(Option::as_ref), absent).map(|t| t.encode()).transpose()?;
+            let after = fold_parent(parent, |p| held.get(&p).and_then(Option::as_ref), absent)
+                .map(|t| t.encode().map_err(|e| format!("{}: {e}", parent.name())))
+                .transpose()?;
             if set.content(parent)? == after {
                 continue;
             }

@@ -10,6 +10,7 @@ pub mod source;
 use pxl_spec::bake::fold::fold_terrain;
 use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::bake::tile::Occupancy;
+use pxl_spec::block::window::SQUARE;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
@@ -20,7 +21,11 @@ pub const CELL_U: f64 = units(GROUND.cell());
 impl crate::pyramid::Base for TerrainTile {
     const LAYER: pxl_spec::bake::published::BaseLayer = pxl_spec::bake::published::BaseLayer::terrain;
 
+    /// Refused where a window's square would hold more of its ways'
+    /// entries than a client gives one (pxl-spec `terrain::ways_fit`).
     fn encode(&self) -> Result<Vec<u8>, String> {
+        terrain::ways_fit(&self.separation, SQUARE)
+            .map_err(|([qx, qy], n)| format!("its square ({qx}, {qy}) holds {n} of the ways' entries, past WAYS_SQUARE_SEGMENTS ({})", terrain::WAYS_SQUARE_SEGMENTS))?;
         terrain::encode(self).map_err(|e| format!("{e:?}"))
     }
 
