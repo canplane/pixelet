@@ -35,13 +35,11 @@ struct Frame {
   up: vec3f,
   // The camera grid's cell angle, radians.
   cell: f32,
-  // How far the chunks that cast reach, a share of the shadow map's half width.
-  shadow_rim: f32,
 };
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process.
-@group(0) @binding(0) var<uniform> frame_words: array<vec4f, 23>;
+@group(0) @binding(0) var<uniform> frame_words: array<vec4f, 22>;
 
 fn frame_view_proj() -> mat4x4f { return mat4x4f(frame_words[0], frame_words[1], frame_words[2], frame_words[3]); }
 fn frame_camera_pos() -> vec3f { return frame_words[4].xyz; }
@@ -64,7 +62,6 @@ fn frame_planet() -> vec4f { return frame_words[19]; }
 fn frame_globe() -> vec4f { return frame_words[20]; }
 fn frame_up() -> vec3f { return frame_words[21].xyz; }
 fn frame_cell() -> f32 { return frame_words[21].w; }
-fn frame_shadow_rim() -> f32 { return frame_words[22].x; }
 
 fn on_globe(p: vec3f) -> vec3f {
   return on_globe_of(p, frame_planet(), frame_globe());
