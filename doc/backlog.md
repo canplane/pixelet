@@ -14,20 +14,7 @@ Nothing now.
 
 ## P1
 
-- **Close the view's bound by area, and let the eye's rays measure it.**
-  The cell is a solid angle (4b1fd556f) and a screen holds at most
-  `GRID_CELLS_MAX`, but drawn cells are not yet held to a quarter of one:
-  a chunk's cells are sized by its distance alone, so ground
-  seen at a grazing angle is drawn four and more times finer than its cell
-  (the camera gizmo's blue, the far half of a 60° view). Decide in one
-  design: the bound in the form it must hold (visible cells ≤ 4 × the
-  grid's), what measures a cell's shown area — the rays of the camera grid,
-  a cell's footprint on what it meets, cast on the CPU or read back from a
-  GPU feedback pass as virtual texturing does (the decision of 20260928
-  already names "the GPU's feedback" as a better estimator) — and how the
-  choice stays on the main axis, the grid deciding the chunk, the chunk
-  asking the query, nothing beside the hierarchy. Near "How the samples are
-  drawn", parked below.
+Nothing now.
 
 ## P2
 
