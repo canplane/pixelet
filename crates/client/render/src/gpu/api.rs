@@ -32,6 +32,7 @@ pub mod buffer_usage {
     pub const VERTEX: u32 = 0x0020;
     pub const UNIFORM: u32 = 0x0040;
     pub const STORAGE: u32 = 0x0080;
+    pub const INDIRECT: u32 = 0x0100;
 }
 
 pub mod texture_usage {

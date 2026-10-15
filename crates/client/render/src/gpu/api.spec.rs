@@ -176,6 +176,10 @@ pub mod op {
     pub const DISPATCH: u32 = 32;
     /// encoder, id, offset, length, address, word, ticket: the buffer's bytes from offset, once the GPU has them, copied into the module's memory at address, and the word at `word` marked `read.DONE` over the ticket; only while that word still holds the ticket, so a range asked of again since takes the later answer alone
     pub const READ_BUFFER: u32 = 33;
+    /// pass, buffer, offset: DRAW's four words read from the buffer at offset, as the GPU last wrote them
+    pub const DRAW_INDIRECT: u32 = 34;
+    /// pass, buffer, offset: DRAW_INDEXED's five words (indices, instances, first index, base vertex, first instance) read from the buffer at offset
+    pub const DRAW_INDEXED_INDIRECT: u32 = 35;
     pub const KEYS: &[&str] = &[
         "BUFFER",
         "TEXTURE",
@@ -209,6 +213,8 @@ pub mod op {
         "COMPUTE_PASS",
         "DISPATCH",
         "READ_BUFFER",
+        "DRAW_INDIRECT",
+        "DRAW_INDEXED_INDIRECT",
     ];
 }
 

@@ -1105,6 +1105,22 @@ impl Gpu {
         }
     }
 
+    pub fn draw_indirect(&self, pass: u32, buffer: u32, offset: u32) {
+        let Some(d) = device() else { return };
+        let Some(b) = d.buffer(buffer).cloned() else { return };
+        if let Some(pass) = d.pass(pass) {
+            pass.draw_indirect(&b, u64::from(offset));
+        }
+    }
+
+    pub fn draw_indexed_indirect(&self, pass: u32, buffer: u32, offset: u32) {
+        let Some(d) = device() else { return };
+        let Some(b) = d.buffer(buffer).cloned() else { return };
+        if let Some(pass) = d.pass(pass) {
+            pass.draw_indexed_indirect(&b, u64::from(offset));
+        }
+    }
+
     pub fn end(&self, pass: u32) {
         if let Some(d) = device() {
             d.take(pass);

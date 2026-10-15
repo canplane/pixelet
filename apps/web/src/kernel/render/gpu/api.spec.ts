@@ -158,6 +158,10 @@ export const op = {
   DISPATCH: 32 as number,
   /** encoder, id, offset, length, address, word, ticket: the buffer's bytes from offset, once the GPU has them, copied into the module's memory at address, and the word at `word` marked `read.DONE` over the ticket; only while that word still holds the ticket, so a range asked of again since takes the later answer alone */
   READ_BUFFER: 33 as number,
+  /** pass, buffer, offset: DRAW's four words read from the buffer at offset, as the GPU last wrote them */
+  DRAW_INDIRECT: 34 as number,
+  /** pass, buffer, offset: DRAW_INDEXED's five words (indices, instances, first index, base vertex, first instance) read from the buffer at offset */
+  DRAW_INDEXED_INDIRECT: 35 as number,
 } as const;
 
 /** What READ_BUFFER leaves in its word: the ticket asked, with DONE set once the bytes are in. A ticket leaves DONE clear. */

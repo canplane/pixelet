@@ -504,6 +504,12 @@ function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
     case op.DRAW_INDEXED:
       get<GPURenderPassEncoder>(w[a]).drawIndexed(w[a + 1], w[a + 2], w[a + 3], 0, w[a + 4]);
       break;
+    case op.DRAW_INDIRECT:
+      get<GPURenderPassEncoder>(w[a]).drawIndirect(get<GPUBuffer>(w[a + 1]), w[a + 2]);
+      break;
+    case op.DRAW_INDEXED_INDIRECT:
+      get<GPURenderPassEncoder>(w[a]).drawIndexedIndirect(get<GPUBuffer>(w[a + 1]), w[a + 2]);
+      break;
     case op.END:
       get<GPURenderPassEncoder | GPUComputePassEncoder>(w[a]).end();
       break;

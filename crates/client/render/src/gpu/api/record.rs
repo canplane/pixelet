@@ -224,6 +224,14 @@ impl Gpu {
         put(op::DRAW_INDEXED, &[pass, indices, instances, first_index, first_instance]);
     }
 
+    pub fn draw_indirect(&self, pass: u32, buffer: u32, offset: u32) {
+        put(op::DRAW_INDIRECT, &[pass, buffer, offset]);
+    }
+
+    pub fn draw_indexed_indirect(&self, pass: u32, buffer: u32, offset: u32) {
+        put(op::DRAW_INDEXED_INDIRECT, &[pass, buffer, offset]);
+    }
+
     pub fn end(&self, pass: u32) {
         put(op::END, &[pass]);
     }
