@@ -5,15 +5,15 @@
 //! correctness bound: set to its least, the view still converges, only
 //! coarser or later.
 
-mod chunk;
 mod control;
+mod decor;
 mod io;
 mod scene;
 mod sched;
 mod view;
 
-pub use chunk::*;
 pub use control::*;
+pub use decor::*;
 pub use io::*;
 pub use scene::*;
 pub use sched::*;

@@ -51,14 +51,12 @@ const _: () = assert!(
     "the directory is a page under the bracket's data"
 );
 
-/// The ranges of `.fixed`, in address order: the resident terrain, the one
-/// open bake's mesh, the chunk table's lanes, the renderer's block table, the
-/// GPU call stream, the kernel's other host calls, the profiler's rings.
+/// The ranges of `.fixed`, in address order: the resident terrain, the
+/// renderer's block table, the GPU call stream, the kernel's other host
+/// calls, the profiler's rings.
 #[derive(Clone, Copy)]
 pub enum Fixed {
     Terrain,
-    Bake,
-    Mounts,
     Blocks,
     Gpu,
     Host,
@@ -71,18 +69,16 @@ const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::
 const SINGLE_BLOCKS: usize = 3;
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a
-/// count the structure fixes (a catalog's length, the chunk table's slots,
+/// count the structure fixes (a catalog's length, the camera grid's cells,
 /// the surfaces), so overflowing the renderer's table is a bug, not a load.
 /// The renderer frees a list's blocks before taking its uploads, so it never
 /// holds more.
-const MAX_LIVE_BLOCKS: usize = crate::chunk::decor::cell::BLOCKS_MAX + MODELS_MAX + crate::scene::actor::ACTORS_MAX + crate::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
+const MAX_LIVE_BLOCKS: usize = crate::scene::decor::cell::BLOCKS_MAX + MODELS_MAX + crate::scene::actor::ACTORS_MAX + crate::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
 
 pub const BLOCK_SLOTS: usize = pxl_render::gpu::renderer::block_slots(MAX_LIVE_BLOCKS);
 
-const FIXED: [u32; 7] = [
+const FIXED: [u32; 5] = [
     crate::layer::terrain::fixed::TERRAIN_BYTES,
-    crate::chunk::build::BAKE_BYTES,
-    crate::chunk::table::MOUNTS_BYTES,
     pxl_render::gpu::renderer::blocks_bytes(BLOCK_SLOTS),
     pxl_render::gpu::api_spec::stream::BYTES,
     crate::abi::host::stream::BYTES,

@@ -1,4 +1,4 @@
-// pxl-kernel/chunk/decor/instance.rs
+// pxl-kernel/scene/decor/instance.rs
 
 //! A chunk's decor instances as lanes, and the block they are laid into.
 //! `hidden` is a flag, so what the eraser is over stays in its block.

@@ -35,7 +35,7 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One rendered frame (profiler/frame.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z."
+      "One rendered frame (profiler/frame.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tiles` holds zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z."
     ],
     "t": 1,
     "dt_ms": 1,
@@ -51,7 +51,6 @@
     "draw_calls": 1,
     "triangles": 1,
     "census": "2 * CENSUS_TAGS",
-    "zoom_tris": "LIMITS.ZOOMS",
     "px": 1,
     "gpu_skipped": 1,
     "buffers": 1,
@@ -60,16 +59,6 @@
     "tex_depth_mb": 1,
     "tex_shadow_mb": 1,
     "tex_layers_mb": 1,
-    "lod_chunks": 1,
-    "lod_in_frustum": 1,
-    "lod_pending": 1,
-    "lod_settling": 1,
-    "lod_offscreen_pending": 1,
-    "lod_oldest_release_ms": 1,
-    "lod_oldest_visible_ms": 1,
-    "mounts_added": 1,
-    "mounts_removed": 1,
-    "mounts_layouts": 1,
     "tiles_total": 1,
     "zoom_tiles": "LIMITS.ZOOMS",
     "tiles_place": 1,
@@ -82,32 +71,17 @@
     "heap_largest_free_mb": 1,
     "ring_cq_peak": 1,
     "ring_held_peak": 1,
-    "work_bakes": 1,
-    "work_fine_peak": 1,
-    "work_coarse_peak": 1,
     "q_terrain": 1,
     "q_place": 1,
-    "stale_hidden": 1,
-    "stale_uncovered": 1,
-    "stale_unready": 1,
-    "slot_waits": 1,
-    "slot_wait_zooms": 1,
-    "slot_chained": 1,
-    "cap_commit_left": 1,
     "cap_record_refused": 1,
     "turn_effects_ms": 1,
     "turn_stage_ms": 1,
     "turn_step_ms": 1,
-    "turn_step_name": 1,
-    "cover_rule": 1,
-    "cover_drawn": 1,
-    "cover_gaps": 1,
-    "view_rays": 1,
-    "view_visits": 1
+    "turn_step_name": 1
   },
   "FRAME_GROUPS": {
     "$doc": [
-      "What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it."
+      "What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it."
     ],
     "pace": [
       "t",
@@ -132,42 +106,11 @@
       "draw_calls",
       "triangles",
       "census",
-      "zoom_tris",
       "px",
       "gpu_skipped"
     ],
-    "lod": [
-      "lod_chunks",
-      "lod_in_frustum",
-      "lod_pending",
-      "lod_settling",
-      "lod_offscreen_pending",
-      "lod_oldest_release_ms",
-      "lod_oldest_visible_ms"
-    ],
-    "mounts": [
-      "mounts_added",
-      "mounts_removed",
-      "mounts_layouts"
-    ],
-    "stale": [
-      "stale_hidden",
-      "stale_uncovered",
-      "stale_unready"
-    ],
-    "slot": [
-      "slot_waits",
-      "slot_wait_zooms",
-      "slot_chained"
-    ],
     "cap": [
-      "cap_commit_left",
       "cap_record_refused"
-    ],
-    "work": [
-      "work_bakes",
-      "work_fine_peak",
-      "work_coarse_peak"
     ],
     "q": [
       "q_terrain",
@@ -177,15 +120,6 @@
       "tiles_total",
       "zoom_tiles",
       "tiles_place"
-    ],
-    "cover": [
-      "cover_rule",
-      "cover_drawn",
-      "cover_gaps"
-    ],
-    "view": [
-      "view_rays",
-      "view_visits"
     ],
     "device": [
       "buffers",
@@ -252,7 +186,7 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes."
+      "One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported."
     ],
     "n": 1,
     "ok": 1,
@@ -304,23 +238,14 @@
       "chunks": "SPREAD",
       "phases": "PHASES * SPREAD",
       "gpu_spans": "GPU_SPAN_NAMES * SPREAD",
-      "per_s_bakes": 1,
-      "backlog_s": 1,
-      "backlog_per_s_bakes": 1,
-      "chunks_per_bake": 1,
-      "mounts_added": 1,
-      "mounts_removed": 1,
       "used_delta_mb": 1,
       "census": "2 * CENSUS_TAGS",
-      "zoom_tris": "LIMITS.ZOOMS",
       "last": "FRAME"
     },
     "tasks": {
       "slots": "STREAM_NAMES * TASK_SUMMARY"
     },
     "counters": {
-      "built_bakes": 1,
-      "built_starved": 1,
       "sheet_repacks": 1,
       "sheet_uploads": 1
     },
@@ -332,7 +257,6 @@
       "initial": 1
     },
     "held": {
-      "tiers": 1,
       "decor_blocks": 1,
       "decor_instances": 1,
       "decor_bytes": 1
@@ -351,16 +275,7 @@
       "draw_calls": 1,
       "triangles": 1,
       "q_terrain": 1,
-      "q_place": 1,
-      "chunks": 1,
-      "in_frustum": 1,
-      "pending": 1,
-      "settling": 1,
-      "offscreen_pending": 1,
-      "oldest_release_ms": 1,
-      "oldest_visible_ms": 1,
-      "fine_peak": 1,
-      "coarse_peak": 1
+      "q_place": 1
     },
     "steps": {
       "count": 1,
@@ -371,13 +286,11 @@
       "star": 1,
       "frames_held": 1,
       "admitted": 1,
-      "evicted": 1,
-      "refined": 1,
-      "changes_peak": 1
+      "evicted": 1
     },
     "view": {
       "$doc": [
-        "Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, as zooms: `cell_want` the camera grid's cell the view wants there, at the distance it is met at, and `cell_drawn` the cells of the chunk drawn there now, coarser while the finer is on its way."
+        "Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at."
       ],
       "dist": 1,
       "polar": 1,
@@ -392,8 +305,7 @@
       "hover_lon": 1,
       "hover_lat": 1,
       "hover_alt": 1,
-      "cell_want": 1,
-      "cell_drawn": 1
+      "cell_want": 1
     }
   },
   "READ": {

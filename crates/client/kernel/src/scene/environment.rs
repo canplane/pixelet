@@ -10,9 +10,9 @@ pub mod cloud;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3;
 
-use crate::chunk::table::Frame;
 use crate::io::host::wall_now;
 use crate::kernel;
+use crate::scene::frame::Frame;
 use crate::sched::edge::wake_at;
 use crate::view::frame::pose::{anchor, globe, km_per_u};
 use crate::view::reach::eye_ground;

@@ -42,7 +42,7 @@ pub mod LIMITS {
     pub const KEYS: &[&str] = &["REASONS", "STEP_SLOTS", "ZOOMS"];
 }
 
-/// One rendered frame (profiler/frame.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z.
+/// One rendered frame (profiler/frame.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tiles` holds zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const dt_ms: u32 = 1;
@@ -58,60 +58,34 @@ pub mod FRAME {
     pub const draw_calls: u32 = 22;
     pub const triangles: u32 = 23;
     pub const census: u32 = 24;
-    pub const zoom_tris: u32 = 48;
-    pub const px: u32 = 72;
-    pub const gpu_skipped: u32 = 73;
-    pub const buffers: u32 = 74;
-    pub const buffer_mb: u32 = 75;
-    pub const arena_mb: u32 = 76;
-    pub const tex_depth_mb: u32 = 77;
-    pub const tex_shadow_mb: u32 = 78;
-    pub const tex_layers_mb: u32 = 79;
-    pub const lod_chunks: u32 = 80;
-    pub const lod_in_frustum: u32 = 81;
-    pub const lod_pending: u32 = 82;
-    pub const lod_settling: u32 = 83;
-    pub const lod_offscreen_pending: u32 = 84;
-    pub const lod_oldest_release_ms: u32 = 85;
-    pub const lod_oldest_visible_ms: u32 = 86;
-    pub const mounts_added: u32 = 87;
-    pub const mounts_removed: u32 = 88;
-    pub const mounts_layouts: u32 = 89;
-    pub const tiles_total: u32 = 90;
-    pub const zoom_tiles: u32 = 91;
-    pub const tiles_place: u32 = 115;
-    pub const heap_used_mb: u32 = 116;
-    pub const heap_live_mb: u32 = 117;
-    pub const heap_run_mb: u32 = 118;
-    pub const heap_slot_mb: u32 = 119;
-    pub const heap_range_mb: u32 = 120;
-    pub const heap_refusals: u32 = 121;
-    pub const heap_largest_free_mb: u32 = 122;
-    pub const ring_cq_peak: u32 = 123;
-    pub const ring_held_peak: u32 = 124;
-    pub const work_bakes: u32 = 125;
-    pub const work_fine_peak: u32 = 126;
-    pub const work_coarse_peak: u32 = 127;
-    pub const q_terrain: u32 = 128;
-    pub const q_place: u32 = 129;
-    pub const stale_hidden: u32 = 130;
-    pub const stale_uncovered: u32 = 131;
-    pub const stale_unready: u32 = 132;
-    pub const slot_waits: u32 = 133;
-    pub const slot_wait_zooms: u32 = 134;
-    pub const slot_chained: u32 = 135;
-    pub const cap_commit_left: u32 = 136;
-    pub const cap_record_refused: u32 = 137;
-    pub const turn_effects_ms: u32 = 138;
-    pub const turn_stage_ms: u32 = 139;
-    pub const turn_step_ms: u32 = 140;
-    pub const turn_step_name: u32 = 141;
-    pub const cover_rule: u32 = 142;
-    pub const cover_drawn: u32 = 143;
-    pub const cover_gaps: u32 = 144;
-    pub const view_rays: u32 = 145;
-    pub const view_visits: u32 = 146;
-    pub const WORDS: u32 = 147;
+    pub const px: u32 = 48;
+    pub const gpu_skipped: u32 = 49;
+    pub const buffers: u32 = 50;
+    pub const buffer_mb: u32 = 51;
+    pub const arena_mb: u32 = 52;
+    pub const tex_depth_mb: u32 = 53;
+    pub const tex_shadow_mb: u32 = 54;
+    pub const tex_layers_mb: u32 = 55;
+    pub const tiles_total: u32 = 56;
+    pub const zoom_tiles: u32 = 57;
+    pub const tiles_place: u32 = 81;
+    pub const heap_used_mb: u32 = 82;
+    pub const heap_live_mb: u32 = 83;
+    pub const heap_run_mb: u32 = 84;
+    pub const heap_slot_mb: u32 = 85;
+    pub const heap_range_mb: u32 = 86;
+    pub const heap_refusals: u32 = 87;
+    pub const heap_largest_free_mb: u32 = 88;
+    pub const ring_cq_peak: u32 = 89;
+    pub const ring_held_peak: u32 = 90;
+    pub const q_terrain: u32 = 91;
+    pub const q_place: u32 = 92;
+    pub const cap_record_refused: u32 = 93;
+    pub const turn_effects_ms: u32 = 94;
+    pub const turn_stage_ms: u32 = 95;
+    pub const turn_step_ms: u32 = 96;
+    pub const turn_step_name: u32 = 97;
+    pub const WORDS: u32 = 98;
     pub const KEYS: &[&str] = &[
         "t",
         "dt_ms",
@@ -127,7 +101,6 @@ pub mod FRAME {
         "draw_calls",
         "triangles",
         "census",
-        "zoom_tris",
         "px",
         "gpu_skipped",
         "buffers",
@@ -136,16 +109,6 @@ pub mod FRAME {
         "tex_depth_mb",
         "tex_shadow_mb",
         "tex_layers_mb",
-        "lod_chunks",
-        "lod_in_frustum",
-        "lod_pending",
-        "lod_settling",
-        "lod_offscreen_pending",
-        "lod_oldest_release_ms",
-        "lod_oldest_visible_ms",
-        "mounts_added",
-        "mounts_removed",
-        "mounts_layouts",
         "tiles_total",
         "zoom_tiles",
         "tiles_place",
@@ -158,61 +121,29 @@ pub mod FRAME {
         "heap_largest_free_mb",
         "ring_cq_peak",
         "ring_held_peak",
-        "work_bakes",
-        "work_fine_peak",
-        "work_coarse_peak",
         "q_terrain",
         "q_place",
-        "stale_hidden",
-        "stale_uncovered",
-        "stale_unready",
-        "slot_waits",
-        "slot_wait_zooms",
-        "slot_chained",
-        "cap_commit_left",
         "cap_record_refused",
         "turn_effects_ms",
         "turn_stage_ms",
         "turn_step_ms",
         "turn_step_name",
-        "cover_rule",
-        "cover_drawn",
-        "cover_gaps",
-        "view_rays",
-        "view_visits",
         "WORDS",
     ];
 }
 
-/// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it.
+/// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it.
 pub mod FRAME_GROUPS {
     pub const pace: &[&str] = &["t", "dt_ms", "frame_ms", "settled", "sched_ms", "budget_ms", "phases", "chunks_ms", "task_ms"];
     pub const turn: &[&str] = &["turn_effects_ms", "turn_stage_ms", "turn_step_ms", "turn_step_name"];
-    pub const gpu: &[&str] = &["gpu_ms", "gpu_spans", "draw_calls", "triangles", "census", "zoom_tris", "px", "gpu_skipped"];
-    pub const lod: &[&str] = &[
-        "lod_chunks",
-        "lod_in_frustum",
-        "lod_pending",
-        "lod_settling",
-        "lod_offscreen_pending",
-        "lod_oldest_release_ms",
-        "lod_oldest_visible_ms",
-    ];
-    pub const mounts: &[&str] = &["mounts_added", "mounts_removed", "mounts_layouts"];
-    pub const stale: &[&str] = &["stale_hidden", "stale_uncovered", "stale_unready"];
-    pub const slot: &[&str] = &["slot_waits", "slot_wait_zooms", "slot_chained"];
-    pub const cap: &[&str] = &["cap_commit_left", "cap_record_refused"];
-    pub const work: &[&str] = &["work_bakes", "work_fine_peak", "work_coarse_peak"];
+    pub const gpu: &[&str] = &["gpu_ms", "gpu_spans", "draw_calls", "triangles", "census", "px", "gpu_skipped"];
+    pub const cap: &[&str] = &["cap_record_refused"];
     pub const q: &[&str] = &["q_terrain", "q_place"];
     pub const tiles: &[&str] = &["tiles_total", "zoom_tiles", "tiles_place"];
-    pub const cover: &[&str] = &["cover_rule", "cover_drawn", "cover_gaps"];
-    pub const view: &[&str] = &["view_rays", "view_visits"];
     pub const device: &[&str] = &["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"];
     pub const heap: &[&str] = &["heap_used_mb", "heap_live_mb", "heap_run_mb", "heap_slot_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"];
     pub const ring: &[&str] = &["ring_cq_peak", "ring_held_peak"];
-    pub const KEYS: &[&str] = &[
-        "pace", "turn", "gpu", "lod", "mounts", "stale", "slot", "cap", "work", "q", "tiles", "cover", "view", "device", "heap", "ring",
-    ];
+    pub const KEYS: &[&str] = &["pace", "turn", "gpu", "cap", "q", "tiles", "device", "heap", "ring"];
 }
 
 /// One settled task (profiler/task.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's.
@@ -256,9 +187,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 147;
-    pub const prev: u32 = 148;
-    pub const WORDS: u32 = 295;
+    pub const has_prev: u32 = 98;
+    pub const prev: u32 = 99;
+    pub const WORDS: u32 = 197;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -270,7 +201,7 @@ pub mod SPREAD {
     pub const KEYS: &[&str] = &["p50", "p95", "max", "WORDS"];
 }
 
-/// One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes.
+/// One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported.
 pub mod TASK_SUMMARY {
     pub const n: u32 = 0;
     pub const ok: u32 = 1;
@@ -324,17 +255,10 @@ pub mod SUMMARY {
         pub const chunks: u32 = 21;
         pub const phases: u32 = 24;
         pub const gpu_spans: u32 = 39;
-        pub const per_s_bakes: u32 = 63;
-        pub const backlog_s: u32 = 64;
-        pub const backlog_per_s_bakes: u32 = 65;
-        pub const chunks_per_bake: u32 = 66;
-        pub const mounts_added: u32 = 67;
-        pub const mounts_removed: u32 = 68;
-        pub const used_delta_mb: u32 = 69;
-        pub const census: u32 = 70;
-        pub const zoom_tris: u32 = 94;
-        pub const last: u32 = 118;
-        pub const WORDS: u32 = 265;
+        pub const used_delta_mb: u32 = 63;
+        pub const census: u32 = 64;
+        pub const last: u32 = 88;
+        pub const WORDS: u32 = 186;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -351,36 +275,27 @@ pub mod SUMMARY {
             "chunks",
             "phases",
             "gpu_spans",
-            "per_s_bakes",
-            "backlog_s",
-            "backlog_per_s_bakes",
-            "chunks_per_bake",
-            "mounts_added",
-            "mounts_removed",
             "used_delta_mb",
             "census",
-            "zoom_tris",
             "last",
             "WORDS",
         ];
     }
     pub mod tasks {
-        pub const AT: u32 = 270;
+        pub const AT: u32 = 191;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 125;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 395;
-        pub const built_bakes: u32 = 0;
-        pub const built_starved: u32 = 1;
-        pub const sheet_repacks: u32 = 2;
-        pub const sheet_uploads: u32 = 3;
-        pub const WORDS: u32 = 4;
-        pub const KEYS: &[&str] = &["AT", "built_bakes", "built_starved", "sheet_repacks", "sheet_uploads", "WORDS"];
+        pub const AT: u32 = 316;
+        pub const sheet_repacks: u32 = 0;
+        pub const sheet_uploads: u32 = 1;
+        pub const WORDS: u32 = 2;
+        pub const KEYS: &[&str] = &["AT", "sheet_repacks", "sheet_uploads", "WORDS"];
     }
     pub mod sheet {
-        pub const AT: u32 = 399;
+        pub const AT: u32 = 318;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -390,16 +305,15 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
     pub mod held {
-        pub const AT: u32 = 404;
-        pub const tiers: u32 = 0;
-        pub const decor_blocks: u32 = 1;
-        pub const decor_instances: u32 = 2;
-        pub const decor_bytes: u32 = 3;
-        pub const WORDS: u32 = 4;
-        pub const KEYS: &[&str] = &["AT", "tiers", "decor_blocks", "decor_instances", "decor_bytes", "WORDS"];
+        pub const AT: u32 = 323;
+        pub const decor_blocks: u32 = 0;
+        pub const decor_instances: u32 = 1;
+        pub const decor_bytes: u32 = 2;
+        pub const WORDS: u32 = 3;
+        pub const KEYS: &[&str] = &["AT", "decor_blocks", "decor_instances", "decor_bytes", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 408;
+        pub const AT: u32 = 326;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -407,7 +321,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 411;
+        pub const AT: u32 = 329;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -417,61 +331,29 @@ pub mod SUMMARY {
         pub const triangles: u32 = 6;
         pub const q_terrain: u32 = 7;
         pub const q_place: u32 = 8;
-        pub const chunks: u32 = 9;
-        pub const in_frustum: u32 = 10;
-        pub const pending: u32 = 11;
-        pub const settling: u32 = 12;
-        pub const offscreen_pending: u32 = 13;
-        pub const oldest_release_ms: u32 = 14;
-        pub const oldest_visible_ms: u32 = 15;
-        pub const fine_peak: u32 = 16;
-        pub const coarse_peak: u32 = 17;
-        pub const WORDS: u32 = 18;
-        pub const KEYS: &[&str] = &[
-            "AT",
-            "present",
-            "dt_ms",
-            "sched_ms",
-            "chunks_ms",
-            "gpu_ms",
-            "draw_calls",
-            "triangles",
-            "q_terrain",
-            "q_place",
-            "chunks",
-            "in_frustum",
-            "pending",
-            "settling",
-            "offscreen_pending",
-            "oldest_release_ms",
-            "oldest_visible_ms",
-            "fine_peak",
-            "coarse_peak",
-            "WORDS",
-        ];
+        pub const WORDS: u32 = 9;
+        pub const KEYS: &[&str] = &["AT", "present", "dt_ms", "sched_ms", "chunks_ms", "gpu_ms", "draw_calls", "triangles", "q_terrain", "q_place", "WORDS"];
     }
     pub mod steps {
-        pub const AT: u32 = 429;
+        pub const AT: u32 = 338;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 590;
+        pub const AT: u32 = 499;
         pub const step: u32 = 0;
         pub const star: u32 = 1;
         pub const frames_held: u32 = 2;
         pub const admitted: u32 = 3;
         pub const evicted: u32 = 4;
-        pub const refined: u32 = 5;
-        pub const changes_peak: u32 = 6;
-        pub const WORDS: u32 = 7;
-        pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "refined", "changes_peak", "WORDS"];
+        pub const WORDS: u32 = 5;
+        pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "WORDS"];
     }
-    /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, as zooms: `cell_want` the camera grid's cell the view wants there, at the distance it is met at, and `cell_drawn` the cells of the chunk drawn there now, coarser while the finer is on its way.
+    /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at.
     pub mod view {
-        pub const AT: u32 = 597;
+        pub const AT: u32 = 504;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -486,8 +368,7 @@ pub mod SUMMARY {
         pub const hover_lat: u32 = 11;
         pub const hover_alt: u32 = 12;
         pub const cell_want: u32 = 13;
-        pub const cell_drawn: u32 = 14;
-        pub const WORDS: u32 = 15;
+        pub const WORDS: u32 = 14;
         pub const KEYS: &[&str] = &[
             "AT",
             "dist",
@@ -504,11 +385,10 @@ pub mod SUMMARY {
             "hover_lat",
             "hover_alt",
             "cell_want",
-            "cell_drawn",
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 612;
+    pub const WORDS: u32 = 518;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "sheet", "held", "fetch", "peak", "steps", "quality", "view", "WORDS"];
 }
 

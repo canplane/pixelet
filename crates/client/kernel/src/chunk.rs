@@ -1,19 +1,10 @@
 // pxl-kernel/chunk.rs
 
-//! Chunks: what each holds, which a view needs, and the tier each is built at.
-//!
 //! A chunk: a cube of the camera grid's cells, `CHUNK_STEPS` zooms finer than
-//! itself, built and drawn as one. Never fetched or held; only its address
-//! exists, and an empty one is never made. It names only the grid's cells:
-//! which of a layer's tiles holds them is its lattice's (`Lattice::read_tile`).
-
-pub mod build;
-pub mod decor;
-pub mod domain;
-pub mod mesh_slot;
-pub mod place;
-pub mod source;
-pub mod table;
+//! itself, which what stands in the world (decor, places) is gathered by
+//! (view/observation.rs `cubes`). Never fetched or held; only its address
+//! exists. It names only the grid's cells: which of a layer's tiles holds
+//! them is its lattice's (`Lattice::read_tile`).
 
 use pxl_spec::space::camera::grid::CHUNK_STEPS;
 use pxl_spec::space::coord::aabb::Aabb;

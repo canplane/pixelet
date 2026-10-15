@@ -18,8 +18,6 @@
 // is numbered by its place in SETTINGS (the kernel's SettingKey), which is
 // what crosses for it. An `index` is a place in a list kept elsewhere — the
 // person and the pet are by theirs in variant.json — and crosses as itself.
-// `sources_chunks` marks one a chunk's build reads, so that changing it
-// builds the chunks again.
 
 export const SETTINGS = {
   /** Ground color from the art pack (four taps of the layer array per

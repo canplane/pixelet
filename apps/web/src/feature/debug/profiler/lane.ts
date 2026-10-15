@@ -16,26 +16,22 @@ import { GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
 
 const MB = 1048576;
 
-type ListLane = "phases" | "gpu_spans" | "census" | "zoom_tris" | "zoom_tiles";
+type ListLane = "phases" | "gpu_spans" | "census" | "zoom_tiles";
 type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
 type ScalarLane = Exclude<FrameLane, ListLane>;
 
 export type Frame =
   & { [K in ScalarLane]: f64 }
-  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; zoom_tris: f64[]; zoom_tiles: f64[] };
+  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; zoom_tiles: f64[] };
 
 /** The kernel counts by zoom: slot z, bit z or a value z is zoom z. */
 export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
-
-/** A wait this old says a demand was starved. */
-export const STARVED_MS = 2000;
 
 const ZOOM_NAMES = Array.from({ length: LIMITS.ZOOMS }, (_, z) => zoomName(z));
 export const LIST_NAMES: Record<ListLane, readonly string[]> = {
   phases: PHASES,
   gpu_spans: GPU_SPAN_NAMES,
   census: CENSUS_TAGS,
-  zoom_tris: ZOOM_NAMES,
   zoom_tiles: ZOOM_NAMES,
 };
 
@@ -106,7 +102,7 @@ function listText(lane: ListLane, f: Frame): string {
     rows.sort((a, b) => b.t - a.t || b.draws - a.draws);
     return rows.map((r) => `${r.tag} ${round(r.draws)}/${tris(r.t)}`).join(" ");
   }
-  const unit = lane === "gpu_spans" || lane === "phases" ? "_ms" : lane === "zoom_tris" ? "_tris" : "";
+  const unit = lane === "gpu_spans" || lane === "phases" ? "_ms" : "";
   return f[lane].map((v, i) => [names[i] ?? String(i), v] as const).filter(([, v]) => v > 0).map(([n, v]) => `${n} ${valueText(unit, v)}`).join(" ") || "-";
 }
 

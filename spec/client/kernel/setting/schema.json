@@ -15,9 +15,7 @@
     "and is held as its index there; only storage keeps it by name. A setting",
     "is numbered by its place in SETTINGS (the kernel's SettingKey), which is",
     "what crosses for it. An `index` is a place in a list kept elsewhere — the",
-    "person and the pet are by theirs in variant.json — and crosses as itself.",
-    "`sources_chunks` marks one a chunk's build reads, so that changing it",
-    "builds the chunks again."
+    "person and the pet are by theirs in variant.json — and crosses as itself."
   ],
   "SETTING_SECTIONS": {
     "$value": ["display", "navigation", "camera", "lighting", "debug", "character", "world"],
@@ -115,8 +113,7 @@
       "kind": "toggle",
       "default": true,
       "section": "display",
-      "cost": "low",
-      "sources_chunks": true
+      "cost": "low"
     },
     "decor": {
       "$doc": [
@@ -134,8 +131,7 @@
       "kind": "toggle",
       "default": true,
       "section": "display",
-      "cost": "med",
-      "sources_chunks": true
+      "cost": "med"
     },
     "clouds": {
       "$doc": [

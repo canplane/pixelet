@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
-import { n1, pct, STARVED_MS, tris, valueText, zoomName, zoomsText } from "./lane.ts";
+import { n1, pct, tris, valueText, zoomName } from "./lane.ts";
 import { BOUND, failText } from "./report.ts";
 import type { FrameSummary, Gauge, Spread } from "./view.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
@@ -19,7 +19,6 @@ import { alpha, color, textStyle } from "@/shared/ui/theme.ts";
 
 const CENSUS_ROWS = 5;
 const SPAN_ROWS = 3;
-const ZOOM_ROWS = 3;
 const MISSED_WARN_SHARE = 0.1;
 /** LoAF's own threshold for a long frame. */
 const LONG_FRAME_MS = 50;
@@ -70,7 +69,7 @@ export function ProfilerView({ v, q }: { v: Gauge["view"]; q: Gauge["quality"] }
       <Row k="hover (u)" v={hovering ? `${Math.floor(v.hover_x)}, ${Math.floor(v.hover_y)}, ${Math.floor(v.hover_z)}` : "-"} />
       <Row k="hover" v={geo(v.hover_lat, v.hover_lon)} />
       <Row k="hover altitude" v={metres(v.hover_alt)} />
-      <Row k="cells wanted/drawn" v={hovering ? `${zoomName(v.cell_want)}/${zoomName(v.cell_drawn)}` : "-"} warn={v.cell_drawn < v.cell_want} />
+      <Row k="cell" v={hovering ? zoomName(v.cell_want) : "-"} />
     </>
   );
 }
@@ -134,32 +133,11 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
             />
           )}
 
-          <Head>Draw/LOD</Head>
-          <Row k="chunks/in view/pending" v={`${f.last.lod_chunks}/${f.last.lod_in_frustum}/${f.last.lod_pending}`} />
-          <Row
-            k="off-view · oldest off/in"
-            v={`${f.last.lod_offscreen_pending} · ${round(f.last.lod_oldest_release_ms)}/${round(f.last.lod_oldest_visible_ms)} ms`}
-            warn={Math.max(f.last.lod_oldest_release_ms, f.last.lod_oldest_visible_ms) > STARVED_MS}
-          />
-          <Row
-            k="built hidden/refused/waiting"
-            v={`${round(f.last.stale_hidden)}/${round(f.last.stale_uncovered)}/${round(f.last.stale_unready)}`}
-          />
-          <Row
-            k="slots waiting/chained"
-            v={`${round(f.last.slot_waits)}/${round(f.last.slot_chained)} ${zoomsText(f.last.slot_wait_zooms)}`}
-            warn={f.last.slot_waits > 0}
-          />
-          <Row
-            k="commit room/terrain refused"
-            v={`${round(f.last.cap_commit_left)}/${round(f.last.cap_record_refused)}`}
-            warn={f.last.cap_record_refused > 0}
-          />
+          <Head>Draw</Head>
+          <Row k="terrain refused" v={`${round(f.last.cap_record_refused)}`} warn={f.last.cap_record_refused > 0} />
           <Row k="draws/triangles" v={`${f.last.draw_calls}/${tris(f.last.triangles)}`} />
           {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
-          {heaviest(f.zoom_tris.map((t, k) => ({ k, t })), (r) => r.t, ZOOM_ROWS).map((r) => <Row key={r.k} k={`  ${zoomName(r.k)} triangles`} v={tris(r.t)} />)}
           <Row k="world surface" v={valueText("px", f.last.px)} />
-          <Row k="bakes per s" v={`${round(f.backlogPerS)}`} />
         </>
       )}
 

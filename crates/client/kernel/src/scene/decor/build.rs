@@ -1,4 +1,4 @@
-// pxl-kernel/chunk/decor/build.rs
+// pxl-kernel/scene/decor/build.rs
 
 //! A chunk's decor build. Scattered decor is never stored: it is a pure function of terrain
 //! and a fixed seed, and a cell holding a placed object filters its
@@ -13,13 +13,13 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use std::collections::TryReserveError;
 
-use crate::chunk::decor::instance::{DecorScratch, GroupLanes, DECOR_GROUPS, HIDDEN_FLAG};
 use crate::decor::strike::reach;
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::meta::placed;
 use crate::layer::object::store::{EntryAt, Store};
 use crate::query::World;
 use crate::query::{grow, ring, Surfaces};
+use crate::scene::decor::instance::{DecorScratch, GroupLanes, DECOR_GROUPS, HIDDEN_FLAG};
 use pxl_spec::block::decor::Decor;
 use pxl_spec::space::coord::zoom::Zoom;
 

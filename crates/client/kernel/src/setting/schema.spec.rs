@@ -18,8 +18,6 @@
 // is numbered by its place in SETTINGS (the kernel's SettingKey), which is
 // what crosses for it. An `index` is a place in a list kept elsewhere — the
 // person and the pet are by theirs in variant.json — and crosses as itself.
-// `sources_chunks` marks one a chunk's build reads, so that changing it
-// builds the chunks again.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
@@ -346,11 +344,6 @@ impl SettingKey {
             SettingKey::orbit_obstacle => matches!(value, 0),
             _ => false,
         }
-    }
-
-    /// Read by a chunk's build, so a change builds the chunks again.
-    pub fn sources_chunks(self) -> bool {
-        matches!(self, SettingKey::textures | SettingKey::decor)
     }
 }
 

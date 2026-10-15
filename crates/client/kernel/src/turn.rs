@@ -65,14 +65,14 @@ fn companion_props() -> Option<CompanionProps> {
         steered: crate::control::camera::input::steering(),
         following: crate::control::navigation::follow_mode::following(),
         eye,
-        tau: crate::view::sight::effective(),
+        tau: crate::view::lens::tau(),
     })
 }
 
 /// The tool's ghost, drawn by the scene.
 fn ghost_step() {
     use crate::control::interaction::ghost::{ghost, Ghost};
-    let changed = kernel().parts().map(|(_, _, scene, draw)| match ghost() {
+    let changed = kernel().parts().map(|(scene, draw)| match ghost() {
         Ghost::None => scene.ghost.clear(draw),
         Ghost::Decor { at, group, rotation, scale } => scene.ghost.set_decor(draw, at, group, rotation as f32, scale as f32),
         Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(draw, at, size, value, rgb, coplanar),
@@ -93,26 +93,11 @@ fn world_gizmo_tick(_: &mut TickContext) {
     frame_gizmo_step(show, focus, third_person.then(crate::control::camera::controller::azimuth));
 }
 
-/// A new cast, where what it observes moved.
-fn sight_tick(_: &mut TickContext) {
-    crate::view::sight::start();
-}
-
-/// A slice of the goal walk, then quality. An unfinished walk asks for another turn.
-fn goal_tick(ctx: &mut TickContext) {
-    let end = now() + ctx.budget.remaining() * crate::param::VIEW_SHARE;
-    crate::view::sight::advance(&|| now() >= end);
-    if crate::view::sight::casting() {
-        ctx.invalidate();
-    }
-}
-
 /// Each pyramid layer's tiles, from the live eye.
 fn demand_tick(_: &mut TickContext) {
     crate::view::demand::admit_arrived();
     changes_step();
-    // Demand follows the live eye, at the quality decided first.
-    let tau = crate::view::sight::effective();
+    let tau = crate::view::lens::tau();
     TerrainTile::demand().step(crate::control::navigation::destination::tile(), tau);
     // Nothing is fetched while places are hidden.
     match crate::setting::store::settings_store().place {
@@ -124,7 +109,7 @@ fn demand_tick(_: &mut TickContext) {
 }
 
 fn camera_input_tick(_: &mut TickContext) {
-    camera_input_step(crate::view::sight::effective());
+    camera_input_step(crate::view::lens::tau());
 }
 
 fn environment_tick(_: &mut TickContext) {
@@ -141,10 +126,8 @@ pub fn boot() {
     on_tick(Phase::interaction, environment_tick, StepName::environment as u32);
     on_tick(Phase::interaction, companion_tick, StepName::companion as u32);
     on_tick(Phase::interaction, crate::scene::character::preview::preview_step, StepName::preview as u32);
-    on_tick(Phase::visible, sight_tick, StepName::sight as u32);
-    on_tick(Phase::visible, goal_tick, StepName::goal as u32);
     on_tick(Phase::visible, demand_tick, StepName::demand as u32);
-    on_tick(Phase::visible, visible_step, StepName::chunks as u32);
+    on_tick(Phase::visible, visible_step, StepName::scene as u32);
     on_tick(Phase::cosmetic, world_gizmo_tick, StepName::world_gizmo as u32);
     on_tick(Phase::report, report_step, StepName::profiler as u32);
     world_tasks();
@@ -156,7 +139,6 @@ pub fn boot() {
 enum TaskPriority {
     Frame,
     Arrival,
-    Build,
     Background,
 }
 
@@ -167,7 +149,6 @@ fn world_tasks() {
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
         && spawn(crate::io::load::gltf_task(), Arrival as u8)
-        && spawn(crate::chunk::build::build_task(), Build as u8)
         && spawn(crate::decor::assets::decor_asset_task(), Background as u8)
         && spawn(crate::layer::object::repository::task(), Background as u8);
     if !spawned {
@@ -215,9 +196,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, edit, {
         let edits = crate::control::interaction::edit::pending_step();
         // A new preview moves the world as drawn where it was and where it is.
-        if let Some(was) = crate::layer::object::preview::set(edits) {
-            crate::chunk::source::chunk_sources_changed();
-            crate::view::sight::moved(was.cubes().chain(edits.cubes()));
+        if crate::layer::object::preview::set(edits).is_some() {
             request_world_tick();
         }
     });
@@ -360,17 +339,12 @@ fn changes_step() {
     DivisionTile::residency().take_moved(divisions);
     crate::layer::object::store::take_written(written);
     let shared = !ground.is_empty() || !written.is_empty();
-    if !written.is_empty() {
-        crate::chunk::source::objects_written(written);
-    }
     if shared {
-        crate::chunk::source::chunk_sources_changed();
-        crate::view::sight::moved(ground.iter().map(|p| p.region()).chain(written.iter().copied()));
         TerrainTile::demand().moved();
     }
     if shared || !places.is_empty() {
         PlaceTile::demand().moved();
-        crate::chunk::place::moved();
+        crate::scene::place::moved();
     }
     if shared || !earth.is_empty() {
         Earth::demand().moved();

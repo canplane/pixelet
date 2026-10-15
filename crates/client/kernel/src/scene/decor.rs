@@ -1,4 +1,4 @@
-// pxl-kernel/chunk/decor.rs
+// pxl-kernel/scene/decor.rs
 
 //! What the world grows on its own: trees, cars, boats, trains.
 

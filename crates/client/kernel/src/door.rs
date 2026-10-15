@@ -145,12 +145,10 @@ fn fixed_at(f: layout::Fixed) -> u32 {
 /// Lays the memory map. Returns where GPU calls are
 /// recorded for the host, 0 where the kernel makes them itself.
 fn lay_out(b: &Bracket) -> u32 {
-    // The map first: the kernel's first use makes the chunk table, which lives in `.fixed`.
+    // The map first: what lives in `.fixed` is handed its range from it.
     section::set_map(section::lay_out(b.given, b.data_end, layout::FIXED_BYTES));
     // Each range to its owner.
     crate::layer::terrain::fixed::RANGE.set(layout::range(layout::Fixed::Terrain));
-    crate::chunk::build::BAKE_RANGE.set(layout::range(layout::Fixed::Bake));
-    crate::chunk::table::MOUNTS_RANGE.set(layout::range(layout::Fixed::Mounts));
     crate::profiler::record::RANGE.set(layout::range(layout::Fixed::Profiler));
     kernel().laid_out = true;
     // A layer asks for no more tiles than its residency frames.

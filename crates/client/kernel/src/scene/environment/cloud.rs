@@ -5,7 +5,7 @@
 //! layer and no chunk holds it. It is laid on the field's own map, which the
 //! wind carries (`pxl-render look/cloud.rs` `drift`): a block of cells there
 //! is built once and drawn moved, each instance a model, a sprite or nothing
-//! by its size on the screen (`chunk/decor/cell.rs` `present_block`).
+//! by its size on the screen (`scene/decor/cell.rs` `present_block`).
 
 use fnv::FnvHashMap;
 
@@ -21,13 +21,13 @@ use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::frame_budget::FrameBudget;
 
-use crate::chunk::decor::build::decor_sprite_px;
-use crate::chunk::decor::cell::{present_block, Shown};
-use crate::chunk::decor::instance::GroupLanes;
-use crate::chunk::table::Frame;
 use crate::io::load::{load_failed, load_gltf, load_image, Load};
 use crate::kernel;
 use crate::model::asset::register_model;
+use crate::scene::decor::build::decor_sprite_px;
+use crate::scene::decor::cell::{present_block, Shown};
+use crate::scene::decor::instance::GroupLanes;
+use crate::scene::frame::Frame;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::{globe, km_per_u, units_per_px_at};
 use crate::view::observation::eye;

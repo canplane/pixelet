@@ -80,14 +80,8 @@ export interface FrameSummary {
   chunks: Spread;
   phases: { name: string; spread: Spread }[];
   gpu_spans: { name: string; spread: Spread }[];
-  perS: f64;
-  backlog_s: f64;
-  backlogPerS: f64;
-  chunks_per_bake: f64 | null;
-  mounts: [f64, f64];
   used_delta_mb: f64;
   census: { tag: string; draws: f64; tris: f64 }[];
-  zoom_tris: f64[];
   last: Frame;
 }
 
@@ -136,7 +130,6 @@ function frameSummary(s: F64Array): FrameSummary | null {
   const F = SUMMARY.frames;
   const a = F.AT;
   if (s[a + F.present] === 0) return null;
-  const nanNull = (v: f64) => (Number.isNaN(v) ? null : v);
   return {
     n: s[a + F.n],
     seconds: s[a + F.seconds],
@@ -151,16 +144,10 @@ function frameSummary(s: F64Array): FrameSummary | null {
     chunks: spreadAt(s, a + F.chunks),
     phases: PHASES.map((name, k) => ({ name, spread: spreadAt(s, a + F.phases + k * SPREAD.WORDS) })),
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.gpu_spans + k * SPREAD.WORDS) })),
-    perS: s[a + F.per_s_bakes],
-    backlog_s: s[a + F.backlog_s],
-    backlogPerS: s[a + F.backlog_per_s_bakes],
-    chunks_per_bake: nanNull(s[a + F.chunks_per_bake]),
-    mounts: [s[a + F.mounts_added], s[a + F.mounts_removed]],
     used_delta_mb: s[a + F.used_delta_mb],
     census: CENSUS_TAGS.map((tag, k) => ({ tag, draws: s[a + F.census + 2 * k], tris: s[a + F.census + 2 * k + 1] }))
       .filter((r) => r.draws > 0)
       .sort((x, y) => y.tris - x.tris),
-    zoom_tris: Array.from({ length: F.last - F.zoom_tris }, (_, k) => s[a + F.zoom_tris + k]),
     last: frameAt(s, a + F.last),
   };
 }

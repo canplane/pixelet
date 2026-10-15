@@ -8,7 +8,7 @@
 use core::mem::{offset_of, size_of};
 
 use crate::io::spec::{STREAM_NAMES, TASK_PHASE_NAMES};
-use crate::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS, ZOOMS};
+use crate::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS};
 use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY};
 use crate::profiler::word::{words, Words};
 use xpute_guest::sched::tick::PHASES;
@@ -61,15 +61,8 @@ pub struct FramesBlock {
     pub chunks: Spread,
     pub phases: [Spread; PHASES.len()],
     pub gpu_spans: [Spread; GPU_SPANS],
-    pub per_s_bakes: f64,
-    pub backlog_s: f64,
-    pub backlog_per_s_bakes: f64,
-    pub chunks_per_bake: f64,
-    pub mounts_added: f64,
-    pub mounts_removed: f64,
     pub used_delta_mb: f64,
     pub census: [[f64; 2]; CENSUS_LEN],
-    pub zoom_tris: [f64; ZOOMS],
     pub last: FrameSample,
 }
 
@@ -81,11 +74,8 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     dt => SUMMARY::frames::dt, task => SUMMARY::frames::task, offthread => SUMMARY::frames::offthread,
     gpu => SUMMARY::frames::gpu, sched => SUMMARY::frames::sched, chunks => SUMMARY::frames::chunks,
     phases => SUMMARY::frames::phases, gpu_spans => SUMMARY::frames::gpu_spans,
-    per_s_bakes => SUMMARY::frames::per_s_bakes, backlog_s => SUMMARY::frames::backlog_s,
-    backlog_per_s_bakes => SUMMARY::frames::backlog_per_s_bakes, chunks_per_bake => SUMMARY::frames::chunks_per_bake,
-    mounts_added => SUMMARY::frames::mounts_added, mounts_removed => SUMMARY::frames::mounts_removed,
     used_delta_mb => SUMMARY::frames::used_delta_mb, census => SUMMARY::frames::census,
-    zoom_tris => SUMMARY::frames::zoom_tris, last => SUMMARY::frames::last,
+    last => SUMMARY::frames::last,
 );
 
 #[repr(C)]
@@ -121,8 +111,6 @@ words!(TasksBlock, SUMMARY::tasks::WORDS, slots => SUMMARY::tasks::slots);
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CountersBlock {
-    pub built_bakes: f64,
-    pub built_starved: f64,
     pub sheet_repacks: f64,
     pub sheet_uploads: f64,
 }
@@ -146,7 +134,6 @@ impl CountersBlock {
 }
 
 words!(CountersBlock, SUMMARY::counters::WORDS,
-    built_bakes => SUMMARY::counters::built_bakes, built_starved => SUMMARY::counters::built_starved,
     sheet_repacks => SUMMARY::counters::sheet_repacks,
     sheet_uploads => SUMMARY::counters::sheet_uploads,
 );
@@ -169,14 +156,13 @@ words!(SheetBlock, SUMMARY::sheet::WORDS,
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct HeldBlock {
-    pub tiers: f64,
     pub decor_blocks: f64,
     pub decor_instances: f64,
     pub decor_bytes: f64,
 }
 
 words!(HeldBlock, SUMMARY::held::WORDS,
-    tiers => SUMMARY::held::tiers, decor_blocks => SUMMARY::held::decor_blocks,
+    decor_blocks => SUMMARY::held::decor_blocks,
     decor_instances => SUMMARY::held::decor_instances, decor_bytes => SUMMARY::held::decor_bytes,
 );
 
@@ -200,8 +186,6 @@ pub struct QualityBlock {
     pub frames_held: f64,
     pub admitted: f64,
     pub evicted: f64,
-    pub refined: f64,
-    pub changes_peak: f64,
 }
 
 #[repr(C)]
@@ -221,7 +205,6 @@ pub struct ViewBlock {
     pub hover_lat: f64,
     pub hover_alt: f64,
     pub cell_want: f64,
-    pub cell_drawn: f64,
 }
 
 words!(ViewBlock, SUMMARY::view::WORDS,
@@ -229,13 +212,12 @@ words!(ViewBlock, SUMMARY::view::WORDS,
     center_lon => SUMMARY::view::center_lon, center_lat => SUMMARY::view::center_lat, center_z => SUMMARY::view::center_z,
     hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
     hover_lon => SUMMARY::view::hover_lon, hover_lat => SUMMARY::view::hover_lat, hover_alt => SUMMARY::view::hover_alt,
-    cell_want => SUMMARY::view::cell_want, cell_drawn => SUMMARY::view::cell_drawn,
+    cell_want => SUMMARY::view::cell_want,
 );
 
 words!(QualityBlock, SUMMARY::quality::WORDS,
     step => SUMMARY::quality::step, star => SUMMARY::quality::star, frames_held => SUMMARY::quality::frames_held,
     admitted => SUMMARY::quality::admitted, evicted => SUMMARY::quality::evicted,
-    refined => SUMMARY::quality::refined, changes_peak => SUMMARY::quality::changes_peak,
 );
 
 #[repr(C)]

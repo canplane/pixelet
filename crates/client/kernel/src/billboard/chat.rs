@@ -2,7 +2,7 @@
 
 //! The (dev-only) map chat's latest line and who says it: a billboard label
 //! as a marker is, standing over the speaker's head rather than on a cell
-//! (`chunk/place.rs` lays both out).
+//! (`scene/place.rs` lays both out).
 
 use pxl_spec::space::coord::q3::Q3;
 use xpute_guest::clock::now;

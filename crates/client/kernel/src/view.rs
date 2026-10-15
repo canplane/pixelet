@@ -5,6 +5,6 @@
 
 pub mod demand;
 pub mod frame;
+pub mod lens;
 pub mod observation;
 pub mod reach;
-pub mod sight;

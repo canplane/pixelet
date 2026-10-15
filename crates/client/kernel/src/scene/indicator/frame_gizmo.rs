@@ -102,7 +102,7 @@ fn sketch(s: &mut Sketch, focus: &Q3, heading: Option<f64>) {
 static GIZMOS: Global<(Sketch, bool, Sketch)> = Global::new();
 
 fn set_lines(at: V3, lines: &[f32]) {
-    let Some((_, _, scene, draw)) = kernel().parts() else { return };
+    let Some((scene, draw)) = kernel().parts() else { return };
     scene.debug.set(draw, at, lines, lines.len());
 }
 

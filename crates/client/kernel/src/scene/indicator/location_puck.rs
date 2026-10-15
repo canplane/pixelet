@@ -14,9 +14,9 @@ use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
-use crate::chunk::table::Frame;
 use crate::kernel;
 use crate::query::World;
+use crate::scene::frame::Frame;
 use crate::sched::edge::request_world_tick;
 use crate::view::reach::view_reach;
 use xpute_guest::global::Global;

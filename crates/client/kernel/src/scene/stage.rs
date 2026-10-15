@@ -4,10 +4,10 @@
 //! the settings, and everything the renderer is handed, since it reads
 //! nothing of the kernel on its own.
 
-use crate::chunk::decor::build::DecorHide;
-use crate::chunk::table::Frame;
 use crate::laid;
-use crate::sched::tick::{TickContext, HARD_SLACK_MS};
+use crate::scene::decor::build::DecorHide;
+use crate::scene::frame::Frame;
+use crate::sched::tick::TickContext;
 use crate::view::frame::pose::{globe, view_resize};
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
@@ -40,12 +40,12 @@ use crate::view::demand::Observed as _;
 use crate::view::frame::resolution::resolution_observe;
 
 /// What the screen holds of the world: nothing yet, nothing since the device
-/// went, or the last frame that went to it and whether that frame drew ground.
+/// went, or a frame.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
     Blank,
     Lost,
-    Drawn { ground: bool },
+    Drawn,
 }
 
 static SCREEN: Global<Screen> = Global::new();
@@ -84,8 +84,9 @@ pub fn stage_write() {
     s[STAGE_AT::FOV] = v.fov;
     // The camera grid's cell angle: the footprint a drawn block covers per
     // unit of distance, square on.
-    s[STAGE_AT::LOD_CELL] = crate::view::sight::cell_angle(crate::view::sight::effective());
-    let grid = crate::view::sight::current().map_or([0.0; 2], |s| s.step());
+    let tau = crate::view::lens::tau();
+    s[STAGE_AT::LOD_CELL] = crate::view::lens::cell_angle(tau);
+    let grid = crate::view::observation::observation().and_then(|o| crate::view::lens::grid_step(&o, tau)).unwrap_or([0.0; 2]);
     s[STAGE_AT::CAMERA_GRID..STAGE_AT::CAMERA_GRID + 2].copy_from_slice(&grid);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
@@ -168,9 +169,7 @@ pub fn stage_render() {
         request_world_tick();
     }
     let Some(stat) = out.stat else { return };
-    SCREEN.set(Screen::Drawn {
-        ground: kernel().sched.shows_ground(),
-    });
+    SCREEN.set(Screen::Drawn);
     resolution_observe(stat.gpu_ms);
     let census: DrawCensus = CENSUS_PIPELINES.map(|p| stat.census[p as usize]);
     set_host_frame_stat(
@@ -180,7 +179,6 @@ pub fn stage_render() {
             draw_calls: stat.draw_calls,
             triangles: stat.triangles,
             census,
-            zoom_tris: Default::default(),
             px: stat.px,
             skipped: stat.skipped,
         },
@@ -224,34 +222,24 @@ pub fn visible_step(ctx: &mut TickContext) {
         frustum: v.frustum.about(anchor),
         camera: v3::sub(&e, &anchor),
         delta_s: ctx.delta,
-        remaining_ms: ctx.budget.remaining(),
-        hard_slack_ms: HARD_SLACK_MS,
         globe: Some(globe()),
     };
 
     let t0 = now();
-    // The chunks plan first; what animates and every layer but the chunks list
-    // before the chunks draw.
-    crate::chunk::source::chunk_sources_step();
     let draw = laid().is_some_and(|k| {
-        let moving = k.sched.tick(frame, &now);
-        if let Some(g) = crate::chunk::domain::current() {
-            k.scene.coverage.step(&mut k.draw, settings_store().world_gizmo, g.pieces(), k.sched.drawn());
-        }
         let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
         k.scene.begin(&mut k.draw, &k.models, frame.eye);
         crate::scene::indicator::camera_gizmo::draw(&mut k.draw, settings_store().camera_gizmo);
-        moving || animating
+        animating
     });
-    // Decor lists after the chunks have listed theirs.
     {
         let k = kernel();
         let edits = crate::layer::object::preview::current();
         let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
-        crate::chunk::decor::cell::step(&pxl_spec::block::decor::DECORS, &k.objects, &frame, &mut k.draw, hide, &ctx.budget);
+        crate::scene::decor::cell::step(&pxl_spec::block::decor::DECORS, &k.objects, &frame, &mut k.draw, hide, &ctx.budget);
         crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
     }
-    crate::chunk::place::step(ctx, &frame);
+    crate::scene::place::step(ctx, &frame);
     let k = kernel();
     k.billboards.draw(&mut k.draw, frame.eye);
     if draw {

@@ -73,12 +73,10 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     }
     let snapshot = Snapshot {
         focus: FocusState {
-            // Shown once a frame that drew ground went to the screen, or one went over
-            // a view whose tiles all answered, which over a source's void draws nothing.
+            // Shown once a frame went to the screen over a view whose tiles all answered.
             status: match (crate::view::observation::eye(), screen()) {
                 (None, _) => GroundStatus::Idle,
-                (Some(_), Screen::Drawn { ground: true }) => GroundStatus::Success,
-                (Some(_), Screen::Drawn { ground: false }) if TerrainTile::demand().answered() => GroundStatus::Success,
+                (Some(_), Screen::Drawn) if TerrainTile::demand().answered() => GroundStatus::Success,
                 _ => GroundStatus::Loading,
             },
             is_off_center: off_center().is_off_center,

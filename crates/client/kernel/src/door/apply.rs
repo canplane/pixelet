@@ -308,13 +308,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let p = abi::SettingSet::read(packet(pkt)?)?;
             let changed = settings_store().set_setting(p.key, p.value);
             refuse_unless(changed.is_some(), Errno::EINVAL)?;
-            if changed == Some(true) {
-                if p.key.sources_chunks() {
-                    crate::chunk::source::chunk_sources_changed();
-                }
-                if p.key == SettingKey::performance_overlay {
-                    profiler_follow(p.value == 1, crate::profiler::summary::counters());
-                }
+            if changed == Some(true) && p.key == SettingKey::performance_overlay {
+                profiler_follow(p.value == 1, crate::profiler::summary::counters());
             }
             applied(s)
         }
@@ -427,9 +422,9 @@ enum BadgeTap {
 /// the eraser takes away a marker someone put up, and the marker tool has the
 /// waiting marker stand there. None where no badge there takes it.
 fn badge_tap(x: f64, y: f64) -> Option<BadgeTap> {
-    use crate::chunk::place::Went;
     use crate::control::interaction::ActiveTool;
-    match (crate::control::interaction::holding().active_tool, crate::chunk::place::tap(x, y)?) {
+    use crate::scene::place::Went;
+    match (crate::control::interaction::holding().active_tool, crate::scene::place::tap(x, y)?) {
         (ActiveTool::Pointer, Went::To(at) | Went::Marker(_, at)) => Some(BadgeTap::Go(at)),
         (ActiveTool::Eraser, Went::Marker(e, _)) => Some(BadgeTap::Remove(e)),
         (ActiveTool::Marker, Went::Marker(e, _)) => Some(BadgeTap::Wait(e)),
@@ -447,6 +442,6 @@ fn tap_at(x: f64, y: f64) {
         Some(BadgeTap::Go(at)) => crate::control::navigation::destination::go_to_place(at),
         Some(BadgeTap::Remove(e)) => crate::control::interaction::edit::remove(e),
         Some(BadgeTap::Wait(e)) => crate::control::interaction::edit::wait_at(e),
-        None => crate::control::interaction::tap(x, y, crate::view::sight::effective()),
+        None => crate::control::interaction::tap(x, y, crate::view::lens::tau()),
     }
 }

@@ -20,7 +20,6 @@ use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
 use crate::sched::tick::tick_step_stats;
-use crate::{kernel, with_parts};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
@@ -100,9 +99,6 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
     let sum = |pick: &dyn Fn(&FrameSample) -> f64| frames.iter().map(pick).sum::<f64>();
     let seconds = ((last.t - first.t) / 1000.0).max(1e-3);
     let moving = || frames.iter().filter(|f| f.settled == 0.0);
-    let bakes = sum(&|f| f.work.bakes);
-    let backlog = || frames.iter().filter(|f| f.lod.pending > 0.0);
-    let backlog_s = (backlog().map(|f| f.dt_ms).sum::<f64>() / 1000.0).max(1e-3);
     let n = frames.len() as f64;
 
     FramesBlock {
@@ -121,15 +117,8 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         phases: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k]))),
         // A span the frame did not run reads 0 and is left out.
         gpu_spans: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0))),
-        per_s_bakes: bakes / seconds,
-        backlog_s,
-        backlog_per_s_bakes: backlog().map(|f| f.work.bakes).sum::<f64>() / backlog_s,
-        chunks_per_bake: if bakes > 0.0 { sum(&|f| f.chunks_ms) / bakes } else { f64::NAN },
-        mounts_added: sum(&|f| f.mounts.added),
-        mounts_removed: sum(&|f| f.mounts.removed),
         used_delta_mb: last.heap.used_mb - first.heap.used_mb,
         census: core::array::from_fn(|k| [sum(&|f| f.gpu.census[k][0]) / n, sum(&|f| f.gpu.census[k][1]) / n]),
-        zoom_tris: core::array::from_fn(|z| sum(&|f| f.gpu.zoom_tris[z]) / n),
         last: *last,
     }
 }
@@ -204,16 +193,14 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let held = with_parts(|_, sched, _| sched.held()).unwrap_or_default();
-    let (decor_blocks, decor_instances) = crate::chunk::decor::cell::counts();
+    let (decor_blocks, decor_instances) = crate::scene::decor::cell::counts();
     put(
         out,
         SUMMARY::held::AT,
         &HeldBlock {
-            tiers: held.tiers as f64,
             decor_blocks: decor_blocks as f64,
             decor_instances: decor_instances as f64,
-            decor_bytes: crate::chunk::decor::cell::bytes() as f64,
+            decor_bytes: crate::scene::decor::cell::bytes() as f64,
         },
     );
 
@@ -231,7 +218,6 @@ fn side(out: &mut [f64]) {
     let [step, star] = [0usize, 0usize];
     let residency = TerrainTile::residency();
     let [admitted, evicted] = residency.churn();
-    let [refined, changes_peak] = kernel().sched.pace();
     put(
         out,
         SUMMARY::quality::AT,
@@ -241,31 +227,26 @@ fn side(out: &mut [f64]) {
             frames_held: residency.frames_used() as f64,
             admitted: admitted as f64,
             evicted: evicted as f64,
-            refined: refined as f64,
-            changes_peak: changes_peak as f64,
         },
     );
 
     // What the pointer meets as drawn, whether or not it could strike it there.
-    let met = crate::control::interaction::pointed()
-        .zip(crate::view::sight::current().and_then(crate::view::sight::Sight::tau))
-        .and_then(|([x, y], tau)| {
-            let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
-            crate::view::frame::pose::view_ray(x, y, &mut origin, &mut direction);
-            let ray = crate::query::Ray {
-                origin,
-                direction,
-                reach: crate::view::frame::pose::view().far,
-            };
-            let hit = crate::query::World::now().first_hit(&ray, crate::query::Detail::Distance(tau)).value().flatten()?;
-            // The grid's cell there is the distance's (`Tau::cell_at`), as the chunks are cut.
-            Some((crate::view::frame::coord::world_to_canonical(&hit.point), tau.cell_at(hit.t)))
-        });
+    let met = crate::control::interaction::pointed().map(|at| (at, crate::view::lens::tau())).and_then(|([x, y], tau)| {
+        let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
+        crate::view::frame::pose::view_ray(x, y, &mut origin, &mut direction);
+        let ray = crate::query::Ray {
+            origin,
+            direction,
+            reach: crate::view::frame::pose::view().far,
+        };
+        let hit = crate::query::World::now().first_hit(&ray, crate::query::Detail::Distance(tau)).value().flatten()?;
+        // The grid's cell there is the distance's (`Tau::cell_at`), as the chunks are cut.
+        Some((crate::view::frame::coord::world_to_canonical(&hit.point), tau.cell_at(hit.t)))
+    });
     let (hover, cell_want) = (met.map(|m| m.0), met.map(|m| m.1));
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
     let [center_lon, center_lat, center_z] = controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
-    let cell_drawn = hover.and_then(|p| with_parts(|_, sched, _| sched.cells_at(&p)).flatten());
     let zoom = |z: Option<Zoom>| z.map_or(f64::NAN, f64::from);
     put(
         out,
@@ -274,7 +255,7 @@ fn side(out: &mut [f64]) {
             dist: controller::dist(),
             polar: controller::polar(),
             azimuth: controller::azimuth(),
-            tau: crate::view::sight::current().and_then(crate::view::sight::Sight::tau).map_or(f64::NAN, |t| t.scale()),
+            tau: crate::view::lens::tau().scale(),
             center_lon,
             center_lat,
             center_z,
@@ -285,7 +266,6 @@ fn side(out: &mut [f64]) {
             hover_lat,
             hover_alt,
             cell_want: zoom(cell_want),
-            cell_drawn: zoom(cell_drawn),
         },
     );
 
@@ -304,14 +284,10 @@ fn side(out: &mut [f64]) {
     put(out, SUMMARY::steps::AT, &steps);
 }
 
-/// The counters as they stand, from the builds and the billboard sheet.
+/// The counters as they stand, from the billboard sheet.
 pub fn counters() -> CountersBlock {
-    let k = kernel();
-    let st = k.sched.builder.stat;
     let sheet = billboard_sheet().stats();
     CountersBlock {
-        built_bakes: st.bakes as f64,
-        built_starved: st.starved as f64,
         sheet_repacks: sheet.repacks as f64,
         sheet_uploads: sheet.uploads as f64,
     }

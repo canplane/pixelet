@@ -1,4 +1,4 @@
-// pxl-kernel/chunk/place.rs
+// pxl-kernel/scene/place.rs
 
 //! Where places, markers and the chat's line are drawn: a place as Carto
 //! draws it at the zoom of Carto's the view is at where it stands, read from
@@ -198,11 +198,11 @@ fn one_thing(a: Label, b: Label) -> bool {
 /// every name out again; whole pixels, so only the view's size or angle does.
 fn spacing_px() -> f64 {
     let v = crate::view::frame::pose::view();
-    let cell = crate::view::sight::cell_angle(crate::view::sight::tau()) * px_per_unit(v.height, v.fov);
+    let cell = crate::view::lens::cell_angle(crate::view::lens::tau()) * px_per_unit(v.height, v.fov);
     libm::round(f64::from(SPACING_CELLS) * cell)
 }
 
-pub fn step(ctx: &mut TickContext, frame: &crate::chunk::table::Frame) {
+pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let p = PLACEMENT.get(Placement::default);
     if crate::view::observation::eye().is_none() {
         if let Some(set) = p.set.take() {
@@ -215,7 +215,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::chunk::table::Frame) {
     }
     let _tiles = PlaceTile::demand();
     let Some(o) = crate::view::observation::observation() else { return };
-    let tau = crate::view::sight::tau();
+    let tau = crate::view::lens::tau();
     // The eye's cubes in view (view/observation.rs `cubes`), as decor's are.
     p.mounted.clear();
     crate::view::observation::cubes(&o, tau, &mut |(zoom, at)| {

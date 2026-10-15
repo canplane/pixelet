@@ -255,19 +255,10 @@ pub fn profiler_record_frame(s: FrameSample) {
     p.sched_ms = p.sched_ms.max(s.sched_ms);
     p.chunks_ms = p.chunks_ms.max(s.chunks_ms);
     p.gpu_ms = p.gpu_ms.max(s.gpu.ms);
-    p.fine_peak = p.fine_peak.max(s.work.fine_peak);
-    p.coarse_peak = p.coarse_peak.max(s.work.coarse_peak);
     p.draw_calls = p.draw_calls.max(s.gpu.draw_calls);
     p.triangles = p.triangles.max(s.gpu.triangles);
     p.q_terrain = p.q_terrain.max(s.q_terrain);
     p.q_place = p.q_place.max(s.q_place);
-    p.chunks = p.chunks.max(s.lod.chunks);
-    p.in_frustum = p.in_frustum.max(s.lod.in_frustum);
-    p.pending = p.pending.max(s.lod.pending);
-    p.offscreen_pending = p.offscreen_pending.max(s.lod.offscreen_pending);
-    p.oldest_release_ms = p.oldest_release_ms.max(s.lod.oldest_release_ms);
-    p.oldest_visible_ms = p.oldest_visible_ms.max(s.lod.oldest_visible_ms);
-    p.settling = p.settling.max(s.lod.settling);
 
     if let Some(frame) = l.sink.frame {
         frame(&s);

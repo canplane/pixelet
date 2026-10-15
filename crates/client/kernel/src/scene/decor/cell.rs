@@ -1,4 +1,4 @@
-// pxl-kernel/chunk/decor/cell.rs
+// pxl-kernel/scene/decor/cell.rs
 
 //! Decor in the eye's cubes (view/observation.rs `cubes`): each holds the
 //! decor standing inside it, built over its zoom's tile and the object
@@ -19,22 +19,20 @@ use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::frame_budget::FrameBudget;
 
-use crate::chunk::build::draws_as_held;
-use crate::chunk::decor::build::{decor_gone_px, decor_sprite_px, DecorBuild, DecorHide, Ground};
-use crate::chunk::decor::instance::{decor_groups, DecorScratch, GroupLanes};
-use crate::chunk::mesh_slot::OCCUPANCY;
-use crate::chunk::source::{objects_met, Met};
-use crate::chunk::table::Frame;
 use crate::chunk::Chunk;
 use crate::kernel;
 use crate::layer::object::store::Store;
 use crate::layer::Base;
+use crate::scene::decor::build::{decor_gone_px, decor_sprite_px, DecorBuild, DecorHide, Ground};
+use crate::scene::decor::instance::{decor_groups, DecorScratch, GroupLanes};
+use crate::scene::frame::Frame;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::units_per_px_at;
 use crate::view::observation::{eye, observation};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::block::decor::{Decor, DECORS};
 use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use xpute_guest::global::Global;
 
 struct Block {
@@ -85,8 +83,10 @@ fn cells() -> &'static mut Cells {
     CELLS.get(Cells::default)
 }
 
-/// One a mounted chunk.
-pub const BLOCKS_MAX: usize = OCCUPANCY;
+/// One a cube in view, the nearest first: a cube spans cells of the camera
+/// grid (view/observation.rs `cubes`), so no more than its cells. A block let
+/// go is freed before any is built.
+pub const BLOCKS_MAX: usize = crate::param::GRID_CELLS_MAX as usize;
 
 /// What a chunk is admitted by before its block says what it holds.
 fn largest_possible(decors: &[Decor]) -> f64 {
@@ -105,7 +105,7 @@ fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
     let (x0, y0, side) = chunk.rect();
     let inside = |x: f64, y: f64| (x0..x0 + side).contains(&x) && (y0..y0 + side).contains(&y);
     // Only where the chunk draws it as it is held: a fold is no one's to hide.
-    let own = draws_as_held(chunk, GROUND.cell());
+    let own = chunk.cell_zoom() >= GROUND.cell();
     let hide = hide.filter(|h| {
         own && match *h {
             DecorHide::Placed(e) => {
@@ -134,7 +134,7 @@ fn build(c: &mut Cells, chunk: Chunk, decors: &[Decor], store: &Store, draw: &mu
     }
     let (x0, y0, _) = over.rect();
     // Interaction reads what is drawn as it is held, never a fold of it.
-    let own = draws_as_held(chunk, GROUND.cell());
+    let own = chunk.cell_zoom() >= GROUND.cell();
     let ground = Ground {
         node: over.column(),
         cell: over.cell_zoom(),
@@ -174,7 +174,7 @@ pub fn step(decors: &[Decor], store: &Store, frame: &Frame, draw: &mut DrawList,
     mounted.clear();
     // The eye's cubes in view, nearest first: what is built first is what is seen nearest.
     if let Some(o) = observation() {
-        crate::view::observation::cubes(&o, crate::view::sight::tau(), &mut |(zoom, at)| {
+        crate::view::observation::cubes(&o, crate::view::lens::tau(), &mut |(zoom, at)| {
             let chunk = Chunk::indexed(zoom, at);
             let b = chunk.region();
             let center = core::array::from_fn(|k| (b.min[k] + b.max[k]) / 2.0);
@@ -184,6 +184,7 @@ pub fn step(decors: &[Decor], store: &Store, frame: &Frame, draw: &mut DrawList,
         });
         let near = |c: &Chunk| v3::len(&v3::sub(&nearest_box(&c.region(), o.eye[0]).nearest(o.eye), &o.eye));
         mounted.sort_unstable_by(|a, b| near(&a.0).total_cmp(&near(&b.0)));
+        mounted.truncate(BLOCKS_MAX);
     }
     let mut keyed = core::mem::take(&mut c.keyed);
     keyed.clear();
@@ -350,4 +351,39 @@ pub fn counts() -> (u32, u32) {
     let c = cells();
     let instances = c.blocks.values().map(|b| decor_groups(b.words()).map(|(_, n)| n).sum::<u32>()).sum();
     (c.blocks.len() as u32, instances)
+}
+
+/// One leaf a chunk's decor stands among: its zoom, catalog number and place
+/// from the chunk's corner at its zoom.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Met {
+    zoom: Zoom,
+    value: u16,
+    at: [i32; 3],
+}
+
+/// Every leaf meeting the chunk, air included, sorted; none where the heap refused it.
+pub fn objects_met(store: &Store, k: Chunk) -> Option<Vec<Met>> {
+    let (zoom, corner) = k.node();
+    let mut out: Vec<Met> = Vec::new();
+    let mut refused = false;
+    store.read(k.node(), k.cell_zoom()).value()?.entries(&mut |e| {
+        let from = if e.zoom >= zoom {
+            first_descendant_of(corner, e.zoom - zoom)
+        } else {
+            ancestor_of(corner, zoom - e.zoom)
+        };
+        refused |= out.try_reserve(1).is_err();
+        if !refused {
+            out.push(Met {
+                zoom: e.zoom,
+                value: e.state as u16,
+                at: core::array::from_fn(|a| (e.at[a] - from[a]) as i32),
+            });
+        }
+    });
+    (!refused).then(|| {
+        out.sort_unstable();
+        out
+    })
 }
