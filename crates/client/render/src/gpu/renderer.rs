@@ -42,9 +42,8 @@ use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURN
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
-use pxl_spec::bake::constant::{BOUND_LEVELS, GROUND_WORDS, HEIGHT_WORDS, LEVEL_WORDS, LOOK_WORDS};
+use pxl_spec::block::window::{BACK_WORDS, ELE_AT, HEIGHTS_AT, LEVELS, SQUARE, SQUARE_WORDS, WAYS_AT};
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
-use pxl_spec::space::layer::lattice::TILE_CELLS;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -106,7 +105,7 @@ pub struct FrameInput<'a> {
     pub earth_tiles: EarthTiles<'a>,
     /// The terrain's held tiles, whose cells the GPU draws whether or not
     /// an eye casts.
-    pub ground: GroundFrames<'a>,
+    pub ground: GroundSquares<'a>,
     /// The eye's rays cast on the GPU into the lane the screen's cells draw;
     /// none without an eye, and the lane holds no cells.
     pub cast: Option<Cast<'a>>,
@@ -126,13 +125,11 @@ pub struct EarthTiles<'a> {
 /// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
-/// The terrain's tiles as the GPU holds them: the frames it keeps a slot
-/// for, and the tiles to hand it.
-pub struct GroundFrames<'a> {
-    pub frames: u32,
-    /// Hands each tile whose frame the GPU does not yet hold to the writer:
-    /// its frame, its four looks a cell and its padded samples, and where
-    /// its cells come back to.
+/// The ground's windows as the GPU holds them (pxl-portable `window`):
+/// how many squares they hold in all, and the squares to hand it.
+pub struct GroundSquares<'a> {
+    pub squares: u32,
+    /// Hands each square whose cells the GPU is to draw to the writer.
     pub upload: &'a mut TerrainUpload,
 }
 
@@ -148,9 +145,8 @@ pub struct Cast<'a> {
     /// Each column's tangent then each row's, where they live, unwritten
     /// until the page replays the turn.
     pub tangents: &'a [f32],
-    /// Per tile zoom from the top to the leaves: the window's south-west
-    /// tile, its tiles across and a spare, then its tiles row by row, each
-    /// its frame plus one, zero where none is held; four a row of the buffer.
+    /// Per window of the eye's, from the top's, a row a slot: the square it
+    /// holds, X and Y, and whether it is present, and a spare.
     pub window: &'a [i32],
     /// Each shard the service area serves: its tile zoom, x and y, a spare.
     pub shards: &'a [[i32; 4]],
@@ -169,20 +165,32 @@ pub struct Overwrites<'a> {
     pub revision: u32,
 }
 
-/// Where a held tile's cells, which the GPU draws, come back to in the
-/// module's memory (`Gpu::read_buffer`): its heights and its bound's levels,
-/// each with its word and the ticket that word holds.
+/// Where a square's cells, which the GPU draws, come back to in the
+/// module's memory (`Gpu::read_buffer`): its heights then its levels, the
+/// word that holds the ticket, and the ticket.
 #[derive(Clone, Copy, Default)]
 pub struct CellsBack {
-    pub heights: u32,
-    pub levels: u32,
-    pub words: [u32; 2],
+    pub cells: u32,
+    pub word: u32,
     pub ticket: u32,
 }
 
-/// Takes a tile's frame, its four looks a cell, its padded samples and where
-/// its cells come back to, while the turn's stream has room for them.
-pub type TerrainWrite<'a> = dyn FnMut(u32, &[u8], &[u8], CellsBack) -> bool + 'a;
+/// A square handed to the GPU: its place among the windows' squares, where
+/// it lies in its tile in squares (X low, Y high), its four looks a cell,
+/// its share of its tile's ways' bound, its tile's padded samples, and where
+/// its cells, joined with the ways, come back to.
+pub struct Square<'a> {
+    pub square: u32,
+    pub place: u32,
+    pub looks: &'a [u8],
+    /// Its share of its tile's ways' bound (pxl-portable `window::WAYS_BOUND`).
+    pub ways: &'a [u32],
+    pub samples: &'a [u8],
+    pub back: CellsBack,
+}
+
+/// Takes a square while the turn's stream has room for it.
+pub type TerrainWrite<'a> = dyn FnMut(Square<'_>) -> bool + 'a;
 
 pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
@@ -740,13 +748,13 @@ struct ScreenCellsPass {
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
 struct GroundBuffers {
-    /// Per frame, a held tile's looks as handed, its cells' heights and
-    /// their bound's levels, which `heights_cs` and `bound_cs` write in the
-    /// turn its tile lands there, and its samples as handed (pxl-portable
-    /// `GROUND_WORDS`).
+    /// Per square of the windows, its looks as handed, its cells' heights
+    /// and levels, which `heights_cs` and `bound_cs` write in the turn it
+    /// is handed, and its tile's samples as handed (pxl-portable
+    /// `window::SQUARE_WORDS`).
     ground: u32,
-    /// The frames that turn uploaded, `heights_cs`'s and `bound_cs`'s one
-    /// per `id.z`, and where each one's cells come back to.
+    /// The squares that turn handed, two words each, `heights_cs`'s and
+    /// `bound_cs`'s one per `id.z`, and where each one's cells come back to.
     fresh: u32,
     fresh_len: u32,
     backs: Vec<(u32, CellsBack)>,
@@ -778,12 +786,8 @@ struct CastBuffers {
     overwrite_revision: Option<u32>,
 }
 
-/// A held tile's frame on the GPU, and where its heights, its levels and
-/// its samples begin in it.
-const GROUND_BYTES: u32 = GROUND_WORDS * 4;
-const HEIGHTS_AT: u32 = LOOK_WORDS * 4;
-const LEVELS_AT: u32 = HEIGHTS_AT + HEIGHT_WORDS * 4;
-const ELE_AT: u32 = LEVELS_AT + LEVEL_WORDS * 4;
+/// A square on the GPU, in bytes.
+const SQUARE_BYTES: u32 = SQUARE_WORDS * 4;
 
 /// The cast's group 0: the eye, the window, the tiles' frames, the lane it
 /// writes, the lane's tangents, the served shards and the overwrites.
@@ -873,16 +877,16 @@ impl ScreenCellsPass {
     /// into the turn's stream as it has room, the packets they live in let
     /// go once handed; whether or not an eye casts, as a tile's cells are
     /// no eye's.
-    fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: GroundFrames) {
+    fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: GroundSquares) {
         let gb = self.ground.get_or_insert_with(|| {
             let buffer = |size: u32, usage: u32| {
                 let id = object();
                 g.buffer(id, size, usage);
                 id
             };
-            let (storage, frames) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, ground.frames);
-            let frames_buffer = buffer(frames * GROUND_BYTES, storage | buffer_usage::COPY_SRC);
-            let fresh = buffer(word_bytes(frames as usize), storage);
+            let (storage, squares) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, ground.squares);
+            let frames_buffer = buffer(squares * SQUARE_BYTES, storage | buffer_usage::COPY_SRC);
+            let fresh = buffer(word_bytes(2 * squares as usize), storage);
             let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &HEIGHTS_GROUP);
             let heights_group = object();
             let mut entries = [0u32; 10];
@@ -891,8 +895,8 @@ impl ScreenCellsPass {
             g.bind_group(heights_group, heights_built.layouts[0], &entries);
             let mut entries = [0u32; 15];
             // Each level's number in its slot, written once.
-            let levels = buffer(BOUND_LEVELS * LEVEL_STRIDE, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            for j in 1..=BOUND_LEVELS {
+            let levels = buffer(LEVELS * LEVEL_STRIDE, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            for j in 1..=LEVELS {
                 g.write_buffer(levels, (j - 1) * LEVEL_STRIDE, bytes(&[j, 0, 0, 0]));
             }
             let bound_built = pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP);
@@ -914,14 +918,16 @@ impl ScreenCellsPass {
         });
         let mut fresh = 0;
         gb.backs.clear();
-        (ground.upload)(&mut |frame, looks, samples, back| {
-            if !room((looks.len() + samples.len()) as u32) {
+        (ground.upload)(&mut |q| {
+            if !room((q.looks.len() + 4 * q.ways.len() + q.samples.len()) as u32) {
                 return false;
             }
-            g.write_buffer(gb.ground, frame * GROUND_BYTES, looks);
-            g.write_buffer(gb.ground, frame * GROUND_BYTES + ELE_AT, samples);
-            g.write_buffer(gb.fresh, word_bytes(fresh as usize), bytes(&[frame]));
-            gb.backs.push((frame, back));
+            let at = q.square * SQUARE_BYTES;
+            g.write_buffer(gb.ground, at, q.looks);
+            g.write_buffer(gb.ground, at + WAYS_AT * 4, bytes(q.ways));
+            g.write_buffer(gb.ground, at + ELE_AT * 4, q.samples);
+            g.write_buffer(gb.fresh, word_bytes(2 * fresh as usize), bytes(&[q.square, q.place]));
+            gb.backs.push((q.square, q.back));
             fresh += 1;
             true
         });
@@ -1034,19 +1040,18 @@ impl ScreenCellsPass {
         g.compute_pass(pass, encoder);
         g.set_pipeline(pass, c.heights_built.pipeline);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
-        g.dispatch(pass, (TILE_CELLS / 2).div_ceil(BOUND_WORKGROUP), TILE_CELLS.div_ceil(BOUND_WORKGROUP), c.fresh_len);
+        g.dispatch(pass, (SQUARE / 2).div_ceil(BOUND_WORKGROUP), SQUARE.div_ceil(BOUND_WORKGROUP), c.fresh_len);
         g.set_pipeline(pass, c.bound_built.pipeline);
-        for j in 1..=BOUND_LEVELS {
+        for j in 1..=LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[(j - 1) * LEVEL_STRIDE]);
-            let side = (TILE_CELLS >> j).div_ceil(BOUND_WORKGROUP);
+            let side = (SQUARE >> j).div_ceil(BOUND_WORKGROUP);
             g.dispatch(pass, side, side, c.fresh_len);
         }
         g.end(pass);
         release(pass);
-        for &(frame, back) in &c.backs {
-            let at = frame * GROUND_BYTES;
-            g.read_buffer(encoder, c.ground, at + HEIGHTS_AT, HEIGHT_WORDS * 4, back.heights, back.words[0], back.ticket);
-            g.read_buffer(encoder, c.ground, at + LEVELS_AT, LEVEL_WORDS * 4, back.levels, back.words[1], back.ticket);
+        // A square's heights and levels lie together, so one read brings both.
+        for &(square, back) in &c.backs {
+            g.read_buffer(encoder, c.ground, square * SQUARE_BYTES + HEIGHTS_AT * 4, BACK_WORDS * 4, back.cells, back.word, back.ticket);
         }
         c.backs.clear();
         c.fresh_len = 0;

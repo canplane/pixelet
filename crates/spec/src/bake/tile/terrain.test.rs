@@ -3,7 +3,6 @@
 use xpute_kit::golden::Golden;
 
 use super::*;
-use pxl_portable::ground::bound_of;
 use xpute_kit::math::rng::SplitMix64;
 
 const GOLDEN: &str = include_str!("../../../golden/bake/terrain.tsv");
@@ -35,20 +34,9 @@ fn tile(seed: u64) -> TerrainTile {
     TerrainTile::of(ele, Ground { cells: cells.into() }, lines(&mut rng), Occupancy::of_bits(0b10101).unwrap())
 }
 
-/// Random cells and lines, as a client holds them once a GPU drew them.
-fn drawn(seed: u64) -> TerrainTile {
-    let mut rng = Rng(SplitMix64::new(seed));
-    let heights: Vec<i16> = (0..HEIGHT_LANE).map(|_| rng.next() as i16).collect();
-    let cells: Vec<GroundId> = (0..GROUND_LANE).map(|_| rng.next() as GroundId).collect();
-    TerrainTile::drawn(heights, Ground { cells: cells.into() }, lines(&mut rng), Occupancy::LEAF)
-}
-
 fn room() -> TileRoom {
     TileRoom {
-        ground: vec![0; GROUND_LANE].leak(),
-        heights: vec![0; HEIGHT_LANE].leak(),
         ways: vec![[0; 2]; WAYS_LANE].leak(),
-        levels: vec![0; LEVEL_LANE].leak(),
         separation: separation::Room {
             starts: vec![0; separation::MAX_LINES + 1].leak(),
             points: vec![[0; 2]; separation::MAX_POINTS].leak(),
@@ -77,16 +65,8 @@ fn the_formats_write_and_read_what_the_record_holds() {
     let terrain = encode(&tile).unwrap();
     assert_eq!(format!("{:016x}", fnv(&terrain)), v.s("terrain.fnv"), "the tile's bytes");
     assert_eq!(decode(&terrain).unwrap(), tile, "a tile reads back as it was written");
-    // On the CPU each cell's own look at the zoom it is read at, and the ways' bound made from its lines.
-    let zoom = 12;
-    let resident = decode_into(&terrain, zoom, room()).unwrap();
-    let own: Vec<GroundId> = tile
-        .ground
-        .cells
-        .chunks(4)
-        .map(|q| pxl_portable::ground::own(u32::from_le_bytes([q[0], q[1], q[2], q[3]]), GROUND.cell_zoom(zoom)) as GroundId)
-        .collect();
-    assert_eq!(*resident.ground.cells, own[..], "each cell's own look");
+    // On the CPU its lines, and the ways' bound made from them.
+    let resident = decode_into(&terrain, room()).unwrap();
     assert_eq!(resident.separation, tile.separation, "its lines");
     let mut ways = vec![[0; 2]; WAYS_LANE];
     ways_of(&tile.separation, &mut ways);
@@ -100,27 +80,7 @@ fn a_packet_that_is_not_a_tile_is_refused() {
     let small = hex::decode(v.s("not_a_page")).unwrap();
     assert!(decode(&small).is_err());
     let room = room();
-    assert!(decode_into(&small, 12, room).is_err());
-}
-
-/// Every entry of every level, as the CPU reads it, is exactly the lowest and
-/// highest its cells and the ways over them reach.
-#[test]
-fn a_level_says_what_its_cells_say() {
-    for seed in [1, 0x2545_f491, 0x9e37_79b9_7f4a_7c15] {
-        let tile = drawn(seed);
-        let (heights, ways) = (&tile.heights, &tile.ways);
-        for j in 1..=BOUND_LEVELS {
-            let (side, n) = (1u32 << j, TILE_CELLS >> j);
-            for y in 0..n {
-                for x in 0..n {
-                    let cells = (y * side..(y + 1) * side).flat_map(|cy| (x * side..(x + 1) * side).map(move |cx| cell_bound(heights, ways, cx, cy)));
-                    let (lo, hi) = (cells.clone().map(|c| c[0]).min().unwrap(), cells.map(|c| c[1]).max().unwrap());
-                    assert_eq!(bound_of(level_bound(&tile.levels, ways, j, [x, y])), [lo, hi], "level {j} at ({x}, {y})");
-                }
-            }
-        }
-    }
+    assert!(decode_into(&small, room).is_err());
 }
 
 /// Every valid occupancy byte round-trips and no other is accepted.

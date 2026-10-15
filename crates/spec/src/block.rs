@@ -12,6 +12,8 @@ pub mod color;
 pub use pxl_portable::cube;
 pub use pxl_portable::mask;
 pub use pxl_portable::placed;
+/// The ground's cells as they are held, one layout with the GPU's.
+pub use pxl_portable::window;
 #[path = "block/decor.spec.rs"]
 pub mod decor;
 pub mod ext;

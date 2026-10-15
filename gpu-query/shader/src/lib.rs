@@ -17,10 +17,11 @@ use pxl_portable::area::{self, Area};
 use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
 use pxl_portable::caves::Cave;
 use pxl_portable::cube::{object, sentinel, Ground};
-use pxl_portable::ground::{self, level_at, Bound, Tile, GROUND_WORDS, HEIGHT_WORDS, LEVEL_WORDS, LOOK_WORDS};
-use pxl_portable::lattice::{GROUND, TILE_CELLS};
+use pxl_portable::ground;
+use pxl_portable::lattice::GROUND;
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
-use pxl_portable::{at, mask, wrap_index, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
+use pxl_portable::window::{self, Squares, ELE_AT, HEIGHTS_AT, LEVELS_AT, SLOTS, SQUARE, SQUARE_WORDS, WAYS_AT};
+use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::spirv;
 
@@ -58,47 +59,73 @@ const PLACED_BLOCK: u32 = 1 << 16;
 const PLACED_AIR: u32 = PLACED_BLOCK | object::air as u32;
 const UNKNOWN: u32 = sentinel::unknown as u32;
 
-/// One held tile's frame in the ground's buffer (pxl-portable
-/// `GROUND_WORDS`): its looks, a cell's four a word, its cells' heights, 2
-/// a word, its bound's levels, then its samples, 2 a word.
-pub struct Framed<'a> {
+/// The eye's windows' cells' zooms begin at the top's (pxl-kernel
+/// layer/terrain/window.rs): its window at `cell` is `cell − FIRST_CELL`.
+const FIRST_CELL: u32 = GROUND.cell_zoom(GROUND.top());
+
+/// A cell's or a window's zoom, held to the eye's windows.
+fn held_to(cell: u32) -> u32 {
+    if cell < FIRST_CELL {
+        FIRST_CELL
+    } else if cell > LEAF_CELL {
+        LEAF_CELL
+    } else {
+        cell
+    }
+}
+
+/// Square `square`'s first word in the ground's buffer (pxl-portable
+/// `window::SQUARE_WORDS`).
+fn square_at(square: u32) -> u32 {
+    square * SQUARE_WORDS
+}
+
+/// Cell `i`'s height off the square at `base`: two a word, low first, the
+/// half's sign carried up.
+fn height_of(ground: &[u32], base: u32, i: u32) -> i32 {
+    ((at(ground, base + HEIGHTS_AT + i / 2) >> (16 * (i % 2))) << 16) as i32 >> 16
+}
+
+/// Entry `at` of level `j` off the square at `base`.
+fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> i32 {
+    at(ground, base + LEVELS_AT + window::level_at(j) + y * (SQUARE >> j) + x) as i32
+}
+
+/// A square being drawn this turn, on its own: what `bound_cs` folds.
+struct Fresh<'a> {
     ground: &'a [u32],
-    frame: u32,
+    base: u32,
 }
 
-impl Tile for Framed<'_> {
-    fn look(&self, x: u32, y: u32) -> u32 {
-        at(self.ground, self.frame * GROUND_WORDS + y * TILE_CELLS + x)
+impl Squares for Fresh<'_> {
+    fn present(&self, _: u32, _: [i32; 2]) -> (u32, bool) {
+        (0, true)
     }
-    fn height(&self, x: u32, y: u32) -> i32 {
-        let i = y * TILE_CELLS + x;
-        ((at(self.ground, self.frame * GROUND_WORDS + LOOK_WORDS + i / 2) >> (16 * (i % 2))) << 16) as i32 >> 16
+    fn look(&self, _: u32, _: u32, i: u32) -> u32 {
+        at(self.ground, self.base + i)
     }
-}
-
-/// The GPU places no ways: a cell reaches its height.
-impl Bound for Framed<'_> {
-    fn cell(&self, x: u32, y: u32) -> [i32; 2] {
-        let h = Tile::height(self, x, y);
-        [h, h]
+    fn height(&self, _: u32, _: u32, i: u32) -> i32 {
+        height_of(self.ground, self.base, i)
     }
-    fn level(&self, j: u32, [x, y]: [u32; 2]) -> i32 {
-        at(self.ground, self.frame * GROUND_WORDS + LOOK_WORDS + HEIGHT_WORDS + level_at(j) + y * (TILE_CELLS >> j) + x) as i32
+    fn way(&self, _: u32, _: u32, k: u32) -> u32 {
+        at(self.ground, self.base + WAYS_AT + k)
+    }
+    fn level(&self, _: u32, _: u32, j: u32, at: [u32; 2]) -> i32 {
+        level_of(self.ground, self.base, j, at)
     }
 }
 
 /// The world as the GPU holds it (pxl-kernel scene/cast.rs fills it): the
 /// ground's held tiles, the service area, the caves, and what is placed with
-/// a preview's cuts. The ways and decor are not here (pxl-portable
-/// `cast::Query`).
+/// a preview's cuts. The ways' lines and decor are not here (pxl-portable
+/// `cast::Query`); the ways' bound is, in each square's lane.
 pub struct World<'a> {
-    /// Per ground zoom from the top, a header — the south-west tile, the
-    /// tiles across — then a word a tile, its frame plus one, 0 where none
-    /// is held.
+    /// Per window of the eye's, from the top's, a word a slot: the square
+    /// it holds, and whether it is present (pxl-portable `window`).
     window: &'a [IVec4],
-    /// Per frame, a held tile's looks as handed, its cells' heights
-    /// (`heights_cs`), their bound's levels (`bound_cs`), and its samples
-    /// as handed.
+    /// Per square of every window, its looks as handed, its cells' heights
+    /// (`heights_cs`), their levels (`bound_cs`), and its tile's samples as
+    /// handed (`window::SQUARE_WORDS`); the eye's windows first.
     ground: &'a [u32],
     /// The served shards: zoom, x, y.
     shards: &'a [IVec4],
@@ -172,107 +199,77 @@ impl World<'_> {
         filled
     }
 
-    /// The word the window holds for the tile `t` at `zoom`: its frame plus
-    /// one, 0 where none is held or the window does not reach it.
-    fn held(&self, zoom: u32, t: [i32; 2]) -> u32 {
-        let across = at(self.window, 0).z as u32;
-        let block = (zoom - GROUND.top()) * (1 + (across * across).div_ceil(4));
-        let h = at(self.window, block);
-        let dx = (t[0] - h.x) as u32 & ((1u32 << zoom) - 1);
-        let dy = t[1] - h.y;
-        if dx >= across || dy < 0 || dy as u32 >= across {
-            return 0;
+    /// The ground's cell `g` at `cell`, off the finest window holding it
+    /// present (`window::find`): its four looks, its height and the zoom it
+    /// is read at; `void` at sea level where none holds it.
+    fn cell_at(&self, cell: u32, g: [i32; 2]) -> (u32, i32, u32) {
+        let (from, slot, i, here) = window::find(self, cell, g, FIRST_CELL);
+        if !here {
+            return (VOID, 0, cell);
         }
-        let i = dy as u32 * across + dx;
-        let w = at(self.window, block + 1 + i / 4);
-        (match i % 4 {
-            0 => w.x,
-            1 => w.y,
-            2 => w.z,
-            _ => w.w,
-        }) as u32
-    }
-
-    /// The finest held tile over the tile `t` at `zoom`, down to the top: its
-    /// zoom and its window word, 0 where none is.
-    fn drawn(&self, zoom: u32, t: [i32; 2]) -> (u32, u32) {
-        let mut z = zoom;
-        loop {
-            let s = zoom - z;
-            let w = self.held(z, [t[0] >> s, t[1] >> s]);
-            if w != 0 || z == GROUND.top() {
-                return (z, w);
-            }
-            z -= 1;
-        }
-    }
-
-    /// The ground's cell `g` of the tiles at `zoom`, counted in their cells,
-    /// off the finest held tile over it: its look and height, `void` where
-    /// none is held; and whether only its look is asked.
-    fn cell(&self, zoom: u32, g: [i32; 2], only_look: bool) -> (u32, i32) {
-        let shamt = GROUND.tile_cell_shamt();
-        let t = [wrap_index(zoom, g[0] >> shamt), g[1] >> shamt];
-        let (from, w) = self.drawn(zoom, t);
-        if w == 0 {
-            return (VOID, 0);
-        }
-        let s = zoom - from;
-        // Its place from the held tile's first cell, in the asked tile's cells.
-        let first = |v: i32| (v >> s) << (shamt + s);
-        let mask = (1u32 << (zoom + shamt)) - 1;
-        let v = [((g[0] - first(t[0])) as u32 & mask) as i32, g[1] - first(t[1])];
-        let tile = Framed { ground: self.ground, frame: w - 1 };
-        if only_look {
-            (ground::look(&tile, v, 1 << s), 0)
-        } else {
-            ground::read(&tile, v, 1 << s)
-        }
+        (self.look(from, slot, i), self.height(from, slot, i), from)
     }
 
     /// The ground's cell `b` of `zoom` as the grid reads it, before the
-    /// area's edge is laid: the tile cell drawing it, or the four it folds a
-    /// zoom finer (`ground::fold`), off the tiles at `read`; its look alone
-    /// where `only_look`.
-    fn ground_at(&self, read: u32, zoom: u32, b: [i32; 2], only_look: bool) -> (u32, f32, [u32; 4]) {
-        // The tile cell holding it: its own, or past the leaves a leaf's.
-        let k = zoom - GROUND.cell_zoom(read);
-        let (w, h) = self.cell(read, [b[0] >> k, b[1] >> k], only_look);
-        (ground::own(w, zoom - k), h as f32, ground::looks(w))
+    /// area's edge is laid: the cell drawing it, past the leaves a leaf's.
+    fn ground_at(&self, zoom: u32, b: [i32; 2]) -> (u32, f32, [u32; 4]) {
+        let read = held_to(zoom);
+        let g = if zoom >= read {
+            [b[0] >> (zoom - read), b[1] >> (zoom - read)]
+        } else {
+            [b[0] << (read - zoom), b[1] << (read - zoom)]
+        };
+        let (w, h, from) = self.cell_at(read, g);
+        (ground::own(w, from), h as f32, ground::looks(w))
     }
 
     /// Whether the leaf cell `l` is gone: past the area, or nothing known
-    /// of it, its look off the leaf tile drawing it.
+    /// of it, its look off the window drawing it.
     fn gone(&self, l: [i32; 2]) -> bool {
-        area::past(self, area::tile_at(LEAF_CELL, l)) || ground::own(self.cell(LEAF_ZOOM, l, true).0, LEAF_CELL) == UNKNOWN
+        let (w, _, from) = self.cell_at(LEAF_CELL, l);
+        area::past(self, area::tile_at(LEAF_CELL, l)) || ground::own(w, from) == UNKNOWN
+    }
+}
+
+/// The eye's windows, as the GPU holds them.
+impl Squares for World<'_> {
+    /// The slot square `q` is held in, while it holds it present.
+    fn present(&self, cell: u32, q: [i32; 2]) -> (u32, bool) {
+        let s = window::slot(q);
+        let h = at(self.window, (cell - FIRST_CELL) * SLOTS + s);
+        (s, h.z != 0 && h.x == q[0] && h.y == q[1])
+    }
+    fn look(&self, cell: u32, slot: u32, i: u32) -> u32 {
+        at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + i)
+    }
+    fn height(&self, cell: u32, slot: u32, i: u32) -> i32 {
+        height_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
+    }
+    fn way(&self, cell: u32, slot: u32, k: u32) -> u32 {
+        at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + WAYS_AT + k)
+    }
+    fn level(&self, cell: u32, slot: u32, j: u32, at: [u32; 2]) -> i32 {
+        level_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), j, at)
     }
 }
 
 /// The ground as the GPU holds it, for pxl-portable's one answer for a node.
 impl ground::Held for World<'_> {
-    /// The join of the bounds over the node of each tile the zooms `cells`
-    /// read their cells from, the finest held over it at each
-    /// (`ground::bounded`), which bounds that tile's own cells alone; none
-    /// (`UNBOUNDED`) for a node wider than the finest asked's tile, which
-    /// holds more than one.
+    /// The join of the bounds over the node of each window the zooms
+    /// `cells` read their cells from, the finest holding them present at
+    /// each (`window::bounded`); none (`UNBOUNDED`) for a node wider than a
+    /// square there, which only splits more.
     fn relief(&mut self, [coarsest, finest]: [u32; 2], (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
-        if GROUND.read_zoom(finest) > zoom {
-            return (ground::UNBOUNDED, true);
-        }
+        let (mut z, last) = (held_to(coarsest), held_to(finest));
         let mut relief = [0, 0];
-        let mut z = coarsest;
-        while z <= finest {
-            let read = GROUND.read_zoom(z);
-            if z == coarsest || read != GROUND.read_zoom(z - 1) {
-                let s = zoom - read;
-                let (from, w) = self.drawn(read, [c[0] >> s, c[1] >> s]);
-                if w == 0 {
-                    return ([0, 0], false);
-                }
-                let tile = Framed { ground: self.ground, frame: w - 1 };
-                let [lo, hi] = ground::bounded(&tile, from, (zoom, [c[0], c[1]]));
-                relief = if z == coarsest { [lo, hi] } else { [relief[0].min(lo), relief[1].max(hi)] };
+        let mut first = true;
+        while z <= last {
+            let ([lo, hi], _, here) = window::bounded(self, z, (zoom, [c[0], c[1]]), FIRST_CELL);
+            if !here {
+                return ([0, 0], false);
             }
+            relief = if first { [lo, hi] } else { [relief[0].min(lo), relief[1].max(hi)] };
+            first = false;
             z += 1;
         }
         (relief, true)
@@ -282,8 +279,7 @@ impl ground::Held for World<'_> {
     /// edge laid on it (pxl-kernel query/node.rs `drawn`).
     fn cell(&mut self, zoom: u32, c: [i32; 3]) -> (ground::Cell, bool) {
         let b = [c[0], c[1]];
-        let read = GROUND.read_zoom(zoom);
-        let (look, h, fold) = self.ground_at(read, zoom, b, false);
+        let (look, h, fold) = self.ground_at(zoom, b);
         let gone = look == UNKNOWN;
         // Ground beside one gone: of the leaf cells its neighbours lie in
         // (`area::ring`), each read once, its look alone.
@@ -432,32 +428,35 @@ pub fn cast_cs(
     }
 }
 
-/// The cells' heights of the frames `fresh` names, the frames handed
-/// samples this turn, one a `z`: each word's two cells (`ground::height`)
-/// off the samples handed there.
+/// The cells' heights of the squares `fresh` names, the squares handed
+/// their tiles' samples this turn, one a `z`, each two words: the square,
+/// and where it lies in its tile, in squares, X low: each word's two cells
+/// (`ground::height`) off the samples handed there.
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn heights_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] ground: &mut [u32],
 ) {
-    if id.x >= TILE_CELLS / 2 || id.y >= TILE_CELLS {
+    if id.x >= SQUARE / 2 || id.y >= SQUARE {
         return;
     }
-    let frame = fresh[id.z as usize];
-    let base = frame * GROUND_WORDS;
+    let base = square_at(at(fresh, 2 * id.z));
+    let place = at(fresh, 2 * id.z + 1);
+    let first = [(place & 0xffff) * SQUARE, (place >> 16) * SQUARE];
     let w = {
         let samples: &[u32] = ground;
-        let ele = move |i: usize| ((at(samples, base + LOOK_WORDS + HEIGHT_WORDS + LEVEL_WORDS + i as u32 / 2) >> (16 * (i as u32 % 2))) << 16) as i32 >> 16;
-        let (a, b) = (ground::height(ele, [2 * id.x, id.y]), ground::height(ele, [2 * id.x + 1, id.y]));
+        let ele = move |i: usize| ((at(samples, base + ELE_AT + i as u32 / 2) >> (16 * (i as u32 % 2))) << 16) as i32 >> 16;
+        let (x, y) = (first[0] + 2 * id.x, first[1] + id.y);
+        let (a, b) = (ground::height(ele, [x, y]), ground::height(ele, [x + 1, y]));
         (a as u32 & 0xffff) | (b as u32) << 16
     };
-    ground[(base + LOOK_WORDS + id.y * (TILE_CELLS / 2) + id.x) as usize] = w;
+    ground[(base + HEIGHTS_AT + id.y * (SQUARE / 2) + id.x) as usize] = w;
 }
 
-/// Level `level.x` of the bound of the frames `fresh` names, one a `z`,
-/// over the level under it, written before (`ground::join`), level 1 over
-/// the cells `heights_cs` drew: a dispatch a level, from 1 up.
+/// Level `level.x` of the squares `fresh` names, one a `z`, over the level
+/// under it, written before (`window::join`), level 1 over the cells
+/// `heights_cs` drew: a dispatch a level, from 1 up.
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn bound_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -466,14 +465,14 @@ pub fn bound_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
 ) {
     let j = level.x;
-    let side = TILE_CELLS >> j;
+    let side = SQUARE >> j;
     if id.x >= side || id.y >= side {
         return;
     }
-    let frame = fresh[id.z as usize];
+    let base = square_at(at(fresh, 2 * id.z));
     let w = {
         let under: &[u32] = ground;
-        ground::join(&Framed { ground: under, frame }, j, [id.x, id.y])
+        window::join(&Fresh { ground: under, base }, 0, 0, j, [id.x, id.y])
     };
-    ground[(frame * GROUND_WORDS + LOOK_WORDS + HEIGHT_WORDS + level_at(j) + id.y * side + id.x) as usize] = w as u32;
+    ground[(base + LEVELS_AT + window::level_at(j) + id.y * side + id.x) as usize] = w as u32;
 }

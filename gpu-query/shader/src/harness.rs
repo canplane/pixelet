@@ -4,7 +4,7 @@
 //! seed, and a tile's ground per cell, each diffed against the CPU.
 
 use pxl_portable::caves::{self, Cave};
-use pxl_portable::ground::{self, Tile, TILE_CELLS};
+use pxl_portable::ground::{self, TILE_CELLS};
 use pxl_portable::LEAF_CELL;
 use spirv_std::glam::UVec3;
 use spirv_std::spirv;
@@ -63,7 +63,7 @@ pub struct Frame<'a> {
     pub heights: &'a [u32],
 }
 
-impl Tile for Frame<'_> {
+impl Frame<'_> {
     fn look(&self, x: u32, y: u32) -> u32 {
         let i = (y * TILE_CELLS + x) as usize;
         self.looks[i / 4] >> (8 * (i % 4)) & 0xff
@@ -78,7 +78,7 @@ impl Tile for Frame<'_> {
 /// Cell `id` of the tile at the leaves: its look in bits 0..8, its block
 /// at `ask.first[2]` without caves in bits 8..16, its height in the high half.
 pub fn ground_of(ask: &Ask, tile: &Frame, id: [u32; 2]) -> u32 {
-    let (w, h) = ground::read(tile, [id[0] as i32, id[1] as i32], 1);
+    let (w, h) = (tile.look(id[0], id[1]), tile.height(id[0], id[1]));
     let look = ground::own(w, LEAF_CELL);
     let cell = ground::Cell {
         look,

@@ -9,6 +9,7 @@ pub mod spec;
 
 use crate::layer::Base as _;
 use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
 use xpute_guest::sched::edge::{notified, Notify};
 
@@ -95,17 +96,27 @@ fn world_gizmo_tick(_: &mut TickContext) {
 
 /// Each pyramid layer's tiles, from the live eye.
 fn demand_tick(_: &mut TickContext) {
+    // The ground's windows where their centres now stand, before what arrives fills them.
+    let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
+    let pinned = crate::layer::terrain::window::step([
+        crate::view::observation::observation().map(|o| [o.eye[0], o.eye[1]]),
+        crate::control::camera::controller::focus().map(at),
+        crate::control::navigation::destination::pending().map(at),
+    ]);
+    if pinned {
+        TerrainTile::demand().moved();
+    }
     crate::view::demand::admit_arrived();
     changes_step();
     let tau = crate::view::lens::tau();
-    TerrainTile::demand().step(crate::control::navigation::destination::tile(), tau);
+    TerrainTile::demand().step(crate::control::navigation::destination::tile(), crate::layer::terrain::window::pinned(), tau);
     // Nothing is fetched while places are hidden.
     match crate::setting::store::settings_store().place {
-        true => PlaceTile::demand().step(None, tau),
+        true => PlaceTile::demand().step(None, &[], tau),
         false => PlaceTile::demand().idle(),
     }
-    Earth::demand().step(None, tau);
-    DivisionTile::demand().step(crate::layer::division::line(crate::control::camera::controller::focus()), tau);
+    Earth::demand().step(None, &[], tau);
+    DivisionTile::demand().step(crate::layer::division::line(crate::control::camera::controller::focus()), &[], tau);
 }
 
 fn camera_input_tick(_: &mut TickContext) {

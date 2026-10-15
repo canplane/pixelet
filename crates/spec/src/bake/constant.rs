@@ -11,10 +11,6 @@ const _: () = assert!(EXTENT[2] == i16::BITS && GROUND.cell() == UNIT_ZOOM, "a h
 /// cells' heights off (pxl-portable).
 pub use pxl_portable::ground::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 
-/// A held tile's frame, its looks, its cells' heights, then their bound's
-/// levels (pxl-portable).
-pub use pxl_portable::ground::{level_at, BOUND_LEVELS, ELE_WORDS, GROUND_WORDS, HEIGHT_WORDS, LEVEL_WORDS, LOOK_WORDS};
-
 pub use super::object::OBJECT_TIERS;
 
 /// The objects' coarsest tier, a placed block, one unit: the ladder is the

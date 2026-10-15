@@ -56,43 +56,6 @@ const SANDSTONE_DEPTH: i32 = 2;
 /// whichever is lower, in leaf cells (pxl-spec block/limit.rs `floor`).
 pub const BEDROCK_DEPTH: i32 = 64;
 
-/// One tile as held, its cells read in place: a resident record on the
-/// CPU, a frame of a storage buffer on the GPU.
-pub trait Tile {
-    /// The four looks the tile's cell `(x, y)` folds, a byte each,
-    /// `dx + 2·dy` (`looks`); a leaf's, and on the CPU any cell's, its own
-    /// four times.
-    fn look(&self, x: u32, y: u32) -> u32;
-    /// The height of the tile's cell `(x, y)`, in leaf cells, as a GPU
-    /// drew it from the tile's samples (`height`).
-    fn height(&self, x: u32, y: u32) -> i32;
-}
-
-/// A tile's cells with its bound's levels made over them.
-pub trait Bound {
-    /// The lowest and highest the tile's cell `(x, y)` reaches, in leaf
-    /// cells: its height, and what its source draws over and under it
-    /// there.
-    fn cell(&self, x: u32, y: u32) -> [i32; 2];
-    /// Entry `(x, y)` of level `j` of the tile's bound's levels, as a word
-    /// (`bound_word`).
-    fn level(&self, j: u32, at: [u32; 2]) -> i32;
-}
-
-/// A cell `v` of a tile `n` × `n` times finer than `tile`, counted from
-/// `tile`'s first cell at that finer size: the look and height of `tile`'s
-/// cell holding it, so a coarser tile standing in draws its own cells and
-/// invents none finer; off `tile`, which knows nothing there, `void` at sea
-/// level.
-pub fn read(tile: &impl Tile, v: [i32; 2], n: u32) -> (u32, i32) {
-    if !holds(v, n) {
-        return (VOID, 0);
-    }
-    let s = n.trailing_zeros();
-    let (x, y) = ((v[0] >> s) as u32, (v[1] >> s) as u32);
-    (tile.look(x, y), tile.height(x, y))
-}
-
 /// The height the surface draws at the center of a tile's cell `(x, y)`,
 /// in leaf cells, off its padded elevation samples `ele` (`ele_index`): the
 /// one producer of a cell's height, which a GPU runs once a cell of a held
@@ -101,34 +64,8 @@ pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [u32; 2]) -> i32 {
     bicubic(ele, x as f32 + 0.5, y as f32 + 0.5)
 }
 
-/// The levels of a held tile's bound over its cells' heights: each entry of
-/// level `j` the lowest and highest of the 2^j × 2^j cells under it, the
-/// join of four of level j − 1's (`join`), up to the tile whole; made
-/// where a GPU holds the tile, off its cells, and read back by the CPU. A
-/// bound read off it is that tile's cells' own; a zoom's tile is its own
-/// bicubic of its own samples, so a node is bounded by each zoom asked
-/// (`Held::relief`).
-pub const BOUND_LEVELS: u32 = TILE_CELLS.trailing_zeros();
-
-/// Where level `j`, from 1, begins among the levels, in words: each level's
-/// entries row by row, level `i` (TILE_CELLS / 2^i)² of them, so the levels
-/// before `j` are (n − n / 4^(j−1)) / 3, n the cells.
-pub const fn level_at(j: u32) -> u32 {
-    let n = TILE_CELLS * TILE_CELLS;
-    (n - (n >> (2 * (j - 1)))) / 3
-}
-
-/// Words a held tile's frame gives each of its lanes: its looks, a cell's
-/// four a word; its cells' heights, 2 a word; its bound's levels, an entry
-/// a word; its padded samples as handed, 2 a word.
-pub const LOOK_WORDS: u32 = TILE_CELLS * TILE_CELLS;
-pub const HEIGHT_WORDS: u32 = TILE_CELLS * TILE_CELLS / 2;
-pub const LEVEL_WORDS: u32 = level_at(BOUND_LEVELS + 1);
+/// A tile's padded samples as a GPU holds them, 2 a word.
 pub const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
-
-/// A held tile's frame on a GPU: its looks, its heights, its levels, then
-/// its samples. The heights and levels follow one another, read back whole.
-pub const GROUND_WORDS: u32 = LOOK_WORDS + HEIGHT_WORDS + LEVEL_WORDS + ELE_WORDS;
 
 /// An entry of a bound as a word, its lowest in the low half and its
 /// highest in the high: each a cell's height, an i16.
@@ -139,51 +76,6 @@ pub fn bound_word([lo, hi]: [i32; 2]) -> i32 {
 /// `bound_word`'s lowest and highest.
 pub fn bound_of(w: i32) -> [i32; 2] {
     [w << 16 >> 16, w >> 16]
-}
-
-/// Entry `(x, y)` of level `j` of `tile`'s bound: the join of the four
-/// under it, at level 1 four cells' heights.
-pub fn join(tile: &impl Bound, j: u32, [x, y]: [u32; 2]) -> i32 {
-    let under = |q: u32| {
-        let (cx, cy) = (2 * x + q % 2, 2 * y + q / 2);
-        if j == 1 {
-            tile.cell(cx, cy)
-        } else {
-            bound_of(tile.level(j - 1, [cx, cy]))
-        }
-    };
-    let [mut lo, mut hi] = under(0);
-    let mut q = 1;
-    while q < 4 {
-        let [l, h] = under(q);
-        (lo, hi) = (lo.min(l), hi.max(h));
-        q += 1;
-    }
-    bound_word([lo, hi])
-}
-
-/// The lowest and highest the cells of `tile`, at `from`, reach under the
-/// node `(zoom, c)` it holds: one entry, of the level whose entries are the
-/// node's columns, or the cell holding a node finer than a cell.
-pub fn bounded(tile: &impl Bound, from: Zoom, (zoom, c): (Zoom, [i32; 2])) -> [i32; 2] {
-    let cell = GROUND.cell_zoom(from);
-    let within = |side: u32, v: i32| (v & (side as i32 - 1)) as u32;
-    if zoom >= cell {
-        let s = zoom - cell;
-        return tile.cell(within(TILE_CELLS, c[0] >> s), within(TILE_CELLS, c[1] >> s));
-    }
-    let j = cell - zoom;
-    let side = TILE_CELLS >> j;
-    bound_of(tile.level(j, [within(side, c[0]), within(side, c[1])]))
-}
-
-/// Whether `tile` holds the cell `v` of a tile `n` × `n` times finer, `n` a
-/// power of two, so a cell's coarser one is its index shifted, floored.
-fn holds(v: [i32; 2], n: u32) -> bool {
-    let s = n.trailing_zeros();
-    let (x, y) = (v[0] >> s, v[1] >> s);
-    let cells = TILE_CELLS as i32;
-    x >= 0 && y >= 0 && x < cells && y < cells
 }
 
 /// A cell's word's four looks, `dx + 2·dy`.
@@ -200,15 +92,6 @@ pub fn word([a, b, c, d]: [u32; 4]) -> u32 {
 /// bake folded it (`fold`).
 pub fn own(w: u32, cell: Zoom) -> u32 {
     majority(looks(w), cell)
-}
-
-/// `read`'s look alone.
-pub fn look(tile: &impl Tile, v: [i32; 2], n: u32) -> u32 {
-    if !holds(v, n) {
-        return VOID;
-    }
-    let s = n.trailing_zeros();
-    tile.look((v[0] >> s) as u32, (v[1] >> s) as u32)
 }
 
 /// Four cells a zoom finer, `dx + 2·dy`, as one: the looks' majority, the

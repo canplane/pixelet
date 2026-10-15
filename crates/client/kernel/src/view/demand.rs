@@ -245,11 +245,18 @@ impl<L: Observed> Demand<L> {
                 },
             );
         }
-        xpute_kit::ensure!(named <= if matches!(L::ASKS, Asks::Floor) { 0 } else { Residency::<L>::DESTINATION_TILES }, ENOTRECOVERABLE, named);
+        xpute_kit::ensure!(
+            named <= if matches!(L::ASKS, Asks::Floor) { 0 } else { Residency::<L>::DESTINATION_TILES + L::PINNED },
+            ENOTRECOVERABLE,
+            named
+        );
 
         L::residency().ask(&asks);
         // A tile no served shard is over or under is answered as its absence is, and never asked for.
-        let unanswered = |p: Tile| !L::residency().resident(p) && !L::residency().settled(p);
+        let unanswered = |p: Tile| {
+            let r = L::residency();
+            !r.resident(p) && (!r.settled(p) || r.again_held(p))
+        };
         if let Some(layer) = L::STREAM.bake() {
             for &p in asks.keys() {
                 if unanswered(p) && !source::serves(layer, p) {
@@ -274,9 +281,11 @@ impl<L: Observed> Demand<L> {
     /// what is drawn. Observes again whenever anything in `Seen` changed.
     ///
     /// `destination` is asked for with its line even with no observation yet:
-    /// at the first fix the camera waits for that ground. A layer with a top
-    /// of its own is observed out to its own reach, unfogged.
-    pub fn step(&mut self, destination: Option<Tile>, tau: Tau) {
+    /// at the first fix the camera waits for that ground; and `pinned`, the
+    /// tiles a reader that takes no coarser answer declares (`Base::PINNED`),
+    /// as the destination is. A layer with a top of its own is observed out
+    /// to its own reach, unfogged.
+    pub fn step(&mut self, destination: Option<Tile>, pinned: &[Tile], tau: Tau) {
         // Nothing coarser than the layer's own top is drawn, whatever the source holds.
         let Some(top) = L::TOP.or(floor::top()).map(|t| t.max(L::LATTICE.top())) else { return };
         let o = observation().map(|o| match L::TOP {
@@ -287,13 +296,16 @@ impl<L: Observed> Demand<L> {
             },
             None => o,
         });
-        if o.is_none() && destination.is_none() {
+        if o.is_none() && destination.is_none() && pinned.is_empty() {
             return;
         }
         let tau = if o.is_some() { tau } else { Tau::FINEST };
         let now = Seen { o, destination, tau };
         if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
-            let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent())));
+            let line = destination
+                .into_iter()
+                .flat_map(|p| std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent())))
+                .chain(pinned.iter().copied());
             self.observe(o.as_ref(), line, &ByEye { tau, lattice: L::LATTICE, top }, top);
             self.last = Some(now);
         }
@@ -318,8 +330,6 @@ impl<L: Observed> Demand<L> {
 /// The pyramid tiles arrived, admitted against the view as many as the
 /// turn's quota allows and at least one; each fetch settles here.
 pub fn admit_arrived() {
-    // A tile whose cells the GPU drew is read once they are back, as one arriving.
-    TerrainTile::residency().ready(crate::layer::terrain::tile::back);
     let mut first = true;
     while first || !world_edge().spent() {
         let Some(Answered {

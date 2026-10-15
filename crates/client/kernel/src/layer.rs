@@ -59,9 +59,9 @@ pub trait Base: Clone + 'static {
     /// the ground stops.
     const TOP: Option<Zoom> = None;
 
-    /// Its framed tiles are read only once a GPU has drawn their cells and
-    /// they are back (`Residency::ready`), until then as if not held.
-    const AWAITS: bool = false;
+    /// The most tiles a reader that takes no coarser answer pins apart from
+    /// the view and a destination's line (pxl-kernel view/demand.rs `step`).
+    const PINNED: u32 = 0;
 
     /// Its records, which it alone holds.
     fn residency() -> &'static mut Residency<Self>;

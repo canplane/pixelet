@@ -16,6 +16,7 @@ use xpute_guest::global::Global;
 use super::world::World;
 use crate::io::source;
 use crate::layer::residency::Line;
+use crate::layer::terrain::window::Windowed;
 use crate::layer::terrain::Source;
 use crate::layer::{Answer, Query};
 
@@ -40,9 +41,13 @@ pub struct Ground<'a> {
 }
 
 impl<'a> Ground<'a> {
-    /// The tiles as the one rule reads them.
-    pub(super) fn around(&self) -> Around<'a> {
+    /// The tiles as the one rule reads them, their cells off the windows.
+    pub(super) fn around(&self) -> Around<'a, Windowed> {
+        let zoom = GROUND.cell_zoom(self.tile.zoom);
         Around {
+            cells: Windowed,
+            first: self.first_at(zoom),
+            zoom,
             own: self.own.view(),
             beside: self.beside.map(|b| b.map(|s| s.view())),
             past: source::past_at,
@@ -77,7 +82,8 @@ impl<'a> World<'a> {
         let mut first = tile.at.map(|v| v << (cell - tile.zoom));
         let x = node.1[0] << (cell - node.0);
         first[0] = x - wrap_index(cell, x - first[0]);
-        self.terrain.cells_of(line).map(|own| Ground { own, beside, tile, first, cell })
+        let held = self.terrain.cells_held(line, node);
+        self.terrain.cells_of(line).and_then(|own| held.map(|()| Ground { own, beside, tile, first, cell }))
     }
 
     /// The ground of `node`'s cells at `zoom` and `ring` about them, read off

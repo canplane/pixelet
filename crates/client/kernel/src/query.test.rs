@@ -11,7 +11,7 @@ use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 
 use super::*;
 use crate::layer::Answer;
-use pxl_spec::bake::tile::terrain::{TerrainTile, HEIGHT_LANE};
+use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile, GROUND_LANE};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
@@ -25,7 +25,7 @@ use crate::layer::object::store::Write;
 use crate::layer::residency::{Candidate, Victim};
 use crate::serial;
 
-const CELLS: usize = HEIGHT_LANE;
+const CELLS: usize = GROUND_LANE;
 const SPAN: usize = TILE_CELLS as usize;
 
 /// The fixture holds fewer tiles than there are frames.
@@ -41,21 +41,33 @@ fn top() -> Tile {
     Tile::new(LEAF_ZOOM - 1, [40, -20])
 }
 
+/// A leaf as a client holds it: its lines, and its cells, each its own look
+/// and its height, as its windows hold them once a GPU drew them.
+#[derive(Clone)]
+struct Leaf {
+    tile: TerrainTile,
+    looks: Vec<GroundId>,
+    heights: Vec<i16>,
+}
+
 /// The tiles held, and over each its line up to the coarsest zoom the
 /// source supplies whole, as the floor holds it all around the eye
 /// (`layer/residency/floor.rs`): a tile's coarser pictures here are the
-/// same ground, each marking its children held.
-fn resident(held: &[(Tile, TerrainTile)]) -> Residency<TerrainTile> {
+/// same ground, each marking its children held; their cells held in the
+/// windows about `centre`, in units.
+fn resident(centre: [f64; 2], held: &[(Tile, Leaf)]) -> Residency<TerrainTile> {
     use pxl_spec::bake::tile::Occupancy;
     let mut residency = Residency::default();
     let mut admitted: Vec<Tile> = Vec::new();
-    for (p, tile) in held {
+    let mut cells = Vec::new();
+    for (p, Leaf { tile, looks, heights }) in held {
         let line = std::iter::successors(Some(*p), |q| (q.zoom > GROUND.top()).then(|| q.parent()));
         for (k, q) in line.enumerate() {
             if admitted.contains(&q) {
                 continue;
             }
             admitted.push(q);
+            cells.push((q, looks.clone(), heights.clone(), tile.ways.to_vec()));
             let picture = match k {
                 0 => tile.clone(),
                 _ => TerrainTile {
@@ -71,13 +83,17 @@ fn resident(held: &[(Tile, TerrainTile)]) -> Residency<TerrainTile> {
     let asks: fnv::FnvHashMap<Tile, crate::io::demand::Ask> = admitted.iter().map(|&q| (q, crate::io::demand::Ask::PLAIN)).collect();
     residency.ask(&asks);
     // Their cells as a GPU would hand them back, at once.
-    residency.ready(|_| true);
+    crate::layer::terrain::window::test::hold(centre, &cells);
     residency
 }
 
 /// A leaf as a client holds it once its cells are back: each cell's height and look given.
-fn drawn(heights: Vec<i16>, ground: Ground, separation: pxl_spec::bake::separation::Separation) -> TerrainTile {
-    TerrainTile::drawn(heights, ground, separation, pxl_spec::bake::tile::Occupancy::LEAF)
+fn drawn(heights: Vec<i16>, ground: Ground, separation: pxl_spec::bake::separation::Separation) -> Leaf {
+    Leaf {
+        tile: TerrainTile::held(separation, pxl_spec::bake::tile::Occupancy::LEAF),
+        looks: ground.cells.into_owned(),
+        heights,
+    }
 }
 
 fn point(x: f64, y: f64) -> Q3 {
@@ -112,9 +128,9 @@ fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
         },
         Default::default(),
     );
-    let residency = resident(&[(leaf, void)]);
     let (x0, y0, _) = leaf.rect();
     let at = [x0 + 10.5, y0 + 10.5];
+    let residency = resident(at, &[(leaf, void)]);
 
     let empty = Store::default();
     let access = World::new(&residency, &empty);
@@ -147,9 +163,9 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
         },
         separation.finish(),
     );
-    let residency = resident(&[(leaf, void)]);
     let (x0, y0, _) = leaf.rect();
     let at = [x0 + 20.5, y0 + 10.5];
+    let residency = resident(at, &[(leaf, void)]);
     let store = Store::default();
     let access = World::new(&residency, &store);
     assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(10.0)));
@@ -168,8 +184,8 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
         drawn(vec![5; CELLS], Ground { cells: cells.into() }, Default::default())
     };
     let tile = |x: i64| pxl_spec::space::layer::tile::tile_at(LEAF_ZOOM, [x, 0]);
-    let residency = resident(&[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())]);
     let seam = pxl_spec::space::coord::world::ROUND / 2.0;
+    let residency = resident([seam, 100.5], &[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())]);
     let top = World::new(&residency, &Store::default()).surface(&point(-seam + 20.5, 100.5), LEAF_ZOOM).value().flatten().unwrap().top;
 
     let mut store = Store::default();
@@ -200,7 +216,7 @@ fn flat_at_five() -> (Residency<TerrainTile>, [f64; 2]) {
         Default::default(),
     );
     let (x0, y0, _) = leaf.rect();
-    (resident(&[(leaf, flat)]), [x0 + 10.0, y0 + 10.0])
+    (resident([x0 + 10.0, y0 + 10.0], &[(leaf, flat)]), [x0 + 10.0, y0 + 10.0])
 }
 
 /// A dig is met as the cells asked fold it, nothing finer: at the leaves' cells

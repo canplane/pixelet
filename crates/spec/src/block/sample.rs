@@ -15,10 +15,11 @@ use crate::block::Block;
 use crate::procedural::{pier_stands, Frame};
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::{units, Zoom, SHARD_ZOOM};
-use crate::space::hierarchy::tree::{ancestor_of, offset_in};
+use crate::space::hierarchy::tree::ancestor_of;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_portable::area::wall;
-use pxl_portable::ground::{blocks, face_height, fold, read, Cell};
+use pxl_portable::ground::{blocks, face_height, fold, Cell};
+use pxl_portable::wrap_index;
 
 /// A building's concrete: nothing in the catalog is a pier's own.
 const PIER: GroundId = ground::building;
@@ -60,14 +61,12 @@ fn fit<T: Clone>(v: &mut Vec<T>, n: usize, fill: T) -> Result<(), Refused> {
     Ok(())
 }
 
+/// A tile as a client reads it whole: its lines and the ways' bound by
+/// square made from them (pxl-spec bake/tile/terrain.rs `ways_of`). Its
+/// cells are its windows' (`Cells`).
 #[derive(Clone, Copy)]
 pub struct TileView<'a> {
-    pub cells: &'a [GroundId],
-    pub heights: &'a [i16],
-    /// Its ways' bound by square and its bound's levels (pxl-spec
-    /// bake/tile/terrain.rs `levels`), made from its lines and cells.
     pub ways: &'a [[i16; 2]],
-    pub levels: &'a [i32],
     pub separation: &'a crate::bake::separation::Separation,
 }
 
@@ -82,27 +81,20 @@ pub struct TileSource<'a> {
     pub n: u32,
 }
 
-/// The CPU holds a cell's own look alone: its four are it four times, as a leaf's.
-impl pxl_portable::ground::Tile for TileView<'_> {
-    fn look(&self, x: u32, y: u32) -> u32 {
-        pxl_portable::ground::word([u32::from(self.cells[GROUND.cell_index(x, y) as usize]); 4])
-    }
-    fn height(&self, x: u32, y: u32) -> i32 {
-        i32::from(self.heights[GROUND.cell_index(x, y) as usize])
-    }
+/// The ground's cells as a reader holds them (pxl-kernel
+/// layer/terrain/window.rs).
+pub trait Cells {
+    /// The cell `g` at zoom `cell`, off the finest window holding it present
+    /// (pxl-portable `window::find`): its four looks and its height; `void`
+    /// at sea level where none does.
+    fn cell(&self, cell: Zoom, g: [i32; 2]) -> (u32, i32);
 }
 
-/// The CPU draws the ways: a cell reaches its height and its square's ways.
-impl pxl_portable::ground::Bound for TileView<'_> {
-    fn cell(&self, x: u32, y: u32) -> [i32; 2] {
-        crate::bake::tile::terrain::cell_bound(self.heights, self.ways, x, y)
-    }
-    fn level(&self, j: u32, at: [u32; 2]) -> i32 {
-        crate::bake::tile::terrain::level_bound(self.levels, self.ways, j, at)
-    }
-}
-
-pub struct Around<'a> {
+pub struct Around<'a, C> {
+    pub cells: C,
+    /// The asked tile's first cell, at its own cells' zoom `zoom`.
+    pub first: [i64; 2],
+    pub zoom: Zoom,
     pub own: TileSource<'a>,
     /// None where the ring does not reach or nothing is drawn; those cells are
     /// `own`'s where it holds them, a coarser tile standing in, and else not
@@ -120,29 +112,13 @@ pub const fn beside_index(qx: i64, qy: i64) -> usize {
     (if k > 4 { k - 1 } else { k }) as usize
 }
 
-impl<'a> Around<'a> {
-    /// What draws the drawn tile's cell `at`, counted from the own tile's
-    /// first: the own tile or the one beside it, the cell's place there, and
-    /// which of the nine it is read as.
-    fn of(&self, at: [i64; 2]) -> (&TileSource<'a>, [i64; 2], [i64; 2]) {
-        let q = ancestor_of(at, GROUND.tile_cell_shamt());
-        if q == [0, 0] {
-            return (&self.own, at, q);
-        }
-        match &self.beside[beside_index(q[0], q[1])] {
-            Some(s) => (s, offset_in(at, GROUND.tile_cell_shamt()), q),
-            None => (&self.own, at, [0, 0]),
-        }
-    }
-}
-
-/// The drawn tile's cells `x0..` of row `y`, counted from the own tile's
-/// first, into `out`: each its look and its height in leaf cells; `void`
-/// where nothing is known.
-fn read_row(around: &Around, y: i64, x0: i64, out: &mut [(u32, i32)]) {
+/// The asked tile's cells `x0..` of row `y`, counted from its first, into
+/// `out`: each its looks and its height in leaf cells, off the windows,
+/// beside it as in it; `void` where nothing is known.
+fn read_row(around: &Around<impl Cells>, y: i64, x0: i64, out: &mut [(u32, i32)]) {
     for (v, x) in out.iter_mut().zip(x0..) {
-        let (s, at, _) = around.of([x, y]);
-        *v = read(&s.tile, [0, 1].map(|a| (s.origin[a] + at[a]) as i32), s.n);
+        let g = [wrap_index(around.zoom, (around.first[0] + x) as i32), (around.first[1] + y) as i32];
+        *v = around.cells.cell(around.zoom, g);
     }
 }
 
@@ -214,7 +190,7 @@ impl Grid {
     /// whose own tile is at `tile` with its first cell, at `cell`, at
     /// `tile_first`. Past the service area there is no ground, and at the
     /// leaves the area is walled from inside (`wall_off`).
-    pub fn read(&mut self, around: &Around, cell: Zoom, tile: Zoom, tile_first: [i64; 2], first: [i64; 2], span: u32) -> Result<(), Refused> {
+    pub fn read(&mut self, around: &Around<impl Cells>, cell: Zoom, tile: Zoom, tile_first: [i64; 2], first: [i64; 2], span: u32) -> Result<(), Refused> {
         let n = (span * span) as usize;
         fit(&mut self.top, n, 0)?;
         fit(&mut self.look, n, sentinel::void)?;
@@ -296,7 +272,7 @@ impl Grid {
     /// Each cell's ways off the lines of the tile its height is read from:
     /// a way at grade recolors its face, a bore takes the ground out over its
     /// floor, and a deck and its pier stand over the ground.
-    fn ways(&mut self, around: &Around, tile_first: [i64; 2], k: i32) -> Result<(), Refused> {
+    fn ways(&mut self, around: &Around<impl Cells>, tile_first: [i64; 2], k: i32) -> Result<(), Refused> {
         let mut crossing = core::mem::take(&mut self.crossing);
         crossing.clear();
         let span = i64::from(self.span);

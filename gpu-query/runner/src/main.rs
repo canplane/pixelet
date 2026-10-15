@@ -14,7 +14,7 @@
 //! the surface's 4 × 4 sum differs here where its WGSL is right; a browser's
 //! WebGPU compiles WGSL with its own compiler, not Naga.
 
-use pxl_portable::ground::{self, Tile, ELE_PADDED_SPAN, TILE_CELLS};
+use pxl_portable::ground::{self, ELE_PADDED_SPAN, TILE_CELLS};
 use pxl_portable::LEAF_CELL;
 use pxl_spec::procedural::{node_seed, Cave};
 use wgpu::util::DeviceExt;
@@ -36,7 +36,7 @@ struct Made {
     heights: Vec<i16>,
 }
 
-impl Tile for Made {
+impl Made {
     fn look(&self, x: u32, y: u32) -> u32 {
         u32::from(self.looks[(y * TILE_CELLS + x) as usize])
     }
@@ -76,7 +76,7 @@ fn made() -> Made {
 
 /// pxl-portable's answer for a leaf cell, in `ground_cs`'s bits.
 fn cpu_ground(tile: &Made, z: i32, [x, y]: [u32; 2]) -> u32 {
-    let (look, h) = ground::read(tile, [x as i32, y as i32], 1);
+    let (look, h) = (tile.look(x, y), tile.height(x, y));
     let cell = ground::Cell {
         look,
         top: ground::blocks(LEAF_CELL, h as f32),
