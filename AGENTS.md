@@ -8,11 +8,10 @@ the tree, is that picture at the size of one loader.
 
 - **The eye decides.** The view is a grid of angular cells about the eye,
   one ray a cell; only what those rays observe is drawn, by the same rule
-  wherever the eye is. A chunk is a cube of world cells at one zoom; the
-  zoom it is observed at is the one whose block, drawn whole, spans at least
-  a cell of the camera grid at its distance.
+  wherever the eye is. A block is observed at the zoom whose block, drawn
+  whole, spans at least a cell of the camera grid at its distance.
 - **The query is the only seam.** Every reader of the world — a ray, a
-  chunk, a walk, an edit — asks the same query directly for what is in a
+  walk, an edit, a placement — asks the same query directly for what is in a
   node at its zoom. Each source answers from its own level of detail; its
   storage representation stays behind the query.
 - **Drawing and mechanics compose the same blocks** (`pxl-spec block/`):
@@ -30,8 +29,8 @@ the tree, is that picture at the size of one loader.
 - **Dependencies point one way:** turn, door and shell (the UI's way in)
   wire everything from the top, and nothing below names them; control,
   which the door's events enter, moves the eye over the view and asks the
-  world's query, naming neither scene nor chunk, whose share of what it
-  decides the turn hands down; scene → chunk → view → query → layer, an
+  world's query, naming no scene, whose share of what it
+  decides the turn hands down; scene → view → query → layer, an
   order and not a path: the dependencies form a DAG, not a pipeline, and an
   edge may skip a step but never points up; io and the turn's edge and
   phases below everyone, io as transport; leaves (settings, models,
