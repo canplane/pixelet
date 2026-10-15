@@ -327,7 +327,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
 /// What moved this turn, told to what reads it: the tiles whose answer moved
 /// (identities, not contents, which a tile's identity fixes) and where the
 /// objects were written. Taken after arrivals are admitted, before the
-/// layers observe and the chunks compare their sources.
+/// layers observe.
 fn changes_step() {
     static MOVED: Global<[Vec<pxl_spec::space::layer::tile::Tile>; 4]> = Global::new();
     static WRITTEN: Global<Vec<Aabb>> = Global::new();

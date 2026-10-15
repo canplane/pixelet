@@ -348,12 +348,10 @@ fn walk_to(from: [f64; 2], stands: f64, to: [f64; 2], p: &CompanionProps) -> Opt
     Some(([at[0], at[1]], under(at[2])))
 }
 
-/// The floor `stands` as the chunks compose it under `at`: the world asked at
-/// the zoom the camera grid at `tau` takes there from the eye, as a chunk takes
-/// its own. Not the box a coarse chunk draws, which only summarizes the cells
-/// it folds and can stand off this by up to a grid cell; a folded cell is
-/// struck by nothing. A coarser answer is taken, as a chunk draws its
-/// ancestors' where its own is not held.
+/// The floor `stands` as the eye's rays draw it under `at`: the world asked
+/// at the zoom the camera grid at `tau` takes there from the eye. A coarser
+/// answer is taken where that zoom is not held, as a ray draws the ground it
+/// has.
 fn drawn_floor(at: [f64; 2], stands: f64, p: &CompanionProps) -> f64 {
     let center = [at[0], at[1], over(stands)];
     let eye = to_world(&p.eye);

@@ -109,7 +109,6 @@ pub fn stopped() -> bool {
     *STOPPED.get(|| false)
 }
 
-
 static DEVELOPMENT: Global<bool> = Global::new();
 
 /// Development builds offer the settings schema.json marks `dev`.
