@@ -230,7 +230,7 @@ Everything above is implemented in more than one language, and the implementatio
 
 - `kit`: `abi` `codec` `collection` `math` `status` `wire` `golden` as the Rust, plus `lang` (comparators, iterators, types) and `env` (feature detection); no `alloc`, since a TypeScript program has no linear heap of its own, and no `bug`, since a thrown error carries its stack.
 - `host`: `mem` the reservation · `ipc` directory, frame, ring, stream, sys, the host's doorbell · `sched` quantum, **strobe** · `abi` commands, handles.
-- `gpu`: the ops and WebGPU's enumerations from `spec/gpu/`.
+- `gpu`: the ops and WebGPU's enumerations from `spec/gpu/`, and `host`, a stream's calls run on a WebGPU device.
 
 **C++** (`cpp/`)
 
