@@ -3,8 +3,7 @@
 //! What is in each block of the world, by one rule
 //! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md): the ground's
 //! grid, each cell a block shifted up to its height (`bicubic`); then the caves, the ways off the ground and what is
-//! placed, each written over the one before. `at` answers one block, and
-//! `Blocks` holds a chunk's as a drawing of it asks them of the world.
+//! placed, each written over the one before. `at` answers one block.
 
 use fnv::FnvHashMap;
 
@@ -498,67 +497,3 @@ impl Grid {
 
 /// The six blocks across a block's faces.
 const NEAR: [[i64; 3]; 6] = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-
-/// Whether shading a block's faces reads the block at `o` about it
-/// (pxl-portable `mask.rs` `mask`): every one beside it and over and
-/// under those, the two over and under it, and the four at its corners and
-/// over them; not the four under its corners, which no face's shading reads.
-pub fn shades([x, y, z]: [i64; 3]) -> bool {
-    let corner = x.abs() == 1 && y.abs() == 1;
-    [x, y, z] != [0, 0, 0] && !(corner && z == -1)
-}
-
-/// A chunk's blocks as drawing what the rays stopped on in it reads them
-/// (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md,
-/// "Observation determines materialization"): the blocks the rays stopped
-/// on, which alone are drawn, each whole, and the blocks about each its
-/// shading reads (`shades`),
-/// each as the world's one query answers it (`pxl-kernel query/block.rs`
-/// `World::compose`); no other block is asked.
-#[derive(Default)]
-pub struct Blocks {
-    /// The blocks the rays stopped on, each once.
-    pub seen: Vec<[i64; 3]>,
-    /// The chunk's first block, at its cells' zoom.
-    first: [i64; 3],
-    /// What each block asked is; none is void or air.
-    asked: FnvHashMap<[i64; 3], Option<Block>>,
-}
-
-impl Blocks {
-    /// The chunk whose first block is `first`, nothing asked yet.
-    pub fn begin(&mut self, first: [i64; 3]) {
-        self.seen.clear();
-        self.asked.clear();
-        self.first = first;
-    }
-
-    pub fn first(&self) -> [i64; 3] {
-        self.first
-    }
-
-    /// Block `b` is one a ray stopped on.
-    pub fn see(&mut self, b: [i64; 3]) -> Result<(), Refused> {
-        try_push(&mut self.seen, b)
-    }
-
-    /// Whether block `b` was asked.
-    pub fn asked(&self, b: [i64; 3]) -> bool {
-        self.asked.contains_key(&b)
-    }
-
-    /// What block `b` is, as the world's one query answered it.
-    pub fn put(&mut self, b: [i64; 3], block: Option<Block>) -> Result<(), Refused> {
-        if self.asked.len() == self.asked.capacity() {
-            self.asked.try_reserve(self.asked.len().max(16))?;
-        }
-        self.asked.insert(b, block);
-        Ok(())
-    }
-
-    /// What block `b` is as it was answered, none for void or air; not
-    /// asked, none of that either.
-    pub fn block(&self, b: [i64; 3]) -> Option<Option<Block>> {
-        self.asked.get(&b).copied()
-    }
-}

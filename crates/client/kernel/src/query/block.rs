@@ -5,11 +5,9 @@
 //! node.rs). Neither reads a layer's storage.
 
 use pxl_spec::bake::tile::terrain::GroundId;
-use pxl_spec::block::sample::{beside_index, shades, Around, Blocks, Grid, Refused};
-use pxl_spec::space::camera::grid::CHUNK_STEPS;
+use pxl_spec::block::sample::{beside_index, Around, Grid, Refused};
 use pxl_spec::space::coord::world::wrap_index;
 use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
@@ -126,44 +124,6 @@ impl<'a> World<'a> {
                 })
             })
         })
-    }
-    /// A chunk's blocks, into `into`, as drawing `seen`, the blocks the
-    /// rays stopped on in it, reads them
-    /// (doc/minutes/20261012-the-ground-is-a-
-    /// grid-then-overwrites.md, "Observation determines materialization"):
-    /// each seen block, drawn whole, and the blocks about it its shading
-    /// reads (`shades`), each asked of the world's one
-    /// query (`World::block`) once, and no other. `cell` is the chunk's cells'
-    /// zoom. Nothing where a block asked is not held.
-    pub fn compose(&self, (_, at): Node<3>, cell: Zoom, seen: impl Iterator<Item = [i64; 3]>, into: &mut Blocks) -> Answer<Result<(), Refused>> {
-        into.begin(at.map(|v| v << CHUNK_STEPS));
-        let mut lack = None;
-        for b in seen {
-            if let Err(e) = into.see(b) {
-                return Answer::Exact(Err(e));
-            }
-            let about = (0..27).map(|d| [d % 3 - 1, d / 3 % 3 - 1, d / 9 - 1]).filter(|&o| shades(o));
-            for n in core::iter::once(b).chain(about.map(|o| [b[0] + o[0], b[1] + o[1], b[2] + o[2]])) {
-                if into.asked(n) {
-                    continue;
-                }
-                let block = match self.block((cell, n)) {
-                    Answer::Nothing(t) => return Answer::Nothing(t),
-                    Answer::Coarser(v, t) => {
-                        lack.get_or_insert(t);
-                        v
-                    }
-                    Answer::Exact(v) => v,
-                };
-                if let Err(e) = into.put(n, block) {
-                    return Answer::Exact(Err(e));
-                }
-            }
-        }
-        match lack {
-            Some(t) => Answer::Coarser(Ok(()), t),
-            None => Answer::Exact(Ok(())),
-        }
     }
 }
 
