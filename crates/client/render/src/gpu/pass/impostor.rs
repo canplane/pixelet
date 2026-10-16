@@ -116,9 +116,14 @@ impl ImpostorPass {
     }
 
     pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &mut DecorPass, blocks: &Blocks) {
-        let due: Vec<(usize, Baked)> = (0..GROUPS)
-            .filter_map(|k| self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w)).map(|w| (k, w)))
-            .collect();
+        // The groups whose model or extent moved since baked, each once.
+        let (mut due, mut len) = ([(0, Baked::default()); GROUPS], 0);
+        for k in 0..GROUPS {
+            if let Some(w) = self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w)) {
+                (due[len], len) = ((k, w), len + 1);
+            }
+        }
+        let due = &due[..len];
         if due.is_empty() {
             return;
         }
