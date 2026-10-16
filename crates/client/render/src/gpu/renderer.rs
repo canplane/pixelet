@@ -733,10 +733,12 @@ struct GroundBuffers {
     /// Per square place (`window::SQUARES`), its cells' way back: the fill
     /// the next landing must be of (its ticket 0 where none is asked), the
     /// buffer its cells are copied into and mapped back through, and that
-    /// mapping's own word (`read_back`).
+    /// mapping's own word (`read_back`), which the host writes: held where
+    /// the guest's allocator puts it, inside the region the host addresses,
+    /// as an arriving image's word is. A static is outside it on a device.
     asked: [CellsBack; SQUARES as usize],
     reads: [u32; SQUARES as usize],
-    mapping: [u32; SQUARES as usize],
+    mapping: Box<[u32; SQUARES as usize]>,
     heights_built: Built,
     heights_group: u32,
     bound_built: Built,
@@ -936,7 +938,7 @@ impl ScreenCellsPass {
                 fresh_len: 0,
                 asked: [CellsBack::default(); SQUARES as usize],
                 reads: core::array::from_fn(|_| buffer(BACK_WORDS * 4, buffer_usage::MAP_READ | buffer_usage::COPY_DST)),
-                mapping: [0; SQUARES as usize],
+                mapping: Box::new([0; SQUARES as usize]),
                 heights_built,
                 heights_group,
                 bound_built,
