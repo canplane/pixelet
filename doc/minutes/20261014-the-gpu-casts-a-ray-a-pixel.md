@@ -30,6 +30,7 @@ of 20261012.
 **One source, two compilers.** `pxl-portable` (`crates/portable`,
 `#![no_std]`, `gpu-portable` in its header) holds what the CPU and the GPU
 both compute:
+
 - the zooms and the lattices;
 - a node's seed and the caves;
 - the block catalog;
@@ -45,6 +46,7 @@ says whether it is current, so no everyday build needs rust-gpu.
 **What the source cannot hold.** WGSL has no u64, i64, f64, u8 or i16, no
 infinity and no recursion, and rust-gpu lowers no enum with data. The source
 is written to that:
+
 - hashes are u32 over i32 cells (xpute-kit `math::rng` `derive_seed_u32`,
   `5e4115cd2`);
 - zooms are u32;
@@ -55,6 +57,7 @@ last bit between the two sides. No tolerance is added for it.
 
 **The boundary.** The GPU reads the world only from what the kernel uploads,
 and only data and call records cross:
+
 - compute pipelines, passes and dispatches;
 - one upload op that names its bytes by address and length in linear memory
   (`a42022dfd`).
@@ -77,6 +80,7 @@ own compiler and is not affected. `node_seed` is unrolled for it (`[naga]`).
 ## Where it stands, measured
 
 The setup:
+
 - M1 Max, Chrome;
 - the eye pinned by `?eye=lon,lat,dist,polar,azimuth` (`2ff4da2a9`);
 - fps is rAF over 5 s;
@@ -85,22 +89,22 @@ The setup:
 Parity at `34baff12e`: 0 differing rays of 2,288,328 (GPU full), 0 of
 572,596 (GPU half) and 0 of 9,906 (CPU lane).
 
-| | fps |
-| --- | --- |
+|      | fps            |
+| ---- | -------------- |
 | full | 2.5 → 3.5 → ~4 |
-| half | ~13.5 |
+| half | ~13.5          |
 
 Steps, the nodes a ray asks about: median 48, p99 about 134.
 
 Where full's frame goes, each part added to the one before:
 
-| | ms |
-| --- | --- |
-| the descent alone (V1) | 14 |
-| the node queries | ~89 |
+|                                         | ms   |
+| --------------------------------------- | ---- |
+| the descent alone (V1)                  | 14   |
+| the node queries                        | ~89  |
 | the ground's heights, bicubic per query | ~148 |
-| the wall's neighbour reads | ~18 |
-| past the area | ~6 |
+| the wall's neighbour reads              | ~18  |
+| past the area                           | ~6   |
 
 The walk is cheap. Its steps are the order of the references' below. The
 cost is in what one step does. A node query reads a tile's raw samples,
