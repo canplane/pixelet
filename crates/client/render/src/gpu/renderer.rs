@@ -21,9 +21,11 @@ use crate::frame::screen_cells::SCREEN_CELLS_MAX;
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, frame_begin, frame_commit, frame_room, gpu, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
+use crate::gpu::api::{
+    buffer_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, frame_room, gpu, pass_desc, release, room, texture_usage, word_bytes, Device, Format, Gpu, Load, Stamp,
+};
 use crate::gpu::api_spec::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
-use crate::gpu::api_spec::{dimension, format, load, resource, surface_role};
+use crate::gpu::api_spec::{resource, surface_role};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
 use crate::gpu::clouds::{self, CloudPass};
 use crate::gpu::grown::{DecorFrame, Drawn, Grown};
@@ -261,17 +263,16 @@ pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
 }
 
 pub fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: [u32; 5], air: [u32; AIR_WORDS]) -> u32 {
-    let id = object();
     let mut e = [0u32; 10 + AIR_WORDS];
     e[..5].copy_from_slice(&buffer_entry(0, frame));
     e[5..10].copy_from_slice(&ao);
     e[10..].copy_from_slice(&air);
-    g.bind_group(id, layout, &e);
-    id
+
+    g.bind_group(layout, &e)
 }
 
 /// Each skin image as one texture's view, made the first time a skin binds it:
-/// the host lets a decoded image go as it uploads it (`Gpu::image_texture`), so
+/// an image's texture is taken once (`Gpu::image_texture`), so
 /// a skin made again, or by another pass, binds what is here. As many as the
 /// skins the asset table names.
 static SKIN_VIEWS: Global<Vec<(u32, u32)>> = Global::new();
@@ -281,17 +282,14 @@ fn skin_view(g: &Gpu, image: u32) -> u32 {
     if let Some(&(_, view)) = views.iter().find(|&&(i, _)| i == image) {
         return view;
     }
-    let (texture, view) = (object(), object());
-    g.image_texture(texture, image);
-    g.view(view, texture, dimension::D2, 0, 1, 0, 1);
+    let texture = g.image_texture(image);
+    let view = g.view(texture, false, 0, 1, 0, 1);
     views.push((image, view));
     view
 }
 
 pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> u32 {
-    let group = object();
-    g.bind_group(group, layout, &[0, resource::VIEW, skin_view(g, image), 0, 0, 1, resource::SAMPLER, sampler, 0, 0]);
-    group
+    g.bind_group(layout, &[0, resource::VIEW, skin_view(g, image), 0, 0, 1, resource::SAMPLER, sampler, 0, 0])
 }
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
@@ -452,12 +450,7 @@ impl Blocks {
         if !room(self.len[i]) {
             return false;
         }
-        let buffer = object();
-        g.buffer(
-            buffer,
-            buffer_size(self.len[i]),
-            buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST,
-        );
+        let buffer = g.buffer(buffer_size(self.len[i]), buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(buffer, 0, memory(self.at[i], self.len[i] & !3));
         self.buffer[i] = buffer;
         self.group[i] = 0;
@@ -564,8 +557,7 @@ impl Blocks {
     pub fn group(&mut self, g: &Gpu, handle: u32, layout: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
         if self.group[i] == 0 {
-            let id = object();
-            g.bind_group(id, layout, &buffer_entry(0, self.buffer[i]));
+            let id = g.bind_group(layout, &buffer_entry(0, self.buffer[i]));
             self.group[i] = id;
         }
         Some(self.group[i])
@@ -578,13 +570,6 @@ fn blocks() -> &'static mut Blocks {
     BLOCKS.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
 }
 
-#[derive(Clone, Copy)]
-struct Device {
-    align: u32,
-    timestamps: bool,
-}
-
-static DEVICE: Global<Option<Device>> = Global::new();
 static RENDERER: Global<Option<Renderer>> = Global::new();
 
 static REDRAW: Global<bool> = Global::new();
@@ -593,19 +578,14 @@ static REDRAW: Global<bool> = Global::new();
 /// power of two no larger, so a larger one is no device's.
 pub const UNIFORM_ALIGN_MAX: u32 = 256;
 
-pub fn gpu_created(align: u32, timestamps: bool) {
-    DEVICE.set(Some(Device { align, timestamps }));
-}
-
 pub fn device_ready() -> bool {
-    DEVICE.get(|| None).is_some()
+    device().is_some()
 }
 
 pub fn gpu_lost() {
-    DEVICE.set(None);
     RENDERER.set(None);
     SKIN_VIEWS.set(Vec::new());
-    forget_objects();
+    device_lost();
     blocks().lose();
     surfaces_lost();
 }
@@ -638,10 +618,9 @@ struct DebugPass {
 
 impl DebugPass {
     fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> DebugPass {
-        let built = pipelines.build(g, PIPELINE_DEBUG, format::CANVAS);
-        let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, format::CANVAS);
-        let frame_group = object();
-        g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
+        let built = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
+        let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
+        let frame_group = g.bind_group(built.layouts[0], &buffer_entry(0, frame_buffer));
         DebugPass {
             built,
             faces,
@@ -654,10 +633,8 @@ impl DebugPass {
     /// outlives its frame.
     fn prepare(&mut self, g: &Gpu, draws: &Draws) {
         while self.sets.len() < draws.of(PIPELINE_DEBUG).len() {
-            let buffer = object();
-            g.buffer(buffer, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            let group = object();
-            g.bind_group(group, self.built.layouts[1], &buffer_entry(0, buffer));
+            let buffer = g.buffer(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            let group = g.bind_group(self.built.layouts[1], &buffer_entry(0, buffer));
             self.sets.push((buffer, group));
         }
     }
@@ -682,8 +659,7 @@ impl DebugPass {
         // With no faces the lines' pass clears the depth itself.
         let faced = sets().any(|s| s.4 > 0);
         if faced {
-            let pass = object();
-            g.pass(pass, encoder, &pass_desc(0, load::CLEAR, depth, load::CLEAR, 0.0, stamp.pass()));
+            let pass = g.pass(encoder, &pass_desc(0, Load::Clear, depth, Load::Clear, 0.0, stamp.pass()));
             g.set_pipeline(pass, self.faces.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
             for (k, _, block, lines, faces) in sets().filter(|s| s.4 > 0) {
@@ -692,11 +668,9 @@ impl DebugPass {
                 g.draw(pass, faces, 1, 0, 0);
             }
             g.end(pass);
-            release(pass);
         }
-        let pass = object();
-        let depth_load = if faced { load::LOAD } else { load::CLEAR };
-        g.pass(pass, encoder, &pass_desc(canvas, load::LOAD, depth, depth_load, 0.0, stamp.pass()));
+        let depth_load = if faced { Load::Load } else { Load::Clear };
+        let pass = g.pass(encoder, &pass_desc(canvas, Load::Load, depth, depth_load, 0.0, stamp.pass()));
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         for (k, _, block, lines, _) in sets() {
@@ -706,7 +680,6 @@ impl DebugPass {
             g.draw(pass, 6, lines / 2, 0, 0);
         }
         g.end(pass);
-        release(pass);
     }
 }
 
@@ -797,13 +770,11 @@ const LEVEL_STRIDE: u32 = UNIFORM_ALIGN_MAX;
 
 impl ScreenCellsPass {
     fn new(g: &Gpu, pipelines: &mut Pipelines, sky_buffer: u32) -> ScreenCellsPass {
-        let built = pipelines.build(g, PIPELINE_SCREEN_CELLS, format::CANVAS);
+        let built = pipelines.build(g, PIPELINE_SCREEN_CELLS, g.canvas());
         let words = look_words();
-        let looks = object();
-        g.buffer(looks, word_bytes(2 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let looks = g.buffer(word_bytes(2 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(looks, 0, bytes(&words));
-        let eye_at = object();
-        g.buffer(eye_at, word_bytes(8), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let eye_at = g.buffer(word_bytes(8), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let mut p = ScreenCellsPass {
             built,
             group: 0,
@@ -830,8 +801,7 @@ impl ScreenCellsPass {
             release(self.lane);
         }
         self.room = cells;
-        self.lane = object();
-        g.buffer(self.lane, word_bytes(4 * (1 + cells)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        self.lane = g.buffer(word_bytes(4 * (1 + cells)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         self.regroup(g);
         if let (Some(c), Some(gb)) = (self.cast.as_mut().filter(|c| c.tangents != 0 && c.shards != 0), &self.ground) {
             c.group = cast_group(g, c, gb.ground, self.lane);
@@ -857,8 +827,7 @@ impl ScreenCellsPass {
         e.extend(buffer_entry(19, self.sky_buffer));
         e.extend(buffer_entry(20, self.looks));
         e.extend(buffer_entry(21, self.eye_at));
-        self.group = object();
-        g.bind_group(self.group, self.built.layouts[0], &e);
+        self.group = g.bind_group(self.built.layouts[0], &e);
     }
 
     /// Each held tile the GPU does not yet hold handed to its frame, copied
@@ -867,20 +836,15 @@ impl ScreenCellsPass {
     /// no eye's.
     fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: GroundSquares) {
         let gb = self.ground.get_or_insert_with(|| {
-            let buffer = |size: u32, usage: u32| {
-                let id = object();
-                g.buffer(id, size, usage);
-                id
-            };
+            let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let (storage, squares) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, ground.squares);
             let frames_buffer = buffer(squares * SQUARE_BYTES, storage | buffer_usage::COPY_SRC);
             let fresh = buffer(word_bytes(2 * squares as usize), storage);
             let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &HEIGHTS_GROUP);
-            let heights_group = object();
             let mut entries = [0u32; 10];
             entries[..5].copy_from_slice(&buffer_entry(0, fresh));
             entries[5..].copy_from_slice(&buffer_entry(1, frames_buffer));
-            g.bind_group(heights_group, heights_built.layouts[0], &entries);
+            let heights_group = g.bind_group(heights_built.layouts[0], &entries);
             let mut entries = [0u32; 15];
             // Each level's number in its slot, written once.
             let levels = buffer(LEVELS * LEVEL_STRIDE, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
@@ -888,11 +852,10 @@ impl ScreenCellsPass {
                 g.write_buffer(levels, (j - 1) * LEVEL_STRIDE, bytes(&[j, 0, 0, 0]));
             }
             let bound_built = pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP);
-            let bound_group = object();
             entries[..5].copy_from_slice(&[0, resource::BUFFER, levels, 0, 16]);
             entries[5..10].copy_from_slice(&buffer_entry(1, fresh));
             entries[10..].copy_from_slice(&buffer_entry(2, frames_buffer));
-            g.bind_group(bound_group, bound_built.layouts[0], &entries);
+            let bound_group = g.bind_group(bound_built.layouts[0], &entries);
             GroundBuffers {
                 ground: frames_buffer,
                 fresh,
@@ -941,11 +904,7 @@ impl ScreenCellsPass {
         };
         if self.cast.is_none() {
             let built = pipelines.build_compute(g, SHADER_CAST, &CAST_GROUP);
-            let buffer = |size: u32, usage: u32| {
-                let id = object();
-                g.buffer(id, size, usage);
-                id
-            };
+            let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             let c = CastBuffers {
                 built,
@@ -976,8 +935,7 @@ impl ScreenCellsPass {
                 release(c.shards);
             }
             c.shard_room = cast.shards.len();
-            c.shards = object();
-            g.buffer(c.shards, word_bytes(4 * c.shard_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+            c.shards = g.buffer(word_bytes(4 * c.shard_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         }
         g.write_buffer(c.shards, 0, bytes(cast.shards));
         let tangents_grow = cast.tangents.len() > c.tangent_room;
@@ -987,8 +945,7 @@ impl ScreenCellsPass {
                 release(c.tangents);
             }
             c.tangent_room = cast.tangents.len();
-            c.tangents = object();
-            g.buffer(c.tangents, word_bytes(c.tangent_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+            c.tangents = g.buffer(word_bytes(c.tangent_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         }
         g.upload_buffer(c.tangents, 0, bytes(cast.tangents));
         // Sized by the lanes' own room, so it is made again only when they grow.
@@ -999,8 +956,7 @@ impl ScreenCellsPass {
                 release(c.overwrites);
             }
             c.overwrite_room = o.room;
-            c.overwrites = object();
-            g.buffer(c.overwrites, word_bytes(2 * o.room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+            c.overwrites = g.buffer(word_bytes(2 * o.room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
             c.overwrite_revision = None;
         }
         if c.overwrite_revision != Some(o.revision) {
@@ -1028,8 +984,7 @@ impl ScreenCellsPass {
     /// written, even when the frame proper is dropped.
     fn grids(&mut self, g: &Gpu, encoder: u32) {
         let Some(c) = self.ground.as_mut().filter(|c| c.fresh_len != 0) else { return };
-        let pass = object();
-        g.compute_pass(pass, encoder);
+        let pass = g.compute_pass(encoder);
         g.set_pipeline(pass, c.heights_built.pipeline);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
         g.dispatch(pass, (SQUARE / 2).div_ceil(BOUND_WORKGROUP), SQUARE.div_ceil(BOUND_WORKGROUP), c.fresh_len);
@@ -1040,27 +995,30 @@ impl ScreenCellsPass {
             g.dispatch(pass, side, side, c.fresh_len);
         }
         g.end(pass);
-        release(pass);
-        // A square's heights and levels lie together, so one read brings both.
+        c.fresh_len = 0;
+    }
+
+    /// The squares the grids wrote read back where the CPU looks them up,
+    /// once the encoder that wrote them is submitted: a square's heights and
+    /// levels lie together, so one read brings both.
+    fn read_back(&mut self, g: &Gpu) {
+        let Some(c) = self.ground.as_mut() else { return };
         for &(square, back) in &c.backs {
-            g.read_buffer(encoder, c.ground, square * SQUARE_BYTES + HEIGHTS_AT * 4, BACK_WORDS * 4, back.cells, back.word, back.ticket);
+            g.read_buffer(c.ground, square * SQUARE_BYTES + HEIGHTS_AT * 4, BACK_WORDS * 4, back.cells, back.word, back.ticket);
         }
         c.backs.clear();
-        c.fresh_len = 0;
     }
 
     /// The GPU's cast into the lane, a ray a cell, where it runs; then the
     /// decor the ground grows over the same world, a candidate a thread.
     fn dispatch(&self, g: &Gpu, encoder: u32) {
         let Some(c) = &self.cast else { return };
-        let pass = object();
-        g.compute_pass(pass, encoder);
+        let pass = g.compute_pass(encoder);
         g.set_pipeline(pass, c.built.pipeline);
         g.set_bind_group(pass, 0, c.group, &[]);
         g.dispatch(pass, c.across[0].div_ceil(CAST_WORKGROUP), c.across[1].div_ceil(CAST_WORKGROUP), 1);
         c.grown.dispatch(g, pass);
         g.end(pass);
-        release(pass);
     }
 
     /// The decor the GPU grew this frame, as the draws read it.
@@ -1083,13 +1041,12 @@ const CAST_WORKGROUP: u32 = 8;
 const BOUND_WORKGROUP: u32 = 8;
 
 fn cast_group(g: &Gpu, c: &CastBuffers, ground: u32, lane: u32) -> u32 {
-    let group = object();
     let mut entries = [0u32; 35];
     for (k, id) in [c.eye, c.window, ground, lane, c.tangents, c.shards, c.overwrites].into_iter().enumerate() {
         entries[5 * k..5 * k + 5].copy_from_slice(&buffer_entry(k as u32, id));
     }
-    g.bind_group(group, c.built.layouts[0], &entries);
-    group
+
+    g.bind_group(c.built.layouts[0], &entries)
 }
 
 /// A variant picker case: its own frame, drawn at one sample with no shadow.
@@ -1105,8 +1062,7 @@ const CASE_FOV_DEG: f64 = 35.0;
 
 impl Case {
     fn new(g: &Gpu, pipelines: &mut Pipelines, ao: &ScreenAo, air: [u32; AIR_WORDS], align: u32) -> Case {
-        let frame_buffer = object();
-        g.buffer(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let frame_buffer = g.buffer(word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let layout = frame_layout(g, pipelines);
         Case {
             frame_buffer,
@@ -1159,19 +1115,16 @@ pub struct Renderer {
 impl Renderer {
     fn new(g: &Gpu, device: Device) -> Renderer {
         let mut pipelines = Pipelines::new();
-        let frame_buffer = object();
-        g.buffer(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let sky_buffer = object();
-        g.buffer(sky_buffer, word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let frame_buffer = g.buffer(word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let sky_buffer = g.buffer(word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buffer);
         let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer);
         let air = atmosphere.entries();
         let stars = StarPass::new(g, &mut pipelines, frame_buffer);
         let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
-        let mips = Mips::new(g, &mut pipelines, format::RGBA8_SRGB);
+        let mips = Mips::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let layers = Layers::new(g);
-        let sky_built = pipelines.build(g, PIPELINE_SKY, format::CANVAS);
-        let sky_group = object();
+        let sky_built = pipelines.build(g, PIPELINE_SKY, g.canvas());
         let moon = ImageMap::new(g, MOON_TEX_SZ, MOON_TEX_SZ);
         let mut sky_entries = [0u32; 20 + AIR_WORDS];
         sky_entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
@@ -1179,21 +1132,14 @@ impl Renderer {
         sky_entries[10..15].copy_from_slice(&[2, resource::VIEW, moon.view, 0, 0]);
         sky_entries[15..20].copy_from_slice(&[3, resource::SAMPLER, moon.sampler, 0, 0]);
         sky_entries[20..].copy_from_slice(&air);
-        g.bind_group(sky_group, sky_built.layouts[0], &sky_entries);
-        let draws_buffer = object();
-        g.buffer(draws_buffer, DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
+        let draws_buffer = g.buffer(DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
         let models = FrameGroups::new(g, frame_layout(g, &mut pipelines), frame_buffer, ao.blank_entry(7), air);
-        let query_set = if device.timestamps {
-            let q = object();
-            g.query_set(q, 2 * GPU_SPAN_NAMES.len() as u32);
-            q
-        } else {
-            0
-        };
+        let query_set = if device.timestamps { g.spans() } else { 0 };
         let mut r = Renderer {
             align: device.align,
             query_set,
-            ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS)],
+            ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, g.canvas()), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, g.canvas())],
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
@@ -1245,8 +1191,7 @@ impl Renderer {
         release(self.bind_group);
         let mut e = self.lit_entries(self.frame_buffer);
         e.extend(buffer_entry(3, self.draws_buffer));
-        self.bind_group = object();
-        g.bind_group(self.bind_group, self.ghost[0].layouts[0], &e);
+        self.bind_group = g.bind_group(self.ghost[0].layouts[0], &e);
         let lit = self.lit_entries(self.frame_buffer);
         self.screen.lit(g, lit);
     }
@@ -1383,8 +1328,7 @@ impl Renderer {
         if uniform_bytes > self.draws_bytes {
             release(self.draws_buffer);
             self.draws_bytes = uniform_bytes * 2;
-            self.draws_buffer = object();
-            g.buffer(self.draws_buffer, self.draws_bytes, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+            self.draws_buffer = g.buffer(self.draws_bytes, buffer_usage::STORAGE | buffer_usage::COPY_DST);
             self.box_groups(g);
         }
         if !uniforms.is_empty() {
@@ -1410,31 +1354,26 @@ impl Renderer {
         let mut stamps: [Stamp; GPU_SPAN_NAMES.len()] = core::array::from_fn(|span| Stamp::of(q, span));
         // What outlives the frame is drawn and submitted ahead of it: from here on
         // the frame only describes itself.
-        let ahead = object();
-        g.encoder(ahead);
+        let ahead = g.encoder();
         self.impostor.bake(g, ahead, &mut self.decor, b);
         self.screen.grids(g, ahead);
         self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR]);
         g.submit(ahead);
-        release(ahead);
+        self.screen.read_back(g);
 
         // The frame proper changes nothing that outlives it, so one too large
         // for the stream is dropped whole and the screen keeps the last.
         frame_begin();
-        let encoder = object();
-        g.encoder(encoder);
+        let encoder = g.encoder();
         self.screen.dispatch(g, encoder);
         if self.screen_ao {
             let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
             self.draw_opaque(g, pass, &draws, b, Stage::Prepass);
             g.end(pass);
-            release(pass);
             self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
         }
-        let canvas_view = object();
-        g.current(world.handle, canvas_view);
-        let pass = object();
-        g.pass(pass, encoder, &pass_desc(canvas_view, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
+        let canvas_view = g.current(world.handle);
+        let pass = g.pass(encoder, &pass_desc(canvas_view, Load::Clear, world.depth_view, Load::Clear, 0.0, stamps[SPAN_WORLD].pass()));
         self.draw_opaque(g, pass, &draws, b, Stage::Lit);
         let mut bound = self.screen.draw(g, pass);
         // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
@@ -1453,20 +1392,17 @@ impl Renderer {
         let mut bound = 0;
         self.decor.draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         g.end(pass);
-        release(pass);
         self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
         self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_DEBUG]);
         self.draw_cases(g, encoder, &draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
+        let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
+        g.submit_frame(encoder, written);
+        release(canvas_view);
         let (mut gpu_ms, mut gpu_spans) = (0.0, [0.0; GPU_SPAN_NAMES.len()]);
         if q != 0 {
-            let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
-            g.timestamps(encoder, q, written);
             gpu_spans = core::array::from_fn(|k| g.gpu_ms(k as u32));
             gpu_ms = g.gpu_ms(GPU_SPAN_NAMES.len() as u32);
         }
-        g.submit(encoder);
-        release(encoder);
-        release(canvas_view);
         let skipped = !frame_commit();
         if skipped {
             REDRAW.set(true);
@@ -1527,13 +1463,10 @@ impl Renderer {
             // No planet: the case is a room of its own.
             u[PLANET + 2] = 0.0;
             g.write_buffer(case.frame_buffer, 0, bytes(&frame));
-            let view_id = object();
-            g.current(s.handle, view_id);
-            let pass = object();
-            g.pass(pass, encoder, &pass_desc(view_id, load::CLEAR, s.depth_view, load::CLEAR, 0.0, stamp.pass()));
+            let view_id = g.current(s.handle);
+            let pass = g.pass(encoder, &pass_desc(view_id, Load::Clear, s.depth_view, Load::Clear, 0.0, stamp.pass()));
             case.skinned.draw(g, pass, core::iter::once(own), blocks(), Stage::Lit, (case.frames.frame, &mut 0));
             g.end(pass);
-            release(pass);
             release(view_id);
         }
     }
@@ -1611,10 +1544,8 @@ fn targets(g: &Gpu, s: &mut Surface) {
     for id in [s.depth_view, s.depth] {
         release(id);
     }
-    s.depth = object();
-    g.texture(s.depth, width, height, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
-    s.depth_view = object();
-    g.view(s.depth_view, s.depth, dimension::D2, 0, 1, 0, 1);
+    s.depth = g.texture(width, height, 1, Format::depth32float, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+    s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
     s.width = width;
     s.height = height;
 }
@@ -1623,7 +1554,7 @@ fn targets(g: &Gpu, s: &mut Surface) {
 pub fn render_frame(input: FrameInput) -> FrameOutput {
     REDRAW.set(false);
     let world = surfaces().find(|s| s.role == surface_role::WORLD);
-    let (Some(g), Some(device), Some(world)) = (gpu(), *DEVICE.get(|| None), world) else {
+    let (Some(g), Some(device), Some(world)) = (gpu(), device(), world) else {
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
         return FrameOutput { redraw: false, stat: None };
     };

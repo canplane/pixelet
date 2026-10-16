@@ -42,14 +42,8 @@ class PlatformModule : Module() {
 
     Function("interrupt") { quotaMs: Double -> PxlGuest.interrupt(quotaMs) }
 
-    /** The device's uniform offset alignment and whether it times its
-     * passes, or null where the system has no GPU. */
-    Function("gpuOpen") { PxlGuest.gpuOpen()?.toList() }
-
-    /** Decodes a PNG or a WebP and holds it for the renderer: its handle, or 0
-     * when it does not decode. Async, so it runs off the JavaScript thread: a
-     * large image costs no turn. */
-    AsyncFunction("imageHold") { handle: Int, file: ByteArray -> PxlGuest.imageHold(handle, file) }
+    /** Whether the device opened; what it is, the kernel reads from the host. */
+    Function("gpuOpen") { PxlGuest.gpuOpen() }
 
     // ---- storage (platform/storage.ts) ----
     //

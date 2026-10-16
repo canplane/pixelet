@@ -10,10 +10,10 @@
 //! window wgpu draws through.
 
 use fnv::FnvHashMap;
-use std::ptr::{null_mut, NonNull};
+use std::ptr::NonNull;
 use std::sync::Mutex;
 
-use jni_sys::{jbyteArray, jclass, jdouble, jint, jintArray, jobject, JNIEnv, JNINativeInterface_};
+use jni_sys::{jboolean, jclass, jdouble, jint, jobject, JNIEnv, JNINativeInterface_};
 use ndk_sys::{ANativeWindow, ANativeWindow_fromSurface, ANativeWindow_release};
 use wgpu::rwh::{AndroidDisplayHandle, AndroidNdkWindowHandle, RawDisplayHandle, RawWindowHandle};
 use xpute_kit::status::bug::OrBug;
@@ -53,48 +53,10 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_memory(env:
     unsafe { make(env, at.cast(), i64::from(bytes)) }
 }
 
-/// Opens the device: its uniform offset alignment and whether it times its
-/// passes, or null where the system has no GPU (surface.rs `pxl_gpu_open`).
-///
-/// # Safety
-/// Called by JNI.
+/// Opens the device: whether it opened (surface.rs `pxl_gpu_open`).
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(env: *mut JNIEnv, _class: jclass) -> jintArray {
-    let (mut align, mut timestamps) = (0u32, 0u32);
-    // SAFETY: our own words.
-    if unsafe { crate::surface::pxl_gpu_open(&raw mut align, &raw mut timestamps) } != 0 {
-        return null_mut();
-    }
-    // SAFETY: the environment JNI called with.
-    let table = unsafe { jni(env) };
-    let words = [align as jint, timestamps as jint];
-    // SAFETY: a fresh array of the two words it is filled with.
-    unsafe {
-        let array = table.NewIntArray.or_bug(Errno::ENOSYS)(env, 2);
-        table.SetIntArrayRegion.or_bug(Errno::ENOSYS)(env, array, 0, 2, words.as_ptr());
-        array
-    }
-}
-
-/// Decodes an image and holds it for the renderer as the kernel's `handle`:
-/// 1, or 0 (image.rs `pxl_image_hold`). Off the kernel's thread, as on an
-/// iPhone.
-///
-/// # Safety
-/// Called by JNI.
-#[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_imageHold(env: *mut JNIEnv, _class: jclass, handle: jint, file: jbyteArray) -> jint {
-    // SAFETY: the environment JNI called with.
-    let table = unsafe { jni(env) };
-    // SAFETY: `file` is the byte array the call was given, copied whole.
-    let bytes = unsafe {
-        let len = table.GetArrayLength.or_bug(Errno::ENOSYS)(env, file);
-        let mut bytes = vec![0u8; len as usize];
-        table.GetByteArrayRegion.or_bug(Errno::ENOSYS)(env, file, 0, len, bytes.as_mut_ptr().cast());
-        bytes
-    };
-    // SAFETY: our own bytes, for the call.
-    unsafe { crate::image::pxl_image_hold(handle as u32, bytes.as_ptr(), bytes.len() as u32) as jint }
+pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(_env: *mut JNIEnv, _class: jclass) -> jboolean {
+    jboolean::from(crate::surface::pxl_gpu_open() == 0)
 }
 
 /// Binds the kernel's surface `handle` to a view's `surface`, through the

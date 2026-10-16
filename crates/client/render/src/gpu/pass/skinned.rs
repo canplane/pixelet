@@ -6,8 +6,10 @@
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::PIPELINE_SKINNED_PREPASS;
-use crate::gpu::api::{bytes, object, release, Gpu};
-use crate::gpu::api_spec::{address, compare, filter, format};
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+
+use crate::gpu::api::{bytes, release, Gpu};
+
 use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, Stage};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{skin_group, Blocks};
@@ -35,11 +37,10 @@ pub struct SkinnedPass {
 
 impl SkinnedPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> SkinnedPass {
-        let sampler = object();
-        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::REPEAT, compare::NONE, 1);
+        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::repeat, None, 1);
         SkinnedPass {
-            lit: pipelines.build(g, PIPELINE_SKINNED, format::CANVAS),
-            prepass: pipelines.build(g, PIPELINE_SKINNED_PREPASS, format::CANVAS),
+            lit: pipelines.build(g, PIPELINE_SKINNED, g.canvas()),
+            prepass: pipelines.build(g, PIPELINE_SKINNED_PREPASS, g.canvas()),
             sampler,
             uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
             skins: [Skin::default(); SKINS],

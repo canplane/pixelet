@@ -1,6 +1,6 @@
 // @pxl/web/platform/web/gpu.ts
 
-import { Command, encode_gpu_ready } from "@/kernel/abi/cmd.spec.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
 import { send_next } from "@/kernel/sched.ts";
 import { Gpu, setGpu } from "@/kernel/gpu.ts";
@@ -41,8 +41,8 @@ export function gpuBoot(): void {
     askAgain();
   };
   tries += 1;
-  void acquireDevice(lost).then((info) => {
-    if (info === null) {
+  void acquireDevice(lost).then((answered) => {
+    if (!answered) {
       if (tries === 1) console.warn(`[gpu] no adapter answered; asking every ${RETRY_MS} ms while the page is shown`);
       if (tries >= TRIES) {
         console.error(`[gpu] no adapter answered in ${tries} requests; nothing can be drawn`);
@@ -56,7 +56,7 @@ export function gpuBoot(): void {
     had = true;
     if (tries > 1) console.info(`[gpu] a device answered after ${tries} requests`);
     tries = 0;
-    send_next(Command.GPU_READY, encode_gpu_ready({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));
+    send_next(Command.GPU_READY);
   }, (err) => {
     console.error("[gpu] the device request failed; nothing can be drawn:", err);
     setGpu(had ? Gpu.Lost : Gpu.Missing);

@@ -252,10 +252,6 @@ export const enum Command {
 
   // ---- the host answers: an I/O the process started, done ----
 
-  /** An image the kernel asked decoded (host.json's IMAGE_DECODE): 0, held for the renderer
-   * as the kernel's `image`, or -errno where the file is not an image the device decodes.
-   * A file that did not come is the open's answer (xpute's SYS_OPENED), not this. */
-  IMAGE_DECODED = 0x1301,
   /** A GPS fix; a field is absent where the browser gave none. */
   SENSOR_POSITION = 0x1202,
   /** An orientation event; a field is absent where the browser gave none. */
@@ -298,7 +294,7 @@ export const enum Command {
   INPUT_WHEEL = 0x1103,
   /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
   INPUT_KEYS = 0x1106,
-  /** A device answered; the kernel's renderer is made on it (crates/client/render/src/gpu/renderer.rs). */
+  /** A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (crates/client/render/src/gpu/api.rs). */
   GPU_READY = 0x1401,
   /** The device went away, and every object on it. */
   GPU_LOST = 0x1402,
@@ -547,16 +543,6 @@ export function read_sensor_stop(b: BranchCursor): SensorStopSignal {
   return { sensor: b.at(0).get<Sensor>() };
 }
 
-/** Command.IMAGE_DECODED's packet. */
-export interface ImageDecoded {
-  image: u32;
-  res: i32;
-}
-
-export function encode_image_decoded(p: ImageDecoded): U8Array {
-  return packet((b) => b.u32(p.image).i32(p.res));
-}
-
 /** Command.SENSOR_POSITION's packet. */
 export interface SensorPosition {
   lon: f64;
@@ -726,16 +712,6 @@ export interface InputKeys {
 
 export function encode_input_keys(p: InputKeys): U8Array {
   return packet((b) => b.i32(p.x).i32(p.y));
-}
-
-/** Command.GPU_READY's packet. */
-export interface GpuReady {
-  min_uniform_offset_alignment: u32;
-  timestamps: boolean;
-}
-
-export function encode_gpu_ready(p: GpuReady): U8Array {
-  return packet((b) => b.u32(p.min_uniform_offset_alignment).bool(p.timestamps));
 }
 
 /** Command.SURFACE_OPEN's packet. */

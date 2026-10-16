@@ -4,8 +4,8 @@
 //! uniform slots written once before the pass, and the draw loop.
 
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
-use crate::gpu::api::{buffer_usage, object, release, Gpu};
-use crate::gpu::api_spec::{format, resource};
+use crate::gpu::api::{buffer_usage, release, Gpu};
+use crate::gpu::api_spec::resource;
 use crate::gpu::atmosphere::AIR_WORDS;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{frame_group, put_f32, put_u32, Scratch};
@@ -18,7 +18,7 @@ pub enum Stage {
 
 /// A layout is shared by its words, so one group 0 serves every model pipeline.
 pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
-    pipelines.build(g, PIPELINE_SKINNED, format::CANVAS).layouts[0]
+    pipelines.build(g, PIPELINE_SKINNED, g.canvas()).layouts[0]
 }
 
 pub struct FrameGroups {
@@ -90,10 +90,8 @@ impl DrawUniforms {
         if need > self.capacity {
             release(self.group);
             release(self.buffer);
-            self.buffer = object();
-            g.buffer(self.buffer, need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            self.group = object();
-            g.bind_group(self.group, layout, &[0, resource::BUFFER, self.buffer, 0, self.bytes]);
+            self.buffer = g.buffer(need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            self.group = g.bind_group(layout, &[0, resource::BUFFER, self.buffer, 0, self.bytes]);
             self.capacity = need;
         }
         let stride = self.stride as usize;

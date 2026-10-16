@@ -9,8 +9,10 @@
 
 use crate::frame::draw::{uniform_of, PIPELINE_BADGE};
 use crate::frame::shader::record::PIPELINE_BADGE_REGION;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
-use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu, Load, Stamp};
+use crate::gpu::api_spec::resource;
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{Blocks, Draws};
@@ -236,14 +238,12 @@ impl BadgePass {
     }
 
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> BadgePass {
-        let sampler = object();
-        g.sampler(sampler, filter::NEAREST, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);
-        let built = pipelines.build(g, PIPELINE_BADGE, format::CANVAS);
-        let frame_group = object();
-        g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
+        let sampler = g.sampler(FilterMode::nearest, FilterMode::linear, MipmapFilterMode::linear, AddressMode::clamp_to_edge, None, 1);
+        let built = pipelines.build(g, PIPELINE_BADGE, g.canvas());
+        let frame_group = g.bind_group(built.layouts[0], &buffer_entry(0, frame_buffer));
         BadgePass {
             built,
-            region_built: pipelines.build(g, PIPELINE_BADGE_REGION, format::RGBA8),
+            region_built: pipelines.build(g, PIPELINE_BADGE_REGION, Format::rgba8unorm),
             numbers: 0,
             numbers_view: 0,
             regions: 0,
@@ -279,24 +279,16 @@ impl BadgePass {
                 release(id);
             }
             self.levels = mip_levels(flush.size, flush.size);
-            self.sheet = object();
-            g.texture(
-                self.sheet,
+            self.sheet = g.texture(
                 flush.size,
                 flush.size,
                 1,
-                format::RGBA8_SRGB,
+                Format::rgba8unorm_srgb,
                 self.levels,
                 texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT,
             );
-            self.sheet_view = object();
-            g.view(self.sheet_view, self.sheet, dimension::D2, 0, self.levels, 0, 1);
-            self.sheet_group = object();
-            g.bind_group(
-                self.sheet_group,
-                self.built.layouts[2],
-                &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0],
-            );
+            self.sheet_view = g.view(self.sheet, false, 0, self.levels, 0, 1);
+            self.sheet_group = g.bind_group(self.built.layouts[2], &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
             live = sheet.live();
             &live
         } else {
@@ -305,8 +297,7 @@ impl BadgePass {
         if slots.is_empty() || self.sheet == 0 {
             return;
         }
-        let encoder = object();
-        g.encoder(encoder);
+        let encoder = g.encoder();
         let mut made = Vec::new();
         let mut drawn = false;
         for &slot in slots {
@@ -332,7 +323,6 @@ impl BadgePass {
             }
         }
         g.submit(encoder);
-        release(encoder);
         // After the submit: a texture let go before it would be gone from the commands that read it.
         for id in made {
             release(id);
@@ -352,31 +342,25 @@ impl BadgePass {
             for id in [self.numbers_view, self.numbers, self.regions_view, self.regions] {
                 release(id);
             }
-            self.numbers = object();
-            g.texture(self.numbers, size.0, size.1, 1, format::RGBA8, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
-            self.numbers_view = object();
-            g.view(self.numbers_view, self.numbers, dimension::D2, 0, 1, 0, 1);
-            self.regions = object();
-            g.texture(self.regions, size.0, size.1, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
-            self.regions_view = object();
-            g.view(self.regions_view, self.regions, dimension::D2, 0, 1, 0, 1);
+            self.numbers = g.texture(size.0, size.1, 1, Format::rgba8unorm, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+            self.numbers_view = g.view(self.numbers, false, 0, 1, 0, 1);
+            self.regions = g.texture(size.0, size.1, 1, Format::depth32float, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+            self.regions_view = g.view(self.regions, false, 0, 1, 0, 1);
             self.regions_size = size;
         }
         let placed = draws.of(PIPELINE_BADGE).filter(|d| d[1] > 0).filter_map(|d| blocks.get(d[0]));
         for (set, (block, _, _)) in self.sets.iter_mut().zip(placed) {
             if set.uniform == 0 {
-                set.uniform = object();
-                g.buffer(set.uniform, word_bytes(BADGE_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+                set.uniform = g.buffer(word_bytes(BADGE_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             }
             if set.block != block || set.depth != depth || set.numbers != self.numbers_view || set.group == 0 {
                 let bound = |layout: u32, before: u32| {
-                    let group = object();
                     let mut e = [0u32; 15];
                     e[..5].copy_from_slice(&buffer_entry(0, set.uniform));
                     e[5..10].copy_from_slice(&buffer_entry(1, block));
                     e[10..].copy_from_slice(&[2, resource::VIEW, before, 0, 0]);
-                    g.bind_group(group, layout, &e);
-                    group
+
+                    g.bind_group(layout, &e)
                 };
                 release(set.group);
                 release(set.region_group);
@@ -411,8 +395,7 @@ impl BadgePass {
             before += d[1];
         }
         // Cleared to no number, and reversed depth to the far plane.
-        let pass = object();
-        g.pass(pass, encoder, &pass_desc(self.numbers_view, load::CLEAR, self.regions_view, load::CLEAR, 0.0, stamp.pass()));
+        let pass = g.pass(encoder, &pass_desc(self.numbers_view, Load::Clear, self.regions_view, Load::Clear, 0.0, stamp.pass()));
         g.set_pipeline(pass, self.region_built.pipeline);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         for (set, d) in self.sets.iter().zip(placed()) {
@@ -420,9 +403,7 @@ impl BadgePass {
             g.draw(pass, 4, d[1], 0, 0);
         }
         g.end(pass);
-        release(pass);
-        let pass = object();
-        g.pass(pass, encoder, &pass_desc(color, load::LOAD, depth, load::READ_ONLY, 0.0, stamp.pass()));
+        let pass = g.pass(encoder, &pass_desc(color, Load::Load, depth, Load::ReadOnly, 0.0, stamp.pass()));
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         g.set_bind_group(pass, 2, self.sheet_group, &[]);
@@ -431,6 +412,5 @@ impl BadgePass {
             g.draw(pass, 4, d[1], 0, 0);
         }
         g.end(pass);
-        release(pass);
     }
 }

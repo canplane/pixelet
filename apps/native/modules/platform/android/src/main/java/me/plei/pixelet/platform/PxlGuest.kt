@@ -25,13 +25,8 @@ object PxlGuest {
   /** The memory, a direct buffer over the whole region the guest took. */
   external fun memory(): ByteBuffer
 
-  /** The device's uniform offset alignment and whether it times its passes,
-   * or null where the system has no GPU. */
-  external fun gpuOpen(): IntArray?
-
-  /** Decodes a PNG or a WebP and holds it for the renderer as the kernel's
-   * `handle`: 1, or 0 when it does not decode. */
-  external fun imageHold(handle: Int, file: ByteArray): Int
+  /** Whether the device opened; what it is, the kernel reads from the host. */
+  external fun gpuOpen(): Boolean
 
   /** Binds the kernel's surface `handle` to `surface`, which the caller
    * keeps until it has unbound it: 0, -2 when no device is open, -3 when the

@@ -42,22 +42,9 @@ public class PlatformModule: Module {
       pxl_interrupt(quotaMs)
     }
 
-    /// The device's uniform offset alignment and whether it times its
-    /// passes, or nil where the system has no GPU.
-    Function("gpuOpen") { () -> [UInt32]? in
-      var align: UInt32 = 0
-      var timestamps: UInt32 = 0
-      return pxl_gpu_open(&align, &timestamps) == 0 ? [align, timestamps] : nil
-    }
-
-    /// Decodes a PNG or a WebP and holds it for the renderer as the kernel's
-    /// `handle`: 1, or 0 when it does not decode. Async, so it runs on the
-    /// module's queue rather than the JavaScript thread: a large image costs
-    /// no turn.
-    AsyncFunction("imageHold") { (handle: UInt32, file: Data) -> UInt32 in
-      file.withUnsafeBytes { bytes in
-        pxl_image_hold(handle, bytes.bindMemory(to: UInt8.self).baseAddress, UInt32(bytes.count))
-      }
+    /// Whether the device opened; what it is, the kernel reads from the host.
+    Function("gpuOpen") { () -> Bool in
+      pxl_gpu_open() == 0
     }
 
     // ---- storage (platform/storage.ts) ----

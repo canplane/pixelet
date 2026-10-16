@@ -8,8 +8,10 @@ use pxl_spec::space::coord::mat4::Mat4;
 use pxl_spec::space::coord::v3::V3;
 
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
-use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu, Load};
+use crate::gpu::api_spec::resource;
 use crate::gpu::atmosphere::AIR_WORDS;
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -39,33 +41,27 @@ pub struct CloudPass {
 
 impl CloudPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [u32; AIR_WORDS]) -> CloudPass {
-        let below = pipelines.build(g, PIPELINE_CLOUDS, format::CANVAS);
-        let above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, format::CANVAS);
-        let tile = object();
-        g.texture(
-            tile,
+        let below = pipelines.build(g, PIPELINE_CLOUDS, g.canvas());
+        let above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, g.canvas());
+        let tile = g.texture(
             TILE_TEXELS,
             TILE_TEXELS,
             1,
-            format::R8,
+            Format::r8unorm,
             mip_levels(TILE_TEXELS, TILE_TEXELS),
             texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT,
         );
-        let tile_view = object();
-        g.view(tile_view, tile, dimension::D2, 0, mip_levels(TILE_TEXELS, TILE_TEXELS), 0, 1);
+        let tile_view = g.view(tile, false, 0, mip_levels(TILE_TEXELS, TILE_TEXELS), 0, 1);
         // Repeated, since the tile meets itself.
-        let tile_sampler = object();
-        g.sampler(tile_sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 1);
-        let uniform = object();
-        g.buffer(uniform, word_bytes(CLOUDS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let group = object();
+        let tile_sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::linear, AddressMode::repeat, None, 1);
+        let uniform = g.buffer(word_bytes(CLOUDS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let mut e = [0u32; 20 + AIR_WORDS];
         e[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
         e[5..10].copy_from_slice(&buffer_entry(1, uniform));
         e[10..15].copy_from_slice(&[2, resource::VIEW, tile_view, 0, 0]);
         e[15..20].copy_from_slice(&[3, resource::SAMPLER, tile_sampler, 0, 0]);
         e[20..].copy_from_slice(&air);
-        g.bind_group(group, below.layouts[0], &e);
+        let group = g.bind_group(below.layouts[0], &e);
         bake(g, pipelines, tile, mip_levels(TILE_TEXELS, TILE_TEXELS));
         CloudPass {
             below,
@@ -114,22 +110,16 @@ pub fn field(eye: [f64; 2], env: &[f32]) -> CloudField {
 }
 
 fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
-    let built = pipelines.build(g, PIPELINE_CLOUD_FIELD, format::R8);
-    let encoder = object();
-    g.encoder(encoder);
-    let level = object();
-    g.view(level, tile, dimension::D2, 0, 1, 0, 1);
-    let pass = object();
-    g.pass(pass, encoder, &pass_desc(level, load::CLEAR, 0, load::CLEAR, 0.0, Stamp::UNTIMED));
+    let built = pipelines.build(g, PIPELINE_CLOUD_FIELD, Format::r8unorm);
+    let encoder = g.encoder();
+    let level = g.view(tile, false, 0, 1, 0, 1);
+    let pass = g.pass(encoder, &pass_desc(level, Load::Clear, 0, Load::Clear, 0.0, None));
     g.set_pipeline(pass, built.pipeline);
     g.draw(pass, 3, 1, 0, 0);
     g.end(pass);
-    for id in [pass, level] {
-        release(id);
-    }
+    release(level);
     g.submit(encoder);
-    release(encoder);
-    let mips = Mips::new(g, pipelines, format::R8);
+    let mips = Mips::new(g, pipelines, Format::r8unorm);
     mips.build(g, tile, levels, 0, 1);
     mips.release();
 }

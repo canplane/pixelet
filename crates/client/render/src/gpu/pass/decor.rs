@@ -7,8 +7,10 @@
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::PIPELINE_DECOR_PREPASS;
-use crate::gpu::api::{buffer_entry, object, release, Gpu};
-use crate::gpu::api_spec::{address, compare, filter, format, resource};
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+
+use crate::gpu::api::{buffer_entry, release, Gpu};
+use crate::gpu::api_spec::resource;
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::model::{bind_mesh, draw_models, put_instances, DrawUniforms, ModelDraw, Stage};
@@ -57,12 +59,11 @@ pub struct DecorPass {
 
 impl DecorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> DecorPass {
-        let sampler = object();
-        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::REPEAT, compare::NONE, 1);
+        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::repeat, None, 1);
         DecorPass {
-            lit: pipelines.build(g, PIPELINE_DECOR, format::CANVAS),
-            ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, format::CANVAS),
-            prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, format::CANVAS),
+            lit: pipelines.build(g, PIPELINE_DECOR, g.canvas()),
+            ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, g.canvas()),
+            prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, g.canvas()),
             sampler,
             uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
             groups: [Group::default(); GROUPS],
@@ -198,8 +199,7 @@ pub(crate) fn block_group(g: &Gpu, held: (u32, u32), block: u32, layout: u32) ->
         return held;
     }
     release(held.1);
-    let id = object();
-    g.bind_group(id, layout, &buffer_entry(0, block));
+    let id = g.bind_group(layout, &buffer_entry(0, block));
     (block, id)
 }
 
@@ -210,7 +210,6 @@ pub(crate) fn uniform_group(g: &Gpu, held: (u32, u32), uniforms: u32, layout: u3
         return held;
     }
     release(held.1);
-    let id = object();
-    g.bind_group(id, layout, &[0, resource::BUFFER, uniforms, 0, DRAW_UNIFORM_BYTES]);
+    let id = g.bind_group(layout, &[0, resource::BUFFER, uniforms, 0, DRAW_UNIFORM_BYTES]);
     (uniforms, id)
 }

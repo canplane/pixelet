@@ -716,25 +716,6 @@
           "section": "the host answers: an I/O the process started, done"
         },
         {
-          "name": "IMAGE_DECODED",
-          "value": 4865,
-          "$doc": [
-            "An image the kernel asked decoded (host.json's IMAGE_DECODE): 0, held for the renderer",
-            "as the kernel's `image`, or -errno where the file is not an image the device decodes.",
-            "A file that did not come is the open's answer (xpute's SYS_OPENED), not this."
-          ],
-          "packet": [
-            {
-              "name": "image",
-              "type": "u32"
-            },
-            {
-              "name": "res",
-              "type": "i32"
-            }
-          ]
-        },
-        {
           "name": "SENSOR_POSITION",
           "value": 4610,
           "$doc": [
@@ -1109,17 +1090,7 @@
           "name": "GPU_READY",
           "value": 5121,
           "$doc": [
-            "A device answered; the kernel's renderer is made on it (crates/client/render/src/gpu/renderer.rs)."
-          ],
-          "packet": [
-            {
-              "name": "min_uniform_offset_alignment",
-              "type": "u32"
-            },
-            {
-              "name": "timestamps",
-              "type": "bool"
-            }
+            "A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (crates/client/render/src/gpu/api.rs)."
           ]
         },
         {

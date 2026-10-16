@@ -59,6 +59,20 @@ macro_rules! wgsl {
     ($($name:literal),+) => { concat!(include_str!(concat!(env!("OUT_DIR"), "/shader/constant.wgsl")), "\n", $(include_str!(concat!(env!("OUT_DIR"), "/shader/", $name, ".wgsl")), "\n"),+) };
 }
 
+/// A compute shader's one entry point, as its source names it.
+pub fn compute_entry(kind: u32) -> &'static str {
+    match kind {
+        SHADER_CAST => "cast_cs",
+        SHADER_BOUND => "bound_cs",
+        SHADER_HEIGHTS => "heights_cs",
+        SHADER_GROWN => "decor_cs",
+        SHADER_GROWN_COUNT => "decor_count_cs",
+        SHADER_GROWN_ARGS => "decor_args_cs",
+        SHADER_GROWN_PLACE => "decor_place_cs",
+        _ => xpute_kit::bug!(EINVAL, kind),
+    }
+}
+
 pub fn source(kind: u32) -> &'static str {
     match kind {
         SHADER_BOX => wgsl!(

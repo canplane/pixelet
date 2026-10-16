@@ -29,17 +29,12 @@ pub mod op {
     /// into lines no wider than the width where it can be; at `at`, how many lines, then
     /// a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
     pub const TEXT_LAYOUT: u32 = 2147483649;
-    /// fd, image: the file opened as `fd` decoded where the device is and held for the
-    /// renderer as `image`, a handle the kernel issued; answered by IMAGE_DECODED. The
-    /// host takes the file's bytes when it runs this, so the kernel may close `fd` in the
-    /// same turn.
-    pub const IMAGE_DECODE: u32 = 2147483651;
     /// weight, px (f32 bits), color (0xRRGGBBAA), at, width, height, x (f32 bits), then
     /// the text's bytes: one line drawn in the platform's own family, starting at x with
     /// the middle of its em box on the middle row, into `width` by `height` pixels at
     /// `at`, RGBA a byte a channel, top row first, alpha not premultiplied
     pub const TEXT_RASTER: u32 = 2147483650;
-    pub const KEYS: &[&str] = &["TEXT_LAYOUT", "IMAGE_DECODE", "TEXT_RASTER"];
+    pub const KEYS: &[&str] = &["TEXT_LAYOUT", "TEXT_RASTER"];
 }
 
 /// The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a

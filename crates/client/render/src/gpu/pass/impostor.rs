@@ -7,8 +7,10 @@
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_IMPOSTOR};
 use crate::frame::shader::record::PIPELINE_IMPOSTOR_BAKE;
-use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, release, texture_usage, Gpu, Stamp};
-use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+
+use crate::gpu::api::{buffer_usage, bytes, pass_desc, release, texture_usage, Format, Gpu, Load};
+use crate::gpu::api_spec::resource;
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::decor::{block_group, uniform_group, DecorPass, GROUPS};
 use crate::gpu::pass::model::{draw_model, draw_models, put_instances, DrawUniforms, ModelDraw};
@@ -55,31 +57,22 @@ fn fit_of(extent: Extent) -> [f32; 4] {
 
 impl ImpostorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> ImpostorPass {
-        let draw = pipelines.build(g, PIPELINE_IMPOSTOR, format::CANVAS);
-        let bake = pipelines.build(g, PIPELINE_IMPOSTOR_BAKE, format::RGBA8_SRGB);
-        let sampler = object();
-        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);
-        let atlas = object();
-        g.texture(
-            atlas,
+        let draw = pipelines.build(g, PIPELINE_IMPOSTOR, g.canvas());
+        let bake = pipelines.build(g, PIPELINE_IMPOSTOR_BAKE, Format::rgba8unorm_srgb);
+        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::linear, AddressMode::clamp_to_edge, None, 1);
+        let atlas = g.texture(
             SPRITE,
             SPRITE,
             GROUPS as u32,
-            format::RGBA8_SRGB,
+            Format::rgba8unorm_srgb,
             1,
             texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
         );
-        let atlas_view = object();
-        g.view(atlas_view, atlas, dimension::D2_ARRAY, 0, 1, 0, GROUPS as u32);
-        let depth = object();
-        g.texture(depth, SPRITE, SPRITE, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT);
-        let depth_view = object();
-        g.view(depth_view, depth, dimension::D2, 0, 1, 0, 1);
-        let fits = object();
-        g.buffer(fits, (GROUPS * 16) as u32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let group = object();
-        g.bind_group(
-            group,
+        let atlas_view = g.view(atlas, true, 0, 1, 0, GROUPS as u32);
+        let depth = g.texture(SPRITE, SPRITE, 1, Format::depth32float, 1, texture_usage::RENDER_ATTACHMENT);
+        let depth_view = g.view(depth, false, 0, 1, 0, 1);
+        let fits = g.buffer((GROUPS * 16) as u32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let group = g.bind_group(
             draw.layouts[2],
             &[
                 0,
@@ -138,16 +131,13 @@ impl ImpostorPass {
                 continue;
             };
             let (fit_group, offset) = slots.at(n as u32);
-            let layer = object();
-            g.view(layer, self.atlas, dimension::D2, 0, 1, k as u32, 1);
-            let pass = object();
-            g.pass(pass, encoder, &pass_desc(layer, load::CLEAR, self.depth_view, load::CLEAR, 1.0, Stamp::UNTIMED));
+            let layer = g.view(self.atlas, false, 0, 1, k as u32, 1);
+            let pass = g.pass(encoder, &pass_desc(layer, Load::Clear, self.depth_view, Load::Clear, 1.0, None));
             g.set_pipeline(pass, self.bake.pipeline);
             g.set_bind_group(pass, 0, fit_group, &[offset]);
             g.set_bind_group(pass, 1, skin, &[]);
             draw_model(g, pass, &self.bake, &mut 0, model, vertex_cnt, index_cnt, 1);
             g.end(pass);
-            release(pass);
             release(layer);
             self.fit[k] = fit_of(w.2);
             self.baked[k] = Some(w);

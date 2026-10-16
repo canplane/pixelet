@@ -20,11 +20,6 @@ export const op = {
    * into lines no wider than the width where it can be; at `at`, how many lines, then
    * a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most */
   TEXT_LAYOUT: 2147483649 as number,
-  /** fd, image: the file opened as `fd` decoded where the device is and held for the
-   * renderer as `image`, a handle the kernel issued; answered by IMAGE_DECODED. The
-   * host takes the file's bytes when it runs this, so the kernel may close `fd` in the
-   * same turn. */
-  IMAGE_DECODE: 2147483651 as number,
   /** weight, px (f32 bits), color (0xRRGGBBAA), at, width, height, x (f32 bits), then
    * the text's bytes: one line drawn in the platform's own family, starting at x with
    * the middle of its em box on the middle row, into `width` by `height` pixels at

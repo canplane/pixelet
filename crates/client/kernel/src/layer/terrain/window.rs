@@ -13,7 +13,7 @@
 use pxl_portable::ground::{own, word};
 use pxl_portable::window::{self, Squares, LEVELS, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT};
 use pxl_portable::wrap_index;
-use pxl_render::gpu::api_spec::read;
+use pxl_render::gpu::api::DONE;
 use pxl_render::gpu::renderer::{CellsBack, Square, TerrainWrite};
 use pxl_spec::bake::tile::terrain::{handed, square_lines, GroundId, TerrainTile, LOOK_LANE};
 use pxl_spec::space::coord::zoom::{units, Zoom};
@@ -232,7 +232,7 @@ pub fn step(at: [Option<[f64; 2]>; 3]) -> bool {
                 *back_word(i as u32) = 0;
                 terrain.moved_at(t);
             }
-            if slot.state == State::Sent && *back_word(i as u32) & read::DONE != 0 {
+            if slot.state == State::Sent && *back_word(i as u32) & DONE != 0 {
                 slot.state = State::Present;
                 terrain.moved_at(t);
             }
@@ -352,7 +352,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> bool {
         }
         window::square_ways(|k| held.ways[k as usize].map(i32::from), place, &mut ways);
         let written = square_lines(tile, &held.separation, place, scratch, lines);
-        w.ticket = (w.ticket % (read::DONE - 1)) + 1;
+        w.ticket = (w.ticket % (DONE - 1)) + 1;
         let back = CellsBack {
             cells: off_of_slice(cells(i)) as u32,
             word: off_of(back_word(i)) as u32,

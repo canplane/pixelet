@@ -8,12 +8,10 @@
 //!
 //! Called from the app through the C ABI (include/pxl_native.h), one call at
 //! a time, and run on the kernel's own thread (thread.rs) — the single
-//! thread `Global` is sound for. What reaches nothing a `Global` holds stays
-//! on the caller's: an image decoded (image.rs), behind a lock of its own.
+//! thread `Global` is sound for.
 
 #[cfg(target_os = "android")]
 mod android;
-mod image;
 mod memory;
 mod surface;
 mod thread;
@@ -63,11 +61,26 @@ fn bracket() -> Bracket {
     }
 }
 
+/// The region as the host reads and writes it between turns.
+fn region_bytes() -> &'static mut [u8] {
+    memory::region();
+    // SAFETY: the region, `GIVEN` bytes from its base; between turns nothing
+    // else holds a reference into it.
+    unsafe { core::slice::from_raw_parts_mut(xpute_guest::mem::base::ptr_at::<u8>(0), memory::GIVEN as usize) }
+}
+
 /// The doorbell (pxl_kernel::door::interrupt): a turn of `quota_ms`, and when
-/// the kernel wants the next. The first lays the memory out.
+/// the kernel wants the next. The first lays the memory out. Around it, the
+/// GPU's host: what the device answered written in before, the turn's calls
+/// run on it after (surface.rs).
 #[no_mangle]
 pub extern "C" fn pxl_interrupt(quota_ms: f64) -> f64 {
-    on_kernel(move || pxl_kernel::door::interrupt(quota_ms, bracket))
+    on_kernel(move || {
+        surface::before_turn(region_bytes());
+        let wake = pxl_kernel::door::interrupt(quota_ms, bracket);
+        surface::after_turn(region_bytes());
+        wake
+    })
 }
 
 /// The memory: its first byte, with its bytes written through `bytes` — what

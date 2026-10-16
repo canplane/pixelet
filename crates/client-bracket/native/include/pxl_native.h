@@ -17,14 +17,9 @@ double pxl_interrupt(double quota_ms);
 // may be null) — what the shell reads the directory and the rings through.
 uint8_t *pxl_memory(uint32_t *bytes);
 
-// Opens the device, writing its uniform offset alignment and whether it
-// times its passes: 0 when it is open, -1 when the system has none.
-int32_t pxl_gpu_open(uint32_t *align, uint32_t *timestamps);
-
-// Decodes the PNG or WebP of `bytes` bytes at `file` and holds it for the
-// renderer as `handle`, which the kernel issued: 1, or 0 when it does not
-// decode. Any thread.
-uint32_t pxl_image_hold(uint32_t handle, const uint8_t *file, uint32_t bytes);
+// Opens the device: 0 when it is open, -1 when the system has none. What it
+// is, the kernel reads from the block its first call asks the host for.
+int32_t pxl_gpu_open(void);
 
 // Binds the kernel's surface `handle` to `layer`, a view's CAMetalLayer,
 // which the view keeps until it has unbound it: 0, or -2 when no device is

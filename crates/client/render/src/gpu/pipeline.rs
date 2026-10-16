@@ -3,8 +3,8 @@
 //! Pipelines made once each. Bind group layouts are shared by their words, so a
 //! bind group made for one pipeline serves every one declaring the same group.
 
-use crate::frame::shader::record::{pipeline as record_of, source, HEAD, PIPELINES, SHADERS};
-use crate::gpu::api::{object, Gpu};
+use crate::frame::shader::record::{compute_entry, pipeline as record_of, source, HEAD, PIPELINES, SHADERS};
+use crate::gpu::api::{Format, Gpu};
 
 pub const GROUPS: usize = 4;
 pub const LANES: usize = 8;
@@ -54,8 +54,7 @@ impl Pipelines {
     fn module(&mut self, g: &Gpu, kind: u32) -> u32 {
         let m = &mut self.modules[kind as usize];
         if *m == 0 {
-            *m = object();
-            g.shader(*m, source(kind));
+            *m = g.shader(source(kind));
         }
         *m
     }
@@ -66,15 +65,14 @@ impl Pipelines {
             return id;
         }
         xpute_kit::ensure!(self.layout_len < LAYOUTS, ENOSPC, LAYOUTS);
-        let id = object();
-        g.layout(id, entries);
+        let id = g.layout(entries);
         self.layouts[self.layout_len] = (key, id);
         self.layout_len += 1;
         id
     }
 
-    pub fn build(&mut self, g: &Gpu, id: u32, format: u32) -> Built {
-        let key = fold(fold(0xcbf29ce484222325, id), format);
+    pub fn build(&mut self, g: &Gpu, id: u32, format: Format) -> Built {
+        let key = fold(fold(0xcbf29ce484222325, id), format as u32);
         if let Some(&(_, b)) = self.built[..self.built_len].iter().find(|(k, _)| *k == key) {
             return b;
         }
@@ -96,8 +94,7 @@ impl Pipelines {
             b.layouts[group] = self.layout(g, &words[at + 1..at + 1 + 3 * n]);
             at += 1 + 3 * n;
         }
-        b.pipeline = object();
-        g.pipeline(b.pipeline, &words, &b.layouts[..groups], module, format);
+        b.pipeline = g.pipeline(&words, &b.layouts[..groups], module, format);
         xpute_kit::ensure!(self.built_len < BUILT, ENOSPC, BUILT);
         self.built[self.built_len] = (key, b);
         self.built_len += 1;
@@ -111,8 +108,7 @@ impl Pipelines {
         let module = self.module(g, kind);
         let mut b = Built::default();
         b.layouts[0] = self.layout(g, group);
-        b.pipeline = object();
-        g.compute_pipeline(b.pipeline, module, &b.layouts[..1]);
+        b.pipeline = g.compute_pipeline(module, compute_entry(kind), &b.layouts[..1]);
         b
     }
 }

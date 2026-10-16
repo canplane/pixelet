@@ -13,8 +13,10 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::around;
 
 use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
-use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, texture_usage, word_bytes, Format, Gpu, Load, Stamp};
+use crate::gpu::api_spec::resource;
 use crate::gpu::clouds::CloudField;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::Mips;
@@ -108,8 +110,7 @@ pub struct Atmosphere {
 
 impl Atmosphere {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> Atmosphere {
-        let uniform = object();
-        g.buffer(uniform, word_bytes(ATMOS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let uniform = g.buffer(word_bytes(ATMOS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let white = model::white();
         let mut words = [0.0f32; ATMOS_FLOATS];
         for (at, rgb) in [
@@ -146,16 +147,13 @@ impl Atmosphere {
         words[EARTH_WINDOW + 2] = f32::from_bits(REACH_ACROSS);
         words[EARTH_WINDOW + 3] = f32::from_bits(around(EARTH_ZOOM) as u32);
 
-        let sampler = object();
-        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
+        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::clamp_to_edge, None, 1);
         let mut textures = [0; TABLES];
         let mut views = [0; TABLES];
         for k in 0..TABLES {
-            textures[k] = object();
             let (w, h) = SIZES[k];
-            g.texture(textures[k], w, h, 1, format::RGBA16F, 1, texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT);
-            views[k] = object();
-            g.view(views[k], textures[k], dimension::D2, 0, 1, 0, 1);
+            textures[k] = g.texture(w, h, 1, Format::rgba16float, 1, texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT);
+            views[k] = g.view(textures[k], false, 0, 1, 0, 1);
         }
         let passes = [
             PIPELINE_ATMOS_TRANSMITTANCE,
@@ -164,7 +162,7 @@ impl Atmosphere {
             PIPELINE_ATMOS_EXPOSURE,
             PIPELINE_ATMOS_IRRADIANCE,
         ]
-        .map(|id| pipelines.build(g, id, format::RGBA16F));
+        .map(|id| pipelines.build(g, id, Format::rgba16float));
 
         let mut atmosphere = Atmosphere {
             uniform,
@@ -180,17 +178,15 @@ impl Atmosphere {
             moon_mu: 1.0,
             earth: ImageMap::new(g, EARTH_SIZE.0, EARTH_SIZE.1),
             earth_tiles: {
-                let (texture, view) = (object(), object());
-                g.texture(
-                    texture,
+                let texture = g.texture(
                     TILE_CELLS,
                     TILE_CELLS,
                     EARTH_LAYERS,
-                    format::RGBA8_SRGB,
+                    Format::rgba8unorm_srgb,
                     1,
                     texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST,
                 );
-                g.view(view, texture, dimension::D2_ARRAY, 0, 1, 0, EARTH_LAYERS);
+                let view = g.view(texture, true, 0, 1, 0, EARTH_LAYERS);
                 (texture, view)
             },
         };
@@ -204,8 +200,7 @@ impl Atmosphere {
         let multiscatter = [12, resource::VIEW, views[MULTISCATTER], 0, 0];
         let frame = buffer_entry(0, frame_buffer);
         let light = |which: f32| {
-            let light = object();
-            g.buffer(light, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            let light = g.buffer(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             g.write_buffer(light, 0, bytes(&[which, 0.0, 0.0, 0.0]));
             buffer_entry(14, light)
         };
@@ -221,8 +216,7 @@ impl Atmosphere {
             (EXPOSURE_TEXEL, of(&unexposed, &[frame])),
         ];
         for (k, entries) in reads {
-            atmosphere.groups[k] = object();
-            g.bind_group(atmosphere.groups[k], atmosphere.passes[pass_of(k)].layouts[0], &entries);
+            atmosphere.groups[k] = g.bind_group(atmosphere.passes[pass_of(k)].layouts[0], &entries);
         }
         atmosphere
     }
@@ -327,13 +321,11 @@ impl Atmosphere {
     }
 
     fn table(&self, g: &Gpu, encoder: u32, k: usize, stamp: &mut Stamp) {
-        let pass = object();
-        g.pass(pass, encoder, &pass_desc(self.views[k], load::CLEAR, 0, load::CLEAR, 0.0, stamp.pass()));
+        let pass = g.pass(encoder, &pass_desc(self.views[k], Load::Clear, 0, Load::Clear, 0.0, stamp.pass()));
         g.set_pipeline(pass, self.passes[pass_of(k)].pipeline);
         g.set_bind_group(pass, 0, self.groups[k], &[]);
         g.draw(pass, 3, 1, 0, 0);
         g.end(pass);
-        release(pass);
     }
 }
 

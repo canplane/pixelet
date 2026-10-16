@@ -18,7 +18,6 @@ use crate::abi::host::root;
 use crate::io::demand::Ask;
 use crate::io::failure::Ended;
 use crate::io::file::{self, Opened, Owner};
-use crate::io::host::decode_image;
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::io::source;
 use crate::sched::edge::{request_world_tick, world_edge};
@@ -69,9 +68,10 @@ impl Load {
 /// model was re-read 38 times, once a turn, for as long as its parse took.
 enum Entry<T> {
     Pending,
-    /// A model: open as this descriptor, this long, unparsed. An image: the
-    /// handle it is being decoded under.
+    /// Open as this descriptor, this long, unread.
     Arrived(u32, u32),
+    /// An image read: the handle its texture is arriving under.
+    Landing(u32),
     Ready(T),
     Failed,
 }
@@ -203,9 +203,8 @@ pub fn cancel_asset(key: u64) -> bool {
 
 static IMAGES: Global<Slots<()>> = Global::new();
 
-/// The file is closed in the same turn: the host takes its bytes when it runs the decode.
 pub fn image_opened(fd: u32, key: u64, opened: Opened) {
-    let Opened::Bytes(_) = opened else {
+    let Opened::Bytes(n) = opened else {
         load_rejected(key, Ended::Failed(opened.failure()));
         return;
     };
@@ -213,10 +212,8 @@ pub fn image_opened(fd: u32, key: u64, opened: Opened) {
         file::close(fd);
         return;
     };
-    let image = IMAGES.get(Slots::default).insert(());
-    decode_image(fd, image);
-    file::close(fd);
-    loader().image[load.number() as usize] = Some(Entry::Arrived(image, 0));
+    loader().image[load.number() as usize] = Some(Entry::Arrived(fd, n));
+    arrivals().notify();
 }
 
 /// The GPU is gone, and with it every image the textures took: each is loaded
@@ -224,20 +221,43 @@ pub fn image_opened(fd: u32, key: u64, opened: Opened) {
 pub fn images_lost() {
     let l = loader();
     for entry in &mut l.image {
-        if let Some(Entry::Ready(h) | Entry::Arrived(h, _)) = *entry {
+        if let Some(Entry::Ready(h) | Entry::Landing(h)) = *entry {
             IMAGES.get(Slots::default).remove(h);
             *entry = None;
         }
     }
 }
 
-/// A file the device cannot decode is the asset's own failure, so it is final.
-pub fn image_decoded(image: u32, decoded: Result<u32, Errno>) {
-    let l = loader();
-    let Some(n) = (0..LOADS).find(|&n| matches!(l.image[n], Some(Entry::Arrived(h, _)) if h == image)) else {
+/// Whether image `n` is still the one arriving as `image`: the device's loss
+/// forgets it.
+fn arriving(n: usize, image: u32) -> bool {
+    matches!(loader().image[n], Some(Entry::Landing(h)) if h == image)
+}
+
+/// An image's bytes, read, into a texture where the device is, and ready once
+/// they are there. A file the device cannot decode is the asset's own
+/// failure, so it is final.
+async fn image_arrived(n: usize, file: Vec<u8>) {
+    let image = IMAGES.get(Slots::default).insert(());
+    loader().image[n] = Some(Entry::Landing(image));
+    while pxl_render::gpu::api::device().is_none() {
+        next_turn(world_edge).await;
+        if !arriving(n, image) {
+            return;
+        }
+    }
+    if !pxl_render::gpu::api::image_arrive(image, file) {
+        loader().image[n] = Some(Entry::Failed);
+        settled();
         return;
-    };
-    l.image[n] = Some(if decoded.is_ok() { Entry::Ready(image) } else { Entry::Failed });
+    }
+    while !pxl_render::gpu::api::image_landed(image) {
+        next_turn(world_edge).await;
+        if !arriving(n, image) {
+            return;
+        }
+    }
+    loader().image[n] = Some(Entry::Ready(image));
     settled();
     request_world_tick();
 }
@@ -255,23 +275,36 @@ pub fn model_opened(fd: u32, key: u64, opened: Opened) {
     arrivals().notify();
 }
 
-fn next_arrival() -> Option<(usize, u32, u32)> {
+/// A file opened and not yet read: a model's or an image's, its descriptor
+/// and length.
+fn next_arrival() -> Option<(LoadKind, usize, u32, u32)> {
     let l = loader();
-    (0..LOADS).find_map(|n| match l.gltf[n] {
-        Some(Entry::Arrived(body, bytes)) => Some((n, body, bytes)),
+    let gltf = (0..LOADS).find_map(|n| match l.gltf[n] {
+        Some(Entry::Arrived(fd, bytes)) => Some((LoadKind::Gltf, n, fd, bytes)),
         _ => None,
+    });
+    gltf.or_else(|| {
+        (0..LOADS).find_map(|n| match l.image[n] {
+            Some(Entry::Arrived(fd, bytes)) => Some((LoadKind::Image, n, fd, bytes)),
+            _ => None,
+        })
     })
 }
 
-pub async fn gltf_task() {
+/// Each asset file that arrives, read whole: a model parsed, an image put
+/// into its texture.
+pub async fn arrival_task() {
     loop {
         notified(arrivals).await;
-        while let Some((n, fd, bytes)) = next_arrival() {
+        while let Some((kind, n, fd, bytes)) = next_arrival() {
             yield_if_spent(world_edge).await;
             let mut buf = Vec::new();
             if buf.try_reserve_exact(bytes as usize).is_err() {
                 file::close(fd);
-                loader().gltf[n] = Some(Entry::Failed);
+                match kind {
+                    LoadKind::Gltf => loader().gltf[n] = Some(Entry::Failed),
+                    LoadKind::Image => loader().image[n] = Some(Entry::Failed),
+                }
                 continue;
             }
             buf.resize(bytes as usize, 0);
@@ -280,6 +313,10 @@ pub async fn gltf_task() {
             file::close(fd);
             // In once the host has run the turn's records.
             next_turn(world_edge).await;
+            if kind == LoadKind::Image {
+                image_arrived(n, buf).await;
+                continue;
+            }
             let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
                 Ok(g) => Entry::Ready(Rc::new(g)),
                 Err(_) => Entry::Failed,

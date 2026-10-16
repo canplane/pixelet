@@ -1,67 +1,25 @@
 {
   "$doc": [
-    "The codes the renderer's WebGPU calls and the host that makes them agree on",
-    "(gpu/api.rs, apps/web/src/platform/web/webgpu.ts). Usage flags are WebGPU's own",
-    "bits, spelled out where they are used, and are not here."
+    "pixelet's conventions over xpute's GPU calls (xpute/spec/gpu/api.json), which",
+    "the renderer writes through xpute's encoder (gpu/api.rs): the stream it writes",
+    "them into, its pipeline records' codes, and what a surface shows."
   ],
-  "format": {
-    "$type": "u32",
-    "$doc": [
-      "A texture's format: the texture pack, skins and the badge sheet; depth; the",
-      "canvas's own; then the screen-space occlusion's — a half-resolution depth and",
-      "normal in four floats, the full-resolution occlusion in one byte, and the blue",
-      "noise it dithers with, four bytes read as they are; then the atmosphere's",
-      "tables, radiance and transmittance in four half floats, filterable and",
-      "renderable on every WebGPU device."
-    ],
-    "RGBA8_SRGB": 0,
-    "DEPTH32": 1,
-    "CANVAS": 2,
-    "RGBA32F": 3,
-    "R8": 4,
-    "RGBA8": 5,
-    "RGBA16F": 6
-  },
-  "dimension": {
-    "$type": "u32",
-    "D2": 0,
-    "D2_ARRAY": 1
-  },
-  "filter": {
-    "$type": "u32",
-    "NEAREST": 0,
-    "LINEAR": 1
-  },
-  "address": {
-    "$type": "u32",
-    "CLAMP": 0,
-    "REPEAT": 1
-  },
-  "compare": {
-    "$type": "u32",
-    "$doc": ["A sampler's comparison: none for a filtering sampler, less-equal for the shadow map's."],
-    "NONE": 0,
-    "LESS_EQUAL": 1
-  },
-  "resource": {
-    "$type": "u32",
-    "$doc": ["What a bind group entry binds."],
-    "BUFFER": 0,
-    "VIEW": 1,
-    "SAMPLER": 2
-  },
   "surface_role": {
     "$type": "u32",
     "$doc": ["What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case."],
     "WORLD": 0,
     "CASE": 1
   },
-  "load": {
+  "resource": {
     "$type": "u32",
-    "$doc": ["An attachment's start: cleared, loaded, or a depth read and not written."],
-    "CLEAR": 0,
-    "LOAD": 1,
-    "READ_ONLY": 2
+    "$doc": [
+      "A bind group entry's kind, the second of its five words (binding, kind,",
+      "object, offset, size; a size of 0 the rest of the buffer), as gpu/api.rs",
+      "expands them into xpute's entries."
+    ],
+    "BUFFER": 0,
+    "VIEW": 1,
+    "SAMPLER": 2
   },
   "stream": {
     "$type": "u32",
@@ -69,22 +27,22 @@
       "The one place the renderer's calls cross (gpu/api.rs): a stream",
       "(xpute-guest ipc/stream.rs) in a range of the kernel's memory, which the",
       "kernel writes its calls into during a turn and the host runs once the turn",
-      "has returned. A record carries everything it names, bytes included, so",
-      "nothing a record reads lies outside it.",
+      "has returned.",
       "",
-      "Its head is HEAD words: the stream's END, then from GPU_MS, the host's side,",
-      "each timed span's GPU time in milliseconds as a double, then the frame's",
-      "whole, as the host last read them."
+      "Its head is HEAD words, past the stream's END what the host writes for the",
+      "kernel: the device's block (xpute DEVICE), a completion word a frame in",
+      "flight, and the timed spans' read: its word, then each span's begin and end",
+      "ticks (gpu/api.rs lays them out and holds this number to it)."
     ],
-    "GPU_MS": 2,
-    "HEAD": 32,
+    "HEAD": 67,
     "BYTES": {
       "$value": 4194304,
       "$doc": [
-        "The range's size: what one turn may send the device. A product number, said",
-        "rather than derived; a chunk's mesh is under a tenth of a megabyte and a",
-        "frame's own records tens of kilobytes, so a turn's uploads wait only when",
-        "a burst of them comes at once."
+        "The range's size: the stream, what one turn may send the device, then at",
+        "its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an",
+        "empty one of. A product number, said rather than derived; a chunk's mesh is",
+        "under a tenth of a megabyte and a frame's own records tens of kilobytes, so",
+        "a turn's uploads wait only when a burst of them comes at once."
       ]
     },
     "RESERVE": {
@@ -97,74 +55,13 @@
       ]
     }
   },
-  "stamp": {
-    "$type": "u32",
-    "$doc": ["A pass's timestamp write index (api.rs Stamp): NONE where the pass writes none."],
-    "NONE": 4294967295
-  },
-  "op": {
-    "$type": "u32",
-    "$doc": ["A record's operation, then its arguments. Bytes go as their count, then the bytes padded to a word."],
-    "BUFFER": { "$value": 2, "$doc": ["id, size, usage"] },
-    "TEXTURE": { "$value": 3, "$doc": ["id, width, height, layers, format, mips, usage"] },
-    "IMAGE_TEXTURE": { "$value": 4, "$doc": ["id, image: a texture of an image a load holds, at its size, with it in it"] },
-    "VIEW": { "$value": 5, "$doc": ["id, texture, dimension, base mip, mips, base layer, layers"] },
-    "SAMPLER": { "$value": 6, "$doc": ["id, mag, min, mipmap, address, compare, anisotropy"] },
-    "SHADER": { "$value": 7, "$doc": ["id, the WGSL's bytes"] },
-    "LAYOUT": { "$value": 8, "$doc": ["id, then (binding, stages, kind) words"] },
-    "PIPELINE": { "$value": 9, "$doc": ["id, module, format, the record's words, the record, then the group layouts"] },
-    "BIND_GROUP": { "$value": 10, "$doc": ["id, layout, then (binding, resource, object, offset, size) words"] },
-    "DESTROY": { "$value": 11, "$doc": ["id"] },
-    "UPLOAD_BUFFER": {
-      "$value": 12,
-      "$doc": [
-        "id, offset, address, length: the bytes at that address in the module's memory, read when the page replays the turn, so the range lives unwritten until then: the owner's own where it does, else a copy in the stream"
-      ]
-    },
-    "UPLOAD_TEXTURE": { "$value": 13, "$doc": ["id, layer, width, height, address, length: the first mip of one layer, whole, as UPLOAD_BUFFER reads its bytes"] },
-    "ENCODER": { "$value": 14, "$doc": ["id"] },
-    "PASS": { "$value": 15, "$doc": ["id, encoder, the pass's description (api.rs pass_desc)"] },
-    "SET_PIPELINE": { "$value": 16, "$doc": ["pass, pipeline"] },
-    "SET_BIND_GROUP": { "$value": 17, "$doc": ["pass, index, group, then the dynamic offsets"] },
-    "SET_VERTEX_BUFFER": { "$value": 18, "$doc": ["pass, slot, buffer, offset, size (0 the rest)"] },
-    "SET_INDEX_BUFFER": { "$value": 19, "$doc": ["pass, buffer, offset, size (0 the rest)"] },
-    "DRAW": { "$value": 20, "$doc": ["pass, vertices, instances, first vertex, first instance"] },
-    "DRAW_INDEXED": { "$value": 21, "$doc": ["pass, indices, instances, first index, first instance"] },
-    "END": { "$value": 22, "$doc": ["pass"] },
-    "SUBMIT": { "$value": 23, "$doc": ["encoder"] },
-    "CONFIGURE": { "$value": 24, "$doc": ["surface: its context configured on the device, in the canvas's format"] },
-    "RESIZE": { "$value": 25, "$doc": ["surface, width, height"] },
-    "CURRENT": { "$value": 26, "$doc": ["surface, view: a view of the surface's texture for this frame"] },
-    "QUERY_SET": { "$value": 27, "$doc": ["id, count"] },
-    "TIMESTAMPS": { "$value": 28, "$doc": ["encoder, query set, written: the pairs of the spans set in `written` read once the GPU has them"] },
-    "COPY_TEXTURE": { "$value": 31, "$doc": ["encoder, source, x, y, target, x, y, layer, width, height: a region of one texture's first mip into another's layer"] },
-    "COMPUTE_PIPELINE": { "$value": 29, "$doc": ["id, module, then the group layouts: the module's one compute entry"] },
-    "COMPUTE_PASS": { "$value": 30, "$doc": ["id, encoder"] },
-    "DISPATCH": { "$value": 32, "$doc": ["pass, workgroups across, up, deep"] },
-    "READ_BUFFER": {
-      "$value": 33,
-      "$doc": [
-        "encoder, id, offset, length, address, word, ticket: the buffer's bytes from offset, once the GPU has them, copied into the module's memory at address, and the word at `word` marked `read.DONE` over the ticket; only while that word still holds the ticket, so a range asked of again since takes the later answer alone"
-      ]
-    },
-    "DRAW_INDIRECT": { "$value": 34, "$doc": ["pass, buffer, offset: DRAW's four words read from the buffer at offset, as the GPU last wrote them"] },
-    "DRAW_INDEXED_INDIRECT": {
-      "$value": 35,
-      "$doc": ["pass, buffer, offset: DRAW_INDEXED's five words (indices, instances, first index, base vertex, first instance) read from the buffer at offset"]
-    }
-  },
-  "read": {
-    "$type": "u32",
-    "$doc": ["What READ_BUFFER leaves in its word: the ticket asked, with DONE set once the bytes are in. A ticket leaves DONE clear."],
-    "DONE": 2147483648
-  },
   "record": {
     "$type": "u32",
     "$doc": [
-      "A pipeline record's codes (shader.rs), and HEAD, the words it opens with",
-      "before its vertex buffers — the one number three parsers of a record would",
-      "otherwise each hold their own copy of. Then: the topology, the cull mode, the",
-      "depth compare under reversed Z (LESS is the shadow map's plain depth; NO_DEPTH, no",
+      "A pipeline record's codes (frame/shader/record.rs, expanded into xpute's",
+      "descriptors by gpu/api.rs), and HEAD, the words it opens with before its",
+      "vertex buffers. Then: the topology, the cull mode, the depth compare under",
+      "reversed Z (LESS is plain depth, for a depth-only pass; NO_DEPTH, no",
       "depth attachment), the blend, which vertex entry point of",
       "its shader the pipeline enters, a vertex step and format, a",
       "binding's stages, and a binding's kind — TEXTURE_UNFILTERED a texture in a",

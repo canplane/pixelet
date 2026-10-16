@@ -16,7 +16,7 @@ use pxl_portable::window::SLOTS;
 use pxl_portable::LEAF_CELL;
 
 use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_PLACE};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, release, word_bytes, Gpu};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, release, word_bytes, Gpu};
 use crate::gpu::api_spec::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
 use crate::gpu::pipeline::{Built, Pipelines};
 
@@ -82,11 +82,7 @@ pub type World = [u32; 5];
 
 impl Grown {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Grown {
-        let buffer = |size: u32, usage: u32| {
-            let id = object();
-            g.buffer(id, size, usage);
-            id
-        };
+        let buffer = |size: u32, usage: u32| g.buffer(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let rows = buffer(core::mem::size_of_val(&DECORS) as u32, storage);
         let table = DECORS;
@@ -125,14 +121,11 @@ impl Grown {
             release(self.records);
             release(self.block);
             self.room = need;
-            self.records = object();
-            g.buffer(
-                self.records,
+            self.records = g.buffer(
                 word_bytes((GROWN_AT + GROWN_WORDS * need) as usize),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             );
-            self.block = object();
-            g.buffer(self.block, word_bytes(((drawn::LANES + 1) * need) as usize), buffer_usage::STORAGE);
+            self.block = g.buffer(word_bytes(((drawn::LANES + 1) * need) as usize), buffer_usage::STORAGE);
         }
         if grow || regroup || self.groups[0] == 0 {
             self.regroup(g, world);
@@ -160,13 +153,12 @@ impl Grown {
 
     fn regroup(&mut self, g: &Gpu, world: World) {
         let group = |built: &Built, ids: &[u32]| {
-            let id = object();
             let mut entries = [0u32; 40];
             for (k, &b) in ids.iter().enumerate() {
                 entries[5 * k..5 * k + 5].copy_from_slice(&buffer_entry(k as u32, b));
             }
-            g.bind_group(id, built.layouts[0], &entries[..5 * ids.len()]);
-            id
+
+            g.bind_group(built.layouts[0], &entries[..5 * ids.len()])
         };
         for id in self.groups {
             release(id);

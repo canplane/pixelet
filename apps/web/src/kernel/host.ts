@@ -18,9 +18,7 @@ import { OBJECTS_PATH, op, root, SETTINGS_PATH } from "@/kernel/abi/host.spec.ts
 import { send_next } from "@/kernel/sched.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { textRaster, textWidth } from "@platform/text.ts";
-import { decodeImage } from "@platform/image.ts";
 import { BUILD_NUMBER } from "@/config/deploy.ts";
-import { Command, encode_image_decoded } from "@/kernel/abi/cmd.spec.ts";
 
 const word = new DataView(new ArrayBuffer(4));
 
@@ -67,17 +65,6 @@ function line_ends(text: string, max_width: number, width: (s: string) => number
 
 function program(code: u32, w: U32Array, a: u32): void {
   switch (code) {
-    case op.IMAGE_DECODE: {
-      // Taken now: the kernel may close the file in this turn.
-      const [fd, image] = [w[a], w[a + 1]];
-      const bytes = SYS.bytes(fd);
-      void (async () => {
-        await Promise.resolve();
-        const decoded = bytes !== null && (await decodeImage(image, bytes));
-        send_next(Command.IMAGE_DECODED, encode_image_decoded({ image, res: decoded ? 0 : Errno.EBADMSG }));
-      })();
-      break;
-    }
     case op.TEXT_LAYOUT: {
       const [weight, px, max_width, at, lines] = [w[a], float(w[a + 1]), float(w[a + 2]), w[a + 3], w[a + 4]];
       const text = text_of(w, a + 5);

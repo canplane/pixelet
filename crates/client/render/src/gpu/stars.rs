@@ -9,8 +9,7 @@ use pxl_spec::space::coord::mat4::Mat4;
 
 use crate::frame::shader::record::PIPELINE_STARS;
 use crate::frame::stage::{stage_lane, STAGE_AT};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, word_bytes, Gpu};
-use crate::gpu::api_spec::format;
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, word_bytes, Gpu};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_mat;
 use crate::look::atmosphere::{transmittance, BOTTOM_RADIUS_KM};
@@ -41,20 +40,16 @@ pub struct StarPass {
 
 impl StarPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> StarPass {
-        let built = pipelines.build(g, PIPELINE_STARS, format::CANVAS);
-        let uniform = object();
-        g.buffer(uniform, word_bytes(STARS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let built = pipelines.build(g, PIPELINE_STARS, g.canvas());
+        let uniform = g.buffer(word_bytes(STARS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let stars: Vec<f32> = CATALOG.as_chunks::<STAR_BYTES>().0.iter().flat_map(star).collect();
-        let catalog = object();
-        g.buffer(catalog, word_bytes(stars.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let catalog = g.buffer(word_bytes(stars.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(catalog, 0, bytes(&stars));
-        let frame_group = object();
-        g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
-        let group = object();
+        let frame_group = g.bind_group(built.layouts[0], &buffer_entry(0, frame_buffer));
         let mut e = [0u32; 10];
         e[..5].copy_from_slice(&buffer_entry(0, uniform));
         e[5..].copy_from_slice(&buffer_entry(1, catalog));
-        g.bind_group(group, built.layouts[1], &e);
+        let group = g.bind_group(built.layouts[1], &e);
         StarPass {
             built,
             frame_group,

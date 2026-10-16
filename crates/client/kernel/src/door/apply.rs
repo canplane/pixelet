@@ -262,16 +262,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             ui::sensors_close();
             applied(s)
         }
-        Command::IMAGE_DECODED => {
-            let p = abi::ImageDecoded::read(packet(pkt)?)?;
-            crate::io::load::image_decoded(p.image, crate::io::host::answered(p.res));
-            Ok(Some(0))
-        }
         Command::GPU_READY => {
-            let p = abi::GpuReady::read(packet(pkt)?)?;
-            let align = p.min_uniform_offset_alignment;
-            refuse_unless(align.is_power_of_two() && align <= pxl_render::gpu::renderer::UNIFORM_ALIGN_MAX, Errno::EINVAL)?;
-            pxl_render::gpu::renderer::gpu_created(p.min_uniform_offset_alignment, p.timestamps);
+            pxl_render::gpu::api::device_answered();
             request_world_tick();
             Ok(Some(0))
         }

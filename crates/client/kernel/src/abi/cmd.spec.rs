@@ -547,10 +547,6 @@ pub enum Command {
     SENSOR_STOP = 0x1203,
 
     // ---- the host answers: an I/O the process started, done ----
-    /// An image the kernel asked decoded (host.json's IMAGE_DECODE): 0, held for the renderer
-    /// as the kernel's `image`, or -errno where the file is not an image the device decodes.
-    /// A file that did not come is the open's answer (xpute's SYS_OPENED), not this.
-    IMAGE_DECODED = 0x1301,
     /// A GPS fix; a field is absent where the browser gave none.
     SENSOR_POSITION = 0x1202,
     /// An orientation event; a field is absent where the browser gave none.
@@ -592,7 +588,7 @@ pub enum Command {
     INPUT_WHEEL = 0x1103,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_KEYS = 0x1106,
-    /// A device answered; the kernel's renderer is made on it (crates/client/render/src/gpu/renderer.rs).
+    /// A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (crates/client/render/src/gpu/api.rs).
     GPU_READY = 0x1401,
     /// The device went away, and every object on it.
     GPU_LOST = 0x1402,
@@ -654,10 +650,9 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 44] = [
+    pub const ALL: [Command; 43] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
-        Command::IMAGE_DECODED,
         Command::SENSOR_POSITION,
         Command::SENSOR_ORIENTATION,
         Command::SENSOR_ERROR,
@@ -981,23 +976,6 @@ impl SensorStopSignal {
     }
 }
 
-/// Command::IMAGE_DECODED's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct ImageDecoded {
-    pub image: u32,
-    pub res: i32,
-}
-
-impl ImageDecoded {
-    pub fn read(pkt: &[u8]) -> Result<ImageDecoded, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(ImageDecoded {
-            image: integer::<u32>(f.at(0)?.get_number()?)?,
-            res: integer::<i32>(f.at(1)?.get_number()?)?,
-        })
-    }
-}
-
 /// Command::SENSOR_POSITION's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct SensorPosition {
@@ -1294,23 +1272,6 @@ impl InputKeys {
         Ok(InputKeys {
             x: integer::<i32>(f.at(0)?.get_number()?)?,
             y: integer::<i32>(f.at(1)?.get_number()?)?,
-        })
-    }
-}
-
-/// Command::GPU_READY's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct GpuReady {
-    pub min_uniform_offset_alignment: u32,
-    pub timestamps: bool,
-}
-
-impl GpuReady {
-    pub fn read(pkt: &[u8]) -> Result<GpuReady, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(GpuReady {
-            min_uniform_offset_alignment: integer::<u32>(f.at(0)?.get_number()?)?,
-            timestamps: f.at(1)?.get_bool()?,
         })
     }
 }
