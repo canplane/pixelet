@@ -8,6 +8,7 @@ import { useKernel } from "@/kernel/shell.ts";
 import { DIVISION_SUBTYPE } from "./division.spec.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 import { assembleLabel, primaryLanguage } from "./label.ts";
+import { fixed } from "@/shared/fixed.ts";
 
 /** The focus's division, assembled per snapshot, so a language switch needs no refetch. */
 export function useDivisionLabel(): string | null {
@@ -27,7 +28,7 @@ export function useCenterCoordinates(): string | null {
 
 /** Four decimals: about eleven meters. */
 function coordinateLabel({ lat, lon }: LonLat): string {
-  return `${Math.abs(lat).toFixed(4)}° ${lat < 0 ? "S" : "N"}, ${Math.abs(lon).toFixed(4)}° ${lon < 0 ? "W" : "E"}`;
+  return `${fixed(Math.abs(lat), 4)}° ${lat < 0 ? "S" : "N"}, ${fixed(Math.abs(lon), 4)}° ${lon < 0 ? "W" : "E"}`;
 }
 
 /** Web Mercator, 256-px tiles, equator, z0. */

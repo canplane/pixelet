@@ -28,6 +28,7 @@ import { useCenterCoordinates, useDivisionLabel } from "@/feature/world/division
 import { DIVISION_SUBTYPE } from "@/feature/world/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
+import { fixed } from "@/shared/fixed.ts";
 
 const DEBOUNCE_MS = 300;
 
@@ -45,7 +46,7 @@ function groundDistanceM(a: LonLat, b: LonLat): f64 {
 
 function formatDistance(m: f64): string {
   if (m < 1000) return `${round(m)}m`;
-  if (m < 10000) return `${(m / 1000).toFixed(1)}km`;
+  if (m < 10000) return `${fixed(m / 1000, 1)}km`;
   return `${round(m / 1000).toLocaleString()}km`;
 }
 

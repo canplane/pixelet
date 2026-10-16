@@ -16,6 +16,7 @@ import type { FrameSummary, Gauge, Spread } from "./view.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
 import { kernel_memory } from "@/kernel/shell.ts";
 import { alpha, color, textStyle } from "@/shared/ui/theme.ts";
+import { fixed } from "@/shared/fixed.ts";
 
 const CENSUS_ROWS = 5;
 const SPAN_ROWS = 3;
@@ -48,7 +49,7 @@ export const Head = ({ children, end }: { children: string; end?: ReactNode }) =
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 const or = (x: number) => (Number.isNaN(x) ? "-" : n1(x));
-const geo = (lat: number, lon: number) => (Number.isNaN(lat) ? "-" : `${lat.toFixed(5)}°, ${lon.toFixed(5)}°`);
+const geo = (lat: number, lon: number) => (Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`);
 const metres = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
 const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
@@ -83,7 +84,7 @@ export function ProfilerRec({ rec }: { rec: Gauge["rec"] }) {
           <View style={[gauge.recDot, rec.recording && gauge.recDotOn]} />
           <Text style={[gauge.text, rec.recording && gauge.warn]}>{rec.recording ? "Recording" : "Stopped"}</Text>
         </View>
-        <Text style={gauge.text}>{`${(rec.elapsed_ms / 1000).toFixed(1)} s`}</Text>
+        <Text style={gauge.text}>{`${fixed(rec.elapsed_ms / 1000, 1)} s`}</Text>
       </View>
       <Row k="frames/tasks" v={`${rec.frames}/${rec.tasks}${rec.truncated ? " truncated" : ""}`} warn={rec.truncated} />
     </View>

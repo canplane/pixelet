@@ -197,6 +197,9 @@ const NOT_EVEN = [
   /\blibm::roundf?\(/,
   /\bMath\.round\(/,
   /\bstd::round\b/,
+  // A number's text rounds its last place half up: `fixed` (apps/web shared/fixed.ts) rounds it half to even.
+  /\.toFixed\(/,
+  /\.toPrecision\(/,
   // A half added inside a floor's own parentheses, or before `.floor()`.
   /\bfloor\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\+\s*0\.5\s*\)/,
   /\([^()]*\+\s*0\.5\s*\)\.floor\(\)/,

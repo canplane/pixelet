@@ -16,6 +16,7 @@ import { type Frame, isList, LANES, LIST_NAMES, offthreadMs } from "./lane.ts";
 import { failText } from "./report.ts";
 import { profilerRingsRead } from "./view.ts";
 import { longFramesSince } from "./long-frame.ts";
+import { fixed } from "@/shared/fixed.ts";
 
 const PID = 1;
 const TID_FRAMES = 1;
@@ -36,7 +37,7 @@ interface TraceEvent {
 }
 
 const us = (ms: f64) => round(ms * 1000);
-const fixed = (n: number, d: number) => +n.toFixed(d);
+const fixed_n = (n: number, d: number) => +fixed(n, d);
 
 function event(name: string, cat: string, ph: string, ts: f64, dur: f64 | null, tid: u32, args?: Args): TraceEvent {
   return { name, cat, ph, ts, ...(dur === null ? {} : { dur }), pid: PID, tid, ...(args ? { args } : {}) };
@@ -49,15 +50,15 @@ function frameArgs(f: Frame): Args {
   const args: Args = {};
   for (const { name } of LANES) {
     if (!isList(name)) {
-      args[name] = fixed(f[name], 2);
+      args[name] = fixed_n(f[name], 2);
       continue;
     }
     const names = LIST_NAMES[name];
     if (name === "census") f.census.forEach(([, t], i) => (args[`census_${names[i]}_tris`] = t));
-    else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed(v, 2)));
+    else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed_n(v, 2)));
   }
   // Vsync wait, compositor, GPU, GC, the shell's glue.
-  args.offthread_ms = fixed(offthreadMs(f), 2);
+  args.offthread_ms = fixed_n(offthreadMs(f), 2);
   return args;
 }
 
@@ -78,8 +79,8 @@ function profilerTraceJson(): string {
     const args: Args = {
       outcome: r.outcome,
       priority: r.priority,
-      queuedMs: r.start_ms === null ? null : fixed(r.start_ms - r.enqueue_ms, 1),
-      ranMs: r.start_ms === null ? null : fixed(r.end_ms - r.start_ms, 1),
+      queuedMs: r.start_ms === null ? null : fixed_n(r.start_ms - r.enqueue_ms, 1),
+      ranMs: r.start_ms === null ? null : fixed_n(r.end_ms - r.start_ms, 1),
     };
     if (r.fail !== 0) {
       args.fail = failText(r.fail, r.detail);
@@ -109,7 +110,7 @@ function profilerTraceJson(): string {
       const args = frameArgs(f);
       args.d_buffers = w.prev === null ? null : f.buffers - w.prev.buffers;
       args.d_heap_used_mb = w.prev === null ? null : f.heap_used_mb - w.prev.heap_used_mb;
-      events.push(event(`stall ${f.dt_ms.toFixed(0)}ms`, "worst", "X", us(f.t - f.dt_ms), us(f.dt_ms), TID_WORST, args));
+      events.push(event(`stall ${fixed(f.dt_ms, 0)}ms`, "worst", "X", us(f.t - f.dt_ms), us(f.dt_ms), TID_WORST, args));
     }
   }
 
@@ -117,8 +118,8 @@ function profilerTraceJson(): string {
   if (longs.length > 0) {
     events.push(threadName(TID_LONG, "LoAF"));
     for (const l of longs) {
-      const args = { blockingMs: fixed(l.blockingMs, 1), scriptMs: fixed(l.scriptMs, 1), renderMs: fixed(l.renderMs, 1) };
-      events.push(event(`long frame ${l.durationMs.toFixed(0)}ms`, "loaf", "X", us(l.t), us(l.durationMs), TID_LONG, args));
+      const args = { blockingMs: fixed_n(l.blockingMs, 1), scriptMs: fixed_n(l.scriptMs, 1), renderMs: fixed_n(l.renderMs, 1) };
+      events.push(event(`long frame ${fixed(l.durationMs, 0)}ms`, "loaf", "X", us(l.t), us(l.durationMs), TID_LONG, args));
     }
   }
 
@@ -127,7 +128,7 @@ function profilerTraceJson(): string {
 
 export async function profilerTraceSave(): Promise<string> {
   const json = profilerTraceJson();
-  const mb = `${(json.length / 1e6).toFixed(1)} MB`;
+  const mb = `${fixed(json.length / 1e6, 1)} MB`;
   const name = `pxl-profiler-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {
     await saveFile(name, json, "application/json");

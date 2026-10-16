@@ -13,6 +13,7 @@ import { PHASES } from "@xpute/host/sched/tick.spec.ts";
 import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS } from "./profiler.spec.ts";
 import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
 import { GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
+import { fixed } from "@/shared/fixed.ts";
 
 const MB = 1048576;
 
@@ -57,7 +58,7 @@ export function frameAt(words: ArrayLike<f64>, o: u32): Frame {
 type FrameGroup = Exclude<keyof typeof FRAME_GROUPS, "$doc">;
 export const GROUPS = Object.keys(FRAME_GROUPS).filter((g) => !g.startsWith("$")) as FrameGroup[];
 
-export const n1 = (n: number) => (n ?? 0).toFixed(1);
+export const n1 = (n: number) => fixed(n ?? 0, 1);
 
 /** The frame's time outside the kernel's turn. */
 export const offthreadMs = (f: Frame) => Math.max(0, f.dt_ms - f.task_ms);
@@ -82,11 +83,11 @@ const NAME_TABLES: Record<string, readonly string[]> = { turn_step_name: EFFECT_
 export function valueText(name: string, v: f64): string {
   if (name.endsWith("_name")) return NAME_TABLES[name]?.[v] ?? "-";
   if (name.endsWith("_ms")) return `${n1(v)}ms`;
-  if (name.endsWith("_mb")) return `${+v.toFixed(1)}MB`;
-  if (name.endsWith("_bytes")) return `${+(v / MB).toFixed(1)}MB`;
+  if (name.endsWith("_mb")) return `${+fixed(v, 1)}MB`;
+  if (name.endsWith("_bytes")) return `${+fixed(v / MB, 1)}MB`;
   if (name.endsWith("_zooms")) return zoomsText(v);
   if (name === "triangles" || name.endsWith("_tris")) return tris(v);
-  if (name === "px") return `${(v / 1e6).toFixed(1)}Mpx`;
+  if (name === "px") return `${fixed(v / 1e6, 1)}Mpx`;
   return Number.isInteger(v) ? String(v) : n1(v);
 }
 
