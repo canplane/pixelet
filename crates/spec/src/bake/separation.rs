@@ -204,7 +204,21 @@ impl Separation {
     /// The segment that starts at point `p`, as the one rule reads it.
     pub fn segment(&self, p: usize) -> Segment {
         let d = self.starts.partition_point(|&s| s as usize <= p) - 1;
-        self.line(d).segment(p - self.starts[d] as usize)
+        Segment::of(self.segment_words(p, p > self.starts[d] as usize))
+    }
+
+    /// The segment that starts at point `p` in its words (pxl-portable
+    /// ways.rs `Segment::words`), and whether the one stored before it is its
+    /// line's one before it: a line ends square at its first and last.
+    pub fn segment_words(&self, p: usize, continues: bool) -> [u32; ways::SEGMENT_WORDS] {
+        let d = self.starts.partition_point(|&s| s as usize <= p) - 1;
+        let (first, last) = (p == self.starts[d] as usize, p + 2 == self.starts[d + 1] as usize);
+        let flags = ways::flags(u32::from(self.form[d]), first, last, continues);
+        Segment::words(
+            [self.points[p], self.points[p + 1]],
+            [self.tops[p], self.tops[p + 1]],
+            [self.width[d], self.kind[d], flags, self.clear[d]],
+        )
     }
 
     /// Every line over each column of a grid (`segments_over`), each segment
@@ -239,14 +253,15 @@ impl Separation {
         self.segments_in(Form::rises, x, y).map(|[_, hi]| hi).max()
     }
 
-    /// Each segment of a line that can rise or sink, with every square of a
-    /// tile of `side` cells cut `across` a side, row by row, that its
-    /// footprint reaches: the one sweep the ways' bound and their entries in
-    /// a window's square both read.
-    pub fn reaches(&self, side: f64, across: u32, mut each: impl FnMut(usize, &Line<'_>, usize)) {
+    /// Each segment of a line that can rise or sink, by its line and its
+    /// place in it, with every square of a tile of `side` cells cut `across`
+    /// a side, row by row, that its footprint reaches: the one sweep the
+    /// ways' bound, their entries in a window's square and the square's lines
+    /// all read.
+    pub fn reaches(&self, side: f64, across: u32, mut each: impl FnMut(usize, usize, &Line<'_>, usize)) {
         let step = side / f64::from(across);
         let square = |v: f64| ((v / step).floor() as i64).clamp(0, i64::from(across) - 1) as usize;
-        for line in self.iter().filter(|d| d.form.rises() || d.form.sinks()) {
+        for (d, line) in self.iter().enumerate().filter(|(_, d)| d.form.rises() || d.form.sinks()) {
             let half = line.footprint();
             for s in 0..line.points.len().saturating_sub(1) {
                 let (a, b) = (line.point(s), line.point(s + 1));
@@ -256,7 +271,7 @@ impl Separation {
                 }
                 for y in square(y0)..=square(y1) {
                     for x in square(x0)..=square(x1) {
-                        each(y * across as usize + x, &line, s);
+                        each(y * across as usize + x, d, &line, s);
                     }
                 }
             }
@@ -270,7 +285,7 @@ impl Separation {
     /// it (`reaches`); lowest over highest where none does.
     pub fn bound(&self, side: f64, across: u32, out: &mut [[i16; 2]]) {
         out.fill([i16::MAX, i16::MIN]);
-        self.reaches(side, across, |k, line, s| {
+        self.reaches(side, across, |k, _, line, s| {
             let (ta, tb) = (line.tops[s], line.tops[s + 1]);
             let o = &mut out[k];
             if line.form.rises() {
@@ -324,24 +339,6 @@ impl Line<'_> {
             }
         }
         b
-    }
-
-    /// Segment `s`, from point `s` to the next, as the one rule reads it: a
-    /// line ends square at its first and last.
-    pub fn segment(&self, s: usize) -> Segment {
-        let byte = |v: i16| f32::from(v) / ways::POINT_SCALE;
-        let [a, b] = [self.points[s], self.points[s + 1]].map(|p| p.map(byte));
-        Segment {
-            a,
-            b,
-            tops: [f32::from(self.tops[s]), f32::from(self.tops[s + 1])],
-            width: f32::from(self.width) / ways::POINT_SCALE,
-            kind: u32::from(self.kind),
-            form: u32::from(self.form.byte()),
-            clear: u32::from(self.clear),
-            first: u32::from(s == 0),
-            last: u32::from(s + 2 == self.points.len()),
-        }
     }
 }
 

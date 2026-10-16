@@ -11,7 +11,10 @@ use super::{occupancy_of, Occupancy};
 use crate::bake::constant::ELE_PADDED_SPAN;
 use crate::bake::malformed;
 use crate::bake::separation::{self, Separation};
+use crate::procedural::Frame;
+use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::layer::lattice::TILE_CELLS;
+use crate::space::layer::tile::Tile;
 
 /// A tile's lane lengths: a cell each, four looks a cell, and its padded
 /// samples; a tile is these and no other size.
@@ -25,11 +28,10 @@ pub use pxl_portable::window::{WAYS_ACROSS, WAYS_SHIFT};
 const WAYS_TILE_LEVELS: u32 = WAYS_ACROSS.trailing_zeros();
 pub const WAYS_LANE: usize = ways_at(WAYS_TILE_LEVELS + 1) as usize;
 
-/// The most entries a window's square holds of the ways: one a segment and
-/// a square of the bound (`WAYS_SHIFT`) its footprint reaches. The densest
-/// square of the format-10 set, z15 010332102333322 (2026-10-15); a tile
-/// past it fails its bake (`ways_fit`).
-pub const WAYS_SQUARE_SEGMENTS: usize = 1068;
+/// The most entries a window's square holds of the ways (pxl-portable
+/// `window::WAYS_SQUARE_SEGMENTS`); a tile past it fails its bake
+/// (`ways_fit`).
+pub const WAYS_SQUARE_SEGMENTS: usize = pxl_portable::window::WAYS_SQUARE_SEGMENTS as usize;
 
 /// Where level `k` of the ways' bound begins, the squares level 0, in entries.
 const fn ways_at(k: u32) -> u32 {
@@ -93,7 +95,7 @@ pub fn ways_of(separation: &Separation, ways: &mut [[i16; 2]]) {
 /// its place in squares and its count, where one does not.
 pub fn ways_fit(separation: &Separation, square: u32) -> Result<(), ([u32; 2], usize)> {
     let mut entries = [0usize; (WAYS_ACROSS * WAYS_ACROSS) as usize];
-    separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, _, _| entries[k] += 1);
+    separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, _, _, _| entries[k] += 1);
     let (bins, squares) = (square >> WAYS_SHIFT, TILE_CELLS / square);
     for qy in 0..squares {
         for qx in 0..squares {
@@ -104,6 +106,57 @@ pub fn ways_fit(separation: &Separation, square: u32) -> Result<(), ([u32; 2], u
         }
     }
     Ok(())
+}
+
+/// The lines of the window's square at `place` (in squares) of `tile`, as
+/// the GPU asks them (pxl-portable window.rs `LINES_*`), into `out`, a
+/// square's `LINES_WORDS`: the tile's header, each bin's entries, and the
+/// segments a bin reaches, each once, in their lines' order — the reach
+/// `ways_fit` counts, so none holds more than `WAYS_SQUARE_SEGMENTS`. The
+/// words written, the rest left as they were; `scratch` the room it works
+/// in, kept between squares.
+pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratch: &mut Vec<(u32, u32)>, out: &mut [u32]) -> usize {
+    use pxl_portable::ways::{header, HEADER_WORDS, SEGMENT_WORDS};
+    use pxl_portable::window::{LINES_BINS, LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, SQUARE};
+    xpute_kit::ensure!(out.len() == LINES_WORDS as usize, ENOTRECOVERABLE);
+    let bins = SQUARE >> WAYS_SHIFT;
+    // Each bin of the square a segment's footprint reaches, and the point it starts at.
+    scratch.clear();
+    separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, d, _, s| {
+        let [x, y] = [k as u32 % WAYS_ACROSS, k as u32 / WAYS_ACROSS];
+        if [x / bins, y / bins] == place {
+            scratch.push(((y % bins) * bins + x % bins, separation.starts[d] + s as u32));
+        }
+    });
+    xpute_kit::ensure!(scratch.len() <= WAYS_SQUARE_SEGMENTS, ENOTRECOVERABLE, scratch.len());
+    let frame = Frame::of(tile);
+    out[..HEADER_WORDS as usize].copy_from_slice(&header(u_per_m(frame.corner[1]) as f32, &frame.stations()));
+    // The segments, each once in their points' order, each entry then its
+    // segment's place among them.
+    scratch.sort_unstable_by_key(|&(b, p)| (p, b));
+    let (mut n, mut last) = (0, None);
+    for e in scratch.iter_mut() {
+        let p = e.1;
+        if last != Some(p) {
+            let at = LINES_SEGMENTS_AT as usize + n * SEGMENT_WORDS;
+            out[at..at + SEGMENT_WORDS].copy_from_slice(&separation.segment_words(p as usize, last == Some(p.wrapping_sub(1))));
+            (n, last) = (n + 1, Some(p));
+        }
+        e.1 = (n - 1) as u32;
+    }
+    // Each bin's entries in its segments' order, its first and its count.
+    scratch.sort_unstable();
+    let mut first = 0;
+    for b in 0..LINES_BINS {
+        let count = scratch[first..].iter().take_while(|e| e.0 == b).count();
+        out[(HEADER_WORDS + b) as usize] = first as u32 | (count as u32) << 16;
+        first += count;
+    }
+    for (k, pair) in scratch.chunks(2).enumerate() {
+        let at = |j: usize| pair.get(j).map_or(0, |e| e.1);
+        out[LINES_ENTRIES_AT as usize + k] = at(0) | at(1) << 16;
+    }
+    LINES_SEGMENTS_AT as usize + n * SEGMENT_WORDS
 }
 
 // Made on first use: a constant array of zeros would ship in the module's data.

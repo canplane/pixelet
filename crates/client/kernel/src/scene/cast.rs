@@ -91,8 +91,8 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::residency();
     kept().send(&mut |frame, pkt| {
         let Some(t) = terrain.in_frame(frame) else { return true };
-        let ways = terrain.get(t).map_or(&[][..], |tile| &tile.ways[..]);
-        window::fill(t, Handed::Packet(pkt, ways), write)
+        let Some(held) = terrain.get(t) else { return true };
+        window::fill(t, Handed::Packet(pkt, held), write)
     });
     let void: Vec<_> = terrain.held().filter(|&(p, _)| terrain.frame(p).is_none()).map(|(p, _)| p).collect();
     for p in void {

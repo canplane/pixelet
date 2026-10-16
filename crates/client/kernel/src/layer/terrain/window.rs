@@ -15,7 +15,7 @@ use pxl_portable::window::{self, Squares, LEVELS, SLOTS, SQUARE, SQUARE_CELLS, S
 use pxl_portable::wrap_index;
 use pxl_render::gpu::api_spec::read;
 use pxl_render::gpu::renderer::{CellsBack, Square, TerrainWrite};
-use pxl_spec::bake::tile::terrain::{handed, GroundId, TerrainTile, LOOK_LANE};
+use pxl_spec::bake::tile::terrain::{handed, square_lines, GroundId, TerrainTile, LOOK_LANE};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
@@ -277,16 +277,26 @@ pub fn table() -> &'static [i32] {
     &w.table
 }
 
-/// What a tile hands its squares: its packet, or a void tile's own looks
-/// over samples all zero; and its ways' bound, made where it landed.
+/// What a tile hands its squares: its packet and the tile as it is held, its
+/// lines and its ways' bound made where it landed; or a void tile's own
+/// looks over samples all zero.
 pub enum Handed<'a> {
-    Packet(&'a [u8], &'a [[i16; 2]]),
+    Packet(&'a [u8], &'a TerrainTile),
     Void,
 }
 
-/// A square's four looks a cell, cut from its tile's, kept so a fill takes
-/// nothing from the heap; the tile's own expanded where it holds one a cell.
-static FILL: Global<(Vec<GroundId>, Vec<GroundId>, Vec<i16>)> = Global::new();
+/// A square's four looks a cell, cut from its tile's, the tile's own
+/// expanded where it holds one a cell, and its lines and the room they are
+/// laid in, kept so a fill takes nothing more from the heap.
+struct Fill {
+    room: Vec<GroundId>,
+    cut: Vec<GroundId>,
+    zeros: Vec<i16>,
+    lines: Vec<u32>,
+    scratch: Vec<(u32, u32)>,
+}
+
+static FILL: Global<Fill> = Global::new();
 
 /// Each square any window wants in `tile` and holds absent, filled from
 /// `from` while `write` takes them: its own looks here, its four looks and
@@ -302,12 +312,18 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> bool {
     if !(0..SQUARES).any(|i| wants(w, i)) {
         return true;
     }
-    let f = FILL.get(|| (vec![0; LOOK_LANE], vec![0; 4 * SQUARE_CELLS as usize], vec![0; pxl_spec::bake::tile::terrain::ELE_LANE]));
-    let (room, cut, zeros) = (&mut f.0, &mut f.1, &f.2);
+    let f = FILL.get(|| Fill {
+        room: vec![0; LOOK_LANE],
+        cut: vec![0; 4 * SQUARE_CELLS as usize],
+        zeros: vec![0; pxl_spec::bake::tile::terrain::ELE_LANE],
+        lines: vec![0; window::LINES_WORDS as usize],
+        scratch: Vec::new(),
+    });
+    let (room, cut, zeros, lines, scratch) = (&mut f.room, &mut f.cut, &f.zeros, &mut f.lines, &mut f.scratch);
     let void = TerrainTile::void();
-    let tile_ways: &[[i16; 2]] = match from {
-        Handed::Packet(_, ways) => ways,
-        Handed::Void => &void.ways,
+    let held: &TerrainTile = match from {
+        Handed::Packet(_, held) => held,
+        Handed::Void => &void,
     };
     let (lane, ele): (&[GroundId], &[i16]) = match from {
         Handed::Packet(pkt, _) => match handed(pkt, room) {
@@ -334,7 +350,8 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> bool {
             let from_row = 4 * ((y0 + y) * side + x0);
             cut[4 * y * SQUARE as usize..4 * (y + 1) * SQUARE as usize].copy_from_slice(&lane[from_row..from_row + 4 * SQUARE as usize]);
         }
-        window::square_ways(|k| tile_ways[k as usize].map(i32::from), place, &mut ways);
+        window::square_ways(|k| held.ways[k as usize].map(i32::from), place, &mut ways);
+        let written = square_lines(tile, &held.separation, place, scratch, lines);
         w.ticket = (w.ticket % (read::DONE - 1)) + 1;
         let back = CellsBack {
             cells: off_of_slice(cells(i)) as u32,
@@ -347,6 +364,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> bool {
             looks: cut,
             ways: &ways,
             samples: pxl_render::gpu::api::bytes(ele),
+            lines: &lines[..written],
             back,
         });
         if !taken {

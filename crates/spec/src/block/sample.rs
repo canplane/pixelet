@@ -453,11 +453,11 @@ impl Columns for Grid {
         self.local(c).map_or(0, |i| self.face_height(i))
     }
 
-    /// The segment starts at the point after the one before it, and is not
-    /// its line's first.
+    /// The segment starts at the point after the one before it, and
+    /// continues its line's.
     fn joins(&self, c: [i32; 2], k: u32) -> bool {
         let at = (self.starts[self.local(c).unwrap_or(0)] + k) as usize;
-        k > 0 && self.over[at].1 == self.over[at - 1].1 + 1 && self.over[at].2.first == 0
+        k > 0 && self.over[at].1 == self.over[at - 1].1 + 1 && self.over[at].2.continues == 1
     }
 }
 

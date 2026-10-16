@@ -43,7 +43,7 @@ use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
 use pxl_portable::scatter::GROUPS;
-use pxl_spec::block::window::{BACK_WORDS, ELE_AT, HEIGHTS_AT, LEVELS, SQUARE, SQUARE_WORDS, WAYS_AT};
+use pxl_spec::block::window::{BACK_WORDS, ELE_AT, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARE_WORDS, WAYS_AT};
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -178,8 +178,9 @@ pub struct CellsBack {
 
 /// A square handed to the GPU: its place among the windows' squares, where
 /// it lies in its tile in squares (X low, Y high), its four looks a cell,
-/// its share of its tile's ways' bound, its tile's padded samples, and where
-/// its cells, joined with the ways, come back to.
+/// its share of its tile's ways' bound, its tile's padded samples, its lines
+/// as far as they are written, and where its cells, joined with the ways,
+/// come back to.
 pub struct Square<'a> {
     pub square: u32,
     pub place: u32,
@@ -187,6 +188,8 @@ pub struct Square<'a> {
     /// Its share of its tile's ways' bound (pxl-portable `window::WAYS_BOUND`).
     pub ways: &'a [u32],
     pub samples: &'a [u8],
+    /// Its lines (pxl-portable `window::LINES_AT`), the words written.
+    pub lines: &'a [u32],
     pub back: CellsBack,
 }
 
@@ -904,13 +907,14 @@ impl ScreenCellsPass {
         let mut fresh = 0;
         gb.backs.clear();
         (ground.upload)(&mut |q| {
-            if !room((q.looks.len() + 4 * q.ways.len() + q.samples.len()) as u32) {
+            if !room((q.looks.len() + 4 * q.ways.len() + q.samples.len() + 4 * q.lines.len()) as u32) {
                 return false;
             }
             let at = q.square * SQUARE_BYTES;
             g.write_buffer(gb.ground, at, q.looks);
             g.write_buffer(gb.ground, at + WAYS_AT * 4, bytes(q.ways));
             g.write_buffer(gb.ground, at + ELE_AT * 4, q.samples);
+            g.write_buffer(gb.ground, at + LINES_AT * 4, bytes(q.lines));
             g.write_buffer(gb.fresh, word_bytes(2 * fresh as usize), bytes(&[q.square, q.place]));
             gb.backs.push((q.square, q.back));
             fresh += 1;

@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-naga-wgsl.
-// Inputs: 539721407554de50245468f4883e65f92dfc258e054906c6929383daf13ef51a
+// Inputs: 7f41bf9ad3a5779810d50d7e63d720a542b7312a5db98844365b895ef5317632
 struct type_4 {
     member: array<u32>,
 }
@@ -1767,7 +1767,7 @@ fn function_() {
                                 let _e245 = global_1.member.member[0u];
                                 let _e249 = global_1.member.member[1u];
                                 let _e253 = global_1.member.member[2u];
-                                let _e255 = ((_e204 * 8178u) + 7508u);
+                                let _e255 = ((_e204 * 13008u) + 7508u);
                                 if (_e255 < _e166) {
                                     let _e258 = global_3.member[_e255];
                                     phi_1455_ = _e258;
@@ -2621,7 +2621,7 @@ fn function_() {
                                             }
                                             let _e1229 = phi_2356_;
                                             if _e1229.member_3 {
-                                                let _e1238 = ((((_e1229.member - 13u) * 16u) + _e1229.member_1) * 8178u);
+                                                let _e1238 = ((((_e1229.member - 13u) * 16u) + _e1229.member_1) * 13008u);
                                                 let _e1239 = (_e1238 + _e1229.member_2);
                                                 if (_e1239 < _e166) {
                                                     let _e1242 = global_3.member[_e1239];
@@ -2954,7 +2954,7 @@ fn function_() {
                                                                         }
                                                                         let _e1554 = phi_2733_;
                                                                         if _e1554.member_3 {
-                                                                            let _e1562 = ((((_e1554.member - 13u) * 16u) + _e1554.member_1) * 8178u);
+                                                                            let _e1562 = ((((_e1554.member - 13u) * 16u) + _e1554.member_1) * 13008u);
                                                                             let _e1563 = (_e1562 + _e1554.member_2);
                                                                             if (_e1563 < _e166) {
                                                                                 let _e1566 = global_3.member[_e1563];
@@ -3438,7 +3438,7 @@ fn function_() {
                                                             }
                                                             let _e1994 = phi_3243_;
                                                             if _e1994.member_3 {
-                                                                let _e2003 = ((((_e1994.member - 13u) * 16u) + _e1994.member_1) * 8178u);
+                                                                let _e2003 = ((((_e1994.member - 13u) * 16u) + _e1994.member_1) * 13008u);
                                                                 let _e2004 = (_e2003 + _e1994.member_2);
                                                                 if (_e2004 < _e166) {
                                                                     let _e2007 = global_3.member[_e2004];
@@ -3771,7 +3771,7 @@ fn function_() {
                                                                                         }
                                                                                         let _e2314 = phi_3620_;
                                                                                         if _e2314.member_3 {
-                                                                                            let _e2322 = ((((_e2314.member - 13u) * 16u) + _e2314.member_1) * 8178u);
+                                                                                            let _e2322 = ((((_e2314.member - 13u) * 16u) + _e2314.member_1) * 13008u);
                                                                                             let _e2323 = (_e2322 + _e2314.member_2);
                                                                                             if (_e2323 < _e166) {
                                                                                                 let _e2326 = global_3.member[_e2323];
@@ -4239,7 +4239,7 @@ fn function_() {
                                                             }
                                                             let _e2691 = phi_4104_;
                                                             if _e2691.member_3 {
-                                                                let _e2700 = ((((_e2691.member - 13u) * 16u) + _e2691.member_1) * 8178u);
+                                                                let _e2700 = ((((_e2691.member - 13u) * 16u) + _e2691.member_1) * 13008u);
                                                                 let _e2701 = (_e2700 + _e2691.member_2);
                                                                 if (_e2701 < _e166) {
                                                                     let _e2704 = global_3.member[_e2701];
@@ -4572,7 +4572,7 @@ fn function_() {
                                                                                         }
                                                                                         let _e3011 = phi_4481_;
                                                                                         if _e3011.member_3 {
-                                                                                            let _e3019 = ((((_e3011.member - 13u) * 16u) + _e3011.member_1) * 8178u);
+                                                                                            let _e3019 = ((((_e3011.member - 13u) * 16u) + _e3011.member_1) * 13008u);
                                                                                             let _e3020 = (_e3019 + _e3011.member_2);
                                                                                             if (_e3020 < _e166) {
                                                                                                 let _e3023 = global_3.member[_e3020];
@@ -5040,7 +5040,7 @@ fn function_() {
                                                             }
                                                             let _e3390 = phi_4968_;
                                                             if _e3390.member_3 {
-                                                                let _e3399 = ((((_e3390.member - 13u) * 16u) + _e3390.member_1) * 8178u);
+                                                                let _e3399 = ((((_e3390.member - 13u) * 16u) + _e3390.member_1) * 13008u);
                                                                 let _e3400 = (_e3399 + _e3390.member_2);
                                                                 if (_e3400 < _e166) {
                                                                     let _e3403 = global_3.member[_e3400];
@@ -5373,7 +5373,7 @@ fn function_() {
                                                                                         }
                                                                                         let _e3710 = phi_5345_;
                                                                                         if _e3710.member_3 {
-                                                                                            let _e3718 = ((((_e3710.member - 13u) * 16u) + _e3710.member_1) * 8178u);
+                                                                                            let _e3718 = ((((_e3710.member - 13u) * 16u) + _e3710.member_1) * 13008u);
                                                                                             let _e3719 = (_e3718 + _e3710.member_2);
                                                                                             if (_e3719 < _e166) {
                                                                                                 let _e3722 = global_3.member[_e3719];
@@ -5841,7 +5841,7 @@ fn function_() {
                                                             }
                                                             let _e4087 = phi_5829_;
                                                             if _e4087.member_3 {
-                                                                let _e4096 = ((((_e4087.member - 13u) * 16u) + _e4087.member_1) * 8178u);
+                                                                let _e4096 = ((((_e4087.member - 13u) * 16u) + _e4087.member_1) * 13008u);
                                                                 let _e4097 = (_e4096 + _e4087.member_2);
                                                                 if (_e4097 < _e166) {
                                                                     let _e4100 = global_3.member[_e4097];
@@ -6174,7 +6174,7 @@ fn function_() {
                                                                                         }
                                                                                         let _e4407 = phi_6206_;
                                                                                         if _e4407.member_3 {
-                                                                                            let _e4415 = ((((_e4407.member - 13u) * 16u) + _e4407.member_1) * 8178u);
+                                                                                            let _e4415 = ((((_e4407.member - 13u) * 16u) + _e4407.member_1) * 13008u);
                                                                                             let _e4416 = (_e4415 + _e4407.member_2);
                                                                                             if (_e4416 < _e166) {
                                                                                                 let _e4419 = global_3.member[_e4416];
@@ -7683,7 +7683,7 @@ fn function_() {
                                                                                                                 let _e6153 = phi_7657_;
                                                                                                                 let _e6154 = select(_e6151, false, _e6153);
                                                                                                                 if _e6154 {
-                                                                                                                    let _e6156 = ((_e6135 * 8178u) + 7508u);
+                                                                                                                    let _e6156 = ((_e6135 * 13008u) + 7508u);
                                                                                                                     if (_e6156 < _e166) {
                                                                                                                         let _e6159 = global_3.member[_e6156];
                                                                                                                         phi_7693_ = _e6159;
@@ -7849,7 +7849,7 @@ fn function_() {
                                                                                                     if _e5974.member_3 {
                                                                                                         let _e5980 = (_e185 >= _e5974.member);
                                                                                                         if _e5980 {
-                                                                                                            let _e6024 = ((((_e5974.member - 13u) * 16u) + _e5974.member_1) * 8178u);
+                                                                                                            let _e6024 = ((((_e5974.member - 13u) * 16u) + _e5974.member_1) * 13008u);
                                                                                                             let _e6027 = ((_e6024 + 4096u) + (_e5974.member_2 / 2u));
                                                                                                             if (_e6027 < _e166) {
                                                                                                                 let _e6030 = global_3.member[_e6027];
@@ -7875,7 +7875,7 @@ fn function_() {
                                                                                                         } else {
                                                                                                             let _e5981 = (_e5974.member - _e185);
                                                                                                             let _e5983 = (_e5981 & 31u);
-                                                                                                            let _e6006 = ((((((((_e5974.member - 13u) * 16u) + _e5974.member_1) * 8178u) + 6144u) + ((4096u - (4096u >> bitcast<u32>(((2u * (_e5981 - 1u)) & 31u)))) / 3u)) + (((_e5974.member_2 / 64u) >> bitcast<u32>(_e5983)) * (64u >> bitcast<u32>(_e5983)))) + ((_e5974.member_2 % 64u) >> bitcast<u32>(_e5983)));
+                                                                                                            let _e6006 = ((((((((_e5974.member - 13u) * 16u) + _e5974.member_1) * 13008u) + 6144u) + ((4096u - (4096u >> bitcast<u32>(((2u * (_e5981 - 1u)) & 31u)))) / 3u)) + (((_e5974.member_2 / 64u) >> bitcast<u32>(_e5983)) * (64u >> bitcast<u32>(_e5983)))) + ((_e5974.member_2 % 64u) >> bitcast<u32>(_e5983)));
                                                                                                             if (_e6006 < _e166) {
                                                                                                                 let _e6009 = global_3.member[_e6006];
                                                                                                                 phi_7948_ = _e6009;
@@ -8092,7 +8092,7 @@ fn function_() {
                                                                                                     }
                                                                                                     let _e6745 = phi_8143_;
                                                                                                     if _e6745.member_3 {
-                                                                                                        let _e6754 = ((((_e6745.member - 13u) * 16u) + _e6745.member_1) * 8178u);
+                                                                                                        let _e6754 = ((((_e6745.member - 13u) * 16u) + _e6745.member_1) * 13008u);
                                                                                                         let _e6755 = (_e6754 + _e6745.member_2);
                                                                                                         if (_e6755 < _e166) {
                                                                                                             let _e6758 = global_3.member[_e6755];
@@ -8436,7 +8436,7 @@ fn function_() {
                                                                                                                                 }
                                                                                                                                 let _e7067 = phi_8520_;
                                                                                                                                 if _e7067.member_3 {
-                                                                                                                                    let _e7075 = ((((_e7067.member - 13u) * 16u) + _e7067.member_1) * 8178u);
+                                                                                                                                    let _e7075 = ((((_e7067.member - 13u) * 16u) + _e7067.member_1) * 13008u);
                                                                                                                                     let _e7076 = (_e7075 + _e7067.member_2);
                                                                                                                                     if (_e7076 < _e166) {
                                                                                                                                         let _e7079 = global_3.member[_e7076];

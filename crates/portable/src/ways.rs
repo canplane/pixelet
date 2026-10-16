@@ -87,8 +87,9 @@ pub fn slab_depth(u_per_m: f32) -> i32 {
 
 /// One segment of a line, in its tile's cells: from `a` to `b`, its road
 /// surface `tops` there in leaf cells, its width in cells, the look it shows,
-/// its form, its tunnel's clear height in leaf cells, and whether it is its
-/// line's first or last, where the line ends square.
+/// its form, its tunnel's clear height in leaf cells, whether it is its
+/// line's first or last, where the line ends square, and whether the one
+/// stored before it is its line's one before it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Segment {
     pub a: [f32; 2],
@@ -100,16 +101,18 @@ pub struct Segment {
     pub clear: u32,
     pub first: u32,
     pub last: u32,
+    pub continues: u32,
 }
 
 /// A segment's words: `a` and `b` each two `i16` eighths of a cell, the tops
-/// two `i16`, then width (eighths), kind, form with first and last over it,
-/// and clear, a byte each.
+/// two `i16`, then width (eighths), kind, form with first, last and
+/// continues over it, and clear, a byte each.
 pub const SEGMENT_WORDS: usize = 4;
 
-/// A segment's form with whether it is its line's first and last, a byte.
-pub fn flags(form: u32, first: bool, last: bool) -> u8 {
-    ((form & 3) | u32::from(first) << 2 | u32::from(last) << 3) as u8
+/// A segment's form with whether it is its line's first and last and
+/// continues the one stored before it, a byte.
+pub fn flags(form: u32, first: bool, last: bool, continues: bool) -> u8 {
+    ((form & 3) | u32::from(first) << 2 | u32::from(last) << 3 | u32::from(continues) << 4) as u8
 }
 
 /// A word's two `i16`, sign-extended in words, as a GPU has no `i16`.
@@ -134,6 +137,7 @@ impl Segment {
             form: byte(2) & 3,
             first: (byte(2) >> 2) & 1,
             last: (byte(2) >> 3) & 1,
+            continues: (byte(2) >> 4) & 1,
             clear: byte(3),
         }
     }
@@ -173,6 +177,34 @@ pub struct Stations {
 
 /// A bent's spacing for the narrow beam (`w` 0) and the wide (1), metres.
 pub const INTERVAL_M: [f32; 2] = [BEAM_PILLAR_INTERVAL_M, WIDE_BEAM_PIER_INTERVAL_M];
+
+/// What a square's lines open with (pxl-portable window.rs `LINES_*`): its
+/// tile's units of height a ground metre, then its stations, step, phase
+/// and leaf, each a float's bits.
+pub const HEADER_WORDS: u32 = 8;
+
+pub fn header(per_m: f32, st: &Stations) -> [u32; HEADER_WORDS as usize] {
+    let [[p0, p1], [p2, p3]] = st.phase;
+    [
+        per_m.to_bits(),
+        st.step[0].to_bits(),
+        st.step[1].to_bits(),
+        p0.to_bits(),
+        p1.to_bits(),
+        p2.to_bits(),
+        p3.to_bits(),
+        st.leaf.to_bits(),
+    ]
+}
+
+pub fn of_header(w: [u32; HEADER_WORDS as usize]) -> (f32, Stations) {
+    let st = Stations {
+        step: [f32::from_bits(w[1]), f32::from_bits(w[2])],
+        phase: [[f32::from_bits(w[3]), f32::from_bits(w[4])], [f32::from_bits(w[5]), f32::from_bits(w[6])]],
+        leaf: f32::from_bits(w[7]),
+    };
+    (f32::from_bits(w[0]), st)
+}
 
 /// A bent's columns across the deck, from its line: the middle, both edges,
 /// or both and the middle, by its half width in cells; `count` of them.

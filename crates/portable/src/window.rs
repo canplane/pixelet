@@ -90,18 +90,37 @@ pub const WAYS_LEVELS: u32 = SQUARE_SHIFT - WAYS_SHIFT;
 const WAYS_BINS_ACROSS: u32 = SQUARE >> WAYS_SHIFT;
 pub const WAYS_BOUND: u32 = ways_at(WAYS_BINS_ACROSS, WAYS_LEVELS + 1);
 
+/// The most entries a square holds of its tile's ways: one a segment and a
+/// bin of the bound (`WAYS_SHIFT`) its footprint reaches. The densest square
+/// of the format-10 set, z15 010332102333322 (2026-10-15); a tile past it
+/// fails its bake (pxl-spec bake/tile/terrain.rs `ways_fit`).
+pub const WAYS_SQUARE_SEGMENTS: u32 = 1068;
+
+/// A square's lines, laid by the CPU as the square is filled (pxl-spec
+/// bake/tile/terrain.rs `square_lines`) for the one rule to ask of a block
+/// there (`ways::block`): its tile's header (`ways::header`), a word a bin
+/// of the bound, its first entry and its count over it; the entries, two a
+/// word, each one of the square's segments, a bin's in their order; then
+/// the segments a bin reaches, in their lines' order, `ways::SEGMENT_WORDS`
+/// each. None holds more than `WAYS_SQUARE_SEGMENTS` of either.
+pub const LINES_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
+pub const LINES_ENTRIES_AT: u32 = crate::ways::HEADER_WORDS + LINES_BINS;
+pub const LINES_SEGMENTS_AT: u32 = LINES_ENTRIES_AT + WAYS_SQUARE_SEGMENTS.div_ceil(2);
+pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::ways::SEGMENT_WORDS as u32;
+
 /// A square's words on a GPU, its lanes in order: its four looks a cell, its
-/// heights two a word, its levels, its ways' bound, then its tile's padded
-/// samples, two a word. Its heights, levels and ways' bound follow one
-/// another, read back whole.
+/// heights two a word, its levels, its ways' bound, its tile's padded
+/// samples, two a word, then its lines. Its heights, levels and ways' bound
+/// follow one another, read back whole.
 pub const LOOK_WORDS: u32 = SQUARE_CELLS;
 pub const HEIGHT_WORDS: u32 = SQUARE_CELLS / 2;
 pub const ELE_WORDS: u32 = crate::ground::ELE_WORDS;
-pub const SQUARE_WORDS: u32 = LOOK_WORDS + HEIGHT_WORDS + LEVEL_WORDS + WAYS_BOUND + ELE_WORDS;
+pub const SQUARE_WORDS: u32 = LOOK_WORDS + HEIGHT_WORDS + LEVEL_WORDS + WAYS_BOUND + ELE_WORDS + LINES_WORDS;
 pub const HEIGHTS_AT: u32 = LOOK_WORDS;
 pub const LEVELS_AT: u32 = HEIGHTS_AT + HEIGHT_WORDS;
 pub const WAYS_AT: u32 = LEVELS_AT + LEVEL_WORDS;
 pub const ELE_AT: u32 = WAYS_AT + WAYS_BOUND;
+pub const LINES_AT: u32 = ELE_AT + ELE_WORDS;
 /// What comes back of a square, from `HEIGHTS_AT`.
 pub const BACK_WORDS: u32 = HEIGHT_WORDS + LEVEL_WORDS + WAYS_BOUND;
 
