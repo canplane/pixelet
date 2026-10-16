@@ -8,7 +8,6 @@
 pub mod spec;
 
 use crate::layer::Base as _;
-use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
 use xpute_guest::sched::edge::{notified, Notify};
@@ -344,19 +343,16 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
 
 /// What moved this turn, told to what reads it: the tiles whose answer moved
 /// (identities, not contents, which a tile's identity fixes) and where the
-/// objects were written. Taken after arrivals are admitted, before the
+/// objects were written, the ground's held by the query
+/// (query/changed.rs). Taken after arrivals are admitted, before the
 /// layers observe.
 fn changes_step() {
-    static MOVED: Global<[Vec<pxl_spec::space::layer::tile::Tile>; 4]> = Global::new();
-    static WRITTEN: Global<Vec<Aabb>> = Global::new();
-    let [ground, places, earth, divisions] = MOVED.get(Default::default);
-    let written = WRITTEN.get(Vec::new);
-    TerrainTile::residency().take_moved(ground);
+    static MOVED: Global<[Vec<pxl_spec::space::layer::tile::Tile>; 3]> = Global::new();
+    let [places, earth, divisions] = MOVED.get(Default::default);
+    let shared = crate::query::changed::take();
     PlaceTile::residency().take_moved(places);
     Earth::residency().take_moved(earth);
     DivisionTile::residency().take_moved(divisions);
-    crate::layer::object::store::take_written(written);
-    let shared = !ground.is_empty() || !written.is_empty();
     if shared {
         TerrainTile::demand().moved();
     }

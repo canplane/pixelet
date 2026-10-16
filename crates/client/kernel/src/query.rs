@@ -13,6 +13,7 @@
 //! there: it is asked only whether anything under it fills, at any zoom.
 
 mod block;
+pub mod changed;
 mod decor;
 mod limit;
 mod node;
