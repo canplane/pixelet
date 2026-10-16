@@ -343,7 +343,8 @@ fn stencil_face(s: &mut dyn Sink, f: &StencilFaceState) {
     [f.compare as u32, f.fail as u32, f.depth_fail as u32, f.pass as u32].into_iter().for_each(|w| s.word(w));
 }
 
-/// The calls, over a table of `N` handles.
+/// The calls, over a table of `N` handles. All-zero bytes are one that has
+/// made nothing, as its table's are an empty table.
 pub struct Gpu<const N: usize> {
     handles: HandleTable<N>,
 }
@@ -355,7 +356,7 @@ impl<const N: usize> Default for Gpu<N> {
 }
 
 impl<const N: usize> Gpu<N> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Gpu { handles: HandleTable::new() }
     }
 

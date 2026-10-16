@@ -8,7 +8,6 @@
 /// The rest is the generation, hence its `u16` lane. The host uses the same 16.
 pub const SLOT_BITS: u32 = 16;
 const SLOT_MASK: u32 = (1 << SLOT_BITS) - 1;
-const NONE: u32 = u32::MAX;
 
 pub fn handle_slot(handle: u32) -> u32 {
     handle & SLOT_MASK
@@ -23,17 +22,20 @@ fn next_generation(generation: u16) -> u16 {
     generation.wrapping_add(1).max(1)
 }
 
+/// All-zero bytes are an empty table, so one may live in memory that starts
+/// zeroed, or be emptied by zeroing it, and is never built and moved.
 pub struct HandleTable<const N: usize> {
     generation: [u16; N],
-    /// The epoch a live slot was taken in; 0 for a free one. A `u64` so no
-    /// count of epochs a program lives through brings a stale one round again.
+    /// One past the epoch a live slot was taken in; 0 for a free one. A `u64`
+    /// so no count of epochs a program lives through brings a stale one round.
     made: [u64; N],
+    /// A free slot's next free slot; 0, which is never handed out, ends the list.
     next: [u32; N],
     /// Advanced by `begin`: the slots taken since are those made in it.
     epoch: u64,
     free: u32,
-    /// Slots never handed out start here.
-    fresh: u32,
+    /// The highest slot handed out; those past it never have been.
+    top: u32,
     count: u32,
 }
 
@@ -44,33 +46,33 @@ impl<const N: usize> Default for HandleTable<N> {
 }
 
 impl<const N: usize> HandleTable<N> {
-    pub fn new() -> Self {
-        xpute_kit::ensure!((2..=1 << SLOT_BITS).contains(&N), EINVAL, SLOT_BITS);
+    pub const fn new() -> Self {
+        const { assert!(N >= 2 && N <= 1 << SLOT_BITS, "a slot is 16 bits, and slot 0 is never handed out") };
         HandleTable {
             generation: [0; N],
             made: [0; N],
-            next: [NONE; N],
-            epoch: 1,
-            free: NONE,
-            fresh: 1,
+            next: [0; N],
+            epoch: 0,
+            free: 0,
+            top: 0,
             count: 0,
         }
     }
 
     pub fn acquire(&mut self) -> Option<u32> {
-        let slot = if self.free != NONE {
+        let slot = if self.free != 0 {
             let slot = self.free;
             self.free = self.next[slot as usize];
             slot
-        } else if (self.fresh as usize) < N {
-            self.fresh += 1;
-            self.fresh - 1
+        } else if (self.top as usize) + 1 < N {
+            self.top += 1;
+            self.top
         } else {
             return None;
         };
         let s = slot as usize;
         self.generation[s] = next_generation(self.generation[s]);
-        self.made[s] = self.epoch;
+        self.made[s] = self.epoch + 1;
         self.count += 1;
         Some(handle_of(slot, self.generation[s]))
     }
@@ -100,8 +102,8 @@ impl<const N: usize> HandleTable<N> {
     /// Every handle taken since `begin` and not yet released, released: what a
     /// transaction that did not commit made, which the other side never saw.
     pub fn rollback(&mut self) {
-        for s in 1..self.fresh {
-            if self.made[s as usize] == self.epoch {
+        for s in 1..=self.top {
+            if self.made[s as usize] == self.epoch + 1 {
                 self.release(handle_of(s, self.generation[s as usize]));
             }
         }

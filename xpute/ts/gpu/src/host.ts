@@ -299,9 +299,11 @@ export class GpuHost {
         const targets = Array.from({ length: r.u() }, (): GPUColorTargetState => {
           const format = TEXTURE_FORMAT[r.u()];
           const [cop, csrc, cdst, aop, asrc, adst] = [r.u(), r.u(), r.u(), r.u(), r.u(), r.u()];
+          // As the formats, WebGPU's newer factors are past what a DOM lib's type lists.
+          const factor = (k: u32) => BLEND_FACTOR[k] as GPUBlendFactor;
           const blend = cop === NONE ? undefined : {
-            color: { operation: BLEND_OPERATION[cop], srcFactor: BLEND_FACTOR[csrc], dstFactor: BLEND_FACTOR[cdst] },
-            alpha: { operation: BLEND_OPERATION[aop], srcFactor: BLEND_FACTOR[asrc], dstFactor: BLEND_FACTOR[adst] },
+            color: { operation: BLEND_OPERATION[cop], srcFactor: factor(csrc), dstFactor: factor(cdst) },
+            alpha: { operation: BLEND_OPERATION[aop], srcFactor: factor(asrc), dstFactor: factor(adst) },
           };
           return { format, blend, writeMask: r.u() };
         });
@@ -559,7 +561,7 @@ export class GpuHost {
         // WebGPU resolves timestamps in nanoseconds.
         const period = LIMIT_NAME.length + Math.ceil(FEATURE_NAME.length / 32);
         new Float32Array(this.memory(), address, words)[period] = 1;
-        out[period + 1] = TEXTURE_FORMAT.indexOf(navigator.gpu.getPreferredCanvasFormat());
+        out[period + 1] = (TEXTURE_FORMAT as readonly string[]).indexOf(navigator.gpu.getPreferredCanvasFormat());
         out[words - 1] = STATUS.READY;
         return;
       }
