@@ -17,7 +17,7 @@ pub mod harness;
 use pxl_portable::area::{self, Area};
 use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
 use pxl_portable::caves::Cave;
-use pxl_portable::cube::{object, sentinel, Ground};
+use pxl_portable::cube::{object, sentinel};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
 use pxl_portable::decor::{Decor, COUNTS};
