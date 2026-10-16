@@ -63,6 +63,6 @@ pub fn has_ground(client: &mut Client, tiles: &[[i64; 2]]) -> Result<Vec<bool>, 
 pub fn bake_leaf(r: &mut separation::Reader<impl Store>, tile: [i64; 2]) -> Result<TerrainTile, String> {
     let solved = separation::solve_tile(r, tile)?;
     let surface = fetch_surface(r.repo, r.client, tile, &solved.drawn)?;
-    let lines = bake_separation(&solved.lines, epsg3857::get_tile_bbox(LEAF_ZOOM, tile)[0]);
+    let lines = bake_separation(&solved.lines, tile);
     Ok(assemble(tile, surface, lines))
 }

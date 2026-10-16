@@ -7,9 +7,10 @@
   "FORMAT": {
     "$doc": [
       "The format each bake writes now, which a published name begins with.",
-      "Bumped only by a change to how the client reads a tile."
+      "Bumped by a change to how the client reads a tile, or to what a",
+      "tile guarantees it (a terrain tile its lines past its edge, 11)."
     ],
-    "terrain": 10,
+    "terrain": 11,
     "place": 10,
     "division": 7,
     "earth": 1

@@ -58,7 +58,7 @@ fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: [i64; 2]) -> R
     let read = |client: &mut Client, sql: &str| client.query(sql, &env).map_err(|e| e.to_string());
     let ways = read(client, SEGMENTS_SQL)?;
     let water = read(client, WATER_SQL)?;
-    let ele = repo.ele(client, [min, max]).map_err(|e| e.to_string())?;
+    let ele = repo.ele(client, tile).map_err(|e| e.to_string())?;
     Ok(TileRows {
         ways: ways.iter().flat_map(Segment::of).collect(),
         water: water.iter().map(|r| (r.get("subtype"), r.get("class"), r.get::<_, &[u8]>("geom_wkb").to_vec())).collect(),

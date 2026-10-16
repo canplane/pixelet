@@ -71,11 +71,11 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
                 place,
                 lines: &lines[..n],
                 looks: |k: u32| word([u32::from(looks_of[at(k)]); 4]),
-                height: |k: u32| i32::from(heights[at(k)]),
+                height: |c: [i32; 2]| i32::from(heights[at((c[1].clamp(0, SQUARE as i32 - 1) as u32) * SQUARE + c[0].clamp(0, SQUARE as i32 - 1) as u32)]),
             };
             pxl_spec::bake::tile::terrain::fill_runs(&laid, &mut runs);
             for b in 0..window::WAYS_BINS {
-                words[(window::HEIGHT_WORDS + window::LEVEL_WORDS + b) as usize] = window::bin_word(cell, |k| runs[k as usize], b) as u32;
+                words[(window::HEIGHT_WORDS + window::LEVEL_WORDS + b) as usize] = window::bin_word(&laid, |k| runs[k as usize], b) as u32;
             }
             let write = |words: &[u32]| {
                 let c = &mut planes().cells[(i * CELLS_LANE_BYTES) as usize..];

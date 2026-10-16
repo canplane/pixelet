@@ -19,8 +19,8 @@ use crate::area::{earth, past, tile_at, walled, Area};
 use crate::cast::{In, Kind};
 use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
-use crate::lattice::GROUND;
 pub use crate::lattice::TILE_CELLS;
+use crate::lattice::{CELL_CENTER, GROUND};
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
 
 // The catalog's looks this rule names, read into a word.
@@ -67,7 +67,7 @@ pub fn bedrock(face: i32) -> i32 {
 /// one producer of a cell's height, which a GPU runs once a cell of a held
 /// tile (`heights_cs`), and the CPU reads back.
 pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [u32; 2]) -> i32 {
-    bicubic(ele, x as f32 + 0.5, y as f32 + 0.5)
+    bicubic(ele, x as f32 + CELL_CENTER, y as f32 + CELL_CENTER)
 }
 
 /// A tile's padded samples as a GPU holds them, 2 a word.

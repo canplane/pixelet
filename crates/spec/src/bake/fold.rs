@@ -78,7 +78,7 @@ pub fn fold_terrain(around: [Option<&TerrainTile>; 16], zoom: Zoom) -> Option<Te
     Some(TerrainTile::of(
         ele,
         fold_ground(children.map(|t| &t.ground), zoom),
-        fold_separation(children.map(|t| &t.separation), zoom),
+        fold_separation(around.map(|t| t.map(|t| &t.separation))),
         Occupancy::of_children(children.map(|t| t.occupancy)),
     ))
 }

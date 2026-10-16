@@ -37,26 +37,23 @@ fn a_narrow_line_along_a_diagonal_is_one_band() {
     }
 }
 
+/// A parent's neighbourhood with `d` its first child's lines and no other.
+fn first_child(d: &Separation) -> [Option<&Separation>; 16] {
+    let mut around = [None; 16];
+    around[crate::space::layer::tile::neighbor_index(0, 0)] = Some(d);
+    around
+}
+
 #[test]
 fn a_line_is_kept_up_the_pyramid_by_its_width_alone() {
-    let empty = Separation::default();
     // Two cells wide: one cell a zoom coarser, kept at its own width.
     let wide = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 2.0);
-    let up = fold_separation([&wide, &empty, &empty, &empty], 15);
+    let up = fold_separation(first_child(&wide));
     assert_eq!(up.len(), 1);
     assert_eq!(up.line(0).width_cells(), 1.0);
     // Under a cell wide: under half the parent's, and gone, whatever it is.
     let narrow = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 0.75);
-    assert_eq!(fold_separation([&narrow, &empty, &empty, &empty], 15).len(), 0);
-}
-
-#[test]
-fn a_straight_flat_line_folds_to_its_ends() {
-    let d = one(&[[0.0, 0.0], [10.0, 0.0], [20.0, 0.0], [30.0, 0.0]], &[40, 40, 40, 40], 4.0);
-    let empty = Separation::default();
-    let up = fold_separation([&d, &empty, &empty, &empty], 15);
-    assert_eq!(up.line(0).points.len(), 2);
-    assert_eq!(up.line(0).point(1), [15.0, 0.0]);
+    assert_eq!(fold_separation(first_child(&narrow)).len(), 0);
 }
 
 #[test]

@@ -8,6 +8,10 @@
 
 use crate::{count, Zoom, CHUNK_STEPS, FINEST_ZOOM, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
 
+/// Where a cell's center lies in it, as a share of its side from its low
+/// corner: what a cell is painted, sampled and crossed at.
+pub const CELL_CENTER: f32 = 0.5;
+
 /// A layer's lattice: its cell is its tile's side over its own count of
 /// cells, the same at every zoom; held as the cell's zoom on a leaf. Its
 /// scale on the camera grid is `scale_steps` zooms: the grid's cell is that

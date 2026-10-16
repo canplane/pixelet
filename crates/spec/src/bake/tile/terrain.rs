@@ -12,7 +12,6 @@ use crate::bake::constant::ELE_PADDED_SPAN;
 use crate::bake::malformed;
 use crate::bake::separation::{self, Separation};
 use crate::procedural::Frame;
-use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::TILE_CELLS;
 use crate::space::layer::tile::Tile;
@@ -101,7 +100,7 @@ pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratc
     xpute_kit::ensure!(count <= WAYS_SQUARE_SEGMENTS, ENOTRECOVERABLE, count);
     let scratch = &mut scratch[..count];
     let frame = Frame::of(tile);
-    out[..HEADER_WORDS as usize].copy_from_slice(&header(u_per_m(frame.corner[1]) as f32, &frame.stations()));
+    out[..HEADER_WORDS as usize].copy_from_slice(&header(frame.per_m(), &frame.stations()));
     // The segments, each once in their points' order, each entry then its
     // segment's place among them.
     scratch.sort_unstable_by_key(|&(b, p)| (p, b));
@@ -132,8 +131,8 @@ pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratc
 
 /// A window's square as its fill reads it (pxl-portable `window::Square`):
 /// its cells' zoom and place in its tile, its lines as `square_lines` lays
-/// them, and cell `i`'s four looks as a word (`looks`) and its height
-/// (`height`), as its lanes hold them.
+/// them, cell `i`'s four looks as a word (`looks`), and column `c`'s height,
+/// counted from its first cell, its ring included (`height`).
 pub struct Laid<'a, L, H> {
     pub cell: Zoom,
     pub place: [u32; 2],
@@ -142,7 +141,7 @@ pub struct Laid<'a, L, H> {
     pub height: H,
 }
 
-impl<L: Fn(u32) -> u32, H: Fn(u32) -> i32> pxl_portable::window::Square for Laid<'_, L, H> {
+impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_portable::window::Square for Laid<'_, L, H> {
     fn cell(&self) -> Zoom {
         self.cell
     }
@@ -155,8 +154,8 @@ impl<L: Fn(u32) -> u32, H: Fn(u32) -> i32> pxl_portable::window::Square for Laid
     fn looks(&self, i: u32) -> u32 {
         (self.looks)(i)
     }
-    fn height(&self, i: u32) -> i32 {
-        (self.height)(i)
+    fn height(&self, c: [i32; 2]) -> i32 {
+        (self.height)(c)
     }
 }
 
@@ -195,31 +194,72 @@ pub fn fill_runs(sq: &impl pxl_portable::window::Square, out: &mut [u32]) -> [u3
     [runs, most]
 }
 
-/// What the window's square at `place` (in squares) of `tile` reads as at
-/// fill (`fill_runs`), off its lines laid into `lines`, a square's
-/// `LINES_WORDS`, with `scratch` (`square_lines`), its looks four a cell as
-/// a client hands them (`handed`) and its heights off the tile's samples as
-/// `heights_cs` draws them; its runs into `out`.
-pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, u32)], lines: &mut [u32], out: &mut [u32]) -> [u32; 2] {
-    let n = square_lines(tile, &held.separation, place, scratch, lines);
-    let cells = &held.ground.cells;
-    let looks = |i: u32| {
+/// The window's square at `place` (in squares) of `tile` as its fill reads
+/// it, its lines `lines` (`square_lines`): its looks four a cell as a client
+/// hands them (`handed`) and its heights off the tile's samples `ele` as
+/// `heights_cs` draws them (`ground::height`), its ring's too.
+fn laid<'a>(tile: Tile, ground: &'a Ground, ele: &'a [i16], place: [u32; 2], lines: &'a [u32]) -> Laid<'a, impl Fn(u32) -> u32 + 'a, impl Fn([i32; 2]) -> i32 + 'a> {
+    let looks = move |i: u32| {
         let at = square_cell(place, i);
         let c = (at[1] * TILE_CELLS + at[0]) as usize;
-        pxl_portable::ground::word(four_looks(cells, c).map(u32::from))
+        pxl_portable::ground::word(four_looks(&ground.cells, c).map(u32::from))
     };
-    let height = |i: u32| pxl_portable::ground::height(|j| i32::from(held.ele[j]), square_cell(place, i));
-    let cell = crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom);
-    fill_runs(
-        &Laid {
-            cell,
-            place,
-            lines: &lines[..n],
-            looks,
-            height,
-        },
-        out,
-    )
+    let height = move |c: [i32; 2]| {
+        let at = [0, 1].map(|a| (place[a] * pxl_portable::window::SQUARE) as f32 + c[a] as f32 + pxl_portable::lattice::CELL_CENTER);
+        pxl_portable::ground::bicubic(|j| i32::from(ele[j]), at[0], at[1])
+    };
+    Laid {
+        cell: crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom),
+        place,
+        lines,
+        looks,
+        height,
+    }
+}
+
+/// What the window's square at `place` (in squares) of `tile` reads as at
+/// fill (`fill_runs`), off its lines laid into `lines`, a square's
+/// `LINES_WORDS`, with `scratch` (`square_lines`); its runs into `out`.
+pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, u32)], lines: &mut [u32], out: &mut [u32]) -> [u32; 2] {
+    let n = square_lines(tile, &held.separation, place, scratch, lines);
+    fill_runs(&laid(tile, &held.ground, &held.ele, place, &lines[..n]), out)
+}
+
+/// `held` with only the lines it draws at `tile`'s zoom: each read alone,
+/// its piers standing as none blocks them, by the rule its squares' columns
+/// are read by, their rings included (`ways::column`) — so a line every span
+/// of which fills no block there (`ways::fills_any`) is none at that zoom,
+/// and is not stored.
+pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
+    use pxl_portable::window::{LINES_WORDS, SQUARE};
+    let lines = &held.separation;
+    let squares = TILE_CELLS / SQUARE;
+    let (mut scratch, mut words) = (vec![(0, 0); WAYS_SQUARE_SEGMENTS], vec![0; LINES_WORDS as usize]);
+    let mut kept = separation::Builder::default();
+    for line in lines.iter() {
+        let mut one = separation::Builder::default();
+        one.push((0..line.points.len()).map(|i| (line.point(i), line.tops[i])), line.width, line.kind, line.form, line.clear);
+        let one = one.finish();
+        let [lo, hi] = line.bounds();
+        let reach = line.footprint();
+        let span = |k: usize| {
+            let first = ((lo[k] - reach) / f64::from(SQUARE)).floor().max(0.0) as u32;
+            let last = ((hi[k] + reach) / f64::from(SQUARE)).floor().min(f64::from(squares - 1)) as u32;
+            first..=last
+        };
+        let seen = span(1).any(|qy| {
+            span(0).any(|qx| {
+                let n = square_lines(tile, &one, [qx, qy], &mut scratch, &mut words);
+                let sq = laid(tile, &held.ground, &held.ele, [qx, qy], &words[..n]);
+                let ring = -1..=SQUARE as i32;
+                ring.clone().any(|y| ring.clone().any(|x| pxl_portable::ways::column(&sq, [x, y]).0.n > 0))
+            })
+        });
+        if seen {
+            kept.push((0..line.points.len()).map(|i| (line.point(i), line.tops[i])), line.width, line.kind, line.form, line.clear);
+        }
+    }
+    TerrainTile { separation: kept.finish(), ..held }
 }
 
 /// Whether each square of `tile`'s windows holds its ways' runs

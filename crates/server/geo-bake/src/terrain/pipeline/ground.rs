@@ -5,6 +5,8 @@
 //! `u32`.
 
 use crate::terrain::CELL_U;
+use pxl_portable::lattice::CELL_CENTER;
+use pxl_portable::ways;
 use pxl_spec::bake::tile::terrain::{Ground, GroundId};
 use pxl_spec::bake::way;
 use pxl_spec::block::cube::ground;
@@ -14,10 +16,6 @@ use crate::terrain::pipeline::feature::{Feature, Layer, P};
 
 const TILE_AREA: usize = (TILE_CELLS * TILE_CELLS) as usize;
 const SPAN: i64 = TILE_CELLS as i64;
-
-/// A cell is painted by what covers its center, the same center elevation
-/// and separation are sampled at.
-const PX_CENTER: f64 = 0.5;
 
 fn cell_idx(x: i64, y: i64) -> usize {
     GROUND.cell_index(x as u32, y as u32) as usize
@@ -80,19 +78,19 @@ pub(crate) fn render_polygon<T: Copy>(points: &[P], value: T, cells: &mut [T], h
     }
 
     let (min_y, max_y) = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p[1]), hi.max(p[1])));
-    let start_row = (min_y - PX_CENTER).ceil().max(0.0);
-    let end_row = (max_y - PX_CENTER).floor().min((SPAN - 1) as f64);
+    let start_row = (min_y - f64::from(CELL_CENTER)).ceil().max(0.0);
+    let end_row = (max_y - f64::from(CELL_CENTER)).floor().min((SPAN - 1) as f64);
     if !start_row.is_finite() || !end_row.is_finite() || start_row > end_row {
         return;
     }
 
     // Half-open, so cells along a shared edge are painted exactly once (the GPU
     // top-left rule).
-    let first = |a: f64| (a - PX_CENTER).ceil().clamp(0.0, SPAN as f64) as i64;
+    let first = |a: f64| (a - f64::from(CELL_CENTER)).ceil().clamp(0.0, SPAN as f64) as i64;
     let mut xs: Vec<f64> = Vec::new();
 
     for y in start_row as i64..=end_row as i64 {
-        let yc = y as f64 + PX_CENTER;
+        let yc = y as f64 + f64::from(CELL_CENTER);
         xs.clear();
         find_intersections(points, yc, &mut xs);
         for hole in holes {
@@ -117,47 +115,30 @@ pub(crate) fn render_polygon<T: Copy>(points: &[P], value: T, cells: &mut [T], h
     }
 }
 
-/// Every cell whose center lies within the way's half width of a segment;
-/// segment distance rounds the ends, so bends need no cap.
+/// Every cell whose center the way covers along a segment (pxl-portable
+/// ways.rs `on_way`, the rule a column is crossed by), its line cut square
+/// where `cut` says at its first and last.
 fn render_linear_feat(points: &[P], value: GroundId, cells: &mut [GroundId], width_cell: f64, cut: [bool; 2], mask: Sea) {
-    let reach = f64::from(way::reach(width_cell as f32));
+    let (width, center) = (width_cell as f32, f64::from(CELL_CENTER));
+    let reach = f64::from(way::reach(width));
     let last = points.len().saturating_sub(2);
     for (s, w) in points.windows(2).enumerate() {
         let (a, b) = ([w[0][0], w[0][1]], [w[1][0], w[1][1]]);
         let span = |k: usize| {
-            let lo = (a[k].min(b[k]) - reach - PX_CENTER).ceil().max(0.0) as i64;
-            let hi = (a[k].max(b[k]) + reach - PX_CENTER).floor().min((SPAN - 1) as f64) as i64;
+            let lo = (a[k].min(b[k]) - reach - center).ceil().max(0.0) as i64;
+            let hi = (a[k].max(b[k]) + reach - center).floor().min((SPAN - 1) as f64) as i64;
             lo..=hi
         };
+        let ends = [s == 0 && cut[0], s == last && cut[1]];
         for y in span(1) {
             for x in span(0) {
-                let at = [x as f64 + PX_CENTER, y as f64 + PX_CENTER];
-                let t = along(at, a, b);
-                if (s == 0 && cut[0] && t < 0.0) || (s == last && cut[1] && t > 1.0) {
-                    continue;
-                }
-                if way::covers(width_cell as f32, distance_to_segment(at, a, b) as f32) {
+                let at = [x as f64 + center, y as f64 + center].map(|v| v as f32);
+                if ways::on_way(a.map(|v| v as f32), b.map(|v| v as f32), width, ends, at).1 {
                     put(cells, mask, cell_idx(x, y), value);
                 }
             }
         }
     }
-}
-
-/// Where `p` falls along `a`–`b`: 0 at `a`, 1 at `b`.
-fn along(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
-    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
-    let len2 = dx * dx + dy * dy;
-    if len2 > 0.0 {
-        ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2
-    } else {
-        0.0
-    }
-}
-
-fn distance_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
-    let t = along(p, a, b).clamp(0.0, 1.0);
-    libm::hypot(p[0] - a[0] - (b[0] - a[0]) * t, p[1] - a[1] - (b[1] - a[1]) * t)
 }
 
 fn find_intersections(nodes: &[P], ys: f64, out: &mut Vec<f64>) {

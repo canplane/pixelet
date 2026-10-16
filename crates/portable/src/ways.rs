@@ -18,7 +18,7 @@
 
 use crate::cube::{sentinel, Ground};
 use crate::ground::blocks;
-use crate::{Zoom, LEAF_CELL};
+use crate::{cells_of_m, Zoom, LEAF_CELL};
 
 /// Points are eighths of the tile's cell.
 pub const POINT_SCALE: f32 = 8.0;
@@ -69,6 +69,12 @@ fn length(v: [f32; 2]) -> f32 {
     libm::sqrtf(v[0] * v[0] + v[1] * v[1])
 }
 
+/// Whether a way of `width` cells is none at those cells: its width rounds
+/// to no cell (half to even, so half a cell is none), what a fold discards.
+pub fn vanishes(width: f32) -> bool {
+    libm::rintf(width) == 0.0
+}
+
 /// Half a way's width, in whole cells.
 pub fn half_cells(width: f32) -> i32 {
     libm::rintf(width / 2.0) as i32
@@ -85,14 +91,17 @@ pub fn covers(width: f32, distance: f32) -> bool {
     distance <= reach(width)
 }
 
-/// How far from its line a way reaches anything drawn, in its tile's cells.
+/// How far from its line a way reaches anything drawn, in its tile's cells:
+/// its reach (`reach`), and a cell past it, so a tile's lines and a square's
+/// hold every line whose air or slab can stand in the ring of cells about
+/// them, a thin way's included.
 pub fn footprint(width: f32) -> f32 {
-    width / 2.0 + LINE_PAST
+    reach(width) + LINE_PAST
 }
 
-/// A deck's slab in units of height, at least one.
-pub fn slab_depth(u_per_m: f32) -> i32 {
-    (libm::rintf(DECK_THICKNESS_M * u_per_m) as i32).max(1)
+/// A deck's slab in leaf cells, at least one, `per_m` leaf cells a metre.
+pub fn slab_depth(per_m: f32) -> i32 {
+    cells_of_m(DECK_THICKNESS_M, per_m).max(1)
 }
 
 /// One segment of a line, in its tile's cells: from `a` to `b`, its road
@@ -189,8 +198,8 @@ pub struct Stations {
 pub const INTERVAL_M: [f32; 2] = [BEAM_PILLAR_INTERVAL_M, WIDE_BEAM_PIER_INTERVAL_M];
 
 /// What a square's lines open with (pxl-portable window.rs `LINES_*`): its
-/// tile's units of height a ground metre, then its stations, step, phase
-/// and leaf, each a float's bits.
+/// tile's leaf cells a ground metre (pxl-spec `Frame::per_m`), then its
+/// stations, step, phase and leaf, each a float's bits.
 pub const HEADER_WORDS: u32 = 8;
 
 pub fn header(per_m: f32, st: &Stations) -> [u32; HEADER_WORDS as usize] {
@@ -306,24 +315,34 @@ fn surface(s: &Segment, t: f32) -> f32 {
     s.tops[0] + (s.tops[1] - s.tops[0]) * t.clamp(0.0, 1.0)
 }
 
-/// What segment `s` is over the column of `side` cells about `at`, `NONE`
-/// unless its way covers `at`: the surface it runs through across the
-/// column, and whether the column holds the section of a pier at a station
-/// of it. A line ends square where it begins and ends, as the ground cuts a
-/// way; its joints stay round.
-pub fn crossing(s: &Segment, at: [f32; 2], side: f32, st: &Stations) -> Crossing {
-    let (a, b) = (s.a, s.b);
+/// Where `at` lies along the segment from `a` to `b` of a way `width` cells
+/// wide, as a share of it clamped to it, and whether the way covers `at`
+/// there: a line ends square where it begins (`ends[0]`) and ends
+/// (`ends[1]`), as the ground cuts a way; its joints stay round. What the
+/// ground's cells and the ways' columns are covered by alike.
+pub fn on_way(a: [f32; 2], b: [f32; 2], width: f32, ends: [bool; 2], at: [f32; 2]) -> (f32, bool) {
     let d = [b[0] - a[0], b[1] - a[1]];
     let len2 = d[0] * d[0] + d[1] * d[1];
     let t = if len2 > 0.0 { ((at[0] - a[0]) * d[0] + (at[1] - a[1]) * d[1]) / len2 } else { 0.0 };
-    if (s.first == 1 && t < 0.0) || (s.last == 1 && t > 1.0) {
-        return Crossing::NONE;
-    }
+    let cut = (ends[0] && t < 0.0) || (ends[1] && t > 1.0);
     let t = t.clamp(0.0, 1.0);
     let near = [a[0] + d[0] * t, a[1] + d[1] * t];
-    if !covers(s.width, length([at[0] - near[0], at[1] - near[1]])) {
+    (t, !cut && covers(width, length([at[0] - near[0], at[1] - near[1]])))
+}
+
+/// What segment `s` is over the column of `side` cells about `at`, `NONE`
+/// unless its way covers `at` (`on_way`): the surface it runs through
+/// across the column, and whether the column holds the section of a pier at
+/// a station of it.
+pub fn crossing(s: &Segment, at: [f32; 2], side: f32, st: &Stations) -> Crossing {
+    let (a, b) = (s.a, s.b);
+    let (t, on) = on_way(a, b, s.width, [s.first == 1, s.last == 1], at);
+    if !on {
         return Crossing::NONE;
     }
+    let d = [b[0] - a[0], b[1] - a[1]];
+    let len2 = d[0] * d[0] + d[1] * d[1];
+    let near = [a[0] + d[0] * t, a[1] + d[1] * t];
     // the column's square spans this much of the segment either side of `t`
     let reach = if len2 > 0.0 { side / 2.0 * (d[0].abs() + d[1].abs()) / len2 } else { 0.0 };
     let (z0, z1) = (surface(s, t - reach), surface(s, t + reach));
@@ -357,15 +376,15 @@ pub struct Occupies {
     pub pier: [i32; 2],
 }
 
-/// What `c` occupies over ground `ground` leaf cells high, `u_per_m` units of
-/// height a ground metre: all the surface sweeps across the column, so a slab
+/// What `c` occupies over ground `ground` leaf cells high, `per_m` leaf
+/// cells a ground metre: all the surface sweeps across the column, so a slab
 /// or a bore steps down to the next column's without a gap however steep.
-pub fn occupies(c: &Crossing, ground: i32, u_per_m: f32) -> Occupies {
+pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupies {
     let (low, top) = (libm::rintf(c.low) as i32, libm::rintf(c.top) as i32);
     let none = [0, 0];
     match c.form {
         BRIDGE => {
-            let lo = low - slab_depth(u_per_m);
+            let lo = low - slab_depth(per_m);
             let pier = if c.pier == 1 && lo > ground { [ground, lo] } else { none };
             Occupies {
                 what: Occupy::Over,
@@ -402,7 +421,7 @@ pub fn occupies(c: &Crossing, ground: i32, u_per_m: f32) -> Occupies {
 /// its ground — its look as read, and its face's height in leaf cells. A
 /// column the grid does not hold has no segment.
 pub trait Columns {
-    /// The cells' zoom, and units of height a ground metre over the grid.
+    /// The cells' zoom, and leaf cells a ground metre over the grid.
     fn cell(&self) -> Zoom;
     fn per_m(&self) -> f32;
     /// How many segments may be over column `c`, and the `k`-th of them.
@@ -446,8 +465,9 @@ fn visit<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> (Crossing, u32) {
     (x, j)
 }
 
-/// Whether the leaf cells `[lo, hi)` fill block `z` of the grid's zoom: half
-/// its height or more, so a run thinner than half a block fills none.
+/// Whether the leaf cells `[lo, hi)` fill block `z` of the grid's zoom: more
+/// than half its height, as its share of the block rounds (half to even), so
+/// a run of half a block or thinner fills none.
 pub fn fills(cell: Zoom, [lo, hi]: [i32; 2], z: i32) -> bool {
     let d = cell as i32 - LEAF_CELL as i32;
     if d >= 0 {
@@ -455,7 +475,18 @@ pub fn fills(cell: Zoom, [lo, hi]: [i32; 2], z: i32) -> bool {
         return lo <= leaf && leaf < hi;
     }
     let s = 1 << -d;
-    2 * (hi.min((z + 1) * s) - lo.max(z * s)) >= s
+    2 * (hi.min((z + 1) * s) - lo.max(z * s)) > s
+}
+
+/// Whether the leaf cells `[lo, hi)` fill any block of the grid's zoom
+/// (`fills`): the first or the last they reach, or one between them whole.
+pub fn fills_any(cell: Zoom, [lo, hi]: [i32; 2]) -> bool {
+    let d = LEAF_CELL as i32 - cell as i32;
+    if lo >= hi {
+        return false;
+    }
+    let (first, last) = if d > 0 { (lo >> d, (hi - 1) >> d) } else { (lo << -d, (hi - 1) << -d) };
+    last - first >= 2 || fills(cell, [lo, hi], first) || fills(cell, [lo, hi], last)
 }
 
 /// Whether a run is empty, as a pier none stands for is.
@@ -472,22 +503,22 @@ fn at_or_after(v: [i32; 2], best: [i32; 2]) -> bool {
 /// grade or over a deck `LOWER_DECK_GAP_M` or more under its own (Arnis
 /// `place_pillar`, `support_blocked`), none where the terrain gives no surface
 /// to stand on; water stops none. Empty where none.
-fn pier_stands<C: Columns>(cols: &C, c: [i32; 2], pier: [i32; 2], ground: i32, u_per_m: f32) -> [i32; 2] {
+fn pier_stands<C: Columns>(cols: &C, c: [i32; 2], pier: [i32; 2], ground: i32, per_m: f32) -> [i32; 2] {
     let (none, look) = ([0, 0], cols.look(c));
     if !Ground::grounds(look) || Ground::transports(look) {
         return none;
     }
-    let surface = pier[1] + slab_depth(u_per_m);
-    if ((surface - pier[0]) as f32) <= PIER_MIN_RISE_M * u_per_m {
+    let surface = pier[1] + slab_depth(per_m);
+    if surface - pier[0] <= cells_of_m(PIER_MIN_RISE_M, per_m) {
         return none;
     }
-    let gap = libm::rintf(LOWER_DECK_GAP_M * u_per_m) as i32;
+    let gap = cells_of_m(LOWER_DECK_GAP_M, per_m);
     let mut k = 0;
     while k < cols.count(c) {
         let (x, next) = visit(cols, c, k);
         k = next;
         if x.is() {
-            let o = occupies(&x, ground, u_per_m);
+            let o = occupies(&x, ground, per_m);
             if o.what == Occupy::Over && o.span[1] <= surface - gap {
                 return none;
             }
@@ -581,8 +612,9 @@ impl Spans {
     }
 }
 
-/// Column `c`'s spans: what each visit of a line writes there — none in a
-/// column of the bedrock, as bedrock wins over a way as it does over the
+/// Column `c`'s spans: what each visit of a line writes there that fills a
+/// block of the grid's zoom (`fills_any`), as `at` reads no other — none in
+/// a column of the bedrock, as bedrock wins over a way as it does over the
 /// ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     let (mut spans, mut fits) = (Spans::NONE, true);
@@ -593,11 +625,12 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     while k < cols.count(c) {
         let (w, next) = writes(cols, c, k);
         k = next;
-        if w.value != NOTHING {
+        let cell = cols.cell();
+        if w.value != NOTHING && fills_any(cell, w.run) {
             fits &= spans.push(w.run, w.value);
-            if !empty(w.pier) {
-                fits &= spans.push(w.pier, PIER);
-            }
+        }
+        if w.value != NOTHING && fills_any(cell, w.pier) {
+            fits &= spans.push(w.pier, PIER);
         }
     }
     (spans, fits)

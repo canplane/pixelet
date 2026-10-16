@@ -174,15 +174,23 @@ pub trait Squares {
 
 /// One square as its fill reads it, for the ways' one rule
 /// (`ways::Columns`): its cells' zoom, where it lies in its tile (in
-/// squares), word `k` of its lines (`LINES_AT`), and cell `i`'s four looks
-/// and height as its lanes hold them. Its columns are its cells, counted
-/// from its first; one outside it has no segment.
+/// squares), word `k` of its lines (`LINES_AT`), cell `i`'s four looks as
+/// its lane holds them, and column `c`'s height off its tile's samples, `c`
+/// counted from its first cell, the ring of columns about it included.
+/// Its columns are its cells and that ring, a ring column read off the
+/// edge bin it borders, whose lines hold every one that reaches it
+/// (`ways::footprint`); one past the ring has no segment.
 pub trait Square {
     fn cell(&self) -> Zoom;
     fn place(&self) -> [u32; 2];
     fn line(&self, k: u32) -> u32;
     fn looks(&self, i: u32) -> u32;
-    fn height(&self, i: u32) -> i32;
+    fn height(&self, c: [i32; 2]) -> i32;
+}
+
+/// Whether column `c` is the square's or its ring's.
+fn held(c: [i32; 2]) -> bool {
+    c[0] >= -1 && c[1] >= -1 && c[0] <= SQUARE as i32 && c[1] <= SQUARE as i32
 }
 
 /// Column `c`'s cell index in the square, none outside it.
@@ -193,12 +201,14 @@ fn cell_index(c: [i32; 2]) -> u32 {
     c[1] as u32 * SQUARE + c[0] as u32
 }
 
-/// Column `c`'s bin word: its first entry and its count; none outside.
+/// Column `c`'s bin word, a ring column's the edge bin it borders: its
+/// first entry and its count; none past the ring.
 fn bin_of(sq: &impl Square, c: [i32; 2]) -> (u32, u32) {
-    if cell_index(c) == SQUARE_CELLS {
+    if !held(c) {
         return (0, 0);
     }
-    let b = ((c[1] as u32) >> WAYS_SHIFT) * WAYS_BINS_ACROSS + ((c[0] as u32) >> WAYS_SHIFT);
+    let (x, y) = (c[0].clamp(0, SQUARE as i32 - 1) as u32, c[1].clamp(0, SQUARE as i32 - 1) as u32);
+    let b = (y >> WAYS_SHIFT) * WAYS_BINS_ACROSS + (x >> WAYS_SHIFT);
     let w = sq.line(crate::ways::HEADER_WORDS + b);
     (w & 0xffff, w >> 16)
 }
@@ -234,7 +244,8 @@ impl<Q: Square> crate::ways::Columns for Q {
     /// In its tile's cells: the square's first, then the cell's middle.
     fn center(&self, c: [i32; 2]) -> [f32; 2] {
         let p = self.place();
-        [(p[0] * SQUARE) as f32 + c[0] as f32 + 0.5, (p[1] * SQUARE) as f32 + c[1] as f32 + 0.5]
+        let center = crate::lattice::CELL_CENTER;
+        [(p[0] * SQUARE) as f32 + c[0] as f32 + center, (p[1] * SQUARE) as f32 + c[1] as f32 + center]
     }
     fn side(&self, _: [i32; 2]) -> f32 {
         1.0
@@ -253,12 +264,11 @@ impl<Q: Square> crate::ways::Columns for Q {
         }
     }
     fn face(&self, c: [i32; 2]) -> i32 {
-        let i = cell_index(c);
-        if i == SQUARE_CELLS {
+        if !held(c) {
             return 0;
         }
         let cell = Square::cell(self);
-        crate::ground::face_height(cell, crate::ground::blocks(cell, self.height(i) as f32))
+        crate::ground::face_height(cell, crate::ground::blocks(cell, self.height(c) as f32))
     }
     /// The entry is the one after the one before it, and its segment
     /// continues the one stored before it.
@@ -343,31 +353,44 @@ pub fn ran(w: &impl Ran, near: &Found, zoom: Zoom, c: [i32; 2], z: i32, top: Zoo
     crate::ways::NOTHING
 }
 
-/// The ways' word of bin `b` of a square whose runs are written
-/// (`RUNS_AT`), word `k` of its runs lane `run(k)`, its cells at `cell`: the
-/// leaf cells its cells' runs span, and of the cells beside them in the
-/// square their air, a block either side — the ground `ways::block`
-/// recolours beside air, and over and under its own — so no block the rule
-/// writes or recolours there lies outside it; empty where it has none.
-pub fn bin_word(cell: Zoom, run: impl Fn(u32) -> u32, b: u32) -> i32 {
-    let (n, s) = (1 << WAYS_SHIFT, 1 << (crate::LEAF_CELL - cell));
-    let first = [(b % WAYS_BINS_ACROSS) * n, (b / WAYS_BINS_ACROSS) * n];
+/// The ways' word of bin `b` of square `sq` whose runs are written
+/// (`RUNS_AT`), word `k` of its runs lane `run(k)`: the leaf cells its
+/// cells' runs span, and of the columns beside them their air — the square's
+/// off its runs, its ring's off the rule (`ways::column`), stored nowhere —
+/// a block either side, the ground `ways::block` recolours beside air and
+/// over and under its own; so no block the rule writes or recolours in the
+/// bin lies outside it; empty where it has none.
+pub fn bin_word(sq: &impl Square, run: impl Fn(u32) -> u32, b: u32) -> i32 {
+    let cell = sq.cell();
+    let (n, s) = (1i32 << WAYS_SHIFT, 1 << (crate::LEAF_CELL - cell));
+    let first = [(b % WAYS_BINS_ACROSS) as i32 * n, (b / WAYS_BINS_ACROSS) as i32 * n];
     let (mut lo, mut hi) = (i32::MAX, i32::MIN);
-    let mut y = if first[1] > 0 { first[1] - 1 } else { 0 };
-    while y <= (first[1] + n).min(SQUARE - 1) {
-        let mut x = if first[0] > 0 { first[0] - 1 } else { 0 };
-        while x <= (first[0] + n).min(SQUARE - 1) {
-            let i = y * SQUARE + x;
+    let mut y = first[1] - 1;
+    while y <= first[1] + n {
+        let mut x = first[0] - 1;
+        while x <= first[0] + n {
             let inside = x >= first[0] && x < first[0] + n && y >= first[1] && y < first[1] + n;
-            let (mut r, to) = (run(i), run(i + 1));
-            while r < to {
-                let (z, len, value) = crate::ways::run_of(run(RUNS_RUN_AT + r));
-                let air = value & crate::ways::AIR_OF != 0;
-                if inside || air {
-                    let d = if air { 1 } else { 0 };
-                    (lo, hi) = (lo.min((z - d) * s), hi.max((z + len as i32 + d) * s));
+            let i = cell_index([x, y]);
+            if i < SQUARE_CELLS {
+                let (mut r, to) = (run(i), run(i + 1));
+                while r < to {
+                    let (z, len, value) = crate::ways::run_of(run(RUNS_RUN_AT + r));
+                    let air = value & crate::ways::AIR_OF != 0;
+                    if inside || air {
+                        let d = if air { 1 } else { 0 };
+                        (lo, hi) = (lo.min((z - d) * s), hi.max((z + len as i32 + d) * s));
+                    }
+                    r += 1;
                 }
-                r += 1;
+            } else {
+                let spans = crate::ways::column(sq, [x, y]).0;
+                let mut k = 0;
+                while k < spans.n as usize {
+                    if spans.value[k] & crate::ways::AIR_OF != 0 {
+                        (lo, hi) = (lo.min(spans.run[k][0] - s), hi.max(spans.run[k][1] + s));
+                    }
+                    k += 1;
+                }
             }
             x += 1;
         }
@@ -377,20 +400,13 @@ pub fn bin_word(cell: Zoom, run: impl Fn(u32) -> u32, b: u32) -> i32 {
 }
 
 /// Whether the descent asks the ways at block `c` of `zoom`, its column's
-/// window `f`: where its bin's word (`bin_word`) meets the block, or its
-/// cell is on its square's edge, past which the fill sees no air. The edge
-/// goes with the rebake that widens a line's footprint to its reach and
-/// past (`ways::footprint`), so a square's lines carry the ring past it and
-/// its fill folds the ring's air into the edge bins' words.
+/// window `f`: where its bin's word (`bin_word`) meets the block.
 pub fn asks(w: &impl Ran, f: &Found, zoom: Zoom, c: [i32; 3]) -> bool {
     if !f.here {
         return false;
     }
     let i = square_of(cell_at(zoom, f.from, [c[0], c[1]])).1;
     let (x, y) = (i % SQUARE, i / SQUARE);
-    if x == 0 || y == 0 || x == SQUARE - 1 || y == SQUARE - 1 {
-        return true;
-    }
     let [lo, hi] = crate::ground::bound_of(w.way(f.from, f.slot, (y >> WAYS_SHIFT) * WAYS_BINS_ACROSS + (x >> WAYS_SHIFT)) as i32);
     // The block's leaf cells.
     let l = crate::LEAF_CELL;

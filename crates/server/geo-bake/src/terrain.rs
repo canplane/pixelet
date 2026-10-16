@@ -49,7 +49,7 @@ impl crate::pyramid::Base for TerrainTile {
     }
 
     fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
-        fold_terrain(neighborhood(p).map(held), p.zoom)
+        fold_terrain(neighborhood(p).map(held), p.zoom).map(|t| terrain::drawn(p, t))
     }
 
     fn occupancy(&self) -> Occupancy {

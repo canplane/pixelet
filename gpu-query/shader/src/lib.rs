@@ -146,8 +146,14 @@ impl window::Square for Filling<'_> {
     fn looks(&self, i: u32) -> u32 {
         at(self.ground, self.base + i)
     }
-    fn height(&self, i: u32) -> i32 {
-        height_of(self.ground, self.base, i)
+    /// Off its tile's samples as `heights_cs` draws a cell (`ground::height`),
+    /// the ring about the square too.
+    fn height(&self, c: [i32; 2]) -> i32 {
+        let (samples, base) = (self.ground, self.base);
+        let ele = move |i: usize| ((at(samples, base + ELE_AT + i as u32 / 2) >> (16 * (i as u32 % 2))) << 16) as i32 >> 16;
+        let first = [(self.place[0] * SQUARE) as i32, (self.place[1] * SQUARE) as i32];
+        let center = pxl_portable::lattice::CELL_CENTER;
+        ground::bicubic(ele, (first[0] + c[0]) as f32 + center, (first[1] + c[1]) as f32 + center)
     }
 }
 
@@ -656,7 +662,8 @@ pub fn ways_cs(
         if i < WAYS_BINS {
             let word = {
                 let lane: &[u32] = ground;
-                window::bin_word(cell, move |k: u32| at(lane, table + k), i)
+                let filling = Filling { ground: lane, base, cell, place: [place & 0xffff, place >> 16] };
+                window::bin_word(&filling, move |k: u32| at(lane, table + k), i)
             };
             put(ground, base + WAYS_AT + i, word as u32);
         }

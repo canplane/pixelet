@@ -3,7 +3,7 @@
 //! One tile's source rows baked into its surface, which with its lines is the tile.
 
 use pxl_spec::bake::separation::Separation;
-use pxl_spec::bake::tile::terrain::{Ground, TerrainTile};
+use pxl_spec::bake::tile::terrain::{self, Ground, TerrainTile};
 use pxl_spec::bake::way::lay;
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::adapter::epsg3857::{self, G3857};
@@ -21,11 +21,13 @@ pub struct Surface {
     pub ground: Ground,
 }
 
-/// The approaches' looks laid into its cells (pxl-spec bake/way.rs `lay`).
+/// The approaches' looks laid into its cells (pxl-spec bake/way.rs `lay`),
+/// then its lines those it draws (pxl-spec bake/tile/terrain.rs `drawn`).
 pub fn assemble(tile: [i64; 2], surface: Surface, lines: Separation) -> TerrainTile {
     let mut looks = surface.ground.cells.into_owned();
-    lay(&lines, Frame::of(Tile::new(LEAF_ZOOM, tile)), &mut looks);
-    TerrainTile::leaf(surface.ele, Ground { cells: looks.into() }, lines)
+    let tile = Tile::new(LEAF_ZOOM, tile);
+    lay(&lines, Frame::of(tile), &mut looks);
+    terrain::drawn(tile, TerrainTile::leaf(surface.ele, Ground { cells: looks.into() }, lines))
 }
 
 /// `drawn`: the ranges of the tile's ways its lines draw.

@@ -36,6 +36,13 @@ impl Frame {
         }
     }
 
+    /// Leaf cells a ground metre over the tile, of height as of breadth: the
+    /// scale where its south-west corner lies, one value a tile
+    /// (pxl-portable `cells_of_m`).
+    pub fn per_m(self) -> f32 {
+        (u_per_m(self.corner[1]) / units(LEAF_CELL)) as f32
+    }
+
     /// Where its piers may stand, in its cells (pxl-portable ways.rs
     /// `Stations`): each beam's lattice of stations, at its spacing in
     /// ground metres where the tile lies, and where its corner falls in it;
