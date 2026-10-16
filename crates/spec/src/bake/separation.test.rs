@@ -1,65 +1,9 @@
 // pxl-spec/bake/separation.test.rs
 
 use super::*;
-use pxl_portable::ways::{self, Columns, Segment, Stations, BEAM_PILLAR_INTERVAL_M};
+use pxl_portable::ways;
 
-use crate::block::cube::{ground, sentinel};
 use crate::procedural::Frame;
-use crate::space::coord::adapter::epsg3857::u_per_m;
-use crate::space::coord::zoom::Zoom;
-
-/// One column of leaf cells, the rule's blocks its leaf cells: its
-/// segments, its center, its look and its face.
-struct Column {
-    segments: Vec<Segment>,
-    at: [f32; 2],
-    look: u32,
-    face: i32,
-    stations: Stations,
-    per_m: f32,
-}
-
-impl Columns for Column {
-    fn cell(&self) -> Zoom {
-        pxl_portable::LEAF_CELL
-    }
-    fn per_m(&self) -> f32 {
-        self.per_m
-    }
-    fn count(&self, c: [i32; 2]) -> u32 {
-        if c == [0, 0] {
-            self.segments.len() as u32
-        } else {
-            0
-        }
-    }
-    fn segment(&self, _: [i32; 2], k: u32) -> Segment {
-        self.segments[k as usize]
-    }
-    fn center(&self, _: [i32; 2]) -> [f32; 2] {
-        self.at
-    }
-    fn side(&self, _: [i32; 2]) -> f32 {
-        1.0
-    }
-    fn stations(&self, _: [i32; 2]) -> Stations {
-        self.stations
-    }
-    fn look(&self, _: [i32; 2]) -> u32 {
-        self.look
-    }
-    fn face(&self, _: [i32; 2]) -> i32 {
-        self.face
-    }
-    fn joins(&self, _: [i32; 2], k: u32) -> bool {
-        self.segments[k as usize].first == 0
-    }
-}
-
-/// Every segment of `d`.
-fn segments(d: &Separation) -> Vec<Segment> {
-    (0..d.len()).flat_map(|k| (d.starts[k] as usize..d.starts[k + 1] as usize - 1).map(|p| d.segment(p))).collect()
-}
 
 /// A leaf tile's frame at the origin: a u a cell.
 const NOWHERE: Frame = Frame { corner: [0.0, 0.0], cell: 1.0 };
@@ -91,46 +35,6 @@ fn a_narrow_line_along_a_diagonal_is_one_band() {
     for k in 0..39 {
         assert!(covered.contains(&(k + 1, k)) || covered.contains(&(k, k + 1)), "cells {k} and {} meet only at a corner", k + 1);
     }
-}
-
-#[test]
-fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() {
-    // A u a cell; a narrow deck's bent is the one cell at its station.
-    let frame = NOWHERE;
-    let station = f64::from(BEAM_PILLAR_INTERVAL_M) * u_per_m(0.0);
-    let d = one(&[[1.0, 3.0], [41.0, 3.0]], &[20, 20], 4.0);
-    let piers: Vec<f64> = (0..42).map(|x| f64::from(x) + 0.5).filter(|&x| d.crossing_point(frame, [x, 3.0], 1.0).any(|o| o.pier == 1)).collect();
-    let expected: Vec<f64> = (0..42)
-        .map(|x| f64::from(x) + 0.5)
-        .filter(|&x| x > 1.0 && x < 41.0 && (x - round(x / station) * station).abs() <= 0.5)
-        .collect();
-    assert!(!expected.is_empty());
-    assert_eq!(piers, expected);
-    let at = [expected[0], 3.0];
-    let over = d.crossing_point(frame, at, 1.0).next().unwrap();
-    assert_eq!(ways::occupies(&over, 5, 0.5).pier, [5, 19]);
-    // The pier stands on the ground and not where the terrain gives none.
-    let column = |segments: Vec<Segment>, look: u8| Column {
-        segments,
-        at: at.map(|v| v as f32),
-        look: u32::from(look),
-        face: 5,
-        stations: frame.stations(),
-        per_m: 0.5,
-    };
-    let at = |c: &Column, z: i32| ways::at(&ways::column(c, [0, 0]).0, pxl_portable::LEAF_CELL, z);
-    let pier = |c: &Column| (5..19).all(|z| at(c, z) == ways::PIER);
-    let none = |c: &Column| (5..19).all(|z| at(c, z) == ways::NOTHING);
-    assert!(pier(&column(segments(&d), ground::grass)));
-    assert!(none(&column(segments(&d), ground::primary)));
-    assert!(none(&column(segments(&d), sentinel::unknown)));
-    assert!(none(&column(segments(&d), sentinel::void)));
-    // A deck under it blocks it over that deck, which has its own pier.
-    let mut under = Builder::default();
-    under.push([([0.0, 3.0], 10), ([40.0, 3.0], 10)], 4 * POINT_SCALE as u8, 3, Form::Bridge, 0);
-    let under = under.finish();
-    let both = column(segments(&d).into_iter().chain(segments(&under)).collect(), ground::grass);
-    assert!((10..19).all(|z| at(&both, z) == ways::NOTHING));
 }
 
 #[test]

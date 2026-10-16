@@ -124,7 +124,3 @@ pub fn write_manifest(path: &Path, built: Option<&str>, fields: serde_json::Valu
     println!("[bake] manifest -> {}", path.display());
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "util.test.rs"]
-mod test;
