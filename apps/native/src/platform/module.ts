@@ -6,6 +6,9 @@ import type { f32, f64, u32 } from "@xpute/kit/abi/word.ts";
 import { requireNativeModule } from "expo";
 
 interface PxlPlatform {
+  /** The module's event (Expo's EventEmitter): `onWake`, the device's host
+   * asking a turn (gpu.ts). */
+  addListener(event: "onWake", listener: () => void): { remove(): void };
   memory(): ArrayBuffer;
   interrupt(quotaMs: f64): f64;
   /** Whether the device opened; what it is, the kernel reads from the host. */

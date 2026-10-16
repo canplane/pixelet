@@ -15,6 +15,8 @@
 
 #[cfg(target_vendor = "apple")]
 use std::ffi::c_void;
+#[cfg(target_vendor = "apple")]
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use pxl_render::gpu::api_spec::stream;
@@ -85,6 +87,34 @@ fn configure_on_main() {
     unsafe { dispatch_async_f(&raw const _dispatch_main_q, core::ptr::null_mut(), work) };
 }
 
+/// What Swift gave to be called for a turn (`pxl_wake_on`), as an address.
+#[cfg(target_vendor = "apple")]
+static WAKE: AtomicUsize = AtomicUsize::new(0);
+
+/// `wake` calls `f`, from whichever thread learns of a completion: Swift sends
+/// the app's event from there, which Expo carries to the JavaScript thread.
+#[cfg(target_vendor = "apple")]
+#[no_mangle]
+pub extern "C" fn pxl_wake_on(f: extern "C" fn()) {
+    WAKE.store(f as usize, Ordering::Release);
+}
+
+/// The app's loop asked for a turn, from whichever thread learned of a
+/// completion the host writes at the next turn's poll (xpute-gpu host
+/// `GpuHost::new`): the platform sends the app an event, and JavaScript asks
+/// the strobe for a frame (apps/native platform/gpu.ts).
+#[cfg(target_vendor = "apple")]
+fn wake() {
+    let f = WAKE.load(Ordering::Acquire);
+    if f != 0 {
+        // SAFETY: an `extern "C" fn()` Swift gave, stored as its address.
+        let f: extern "C" fn() = unsafe { core::mem::transmute(f) };
+        f();
+    }
+}
+#[cfg(target_os = "android")]
+use crate::android::wake;
+
 /// Asks for the adapter's own limits: the simulator's Metal falls short of
 /// WebGPU's defaults and refuses a device that asks for them.
 fn open() -> bool {
@@ -108,7 +138,7 @@ fn open() -> bool {
     })) else {
         return false;
     };
-    let host = GpuHost::new(adapter, device, queue.clone(), PREFERRED, CONFIGURE_SURFACES);
+    let host = GpuHost::new(adapter, device, queue.clone(), PREFERRED, CONFIGURE_SURFACES, wake);
     DEVICE.set(Some(Device {
         instance,
         host,

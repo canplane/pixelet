@@ -268,7 +268,9 @@ struct Decoder {
 }
 
 impl Decoder {
-    fn new() -> Decoder {
+    /// Each answer `wake`s the host's loop, from this thread: the image lands
+    /// at the next turn's poll, which nothing else would ask for.
+    fn new(wake: fn()) -> Decoder {
         let (ask, jobs) = std::sync::mpsc::channel::<Job>();
         let (answer, answers) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
@@ -276,6 +278,7 @@ impl Decoder {
                 if answer.send((job, crate::image::decode(&bytes, flip_y, premultiplied))).is_err() {
                     return;
                 }
+                wake();
             }
         });
         Decoder { ask, answers, next: 0 }
@@ -391,8 +394,12 @@ fn set_word(memory: &mut [u8], at: u32, v: u32) {
 
 impl GpuHost {
     /// `preferred` the surface format the platform shows best, `configure_at`
-    /// where its surfaces may be configured.
-    pub fn new(adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue, preferred: wgpu::TextureFormat, configure_at: ConfigureAt) -> GpuHost {
+    /// where its surfaces may be configured. `wake` asks the platform's loop
+    /// for a turn, from any thread: a completion is written into the guest's
+    /// memory only at a turn's poll, so whoever learns of one between turns
+    /// asks for it, as an executor's pender asks for a poll
+    /// (embassy-executor's `Pender`; its std one signals the sleeping loop).
+    pub fn new(adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue, preferred: wgpu::TextureFormat, configure_at: ConfigureAt, wake: fn()) -> GpuHost {
         GpuHost {
             adapter,
             belt: wgpu::util::StagingBelt::new(device.clone(), BELT_CHUNK_BYTES),
@@ -405,7 +412,7 @@ impl GpuHost {
             configure_at,
             block: None,
             pending: Vec::new(),
-            decoder: Decoder::new(),
+            decoder: Decoder::new(wake),
             decoding: std::collections::VecDeque::new(),
             scratch: Vec::new(),
             finished: Vec::new(),

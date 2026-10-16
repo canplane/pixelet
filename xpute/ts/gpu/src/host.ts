@@ -137,7 +137,12 @@ export class GpuHost {
   /** Where the guest asked the device's block written, for its status. */
   private block: { address: u32; words: u32 } | undefined;
 
-  constructor(private readonly device: GPUDevice, private readonly memory: () => ArrayBufferLike) {}
+  /**
+   * `wake` asks the host's loop for a turn: a completion written into the
+   * guest's memory between turns is read only by a turn, so it asks for one,
+   * as an executor's pender asks for a poll (embassy-executor's `Pender`).
+   */
+  constructor(private readonly device: GPUDevice, private readonly memory: () => ArrayBufferLike, private readonly wake: () => void) {}
 
   /** A surface the guest names by `surface` in CONFIGURE, RESIZE and CURRENT. */
   bindSurface(surface: u32, context: GPUCanvasContext): void {
@@ -181,10 +186,12 @@ export class GpuHost {
     return new Uint8Array(this.memory(), address, size);
   }
 
-  /** `ticket | DONE` at `word`, where the ticket still stands. */
+  /** `ticket | DONE` at `word`, where the ticket still stands, and a turn asked to read it. */
   private done(word: u32, ticket: u32): void {
     const w = new Uint32Array(this.memory(), word, 1);
-    if (w[0] === ticket) w[0] = (ticket | DONE) >>> 0;
+    if (w[0] !== ticket) return;
+    w[0] = (ticket | DONE) >>> 0;
+    this.wake();
   }
 
   /** A texture's place read into `p`: one of `places` where WebGPU reads
@@ -617,6 +624,7 @@ export class GpuHost {
           this.bytesAt(address, size).set(new Uint8Array(buffer.getMappedRange(offset, size)));
           buffer.unmap();
           new Uint32Array(this.memory(), word, 1)[0] = (ticket | DONE) >>> 0;
+          this.wake();
         }, () => {});
         return;
       }

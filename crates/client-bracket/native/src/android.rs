@@ -11,9 +11,9 @@
 
 use fnv::FnvHashMap;
 use std::ptr::NonNull;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
-use jni_sys::{jboolean, jbyteArray, jclass, jdouble, jint, jobject, jvalue, JNIEnv, JNINativeInterface_, JNI_ABORT};
+use jni_sys::{jboolean, jbyteArray, jclass, jdouble, jint, jmethodID, jobject, jvalue, JNIEnv, JNINativeInterface_, JavaVM, JNI_ABORT, JNI_OK};
 use ndk_sys::{ANativeWindow, ANativeWindow_fromSurface, ANativeWindow_release};
 use wgpu::rwh::{AndroidDisplayHandle, AndroidNdkWindowHandle, RawDisplayHandle, RawWindowHandle};
 use xpute_kit::status::bug::OrBug;
@@ -113,10 +113,58 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_unpack(env:
     }
 }
 
-/// Opens the device: whether it opened (surface.rs `pxl_gpu_open`).
+/// The VM, `PxlGuest`'s class held past the call, and its static `wake`:
+/// what a completion calls to ask a turn (`wake`). Taken as the device opens,
+/// on a thread Java made, since a thread the host made finds no class of the
+/// app's by name.
+static WAKE: OnceLock<(usize, usize, usize)> = OnceLock::new();
+
+/// Opens the device: whether it opened (surface.rs `pxl_gpu_open`). `this` is
+/// `PxlGuest`, a Kotlin object, whose calls are its instance's.
+///
+/// # Safety
+/// Called by JNI.
 #[no_mangle]
-pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(_env: *mut JNIEnv, _class: jclass) -> jboolean {
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(env: *mut JNIEnv, this: jobject) -> jboolean {
+    let j = unsafe { jni(env) };
+    let mut vm: *mut JavaVM = core::ptr::null_mut();
+    // SAFETY: JNI's own calls on the environment it called with; the class
+    // is held globally, so it outlives this call.
+    unsafe {
+        if j.GetJavaVM.or_bug(Errno::ENOSYS)(env, &raw mut vm) == JNI_OK {
+            let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(env, j.GetObjectClass.or_bug(Errno::ENOSYS)(env, this));
+            let method = j.GetStaticMethodID.or_bug(Errno::ENOSYS)(env, class, c"wake".as_ptr(), c"()V".as_ptr());
+            if !method.is_null() {
+                let _ = WAKE.set((vm as usize, class as usize, method as usize));
+            }
+        }
+    }
     jboolean::from(crate::surface::pxl_gpu_open() == 0)
+}
+
+/// `PxlGuest.wake`, from whichever thread learned of a completion (surface.rs
+/// `wake`). JNI may be called only from a thread attached to the VM, so the
+/// caller is attached, for good and as a daemon: the host's threads live as
+/// long as it does, and a daemon keeps no VM from exiting. Kotlin sends the
+/// app's event from there, which Expo carries to the JavaScript thread.
+pub fn wake() {
+    let Some(&(vm, class, method)) = WAKE.get() else { return };
+    let vm = vm as *mut JavaVM;
+    let mut env: *mut JNIEnv = core::ptr::null_mut();
+    // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
+    // class and method JNI gave while the device opened, the class held.
+    unsafe {
+        let attach = (**vm).AttachCurrentThreadAsDaemon.or_bug(Errno::ENOSYS);
+        if attach(vm, (&raw mut env).cast(), core::ptr::null_mut()) != JNI_OK {
+            return;
+        }
+        let j = jni(env);
+        j.CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(env, class as jclass, method as jmethodID, core::ptr::null());
+        // What Kotlin threw has no Java caller here to reach.
+        if j.ExceptionCheck.or_bug(Errno::ENOSYS)(env) != 0 {
+            j.ExceptionClear.or_bug(Errno::ENOSYS)(env);
+        }
+    }
 }
 
 /// Binds the kernel's surface `handle` to a view's `surface`, through the

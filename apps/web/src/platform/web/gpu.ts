@@ -2,7 +2,7 @@
 
 import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
-import { send_next } from "@/kernel/sched.ts";
+import { request_frame, send_next } from "@/kernel/sched.ts";
 import { Gpu, setGpu } from "@/kernel/gpu.ts";
 
 /** Safari, after losing its GPU process, gave no device for a while, so the
@@ -41,7 +41,8 @@ export function gpuBoot(): void {
     askAgain();
   };
   tries += 1;
-  void acquireDevice(lost).then((answered) => {
+  // A completion the device writes asks the strobe for the turn that reads it.
+  void acquireDevice(lost, request_frame).then((answered) => {
     if (!answered) {
       if (tries === 1) console.warn(`[gpu] no adapter answered; asking every ${RETRY_MS} ms while the page is shown`);
       if (tries >= TRIES) {

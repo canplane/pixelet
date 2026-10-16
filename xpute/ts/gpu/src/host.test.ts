@@ -31,7 +31,7 @@ async function replay(): Promise<void> {
     const bytes = new Uint8Array(memory);
     const words = new Uint32Array(memory);
     if (g.has(`${p}.input`)) bytes.set(g.bytes(`${p}.input`), inputAt);
-    const host = new GpuHost(device, () => memory);
+    const host = new GpuHost(device, () => memory, () => {});
     const turns: string[] = [];
     g.each(`${p}.turn`, (k) => turns.push(k));
     for (const [k, turn] of turns.entries()) {

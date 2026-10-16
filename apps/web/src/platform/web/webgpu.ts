@@ -49,7 +49,8 @@ async function missingOf(): Promise<Missing | null> {
 
 /** False where no adapter answered. What the device is, the kernel reads from
  * the block its first call asks the host for. */
-export async function acquireDevice(lost: () => void): Promise<boolean> {
+/** `wake`: what a completion calls to ask the turn that reads it (xpute GpuHost). */
+export async function acquireDevice(lost: () => void, wake: () => void): Promise<boolean> {
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   if (!adapter) return false;
   const timestamps = adapter.features.has("timestamp-query");
@@ -73,7 +74,7 @@ export async function acquireDevice(lost: () => void): Promise<boolean> {
         ].map(of).join(" "),
     );
   }
-  const h = new GpuHost(d, () => moduleMemory!);
+  const h = new GpuHost(d, () => moduleMemory!, wake);
   d.lost.then((info) => {
     // Nothing here destroys the device, so a loss is always the browser's.
     console.warn(`[gpu] device lost (${info.reason}): ${info.message}`);

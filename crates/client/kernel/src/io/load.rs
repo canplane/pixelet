@@ -37,7 +37,8 @@ enum Entry<T> {
     Pending,
     /// Its file in its arrival's task, being read.
     Arrived,
-    /// An image read: the handle its texture is arriving under.
+    /// An image handed to the device under this handle, ready once the host's
+    /// word says it landed (`load_image`).
     Landing(u32),
     Ready(T),
     Failed,
@@ -72,13 +73,22 @@ pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
     }
 }
 
+/// An image's handle once its texture is there. Its landing is the word the
+/// host writes, read here where the image is read, so nothing waits on it;
+/// once read it stays, since the texture is taken from the host's record.
 pub fn load_image(load: Load) -> Option<u32> {
     let l = loader();
-    match &l.image[load.number() as usize] {
+    let entry = &mut l.image[load.number() as usize];
+    if let Some(Entry::Landing(h)) = *entry {
+        if pxl_render::gpu::api::image_landed(h) {
+            *entry = Some(Entry::Ready(h));
+        }
+    }
+    match entry {
         Some(Entry::Ready(h)) => Some(*h),
         Some(_) => None,
         None => {
-            l.image[load.number() as usize] = Some(Entry::Pending);
+            *entry = Some(Entry::Pending);
             None
         }
     }
@@ -112,7 +122,8 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
         if matches!(l.gltf[n], Some(Entry::Pending)) {
             l.wants.push((subject_of(LoadKind::Gltf, load), Ask::PLAIN));
         }
-        if matches!(l.image[n], Some(Entry::Pending)) {
+        // An image is read only where a device can take it.
+        if matches!(l.image[n], Some(Entry::Pending)) && pxl_render::gpu::api::device().is_some() {
             l.wants.push((subject_of(LoadKind::Image, load), Ask::PLAIN));
         }
     }
@@ -190,38 +201,23 @@ pub fn images_lost() {
     }
 }
 
-/// Whether image `n` is still the one arriving as `image`: the device's loss
-/// forgets it.
-fn arriving(n: usize, image: u32) -> bool {
-    matches!(loader().image[n], Some(Entry::Landing(h)) if h == image)
-}
-
-/// An image's bytes, read, into a texture where the device is, and ready once
-/// they are there. A file the device cannot decode is the asset's own
-/// failure, so it is final.
-async fn image_arrived(n: usize, file: Vec<u8>) {
-    let image = IMAGES.get(Slots::default).insert(());
-    loader().image[n] = Some(Entry::Landing(image));
-    while pxl_render::gpu::api::device().is_none() {
-        next_turn(world_edge).await;
-        if !arriving(n, image) {
-            return;
-        }
+/// An image's bytes, read, into a texture where the device is: landing until
+/// the host says it is there (`load_image`). A file the device cannot decode is
+/// the asset's own failure, so it is final; a device gone since it was asked
+/// for takes it again when one is back (`images_lost`).
+fn image_arrived(n: usize, file: Vec<u8>) {
+    if pxl_render::gpu::api::device().is_none() {
+        loader().image[n] = None;
+        return;
     }
+    let image = IMAGES.get(Slots::default).insert(());
     if !pxl_render::gpu::api::image_arrive(image, file) {
+        IMAGES.get(Slots::default).remove(image);
         loader().image[n] = Some(Entry::Failed);
         settled();
         return;
     }
-    while !pxl_render::gpu::api::image_landed(image) {
-        next_turn(world_edge).await;
-        if !arriving(n, image) {
-            return;
-        }
-    }
-    loader().image[n] = Some(Entry::Ready(image));
-    settled();
-    request_world_tick();
+    loader().image[n] = Some(Entry::Landing(image));
 }
 
 pub fn model_opened(fd: u32, key: u64, opened: Opened) {
@@ -271,7 +267,7 @@ async fn arrival(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
     // In once the host has run the turn's records.
     next_turn(world_edge).await;
     if kind == LoadKind::Image {
-        image_arrived(n, buf).await;
+        image_arrived(n, buf);
         return;
     }
     let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {

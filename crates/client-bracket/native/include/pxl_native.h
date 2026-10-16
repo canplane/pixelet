@@ -22,6 +22,11 @@ uint8_t *pxl_memory(uint32_t *bytes);
 // is, the kernel reads from the block its first call asks the host for.
 int32_t pxl_gpu_open(void);
 
+// `f` is what the device's host calls to ask a turn, from whichever thread
+// learned of a completion (an image decoded): it sends the app an event, and
+// JavaScript asks for the turn that reads it.
+void pxl_wake_on(void (*f)(void));
+
 // Binds the kernel's surface `handle` to `layer`, a view's CAMetalLayer,
 // which the view keeps until it has unbound it: 0, or -2 when no device is
 // open, -3 when the system would not make a surface of the layer.

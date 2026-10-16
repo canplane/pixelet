@@ -16,6 +16,9 @@ import UIKit
 /// guest runs each on its own thread while this one waits
 /// (crates/client-bracket/native/src/thread.rs), and an image's decode runs off both.
 public class PlatformModule: Module {
+  /// The module `pxl_wake_on`'s function sends through.
+  nonisolated(unsafe) static weak var current: PlatformModule?
+
   public func definition() -> ModuleDefinition {
     Name("PxlPlatform")
 
@@ -23,10 +26,22 @@ public class PlatformModule: Module {
 
     OnCreate {
       ViewModifierRegistry.register(contentScrollsModifier) { _, _, _ in ContentScrollsModifier() }
+      PlatformModule.current = self
+      // A C function captures nothing, so it reaches the module through the
+      // static. Called from the thread that learned of a completion: Expo's
+      // sendEvent schedules the event onto the JavaScript thread itself.
+      pxl_wake_on { PlatformModule.current?.sendEvent("onWake") }
     }
     OnDestroy {
       ViewModifierRegistry.unregister(contentScrollsModifier)
+      PlatformModule.current = nil
     }
+
+    // ---- the kernel's turns (platform/gpu.ts) ----
+
+    /// The device's host asks a turn: a completion it writes at the next
+    /// turn's poll would otherwise wait for an input to be read.
+    Events("onWake")
 
     // ---- the kernel (platform/guest.ts, gpu.ts) ----
 

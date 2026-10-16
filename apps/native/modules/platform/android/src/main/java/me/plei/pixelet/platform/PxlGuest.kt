@@ -28,6 +28,16 @@ object PxlGuest {
   /** Whether the device opened; what it is, the kernel reads from the host. */
   external fun gpuOpen(): Boolean
 
+  /** What `wake` calls: the module's event (PlatformModule.kt `onWake`). */
+  @Volatile var woken: (() -> Unit)? = null
+
+  /** Called by the device's host (src/android.rs `wake`) from whichever
+   * thread learned of a completion, attached to the VM there, to ask the turn
+   * that reads it. */
+  @JvmStatic fun wake() {
+    woken?.invoke()
+  }
+
   /** Binds the kernel's surface `handle` to `surface`, which the caller
    * keeps until it has unbound it: 0, -2 when no device is open, -3 when the
    * system would not make a surface of it. */

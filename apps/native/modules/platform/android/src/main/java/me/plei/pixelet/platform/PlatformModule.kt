@@ -45,6 +45,18 @@ class PlatformModule : Module() {
     /** Whether the device opened; what it is, the kernel reads from the host. */
     Function("gpuOpen") { PxlGuest.gpuOpen() }
 
+    // ---- the kernel's turns (platform/gpu.ts) ----
+
+    /** The device's host asks a turn: a completion it writes at the next
+     * turn's poll would otherwise wait for an input to be read. Sent from the
+     * thread that learned of the completion; Expo carries the event to the
+     * JavaScript thread itself. */
+    Events("onWake")
+
+    OnCreate { PxlGuest.woken = { sendEvent("onWake") } }
+
+    OnDestroy { PxlGuest.woken = null }
+
     // ---- the transport (platform/origin.ts) ----
 
     /** A body fetched still zstd, decoded off the JavaScript thread on the

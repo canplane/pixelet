@@ -1,7 +1,7 @@
 // @pxl/native/platform/gpu.ts
 
 import { Command } from "@/kernel/abi/cmd.spec.ts";
-import { send_next } from "@/kernel/sched.ts";
+import { request_frame, send_next } from "@/kernel/sched.ts";
 import { Gpu, setGpu } from "@/kernel/gpu.ts";
 import { PLATFORM } from "./module.ts";
 
@@ -12,5 +12,8 @@ export function gpuBoot(): void {
     setGpu(Gpu.Missing);
     return;
   }
+  // A completion the device's host learns of between turns asks the turn
+  // that reads it, as the page's host does (platform/web/gpu.ts).
+  PLATFORM.addListener("onWake", request_frame);
   send_next(Command.GPU_READY);
 }

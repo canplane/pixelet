@@ -28,7 +28,7 @@ fn every_record_reads_back_its_bytes_on_a_device() {
             let input = g.bytes(&key);
             memory[input_at as usize..input_at as usize + input.len()].copy_from_slice(&input);
         }
-        let mut host = GpuHost::new(adapter.clone(), device.clone(), queue.clone(), wgpu::TextureFormat::Bgra8Unorm, ConfigureAt::Here);
+        let mut host = GpuHost::new(adapter.clone(), device.clone(), queue.clone(), wgpu::TextureFormat::Bgra8Unorm, ConfigureAt::Here, || {});
         g.each(&format!("{p}.turn"), |turn| {
             let words = g.bytes(turn);
             memory[..words.len()].copy_from_slice(&words);
