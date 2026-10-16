@@ -278,7 +278,7 @@ pub fn table() -> &'static [i32] {
 }
 
 /// What a tile hands its squares: its packet and the tile as it is held, its
-/// lines and its ways' bound made where it landed; or a void tile's own
+/// lines; or a void tile's own
 /// looks over samples all zero.
 pub enum Handed<'a> {
     Packet(&'a [u8], &'a TerrainTile),
@@ -337,7 +337,6 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> bool {
             (&room[..], &zeros[..])
         }
     };
-    let mut ways = [0u32; window::WAYS_BOUND as usize];
     for i in 0..SQUARES {
         if !wants(w, i) {
             continue;
@@ -350,7 +349,6 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> bool {
             let from_row = 4 * ((y0 + y) * side + x0);
             cut[4 * y * SQUARE as usize..4 * (y + 1) * SQUARE as usize].copy_from_slice(&lane[from_row..from_row + 4 * SQUARE as usize]);
         }
-        window::square_ways(|k| held.ways[k as usize].map(i32::from), place, &mut ways);
         let written = square_lines(tile, &held.separation, place, scratch, lines);
         w.ticket = (w.ticket % (DONE - 1)) + 1;
         let back = CellsBack {
@@ -362,7 +360,6 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> bool {
             square: i,
             place: place[0] | place[1] << 16,
             looks: cut,
-            ways: &ways,
             samples: pxl_render::gpu::api::bytes(ele),
             lines: &lines[..written],
             back,

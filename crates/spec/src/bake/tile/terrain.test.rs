@@ -34,19 +34,16 @@ fn tile(seed: u64) -> TerrainTile {
     TerrainTile::of(ele, Ground { cells: cells.into() }, lines(&mut rng), Occupancy::of_bits(0b10101).unwrap())
 }
 
-fn room() -> TileRoom {
-    TileRoom {
-        ways: vec![[0; 2]; WAYS_LANE].leak(),
-        separation: separation::Room {
-            starts: vec![0; separation::MAX_LINES + 1].leak(),
-            points: vec![[0; 2]; separation::MAX_POINTS].leak(),
-            tops: vec![0; separation::MAX_POINTS].leak(),
-            width: vec![0; separation::MAX_LINES].leak(),
-            kind: vec![0; separation::MAX_LINES].leak(),
-            form: vec![0; separation::MAX_LINES].leak(),
-            clear: vec![0; separation::MAX_LINES].leak(),
-            boxes: vec![[0; 4]; separation::MAX_BOXES].leak(),
-        },
+fn room() -> separation::Room {
+    separation::Room {
+        starts: vec![0; separation::MAX_LINES + 1].leak(),
+        points: vec![[0; 2]; separation::MAX_POINTS].leak(),
+        tops: vec![0; separation::MAX_POINTS].leak(),
+        width: vec![0; separation::MAX_LINES].leak(),
+        kind: vec![0; separation::MAX_LINES].leak(),
+        form: vec![0; separation::MAX_LINES].leak(),
+        clear: vec![0; separation::MAX_LINES].leak(),
+        boxes: vec![[0; 4]; separation::MAX_BOXES].leak(),
     }
 }
 
@@ -65,12 +62,9 @@ fn the_formats_write_and_read_what_the_record_holds() {
     let terrain = encode(&tile).unwrap();
     assert_eq!(format!("{:016x}", fnv(&terrain)), v.s("terrain.fnv"), "the tile's bytes");
     assert_eq!(decode(&terrain).unwrap(), tile, "a tile reads back as it was written");
-    // On the CPU its lines, and the ways' bound made from them.
+    // On the CPU its lines.
     let resident = decode_into(&terrain, room()).unwrap();
     assert_eq!(resident.separation, tile.separation, "its lines");
-    let mut ways = vec![[0; 2]; WAYS_LANE];
-    ways_of(&tile.separation, &mut ways);
-    assert_eq!(*resident.ways, ways[..], "the ways' bound");
     assert_eq!(resident.occupancy, tile.occupancy);
 }
 

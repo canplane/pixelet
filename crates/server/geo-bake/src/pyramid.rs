@@ -28,7 +28,8 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// The zoom its tiles are made at; every coarser one is folded.
     const LEAF: Zoom = LEAF_ZOOM;
 
-    fn encode(&self) -> Result<Vec<u8>, String>;
+    /// As tile `at` is published.
+    fn encode(&self, at: Tile) -> Result<Vec<u8>, String>;
     fn decode(raw: &[u8]) -> Result<Self, String>;
 
     fn sources(p: Tile) -> Vec<Tile> {
@@ -287,7 +288,7 @@ fn fold_band<L: Base>(set: &Staged<'_>, rows: &[&[Tile]], absent: &impl Absent<L
                 }
             }
             let after = fold_parent(parent, |p| held.get(&p).and_then(Option::as_ref), absent)
-                .map(|t| t.encode().map_err(|e| format!("{}: {e}", parent.name())))
+                .map(|t| t.encode(parent).map_err(|e| format!("{}: {e}", parent.name())))
                 .transpose()?;
             if set.content(parent)? == after {
                 continue;

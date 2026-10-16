@@ -29,7 +29,7 @@ fn run() -> Result<(), String> {
             let tiles = leaves(&mut client, &coverage, within)?;
             run.stage.leaf::<PlaceTile>(shard, |set| {
                 for (tile, place) in &tiles {
-                    set.write(*tile, &pack(&place.encode()?, Level::Stored).map_err(|e| e.to_string())?)?;
+                    set.write(*tile, &pack(&place.encode(*tile)?, Level::Stored).map_err(|e| e.to_string())?)?;
                 }
                 Ok(())
             })?;

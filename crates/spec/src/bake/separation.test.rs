@@ -118,8 +118,9 @@ fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() 
         stations: frame.stations(),
         per_m: 0.5,
     };
-    let pier = |c: &Column| (5..19).all(|z| ways::block(c, [0, 0, z], false) == ways::PIER);
-    let none = |c: &Column| (5..19).all(|z| ways::block(c, [0, 0, z], false) == ways::NOTHING);
+    let at = |c: &Column, z: i32| ways::at(&ways::column(c, [0, 0]).0, pxl_portable::LEAF_CELL, z);
+    let pier = |c: &Column| (5..19).all(|z| at(c, z) == ways::PIER);
+    let none = |c: &Column| (5..19).all(|z| at(c, z) == ways::NOTHING);
     assert!(pier(&column(segments(&d), ground::grass)));
     assert!(none(&column(segments(&d), ground::primary)));
     assert!(none(&column(segments(&d), sentinel::unknown)));
@@ -129,7 +130,7 @@ fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() 
     under.push([([0.0, 3.0], 10), ([40.0, 3.0], 10)], 4 * POINT_SCALE as u8, 3, Form::Bridge, 0);
     let under = under.finish();
     let both = column(segments(&d).into_iter().chain(segments(&under)).collect(), ground::grass);
-    assert!((10..19).all(|z| ways::block(&both, [0, 0, z], false) == ways::NOTHING));
+    assert!((10..19).all(|z| at(&both, z) == ways::NOTHING));
 }
 
 #[test]

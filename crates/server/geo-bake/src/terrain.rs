@@ -7,11 +7,12 @@ pub mod pipeline;
 pub mod repository;
 pub mod source;
 
+use pxl_portable::ways::SPANS;
 use pxl_spec::bake::fold::fold_terrain;
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::block::window::SQUARE;
+use pxl_spec::block::window::{RUNS_SQUARE, SQUARE};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
@@ -24,13 +25,17 @@ impl crate::pyramid::Base for TerrainTile {
 
     /// Refused where a record's room does not hold its lines (pxl-spec
     /// `Separation::fits`), or a window's square would hold more of its
-    /// ways' entries than a client gives one (pxl-spec `terrain::ways_fit`).
-    fn encode(&self) -> Result<Vec<u8>, String> {
+    /// ways' entries than a client gives one (pxl-spec `terrain::ways_fit`),
+    /// or more of its ways' runs, or a column more spans (`terrain::runs_fit`).
+    fn encode(&self, at: Tile) -> Result<Vec<u8>, String> {
         self.separation
             .fits()
             .map_err(|[lines, points]| format!("its ways hold {lines} lines and {points} points, past MAX_LINES ({MAX_LINES}) or MAX_POINTS ({MAX_POINTS})"))?;
         terrain::ways_fit(&self.separation, SQUARE)
             .map_err(|([qx, qy], n)| format!("its square ({qx}, {qy}) holds {n} of the ways' entries, past WAYS_SQUARE_SEGMENTS ({})", terrain::WAYS_SQUARE_SEGMENTS))?;
+        terrain::runs_fit(at, self).map_err(|([qx, qy], [runs, spans])| {
+            format!("its square ({qx}, {qy}) reads as {runs} of the ways' runs and a column {spans} spans, past RUNS_SQUARE ({RUNS_SQUARE}) or SPANS ({SPANS})")
+        })?;
         terrain::encode(self).map_err(|e| format!("{e:?}"))
     }
 

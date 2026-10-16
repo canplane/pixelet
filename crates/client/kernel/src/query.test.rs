@@ -67,7 +67,7 @@ fn resident(centre: [f64; 2], held: &[(Tile, Leaf)]) -> Residency<TerrainTile> {
                 continue;
             }
             admitted.push(q);
-            cells.push((q, looks.clone(), heights.clone(), tile.ways.to_vec()));
+            cells.push((q, looks.clone(), heights.clone(), tile.separation.clone()));
             let picture = match k {
                 0 => tile.clone(),
                 _ => TerrainTile {

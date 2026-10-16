@@ -18,7 +18,7 @@ use crate::frame::draw::{
     PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::frame::screen_cells::SCREEN_CELLS_MAX;
-use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS};
+use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_WAYS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, texture_usage, word_bytes, Device, Format, Gpu, Load, Stamp};
@@ -43,7 +43,7 @@ use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
 use pxl_portable::scatter::GROUPS;
-use pxl_spec::block::window::{BACK_WORDS, ELE_AT, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARE_WORDS, WAYS_AT};
+use pxl_spec::block::window::{BACK_WORDS, ELE_AT, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -188,8 +188,6 @@ pub struct Square<'a> {
     pub square: u32,
     pub place: u32,
     pub looks: &'a [u8],
-    /// Its share of its tile's ways' bound (pxl-portable `window::WAYS_BOUND`).
-    pub ways: &'a [u32],
     pub samples: &'a [u8],
     /// Its lines (pxl-portable `window::LINES_AT`), the words written.
     pub lines: &'a [u32],
@@ -711,19 +709,24 @@ struct ScreenCellsPass {
 struct GroundBuffers {
     /// Per square of the windows, its looks as handed, its cells' heights
     /// and levels, which `heights_cs` and `bound_cs` write in the turn it
-    /// is handed, and its tile's samples as handed (pxl-portable
+    /// is handed, its tile's samples and lines as handed, and its ways'
+    /// runs, which `ways_cs` writes then (pxl-portable
     /// `window::SQUARE_WORDS`).
     ground: u32,
-    /// The squares that turn handed, two words each, `heights_cs`'s and
-    /// `bound_cs`'s one per `id.z`, and where each one's cells come back to.
+    /// The squares that turn handed, two words each, `heights_cs`'s,
+    /// `bound_cs`'s and `ways_cs`'s one per `id.z`, and where each one's
+    /// cells come back to.
     fresh: u32,
     fresh_len: u32,
     backs: Vec<(u32, CellsBack)>,
     heights_built: Built,
     heights_group: u32,
     bound_built: Built,
-    /// `bound_cs`'s group, its level at a dynamic offset (`LEVEL_STRIDE`).
+    /// `bound_cs`'s group, its level at a dynamic offset (`SLOT_STRIDE`).
     bound_group: u32,
+    /// `ways_cs`'s, and its group, its pass at a dynamic offset.
+    ways_built: Built,
+    ways_group: u32,
 }
 
 /// What the GPU's cast reads and the lane it writes.
@@ -761,13 +764,13 @@ const CAST_GROUP: [u32; 21] = [
 /// cells of.
 const HEIGHTS_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
 
-/// `bound_cs`'s group 0: its level, the fresh frames and the frames it
-/// writes the levels of.
+/// `bound_cs`'s and `ways_cs`'s group 0: its level or its pass, the fresh
+/// frames and the frames it writes the levels or the runs of.
 const BOUND_GROUP: [u32; 9] = [0, COMPUTE, UNIFORM_DYNAMIC, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE_RW];
 
-/// A level's slot in `bound_cs`'s levels, every device's dynamic offset
-/// alignment.
-const LEVEL_STRIDE: u32 = UNIFORM_ALIGN_MAX;
+/// A number's slot in the fill's numbers, read at a dynamic offset: every
+/// device's dynamic offset alignment.
+const SLOT_STRIDE: u32 = UNIFORM_ALIGN_MAX;
 
 impl ScreenCellsPass {
     fn new(g: &Gpu, pipelines: &mut Pipelines, sky_buffer: u32) -> ScreenCellsPass {
@@ -847,16 +850,17 @@ impl ScreenCellsPass {
             entries[5..].copy_from_slice(&buffer_entry(1, frames_buffer));
             let heights_group = g.bind_group(heights_built.layouts[0], &entries);
             let mut entries = [0u32; 15];
-            // Each level's number in its slot, written once.
-            let levels = buffer(LEVELS * LEVEL_STRIDE, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            for j in 1..=LEVELS {
-                g.write_buffer(levels, (j - 1) * LEVEL_STRIDE, bytes(&[j, 0, 0, 0]));
+            // Each slot's number in it, written once: `bound_cs`'s level,
+            // `ways_cs`'s pass.
+            let slots = buffer((LEVELS + 1) * SLOT_STRIDE, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            for k in 0..=LEVELS {
+                g.write_buffer(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
             }
-            let bound_built = pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP);
-            entries[..5].copy_from_slice(&[0, resource::BUFFER, levels, 0, 16]);
+            entries[..5].copy_from_slice(&[0, resource::BUFFER, slots, 0, 16]);
             entries[5..10].copy_from_slice(&buffer_entry(1, fresh));
             entries[10..].copy_from_slice(&buffer_entry(2, frames_buffer));
-            let bound_group = g.bind_group(bound_built.layouts[0], &entries);
+            let (bound_built, ways_built) = (pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP), pipelines.build_compute(g, SHADER_WAYS, &BOUND_GROUP));
+            let (bound_group, ways_group) = (g.bind_group(bound_built.layouts[0], &entries), g.bind_group(ways_built.layouts[0], &entries));
             GroundBuffers {
                 ground: frames_buffer,
                 fresh,
@@ -866,17 +870,18 @@ impl ScreenCellsPass {
                 heights_group,
                 bound_built,
                 bound_group,
+                ways_built,
+                ways_group,
             }
         });
         let mut fresh = 0;
         gb.backs.clear();
         (ground.upload)(&mut |q| {
-            if !room((q.looks.len() + 4 * q.ways.len() + q.samples.len() + 4 * q.lines.len()) as u32) {
+            if !room((q.looks.len() + q.samples.len() + 4 * q.lines.len()) as u32) {
                 return false;
             }
             let at = q.square * SQUARE_BYTES;
             g.write_buffer(gb.ground, at, q.looks);
-            g.write_buffer(gb.ground, at + WAYS_AT * 4, bytes(q.ways));
             g.write_buffer(gb.ground, at + ELE_AT * 4, q.samples);
             g.write_buffer(gb.ground, at + LINES_AT * 4, bytes(q.lines));
             g.write_buffer(gb.fresh, word_bytes(2 * fresh as usize), bytes(&[q.square, q.place]));
@@ -979,19 +984,29 @@ impl ScreenCellsPass {
     }
 
     /// The cells of the frames this turn uploaded, from their samples, then
-    /// their bounds a level a dispatch, each over the one before, and both
-    /// read back where the CPU looks them up: ahead of the frame, as they
-    /// outlive it, so no frame the window names is cast before its cells are
-    /// written, even when the frame proper is dropped.
+    /// their ways' runs, then their bounds a level a dispatch, each over the
+    /// one before, and cells and bounds read back where the CPU looks them
+    /// up: ahead of the frame, as they outlive it, so no frame the window
+    /// names is cast before its cells are written, even when the frame
+    /// proper is dropped.
     fn grids(&mut self, g: &Gpu, encoder: u32) {
         let Some(c) = self.ground.as_mut().filter(|c| c.fresh_len != 0) else { return };
         let pass = g.compute_pass(encoder);
         g.set_pipeline(pass, c.heights_built.pipeline);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
         g.dispatch(pass, (SQUARE / 2).div_ceil(BOUND_WORKGROUP), SQUARE.div_ceil(BOUND_WORKGROUP), c.fresh_len);
+        // A column a thread, over the faces just drawn: the columns'
+        // runs counted, summed a square a thread, written, then each bin's
+        // ways' word off them, before the levels join it.
+        g.set_pipeline(pass, c.ways_built.pipeline);
+        for k in 0..4 {
+            g.set_bind_group(pass, 0, c.ways_group, &[k * SLOT_STRIDE]);
+            let across = if k % 2 == 1 { 1 } else { SQUARE_CELLS / WAYS_WORKGROUP };
+            g.dispatch(pass, across, 1, c.fresh_len);
+        }
         g.set_pipeline(pass, c.bound_built.pipeline);
         for j in 1..=LEVELS {
-            g.set_bind_group(pass, 0, c.bound_group, &[(j - 1) * LEVEL_STRIDE]);
+            g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
             let side = (SQUARE >> j).div_ceil(BOUND_WORKGROUP);
             g.dispatch(pass, side, side, c.fresh_len);
         }
@@ -1040,6 +1055,8 @@ impl ScreenCellsPass {
 const CAST_WORKGROUP: u32 = 8;
 /// `heights_cs`'s and `bound_cs`'s workgroup, a side, a frame a layer.
 const BOUND_WORKGROUP: u32 = 8;
+/// `ways_cs`'s workgroup: columns in a row.
+const WAYS_WORKGROUP: u32 = 64;
 
 fn cast_group(g: &Gpu, c: &CastBuffers, ground: u32, lane: u32) -> u32 {
     let mut entries = [0u32; 35];

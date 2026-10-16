@@ -255,9 +255,8 @@ impl Separation {
 
     /// Each segment of a line that can rise or sink, by its line and its
     /// place in it, with every square of a tile of `side` cells cut `across`
-    /// a side, row by row, that its footprint reaches: the one sweep the
-    /// ways' bound, their entries in a window's square and the square's lines
-    /// all read.
+    /// a side, row by row, that its footprint reaches: the one sweep a
+    /// window's square's entries and its lines both read.
     pub fn reaches(&self, side: f64, across: u32, mut each: impl FnMut(usize, usize, &Line<'_>, usize)) {
         let step = side / f64::from(across);
         let square = |v: f64| ((v / step).floor() as i64).clamp(0, i64::from(across) - 1) as usize;
@@ -276,25 +275,6 @@ impl Separation {
                 }
             }
         }
-    }
-
-    /// The ways' bound over a tile of `side` cells a side, cut into
-    /// `across` × `across` squares row by row, into `out`: in each square the
-    /// highest top of a line that can rise and, under the lowest of one that
-    /// can sink, the way's own cell, wherever a segment's footprint reaches
-    /// it (`reaches`); lowest over highest where none does.
-    pub fn bound(&self, side: f64, across: u32, out: &mut [[i16; 2]]) {
-        out.fill([i16::MAX, i16::MIN]);
-        self.reaches(side, across, |k, _, line, s| {
-            let (ta, tb) = (line.tops[s], line.tops[s + 1]);
-            let o = &mut out[k];
-            if line.form.rises() {
-                o[1] = o[1].max(ta.max(tb));
-            }
-            if line.form.sinks() {
-                o[0] = o[0].min(ta.min(tb).saturating_sub(1));
-            }
-        });
     }
 
     /// The lower and higher end of each segment whose footprint reaches the
@@ -345,7 +325,7 @@ impl Line<'_> {
 /// What segment `s` is over the column of side `side` about `at` in its
 /// tile's cells (pxl-portable ways.rs `crossing`).
 fn crossing_at(s: &Segment, at: [f64; 2], side: f64, stations: &Stations) -> Option<Crossing> {
-    ways::crossing(s, at.map(|v| v as f32), side as f32, stations)
+    Some(ways::crossing(s, at.map(|v| v as f32), side as f32, stations)).filter(Crossing::is)
 }
 
 /// Where the nearest point of the line from `a` along `d` to `p` lies, as a

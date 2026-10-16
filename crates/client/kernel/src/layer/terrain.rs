@@ -7,4 +7,4 @@ mod query;
 pub mod tile;
 pub mod window;
 
-pub use query::{tile_view, Source};
+pub use query::Source;

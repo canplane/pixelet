@@ -11,7 +11,7 @@
 use crate::layer::kept::Kept;
 use crate::layer::residency::Residency;
 use pxl_spec::bake::separation::{self, MAX_BOXES, MAX_LINES, MAX_POINTS};
-use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile, TileRoom, WAYS_LANE};
+use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::mem::base::ptr_at;
@@ -23,7 +23,7 @@ use crate::io::failure::Failure;
 
 use crate::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::layer::terrain::fixed::RANGE;
-use crate::layer::terrain::fixed::{separation_off, ways_off, SEPARATION_LANE_BYTES, WAYS_LANE_BYTES};
+use crate::layer::terrain::fixed::{separation_off, SEPARATION_LANE_BYTES};
 use crate::layer::Base;
 use pxl_spec::bake::tile::Occupancy;
 use xpute_guest::clock::now;
@@ -80,26 +80,22 @@ pub fn kept_for(tile: Tile) -> bool {
 /// # Safety
 /// The record's lanes are the tile's that is given them, and no other's,
 /// from now until another tile takes the record.
-unsafe fn room_of(record: u32) -> TileRoom {
+unsafe fn room_of(record: u32) -> separation::Room {
     // Inside the range by the layout, so past its end is a bug.
     let lane = |off, bytes| RANGE.get().at(off, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
-    let ways = lane(ways_off(record), WAYS_LANE_BYTES);
     let separation_lane = |k: usize| lane(separation_off(record, k), SEPARATION_LANE_BYTES[k]);
     // SAFETY: each lane is kernel memory at its own size, never freed, and the
     // caller's contract makes it this tile's alone.
     unsafe {
-        TileRoom {
-            ways: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(ways), WAYS_LANE),
-            separation: separation::Room {
-                starts: core::slice::from_raw_parts_mut(ptr_at::<u32>(separation_lane(0)), MAX_LINES + 1),
-                points: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(separation_lane(1)), MAX_POINTS),
-                tops: core::slice::from_raw_parts_mut(ptr_at::<i16>(separation_lane(2)), MAX_POINTS),
-                width: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(3)), MAX_LINES),
-                kind: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(4)), MAX_LINES),
-                form: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(5)), MAX_LINES),
-                clear: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(6)), MAX_LINES),
-                boxes: core::slice::from_raw_parts_mut(ptr_at::<[i16; 4]>(separation_lane(7)), MAX_BOXES),
-            },
+        separation::Room {
+            starts: core::slice::from_raw_parts_mut(ptr_at::<u32>(separation_lane(0)), MAX_LINES + 1),
+            points: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(separation_lane(1)), MAX_POINTS),
+            tops: core::slice::from_raw_parts_mut(ptr_at::<i16>(separation_lane(2)), MAX_POINTS),
+            width: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(3)), MAX_LINES),
+            kind: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(4)), MAX_LINES),
+            form: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(5)), MAX_LINES),
+            clear: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(6)), MAX_LINES),
+            boxes: core::slice::from_raw_parts_mut(ptr_at::<[i16; 4]>(separation_lane(7)), MAX_BOXES),
         }
     }
 }

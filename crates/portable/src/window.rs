@@ -69,26 +69,15 @@ pub const fn level_at(j: u32) -> u32 {
 pub const LEVELS: u32 = SQUARE_SHIFT;
 pub const LEVEL_WORDS: u32 = level_at(LEVELS + 1);
 
-/// The ways' bound a tile holds (pxl-spec bake/tile/terrain.rs `ways_of`):
-/// by bins `WAYS_ACROSS` a side, each `1 << WAYS_SHIFT` cells, then its
-/// levels up to the tile whole, each the join of the four under it, a bound
-/// word an entry (`ground::bound_word`); an empty one `[i16::MAX, i16::MIN]`,
+/// A tile's ways are cut into bins `WAYS_ACROSS` a side, each
+/// `1 << WAYS_SHIFT` cells: a square lays its lines by them (`LINES_AT`),
+/// and its fill writes a bound word a bin off its runs (`bin_word`), which
+/// each cell's reach joins (`reach`); an empty one `[i16::MAX, i16::MIN]`,
 /// which a join passes over.
 pub const WAYS_ACROSS: u32 = 32;
 pub const WAYS_SHIFT: u32 = (TILE_CELLS / WAYS_ACROSS).trailing_zeros();
-
-/// Where level `k` of a bound `across` bins a side begins, the bins level
-/// 0, in entries.
-pub const fn ways_at(across: u32, k: u32) -> u32 {
-    let n = across * across;
-    4 * (n - (n >> (2 * k))) / 3
-}
-
-/// A square's share of its tile's ways' bound: its bins and their levels up
-/// to the square whole, cut out of the tile's where it fills.
-pub const WAYS_LEVELS: u32 = SQUARE_SHIFT - WAYS_SHIFT;
 const WAYS_BINS_ACROSS: u32 = SQUARE >> WAYS_SHIFT;
-pub const WAYS_BOUND: u32 = ways_at(WAYS_BINS_ACROSS, WAYS_LEVELS + 1);
+pub const WAYS_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
 
 /// The most entries a square holds of its tile's ways: one a segment and a
 /// bin of the bound (`WAYS_SHIFT`) its footprint reaches. The densest square
@@ -99,50 +88,45 @@ pub const WAYS_SQUARE_SEGMENTS: u32 = 1068;
 /// A square's lines, laid by the CPU as the square is filled (pxl-spec
 /// bake/tile/terrain.rs `square_lines`) for the one rule to ask of a block
 /// there (`ways::block`): its tile's header (`ways::header`), a word a bin
-/// of the bound, its first entry and its count over it; the entries, two a
+/// (`WAYS_BINS`), its first entry and its count over it; the entries, two a
 /// word, each one of the square's segments, a bin's in their order; then
 /// the segments a bin reaches, in their lines' order, `ways::SEGMENT_WORDS`
 /// each. None holds more than `WAYS_SQUARE_SEGMENTS` of either.
-pub const LINES_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
-pub const LINES_ENTRIES_AT: u32 = crate::ways::HEADER_WORDS + LINES_BINS;
+pub const LINES_ENTRIES_AT: u32 = crate::ways::HEADER_WORDS + WAYS_BINS;
 pub const LINES_SEGMENTS_AT: u32 = LINES_ENTRIES_AT + WAYS_SQUARE_SEGMENTS.div_ceil(2);
 pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::ways::SEGMENT_WORDS as u32;
 
+/// The most runs a square's columns read as (`ways::run`): the most of the
+/// format-10 set (2026-10-16), measured with every tile at every zoom (z15's
+/// 4312; z14's most 2654); a tile past it fails its bake (pxl-spec
+/// bake/tile/terrain.rs `runs_fit`).
+pub const RUNS_SQUARE: u32 = 4312;
+
+/// A square's ways as the descent reads them, written at fill (`ways_cs`)
+/// off its lines: each cell's first run, a word, cells row by row and one
+/// more after the last, so a cell's runs are its first to the next's — each
+/// cell's count until the fill sums them; then from `RUNS_RUN_AT` the runs
+/// (`ways::run_word`), cells in order and a cell's lowest first. Only cells
+/// a way writes in have any.
+pub const RUNS_RUN_AT: u32 = SQUARE_CELLS + 1;
+pub const RUNS_WORDS: u32 = RUNS_RUN_AT + RUNS_SQUARE;
+
 /// A square's words on a GPU, its lanes in order: its four looks a cell, its
-/// heights two a word, its levels, its ways' bound, its tile's padded
-/// samples, two a word, then its lines. Its heights, levels and ways' bound
-/// follow one another, read back whole.
+/// heights two a word, its levels, its ways' bound a bin, its tile's padded
+/// samples, two a word, its lines, then its ways' runs. Its heights, levels
+/// and ways' bound follow one another, read back whole.
 pub const LOOK_WORDS: u32 = SQUARE_CELLS;
 pub const HEIGHT_WORDS: u32 = SQUARE_CELLS / 2;
 pub const ELE_WORDS: u32 = crate::ground::ELE_WORDS;
-pub const SQUARE_WORDS: u32 = LOOK_WORDS + HEIGHT_WORDS + LEVEL_WORDS + WAYS_BOUND + ELE_WORDS + LINES_WORDS;
+pub const SQUARE_WORDS: u32 = LOOK_WORDS + HEIGHT_WORDS + LEVEL_WORDS + WAYS_BINS + ELE_WORDS + LINES_WORDS + RUNS_WORDS;
 pub const HEIGHTS_AT: u32 = LOOK_WORDS;
 pub const LEVELS_AT: u32 = HEIGHTS_AT + HEIGHT_WORDS;
 pub const WAYS_AT: u32 = LEVELS_AT + LEVEL_WORDS;
-pub const ELE_AT: u32 = WAYS_AT + WAYS_BOUND;
+pub const ELE_AT: u32 = WAYS_AT + WAYS_BINS;
 pub const LINES_AT: u32 = ELE_AT + ELE_WORDS;
+pub const RUNS_AT: u32 = LINES_AT + LINES_WORDS;
 /// What comes back of a square, from `HEIGHTS_AT`.
-pub const BACK_WORDS: u32 = HEIGHT_WORDS + LEVEL_WORDS + WAYS_BOUND;
-
-/// The square at `place` (in squares) of a tile's ways' bound `tile` (an
-/// entry by index), its own entries in `out`, a bound word each.
-pub fn square_ways(tile: impl Fn(u32) -> [i32; 2], place: [u32; 2], out: &mut [u32]) {
-    let mut k = 0;
-    while k <= WAYS_LEVELS {
-        let side = WAYS_BINS_ACROSS >> k;
-        let mut y = 0;
-        while y < side {
-            let mut x = 0;
-            while x < side {
-                let from = ways_at(WAYS_ACROSS, k) + (place[1] * side + y) * (WAYS_ACROSS >> k) + place[0] * side + x;
-                out[(ways_at(WAYS_BINS_ACROSS, k) + y * side + x) as usize] = crate::ground::bound_word(tile(from)) as u32;
-                x += 1;
-            }
-            y += 1;
-        }
-        k += 1;
-    }
-}
+pub const BACK_WORDS: u32 = HEIGHT_WORDS + LEVEL_WORDS + WAYS_BINS;
 
 /// What cell `i` of a square reaches: its height, joined with its bin's
 /// ways (`Squares::way`).
@@ -163,12 +147,242 @@ pub trait Squares {
     fn look(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Cell `i`'s height, in leaf cells, as the GPU drew it.
     fn height(&self, cell: Zoom, slot: u32, i: u32) -> i32;
-    /// Entry `k` of the ways' bound of the square in `slot`, a bound word
-    /// (`WAYS_BOUND`).
+    /// Bin `k`'s ways' bound of the square in `slot`, a bound word
+    /// (`bin_word`).
     fn way(&self, cell: Zoom, slot: u32, k: u32) -> u32;
     /// Entry `at` of level `j` of the square in `slot`, as a bound word
     /// (`ground::bound_word`): its cells' reach joined (`join`).
     fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> i32;
+}
+
+/// One square as its fill reads it, for the ways' one rule
+/// (`ways::Columns`): its cells' zoom, where it lies in its tile (in
+/// squares), word `k` of its lines (`LINES_AT`), and cell `i`'s four looks
+/// and height as its lanes hold them. Its columns are its cells, counted
+/// from its first; one outside it has no segment.
+pub trait Square {
+    fn cell(&self) -> Zoom;
+    fn place(&self) -> [u32; 2];
+    fn line(&self, k: u32) -> u32;
+    fn looks(&self, i: u32) -> u32;
+    fn height(&self, i: u32) -> i32;
+}
+
+/// Column `c`'s cell index in the square, none outside it.
+fn cell_index(c: [i32; 2]) -> u32 {
+    if c[0] < 0 || c[1] < 0 || c[0] >= SQUARE as i32 || c[1] >= SQUARE as i32 {
+        return SQUARE_CELLS;
+    }
+    c[1] as u32 * SQUARE + c[0] as u32
+}
+
+/// Column `c`'s bin word: its first entry and its count; none outside.
+fn bin_of(sq: &impl Square, c: [i32; 2]) -> (u32, u32) {
+    if cell_index(c) == SQUARE_CELLS {
+        return (0, 0);
+    }
+    let b = ((c[1] as u32) >> WAYS_SHIFT) * WAYS_BINS_ACROSS + ((c[0] as u32) >> WAYS_SHIFT);
+    let w = sq.line(crate::ways::HEADER_WORDS + b);
+    (w & 0xffff, w >> 16)
+}
+
+/// Entry `e` of the square's lines: the place of a segment among its.
+fn entry_of(sq: &impl Square, e: u32) -> u32 {
+    (sq.line(LINES_ENTRIES_AT + e / 2) >> (16 * (e % 2))) & 0xffff
+}
+
+fn segment_at(sq: &impl Square, at: u32) -> crate::ways::Segment {
+    let base = LINES_SEGMENTS_AT + at * crate::ways::SEGMENT_WORDS as u32;
+    crate::ways::Segment::of([sq.line(base), sq.line(base + 1), sq.line(base + 2), sq.line(base + 3)])
+}
+
+fn header_of(sq: &impl Square) -> (f32, crate::ways::Stations) {
+    crate::ways::of_header([sq.line(0), sq.line(1), sq.line(2), sq.line(3), sq.line(4), sq.line(5), sq.line(6), sq.line(7)])
+}
+
+/// A square's columns as its lines and its cells give them.
+impl<Q: Square> crate::ways::Columns for Q {
+    fn cell(&self) -> Zoom {
+        Square::cell(self)
+    }
+    fn per_m(&self) -> f32 {
+        header_of(self).0
+    }
+    fn count(&self, c: [i32; 2]) -> u32 {
+        bin_of(self, c).1
+    }
+    fn segment(&self, c: [i32; 2], k: u32) -> crate::ways::Segment {
+        segment_at(self, entry_of(self, bin_of(self, c).0 + k))
+    }
+    /// In its tile's cells: the square's first, then the cell's middle.
+    fn center(&self, c: [i32; 2]) -> [f32; 2] {
+        let p = self.place();
+        [(p[0] * SQUARE) as f32 + c[0] as f32 + 0.5, (p[1] * SQUARE) as f32 + c[1] as f32 + 0.5]
+    }
+    fn side(&self, _: [i32; 2]) -> f32 {
+        1.0
+    }
+    fn stations(&self, _: [i32; 2]) -> crate::ways::Stations {
+        header_of(self).1
+    }
+    /// Its own look, as the grid reads a cell before the service area's
+    /// wall is laid: the wall is the descent's to lay (`ran`'s reader).
+    fn look(&self, c: [i32; 2]) -> u32 {
+        let i = cell_index(c);
+        if i == SQUARE_CELLS {
+            crate::cube::sentinel::void as u32
+        } else {
+            crate::ground::own(self.looks(i), Square::cell(self))
+        }
+    }
+    fn face(&self, c: [i32; 2]) -> i32 {
+        let i = cell_index(c);
+        if i == SQUARE_CELLS {
+            return 0;
+        }
+        let cell = Square::cell(self);
+        crate::ground::face_height(cell, crate::ground::blocks(cell, self.height(i) as f32))
+    }
+    /// The entry is the one after the one before it, and its segment
+    /// continues the one stored before it.
+    fn joins(&self, c: [i32; 2], k: u32) -> bool {
+        if k == 0 {
+            return false;
+        }
+        let first = bin_of(self, c).0;
+        let e = entry_of(self, first + k);
+        e == entry_of(self, first + k - 1) + 1 && segment_at(self, e).continues == 1
+    }
+}
+
+/// What the ways' runs read of a side's windows beyond their cells: word
+/// `k` of the runs lane (`RUNS_AT`) of the square in `slot` at `cell`.
+pub trait Ran: Squares {
+    fn ran(&self, cell: Zoom, slot: u32, k: u32) -> u32;
+}
+
+/// Where a column of blocks at `zoom` has its ways read, found once: the
+/// window its ground is read off (`find`'s, its cells past the leaves a
+/// leaf's) — its zoom and slot, the square held there — and whether any is;
+/// by default none.
+#[derive(Clone, Copy, Default)]
+pub struct Found {
+    pub from: Zoom,
+    pub slot: u32,
+    pub square: [i32; 2],
+    pub here: bool,
+}
+
+/// The cell at `from` column `c` of blocks at `zoom` lies in.
+fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
+    let s = zoom - from;
+    [wrap_index(from, c[0] >> s), c[1] >> s]
+}
+
+/// The window holding cell `g` at `cell`, as `find` finds it to `top`
+/// (`Found`), and the cell's index in its square there.
+pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found, u32) {
+    let (from, slot, i, here) = find(w, cell, g, top);
+    let square = square_of(cell_at(cell, from, g)).0;
+    (Found { from, slot, square, here }, i)
+}
+
+/// Column `c` of blocks at `zoom`'s window (`Found`), to `top`.
+pub fn found(w: &impl Ran, zoom: Zoom, c: [i32; 2], top: Zoom) -> Found {
+    let read = if zoom > crate::LEAF_CELL { crate::LEAF_CELL } else { zoom };
+    let s = zoom - read;
+    found_at(w, read, [c[0] >> s, c[1] >> s], top).0
+}
+
+/// What the ways write in block `z` of the column `c` of blocks at `zoom`,
+/// as its window holds it run along z (`ways::at`'s): the block it lies in
+/// there. A column whose cell lies in `near`'s square is read off it, as
+/// the columns about one mostly are; one past it finds its own (`found`).
+/// `ways::NOTHING` where no way writes, or no window to `top` holds it.
+pub fn ran(w: &impl Ran, near: &Found, zoom: Zoom, c: [i32; 2], z: i32, top: Zoom) -> u32 {
+    let (q, _) = square_of(cell_at(zoom, near.from, c));
+    // Component-wise: a GPU has no array equality.
+    let f = if near.here && q[0] == near.square[0] && q[1] == near.square[1] {
+        *near
+    } else {
+        found(w, zoom, c, top)
+    };
+    if !f.here {
+        return crate::ways::NOTHING;
+    }
+    let i = square_of(cell_at(zoom, f.from, c)).1;
+    let (zr, to) = (z >> (zoom - f.from), w.ran(f.from, f.slot, i + 1));
+    let mut r = w.ran(f.from, f.slot, i);
+    while r < to {
+        let (lo, len, value) = crate::ways::run_of(w.ran(f.from, f.slot, RUNS_RUN_AT + r));
+        if zr < lo {
+            return crate::ways::NOTHING;
+        }
+        if zr < lo + len as i32 {
+            return value;
+        }
+        r += 1;
+    }
+    crate::ways::NOTHING
+}
+
+/// The ways' word of bin `b` of a square whose runs are written
+/// (`RUNS_AT`), word `k` of its runs lane `run(k)`, its cells at `cell`: the
+/// leaf cells its cells' runs span, and of the cells beside them in the
+/// square their air, a block either side — the ground `ways::block`
+/// recolours beside air, and over and under its own — so no block the rule
+/// writes or recolours there lies outside it; empty where it has none.
+pub fn bin_word(cell: Zoom, run: impl Fn(u32) -> u32, b: u32) -> i32 {
+    let (n, s) = (1 << WAYS_SHIFT, 1 << (crate::LEAF_CELL - cell));
+    let first = [(b % WAYS_BINS_ACROSS) * n, (b / WAYS_BINS_ACROSS) * n];
+    let (mut lo, mut hi) = (i32::MAX, i32::MIN);
+    let mut y = if first[1] > 0 { first[1] - 1 } else { 0 };
+    while y <= (first[1] + n).min(SQUARE - 1) {
+        let mut x = if first[0] > 0 { first[0] - 1 } else { 0 };
+        while x <= (first[0] + n).min(SQUARE - 1) {
+            let i = y * SQUARE + x;
+            let inside = x >= first[0] && x < first[0] + n && y >= first[1] && y < first[1] + n;
+            let (mut r, to) = (run(i), run(i + 1));
+            while r < to {
+                let (z, len, value) = crate::ways::run_of(run(RUNS_RUN_AT + r));
+                let air = value & crate::ways::AIR_OF != 0;
+                if inside || air {
+                    let d = if air { 1 } else { 0 };
+                    (lo, hi) = (lo.min((z - d) * s), hi.max((z + len as i32 + d) * s));
+                }
+                r += 1;
+            }
+            x += 1;
+        }
+        y += 1;
+    }
+    crate::ground::bound_word(if lo > hi { [i16::MAX as i32, i16::MIN as i32] } else { [lo, hi] })
+}
+
+/// Whether the descent asks the ways at block `c` of `zoom`, its column's
+/// window `f`: where its bin's word (`bin_word`) meets the block, or its
+/// cell is on its square's edge, past which the fill sees no air. The edge
+/// goes with the rebake that widens a line's footprint to its reach and
+/// past (`ways::footprint`), so a square's lines carry the ring past it and
+/// its fill folds the ring's air into the edge bins' words.
+pub fn asks(w: &impl Ran, f: &Found, zoom: Zoom, c: [i32; 3]) -> bool {
+    if !f.here {
+        return false;
+    }
+    let i = square_of(cell_at(zoom, f.from, [c[0], c[1]])).1;
+    let (x, y) = (i % SQUARE, i / SQUARE);
+    if x == 0 || y == 0 || x == SQUARE - 1 || y == SQUARE - 1 {
+        return true;
+    }
+    let [lo, hi] = crate::ground::bound_of(w.way(f.from, f.slot, (y >> WAYS_SHIFT) * WAYS_BINS_ACROSS + (x >> WAYS_SHIFT)) as i32);
+    // The block's leaf cells.
+    let l = crate::LEAF_CELL;
+    let (zlo, zhi) = if zoom <= l {
+        (c[2] << (l - zoom), (c[2] + 1) << (l - zoom))
+    } else {
+        (c[2] >> (zoom - l), (c[2] >> (zoom - l)) + 1)
+    };
+    zlo < hi && zhi > lo
 }
 
 /// The finest window, at `cell` or coarser to `top`, holding cell `g` (at

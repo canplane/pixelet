@@ -151,7 +151,7 @@ impl World<'_> {
         }
         let cave = at.cave;
         let mut reading = Reading::new(self, at);
-        let ground = ground::node(&mut reading, cave, (zoom, b.map(|v| v as i32)), [zoom, zoom], true);
+        let (ground, _, ()) = ground::node(&mut reading, cave, (zoom, b.map(|v| v as i32)), [zoom, zoom], true);
         // The ways are read with the cell, and stand within its tile's bound.
         let grid = reading.read.then(|| CELL.get(Grid::default));
         reading.answer(ground.kind != Kind::Lacks, || match grid {
@@ -209,7 +209,7 @@ impl World<'_> {
         }
         let cave = at.cave;
         let mut reading = Reading::new(self, at);
-        let ground = ground::node(&mut reading, cave, (zoom, c.map(|v| v as i32)), [far, near], false);
+        let (ground, _, ()) = ground::node(&mut reading, cave, (zoom, c.map(|v| v as i32)), [far, near], false);
         reading.answer(ground.kind != Kind::Lacks, || match ground.kind {
             Kind::Split => In::Split,
             _ => In::Empty,
@@ -279,6 +279,8 @@ impl Area for Reading<'_, '_> {
 }
 
 impl ground::Held for Reading<'_, '_> {
+    type Place = ();
+
     /// The join of the bounds over the node of each tile the zooms `cells`
     /// read their cells from, off its line, as the GPU's (gpu-query-shader
     /// `relief`); none (`UNBOUNDED`) for a node wider than the finest asked's
@@ -305,28 +307,24 @@ impl ground::Held for Reading<'_, '_> {
     }
 
     /// The block's cell and the ring about it read into the grid (`CELL`),
-    /// as the ways over it are read with it.
-    fn cell(&mut self, zoom: Zoom, _: [i32; 3]) -> (Cell, bool) {
+    /// as the ways over it are read with it, off the grid itself: no place.
+    fn cell(&mut self, zoom: Zoom, _: [i32; 3]) -> (Cell, (), bool) {
         let (_, b) = self.at.node;
-        let none = Cell {
-            look: u32::from(sentinel::void),
-            top: 0,
-            fold: [u32::from(sentinel::void); 4],
-        };
+        let none = Cell::NONE;
         let line = self.world.line(self.at, zoom);
         let Some(g) = self.take(self.world.ground(&line, (zoom, [b[0], b[1]]), zoom, 1)) else {
-            return (none, false);
+            return (none, (), false);
         };
         let grid = CELL.get(Grid::default);
         match grid.read(&g.around(), zoom, g.tile.zoom, g.first_at(zoom), [b[0] - 1, b[1] - 1], 3) {
             Ok(()) => {
                 self.read = true;
-                (grid.cell_at([b[0], b[1]]).unwrap_or(none), true)
+                (grid.cell_at([b[0], b[1]]).unwrap_or(none), (), true)
             }
             // The heap refused a 3 × 3 grid's room.
             Err(_) => {
                 self.lacked = Some(g.tile);
-                (none, false)
+                (none, (), false)
             }
         }
     }

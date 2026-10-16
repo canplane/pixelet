@@ -6,13 +6,18 @@
 //! GPU's descent (pxl-spec bake/separation.rs keeps the lines, solved
 //! offline). A block is asked of the lines over its column, each visit of a
 //! line its own crossing: the run of its segments, one after another, that
-//! are over the column. What is under half a block in any dimension at a
+//! are over the column. A column's visits make its spans once (`column`),
+//! what a block of it is is read off them (`at`), and ground beside the air
+//! they leave takes that way's look
+//! (`block`'s surround). What is under half a block in any dimension at a
 //! zoom is absent there, as the fold drops a line under half a cell wide: a
 //! slab or a bore fills a block where it holds half its height or more, and
 //! a pier, a leaf cell square, stands only in columns no more than two leaf
-//! cells wide. Index loops, no `Option<bool>`, words for tags.
+//! cells wide. Index loops, no `Option` (a crossing none is is `Crossing::NONE`), words
+//! for tags, nothing a GPU lacks (`hypot`).
 
 use crate::cube::{sentinel, Ground};
+use crate::ground::blocks;
 use crate::{Zoom, LEAF_CELL};
 
 /// Points are eighths of the tile's cell.
@@ -58,6 +63,11 @@ pub const NOTHING: u32 = u32::MAX;
 
 /// What `block` answers for a bore's air.
 pub const AIR: u32 = sentinel::void as u32;
+
+/// A vector's length, as a GPU takes one: no `hypot` there.
+fn length(v: [f32; 2]) -> f32 {
+    libm::sqrtf(v[0] * v[0] + v[1] * v[1])
+}
 
 /// Half a way's width, in whole cells.
 pub fn half_cells(width: f32) -> i32 {
@@ -236,7 +246,7 @@ pub fn pier_covers(st: &Stations, width: f32, a: [f32; 2], d: [f32; 2], near: [f
     if !(0.0..1.0).contains(&t) {
         return false;
     }
-    let len = libm::hypotf(d[0], d[1]);
+    let len = length(d);
     let dir = [d[0] / len, d[1] / len];
     let foot = [a[0] + d[0] * t, a[1] + d[1] * t];
     // A leaf cell, and the centers of the leaf cells the column holds: its
@@ -274,35 +284,57 @@ pub struct Crossing {
     pub clear: u32,
 }
 
-/// What segment `s` is over the column of `side` cells about `at`, if its way
-/// covers `at`: the surface it runs through across the column, and whether
-/// `at` is inside the section of a pier at a station of it. A line ends square
-/// where it begins and ends, as the ground cuts a way; its joints stay round.
-pub fn crossing(s: &Segment, at: [f32; 2], side: f32, st: &Stations) -> Option<Crossing> {
+impl Crossing {
+    /// No crossing: of kind `NOTHING`.
+    pub const NONE: Crossing = Crossing {
+        low: 0.0,
+        top: 0.0,
+        kind: NOTHING,
+        form: 0,
+        pier: 0,
+        clear: 0,
+    };
+
+    /// Whether it is one (`NONE` is not).
+    pub fn is(&self) -> bool {
+        self.kind != NOTHING
+    }
+}
+
+/// The road surface of `s` at the share `t` of it, clamped to its ends.
+fn surface(s: &Segment, t: f32) -> f32 {
+    s.tops[0] + (s.tops[1] - s.tops[0]) * t.clamp(0.0, 1.0)
+}
+
+/// What segment `s` is over the column of `side` cells about `at`, `NONE`
+/// unless its way covers `at`: the surface it runs through across the
+/// column, and whether the column holds the section of a pier at a station
+/// of it. A line ends square where it begins and ends, as the ground cuts a
+/// way; its joints stay round.
+pub fn crossing(s: &Segment, at: [f32; 2], side: f32, st: &Stations) -> Crossing {
     let (a, b) = (s.a, s.b);
     let d = [b[0] - a[0], b[1] - a[1]];
     let len2 = d[0] * d[0] + d[1] * d[1];
     let t = if len2 > 0.0 { ((at[0] - a[0]) * d[0] + (at[1] - a[1]) * d[1]) / len2 } else { 0.0 };
     if (s.first == 1 && t < 0.0) || (s.last == 1 && t > 1.0) {
-        return None;
+        return Crossing::NONE;
     }
     let t = t.clamp(0.0, 1.0);
     let near = [a[0] + d[0] * t, a[1] + d[1] * t];
-    if !covers(s.width, libm::hypotf(at[0] - near[0], at[1] - near[1])) {
-        return None;
+    if !covers(s.width, length([at[0] - near[0], at[1] - near[1]])) {
+        return Crossing::NONE;
     }
     // the column's square spans this much of the segment either side of `t`
     let reach = if len2 > 0.0 { side / 2.0 * (d[0].abs() + d[1].abs()) / len2 } else { 0.0 };
-    let z = |t: f32| s.tops[0] + (s.tops[1] - s.tops[0]) * t.clamp(0.0, 1.0);
-    let (z0, z1) = (z(t - reach), z(t + reach));
-    Some(Crossing {
+    let (z0, z1) = (surface(s, t - reach), surface(s, t + reach));
+    Crossing {
         low: z0.min(z1),
         top: z0.max(z1),
         kind: s.kind,
         form: s.form,
         pier: u32::from(s.form != TUNNEL && pier_covers(st, s.width, a, d, near, at, side)),
         clear: s.clear,
-    })
+    }
 }
 
 /// What a crossing occupies of its column, in leaf cells, each `[lo, hi)`.
@@ -388,7 +420,7 @@ pub trait Columns {
 }
 
 /// The `k`-th segment's crossing of column `c`.
-fn crossing_at<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> Option<Crossing> {
+fn crossing_at<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> Crossing {
     crossing(&cols.segment(c, k), cols.center(c), cols.side(c), &cols.stations(c))
 }
 
@@ -396,23 +428,22 @@ fn crossing_at<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> Option<Crossing> {
 /// run of segments from it, each the next of its line and each over the
 /// column, as one crossing — all the surface they sweep across the column,
 /// and a pier where any one's station is — and where the next visit starts.
-/// None where the `k`-th is not over it.
-fn visit<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> (Option<Crossing>, u32) {
-    let Some(mut x) = crossing_at(cols, c, k) else { return (None, k + 1) };
+/// `NONE` where the `k`-th is not over it.
+fn visit<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> (Crossing, u32) {
+    let mut x = crossing_at(cols, c, k);
+    if !x.is() {
+        return (x, k + 1);
+    }
     let mut j = k + 1;
     while j < cols.count(c) && cols.joins(c, j) {
-        let Some(y) = crossing_at(cols, c, j) else { break };
+        let y = crossing_at(cols, c, j);
+        if !y.is() {
+            break;
+        }
         (x.low, x.top, x.pier) = (x.low.min(y.low), x.top.max(y.top), x.pier | y.pier);
         j += 1;
     }
-    (Some(x), j)
-}
-
-/// Whether a crossing of column `c` writes there: a look that grounds, on a
-/// column that is not the bedrock, as bedrock wins over a way as it does
-/// over the ground's face.
-fn writes<C: Columns>(cols: &C, c: [i32; 2], x: &Crossing) -> bool {
-    Ground::grounds(x.kind) && cols.look(c) != sentinel::unknown as u32
+    (x, j)
 }
 
 /// Whether the leaf cells `[lo, hi)` fill block `z` of the grid's zoom: half
@@ -442,10 +473,9 @@ fn at_or_after(v: [i32; 2], best: [i32; 2]) -> bool {
 /// `place_pillar`, `support_blocked`), none where the terrain gives no surface
 /// to stand on; water stops none. Empty where none.
 fn pier_stands<C: Columns>(cols: &C, c: [i32; 2], pier: [i32; 2], ground: i32, u_per_m: f32) -> [i32; 2] {
-    let none = [0, 0];
-    match Ground::of(cols.look(c) as u8) {
-        Some(g) if !g.transport() => {}
-        _ => return none,
+    let (none, look) = ([0, 0], cols.look(c));
+    if !Ground::grounds(look) || Ground::transports(look) {
+        return none;
     }
     let surface = pier[1] + slab_depth(u_per_m);
     if ((surface - pier[0]) as f32) <= PIER_MIN_RISE_M * u_per_m {
@@ -456,7 +486,7 @@ fn pier_stands<C: Columns>(cols: &C, c: [i32; 2], pier: [i32; 2], ground: i32, u
     while k < cols.count(c) {
         let (x, next) = visit(cols, c, k);
         k = next;
-        if let Some(x) = x {
+        if x.is() {
             let o = occupies(&x, ground, u_per_m);
             if o.what == Occupy::Over && o.span[1] <= surface - gap {
                 return none;
@@ -466,82 +496,233 @@ fn pier_stands<C: Columns>(cols: &C, c: [i32; 2], pier: [i32; 2], ground: i32, u
     pier
 }
 
-/// The way of the first bore of column `c`, in its segments' order, whose
-/// air holds block `z[0]` or `z[1]`; `NOTHING` where none does.
-fn bore<C: Columns>(cols: &C, c: [i32; 2], z: [i32; 2]) -> u32 {
-    let (cell, face, per_m) = (cols.cell(), cols.face(c), cols.per_m());
+/// What a run's value marks as a bore's air, over the look of its way.
+pub const AIR_OF: u32 = 0x80;
+
+/// What one visit writes in its column, in leaf cells: a deck's slab or an
+/// embankment (its way's look), or a bore's or a cutting's air (`AIR_OF`
+/// over its way's look), over `run`; and a pier (`PIER`) over `pier`,
+/// empty where none stands. `NOTHING` where it writes none.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Writes {
+    run: [i32; 2],
+    value: u32,
+    pier: [i32; 2],
+}
+
+impl Writes {
+    const NONE: Writes = Writes {
+        run: [0, 0],
+        value: NOTHING,
+        pier: [0, 0],
+    };
+}
+
+/// What the visit from the `k`-th segment over column `c` writes, and where
+/// the next visit starts: a visit of a look that grounds, as what it
+/// occupies over the column's face, its pier where one stands.
+fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> (Writes, u32) {
+    let (x, next) = visit(cols, c, k);
+    if !x.is() || !Ground::grounds(x.kind) {
+        return (Writes::NONE, next);
+    }
+    let (face, per_m) = (cols.face(c), cols.per_m());
+    let o = occupies(&x, face, per_m);
+    let w = match o.what {
+        Occupy::Under => Writes {
+            run: o.span,
+            value: AIR_OF | x.kind,
+            pier: [0, 0],
+        },
+        Occupy::Over => Writes {
+            run: o.span,
+            value: x.kind,
+            pier: if empty(o.pier) { o.pier } else { pier_stands(cols, c, o.pier, face, per_m) },
+        },
+        // An approach's look, laid into the cells by the bake (pxl-spec bake/way.rs `lay`).
+        Occupy::Grade => Writes::NONE,
+    };
+    (w, next)
+}
+
+/// The most spans one column's visits make (`column`): the most of the
+/// format-10 set (2026-10-16), measured with every tile at every zoom (z12's
+/// 23; z15's most 9); a tile past it fails its bake (pxl-spec
+/// bake/tile/terrain.rs `runs_fit`).
+pub const SPANS: usize = 23;
+
+/// A column's spans, in leaf cells, in the order its visits come: each a
+/// deck's slab or an embankment (its way's look), a pier (`PIER`), or a
+/// bore's or a cutting's air (`AIR_OF` over its way's look); `n` of them.
+/// The sweep's working set: its visits found once, read at each block.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Spans {
+    pub run: [[i32; 2]; SPANS],
+    pub value: [u32; SPANS],
+    pub n: u32,
+}
+
+impl Spans {
+    const NONE: Spans = Spans {
+        run: [[0, 0]; SPANS],
+        value: [0; SPANS],
+        n: 0,
+    };
+
+    /// Span `v` over `run`, where there is room; false where there is none.
+    fn push(&mut self, run: [i32; 2], v: u32) -> bool {
+        if self.n as usize >= SPANS {
+            return false;
+        }
+        self.run[self.n as usize] = run;
+        self.value[self.n as usize] = v;
+        self.n += 1;
+        true
+    }
+}
+
+/// Column `c`'s spans: what each visit of a line writes there — none in a
+/// column of the bedrock, as bedrock wins over a way as it does over the
+/// ground's face — and whether they all fit `SPANS`.
+pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
+    let (mut spans, mut fits) = (Spans::NONE, true);
+    if cols.look(c) == sentinel::unknown as u32 {
+        return (spans, fits);
+    }
     let mut k = 0;
     while k < cols.count(c) {
-        let (x, next) = visit(cols, c, k);
+        let (w, next) = writes(cols, c, k);
         k = next;
-        if let Some(x) = x.filter(|x| writes(cols, c, x)) {
-            let o = occupies(&x, face, per_m);
-            if o.what == Occupy::Under && (fills(cell, o.span, z[0]) || fills(cell, o.span, z[1])) {
-                return x.kind;
+        if w.value != NOTHING {
+            fits &= spans.push(w.run, w.value);
+            if !empty(w.pier) {
+                fits &= spans.push(w.pier, PIER);
             }
         }
+    }
+    (spans, fits)
+}
+
+/// What the ways write in block `z` at `cell` of a column whose spans are
+/// `spans`: a deck's slab or its pier, the highest of those over it keeping
+/// what two share, a slab before its pier; else the first air over it
+/// (`AIR_OF` over its way's look); else `NOTHING`.
+pub fn at(spans: &Spans, cell: Zoom, z: i32) -> u32 {
+    let (mut best, mut look, mut air) = ([i32::MIN, i32::MIN], NOTHING, NOTHING);
+    let mut k = 0;
+    while k < spans.n as usize {
+        let (run, v) = (spans.run[k], spans.value[k]);
+        if fills(cell, run, z) {
+            if v & AIR_OF != 0 {
+                if air == NOTHING {
+                    air = v;
+                }
+            } else if at_or_after(run, best) {
+                (best, look) = (run, v);
+            }
+        }
+        k += 1;
+    }
+    if look != NOTHING {
+        look
+    } else {
+        air
+    }
+}
+
+/// What the ways leave in a column's blocks, as a reader holds them: block
+/// `z` of column `c` at the reader's zoom, what `at` answers there; and
+/// whether the ground fills block `b`, caves aside.
+pub trait Airs {
+    fn at(&self, c: [i32; 2], z: i32) -> u32;
+    fn ground(&self, b: [i32; 3]) -> bool;
+}
+
+/// The look of the way whose air `v` is, `NOTHING` where it is none.
+fn air_way(v: u32) -> u32 {
+    if v != NOTHING && v & AIR_OF != 0 {
+        v & !AIR_OF
+    } else {
+        NOTHING
+    }
+}
+
+/// What the ways write in block `b`, its own column read off its spans
+/// (`at`): a deck's slab or its pier; else a bore's air (`AIR`); else, where
+/// the ground is (`Airs::ground`), the way's block about the air a way
+/// leaves beside it — the column's own under and over it, the four across
+/// its faces, in the grid's order, the first that is a way's air — so a
+/// cave written under it never opens into it; else `NOTHING`, the ground's
+/// block standing. The seven read in one loop (`near`), as a GPU inlines a
+/// read once a place it is called from.
+pub fn block(airs: &impl Airs, b: [i32; 3]) -> u32 {
+    let mut k = 0;
+    while k < 7 {
+        let d = near(k);
+        let v = airs.at([b[0] + d[0], b[1] + d[1]], b[2] + d[2]);
+        if k == 0 && v != NOTHING {
+            return if v & AIR_OF != 0 { AIR } else { v };
+        }
+        if k > 0 && air_way(v) != NOTHING {
+            return if airs.ground(b) { air_way(v) } else { NOTHING };
+        }
+        k += 1;
     }
     NOTHING
 }
 
-/// The columns about a block whose bores it may border, in the order of the
-/// grid's cells, row by row: the row under it, the cell before it, its own
-/// (the blocks under and over it), the cell after it, the row over it.
-const NEAR: [[i32; 2]; 5] = [[0, -1], [-1, 0], [0, 0], [1, 0], [0, 1]];
+/// The `k`-th of a block and the six about it, from its own: the row under
+/// it, the cell before it, the block under it, the block over it, the cell
+/// after it, the row over it — the order of the grid's cells.
+fn near(k: u32) -> [i32; 3] {
+    let mut d = [0; 3];
+    if k > 0 {
+        let j = k - 1;
+        let (i, s) = if j < 3 { (j, -1) } else { (5 - j, 1) };
+        d[if i == 2 { 2 } else { 1 - i as usize }] = s;
+    }
+    d
+}
 
-/// What the ways write in block `b` of the grid's zoom: a deck's slab or its
-/// pier, the highest of those over it keeping what two share; else a bore's
-/// air (`AIR`); else, where the ground is (`ground`), the way's block about a
-/// bore beside it, so a cave written under it never opens into it; else
-/// `NOTHING`, the ground's block standing.
-pub fn block<C: Columns>(cols: &C, b: [i32; 3], ground: bool) -> u32 {
-    let (c, cell) = ([b[0], b[1]], cols.cell());
-    let (face, per_m) = (cols.face(c), cols.per_m());
-    // The highest slab or pier over `b`, by its run's ends in leaf cells,
-    // then its look.
-    let (mut best, mut look, mut air) = ([i32::MIN, i32::MIN], NOTHING, false);
+/// A run along z as a square holds it, a word: its first block, an `i16`,
+/// its length in blocks, a byte, and its value, a byte (`at`'s, its air
+/// `AIR_OF` over its way's look).
+pub fn run_word(lo: i32, len: u32, value: u32) -> u32 {
+    (lo as u32 & 0xffff) | (len & 0xff) << 16 | (value & 0xff) << 24
+}
+
+/// A run's first block, its length and its value; a value of no way is
+/// `NOTHING`.
+pub fn run_of(w: u32) -> (i32, u32, u32) {
+    ((w << 16) as i32 >> 16, (w >> 16) & 0xff, w >> 24)
+}
+
+/// The blocks at `cell` a column's spans lie in, `[from, to]` with a block
+/// either side; false where it has none.
+pub fn rises(spans: &Spans, cell: Zoom) -> ([i32; 2], bool) {
+    let (mut lo, mut hi) = (i32::MAX, i32::MIN);
     let mut k = 0;
-    while k < cols.count(c) {
-        let (x, next) = visit(cols, c, k);
-        k = next;
-        if let Some(x) = x.filter(|x| writes(cols, c, x)) {
-            let o = occupies(&x, face, per_m);
-            match o.what {
-                Occupy::Under => air |= fills(cell, o.span, b[2]),
-                Occupy::Over => {
-                    if fills(cell, o.span, b[2]) && at_or_after(o.span, best) {
-                        (best, look) = (o.span, x.kind);
-                    }
-                    if !empty(o.pier) {
-                        let pier = pier_stands(cols, c, o.pier, face, per_m);
-                        if !empty(pier) && fills(cell, pier, b[2]) && at_or_after(pier, best) {
-                            (best, look) = (pier, PIER);
-                        }
-                    }
-                }
-                // An approach's look, laid into the cells by the bake (pxl-spec bake/way.rs `lay`).
-                Occupy::Grade => {}
-            }
+    while k < spans.n as usize {
+        (lo, hi) = (lo.min(spans.run[k][0]), hi.max(spans.run[k][1]));
+        k += 1;
+    }
+    ([blocks(cell, lo as f32) - 2, blocks(cell, hi as f32) + 2], spans.n > 0)
+}
+
+/// The run along z at `cell` of a column whose spans are `spans` from block
+/// `z`, to `to` at most: what the ways write there (`at`, `NOTHING` where
+/// none) and how many blocks from it hold the same, at most 255 — so a
+/// column's runs from the first block it `rises` to, each from the block
+/// after the last, are what a square holds of it (pxl-portable window.rs
+/// `RUNS_AT`).
+pub fn run(spans: &Spans, cell: Zoom, z: i32, to: i32) -> (u32, u32) {
+    let (mut value, mut len) = (NOTHING, 0);
+    while len < 255 && z + len as i32 <= to {
+        let v = at(spans, cell, z + len as i32);
+        if len > 0 && v != value {
+            break;
         }
+        (value, len) = (v, len + 1);
     }
-    if look != NOTHING {
-        return look;
-    }
-    if air {
-        return AIR;
-    }
-    if !ground {
-        return NOTHING;
-    }
-    let mut d = 0;
-    while d < NEAR.len() {
-        let [dx, dy] = NEAR[d];
-        let z = if dx == 0 && dy == 0 { [b[2] - 1, b[2] + 1] } else { [b[2], b[2]] };
-        let way = bore(cols, [b[0] + dx, b[1] + dy], z);
-        if way != NOTHING {
-            return way;
-        }
-        d += 1;
-    }
-    NOTHING
+    (value, len)
 }

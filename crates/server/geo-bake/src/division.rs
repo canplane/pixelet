@@ -198,7 +198,7 @@ impl crate::pyramid::Base for DivisionTile {
 
     const LEAF: pxl_spec::space::coord::zoom::Zoom = DIVISION_LEAF;
 
-    fn encode(&self) -> Result<Vec<u8>, String> {
+    fn encode(&self, _: Tile) -> Result<Vec<u8>, String> {
         pxl_spec::bake::tile::division::encode(self).map_err(|e| format!("{e:?}"))
     }
 

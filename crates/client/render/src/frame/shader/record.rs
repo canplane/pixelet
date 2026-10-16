@@ -51,7 +51,11 @@ pub const SHADER_GROWN: u32 = 29;
 pub const SHADER_GROWN_COUNT: u32 = 30;
 pub const SHADER_GROWN_ARGS: u32 = 31;
 pub const SHADER_GROWN_PLACE: u32 = 32;
-pub const SHADERS: u32 = 33;
+/// Each newly held terrain frame's ways, its columns' runs along z off its
+/// lines, generated with the cast from pxl-portable's `ways`: its one
+/// compute entry.
+pub const SHADER_WAYS: u32 = 33;
+pub const SHADERS: u32 = 34;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -69,6 +73,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_GROWN_COUNT => "decor_count_cs",
         SHADER_GROWN_ARGS => "decor_args_cs",
         SHADER_GROWN_PLACE => "decor_place_cs",
+        SHADER_WAYS => "ways_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }
@@ -181,6 +186,7 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_GROWN_COUNT => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_count.gen.wgsl")),
         SHADER_GROWN_ARGS => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_args.gen.wgsl")),
         SHADER_GROWN_PLACE => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_place.gen.wgsl")),
+        SHADER_WAYS => include_str!(concat!(env!("OUT_DIR"), "/shader/ways.gen.wgsl")),
         SHADER_MIPS => wgsl!("mips"),
         SHADER_SHEET => wgsl!("sheet"),
         SHADER_IMPOSTOR => wgsl!(

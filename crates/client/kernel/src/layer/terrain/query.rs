@@ -10,7 +10,7 @@ use pxl_portable::window::{self as cells, Squares as _, SQUARE_SHIFT};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::block::cube::Ground;
 use pxl_spec::block::limit::bedrock;
-use pxl_spec::block::sample::{TileSource, TileView};
+use pxl_spec::block::sample::TileSource;
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::world::point;
@@ -40,18 +40,11 @@ pub struct Source<'a> {
 impl<'a> Source<'a> {
     pub fn view(&self) -> TileSource<'a> {
         TileSource {
-            tile: tile_view(self.tile),
+            separation: &self.tile.separation,
             frame: Frame::of(self.from),
             origin: self.origin,
             n: self.n,
         }
-    }
-}
-
-pub fn tile_view(tile: &TerrainTile) -> TileView<'_> {
-    TileView {
-        ways: &tile.ways,
-        separation: &tile.separation,
     }
 }
 

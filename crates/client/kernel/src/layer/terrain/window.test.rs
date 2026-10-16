@@ -6,14 +6,15 @@
 use super::*;
 
 /// A tile as `hold` takes it: a cell's own look and its height, row by row
-/// from its first, and its ways' bound.
-pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, Vec<[i16; 2]>);
+/// from its first, and its lines.
+pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, pxl_spec::bake::separation::Separation);
 
 /// The eye's and the focus's windows about `centre`, in units, X then Y,
 /// each square the tiles `held` cover present: per tile, a cell's own look
-/// and its height, row by row from its first, and its ways' bound; each
-/// square's levels joined over its cells and its ways as a GPU joins them
-/// (pxl-portable `window::join`).
+/// and its height, row by row from its first, and its lines; each square's
+/// ways' words off its runs as its fill writes them (pxl-spec
+/// `terrain::fill_runs`, pxl-portable `window::bin_word`), and its levels
+/// joined over its cells and its ways as a GPU joins them (`window::join`).
 pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     PLANES.set(Planes {
         cells: vec![0; (SQUARES * CELLS_LANE_BYTES) as usize].leak(),
@@ -46,7 +47,9 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             let square = wanted(cell, first, s);
             w.slots[i as usize].square = square;
             let (t, place) = tile_of(cell, square);
-            let Some((_, looks_of, heights, ways)) = held.iter().find(|(p, _, _, _)| *p == t) else { continue };
+            let Some((_, looks_of, heights, separation)) = held.iter().find(|(p, _, _, _)| *p == t) else {
+                continue;
+            };
             let side = GROUND.tile_cells();
             let at = |k: u32| ((place[1] * SQUARE + k / SQUARE) * side + place[0] * SQUARE + k % SQUARE) as usize;
             for (k, l) in looks(i).iter_mut().enumerate() {
@@ -56,8 +59,19 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             for k in 0..SQUARE_CELLS {
                 words[(k / 2) as usize] |= (heights[at(k)] as u16 as u32) << (16 * (k % 2));
             }
-            let from = (window::HEIGHT_WORDS + window::LEVEL_WORDS) as usize;
-            window::square_ways(|e| ways[e as usize].map(i32::from), place, &mut words[from..]);
+            let (mut scratch, mut lines, mut runs) = (Vec::new(), vec![0; window::LINES_WORDS as usize], vec![0; window::RUNS_WORDS as usize]);
+            let n = pxl_spec::bake::tile::terrain::square_lines(t, separation, place, &mut scratch, &mut lines);
+            let laid = pxl_spec::bake::tile::terrain::Laid {
+                cell,
+                place,
+                lines: &lines[..n],
+                looks: |k: u32| word([u32::from(looks_of[at(k)]); 4]),
+                height: |k: u32| i32::from(heights[at(k)]),
+            };
+            pxl_spec::bake::tile::terrain::fill_runs(&laid, &mut runs);
+            for b in 0..window::WAYS_BINS {
+                words[(window::HEIGHT_WORDS + window::LEVEL_WORDS + b) as usize] = window::bin_word(cell, |k| runs[k as usize], b) as u32;
+            }
             let write = |words: &[u32]| {
                 let c = &mut planes().cells[(i * CELLS_LANE_BYTES) as usize..];
                 for (k, v) in words.iter().enumerate() {

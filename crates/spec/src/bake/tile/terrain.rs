@@ -13,6 +13,7 @@ use crate::bake::malformed;
 use crate::bake::separation::{self, Separation};
 use crate::procedural::Frame;
 use crate::space::coord::adapter::epsg3857::u_per_m;
+use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::TILE_CELLS;
 use crate::space::layer::tile::Tile;
 
@@ -21,22 +22,14 @@ use crate::space::layer::tile::Tile;
 pub const GROUND_LANE: usize = (TILE_CELLS * TILE_CELLS) as usize;
 pub const LOOK_LANE: usize = 4 * GROUND_LANE;
 pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
-/// Squares a side the ways' bound is held in (`Separation::bound`), each
-/// `1 << WAYS_SHIFT` cells a side, then its levels up to the tile whole
-/// (pxl-portable `window`, which cuts a square's share).
+/// Bins a side a tile's ways are cut into, each `1 << WAYS_SHIFT` cells a
+/// side, as a window's square lays its lines by them (`square_lines`).
 pub use pxl_portable::window::{WAYS_ACROSS, WAYS_SHIFT};
-const WAYS_TILE_LEVELS: u32 = WAYS_ACROSS.trailing_zeros();
-pub const WAYS_LANE: usize = ways_at(WAYS_TILE_LEVELS + 1) as usize;
 
 /// The most entries a window's square holds of the ways (pxl-portable
 /// `window::WAYS_SQUARE_SEGMENTS`); a tile past it fails its bake
 /// (`ways_fit`).
 pub const WAYS_SQUARE_SEGMENTS: usize = pxl_portable::window::WAYS_SQUARE_SEGMENTS as usize;
-
-/// Where level `k` of the ways' bound begins, the squares level 0, in entries.
-const fn ways_at(k: u32) -> u32 {
-    pxl_portable::window::ways_at(WAYS_ACROSS, k)
-}
 
 /// What a ground cell holds: the id of a cube of the ground's palette, a
 /// Carto look, which fits a byte (`block/cube.json`).
@@ -62,32 +55,15 @@ impl Ground {
 
 /// A tile: one lane a fact the client cannot make. What it draws by rule —
 /// a slab, a bore, a pier — is not here. The bake holds what goes on the
-/// wire; a client what it reads of a tile as a whole, its lines and the
-/// ways' bound made from them. Its cells a client holds in its windows,
-/// drawn by a GPU off the samples (pxl-portable `window`).
+/// wire; a client what it reads of a tile as a whole, its lines. Its cells
+/// a client holds in its windows, drawn by a GPU off the samples, and its
+/// ways there off the lines (pxl-portable `window`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainTile {
-    pub ground: Ground,                 // a class a cell: the source rasterized, or its fold; a client's void tile's alone
-    pub separation: Separation,         // ways off the ground: source lines, tops solved offline
-    pub ele: Cow<'static, [i16]>,       // the bake's: padded samples, a leaf's source or the fold's; a client hands them to a GPU off the packet
-    pub occupancy: Occupancy,           // which children are tiles: none is asked for that is not
-    pub ways: Cow<'static, [[i16; 2]]>, // a client's: the ways' bound by square and its levels, made from the lines
-}
-
-/// The ways' bound off a tile's lines, by square, then its levels, each
-/// entry the join of the four under it, into `ways`.
-pub fn ways_of(separation: &Separation, ways: &mut [[i16; 2]]) {
-    xpute_kit::ensure!(ways.len() == WAYS_LANE, ENOTRECOVERABLE);
-    separation.bound(f64::from(TILE_CELLS), WAYS_ACROSS, &mut ways[..(WAYS_ACROSS * WAYS_ACROSS) as usize]);
-    for k in 1..=WAYS_TILE_LEVELS {
-        let (under, side) = (ways_at(k - 1), WAYS_ACROSS >> k);
-        for y in 0..side {
-            for x in 0..side {
-                let four = [0, 1, 2, 3].map(|q| ways[(under + (2 * y + q / 2) * 2 * side + 2 * x + q % 2) as usize]);
-                ways[(ways_at(k) + y * side + x) as usize] = four.into_iter().fold([i16::MAX, i16::MIN], |[lo, hi], [l, h]| [lo.min(l), hi.max(h)]);
-            }
-        }
-    }
+    pub ground: Ground,           // a class a cell: the source rasterized, or its fold; a client's void tile's alone
+    pub separation: Separation,   // ways off the ground: source lines, tops solved offline
+    pub ele: Cow<'static, [i16]>, // the bake's: padded samples, a leaf's source or the fold's; a client hands them to a GPU off the packet
+    pub occupancy: Occupancy,     // which children are tiles: none is asked for that is not
 }
 
 /// Whether every square of `square` cells a side a tile is cut into holds
@@ -117,7 +93,7 @@ pub fn ways_fit(separation: &Separation, square: u32) -> Result<(), ([u32; 2], u
 /// in, kept between squares.
 pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratch: &mut Vec<(u32, u32)>, out: &mut [u32]) -> usize {
     use pxl_portable::ways::{header, HEADER_WORDS, SEGMENT_WORDS};
-    use pxl_portable::window::{LINES_BINS, LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, SQUARE};
+    use pxl_portable::window::{LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, SQUARE, WAYS_BINS};
     xpute_kit::ensure!(out.len() == LINES_WORDS as usize, ENOTRECOVERABLE);
     let bins = SQUARE >> WAYS_SHIFT;
     // Each bin of the square a segment's footprint reaches, and the point it starts at.
@@ -147,7 +123,7 @@ pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratc
     // Each bin's entries in its segments' order, its first and its count.
     scratch.sort_unstable();
     let mut first = 0;
-    for b in 0..LINES_BINS {
+    for b in 0..WAYS_BINS {
         let count = scratch[first..].iter().take_while(|e| e.0 == b).count();
         out[(HEADER_WORDS + b) as usize] = first as u32 | (count as u32) << 16;
         first += count;
@@ -159,8 +135,124 @@ pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratc
     LINES_SEGMENTS_AT as usize + n * SEGMENT_WORDS
 }
 
+/// A window's square as its fill reads it (pxl-portable `window::Square`):
+/// its cells' zoom and place in its tile, its lines as `square_lines` lays
+/// them, and cell `i`'s four looks as a word (`looks`) and its height
+/// (`height`), as its lanes hold them.
+pub struct Laid<'a, L, H> {
+    pub cell: Zoom,
+    pub place: [u32; 2],
+    pub lines: &'a [u32],
+    pub looks: L,
+    pub height: H,
+}
+
+impl<L: Fn(u32) -> u32, H: Fn(u32) -> i32> pxl_portable::window::Square for Laid<'_, L, H> {
+    fn cell(&self) -> Zoom {
+        self.cell
+    }
+    fn place(&self) -> [u32; 2] {
+        self.place
+    }
+    fn line(&self, k: u32) -> u32 {
+        self.lines[k as usize]
+    }
+    fn looks(&self, i: u32) -> u32 {
+        (self.looks)(i)
+    }
+    fn height(&self, i: u32) -> i32 {
+        (self.height)(i)
+    }
+}
+
+/// Cell `i` of the square at `place` (in squares), in its tile's cells.
+fn square_cell(place: [u32; 2], i: u32) -> [u32; 2] {
+    use pxl_portable::window::SQUARE;
+    [place[0] * SQUARE + i % SQUARE, place[1] * SQUARE + i / SQUARE]
+}
+
+/// A square's ways as its fill writes them on a GPU (pxl-portable
+/// `ways_cs`), on the CPU: each column's spans off its lines
+/// (`ways::column`) read along z as runs (`ways::rises`, `ways::run`), into
+/// `out`, a square's runs lane (`window::RUNS_WORDS`), none past
+/// `RUNS_SQUARE`; the runs it reads as, and the most spans a column makes.
+pub fn fill_runs(sq: &impl pxl_portable::window::Square, out: &mut [u32]) -> [u32; 2] {
+    use pxl_portable::window::{RUNS_RUN_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS};
+    let cell = sq.cell();
+    let (mut runs, mut most) = (0, 0);
+    for i in 0..SQUARE_CELLS {
+        out[i as usize] = runs;
+        let (spans, fits) = pxl_portable::ways::column(sq, [(i % SQUARE) as i32, (i / SQUARE) as i32]);
+        most = most.max(if fits { spans.n } else { u32::MAX });
+        let ([mut z, to], any) = pxl_portable::ways::rises(&spans, cell);
+        while any && z <= to {
+            let (value, len) = pxl_portable::ways::run(&spans, cell, z, to);
+            if value != pxl_portable::ways::NOTHING {
+                if runs < RUNS_SQUARE {
+                    out[(RUNS_RUN_AT + runs) as usize] = pxl_portable::ways::run_word(z, len, value);
+                }
+                runs += 1;
+            }
+            z += len as i32;
+        }
+    }
+    out[SQUARE_CELLS as usize] = runs;
+    [runs, most]
+}
+
+/// What the window's square at `place` (in squares) of `tile` reads as at
+/// fill (`fill_runs`), off its lines laid into `lines`, a square's
+/// `LINES_WORDS`, with `scratch` (`square_lines`), its looks four a cell as
+/// a client hands them (`handed`) and its heights off the tile's samples as
+/// `heights_cs` draws them; its runs into `out`.
+pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut Vec<(u32, u32)>, lines: &mut [u32], out: &mut [u32]) -> [u32; 2] {
+    let n = square_lines(tile, &held.separation, place, scratch, lines);
+    let cells = &held.ground.cells;
+    let looks = |i: u32| {
+        let at = square_cell(place, i);
+        let c = (at[1] * TILE_CELLS + at[0]) as usize;
+        pxl_portable::ground::word(match cells.len() {
+            LOOK_LANE => [0, 1, 2, 3].map(|k| u32::from(cells[4 * c + k])),
+            1 => [u32::from(cells[0]); 4],
+            _ => [u32::from(cells[c]); 4],
+        })
+    };
+    let height = |i: u32| pxl_portable::ground::height(|j| i32::from(held.ele[j]), square_cell(place, i));
+    let cell = crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom);
+    fill_runs(
+        &Laid {
+            cell,
+            place,
+            lines: &lines[..n],
+            looks,
+            height,
+        },
+        out,
+    )
+}
+
+/// Whether each square of `tile`'s windows holds its ways' runs
+/// (`square_runs`): none more than `window::RUNS_SQUARE` runs, no column
+/// more than `ways::SPANS` spans; the first that does not, and what it
+/// reads as.
+pub fn runs_fit(tile: Tile, held: &TerrainTile) -> Result<(), ([u32; 2], [u32; 2])> {
+    use pxl_portable::window::{LINES_WORDS, RUNS_SQUARE, RUNS_WORDS, SQUARE};
+    if held.separation.is_empty() {
+        return Ok(());
+    }
+    let (mut scratch, mut lines, mut out) = (Vec::new(), vec![0; LINES_WORDS as usize], vec![0; RUNS_WORDS as usize]);
+    for qy in 0..TILE_CELLS / SQUARE {
+        for qx in 0..TILE_CELLS / SQUARE {
+            let [runs, spans] = square_runs(tile, held, [qx, qy], &mut scratch, &mut lines, &mut out);
+            if runs > RUNS_SQUARE || spans > pxl_portable::ways::SPANS as u32 {
+                return Err(([qx, qy], [runs, spans]));
+            }
+        }
+    }
+    Ok(())
+}
+
 // Made on first use: a constant array of zeros would ship in the module's data.
-static VOID_WAYS: std::sync::LazyLock<Vec<[i16; 2]>> = std::sync::LazyLock::new(|| vec![[i16::MAX, i16::MIN]; WAYS_LANE]);
 static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> = std::sync::LazyLock::new(|| vec![crate::block::cube::sentinel::void; GROUND_LANE]);
 
 impl TerrainTile {
@@ -177,7 +269,6 @@ impl TerrainTile {
             separation: Separation::default(),
             ele: Cow::Borrowed(&[]),
             occupancy: Occupancy::ZERO,
-            ways: Cow::Borrowed(&VOID_WAYS[..]),
         }
     }
 
@@ -195,21 +286,17 @@ impl TerrainTile {
             separation,
             ele: ele.into(),
             occupancy,
-            ways: Cow::Borrowed(&[]),
         }
     }
 
-    /// A tile as a client holds it: its lines and the ways' bound made from
-    /// them, its cells none of its own (a client's windows hold them).
+    /// A tile as a client holds it: its lines, its cells none of its own (a
+    /// client's windows hold them).
     pub fn held(separation: Separation, occupancy: Occupancy) -> TerrainTile {
-        let mut ways = vec![[0; 2]; WAYS_LANE];
-        ways_of(&separation, &mut ways);
         TerrainTile {
             ground: Ground { cells: Cow::Borrowed(&[]) },
             separation,
             ele: Cow::Borrowed(&[]),
             occupancy,
-            ways: ways.into(),
         }
     }
 }
@@ -231,13 +318,6 @@ pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
         separation::write_branch(&tile.separation, b);
     }));
     encoder().encode(&t, TreeEncoderOptions::default())
-}
-
-/// The record's lanes in `.fixed.terrain` a tile is decoded into: its lines
-/// and the ways' bound; its cells go to its windows (`handed`).
-pub struct TileRoom {
-    pub ways: &'static mut [[i16; 2]],
-    pub separation: separation::Room,
 }
 
 struct Lanes<'a> {
@@ -274,22 +354,15 @@ pub fn handed<'a>(pkt: &'a [u8], room: &'a mut [GroundId]) -> Result<(&'a [Groun
     Ok((&room[..LOOK_LANE], ele))
 }
 
-/// Decode a tile straight into its resident room: its lines, and the ways'
-/// bound made from them.
-pub fn decode_into(pkt: &[u8], room: TileRoom) -> Result<TerrainTile, MarshalError> {
+/// Decode a tile straight into its resident room in `.fixed.terrain`: its
+/// lines; its cells go to its windows (`handed`).
+pub fn decode_into(pkt: &[u8], room: separation::Room) -> Result<TerrainTile, MarshalError> {
     let Lanes { occupancy, separation, .. } = read_tile(pkt)?;
-    if room.ways.len() != WAYS_LANE {
-        return Err(malformed());
-    }
-    let TileRoom { ways, separation: separation_room } = room;
-    let separation = separation.into_room(separation_room);
-    ways_of(&separation, ways);
     Ok(TerrainTile {
         ground: Ground { cells: Cow::Borrowed(&[]) },
-        separation,
+        separation: separation.into_room(room),
         ele: Cow::Borrowed(&[]),
         occupancy,
-        ways: (&*ways).into(),
     })
 }
 

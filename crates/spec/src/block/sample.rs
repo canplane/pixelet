@@ -57,20 +57,13 @@ fn fit<T: Clone>(v: &mut Vec<T>, n: usize, fill: T) -> Result<(), Refused> {
     Ok(())
 }
 
-/// A tile as a client reads it whole: its lines and the ways' bound by
-/// square made from them (pxl-spec bake/tile/terrain.rs `ways_of`). Its
-/// cells are its windows' (`Cells`).
-#[derive(Clone, Copy)]
-pub struct TileView<'a> {
-    pub ways: &'a [[i16; 2]],
-    pub separation: &'a crate::bake::separation::Separation,
-}
-
 /// The tile drawn in place of this one (its own, or a coarser one whose cell
 /// stands for `n` × `n` of its cells until its own comes).
 #[derive(Clone, Copy)]
 pub struct TileSource<'a> {
-    pub tile: TileView<'a>,
+    /// Its lines, which a client reads of a tile whole; its cells are its
+    /// windows' (`Cells`).
+    pub separation: &'a crate::bake::separation::Separation,
     /// Where the tile lies, for its piers' stations.
     pub frame: Frame,
     pub origin: [i64; 2],
@@ -149,11 +142,17 @@ pub struct Grid {
     /// four times where it folds none.
     fold: Vec<[GroundId; 4]>,
     /// The ways off the ground, as the one rule asks them of a block
-    /// (pxl-portable ways.rs `block`): each cell's segments with the point
-    /// each starts at, cell by cell and a cell's in its lines' points' order,
-    /// a cell's first at `starts`; the tile a cell's are read from, the own
-    /// `0` and the one beside at `q` `1 + beside_index(q)`, and where each
-    /// lies; units of height a ground metre on the own tile.
+    /// (pxl-portable ways.rs `column`, `block`), over the way columns: the
+    /// grid's cells, or past the leaves the drawn tile's, which the cells
+    /// finer than them read as the ground's do — `wshift` zooms coarser,
+    /// `wspan` a side from `wfirst`. Each way column's segments with the
+    /// point each starts at, column by column and a column's in its lines'
+    /// points' order, a column's first at `starts`; the tile a column's are
+    /// read from, the own `0` and the one beside at `q` `1 + beside_index(q)`,
+    /// and where each lies; units of height a ground metre on the own tile.
+    wshift: u32,
+    wfirst: [i64; 2],
+    wspan: u32,
     over: Vec<(u32, u32, Segment)>,
     starts: Vec<u32>,
     source: Vec<u8>,
@@ -180,6 +179,9 @@ impl Default for Grid {
             source: Vec::new(),
             places: [Place::default(); 9],
             per_m: 0.0,
+            wshift: 0,
+            wfirst: [0; 2],
+            wspan: 0,
             look: Vec::new(),
             cells: Vec::new(),
         }
@@ -277,13 +279,18 @@ impl Grid {
     fn ways(&mut self, around: &Around<impl Cells>, tile_first: [i64; 2], k: i32) -> Result<(), Refused> {
         let mut over = core::mem::take(&mut self.over);
         over.clear();
-        let (span, n) = (i64::from(self.span), (self.span * self.span) as usize);
+        // Past the leaves a way column is a drawn tile's cell, as the ground's is.
+        let wshift = (-k).max(0) as u32;
+        let wfirst = self.first.map(|v| v >> wshift);
+        let wspan = (0..2).map(|a| ((self.first[a] + i64::from(self.span) - 1) >> wshift) - wfirst[a] + 1).max().unwrap_or(0) as u32;
+        (self.wshift, self.wfirst, self.wspan) = (wshift, wfirst, wspan);
+        let (span, n) = (i64::from(wspan), (wspan * wspan) as usize);
         fit(&mut self.source, n, 0)?;
         let source = &mut self.source;
         let places = &mut self.places;
-        let rel = [self.first[0] - tile_first[0], self.first[1] - tile_first[1]];
-        // A cell's side and its first's corner, in the drawn tile's cells.
-        let step = if k >= 0 { f64::from(1 << k) } else { 1.0 / f64::from(1 << -k) };
+        let rel = [wfirst[0] - (tile_first[0] >> wshift), wfirst[1] - (tile_first[1] >> wshift)];
+        // A way column's side and its first's corner, in the drawn tile's cells.
+        let step = if k >= 0 { f64::from(1 << k) } else { 1.0 };
         let corner = rel.map(|v| v as f64 * step);
         let quadrant = |c: [i64; 2]| ancestor_of([0, 1].map(|a| ((rel[a] + c[a]) as f64 * step).floor() as i64), GROUND.tile_cell_shamt());
         let beside = |q: [i64; 2]| if q == [0, 0] { None } else { around.beside[beside_index(q[0], q[1])].as_ref() };
@@ -296,11 +303,11 @@ impl Grid {
                 stations: s.frame.stations(),
             };
             let mut grown = Ok(());
-            s.tile.separation.segments_over(origin, step / n, [span, span], |cx, cy, p| {
+            s.separation.segments_over(origin, step / n, [span, span], |cx, cy, p| {
                 if grown.is_ok() && reads(quadrant([cx, cy])) {
                     let col = (cy * span + cx) as usize;
                     source[col] = at as u8;
-                    grown = try_push(&mut over, (col as u32, p as u32, s.tile.separation.segment(p)));
+                    grown = try_push(&mut over, (col as u32, p as u32, s.separation.segment(p)));
                 }
             });
             grown
@@ -356,10 +363,10 @@ impl Grid {
     /// deck's, a pier's or a bore's block, or a bore's air; none where they
     /// write nothing or the window does not hold it.
     fn way(&self, b: [i64; 3]) -> Option<Option<GroundId>> {
-        let i = self.index([b[0], b[1]])?;
+        self.index([b[0], b[1]])?;
         let z = b[2] as i32;
-        let local = [(b[0] - self.first[0]) as i32, (b[1] - self.first[1]) as i32, z];
-        match ways::block(self, local, self.block(i, z).is_some()) {
+        let w = [((b[0] >> self.wshift) - self.wfirst[0]) as i32, ((b[1] >> self.wshift) - self.wfirst[1]) as i32];
+        match ways::block(self, [w[0], w[1], z]) {
             ways::NOTHING => None,
             ways::AIR => Some(None),
             g => Some(Some(g as GroundId)),
@@ -425,11 +432,11 @@ impl Columns for Grid {
     }
 
     fn count(&self, c: [i32; 2]) -> u32 {
-        self.local(c).map_or(0, |i| self.starts[i + 1] - self.starts[i])
+        self.wlocal(c).map_or(0, |i| self.starts[i + 1] - self.starts[i])
     }
 
     fn segment(&self, c: [i32; 2], k: u32) -> Segment {
-        self.over[(self.starts[self.local(c).unwrap_or(0)] + k) as usize].2
+        self.over[(self.starts[self.wlocal(c).unwrap_or(0)] + k) as usize].2
     }
 
     fn center(&self, c: [i32; 2]) -> [f32; 2] {
@@ -446,18 +453,30 @@ impl Columns for Grid {
     }
 
     fn look(&self, c: [i32; 2]) -> u32 {
-        self.local(c).map_or(u32::from(sentinel::void), |i| u32::from(self.look[i]))
+        self.cell_of(c).map_or(u32::from(sentinel::void), |i| u32::from(self.look[i]))
     }
 
     fn face(&self, c: [i32; 2]) -> i32 {
-        self.local(c).map_or(0, |i| self.face_height(i))
+        self.cell_of(c).map_or(0, |i| self.face_height(i))
     }
 
     /// The segment starts at the point after the one before it, and
     /// continues its line's.
     fn joins(&self, c: [i32; 2], k: u32) -> bool {
-        let at = (self.starts[self.local(c).unwrap_or(0)] + k) as usize;
+        let at = (self.starts[self.wlocal(c).unwrap_or(0)] + k) as usize;
         k > 0 && self.over[at].1 == self.over[at - 1].1 + 1 && self.over[at].2.continues == 1
+    }
+}
+
+/// What the ways leave in the window's columns, each read off its spans.
+impl ways::Airs for Grid {
+    fn at(&self, c: [i32; 2], z: i32) -> u32 {
+        ways::at(&ways::column(self, c).0, self.cell, z)
+    }
+
+    /// Off the way column's cell, as every cell it holds reads the same.
+    fn ground(&self, b: [i32; 3]) -> bool {
+        self.cell_of([b[0], b[1]]).is_some_and(|i| self.block(i, b[2]).is_some())
     }
 }
 
@@ -468,8 +487,22 @@ impl Grid {
         ((0..span).contains(&c[0]) && (0..span).contains(&c[1])).then(|| (c[1] * span + c[0]) as usize)
     }
 
-    /// Where column `c`'s segments' tile lies.
+    /// The way column `c` counted from `wfirst`, as an index, if held.
+    fn wlocal(&self, c: [i32; 2]) -> Option<usize> {
+        let span = self.wspan as i32;
+        ((0..span).contains(&c[0]) && (0..span).contains(&c[1])).then(|| (c[1] * span + c[0]) as usize)
+    }
+
+    /// A cell of the grid way column `c` holds, which all it holds read as
+    /// one: its first the grid holds.
+    fn cell_of(&self, c: [i32; 2]) -> Option<usize> {
+        let first = [0, 1].map(|a| (((self.wfirst[a] + i64::from(c[a])) << self.wshift) - self.first[a]).max(0) as i32);
+        self.wlocal(c)?;
+        self.local(first)
+    }
+
+    /// Where way column `c`'s segments' tile lies.
     fn place(&self, c: [i32; 2]) -> &Place {
-        &self.places[usize::from(self.local(c).map_or(0, |i| self.source[i]))]
+        &self.places[usize::from(self.wlocal(c).map_or(0, |i| self.source[i]))]
     }
 }

@@ -364,10 +364,18 @@ pub trait Held: Area {
     /// heights' whole range (`UNBOUNDED`) where the source cannot bound them,
     /// which only splits more; false where no tile over it is held.
     fn relief(&mut self, cells: [Zoom; 2], node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
+    /// Where a column is held, as the source names it: the place its read
+    /// found (a GPU's window, `window::Found`), none where it reads none.
+    type Place: Copy + Default;
     /// The column of the block `c` at `zoom` as the grid reads it, the
-    /// service area's edge laid on it (`Cell`); false where it cannot be read.
-    fn cell(&mut self, zoom: Zoom, c: [i32; 3]) -> (Cell, bool);
+    /// service area's edge laid on it (`Cell`), and the place it was read
+    /// at; false where it cannot be read.
+    fn cell(&mut self, zoom: Zoom, c: [i32; 3]) -> (Cell, Self::Place, bool);
 }
+
+/// What the ground answers of a node (`node`): its kind, and a block's
+/// look and its fold's four.
+pub type Answer = In<(u32, [u32; 4])>;
 
 /// The ground's answer for a node, the one way a descent asks the ground,
 /// `cave` the caves there and `block` whether it is asked at its own zoom:
@@ -375,8 +383,11 @@ pub trait Held: Area {
 /// each zoom's tile its cells are read from (`Held::relief`) — a block over it is air,
 /// else its cell's block (`Cell::block`), its look and its fold's four; a
 /// coarser node nothing under fills at the zooms asked (`empty`) a block of
-/// air its size, else split; where no tile over it is held, the lack.
-pub fn node(held: &mut impl Held, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> In<(u32, [u32; 4])> {
+/// air its size, else split; where no tile over it is held, the lack. With
+/// it the cell its block was read off and the place it was read at, none
+/// (`Cell::NONE`, the place's default) where it read none.
+pub fn node<H: Held>(held: &mut H, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, H::Place) {
+    let none = H::Place::default();
     let air = In {
         kind: Kind::Block,
         block: (VOID, [VOID; 4]),
@@ -393,7 +404,7 @@ pub fn node(held: &mut impl Held, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far,
     // sea level. No node a shard or finer straddles the area.
     if zoom >= SHARD_ZOOM && past(held, tile_at(zoom, [c[0], c[1]])) {
         let earth = earth(c[2]);
-        return if block {
+        let answer = if block {
             In {
                 kind: Kind::Block,
                 block: (earth, [earth; 4]),
@@ -403,36 +414,39 @@ pub fn node(held: &mut impl Held, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far,
         } else {
             split
         };
+        return (answer, Cell::NONE, none);
     }
     // Coarser than any tile, no one index holds it.
     if zoom < GROUND.top() {
-        return split;
+        return (split, Cell::NONE, none);
     }
     // A block's cells are its zoom's; a coarser node's, those of each zoom
     // asked within it (`empty`).
     let cells = if block { [zoom, zoom] } else { [if far > zoom + 1 { far } else { zoom + 1 }, near] };
     let (relief, ok) = held.relief(cells, (zoom, c));
     if !ok {
-        return lacks;
+        return (lacks, Cell::NONE, none);
     }
     if block {
         if above(zoom, c[2], relief[1]) {
-            return air;
+            return (air, Cell::NONE, none);
         }
-        let (column, ok) = held.cell(zoom, c);
+        let (column, at, ok) = held.cell(zoom, c);
         if !ok {
-            return lacks;
+            return (lacks, Cell::NONE, none);
         }
-        return In {
+        let answer = In {
             kind: Kind::Block,
             block: column.block(zoom, c[2], cave.hollow()),
         };
+        return (answer, column, at);
     }
-    if empty(held, (zoom, c), relief, [far, near], cave.whole(zoom) == (true, true)) {
+    let answer = if empty(held, (zoom, c), relief, [far, near], cave.whole(zoom) == (true, true)) {
         air
     } else {
         split
-    }
+    };
+    (answer, Cell::NONE, none)
 }
 
 /// A cell's ground, as the grid reads it: its look (`unknown` for the wall),
@@ -446,6 +460,9 @@ pub struct Cell {
 }
 
 impl Cell {
+    /// No ground: void at sea level, as a column no tile is read for.
+    pub const NONE: Cell = Cell { look: VOID, top: 0, fold: [VOID; 4] };
+
     /// Whether it has ground at all: a look the catalog grounds, or the wall.
     pub fn grounded(&self) -> bool {
         self.look == UNKNOWN || Ground::grounds(self.look)
