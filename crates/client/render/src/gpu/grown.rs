@@ -68,6 +68,8 @@ pub struct Grown {
     records: u32,
     block: u32,
     room: u32,
+    /// The world its groups bind: grouped again exactly when it is another.
+    bound: World,
     on: bool,
 }
 
@@ -100,14 +102,16 @@ impl Grown {
             records: 0,
             block: 0,
             room: 0,
+            bound: [0; 5],
             on: false,
         }
     }
 
     /// The frame's decor handed over, none where decor is off; `meshes`
     /// each group's index count, none while its model loads. Grouped again
-    /// over `world` where `regroup` or the records' room grew.
-    pub fn prepare(&mut self, g: &Gpu, frame: Option<DecorFrame>, meshes: &[u32; GROUPS as usize], world: World, regroup: bool) {
+    /// where `world` is not the one its groups bind or the records' room
+    /// grew, so a frame without decor misses no change.
+    pub fn prepare(&mut self, g: &Gpu, frame: Option<DecorFrame>, meshes: &[u32; GROUPS as usize], world: World) {
         self.on = frame.is_some();
         let Some(f) = frame else { return };
         let need = GROWN_ROOM + (f.placed.len() as u32).next_power_of_two().max(64);
@@ -122,8 +126,9 @@ impl Grown {
             );
             self.block = g.buffer(word_bytes(((drawn::LANES + 1) * need) as usize), buffer_usage::STORAGE);
         }
-        if grow || regroup || self.groups[0] == 0 {
+        if grow || world != self.bound {
             self.regroup(g, world);
+            self.bound = world;
         }
         g.write_buffer(self.shown, 0, bytes(f.shown));
         g.write_buffer(self.params, 0, bytes(f.params));

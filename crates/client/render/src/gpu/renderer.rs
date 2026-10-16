@@ -743,7 +743,10 @@ struct GroundBuffers {
 /// What the GPU's cast reads and the lane it writes.
 struct CastBuffers {
     built: Built,
+    /// Its group 0, and the buffers it binds (`cast_group`): made again
+    /// exactly when one of them is another.
     group: u32,
+    bound: [u32; 7],
     eye: u32,
     window: u32,
     window_words: usize,
@@ -818,9 +821,6 @@ impl ScreenCellsPass {
         self.room = cells;
         self.lane = g.buffer(word_bytes(4 * (1 + cells)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         self.regroup(g);
-        if let (Some(c), Some(gb)) = (self.cast.as_mut().filter(|c| c.tangents != 0 && c.shards != 0), &self.ground) {
-            c.group = cast_group(g, c, gb.ground, self.lane);
-        }
         // A new lane holds no cast.
         self.generation = 0;
     }
@@ -932,6 +932,7 @@ impl ScreenCellsPass {
             let c = CastBuffers {
                 built,
                 group: 0,
+                bound: [0; 7],
                 eye: buffer(word_bytes(CAST_EYE_WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
                 window: buffer(word_bytes(cast.window.len()), storage),
                 window_words: cast.window.len(),
@@ -962,7 +963,6 @@ impl ScreenCellsPass {
         }
         g.write_buffer(c.shards, 0, bytes(cast.shards));
         let tangents_grow = cast.tangents.len() > c.tangent_room;
-        let regroup = tangents_grow || shards_grow;
         if tangents_grow {
             if c.tangents != 0 {
                 release(c.tangents);
@@ -987,16 +987,17 @@ impl ScreenCellsPass {
             g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
             c.overwrite_revision = Some(o.revision);
         }
-        let regroup = regroup || overwrites_grow;
         let cells = (c.across[0] * c.across[1]) as usize;
         self.fit(g, cells);
         let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
-        // A lane `fit` made again regroups the cast itself.
-        if regroup || c.group == 0 {
-            c.group = cast_group(g, c, ground, self.lane);
+        let bound = [c.eye, c.window, ground, self.lane, c.tangents, c.shards, c.overwrites];
+        if bound != c.bound {
+            release(c.group);
+            c.group = cast_group(g, &c.built, bound);
+            c.bound = bound;
         }
         let world = [c.eye, c.window, ground, c.shards, c.overwrites];
-        c.grown.prepare(g, cast.decor, meshes, world, regroup);
+        c.grown.prepare(g, cast.decor, meshes, world);
         g.write_buffer(self.lane, 0, bytes(&[c.across[0], c.across[1], steps, 0]));
     }
 
@@ -1105,13 +1106,15 @@ const BOUND_WORKGROUP: u32 = 8;
 /// `ways_cs`'s workgroup: columns in a row.
 const WAYS_WORKGROUP: u32 = 64;
 
-fn cast_group(g: &Gpu, c: &CastBuffers, ground: u32, lane: u32) -> u32 {
+/// The cast's group 0 over `bound`: the eye, the window, the tiles' frames,
+/// the lane, its tangents, the served shards and the overwrites.
+fn cast_group(g: &Gpu, built: &Built, bound: [u32; 7]) -> u32 {
     let mut entries = [0u32; 35];
-    for (k, id) in [c.eye, c.window, ground, lane, c.tangents, c.shards, c.overwrites].into_iter().enumerate() {
+    for (k, id) in bound.into_iter().enumerate() {
         entries[5 * k..5 * k + 5].copy_from_slice(&buffer_entry(k as u32, id));
     }
 
-    g.bind_group(c.built.layouts[0], &entries)
+    g.bind_group(built.layouts[0], &entries)
 }
 
 /// A variant picker case: its own frame, drawn at one sample with no shadow.
