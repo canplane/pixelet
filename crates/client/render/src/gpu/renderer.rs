@@ -362,6 +362,13 @@ impl Scratch {
     }
 }
 
+/// Its block goes with it: the renderer is dropped whole when the GPU is lost.
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        self.free();
+    }
+}
+
 const EMPTY: u32 = 0;
 
 /// A power of two so a position wraps by masking, at least twice `live` so
