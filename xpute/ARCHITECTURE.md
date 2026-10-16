@@ -236,7 +236,7 @@ Everything above is implemented in more than one language, and the implementatio
 
 - `kit`: `abi` `alloc` `codec` `collection` `math` `status` `wire` `golden` as the Rust, and `codec` hex, base64url and FNV, which the Rust takes as crates.
 - `guest`: `mem` the memory, sections and the heap door · `ipc` directory, frame, ring, stream, sys and the file table, the guest's door · `sched` quantum, tick, pass, task, edge · `abi` commands, handles · `clock`.
-- `gpu`: the ops and WebGPU's enumerations from `spec/gpu/`.
+- `gpu`: the ops and WebGPU's enumerations from `spec/gpu/`, and `encode`, the calls written into a stream.
 
 The two layers differ in what they ask of a program. `kit` asks nothing: link it and call it. `guest` and `host` ask a program to run xpute's way — memory granted once, work in turns, I/O by asking.
 

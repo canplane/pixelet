@@ -35,6 +35,10 @@ class Stream {
 
     std::uint32_t head_at() const noexcept { return at_; }
 
+    // The memory the stream lies in, which a record naming the guest's bytes
+    // gives offsets of.
+    Memory memory() const noexcept { return mem_; }
+
     std::uint32_t left() const noexcept { return (words_ - head_ - len_) * WORD; }
 
     // Whether a record of `args` words and `bytes` would fit whole with
@@ -46,6 +50,11 @@ class Stream {
     // Answers where the `n` words begin. Past the range is a bug: the guest asked
     // more of a turn than it sized the range for, reported at the caller.
     std::uint32_t open(std::uint32_t op, std::uint32_t n, std::source_location at = std::source_location::current()) noexcept;
+
+    // A record of `n` words for its writer to fill, answered where they
+    // begin; none where an open transaction no longer fits it, which drops the
+    // transaction, as a record past the range does.
+    std::optional<std::uint32_t> reserve(std::uint32_t op, std::uint32_t n, std::source_location at = std::source_location::current()) noexcept;
 
     void record(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint32_t> tail = {},
                 std::optional<std::span<const std::uint8_t>> bytes = std::nullopt, std::source_location at = std::source_location::current()) noexcept;
