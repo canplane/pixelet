@@ -224,7 +224,7 @@ Everything above is implemented in more than one language, and the implementatio
 
 - `kit`: `abi` words and the command number · `alloc` slab and buddy · `codec` JSON · `collection` arena, deque, heap · `math` scalar, rng · `status` errno, error, bug · `wire` XTP, TLV · `golden` the record reader.
 - `guest`: `mem` sections, the base, the heap door and a heap to install between bounds the guest gives · `module` what a WebAssembly guest reads of its module: where the linker stopped, the memory given, the host's clock · `ipc` directory, frame, ring, stream, sys and the file table, the guest's door · `sched` quantum, tick, pass, task, edge · `abi` commands, handles · `clock` · `global`.
-- `gpu`: the ops and WebGPU's enumerations from `spec/gpu/`, and `encode`, the calls written into a stream.
+- `gpu`: the ops and WebGPU's enumerations from `spec/gpu/`, and `encode`, the calls written into a stream, and behind the `host` feature `host`, a stream's calls run on a wgpu device.
 
 **TypeScript** (`ts/`)
 

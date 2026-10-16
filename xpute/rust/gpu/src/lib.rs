@@ -13,3 +13,9 @@ pub mod spec;
 pub mod enums;
 
 pub mod encode;
+
+#[cfg(feature = "host")]
+pub mod host;
+
+#[cfg(feature = "host")]
+mod image;
