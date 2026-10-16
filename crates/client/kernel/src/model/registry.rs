@@ -298,6 +298,11 @@ impl Model {
         self.scale
     }
 
+    /// Its bounding sphere about its origin, unscaled.
+    pub fn radius(&self) -> f32 {
+        self.radius
+    }
+
     /// A clip's length, where it has one.
     pub fn duration(&self, clip: u32) -> Option<f32> {
         self.clips.get(clip as usize).map(|c| c.duration)

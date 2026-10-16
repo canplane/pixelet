@@ -6,12 +6,13 @@
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
-use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::abi::handle::Slots;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
 use crate::model::registry::{blend, Models};
+use crate::scene::frame::Frame;
 
 /// The companion's and the display cases'.
 pub const ACTORS_MAX: usize = crate::scene::character::companion::ACTORS_MAX + crate::scene::character::preview::CASES_MAX;
@@ -109,13 +110,21 @@ impl Actors {
 
     /// Whether any actor plays a clip of some length: the only thing that asks
     /// for the next frame.
-    pub fn tick(&mut self, draw: &mut DrawList, models: &Models, dt: f32) -> bool {
+    /// Every actor's clock advanced; true where one the eye can see moves: in
+    /// the view and a cell of the camera grid across or more, as the rays
+    /// observe nothing smaller. So a frame is asked only for what can be seen
+    /// to change.
+    pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
+        let dt = frame.delta_s as f32;
+        let cell = crate::view::lens::cell_angle(crate::view::lens::tau());
         let mut animating = false;
         let Actors { actors, from } = self;
         for a in actors.values_mut() {
             let Some(m) = models.get(a.model) else { continue };
             let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
-            animating |= a.current.as_ref().and_then(length).is_some();
+            let (about, r) = (v3::sub(&a.at, &frame.anchor), f64::from(m.radius() * m.scale()));
+            let seen = a.visible && frame.frustum.sees(about, r) && 2.0 * r >= cell * v3::len(&v3::sub(&about, &frame.camera));
+            animating |= seen && a.current.as_ref().and_then(length).is_some();
             let wrap = |p: &mut Playing| {
                 p.time += dt;
                 if let Some(d) = length(p) {

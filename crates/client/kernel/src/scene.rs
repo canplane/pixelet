@@ -36,7 +36,7 @@ pub struct Scene {
 impl Scene {
     /// Advances what animates; whether anything did.
     pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
-        self.actors.tick(draw, models, frame.delta_s as f32) | self.puck.tick(frame) | self.environment.tick(frame)
+        self.actors.tick(draw, models, frame) | self.puck.tick(frame) | self.environment.tick(frame)
     }
 
     /// Begins the frame's list with the scene's own layers.
