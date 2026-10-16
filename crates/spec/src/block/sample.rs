@@ -362,11 +362,13 @@ impl Grid {
     /// What the ways write in block `b` (pxl-portable ways.rs `block`): a
     /// deck's, a pier's or a bore's block, or a bore's air; none where they
     /// write nothing or the window does not hold it.
-    fn way(&self, b: [i64; 3]) -> Option<Option<GroundId>> {
-        self.index([b[0], b[1]])?;
+    fn way(&self, b: [i64; 3], answered_air: bool) -> Option<Option<GroundId>> {
+        let i = self.index([b[0], b[1]])?;
         let z = b[2] as i32;
         let w = [((b[0] >> self.wshift) - self.wfirst[0]) as i32, ((b[1] >> self.wshift) - self.wfirst[1]) as i32];
-        match ways::block(self, [w[0], w[1], z]) {
+        // Carved: air as the caves answer it where the grid's ground fills.
+        let carved = answered_air && self.block(i, z).is_some();
+        match ways::block(self, [w[0], w[1], z], carved) {
             ways::NOTHING => None,
             ways::AIR => Some(None),
             g => Some(Some(g as GroundId)),
@@ -412,7 +414,7 @@ impl Grid {
     /// there (pxl-portable `Cell::block`), the layers read top down: what the
     /// ways write, air included; else the ground's. None is void or air.
     pub fn ways_over(&self, b: [i64; 3], (g, fold): (u32, [u32; 4])) -> Option<Block> {
-        if let Some(way) = self.way(b) {
+        if let Some(way) = self.way(b, g == u32::from(sentinel::void)) {
             return way.map(|g| Block::Ground(g, [g; 4]));
         }
         let g = byte(g);
@@ -472,11 +474,6 @@ impl Columns for Grid {
 impl ways::Airs for Grid {
     fn at(&self, c: [i32; 2], z: i32) -> u32 {
         ways::at(&ways::column(self, c).0, self.cell, z)
-    }
-
-    /// Off the way column's cell, as every cell it holds reads the same.
-    fn ground(&self, b: [i32; 3]) -> bool {
-        self.cell_of([b[0], b[1]]).is_some_and(|i| self.block(i, b[2]).is_some())
     }
 }
 

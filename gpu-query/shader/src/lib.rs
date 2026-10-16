@@ -324,7 +324,7 @@ impl Ran for World<'_> {
 /// (`found`) and the columns about it read off it: none in a column past
 /// the area or walled, as the rule writes none there (pxl-portable
 /// `ways::at`) — the own column's wall its cell as read (`cell`), each
-/// other's its own. Its ground is that cell's, caves aside.
+/// other's its own.
 struct Ways<'w> {
     world: World<'w>,
     zoom: u32,
@@ -345,9 +345,6 @@ impl ways::Airs for Ways<'_> {
             self.zoom >= SHARD_ZOOM && area::past(&self.world, area::tile_at(self.zoom, c)) || self.world.column(self.zoom, c).0.look == UNKNOWN
         };
         if walled { ways::NOTHING } else { v }
-    }
-    fn ground(&self, b: [i32; 3]) -> bool {
-        self.cell.block(self.zoom, b[2], false).0 != VOID
     }
 }
 
@@ -472,7 +469,9 @@ impl Query for World<'_> {
             // Off the window the ground's cell was read at: one find a block.
             if window::asks(self, &found, zoom, c) {
                 let ways = Ways { world: *self, zoom, own: [c[0], c[1]], cell, found };
-                let way = ways::block(&ways, c);
+                // Carved: air as the caves answer it where the grid's ground fills.
+                let carved = value == VOID && cell.block(zoom, c[2], false).0 != VOID;
+                let way = ways::block(&ways, c, carved);
                 if way != ways::NOTHING {
                     value = if way == ways::AIR { VOID } else { way };
                     f = [value; 4];

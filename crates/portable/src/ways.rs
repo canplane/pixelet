@@ -631,11 +631,9 @@ pub fn at(spans: &Spans, cell: Zoom, z: i32) -> u32 {
 }
 
 /// What the ways leave in a column's blocks, as a reader holds them: block
-/// `z` of column `c` at the reader's zoom, what `at` answers there; and
-/// whether the ground fills block `b`, caves aside.
+/// `z` of column `c` at the reader's zoom, what `at` answers there.
 pub trait Airs {
     fn at(&self, c: [i32; 2], z: i32) -> u32;
-    fn ground(&self, b: [i32; 3]) -> bool;
 }
 
 /// The look of the way whose air `v` is, `NOTHING` where it is none.
@@ -649,22 +647,23 @@ fn air_way(v: u32) -> u32 {
 
 /// What the ways write in block `b`, its own column read off its spans
 /// (`at`): a deck's slab or its pier; else a bore's air (`AIR`); else, where
-/// the ground is (`Airs::ground`), the way's block about the air a way
-/// leaves beside it — the column's own under and over it, the four across
-/// its faces, in the grid's order, the first that is a way's air — so a
-/// cave written under it never opens into it; else `NOTHING`, the ground's
-/// block standing. The seven read in one loop (`near`), as a GPU inlines a
-/// read once a place it is called from.
-pub fn block(airs: &impl Airs, b: [i32; 3]) -> u32 {
+/// a cave carves ground the grid fills (`carved`), the way's block about the
+/// air a way leaves beside it — the column's own under and over it, the four
+/// across its faces, in the grid's order, the first that is a way's air — so
+/// a cave never opens into a way; else `NOTHING`, the block as the ground and
+/// its caves answer it. Ground no cave carves keeps its look: the ways write
+/// only what they change. The seven read in one loop (`near`), as a GPU
+/// inlines a read once a place it is called from.
+pub fn block(airs: &impl Airs, b: [i32; 3], carved: bool) -> u32 {
     let mut k = 0;
-    while k < 7 {
+    while k < if carved { 7 } else { 1 } {
         let d = near(k);
         let v = airs.at([b[0] + d[0], b[1] + d[1]], b[2] + d[2]);
         if k == 0 && v != NOTHING {
             return if v & AIR_OF != 0 { AIR } else { v };
         }
         if k > 0 && air_way(v) != NOTHING {
-            return if airs.ground(b) { air_way(v) } else { NOTHING };
+            return air_way(v);
         }
         k += 1;
     }
