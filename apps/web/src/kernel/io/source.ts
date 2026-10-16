@@ -18,7 +18,10 @@ const ASK_AGAIN_MS = 2_000;
 async function asked(): Promise<string | null> {
   try {
     const res = await originGet(TILE_SOURCE_ROUTE);
-    return res.ok ? await res.text() : null;
+    if (res.ok) return await res.text();
+    // A refusal's body is not read: let go, not held until collected.
+    await res.body?.cancel();
+    return null;
   } catch (err) {
     console.warn(`[source] ${err instanceof Error ? err.message : String(err)}`);
     return null;
