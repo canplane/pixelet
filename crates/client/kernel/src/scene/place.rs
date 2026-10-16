@@ -199,7 +199,7 @@ fn one_thing(a: Label, b: Label) -> bool {
 fn spacing_px() -> f64 {
     let v = crate::view::frame::pose::view();
     let cell = crate::view::lens::cell_angle(crate::view::lens::tau()) * px_per_unit(v.height, v.fov);
-    libm::round(f64::from(SPACING_CELLS) * cell)
+    libm::rint(f64::from(SPACING_CELLS) * cell)
 }
 
 pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {

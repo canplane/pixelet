@@ -2,7 +2,8 @@
 // Holds the tree to the rules a machine can decide: the header
 // path, cited paths and names existing, the lattice's arithmetic only in
 // `space/`, no raw pointer casts in offset crates, `@expo/ui` only in the
-// sheet, each generated shader made from the sources the tree holds now.
+// sheet, each rounding half to even, each generated shader made from the
+// sources the tree holds now.
 // `doc/minutes/` and `doc/experiment/` are exempt from cited paths: each
 // names the files of its day.
 //   deno run -A script/check-rules.ts
@@ -177,6 +178,38 @@ for (const f of files) {
   });
 }
 
+// One rounding: half to even (ARCHITECTURE.md, Terrain). A call that
+// rounds otherwise, or a floor of a half added, is refused in pixelet's code
+// and xpute's; xpute's scalar keeps its named variants, round_half_up and
+// round_half_away, as options a library offers.
+const ROUNDING_ROOTS = ["crates/", "apps/", "gpu-query/", "xpute/"];
+const ROUNDING_NAMED = [
+  "xpute/rust/kit/src/math/scalar.rs",
+  "xpute/rust/kit/src/math/scalar.test.rs",
+  "xpute/ts/kit/src/math/scalar.ts",
+  "xpute/ts/kit/src/math/scalar.test.ts",
+  "xpute/cpp/kit/math/scalar.hpp",
+  "xpute/cpp/kit/math/scalar.test.cpp",
+];
+const NOT_EVEN = [
+  /\.round\(\)/,
+  /\bf(?:32|64)::round\b/,
+  /\blibm::roundf?\(/,
+  /\bMath\.round\(/,
+  /\bstd::round\b/,
+  // A half added inside a floor's own parentheses, or before `.floor()`.
+  /\bfloor\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\+\s*0\.5\s*\)/,
+  /\([^()]*\+\s*0\.5\s*\)\.floor\(\)/,
+];
+for (const f of files) {
+  if (!ROUNDING_ROOTS.some((r) => f.startsWith(r)) || ROUNDING_NAMED.includes(f) || !/\.(rs|tsx?|wgsl|hpp|cpp)$/.test(f) || f.endsWith(".gen.wgsl")) continue;
+  const text = read(f);
+  if (text === null) continue;
+  text.split("\n").forEach((line, n) => {
+    if (NOT_EVEN.some((r) => r.test(line))) problems.push(`${f}:${n + 1}: rounds other than half to even: ${line.trim()}`);
+  });
+}
+
 // A generated shader names the digest of the sources it was made from
 // (portable-wgsl.ts `inputsDigest`); one the tree has moved past is stale.
 const digest = await inputsDigest(root);
@@ -190,4 +223,4 @@ if (problems.length) {
   console.error(`\ncheck-rules: ${problems.length}`);
   Deno.exit(1);
 }
-console.log("check-rules: headers, cited paths, the lattice, the memory's offsets, SwiftUI's place and the generated shaders hold");
+console.log("check-rules: headers, cited paths, the lattice, the memory's offsets, SwiftUI's place, one rounding and the generated shaders hold");

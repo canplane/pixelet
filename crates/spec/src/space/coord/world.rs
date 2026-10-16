@@ -81,7 +81,7 @@ pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i64; 3]) -> [i64; 3] {
 /// The copy of `x` nearest `about`: where a stored X stands for an eye at `about`.
 pub fn nearest(x: f64, about: f64) -> f64 {
     // Whole laps added to `x`, so a point already on the lap comes back unchanged.
-    x - ROUND * libm::floor((x - about) / ROUND + 0.5)
+    x - ROUND * libm::rint((x - about) / ROUND)
 }
 
 /// `b` moved round the world to the copy nearest `about`.
@@ -101,6 +101,6 @@ pub fn node_near(zoom: Zoom, at: [i64; 3], about: f64) -> [i64; 3] {
     }
     let whole = cube(zoom, at);
     let x = (whole.min[0] + whole.max[0]) / 2.0;
-    let rounds = ((nearest(x, about) - x) / ROUND).round() as i64;
+    let rounds = libm::rint((nearest(x, about) - x) / ROUND) as i64;
     [at[0] + rounds * around(zoom), at[1], at[2]]
 }

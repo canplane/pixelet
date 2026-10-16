@@ -212,7 +212,7 @@ fn heatmap(name: &str, steps: &[u64]) {
 }
 
 fn percentile(sorted: &[u64], q: f64) -> u64 {
-    sorted[((sorted.len() - 1) as f64 * q).round() as usize]
+    sorted[((sorted.len() - 1) as f64 * q).round_ties_even() as usize]
 }
 
 fn main() {
