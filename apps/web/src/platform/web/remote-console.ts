@@ -35,7 +35,7 @@ function flush(): void {
   const body = queued.join("\n");
   queued.length = 0;
   // `keepalive` lands a line logged as the page unloads; a failure is swallowed.
-  fetch(ENDPOINT, { method: "POST", body, keepalive: true }).catch(() => {});
+  fetch(ENDPOINT, { method: "POST", body, keepalive: true }).then((r) => r.body?.cancel(), () => {});
 }
 
 function send(level: string, args: unknown[]): void {
