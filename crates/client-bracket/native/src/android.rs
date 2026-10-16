@@ -117,7 +117,18 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_unpack(env:
 /// what a completion calls to ask a turn (`wake`). Taken as the device opens,
 /// on a thread Java made, since a thread the host made finds no class of the
 /// app's by name.
-static WAKE: OnceLock<(usize, usize, usize)> = OnceLock::new();
+struct Wake {
+    vm: *mut JavaVM,
+    class: jclass,
+    method: jmethodID,
+}
+
+// SAFETY: JNI's VM is one for the process and may be used from any thread; a
+// global reference and a method ID stay valid in every thread until let go.
+unsafe impl Send for Wake {}
+unsafe impl Sync for Wake {}
+
+static WAKE: OnceLock<Wake> = OnceLock::new();
 
 /// Opens the device: whether it opened (surface.rs `pxl_gpu_open`). `this` is
 /// `PxlGuest`, a Kotlin object, whose calls are its instance's.
@@ -135,7 +146,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(env
             let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(env, j.GetObjectClass.or_bug(Errno::ENOSYS)(env, this));
             let method = j.GetStaticMethodID.or_bug(Errno::ENOSYS)(env, class, c"wake".as_ptr(), c"()V".as_ptr());
             if !method.is_null() {
-                let _ = WAKE.set((vm as usize, class as usize, method as usize));
+                let _ = WAKE.set(Wake { vm, class, method });
             }
         }
     }
@@ -148,8 +159,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(env
 /// long as it does, and a daemon keeps no VM from exiting. Kotlin sends the
 /// app's event from there, which Expo carries to the JavaScript thread.
 pub fn wake() {
-    let Some(&(vm, class, method)) = WAKE.get() else { return };
-    let vm = vm as *mut JavaVM;
+    let Some(&Wake { vm, class, method }) = WAKE.get() else { return };
     let mut env: *mut JNIEnv = core::ptr::null_mut();
     // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
     // class and method JNI gave while the device opened, the class held.
@@ -159,7 +169,7 @@ pub fn wake() {
             return;
         }
         let j = jni(env);
-        j.CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(env, class as jclass, method as jmethodID, core::ptr::null());
+        j.CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(env, class, method, core::ptr::null());
         // What Kotlin threw has no Java caller here to reach.
         if j.ExceptionCheck.or_bug(Errno::ENOSYS)(env) != 0 {
             j.ExceptionClear.or_bug(Errno::ENOSYS)(env);
