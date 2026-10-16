@@ -43,7 +43,7 @@ use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
 use pxl_portable::scatter::GROUPS;
-use pxl_spec::block::window::{BACK_WORDS, ELE_AT, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARE_CELLS, SQUARE_WORDS};
+use pxl_spec::block::window::{BACK_WORDS, ELE_AT, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -126,10 +126,9 @@ pub struct EarthTiles<'a> {
 /// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
-/// The ground's windows as the GPU holds them (pxl-portable `window`):
-/// how many squares they hold in all, and the squares to hand it.
+/// The ground's windows as the GPU holds them (pxl-portable `window`,
+/// `SQUARES` of them): the squares to hand it.
 pub struct GroundSquares<'a> {
-    pub squares: u32,
     /// Hands each square whose cells the GPU is to draw to the writer.
     pub upload: &'a mut TerrainUpload,
 }
@@ -715,10 +714,11 @@ struct GroundBuffers {
     ground: u32,
     /// The squares that turn handed, two words each, `heights_cs`'s,
     /// `bound_cs`'s and `ways_cs`'s one per `id.z`, and where each one's
-    /// cells come back to.
+    /// cells come back to: the first `fresh_len` of `backs`, a square handed
+    /// once a turn at most (`window::SQUARES`).
     fresh: u32,
     fresh_len: u32,
-    backs: Vec<(u32, CellsBack)>,
+    backs: [(u32, CellsBack); SQUARES as usize],
     heights_built: Built,
     heights_group: u32,
     bound_built: Built,
@@ -841,7 +841,7 @@ impl ScreenCellsPass {
     fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: GroundSquares) {
         let gb = self.ground.get_or_insert_with(|| {
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
-            let (storage, squares) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, ground.squares);
+            let (storage, squares) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, SQUARES);
             let frames_buffer = buffer(squares * SQUARE_BYTES, storage | buffer_usage::COPY_SRC);
             let fresh = buffer(word_bytes(2 * squares as usize), storage);
             let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &HEIGHTS_GROUP);
@@ -865,7 +865,7 @@ impl ScreenCellsPass {
                 ground: frames_buffer,
                 fresh,
                 fresh_len: 0,
-                backs: Vec::new(),
+                backs: [(0, CellsBack::default()); SQUARES as usize],
                 heights_built,
                 heights_group,
                 bound_built,
@@ -875,7 +875,6 @@ impl ScreenCellsPass {
             }
         });
         let mut fresh = 0;
-        gb.backs.clear();
         (ground.upload)(&mut |q| {
             if !room((q.looks.len() + q.samples.len() + 4 * q.lines.len()) as u32) {
                 return false;
@@ -885,7 +884,7 @@ impl ScreenCellsPass {
             g.write_buffer(gb.ground, at + ELE_AT * 4, q.samples);
             g.write_buffer(gb.ground, at + LINES_AT * 4, bytes(q.lines));
             g.write_buffer(gb.fresh, word_bytes(2 * fresh as usize), bytes(&[q.square, q.place]));
-            gb.backs.push((q.square, q.back));
+            gb.backs[fresh as usize] = (q.square, q.back);
             fresh += 1;
             true
         });
@@ -1019,10 +1018,9 @@ impl ScreenCellsPass {
     /// levels lie together, so one read brings both.
     fn read_back(&mut self, g: &Gpu) {
         let Some(c) = self.ground.as_mut() else { return };
-        for &(square, back) in &c.backs {
+        for &(square, back) in &c.backs[..c.fresh_len as usize] {
             g.read_buffer(c.ground, square * SQUARE_BYTES + HEIGHTS_AT * 4, BACK_WORDS * 4, back.cells, back.word, back.ticket);
         }
-        c.backs.clear();
     }
 
     /// The GPU's cast into the lane, a ray a cell, where it runs; then the

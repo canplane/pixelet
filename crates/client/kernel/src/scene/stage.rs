@@ -145,10 +145,7 @@ pub fn stage_render() {
             layers: &layers,
             upload: &mut earth_upload,
         },
-        ground: GroundSquares {
-            squares: pxl_portable::window::SQUARES,
-            upload: &mut terrain_upload,
-        },
+        ground: GroundSquares { upload: &mut terrain_upload },
         cast: o.as_ref().and(eye).map(|(eye, tangents)| Cast {
             eye,
             tangents,
