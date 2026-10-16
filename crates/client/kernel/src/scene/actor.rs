@@ -38,6 +38,9 @@ pub struct Actor {
     palette_handle: u32,
     local: Vec<[f32; 10]>,
     global: Vec<[f32; 16]>,
+    /// Its palette shows its clips at their clocks: posed again only where
+    /// it moves where it is seen, or where it does not show them.
+    posed: bool,
 }
 
 #[derive(Default)]
@@ -76,6 +79,7 @@ impl Actors {
             palette_handle,
             local: vec![[0.0; 10]; joints],
             global: vec![[0.0; 16]; joints],
+            posed: false,
         };
         Some(self.actors.insert(actor))
     }
@@ -96,6 +100,7 @@ impl Actors {
         }
         a.previous = a.current;
         a.current = Some(Playing { clip, time: 0.0 });
+        a.posed = false;
         a.fade = 0.0;
         a.fade_len = if a.previous.is_some() { fade_s.max(0.0) } else { 0.0 };
     }
@@ -124,7 +129,10 @@ impl Actors {
             let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
             let (about, r) = (v3::sub(&a.at, &frame.anchor), f64::from(m.radius() * m.scale()));
             let seen = a.visible && frame.frustum.sees(about, r) && 2.0 * r >= cell * v3::len(&v3::sub(&about, &frame.camera));
-            animating |= seen && a.current.as_ref().and_then(length).is_some();
+            // A clip of some length plays, or one fades into the next.
+            let moving = a.current.as_ref().and_then(length).is_some() || a.previous.is_some();
+            let moves = seen && moving;
+            animating |= moves;
             let wrap = |p: &mut Playing| {
                 p.time += dt;
                 if let Some(d) = length(p) {
@@ -147,6 +155,12 @@ impl Actors {
             if joints == 0 {
                 continue;
             }
+            // Unseen, its clocks run on and its palette waits for it to be seen.
+            if !moves && (a.posed || !seen) {
+                a.posed &= !moving;
+                continue;
+            }
+            a.posed = true;
             m.pose(a.current.map(|p| (p.clip, p.time)), &mut a.local);
             if let Some(prev) = a.previous {
                 from.resize(joints, [0.0; 10]);
