@@ -7,7 +7,7 @@
 // an op, a count and the op's words in the order each op's doc gives; bytes go as a count
 // and padded words, as the stream lays them. Objects are the guest's handles (abi/handle).
 // An optional field holds NONE where unset. Render and compute sit side by side.
-// A transaction (ipc/stream) that does not commit drops its records, not the handles they took: objects are made outside one.
+// A transaction (ipc/stream) that does not commit drops its records and gives back the handles they took, so the host never hears of the objects: the encoder's begin and commit open and close both.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
@@ -122,7 +122,7 @@ export const op = {
   RESIZE: 46 as number,
   /** id, surface: the surface's texture for this turn, as a view. */
   CURRENT: 47 as number,
-  /** address, words: the host writes there the device's limits (LIMIT_NAME, a word each), then its features (FEATURE_NAME, a bit each, in words), then STATUS. */
+  /** address, words: the host writes there the device's limits (LIMIT_NAME, a word each), then its features (FEATURE_NAME, a bit each, in words), then its timestamp period (f32 bits: the nanoseconds a resolved timestamp's unit is, 1 where they are nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: what SURFACE_PREFERRED names, as the web's getPreferredCanvasFormat), then STATUS. */
   DEVICE: 48 as number,
 } as const;
 

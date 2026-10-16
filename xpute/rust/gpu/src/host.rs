@@ -144,7 +144,7 @@ struct Words<'w> {
     at: usize,
 }
 
-impl Words<'_> {
+impl<'w> Words<'w> {
     fn u(&mut self) -> u32 {
         let v = self.w[self.at];
         self.at += 1;
@@ -164,14 +164,17 @@ impl Words<'_> {
         Some(self.u()).filter(|&v| v != NONE)
     }
     /// A count, then the bytes padded to words.
-    fn bytes(&mut self) -> Vec<u8> {
+    fn bytes(&mut self) -> &'w [u8] {
         let n = self.u() as usize;
         let words = &self.w[self.at..self.at + n.div_ceil(4)];
         self.at += n.div_ceil(4);
-        words.iter().flat_map(|w| w.to_le_bytes()).take(n).collect()
+        // SAFETY: the words as their bytes, which are the guest's in order on
+        // a little-endian host, as every host is; at least `n` of them.
+        let all: &'w [u8] = unsafe { core::slice::from_raw_parts(words.as_ptr().cast::<u8>(), 4 * words.len()) };
+        &all[..n]
     }
     fn text(&mut self) -> String {
-        String::from_utf8_lossy(&self.bytes()).into_owned()
+        String::from_utf8_lossy(self.bytes()).into_owned()
     }
 }
 
@@ -188,13 +191,102 @@ const WAITING: u8 = 0;
 const ANSWERED: u8 = 1;
 const REFUSED: u8 = 2;
 
-/// A surface the guest names by number, as the program bound it.
+/// An image the decoder has (COPY_EXTERNAL_IMAGE), landed in its texture at
+/// the poll after its decode comes back.
+struct Decoding {
+    /// Its place in what was sent the decoder, which answers in order.
+    job: u64,
+    to: OwnedTexture,
+    word: u32,
+    ticket: u32,
+}
+
+/// What the decoder is asked: a job's number, the bytes, flip y and premultiply.
+type Job = (u64, Vec<u8>, bool, bool);
+
+/// The one thread decoding images off the turn, made with the host, its
+/// answers in the order it was asked.
+struct Decoder {
+    ask: std::sync::mpsc::Sender<Job>,
+    answers: std::sync::mpsc::Receiver<(u64, Option<crate::image::Image>)>,
+    next: u64,
+}
+
+impl Decoder {
+    fn new() -> Decoder {
+        let (ask, jobs) = std::sync::mpsc::channel::<Job>();
+        let (answer, answers) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for (job, bytes, flip_y, premultiplied) in jobs {
+                if answer.send((job, crate::image::decode(&bytes, flip_y, premultiplied))).is_err() {
+                    return;
+                }
+            }
+        });
+        Decoder { ask, answers, next: 0 }
+    }
+}
+
+/// A surface the guest names by number: what the guest asked of it, which
+/// holds before a window's surface is bound to it and after, and that surface
+/// while one is.
 struct Surface {
-    surface: wgpu::Surface<'static>,
-    config: Option<wgpu::SurfaceConfiguration>,
+    /// CONFIGURE's: format, usage and whether the guest's alpha is
+    /// premultiplied; none before it.
+    asked: Option<(wgpu::TextureFormat, wgpu::TextureUsages, bool)>,
+    /// RESIZE's, at least a pixel each way.
     size: [u32; 2],
-    /// This turn's texture, presented at the turn's end (`present`).
-    frame: Option<wgpu::SurfaceTexture>,
+    bound: Option<Bound>,
+    /// This turn's texture, the same to every CURRENT of the turn.
+    frame: Option<Frame>,
+    /// The texture drawn where the window gives none, kept until what is
+    /// asked of the surface changes, so a hidden window costs no texture a frame.
+    unshown: Option<wgpu::Texture>,
+}
+
+struct Bound {
+    surface: wgpu::Surface<'static>,
+    /// What is asked differs from what the surface was last configured with,
+    /// so no frame is taken from it until it is configured (`configure_surfaces`).
+    stale: bool,
+}
+
+/// The window's texture, shown at the turn's end; or, where the window gives
+/// none this turn, one of its format and size drawn into and never shown, as
+/// WebGPU's getCurrentTexture always gives a texture.
+enum Frame {
+    Shown(wgpu::SurfaceTexture),
+    Unshown(wgpu::Texture),
+}
+
+impl Default for Surface {
+    fn default() -> Self {
+        Surface {
+            asked: None,
+            size: [1, 1],
+            bound: None,
+            frame: None,
+            unshown: None,
+        }
+    }
+}
+
+impl Frame {
+    fn texture(&self) -> &wgpu::Texture {
+        match self {
+            Frame::Shown(f) => &f.texture,
+            Frame::Unshown(t) => t,
+        }
+    }
+}
+
+/// Where a stale surface is configured: configuring one sets its layer's
+/// properties, which some platforms allow on one thread alone. `Elsewhere`
+/// asks for it there, where the caller then runs `configure_surfaces`.
+#[derive(Clone, Copy)]
+pub enum ConfigureAt {
+    Here,
+    Elsewhere(fn()),
 }
 
 pub struct GpuHost {
@@ -204,14 +296,29 @@ pub struct GpuHost {
     names: Names,
     objects: Vec<Option<Object>>,
     /// At the number the program binds each by, as objects at their slots.
-    surfaces: Vec<Option<Surface>>,
+    surfaces: Vec<Surface>,
+    /// The surface format the device prefers, which SURFACE_PREFERRED names
+    /// and DEVICE tells the guest, as the web's getPreferredCanvasFormat.
+    preferred: wgpu::TextureFormat,
+    configure_at: ConfigureAt,
     /// Where the guest asked the device's block written, for its status.
     block: Option<(u32, u32)>,
     pending: Vec<Pending>,
+    decoder: Decoder,
+    decoding: std::collections::VecDeque<Decoding>,
     /// A record's words, copied out of the guest's memory so the record may
     /// write into it.
     scratch: Vec<u32>,
+    /// Every buffer write goes through the belt, whose chunks are mapped once
+    /// and reused, into `uploads`, which goes ahead of whatever is submitted
+    /// next: `Queue::write_buffer` makes a Metal buffer and mapping a write.
+    belt: wgpu::util::StagingBelt,
+    uploads: Option<wgpu::CommandEncoder>,
 }
+
+/// A mesh, the largest write a frame makes, is about a MiB; larger writes take
+/// a chunk of their own.
+const BELT_CHUNK_BYTES: u64 = 1 << 20;
 
 /// The guest's memory, as the host reads and writes it at the addresses the
 /// guest names.
@@ -226,17 +333,25 @@ fn set_word(memory: &mut [u8], at: u32, v: u32) {
 }
 
 impl GpuHost {
-    pub fn new(adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue) -> GpuHost {
+    /// `preferred` the surface format the platform shows best, `configure_at`
+    /// where its surfaces may be configured.
+    pub fn new(adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue, preferred: wgpu::TextureFormat, configure_at: ConfigureAt) -> GpuHost {
         GpuHost {
             adapter,
+            belt: wgpu::util::StagingBelt::new(device.clone(), BELT_CHUNK_BYTES),
             device,
             queue,
             names: Names::new(),
             objects: Vec::new(),
             surfaces: Vec::new(),
+            preferred,
+            configure_at,
             block: None,
             pending: Vec::new(),
+            decoder: Decoder::new(),
+            decoding: std::collections::VecDeque::new(),
             scratch: Vec::new(),
+            uploads: None,
         }
     }
 
@@ -246,24 +361,126 @@ impl GpuHost {
         self.names.unread()
     }
 
-    /// A surface the guest names by `surface` in CONFIGURE, RESIZE and
-    /// CURRENT, `size` its pixels as the window has it.
-    pub fn bind_surface(&mut self, surface: u32, s: wgpu::Surface<'static>, size: [u32; 2]) {
-        let at = surface as usize;
-        if self.surfaces.len() <= at {
-            self.surfaces.resize_with(at + 1, || None);
-        }
-        self.surfaces[at] = Some(Surface {
-            surface: s,
-            config: None,
-            size,
-            frame: None,
-        });
+    /// The window's surface for the guest's `surface`, configured as the
+    /// guest asked once it is (`configure_at`), at the size it last gave.
+    pub fn bind_surface(&mut self, surface: u32, s: wgpu::Surface<'static>) {
+        self.surface(surface).bound = Some(Bound { surface: s, stale: true });
+        self.want_configured(surface);
     }
 
+    /// The guest's `surface` drawn, until a surface is bound again, into
+    /// frames never shown.
     pub fn unbind_surface(&mut self, surface: u32) {
-        if let Some(s) = self.surfaces.get_mut(surface as usize) {
-            *s = None;
+        let s = self.surface(surface);
+        s.bound = None;
+        s.frame = None;
+    }
+
+    /// Every bound surface whose configuration is not what is asked,
+    /// configured: run where `configure_at` says, while nothing else uses the
+    /// host.
+    pub fn configure_surfaces(&mut self) {
+        for (n, s) in self.surfaces.iter_mut().enumerate() {
+            let (Some(b), Some((format, usage, premultiplied))) = (s.bound.as_mut().filter(|b| b.stale), s.asked) else {
+                continue;
+            };
+            let caps = b.surface.get_capabilities(&self.adapter);
+            // A format the surface does not offer is the adapter unable to show it there.
+            assert!(caps.formats.contains(&format), "[gpu] surface {n} cannot show {format:?} on this adapter");
+            // Shows through where clear, as a premultiplied canvas does; Metal
+            // offers only opaque and post-multiplied.
+            let alpha_mode = [wgpu::CompositeAlphaMode::PreMultiplied, wgpu::CompositeAlphaMode::PostMultiplied]
+                .into_iter()
+                .find(|m| premultiplied && caps.alpha_modes.contains(m))
+                .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
+            let config = wgpu::SurfaceConfiguration {
+                usage,
+                format,
+                color_space: wgpu::SurfaceColorSpace::Auto,
+                width: s.size[0],
+                height: s.size[1],
+                present_mode: wgpu::PresentMode::Fifo,
+                desired_maximum_frame_latency: 2,
+                alpha_mode,
+                view_formats: Vec::new(),
+            };
+            b.surface.configure(&self.device, &config);
+            b.stale = false;
+        }
+    }
+
+    /// `surface`'s texture for this turn: the window's where it gives one, else
+    /// one never shown. A surface the window has outdated is configured and
+    /// asked again, where it may be configured here; one it gives suboptimal
+    /// is shown and configured before the next.
+    fn current(&mut self, surface: u32) -> Frame {
+        let mut asked = false;
+        loop {
+            if let ConfigureAt::Here = self.configure_at {
+                self.configure_surfaces();
+            }
+            let Some(b) = self.surface(surface).bound.as_mut().filter(|b| !b.stale) else { break };
+            match b.surface.get_current_texture() {
+                wgpu::CurrentSurfaceTexture::Success(f) => return Frame::Shown(f),
+                wgpu::CurrentSurfaceTexture::Suboptimal(f) => {
+                    b.stale = true;
+                    if let ConfigureAt::Elsewhere(ask) = self.configure_at {
+                        ask();
+                    }
+                    return Frame::Shown(f);
+                }
+                wgpu::CurrentSurfaceTexture::Outdated if !asked => {
+                    asked = true;
+                    self.want_configured(surface);
+                }
+                _ => break,
+            }
+        }
+        let device = self.device.clone();
+        let s = self.surface(surface);
+        let Some((format, usage, _)) = s.asked else {
+            panic!("[gpu] surface {surface} drawn before it is configured")
+        };
+        let usage = usage | wgpu::TextureUsages::RENDER_ATTACHMENT;
+        let size = wgpu::Extent3d {
+            width: s.size[0],
+            height: s.size[1],
+            depth_or_array_layers: 1,
+        };
+        let kept = s.unshown.take().filter(|t| t.format() == format && t.usage() == usage && t.size() == size);
+        let texture = kept.unwrap_or_else(|| {
+            device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage,
+                view_formats: &[],
+            })
+        });
+        s.unshown = Some(texture.clone());
+        Frame::Unshown(texture)
+    }
+
+    fn surface(&mut self, surface: u32) -> &mut Surface {
+        let at = surface as usize;
+        if self.surfaces.len() <= at {
+            self.surfaces.resize_with(at + 1, Surface::default);
+        }
+        &mut self.surfaces[at]
+    }
+
+    /// `surface`'s configuration made stale, and configured where it may be.
+    fn want_configured(&mut self, surface: u32) {
+        let s = self.surface(surface);
+        let Some(b) = s.bound.as_mut().filter(|_| s.asked.is_some()) else { return };
+        b.stale = true;
+        s.frame = None;
+        match self.configure_at {
+            ConfigureAt::Here => self.configure_surfaces(),
+            ConfigureAt::Elsewhere(ask) => ask(),
         }
     }
 
@@ -271,6 +488,7 @@ impl GpuHost {
     pub fn lost(&mut self, memory: &mut [u8]) {
         self.objects.clear();
         self.pending.clear();
+        self.decoding.clear();
         if let Some((address, words)) = self.block {
             set_word(memory, address + 4 * (words - 1), STATUS::LOST);
         }
@@ -297,12 +515,36 @@ impl GpuHost {
             }
             _ => false,
         });
+        while let Ok((job, image)) = self.decoder.answers.try_recv() {
+            // A job the device's loss forgot answers to nothing.
+            let Some(d) = self.decoding.pop_front_if(|d| d.job == job) else { continue };
+            // An image the host cannot decode is left out and its word not
+            // written, as the web leaves out one its browser cannot; one whose
+            // texture went meanwhile has nowhere to land.
+            let held = self.objects.iter().flatten().any(|o| matches!(o, Object::Texture(t) if *t == d.to.texture));
+            let Some(image) = image.filter(|_| held) else { continue };
+            let layout = wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * image.width),
+                rows_per_image: Some(image.height),
+            };
+            let size = wgpu::Extent3d {
+                width: image.width,
+                height: image.height,
+                depth_or_array_layers: 1,
+            };
+            self.queue.write_texture(d.to.info(), &image.rgba, layout, size);
+            // In the queue ahead of anything the guest submits from here.
+            if word_at(memory, d.word) == d.ticket {
+                set_word(memory, d.word, d.ticket | DONE);
+            }
+        }
     }
 
     /// Each surface's texture this turn drew, shown.
     pub fn present(&mut self) {
-        for s in self.surfaces.iter_mut().flatten() {
-            if let Some(frame) = s.frame.take() {
+        for s in &mut self.surfaces {
+            if let Some(Frame::Shown(frame)) = s.frame.take() {
                 self.queue.present(frame);
             }
         }
@@ -325,6 +567,32 @@ impl GpuHost {
             self.record(memory, code, &mut Words { w: &scratch, at: 0 });
             self.scratch = scratch;
             k += 2 + n;
+        }
+        // The turn's writes reach the queue with it, as the web's writeBuffer does.
+        if self.uploads.is_some() {
+            self.submit(Vec::new());
+        }
+    }
+
+    /// `bytes` into buffer `id` at `offset` through the belt; nothing for none,
+    /// as WebGPU writes nothing.
+    fn write(&mut self, id: u32, offset: u64, bytes: &[u8]) {
+        let Some(size) = core::num::NonZeroU64::new(bytes.len() as u64) else { return };
+        let buffer = self.buffer(id).clone();
+        let encoder = self.uploads.get_or_insert_with(|| self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }));
+        self.belt.write_buffer(encoder, &buffer, offset, size).copy_from_slice(bytes);
+    }
+
+    /// `then` submitted after the writes made since the last submit.
+    fn submit(&mut self, then: Vec<wgpu::CommandBuffer>) {
+        let uploads = self.uploads.take().map(|e| {
+            self.belt.finish();
+            e.finish()
+        });
+        let staged = uploads.is_some();
+        self.queue.submit(uploads.into_iter().chain(then));
+        if staged {
+            self.belt.recall();
         }
     }
 
@@ -671,11 +939,11 @@ impl GpuHost {
             op::WRITE_BUFFER => {
                 let (id, offset) = (r.u(), u64::from(r.u()));
                 let bytes = r.bytes();
-                self.queue.write_buffer(self.buffer(id), offset, &bytes);
+                self.write(id, offset, bytes);
             }
             op::WRITE_BUFFER_AT => {
                 let (id, offset, address, size) = (r.u(), u64::from(r.u()), r.u() as usize, r.u() as usize);
-                self.queue.write_buffer(self.buffer(id), offset, &memory[address..address + size]);
+                self.write(id, offset, &memory[address..address + size]);
             }
             op::WRITE_TEXTURE | op::WRITE_TEXTURE_AT => {
                 let place = self.texture_place(r);
@@ -687,7 +955,7 @@ impl GpuHost {
                 let size = Self::extent(r);
                 if code == op::WRITE_TEXTURE {
                     let bytes = r.bytes();
-                    self.queue.write_texture(place.info(), &bytes, layout, size);
+                    self.queue.write_texture(place.info(), bytes, layout, size);
                 } else {
                     let (address, n) = (r.u() as usize, r.u() as usize);
                     self.queue.write_texture(place.info(), &memory[address..address + n], layout, size);
@@ -697,29 +965,12 @@ impl GpuHost {
                 let to = self.texture_place(r);
                 let (flip_y, premultiplied) = (r.flag(), r.flag());
                 let (address, n, word, ticket) = (r.u() as usize, r.u() as usize, r.u(), r.u());
-                // An image this host cannot decode is left out, its word not
-                // written, as the web leaves out one its browser cannot.
-                if let Some(image) = crate::image::decode(&memory[address..address + n], flip_y, premultiplied) {
-                    let layout = wgpu::TexelCopyBufferLayout {
-                        offset: 0,
-                        bytes_per_row: Some(4 * image.width),
-                        rows_per_image: Some(image.height),
-                    };
-                    let size = wgpu::Extent3d {
-                        width: image.width,
-                        height: image.height,
-                        depth_or_array_layers: 1,
-                    };
-                    self.queue.write_texture(to.info(), &image.rgba, layout, size);
-                    // In the texture as the queue's next work sees it, so
-                    // answered at the next poll.
-                    self.pending.push(Pending {
-                        state: Arc::new(AtomicU8::new(ANSWERED)),
-                        word,
-                        ticket,
-                        read: None,
-                    });
-                }
+                // Copied now: the guest's bytes are only its until the next
+                // turn; decoded off the turn, so a large image costs none.
+                let job = self.decoder.next;
+                self.decoder.next += 1;
+                let _ = self.decoder.ask.send((job, memory[address..address + n].to_vec(), flip_y, premultiplied));
+                self.decoding.push_back(Decoding { job, to, word, ticket });
             }
             op::ENCODER => {
                 let id = r.u();
@@ -871,7 +1122,7 @@ impl GpuHost {
                         _ => None,
                     })
                     .collect();
-                self.queue.submit(finished);
+                self.submit(finished);
             }
             op::READ_BUFFER => {
                 let (b, offset, size, address, word, ticket) = (r.u(), u64::from(r.u()), r.u(), r.u(), r.u(), r.u());
@@ -883,7 +1134,7 @@ impl GpuHost {
                 });
                 let mut e = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
                 e.copy_buffer_to_buffer(self.buffer(b), offset, &staging, 0, u64::from(size));
-                self.queue.submit([e.finish()]);
+                self.submit(vec![e.finish()]);
                 let state = Arc::new(AtomicU8::new(WAITING));
                 let answered = Arc::clone(&state);
                 staging.slice(..).map_async(wgpu::MapMode::Read, move |result| {
@@ -898,67 +1149,43 @@ impl GpuHost {
             }
             op::QUEUE_DONE => {
                 let (word, ticket) = (r.u(), r.u());
+                // What was written is the queue's work as much as what was submitted.
+                self.submit(Vec::new());
                 let state = Arc::new(AtomicU8::new(WAITING));
                 let answered = Arc::clone(&state);
                 self.queue.on_submitted_work_done(move || answered.store(ANSWERED, Ordering::Release));
                 self.pending.push(Pending { state, word, ticket, read: None });
             }
             op::CONFIGURE => {
-                let surface = r.u();
-                let format = r.u();
-                let usage = wgpu::TextureUsages::from_bits_truncate(r.u());
-                let alpha = r.u();
-                let Some(s) = self.surfaces.get_mut(surface as usize).and_then(Option::as_mut) else { return };
-                // No format is the adapter unable to show on this surface at all.
-                let caps = s.surface.get_capabilities(&self.adapter);
-                assert!(!caps.formats.is_empty(), "[gpu] surface {surface} cannot be presented to by this adapter");
+                let (surface, format, usage, alpha) = (r.u(), r.u(), wgpu::TextureUsages::from_bits_truncate(r.u()), r.u());
                 let format = if format == SURFACE_PREFERRED {
-                    caps.formats[0]
+                    self.preferred
                 } else {
                     of(&self.names.texture_format, format, "format")
                 };
-                let alpha_mode = match CANVAS_ALPHA_MODE.get(alpha as usize).copied() {
-                    Some("premultiplied") => wgpu::CompositeAlphaMode::PreMultiplied,
-                    _ => wgpu::CompositeAlphaMode::Opaque,
-                };
-                let alpha_mode = if caps.alpha_modes.contains(&alpha_mode) { alpha_mode } else { wgpu::CompositeAlphaMode::Auto };
-                let config = wgpu::SurfaceConfiguration {
-                    usage,
-                    format,
-                    color_space: wgpu::SurfaceColorSpace::Auto,
-                    width: s.size[0].max(1),
-                    height: s.size[1].max(1),
-                    present_mode: wgpu::PresentMode::Fifo,
-                    desired_maximum_frame_latency: 2,
-                    alpha_mode,
-                    view_formats: Vec::new(),
-                };
-                s.surface.configure(&self.device, &config);
-                s.config = Some(config);
+                let premultiplied = CANVAS_ALPHA_MODE.get(alpha as usize) == Some(&"premultiplied");
+                self.surface(surface).asked = Some((format, usage, premultiplied));
+                self.want_configured(surface);
             }
             op::RESIZE => {
                 let (surface, width, height) = (r.u(), r.u(), r.u());
-                let Some(s) = self.surfaces.get_mut(surface as usize).and_then(Option::as_mut) else { return };
-                s.size = [width, height];
-                if let Some(c) = s.config.as_mut().filter(|c| c.width != width.max(1) || c.height != height.max(1)) {
-                    (c.width, c.height) = (width.max(1), height.max(1));
-                    s.frame = None;
-                    s.surface.configure(&self.device, c);
+                let size = [width.max(1), height.max(1)];
+                let s = self.surface(surface);
+                if s.size != size {
+                    s.size = size;
+                    self.want_configured(surface);
                 }
             }
             op::CURRENT => {
                 let (id, surface) = (r.u(), r.u());
-                let Some(s) = self.surfaces.get_mut(surface as usize).and_then(Option::as_mut) else { return };
-                if s.frame.is_none() {
-                    s.frame = match s.surface.get_current_texture() {
-                        wgpu::CurrentSurfaceTexture::Success(f) | wgpu::CurrentSurfaceTexture::Suboptimal(f) => Some(f),
-                        _ => None,
-                    };
-                }
-                let Some(frame) = &s.frame else { return };
-                let format = frame.texture.format();
-                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-                self.put(id, Object::View(view, format));
+                let frame = match self.surface(surface).frame.take() {
+                    Some(frame) => frame,
+                    None => self.current(surface),
+                };
+                let texture = frame.texture().clone();
+                self.surface(surface).frame = Some(frame);
+                let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+                self.put(id, Object::View(view, texture.format()));
             }
             op::DEVICE => {
                 let (address, words) = (r.u(), r.u());
@@ -973,9 +1200,18 @@ impl GpuHost {
                         bits[k >> 5] |= 1 << (k & 31);
                     }
                 }
+                let period_at = LIMIT_NAME.len() + bits.len();
                 for (k, w) in bits.into_iter().enumerate() {
                     set_word(memory, address + 4 * (LIMIT_NAME.len() + k) as u32, w);
                 }
+                // wgpu resolves timestamps in ticks of this many nanoseconds.
+                set_word(memory, address + 4 * period_at as u32, self.queue.get_timestamp_period().to_bits());
+                let preferred = self.names.texture_format.iter().position(|f| *f == Some(self.preferred));
+                set_word(
+                    memory,
+                    address + 4 * (period_at + 1) as u32,
+                    preferred.unwrap_or_else(|| panic!("[gpu] {:?} is no format the spec names", self.preferred)) as u32,
+                );
                 set_word(memory, address + 4 * (words - 1), STATUS::READY);
             }
             _ => panic!("[gpu] op {code} is no op of spec/gpu/api.json"),

@@ -45,7 +45,7 @@ template <std::size_t N> class HandleTable {
             return std::nullopt;
         }
         generation_[slot] = next_generation(generation_[slot]);
-        live_[slot] = true;
+        made_[slot] = epoch_;
         count_++;
         return slot | std::uint32_t{generation_[slot]} << HANDLE_SLOT_BITS;
     }
@@ -54,7 +54,7 @@ template <std::size_t N> class HandleTable {
     bool release(std::uint32_t handle) noexcept {
         if (!live(handle)) return false;
         std::uint32_t slot = handle_slot(handle);
-        live_[slot] = false;
+        made_[slot] = 0;
         next_[slot] = free_;
         free_ = slot;
         count_--;
@@ -63,7 +63,18 @@ template <std::size_t N> class HandleTable {
 
     bool live(std::uint32_t handle) const noexcept {
         std::uint32_t slot = handle_slot(handle);
-        return slot != 0 && slot < N && live_[slot] && generation_[slot] == handle >> HANDLE_SLOT_BITS;
+        return slot != 0 && slot < N && made_[slot] != 0 && generation_[slot] == handle >> HANDLE_SLOT_BITS;
+    }
+
+    // From here, what is taken is what `rollback` gives back.
+    void begin() noexcept { epoch_++; }
+
+    // Every handle taken since `begin` and not yet released, released: what a
+    // transaction that did not commit made, which the other side never saw.
+    void rollback() noexcept {
+        for (std::uint32_t slot = 1; slot < fresh_; slot++) {
+            if (made_[slot] == epoch_) release(slot | std::uint32_t{generation_[slot]} << HANDLE_SLOT_BITS);
+        }
     }
 
     std::uint32_t count() const noexcept { return count_; }
@@ -72,9 +83,13 @@ template <std::size_t N> class HandleTable {
     static constexpr std::uint32_t NONE = UINT32_MAX;
 
     std::array<std::uint16_t, N> generation_{};
-    std::array<bool, N> live_{};
+    // The epoch a live slot was taken in; 0 for a free one. 64 bits so no
+    // count of epochs a program lives through brings a stale one round again.
+    std::array<std::uint64_t, N> made_{};
     std::array<std::uint32_t, N> next_{};
     std::uint32_t free_ = NONE;
+    // Advanced by `begin`: the slots taken since are those made in it.
+    std::uint64_t epoch_ = 1;
     std::uint32_t fresh_ = 1;
     std::uint32_t count_ = 0;
 };

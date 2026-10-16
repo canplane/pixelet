@@ -517,9 +517,29 @@ template <std::size_t N> class Gpu {
         return make(stream, op::CURRENT, [&](auto &s) { s.word(surface); });
     }
 
+    // The records from here to `commit` are one, and so are the objects they
+    // make: a transaction that does not fit drops both.
+    void begin(Stream &stream) noexcept {
+        stream.begin();
+        handles_.begin();
+    }
+
+    // False where the transaction did not fit: the stream is as at `begin`,
+    // and every handle taken since is free again, as the host never saw it.
+    bool commit(Stream &stream) noexcept {
+        bool fit = stream.commit();
+        if (!fit) handles_.rollback();
+        return fit;
+    }
+
     // Ends a pass: the host lets it go with the record, and its handle is
-    // free again.
-    bool end(Stream &stream, Id pass) noexcept { return detail::emit(stream, op::END, [&](auto &s) { s.word(pass); }) && handles_.release(pass); }
+    // free again, whether or not the record was written, since one dropped
+    // with its transaction left nothing on the host.
+    bool end(Stream &stream, Id pass) noexcept {
+        bool sent = detail::emit(stream, op::END, [&](auto &s) { s.word(pass); });
+        handles_.release(pass);
+        return sent;
+    }
 
     // Each encoder finished and submitted, in order, and let go as `end`
     // lets a pass go.
@@ -528,9 +548,7 @@ template <std::size_t N> class Gpu {
             s.word(static_cast<std::uint32_t>(encoders.size()));
             for (Id e : encoders) s.word(e);
         });
-        if (sent) {
-            for (Id e : encoders) handles_.release(e);
-        }
+        for (Id e : encoders) handles_.release(e);
         return sent;
     }
 

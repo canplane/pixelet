@@ -273,13 +273,47 @@ void timestamps(Encoder &gpu, Stream &s, const At &at, const Turn &turn) {
     turn(s);
 }
 
+// A transaction that does not fit dropped with the objects it made, its
+// handles given back and taken again by the next one, which writes 7.
+void dropped_transaction(Encoder &gpu, Stream &s, const At &at, const Turn &turn) {
+    Id out = *gpu.buffer(s, {.size = 4, .usage = BUFFER_USAGE::STORAGE | BUFFER_USAGE::COPY_SRC, .mapped_at_creation = false});
+    Id m = *gpu.shader_module(s, "@group(0) @binding(0) var<storage, read_write> o: array<u32>;\n@compute @workgroup_size(1) fn main() { o[0] = 7u; }\n");
+    const BindGroupLayoutEntry entries[] = {buffer_entry(0, BufferBindingType::storage)};
+    Id bgl = *gpu.bind_group_layout(s, entries);
+    const Id layouts[] = {bgl};
+    Id pl = *gpu.pipeline_layout(s, layouts);
+    const BindGroupEntry resources[] = {buffer_resource(0, out)};
+    Id bg = *gpu.bind_group(s, bgl, resources);
+    Id p = *gpu.compute_pipeline(s, {pl, m, "main"});
+    auto write = [&](bool spill) {
+        gpu.begin(s);
+        // Held past the commit: the handle a dropped one gives back.
+        gpu.buffer(s, {.size = 4, .usage = BUFFER_USAGE::STORAGE, .mapped_at_creation = false});
+        Id e = *gpu.encoder(s);
+        Id ps = *gpu.compute_pass(s, e, std::nullopt);
+        call::set_pipeline(s, ps, p);
+        call::set_bind_group(s, ps, 0, bg);
+        call::dispatch(s, ps, {1, 1, 1});
+        gpu.end(s, ps);
+        // More than the stream holds.
+        if (spill) call::write_buffer(s, out, 0, std::vector<std::uint8_t>(s.left() + 4));
+        const Id encoders[] = {e};
+        gpu.submit(s, encoders);
+        return gpu.commit(s);
+    };
+    XPUTE_CHECK(!write(true));
+    XPUTE_CHECK(write(false));
+    at.read(s, out, 4, 1);
+    turn(s);
+}
+
 struct Program {
     const char *name;
     void (*encode)(Encoder &, Stream &, const At &, const Turn &);
 };
 
 const Program PROGRAMS[] = {
-    {"add_arrays", add_arrays}, {"triangle", triangle}, {"indexed_instanced", indexed_instanced}, {"sampled_image", sampled_image}, {"timestamps", timestamps},
+    {"add_arrays", add_arrays}, {"triangle", triangle}, {"indexed_instanced", indexed_instanced}, {"sampled_image", sampled_image}, {"timestamps", timestamps}, {"dropped_transaction", dropped_transaction},
 };
 
 } // namespace

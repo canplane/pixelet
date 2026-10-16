@@ -556,6 +556,10 @@ export class GpuHost {
         FEATURE_NAME.forEach((name, k) => {
           if (d.features.has(name as GPUFeatureName)) out[LIMIT_NAME.length + (k >> 5)] |= 1 << (k & 31);
         });
+        // WebGPU resolves timestamps in nanoseconds.
+        const period = LIMIT_NAME.length + Math.ceil(FEATURE_NAME.length / 32);
+        new Float32Array(this.memory(), address, words)[period] = 1;
+        out[period + 1] = TEXTURE_FORMAT.indexOf(navigator.gpu.getPreferredCanvasFormat());
         out[words - 1] = STATUS.READY;
         return;
       }

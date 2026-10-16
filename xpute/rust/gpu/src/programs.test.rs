@@ -51,7 +51,7 @@ pub struct Program {
     pub encode: fn(&mut Encoder, &mut Stream, &At, &mut Turn),
 }
 
-pub const PROGRAMS: [Program; 5] = [
+pub const PROGRAMS: [Program; 6] = [
     Program {
         name: "add_arrays",
         encode: add_arrays,
@@ -68,6 +68,10 @@ pub const PROGRAMS: [Program; 5] = [
     Program {
         name: "timestamps",
         encode: timestamps,
+    },
+    Program {
+        name: "dropped_transaction",
+        encode: dropped_transaction,
     },
 ];
 
@@ -612,6 +616,90 @@ fn timestamps(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     call::dispatch(s, pass, [1, 1, 1]);
     gpu.end(s, pass);
     gpu.submit(s, &[e]);
+    at.read(s, out, 4, 1);
+    turn(s);
+}
+
+/// A transaction that does not fit dropped with the objects it made, its
+/// handles given back and taken again by the next one, which writes 7.
+fn dropped_transaction(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
+    let out = gpu
+        .buffer(
+            s,
+            &BufferDescriptor {
+                size: 4,
+                usage: B::STORAGE | B::COPY_SRC,
+                mapped_at_creation: false,
+            },
+        )
+        .unwrap();
+    let m = gpu
+        .shader_module(
+            s,
+            "@group(0) @binding(0) var<storage, read_write> o: array<u32>;\n@compute @workgroup_size(1) fn main() { o[0] = 7u; }\n",
+        )
+        .unwrap();
+    let bgl = gpu
+        .bind_group_layout(
+            s,
+            &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: S::COMPUTE,
+                layout: BindingLayout::Buffer {
+                    ty: BufferBindingType::storage,
+                    dynamic_offset: false,
+                    min_binding_size: 0,
+                },
+            }],
+        )
+        .unwrap();
+    let pl = gpu.pipeline_layout(s, &[bgl]).unwrap();
+    let bg = gpu
+        .bind_group(
+            s,
+            bgl,
+            &[BindGroupEntry {
+                binding: 0,
+                resource: Resource::Buffer { buffer: out, offset: 0, size: None },
+            }],
+        )
+        .unwrap();
+    let p = gpu
+        .compute_pipeline(
+            s,
+            &ComputePipelineDescriptor {
+                layout: Some(pl),
+                module: m,
+                entry: "main",
+            },
+        )
+        .unwrap();
+    let write = |gpu: &mut Encoder, s: &mut Stream, spill: bool| {
+        gpu.begin(s);
+        // Held past the commit: the handle a dropped one gives back.
+        let _held = gpu.buffer(
+            s,
+            &BufferDescriptor {
+                size: 4,
+                usage: B::STORAGE,
+                mapped_at_creation: false,
+            },
+        );
+        let e = gpu.encoder(s).unwrap();
+        let pass = gpu.compute_pass(s, e, &None).unwrap();
+        call::set_pipeline(s, pass, p);
+        call::set_bind_group(s, pass, 0, bg, &[]);
+        call::dispatch(s, pass, [1, 1, 1]);
+        gpu.end(s, pass);
+        if spill {
+            // More than the stream holds.
+            call::write_buffer(s, out, 0, &vec![0; s.left() + 4]);
+        }
+        gpu.submit(s, &[e]);
+        gpu.commit(s)
+    };
+    assert!(!write(gpu, s, true), "the first transaction does not fit");
+    assert!(write(gpu, s, false), "the second does");
     at.read(s, out, 4, 1);
     turn(s);
 }

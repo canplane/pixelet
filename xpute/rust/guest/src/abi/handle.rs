@@ -25,8 +25,12 @@ fn next_generation(generation: u16) -> u16 {
 
 pub struct HandleTable<const N: usize> {
     generation: [u16; N],
-    live: [bool; N],
+    /// The epoch a live slot was taken in; 0 for a free one. A `u64` so no
+    /// count of epochs a program lives through brings a stale one round again.
+    made: [u64; N],
     next: [u32; N],
+    /// Advanced by `begin`: the slots taken since are those made in it.
+    epoch: u64,
     free: u32,
     /// Slots never handed out start here.
     fresh: u32,
@@ -44,8 +48,9 @@ impl<const N: usize> HandleTable<N> {
         xpute_kit::ensure!((2..=1 << SLOT_BITS).contains(&N), EINVAL, SLOT_BITS);
         HandleTable {
             generation: [0; N],
-            live: [false; N],
+            made: [0; N],
             next: [NONE; N],
+            epoch: 1,
             free: NONE,
             fresh: 1,
             count: 0,
@@ -65,7 +70,7 @@ impl<const N: usize> HandleTable<N> {
         };
         let s = slot as usize;
         self.generation[s] = next_generation(self.generation[s]);
-        self.live[s] = true;
+        self.made[s] = self.epoch;
         self.count += 1;
         Some(handle_of(slot, self.generation[s]))
     }
@@ -75,7 +80,7 @@ impl<const N: usize> HandleTable<N> {
             return false;
         }
         let slot = handle_slot(handle);
-        self.live[slot as usize] = false;
+        self.made[slot as usize] = 0;
         self.next[slot as usize] = self.free;
         self.free = slot;
         self.count -= 1;
@@ -84,7 +89,22 @@ impl<const N: usize> HandleTable<N> {
 
     pub fn live(&self, handle: u32) -> bool {
         let s = handle_slot(handle) as usize;
-        s != 0 && s < N && self.live[s] && self.generation[s] as u32 == handle >> SLOT_BITS
+        s != 0 && s < N && self.made[s] != 0 && self.generation[s] as u32 == handle >> SLOT_BITS
+    }
+
+    /// From here, what is taken is what `rollback` gives back.
+    pub fn begin(&mut self) {
+        self.epoch += 1;
+    }
+
+    /// Every handle taken since `begin` and not yet released, released: what a
+    /// transaction that did not commit made, which the other side never saw.
+    pub fn rollback(&mut self) {
+        for s in 1..self.fresh {
+            if self.made[s as usize] == self.epoch {
+                self.release(handle_of(s, self.generation[s as usize]));
+            }
+        }
     }
 
     pub fn count(&self) -> u32 {

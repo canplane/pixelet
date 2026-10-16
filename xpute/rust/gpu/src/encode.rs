@@ -607,10 +607,30 @@ impl<const N: usize> Gpu<N> {
         self.make(stream, op::CURRENT, &|s| s.word(surface))
     }
 
+    /// The records from here to `commit` are one, and so are the objects they
+    /// make: a transaction that does not fit drops both.
+    pub fn begin(&mut self, stream: &mut Stream) {
+        stream.begin();
+        self.handles.begin();
+    }
+
+    /// False where the transaction did not fit: the stream is as at `begin`,
+    /// and every handle taken since is free again, as the host never saw it.
+    pub fn commit(&mut self, stream: &mut Stream) -> bool {
+        let fit = stream.commit();
+        if !fit {
+            self.handles.rollback();
+        }
+        fit
+    }
+
     /// Ends a pass: the host lets it go with the record, and its handle is
-    /// free again.
+    /// free again, whether or not the record was written, since one dropped
+    /// with its transaction left nothing on the host.
     pub fn end(&mut self, stream: &mut Stream, pass: Id) -> bool {
-        emit(stream, op::END, &|s| s.word(pass)) && self.handles.release(pass)
+        let sent = emit(stream, op::END, &|s| s.word(pass));
+        self.handles.release(pass);
+        sent
     }
 
     /// Each encoder finished and submitted, in order, and let go as `end`
@@ -620,11 +640,9 @@ impl<const N: usize> Gpu<N> {
             s.word(encoders.len() as u32);
             encoders.iter().for_each(|e| s.word(*e));
         });
-        if sent {
-            encoders.iter().for_each(|e| {
-                self.handles.release(*e);
-            });
-        }
+        encoders.iter().for_each(|e| {
+            self.handles.release(*e);
+        });
         sent
     }
 
