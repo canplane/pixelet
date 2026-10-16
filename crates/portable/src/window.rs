@@ -34,6 +34,11 @@ pub const WINDOWS: u32 = EYE_WINDOWS + 3;
 /// Squares every window holds, the eye's first: the most the GPU holds, and
 /// so the most of their cells read back at once.
 pub const SQUARES: u32 = WINDOWS * SLOTS;
+/// A square handed to the GPU's fill, in words: its index, where it lies in
+/// its tile (`x | y << 16`, in squares), and its cells' zoom, its window's
+/// as the window holds it (pxl-kernel layer/terrain/window.rs `Window::cell`;
+/// a destination's moves with its line), never derived from the index.
+pub const FRESH_WORDS: u32 = 3;
 
 /// How far from its centre a window holds every cell, in its own cells: a
 /// zoom's band ends `SPLIT` of its cells from the eye (`cast::SPLIT`).

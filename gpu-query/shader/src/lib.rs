@@ -24,7 +24,7 @@ use pxl_portable::decor::{Decor, COUNTS};
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
 use pxl_portable::scatter::{self, drawn, Grounds, GROWN_AT, GROWN_WORDS, PLACED_BLOCK, SQUARE_BLOCKS};
 use pxl_portable::window::{self, Squares, ELE_AT, FIRST_CELL, HEIGHTS_AT, LEVELS_AT, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS, WAYS_AT};
-use pxl_portable::window::{Ran, LINES_AT, RUNS_AT, RUNS_RUN_AT, RUNS_SQUARE, SQUARE_CELLS, WAYS_BINS};
+use pxl_portable::window::{Ran, FRESH_WORDS, LINES_AT, RUNS_AT, RUNS_RUN_AT, RUNS_SQUARE, SQUARE_CELLS, WAYS_BINS};
 use pxl_portable::ways;
 use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
@@ -613,8 +613,8 @@ pub fn heights_cs(
     if id.x >= SQUARE / 2 || id.y >= SQUARE {
         return;
     }
-    let base = square_at(at(fresh, 2 * id.z));
-    let place = at(fresh, 2 * id.z + 1);
+    let base = square_at(at(fresh, FRESH_WORDS * id.z));
+    let place = at(fresh, FRESH_WORDS * id.z + 1);
     let first = [(place & 0xffff) * SQUARE, (place >> 16) * SQUARE];
     let w = {
         let samples: &[u32] = ground;
@@ -641,7 +641,7 @@ pub fn bound_cs(
     if id.x >= side || id.y >= side {
         return;
     }
-    let base = square_at(at(fresh, 2 * id.z));
+    let base = square_at(at(fresh, FRESH_WORDS * id.z));
     let w = {
         let under: &[u32] = ground;
         window::join(&Fresh { ground: under, base }, 0, 0, j, [id.x, id.y])
@@ -666,15 +666,18 @@ pub fn ways_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
 ) {
-    let (square, i) = (at(fresh, 2 * id.z), id.x);
+    let (square, i) = (at(fresh, FRESH_WORDS * id.z), id.x);
     let base = square_at(square);
-    let place = at(fresh, 2 * id.z + 1);
+    let place = at(fresh, FRESH_WORDS * id.z + 1);
+    // The window's cells' zoom, as handed with the square: a focus's or a
+    // destination's is not its index's.
+    let cell = at(fresh, FRESH_WORDS * id.z + 2);
     let table = base + RUNS_AT;
     if pass.x == 3 {
         if i < WAYS_BINS {
             let word = {
                 let lane: &[u32] = ground;
-                window::bin_word(FIRST_CELL + square / SLOTS, move |k: u32| at(lane, table + k), i)
+                window::bin_word(cell, move |k: u32| at(lane, table + k), i)
             };
             put(ground, base + WAYS_AT + i, word as u32);
         }
@@ -697,7 +700,7 @@ pub fn ways_cs(
     }
     let (writes, c) = (pass.x == 2, [(i % SQUARE) as i32, (i / SQUARE) as i32]);
     let first = if writes { at(ground, table + i) } else { 0 };
-    let square = (base, FIRST_CELL + square / SLOTS, [place & 0xffff, place >> 16]);
+    let square = (base, cell, [place & 0xffff, place >> 16]);
     let n = fill_column(ground, square, c, first, if writes { RUNS_SQUARE } else { 0 });
     if !writes {
         put(ground, table + i, n);

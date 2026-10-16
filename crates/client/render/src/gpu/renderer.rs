@@ -45,7 +45,7 @@ use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
 use pxl_portable::scatter::GROUPS;
-use pxl_spec::block::window::{BACK_WORDS, ELE_AT, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
+use pxl_spec::block::window::{BACK_WORDS, ELE_AT, FRESH_WORDS, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -189,6 +189,8 @@ pub struct CellsBack {
 pub struct Square<'a> {
     pub square: u32,
     pub place: u32,
+    /// Its cells' zoom, its window's (pxl-portable `window::FRESH_WORDS`).
+    pub cell: u32,
     pub looks: &'a [u8],
     pub samples: &'a [u8],
     /// Its lines (pxl-portable `window::LINES_AT`), the words written.
@@ -914,7 +916,7 @@ impl ScreenCellsPass {
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let (storage, squares) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, SQUARES);
             let frames_buffer = buffer(squares * SQUARE_BYTES, storage | buffer_usage::COPY_SRC);
-            let fresh = buffer(word_bytes(2 * squares as usize), storage);
+            let fresh = buffer(word_bytes((FRESH_WORDS * squares) as usize), storage);
             let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &HEIGHTS_GROUP);
             let mut entries = [0u32; 10];
             entries[..5].copy_from_slice(&buffer_entry(0, fresh));
@@ -956,7 +958,7 @@ impl ScreenCellsPass {
             g.write_buffer(gb.ground, at, q.looks);
             g.write_buffer(gb.ground, at + ELE_AT * 4, q.samples);
             g.write_buffer(gb.ground, at + LINES_AT * 4, bytes(q.lines));
-            g.write_buffer(gb.fresh, word_bytes(2 * fresh as usize), bytes(&[q.square, q.place]));
+            g.write_buffer(gb.fresh, word_bytes((FRESH_WORDS * fresh) as usize), bytes(&[q.square, q.place, q.cell]));
             gb.asked[q.square as usize] = q.back;
             fresh += 1;
             true
