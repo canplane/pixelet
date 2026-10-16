@@ -5,11 +5,16 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { type Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
 import { copyText } from "@platform/save.ts";
 
-import { fieldText, type Frame, GROUPS, groupText, n1, offthreadMs, pct, phaseText, tris } from "./lane.ts";
+import { fieldText, type Frame, GROUPS, groupText, n1, pct, phaseText, tris, valueText } from "./lane.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
 import type { ProfilerReport, Spread, TaskRecord, TaskSummary } from "./view.ts";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
+/** A count of bytes as the one MB the figures are shown in, signed. */
+const signedBytes = (b: number) => `${b >= 0 ? "+" : ""}${valueText("_bytes", b)}`;
+const bytes = (b: number) => valueText("_bytes", b);
+/** Where the interval's turns ended: before it, by the time left, or past it, by how much. */
+const pastText = (f: Frame) => (f.over_ms > 0 ? `over by ${n1(f.over_ms)}` : `off-turn ${n1(f.off_turn_ms)}`);
 const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 
 export function failText(fail: u32, detail: u32): string {
@@ -31,10 +36,10 @@ export function taskLine(r: TaskRecord): string {
 
 /** Geometry, textures and heap only mean anything as deltas from `prev`. */
 export function frameLine(s: Frame, prev: Frame | null): string {
-  const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.heap_used_mb - prev.heap_used_mb)}MB`;
-  return `[${n1(s.t).padStart(9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(offthreadMs(s))}  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)}/${n1(s.budget_ms)}${
-    s.settled ? " (still)" : ""
-  } (chunks ${n1(s.chunks_ms)})  draws ${s.draw_calls} tris ${tris(s.triangles)}  buf ${s.buffers}  heap ${s.heap_used_mb}MB${d}`;
+  const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap peak ${signedBytes(s.heap_peak_bytes - prev.heap_peak_bytes)}`;
+  return `[${n1(s.t).padStart(9)}] ${valueText("kind_name", s.kind_name)}  interval ${n1(s.interval_ms)} = ${s.turns} turns ${n1(s.busy_ms)} + ${pastText(s)}  tick ${n1(s.tick_ms)}/${
+    n1(s.budget_ms)
+  }${s.settled ? " (still)" : ""}  gpu ${n1(s.gpu_ms)}  draws ${s.draw_calls} tris ${tris(s.triangles)}  buf ${s.buffers}  heap peak ${bytes(s.heap_peak_bytes)}${d}`;
 }
 
 export const longFrameLine = (l: LongFrame) =>
@@ -47,30 +52,33 @@ function windowSection(r: ProfilerReport): string[] {
   const spans = f.gpu_spans.filter((s) => s.spread.max > 0).map((s) => `${s.name} ${n1(s.spread.p95)}`).join("  ");
   const steps = r.steps.length === 0 ? "none" : [...r.steps].sort((a, b) => b.ms / b.count - a.ms / a.count).map((s) => `${s.phase}/${s.name} ${n1(s.ms / s.count)}/${n1(s.max_ms)}`).join("  ");
 
+  const counted = (rows: { name: string; n: f64 }[]) => rows.filter((r) => r.n > 0).map((r) => `${r.name} ${r.n}`).join("  ") || "-";
+
   return [
-    `frames n=${f.n}  over ${n1(f.seconds)}s  moving ${f.moving}  still ${f.n - f.moving}   display ${n1(last.frame_ms)} ms`,
-    `  dt      ${spread(f.dt)} ms   missed ${f.missed} (${pct(f.missed, f.moving)}% of moving frames)`,
-    `  task    p50 ${n1(f.task.p50)}  p95 ${n1(f.task.p95)} ms   (the kernel's turn: tick, draw, submit)`,
-    `  offthd  p50 ${n1(f.offthread.p50)}  p95 ${n1(f.offthread.p95)} ms   (vsync/compositor/GPU/GC and the shell's glue)`,
-    `  gpu     ${spread(f.gpu)} ms${last.gpu_ms === 0 ? "   (no timestamps: no renderer yet, or the device keeps none)" : ""}`,
-    `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
-    `  sched   p95 ${n1(f.sched.p95)}  max ${n1(f.sched.max)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${
+    `frames n=${f.n}  over ${n1(f.seconds)}s  moving ${f.moving}  still ${f.n - f.moving}   display ${n1(last.display_ms)} ms   turns ${f.turns}`,
+    `  kinds   ${counted(f.kinds)}   wakes ${counted(f.wakes)}`,
+    `  interval ${spread(f.interval)} ms   missed ${f.missed} (${pct(f.missed, f.moving)}% of moving frames)`,
+    `  busy    ${spread(f.busy)} ms   (the interval's turns, rise to fall)`,
+    `  off-turn ${spread(f.off_turn)} ms   long ${f.long} (turns past their interval)`,
+    `  tick    ${spread(f.tick)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${
       f.phases.map((p) => `${p.name} ${n1(p.spread.p95)}`).join("  ")
     }`,
-    `  cpu     chunks p95 ${n1(f.chunks.p95)} ms   (the scene's pass inside the visible phase)`,
+    `  tasks   ${spread(f.tasks)} ms   (the turns' tasks past the frame)`,
+    `  gpu     ${spread(f.gpu)} ms${last.gpu_ms === 0 ? "   (no timestamps: no renderer yet, or the device keeps none)" : ""}`,
+    `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms per frame, max)`,
     `  by tag  ${f.census.map((t) => `${t.tag} ${round(t.draws)}/${tris(t.tris)}`).join("  ")}   (draws/tris a frame, mean)`,
-    `  heap Δ  ${signed(f.used_delta_mb)}MB`,
-    // `live` counts a carved run whole, so it is committed, not held.
-    `  heap    live ${pct(last.heap_live_mb, last.heap_range_mb)}% of the range   ${n1(last.heap_live_mb - last.heap_run_mb)}MB of it whole pages   runs hold ${
-      pct(last.heap_slot_mb, last.heap_run_mb)
-    }% of themselves, the other ${n1(last.heap_run_mb - last.heap_slot_mb)}MB what the carving costs`,
+    `  heap peak Δ ${signedBytes(f.heap_peak_delta_bytes)}`,
+    // `lent` counts a carved run whole, so it is committed, not held.
+    `  heap    lent ${pct(last.heap_lent_bytes, last.heap_range_bytes)}% of the range   ${bytes(last.heap_lent_bytes - last.heap_run_bytes)} of it whole pages   runs hold ${
+      pct(last.heap_held_bytes, last.heap_run_bytes)
+    }% of themselves, the other ${bytes(last.heap_run_bytes - last.heap_held_bytes)} what the carving costs`,
   ];
 }
 
 function lastSection(f: Frame): string[] {
-  return ["last frame", ...GROUPS.filter((g) => g !== "pace").map((g) => `  ${g.padEnd(7)} ${groupText(g, f)}`)];
+  return ["last frame", ...GROUPS.filter((g) => g !== "time").map((g) => `  ${g.padEnd(7)} ${groupText(g, f)}`)];
 }
 
 function sideSection(r: ProfilerReport): string[] {
@@ -82,7 +90,7 @@ function sideSection(r: ProfilerReport): string[] {
   return lines.length === 0 ? [] : ["state", ...lines];
 }
 
-const peakSection = (p: Record<string, f64>) => ["peak (window)", `  ${Object.entries(p).map(([k, v]) => fieldText(k, v)).join("  ")}`];
+const peakSection = (p: Record<string, f64>) => ["peak (since recording)", `  ${Object.entries(p).map(([k, v]) => fieldText(k, v)).join("  ")}`];
 
 function tasksSection(tasks: TaskSummary[]): string[] {
   const n = tasks.reduce((sum, t) => sum + t.n, 0);
@@ -116,7 +124,7 @@ export function profilerReportText(r: ProfilerReport): string {
     for (const rec of r.recent) out.push(taskLine(rec));
   }
   if (r.worst.length > 0) {
-    out.push(`--- worst ${r.worst.length} frames in the window ---`);
+    out.push(`--- worst ${r.worst.length} frames since recording ---`);
     for (const w of r.worst) out.push(frameLine(w.sample, w.prev));
   }
   if (r.longs.length > 0) {

@@ -15,9 +15,9 @@ import { OUTCOME_NAMES, STREAM_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/deman
 import { kernel_call, kernel_memory, kernel_room } from "@/kernel/shell.ts";
 
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
-import { CENSUS_TAGS, FRAME, LOG, READ, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WORST } from "./profiler.spec.ts";
+import { CENSUS_TAGS, FRAME, LOG, READ, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WAKES, WORST } from "./profiler.spec.ts";
 import { STEP_NAMES } from "@/kernel/turn/step.spec.ts";
-import { GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
+import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
 import { type Frame, frameAt } from "./lane.ts";
 import { type LongFrame, longFramesSince } from "./long-frame.ts";
 
@@ -72,15 +72,21 @@ export interface FrameSummary {
   moving: f64;
   missed: f64;
   overran: f64;
-  dt: Spread;
-  task: Spread;
-  offthread: Spread;
+  /** Intervals whose turns ran past them. */
+  long: f64;
+  turns: f64;
+  interval: Spread;
+  busy: Spread;
+  off_turn: Spread;
+  tick: Spread;
+  tasks: Spread;
   gpu: Spread;
-  sched: Spread;
-  chunks: Spread;
   phases: { name: string; spread: Spread }[];
   gpu_spans: { name: string; spread: Spread }[];
-  used_delta_mb: f64;
+  /** Frames by the renderer's kind, and the turns' last ask by wake. */
+  kinds: { name: string; n: f64 }[];
+  wakes: { name: string; n: f64 }[];
+  heap_peak_delta_bytes: f64;
   census: { tag: string; draws: f64; tris: f64 }[];
   last: Frame;
 }
@@ -115,7 +121,7 @@ export interface ProfilerReport {
   t: f64;
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
-  sections: Record<"counters" | "sheet" | "fetch" | "quality" | "view", Record<string, f64>>;
+  sections: Record<"open" | "counters" | "sheet" | "fetch" | "quality" | "view", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   peak: Record<string, f64> | null;
   tasks: TaskSummary[];
@@ -136,15 +142,19 @@ function frameSummary(s: F64Array): FrameSummary | null {
     moving: s[a + F.moving],
     missed: s[a + F.missed],
     overran: s[a + F.overran],
-    dt: spreadAt(s, a + F.dt),
-    task: spreadAt(s, a + F.task),
-    offthread: spreadAt(s, a + F.offthread),
+    long: s[a + F.long],
+    turns: s[a + F.turns],
+    interval: spreadAt(s, a + F.interval),
+    busy: spreadAt(s, a + F.busy),
+    off_turn: spreadAt(s, a + F.off_turn),
+    tick: spreadAt(s, a + F.tick),
+    tasks: spreadAt(s, a + F.tasks),
     gpu: spreadAt(s, a + F.gpu),
-    sched: spreadAt(s, a + F.sched),
-    chunks: spreadAt(s, a + F.chunks),
     phases: PHASES.map((name, k) => ({ name, spread: spreadAt(s, a + F.phases + k * SPREAD.WORDS) })),
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.gpu_spans + k * SPREAD.WORDS) })),
-    used_delta_mb: s[a + F.used_delta_mb],
+    kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
+    wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
+    heap_peak_delta_bytes: s[a + F.heap_peak_delta_bytes],
     census: CENSUS_TAGS.map((tag, k) => ({ tag, draws: s[a + F.census + 2 * k], tris: s[a + F.census + 2 * k + 1] }))
       .filter((r) => r.draws > 0)
       .sort((x, y) => y.tris - x.tris),
@@ -204,6 +214,8 @@ function read(windowMs: f64 | null): Read {
 export interface Gauge {
   rec: { recording: boolean; elapsed_ms: f64; tasks: u32; frames: u32; truncated: boolean };
   frames: FrameSummary | null;
+  /** The interval in progress, which no frame turn has closed. */
+  open: { turns: f64; busy_ms: f64 };
   tasks: TaskSummary[];
   counters: Record<string, f64>;
   sheet: { size: u32; entries: u32; shelves: u32; used_px: u32; initial: u32 };
@@ -227,6 +239,7 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
   return {
     rec: { recording: r.recording !== 0, elapsed_ms: r.elapsed_ms, tasks: r.tasks, frames: r.frames, truncated: r.truncated !== 0 },
     frames: frameSummary(s),
+    open: section(s, SUMMARY.open) as Gauge["open"],
     tasks: taskSummaries(s),
     counters: section(s, SUMMARY.counters),
     sheet: section(s, SUMMARY.sheet) as Gauge["sheet"],
@@ -256,6 +269,7 @@ export function profilerReportRead(): ProfilerReport {
     build: { number: BUILD_NUMBER, id: BUILD_ID, time: BUILD_TIME },
     frames: frameSummary(s),
     sections: {
+      open: section(s, SUMMARY.open),
       counters: section(s, SUMMARY.counters),
       sheet: section(s, SUMMARY.sheet),
       fetch: section(s, SUMMARY.fetch),

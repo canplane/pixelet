@@ -45,8 +45,6 @@ pub struct GpuSample {
     pub triangles: f64,
     pub census: DrawCensus,
     pub px: f64,
-    /// 1 where the frame did not fit the GPU stream and was not drawn.
-    pub skipped: f64,
 }
 
 #[repr(C)]
@@ -66,19 +64,23 @@ pub struct TileSample {
     pub place: f64,
 }
 
+/// The heap as its allocator states it (xpute-guest mem/heap.rs `HeapStat`),
+/// in bytes as it counts them: each figure what it is, not a rounding of it.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct HeapSample {
-    pub used_mb: f64,
-    /// Handed out by the page allocator, carved runs counted whole.
-    pub live_mb: f64,
-    /// Of `live_mb`, what was carved into slots, and what is out in slots;
-    /// the difference is the carving's overhead.
-    pub run_mb: f64,
-    pub slot_mb: f64,
-    pub range_mb: f64,
+    /// The high-water mark: how far the heap has ever reached, never less.
+    pub peak_bytes: f64,
+    /// Pages lent out, a carved run counted whole.
+    pub lent_bytes: f64,
+    /// Of what is lent, what was carved into slots, and what is held in
+    /// slots; their difference is what the carving costs.
+    pub run_bytes: f64,
+    pub held_bytes: f64,
+    pub range_bytes: f64,
+    pub largest_free_bytes: f64,
     pub refusals: f64,
-    pub largest_free_mb: f64,
+    pub releases: f64,
 }
 
 /// The completion ring's peak, and the most submissions a turn held back for
@@ -90,54 +92,51 @@ pub struct RingSample {
     pub held_peak: f64,
 }
 
+/// One frame turn and the interval it opened (profiler.json FRAME): every
+/// figure of one turn, landed when the next frame turn closes the interval.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FrameSample {
     pub t: f64,
-    /// The host's rAF interval, not the world's step: they differ past
-    /// MAX_STEP_S, which is where the frames worth reading are.
-    pub dt_ms: f64,
-    pub frame_ms: f64,
-    /// 1 when the tick took the large settled budget, so a long dt was chosen.
+    /// The host's interval from this frame to the next, which the turns in
+    /// it filled: not the world's step, which stops at MAX_STEP_S.
+    pub interval_ms: f64,
+    pub display_ms: f64,
+    /// 1 when the tick took the large settled budget, so a long interval was chosen.
     pub settled: f64,
-    /// From the turn's rising edge to the end of the tick: what `budget_ms` is a
-    /// quota on. It exceeds the sum of `phases` by the effects and wait before the
-    /// frame task.
-    pub sched_ms: f64,
+    /// Every turn the interval held, the frame's and those without a host
+    /// frame, and their time, rise to fall each.
+    pub turns: f64,
+    pub busy_ms: f64,
+    /// The interval less the turns, and what the turns ran past it: one of
+    /// the two 0, so neither is ever negative.
+    pub off_turn_ms: f64,
+    pub over_ms: f64,
     pub budget_ms: f64,
+    /// The parts of `busy_ms`: what is left of it is unmeasured.
+    pub door_ms: f64,
+    pub effects_ms: f64,
+    pub tick_ms: f64,
     pub phases: [f64; PHASES.len()],
-    pub chunks_ms: f64,
-    /// The kernel's whole turn; `dt_ms - task_ms` is everything outside it.
-    pub task_ms: f64,
+    pub stage_ms: f64,
+    pub tasks_ms: f64,
+    pub worst_effect_ms: f64,
+    pub worst_effect_name: f64,
+    /// The renderer's FRAME_KINDS and the edge's WAKES, by index.
+    pub kind: f64,
+    pub wake: f64,
+    pub wake_in_ms: f64,
     pub gpu: GpuSample,
     pub device: DeviceSample,
     pub tiles: TileSample,
     pub heap: HeapSample,
     pub rings: RingSample,
-    // Queued plus in-flight requests, per stream.
-    pub q_terrain: f64,
-    pub q_place: f64,
-    pub cap: CapSample,
-    pub turn: TurnSample,
-}
-
-/// The turn in parts that add up to `task_ms`, so unmeasured time shows as
-/// the difference. Effects went untimed until one took 70 ms of a turn whose
-/// tick was 1.5 ms (2026-09-23).
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct TurnSample {
-    pub effects_ms: f64,
-    pub stage_ms: f64,
-    pub step_ms: f64,
-    pub step_name: f64,
-}
-
-/// What the frame's ceilings left undone: whether one is holding the screen back.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct CapSample {
-    pub record_refused: f64,
+    /// Requests waiting for a credit, and out on one, per stream.
+    pub waiting_terrain: f64,
+    pub out_terrain: f64,
+    pub waiting_place: f64,
+    pub out_place: f64,
+    pub terrain_refused: f64,
 }
 
 /// Kept with the frame before it, since geometry, textures and heap only mean anything as deltas.
@@ -149,47 +148,50 @@ pub struct WorstFrame {
     pub prev: FrameSample,
 }
 
-/// Worst values since recording started, kept past the ring's minute.
+/// The largest of each since recording began, kept past the ring's minute.
 /// Written through `words!`: a hand-ordered copy once shifted every lane
 /// from the fifth on by one (2026-09-23).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FramePeak {
     pub present: f64,
-    pub dt_ms: f64,
-    pub sched_ms: f64,
-    pub chunks_ms: f64,
+    pub interval_ms: f64,
+    pub busy_ms: f64,
+    pub tick_ms: f64,
     pub gpu_ms: f64,
     pub draw_calls: f64,
     pub triangles: f64,
-    pub q_terrain: f64,
-    pub q_place: f64,
+    pub waiting_terrain: f64,
+    pub waiting_place: f64,
 }
 
 words!(FrameSample, FRAME::WORDS,
-    t => FRAME::t, dt_ms => FRAME::dt_ms, frame_ms => FRAME::frame_ms, settled => FRAME::settled,
-    sched_ms => FRAME::sched_ms, budget_ms => FRAME::budget_ms, phases => FRAME::phases, chunks_ms => FRAME::chunks_ms, task_ms => FRAME::task_ms,
+    t => FRAME::t, interval_ms => FRAME::interval_ms, display_ms => FRAME::display_ms, settled => FRAME::settled,
+    turns => FRAME::turns, busy_ms => FRAME::busy_ms, off_turn_ms => FRAME::off_turn_ms, over_ms => FRAME::over_ms,
+    budget_ms => FRAME::budget_ms, door_ms => FRAME::door_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
+    phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
+    worst_effect_ms => FRAME::worst_effect_ms, worst_effect_name => FRAME::worst_effect_name,
+    kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
     gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans, gpu.draw_calls => FRAME::draw_calls, gpu.triangles => FRAME::triangles,
-    gpu.census => FRAME::census, gpu.px => FRAME::px, gpu.skipped => FRAME::gpu_skipped,
+    gpu.census => FRAME::census, gpu.px => FRAME::px,
     device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb,
     device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb,
     tiles.total => FRAME::tiles_total, tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
-    heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.run_mb => FRAME::heap_run_mb,
-    heap.slot_mb => FRAME::heap_slot_mb, heap.range_mb => FRAME::heap_range_mb,
-    heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
+    heap.peak_bytes => FRAME::heap_peak_bytes, heap.lent_bytes => FRAME::heap_lent_bytes, heap.run_bytes => FRAME::heap_run_bytes,
+    heap.held_bytes => FRAME::heap_held_bytes, heap.range_bytes => FRAME::heap_range_bytes,
+    heap.largest_free_bytes => FRAME::heap_largest_free_bytes, heap.refusals => FRAME::heap_refusals, heap.releases => FRAME::heap_releases,
     rings.cq_peak => FRAME::ring_cq_peak, rings.held_peak => FRAME::ring_held_peak,
-    q_terrain => FRAME::q_terrain, q_place => FRAME::q_place,
-    cap.record_refused => FRAME::cap_record_refused,
-    turn.effects_ms => FRAME::turn_effects_ms, turn.stage_ms => FRAME::turn_stage_ms,
-    turn.step_ms => FRAME::turn_step_ms, turn.step_name => FRAME::turn_step_name,
+    waiting_terrain => FRAME::waiting_terrain, out_terrain => FRAME::out_terrain,
+    waiting_place => FRAME::waiting_place, out_place => FRAME::out_place,
+    terrain_refused => FRAME::cap_terrain_refused,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
 
 words!(FramePeak, SUMMARY::peak::WORDS,
-    present => SUMMARY::peak::present, dt_ms => SUMMARY::peak::dt_ms, sched_ms => SUMMARY::peak::sched_ms,
-    chunks_ms => SUMMARY::peak::chunks_ms, gpu_ms => SUMMARY::peak::gpu_ms, draw_calls => SUMMARY::peak::draw_calls,
-    triangles => SUMMARY::peak::triangles, q_terrain => SUMMARY::peak::q_terrain, q_place => SUMMARY::peak::q_place,
+    present => SUMMARY::peak::present, interval_ms => SUMMARY::peak::interval_ms, busy_ms => SUMMARY::peak::busy_ms,
+    tick_ms => SUMMARY::peak::tick_ms, gpu_ms => SUMMARY::peak::gpu_ms, draw_calls => SUMMARY::peak::draw_calls,
+    triangles => SUMMARY::peak::triangles, waiting_terrain => SUMMARY::peak::waiting_terrain, waiting_place => SUMMARY::peak::waiting_place,
 );
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
@@ -205,10 +207,15 @@ const MISSED_INTERVALS: f64 = 1.5;
 /// A frame that dropped a vsync while moving. Still frames take a larger
 /// budget on purpose, and a repeated image is no visible stutter.
 pub fn missed(f: &FrameSample) -> bool {
-    f.settled == 0.0 && f.dt_ms > f.frame_ms * MISSED_INTERVALS
+    f.settled == 0.0 && f.interval_ms > f.display_ms * MISSED_INTERVALS
 }
 
 /// Past even the hard ceiling: one step too big for the forward-progress waiver.
 pub fn overran(f: &FrameSample) -> bool {
-    f.sched_ms > f.budget_ms + crate::sched::tick::HARD_SLACK_MS
+    f.tick_ms > f.budget_ms + crate::sched::tick::HARD_SLACK_MS
+}
+
+/// The interval's turns ran past it: a long frame, and `over_ms` by how much.
+pub fn long(f: &FrameSample) -> bool {
+    f.over_ms > 0.0
 }

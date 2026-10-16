@@ -10,12 +10,13 @@ import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
-import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS } from "./profiler.spec.ts";
+import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS, WAKES } from "./profiler.spec.ts";
 import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
-import { GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
+import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
 import { fixed } from "@/shared/fixed.ts";
 
-const MB = 1048576;
+/** The one megabyte every figure in bytes is shown in. */
+export const MB = 1048576;
 
 type ListLane = "phases" | "gpu_spans" | "census" | "zoom_tiles";
 type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
@@ -60,9 +61,6 @@ export const GROUPS = Object.keys(FRAME_GROUPS).filter((g) => !g.startsWith("$")
 
 export const n1 = (n: number) => fixed(n ?? 0, 1);
 
-/** The frame's time outside the kernel's turn. */
-export const offthreadMs = (f: Frame) => Math.max(0, f.dt_ms - f.task_ms);
-
 const UNIT = /_(ms|mb|bytes|px)$/;
 
 /** A task phase's mean or total: bytes are counted, the rest are ms. */
@@ -78,7 +76,7 @@ export function zoomsText(bits: f64): string {
   return out.length > 0 ? out.join(",") : "-";
 }
 
-const NAME_TABLES: Record<string, readonly string[]> = { turn_step_name: EFFECT_NAMES };
+const NAME_TABLES: Record<string, readonly string[]> = { worst_effect_name: EFFECT_NAMES, kind_name: FRAME_KINDS, wake_name: WAKES };
 
 export function valueText(name: string, v: f64): string {
   if (name.endsWith("_name")) return NAME_TABLES[name]?.[v] ?? "-";

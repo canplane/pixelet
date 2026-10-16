@@ -229,17 +229,21 @@ impl<S: Serve> RequestScheduler<S> {
         self.credits
     }
 
-    pub fn counts(&self) -> (u32, u32) {
-        let out = self.attempt.iter().flatten().count() as u32;
-        let waiting = self.desired.iter().flatten().filter(|w| !self.attempting(w.stream, w.subject)).count() as u32;
+    /// Requests waiting for a credit and out on one, of the streams `of`
+    /// takes: the one rule every count a report shows is made by. For a
+    /// report only, never for deciding what to want.
+    fn counted(&self, of: impl Fn(Stream) -> bool) -> (u32, u32) {
+        let out = self.attempt.iter().flatten().filter(|a| of(a.stream)).count() as u32;
+        let waiting = self.desired.iter().flatten().filter(|w| of(w.stream) && !self.attempting(w.stream, w.subject)).count() as u32;
         (waiting, out)
     }
 
-    /// For a report only, never for deciding what to want.
-    pub fn pending_count(&self, stream: Stream) -> u32 {
-        let wanted = self.desired.iter().flatten().filter(|w| w.stream == stream).count();
-        let out = self.attempt.iter().flatten().filter(|a| a.stream == stream && self.find(a.stream, a.subject).is_none()).count();
-        (wanted + out) as u32
+    pub fn counts(&self) -> (u32, u32) {
+        self.counted(|_| true)
+    }
+
+    pub fn stream_counts(&self, stream: Stream) -> (u32, u32) {
+        self.counted(|s| s == stream)
     }
 
     fn placed(&self, w: &Wanted) -> Placed {
@@ -474,8 +478,8 @@ pub fn counts() -> (u32, u32) {
     sched().counts()
 }
 
-pub fn pending_count(stream: Stream) -> u32 {
-    sched().pending_count(stream)
+pub fn stream_counts(stream: Stream) -> (u32, u32) {
+    sched().stream_counts(stream)
 }
 
 pub fn pump() {

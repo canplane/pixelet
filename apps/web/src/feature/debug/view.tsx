@@ -27,5 +27,5 @@ export function ViewOverlay() {
   }, [show, open]);
 
   if (!show) return null;
-  return <Fold name="view" title="View">{g !== null && <ProfilerView v={g.view} q={g.quality} />}</Fold>;
+  return <Fold name="view" title="View">{g !== null && <ProfilerView v={g.view} />}</Fold>;
 }

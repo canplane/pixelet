@@ -112,7 +112,7 @@ fn an_answer_is_asked_once() {
     l.pump(0.0);
     assert!(started(&mut l).is_empty(), "an answered want was asked again");
     assert!(stopped(&mut l).is_empty());
-    assert_eq!(l.pending_count(Stream::terrain), 0);
+    assert_eq!(l.stream_counts(Stream::terrain), (0, 0));
     l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 1.0);
     l.pump(1.0);
     assert_eq!(started(&mut l).len(), 1);
@@ -288,6 +288,7 @@ fn an_asset_shares_the_credits_and_is_never_withdrawn() {
     l.declare(Stream::asset, &[(7, Ask::PLAIN)], 0.0);
     l.pump(0.0);
     assert_eq!(started(&mut l).len(), 1, "one credit, one read — an asset does not go beside the tiles");
-    assert_eq!(l.pending_count(Stream::asset), 1);
+    let (waiting, out) = l.stream_counts(Stream::asset);
+    assert_eq!(waiting + out, 1);
     assert_eq!(l.counts().0, 1, "and it is what is waiting");
 }

@@ -16,10 +16,13 @@ use crate::kernel;
 use crate::layer::earth::Earth;
 use crate::layer::residency::Residency;
 use crate::mem::section;
+use crate::profiler::record::profiler_record_turn;
+use crate::profiler::spec::Wake;
 use layout::DOOR_LAYOUT;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
+use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_guest::ipc::door::Door;
@@ -188,24 +191,31 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
     if core::mem::take(&mut s.profiler_taken) {
         crate::profiler::log::profiler_log_clear();
     }
+    let rise = now();
     crate::io::host::host_rise();
     crate::sched::edge::world_edge().rise(quota_ms);
     door().drain(|number, pkt| apply::apply(s, number, pkt));
+    let drained = now();
     if quota_ms > 0.0 || world_frame_waiting() {
         xpute_guest::sched::task::poll();
     }
+    let polled = now();
     if take_world_drawn() {
         post_shell(s);
     }
     pxl_render::gpu::api::gpu_publish();
     crate::io::host::host_fall();
-    let wake = crate::sched::edge::world_fall();
+    let fall = crate::sched::edge::world_fall();
     // What the completion ring had no room for is still in the submission ring.
-    if door().pending() {
-        0.0
-    } else {
-        wake
-    }
+    let wake = if door().pending() { 0.0 } else { fall };
+    let asked = match wake {
+        0.0 => Wake::next,
+        w if w < 0.0 => Wake::none,
+        _ => Wake::timer,
+    };
+    let fell = now();
+    profiler_record_turn(fell - rise, drained - rise, polled - drained, f64::from(asked as u8), wake.max(0.0));
+    wake
 }
 
 /// Grows to the largest snapshot and stays, so a settled turn allocates nothing.

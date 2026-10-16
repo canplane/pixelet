@@ -11,11 +11,11 @@ use crate::io::request::{counts, credits};
 use crate::layer::Base as _;
 use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
-use crate::profiler::block::{FetchBlock, FramesBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::profiler::block::{FetchBlock, FramesBlock, OpenBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::profiler::frame::FrameSample;
-use crate::profiler::frame::{missed, overran};
+use crate::profiler::frame::{long, missed, overran};
 use crate::profiler::log::window_baseline;
-use crate::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
+use crate::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_open_interval, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
 use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
@@ -86,6 +86,8 @@ pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
     );
 
     put(out, SUMMARY::frames::AT, &frames(scratch, profiler_frames_since(since)));
+    let open = profiler_open_interval().map_or(OpenBlock::default(), |f| OpenBlock { turns: f.turns, busy_ms: f.busy_ms });
+    put(out, SUMMARY::open::AT, &open);
     put(out, SUMMARY::tasks::AT, &tasks(scratch, profiler_tasks_since(since)));
     put(out, SUMMARY::peak::AT, &profiler_frame_peak());
     side(out);
@@ -101,23 +103,28 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
     let moving = || frames.iter().filter(|f| f.settled == 0.0);
     let n = frames.len() as f64;
 
+    let count = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
     FramesBlock {
         present: 1.0,
         n,
         seconds,
         moving: moving().count() as f64,
         missed: moving().filter(|f| missed(f)).count() as f64,
-        overran: frames.iter().filter(|f| overran(f)).count() as f64,
-        dt: spread(scratch, moving().map(|f| f.dt_ms)),
-        task: spread(scratch, frames.iter().map(|f| f.task_ms)),
-        offthread: spread(scratch, frames.iter().map(|f| (f.dt_ms - f.task_ms).max(0.0))),
+        overran: count(&overran),
+        long: count(&long),
+        turns: sum(&|f| f.turns),
+        interval: spread(scratch, moving().map(|f| f.interval_ms)),
+        busy: spread(scratch, frames.iter().map(|f| f.busy_ms)),
+        off_turn: spread(scratch, frames.iter().map(|f| f.off_turn_ms)),
+        tick: spread(scratch, frames.iter().map(|f| f.tick_ms)),
+        tasks: spread(scratch, frames.iter().map(|f| f.tasks_ms)),
         gpu: spread(scratch, frames.iter().map(|f| f.gpu.ms)),
-        sched: spread(scratch, frames.iter().map(|f| f.sched_ms)),
-        chunks: spread(scratch, frames.iter().map(|f| f.chunks_ms)),
         phases: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k]))),
         // A span the frame did not run reads 0 and is left out.
         gpu_spans: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0))),
-        used_delta_mb: last.heap.used_mb - first.heap.used_mb,
+        kinds: core::array::from_fn(|k| count(&|f| f.kind == k as f64)),
+        wakes: core::array::from_fn(|k| count(&|f| f.wake == k as f64)),
+        heap_peak_delta_bytes: last.heap.peak_bytes - first.heap.peak_bytes,
         census: core::array::from_fn(|k| [sum(&|f| f.gpu.census[k][0]) / n, sum(&|f| f.gpu.census[k][1]) / n]),
         last: *last,
     }
@@ -204,15 +211,12 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let [step, star] = [0usize, 0usize];
     let residency = TerrainTile::residency();
     let [admitted, evicted] = residency.churn();
     put(
         out,
         SUMMARY::quality::AT,
         &QualityBlock {
-            step: step as f64,
-            star: star as f64,
             frames_held: residency.frames_used() as f64,
             admitted: admitted as f64,
             evicted: evicted as f64,

@@ -14,7 +14,6 @@ use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
-use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
 use crate::mem::MB;
@@ -29,7 +28,7 @@ use crate::io::load::load_image;
 use crate::io::text::text_raster;
 use crate::kernel;
 use crate::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
-use crate::profiler::report::set_host_frame_stat;
+use crate::profiler::report::set_host_frame;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
 use crate::scene::environment::cloud::cloud_groups;
@@ -162,11 +161,15 @@ pub fn stage_render() {
     if out.redraw {
         request_world_tick();
     }
-    let Some(stat) = out.stat else { return };
+    let Some(stat) = out.stat else {
+        set_host_frame(out.kind, GpuSample::default(), DeviceSample::default());
+        return;
+    };
     SCREEN.set(Screen::Drawn);
     resolution_observe(stat.gpu_ms);
     let census: DrawCensus = CENSUS_PIPELINES.map(|p| stat.census[p as usize]);
-    set_host_frame_stat(
+    set_host_frame(
+        out.kind,
         GpuSample {
             ms: stat.gpu_ms,
             spans: stat.gpu_spans,
@@ -174,7 +177,6 @@ pub fn stage_render() {
             triangles: stat.triangles,
             census,
             px: stat.px,
-            skipped: stat.skipped,
         },
         DeviceSample {
             buffers: stat.buffers,
@@ -186,14 +188,13 @@ pub fn stage_render() {
 }
 
 struct Pass {
-    visible_pass: Option<f64>,
     draw: bool,
 }
 
 static PASS: Global<Pass> = Global::new();
 
 fn pass() -> &'static mut Pass {
-    PASS.get(|| Pass { visible_pass: None, draw: false })
+    PASS.get(|| Pass { draw: false })
 }
 
 pub fn take_draw() -> bool {
@@ -202,7 +203,6 @@ pub fn take_draw() -> bool {
 
 pub fn visible_step(ctx: &mut TickContext) {
     let c = pass();
-    c.visible_pass = None;
     view_resize(ctx.state.width, ctx.state.height);
     let v = view();
 
@@ -217,7 +217,6 @@ pub fn visible_step(ctx: &mut TickContext) {
         globe: Some(globe()),
     };
 
-    let t0 = now();
     let draw = laid().is_some_and(|k| {
         let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
         k.scene.begin(&mut k.draw, &k.models, frame.eye);
@@ -236,10 +235,4 @@ pub fn visible_step(ctx: &mut TickContext) {
         c.draw = true;
         ctx.invalidate();
     }
-    c.visible_pass = Some(now() - t0);
-}
-
-/// How long this turn's chunks took; none where the stage was empty.
-pub fn visible_pass() -> Option<f64> {
-    pass().visible_pass
 }

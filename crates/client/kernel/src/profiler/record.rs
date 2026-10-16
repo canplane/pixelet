@@ -122,8 +122,12 @@ struct Profiler {
     worst: &'static mut [WorstFrame],
     worst_len: usize,
     rings: RingSample,
-    /// The frame whose task and the gap after it are not known yet.
+    /// The interval in progress: the last frame turn's record, which every
+    /// turn after it adds its time to until the next frame turn closes it.
     open: Option<FrameSample>,
+    /// This turn's frame task's time, which the turn's end takes out of the
+    /// time its tasks ran.
+    frame_task_ms: f64,
 }
 
 static PROFILER: Global<Profiler> = Global::new();
@@ -146,6 +150,7 @@ fn profiler() -> &'static mut Profiler {
         worst_len: 0,
         rings: RingSample::default(),
         open: None,
+        frame_task_ms: 0.0,
     })
 }
 
@@ -223,20 +228,43 @@ pub fn profiler_take_rings() -> RingSample {
     core::mem::take(&mut profiler().rings)
 }
 
-/// Lands the open frame with the gap that ended at `s`, which its turn made,
-/// and opens `s`.
-pub fn profiler_record_frame(s: FrameSample) {
+/// A frame turn, `s` its record: closes the interval in progress with
+/// `interval_ms`, the host's gap that just ended, lands it, and opens `s`'s.
+/// `frame_task_ms` is how long the frame task ran, the turn's end's to take
+/// out of the tasks' time.
+pub fn profiler_record_frame(s: FrameSample, interval_ms: f64, frame_task_ms: f64) {
     let l = profiler();
     if !l.recording {
         return;
     }
+    l.frame_task_ms = frame_task_ms;
     let Some(mut f) = l.open.replace(s) else { return };
-    (f.dt_ms, f.settled) = (s.dt_ms, s.settled);
-    let s = f;
+    f.interval_ms = interval_ms;
+    f.settled = s.settled;
+    // One of the two is 0: a turn past its interval is a long frame, and that is its figure.
+    (f.off_turn_ms, f.over_ms) = ((interval_ms - f.busy_ms).max(0.0), (f.busy_ms - interval_ms).max(0.0));
+    land(l, f);
+}
+
+/// A turn's end, frame turn or not: its time into the interval in progress,
+/// rise to fall, its door's and its tasks' parts, and what it asked as it fell.
+pub fn profiler_record_turn(turn_ms: f64, door_ms: f64, poll_ms: f64, wake: f64, wake_in_ms: f64) {
+    let l = profiler();
+    let frame_task_ms = core::mem::take(&mut l.frame_task_ms);
+    let Some(f) = l.open.as_mut().filter(|_| l.recording) else { return };
+    f.turns += 1.0;
+    f.busy_ms += turn_ms;
+    f.door_ms += door_ms;
+    // The frame task runs inside the poll, so this is never negative.
+    f.tasks_ms += poll_ms - frame_task_ms;
+    (f.wake, f.wake_in_ms) = (wake, wake_in_ms);
+}
+
+fn land(l: &mut Profiler, s: FrameSample) {
     if l.worst.is_empty() {
         l.worst = fixed_lane(Lane::Worst, WORST_CAP);
     }
-    let at = l.worst[..l.worst_len].partition_point(|w| w.sample.dt_ms >= s.dt_ms);
+    let at = l.worst[..l.worst_len].partition_point(|w| w.sample.interval_ms >= s.interval_ms);
     if at < l.worst.len() {
         let prev = l.frame_ring[..l.frame_len].last().copied();
         let kept = l.worst_len.min(l.worst.len() - 1);
@@ -251,14 +279,14 @@ pub fn profiler_record_frame(s: FrameSample) {
 
     let p = &mut l.frame_peak;
     p.present = 1.0;
-    p.dt_ms = p.dt_ms.max(s.dt_ms);
-    p.sched_ms = p.sched_ms.max(s.sched_ms);
-    p.chunks_ms = p.chunks_ms.max(s.chunks_ms);
+    p.interval_ms = p.interval_ms.max(s.interval_ms);
+    p.busy_ms = p.busy_ms.max(s.busy_ms);
+    p.tick_ms = p.tick_ms.max(s.tick_ms);
     p.gpu_ms = p.gpu_ms.max(s.gpu.ms);
     p.draw_calls = p.draw_calls.max(s.gpu.draw_calls);
     p.triangles = p.triangles.max(s.gpu.triangles);
-    p.q_terrain = p.q_terrain.max(s.q_terrain);
-    p.q_place = p.q_place.max(s.q_place);
+    p.waiting_terrain = p.waiting_terrain.max(s.waiting_terrain);
+    p.waiting_place = p.waiting_place.max(s.waiting_place);
 
     if let Some(frame) = l.sink.frame {
         frame(&s);
@@ -273,14 +301,10 @@ pub fn profiler_record_frame(s: FrameSample) {
     }
 }
 
-/// The open frame, so `task_ms`, known only after the turn, lands in it.
-/// None once recording stopped.
-pub fn profiler_open_frame() -> Option<&'static mut FrameSample> {
+/// The interval in progress, which no frame turn has closed yet.
+pub fn profiler_open_interval() -> Option<&'static FrameSample> {
     let l = profiler();
-    if !l.recording {
-        return None;
-    }
-    l.open.as_mut()
+    l.open.as_ref().filter(|_| l.recording)
 }
 
 fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {

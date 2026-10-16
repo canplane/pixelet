@@ -27,7 +27,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use crate::decor::assets::decor_assets_wanted;
 use crate::kernel;
 use crate::layer::earth::Earth;
-use crate::profiler::report::{report_step, set_host_task_ms, set_turn_timing};
+use crate::profiler::report::{profiler_frame, FrameTurn};
 use crate::scene::character::companion::{companion_step, CompanionProps};
 use crate::scene::environment::environment_step;
 use crate::scene::indicator::frame_gizmo::frame_gizmo_step;
@@ -140,7 +140,6 @@ pub fn boot() {
     on_tick(Phase::visible, demand_tick, StepName::demand as u32);
     on_tick(Phase::visible, visible_step, StepName::scene as u32);
     on_tick(Phase::cosmetic, world_gizmo_tick, StepName::world_gizmo as u32);
-    on_tick(Phase::report, report_step, StepName::profiler as u32);
     world_tasks();
 }
 
@@ -328,8 +327,15 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     crate::scene::stage::stage_write();
     crate::scene::stage::stage_render();
     let done = now();
-    set_turn_timing(effects_ms, done - after_tick);
-    set_host_task_ms(done - t0);
+    profiler_frame(FrameTurn {
+        tick: report,
+        interval_ms: delta * 1000.0,
+        display_ms: frame_ms,
+        settled: !interactive,
+        effects_ms,
+        stage_ms: done - after_tick,
+        task_ms: done - t0,
+    });
     if report.invalidated || take_draw() {
         request_world_tick();
     }

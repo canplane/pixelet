@@ -13,8 +13,7 @@
     "preview",
     "demand",
     "scene",
-    "world_gizmo",
-    "profiler"
+    "world_gizmo"
   ],
   "EFFECT_NAMES": [
     "navigation",

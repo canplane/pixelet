@@ -12,7 +12,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { saveFile } from "@platform/save.ts";
 
-import { type Frame, isList, LANES, LIST_NAMES, offthreadMs } from "./lane.ts";
+import { type Frame, isList, LANES, LIST_NAMES } from "./lane.ts";
 import { failText } from "./report.ts";
 import { profilerRingsRead } from "./view.ts";
 import { longFramesSince } from "./long-frame.ts";
@@ -58,7 +58,6 @@ function frameArgs(f: Frame): Args {
     else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed_n(v, 2)));
   }
   // Vsync wait, compositor, GPU, GC, the shell's glue.
-  args.offthread_ms = fixed_n(offthreadMs(f), 2);
   return args;
 }
 
@@ -97,7 +96,8 @@ function profilerTraceJson(): string {
     for (const f of frames) {
       const ts = us(f.t);
       events.push(event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)));
-      events.push(event("sched pass", "frame", "X", ts - us(f.sched_ms), us(f.sched_ms), TID_FRAMES));
+      // The record is taken as the stage ends, and the tick ran just before it.
+      events.push(event("tick", "frame", "X", ts - us(f.stage_ms + f.tick_ms), us(f.tick_ms), TID_FRAMES));
     }
   }
 
@@ -109,8 +109,10 @@ function profilerTraceJson(): string {
       const f = w.sample;
       const args = frameArgs(f);
       args.d_buffers = w.prev === null ? null : f.buffers - w.prev.buffers;
-      args.d_heap_used_mb = w.prev === null ? null : f.heap_used_mb - w.prev.heap_used_mb;
-      events.push(event(`stall ${fixed(f.dt_ms, 0)}ms`, "worst", "X", us(f.t - f.dt_ms), us(f.dt_ms), TID_WORST, args));
+      args.d_heap_peak_bytes = w.prev === null ? null : f.heap_peak_bytes - w.prev.heap_peak_bytes;
+      // From where the frame turn began, over the interval it opened.
+      const began = f.t - (f.effects_ms + f.tick_ms + f.stage_ms);
+      events.push(event(`interval ${fixed(f.interval_ms, 0)}ms`, "worst", "X", us(began), us(f.interval_ms), TID_WORST, args));
     }
   }
 

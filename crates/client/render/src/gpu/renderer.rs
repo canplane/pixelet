@@ -4,7 +4,7 @@
 //! Depth is reversed f32 throughout, near 1 and far 0: float precision and
 //! perspective depth cancel, so far coplanar faces stop fighting.
 
-use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
+use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::abi::handle::handle_slot;
@@ -204,6 +204,9 @@ pub type TerrainWrite<'a> = dyn FnMut(Square<'_>) -> bool + 'a;
 pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
 pub struct FrameOutput {
+    /// What the frame turn made: decided where each case is (no device or
+    /// surface, not admitted, dropped from the stream, and the cast's kind).
+    pub kind: FrameKind,
     /// A surface waits on a size to settle, so another turn is wanted.
     pub redraw: bool,
     pub stat: Option<FrameStat>,
@@ -221,8 +224,6 @@ pub struct FrameStat {
     pub px: f64,
     pub census: [[f64; 2]; PIPELINES as usize],
     pub gpu_spans: [f64; GPU_SPAN_NAMES.len()],
-    /// 1 where the frame did not fit the GPU stream and was not drawn.
-    pub skipped: f64,
 }
 
 pub fn put_f32(buf: &mut [u8], at: usize, v: f32) {
@@ -718,6 +719,10 @@ struct ScreenCellsPass {
     generation: u32,
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
+    /// What this frame does with the cast, as `prepare` decided it: nothing
+    /// cast (`plain`), the ray lane standing (`standing`), or a cast run
+    /// (`cast`). `dispatch` and the frame's report read it.
+    kind: FrameKind,
 }
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
@@ -778,7 +783,6 @@ struct CastBuffers {
     /// the same: the lane and the decor grown over it stand, and nothing is
     /// cast.
     read: CastRead,
-    standing: bool,
 }
 
 /// The cast's whole input as the last cast read it, byte for byte: the lane
@@ -867,6 +871,7 @@ impl ScreenCellsPass {
             generation: 0,
             ground: None,
             cast: None,
+            kind: FrameKind::plain,
         };
         p.fit(g, SCREEN_CELLS_MAX);
         p
@@ -980,6 +985,7 @@ impl ScreenCellsPass {
         // decor grown. What the cast reads stands for the next: the ground
         // it binds is made once.
         let (Some(cast), Some(ground)) = (cast, self.ground.as_ref().map(|gb| gb.ground)) else {
+            self.kind = FrameKind::plain;
             if let Some(c) = self.cast.as_mut() {
                 c.across = [0; 2];
                 c.grown.off();
@@ -1009,7 +1015,6 @@ impl ScreenCellsPass {
                 overwrite_revision: None,
                 grown: Grown::new(g, pipelines),
                 read: CastRead::default(),
-                standing: false,
             };
             self.cast = Some(c);
         }
@@ -1044,10 +1049,11 @@ impl ScreenCellsPass {
         r.read(meshes);
         // And the ground's squares, written this frame or not.
         let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
-        c.standing = r.end() && fresh == 0 && c.group != 0;
-        if c.standing {
+        if r.end() && fresh == 0 && c.group != 0 {
+            self.kind = FrameKind::standing;
             return;
         }
+        self.kind = FrameKind::cast;
         xpute_kit::ensure!(cast.window.len() <= c.window_words, ENOTRECOVERABLE, cast.window.len());
         g.write_buffer(c.window, 0, bytes(cast.window));
         g.write_buffer(c.eye, 0, bytes(&cast.eye));
@@ -1185,7 +1191,7 @@ impl ScreenCellsPass {
     /// The GPU's cast into the lane, a ray a cell, where it runs; then the
     /// decor the ground grows over the same world, a candidate a thread.
     fn dispatch(&self, g: &Gpu, encoder: u32) {
-        let Some(c) = self.cast.as_ref().filter(|c| !c.standing) else { return };
+        let Some(c) = self.cast.as_ref().filter(|_| self.kind == FrameKind::cast) else { return };
         let pass = g.compute_pass(encoder);
         g.set_pipeline(pass, c.built.pipeline);
         g.set_bind_group(pass, 0, c.group, &[]);
@@ -1479,7 +1485,7 @@ impl Renderer {
         bound
     }
 
-    fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> FrameStat {
+    fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> (FrameKind, FrameStat) {
         self.decor.set_models(input.decor);
         self.impostor.set_models(input.decor);
         for &(model, image) in input.skins {
@@ -1588,9 +1594,10 @@ impl Renderer {
                 c.read.forget();
             }
         }
-        let stat = self.stat(draws.records, world, skipped, (gpu_ms, gpu_spans));
+        let kind = if skipped { FrameKind::dropped } else { self.screen.kind };
+        let stat = self.stat(draws.records, world, (gpu_ms, gpu_spans));
         self.order = order;
-        stat
+        (kind, stat)
     }
 
     /// The cases drawn this frame: a surface still a case, and its actor's draw.
@@ -1654,7 +1661,7 @@ impl Renderer {
 
     /// What the scheduler asked for: a draw passed over because its block, skin or
     /// sprite is not on the device yet is still counted.
-    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, skipped: bool, (gpu_ms, gpu_spans): (f64, [f64; GPU_SPAN_NAMES.len()])) -> FrameStat {
+    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, (gpu_ms, gpu_spans): (f64, [f64; GPU_SPAN_NAMES.len()])) -> FrameStat {
         let b = blocks();
         let mut triangles = 0u32;
         let mut census = [[0.0; 2]; PIPELINES as usize];
@@ -1690,7 +1697,6 @@ impl Renderer {
             px,
             census,
             gpu_spans,
-            skipped: f64::from(u8::from(skipped)),
         }
     }
 }
@@ -1737,18 +1743,27 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     let world = surfaces().find(|s| s.role == surface_role::WORLD);
     let (Some(g), Some(device), Some(world)) = (gpu(), device(), world) else {
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
-        return FrameOutput { redraw: false, stat: None };
+        return FrameOutput {
+            kind: FrameKind::unready,
+            redraw: false,
+            stat: None,
+        };
     };
     // The surfaces would block: skip rather than wait.
     if !(input.admit)() {
         take_lists(Some(g), input.lists);
-        return FrameOutput { redraw: true, stat: None };
+        return FrameOutput {
+            kind: FrameKind::held,
+            redraw: true,
+            stat: None,
+        };
     }
     let slot = RENDERER.get(|| None);
     let r = slot.get_or_insert_with(|| Renderer::new(g, device));
     blocks().restore(g);
-    let stat = r.frame(g, world, input);
+    let (kind, stat) = r.frame(g, world, input);
     FrameOutput {
+        kind,
         redraw: *REDRAW.get(|| false),
         stat: Some(stat),
     }

@@ -14,7 +14,7 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
-pub const STEP_NAMES: &[&str] = &["controller", "input", "camera", "environment", "companion", "preview", "demand", "scene", "world_gizmo", "profiler"];
+pub const STEP_NAMES: &[&str] = &["controller", "input", "camera", "environment", "companion", "preview", "demand", "scene", "world_gizmo"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
@@ -27,12 +27,11 @@ pub enum StepName {
     demand = 6,
     scene = 7,
     world_gizmo = 8,
-    profiler = 9,
 }
 
 impl StepName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [StepName; 10] = [
+    pub const ALL: [StepName; 9] = [
         StepName::controller,
         StepName::input,
         StepName::camera,
@@ -42,7 +41,6 @@ impl StepName {
         StepName::demand,
         StepName::scene,
         StepName::world_gizmo,
-        StepName::profiler,
     ];
 
     /// The member a number names, or none for a number the set does not
