@@ -24,7 +24,7 @@ use crate::enums::{
     MIPMAP_FILTER_MODE, PRIMITIVE_TOPOLOGY, QUERY_TYPE, SAMPLER_BINDING_TYPE, STENCIL_OPERATION, STORAGE_TEXTURE_ACCESS, STORE_OP, TEXTURE_ASPECT, TEXTURE_DIMENSION, TEXTURE_FORMAT,
     TEXTURE_SAMPLE_TYPE, TEXTURE_VIEW_DIMENSION, VERTEX_FORMAT, VERTEX_STEP_MODE,
 };
-use crate::spec::{op, DONE, NONE, STATUS, SURFACE_PREFERRED};
+use crate::spec::{op, BUFFER_USAGE, COLOR_WRITE, DONE, NONE, SHADER_STAGE, STATUS, SURFACE_PREFERRED, TEXTURE_USAGE};
 
 enum Object {
     Buffer(wgpu::Buffer),
@@ -129,6 +129,53 @@ impl Names {
         out.extend(none(STORAGE_TEXTURE_ACCESS, &self.storage_access));
         out
     }
+}
+
+/// Each flag set's members as wgpu's flags of the same name: a guest's word
+/// is the union of the flags of the members whose bits it sets, whatever bits
+/// wgpu gives them (its trunk splits them over two words).
+const BUFFER_USAGES: [(u32, wgpu::BufferUsages); 10] = [
+    (BUFFER_USAGE::MAP_READ, wgpu::BufferUsages::MAP_READ),
+    (BUFFER_USAGE::MAP_WRITE, wgpu::BufferUsages::MAP_WRITE),
+    (BUFFER_USAGE::COPY_SRC, wgpu::BufferUsages::COPY_SRC),
+    (BUFFER_USAGE::COPY_DST, wgpu::BufferUsages::COPY_DST),
+    (BUFFER_USAGE::INDEX, wgpu::BufferUsages::INDEX),
+    (BUFFER_USAGE::VERTEX, wgpu::BufferUsages::VERTEX),
+    (BUFFER_USAGE::UNIFORM, wgpu::BufferUsages::UNIFORM),
+    (BUFFER_USAGE::STORAGE, wgpu::BufferUsages::STORAGE),
+    (BUFFER_USAGE::INDIRECT, wgpu::BufferUsages::INDIRECT),
+    (BUFFER_USAGE::QUERY_RESOLVE, wgpu::BufferUsages::QUERY_RESOLVE),
+];
+const TEXTURE_USAGES: [(u32, wgpu::TextureUsages); 5] = [
+    (TEXTURE_USAGE::COPY_SRC, wgpu::TextureUsages::COPY_SRC),
+    (TEXTURE_USAGE::COPY_DST, wgpu::TextureUsages::COPY_DST),
+    (TEXTURE_USAGE::TEXTURE_BINDING, wgpu::TextureUsages::TEXTURE_BINDING),
+    (TEXTURE_USAGE::STORAGE_BINDING, wgpu::TextureUsages::STORAGE_BINDING),
+    (TEXTURE_USAGE::RENDER_ATTACHMENT, wgpu::TextureUsages::RENDER_ATTACHMENT),
+];
+const SHADER_STAGES: [(u32, wgpu::ShaderStages); 3] = [
+    (SHADER_STAGE::VERTEX, wgpu::ShaderStages::VERTEX),
+    (SHADER_STAGE::FRAGMENT, wgpu::ShaderStages::FRAGMENT),
+    (SHADER_STAGE::COMPUTE, wgpu::ShaderStages::COMPUTE),
+];
+const COLOR_WRITES: [(u32, wgpu::ColorWrites); 5] = [
+    (COLOR_WRITE::RED, wgpu::ColorWrites::RED),
+    (COLOR_WRITE::GREEN, wgpu::ColorWrites::GREEN),
+    (COLOR_WRITE::BLUE, wgpu::ColorWrites::BLUE),
+    (COLOR_WRITE::ALPHA, wgpu::ColorWrites::ALPHA),
+    (COLOR_WRITE::ALL, wgpu::ColorWrites::ALL),
+];
+// A member the spec gains is one these name, or the build stops here.
+const _: () = assert!(
+    BUFFER_USAGES.len() == BUFFER_USAGE::KEYS.len()
+        && TEXTURE_USAGES.len() == TEXTURE_USAGE::KEYS.len()
+        && SHADER_STAGES.len() == SHADER_STAGE::KEYS.len()
+        && COLOR_WRITES.len() == COLOR_WRITE::KEYS.len()
+);
+
+/// The flags of `of`'s members whose bits `word` sets.
+fn flags<F: Copy + core::ops::BitOr<Output = F>>(of: &[(u32, F)], none: F, word: u32) -> F {
+    of.iter().filter(|(bit, _)| word & bit == *bit).fold(none, |all, (_, f)| all | *f)
 }
 
 /// `n` of `of`, a member the guest named; a name wgpu gives no value of is
@@ -726,7 +773,7 @@ impl GpuHost {
                 let b = self.device.create_buffer(&wgpu::BufferDescriptor {
                     label: None,
                     size,
-                    usage: wgpu::BufferUsages::from_bits_truncate(usage),
+                    usage: flags(&BUFFER_USAGES, wgpu::BufferUsages::empty(), usage),
                     mapped_at_creation: mapped,
                 });
                 self.put(id, Object::Buffer(b));
@@ -737,7 +784,7 @@ impl GpuHost {
                 let (mip_level_count, sample_count) = (r.u(), r.u());
                 let dimension = of(&self.names.dimension, r.u(), "dimension");
                 let format = of(&self.names.texture_format, r.u(), "format");
-                let usage = wgpu::TextureUsages::from_bits_truncate(r.u());
+                let usage = flags(&TEXTURE_USAGES, wgpu::TextureUsages::empty(), r.u());
                 let view_formats: Vec<wgpu::TextureFormat> = (0..r.u()).map(|_| of(&self.names.texture_format, r.u(), "format")).collect();
                 let t = self.device.create_texture(&wgpu::TextureDescriptor {
                     label: None,
@@ -758,16 +805,16 @@ impl GpuHost {
                 let dimension = r.opt().map(|v| of(&self.names.view_dimension, v, "view dimension"));
                 let aspect = of(&self.names.aspect, r.u(), "aspect");
                 let (base_mip_level, mip_level_count, base_array_layer, array_layer_count) = (r.u(), r.opt(), r.u(), r.opt());
+                // The rest as WebGPU defaults them, whatever fields wgpu adds.
                 let v = texture.create_view(&wgpu::TextureViewDescriptor {
-                    label: None,
                     format,
                     dimension,
-                    usage: None,
                     aspect,
                     base_mip_level,
                     mip_level_count,
                     base_array_layer,
                     array_layer_count,
+                    ..Default::default()
                 });
                 self.put(id, Object::View(v, format.unwrap_or(texture.format())));
             }
@@ -841,7 +888,7 @@ impl GpuHost {
                         };
                         wgpu::BindGroupLayoutEntry {
                             binding,
-                            visibility: wgpu::ShaderStages::from_bits_truncate(visibility),
+                            visibility: flags(&SHADER_STAGES, wgpu::ShaderStages::empty(), visibility),
                             ty,
                             count: None,
                         }
@@ -1157,7 +1204,7 @@ impl GpuHost {
                 self.pending.push(Pending { state, word, ticket, read: None });
             }
             op::CONFIGURE => {
-                let (surface, format, usage, alpha) = (r.u(), r.u(), wgpu::TextureUsages::from_bits_truncate(r.u()), r.u());
+                let (surface, format, usage, alpha) = (r.u(), r.u(), flags(&TEXTURE_USAGES, wgpu::TextureUsages::empty(), r.u()), r.u());
                 let format = if format == SURFACE_PREFERRED {
                     self.preferred
                 } else {
@@ -1284,7 +1331,7 @@ impl GpuHost {
                 Some(wgpu::ColorTargetState {
                     format,
                     blend,
-                    write_mask: wgpu::ColorWrites::from_bits_truncate(r.u()),
+                    write_mask: flags(&COLOR_WRITES, wgpu::ColorWrites::empty(), r.u()),
                 })
             })
             .collect();
