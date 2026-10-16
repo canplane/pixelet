@@ -8,17 +8,18 @@ use crate::abi::handle::Slots;
 use crate::ipc::sys::spec::flag;
 use crate::ipc::sys::{Fd, Sys};
 
-pub struct Files<O> {
-    held: Slots<O>,
+/// At most `N - 1` open at once (`Slots`).
+pub struct Files<O, const N: usize> {
+    held: Slots<O, N>,
 }
 
-impl<O> Default for Files<O> {
+impl<O, const N: usize> Default for Files<O, N> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<O> Files<O> {
+impl<O, const N: usize> Files<O, N> {
     pub const fn new() -> Self {
         Files { held: Slots::new() }
     }

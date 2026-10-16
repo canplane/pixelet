@@ -54,7 +54,7 @@ struct Guest {
 struct State {
     stream: Stream,
     sys: Sys,
-    files: Files<u32>,
+    files: Files<u32, { spec::HANDLES as usize }>,
     handles: HandleTable<{ spec::HANDLES as usize }>,
     now: Now,
     /// The clock at the last MARK.

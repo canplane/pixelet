@@ -15,6 +15,7 @@ use crate::io::host::{answered, heap_stat, sys, turn};
 use crate::io::load::LOADS;
 use crate::io::request::Credit;
 use crate::mem::spec::MIN_HEAP_BYTES;
+use crate::param::MAX_CREDITS;
 use crate::sched::edge::request_world_tick;
 use pxl_spec::bake::source::VERSION_BYTES;
 use xpute_guest::global::Global;
@@ -63,9 +64,13 @@ pub enum Owner {
     Write,
 }
 
-static FILES: Global<Files<Owner>> = Global::new();
+/// The most files open at once, and slot 0: a credit's each (`open` takes
+/// one), each kept file's read, and a write, opened and closed in one call.
+const OPEN: usize = MAX_CREDITS as usize + Kept::ALL.len() + 2;
 
-fn files() -> &'static mut Files<Owner> {
+static FILES: Global<Files<Owner, OPEN>> = Global::new();
+
+fn files() -> &'static mut Files<Owner, OPEN> {
     FILES.get(Files::new)
 }
 

@@ -41,13 +41,12 @@ pub struct Actor {
 
 #[derive(Default)]
 pub struct Actors {
-    actors: Slots<Actor>,
+    actors: Slots<Actor, { ACTORS_MAX + 1 }>,
     from: Vec<[f32; 10]>,
 }
 
 impl Actors {
     pub fn new_actor(&mut self, draw: &mut DrawList, models: &Models, model: u32) -> Option<u32> {
-        xpute_kit::ensure!(self.actors.iter().count() < ACTORS_MAX, ENOTRECOVERABLE);
         let joints = models.get(model)?.joints();
         let palette_bytes = word_bytes(joints.max(1) * 16);
         let (palette_at, palette_bytes) = alloc(palette_bytes)?;

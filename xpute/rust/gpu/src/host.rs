@@ -206,6 +206,13 @@ impl<'w> Words<'w> {
     fn flag(&mut self) -> bool {
         self.u() != 0
     }
+    /// A count, then that many words, read where they lie.
+    fn list(&mut self) -> &'w [u32] {
+        let n = self.u() as usize;
+        let words = &self.w[self.at..self.at + n];
+        self.at += n;
+        words
+    }
     /// None where the guest left it unset.
     fn opt(&mut self) -> Option<u32> {
         Some(self.u()).filter(|&v| v != NONE)
@@ -357,6 +364,8 @@ pub struct GpuHost {
     /// A record's words, copied out of the guest's memory so the record may
     /// write into it.
     scratch: Vec<u32>,
+    /// A submit's command buffers, gathered in place each time.
+    finished: Vec<wgpu::CommandBuffer>,
     /// Every buffer write goes through the belt, whose chunks are mapped once
     /// and reused, into `uploads`, which goes ahead of whatever is submitted
     /// next: `Queue::write_buffer` makes a Metal buffer and mapping a write.
@@ -399,6 +408,7 @@ impl GpuHost {
             decoder: Decoder::new(),
             decoding: std::collections::VecDeque::new(),
             scratch: Vec::new(),
+            finished: Vec::new(),
             uploads: None,
         }
     }
@@ -621,7 +631,7 @@ impl GpuHost {
         }
         // The turn's writes reach the queue with it, as the web's writeBuffer does.
         if self.uploads.is_some() {
-            self.submit(Vec::new());
+            self.submit(core::iter::empty());
         }
     }
 
@@ -635,7 +645,7 @@ impl GpuHost {
     }
 
     /// `then` submitted after the writes made since the last submit.
-    fn submit(&mut self, then: Vec<wgpu::CommandBuffer>) {
+    fn submit(&mut self, then: impl IntoIterator<Item = wgpu::CommandBuffer>) {
         let uploads = self.uploads.take().map(|e| {
             self.belt.finish();
             e.finish()
@@ -1088,15 +1098,14 @@ impl GpuHost {
                 }
             }
             op::SET_BIND_GROUP => {
-                let (pass, index, group) = (r.u(), r.u(), r.u());
-                let offsets: Vec<u32> = (0..r.u()).map(|_| r.u()).collect();
+                let (pass, index, group, offsets) = (r.u(), r.u(), r.u(), r.list());
                 let group = match self.get(group) {
                     Object::BindGroup(g) => g.clone(),
                     _ => panic!("[gpu] {group} is no bind group"),
                 };
                 match self.get_mut(pass) {
-                    Object::RenderPass(p) => p.set_bind_group(index, &group, &offsets),
-                    Object::ComputePass(p) => p.set_bind_group(index, &group, &offsets),
+                    Object::RenderPass(p) => p.set_bind_group(index, &group, offsets),
+                    Object::ComputePass(p) => p.set_bind_group(index, &group, offsets),
                     _ => panic!("[gpu] {pass} is no pass"),
                 }
             }
@@ -1165,15 +1174,13 @@ impl GpuHost {
                 drop(self.take(id));
             }
             op::SUBMIT => {
-                let ids: Vec<u32> = (0..r.u()).map(|_| r.u()).collect();
-                let finished: Vec<wgpu::CommandBuffer> = ids
-                    .iter()
-                    .filter_map(|&id| match self.take(id) {
-                        Some(Object::Encoder(e)) => Some(e.finish()),
-                        _ => None,
-                    })
-                    .collect();
-                self.submit(finished);
+                let mut finished = core::mem::take(&mut self.finished);
+                finished.extend(r.list().iter().filter_map(|&id| match self.take(id) {
+                    Some(Object::Encoder(e)) => Some(e.finish()),
+                    _ => None,
+                }));
+                self.submit(finished.drain(..));
+                self.finished = finished;
             }
             op::MAP_ASYNC => {
                 let (b, offset, size, address, word, ticket) = (r.u(), u64::from(r.u()), u64::from(r.u()), r.u(), r.u(), r.u());
@@ -1193,7 +1200,7 @@ impl GpuHost {
             op::QUEUE_DONE => {
                 let (word, ticket) = (r.u(), r.u());
                 // What was written is the queue's work as much as what was submitted.
-                self.submit(Vec::new());
+                self.submit(core::iter::empty());
                 let state = Arc::new(AtomicU8::new(WAITING));
                 let answered = Arc::clone(&state);
                 self.queue.on_submitted_work_done(move || answered.store(ANSWERED, Ordering::Release));
@@ -1390,23 +1397,26 @@ impl GpuHost {
             resolve: Option<wgpu::TextureView>,
             ops: wgpu::Operations<wgpu::Color>,
         }
-        let colors: Vec<Color> = (0..r.u())
-            .map(|_| {
-                let view = self.view(r.u()).0.clone();
-                let resolve = r.opt().map(|v| self.view(v).0.clone());
-                let (load, store) = (r.u(), r.u());
-                let c = [r.f32(), r.f32(), r.f32(), r.f32()].map(f64::from);
-                let clear = wgpu::Color { r: c[0], g: c[1], b: c[2], a: c[3] };
-                Color {
-                    view,
-                    resolve,
-                    ops: wgpu::Operations {
-                        load: load_op(load, clear),
-                        store: store_op(store),
-                    },
-                }
-            })
-            .collect();
+        let n = r.u() as usize;
+        if n > COLORS {
+            panic!("[gpu] a pass of {n} color targets");
+        }
+        let mut colors: [Option<Color>; COLORS] = core::array::from_fn(|_| None);
+        for color in &mut colors[..n] {
+            let view = self.view(r.u()).0.clone();
+            let resolve = r.opt().map(|v| self.view(v).0.clone());
+            let (load, store) = (r.u(), r.u());
+            let c = [r.f32(), r.f32(), r.f32(), r.f32()].map(f64::from);
+            let clear = wgpu::Color { r: c[0], g: c[1], b: c[2], a: c[3] };
+            *color = Some(Color {
+                view,
+                resolve,
+                ops: wgpu::Operations {
+                    load: load_op(load, clear),
+                    store: store_op(store),
+                },
+            });
+        }
         let depth = r.opt();
         let (dload, dstore, dclear, dro, sload, sstore, sclear, sro) = (r.u(), r.u(), r.f32(), r.flag(), r.u(), r.u(), r.u(), r.flag());
         // WebGPU refuses ops on an aspect the format lacks, or one read only.
@@ -1425,17 +1435,14 @@ impl GpuHost {
         });
         let stamps = self.timestamps(r);
         let occlusion = r.opt().map(|q| self.query_set(q).clone());
-        let color_attachments: Vec<Option<wgpu::RenderPassColorAttachment>> = colors
-            .iter()
-            .map(|c| {
-                Some(wgpu::RenderPassColorAttachment {
-                    view: &c.view,
-                    depth_slice: None,
-                    resolve_target: c.resolve.as_ref(),
-                    ops: c.ops,
-                })
+        let color_attachments: [Option<wgpu::RenderPassColorAttachment>; COLORS] = core::array::from_fn(|k| {
+            colors[k].as_ref().map(|c| wgpu::RenderPassColorAttachment {
+                view: &c.view,
+                depth_slice: None,
+                resolve_target: c.resolve.as_ref(),
+                ops: c.ops,
             })
-            .collect();
+        });
         let depth_stencil_attachment = depth.as_ref().map(|(view, depth_ops, stencil_ops)| wgpu::RenderPassDepthStencilAttachment {
             view,
             depth_ops: *depth_ops,
@@ -1450,7 +1457,7 @@ impl GpuHost {
             .encoder(e)
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
-                color_attachments: &color_attachments,
+                color_attachments: &color_attachments[..n],
                 depth_stencil_attachment,
                 timestamp_writes,
                 occlusion_query_set: occlusion.as_ref(),
@@ -1460,6 +1467,10 @@ impl GpuHost {
         self.put(id, Object::RenderPass(Box::new(p)));
     }
 }
+
+/// The most color targets a render pass takes: wgpu-hal's
+/// `MAX_COLOR_ATTACHMENTS`, the bound wgpu builds its passes to.
+const COLORS: usize = 8;
 
 fn load_op<V>(load: u32, clear: V) -> wgpu::LoadOp<V> {
     match LOAD_OP.get(load as usize).copied() {

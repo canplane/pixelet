@@ -201,7 +201,7 @@ pub fn cancel_asset(key: u64) -> bool {
     true
 }
 
-static IMAGES: Global<Slots<()>> = Global::new();
+static IMAGES: Global<Slots<(), { LOADS + 1 }>> = Global::new();
 
 pub fn image_opened(fd: u32, key: u64, opened: Opened) {
     let Opened::Bytes(n) = opened else {

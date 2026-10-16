@@ -30,7 +30,7 @@ fn handle_0_is_never_a_handle_and_a_full_table_refuses() {
 
 #[test]
 fn slots_a_removed_handle_names_nothing_even_once_its_slot_is_taken_again() {
-    let mut s = Slots::new();
+    let mut s = Slots::<_, 4>::new();
     let a = s.insert("a");
     assert_ne!(a, 0);
     assert_eq!(s.get(a), Some(&"a"));

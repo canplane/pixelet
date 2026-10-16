@@ -63,6 +63,13 @@ type GpuObject =
 /** A view with its format, which a pass's depth attachment asks of it. */
 type View = { readonly view: GPUTextureView; readonly format: GPUTextureFormat };
 
+/** A texture's place in a copy, its fields refilled record by record. */
+type Place = { texture: GPUTexture; mipLevel: number; origin: number[]; aspect: GPUTextureAspect };
+
+function place(): Place {
+  return { texture: undefined as unknown as GPUTexture, mipLevel: 0, origin: [0, 0, 0], aspect: "all" };
+}
+
 /** `copyExternalImageToTexture`, which the lib's `GPUQueue` does not list. */
 type ExternalImageQueue = GPUQueue & {
   copyExternalImageToTexture(source: { source: ImageBitmap }, destination: GPUTexelCopyTextureInfo, size: GPUExtent3D): void;
@@ -111,6 +118,21 @@ class Words {
 
 export class GpuHost {
   private readonly objects: (GpuObject | undefined)[] = [];
+  /** What a record's call takes, refilled each time rather than made: WebGPU
+   * reads a dictionary only during the call it is given to. Two places, as
+   * a texture-to-texture copy names two. */
+  private readonly places: [Place, Place] = [place(), place()];
+  private readonly buffered: GPUTexelCopyBufferInfo = { buffer: undefined as unknown as GPUBuffer, offset: 0, bytesPerRow: 0, rowsPerImage: 0 };
+  private readonly layout: GPUTexelCopyBufferLayout = { offset: 0, bytesPerRow: 0, rowsPerImage: 0 };
+  private readonly size: number[] = [0, 0, 0];
+  /** A pass's: its descriptors, its color attachments (as many as one has
+   * had), its depth attachment, its timestamps; a submit's buffers. */
+  private readonly pass: GPURenderPassDescriptor = { colorAttachments: [] };
+  private readonly colors: GPURenderPassColorAttachment[] = [];
+  private readonly depth: GPURenderPassDepthStencilAttachment = { view: undefined as unknown as GPUTextureView };
+  private readonly compute: GPUComputePassDescriptor = {};
+  private readonly stamps: GPURenderPassTimestampWrites = { querySet: undefined as unknown as GPUQuerySet };
+  private readonly finished: GPUCommandBuffer[] = [];
   private readonly surfaces = new Map<u32, GPUCanvasContext>();
   /** Where the guest asked the device's block written, for its status. */
   private block: { address: u32; words: u32 } | undefined;
@@ -159,28 +181,49 @@ export class GpuHost {
     return new Uint8Array(this.memory(), address, size);
   }
 
-  /** A view's bytes as WebGPU takes them: its buffer, where it starts, how long. */
-  private static span(v: Uint8Array): [ArrayBuffer, number, number] {
-    return [v.buffer as ArrayBuffer, v.byteOffset, v.byteLength];
-  }
-
   /** `ticket | DONE` at `word`, where the ticket still stands. */
   private done(word: u32, ticket: u32): void {
     const w = new Uint32Array(this.memory(), word, 1);
     if (w[0] === ticket) w[0] = (ticket | DONE) >>> 0;
   }
 
-  private texturePlace(r: Words): GPUTexelCopyTextureInfo {
-    return { texture: this.get<GPUTexture>(r.u()), mipLevel: r.u(), origin: [r.u(), r.u(), r.u()], aspect: TEXTURE_ASPECT[r.u()] };
+  /** A texture's place read into `p`: one of `places` where WebGPU reads
+   * it only during the call, a fresh one where it is kept past it. */
+  private texturePlace(r: Words, p: Place): Place {
+    p.texture = this.get<GPUTexture>(r.u());
+    p.mipLevel = r.u();
+    p.origin[0] = r.u();
+    p.origin[1] = r.u();
+    p.origin[2] = r.u();
+    p.aspect = TEXTURE_ASPECT[r.u()];
+    return p;
   }
 
   private bufferLayout(r: Words): GPUTexelCopyBufferInfo {
-    return { buffer: this.get<GPUBuffer>(r.u()), offset: r.u(), bytesPerRow: r.u(), rowsPerImage: r.u() };
+    const b = this.buffered;
+    b.buffer = this.get<GPUBuffer>(r.u());
+    b.offset = r.u();
+    b.bytesPerRow = r.u();
+    b.rowsPerImage = r.u();
+    return b;
+  }
+
+  private extent(r: Words): number[] {
+    const e = this.size;
+    e[0] = r.u();
+    e[1] = r.u();
+    e[2] = r.u();
+    return e;
   }
 
   private timestamps(r: Words): GPURenderPassTimestampWrites | undefined {
-    const [set, begin, end] = [r.opt(), r.opt(), r.opt()];
-    return set === undefined ? undefined : { querySet: this.get<GPUQuerySet>(set), beginningOfPassWriteIndex: begin, endOfPassWriteIndex: end };
+    const set = r.opt();
+    const t = this.stamps;
+    t.beginningOfPassWriteIndex = r.opt();
+    t.endOfPassWriteIndex = r.opt();
+    if (set === undefined) return undefined;
+    t.querySet = this.get<GPUQuerySet>(set);
+    return t;
   }
 
   private stencilFace(r: Words): GPUStencilFaceState {
@@ -353,26 +396,42 @@ export class GpuHost {
       case op.WRITE_BUFFER: {
         const buffer = this.get<GPUBuffer>(r.u());
         const offset = r.u();
-        d.queue.writeBuffer(buffer, offset, ...GpuHost.span(r.bytes()));
+        const n = r.u();
+        d.queue.writeBuffer(buffer, offset, r.w.buffer as ArrayBuffer, r.w.byteOffset + 4 * r.at, n);
+        r.skip(Math.ceil(n / 4));
         return;
       }
       case op.WRITE_BUFFER_AT: {
         const buffer = this.get<GPUBuffer>(r.u());
         const offset = r.u();
-        d.queue.writeBuffer(buffer, offset, ...GpuHost.span(this.bytesAt(r.u(), r.u())));
+        d.queue.writeBuffer(buffer, offset, this.memory() as ArrayBuffer, r.u(), r.u());
         return;
       }
       case op.WRITE_TEXTURE:
       case op.WRITE_TEXTURE_AT: {
-        const place = this.texturePlace(r);
-        const layout = { bytesPerRow: r.u(), rowsPerImage: r.u() };
-        const size = [r.u(), r.u(), r.u()];
-        const [data, at, length] = GpuHost.span(code === op.WRITE_TEXTURE ? r.bytes() : this.bytesAt(r.u(), r.u()));
-        d.queue.writeTexture(place, new Uint8Array(data, at, length), layout, size);
+        const place = this.texturePlace(r, this.places[0]);
+        const layout = this.layout;
+        layout.bytesPerRow = r.u();
+        layout.rowsPerImage = r.u();
+        const size = this.extent(r);
+        // The bytes where they lie: in the record, a count then them, or at
+        // an address and size in the guest's memory; the layout says where.
+        let data: ArrayBuffer;
+        if (code === op.WRITE_TEXTURE) {
+          const n = r.u();
+          data = r.w.buffer as ArrayBuffer;
+          layout.offset = r.w.byteOffset + 4 * r.at;
+          r.skip(Math.ceil(n / 4));
+        } else {
+          data = this.memory() as ArrayBuffer;
+          layout.offset = r.u();
+          r.skip(1);
+        }
+        d.queue.writeTexture(place, data, layout, size);
         return;
       }
       case op.COPY_EXTERNAL_IMAGE: {
-        const to = this.texturePlace(r);
+        const to = this.texturePlace(r, place());
         const [flipY, premultipliedAlpha] = [r.flag(), r.flag()];
         // Copied now: the guest's bytes are only its until the next turn.
         const image = new Blob([this.bytesAt(r.u(), r.u()).slice()]);
@@ -397,17 +456,17 @@ export class GpuHost {
       }
       case op.COPY_BUFFER_TO_TEXTURE: {
         const e = this.get<GPUCommandEncoder>(r.u());
-        e.copyBufferToTexture(this.bufferLayout(r), this.texturePlace(r), [r.u(), r.u(), r.u()]);
+        e.copyBufferToTexture(this.bufferLayout(r), this.texturePlace(r, this.places[0]), this.extent(r));
         return;
       }
       case op.COPY_TEXTURE_TO_BUFFER: {
         const e = this.get<GPUCommandEncoder>(r.u());
-        e.copyTextureToBuffer(this.texturePlace(r), this.bufferLayout(r), [r.u(), r.u(), r.u()]);
+        e.copyTextureToBuffer(this.texturePlace(r, this.places[0]), this.bufferLayout(r), this.extent(r));
         return;
       }
       case op.COPY_TEXTURE_TO_TEXTURE: {
         const e = this.get<GPUCommandEncoder>(r.u());
-        e.copyTextureToTexture(this.texturePlace(r), this.texturePlace(r), [r.u(), r.u(), r.u()]);
+        e.copyTextureToTexture(this.texturePlace(r, this.places[0]), this.texturePlace(r, this.places[1]), this.extent(r));
         return;
       }
       case op.CLEAR_BUFFER: {
@@ -424,35 +483,51 @@ export class GpuHost {
       case op.RENDER_PASS: {
         const id = r.u();
         const e = this.get<GPUCommandEncoder>(r.u());
-        const colorAttachments = Array.from({ length: r.u() }, (): GPURenderPassColorAttachment => {
-          const [view, resolve, load, store] = [this.get<View>(r.u()).view, r.opt(), LOAD_OP[r.u()], STORE_OP[r.u()]];
-          return { view, resolveTarget: resolve === undefined ? undefined : this.get<View>(resolve).view, loadOp: load, storeOp: store, clearValue: [r.f32(), r.f32(), r.f32(), r.f32()] };
-        });
+        const n = r.u();
+        const colors = this.pass.colorAttachments as GPURenderPassColorAttachment[];
+        colors.length = 0;
+        for (let k = 0; k < n; k++) {
+          const c = this.colors[k] ??= { view: undefined as unknown as GPUTextureView, loadOp: "load", storeOp: "store", clearValue: [0, 0, 0, 0] };
+          c.view = this.get<View>(r.u()).view;
+          const resolve = r.opt();
+          c.resolveTarget = resolve === undefined ? undefined : this.get<View>(resolve).view;
+          c.loadOp = LOAD_OP[r.u()];
+          c.storeOp = STORE_OP[r.u()];
+          const clear = c.clearValue as number[];
+          for (let i = 0; i < 4; i++) clear[i] = r.f32();
+          colors.push(c);
+        }
         const depth = r.opt();
-        const [dload, dstore, dclear, dro, sload, sstore, sclear, sro] = [r.u(), r.u(), r.f32(), r.flag(), r.u(), r.u(), r.u(), r.flag()];
-        let depthStencilAttachment: GPURenderPassDepthStencilAttachment | undefined;
+        const dload = r.u(), dstore = r.u(), dclear = r.f32(), dro = r.flag(), sload = r.u(), sstore = r.u(), sclear = r.u(), sro = r.flag();
+        this.pass.depthStencilAttachment = undefined;
         if (depth !== undefined) {
           // WebGPU refuses ops on an aspect the format lacks, or one read only.
           const { view, format } = this.get<View>(depth);
-          const [hasDepth, hasStencil] = [format.startsWith("depth"), format.includes("stencil")];
-          depthStencilAttachment = {
-            view,
-            ...(hasDepth && !dro ? { depthLoadOp: LOAD_OP[dload], depthStoreOp: STORE_OP[dstore], depthClearValue: dclear } : { depthReadOnly: dro }),
-            ...(hasStencil && !sro ? { stencilLoadOp: LOAD_OP[sload], stencilStoreOp: STORE_OP[sstore], stencilClearValue: sclear } : { stencilReadOnly: sro }),
-          };
+          const a = this.depth;
+          a.view = view;
+          const ops = format.startsWith("depth") && !dro;
+          a.depthLoadOp = ops ? LOAD_OP[dload] : undefined;
+          a.depthStoreOp = ops ? STORE_OP[dstore] : undefined;
+          a.depthClearValue = ops ? dclear : undefined;
+          a.depthReadOnly = ops ? undefined : dro;
+          const stencil = format.includes("stencil") && !sro;
+          a.stencilLoadOp = stencil ? LOAD_OP[sload] : undefined;
+          a.stencilStoreOp = stencil ? STORE_OP[sstore] : undefined;
+          a.stencilClearValue = stencil ? sclear : undefined;
+          a.stencilReadOnly = stencil ? undefined : sro;
+          this.pass.depthStencilAttachment = a;
         }
-        const timestampWrites = this.timestamps(r);
+        this.pass.timestampWrites = this.timestamps(r);
         const occlusion = r.opt();
-        this.put(
-          id,
-          e.beginRenderPass({ colorAttachments, depthStencilAttachment, timestampWrites, occlusionQuerySet: occlusion === undefined ? undefined : this.get<GPUQuerySet>(occlusion) }),
-        );
+        this.pass.occlusionQuerySet = occlusion === undefined ? undefined : this.get<GPUQuerySet>(occlusion);
+        this.put(id, e.beginRenderPass(this.pass));
         return;
       }
       case op.COMPUTE_PASS: {
         const id = r.u();
         const e = this.get<GPUCommandEncoder>(r.u());
-        this.put(id, e.beginComputePass({ timestampWrites: this.timestamps(r) }));
+        this.compute.timestampWrites = this.timestamps(r);
+        this.put(id, e.beginComputePass(this.compute));
         return;
       }
       case op.SET_PIPELINE: {
@@ -519,9 +594,15 @@ export class GpuHost {
         return;
       }
       case op.SUBMIT: {
-        const ids = Array.from({ length: r.u() }, () => r.u());
-        d.queue.submit(ids.map((id) => this.get<GPUCommandEncoder>(id).finish()));
-        ids.forEach((id) => this.forget(id));
+        const n = r.u();
+        const finished = this.finished;
+        for (let k = 0; k < n; k++) {
+          const id = r.u();
+          finished.push(this.get<GPUCommandEncoder>(id).finish());
+          this.forget(id);
+        }
+        d.queue.submit(finished);
+        finished.length = 0;
         return;
       }
       case op.MAP_ASYNC: {

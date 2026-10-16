@@ -61,6 +61,8 @@ export class Doorbell {
     try {
       wake = this.interrupt(quota_ms);
     } catch (err) {
+      // Printed here, once: what a caller catches next is only the stop.
+      console.error("[xpute/doorbell] the guest trapped:", err);
       this.trapped = true;
       this.stopped?.();
       throw err;

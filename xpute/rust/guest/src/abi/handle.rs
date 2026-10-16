@@ -3,7 +3,7 @@
 //! Generational handles: a slot and its generation, so a handle kept past its
 //! release names nothing that takes the slot after. 0 is never a handle.
 //! `HandleTable` is fixed at N slots for what another side keeps; `Slots`
-//! grows and holds values this side keeps.
+//! is fixed at N slots too, and holds values this side keeps.
 
 /// The rest is the generation, hence its `u16` lane. The host uses the same 16.
 pub const SLOT_BITS: u32 = 16;
@@ -114,36 +114,44 @@ impl<const N: usize> HandleTable<N> {
     }
 }
 
-/// Grows, never shrinks; a slot given back is the next one taken.
-pub struct Slots<T> {
-    /// Slot 0 is held empty so no handle is 0.
-    entries: Vec<(u16, Option<T>)>,
-    free: Vec<u32>,
+/// Fixed at N slots, slot 0 never handed out, as `HandleTable`; a slot
+/// given back is the next one taken.
+pub struct Slots<T, const N: usize> {
+    entries: [(u16, Option<T>); N],
+    /// A free slot's next free slot; 0, which is never handed out, ends the list.
+    next: [u32; N],
+    free: u32,
+    /// The highest slot handed out; those past it never have been.
+    top: u32,
 }
 
-impl<T> Default for Slots<T> {
+impl<T, const N: usize> Default for Slots<T, N> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T> Slots<T> {
+impl<T, const N: usize> Slots<T, N> {
     pub const fn new() -> Self {
+        const { assert!(N >= 2 && N <= 1 << SLOT_BITS, "a slot is 16 bits, and slot 0 is never handed out") };
         Slots {
-            entries: Vec::new(),
-            free: Vec::new(),
+            entries: [const { (0, None) }; N],
+            next: [0; N],
+            free: 0,
+            top: 0,
         }
     }
 
     pub fn insert(&mut self, value: T) -> u32 {
-        if self.entries.is_empty() {
-            self.entries.push((0, None));
-        }
-        let slot = self.free.pop().unwrap_or_else(|| {
-            xpute_kit::ensure!(self.entries.len() < 1 << SLOT_BITS, ENOSPC, SLOT_BITS);
-            self.entries.push((0, None));
-            (self.entries.len() - 1) as u32
-        });
+        let slot = if self.free != 0 {
+            let slot = self.free;
+            self.free = self.next[slot as usize];
+            slot
+        } else {
+            xpute_kit::ensure!((self.top as usize) + 1 < N, ENOSPC, N);
+            self.top += 1;
+            self.top
+        };
         let entry = &mut self.entries[slot as usize];
         entry.0 = next_generation(entry.0);
         entry.1 = Some(value);
@@ -151,8 +159,9 @@ impl<T> Slots<T> {
     }
 
     fn entry(&self, handle: u32) -> Option<&(u16, Option<T>)> {
-        self.entries
-            .get(handle_slot(handle) as usize)
+        let slot = handle_slot(handle);
+        (slot != 0 && slot <= self.top)
+            .then(|| &self.entries[slot as usize])
             .filter(|(generation, value)| value.is_some() && *generation as u32 == handle >> SLOT_BITS)
     }
 
@@ -168,19 +177,20 @@ impl<T> Slots<T> {
     pub fn remove(&mut self, handle: u32) -> Option<T> {
         self.entry(handle)?;
         let slot = handle_slot(handle);
-        self.free.push(slot);
+        self.next[slot as usize] = self.free;
+        self.free = slot;
         self.entries[slot as usize].1.take()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (u32, &T)> {
-        self.entries
+        self.entries[..=self.top as usize]
             .iter()
             .enumerate()
             .filter_map(|(slot, (generation, value))| Some((handle_of(slot as u32, *generation), value.as_ref()?)))
     }
 
     pub fn values_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.entries.iter_mut().filter_map(|(_, value)| value.as_mut())
+        self.entries[..=self.top as usize].iter_mut().filter_map(|(_, value)| value.as_mut())
     }
 }
 

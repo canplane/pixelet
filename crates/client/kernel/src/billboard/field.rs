@@ -8,7 +8,7 @@ use pxl_render::gpu::api::bytes;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::abi::handle::Slots;
 
-use crate::billboard::sheet::billboard_sheet;
+use crate::billboard::sheet::{billboard_sheet, SETS_MAX};
 
 /// Anchor relative to the set's (3), logical size in pixels (2), sheet
 /// rectangle (4), anchor's place down the sprite, 0 top 1 bottom (1), and
@@ -46,7 +46,7 @@ struct Set {
 
 #[derive(Default)]
 pub struct Billboards {
-    sets: Slots<Set>,
+    sets: Slots<Set, { SETS_MAX + 1 }>,
 }
 
 impl Billboards {

@@ -18,7 +18,8 @@ export function each_record(memory: ArrayBufferLike, at: u32, head: u32, run: (o
   if (end === 0) return;
   const w = new Uint32Array(memory, at + 4 * head, end) as U32Array;
   for (let k = 0; k < end;) {
-    const [op, n] = [w[k], w[k + 1]];
+    const op = w[k];
+    const n = w[k + 1];
     run(op, w, k + 2, n);
     k += 2 + n;
   }
