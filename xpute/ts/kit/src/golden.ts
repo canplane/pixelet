@@ -23,9 +23,12 @@ export class Golden {
     );
   }
 
-  /** The record at `path` under spec/: `golden/wire/tlv.tsv`. */
+  /**
+   * The record at `path` under spec/: `golden/wire/tlv.tsv`, fetched beside
+   * this file, so a page served from the tree reads it as Deno does.
+   */
   static async load(path: string): Promise<Golden> {
-    return new Golden(await Deno.readTextFile(new URL(path, SPEC)));
+    return new Golden(await (await fetch(new URL(path, SPEC))).text());
   }
 
   has(key: string): boolean {

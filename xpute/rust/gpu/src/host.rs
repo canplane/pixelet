@@ -1299,3 +1299,7 @@ fn feature(name: &str) -> Option<wgpu::Features> {
         _ => return None,
     })
 }
+
+#[cfg(test)]
+#[path = "host.test.rs"]
+mod test;

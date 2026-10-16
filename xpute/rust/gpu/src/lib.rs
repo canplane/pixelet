@@ -19,3 +19,7 @@ pub mod host;
 
 #[cfg(feature = "host")]
 mod image;
+
+#[cfg(test)]
+#[path = "programs.test.rs"]
+mod programs;

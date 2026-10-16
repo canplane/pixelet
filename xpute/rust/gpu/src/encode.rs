@@ -826,3 +826,7 @@ pub mod call {
         words(stream, op::DEVICE, &[off_of_slice(into) as u32, into.len() as u32])
     }
 }
+
+#[cfg(test)]
+#[path = "encode.test.rs"]
+mod test;

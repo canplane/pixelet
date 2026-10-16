@@ -7,6 +7,8 @@
   "tasks": {
     "check": "deno fmt --check && deno check ts/kit/src/**/*.ts && deno check ts/host/src/**/*.ts && deno check ts/gpu/src/**/*.ts && deno check ts/conformance/src/**/*.ts && cargo fmt --manifest-path rust/Cargo.toml --all --check && cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings && ./script/cpp.ts check",
     "test": "deno test -A ts/kit/src && deno test -A ts/host/src && cargo test --manifest-path rust/Cargo.toml --all && ./script/cpp.ts test && cargo build --manifest-path rust/Cargo.toml -p xpute-conformance && cargo build --manifest-path rust/Cargo.toml -p xpute-conformance --target wasm32-unknown-unknown && ./script/cpp.ts guest && ./script/cpp.ts wasm && deno test -A ts/conformance/src",
+    // What needs a GPU: the native host on wgpu, and the web host in Chrome (script/web-gpu.ts).
+    "test:gpu": "cargo test --manifest-path rust/Cargo.toml -p xpute-gpu --features host && ./script/web-gpu.ts",
     "fmt": "deno fmt && cargo fmt --manifest-path rust/Cargo.toml --all",
     "lint": "deno lint",
     "export": "./script/export.ts"

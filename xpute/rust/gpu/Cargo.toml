@@ -21,3 +21,8 @@ zune-jpeg = { version = "0.5", optional = true }
 
 [features]
 host = ["dep:wgpu", "dep:serde", "dep:png", "dep:image-webp", "dep:zune-jpeg"]
+
+[dev-dependencies]
+# The golden records' reader, and a device asked for without a runtime.
+xpute-kit = { path = "../kit", features = ["golden"] }
+pollster = "1"
