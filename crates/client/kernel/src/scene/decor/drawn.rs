@@ -40,13 +40,32 @@ fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
     extent_u / split_distance(cell_zoom) * px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) >= decor_sprite_px()
 }
 
-/// The frame's hand-over, kept so a settled frame asks the heap for nothing.
+/// The frame's hand-over, kept so a settled frame asks the heap for nothing,
+/// and made again only where what it is made of changed.
 struct Handed {
     on: bool,
+    /// A constant of the decor table, made once.
     shown: [u32; DECORS.len()],
     params: [u32; drawn::PARAM_WORDS as usize],
     placed: Vec<[u32; 4]>,
     translation: [f32; 3],
+    /// What it was last made of, by value.
+    seen: Option<Seen>,
+    /// Moves each time it is made again: what the renderer reads to know
+    /// the hand-over changed.
+    revision: u32,
+}
+
+/// Everything the hand-over is made of: the eye, a pixel's size there, what
+/// the eraser leaves out, and the placed objects as the store's revision
+/// counts them. A new input goes here or the hand-over never sees it change.
+#[derive(Clone, Copy, PartialEq)]
+struct Seen {
+    eye: V3,
+    upp: f64,
+    hide: Option<EntryAt>,
+    scattered: Option<[i64; 3]>,
+    objects: u32,
 }
 
 static HANDED: Global<Handed> = Global::new();
@@ -54,10 +73,12 @@ static HANDED: Global<Handed> = Global::new();
 fn handed() -> &'static mut Handed {
     HANDED.get(|| Handed {
         on: false,
-        shown: [0; DECORS.len()],
+        shown: core::array::from_fn(|k| (FIRST_CELL..=LEAF_CELL).filter(|&c| decor_shown(DECORS[k].extent(), c)).fold(0, |w, c| w | 1 << (c - FIRST_CELL))),
         params: [0; drawn::PARAM_WORDS as usize],
         placed: Vec::new(),
         translation: [0.0; 3],
+        seen: None,
+        revision: 0,
     })
 }
 
@@ -71,15 +92,25 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i6
     let h = handed();
     h.on = settings_store().decor;
     if !h.on {
+        h.seen = None;
         return;
     }
-    for (k, d) in DECORS.iter().enumerate() {
-        h.shown[k] = (FIRST_CELL..=LEAF_CELL).filter(|&c| decor_shown(d.extent(), c)).fold(0, |w, c| w | 1 << (c - FIRST_CELL));
+    let seen = Seen {
+        eye,
+        upp: units_per_px_at(1.0),
+        hide,
+        scattered,
+        objects: store.raw_lanes().3,
+    };
+    if h.seen == Some(seen) {
+        return;
     }
+    h.seen = Some(seen);
+    h.revision = h.revision.wrapping_add(1);
     let anchor = eye.map(libm::floor);
     let p = &mut h.params;
     p.fill(0);
-    p[drawn::UPP as usize] = (units_per_px_at(1.0) as f32).to_bits();
+    p[drawn::UPP as usize] = (seen.upp as f32).to_bits();
     p[drawn::MODEL_PX as usize] = (decor_gone_px() as f32).to_bits();
     p[drawn::SPRITE_PX as usize] = (decor_sprite_px() as f32).to_bits();
     let at = drawn::ANCHOR as usize;
@@ -95,7 +126,7 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i6
         p[drawn::EXTENTS as usize + k] = e.to_bits();
     }
     h.translation = [0, 1, 2].map(|k| (anchor[k] - eye[k]) as f32);
-    let reach = DECORS.iter().map(|d| d.extent()).fold(0.0, f64::max) / (decor_sprite_px() * units_per_px_at(1.0));
+    let reach = DECORS.iter().map(|d| d.extent()).fold(0.0, f64::max) / (decor_sprite_px() * seen.upp);
     let around = Aabb {
         min: eye.map(|v| v - reach),
         max: eye.map(|v| v + reach),
@@ -111,6 +142,11 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i6
         let [x, y, z] = index_of(UNIT_ZOOM, &e.corner());
         placed.push([k | variant << 8 | turn << 16, x.rem_euclid(ROUND) as u32, y as u32, z as u32]);
     });
+}
+
+/// Moves each time the hand-over is made again, so it is the same while this is.
+pub fn revision() -> u32 {
+    handed().revision
 }
 
 /// The hand-over `step` made, none where decor is off.
