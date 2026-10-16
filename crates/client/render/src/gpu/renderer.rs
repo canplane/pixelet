@@ -395,8 +395,10 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 /// Handle, address, length, the two counts, buffer, group.
 const BLOCK_LANES: usize = 7;
 
+/// The table's lanes, then the draw list's (frame/draw.rs `lanes_bytes`),
+/// room for the most blocks live, half the slots.
 pub const fn blocks_bytes(slots: usize) -> u32 {
-    (BLOCK_LANES * slots * 4) as u32
+    (BLOCK_LANES * slots * 4) as u32 + crate::frame::draw::lanes_bytes(slots / 2)
 }
 
 /// # Safety
@@ -418,6 +420,8 @@ pub unsafe fn set_blocks(at: u32, slots: usize) {
         bytes: 0,
         missing: 0,
     });
+    // SAFETY: the range's rest past the table, the lists' alone.
+    unsafe { crate::frame::draw::set_lanes(at + (BLOCK_LANES * slots * 4) as u32, slots / 2) };
 }
 
 fn home(handle: u32, slots: usize) -> usize {

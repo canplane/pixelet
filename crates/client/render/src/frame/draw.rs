@@ -5,6 +5,7 @@
 //! reused before the list runs.
 
 use pxl_spec::space::coord::v3::V3;
+use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
@@ -46,15 +47,50 @@ pub const PIPELINE_IMPOSTOR: u32 = 34;
 /// Rewrite record: handle, address, byte offset, length.
 pub const REWRITE_WORDS: usize = 4;
 
+/// The uploads' and the frees' lanes in `.fixed.blocks` (pxl-render
+/// gpu/renderer.rs `set_blocks`), each twice, the one written and the one
+/// the renderer took: room for as many records as blocks live, since a
+/// turn's uploads become live blocks and its frees were.
+struct ListLanes {
+    uploads: [&'static mut [u32]; 2],
+    frees: [&'static mut [u32]; 2],
+}
+
+static LANES: Global<ListLanes> = Global::new();
+
+fn lanes() -> &'static mut ListLanes {
+    LANES.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
+}
+
+/// The lists' lanes' bytes, for `live` blocks.
+pub const fn lanes_bytes(live: usize) -> u32 {
+    (2 * (UPLOAD_WORDS + 1) * live * 4) as u32
+}
+
+/// # Safety
+/// `at` must address `lanes_bytes(live)`, 4-aligned, the lists' alone for
+/// as long as the module runs.
+pub unsafe fn set_lanes(at: u32, live: usize) {
+    // SAFETY: the caller's range, one lane after another.
+    let lane = |from: usize, words: usize| unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize + from * 4), words) };
+    let (u, f) = (UPLOAD_WORDS * live, live);
+    LANES.set(ListLanes {
+        uploads: [lane(0, u), lane(u, u)],
+        frees: [lane(2 * u, f), lane(2 * u + f, f)],
+    });
+}
+
 #[derive(Default)]
 pub struct DrawList {
-    uploads: Vec<u32>,
+    /// The lanes' side written, and how much of each is.
+    side: usize,
+    uploads: usize,
+    frees: usize,
     rewrites: Vec<u32>,
-    frees: Vec<u32>,
     draws: Vec<u32>,
     uniforms: Vec<f32>,
     next_handle: u32,
-    taken: [Vec<u32>; 3],
+    taken: Vec<u32>,
 }
 
 pub struct Lists<'a> {
@@ -69,7 +105,10 @@ impl DrawList {
     pub fn upload(&mut self, at: u32, bytes: u32, vertex_cnt: u32, index_cnt: u32) -> u32 {
         self.next_handle = self.next_handle.wrapping_add(1).max(1);
         let handle = self.next_handle;
-        self.uploads.extend_from_slice(&[handle, at, bytes, vertex_cnt, index_cnt]);
+        let lane = &mut lanes().uploads[self.side];
+        xpute_kit::ensure!(self.uploads + UPLOAD_WORDS <= lane.len(), ENOSPC, lane.len());
+        lane[self.uploads..self.uploads + UPLOAD_WORDS].copy_from_slice(&[handle, at, bytes, vertex_cnt, index_cnt]);
+        self.uploads += UPLOAD_WORDS;
         handle
     }
 
@@ -86,16 +125,20 @@ impl DrawList {
                 k += REWRITE_WORDS;
             }
         }
+        let (uploads, frees) = (&mut lanes().uploads[self.side], &mut lanes().frees[self.side]);
         let mut k = 0;
-        while k < self.uploads.len() {
-            if self.uploads[k] == handle {
-                self.uploads.drain(k..k + UPLOAD_WORDS);
+        while k < self.uploads {
+            if uploads[k] == handle {
+                uploads.copy_within(k + UPLOAD_WORDS..self.uploads, k);
+                self.uploads -= UPLOAD_WORDS;
                 // An upload never taken needs no free either.
                 return;
             }
             k += UPLOAD_WORDS;
         }
-        self.frees.push(handle);
+        xpute_kit::ensure!(self.frees < frees.len(), ENOSPC, frees.len());
+        frees[self.frees] = handle;
+        self.frees += 1;
     }
 
     pub fn rewrite(&mut self, handle: u32, at: u32, bytes: u32) {
@@ -153,19 +196,18 @@ impl DrawList {
         self.draws.extend_from_slice(&[handle, group, count, uniform, pipeline]);
     }
 
-    /// Uploads, rewrites and frees start fresh; draws stay until the next frame.
+    /// Uploads, rewrites and frees start fresh, on the lanes' other side;
+    /// draws stay until the next frame.
     pub fn take(&mut self) -> Lists<'_> {
-        let [uploads, rewrites, frees] = &mut self.taken;
-        core::mem::swap(uploads, &mut self.uploads);
-        core::mem::swap(rewrites, &mut self.rewrites);
-        core::mem::swap(frees, &mut self.frees);
-        self.uploads.clear();
+        let (side, uploads, frees) = (self.side, self.uploads, self.frees);
+        (self.side, self.uploads, self.frees) = (1 - side, 0, 0);
+        core::mem::swap(&mut self.taken, &mut self.rewrites);
         self.rewrites.clear();
-        self.frees.clear();
+        let l = lanes();
         Lists {
-            uploads,
-            rewrites,
-            frees,
+            uploads: &l.uploads[side][..uploads],
+            rewrites: &self.taken,
+            frees: &l.frees[side][..frees],
             draws: &self.draws,
             uniforms: &self.uniforms,
         }
