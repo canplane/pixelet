@@ -167,6 +167,11 @@ impl Grown {
         ];
     }
 
+    /// No decor this frame: none grown, none drawn.
+    pub fn off(&mut self) {
+        self.on = false;
+    }
+
     /// Within a compute pass over the cast's world, after the cast: grown,
     /// counted, laid out, placed.
     pub fn dispatch(&self, g: &Gpu, pass: u32) {

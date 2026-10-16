@@ -914,9 +914,14 @@ impl ScreenCellsPass {
         let whole = eye.map(|v| libm::floor(v) as i64 as u32);
         let part = eye.map(|v| ((v - libm::floor(v)) as f32).to_bits());
         g.write_buffer(self.eye_at, 0, bytes(&[whole[0], whole[1], whole[2], 0, part[0], part[1], part[2], 0]));
-        // No cast, no world: a lane of no cells.
+        // No cast, no world: a lane of no cells, no ray cast into it and no
+        // decor grown. What the cast reads stands for the next: the ground
+        // it binds is made once.
         let (Some(cast), Some(ground)) = (cast, self.ground.as_ref().map(|gb| gb.ground)) else {
-            self.cast = None;
+            if let Some(c) = self.cast.as_mut() {
+                c.across = [0; 2];
+                c.grown.off();
+            }
             g.write_buffer(self.lane, 0, bytes(&[0u32, 0, steps, 0]));
             return;
         };
