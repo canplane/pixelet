@@ -49,7 +49,8 @@ fn last_words(stop: Stop<'_>) {
     eprintln!("{line}");
 }
 
-/// What a device gives the kernel: the region, the clock and the allocator.
+/// What a device gives the kernel: the region, the clock, the allocator and
+/// the frames its surfaces admit (surface.rs).
 fn bracket() -> Bracket {
     memory::region();
     Bracket {
@@ -57,6 +58,7 @@ fn bracket() -> Bracket {
         data_end: memory::DATA_END,
         clock: now,
         heap_stat,
+        admit_frame: surface::admit_frame,
         last_words: Some(last_words),
     }
 }

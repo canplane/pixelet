@@ -34,6 +34,12 @@ pub struct Bracket {
     pub data_end: u32,
     pub clock: fn() -> f64,
     pub heap_stat: fn() -> HeapStat,
+    /// Whether the surfaces take a frame now without blocking; one admitted
+    /// is drawn this turn, and the bracket counts it until the GPU has done
+    /// it. A page's always: the browser paces its frames. A device's while
+    /// fewer than two are unfinished, since taking a drawable there blocks
+    /// the thread that waits for the turn.
+    pub admit_frame: fn() -> bool,
     /// Where a bracket whose process dies with the kernel reports why: no host
     /// is left to run the record, and a panic's text is not in its numbers.
     /// None where the host outlives the kernel (a page).
@@ -107,6 +113,7 @@ fn host_attached(s: &mut State) {
 fn boot(b: &Bracket) {
     xpute_guest::clock::set_clock(b.clock);
     crate::io::host::set_heap_stat(b.heap_stat);
+    crate::io::host::set_admit_frame(b.admit_frame);
     crate::io::host::set_last_words(b.last_words);
     executor::install();
     // Named invariants report through `bug!`; a core panic reports only its location.

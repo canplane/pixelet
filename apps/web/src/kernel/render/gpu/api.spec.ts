@@ -27,11 +27,11 @@ export const resource = {
  * has returned.
  *
  * Its head is HEAD words, past the stream's END what the host writes for the
- * kernel: the device's block (xpute DEVICE), a completion word a frame in
- * flight, and the timed spans' read: its word, then each span's begin and end
- * ticks (gpu/api.rs lays them out and holds this number to it). */
+ * kernel: the device's block (xpute DEVICE) and the timed spans' read: its
+ * word, then each span's begin and end ticks (gpu/api.rs lays them out and
+ * holds this number to it). */
 export const stream = {
-  HEAD: 67 as number,
+  HEAD: 65 as number,
   /** The range's size: the stream, what one turn may send the device, then at
    * its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an
    * empty one of. A product number, said rather than derived; a chunk's mesh is

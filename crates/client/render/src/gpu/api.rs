@@ -4,12 +4,12 @@
 //! (xpute-gpu encode) into one stream in the kernel's memory, which the host
 //! runs after the turn: the page's on WebGPU, the device app's on wgpu
 //! (xpute-gpu host), the same records either way. What is pixelet's stays
-//! here: the pipeline records expanded into descriptors, a pass's shape, the
-//! spans' timing and how many frames may be in flight.
+//! here: the pipeline records expanded into descriptors, a pass's shape and
+//! the spans' timing.
 //!
 //! The stream's head holds what the host writes for the kernel: the device's
 //! block (limits, features, timestamp period, preferred surface format,
-//! status), each frame in flight's completion word, and the spans' times.
+//! status) and the spans' times.
 
 use xpute_gpu::encode::{self, call, Gpu as Encoder, Id};
 use xpute_gpu::enums::{
@@ -43,11 +43,6 @@ pub mod texture_usage {
 /// The objects the renderer may hold at once.
 pub const OBJECTS: usize = 1 << 15;
 
-/// The GPU may hold this many unfinished frames; the next is skipped rather
-/// than waited for. A layer keeps three drawables, so with two in flight a
-/// third is always free and taking it never blocks.
-const FRAMES_IN_FLIGHT: usize = 2;
-
 const SPANS: usize = GPU_SPAN_NAMES.len();
 
 /// The device's block (xpute DEVICE): a word a limit, the features a bit
@@ -56,12 +51,10 @@ const FEATURE_WORDS: usize = FEATURE_NAME.len().div_ceil(32);
 const PERIOD_AT: usize = LIMIT_NAME.len() + FEATURE_WORDS;
 const DEVICE_WORDS: usize = PERIOD_AT + 3;
 
-/// The head's words past the stream's own: the device's block, a completion
-/// word a frame in flight, the spans' read's word, then their begin and end
-/// ticks, two words a tick.
+/// The head's words past the stream's own: the device's block, the spans'
+/// read's word, then their begin and end ticks, two words a tick.
 const DEVICE_AT: usize = 1;
-const FRAMES_AT: usize = DEVICE_AT + DEVICE_WORDS;
-const STAMPS_WORD_AT: usize = FRAMES_AT + FRAMES_IN_FLIGHT;
+const STAMPS_WORD_AT: usize = DEVICE_AT + DEVICE_WORDS;
 const STAMPS_AT: usize = STAMPS_WORD_AT + 1;
 const HEAD: usize = STAMPS_AT + 2 * 2 * SPANS;
 const _: () = assert!(HEAD == stream::HEAD as usize, "spec/client/render/gpu/api.json's stream HEAD is the head laid out here");
@@ -172,8 +165,6 @@ struct State {
     /// The device's block asked for; read once it is READY.
     asked: bool,
     device: Option<Device>,
-    /// Frames submitted, so the next frame's completion ticket.
-    frames: u32,
     /// The spans' query set, its resolve buffer, which spans the read in
     /// flight timed, and their times from the last read in, in ms; past the
     /// last span, the whole frame's.
@@ -233,7 +224,6 @@ pub unsafe fn install(at: u32) -> u32 {
         in_frame: false,
         asked: false,
         device: None,
-        frames: 0,
         stamps: None,
         stamps_written: 0,
         gpu_ms: [0.0; SPANS + 1],
@@ -296,9 +286,6 @@ pub fn device_lost() {
         unsafe { core::ptr::write_bytes(core::ptr::from_mut(s.encoder), 0, 1) };
         (s.asked, s.device, s.stamps) = (false, None, None);
         s.images.clear();
-        for k in 0..FRAMES_IN_FLIGHT {
-            *head(FRAMES_AT + k) = 0;
-        }
         *head(STAMPS_WORD_AT) = 0;
     }
 }
@@ -366,13 +353,6 @@ pub fn frame_commit() -> bool {
     let s = state();
     s.in_frame = false;
     s.encoder.commit(&mut s.stream)
-}
-
-/// False while the GPU holds as many unfinished frames as it may: skip rather than wait.
-pub fn frame_room() -> bool {
-    let s = state();
-    let word = *head(FRAMES_AT + s.frames as usize % FRAMES_IN_FLIGHT);
-    word == 0 || word & DONE != 0
 }
 
 // Each upload's arguments before its bytes: buffer, offset; texture, mip,
@@ -858,8 +838,8 @@ impl Gpu {
     }
 
     /// The frame's encoder, its spans resolved and read where no read is still
-    /// on its way, submitted; then its completion word, which `frame_room`
-    /// counts.
+    /// on its way, submitted. One read at most is on its way, so its ticket
+    /// need not tell reads apart.
     pub fn submit_frame(&self, encoder: Id, written: u32) {
         let s = self.s();
         let stamps_free = *head(STAMPS_WORD_AT) == 0 || *head(STAMPS_WORD_AT) & DONE != 0;
@@ -875,15 +855,10 @@ impl Gpu {
                     &mut *ptr_at::<u32>(s.at as usize + STAMPS_WORD_AT * WORD),
                 )
             };
-            call::read_buffer(&mut s.stream, resolve, 0, ticks, word, s.frames & !DONE | 1);
+            call::read_buffer(&mut s.stream, resolve, 0, ticks, word, 1);
         } else {
             s.encoder.submit(&mut s.stream, &[encoder]);
         }
-        let k = s.frames as usize % FRAMES_IN_FLIGHT;
-        let at = s.at as usize + (FRAMES_AT + k) * WORD;
-        s.frames = s.frames.wrapping_add(1);
-        // SAFETY: the frame's completion word in the head, the host's to write.
-        call::queue_done(&mut s.stream, unsafe { &mut *ptr_at::<u32>(at) }, s.frames & !DONE | 1);
     }
 
     /// Configured in the format the device prefers, its alpha premultiplied.

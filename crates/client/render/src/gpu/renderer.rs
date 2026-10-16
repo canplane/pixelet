@@ -21,9 +21,7 @@ use crate::frame::screen_cells::SCREEN_CELLS_MAX;
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
-use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, frame_room, gpu, pass_desc, release, room, texture_usage, word_bytes, Device, Format, Gpu, Load, Stamp,
-};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, texture_usage, word_bytes, Device, Format, Gpu, Load, Stamp};
 use crate::gpu::api_spec::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
 use crate::gpu::api_spec::{resource, surface_role};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
@@ -111,6 +109,9 @@ pub struct FrameInput<'a> {
     pub cast: Option<Cast<'a>>,
     pub billboards: &'a mut Sheet,
     pub text: TextOf,
+    /// Whether the surfaces take a frame now without blocking; one admitted
+    /// is drawn. Asked only once nothing else stops the frame.
+    pub admit: fn() -> bool,
 }
 
 /// The earth layer's tiles as the GPU reads them: the floor's window, its
@@ -1558,8 +1559,8 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
         return FrameOutput { redraw: false, stat: None };
     };
-    // The GPU holds as many frames as it may: skip rather than wait.
-    if !frame_room() {
+    // The surfaces would block: skip rather than wait.
+    if !(input.admit)() {
         take_lists(Some(g), input.lists);
         return FrameOutput { redraw: true, stat: None };
     }
