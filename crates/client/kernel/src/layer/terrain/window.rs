@@ -380,10 +380,10 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> bool {
 pub struct Windowed;
 
 impl Cells for Windowed {
-    fn cell(&self, cell: Zoom, g: [i32; 2]) -> (u32, i32) {
+    fn cell(&self, cell: Zoom, g: [i32; 2]) -> (u32, i32, Zoom) {
         match window::find(self, cell, g, FIRST_CELL) {
-            (from, slot, i, true) => (self.look(from, slot, i), self.height(from, slot, i)),
-            _ => (word([u32::from(pxl_spec::block::cube::sentinel::void); 4]), 0),
+            (from, slot, i, true) => (self.look(from, slot, i), self.height(from, slot, i), from),
+            _ => (word([u32::from(pxl_spec::block::cube::sentinel::void); 4]), 0, cell),
         }
     }
 }

@@ -63,11 +63,11 @@ const VOID: u32 = sentinel::void as u32;
 const PLACED_AIR: u32 = PLACED_BLOCK | object::air as u32;
 const UNKNOWN: u32 = sentinel::unknown as u32;
 
-/// A cell's or a window's zoom, held to the eye's windows.
+/// A cell's or a window's zoom, held to the eye's windows: past the leaves,
+/// the leaves'. None coarser than the first is asked: a ray's range starts at
+/// the top tile's cells (pxl-kernel view/lens.rs `gpu_cast`, `asked`).
 fn held_to(cell: u32) -> u32 {
-    if cell < FIRST_CELL {
-        FIRST_CELL
-    } else if cell > LEAF_CELL {
+    if cell > LEAF_CELL {
         LEAF_CELL
     } else {
         cell
@@ -273,13 +273,9 @@ impl World<'_> {
     /// and where it is held.
     fn ground_at(&self, zoom: u32, b: [i32; 2]) -> (u32, f32, [u32; 4], window::Found) {
         let read = held_to(zoom);
-        let g = if zoom >= read {
-            [b[0] >> (zoom - read), b[1] >> (zoom - read)]
-        } else {
-            [b[0] << (read - zoom), b[1] << (read - zoom)]
-        };
-        let (w, h, f) = self.cell_at(read, g);
-        (ground::own(w, f.from), h as f32, ground::looks(w), f)
+        let (w, h, f) = self.cell_at(read, [b[0] >> (zoom - read), b[1] >> (zoom - read)]);
+        let (look, h, fold) = ground::read_cell(w, h, f.from);
+        (look, h, fold, f)
     }
 
     /// Whether the leaf cell `l` is gone: past the area, or nothing known
@@ -354,22 +350,14 @@ impl ground::Held for World<'_> {
 
     /// The join of the bounds over the node of each window the zooms
     /// `cells` read their cells from, the finest holding them present at
-    /// each (`window::bounded`); none (`UNBOUNDED`) for a node wider than a
-    /// square there, which only splits more.
-    fn relief(&mut self, [coarsest, finest]: [u32; 2], (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
-        let (mut z, last) = (held_to(coarsest), held_to(finest));
-        let mut relief = [0, 0];
-        let mut first = true;
-        while z <= last {
-            let ([lo, hi], _, here) = window::bounded(self, z, (zoom, [c[0], c[1]]), FIRST_CELL);
-            if !here {
-                return ([0, 0], false);
-            }
-            relief = if first { [lo, hi] } else { [relief[0].min(lo), relief[1].max(hi)] };
-            first = false;
-            z += 1;
-        }
-        (relief, true)
+    /// each (`window::bounded`), by the CPU's one join (pxl-portable
+    /// `ground::relief_over`); none (`UNBOUNDED`) for a node wider than a
+    /// window, which only splits more.
+    fn relief(&mut self, cells: [u32; 2], (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
+        ground::relief_over(cells, held_to, |z| {
+            let (r, _, here) = window::bounded(self, held_to(z), (zoom, [c[0], c[1]]), FIRST_CELL);
+            (r, here)
+        })
     }
 
     /// The block's column off the tile drawing that zoom's cells, the area's

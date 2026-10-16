@@ -282,28 +282,26 @@ impl ground::Held for Reading<'_, '_> {
     type Place = ();
 
     /// The join of the bounds over the node of each tile the zooms `cells`
-    /// read their cells from, off its line, as the GPU's (gpu-query-shader
-    /// `relief`); none (`UNBOUNDED`) for a node wider than the finest asked's
-    /// tile; a node with no ground under it, lowest over highest.
-    fn relief(&mut self, [coarsest, finest]: [Zoom; 2], _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
+    /// read their cells from, off its line, by the GPU's one join
+    /// (pxl-portable `ground::relief_over`): none (`UNBOUNDED`) for a node
+    /// wider than a tile it reads; a node with no ground under it, `EMPTY`.
+    fn relief(&mut self, cells: [Zoom; 2], _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
         let (zoom, c) = self.at.node;
-        if GROUND.read_zoom(finest) > zoom {
-            return (ground::UNBOUNDED, true);
-        }
-        let none = [i32::from(i16::MAX), i32::from(i16::MIN)];
-        let mut relief = none;
-        for z in coarsest..=finest {
-            if z != coarsest && GROUND.read_zoom(z) == GROUND.read_zoom(z - 1) {
-                continue;
-            }
-            let line = self.world.line(self.at, z);
-            let Some(r) = self.take(self.world.terrain.relief(&line, (zoom, [c[0], c[1]]))) else {
-                return (none, false);
-            };
-            let [lo, hi] = r.unwrap_or(none);
-            relief = [relief[0].min(lo), relief[1].max(hi)];
-        }
-        (relief, true)
+        ground::relief_over(
+            cells,
+            |z| GROUND.read_zoom(z),
+            |z| {
+                // A tile coarser than the node bounds none of it.
+                if GROUND.read_zoom(z) > zoom {
+                    return (ground::UNBOUNDED, true);
+                }
+                let line = self.world.line(self.at, z);
+                match self.take(self.world.terrain.relief(&line, (zoom, [c[0], c[1]]))) {
+                    Some(r) => (r.unwrap_or(ground::EMPTY), true),
+                    None => (ground::EMPTY, false),
+                }
+            },
+        )
     }
 
     /// The block's cell and the ring about it read into the grid (`CELL`),

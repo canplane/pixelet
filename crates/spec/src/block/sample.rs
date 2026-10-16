@@ -17,7 +17,7 @@ use crate::space::coord::zoom::{units, Zoom, SHARD_ZOOM};
 use crate::space::hierarchy::tree::ancestor_of;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_portable::area::wall;
-use pxl_portable::ground::{blocks, face_height, fold, Cell};
+use pxl_portable::ground::{blocks, coarser, face_height, read_cell, Cell};
 use pxl_portable::wrap_index;
 
 // A composition's workspace grows with what stands in the chunk, so it is the
@@ -74,9 +74,10 @@ pub struct TileSource<'a> {
 /// layer/terrain/window.rs).
 pub trait Cells {
     /// The cell `g` at zoom `cell`, off the finest window holding it present
-    /// (pxl-portable `window::find`): its four looks and its height; `void`
-    /// at sea level where none does.
-    fn cell(&self, cell: Zoom, g: [i32; 2]) -> (u32, i32);
+    /// (pxl-portable `window::find`): its four looks, its height and the zoom
+    /// of the cell the word is, a coarser window's where one stands in;
+    /// `void` at sea level where none does.
+    fn cell(&self, cell: Zoom, g: [i32; 2]) -> (u32, i32, Zoom);
 }
 
 pub struct Around<'a, C> {
@@ -102,9 +103,9 @@ pub const fn beside_index(qx: i64, qy: i64) -> usize {
 }
 
 /// The asked tile's cells `x0..` of row `y`, counted from its first, into
-/// `out`: each its looks and its height in leaf cells, off the windows,
-/// beside it as in it; `void` where nothing is known.
-fn read_row(around: &Around<impl Cells>, y: i64, x0: i64, out: &mut [(u32, i32)]) {
+/// `out`: each its looks, its height in leaf cells and its word's zoom, off
+/// the windows, beside it as in it; `void` where nothing is known.
+fn read_row(around: &Around<impl Cells>, y: i64, x0: i64, out: &mut [(u32, i32, Zoom)]) {
     for (v, x) in out.iter_mut().zip(x0..) {
         let g = [wrap_index(around.zoom, (around.first[0] + x) as i32), (around.first[1] + y) as i32];
         *v = around.cells.cell(around.zoom, g);
@@ -161,7 +162,7 @@ pub struct Grid {
     /// What a read works in, kept between reads: each cell's look as read,
     /// and the drawn tile's cells the window folds.
     look: Vec<GroundId>,
-    cells: Vec<(u32, i32)>,
+    cells: Vec<(u32, i32, Zoom)>,
 }
 
 impl Default for Grid {
@@ -213,7 +214,7 @@ impl Grid {
             0.. => (span as usize) << k,
             _ => (0..2).map(|a| (drawn(rel[a] + i64::from(span) - 1) - from[a] + 1) as usize).max().unwrap_or(0),
         };
-        fit(&mut self.cells, across * across, (u32::from(sentinel::void), 0))?;
+        fit(&mut self.cells, across * across, (u32::from(sentinel::void), 0, cell))?;
         for (y, row) in self.cells.chunks_mut(across).take(across).enumerate() {
             read_row(around, from[1] + y as i64, from[0], row);
         }
@@ -224,17 +225,12 @@ impl Grid {
         for i in 0..n {
             let g = [(i % span as usize) as i64, (i / span as usize) as i64];
             let read = |c: [i64; 2]| self.cells[(c[1] - from[1]) as usize * across + (c[0] - from[0]) as usize];
+            let c = [0, 1].map(|a| drawn(rel[a] + g[a]));
             let (look, h, fold) = if k == 1 {
-                let c = [0, 1].map(|a| drawn(rel[a] + g[a]));
-                fold(
-                    [[0, 0], [1, 0], [0, 1], [1, 1]]
-                        .map(|[dx, dy]| read([c[0] + dx, c[1] + dy]))
-                        .map(|(w, h)| (pxl_portable::ground::own(w, cell + 1), h)),
-                    cell,
-                )
+                coarser([[0, 0], [1, 0], [0, 1], [1, 1]].map(|[dx, dy]| read([c[0] + dx, c[1] + dy])), cell)
             } else {
-                let (w, h) = read([0, 1].map(|a| drawn(rel[a] + g[a])));
-                (pxl_portable::ground::own(w, cell), h as f32, pxl_portable::ground::looks(w))
+                let (w, h, from) = read(c);
+                read_cell(w, h, from)
             };
             let center = [0, 1].map(|a| (first[a] + g[a]) as f64 * side + side / 2.0);
             let key = center.map(|v| (v / shard).floor() as i64);

@@ -114,6 +114,32 @@ pub fn fold(four: [(u32, i32); 4], cell: Zoom) -> (u32, f32, [u32; 4]) {
     (majority(looks, cell), h, looks)
 }
 
+/// A held cell as a grid reads it, off its word `w`, its height `h` and
+/// `from`, the zoom the word is a cell of (a coarser window's where one
+/// stands in, the leaf's past the leaves): its look, height and the four
+/// looks it folds. A cell's look is decided at the zoom of the cell it is
+/// made of, so a word's tie breaks at `from` (`majority`).
+pub fn read_cell(w: u32, h: i32, from: Zoom) -> (u32, f32, [u32; 4]) {
+    (own(w, from), h as f32, looks(w))
+}
+
+/// A cell one zoom coarser than those held, `zoom`'s, as a grid reads it: the
+/// fold of its four children (`dx + 2·dy`), each read as held (`read_cell`), its look
+/// decided at its own zoom. No coarser is asked: a ray's zooms start at the
+/// top tile's cells (pxl-kernel view/lens.rs `asked`), and only a ground read
+/// for a tile under the top reaches this one (pxl-spec block/sample.rs
+/// `Grid::read`, which refuses more).
+pub fn coarser(four: [(u32, i32, Zoom); 4], zoom: Zoom) -> (u32, f32, [u32; 4]) {
+    let mut children = [(VOID, 0); 4];
+    let mut k = 0;
+    while k < 4 {
+        let (w, h, from) = four[k];
+        children[k] = (own(w, from), h);
+        k += 1;
+    }
+    fold(children, zoom)
+}
+
 /// Tile cells an elevation sample spans.
 const CELL_STEP: f32 = (TILE_CELLS / TILE_ELE_SPAN) as f32;
 
@@ -353,6 +379,36 @@ pub fn above(cell: Zoom, z: i32, hi: i32) -> bool {
 
 /// A bound over every height a cell holds, i16's whole range.
 pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
+
+/// The bound of no ground, lowest over highest: what joins as nothing.
+pub const EMPTY: [i32; 2] = [i16::MAX as i32, i16::MIN as i32];
+
+/// The join of a node's bounds over the zooms `cells` its cells are read at
+/// (`Held::relief`), one a source: the finest first, a zoom read from the
+/// same source as the one finer (`source`) passed. `at` gives a zoom's bound,
+/// `EMPTY` where no ground is under the node, and whether anything over it
+/// is held, false a lack. `UNBOUNDED` ends it: a node no source bounds only
+/// splits more.
+pub fn relief_over(cells: [Zoom; 2], source: impl Fn(Zoom) -> Zoom, mut at: impl FnMut(Zoom) -> ([i32; 2], bool)) -> ([i32; 2], bool) {
+    let [coarsest, finest] = cells;
+    let mut relief = EMPTY;
+    let mut z = finest + 1;
+    while z > coarsest {
+        z -= 1;
+        if z != finest && source(z) == source(z + 1) {
+            continue;
+        }
+        let (r, held) = at(z);
+        if !held {
+            return (EMPTY, false);
+        }
+        if r[0] == UNBOUNDED[0] && r[1] == UNBOUNDED[1] {
+            return (UNBOUNDED, true);
+        }
+        relief = [relief[0].min(r[0]), relief[1].max(r[1])];
+    }
+    (relief, true)
+}
 
 /// How the ground is held where a node reads it: the CPU's residency, a
 /// GPU's window over the tiles it was handed.
