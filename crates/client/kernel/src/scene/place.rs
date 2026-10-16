@@ -70,7 +70,49 @@ struct Placement {
     spare: Vec<(Label, Q3)>,
     /// Markers and lines not ready yet, kept to become so.
     pending: Vec<Label>,
+    /// What the billboard set holds, and the buffer the next run lays out
+    /// into, swapped as `labeled` and `spare` are.
     instances: Vec<f32>,
+    spare_instances: Vec<f32>,
+    /// What the last run read, compared by value: equal, with nothing moved
+    /// and nothing left waiting, the labels it laid out stand.
+    last: Option<Seen>,
+    /// The last run left a label not laid out or not painted, which a later
+    /// turn has: the next runs again.
+    waiting: bool,
+}
+
+/// Everything `step` reads, by value, as the demand's `Seen` is: the eye and
+/// its view (the observation holds its frustum), the grid's τ, the places
+/// setting, the spacing names wrap to, the marker being written and the
+/// chat's line and its speaker. A new input goes here or the step never sees
+/// it change.
+#[derive(Clone, Copy, PartialEq)]
+struct Seen {
+    o: pxl_spec::space::camera::eye::Observation,
+    tau: pxl_spec::space::camera::grid::Tau,
+    places: bool,
+    spacing: f64,
+    drafted: Option<(Label, Q3, Zoom)>,
+    line: Option<Label>,
+    speaker: Option<(Q3, Q3)>,
+}
+
+/// What `one_thing` matches a label by: none for a place, which is itself.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Thing {
+    Marker(EntryAt),
+    Count((Zoom, [i64; 3])),
+    Chat,
+}
+
+fn thing(label: Label) -> Option<Thing> {
+    match label {
+        Label::Marker { at, .. } => Some(Thing::Marker(at)),
+        Label::Count { cell, .. } => Some(Thing::Count(cell)),
+        Label::Chat { .. } => Some(Thing::Chat),
+        Label::Place { .. } => None,
+    }
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
@@ -181,17 +223,6 @@ fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
     Some(high - hit.t)
 }
 
-/// Whether two labels show one thing, which the older shows while the newer
-/// is not ready: a marker under one entry, a cell's count, and the chat's line.
-fn one_thing(a: Label, b: Label) -> bool {
-    match (a, b) {
-        (Label::Marker { at, .. }, Label::Marker { at: other, .. }) => at == other,
-        (Label::Count { cell, .. }, Label::Count { cell: other, .. }) => cell == other,
-        (Label::Chat { .. }, Label::Chat { .. }) => true,
-        _ => false,
-    }
-}
-
 /// The cell a place keeps to itself, as wide as the camera grid's cells are
 /// at the view's own τ: its name wraps to it and its billboard's region is it.
 /// Not the τ in force, which coarsens while the view moves and would lay
@@ -209,6 +240,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
             remove_billboard_set(set);
             ctx.invalidate();
         }
+        // Nothing is drawn now: what comes back is laid out afresh.
+        (p.last, p.waiting) = (None, false);
+        p.instances.clear();
         p.hits.clear();
         badge::retain(&FnvHashSet::default());
         return;
@@ -216,6 +250,22 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let _tiles = PlaceTile::demand();
     let Some(o) = crate::view::observation::observation() else { return };
     let tau = crate::view::lens::tau();
+    let draft = draft();
+    // A waiting marker is shown wherever it is.
+    let drafted = draft.map(|d| marker_at(d.at, &d.words)).map(|(label, stands, _)| (label, stands, FINEST_ZOOM));
+    let seen = Seen {
+        o,
+        tau,
+        places: settings_store().place,
+        spacing: spacing_px(),
+        drafted,
+        line: shown_line(),
+        speaker: speaker(),
+    };
+    if !p.waiting && !p.moved && p.last == Some(seen) {
+        return;
+    }
+    p.last = Some(seen);
     // The eye's cubes in view (view/observation.rs `cubes`), as decor's are.
     p.mounted.clear();
     crate::view::observation::cubes(&o, tau, &mut |(zoom, at)| {
@@ -253,14 +303,10 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let mut labeled = core::mem::take(&mut p.spare);
     labeled.clear();
     p.pending.clear();
-    // A waiting marker stands over whatever stands at its place, with the words it has so far.
-    let draft = draft();
-    // A waiting marker is shown wherever it is.
-    let drafted = draft.map(|d| marker_at(d.at, &d.words)).map(|(label, stands, _)| (label, stands, FINEST_ZOOM));
     // The line is its speaker's, judged where it stands, as a marker by the chunk drawing it there.
-    let line = shown_line();
+    let line = seen.line;
     let said = line
-        .zip(speaker())
+        .zip(seen.speaker)
         .and_then(|(label, (feet, over))| Some((label, over, crate::view::observation::cell_at(&o, tau, crate::view::frame::coord::to_world(&feet))?)));
     let is_drafted = |label: &Label| matches!(label, Label::Marker { at, .. } if Some(*at) == draft.map(|d| d.at));
     // A cell's markers but the waiting one: one is itself, more their count.
@@ -272,19 +318,27 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
             _ => (first.label, first.stands, first.cell_zoom),
         })
     });
-    let spacing = spacing_px();
+    let spacing = seen.spacing;
+    // What was drawn last by the thing it shows, read once: a marker's
+    // words or the line changed, and what was drawn stays until the new one
+    // is ready to show.
+    let before: fnv::FnvHashMap<Thing, Label> = drawn_before.iter().filter_map(|&(l, _)| Some((thing(l)?, l))).collect();
+    let mut unlaid = false;
     // Laid out last, so a line wins a tie with a badge (the sort's tiebreak).
     for (label, center, cell_zoom) in drafted.into_iter().chain(shown).chain(said) {
         let Some(label) = label.at(cell_zoom, spacing) else { continue };
-        // A marker's words or the line changed: what was drawn stays until the new one is ready to show.
-        let label = match drawn_before.iter().find(|d| one_thing(d.0, label)) {
-            Some(&(before, _)) if before != label && !badge::ready(label) => {
+        let label = match thing(label).and_then(|t| before.get(&t)) {
+            Some(&before) if before != label && !badge::ready(label) => {
                 p.pending.push(label);
                 before
             }
             _ => label,
         };
-        let Some([width, height, anchor]) = badge::size(label) else { continue };
+        // Its words are laid out by a later turn.
+        let Some([width, height, anchor]) = badge::size(label) else {
+            unlaid = true;
+            continue;
+        };
         let region = if matches!(label, Label::Place { .. }) { spacing } else { width };
         let local = crate::view::frame::coord::to_world(&center);
         p.batch.push(local[0], local[1], local[2], [width, height, region], anchor, labeled.len() as f64);
@@ -292,8 +346,10 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     }
     // The line's slot is kept while it is said, wherever its speaker is.
     badge::retain(&labeled.iter().map(|l| l.0).chain(p.pending.iter().copied()).chain(line).collect());
-    // Painted at render, which asks for no turn: one looks again.
-    if !p.pending.is_empty() {
+    // Painted at render, or laid out by the host, neither of which asks a
+    // turn: one looks again.
+    p.waiting = !p.pending.is_empty() || unlaid;
+    if p.waiting {
         crate::sched::edge::request_world_tick();
     }
     p.found = found;
@@ -321,7 +377,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
             .map(|&i| (p.batch.screen[i as usize], labeled[i as usize].0, labeled[i as usize].1))
             .filter(|h| !matches!(h.1, Label::Chat { .. })),
     );
-    let mut instances = core::mem::take(&mut p.instances);
+    let mut instances = core::mem::take(&mut p.spare_instances);
     instances.clear();
     // f32 instances, so about the sea under the eye rather than the world's origin.
     let about = crate::view::frame::pose::sea_under_eye();
@@ -331,13 +387,15 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         let [w, h, anchor] = badge::size(labeled[i].0).or_bug(Errno::ENOTRECOVERABLE);
         instances.extend_from_slice(&billboard_instance(at, [w, h], badge::slot(labeled[i].0) as u32, anchor / h, f64::from(p.batch.region_px[i])));
     }
-    if p.set.is_some() || !instances.is_empty() {
+    // Written, and a frame asked, only where what is drawn changed.
+    if instances != p.instances {
         let set = *p.set.get_or_insert_with(new_billboard_set);
         place_billboard_set(set, about);
         write_billboard_set(set, &instances);
         ctx.invalidate();
     }
-    (p.labeled, p.spare, p.instances) = (labeled, drawn_before, instances);
+    let drawn_instances = core::mem::replace(&mut p.instances, instances);
+    (p.labeled, p.spare, p.spare_instances) = (labeled, drawn_before, drawn_instances);
 }
 
 /// Where a tap on a billboard goes: to its place; a marker someone put up is
