@@ -12,8 +12,13 @@ import { TILE_SOURCE_ROUTE } from "@/config/route.ts";
 import { originGet } from "@platform/origin.ts";
 import { GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { send_next } from "@/kernel/sched.ts";
+import { online, whenOnline } from "@/kernel/online.ts";
 
+/** The wait after a refused ask, doubled each time up to the most: a source
+ * that does not answer is not asked again at a pace. Offline, nothing is
+ * asked until the device says it is online. */
 const ASK_AGAIN_MS = 2_000;
+const ASK_AGAIN_MOST_MS = 60_000;
 
 async function asked(): Promise<string | null> {
   try {
@@ -30,8 +35,12 @@ async function asked(): Promise<string | null> {
 
 export async function declare_source(): Promise<void> {
   let source = await asked();
+  let wait_ms = ASK_AGAIN_MS;
   while (source === null) {
-    await new Promise((resolve) => setTimeout(resolve, ASK_AGAIN_MS));
+    if (online()) {
+      await new Promise((resolve) => setTimeout(resolve, wait_ms));
+      wait_ms = Math.min(2 * wait_ms, ASK_AGAIN_MOST_MS);
+    } else await whenOnline();
     source = await asked();
   }
   const pkt = encode_world_source(GUEST_DOORBELL, source);

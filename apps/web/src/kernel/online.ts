@@ -13,6 +13,18 @@ export function online(): boolean {
   return useOnlineStore.getState().online;
 }
 
+/** Resolved once the device says it is online: at once if it does, else on its word, with no timer. */
+export function whenOnline(): Promise<void> {
+  if (online()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const stop = useOnlineStore.subscribe((s) => {
+      if (!s.online) return;
+      stop();
+      resolve();
+    });
+  });
+}
+
 export function useOnline(): boolean {
   return useOnlineStore((s) => s.online);
 }
