@@ -68,10 +68,12 @@ type ExternalImageQueue = GPUQueue & {
   copyExternalImageToTexture(source: { source: ImageBitmap }, destination: GPUTexelCopyTextureInfo, size: GPUExtent3D): void;
 };
 
-/** A record's words read in order, as the guest wrote them. */
+/** A run's words read in order, as the guest wrote them: one cursor over
+ * the stream, set at each record's first word, so a record makes nothing. */
 class Words {
   private readonly f: Float32Array;
-  constructor(private readonly w: U32Array, private at: u32) {
+  at: u32 = 0;
+  constructor(readonly w: U32Array) {
     this.f = new Float32Array(w.buffer, w.byteOffset, w.length);
   }
   u(): u32 {
@@ -85,6 +87,10 @@ class Words {
   }
   flag(): boolean {
     return this.u() !== 0;
+  }
+  /** Past `n` words, read in place by the caller. */
+  skip(n: u32): void {
+    this.at += n;
   }
   /** None where the guest left it unset. */
   opt(): u32 | undefined {
@@ -129,7 +135,12 @@ export class GpuHost {
 
   /** Runs the stream at `at`, `head` words of head, as the turn left it. */
   run(at: u32, head: u32): void {
-    each_record(this.memory(), at, head, (code, w, a) => this.record(code, new Words(w, a)));
+    let r: Words | undefined;
+    each_record(this.memory(), at, head, (code, w, a) => {
+      r ??= new Words(w);
+      r.at = a;
+      this.record(code, r);
+    });
   }
 
   private put(id: u32, o: GpuObject): void {
@@ -453,8 +464,12 @@ export class GpuHost {
       }
       case op.SET_BIND_GROUP: {
         const pass = this.get<GPURenderPassEncoder | GPUComputePassEncoder>(r.u());
-        const [index, group] = [r.u(), this.get<GPUBindGroup>(r.u())];
-        pass.setBindGroup(index, group, Array.from({ length: r.u() }, () => r.u()));
+        const index = r.u();
+        const group = this.get<GPUBindGroup>(r.u());
+        const offsets = r.u();
+        // Hundreds a frame: the offsets are read where they lie, no array made.
+        pass.setBindGroup(index, group, r.w, r.at, offsets);
+        r.skip(offsets);
         return;
       }
       case op.SET_VERTEX_BUFFER: {
