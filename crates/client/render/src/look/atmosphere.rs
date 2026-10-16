@@ -8,6 +8,12 @@
 /// is 0.3% off, which the scattering does not see.
 pub const BOTTOM_RADIUS_KM: f64 = pxl_spec::space::coord::globe::MERCATOR_RADIUS_KM;
 pub const TOP_RADIUS_KM: f64 = BOTTOM_RADIUS_KM + 100.0;
+/// How far the sun's or the moon's height (the cosine of its zenith angle)
+/// moves before the sky is drawn for it again: about a thousandth of a
+/// radian near the horizon, where the colors move fastest. The sky's clock
+/// steps by it (pxl-kernel scene/environment.rs) and its tables are drawn
+/// again by it (gpu/atmosphere.rs `moved`).
+pub const SUN_MU_STEP: f32 = 2e-4;
 pub const RAYLEIGH_SCATTERING: [f64; 3] = [5.802e-3, 13.558e-3, 33.1e-3];
 pub const RAYLEIGH_SCALE_HEIGHT_KM: f64 = 8.0;
 /// The day's weather: Koschmieder's visual range, 30-50 km on a clear day; the

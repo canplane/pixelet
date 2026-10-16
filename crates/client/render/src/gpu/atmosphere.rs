@@ -86,8 +86,7 @@ const EXPOSURE_TEXEL: usize = 3;
 pub(crate) const IRRADIANCE: usize = 4;
 const MOON_VIEW: usize = 5;
 
-/// About a thousandth of a radian near the horizon, where the colors move fastest.
-const SUN_MU_STEP: f32 = 2e-4;
+use crate::look::atmosphere::SUN_MU_STEP;
 /// A share of the altitude, and at least a meter.
 const ALTITUDE_SHARE: f32 = 0.005;
 const ALTITUDE_FLOOR_KM: f32 = 0.001;

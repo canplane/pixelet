@@ -7,6 +7,7 @@
 pub mod celestial_position;
 pub mod cloud;
 
+use pxl_render::look::atmosphere::SUN_MU_STEP;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3;
 
@@ -18,34 +19,13 @@ use crate::view::frame::pose::{anchor, globe, km_per_u};
 use crate::view::reach::eye_ground;
 use celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use xpute_guest::clock::now;
-use xpute_guest::global::Global;
 
-// The sky moves with the wall clock and nothing else asks for a frame while
-// the view is still, so the clock asks for one this often.
-const ENV_CLOCK_FRAME_MS: f64 = 2000.0;
-
-struct Environment {
-    clock_frame_at: f64,
-}
-
-static ENVIRONMENT: Global<Environment> = Global::new();
-
-fn environment() -> &'static mut Environment {
-    ENVIRONMENT.get(|| Environment { clock_frame_at: 0.0 })
-}
-
-/// Runs before the chunks' step.
+/// Runs before the chunks' step: the sky moves with the wall clock and
+/// nothing else asks for a frame while the view is still, so the clock asks
+/// for one when its next step falls (`EnvironmentDraw::observe`).
 pub fn environment_step() {
-    let e = environment();
-    let sched = &mut kernel().scene;
-
-    let unix_ms = wall_now();
-    sched.environment.observe(unix_ms);
-
-    if unix_ms - e.clock_frame_at >= ENV_CLOCK_FRAME_MS {
-        e.clock_frame_at = unix_ms;
-    }
-    wake_at(now() + e.clock_frame_at + ENV_CLOCK_FRAME_MS - unix_ms);
+    let next_ms = kernel().scene.environment.observe(wall_now());
+    wake_at(now() + next_ms);
 }
 
 /// Below this the transition counts as done and stops asking for frames.
@@ -55,7 +35,8 @@ const EASE_RATE: f64 = 1.5;
 
 pub struct EnvironmentDraw {
     started: bool,
-    /// Days since J2000.0, from the host's wall clock.
+    /// Days since J2000.0 the sky is drawn for, from the host's wall clock
+    /// a step at a time (`observe`).
     days: f64,
     sun: [f64; 3],
     moon: [f64; 3],
@@ -89,11 +70,28 @@ impl EnvironmentDraw {
         self.started && self.sun[2] < 0.0
     }
 
-    /// Unix milliseconds.
-    pub fn observe(&mut self, unix_ms: f64) {
-        self.days = j2000_days(unix_ms);
+    /// Unix milliseconds: the time, and the sky's days a step at a time, a
+    /// step where the sun's or the moon's height over the anchor has moved
+    /// `SUN_MU_STEP` since the last — so the sky's words stay the same
+    /// between steps, and its tables are drawn again by the same measure;
+    /// and how many milliseconds on the next step falls, as their heights
+    /// move now.
+    pub fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
         self.time = (unix_ms - first) / 1000.0;
+        let [lon, lat, _] = anchor();
+        let heights = |days: f64| [sun_position(days, lat, lon)[2], moon_position(days, lat, lon)[2]];
+        let (step, days) = (f64::from(SUN_MU_STEP), j2000_days(unix_ms));
+        let moved = |from: [f64; 2], to: [f64; 2]| [0, 1].map(|k| (to[k] - from[k]).abs());
+        if !self.started || moved(heights(self.days), heights(days)).iter().any(|&d| d > step) {
+            self.days = days;
+        }
+        // As fast as each height moves over the next minute, when it will have moved a step.
+        const MINUTE_MS: f64 = 60_000.0;
+        let (now, drawn) = (heights(days), heights(self.days));
+        let rate = moved(now, heights(days + MINUTE_MS / 86_400_000.0));
+        let gone = moved(drawn, now);
+        (0..2).map(|k| (step - gone[k]).max(0.0) * MINUTE_MS / rate[k]).fold(f64::INFINITY, f64::min)
     }
 
     /// Whether a transition is still in flight and wants frames.
