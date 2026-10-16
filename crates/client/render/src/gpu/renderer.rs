@@ -770,6 +770,57 @@ struct CastBuffers {
     overwrite_room: usize,
     overwrite_revision: Option<u32>,
     grown: Grown,
+    /// What the last cast read (`CastRead`), and whether this frame's is
+    /// the same: the lane and the decor grown over it stand, and nothing is
+    /// cast.
+    read: CastRead,
+    standing: bool,
+}
+
+/// The cast's whole input as the last cast read it, byte for byte: the lane
+/// and the decor grown over the same world are one function of it, so a
+/// frame that reads the same stands on them. Each lane is read with its
+/// length, so no two sets read alike.
+#[derive(Default)]
+struct CastRead {
+    bytes: Vec<u8>,
+    at: usize,
+    same: bool,
+}
+
+impl CastRead {
+    fn begin(&mut self) {
+        (self.at, self.same) = (0, true);
+    }
+
+    fn take(&mut self, lane: &[u8]) {
+        let end = self.at + lane.len();
+        if self.bytes.get(self.at..end) != Some(lane) {
+            self.same = false;
+            if self.bytes.len() < end {
+                self.bytes.resize(end, 0);
+            }
+            self.bytes[self.at..end].copy_from_slice(lane);
+        }
+        self.at = end;
+    }
+
+    fn read<T: Copy>(&mut self, lane: &[T]) {
+        self.take(bytes(&[lane.len() as u32]));
+        self.take(bytes(lane));
+    }
+
+    /// Whether all of it read as the last time.
+    fn end(&mut self) -> bool {
+        let same = self.same && self.at == self.bytes.len();
+        self.bytes.truncate(self.at);
+        same
+    }
+
+    /// The lane no longer holds what was read: the next frame casts.
+    fn forget(&mut self) {
+        self.bytes.clear();
+    }
 }
 
 /// A square on the GPU, in bytes.
@@ -928,6 +979,7 @@ impl ScreenCellsPass {
             if let Some(c) = self.cast.as_mut() {
                 c.across = [0; 2];
                 c.grown.off();
+                c.read.forget();
             }
             g.write_buffer(self.lane, 0, bytes(&[0u32, 0, steps, 0]));
             return;
@@ -952,10 +1004,46 @@ impl ScreenCellsPass {
                 overwrite_room: 0,
                 overwrite_revision: None,
                 grown: Grown::new(g, pipelines),
+                read: CastRead::default(),
+                standing: false,
             };
             self.cast = Some(c);
         }
         let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
+        // The cast and the decor it grows read exactly this, all of it here:
+        // a field the frame hands the cast fails to destructure until it is
+        // read. The overwrites' contents are their revision's.
+        let Cast {
+            eye,
+            tangents,
+            window,
+            shards,
+            overwrites: Overwrites { heap: _, data: _, room, revision },
+            decor,
+        } = &cast;
+        let r = &mut c.read;
+        r.begin();
+        r.read(eye);
+        r.read(tangents);
+        r.read(window);
+        r.read(shards);
+        r.read(&[*room as u32, *revision, steps]);
+        match decor {
+            Some(DecorFrame { shown, params, placed, translation }) => {
+                r.read(shown);
+                r.read(params);
+                r.read(placed);
+                r.read(translation);
+            }
+            None => r.read::<u32>(&[]),
+        }
+        r.read(meshes);
+        // And the ground's squares, written this frame or not.
+        let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
+        c.standing = r.end() && fresh == 0 && c.group != 0;
+        if c.standing {
+            return;
+        }
         xpute_kit::ensure!(cast.window.len() <= c.window_words, ENOTRECOVERABLE, cast.window.len());
         g.write_buffer(c.window, 0, bytes(cast.window));
         g.write_buffer(c.eye, 0, bytes(&cast.eye));
@@ -1083,7 +1171,7 @@ impl ScreenCellsPass {
     /// The GPU's cast into the lane, a ray a cell, where it runs; then the
     /// decor the ground grows over the same world, a candidate a thread.
     fn dispatch(&self, g: &Gpu, encoder: u32) {
-        let Some(c) = &self.cast else { return };
+        let Some(c) = self.cast.as_ref().filter(|c| !c.standing) else { return };
         let pass = g.compute_pass(encoder);
         g.set_pipeline(pass, c.built.pipeline);
         g.set_bind_group(pass, 0, c.group, &[]);
@@ -1481,6 +1569,10 @@ impl Renderer {
         let skipped = !frame_commit();
         if skipped {
             REDRAW.set(true);
+            // Its cast was dropped with it: the lane holds an older one.
+            if let Some(c) = self.screen.cast.as_mut() {
+                c.read.forget();
+            }
         }
         let stat = self.stat(draws.records, world, skipped, (gpu_ms, gpu_spans));
         self.order = order;
