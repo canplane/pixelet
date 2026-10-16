@@ -31,8 +31,8 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             state: State::Absent,
         }; SQUARES as usize],
         ticket: 0,
-        table: Vec::new(),
-        pinned: Vec::new(),
+        table: [0; TABLE_WORDS],
+        pinned: List::new(),
     });
     let w = windows();
     for win in 0..WINDOWS {

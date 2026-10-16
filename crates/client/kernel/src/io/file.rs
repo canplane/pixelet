@@ -184,6 +184,37 @@ pub fn close(fd: Fd) {
     }
 }
 
+/// A path as `open` takes it, written where it is wanted: at most
+/// `PATH_BYTES`, so no path is allocated.
+pub struct Path {
+    bytes: [u8; PATH_BYTES],
+    len: usize,
+}
+
+impl Path {
+    /// The path `write` writes; past `PATH_BYTES` is a bug, as `named` says.
+    pub fn of(write: impl FnOnce(&mut Path) -> core::fmt::Result) -> Path {
+        let mut p = Path { bytes: [0; PATH_BYTES], len: 0 };
+        xpute_kit::ensure!(write(&mut p).is_ok(), EMSGSIZE, PATH_BYTES);
+        p
+    }
+
+    pub fn as_str(&self) -> &str {
+        // SAFETY: only `write_str`'s whole strs are in it.
+        unsafe { core::str::from_utf8_unchecked(&self.bytes[..self.len]) }
+    }
+}
+
+impl core::fmt::Write for Path {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        let end = self.len + s.len();
+        let to = self.bytes.get_mut(self.len..end).ok_or(core::fmt::Error)?;
+        to.copy_from_slice(s.as_bytes());
+        self.len = end;
+        Ok(())
+    }
+}
+
 fn named(path: &str) -> &str {
     xpute_kit::ensure!(path.len() <= PATH_BYTES, EMSGSIZE, path.len());
     path

@@ -25,6 +25,7 @@ use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, w
 use xpute_guest::ipc::door::Door;
 use xpute_guest::ipc::ring::Ring;
 use xpute_guest::mem::base::{off_of, off_of_slice, ptr_at};
+use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::wire::xtp::PacketWriter;
 
@@ -259,7 +260,7 @@ fn post_shell(s: &mut State) {
     });
     // Collected first: stopping a read settles it, which must not happen inside
     // the request scheduler's own walk.
-    let mut stops = Vec::new();
+    let mut stops = List::<u64, { crate::param::MAX_CREDITS as usize }>::new();
     take_stops(|key| stops.push(key));
     for key in stops {
         if !crate::io::fetch::cancel(key) {

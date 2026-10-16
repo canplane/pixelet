@@ -68,8 +68,9 @@ pub const TILE_PREFIX: &str = "/tile/";
 pub const ASSET_PREFIX: &str = "/asset/";
 
 /// A kind's tile under `TILE_PREFIX` and the kind, `{version}/{name}`.
-pub fn tile_object(version: &str, name: &str) -> String {
-    format!("{version}/{name}")
+/// Written into `w`, so a key is made where it is wanted, not allocated.
+pub fn tile_object(w: &mut impl core::fmt::Write, version: &str, name: impl core::fmt::Display) -> core::fmt::Result {
+    write!(w, "{version}/{name}")
 }
 
 /// The Earth's picture whole, in place of a tile's name under the earth layer's version: the sphere's, no tile of the pyramid.

@@ -22,6 +22,7 @@ use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::{off_of, off_of_slice};
+use xpute_kit::collection::list::List;
 
 use crate::layer::terrain::fixed::{back_off, cells_off, fill_off, looks_off, CELLS_BYTES, CELLS_LANE_BYTES, LOOK_LANE_BYTES, RANGE};
 use crate::layer::Base;
@@ -39,6 +40,8 @@ pub enum Centre {
 /// The tiles the windows apart from the eye's want at most: a window spans
 /// two tiles a side.
 pub const PINNED_TILES: u32 = (WINDOWS - EYE_WINDOWS) * 4;
+/// The eye's windows' slot table's words: a row of four a slot.
+const TABLE_WORDS: usize = (4 * EYE_WINDOWS * SLOTS) as usize;
 const _: () = assert!(window::WINDOW <= TILE_CELLS + 1, "a window spans two tiles a side");
 
 /// Who window `w` is about, and its cells' zoom as laid out; a
@@ -91,9 +94,9 @@ struct Windows {
     slots: [Slot; SQUARES as usize],
     ticket: u32,
     /// The slot table the GPU's cast reads: per eye window, a row a slot.
-    table: Vec<i32>,
+    table: [i32; TABLE_WORDS],
     /// The tiles the windows apart from the eye's want (`pinned`).
-    pinned: Vec<Tile>,
+    pinned: List<Tile, { PINNED_TILES as usize }>,
 }
 
 static WINDOWS_STATE: Global<Windows> = Global::new();
@@ -109,8 +112,8 @@ fn windows() -> &'static mut Windows {
             state: State::Absent,
         }; SQUARES as usize],
         ticket: 0,
-        table: Vec::new(),
-        pinned: Vec::new(),
+        table: [0; TABLE_WORDS],
+        pinned: List::new(),
     })
 }
 
@@ -242,7 +245,7 @@ pub fn step(at: [Option<[f64; 2]>; 3]) -> bool {
             }
         }
     }
-    was != w.pinned
+    was[..] != w.pinned[..]
 }
 
 /// The tiles the focus's and a destination's windows want, which the eye's
@@ -257,10 +260,8 @@ pub fn pinned() -> &'static [Tile] {
 /// whether present.
 pub fn table() -> &'static [i32] {
     let w = windows();
-    w.table.clear();
-    for i in 0..EYE_WINDOWS * SLOTS {
-        let slot = w.slots[i as usize];
-        w.table.extend_from_slice(&[slot.square[0], slot.square[1], i32::from(slot.state == State::Present), 0]);
+    for (row, slot) in w.table.as_chunks_mut::<4>().0.iter_mut().zip(&w.slots) {
+        *row = [slot.square[0], slot.square[1], i32::from(slot.state == State::Present), 0];
     }
     &w.table
 }

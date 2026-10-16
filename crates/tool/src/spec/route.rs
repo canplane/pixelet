@@ -84,8 +84,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }
     rs.extend(object_doc.iter().map(|l| format!("/// {l}")));
     rs.extend([
-        "pub fn tile_object(version: &str, name: &str) -> String {".to_string(),
-        format!("    format!({})", json_str(object)),
+        "/// Written into `w`, so a key is made where it is wanted, not allocated.".to_string(),
+        "pub fn tile_object(w: &mut impl core::fmt::Write, version: &str, name: impl core::fmt::Display) -> core::fmt::Result {".to_string(),
+        format!("    write!(w, {})", json_str(object)),
         "}".into(),
         String::new(),
         format!("/// {sphere_doc}"),

@@ -17,10 +17,11 @@ use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 use crate::abi::host::root;
 use crate::io::demand::Ask;
 use crate::io::failure::Ended;
-use crate::io::file::{self, Opened, Owner};
+use crate::io::file::{self, Opened, Owner, Path};
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::io::source;
 use crate::sched::edge::{request_world_tick, world_edge};
+use core::fmt::Write as _;
 use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::route::{tile_object, TILE_SPHERE};
 use xpute_guest::abi::handle::Slots;
@@ -187,8 +188,13 @@ pub fn open_asset(credit: Credit, kind: LoadKind, load: Load) {
         LoadKind::Image => Owner::Image { key },
     };
     match load {
-        Load::Sphere => file::open(credit, BaseLayer::earth as u32, &tile_object(source::whole(BaseLayer::earth), TILE_SPHERE), owner),
-        _ => file::open(credit, root::ASSET, &load.number().to_string(), owner),
+        Load::Sphere => file::open(
+            credit,
+            BaseLayer::earth as u32,
+            Path::of(|w| tile_object(w, source::whole(BaseLayer::earth), TILE_SPHERE)).as_str(),
+            owner,
+        ),
+        _ => file::open(credit, root::ASSET, Path::of(|w| write!(w, "{}", load.number())).as_str(), owner),
     };
 }
 
