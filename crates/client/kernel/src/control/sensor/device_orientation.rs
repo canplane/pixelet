@@ -141,10 +141,12 @@ pub fn orientation_visible() {
     }
 }
 
-/// Also the only path back once lost; iOS recovery stays manual (the compass
-/// button), since its request needs a user gesture.
+/// Armed only while a heading is tracked, where silence is the only sign of
+/// its loss: nothing tracked, nothing is woken for. A heading is asked for
+/// when the sensors open and again when the user follows (pxl-kernel
+/// shell.rs `tracking_action`), never on a timer.
 pub fn orientation_watchdog_step(platform: OrientationPlatform) {
-    if !platform.silence_is_loss {
+    if !platform.silence_is_loss || !device_orientation_store().is_tracking_orientation {
         return;
     }
     let o = orientation();
@@ -155,13 +157,6 @@ pub fn orientation_watchdog_step(platform: OrientationPlatform) {
     }
     o.watchdog_at = t + WATCHDOG_INTERVAL_MS;
     wake_at(o.watchdog_at);
-    let store = device_orientation_store();
-    if !store.is_tracking_orientation {
-        if !platform.needs_permission {
-            request_orientation(platform);
-        }
-        return;
-    }
     let Some(last) = o.last_event_at else { return };
     if t - last > WATCHDOG_TIMEOUT_MS {
         o.command = Some(OrientationCommand::Remove);
