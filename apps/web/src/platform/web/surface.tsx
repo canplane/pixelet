@@ -11,7 +11,7 @@ import { useEffect, useRef } from "react";
 
 import { PointerPhase, PointerType } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_open, kernel_rect, kernel_visible, kernel_wheel } from "@/kernel/control/input.ts";
-import { worldPointer } from "@/app/store/pointer.ts";
+import { releasePointers, worldPointer } from "@/app/store/pointer.ts";
 import { keyDown, keyUp, releaseKeys } from "@/app/store/keyboard.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { surface_close, surface_open, surface_size } from "@/kernel/render/surface.ts";
@@ -118,7 +118,10 @@ function drive(canvas: HTMLCanvasElement): () => void {
   };
   const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
   const onVisibility = () => {
-    if (document.visibilityState !== "visible") releaseKeys();
+    if (document.visibilityState !== "visible") {
+      releaseKeys();
+      releasePointers();
+    }
     kernel_visible(document.visibilityState === "visible");
   };
   const onPageHide = () => kernel_visible(false);
@@ -137,6 +140,7 @@ function drive(canvas: HTMLCanvasElement): () => void {
   globalThis.addEventListener("keydown", onKeyDown, true);
   globalThis.addEventListener("keyup", onKeyUp, true);
   globalThis.addEventListener("blur", releaseKeys);
+  globalThis.addEventListener("blur", releasePointers);
   const observer = new ResizeObserver(onResize);
   observer.observe(canvas);
 
@@ -151,8 +155,10 @@ function drive(canvas: HTMLCanvasElement): () => void {
   });
 
   return () => {
+    releasePointers();
     close();
     observer.disconnect();
+    globalThis.removeEventListener("blur", releasePointers);
     globalThis.removeEventListener("blur", releaseKeys);
     globalThis.removeEventListener("keyup", onKeyUp, true);
     globalThis.removeEventListener("keydown", onKeyDown, true);

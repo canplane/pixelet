@@ -17,8 +17,8 @@ import { DockMode, useUiStore } from "@/app/store/ui.ts";
 
 /** The pointers spent putting the typing away. */
 const spent = new Set<i32>();
-/** The pointers pressed, whose moves drag rather than hover. */
-const pressed = new Set<i32>();
+/** The pointers pressed, whose moves drag rather than hover, each with its kind. */
+const pressed = new Map<i32, PointerType>();
 
 useUiStore.subscribe((state, before) => {
   if (state.dockMode === DockMode.Message && before.dockMode !== DockMode.Message) kernel_pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
@@ -29,7 +29,7 @@ export function worldPointer(phase: PointerPhase, pointerType: PointerType, id: 
   const typing = dockMode === DockMode.Message;
   switch (phase) {
     case PointerPhase.Down:
-      pressed.add(id);
+      pressed.set(id, pointerType);
       Keyboard.dismiss();
       if (typing) {
         spent.add(id);
@@ -46,4 +46,10 @@ export function worldPointer(phase: PointerPhase, pointerType: PointerType, id: 
       break;
   }
   kernel_pointer(phase, pointerType, id, button, x, y);
+}
+
+/** Each pointer still pressed ends with a cancel: the page lost it (blur,
+ * hidden, the surface gone) and its lift will not come. */
+export function releasePointers(): void {
+  for (const [id, pointerType] of pressed) worldPointer(PointerPhase.Cancel, pointerType, id, 0, 0, 0);
 }
