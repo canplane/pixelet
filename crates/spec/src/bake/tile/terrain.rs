@@ -216,11 +216,7 @@ pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mu
     let looks = |i: u32| {
         let at = square_cell(place, i);
         let c = (at[1] * TILE_CELLS + at[0]) as usize;
-        pxl_portable::ground::word(match cells.len() {
-            LOOK_LANE => [0, 1, 2, 3].map(|k| u32::from(cells[4 * c + k])),
-            1 => [u32::from(cells[0]); 4],
-            _ => [u32::from(cells[c]); 4],
-        })
+        pxl_portable::ground::word(four_looks(cells, c).map(u32::from))
     };
     let height = |i: u32| pxl_portable::ground::height(|j| i32::from(held.ele[j]), square_cell(place, i));
     let cell = crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom);
@@ -306,9 +302,19 @@ impl TerrainTile {
     }
 }
 
-/// One look a cell, each its own four.
-fn expand(one: &[GroundId]) -> Vec<GroundId> {
-    one.iter().flat_map(|&l| [l; 4]).collect()
+/// Cell `c`'s four looks, however a tile holds them: four a cell
+/// (`LOOK_LANE`), one a cell, each its own four, or one for the whole tile.
+fn four_looks(cells: &[GroundId], c: usize) -> [GroundId; 4] {
+    match cells.len() {
+        LOOK_LANE => [cells[4 * c], cells[4 * c + 1], cells[4 * c + 2], cells[4 * c + 3]],
+        1 => [cells[0]; 4],
+        _ => [cells[c]; 4],
+    }
+}
+
+/// The tile's four looks a cell, however it holds them (`four_looks`).
+fn expand(cells: &[GroundId]) -> Vec<GroundId> {
+    (0..GROUND_LANE).flat_map(|c| four_looks(cells, c)).collect()
 }
 
 // A tile whose every cell's four looks are one, a leaf's, goes out a look a
@@ -353,8 +359,8 @@ pub fn handed<'a>(pkt: &'a [u8], room: &'a mut [GroundId]) -> Result<(&'a [Groun
     if ground.len() == LOOK_LANE {
         return Ok((ground, ele));
     }
-    for (q, &l) in room[..LOOK_LANE].chunks_mut(4).zip(ground) {
-        q.fill(l);
+    for (c, q) in room[..LOOK_LANE].chunks_mut(4).enumerate() {
+        q.copy_from_slice(&four_looks(ground, c));
     }
     Ok((&room[..LOOK_LANE], ele))
 }
@@ -374,7 +380,7 @@ pub fn decode_into(pkt: &[u8], room: separation::Room) -> Result<TerrainTile, Ma
 // Copied out as the bake holds it, for a tile that outlives its packet.
 pub fn decode(pkt: &[u8]) -> Result<TerrainTile, MarshalError> {
     let Lanes { ele, ground, occupancy, separation } = read_tile(pkt)?;
-    let cells = if ground.len() == LOOK_LANE { ground.to_vec() } else { expand(ground) };
+    let cells = expand(ground);
     Ok(TerrainTile::of(ele.to_vec(), Ground { cells: cells.into() }, separation.to_separation(), occupancy))
 }
 
