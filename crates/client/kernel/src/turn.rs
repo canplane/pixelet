@@ -288,7 +288,9 @@ async fn frame_task() {
         notified(frames).await;
         let Some(host) = FRAME.get(|| None).take() else { continue };
         let edge = world_edge();
+        let frame_ms = host.frame_ms;
         world_frame(host, edge.quota_ms(), edge.edge_at());
+        crate::sched::edge::tasks_after_frame(frame_ms);
         DRAWN.set(true);
     }
 }

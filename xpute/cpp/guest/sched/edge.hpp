@@ -26,6 +26,7 @@ template <std::size_t N> class Edge {
     void rise(double quota_ms) noexcept {
         edge_at_ = now();
         quota_ms_ = quota_ms;
+        until_ = edge_at_ + quota_ms;
         std::size_t n = std::exchange(parked_len_, 0);
         for (std::size_t i = 0; i < n; i++) parked_[i].wake();
     }
@@ -42,8 +43,14 @@ template <std::size_t N> class Edge {
     double edge_at() const noexcept { return edge_at_; }
     double quota_ms() const noexcept { return quota_ms_; }
 
-    double remaining() const noexcept { return std::max(edge_at_ + quota_ms_ - now(), 0.0); }
-    bool spent() const noexcept { return now() >= edge_at_ + quota_ms_; }
+    double remaining() const noexcept { return std::max(until_ - now(), 0.0); }
+    bool spent() const noexcept { return now() >= until_; }
+
+    // The tasks yield no sooner than `at`, whatever the quota: a share the
+    // guest keeps them past what ran before them, so what overran the quota
+    // does not take the tasks' turn too. The share is the guest's policy; the
+    // edge keeps only the deadline.
+    void extend_to(double at) noexcept { until_ = std::max(until_, at); }
 
     void ask_next() noexcept { asked_ = true; }
 
@@ -58,6 +65,8 @@ template <std::size_t N> class Edge {
   private:
     double edge_at_ = 0;
     double quota_ms_ = 0;
+    // When the tasks yield: the quota's end, or later (`extend_to`).
+    double until_ = 0;
     std::array<Waker, N> parked_{};
     std::size_t parked_len_ = 0;
     bool asked_ = false;

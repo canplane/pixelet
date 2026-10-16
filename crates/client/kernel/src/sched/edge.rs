@@ -31,6 +31,15 @@ pub fn request_world_tick() {
     world_edge().ask_next();
 }
 
+/// The turn's tasks keep their share past the frame that ran before them
+/// (`param::CONTENT_SHARE` of the frame the host paces, the margin taken as
+/// the quota takes it), whatever the frame overran: what the frame owes the
+/// host comes off its own next quota, never the tasks' turn.
+pub fn tasks_after_frame(frame_ms: f64) {
+    use crate::param::{CONTENT_SHARE, QUANTUM_MARGIN_SHARE};
+    world_edge().extend_to(xpute_guest::clock::now() + CONTENT_SHARE * frame_ms * (1.0 - QUANTUM_MARGIN_SHARE));
+}
+
 /// The earliest asked wins; a wait still pending when its turn comes asks again.
 pub fn wake_at(at: f64) {
     world_edge().wake_at(at);
