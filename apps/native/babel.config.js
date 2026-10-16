@@ -23,7 +23,7 @@ const root = path.resolve(__dirname, "../..");
  * does the rest.
  */
 const { readEnums, enumAt, stale: staleIn } = require(path.join(root, "apps/web/script/const-enum.cjs"));
-const TABLE = readEnums([path.join(root, "apps/web/src"), path.join(root, "packages"), path.join(root, "apps/native/src")]);
+const TABLE = readEnums([path.join(root, "apps/web/src"), path.join(root, "xpute/ts"), path.join(root, "apps/native/src")]);
 const { exported: EXPORTED, local: LOCAL } = TABLE;
 
 /** The table is read once, when Metro loads this file, so an enum or a member
