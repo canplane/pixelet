@@ -3,12 +3,12 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-naga-wgsl.
-// Inputs: ac5bed0c2110248d5d686e86cea9cfe666506ad9320eae57db1fcc218c51dcb0
+// Inputs: 2f5f414fe77b0c0b2da9f31c142608e4d18b03c189217fd3c392825a98a9618f
 struct type_4 {
     member: array<u32>,
 }
 
-struct type_20 {
+struct type_21 {
     member: u32,
     member_1: u32,
 }
@@ -123,7 +123,7 @@ fn function_() {
     var phi_6397_: bool;
     var phi_788_: u32;
     var phi_8769_: bool;
-    var phi_810_: type_20;
+    var phi_810_: type_21;
     var phi_813_: u32;
     var phi_829_: u32;
     var phi_832_: u32;
@@ -132,17 +132,17 @@ fn function_() {
     var phi_8766_: bool;
     var local_30: u32;
     var phi_873_: bool;
-    var phi_878_: type_20;
-    var phi_879_: type_20;
+    var phi_878_: type_21;
+    var phi_879_: type_21;
     var phi_880_: bool;
     var phi_885_: u32;
-    var phi_887_: type_20;
+    var phi_887_: type_21;
     var phi_888_: u32;
     var phi_889_: bool;
     var phi_890_: bool;
     var phi_8784_: bool;
     var phi_891_: u32;
-    var phi_811_: type_20;
+    var phi_811_: type_21;
     var phi_814_: u32;
     var phi_892_: bool;
     var phi_893_: bool;
@@ -152,8 +152,8 @@ fn function_() {
     var phi_6345_: bool;
     var phi_6344_: bool;
     var phi_6342_: u32;
-    var local_31: type_20;
-    var local_32: type_20;
+    var local_31: type_21;
+    var local_32: type_21;
     var phi_911_: u32;
     var phi_912_: u32;
     var phi_8850_: bool;
@@ -170,7 +170,7 @@ fn function_() {
     var phi_6447_: u32;
     var phi_6448_: bool;
     var phi_1091_: u32;
-    var phi_1095_: type_20;
+    var phi_1095_: type_21;
     var phi_6477_: u32;
     var phi_6480_: u32;
     var phi_6481_: bool;
@@ -179,7 +179,7 @@ fn function_() {
     var phi_6488_: u32;
     var phi_6489_: bool;
     var phi_1132_: u32;
-    var phi_1136_: type_20;
+    var phi_1136_: type_21;
     var phi_1159_: u32;
     var phi_1185_: u32;
     var phi_1205_: u32;
@@ -255,7 +255,7 @@ fn function_() {
     var phi_6772_: u32;
     var phi_6773_: bool;
     var phi_1913_: u32;
-    var phi_1917_: type_20;
+    var phi_1917_: type_21;
     var phi_6802_: u32;
     var phi_6805_: u32;
     var phi_6806_: bool;
@@ -264,7 +264,7 @@ fn function_() {
     var phi_6813_: u32;
     var phi_6814_: bool;
     var phi_1958_: u32;
-    var phi_1962_: type_20;
+    var phi_1962_: type_21;
     var phi_1985_: u32;
     var phi_2013_: u32;
     var phi_2104_: u32;
@@ -278,7 +278,7 @@ fn function_() {
     var phi_6947_: u32;
     var phi_6948_: bool;
     var phi_2145_: u32;
-    var phi_2149_: type_20;
+    var phi_2149_: type_21;
     var phi_2172_: u32;
     var phi_2198_: u32;
     var phi_2218_: u32;
@@ -396,7 +396,7 @@ fn function_() {
     var phi_7499_: bool;
     var phi_3192_: u32;
     var phi_9276_: bool;
-    var phi_3214_: type_20;
+    var phi_3214_: type_21;
     var phi_3217_: u32;
     var phi_3233_: u32;
     var phi_3236_: u32;
@@ -405,17 +405,17 @@ fn function_() {
     var phi_9273_: bool;
     var local_34: u32;
     var phi_3277_: bool;
-    var phi_3282_: type_20;
-    var phi_3283_: type_20;
+    var phi_3282_: type_21;
+    var phi_3283_: type_21;
     var phi_3284_: bool;
     var phi_3289_: u32;
-    var phi_3291_: type_20;
+    var phi_3291_: type_21;
     var phi_3292_: u32;
     var phi_3293_: bool;
     var phi_3294_: bool;
     var phi_9312_: bool;
     var phi_3295_: u32;
-    var phi_3215_: type_20;
+    var phi_3215_: type_21;
     var phi_3218_: u32;
     var phi_3296_: bool;
     var phi_3297_: bool;
@@ -425,8 +425,8 @@ fn function_() {
     var phi_6351_: bool;
     var phi_6350_: bool;
     var phi_6349_: u32;
-    var local_35: type_20;
-    var local_36: type_20;
+    var local_35: type_21;
+    var local_36: type_21;
     var phi_3315_: u32;
     var phi_3316_: u32;
     var phi_9381_: bool;
@@ -443,7 +443,7 @@ fn function_() {
     var phi_7584_: u32;
     var phi_7585_: bool;
     var phi_3396_: u32;
-    var phi_3400_: type_20;
+    var phi_3400_: type_21;
     var phi_7614_: u32;
     var phi_7617_: u32;
     var phi_7618_: bool;
@@ -452,7 +452,7 @@ fn function_() {
     var phi_7625_: u32;
     var phi_7626_: bool;
     var phi_3437_: u32;
-    var phi_3441_: type_20;
+    var phi_3441_: type_21;
     var phi_3464_: u32;
     var phi_3490_: u32;
     var phi_3510_: u32;
@@ -528,7 +528,7 @@ fn function_() {
     var phi_7905_: u32;
     var phi_7906_: bool;
     var phi_4218_: u32;
-    var phi_4222_: type_20;
+    var phi_4222_: type_21;
     var phi_7935_: u32;
     var phi_7938_: u32;
     var phi_7939_: bool;
@@ -537,7 +537,7 @@ fn function_() {
     var phi_7946_: u32;
     var phi_7947_: bool;
     var phi_4263_: u32;
-    var phi_4267_: type_20;
+    var phi_4267_: type_21;
     var phi_4290_: u32;
     var phi_4318_: u32;
     var phi_4409_: u32;
@@ -551,7 +551,7 @@ fn function_() {
     var phi_8080_: u32;
     var phi_8081_: bool;
     var phi_4450_: u32;
-    var phi_4454_: type_20;
+    var phi_4454_: type_21;
     var phi_4477_: u32;
     var phi_4503_: u32;
     var phi_4523_: u32;
@@ -1153,7 +1153,7 @@ fn function_() {
                             }
                             let _e232 = local_29[_e229];
                             phi_8769_ = false;
-                            phi_810_ = type_20(0u, type_20().member_1);
+                            phi_810_ = type_21(0u, type_21().member_1);
                             phi_813_ = 0u;
                             loop {
                                 let _e237 = phi_8769_;
@@ -1216,7 +1216,7 @@ fn function_() {
                                     let _e265 = (2u * _e264);
                                     let _e266 = (_e265 > 4u);
                                     if _e266 {
-                                        phi_887_ = type_20();
+                                        phi_887_ = type_21();
                                         phi_888_ = u32();
                                         phi_889_ = false;
                                         phi_890_ = false;
@@ -1229,9 +1229,9 @@ fn function_() {
                                             }
                                             let _e275 = phi_873_;
                                             if _e275 {
-                                                phi_878_ = type_20(1u, _e244);
+                                                phi_878_ = type_21(1u, _e244);
                                             } else {
-                                                phi_878_ = type_20();
+                                                phi_878_ = type_21();
                                             }
                                             let _e278 = phi_878_;
                                             phi_879_ = _e278;
@@ -1267,7 +1267,7 @@ fn function_() {
                                 } else {
                                     phi_8784_ = _e237;
                                     phi_891_ = u32();
-                                    phi_811_ = type_20();
+                                    phi_811_ = type_21();
                                     phi_814_ = u32();
                                     phi_892_ = false;
                                     phi_893_ = false;
@@ -1373,7 +1373,7 @@ fn function_() {
                                 let _e371 = phi_6447_;
                                 let _e373 = phi_6448_;
                                 if (select(_e371, 4096u, _e373) == 4096u) {
-                                    phi_1095_ = type_20(0u, 0u);
+                                    phi_1095_ = type_21(0u, 0u);
                                 } else {
                                     let _e386 = ((_e147 + 8173u) + (8u + (((bitcast<u32>(_e173) >> bitcast<u32>(4u)) * 4u) + (bitcast<u32>(_e171) >> bitcast<u32>(4u)))));
                                     if (_e386 < _e137) {
@@ -1383,7 +1383,7 @@ fn function_() {
                                         phi_1091_ = 0u;
                                     }
                                     let _e391 = phi_1091_;
-                                    phi_1095_ = type_20((_e391 & 65535u), (_e391 >> bitcast<u32>(16i)));
+                                    phi_1095_ = type_21((_e391 & 65535u), (_e391 >> bitcast<u32>(16i)));
                                 }
                                 let _e397 = phi_1095_;
                                 let _e399 = (_e350 < _e397.member_1);
@@ -1423,7 +1423,7 @@ fn function_() {
                                     let _e418 = phi_6488_;
                                     let _e420 = phi_6489_;
                                     if (select(_e418, 4096u, _e420) == 4096u) {
-                                        phi_1136_ = type_20(0u, 0u);
+                                        phi_1136_ = type_21(0u, 0u);
                                     } else {
                                         let _e433 = ((_e147 + 8173u) + (8u + (((bitcast<u32>(_e173) >> bitcast<u32>(4u)) * 4u) + (bitcast<u32>(_e171) >> bitcast<u32>(4u)))));
                                         if (_e433 < _e137) {
@@ -1433,7 +1433,7 @@ fn function_() {
                                             phi_1132_ = 0u;
                                         }
                                         let _e438 = phi_1132_;
-                                        phi_1136_ = type_20((_e438 & 65535u), (_e438 >> bitcast<u32>(16i)));
+                                        phi_1136_ = type_21((_e438 & 65535u), (_e438 >> bitcast<u32>(16i)));
                                     }
                                     let _e444 = phi_1136_;
                                     let _e446 = (_e444.member + _e350);
@@ -1960,7 +1960,7 @@ fn function_() {
                                             let _e935 = phi_6772_;
                                             let _e937 = phi_6773_;
                                             if (select(_e935, 4096u, _e937) == 4096u) {
-                                                phi_1917_ = type_20(0u, 0u);
+                                                phi_1917_ = type_21(0u, 0u);
                                             } else {
                                                 let _e949 = (_e449 + (8u + (((bitcast<u32>(_e173) >> bitcast<u32>(4u)) * 4u) + (bitcast<u32>(_e171) >> bitcast<u32>(4u)))));
                                                 if (_e949 < _e137) {
@@ -1970,7 +1970,7 @@ fn function_() {
                                                     phi_1913_ = 0u;
                                                 }
                                                 let _e954 = phi_1913_;
-                                                phi_1917_ = type_20((_e954 & 65535u), (_e954 >> bitcast<u32>(16i)));
+                                                phi_1917_ = type_21((_e954 & 65535u), (_e954 >> bitcast<u32>(16i)));
                                             }
                                             let _e960 = phi_1917_;
                                             if (_e916 < _e960.member_1) {
@@ -2012,7 +2012,7 @@ fn function_() {
                                                     let _e982 = phi_6813_;
                                                     let _e984 = phi_6814_;
                                                     if (select(_e982, 4096u, _e984) == 4096u) {
-                                                        phi_1962_ = type_20(0u, 0u);
+                                                        phi_1962_ = type_21(0u, 0u);
                                                     } else {
                                                         let _e996 = (_e449 + (8u + (((bitcast<u32>(_e173) >> bitcast<u32>(4u)) * 4u) + (bitcast<u32>(_e171) >> bitcast<u32>(4u)))));
                                                         if (_e996 < _e137) {
@@ -2022,7 +2022,7 @@ fn function_() {
                                                             phi_1958_ = 0u;
                                                         }
                                                         let _e1001 = phi_1958_;
-                                                        phi_1962_ = type_20((_e1001 & 65535u), (_e1001 >> bitcast<u32>(16i)));
+                                                        phi_1962_ = type_21((_e1001 & 65535u), (_e1001 >> bitcast<u32>(16i)));
                                                     }
                                                     let _e1007 = phi_1962_;
                                                     let _e1009 = (_e1007.member + _e916);
@@ -2097,7 +2097,7 @@ fn function_() {
                                                     let _e1078 = phi_6947_;
                                                     let _e1080 = phi_6948_;
                                                     if (select(_e1078, 4096u, _e1080) == 4096u) {
-                                                        phi_2149_ = type_20(0u, 0u);
+                                                        phi_2149_ = type_21(0u, 0u);
                                                     } else {
                                                         let _e1092 = (_e449 + (8u + (((bitcast<u32>(_e173) >> bitcast<u32>(4u)) * 4u) + (bitcast<u32>(_e171) >> bitcast<u32>(4u)))));
                                                         if (_e1092 < _e137) {
@@ -2107,7 +2107,7 @@ fn function_() {
                                                             phi_2145_ = 0u;
                                                         }
                                                         let _e1097 = phi_2145_;
-                                                        phi_2149_ = type_20((_e1097 & 65535u), (_e1097 >> bitcast<u32>(16i)));
+                                                        phi_2149_ = type_21((_e1097 & 65535u), (_e1097 >> bitcast<u32>(16i)));
                                                     }
                                                     let _e1103 = phi_2149_;
                                                     let _e1105 = (_e1103.member + _e916);
@@ -2897,7 +2897,7 @@ fn function_() {
                                                             }
                                                             let _e1818 = local_20[_e1815];
                                                             phi_9276_ = _e1593;
-                                                            phi_3214_ = type_20(0u, type_20().member_1);
+                                                            phi_3214_ = type_21(0u, type_21().member_1);
                                                             phi_3217_ = 0u;
                                                             loop {
                                                                 let _e1823 = phi_9276_;
@@ -2960,7 +2960,7 @@ fn function_() {
                                                                     let _e1851 = (2u * _e1850);
                                                                     let _e1852 = (_e1851 > 4u);
                                                                     if _e1852 {
-                                                                        phi_3291_ = type_20();
+                                                                        phi_3291_ = type_21();
                                                                         phi_3292_ = u32();
                                                                         phi_3293_ = false;
                                                                         phi_3294_ = false;
@@ -2973,9 +2973,9 @@ fn function_() {
                                                                             }
                                                                             let _e1861 = phi_3277_;
                                                                             if _e1861 {
-                                                                                phi_3282_ = type_20(1u, _e1830);
+                                                                                phi_3282_ = type_21(1u, _e1830);
                                                                             } else {
-                                                                                phi_3282_ = type_20();
+                                                                                phi_3282_ = type_21();
                                                                             }
                                                                             let _e1864 = phi_3282_;
                                                                             phi_3283_ = _e1864;
@@ -3011,7 +3011,7 @@ fn function_() {
                                                                 } else {
                                                                     phi_9312_ = _e1823;
                                                                     phi_3295_ = u32();
-                                                                    phi_3215_ = type_20();
+                                                                    phi_3215_ = type_21();
                                                                     phi_3218_ = u32();
                                                                     phi_3296_ = false;
                                                                     phi_3297_ = false;
@@ -3135,7 +3135,7 @@ fn function_() {
                                                                         let _e1986 = phi_7584_;
                                                                         let _e1988 = phi_7585_;
                                                                         if (select(_e1986, 4096u, _e1988) == 4096u) {
-                                                                            phi_3400_ = type_20(0u, 0u);
+                                                                            phi_3400_ = type_21(0u, 0u);
                                                                         } else {
                                                                             let _e2000 = (_e449 + (8u + (((bitcast<u32>(_e173) >> bitcast<u32>(4u)) * 4u) + (bitcast<u32>(_e171) >> bitcast<u32>(4u)))));
                                                                             if (_e2000 < _e137) {
@@ -3145,7 +3145,7 @@ fn function_() {
                                                                                 phi_3396_ = 0u;
                                                                             }
                                                                             let _e2005 = phi_3396_;
-                                                                            phi_3400_ = type_20((_e2005 & 65535u), (_e2005 >> bitcast<u32>(16i)));
+                                                                            phi_3400_ = type_21((_e2005 & 65535u), (_e2005 >> bitcast<u32>(16i)));
                                                                         }
                                                                         let _e2011 = phi_3400_;
                                                                         let _e2013 = (_e1967 < _e2011.member_1);
@@ -3185,7 +3185,7 @@ fn function_() {
                                                                             let _e2032 = phi_7625_;
                                                                             let _e2034 = phi_7626_;
                                                                             if (select(_e2032, 4096u, _e2034) == 4096u) {
-                                                                                phi_3441_ = type_20(0u, 0u);
+                                                                                phi_3441_ = type_21(0u, 0u);
                                                                             } else {
                                                                                 let _e2046 = (_e449 + (8u + (((bitcast<u32>(_e173) >> bitcast<u32>(4u)) * 4u) + (bitcast<u32>(_e171) >> bitcast<u32>(4u)))));
                                                                                 if (_e2046 < _e137) {
@@ -3195,7 +3195,7 @@ fn function_() {
                                                                                     phi_3437_ = 0u;
                                                                                 }
                                                                                 let _e2051 = phi_3437_;
-                                                                                phi_3441_ = type_20((_e2051 & 65535u), (_e2051 >> bitcast<u32>(16i)));
+                                                                                phi_3441_ = type_21((_e2051 & 65535u), (_e2051 >> bitcast<u32>(16i)));
                                                                             }
                                                                             let _e2057 = phi_3441_;
                                                                             let _e2059 = (_e2057.member + _e1967);
@@ -3705,7 +3705,7 @@ fn function_() {
                                                                                     let _e2522 = phi_7905_;
                                                                                     let _e2524 = phi_7906_;
                                                                                     if (select(_e2522, 4096u, _e2524) == 4096u) {
-                                                                                        phi_4222_ = type_20(0u, 0u);
+                                                                                        phi_4222_ = type_21(0u, 0u);
                                                                                     } else {
                                                                                         let _e2536 = (_e449 + (8u + (((bitcast<u32>(_e173) >> bitcast<u32>(4u)) * 4u) + (bitcast<u32>(_e171) >> bitcast<u32>(4u)))));
                                                                                         if (_e2536 < _e137) {
@@ -3715,7 +3715,7 @@ fn function_() {
                                                                                             phi_4218_ = 0u;
                                                                                         }
                                                                                         let _e2541 = phi_4218_;
-                                                                                        phi_4222_ = type_20((_e2541 & 65535u), (_e2541 >> bitcast<u32>(16i)));
+                                                                                        phi_4222_ = type_21((_e2541 & 65535u), (_e2541 >> bitcast<u32>(16i)));
                                                                                     }
                                                                                     let _e2547 = phi_4222_;
                                                                                     if (_e2503 < _e2547.member_1) {
@@ -3757,7 +3757,7 @@ fn function_() {
                                                                                             let _e2569 = phi_7946_;
                                                                                             let _e2571 = phi_7947_;
                                                                                             if (select(_e2569, 4096u, _e2571) == 4096u) {
-                                                                                                phi_4267_ = type_20(0u, 0u);
+                                                                                                phi_4267_ = type_21(0u, 0u);
                                                                                             } else {
                                                                                                 let _e2583 = (_e449 + (8u + (((bitcast<u32>(_e173) >> bitcast<u32>(4u)) * 4u) + (bitcast<u32>(_e171) >> bitcast<u32>(4u)))));
                                                                                                 if (_e2583 < _e137) {
@@ -3767,7 +3767,7 @@ fn function_() {
                                                                                                     phi_4263_ = 0u;
                                                                                                 }
                                                                                                 let _e2588 = phi_4263_;
-                                                                                                phi_4267_ = type_20((_e2588 & 65535u), (_e2588 >> bitcast<u32>(16i)));
+                                                                                                phi_4267_ = type_21((_e2588 & 65535u), (_e2588 >> bitcast<u32>(16i)));
                                                                                             }
                                                                                             let _e2594 = phi_4267_;
                                                                                             let _e2596 = (_e2594.member + _e2503);
@@ -3842,7 +3842,7 @@ fn function_() {
                                                                                             let _e2665 = phi_8080_;
                                                                                             let _e2667 = phi_8081_;
                                                                                             if (select(_e2665, 4096u, _e2667) == 4096u) {
-                                                                                                phi_4454_ = type_20(0u, 0u);
+                                                                                                phi_4454_ = type_21(0u, 0u);
                                                                                             } else {
                                                                                                 let _e2679 = (_e449 + (8u + (((bitcast<u32>(_e173) >> bitcast<u32>(4u)) * 4u) + (bitcast<u32>(_e171) >> bitcast<u32>(4u)))));
                                                                                                 if (_e2679 < _e137) {
@@ -3852,7 +3852,7 @@ fn function_() {
                                                                                                     phi_4450_ = 0u;
                                                                                                 }
                                                                                                 let _e2684 = phi_4450_;
-                                                                                                phi_4454_ = type_20((_e2684 & 65535u), (_e2684 >> bitcast<u32>(16i)));
+                                                                                                phi_4454_ = type_21((_e2684 & 65535u), (_e2684 >> bitcast<u32>(16i)));
                                                                                             }
                                                                                             let _e2690 = phi_4454_;
                                                                                             let _e2692 = (_e2690.member + _e2503);

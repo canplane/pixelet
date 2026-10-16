@@ -117,6 +117,27 @@ pub fn wall(look: u32, cell: Zoom, gone: bool, beside: bool) -> u32 {
     }
 }
 
+/// A cell's look with the area's edge laid, the one rule every grid reads it
+/// by (pxl-spec block/sample.rs `Grid::wall_off`, gpu-query's `column`):
+/// `gone` where the cell is past the area or nothing is known of it; at a
+/// leaf's cells or finer, ground beside one gone is the wall (`wall`), where
+/// the leaf cells the eight about the block `b` at `cell` lie in (`ring`) are
+/// asked by their offset in leaf cells (`gone_at`), each once, none past
+/// the first gone.
+pub fn edge(look: u32, cell: Zoom, b: [i32; 2], gone: bool, gone_at: impl Fn(i32, i32) -> bool) -> u32 {
+    let beside = !gone && cell >= LEAF_CELL && Ground::grounds(look) && {
+        let r = ring(cell, b);
+        let mut any = false;
+        let mut k = 0u32;
+        while k < 9 {
+            any = any || (r >> k & 1 == 1 && gone_at((k % 3) as i32 - 1, (k / 3) as i32 - 1));
+            k += 1;
+        }
+        any
+    };
+    wall(look, cell, gone, beside)
+}
+
 /// Block `z` past the service area: the Earth's ground, bedrock under sea
 /// level, air over it.
 pub fn earth(z: i32) -> u32 {

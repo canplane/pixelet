@@ -373,22 +373,13 @@ impl World<'_> {
     /// area's edge laid on it, and the window it is read off.
     fn column(&self, zoom: u32, b: [i32; 2]) -> (ground::Cell, window::Found) {
         let (look, h, fold, found) = self.ground_at(zoom, b);
-        let gone = look == UNKNOWN;
-        // Ground beside one gone: of the leaf cells its neighbours lie in
-        // (`area::ring`), each read once, its look alone.
-        let beside = !gone && zoom >= LEAF_CELL && Ground::grounds(look) && {
-            let (ring, s) = (area::ring(zoom, b), zoom - LEAF_CELL);
-            let mut any = false;
-            let mut k = 0;
-            while k < 9 {
-                let l = [wrap_index(LEAF_CELL, (b[0] >> s) + (k % 3) as i32 - 1), (b[1] >> s) + (k / 3) as i32 - 1];
-                any = any || (ring >> k & 1 == 1 && self.gone(l));
-                k += 1;
-            }
-            any
+        // The leaf cells about it read by their offset, each its look alone.
+        let gone_at = |dx: i32, dy: i32| {
+            let s = zoom - LEAF_CELL;
+            self.gone([wrap_index(LEAF_CELL, (b[0] >> s) + dx), (b[1] >> s) + dy])
         };
         let cell = ground::Cell {
-            look: area::wall(look, zoom, gone, beside),
+            look: area::edge(look, zoom, b, look == UNKNOWN, gone_at),
             top: ground::blocks(zoom, h),
             fold,
         };

@@ -9,14 +9,14 @@ use pxl_portable::ways::{self, Columns, Segment, Stations};
 
 use crate::bake::tile::terrain::GroundId;
 use crate::block::cube::sentinel;
-use crate::block::limit::at_edge;
+
 use crate::block::Block;
 use crate::procedural::Frame;
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::{units, Zoom, SHARD_ZOOM};
 use crate::space::hierarchy::tree::ancestor_of;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_portable::area::wall;
+use pxl_portable::area::edge;
 use pxl_portable::ground::{blocks, coarser, face_height, read_cell, Cell};
 use pxl_portable::wrap_index;
 
@@ -264,7 +264,8 @@ impl Grid {
         let past = |x: i64, y: i64| (0..span).contains(&x) && (0..span).contains(&y) && marked[(y * span + x) as usize] == sentinel::unknown;
         for (i, (look, &g)) in self.look[..n].iter_mut().zip(&marked[..n]).enumerate() {
             let (x, y) = (i as i64 % span, i as i64 / span);
-            *look = byte(wall(u32::from(g), self.cell, g == sentinel::unknown, at_edge(|dx, dy| past(x + dx, y + dy))));
+            let b = [(self.first[0] + x) as i32, (self.first[1] + y) as i32];
+            *look = byte(edge(u32::from(g), self.cell, b, g == sentinel::unknown, |dx, dy| past(x + i64::from(dx), y + i64::from(dy))));
         }
     }
 
