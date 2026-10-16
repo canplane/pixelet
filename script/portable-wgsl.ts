@@ -24,10 +24,19 @@ import { dirname, fromFileUrl, join } from "@std/path";
 const root = dirname(dirname(fromFileUrl(import.meta.url)));
 const shaders = join(root, "crates/client/render/src/frame/shader");
 // Each entry and the file it is checked in as.
-const ENTRIES = [["cast_cs", "cast.gen.wgsl"], ["heights_cs", "heights.gen.wgsl"], ["bound_cs", "bound.gen.wgsl"], ["decor_cs", "decor.gen.wgsl"], ["decor_count_cs", "decor_count.gen.wgsl"], [
-  "decor_args_cs",
-  "decor_args.gen.wgsl",
-], ["decor_place_cs", "decor_place.gen.wgsl"], ["ways_cs", "ways.gen.wgsl"]];
+const ENTRIES = [
+  ["cast_cs", "cast.gen.wgsl"],
+  ["heights_cs", "heights.gen.wgsl"],
+  ["bound_cs", "bound.gen.wgsl"],
+  ["decor_cs", "decor.gen.wgsl"],
+  ["decor_count_cs", "decor_count.gen.wgsl"],
+  [
+    "decor_args_cs",
+    "decor_args.gen.wgsl",
+  ],
+  ["decor_place_cs", "decor_place.gen.wgsl"],
+  ["ways_cs", "ways.gen.wgsl"],
+];
 // rust-gpu's own pin (rustc_codegen_spirv 0.10.0-alpha.1 build.rs), as gpu-query/rust-toolchain.toml holds it.
 const NIGHTLY = "nightly-2026-04-11";
 const IMAGE = "rust:1-bookworm";
