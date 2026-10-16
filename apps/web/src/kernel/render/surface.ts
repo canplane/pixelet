@@ -7,13 +7,13 @@ import { send_next } from "@/kernel/sched.ts";
 
 /** 0 when the kernel has none left. */
 export function surface_open(role: u32): u32 {
-  return GUEST_DOORBELL.call(Command.SURFACE_OPEN, encode_surface_open({ role }), (result) => result >>> 0);
+  return GUEST_DOORBELL.call(Command.SURFACE_OPEN, encode_surface_open(GUEST_DOORBELL, role), (result) => result >>> 0);
 }
 
 export function surface_size(surface: u32, width: u32, height: u32, dpr: f64): void {
-  send_next(Command.SURFACE_RESIZE, encode_surface_resize({ surface, width, height, device_pixel_ratio: dpr }));
+  send_next(Command.SURFACE_RESIZE, encode_surface_resize(GUEST_DOORBELL, surface, width, height, dpr));
 }
 
 export function surface_close(surface: u32): void {
-  GUEST_DOORBELL.call(Command.SURFACE_CLOSE, encode_surface_close({ surface }), (result) => result);
+  GUEST_DOORBELL.call(Command.SURFACE_CLOSE, encode_surface_close(GUEST_DOORBELL, surface), (result) => result);
 }

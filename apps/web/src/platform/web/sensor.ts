@@ -42,7 +42,7 @@ export function geolocationStart(): void {
   geolocationWatch = navigator.geolocation.watchPosition(
     (pos) => {
       const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-      kernel_position({ lon: longitude, lat: latitude, altitude, accuracy, course: heading });
+      kernel_position(longitude, latitude, altitude, accuracy, heading);
     },
     (err) => {
       // Cleared, not just forgotten: a dead watch keeps calling back and would race a later start.
@@ -54,7 +54,7 @@ export function geolocationStart(): void {
         : err.code === err.TIMEOUT
         ? GeolocationErrorCode.Timeout
         : GeolocationErrorCode.Other;
-      kernel_position_error({ code });
+      kernel_position_error(code);
     },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
   );
@@ -64,7 +64,7 @@ let orientationEvent: string | null = null;
 
 function onOrientation(e: Event): void {
   const o = e as IOSOrientationEvent;
-  kernel_orientation({ webkit_compass_heading: o.webkitCompassHeading ?? null, alpha: o.alpha, beta: o.beta, gamma: o.gamma });
+  kernel_orientation(o.webkitCompassHeading ?? null, o.alpha, o.beta, o.gamma);
 }
 
 function listenOrientation(name: string): void {
@@ -81,7 +81,7 @@ export function orientationListen(): void {
 export function permissionFollow(): () => void {
   let status: PermissionStatus | null = null;
   let stopped = false;
-  const onChange = () => kernel_permission({ sensor: Sensor.Geolocation, answer: status?.state === "granted" ? PermissionAnswer.Granted : PermissionAnswer.Denied });
+  const onChange = () => kernel_permission(Sensor.Geolocation, status?.state === "granted" ? PermissionAnswer.Granted : PermissionAnswer.Denied);
   navigator.permissions?.query({ name: "geolocation" }).then((s) => {
     if (stopped) return;
     status = s;
@@ -97,17 +97,17 @@ export function permissionFollow(): () => void {
 export function orientationPermit(): Promise<boolean> {
   if (!orientationNeedsPermission() || orientationEvent !== null) return Promise.resolve(true);
   const prompt = (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!();
-  kernel_permission({ sensor: Sensor.Orientation, answer: PermissionAnswer.Asking });
+  kernel_permission(Sensor.Orientation, PermissionAnswer.Asking);
   return prompt.then(
     (permission) => {
       const granted = permission === "granted";
       if (granted) listenOrientation("deviceorientation");
-      kernel_permission({ sensor: Sensor.Orientation, answer: granted ? PermissionAnswer.Granted : PermissionAnswer.Denied });
+      kernel_permission(Sensor.Orientation, granted ? PermissionAnswer.Granted : PermissionAnswer.Denied);
       return granted;
     },
     (err) => {
       console.error("[kernel] orientation permission error:", err);
-      kernel_permission({ sensor: Sensor.Orientation, answer: PermissionAnswer.Failed });
+      kernel_permission(Sensor.Orientation, PermissionAnswer.Failed);
       return false;
     },
   );

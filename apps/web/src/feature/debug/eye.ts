@@ -9,13 +9,13 @@
  */
 
 import { Command, encode_input_go_to, encode_input_view } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command } from "@/kernel/shell.ts";
+import { kernel_command, kernel_room } from "@/kernel/shell.ts";
 
 export function pinEye(): void {
   const eye = new URLSearchParams(location.search).get("eye");
   if (eye === null) return;
   const [lon, lat, dist, polar, azimuth] = eye.split(",").map((v) => (v === "" ? null : Number(v)));
   if (lon == null || lat == null) return;
-  kernel_command(Command.INPUT_GO_TO, encode_input_go_to({ lon, lat }));
-  kernel_command(Command.INPUT_VIEW, encode_input_view({ dist: dist ?? null, polar: polar ?? null, azimuth: azimuth ?? null }));
+  kernel_command(Command.INPUT_GO_TO, encode_input_go_to(kernel_room, lon, lat));
+  kernel_command(Command.INPUT_VIEW, encode_input_view(kernel_room, dist ?? null, polar ?? null, azimuth ?? null));
 }

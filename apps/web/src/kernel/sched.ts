@@ -5,9 +5,9 @@
  * gap and I/O credits, then rings with a quota.
  */
 
-import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { Strobe } from "@xpute/host/sched/strobe.ts";
+import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { Command, encode_world_frame } from "@/kernel/abi/cmd.spec.ts";
 import { GUEST, GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { directory } from "@/kernel/module.ts";
@@ -25,19 +25,19 @@ export function request_frame(): void {
   strobe.request();
 }
 
-export function send_next(cmd: u32, pkt?: U8Array): void {
+export function send_next(cmd: u32, pkt?: PacketWriter): void {
   GUEST_DOORBELL.send(0, cmd, pkt);
   request_frame();
 }
 
-export function send_input(cmd: u32, pkt?: U8Array): void {
+export function send_input(cmd: u32, pkt?: PacketWriter): void {
   GUEST_DOORBELL.send(0, cmd, pkt);
   strobe.input();
   request_frame();
 }
 
 /** Rung at once with no quota, so it is heard even after the strobe has stopped. */
-export function ring_now(cmd: Command, pkt?: U8Array): void {
+export function ring_now(cmd: Command, pkt?: PacketWriter): void {
   GUEST_DOORBELL.send(0, cmd, pkt);
   GUEST_DOORBELL.ring(0);
   request_frame();
@@ -67,18 +67,6 @@ export function start_sched(): void {
     const width = Math.max(1, w);
     const height = Math.max(1, h);
     const unix_ms = clock();
-    GUEST_DOORBELL.send(
-      0,
-      Command.WORLD_FRAME,
-      encode_world_frame({
-        width,
-        height,
-        dpr,
-        frame_ms: grant.frame_ms,
-        interactive: grant.interactive,
-        credits: NET_CREDITS,
-        unix_ms,
-      }),
-    );
+    GUEST_DOORBELL.send(0, Command.WORLD_FRAME, encode_world_frame(GUEST_DOORBELL, width, height, dpr, grant.frame_ms, grant.interactive, NET_CREDITS, unix_ms));
   }, (run) => requestAnimationFrame(run));
 }

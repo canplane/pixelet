@@ -13,9 +13,8 @@
  * raises on the completion ring.
  */
 
-import type { U8Array } from "@xpute/kit/abi/array.ts";
+import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import { packet } from "@xpute/host/ipc/doorbell.ts";
 
 /** What a command is about. */
 export const enum Major {
@@ -37,23 +36,14 @@ export const enum Command {
   SYS_OPENED = 0x0101,
 }
 
-/** Command.NOP's packet. */
-export interface Nop {
-  value: u32;
+/** Command.NOP's packet, written in place into `to`. */
+export function encode_nop(to: PacketRoom, value: u32): PacketWriter {
+  return to.writer(1).u32(value);
 }
 
-export function encode_nop(p: Nop): U8Array {
-  return packet((b) => b.u32(p.value));
-}
-
-/** Command.SYS_OPENED's packet. */
-export interface SysOpened {
-  fd: u32;
-  res: i32;
-  /** Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on. */
-  detail: u32;
-}
-
-export function encode_sys_opened(p: SysOpened): U8Array {
-  return packet((b) => b.u32(p.fd).i32(p.res).u32(p.detail));
+/** Command.SYS_OPENED's packet, written in place into `to`.
+ *
+ * @param detail Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on. */
+export function encode_sys_opened(to: PacketRoom, fd: u32, res: i32, detail: u32): PacketWriter {
+  return to.writer(3).u32(fd).i32(res).u32(detail);
 }

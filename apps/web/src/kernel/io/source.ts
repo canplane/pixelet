@@ -31,7 +31,7 @@ export async function declare_source(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ASK_AGAIN_MS));
     source = await asked();
   }
-  const pkt = encode_world_source({ source });
+  const pkt = encode_world_source(GUEST_DOORBELL, source);
   if (!GUEST_DOORBELL.fits(pkt)) {
     console.error(`[source] the declaration, ${source.length} bytes, is more than a command carries`);
     return;

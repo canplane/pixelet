@@ -10,7 +10,7 @@ import { assert, assertEquals, assertNotEquals } from "@std/assert";
 import { fromFileUrl, join, resolve } from "@std/path";
 
 import { Golden } from "@xpute/kit/golden.ts";
-import { encoder, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
+import { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { Command } from "@xpute/host/abi/cmd.spec.ts";
 import { handle_slot } from "@xpute/host/abi/handle.ts";
@@ -115,6 +115,7 @@ class Host {
   readonly sq: Ring;
   private readonly cq: Ring;
   private readonly stream_at: number;
+  private readonly writer = new PacketWriter();
 
   constructor(private readonly guest: Guest) {
     const mem = guest.memory;
@@ -126,7 +127,12 @@ class Host {
   }
 
   submit(tag: number, command: number, ack: boolean, args: number[]): void {
-    const packet = args.length === 0 ? null : encoder.encode(new TreeView().branch((b) => args.forEach((a) => b.u32(a))));
+    let packet: PacketWriter | null = null;
+    if (args.length > 0) {
+      assert(this.sq.write(this.writer, args.length), "a full ring takes no packet");
+      for (const a of args) this.writer.u32(a);
+      packet = this.writer;
+    }
     assertEquals(this.sq.push(tag, command, ack ? frame.ACKREQ : 0, packet), Errno.OK);
   }
 

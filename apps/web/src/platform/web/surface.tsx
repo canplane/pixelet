@@ -141,7 +141,14 @@ function drive(canvas: HTMLCanvasElement): () => void {
   observer.observe(canvas);
 
   sendRect();
-  const close = kernel_open(() => ({ width: canvas.clientWidth, height: canvas.clientHeight, dpr: dpr() }));
+  // One viewport, filled again each frame it is asked for.
+  const viewport = { width: 0, height: 0, dpr: 1 };
+  const close = kernel_open(() => {
+    viewport.width = canvas.clientWidth;
+    viewport.height = canvas.clientHeight;
+    viewport.dpr = dpr();
+    return viewport;
+  });
 
   return () => {
     close();

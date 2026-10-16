@@ -214,8 +214,8 @@ impl TsUses {
         }
     }
 
-    fn field_lines(&mut self, spec: &Spec, fields: &[Field]) -> Result<Vec<String>, String> {
-        let mut out = Vec::new();
+    /// The word and array types `fields` are spelled with.
+    fn note(&mut self, spec: &Spec, fields: &[Field]) -> Result<(), String> {
         for f in fields {
             if NUMBERS.contains(&f.ty.as_str()) {
                 TsUses::add(&mut self.words, f.ty.clone());
@@ -226,6 +226,14 @@ impl TsUses {
             if spec.kind(&f.ty)? == Kind::Extern {
                 TsUses::add(&mut self.words, "u32".to_string());
             }
+        }
+        Ok(())
+    }
+
+    fn field_lines(&mut self, spec: &Spec, fields: &[Field]) -> Result<Vec<String>, String> {
+        self.note(spec, fields)?;
+        let mut out = Vec::new();
+        for f in fields {
             if let Some(doc) = &f.doc {
                 out.extend(ts_doc(doc, "  "));
             }
@@ -255,7 +263,7 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
     let mut tail: Vec<String> = Vec::new();
     let mut uses = TsUses {
         words: Vec::new(),
-        arrays: vec!["U8Array".to_string()],
+        arrays: Vec::new(),
     };
     for r in &spec.records {
         tail.push(String::new());
@@ -270,12 +278,23 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
     for c in spec.commands()? {
         let name = pascal(&c.name);
         if let Some(packet) = &c.packet {
-            tail.extend([String::new(), format!("/** Command.{}'s packet. */", c.name), format!("export interface {name} {{")]);
-            tail.extend(uses.field_lines(spec, packet)?);
-            tail.extend(["}".to_string(), String::new()]);
-            let writes = packet.iter().map(|f| ts_write(spec, f, &format!("p.{}", f.name))).collect::<Result<Vec<_>, String>>()?;
-            tail.push(format!("export function encode_{}(p: {name}): U8Array {{", c.name.to_lowercase()));
-            tail.push(format!("  return packet((b) => b{});", writes.concat()));
+            // Written in place, its fields handed over as they are: no record is made for it.
+            uses.note(spec, packet)?;
+            let mut doc = vec![format!("Command.{}'s packet, written in place into `to`.", c.name)];
+            for f in packet {
+                if let Some(d) = &f.doc {
+                    if doc.len() == 1 {
+                        doc.push(String::new());
+                    }
+                    doc.push(format!("@param {} {}", f.name, d.join(" ")));
+                }
+            }
+            tail.push(String::new());
+            tail.extend(ts_doc(&doc, ""));
+            let params = packet.iter().map(|f| Ok(format!(", {}: {}", f.name, ts_type(spec, f)?))).collect::<Result<Vec<_>, String>>()?;
+            let writes = packet.iter().map(|f| ts_write(spec, f, &f.name)).collect::<Result<Vec<_>, String>>()?;
+            tail.push(format!("export function encode_{}(to: PacketRoom{}): PacketWriter {{", c.name.to_lowercase(), params.concat()));
+            tail.push(format!("  return to.writer({}){};", packet.len(), writes.concat()));
             tail.push("}".into());
         }
         if let Some(signal) = &c.signal {
@@ -310,14 +329,14 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
         ]);
     }
     tail.splice(0..0, helpers.iter().map(|l| l.to_string()));
-    let cursors: Vec<&str> = ["BranchCursor", "NodeCursor"].into_iter().filter(|c| reads(&tail, c)).collect();
+    let xtp: Vec<&str> = ["BranchCursor", "NodeCursor", "PacketRoom", "PacketWriter"].into_iter().filter(|c| reads(&tail, c)).collect();
     out.push(String::new());
-    if !cursors.is_empty() {
-        out.push(format!("import type {{ {} }} from \"@xpute/kit/wire/xtp/mod.ts\";", cursors.join(", ")));
+    for (names, from) in [(xtp.iter().map(|s| s.to_string()).collect(), "wire/xtp/mod.ts"), (uses.arrays, "abi/array.ts"), (uses.words, "abi/word.ts")] {
+        let names: Vec<String> = names;
+        if !names.is_empty() {
+            out.push(format!("import type {{ {} }} from \"@xpute/kit/{from}\";", names.join(", ")));
+        }
     }
-    out.push(format!("import type {{ {} }} from \"@xpute/kit/abi/array.ts\";", uses.arrays.join(", ")));
-    out.push(format!("import type {{ {} }} from \"@xpute/kit/abi/word.ts\";", uses.words.join(", ")));
-    out.push("import { packet } from \"@xpute/host/ipc/doorbell.ts\";".into());
     for e in &spec.enums {
         out.push(String::new());
         if let Some(doc) = &e.doc {

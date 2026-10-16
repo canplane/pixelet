@@ -15,6 +15,7 @@ import { Command as XputeCommand, encode_sys_opened } from "@xpute/host/abi/cmd.
 import { FileError, Sys } from "@xpute/host/ipc/sys.ts";
 
 import { OBJECTS_PATH, op, root, SETTINGS_PATH } from "@/kernel/abi/host.spec.ts";
+import { GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { send_next } from "@/kernel/sched.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { textRaster, textWidth } from "@platform/text.ts";
@@ -139,7 +140,7 @@ const SYS = new Sys({
     if (r !== root.STORAGE) throw new FileError(Errno.EROFS);
     storageSet(storage_key(path), td.decode(bytes));
   },
-  opened: (fd, res, detail) => send_next(XputeCommand.SYS_OPENED, encode_sys_opened({ fd, res, detail })),
+  opened: (fd, res, detail) => send_next(XputeCommand.SYS_OPENED, encode_sys_opened(GUEST_DOORBELL, fd, res, detail)),
   abort: ({ errno, file, line, column, a, b }) => {
     console.error(`[kernel] stopped: ${strerror(errno)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`);
     const where = `${file.split("/").pop()}:${line}`;

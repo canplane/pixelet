@@ -12,7 +12,7 @@ import { td } from "@xpute/kit/codec/encoding.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
 import { OUTCOME_NAMES, STREAM_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/demand.spec.ts";
-import { kernel_call, kernel_memory } from "@/kernel/shell.ts";
+import { kernel_call, kernel_memory, kernel_room } from "@/kernel/shell.ts";
 
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
 import { CENSUS_TAGS, FRAME, LOG, READ, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WORST } from "./profiler.spec.ts";
@@ -192,7 +192,7 @@ interface Read {
 
 /** Over the last `windowMs`, or the whole recording at null. */
 function read(windowMs: f64 | null): Read {
-  const r = u32s(kernel_call(Command.PROFILER_READ, encode_profiler_read({ window_ms: windowMs })), READ.WORDS);
+  const r = u32s(kernel_call(Command.PROFILER_READ, encode_profiler_read(kernel_room, windowMs)), READ.WORDS);
   return {
     summary: words(r[READ.summary_at], r[READ.summary_words]),
     frames: [r[READ.frames_at], r[READ.frames_count]],

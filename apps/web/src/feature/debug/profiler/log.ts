@@ -7,7 +7,7 @@
  */
 
 import { Command, encode_profiler_log } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command } from "@/kernel/shell.ts";
+import { kernel_command, kernel_room } from "@/kernel/shell.ts";
 import { frameLine, longFrameLine, taskLine } from "./report.ts";
 import { profilerLogTake } from "./view.ts";
 import { setLongFrameSink } from "./long-frame.ts";
@@ -26,7 +26,7 @@ function drainLog(): void {
 
 /** Called from the console (`__pxl_profiler_log`). */
 export function profilerLog(on: boolean): void {
-  kernel_command(Command.PROFILER_LOG, encode_profiler_log({ on }));
+  kernel_command(Command.PROFILER_LOG, encode_profiler_log(kernel_room, on));
   setLongFrameSink(on ? (l) => console.log(`[profiler] ${longFrameLine(l)}`) : null);
   if (on && drain === null) drain = setInterval(drainLog, DRAIN_MS);
   if (!on && drain !== null) {

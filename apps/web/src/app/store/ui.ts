@@ -7,7 +7,7 @@ import { cube } from "@/catalog/block/cube.spec.ts";
 import { allCubes, type Cube, decorIds } from "@/catalog/block/mod.ts";
 import { ActiveTool, Command, encode_chat_send, encode_input_marker_words } from "@/kernel/abi/cmd.spec.ts";
 import { MARKER_TEXT_CHARS } from "@/catalog/block/ext.spec.ts";
-import { kernel_command, kernel_fits, kernel_hold, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
+import { kernel_command, kernel_fits, kernel_hold, kernel_room, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
 
@@ -166,18 +166,18 @@ export const useUiStore = create<UiState>()((set) => ({
     set((state) => ({
       chatLines: [...state.chatLines, { id: nextChatLineId++, text }].slice(-MAX_CHAT_LINES),
     }));
-    kernel_command(Command.CHAT_SEND, encode_chat_send({ text }));
+    kernel_command(Command.CHAT_SEND, encode_chat_send(kernel_room, text));
   },
 }));
 
 /** A line too long to send is refused whole, never cut. */
 export function chatFits(text: string): boolean {
-  return kernel_fits(encode_chat_send({ text }));
+  return kernel_fits(encode_chat_send(kernel_room, text));
 }
 
 /** The waiting marker's words as typed, which it is drawn with. */
 export function draftMarkerWords(text: string): void {
-  kernel_command(Command.INPUT_MARKER_WORDS, encode_input_marker_words({ text }));
+  kernel_command(Command.INPUT_MARKER_WORDS, encode_input_marker_words(kernel_room, text));
 }
 
 /** The waiting marker put up with its words. */

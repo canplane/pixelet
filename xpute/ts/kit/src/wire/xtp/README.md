@@ -1,6 +1,6 @@
 # XTP: Xpute Tree Packet
 
-A small **relocatable binary tree packet** format, implemented in each of xpute's languages and held to each other: this directory in TypeScript, `rust/kit/src/wire/xtp/` in Rust and `cpp/kit/wire/xtp/` in C++. The wire format is the contract between them; the walkthrough below is the TypeScript API, which the others mirror in their own languages' shapes. The Rust and the C++ also write a packet in place, into bytes the caller holds, with no tree built first (`PacketWriter`), giving the bytes the tree encoder gives.
+A small **relocatable binary tree packet** format, implemented in each of xpute's languages and held to each other: this directory in TypeScript, `rust/kit/src/wire/xtp/` in Rust and `cpp/kit/wire/xtp/` in C++. The wire format is the contract between them; the walkthrough below is the TypeScript API, which the others mirror in their own languages' shapes. Each also writes a packet in place, into bytes the caller holds, with no tree built first (`PacketWriter`), giving the bytes the tree encoder gives; the TypeScript one writes a root branch of scalars and strings, what the host sends.
 
 It is designed to stay simple at the surface:
 

@@ -4,7 +4,7 @@ import { BOOL, type f32, type f64, FIELD_SET, type i16, type i32, type i64, type
 import type { BigTypedArray, TypedArray, U8Array } from "@xpute/kit/abi/array.ts";
 import * as encoding from "@xpute/kit/codec/encoding.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError } from "@xpute/kit/status/error.ts";
+import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
 
 import type { AlignUnit, BranchNode, EncodingState, GraftNode, Node, NodeType, ScalarNode, SequenceNode } from "./spec.ts";
 import {
@@ -340,3 +340,132 @@ export class TreeEncoder {
 }
 
 export const encoder = new TreeEncoder();
+
+/** Where a packet is written in place: a writer begun over the room for a
+ * root branch of `count` children. */
+export interface PacketRoom {
+  writer(count: u32): PacketWriter;
+}
+
+/**
+ * Writes a root-branch packet of scalars and strings in place, into bytes the
+ * caller holds, byte for byte as `TreeEncoder` would and with no tree built
+ * first: rust/kit/src/wire/xtp/encode.rs `PacketWriter`, in the shapes the
+ * host writes. A packet declares its child count up front (`begin`); a child
+ * that does not fit makes `finish` refuse, and a miscount throws. One writer
+ * serves every packet its room hands out, begun again for each.
+ */
+export class PacketWriter {
+  private bytes: U8Array = new Uint8Array(0);
+  private view: DataView = new DataView(new ArrayBuffer(0));
+  /** Where the packet begins in `bytes`, and the bytes it may take. */
+  start: u32 = 0;
+  private cap: u32 = 0;
+  private count: u32 = 0;
+  private written: u32 = 0;
+  /** The packet's end so far, from `start`. */
+  private lim: u32 = 0;
+  private fits: boolean = false;
+
+  /** `bytes` and `view` see the same memory from the same offset. */
+  begin(bytes: U8Array, view: DataView, start: u32, cap: u32, count: u32): this {
+    this.bytes = bytes;
+    this.view = view;
+    this.start = start;
+    this.cap = cap;
+    this.count = count;
+    this.written = 0;
+    const end: u32 = HDR_SZ + WORD_SZ * (1 + count);
+    this.fits = end <= cap;
+    this.lim = this.fits ? end : HDR_SZ;
+    if (this.fits) {
+      bytes.fill(0, start, start + end);
+      SET_WORD(view, start, MAGIC, RESERVED);
+      SET_WORD(view, start + HDR_SZ, count, RESERVED);
+    }
+    return this;
+  }
+
+  /** Where `bytes` aligned to `unit` begin, zeroed from the end so far; -1 past the room. */
+  private reserve(unit: AlignUnit, bytes: u32): number {
+    if (!this.fits) return -1;
+    const base: u32 = ALIGN(this.lim, unit);
+    const end: u32 = base + bytes;
+    if (end > this.cap) {
+      this.fits = false;
+      return -1;
+    }
+    this.bytes.fill(0, this.start + this.lim, this.start + end);
+    this.lim = end;
+    return base;
+  }
+
+  private entry(base: number, type: NodeType): this {
+    if (this.written >= this.count) throw new InvariantError(Errno.ENOSPC);
+    if (this.fits) {
+      const rel_off: u32 = base < 0 ? 0 : base - HDR_SZ;
+      SET_WORD(this.view, this.start + HDR_SZ + WORD_SZ * (1 + this.written), rel_off, FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type));
+    }
+    this.written++;
+    return this;
+  }
+
+  u8(v: u8 | null): this {
+    const base = v === null ? -1 : this.reserve(1, 1);
+    if (base >= 0) this.view.setUint8(this.start + base, v as u8);
+    return this.entry(base, ScalarType.U8);
+  }
+
+  u32(v: u32 | null): this {
+    const base = v === null ? -1 : this.reserve(4, 4);
+    if (base >= 0) this.view.setUint32(this.start + base, v as u32, LE);
+    return this.entry(base, ScalarType.U32);
+  }
+
+  i32(v: i32 | null): this {
+    const base = v === null ? -1 : this.reserve(4, 4);
+    if (base >= 0) this.view.setInt32(this.start + base, v as i32, LE);
+    return this.entry(base, ScalarType.I32);
+  }
+
+  f64(v: f64 | null): this {
+    const base = v === null ? -1 : this.reserve(8, 8);
+    if (base >= 0) this.view.setFloat64(this.start + base, v as f64, LE);
+    return this.entry(base, ScalarType.F64);
+  }
+
+  bool(v: boolean | null): this {
+    const base = v === null ? -1 : this.reserve(1, 1);
+    if (base >= 0) this.view.setUint8(this.start + base, BOOL(v));
+    return this.entry(base, ScalarType.BOOL);
+  }
+
+  /** UTF-8 as `TextEncoder` writes it, a NUL after it that its length leaves out. */
+  str(s: string | null): this {
+    if (s === null || !this.fits) return this.entry(-1, SequenceType.STR);
+    const base: u32 = ALIGN(this.lim, WORD_SZ);
+    const payload: u32 = base + WORD_SZ;
+    const res = payload < this.cap ? encoding.te.encodeInto(s, this.bytes.subarray(this.start + payload, this.start + this.cap)) : null;
+    const end: u32 = res === null ? 0 : payload + ALIGN(res.written + 1, WORD_SZ);
+    if (res === null || res.read < s.length || end > this.cap) {
+      this.fits = false;
+      return this.entry(-1, SequenceType.STR);
+    }
+    this.bytes.fill(0, this.start + this.lim, this.start + payload);
+    this.bytes.fill(0, this.start + payload + res.written, this.start + end);
+    SET_WORD(this.view, this.start + base, res.written, RESERVED);
+    this.lim = end;
+    return this.entry(base, SequenceType.STR);
+  }
+
+  /** The packet's length, or -1 when a child did not fit. */
+  finish(): number {
+    if (this.written !== this.count) throw new InvariantError(Errno.ENOTRECOVERABLE);
+    if (!this.fits) return -1;
+    const end: u32 = ALIGN(this.lim, WORD_SZ);
+    if (end > this.cap) return -1;
+    this.bytes.fill(0, this.start + this.lim, this.start + end);
+    SET_WORD(this.view, this.start + WORD_SZ, end - HDR_SZ, FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, SpecialType.BRANCH));
+    return end;
+  }
+}

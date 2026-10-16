@@ -6,6 +6,7 @@ import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
+import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 
 import * as frame from "./frame.ts";
 import { CAPACITY, HEAD, HEADER_WORDS, SLOT_BASE, SLOT_BYTES, TAIL } from "./ring.spec.ts";
@@ -40,6 +41,7 @@ export class Ring {
   readonly slot_bytes: u32;
   private readonly mask: u32;
   private readonly slots: U8Array;
+  private readonly slot_view: DataView;
   private readonly slot_base: u32;
 
   constructor(mem: ArrayBufferLike, at: u32) {
@@ -53,6 +55,7 @@ export class Ring {
     this.words = new Uint32Array(mem, at, ring_bytes(capacity) / 4);
     // Never a SharedArrayBuffer here, and the tree reader takes an ArrayBuffer view.
     this.slots = new Uint8Array(mem as ArrayBuffer, this.slot_base, slots_bytes(capacity, this.slot_bytes));
+    this.slot_view = new DataView(mem as ArrayBuffer, this.slot_base, slots_bytes(capacity, this.slot_bytes));
   }
 
   static init(mem: ArrayBufferLike, at: u32, capacity: u32, slot_base: u32, slot_bytes: u32): Ring {
@@ -86,21 +89,23 @@ export class Ring {
     return ((position & this.mask) >>> 0) * this.slot_bytes;
   }
 
-  /** EAGAIN, writing nothing, when full; EMSGSIZE when the packet exceeds a slot. */
-  /** Whether `packet` fits a slot: one that does not is refused, never split. */
-  fits(packet: U8Array): boolean {
-    return padded(packet.byteLength) <= this.slot_bytes;
+  /** Begins `w` over the tail's slot, a packet of `count` children written
+   * in place; false, beginning nothing, when the ring is full. */
+  write(w: PacketWriter, count: u32): boolean {
+    if (this.len >= this.capacity) return false;
+    w.begin(this.slots, this.slot_view, this.slot_at(this.tail), this.slot_bytes, count);
+    return true;
   }
 
-  push(tag: u32, cmd: u32, flags: u32 = 0, packet: U8Array | null = null, result: i32 = 0): Errno {
+  /** EAGAIN, writing nothing, when full; EMSGSIZE when the packet a writer wrote
+   * in the tail's slot (`write`) exceeds it: refused, never split. */
+  push(tag: u32, cmd: u32, flags: u32 = 0, packet: PacketWriter | null = null, result: i32 = 0): Errno {
     if (this.len >= this.capacity) return Errno.EAGAIN;
     let packet_at = 0;
     if (packet !== null) {
-      if (!this.fits(packet)) return Errno.EMSGSIZE;
-      const need = padded(packet.byteLength);
       const start = this.slot_at(this.tail);
-      this.slots.set(packet, start);
-      this.slots.fill(0, start + packet.byteLength, start + need);
+      if (packet.start !== start) throw new InvariantError(Errno.ENOTRECOVERABLE);
+      if (packet.finish() < 0) return Errno.EMSGSIZE;
       packet_at = this.slot_base + start;
     }
     const w = this.words;

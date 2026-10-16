@@ -63,8 +63,8 @@ function recheck(): void {
   void Location.getForegroundPermissionsAsync().then(({ status }) => {
     if (granted !== false || status !== Location.PermissionStatus.GRANTED) return;
     granted = true;
-    kernel_permission({ sensor: Sensor.Geolocation, answer: PermissionAnswer.Granted });
-    kernel_permission({ sensor: Sensor.Orientation, answer: PermissionAnswer.Granted });
+    kernel_permission(Sensor.Geolocation, PermissionAnswer.Granted);
+    kernel_permission(Sensor.Orientation, PermissionAnswer.Granted);
   });
 }
 
@@ -90,7 +90,7 @@ let geolocation: Watch | null = null;
 function geolocationFail(watch: Watch, code: GeolocationErrorCode): void {
   if (geolocation !== watch) return;
   geolocationStop();
-  kernel_position_error({ code });
+  kernel_position_error(code);
 }
 
 export function geolocationStart(): void {
@@ -103,7 +103,7 @@ export function geolocationStart(): void {
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
       (pos) => {
         const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-        kernel_position({ lon: longitude, lat: latitude, altitude, accuracy: known(accuracy), course: known(heading) });
+        kernel_position(longitude, latitude, altitude, known(accuracy), known(heading));
       },
       () => geolocationFail(watch, GeolocationErrorCode.PositionUnavailable),
     );
@@ -122,7 +122,7 @@ let orientation: Watch | null = null;
 function orientationFail(watch: Watch, refused: boolean): void {
   if (orientation !== watch) return;
   orientationRemove();
-  if (refused) kernel_permission({ sensor: Sensor.Orientation, answer: PermissionAnswer.Denied });
+  if (refused) kernel_permission(Sensor.Orientation, PermissionAnswer.Denied);
   else kernel_orientation_lost();
 }
 
@@ -135,7 +135,7 @@ export function orientationListen(): void {
     const subscription = await Location.watchHeadingAsync(
       (h) => {
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
-        kernel_orientation({ webkit_compass_heading: heading, alpha: null, beta: null, gamma: null });
+        kernel_orientation(heading, null, null, null);
       },
       (reason) => {
         console.error("[sensor] heading:", reason);
