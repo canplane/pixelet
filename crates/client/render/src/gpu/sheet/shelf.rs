@@ -57,6 +57,48 @@ const MAX_SIZE: u32 = 2048;
 /// Transparent margin so a linear or mipmapped sample cannot reach a neighbor.
 pub const PAD: u32 = 1;
 
+/// The most slots a sheet holds: a live or free one holds a rectangle of a
+/// size class at least (`WIDTH_BUCKET` × `HEIGHT_BUCKET`), none overlapping,
+/// in a sheet `MAX_SIZE` a side at most; an unused one is reused before
+/// another is made.
+pub const SLOTS_MAX: usize = ((MAX_SIZE / WIDTH_BUCKET) * (MAX_SIZE / HEIGHT_BUCKET)) as usize;
+
+/// A set of a sheet's slots, a bit each.
+#[derive(Clone, Copy)]
+pub struct SlotSet([u64; SLOTS_MAX / 64]);
+
+impl Default for SlotSet {
+    fn default() -> SlotSet {
+        SlotSet([0; SLOTS_MAX / 64])
+    }
+}
+
+impl SlotSet {
+    pub fn insert(&mut self, slot: u32) {
+        let s = slot as usize;
+        xpute_kit::ensure!(s < SLOTS_MAX, ENOSPC, s);
+        self.0[s / 64] |= 1 << (s % 64);
+    }
+
+    pub fn contains(&self, slot: u32) -> bool {
+        let s = slot as usize;
+        s < SLOTS_MAX && self.0[s / 64] >> (s % 64) & 1 == 1
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.iter().all(|&w| w == 0)
+    }
+
+    pub fn len(&self) -> u32 {
+        self.0.iter().map(|w| w.count_ones()).sum()
+    }
+
+    /// Its slots, lowest first.
+    pub fn iter(&self) -> impl Iterator<Item = u32> + '_ {
+        self.0.iter().enumerate().flat_map(|(k, &w)| (0..64).filter(move |b| w >> b & 1 == 1).map(move |b| (k * 64 + b) as u32))
+    }
+}
+
 /// UNUSED holds nothing, FREE is reusable by its size class, LIVE is drawn.
 const UNUSED: u8 = 0;
 const FREE: u8 = 1;
@@ -141,8 +183,7 @@ pub struct Sheet {
     repacks: u32,
     uploads: u32,
 
-    dirty: Vec<u32>,
-    is_dirty: Vec<bool>,
+    dirty: SlotSet,
 }
 
 impl Sheet {
@@ -179,7 +220,7 @@ impl Sheet {
     /// dirty lacks until a sync paints it.
     pub fn painted(&self, slot: u32) -> bool {
         let s = slot as usize;
-        self.state.get(s) == Some(&LIVE) && !self.is_dirty.get(s).copied().unwrap_or(false)
+        self.state.get(s) == Some(&LIVE) && !self.dirty.contains(slot)
     }
 
     pub fn slot_draw(&self, slot: u32) -> Option<&DrawSpec> {
@@ -213,31 +254,25 @@ impl Sheet {
     }
 
     pub fn mark_dirty(&mut self, slot: u32) {
-        let s = slot as usize;
-        if self.is_dirty.len() <= s {
-            self.is_dirty.resize(s + 1, false);
-        }
-        if self.is_dirty[s] {
-            return;
-        }
-        self.is_dirty[s] = true;
-        self.dirty.push(slot);
+        self.dirty.insert(slot);
     }
 
-    /// The whole sheet if it was replaced since `generation`, else the dirty slots,
-    /// swapped into `dirty` rather than allocated.
-    pub fn flush(&mut self, generation: u32, dirty: &mut Vec<u32>) -> Flush {
+    /// The slots to paint into `paint`: every live one if the sheet was
+    /// replaced since `generation`, else the dirty ones, which are then clean.
+    pub fn flush(&mut self, generation: u32, paint: &mut SlotSet) -> Flush {
         let whole = generation != self.generation;
-        dirty.clear();
-        std::mem::swap(&mut self.dirty, dirty);
-        for &slot in dirty.iter() {
-            self.is_dirty[slot as usize] = false;
-        }
         if whole {
-            dirty.clear();
+            *paint = SlotSet::default();
+            for s in 0..self.state.len() as u32 {
+                if self.state[s as usize] == LIVE {
+                    paint.insert(s);
+                }
+            }
         } else {
-            self.uploads += dirty.len() as u32;
+            *paint = self.dirty;
+            self.uploads += paint.len();
         }
+        self.dirty = SlotSet::default();
         Flush {
             whole,
             size: self.size,
@@ -311,10 +346,6 @@ impl Sheet {
         (slots, ws, hs)
     }
 
-    pub fn live(&self) -> Vec<u32> {
-        (0..self.state.len() as u32).filter(|&s| self.state[s as usize] == LIVE).collect()
-    }
-
     /// Halves the sheet while every live entry still fits. Without it a sheet one
     /// dense view grew stays that large, canvas and texture, for a dozen entries.
     pub fn compact(&mut self) -> bool {
@@ -359,9 +390,6 @@ impl Sheet {
             (self.x[s], self.y[s]) = plan.at[i];
             self.used_px += self.w[s] * self.h[s];
         }
-        for &slot in &self.dirty {
-            self.is_dirty[slot as usize] = false;
-        }
-        self.dirty.clear();
+        self.dirty = SlotSet::default();
     }
 }

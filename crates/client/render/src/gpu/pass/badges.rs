@@ -16,7 +16,7 @@ use crate::gpu::api_spec::resource;
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{Blocks, Draws};
-use crate::gpu::sheet::shelf::{DrawSpec, Sheet};
+use crate::gpu::sheet::shelf::{DrawSpec, Sheet, SlotSet};
 use crate::gpu::sheet::{Align, Halo, SheetPainter, Sketch, SHEET_SCALE};
 use crate::gpu::text::{Font, TextOf};
 
@@ -223,7 +223,7 @@ pub struct BadgePass {
     levels: u32,
     generation: u32,
     sets: [Set; SETS],
-    dirty: Vec<u32>,
+    dirty: SlotSet,
     uniform: [f32; BADGE_FLOATS],
     frame_group: u32,
     pub view: [f32; 16],
@@ -258,7 +258,7 @@ impl BadgePass {
             levels: 1,
             generation: u32::MAX,
             sets: [Set::default(); SETS],
-            dirty: Vec::new(),
+            dirty: SlotSet::default(),
             uniform: [0.0; BADGE_FLOATS],
             view: [0.0; 16],
             proj: [0.0; 16],
@@ -270,8 +270,7 @@ impl BadgePass {
     pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, sheet: &mut Sheet, text: TextOf) {
         let flush = sheet.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;
-        let live;
-        let slots: &[u32] = if flush.whole {
+        if flush.whole {
             if flush.size == 0 {
                 return;
             }
@@ -289,18 +288,14 @@ impl BadgePass {
             );
             self.sheet_view = g.view(self.sheet, false, 0, self.levels, 0, 1);
             self.sheet_group = g.bind_group(self.built.layouts[2], &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
-            live = sheet.live();
-            &live
-        } else {
-            &self.dirty
-        };
-        if slots.is_empty() || self.sheet == 0 {
+        }
+        if self.dirty.is_empty() || self.sheet == 0 {
             return;
         }
         let encoder = g.encoder();
         let mut made = Vec::new();
         let mut drawn = false;
-        for &slot in slots {
+        for slot in self.dirty.iter() {
             let Some(spec) = sheet.slot_draw(slot) else { continue };
             let mut p = Sketch::default();
             match spec {
