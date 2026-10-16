@@ -490,11 +490,6 @@ impl Blocks {
         }
     }
 
-    /// The block as the heap holds it, the source its buffer is a copy of.
-    pub fn bytes(&self, handle: u32) -> Option<&'static [u8]> {
-        self.find(handle).map(|i| memory(self.at[i], self.len[i]))
-    }
-
     /// None until the block is on the device.
     pub fn get(&self, handle: u32) -> Option<(u32, u32, u32)> {
         self.find(handle).filter(|&i| self.buffer[i] != 0).map(|i| (self.buffer[i], self.vertex_cnt[i], self.index_cnt[i]))
@@ -1264,7 +1259,7 @@ impl Case {
         let layout = frame_layout(g, pipelines);
         Case {
             frame_buffer,
-            frames: FrameGroups::new(g, layout, frame_buffer, ao.blank_entry(7), air),
+            frames: FrameGroups::new(g, layout, frame_buffer, [ao.blank_entry(7); 2], air),
             skinned: SkinnedPass::new(g, pipelines, align),
         }
     }
@@ -1307,8 +1302,8 @@ pub struct Renderer {
     debug: DebugPass,
     screen: ScreenCellsPass,
     /// The world image's whole input as the last image drew it (stage 2):
-    /// the frame's, the sky's and the stars' words, the air's, the poses, the
-    /// image's own textures, and what came or was drawn again without words.
+    /// the frame's, the sky's and the stars' words, the air's, the image's
+    /// own textures, and what came or was drawn again without words.
     world: Read,
     /// What lays the world image on a frame, and its group over the views
     /// it was made for.
@@ -1341,7 +1336,7 @@ impl Renderer {
         sky_entries[20..].copy_from_slice(&air);
         let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
         let draws_buffer = g.buffer(DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        let models = FrameGroups::new(g, frame_layout(g, &mut pipelines), frame_buffer, ao.blank_entry(7), air);
+        let models = FrameGroups::new(g, frame_layout(g, &mut pipelines), frame_buffer, [ao.blank_entry(7); 2], air);
         let query_set = if device.timestamps { g.spans() } else { 0 };
         let mut r = Renderer {
             align: device.align,
@@ -1410,7 +1405,7 @@ impl Renderer {
     /// The occlusion map is a new object, so every lit pass's group 0 is remade.
     fn rebind(&mut self, g: &Gpu) {
         self.box_groups(g);
-        self.models.rebind(g, self.frame_buffer, self.ao.entry(7));
+        self.models.rebind(g, self.frame_buffer, [self.ao.entry(7), self.ao.blank_entry(7)]);
     }
 
     fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32]) {
@@ -1503,13 +1498,12 @@ impl Renderer {
         }
     }
 
-    /// The world image's opaque models: the decor grown over the world and
-    /// the actors. The impostors are the lit pass's alone. `bound` comes back
-    /// as the group 0 the pass has.
-    fn draw_opaque(&mut self, g: &Gpu, pass: u32, draws: &Draws, b: &mut Blocks, stage: Stage) -> u32 {
+    /// The world image's opaque models: the decor grown over the world. The
+    /// impostors are the lit pass's alone. `bound` comes back as the group 0
+    /// the pass has.
+    fn draw_opaque(&mut self, g: &Gpu, pass: u32, b: &mut Blocks, stage: Stage) -> u32 {
         let mut bound = 0;
         self.decor.draw_grown(g, pass, self.screen.grown(), b, stage, (self.models.frame, &mut bound));
-        self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, stage, (self.models.frame, &mut bound));
         bound
     }
 
@@ -1517,9 +1511,9 @@ impl Renderer {
     /// the cast's lane (stage 1, `ScreenCellsPass::prepare`); the world
     /// image, everything the world and its light make, into the surface's own
     /// colour and depth (stage 2, `world`); and the frame, the image laid on
-    /// it whole and over it what moves on its own — the clouds, which the
-    /// wind carries, the puck, the ghosts, the badges, the gizmos (stage 3,
-    /// every frame).
+    /// it whole and over it what moves on its own — the actors, whose clips
+    /// play, the clouds, which the wind carries, the puck, the ghosts, the
+    /// badges, the gizmos (stage 3, every frame).
     fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> (FrameKind, FrameStat) {
         let mut read = core::mem::take(&mut self.world);
         read.begin();
@@ -1568,7 +1562,6 @@ impl Renderer {
         self.decor.prepare(g, &draws, uniforms, b);
         self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, b);
         self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, b);
-        SkinnedPass::read(&mut read, draws.of(PIPELINE_SKINNED), uniforms, b);
         self.puck.prepare_zone(g, &draws, b);
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
@@ -1599,12 +1592,12 @@ impl Renderer {
         if !still {
             if self.screen_ao {
                 let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
-                self.draw_opaque(g, pass, &draws, b, Stage::Prepass);
+                self.draw_opaque(g, pass, b, Stage::Prepass);
                 g.end(pass);
                 self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
             }
             let pass = g.pass(encoder, &pass_desc(world.world_view, Load::Clear, world.world_depth_view, Load::Clear, 0.0, stamps[SPAN_WORLD].pass()));
-            self.draw_opaque(g, pass, &draws, b, Stage::Lit);
+            self.draw_opaque(g, pass, b, Stage::Lit);
             let mut bound = self.screen.draw(g, pass);
             // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
             self.impostor.draw_grown(g, pass, self.screen.grown(), GROUPS, (self.models.frame, &mut bound));
@@ -1626,10 +1619,15 @@ impl Renderer {
         g.set_pipeline(pass, self.blit.pipeline);
         g.set_bind_group(pass, 0, self.blit_group, &[]);
         g.draw(pass, 3, 1, 0, 0);
-        // The clouds the kernel lists, the cumulus, carried by the wind.
+        // The actors, whose clips play, and the clouds the kernel lists, the
+        // cumulus, which the wind carries: drawn over the image against its
+        // depth, as a moving object is over a cached world, their occlusion
+        // open.
         let mut bound = 0;
-        self.decor.draw(g, pass, &draws, b, Stage::Lit, (self.models.frame, &mut bound));
-        self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, (self.models.frame, &mut bound));
+        let over = (self.models.over, &mut bound);
+        self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, Stage::Lit, (over.0, &mut *over.1));
+        self.decor.draw(g, pass, &draws, b, Stage::Lit, (over.0, &mut *over.1));
+        self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, over);
         self.clouds.draw(g, pass);
         self.puck.draw_beacon(g, pass, &draws, uniforms);
         self.puck.draw_zone(g, pass, &draws, uniforms, b);

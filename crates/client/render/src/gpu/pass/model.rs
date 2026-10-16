@@ -21,28 +21,34 @@ pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
     pipelines.build(g, PIPELINE_SKINNED, g.canvas()).layouts[0]
 }
 
+/// Group 0 as the world image's models read it, the occlusion its map, and
+/// as what is drawn over the image reads it (`over`): open, as the map is of
+/// the image beneath, which the occlusion was found over without it.
 pub struct FrameGroups {
     pub frame: u32,
+    pub over: u32,
     layout: u32,
     air: [u32; AIR_WORDS],
 }
 
 impl FrameGroups {
-    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, ao: [u32; 5], air: [u32; AIR_WORDS]) -> FrameGroups {
+    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, [ao, open]: [[u32; 5]; 2], air: [u32; AIR_WORDS]) -> FrameGroups {
         FrameGroups {
             frame: frame_group(g, layout, frame_buffer, ao, air),
+            over: frame_group(g, layout, frame_buffer, open, air),
             layout,
             air,
         }
     }
 
-    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, ao: [u32; 5]) {
+    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, ao: [[u32; 5]; 2]) {
         self.release();
         *self = FrameGroups::new(g, self.layout, frame_buffer, ao, self.air);
     }
 
     pub fn release(&self) {
         release(self.frame);
+        release(self.over);
     }
 }
 
