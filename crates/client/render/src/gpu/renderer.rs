@@ -1141,8 +1141,17 @@ impl ScreenCellsPass {
     /// again: its bytes went into the square's cells while the kernel holds
     /// the square Sent (or Absent, if it moved), which nothing reads, and the
     /// latest fill's landing writes them again before the word says read. A
-    /// mapping still on its way is waited for. The turn's squares are done
-    /// with here.
+    /// mapping still on its way is waited for, looked at only when a turn
+    /// runs: nothing asks a turn for it. The turn's squares are done with
+    /// here.
+    ///
+    /// On a device, a mapping that completes after the last asked turn is
+    /// seen at the next turn: the host learns of it only by polling the
+    /// device, and a thread waiting there (wgpu `poll(Wait)`) holds the lock a
+    /// surface's present takes (wgpu-core device/resource.rs:916,
+    /// present.rs:364), so none waits. Where read-backs matter on a settled
+    /// view, the platform's own completion (a command buffer's handler, a
+    /// timeline semaphore) is the wake.
     fn read_back(&mut self, g: &Gpu) {
         let Some(c) = self.ground.as_mut() else { return };
         c.fresh_len = 0;
