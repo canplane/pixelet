@@ -23,7 +23,7 @@ use pxl_portable::lattice::GROUND;
 use pxl_portable::decor::{Decor, COUNTS};
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
 use pxl_portable::scatter::{self, drawn, Grounds, GROWN_AT, GROWN_WORDS, PLACED_BLOCK, SQUARE_BLOCKS};
-use pxl_portable::window::{self, Squares, ELE_AT, HEIGHTS_AT, LEVELS_AT, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS, WAYS_AT};
+use pxl_portable::window::{self, Squares, ELE_AT, FIRST_CELL, HEIGHTS_AT, LEVELS_AT, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS, WAYS_AT};
 use pxl_portable::window::{Ran, LINES_AT, RUNS_AT, RUNS_RUN_AT, RUNS_SQUARE, SQUARE_CELLS, WAYS_BINS};
 use pxl_portable::ways;
 use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM};
@@ -62,10 +62,6 @@ fn cut(e: IVec4) -> Cut {
 const VOID: u32 = sentinel::void as u32;
 const PLACED_AIR: u32 = PLACED_BLOCK | object::air as u32;
 const UNKNOWN: u32 = sentinel::unknown as u32;
-
-/// The eye's windows' cells' zooms begin at the top's (pxl-kernel
-/// layer/terrain/window.rs): its window at `cell` is `cell − FIRST_CELL`.
-const FIRST_CELL: u32 = GROUND.cell_zoom(GROUND.top());
 
 /// A cell's or a window's zoom, held to the eye's windows.
 fn held_to(cell: u32) -> u32 {

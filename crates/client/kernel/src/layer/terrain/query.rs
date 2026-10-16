@@ -22,7 +22,8 @@ use pxl_spec::space::layer::tile::{tile_at, Tile};
 
 use crate::io::source;
 use crate::layer::residency::{Line, Residency};
-use crate::layer::terrain::window::{Windowed, FIRST_CELL};
+use crate::layer::terrain::window::Windowed;
+use pxl_portable::window::FIRST_CELL;
 
 use crate::layer::{Answer, Bound, Query, Relief};
 

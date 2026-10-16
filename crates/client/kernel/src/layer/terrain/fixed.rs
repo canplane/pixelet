@@ -10,7 +10,7 @@ use pxl_portable::window::{BACK_WORDS, SQUARE_CELLS};
 use pxl_spec::bake::separation::{MAX_BOXES, MAX_LINES, MAX_POINTS};
 
 use crate::layer::residency::Residency;
-use crate::layer::terrain::window::SQUARES;
+use pxl_portable::window::SQUARES;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 
 /// `.fixed.terrain`, handed in at boot.

@@ -22,9 +22,6 @@ use crate::setting::store::settings_store;
 use crate::view::frame::pose::view;
 use crate::view::lens;
 
-/// The squares the GPU holds, every window's.
-pub const SQUARES: u32 = window::SQUARES;
-
 /// The shards the service area serves, as the GPU reads them.
 static SHARDS: Global<Vec<[i32; 4]>> = Global::new();
 

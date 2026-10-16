@@ -19,9 +19,9 @@ use xpute_guest::global::Global;
 
 use crate::layer::object::meta::user_decor_pick;
 use crate::layer::object::store::{EntryAt, Store};
-use crate::layer::terrain::window::FIRST_CELL;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::units_per_px_at;
+use pxl_portable::window::FIRST_CELL;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
 /// down to `DECOR_SPRITE_PX`. No fade: the edge is per instance, so it staggers.

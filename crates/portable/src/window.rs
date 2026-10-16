@@ -10,8 +10,8 @@
 //! present once its cells are drawn; a reader of one absent reads the
 //! coarser window's (`find`), as a coarser tile stood in before.
 
-use crate::lattice::TILE_CELLS;
-use crate::{wrap_index, Zoom};
+use crate::lattice::{GROUND, TILE_CELLS};
+use crate::{wrap_index, Zoom, LEAF_CELL};
 
 /// A square's side in cells, as a shift.
 pub const SQUARE_SHIFT: u32 = 6;
@@ -22,6 +22,18 @@ pub const ACROSS: u32 = 4;
 pub const SLOTS: u32 = ACROSS * ACROSS;
 /// A window's side in cells.
 pub const WINDOW: u32 = ACROSS * SQUARE;
+/// The eye's coarsest window's cells' zoom: the top's.
+pub const FIRST_CELL: Zoom = GROUND.cell_zoom(GROUND.top());
+/// The eye's windows, every zoom the pyramid draws, coarsest first, which
+/// the GPU's cast reads: the one at `cell` is `cell − FIRST_CELL`.
+pub const EYE_WINDOWS: u32 = LEAF_CELL - FIRST_CELL + 1;
+/// Every window: the eye's; the focus's, the leaves' and one over, what
+/// walking and editing read; a destination's one, at the zoom its line says
+/// its ground, found exactly (pxl-kernel layer/terrain/window.rs).
+pub const WINDOWS: u32 = EYE_WINDOWS + 3;
+/// Squares every window holds, the eye's first: the most the GPU holds, and
+/// so the most of their cells read back at once.
+pub const SQUARES: u32 = WINDOWS * SLOTS;
 
 /// How far from its centre a window holds every cell, in its own cells: a
 /// zoom's band ends `SPLIT` of its cells from the eye (`cast::SPLIT`).

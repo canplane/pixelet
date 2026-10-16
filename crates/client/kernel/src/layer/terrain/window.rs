@@ -11,8 +11,9 @@
 //! which the browser's cache answers.
 
 use pxl_portable::ground::{own, word};
-use pxl_portable::window::{self, Squares, LEVELS, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT};
+use pxl_portable::window::{self, Squares, EYE_WINDOWS, FIRST_CELL, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
 use pxl_portable::wrap_index;
+use pxl_portable::LEAF_CELL;
 use pxl_render::gpu::api::DONE;
 use pxl_render::gpu::renderer::{CellsBack, Square, TerrainWrite};
 use pxl_spec::bake::tile::terrain::{handed, square_lines, GroundId, TerrainTile, LOOK_LANE};
@@ -27,10 +28,6 @@ use crate::layer::Base;
 use crate::mem::fixed::lane;
 use pxl_spec::block::sample::Cells;
 
-/// The eye's coarsest window's cells' zoom: the top's.
-pub const FIRST_CELL: Zoom = GROUND.cell_zoom(GROUND.top());
-const LEAF_CELL: Zoom = GROUND.cell_zoom(LEAF_ZOOM);
-
 /// Who a window is about.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Centre {
@@ -39,15 +36,6 @@ pub enum Centre {
     Destination,
 }
 
-/// The eye's windows, every zoom the pyramid draws, coarsest first, which
-/// the GPU's cast reads.
-pub const EYE_WINDOWS: u32 = LEAF_CELL - FIRST_CELL + 1;
-/// Every window: the eye's; the focus's, the leaves' and one over, what
-/// walking and editing read; a destination's one, at the zoom its line says
-/// its ground (`step`), found exactly.
-pub const WINDOWS: u32 = EYE_WINDOWS + 3;
-/// Squares every window holds, the eye's first.
-pub const SQUARES: u32 = WINDOWS * SLOTS;
 /// The tiles the windows apart from the eye's want at most: a window spans
 /// two tiles a side.
 pub const PINNED_TILES: u32 = (WINDOWS - EYE_WINDOWS) * 4;

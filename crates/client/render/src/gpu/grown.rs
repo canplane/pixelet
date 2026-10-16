@@ -10,10 +10,8 @@
 //! what is grown.
 
 use pxl_portable::decor::{COUNTS, DECORS};
-use pxl_portable::lattice::GROUND;
 use pxl_portable::scatter::{drawn, GROUPS, GROWN_AT, GROWN_WORDS, SQUARE_BLOCKS, SQUARE_GROWN};
-use pxl_portable::window::SLOTS;
-use pxl_portable::LEAF_CELL;
+use pxl_portable::window::{EYE_WINDOWS, SLOTS};
 
 use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_PLACE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, release, word_bytes, Gpu};
@@ -35,12 +33,9 @@ pub struct DecorFrame<'a> {
     pub translation: [f32; 3],
 }
 
-/// The eye's windows, from the top's to the leaves'.
-const WINDOWS: u32 = LEAF_CELL - GROUND.cell_zoom(GROUND.top()) + 1;
-
 /// The most records `decor_cs` grows: every window's squares at their most
 /// (pxl-portable `scatter::SQUARE_GROWN`).
-const GROWN_ROOM: u32 = SQUARE_GROWN * WINDOWS * SLOTS;
+const GROWN_ROOM: u32 = SQUARE_GROWN * EYE_WINDOWS * SLOTS;
 
 /// The workgroups' sides: `decor_cs`'s, and a record a thread's.
 const GROW_WORKGROUP: u32 = 8;
@@ -184,7 +179,7 @@ impl Grown {
                 &self.grow,
                 (COUNTS as u32).div_ceil(GROW_WORKGROUP),
                 SQUARE_BLOCKS.div_ceil(GROW_WORKGROUP),
-                WINDOWS * SLOTS * DECORS.len() as u32,
+                EYE_WINDOWS * SLOTS * DECORS.len() as u32,
             ),
             (&self.count, records, 1, 1),
             (&self.args_built, 1, 1, 1),
