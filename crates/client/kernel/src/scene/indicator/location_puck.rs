@@ -75,6 +75,17 @@ struct Puck {
     lane: Vec<f32>,
     beacon_for: Option<([f64; 2], bool)>,
     shown: bool,
+    /// What the zone was last grounded from, and the center it gave; none
+    /// where it found no height.
+    grounded: Option<(Seen, Option<V3>)>,
+}
+
+/// What grounding the zone is made of, by value: the fix, and where it is
+/// in the eye's frame. With the ground its queries read (`read`), it is all.
+#[derive(Clone, Copy, PartialEq)]
+struct Seen {
+    device: Q3,
+    pos: V3,
 }
 
 static PUCK: Global<Puck> = Global::new();
@@ -88,6 +99,7 @@ pub fn location_puck_step(device_coord: Option<Q3>) {
         lane: Vec::new(),
         beacon_for: None,
         shown: false,
+        grounded: None,
     });
     if device_coord.is_some() {
         p.last_known_device_coord = device_coord;
@@ -96,14 +108,41 @@ pub fn location_puck_step(device_coord: Option<Q3>) {
         return clear(p);
     };
 
-    let pos = crate::view::frame::coord::to_world(&device);
+    let seen = Seen {
+        device,
+        pos: crate::view::frame::coord::to_world(&device),
+    };
+    let center_pos = match p.grounded {
+        Some((s, center)) if s == seen && !crate::query::changed::within(read(&device)) => center,
+        _ => {
+            let center = ground(p, seen);
+            p.grounded = Some((seen, center));
+            center
+        }
+    };
+    let Some(center_pos) = center_pos else {
+        return clear(p);
+    };
+    let pos = seen.pos;
+
+    // The beacon adds back what the zone's cell flooring dropped, so it moves
+    // smoothly rather than in whole-cell jumps.
+    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], kernel().scene.environment.night());
+    if p.beacon_for != Some(beacon) {
+        p.beacon_for = Some(beacon);
+        kernel().scene.puck.set_beacon(beacon.0, beacon.1);
+    }
+}
+
+/// The zone grounded at the fix and drawn where it changed: its center, none
+/// where the fix has no height yet.
+fn ground(p: &mut Puck, seen: Seen) -> Option<V3> {
+    let (device, pos) = (seen.device, seen.pos);
     // The fix names a place and not how high.
     if let Some(z) = World::now().surface_support(&device).value().flatten() {
         p.last_known_center_z = Some(z);
     }
-    let Some(center_z) = p.last_known_center_z else {
-        return clear(p);
-    };
+    let center_z = p.last_known_center_z?;
     let raw = [pos[0], pos[1], center_z];
     let center_pos = v3::floor(&raw, units(GROUND.cell()));
 
@@ -137,14 +176,15 @@ pub fn location_puck_step(device_coord: Option<Q3>) {
         request_world_tick();
     }
     p.lane = lane;
+    Some(center_pos)
+}
 
-    // The beacon adds back what the zone's cell flooring dropped, so it moves
-    // smoothly rather than in whole-cell jumps.
-    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], kernel().scene.environment.night());
-    if p.beacon_for != Some(beacon) {
-        p.beacon_for = Some(beacon);
-        kernel().scene.puck.set_beacon(beacon.0, beacon.1);
-    }
+/// The columns grounding the zone at `device` reads, corners in units: its
+/// cells, floored to the cell, and a cell about each.
+fn read(device: &Q3) -> [[f64; 2]; 2] {
+    let at = [0, 1].map(|k| pxl_spec::space::coord::q3::to_real(i64::from(device[k])));
+    let reach = (ZONE_RADIUS_CELL.ceil() + 2.0) * units(GROUND.cell());
+    [at.map(|v| v - reach), at.map(|v| v + reach)]
 }
 
 fn clear(p: &mut Puck) {
