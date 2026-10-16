@@ -43,6 +43,11 @@ pub mod texture_usage {
 /// The objects the renderer may hold at once.
 pub const OBJECTS: usize = 1 << 15;
 
+/// The most entries a group has, a layout's and a bind group's alike: the
+/// screen's lit group (frame/shader/record.rs, and renderer.rs's lit
+/// entries), its 19; a group past it is refused where it is made.
+pub const GROUP_ENTRIES: usize = 19;
+
 const SPANS: usize = GPU_SPAN_NAMES.len();
 
 /// The device's block (xpute DEVICE): a word a limit, the features a bit
@@ -534,18 +539,18 @@ impl Gpu {
 
     /// A group's (binding, stages, kind) words, as a pipeline record holds them.
     pub fn layout(&self, words: &[u32]) -> Id {
-        let entries: Vec<encode::BindGroupLayoutEntry> = words
-            .as_chunks::<3>()
-            .0
-            .iter()
-            .map(|&[binding, stage, kind]| encode::BindGroupLayoutEntry {
+        let words = words.as_chunks::<3>().0;
+        xpute_kit::ensure!(words.len() <= GROUP_ENTRIES, ENOSPC, words.len());
+        let entries: [encode::BindGroupLayoutEntry; GROUP_ENTRIES] = core::array::from_fn(|i| {
+            let [binding, stage, kind] = words.get(i).copied().unwrap_or_default();
+            encode::BindGroupLayoutEntry {
                 binding,
                 visibility: stages(stage),
                 layout: binding_layout(kind),
-            })
-            .collect();
+            }
+        });
         let s = self.s();
-        made(s.encoder.bind_group_layout(&mut s.stream, &entries))
+        made(s.encoder.bind_group_layout(&mut s.stream, &entries[..words.len()]))
     }
 
     fn pipeline_layout(&self, layouts: &[Id]) -> Id {
@@ -660,11 +665,11 @@ impl Gpu {
 
     /// Entries are (binding, kind, object, offset, size; 0 the rest of the buffer).
     pub fn bind_group(&self, layout: Id, words: &[u32]) -> Id {
-        let entries: Vec<encode::BindGroupEntry> = words
-            .as_chunks::<5>()
-            .0
-            .iter()
-            .map(|&[binding, kind, object, offset, size]| encode::BindGroupEntry {
+        let words = words.as_chunks::<5>().0;
+        xpute_kit::ensure!(words.len() <= GROUP_ENTRIES, ENOSPC, words.len());
+        let entries: [encode::BindGroupEntry; GROUP_ENTRIES] = core::array::from_fn(|i| {
+            let [binding, kind, object, offset, size] = words.get(i).copied().unwrap_or_default();
+            encode::BindGroupEntry {
                 binding,
                 resource: match kind {
                     resource::BUFFER => encode::Resource::Buffer {
@@ -675,10 +680,10 @@ impl Gpu {
                     resource::VIEW => encode::Resource::View(object),
                     _ => encode::Resource::Sampler(object),
                 },
-            })
-            .collect();
+            }
+        });
         let s = self.s();
-        made(s.encoder.bind_group(&mut s.stream, layout, &entries))
+        made(s.encoder.bind_group(&mut s.stream, layout, &entries[..words.len()]))
     }
 
     /// The format the device's surfaces show best, which the canvas's pipelines target.
