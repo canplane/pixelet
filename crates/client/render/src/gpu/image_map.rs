@@ -36,11 +36,12 @@ impl ImageMap {
         }
     }
 
-    pub fn step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<u32>) {
+    /// Whether the image came this frame.
+    pub fn step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<u32>) -> bool {
         if self.loaded {
-            return;
+            return false;
         }
-        let Some(image) = image() else { return };
+        let Some(image) = image() else { return false };
         let face = g.image_texture(image);
         let encoder = g.encoder();
         g.copy_texture(encoder, face, 0, 0, self.texture, 0, 0, 0, self.size.0, self.size.1);
@@ -48,5 +49,6 @@ impl ImageMap {
         release(face);
         mips.build(g, self.texture, self.levels, 0, 1);
         self.loaded = true;
+        true
     }
 }

@@ -59,6 +59,11 @@ impl StarPass {
         }
     }
 
+    /// The words they are drawn by, as `lay_out` wrote them.
+    pub fn words(&self) -> &[f32] {
+        &self.words
+    }
+
     /// Nothing is written while the stars are faded out.
     pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, env: &[f32], width: u32) {
         let u = &mut self.words;

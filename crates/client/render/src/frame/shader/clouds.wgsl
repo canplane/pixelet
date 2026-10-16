@@ -6,17 +6,28 @@
 
 struct Clouds {
   ray: mat3x3f,
+  // The field's lattice unit the eye is over and its share of one; the
+  // lattice's units around; the cells the wind has moved it under the map
+  // (gpu/clouds.rs `field`).
+  base: vec2u,
+  frac: vec2f,
+  count: u32,
+  drift: vec2f,
 };
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process.
-@group(0) @binding(1) var<uniform> clouds_words: array<vec4f, 3>;
+@group(0) @binding(1) var<uniform> clouds_words: array<vec4f, 5>;
 @group(0) @binding(2) var cloud_tile: texture_2d<f32>;
 @group(0) @binding(3) var cloud_tile_sampler: sampler;
 
 fn clouds_ray() -> mat3x3f { return mat3x3f(clouds_words[0].xyz, clouds_words[1].xyz, clouds_words[2].xyz); }
 // Faded over the upper half of the climb to where the clouds are gone (look/cloud.rs `shown`).
 fn clouds_shown() -> f32 { return clouds_words[0].w; }
+fn clouds_base() -> vec2u { return bitcast<vec2u>(clouds_words[3].xy); }
+fn clouds_frac() -> vec2f { return clouds_words[3].zw; }
+fn clouds_count() -> u32 { return bitcast<u32>(clouds_words[4].x); }
+fn clouds_drift() -> vec2f { return clouds_words[4].zw; }
 
 // The lattice's footprint where `dir` is `t` km on, before any branch takes a derivative.
 fn footprint_at(dir: vec3f, t: f32) -> f32 {

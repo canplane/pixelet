@@ -32,12 +32,6 @@ struct Atmosphere {
   night_sky: vec3f,
   // The Earth's face under the eye: at sea level the terrain floated on it.
   land_altitude_km: f32,
-  cloud_base: vec2u,
-  cloud_frac: vec2f,
-  cloud_count: u32,
-  cloud_altitude_km: f32,
-  // Cells the field has moved under the map.
-  cloud_drift: vec2f,
   // A lit city's radiance where the picture holds all of it.
   city_light: vec3f,
   // In units.
@@ -49,7 +43,7 @@ struct Atmosphere {
 };
 
 // The test holds both to the host's (gpu/atmosphere.rs).
-const ATMOS_VEC4S: u32 = 15u;
+const ATMOS_VEC4S: u32 = 13u;
 const EARTH_TILE_BITS: u32 = 4u;
 
 // Field by field, never as a struct: a struct lost Safari's WebGPU its GPU process.
@@ -81,15 +75,10 @@ fn atmos_sun_seen() -> vec3f { return atmos_words[8].xyz; }
 fn atmos_center_lon() -> f32 { return atmos_words[8].w; }
 fn atmos_night_sky() -> vec3f { return atmos_words[9].xyz; }
 fn atmos_land_altitude_km() -> f32 { return atmos_words[9].w; }
-fn atmos_cloud_base() -> vec2u { return bitcast<vec2u>(atmos_words[10].xy); }
-fn atmos_cloud_frac() -> vec2f { return atmos_words[10].zw; }
-fn atmos_cloud_count() -> u32 { return bitcast<u32>(atmos_words[11].x); }
-fn atmos_cloud_altitude_km() -> f32 { return atmos_words[11].y; }
-fn atmos_cloud_drift() -> vec2f { return atmos_words[11].zw; }
-fn atmos_city_light() -> vec3f { return atmos_words[12].xyz; }
-fn atmos_earth_reach() -> f32 { return atmos_words[12].w; }
-fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[13]); }
-fn atmos_earth_tiles() -> vec4u { return bitcast<vec4u>(atmos_words[14]); }
+fn atmos_city_light() -> vec3f { return atmos_words[10].xyz; }
+fn atmos_earth_reach() -> f32 { return atmos_words[10].w; }
+fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[11]); }
+fn atmos_earth_tiles() -> vec4u { return bitcast<vec4u>(atmos_words[12]); }
 
 
 /* the medium */

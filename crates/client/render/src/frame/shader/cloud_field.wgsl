@@ -8,8 +8,8 @@ const CLOUD_LATTICE_CELLS: u32 = 4096u;
 // Taken back to the flat map so a cloud stays over its ground wherever the view is centered.
 fn cloud_lattice(point: vec3f) -> vec2f {
   let on_map = off_globe_of(point, frame_planet(), frame_globe());
-  let cells = frame_planet().xy + on_map + atmos_cloud_drift();
-  return atmos_cloud_frac() + cells / f32(CLOUD_LATTICE_CELLS);
+  let cells = frame_planet().xy + on_map + clouds_drift();
+  return clouds_frac() + cells / f32(CLOUD_LATTICE_CELLS);
 }
 
 // Read at the footprint's mip, so a pixel wider than a cloud is as opaque as its covered share.
@@ -21,7 +21,7 @@ fn cloud_opacity(p: vec2f, footprint: f32) -> f32 {
 // with the rest, so the pattern stays on its ground as the origin moves.
 fn cloud_opacity_finer(p: vec2f, footprint: f32, finer: u32) -> f32 {
   let texels_per_unit = f32(CLOUD_TILE_TEXELS) / f32(CLOUD_TILE_UNITS);
-  let base = (atmos_cloud_base() % vec2u(CLOUD_TILE_UNITS)) * finer % vec2u(CLOUD_TILE_UNITS);
+  let base = (clouds_base() % vec2u(CLOUD_TILE_UNITS)) * finer % vec2u(CLOUD_TILE_UNITS);
   let uv = (vec2f(base) + p * f32(finer)) / f32(CLOUD_TILE_UNITS);
   return textureSampleLevel(cloud_tile, cloud_tile_sampler, uv, log2(max(footprint * f32(finer) * texels_per_unit, 1.0))).r;
 }
@@ -39,9 +39,9 @@ const WEATHER_CROWDED: f32 = 0.75;
 // The base is split on the coarse lattice, so the weather stays on its ground
 // as the origin moves, and wraps with the map.
 fn weather(p: vec2f, salt: u32) -> f32 {
-  let base = atmos_cloud_base();
+  let base = clouds_base();
   let at = (vec2f(base % vec2u(WEATHER_CELL)) + p) / f32(WEATHER_CELL);
-  let v = lattice_noise(base / WEATHER_CELL, at, atmos_cloud_count() / WEATHER_CELL - 1u, salt);
+  let v = lattice_noise(base / WEATHER_CELL, at, clouds_count() / WEATHER_CELL - 1u, salt);
   let even = 1.0 / (1.0 + exp(-LOGISTIC_SCALE * (v - 0.5) / WEATHER_SIGMA));
   return smoothstep(WEATHER_CLEAR, WEATHER_CROWDED, even);
 }

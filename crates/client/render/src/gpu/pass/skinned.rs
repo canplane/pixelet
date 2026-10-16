@@ -12,7 +12,7 @@ use crate::gpu::api::{bytes, release, Gpu};
 
 use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, Stage};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{skin_group, Blocks};
+use crate::gpu::renderer::{skin_group, Blocks, Read};
 
 /// Translation, turn about Z, opacity, scale, padding.
 const DRAW_UNIFORM_BYTES: u32 = 32;
@@ -85,6 +85,18 @@ impl SkinnedPass {
         });
         for d in draws {
             blocks.group(g, d[1], self.lit.layouts[3]);
+        }
+    }
+
+    /// Into `read`, what `draws` are drawn by: each draw, the uniform its
+    /// pass prepares and its joints' palette as the heap holds it — the
+    /// poses, an input of the world image (gpu/renderer.rs).
+    pub(crate) fn read<'a>(read: &mut Read, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]>, uniforms: &[f32], blocks: &Blocks) {
+        read.read::<u32>(&[draws.len() as u32]);
+        for d in draws {
+            read.read(d);
+            read.read(&uniform_of(uniforms, d)[..6]);
+            read.read(blocks.bytes(d[1]).unwrap_or(&[]));
         }
     }
 

@@ -17,7 +17,6 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, texture_usage, word_bytes, Format, Gpu, Load, Stamp};
 use crate::gpu::api_spec::resource;
-use crate::gpu::clouds::CloudField;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::Mips;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -26,7 +25,7 @@ use crate::look::atmosphere as model;
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_SUN};
 
 /// One past the last field: the device rounds the struct up to a 16-byte row.
-pub const ATMOS_FLOATS: usize = 60;
+pub const ATMOS_FLOATS: usize = 52;
 /// Offsets in floats into the struct.
 pub(crate) const RAYLEIGH_SCATTERING: usize = 0;
 pub(crate) const BOTTOM_RADIUS: usize = 3;
@@ -54,15 +53,10 @@ pub(crate) const SUN_SEEN: usize = 32;
 pub(crate) const CENTER_LON: usize = 35;
 pub(crate) const NIGHT_SKY: usize = 36;
 pub(crate) const LAND_ALTITUDE: usize = 39;
-pub(crate) const CLOUD_BASE: usize = 40;
-pub(crate) const CLOUD_FRAC: usize = 42;
-pub(crate) const CLOUD_COUNT: usize = 44;
-pub(crate) const CLOUD_ALTITUDE: usize = 45;
-pub(crate) const CLOUD_DRIFT: usize = 46;
-pub(crate) const CITY_LIGHT: usize = 48;
-pub(crate) const EARTH_REACH: usize = 51;
-pub(crate) const EARTH_WINDOW: usize = 52;
-pub(crate) const EARTH_TILES: usize = 56;
+pub(crate) const CITY_LIGHT: usize = 40;
+pub(crate) const EARTH_REACH: usize = 43;
+pub(crate) const EARTH_WINDOW: usize = 44;
+pub(crate) const EARTH_TILES: usize = 48;
 
 /// Bindings 8 through 19, ten entries of five words.
 pub const AIR_WORDS: usize = 50;
@@ -237,14 +231,16 @@ impl Atmosphere {
 
     /// The earth layer's tiles: what has come goes into its layer as the
     /// stream has room, and the window says which layer each tile reads.
-    /// Written by `lay_out`, which the renderer calls after this.
-    pub fn set_earth_tiles(&mut self, g: &Gpu, window: [i32; 2], layers: &[u32], upload: &mut Upload) {
-        let texture = self.earth_tiles.0;
+    /// Written by `lay_out`, which the renderer calls after this; whether a
+    /// tile came this frame.
+    pub fn set_earth_tiles(&mut self, g: &Gpu, window: [i32; 2], layers: &[u32], upload: &mut Upload) -> bool {
+        let (texture, mut came) = (self.earth_tiles.0, false);
         upload(&mut |layer, texels| {
             if !room(texels.len() as u32) {
                 return false;
             }
             g.write_texture(texture, layer, TILE_CELLS, TILE_CELLS, texels);
+            came = true;
             true
         });
         let w = &mut self.words;
@@ -258,11 +254,18 @@ impl Atmosphere {
         for (w, p) in w[EARTH_TILES..EARTH_TILES + 4].iter_mut().zip(packed) {
             *w = f32::from_bits(p);
         }
+        came
     }
 
-    /// This month's Earth: the kernel draws nothing before its image has come.
-    pub fn earth_step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<u32>) {
-        self.earth.step(g, mips, image);
+    /// This month's Earth: the kernel draws nothing before its image has
+    /// come; whether it came this frame.
+    pub fn earth_step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<u32>) -> bool {
+        self.earth.step(g, mips, image)
+    }
+
+    /// The words the sky and the world read, as `lay_out` wrote them.
+    pub fn words(&self) -> &[f32] {
+        &self.words
     }
 
     /// `up` is straight up where the eye stands, which every light and ray height is measured from.
@@ -284,19 +287,10 @@ impl Atmosphere {
         g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
 
-    /// Written by `lay_out`, which the renderer calls after this.
-    pub fn set_clouds(&mut self, field: &CloudField) {
-        let w = &mut self.words;
-        for k in 0..2 {
-            w[CLOUD_BASE + k] = f32::from_bits(field.base[k]);
-            w[CLOUD_FRAC + k] = field.frac[k];
-            w[CLOUD_DRIFT + k] = field.drift[k];
-        }
-        w[CLOUD_COUNT] = f32::from_bits(field.count);
-        w[CLOUD_ALTITUDE] = field.altitude_km;
-    }
-
-    pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) {
+    /// Whether a table the world reads was drawn again, past the exposure
+    /// texel, which is a function of the words and the tables.
+    pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
+        let mut drew = !self.baked;
         if !self.baked {
             self.table(g, encoder, TRANSMITTANCE, stamp);
             self.table(g, encoder, MULTISCATTER, stamp);
@@ -310,13 +304,16 @@ impl Atmosphere {
         if moved(self.drawn_for, now) {
             self.table(g, encoder, SKY_VIEW, stamp);
             self.drawn_for = Some(now);
+            drew = true;
         }
         let moon = (self.moon_mu, altitude);
         if self.words[MOON_LIGHT] > 0.0 && moved(self.moon_drawn_for, moon) {
             self.table(g, encoder, MOON_VIEW, stamp);
             self.moon_drawn_for = Some(moon);
+            drew = true;
         }
         self.table(g, encoder, EXPOSURE_TEXEL, stamp);
+        drew
     }
 
     fn table(&self, g: &Gpu, encoder: u32, k: usize, stamp: &mut Stamp) {

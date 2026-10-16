@@ -28,8 +28,16 @@ pub struct Surface {
     pub height: u32,
     pub wanted: (u32, u32),
     pub waited: u32,
+    /// The frame's depth, under what stage 3 draws.
     pub depth: u32,
     pub depth_view: u32,
+    /// The world image the frame is drawn over (gpu/renderer.rs, stage 2):
+    /// its colour, in the canvas's format, and its depth, each at the
+    /// frame's size and made with it.
+    pub world: u32,
+    pub world_view: u32,
+    pub world_depth: u32,
+    pub world_depth_view: u32,
 }
 
 impl Surface {

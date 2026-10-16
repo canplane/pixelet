@@ -145,11 +145,12 @@ impl Layers {
         }
     }
 
-    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<u32>) {
+    /// Whether the pack came this frame.
+    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<u32>) -> bool {
         if self.loaded {
-            return;
+            return false;
         }
-        let Some(image) = pack() else { return };
+        let Some(image) = pack() else { return false };
         let (tiles, table) = plan();
         let texture = g.image_texture(image);
         let encoder = g.encoder();
@@ -161,5 +162,6 @@ impl Layers {
         mips.build(g, self.tex, self.levels, 0, self.slots);
         g.write_buffer(self.table, 0, bytes(&table));
         self.loaded = true;
+        true
     }
 }

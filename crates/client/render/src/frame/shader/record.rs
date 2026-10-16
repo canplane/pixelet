@@ -55,7 +55,9 @@ pub const SHADER_GROWN_PLACE: u32 = 32;
 /// lines, generated with the cast from pxl-portable's `ways`: its one
 /// compute entry.
 pub const SHADER_WAYS: u32 = 33;
-pub const SHADERS: u32 = 34;
+/// The world image laid on a frame (blit.wgsl).
+pub const SHADER_BLIT: u32 = 34;
+pub const SHADERS: u32 = 35;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -188,6 +190,7 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_GROWN_PLACE => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_place.gen.wgsl")),
         SHADER_WAYS => include_str!(concat!(env!("OUT_DIR"), "/shader/ways.gen.wgsl")),
         SHADER_MIPS => wgsl!("mips"),
+        SHADER_BLIT => wgsl!("blit"),
         SHADER_SHEET => wgsl!("sheet"),
         SHADER_IMPOSTOR => wgsl!(
             "frame",
@@ -261,6 +264,7 @@ pub const FRAME_AT: [usize; 16] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 52
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_SKY: u32 = 13;
 pub const PIPELINE_MIPS: u32 = 14;
+pub const PIPELINE_BLIT: u32 = 15;
 pub const PIPELINE_DECOR_PREPASS: u32 = 16;
 pub const PIPELINE_SKINNED_PREPASS: u32 = 17;
 pub const PIPELINE_AO_DOWNSAMPLE: u32 = 18;
@@ -622,6 +626,16 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             ])],
         ),
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
+        // Every pixel, its depth too, so what is drawn over it meets the world's.
+        PIPELINE_BLIT => record(
+            Head {
+                depth_write: true,
+                depth_compare: ALWAYS,
+                ..screen(SHADER_BLIT)
+            },
+            &[],
+            &[group(&[[0, FRAGMENT, TEXTURE_UNFILTERED], [1, FRAGMENT, DEPTH]])],
+        ),
         PIPELINE_IMPOSTOR => record(
             Head {
                 topology: STRIP,

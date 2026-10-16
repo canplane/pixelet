@@ -115,7 +115,8 @@ impl ImpostorPass {
         }
     }
 
-    pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &mut DecorPass, blocks: &Blocks) {
+    /// Whether a group was baked again.
+    pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &mut DecorPass, blocks: &Blocks) -> bool {
         // The groups whose model or extent moved since baked, each once.
         let (mut due, mut len) = ([(0, Baked::default()); GROUPS], 0);
         for k in 0..GROUPS {
@@ -125,12 +126,12 @@ impl ImpostorPass {
         }
         let due = &due[..len];
         if due.is_empty() {
-            return;
+            return false;
         }
         self.fit_uniforms.write(g, self.bake.layouts[0], due.len() as u32, due.iter(), |buf, &(_, w)| {
             buf[..FIT_BYTES as usize].copy_from_slice(bytes(&fit_of(w.2)));
         });
-        let Some(slots) = self.fit_uniforms.slots() else { return };
+        let Some(slots) = self.fit_uniforms.slots() else { return false };
         for (n, &(k, w)) in due.iter().enumerate() {
             let Some((model, vertex_cnt, index_cnt, skin)) = decor.model_of(g, k as u32, blocks) else {
                 continue;
@@ -148,6 +149,7 @@ impl ImpostorPass {
             self.baked[k] = Some(w);
         }
         g.write_buffer(self.fits, 0, bytes(self.fit.as_flattened()));
+        true
     }
 
     /// Every block group the draws will bind is made here, so drawing makes

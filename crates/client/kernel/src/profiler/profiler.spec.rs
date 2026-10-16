@@ -84,33 +84,33 @@ pub mod FRAME {
     pub const wake_in_ms: u32 = 23;
     pub const gpu_ms: u32 = 24;
     pub const gpu_spans: u32 = 25;
-    pub const draw_calls: u32 = 32;
-    pub const triangles: u32 = 33;
-    pub const census: u32 = 34;
-    pub const px: u32 = 54;
-    pub const buffers: u32 = 55;
-    pub const buffer_mb: u32 = 56;
-    pub const tex_depth_mb: u32 = 57;
-    pub const tex_layers_mb: u32 = 58;
-    pub const tiles_total: u32 = 59;
-    pub const zoom_tiles: u32 = 60;
-    pub const tiles_place: u32 = 84;
-    pub const heap_peak_bytes: u32 = 85;
-    pub const heap_lent_bytes: u32 = 86;
-    pub const heap_run_bytes: u32 = 87;
-    pub const heap_held_bytes: u32 = 88;
-    pub const heap_range_bytes: u32 = 89;
-    pub const heap_largest_free_bytes: u32 = 90;
-    pub const heap_refusals: u32 = 91;
-    pub const heap_releases: u32 = 92;
-    pub const ring_cq_peak: u32 = 93;
-    pub const ring_held_peak: u32 = 94;
-    pub const waiting_terrain: u32 = 95;
-    pub const out_terrain: u32 = 96;
-    pub const waiting_place: u32 = 97;
-    pub const out_place: u32 = 98;
-    pub const cap_terrain_refused: u32 = 99;
-    pub const WORDS: u32 = 100;
+    pub const draw_calls: u32 = 33;
+    pub const triangles: u32 = 34;
+    pub const census: u32 = 35;
+    pub const px: u32 = 55;
+    pub const buffers: u32 = 56;
+    pub const buffer_mb: u32 = 57;
+    pub const tex_depth_mb: u32 = 58;
+    pub const tex_layers_mb: u32 = 59;
+    pub const tiles_total: u32 = 60;
+    pub const zoom_tiles: u32 = 61;
+    pub const tiles_place: u32 = 85;
+    pub const heap_peak_bytes: u32 = 86;
+    pub const heap_lent_bytes: u32 = 87;
+    pub const heap_run_bytes: u32 = 88;
+    pub const heap_held_bytes: u32 = 89;
+    pub const heap_range_bytes: u32 = 90;
+    pub const heap_largest_free_bytes: u32 = 91;
+    pub const heap_refusals: u32 = 92;
+    pub const heap_releases: u32 = 93;
+    pub const ring_cq_peak: u32 = 94;
+    pub const ring_held_peak: u32 = 95;
+    pub const waiting_terrain: u32 = 96;
+    pub const out_terrain: u32 = 97;
+    pub const waiting_place: u32 = 98;
+    pub const out_place: u32 = 99;
+    pub const cap_terrain_refused: u32 = 100;
+    pub const WORDS: u32 = 101;
     pub const KEYS: &[&str] = &[
         "t",
         "interval_ms",
@@ -229,9 +229,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 100;
-    pub const prev: u32 = 101;
-    pub const WORDS: u32 = 201;
+    pub const has_prev: u32 = 101;
+    pub const prev: u32 = 102;
+    pub const WORDS: u32 = 203;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -299,12 +299,12 @@ pub mod SUMMARY {
         pub const gpu: u32 = 23;
         pub const phases: u32 = 26;
         pub const gpu_spans: u32 = 41;
-        pub const kinds: u32 = 62;
-        pub const wakes: u32 = 69;
-        pub const heap_peak_delta_bytes: u32 = 72;
-        pub const census: u32 = 73;
-        pub const last: u32 = 93;
-        pub const WORDS: u32 = 193;
+        pub const kinds: u32 = 65;
+        pub const wakes: u32 = 73;
+        pub const heap_peak_delta_bytes: u32 = 76;
+        pub const census: u32 = 77;
+        pub const last: u32 = 97;
+        pub const WORDS: u32 = 198;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -333,27 +333,27 @@ pub mod SUMMARY {
     }
     /// The interval in progress, which no frame turn has closed yet: its turns and their time, rise to fall. A settled view's turns are here, if any run.
     pub mod open {
-        pub const AT: u32 = 198;
+        pub const AT: u32 = 203;
         pub const turns: u32 = 0;
         pub const busy_ms: u32 = 1;
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "turns", "busy_ms", "WORDS"];
     }
     pub mod tasks {
-        pub const AT: u32 = 200;
+        pub const AT: u32 = 205;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 125;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 325;
+        pub const AT: u32 = 330;
         pub const sheet_repacks: u32 = 0;
         pub const sheet_uploads: u32 = 1;
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "sheet_repacks", "sheet_uploads", "WORDS"];
     }
     pub mod sheet {
-        pub const AT: u32 = 327;
+        pub const AT: u32 = 332;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -363,7 +363,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 332;
+        pub const AT: u32 = 337;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -372,7 +372,7 @@ pub mod SUMMARY {
     }
     /// The largest of each since recording began, kept past the ring's minute.
     pub mod peak {
-        pub const AT: u32 = 335;
+        pub const AT: u32 = 340;
         pub const present: u32 = 0;
         pub const interval_ms: u32 = 1;
         pub const busy_ms: u32 = 2;
@@ -398,14 +398,14 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 344;
+        pub const AT: u32 = 349;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 505;
+        pub const AT: u32 = 510;
         pub const frames_held: u32 = 0;
         pub const admitted: u32 = 1;
         pub const evicted: u32 = 2;
@@ -414,7 +414,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at.
     pub mod view {
-        pub const AT: u32 = 508;
+        pub const AT: u32 = 513;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -449,7 +449,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 522;
+    pub const WORDS: u32 = 527;
     pub const KEYS: &[&str] = &["rec", "frames", "open", "tasks", "counters", "sheet", "fetch", "peak", "steps", "quality", "view", "WORDS"];
 }
 

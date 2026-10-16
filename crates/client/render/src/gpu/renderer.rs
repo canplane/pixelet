@@ -18,7 +18,9 @@ use crate::frame::draw::{
     PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::frame::screen_cells::SCREEN_CELLS_MAX;
-use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_WAYS};
+use crate::frame::shader::record::{
+    FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_WAYS,
+};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{
@@ -27,7 +29,7 @@ use crate::gpu::api::{
 use crate::gpu::api_spec::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
 use crate::gpu::api_spec::{resource, surface_role};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
-use crate::gpu::clouds::{self, CloudPass};
+use crate::gpu::clouds::CloudPass;
 use crate::gpu::grown::{DecorFrame, Drawn, Grown};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::{Layers, Mips};
@@ -85,6 +87,7 @@ const SPAN_AIR: usize = GpuSpanName::air as usize;
 const SPAN_PREPASS: usize = GpuSpanName::prepass as usize;
 const SPAN_AO: usize = GpuSpanName::ao as usize;
 const SPAN_WORLD: usize = GpuSpanName::world as usize;
+const SPAN_OVERLAY: usize = GpuSpanName::overlay as usize;
 const SPAN_BADGES: usize = GpuSpanName::badges as usize;
 const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
 const SPAN_CASES: usize = GpuSpanName::cases as usize;
@@ -487,6 +490,11 @@ impl Blocks {
         }
     }
 
+    /// The block as the heap holds it, the source its buffer is a copy of.
+    pub fn bytes(&self, handle: u32) -> Option<&'static [u8]> {
+        self.find(handle).map(|i| memory(self.at[i], self.len[i]))
+    }
+
     /// None until the block is on the device.
     pub fn get(&self, handle: u32) -> Option<(u32, u32, u32)> {
         self.find(handle).filter(|&i| self.buffer[i] != 0).map(|i| (self.buffer[i], self.vertex_cnt[i], self.index_cnt[i]))
@@ -606,7 +614,7 @@ pub fn gpu_lost() {
 }
 
 pub fn surface_closed(s: Surface) {
-    for id in [s.depth_view, s.depth] {
+    for id in [s.depth_view, s.depth, s.world_view, s.world, s.world_depth_view, s.world_depth] {
         release(id);
     }
     let slot = handle_slot(s.handle) as usize;
@@ -779,29 +787,30 @@ struct CastBuffers {
     overwrite_room: usize,
     overwrite_revision: Option<u32>,
     grown: Grown,
-    /// What the last cast read (`CastRead`), and whether this frame's is
-    /// the same: the lane and the decor grown over it stand, and nothing is
+    /// What the last cast read (`Read`), and whether this frame's is the
+    /// same: the lane and the decor grown over it stand, and nothing is
     /// cast.
-    read: CastRead,
+    read: Read,
 }
 
-/// The cast's whole input as the last cast read it, byte for byte: the lane
-/// and the decor grown over the same world are one function of it, so a
-/// frame that reads the same stands on them. Each lane is read with its
-/// length, so no two sets read alike.
+/// A stage's whole input as it last read it, byte for byte: what the stage
+/// makes is one function of it, so a frame that reads the same stands on
+/// what it made — the cast's lane and the decor grown over it (stage 1),
+/// the world image (stage 2). Each lane is read with its length, so no two
+/// sets read alike; what changed without words to read is marked so.
 #[derive(Default)]
-struct CastRead {
+pub(crate) struct Read {
     bytes: Vec<u8>,
     at: usize,
     same: bool,
 }
 
-impl CastRead {
-    fn begin(&mut self) {
+impl Read {
+    pub(crate) fn begin(&mut self) {
         (self.at, self.same) = (0, true);
     }
 
-    fn take(&mut self, lane: &[u8]) {
+    pub(crate) fn take(&mut self, lane: &[u8]) {
         let end = self.at + lane.len();
         if self.bytes.get(self.at..end) != Some(lane) {
             self.same = false;
@@ -813,20 +822,26 @@ impl CastRead {
         self.at = end;
     }
 
-    fn read<T: Copy>(&mut self, lane: &[T]) {
+    pub(crate) fn read<T: Copy>(&mut self, lane: &[T]) {
         self.take(bytes(&[lane.len() as u32]));
         self.take(bytes(lane));
     }
 
+    /// What this frame changed of the stage's input that has no words, as
+    /// an image come or a table drawn.
+    pub(crate) fn mark(&mut self, changed: bool) {
+        self.same &= !changed;
+    }
+
     /// Whether all of it read as the last time.
-    fn end(&mut self) -> bool {
+    pub(crate) fn end(&mut self) -> bool {
         let same = self.same && self.at == self.bytes.len();
         self.bytes.truncate(self.at);
         same
     }
 
     /// The lane no longer holds what was read: the next frame casts.
-    fn forget(&mut self) {
+    pub(crate) fn forget(&mut self) {
         self.bytes.clear();
     }
 }
@@ -1014,7 +1029,7 @@ impl ScreenCellsPass {
                 overwrite_room: 0,
                 overwrite_revision: None,
                 grown: Grown::new(g, pipelines),
-                read: CastRead::default(),
+                read: Read::default(),
             };
             self.cast = Some(c);
         }
@@ -1291,6 +1306,15 @@ pub struct Renderer {
     badges: BadgePass,
     debug: DebugPass,
     screen: ScreenCellsPass,
+    /// The world image's whole input as the last image drew it (stage 2):
+    /// the frame's, the sky's and the stars' words, the air's, the poses, the
+    /// image's own textures, and what came or was drawn again without words.
+    world: Read,
+    /// What lays the world image on a frame, and its group over the views
+    /// it was made for.
+    blit: Built,
+    blit_group: u32,
+    blit_views: [u32; 2],
     cases: [Option<Case>; SURFACES],
     order: Vec<u32>,
 }
@@ -1330,6 +1354,10 @@ impl Renderer {
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer),
             screen: ScreenCellsPass::new(g, &mut pipelines, sky_buffer),
+            world: Read::default(),
+            blit: pipelines.build(g, PIPELINE_BLIT, g.canvas()),
+            blit_group: 0,
+            blit_views: [0; 2],
             pipelines,
             frame_buffer,
             frame: [0.0; FRAME_FLOATS],
@@ -1410,8 +1438,7 @@ impl Renderer {
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let up = v3::norm(&v3::sub(&eye, &planet_center));
-        self.clouds.lay_out(g, &m, &eye, env, s[STAGE_AT::CLOUDS]);
-        self.atmosphere.set_clouds(&clouds::field([eye_world[0], eye_world[1]], env));
+        self.clouds.lay_out(g, &m, &eye, [eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS]);
         self.stars.lay_out(g, &m, env, width);
         put_ray(&mut self.sky, 0, &m, &eye);
         self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
@@ -1476,28 +1503,39 @@ impl Renderer {
         }
     }
 
-    /// The impostors are the lit pass's alone. `bound` comes back as the group 0 the pass has.
+    /// The world image's opaque models: the decor grown over the world and
+    /// the actors. The impostors are the lit pass's alone. `bound` comes back
+    /// as the group 0 the pass has.
     fn draw_opaque(&mut self, g: &Gpu, pass: u32, draws: &Draws, b: &mut Blocks, stage: Stage) -> u32 {
         let mut bound = 0;
-        self.decor.draw(g, pass, draws, b, stage, (self.models.frame, &mut bound));
         self.decor.draw_grown(g, pass, self.screen.grown(), b, stage, (self.models.frame, &mut bound));
         self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, stage, (self.models.frame, &mut bound));
         bound
     }
 
+    /// A frame in three stages, each standing while what it reads stands:
+    /// the cast's lane (stage 1, `ScreenCellsPass::prepare`); the world
+    /// image, everything the world and its light make, into the surface's own
+    /// colour and depth (stage 2, `world`); and the frame, the image laid on
+    /// it whole and over it what moves on its own — the clouds, which the
+    /// wind carries, the puck, the ghosts, the badges, the gizmos (stage 3,
+    /// every frame).
     fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> (FrameKind, FrameStat) {
+        let mut read = core::mem::take(&mut self.world);
+        read.begin();
         self.decor.set_models(input.decor);
         self.impostor.set_models(input.decor);
         for &(model, image) in input.skins {
             self.skinned.set_skin(g, model, image);
         }
-        self.layers.step(g, &self.mips, input.pack);
-        self.moon.step(g, &self.mips, input.moon);
-        self.atmosphere.earth_step(g, &self.mips, input.earth);
+        read.read(input.skins);
+        read.mark(self.layers.step(g, &self.mips, input.pack));
+        read.mark(self.moon.step(g, &self.mips, input.moon));
+        read.mark(self.atmosphere.earth_step(g, &self.mips, input.earth));
         let cast = input.cast;
         self.screen.hand(g, &mut self.pipelines, input.ground);
         let tiles = input.earth_tiles;
-        self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload);
+        read.mark(self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload));
         self.badges.sync_sheet(g, &self.mips, input.billboards, input.text);
         let (records, uniforms) = take_lists(Some(g), input.lists);
 
@@ -1505,6 +1543,7 @@ impl Renderer {
         self.lay_out(g, world.width, world.height, input.environment);
         if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
             self.rebind(g);
+            read.mark(true);
         }
         g.write_buffer(self.sky_buffer, 0, bytes(&self.sky));
         let uniform_bytes = word_bytes(uniforms.len());
@@ -1520,10 +1559,16 @@ impl Renderer {
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
         g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
+        read.read(&self.frame);
+        read.read(&self.sky);
+        read.read(self.stars.words());
+        read.read(self.atmosphere.words());
+        read.read(&[world.world, world.world_depth, u32::from(self.screen_ao)]);
         let b = blocks();
         self.decor.prepare(g, &draws, uniforms, b);
         self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, b);
         self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, b);
+        SkinnedPass::read(&mut read, draws.of(PIPELINE_SKINNED), uniforms, b);
         self.puck.prepare_zone(g, &draws, b);
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
@@ -1538,35 +1583,53 @@ impl Renderer {
         // What outlives the frame is drawn and submitted ahead of it: from here on
         // the frame only describes itself.
         let ahead = g.encoder();
-        self.impostor.bake(g, ahead, &mut self.decor, b);
+        read.mark(self.impostor.bake(g, ahead, &mut self.decor, b));
         self.screen.grids(g, ahead);
-        self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR]);
+        read.mark(self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR]));
         g.submit(ahead);
         self.screen.read_back(g);
+        // The image stands where it read all as last time over a lane that stood.
+        let still = read.end() && self.screen.kind != FrameKind::cast;
 
         // The frame proper changes nothing that outlives it, so one too large
         // for the stream is dropped whole and the screen keeps the last.
         frame_begin();
         let encoder = g.encoder();
         self.screen.dispatch(g, encoder);
-        if self.screen_ao {
-            let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
-            self.draw_opaque(g, pass, &draws, b, Stage::Prepass);
+        if !still {
+            if self.screen_ao {
+                let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
+                self.draw_opaque(g, pass, &draws, b, Stage::Prepass);
+                g.end(pass);
+                self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
+            }
+            let pass = g.pass(encoder, &pass_desc(world.world_view, Load::Clear, world.world_depth_view, Load::Clear, 0.0, stamps[SPAN_WORLD].pass()));
+            self.draw_opaque(g, pass, &draws, b, Stage::Lit);
+            let mut bound = self.screen.draw(g, pass);
+            // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
+            self.impostor.draw_grown(g, pass, self.screen.grown(), GROUPS, (self.models.frame, &mut bound));
+            // At the far plane after the opaque world, so only empty pixels run the sky shader.
+            g.set_pipeline(pass, self.sky_built.pipeline);
+            g.set_bind_group(pass, 0, self.sky_group, &[]);
+            g.draw(pass, 3, 1, 0, 0);
+            self.stars.draw(g, pass);
             g.end(pass);
-            self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
         }
         let canvas_view = g.current(world.handle);
-        let pass = g.pass(encoder, &pass_desc(canvas_view, Load::Clear, world.depth_view, Load::Clear, 0.0, stamps[SPAN_WORLD].pass()));
-        self.draw_opaque(g, pass, &draws, b, Stage::Lit);
-        let mut bound = self.screen.draw(g, pass);
-        // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
-        self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, (self.models.frame, &mut bound));
-        self.impostor.draw_grown(g, pass, self.screen.grown(), GROUPS, (self.models.frame, &mut bound));
-        // At the far plane after the opaque world, so only empty pixels run the sky shader.
-        g.set_pipeline(pass, self.sky_built.pipeline);
-        g.set_bind_group(pass, 0, self.sky_group, &[]);
+        let pass = g.pass(encoder, &pass_desc(canvas_view, Load::Clear, world.depth_view, Load::Clear, 0.0, stamps[SPAN_OVERLAY].pass()));
+        let views = [world.world_view, world.world_depth_view];
+        if views != self.blit_views {
+            release(self.blit_group);
+            self.blit_group = g.bind_group(self.blit.layouts[0], &[0, resource::VIEW, views[0], 0, 0, 1, resource::VIEW, views[1], 0, 0]);
+            self.blit_views = views;
+        }
+        g.set_pipeline(pass, self.blit.pipeline);
+        g.set_bind_group(pass, 0, self.blit_group, &[]);
         g.draw(pass, 3, 1, 0, 0);
-        self.stars.draw(g, pass);
+        // The clouds the kernel lists, the cumulus, carried by the wind.
+        let mut bound = 0;
+        self.decor.draw(g, pass, &draws, b, Stage::Lit, (self.models.frame, &mut bound));
+        self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, (self.models.frame, &mut bound));
         self.clouds.draw(g, pass);
         self.puck.draw_beacon(g, pass, &draws, uniforms);
         self.puck.draw_zone(g, pass, &draws, uniforms, b);
@@ -1589,12 +1652,19 @@ impl Renderer {
         let skipped = !frame_commit();
         if skipped {
             REDRAW.set(true);
-            // Its cast was dropped with it: the lane holds an older one.
+            // Its cast and its image were dropped with it: the lane and the
+            // image hold older ones.
             if let Some(c) = self.screen.cast.as_mut() {
                 c.read.forget();
             }
+            read.forget();
         }
-        let kind = if skipped { FrameKind::dropped } else { self.screen.kind };
+        self.world = read;
+        let kind = match (skipped, still) {
+            (true, _) => FrameKind::dropped,
+            (false, true) => FrameKind::still,
+            (false, false) => self.screen.kind,
+        };
         let stat = self.stat(draws.records, world, (gpu_ms, gpu_spans));
         self.order = order;
         (kind, stat)
@@ -1728,11 +1798,20 @@ fn targets(g: &Gpu, s: &mut Surface) {
     }
     s.waited = 0;
     g.resize(s.handle, width, height);
-    for id in [s.depth_view, s.depth] {
+    for id in [s.depth_view, s.depth, s.world_view, s.world, s.world_depth_view, s.world_depth] {
         release(id);
     }
-    s.depth = g.texture(width, height, 1, Format::depth32float, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+    let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
+    s.depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
     s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
+    // The world's alone draws over an image of it; a case draws straight.
+    (s.world, s.world_view, s.world_depth, s.world_depth_view) = (0, 0, 0, 0);
+    if s.role == surface_role::WORLD {
+        s.world = g.texture(width, height, 1, g.canvas(), 1, usage);
+        s.world_view = g.view(s.world, false, 0, 1, 0, 1);
+        s.world_depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
+        s.world_depth_view = g.view(s.world_depth, false, 0, 1, 0, 1);
+    }
     s.width = width;
     s.height = height;
 }

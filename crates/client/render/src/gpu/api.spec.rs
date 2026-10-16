@@ -41,7 +41,7 @@ pub mod resource {
 /// word, then each span's begin and end ticks (gpu/api.rs lays them out and
 /// holds this number to it).
 pub mod stream {
-    pub const HEAD: u32 = 65;
+    pub const HEAD: u32 = 69;
     /// The range's size: the stream, what one turn may send the device, then at
     /// its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an
     /// empty one of. A product number, said rather than derived; a chunk's mesh is

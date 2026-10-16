@@ -19,16 +19,14 @@ use crate::gpu::renderer::put_ray;
 use crate::look::cloud::{drift, CUMULUS_KM, LATTICE_COUNT, LATTICE_SHAMT, TILE_TEXELS};
 use crate::look::environment::{ENV_AIR, ENV_SKY};
 
-/// The ray, its first word's last lane how much of the clouds shows.
-pub(crate) const CLOUDS_FLOATS: usize = 12;
+/// The ray, its first word's last lane how much of the clouds shows, then
+/// the field the eye is over (frame/shader/clouds.wgsl `Clouds`).
+pub(crate) const CLOUDS_FLOATS: usize = 20;
 const SHOWN: usize = 3;
-pub struct CloudField {
-    pub base: [u32; 2],
-    pub frac: [f32; 2],
-    pub drift: [f32; 2],
-    pub count: u32,
-    pub altitude_km: f32,
-}
+const BASE: usize = 12;
+const FRAC: usize = 14;
+const COUNT: usize = 16;
+const DRIFT: usize = 18;
 
 pub struct CloudPass {
     below: Built,
@@ -73,10 +71,13 @@ impl CloudPass {
         }
     }
 
-    /// `shown`, how much of the clouds the kernel shows.
-    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, eye: &V3, env: &[f32], shown: f64) {
+    /// `shown`, how much of the clouds the kernel shows; `over`, the eye's
+    /// place on the map in the world's doubles. The field moves with the
+    /// wind, so its words are the clouds' own, apart from the sky's.
+    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, eye: &V3, over: [f64; 2], env: &[f32], shown: f64) {
         put_ray(&mut self.words, 0, view_proj, eye);
         self.words[SHOWN] = shown as f32;
+        field(&mut self.words, over, env);
         self.over = env[ENV_AIR] as f64 > CUMULUS_KM;
         g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
@@ -93,20 +94,20 @@ impl CloudPass {
 }
 
 /// The eye, in the world's doubles, split on the lattice into a whole unit
-/// and a fraction of one, so the shader never holds a world-sized coordinate.
-/// The world is `LATTICE_COUNT` units around, so a lap of X is a whole number
-/// of them and the unit wraps with it.
-pub fn field(eye: [f64; 2], env: &[f32]) -> CloudField {
+/// and a fraction of one, so the shader never holds a world-sized coordinate;
+/// the world is `LATTICE_COUNT` units around, so a lap of X is a whole number
+/// of them and the unit wraps with it. And where the wind has carried the
+/// field by now.
+fn field(words: &mut [f32; CLOUDS_FLOATS], eye: [f64; 2], env: &[f32]) {
     let side = (1u32 << LATTICE_SHAMT) as f64;
-    let units = eye.map(|v| v / side);
-    let (base, frac) = (units.map(|u| (u.floor() as i64).rem_euclid(i64::from(LATTICE_COUNT)) as u32), units.map(|u| (u - u.floor()) as f32));
-    CloudField {
-        base,
-        frac,
-        drift: drift(f64::from(env[ENV_SKY + 1])).map(|d| d as f32),
-        count: LATTICE_COUNT,
-        altitude_km: CUMULUS_KM as f32,
+    let drift = drift(f64::from(env[ENV_SKY + 1]));
+    for k in 0..2 {
+        let u = eye[k] / side;
+        words[BASE + k] = f32::from_bits((u.floor() as i64).rem_euclid(i64::from(LATTICE_COUNT)) as u32);
+        words[FRAC + k] = (u - u.floor()) as f32;
+        words[DRIFT + k] = drift[k] as f32;
     }
+    words[COUNT] = f32::from_bits(LATTICE_COUNT);
 }
 
 fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
