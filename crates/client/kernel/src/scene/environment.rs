@@ -28,9 +28,8 @@ pub fn environment_step() {
     wake_at(now() + next_ms);
 }
 
-/// Below this the transition counts as done and stops asking for frames.
-const SETTLE_EPS: f64 = 0.005;
-/// The sun and moon follow a jump of the anchor in about 1.5 s and never step.
+/// The sun and moon follow a jump of the anchor, and the stars fade in, over
+/// 1/EASE_RATE s, and never step.
 const EASE_RATE: f64 = 1.5;
 
 pub struct EnvironmentDraw {
@@ -40,6 +39,11 @@ pub struct EnvironmentDraw {
     days: f64,
     sun: [f64; 3],
     moon: [f64; 3],
+    /// The anchor the sky is observed from, where the sun and moon stood when
+    /// it last jumped, and how far they have come since, to one at the end.
+    anchor: [f64; 2],
+    from: [[f64; 3]; 2],
+    eased: f64,
     stars: f64,
     /// Seconds of wall time since the first observation: a tick's delta is
     /// clamped and sparse at rest, which ran clouds and stars slow, and the
@@ -56,6 +60,9 @@ impl Default for EnvironmentDraw {
             days: 0.0,
             sun: [0.0; 3],
             moon: [0.0; 3],
+            anchor: [0.0; 2],
+            from: [[0.0; 3]; 2],
+            eased: 1.0,
             stars: 0.0,
             time: 0.0,
             first_ms: None,
@@ -80,7 +87,10 @@ impl EnvironmentDraw {
         let first = *self.first_ms.get_or_insert(unix_ms);
         self.time = (unix_ms - first) / 1000.0;
         let [lon, lat, _] = anchor();
-        let heights = |days: f64| [sun_position(days, lat, lon)[2], moon_position(days, lat, lon)[2]];
+        // The cosine of each one's zenith angle: its direction's up, the
+        // positions standing at a distance.
+        let mu = |p: [f64; 3]| p[2] / v3::len(&p);
+        let heights = |days: f64| [mu(sun_position(days, lat, lon)), mu(moon_position(days, lat, lon))];
         let (step, days) = (f64::from(SUN_MU_STEP), j2000_days(unix_ms));
         let moved = |from: [f64; 2], to: [f64; 2]| [0, 1].map(|k| (to[k] - from[k]).abs());
         if !self.started || moved(heights(self.days), heights(days)).iter().any(|&d| d > step) {
@@ -94,7 +104,10 @@ impl EnvironmentDraw {
         (0..2).map(|k| (step - gone[k]).max(0.0) * MINUTE_MS / rate[k]).fold(f64::INFINITY, f64::min)
     }
 
-    /// Whether a transition is still in flight and wants frames.
+    /// Whether a transition is still in flight and wants frames: the sun
+    /// and moon on their way across a jump of the anchor, the stars fading
+    /// in. The clock's steps are taken as they come (`observe`), each too
+    /// small to see, so a still sky's words stand between them.
     pub fn tick(&mut self, frame: &Frame) -> bool {
         if self.first_ms.is_none() {
             return false;
@@ -103,19 +116,24 @@ impl EnvironmentDraw {
         let [lon, lat, _] = anchor();
         let sun = sun_position(self.days, lat, lon);
         let moon = moon_position(self.days, lat, lon);
-        let a = if self.started { (frame.delta_s * EASE_RATE).clamp(0.0, 1.0) } else { 1.0 };
         if !self.started {
-            self.sun = sun;
-            self.moon = moon;
+            (self.sun, self.moon, self.anchor) = (sun, moon, [lon, lat]);
             self.started = true;
         }
-        for k in 0..3 {
-            self.sun[k] += (sun[k] - self.sun[k]) * a;
-            self.moon[k] += (moon[k] - self.moon[k]) * a;
+        if self.anchor != [lon, lat] {
+            (self.from, self.eased, self.anchor) = ([self.sun, self.moon], 0.0, [lon, lat]);
         }
+        self.eased = (self.eased + frame.delta_s * EASE_RATE).min(1.0);
+        let along = |from: [f64; 3], to: [f64; 3]| {
+            if self.eased < 1.0 {
+                core::array::from_fn(|k| from[k] + (to[k] - from[k]) * self.eased)
+            } else {
+                to
+            }
+        };
+        (self.sun, self.moon) = (along(self.from[0], sun), along(self.from[1], moon));
         // The stars start dark and fade in, the first frame included.
-        let star_a = (frame.delta_s * EASE_RATE).clamp(0.0, 1.0);
-        self.stars += (1.0 - self.stars) * star_a;
+        self.stars = (self.stars + frame.delta_s * EASE_RATE).min(1.0);
         // Height over the planet: the world is tangent to it at the camera center
         // and the planet falls away under a camera standing off it.
         let km_per_u = km_per_u();
@@ -134,6 +152,6 @@ impl EnvironmentDraw {
             star_frame: equatorial_to_local(self.days, lat, lon),
         };
         write_environment(&mut self.out, &light);
-        1.0 - self.stars > SETTLE_EPS
+        self.eased < 1.0 || self.stars < 1.0
     }
 }
