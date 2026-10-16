@@ -694,19 +694,12 @@ impl GpuHost {
                 }
             }
             op::COPY_EXTERNAL_IMAGE => {
-                let texture = self.texture(r.u()).clone();
-                let (mip_level, origin) = (r.u(), wgpu::Origin3d { x: r.u(), y: r.u(), z: r.u() });
+                let to = self.texture_place(r);
                 let (flip_y, premultiplied) = (r.flag(), r.flag());
-                let (address, n) = (r.u() as usize, r.u() as usize);
-                // An image this host cannot decode is left out, as the web
-                // leaves out one its browser cannot.
+                let (address, n, word, ticket) = (r.u() as usize, r.u() as usize, r.u(), r.u());
+                // An image this host cannot decode is left out, its word not
+                // written, as the web leaves out one its browser cannot.
                 if let Some(image) = crate::image::decode(&memory[address..address + n], flip_y, premultiplied) {
-                    let place = wgpu::TexelCopyTextureInfo {
-                        texture: &texture,
-                        mip_level,
-                        origin,
-                        aspect: wgpu::TextureAspect::All,
-                    };
                     let layout = wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(4 * image.width),
@@ -717,7 +710,15 @@ impl GpuHost {
                         height: image.height,
                         depth_or_array_layers: 1,
                     };
-                    self.queue.write_texture(place, &image.rgba, layout, size);
+                    self.queue.write_texture(to.info(), &image.rgba, layout, size);
+                    // In the texture as the queue's next work sees it, so
+                    // answered at the next poll.
+                    self.pending.push(Pending {
+                        state: Arc::new(AtomicU8::new(ANSWERED)),
+                        word,
+                        ticket,
+                        read: None,
+                    });
                 }
             }
             op::ENCODER => {

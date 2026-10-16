@@ -48,9 +48,13 @@ bool write_texture_at(Stream &stream, const TexelCopyTexture &place, std::array<
     });
 }
 
-bool copy_external_image(Stream &stream, Id texture, std::uint32_t mip, std::array<std::uint32_t, 3> origin, bool flip_y, bool premultiplied, std::span<const std::uint8_t> image) noexcept {
-    return words(stream, op::COPY_EXTERNAL_IMAGE,
-                 {texture, mip, origin[0], origin[1], origin[2], flag(flip_y), flag(premultiplied), off(stream, image), static_cast<std::uint32_t>(image.size())});
+bool copy_external_image(Stream &stream, const TexelCopyTexture &to, bool flip_y, bool premultiplied, std::span<const std::uint8_t> image, std::uint32_t &word, std::uint32_t ticket) noexcept {
+    word = ticket;
+    std::uint32_t image_at = off(stream, image), word_at = stream.memory().off_of(&word);
+    return emit(stream, op::COPY_EXTERNAL_IMAGE, [&](auto &s) {
+        detail::texture_place(s, to);
+        detail::words(s, {flag(flip_y), flag(premultiplied), image_at, static_cast<std::uint32_t>(image.size()), word_at, ticket});
+    });
 }
 
 bool copy_buffer_to_buffer(Stream &stream, Id encoder, std::array<std::uint32_t, 2> from, std::array<std::uint32_t, 2> to, std::uint32_t size) noexcept {

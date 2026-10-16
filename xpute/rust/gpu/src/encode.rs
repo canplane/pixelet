@@ -684,23 +684,15 @@ pub mod call {
         })
     }
 
-    /// An encoded image (PNG, JPEG, WebP) where it lies in the guest's memory.
-    pub fn copy_external_image(stream: &mut Stream, texture: Id, mip: u32, origin: [u32; 3], flip_y: bool, premultiplied: bool, image: &[u8]) -> bool {
-        words(
-            stream,
-            op::COPY_EXTERNAL_IMAGE,
-            &[
-                texture,
-                mip,
-                origin[0],
-                origin[1],
-                origin[2],
-                flag(flip_y),
-                flag(premultiplied),
-                off_of_slice(image) as u32,
-                image.len() as u32,
-            ],
-        )
+    /// An encoded image (PNG, JPEG, WebP) where it lies in the guest's memory,
+    /// decoded into `to`; `word` where `ticket | DONE` lands once it is there.
+    pub fn copy_external_image(stream: &mut Stream, to: &TexelCopyTexture, flip_y: bool, premultiplied: bool, image: &[u8], word: &mut u32, ticket: u32) -> bool {
+        *word = ticket;
+        let (image_at, word_at) = (off_of_slice(image) as u32, off_of_slice(core::slice::from_ref(word)) as u32);
+        emit(stream, op::COPY_EXTERNAL_IMAGE, &|s| {
+            texture_place(s, to);
+            [flag(flip_y), flag(premultiplied), image_at, image.len() as u32, word_at, ticket].into_iter().for_each(|w| s.word(w));
+        })
     }
 
     pub fn copy_buffer_to_buffer(stream: &mut Stream, encoder: Id, from: (Id, u32), to: (Id, u32), size: u32) -> bool {

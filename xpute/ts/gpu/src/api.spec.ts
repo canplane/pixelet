@@ -14,7 +14,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 /** An optional field left unset, an index or a handle absent. */
 export const NONE: u32 = 4294967295 as number;
 
-/** Or-ed into a ticket where a completion word is written (READ_BUFFER, QUEUE_DONE). */
+/** Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, READ_BUFFER, QUEUE_DONE). */
 export const DONE: u32 = 2147483648 as number;
 
 /** In CONFIGURE's format: the format the host's surface prefers. */
@@ -60,7 +60,7 @@ export const op = {
   WRITE_TEXTURE: 15 as number,
   /** as WRITE_TEXTURE, the bytes an address and a count in the guest's memory. */
   WRITE_TEXTURE_AT: 16 as number,
-  /** texture, mip, origin x, y, z, flip y (0 or 1), premultiplied (0 or 1), address, bytes: an encoded image (PNG, JPEG, WebP) the host decodes into the texture. */
+  /** texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0 or 1), address, bytes, word, ticket: an encoded image (PNG, JPEG, WebP) the host decodes into the texture, and once it is there writes ticket | DONE at the word, where the ticket still stands; an image the host cannot decode is left out and its word not written. */
   COPY_EXTERNAL_IMAGE: 17 as number,
   /** id. */
   ENCODER: 18 as number,

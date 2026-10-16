@@ -572,8 +572,9 @@ bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<
 // `layout`: bytes per row, rows per image.
 bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
 bool write_texture_at(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
-// An encoded image (PNG, JPEG, WebP) where it lies in the guest's memory.
-bool copy_external_image(Stream &stream, Id texture, std::uint32_t mip, std::array<std::uint32_t, 3> origin, bool flip_y, bool premultiplied, std::span<const std::uint8_t> image) noexcept;
+// An encoded image (PNG, JPEG, WebP) where it lies in the guest's memory,
+// decoded into `to`; `word` where `ticket | DONE` lands once it is there.
+bool copy_external_image(Stream &stream, const TexelCopyTexture &to, bool flip_y, bool premultiplied, std::span<const std::uint8_t> image, std::uint32_t &word, std::uint32_t ticket) noexcept;
 // `from` and `to`: a buffer and its offset.
 bool copy_buffer_to_buffer(Stream &stream, Id encoder, std::array<std::uint32_t, 2> from, std::array<std::uint32_t, 2> to, std::uint32_t size) noexcept;
 bool copy_buffer_to_texture(Stream &stream, Id encoder, const TexelCopyBuffer &from, const TexelCopyTexture &to, std::array<std::uint32_t, 3> size) noexcept;

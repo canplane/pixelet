@@ -359,14 +359,19 @@ export class GpuHost {
         return;
       }
       case op.COPY_EXTERNAL_IMAGE: {
-        const texture = this.get<GPUTexture>(r.u());
-        const [mipLevel, origin, flipY, premultipliedAlpha] = [r.u(), [r.u(), r.u(), r.u()], r.flag(), r.flag()];
+        const to = this.texturePlace(r);
+        const [flipY, premultipliedAlpha] = [r.flag(), r.flag()];
         // Copied now: the guest's bytes are only its until the next turn.
         const image = new Blob([this.bytesAt(r.u(), r.u()).slice()]);
+        const [word, ticket] = [r.u(), r.u()];
+        // An image the browser cannot decode is left out, its word not written.
         createImageBitmap(image, { imageOrientation: flipY ? "flipY" : "from-image", premultiplyAlpha: premultipliedAlpha ? "premultiply" : "none" }).then((source) => {
-          if (this.objects.includes(texture)) (d.queue as ExternalImageQueue).copyExternalImageToTexture({ source }, { texture, mipLevel, origin }, [source.width, source.height]);
+          if (this.objects.includes(to.texture)) {
+            (d.queue as ExternalImageQueue).copyExternalImageToTexture({ source }, to, [source.width, source.height]);
+            this.done(word, ticket);
+          }
           source.close();
-        });
+        }, () => {});
         return;
       }
       case op.ENCODER:

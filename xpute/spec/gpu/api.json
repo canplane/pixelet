@@ -18,7 +18,7 @@
     "$value": 2147483648,
     "$type": "u32",
     "$doc": [
-      "Or-ed into a ticket where a completion word is written (READ_BUFFER, QUEUE_DONE)."
+      "Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, READ_BUFFER, QUEUE_DONE)."
     ]
   },
   "SURFACE_PREFERRED": {
@@ -146,7 +146,7 @@
     "COPY_EXTERNAL_IMAGE": {
       "$value": 17,
       "$doc": [
-        "texture, mip, origin x, y, z, flip y (0 or 1), premultiplied (0 or 1), address, bytes: an encoded image (PNG, JPEG, WebP) the host decodes into the texture."
+        "texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0 or 1), address, bytes, word, ticket: an encoded image (PNG, JPEG, WebP) the host decodes into the texture, and once it is there writes ticket | DONE at the word, where the ticket still stands; an image the host cannot decode is left out and its word not written."
       ]
     },
     "ENCODER": {

@@ -20,7 +20,7 @@ namespace xpute::gpu {
 // An optional field left unset, an index or a handle absent.
 inline constexpr std::uint32_t NONE = 4294967295u;
 
-// Or-ed into a ticket where a completion word is written (READ_BUFFER, QUEUE_DONE).
+// Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, READ_BUFFER, QUEUE_DONE).
 inline constexpr std::uint32_t DONE = 2147483648u;
 
 // In CONFIGURE's format: the format the host's surface prefers.
@@ -83,7 +83,7 @@ inline constexpr std::uint32_t WRITE_TEXTURE = 15u;
 // as WRITE_TEXTURE, the bytes an address and a count in the guest's memory.
 inline constexpr std::uint32_t WRITE_TEXTURE_AT = 16u;
 
-// texture, mip, origin x, y, z, flip y (0 or 1), premultiplied (0 or 1), address, bytes: an encoded image (PNG, JPEG, WebP) the host decodes into the texture.
+// texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0 or 1), address, bytes, word, ticket: an encoded image (PNG, JPEG, WebP) the host decodes into the texture, and once it is there writes ticket | DONE at the word, where the ticket still stands; an image the host cannot decode is left out and its word not written.
 inline constexpr std::uint32_t COPY_EXTERNAL_IMAGE = 17u;
 
 // id.

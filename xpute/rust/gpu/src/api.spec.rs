@@ -20,7 +20,7 @@
 /// An optional field left unset, an index or a handle absent.
 pub const NONE: u32 = 4294967295;
 
-/// Or-ed into a ticket where a completion word is written (READ_BUFFER, QUEUE_DONE).
+/// Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, READ_BUFFER, QUEUE_DONE).
 pub const DONE: u32 = 2147483648;
 
 /// In CONFIGURE's format: the format the host's surface prefers.
@@ -66,7 +66,7 @@ pub mod op {
     pub const WRITE_TEXTURE: u32 = 15;
     /// as WRITE_TEXTURE, the bytes an address and a count in the guest's memory.
     pub const WRITE_TEXTURE_AT: u32 = 16;
-    /// texture, mip, origin x, y, z, flip y (0 or 1), premultiplied (0 or 1), address, bytes: an encoded image (PNG, JPEG, WebP) the host decodes into the texture.
+    /// texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0 or 1), address, bytes, word, ticket: an encoded image (PNG, JPEG, WebP) the host decodes into the texture, and once it is there writes ticket | DONE at the word, where the ticket still stands; an image the host cannot decode is left out and its word not written.
     pub const COPY_EXTERNAL_IMAGE: u32 = 17;
     /// id.
     pub const ENCODER: u32 = 18;
