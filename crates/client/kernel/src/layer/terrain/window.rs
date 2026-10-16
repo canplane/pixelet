@@ -16,14 +16,14 @@ use pxl_portable::wrap_index;
 use pxl_portable::LEAF_CELL;
 use pxl_render::gpu::api::DONE;
 use pxl_render::gpu::renderer::{CellsBack, Square, TerrainWrite};
-use pxl_spec::bake::tile::terrain::{handed, square_lines, GroundId, TerrainTile, LOOK_LANE};
+use pxl_spec::bake::tile::terrain::{handed, square_lines, GroundId, TerrainTile, ELE_LANE, LOOK_LANE};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::{off_of, off_of_slice};
 
-use crate::layer::terrain::fixed::{back_off, cells_off, looks_off, CELLS_BYTES, CELLS_LANE_BYTES, LOOK_LANE_BYTES, RANGE};
+use crate::layer::terrain::fixed::{back_off, cells_off, fill_off, looks_off, CELLS_BYTES, CELLS_LANE_BYTES, LOOK_LANE_BYTES, RANGE};
 use crate::layer::Base;
 use crate::mem::fixed::lane;
 use pxl_spec::block::sample::Cells;
@@ -275,16 +275,18 @@ pub enum Handed<'a> {
 
 /// A square's four looks a cell, cut from its tile's, the tile's own
 /// expanded where it holds one a cell, and its lines and the room they are
-/// laid in, kept so a fill takes nothing more from the heap.
+/// laid in: lanes of `.fixed.terrain` (fixed.rs `FILL_LANE_BYTES`).
 struct Fill {
-    room: Vec<GroundId>,
-    cut: Vec<GroundId>,
-    zeros: Vec<i16>,
-    lines: Vec<u32>,
-    scratch: Vec<(u32, u32)>,
+    room: &'static mut [GroundId],
+    cut: &'static mut [GroundId],
+    lines: &'static mut [u32],
+    scratch: &'static mut [(u32, u32)],
 }
 
 static FILL: Global<Fill> = Global::new();
+
+/// A void tile's samples.
+static ZEROS: [i16; ELE_LANE] = [0; ELE_LANE];
 
 /// Each square any window wants in `tile` and holds absent, filled from
 /// `from` while `write` takes them: its own looks here, its four looks and
@@ -300,14 +302,19 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> bool {
     if !(0..SQUARES).any(|i| wants(w, i)) {
         return true;
     }
-    let f = FILL.get(|| Fill {
-        room: vec![0; LOOK_LANE],
-        cut: vec![0; 4 * SQUARE_CELLS as usize],
-        zeros: vec![0; pxl_spec::bake::tile::terrain::ELE_LANE],
-        lines: vec![0; window::LINES_WORDS as usize],
-        scratch: Vec::new(),
+    let f = FILL.get(|| {
+        let r = RANGE.get();
+        // SAFETY: the fill's lanes are its alone, plain numbers, zeroed at boot.
+        unsafe {
+            Fill {
+                room: lane(r, fill_off(0), LOOK_LANE),
+                cut: lane(r, fill_off(1), 4 * SQUARE_CELLS as usize),
+                lines: lane(r, fill_off(2), window::LINES_WORDS as usize),
+                scratch: lane(r, fill_off(3), window::WAYS_SQUARE_SEGMENTS as usize),
+            }
+        }
     });
-    let (room, cut, zeros, lines, scratch) = (&mut f.room, &mut f.cut, &f.zeros, &mut f.lines, &mut f.scratch);
+    let (room, cut, lines, scratch) = (&mut *f.room, &mut *f.cut, &mut *f.lines, &mut *f.scratch);
     let void = TerrainTile::void();
     let held: &TerrainTile = match from {
         Handed::Packet(_, held) => held,
@@ -322,7 +329,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> bool {
             for (q, &l) in room.chunks_mut(4).zip(void.ground.cells.iter()) {
                 q.fill(l);
             }
-            (&room[..], &zeros[..])
+            (&room[..], &ZEROS[..])
         }
     };
     for i in 0..SQUARES {

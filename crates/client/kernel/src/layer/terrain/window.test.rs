@@ -59,7 +59,11 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             for k in 0..SQUARE_CELLS {
                 words[(k / 2) as usize] |= (heights[at(k)] as u16 as u32) << (16 * (k % 2));
             }
-            let (mut scratch, mut lines, mut runs) = (Vec::new(), vec![0; window::LINES_WORDS as usize], vec![0; window::RUNS_WORDS as usize]);
+            let (mut scratch, mut lines, mut runs) = (
+                vec![(0, 0); window::WAYS_SQUARE_SEGMENTS as usize],
+                vec![0; window::LINES_WORDS as usize],
+                vec![0; window::RUNS_WORDS as usize],
+            );
             let n = pxl_spec::bake::tile::terrain::square_lines(t, separation, place, &mut scratch, &mut lines);
             let laid = pxl_spec::bake::tile::terrain::Laid {
                 cell,

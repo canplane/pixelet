@@ -4,10 +4,12 @@
 //! square lies in, and where a record's bytes are. A plane is one lane of
 //! every frame, or of every square, end to end; planes in order: the
 //! separation's eight and the ways' bound, a tile's; then a square's cells,
-//! its looks, and the word its cells come back under.
+//! its looks, and the word its cells come back under; then the room a fill
+//! works in, once.
 
-use pxl_portable::window::{BACK_WORDS, SQUARE_CELLS};
+use pxl_portable::window::{BACK_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
 use pxl_spec::bake::separation::{MAX_BOXES, MAX_LINES, MAX_POINTS};
+use pxl_spec::bake::tile::terrain::LOOK_LANE;
 
 use crate::layer::residency::Residency;
 use pxl_portable::window::SQUARES;
@@ -36,15 +38,17 @@ pub const SEPARATION_LANE_BYTES: [u32; 8] = [
     lane(MAX_BOXES, 8),
 ];
 
-pub const SEPARATION_BYTES: u32 = FRAMES * {
+const fn sum(lanes: &[u32]) -> u32 {
     let mut sum = 0;
     let mut k = 0;
-    while k < SEPARATION_LANE_BYTES.len() {
-        sum += SEPARATION_LANE_BYTES[k];
+    while k < lanes.len() {
+        sum += lanes[k];
         k += 1;
     }
     sum
-};
+}
+
+pub const SEPARATION_BYTES: u32 = FRAMES * sum(&SEPARATION_LANE_BYTES);
 
 /// One square's cells as the GPU drew them, read back whole: each cell's
 /// height, an i16, then its levels and its ways' bound, a word an entry
@@ -58,9 +62,22 @@ pub const LOOK_LANE_BYTES: u32 = SQUARE_CELLS;
 /// The word a square's cells come back under (pxl-render `Renderer::read_back`).
 pub const BACK_LANE_BYTES: u32 = 4;
 
+/// The room a fill works in (window.rs `fill`), a lane each in order: a
+/// tile's looks four a cell as handed, a square's cut from them, its lines,
+/// and the pairs `square_lines` lays them with.
+pub const FILL_LANE_BYTES: [u32; 4] = [
+    lane(LOOK_LANE, 1),
+    lane(4 * SQUARE_CELLS as usize, 1),
+    lane(LINES_WORDS as usize, 4),
+    lane(WAYS_SQUARE_SEGMENTS as usize, 8),
+];
+
 const TILES_BYTES: u32 = SEPARATION_BYTES;
 
-pub const TERRAIN_BYTES: u32 = TILES_BYTES + SQUARES * (CELLS_LANE_BYTES + LOOK_LANE_BYTES + BACK_LANE_BYTES);
+/// Where the fill's room starts, on a cache line.
+const FILL_AT: u32 = lane((TILES_BYTES + SQUARES * (CELLS_LANE_BYTES + LOOK_LANE_BYTES + BACK_LANE_BYTES)) as usize, 1);
+
+pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_LANE_BYTES);
 
 const _: () = assert!(LOOK_LANE_BYTES.is_multiple_of(64), "terrain: a look lane must be whole cache lines");
 
@@ -84,4 +101,14 @@ pub const fn looks_off(square: u32) -> u32 {
 
 pub const fn back_off(square: u32) -> u32 {
     TILES_BYTES + SQUARES * (CELLS_LANE_BYTES + LOOK_LANE_BYTES) + square * BACK_LANE_BYTES
+}
+
+pub const fn fill_off(lane: usize) -> u32 {
+    let mut at = FILL_AT;
+    let mut k = 0;
+    while k < lane {
+        at += FILL_LANE_BYTES[k];
+        k += 1;
+    }
+    at
 }

@@ -90,21 +90,26 @@ pub fn ways_fit(separation: &Separation, square: u32) -> Result<(), ([u32; 2], u
 /// segments a bin reaches, each once, in their lines' order — the reach
 /// `ways_fit` counts, so none holds more than `WAYS_SQUARE_SEGMENTS`. The
 /// words written, the rest left as they were; `scratch` the room it works
-/// in, kept between squares.
-pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratch: &mut Vec<(u32, u32)>, out: &mut [u32]) -> usize {
+/// in, `WAYS_SQUARE_SEGMENTS` pairs, kept between squares.
+pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratch: &mut [(u32, u32)], out: &mut [u32]) -> usize {
     use pxl_portable::ways::{header, HEADER_WORDS, SEGMENT_WORDS};
     use pxl_portable::window::{LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, SQUARE, WAYS_BINS};
     xpute_kit::ensure!(out.len() == LINES_WORDS as usize, ENOTRECOVERABLE);
+    xpute_kit::ensure!(scratch.len() == WAYS_SQUARE_SEGMENTS, ENOTRECOVERABLE);
     let bins = SQUARE >> WAYS_SHIFT;
     // Each bin of the square a segment's footprint reaches, and the point it starts at.
-    scratch.clear();
+    let mut count = 0;
     separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, d, _, s| {
         let [x, y] = [k as u32 % WAYS_ACROSS, k as u32 / WAYS_ACROSS];
         if [x / bins, y / bins] == place {
-            scratch.push(((y % bins) * bins + x % bins, separation.starts[d] + s as u32));
+            if let Some(e) = scratch.get_mut(count) {
+                *e = ((y % bins) * bins + x % bins, separation.starts[d] + s as u32);
+            }
+            count += 1;
         }
     });
-    xpute_kit::ensure!(scratch.len() <= WAYS_SQUARE_SEGMENTS, ENOTRECOVERABLE, scratch.len());
+    xpute_kit::ensure!(count <= WAYS_SQUARE_SEGMENTS, ENOTRECOVERABLE, count);
+    let scratch = &mut scratch[..count];
     let frame = Frame::of(tile);
     out[..HEADER_WORDS as usize].copy_from_slice(&header(u_per_m(frame.corner[1]) as f32, &frame.stations()));
     // The segments, each once in their points' order, each entry then its
@@ -205,7 +210,7 @@ pub fn fill_runs(sq: &impl pxl_portable::window::Square, out: &mut [u32]) -> [u3
 /// `LINES_WORDS`, with `scratch` (`square_lines`), its looks four a cell as
 /// a client hands them (`handed`) and its heights off the tile's samples as
 /// `heights_cs` draws them; its runs into `out`.
-pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut Vec<(u32, u32)>, lines: &mut [u32], out: &mut [u32]) -> [u32; 2] {
+pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, u32)], lines: &mut [u32], out: &mut [u32]) -> [u32; 2] {
     let n = square_lines(tile, &held.separation, place, scratch, lines);
     let cells = &held.ground.cells;
     let looks = |i: u32| {
@@ -240,7 +245,7 @@ pub fn runs_fit(tile: Tile, held: &TerrainTile) -> Result<(), ([u32; 2], [u32; 2
     if held.separation.is_empty() {
         return Ok(());
     }
-    let (mut scratch, mut lines, mut out) = (Vec::new(), vec![0; LINES_WORDS as usize], vec![0; RUNS_WORDS as usize]);
+    let (mut scratch, mut lines, mut out) = (vec![(0, 0); WAYS_SQUARE_SEGMENTS], vec![0; LINES_WORDS as usize], vec![0; RUNS_WORDS as usize]);
     for qy in 0..TILE_CELLS / SQUARE {
         for qx in 0..TILE_CELLS / SQUARE {
             let [runs, spans] = square_runs(tile, held, [qx, qy], &mut scratch, &mut lines, &mut out);
