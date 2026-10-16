@@ -38,11 +38,25 @@ impl At {
         unsafe { &mut *self.base.add(self.done).cast::<u32>() }
     }
 
-    /// Reads `n` bytes of `buffer` back to the record's place.
-    fn read(&self, s: &mut Stream, buffer: Id, n: usize, ticket: u32) {
+    /// Reads `n` bytes of `buffer` back to the record's place, as WebGPU
+    /// reads back: copied into a buffer made to be mapped, then mapped.
+    fn read(&self, gpu: &mut Encoder, s: &mut Stream, buffer: Id, n: usize, ticket: u32) {
+        let mapped = gpu
+            .buffer(
+                s,
+                &BufferDescriptor {
+                    size: n as u32,
+                    usage: B::MAP_READ | B::COPY_DST,
+                    mapped_at_creation: false,
+                },
+            )
+            .unwrap();
+        let e = gpu.encoder(s).unwrap();
+        call::copy_buffer_to_buffer(s, e, (buffer, 0), (mapped, 0), n as u32);
+        gpu.submit(s, &[e]);
         // SAFETY: as `input`.
         let into = unsafe { core::slice::from_raw_parts_mut(self.base.add(self.readback), n) };
-        call::read_buffer(s, buffer, 0, into, self.done(), ticket);
+        call::map_async(s, mapped, 0, into, self.done(), ticket);
     }
 }
 
@@ -159,7 +173,7 @@ fn read_target(gpu: &mut Encoder, s: &mut Stream, at: &At, e: Id, texture: Id, t
         [SIDE, SIDE, 1],
     );
     gpu.submit(s, &[e]);
-    at.read(s, out, (256 * SIDE) as usize, ticket);
+    at.read(gpu, s, out, (256 * SIDE) as usize, ticket);
 }
 
 fn color_target() -> [ColorTargetState; 1] {
@@ -246,7 +260,7 @@ fn add_arrays(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     call::dispatch(s, pass, [N / 64, 1, 1]);
     gpu.end(s, pass);
     gpu.submit(s, &[e]);
-    at.read(s, c, (4 * N) as usize, 1);
+    at.read(gpu, s, c, (4 * N) as usize, 1);
     turn(s);
 }
 
@@ -616,7 +630,7 @@ fn timestamps(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     call::dispatch(s, pass, [1, 1, 1]);
     gpu.end(s, pass);
     gpu.submit(s, &[e]);
-    at.read(s, out, 4, 1);
+    at.read(gpu, s, out, 4, 1);
     turn(s);
 }
 
@@ -700,6 +714,6 @@ fn dropped_transaction(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Tu
     };
     assert!(!write(gpu, s, true), "the first transaction does not fit");
     assert!(write(gpu, s, false), "the second does");
-    at.read(s, out, 4, 1);
+    at.read(gpu, s, out, 4, 1);
     turn(s);
 }

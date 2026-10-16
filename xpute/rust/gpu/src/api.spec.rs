@@ -20,7 +20,7 @@
 /// An optional field left unset, an index or a handle absent.
 pub const NONE: u32 = 4294967295;
 
-/// Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, READ_BUFFER, QUEUE_DONE).
+/// Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE).
 pub const DONE: u32 = 2147483648;
 
 /// In CONFIGURE's format: the format the host's surface prefers.
@@ -118,8 +118,8 @@ pub mod op {
     pub const END: u32 = 41;
     /// encoders' count, that many encoders, each finished and let go with the record.
     pub const SUBMIT: u32 = 42;
-    /// buffer, offset, size, address, word, ticket: once the bytes are copied to the address the host writes ticket | DONE at the word, where the ticket still stands.
-    pub const READ_BUFFER: u32 = 43;
+    /// buffer, offset, size, address, word, ticket: WebGPU's mapAsync for reading, of a buffer the guest made MAP_READ | COPY_DST and copied into on an encoder it submitted before. Once mapped, the range is copied to the address, ticket | DONE written at the word and the buffer unmapped. The word is the mapping's own: the guest maps the buffer again only once it holds DONE, and judges by the ticket whose bytes landed.
+    pub const MAP_ASYNC: u32 = 43;
     /// word, ticket: ticket | DONE at the word once what was submitted before it is done, where the ticket still stands.
     pub const QUEUE_DONE: u32 = 44;
     /// surface, format (TEXTURE_FORMAT, or SURFACE_PREFERRED), usage (TEXTURE_USAGE), alpha mode (CANVAS_ALPHA_MODE).
@@ -173,7 +173,7 @@ pub mod op {
         "DISPATCH_INDIRECT",
         "END",
         "SUBMIT",
-        "READ_BUFFER",
+        "MAP_ASYNC",
         "QUEUE_DONE",
         "CONFIGURE",
         "RESIZE",

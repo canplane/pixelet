@@ -524,19 +524,19 @@ export class GpuHost {
         ids.forEach((id) => this.forget(id));
         return;
       }
-      case op.READ_BUFFER: {
-        const [buffer, offset, size, address, word, ticket] = [this.get<GPUBuffer>(r.u()), r.u(), r.u(), r.u(), r.u(), r.u()];
-        const staging = d.createBuffer({ size, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-        const e = d.createCommandEncoder();
-        e.copyBufferToBuffer(buffer, offset, staging, 0, size);
-        d.queue.submit([e.finish()]);
-        staging.mapAsync(GPUMapMode.READ).then(() => {
-          if (new Uint32Array(this.memory(), word, 1)[0] === ticket) {
-            this.bytesAt(address, size).set(new Uint8Array(staging.getMappedRange()));
-            this.done(word, ticket);
-          }
-          staging.destroy();
-        }, () => staging.destroy());
+      case op.MAP_ASYNC: {
+        const buffer = this.get<GPUBuffer>(r.u());
+        const offset = r.u();
+        const size = r.u();
+        const address = r.u();
+        const word = r.u();
+        const ticket = r.u();
+        // The word is the mapping's own: it lands whatever it holds.
+        buffer.mapAsync(GPUMapMode.READ, offset, size).then(() => {
+          this.bytesAt(address, size).set(new Uint8Array(buffer.getMappedRange(offset, size)));
+          buffer.unmap();
+          new Uint32Array(this.memory(), word, 1)[0] = (ticket | DONE) >>> 0;
+        }, () => {});
         return;
       }
       case op.QUEUE_DONE: {

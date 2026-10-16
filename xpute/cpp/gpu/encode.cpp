@@ -143,10 +143,10 @@ bool dispatch(Stream &stream, Id pass, std::array<std::uint32_t, 3> workgroups) 
 
 bool dispatch_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noexcept { return words(stream, op::DISPATCH_INDIRECT, {pass, buffer, offset}); }
 
-bool read_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<std::uint8_t> into, std::uint32_t &word, std::uint32_t ticket) noexcept {
+bool map_async(Stream &stream, Id buffer, std::uint32_t offset, std::span<std::uint8_t> into, std::uint32_t &word, std::uint32_t ticket) noexcept {
     word = ticket;
     Memory mem = stream.memory();
-    return words(stream, op::READ_BUFFER, {buffer, offset, static_cast<std::uint32_t>(into.size()), mem.off_of(into), mem.off_of(&word), ticket});
+    return words(stream, op::MAP_ASYNC, {buffer, offset, static_cast<std::uint32_t>(into.size()), mem.off_of(into), mem.off_of(&word), ticket});
 }
 
 bool queue_done(Stream &stream, std::uint32_t &word, std::uint32_t ticket) noexcept {

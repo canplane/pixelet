@@ -55,7 +55,7 @@ pub const CELLS_LANE_BYTES: u32 = lane(CELLS_BYTES as usize, 1);
 /// One square's looks: a cell's own, a byte.
 pub const LOOK_LANE_BYTES: u32 = SQUARE_CELLS;
 
-/// The word a square's cells come back under (pxl-render `Gpu::read_buffer`).
+/// The word a square's cells come back under (pxl-render `Renderer::read_back`).
 pub const BACK_LANE_BYTES: u32 = 4;
 
 const TILES_BYTES: u32 = SEPARATION_BYTES;

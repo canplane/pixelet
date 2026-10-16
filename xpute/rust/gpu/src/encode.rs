@@ -814,13 +814,15 @@ pub mod call {
         words(stream, op::DISPATCH_INDIRECT, &[pass, buffer, offset])
     }
 
-    /// `into` the bytes' place in the guest's memory, `word` where `ticket |
-    /// DONE` lands once they are there, while the ticket still stands.
-    pub fn read_buffer(stream: &mut Stream, buffer: Id, offset: u32, into: &mut [u8], word: &mut u32, ticket: u32) -> bool {
+    /// `buffer`, made MAP_READ | COPY_DST and copied into on an encoder
+    /// submitted before, mapped for reading: `into` the bytes' place in the
+    /// guest's memory, `word` the mapping's own, where `ticket | DONE` lands
+    /// once they are there and the buffer is unmapped again.
+    pub fn map_async(stream: &mut Stream, buffer: Id, offset: u32, into: &mut [u8], word: &mut u32, ticket: u32) -> bool {
         *word = ticket;
         words(
             stream,
-            op::READ_BUFFER,
+            op::MAP_ASYNC,
             &[buffer, offset, into.len() as u32, off_of_slice(into) as u32, off_of_slice(core::slice::from_ref(word)) as u32, ticket],
         )
     }

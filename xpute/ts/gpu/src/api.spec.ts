@@ -14,7 +14,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 /** An optional field left unset, an index or a handle absent. */
 export const NONE: u32 = 4294967295 as number;
 
-/** Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, READ_BUFFER, QUEUE_DONE). */
+/** Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE). */
 export const DONE: u32 = 2147483648 as number;
 
 /** In CONFIGURE's format: the format the host's surface prefers. */
@@ -112,8 +112,8 @@ export const op = {
   END: 41 as number,
   /** encoders' count, that many encoders, each finished and let go with the record. */
   SUBMIT: 42 as number,
-  /** buffer, offset, size, address, word, ticket: once the bytes are copied to the address the host writes ticket | DONE at the word, where the ticket still stands. */
-  READ_BUFFER: 43 as number,
+  /** buffer, offset, size, address, word, ticket: WebGPU's mapAsync for reading, of a buffer the guest made MAP_READ | COPY_DST and copied into on an encoder it submitted before. Once mapped, the range is copied to the address, ticket | DONE written at the word and the buffer unmapped. The word is the mapping's own: the guest maps the buffer again only once it holds DONE, and judges by the ticket whose bytes landed. */
+  MAP_ASYNC: 43 as number,
   /** word, ticket: ticket | DONE at the word once what was submitted before it is done, where the ticket still stands. */
   QUEUE_DONE: 44 as number,
   /** surface, format (TEXTURE_FORMAT, or SURFACE_PREFERRED), usage (TEXTURE_USAGE), alpha mode (CANVAS_ALPHA_MODE). */

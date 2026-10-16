@@ -21,7 +21,9 @@ use crate::frame::screen_cells::SCREEN_CELLS_MAX;
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_WAYS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, texture_usage, word_bytes, Device, Format, Gpu, Load, Stamp};
+use crate::gpu::api::{
+    buffer_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, texture_usage, word_bytes, Device, Format, Gpu, Load, Stamp, DONE,
+};
 use crate::gpu::api_spec::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
 use crate::gpu::api_spec::{resource, surface_role};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
@@ -169,8 +171,9 @@ pub struct Overwrites<'a> {
 }
 
 /// Where a square's cells, which the GPU draws, come back to in the
-/// module's memory (`Gpu::read_buffer`): its heights then its levels, the
-/// word that holds the ticket, and the ticket.
+/// module's memory (`Renderer::read_back`): its heights then its levels,
+/// the kernel's word that takes `ticket | DONE` once this fill's are in,
+/// and the ticket.
 #[derive(Clone, Copy, Default)]
 pub struct CellsBack {
     pub cells: u32,
@@ -717,12 +720,16 @@ struct GroundBuffers {
     /// `window::SQUARE_WORDS`).
     ground: u32,
     /// The squares that turn handed, two words each, `heights_cs`'s,
-    /// `bound_cs`'s and `ways_cs`'s one per `id.z`, and where each one's
-    /// cells come back to: the first `fresh_len` of `backs`, a square handed
-    /// once a turn at most (`window::SQUARES`).
+    /// `bound_cs`'s and `ways_cs`'s one per `id.z`.
     fresh: u32,
     fresh_len: u32,
-    backs: [(u32, CellsBack); SQUARES as usize],
+    /// Per square place (`window::SQUARES`), its cells' way back: the fill
+    /// the next landing must be of (its ticket 0 where none is asked), the
+    /// buffer its cells are copied into and mapped back through, and that
+    /// mapping's own word (`read_back`).
+    asked: [CellsBack; SQUARES as usize],
+    reads: [u32; SQUARES as usize],
+    mapping: [u32; SQUARES as usize],
     heights_built: Built,
     heights_group: u32,
     bound_built: Built,
@@ -869,7 +876,9 @@ impl ScreenCellsPass {
                 ground: frames_buffer,
                 fresh,
                 fresh_len: 0,
-                backs: [(0, CellsBack::default()); SQUARES as usize],
+                asked: [CellsBack::default(); SQUARES as usize],
+                reads: core::array::from_fn(|_| buffer(BACK_WORDS * 4, buffer_usage::MAP_READ | buffer_usage::COPY_DST)),
+                mapping: [0; SQUARES as usize],
                 heights_built,
                 heights_group,
                 bound_built,
@@ -888,7 +897,7 @@ impl ScreenCellsPass {
             g.write_buffer(gb.ground, at + ELE_AT * 4, q.samples);
             g.write_buffer(gb.ground, at + LINES_AT * 4, bytes(q.lines));
             g.write_buffer(gb.fresh, word_bytes(2 * fresh as usize), bytes(&[q.square, q.place]));
-            gb.backs[fresh as usize] = (q.square, q.back);
+            gb.asked[q.square as usize] = q.back;
             fresh += 1;
             true
         });
@@ -1016,16 +1025,46 @@ impl ScreenCellsPass {
         g.end(pass);
     }
 
-    /// The squares the grids wrote read back where the CPU looks them up,
+    /// The squares the grids wrote mapped back where the CPU looks them up,
     /// once the encoder that wrote them is submitted: a square's heights and
-    /// levels lie together, so one read brings both. The turn's squares are
-    /// done with here, the last to read their count.
+    /// levels lie together, so one mapping brings both.
+    ///
+    /// A square's buffer maps once at a time, and its mapping lands whatever
+    /// fill it was asked for. One that landed for the square's latest fill
+    /// marks it read: the kernel's word takes `ticket | DONE`. One that
+    /// landed for an earlier fill is discarded, and the latest fill asked for
+    /// again: its bytes went into the square's cells while the kernel holds
+    /// the square Sent (or Absent, if it moved), which nothing reads, and the
+    /// latest fill's landing writes them again before the word says read. A
+    /// mapping still on its way is waited for. The turn's squares are done
+    /// with here.
     fn read_back(&mut self, g: &Gpu) {
         let Some(c) = self.ground.as_mut() else { return };
-        for &(square, back) in &c.backs[..c.fresh_len as usize] {
-            g.read_buffer(c.ground, square * SQUARE_BYTES + HEIGHTS_AT * 4, BACK_WORDS * 4, back.cells, back.word, back.ticket);
-        }
         c.fresh_len = 0;
+        let mut copy = None;
+        for i in 0..SQUARES as usize {
+            let (back, word) = (c.asked[i], c.mapping[i]);
+            if back.ticket == 0 || word != 0 && word & DONE == 0 {
+                continue;
+            }
+            if word == back.ticket | DONE {
+                // SAFETY: the kernel's word for the square, which it handed
+                // with this fill (pxl-kernel layer/terrain/window.rs).
+                unsafe { *ptr_at::<u32>(back.word as usize) = word };
+                c.asked[i].ticket = 0;
+                continue;
+            }
+            let e = *copy.get_or_insert_with(|| g.encoder());
+            g.copy_buffer(e, (c.ground, i as u32 * SQUARE_BYTES + HEIGHTS_AT * 4), (c.reads[i], 0), BACK_WORDS * 4);
+        }
+        let Some(e) = copy else { return };
+        g.submit(e);
+        for i in 0..SQUARES as usize {
+            let (back, word) = (c.asked[i], c.mapping[i]);
+            if back.ticket != 0 && (word == 0 || word & DONE != 0) {
+                g.map_read(c.reads[i], 0, BACK_WORDS * 4, back.cells, &mut c.mapping[i], back.ticket);
+            }
+        }
     }
 
     /// The GPU's cast into the lane, a ray a cell, where it runs; then the

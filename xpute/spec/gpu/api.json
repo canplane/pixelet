@@ -18,7 +18,7 @@
     "$value": 2147483648,
     "$type": "u32",
     "$doc": [
-      "Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, READ_BUFFER, QUEUE_DONE)."
+      "Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE)."
     ]
   },
   "SURFACE_PREFERRED": {
@@ -299,10 +299,10 @@
         "encoders' count, that many encoders, each finished and let go with the record."
       ]
     },
-    "READ_BUFFER": {
+    "MAP_ASYNC": {
       "$value": 43,
       "$doc": [
-        "buffer, offset, size, address, word, ticket: once the bytes are copied to the address the host writes ticket | DONE at the word, where the ticket still stands."
+        "buffer, offset, size, address, word, ticket: WebGPU's mapAsync for reading, of a buffer the guest made MAP_READ | COPY_DST and copied into on an encoder it submitted before. Once mapped, the range is copied to the address, ticket | DONE written at the word and the buffer unmapped. The word is the mapping's own: the guest maps the buffer again only once it holds DONE, and judges by the ticket whose bytes landed."
       ]
     },
     "QUEUE_DONE": {

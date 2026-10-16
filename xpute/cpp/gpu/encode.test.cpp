@@ -35,8 +35,16 @@ struct At {
 
     std::span<const std::uint8_t> input_bytes() const { return {mem.at(input), input_len}; }
     std::uint32_t &done() const { return *reinterpret_cast<std::uint32_t *>(mem.at(done_at)); }
-    // Reads `n` bytes of `buffer` back to the record's place.
-    void read(Stream &s, Id buffer, std::uint32_t n, std::uint32_t ticket) const { call::read_buffer(s, buffer, 0, {mem.at(readback), n}, done(), ticket); }
+    // Reads `n` bytes of `buffer` back to the record's place, as WebGPU reads
+    // back: copied into a buffer made to be mapped, then mapped.
+    void read(Encoder &gpu, Stream &s, Id buffer, std::uint32_t n, std::uint32_t ticket) const {
+        Id mapped = *gpu.buffer(s, {.size = n, .usage = BUFFER_USAGE::MAP_READ | BUFFER_USAGE::COPY_DST, .mapped_at_creation = false});
+        Id e = *gpu.encoder(s);
+        call::copy_buffer_to_buffer(s, e, {buffer, 0}, {mapped, 0}, n);
+        const Id encoders[] = {e};
+        gpu.submit(s, encoders);
+        call::map_async(s, mapped, 0, {mem.at(readback), n}, done(), ticket);
+    }
 };
 
 std::vector<std::uint8_t> le(const std::vector<std::uint32_t> &w) {
@@ -72,7 +80,7 @@ void read_target(Encoder &gpu, Stream &s, const At &at, Id e, Id texture, std::u
     call::copy_texture_to_buffer(s, e, {texture, 0, {0, 0, 0}, TextureAspect::all}, {out, 0, 256, SIDE}, {SIDE, SIDE, 1});
     const Id encoders[] = {e};
     gpu.submit(s, encoders);
-    at.read(s, out, 256 * SIDE, ticket);
+    at.read(gpu, s, out, 256 * SIDE, ticket);
 }
 
 const ColorTargetState COLOR_TARGET[] = {{TextureFormat::rgba8unorm, std::nullopt, COLOR_WRITE::ALL}};
@@ -111,7 +119,7 @@ void add_arrays(Encoder &gpu, Stream &s, const At &at, const Turn &turn) {
     gpu.end(s, ps);
     const Id encoders[] = {e};
     gpu.submit(s, encoders);
-    at.read(s, c, 4 * N, 1);
+    at.read(gpu, s, c, 4 * N, 1);
     turn(s);
 }
 
@@ -269,7 +277,7 @@ void timestamps(Encoder &gpu, Stream &s, const At &at, const Turn &turn) {
     gpu.end(s, ps);
     const Id encoders[] = {e};
     gpu.submit(s, encoders);
-    at.read(s, out, 4, 1);
+    at.read(gpu, s, out, 4, 1);
     turn(s);
 }
 
@@ -303,7 +311,7 @@ void dropped_transaction(Encoder &gpu, Stream &s, const At &at, const Turn &turn
     };
     XPUTE_CHECK(!write(true));
     XPUTE_CHECK(write(false));
-    at.read(s, out, 4, 1);
+    at.read(gpu, s, out, 4, 1);
     turn(s);
 }
 

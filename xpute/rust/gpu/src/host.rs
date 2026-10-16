@@ -230,8 +230,9 @@ struct Pending {
     state: Arc<AtomicU8>,
     word: u32,
     ticket: u32,
-    /// A read's staging buffer and where its bytes go.
-    read: Option<(wgpu::Buffer, u32)>,
+    /// A mapping's buffer, its range and where its bytes go: its word is
+    /// its own, written whatever it holds (MAP_ASYNC).
+    read: Option<(wgpu::Buffer, u64, u64, u32)>,
 }
 
 const WAITING: u8 = 0;
@@ -541,21 +542,24 @@ impl GpuHost {
         }
     }
 
-    /// What the device has answered since: each read's bytes copied to its
-    /// address and each done's word set, where the ticket still stands.
+    /// What the device has answered since: each mapping's bytes copied to
+    /// its address, its own word set and the buffer unmapped; each done's
+    /// word set where its ticket still stands.
     /// Run at the turn's edge, before the turn reads its words.
     pub fn poll(&mut self, memory: &mut [u8]) {
         let _ = self.device.poll(wgpu::PollType::Poll);
         self.pending.retain(|p| match p.state.load(Ordering::Acquire) {
             WAITING => true,
             ANSWERED => {
-                if word_at(memory, p.word) == p.ticket {
-                    if let Some((staging, address)) = &p.read {
-                        if let Ok(range) = staging.slice(..).get_mapped_range() {
-                            let a = *address as usize;
-                            memory[a..a + range.len()].copy_from_slice(&range);
-                        }
+                if let Some((buffer, offset, size, address)) = &p.read {
+                    let slice = buffer.slice(*offset..*offset + *size);
+                    if let Ok(range) = slice.get_mapped_range() {
+                        let a = *address as usize;
+                        memory[a..a + range.len()].copy_from_slice(&range);
                     }
+                    buffer.unmap();
+                    set_word(memory, p.word, p.ticket | DONE);
+                } else if word_at(memory, p.word) == p.ticket {
                     set_word(memory, p.word, p.ticket | DONE);
                 }
                 false
@@ -1171,27 +1175,19 @@ impl GpuHost {
                     .collect();
                 self.submit(finished);
             }
-            op::READ_BUFFER => {
-                let (b, offset, size, address, word, ticket) = (r.u(), u64::from(r.u()), r.u(), r.u(), r.u(), r.u());
-                let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: None,
-                    size: u64::from(size),
-                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                });
-                let mut e = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-                e.copy_buffer_to_buffer(self.buffer(b), offset, &staging, 0, u64::from(size));
-                self.submit(vec![e.finish()]);
+            op::MAP_ASYNC => {
+                let (b, offset, size, address, word, ticket) = (r.u(), u64::from(r.u()), u64::from(r.u()), r.u(), r.u(), r.u());
+                let buffer = self.buffer(b).clone();
                 let state = Arc::new(AtomicU8::new(WAITING));
                 let answered = Arc::clone(&state);
-                staging.slice(..).map_async(wgpu::MapMode::Read, move |result| {
+                buffer.slice(offset..offset + size).map_async(wgpu::MapMode::Read, move |result| {
                     answered.store(if result.is_ok() { ANSWERED } else { REFUSED }, Ordering::Release);
                 });
                 self.pending.push(Pending {
                     state,
                     word,
                     ticket,
-                    read: Some((staging, address)),
+                    read: Some((buffer, offset, size, address)),
                 });
             }
             op::QUEUE_DONE => {

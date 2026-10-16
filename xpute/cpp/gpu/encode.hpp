@@ -616,9 +616,11 @@ bool draw_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noe
 bool draw_indexed_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noexcept;
 bool dispatch(Stream &stream, Id pass, std::array<std::uint32_t, 3> workgroups) noexcept;
 bool dispatch_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noexcept;
-// `into` the bytes' place in the guest's memory, `word` where `ticket | DONE`
-// lands once they are there, while the ticket still stands.
-bool read_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<std::uint8_t> into, std::uint32_t &word, std::uint32_t ticket) noexcept;
+// `buffer`, made MAP_READ | COPY_DST and copied into on an encoder submitted
+// before, mapped for reading: `into` the bytes' place in the guest's memory,
+// `word` the mapping's own, where `ticket | DONE` lands once they are there
+// and the buffer is unmapped again.
+bool map_async(Stream &stream, Id buffer, std::uint32_t offset, std::span<std::uint8_t> into, std::uint32_t &word, std::uint32_t ticket) noexcept;
 // `ticket | DONE` at `word` once what was submitted before is done.
 bool queue_done(Stream &stream, std::uint32_t &word, std::uint32_t ticket) noexcept;
 // `format` none for the format the host's surface prefers.

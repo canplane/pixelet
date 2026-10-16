@@ -20,7 +20,7 @@ namespace xpute::gpu {
 // An optional field left unset, an index or a handle absent.
 inline constexpr std::uint32_t NONE = 4294967295u;
 
-// Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, READ_BUFFER, QUEUE_DONE).
+// Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE).
 inline constexpr std::uint32_t DONE = 2147483648u;
 
 // In CONFIGURE's format: the format the host's surface prefers.
@@ -161,8 +161,8 @@ inline constexpr std::uint32_t END = 41u;
 // encoders' count, that many encoders, each finished and let go with the record.
 inline constexpr std::uint32_t SUBMIT = 42u;
 
-// buffer, offset, size, address, word, ticket: once the bytes are copied to the address the host writes ticket | DONE at the word, where the ticket still stands.
-inline constexpr std::uint32_t READ_BUFFER = 43u;
+// buffer, offset, size, address, word, ticket: WebGPU's mapAsync for reading, of a buffer the guest made MAP_READ | COPY_DST and copied into on an encoder it submitted before. Once mapped, the range is copied to the address, ticket | DONE written at the word and the buffer unmapped. The word is the mapping's own: the guest maps the buffer again only once it holds DONE, and judges by the ticket whose bytes landed.
+inline constexpr std::uint32_t MAP_ASYNC = 43u;
 
 // word, ticket: ticket | DONE at the word once what was submitted before it is done, where the ticket still stands.
 inline constexpr std::uint32_t QUEUE_DONE = 44u;

@@ -33,7 +33,7 @@ use crate::gpu::api_spec::{record, resource, stream};
 use crate::gpu::span_spec::GPU_SPAN_NAMES;
 
 pub mod buffer_usage {
-    pub use xpute_gpu::spec::BUFFER_USAGE::{COPY_DST, COPY_SRC, INDEX, INDIRECT, STORAGE, UNIFORM, VERTEX};
+    pub use xpute_gpu::spec::BUFFER_USAGE::{COPY_DST, COPY_SRC, INDEX, INDIRECT, MAP_READ, STORAGE, UNIFORM, VERTEX};
 }
 
 pub mod texture_usage {
@@ -170,10 +170,11 @@ struct State {
     /// The device's block asked for; read once it is READY.
     asked: bool,
     device: Option<Device>,
-    /// The spans' query set, its resolve buffer, which spans the read in
-    /// flight timed, and their times from the last read in, in ms; past the
-    /// last span, the whole frame's.
-    stamps: Option<(Id, Id)>,
+    /// The spans' query set, its resolve buffer and the buffer it is copied
+    /// into and mapped back through, which spans the read in flight timed,
+    /// and their times from the last read in, in ms; past the last span, the
+    /// whole frame's.
+    stamps: Option<(Id, Id, Id)>,
     stamps_written: u32,
     gpu_ms: [f64; SPANS + 1],
     /// The images on their way into textures (`image_arrive`).
@@ -842,14 +843,16 @@ impl Gpu {
         s.encoder.submit(&mut s.stream, &[encoder]);
     }
 
-    /// The frame's encoder, its spans resolved and read where no read is still
-    /// on its way, submitted. One read at most is on its way, so its ticket
-    /// need not tell reads apart.
+    /// The frame's encoder, its spans resolved, copied out and mapped back
+    /// where no mapping is still on its way, submitted. One mapping at most is
+    /// on its way, so its ticket need not tell them apart.
     pub fn submit_frame(&self, encoder: Id, written: u32) {
         let s = self.s();
         let stamps_free = *head(STAMPS_WORD_AT) == 0 || *head(STAMPS_WORD_AT) & DONE != 0;
-        if let (Some((set, resolve)), true) = (s.stamps, stamps_free) {
+        if let (Some((set, resolve, mapped)), true) = (s.stamps, stamps_free) {
+            let bytes = 2 * SPANS as u32 * 8;
             call::resolve_query_set(&mut s.stream, encoder, set, 0, 2 * SPANS as u32, resolve, 0);
+            call::copy_buffer_to_buffer(&mut s.stream, encoder, (resolve, 0), (mapped, 0), bytes);
             s.encoder.submit(&mut s.stream, &[encoder]);
             s.stamps_written = written;
             let at = s.at as usize + STAMPS_AT * WORD;
@@ -860,7 +863,7 @@ impl Gpu {
                     &mut *ptr_at::<u32>(s.at as usize + STAMPS_WORD_AT * WORD),
                 )
             };
-            call::read_buffer(&mut s.stream, resolve, 0, ticks, word, 1);
+            call::map_async(&mut s.stream, mapped, 0, ticks, word, 1);
         } else {
             s.encoder.submit(&mut s.stream, &[encoder]);
         }
@@ -881,7 +884,8 @@ impl Gpu {
         made(s.encoder.current(&mut s.stream, handle_slot(surface)))
     }
 
-    /// The spans' query set, two queries a span, and the buffer they resolve into.
+    /// The spans' query set, two queries a span, the buffer they resolve into
+    /// and the one that is mapped back.
     pub fn spans(&self) -> Id {
         let s = self.s();
         let set = made(s.encoder.query_set(&mut s.stream, QueryType::timestamp, 2 * SPANS as u32));
@@ -893,7 +897,15 @@ impl Gpu {
                 mapped_at_creation: false,
             },
         ));
-        s.stamps = Some((set, resolve));
+        let mapped = made(s.encoder.buffer(
+            &mut s.stream,
+            &encode::BufferDescriptor {
+                size: (2 * SPANS * 8) as u32,
+                usage: BUFFER_USAGE::MAP_READ | BUFFER_USAGE::COPY_DST,
+                mapped_at_creation: false,
+            },
+        ));
+        s.stamps = Some((set, resolve, mapped));
         set
     }
 
@@ -920,14 +932,20 @@ impl Gpu {
         s.gpu_ms[(span as usize).min(SPANS)]
     }
 
-    /// `length` bytes of buffer `id` from `offset`, as what was submitted
-    /// before left them, into the kernel's memory at `address`, `word` set to
-    /// `ticket | DONE` once they are in: a turn or more later, and only while
-    /// the word still holds the ticket.
-    pub fn read_buffer(&self, id: Id, offset: u32, length: u32, address: u32, word: u32, ticket: u32) {
-        // SAFETY: the kernel's own range and word, which it asked to be
-        // written and does not write while the ticket is out.
-        let (into, word) = unsafe { (core::slice::from_raw_parts_mut(ptr_at::<u8>(address as usize), length as usize), &mut *ptr_at::<u32>(word as usize)) };
-        call::read_buffer(&mut self.s().stream, id, offset, into, word, ticket);
+    /// `size` bytes of `from` from `at` into `to` from `to_at`, on `encoder`.
+    pub fn copy_buffer(&self, encoder: Id, (from, at): (Id, u32), (to, to_at): (Id, u32), size: u32) {
+        call::copy_buffer_to_buffer(&mut self.s().stream, encoder, (from, at), (to, to_at), size);
+    }
+
+    /// `length` bytes of `id`, a buffer made `MAP_READ | COPY_DST` and copied
+    /// into on an encoder submitted before, mapped back from `offset` into
+    /// the kernel's memory at `address`; `word`, the mapping's own, holds
+    /// `ticket | DONE` once they are in, a turn or more later, and only then
+    /// may `id` be mapped again (xpute MAP_ASYNC).
+    pub fn map_read(&self, id: Id, offset: u32, length: u32, address: u32, word: &mut u32, ticket: u32) {
+        // SAFETY: the kernel's own range, which it asked to be written and
+        // does not read while the mapping is out.
+        let into = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(address as usize), length as usize) };
+        call::map_async(&mut self.s().stream, id, offset, into, word, ticket);
     }
 }
