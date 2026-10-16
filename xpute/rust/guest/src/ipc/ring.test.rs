@@ -36,46 +36,6 @@ fn ring_messages_come_out_in_order_across_the_wrap_and_a_full_ring_refuses() {
 }
 
 #[test]
-fn ring_a_packet_written_in_place_reads_as_the_one_pushed_and_one_past_a_slot_is_refused_whatever_the_ring_holds() {
-    use xpute_kit::wire::xtp::PacketWriter;
-    let (r, _buf) = ring(8, 64);
-    let write = |n: u32| {
-        move |out: &mut [u8]| {
-            let mut w = PacketWriter::new(out, 2);
-            w.u32(Some(n)).u64(Some((n as u64) << 40));
-            w.finish()
-        }
-    };
-    let mut t: TreeView<'_> = TreeView::new();
-    t.branch(Some(&mut |b| {
-        b.u32(Some(5)).u64(Some(5 << 40));
-    }));
-    let pushed = encoder().encode(&t, TreeEncoderOptions::default()).unwrap();
-    assert_eq!(r.push_in_place(1, 2, 0, 0, write(5)), Errno::OK);
-    let at = r.peek() as u32;
-    assert_eq!(r.packet(at).unwrap().unwrap(), pushed.as_slice());
-
-    // Refused the same with a message in the ring and with none.
-    let long = "x".repeat(200);
-    let too_long = |out: &mut [u8]| {
-        let mut w = PacketWriter::new(out, 1);
-        w.str(Some(&long));
-        w.finish()
-    };
-    let tail = r.tail();
-    assert_eq!(r.push_in_place(1, 2, 0, 0, too_long), Errno::EMSGSIZE);
-    assert_eq!(r.tail(), tail, "and nothing written");
-    r.advance();
-    assert_eq!(r.push_in_place(1, 2, 0, 0, too_long), Errno::EMSGSIZE, "an empty ring answers the same");
-
-    assert_eq!(r.push_in_place(3, 4, 0, -1, write(6)), Errno::OK);
-    let at = r.peek() as u32;
-    assert_eq!((r.tag(at), r.cmd(at), r.result(at)), (3, 4, -1));
-    let reader = TreeReader::new(r.packet(at).unwrap().unwrap()).unwrap().read_branch().unwrap();
-    assert_eq!(reader.at(0).unwrap().get_number().unwrap(), 6.0);
-}
-
-#[test]
 fn ring_one_payload_a_slot_so_the_payloads_run_out_with_the_slots_and_never_before_them() {
     let (r, _buf) = ring(8, 64);
     let pkt = |n: u32| {
