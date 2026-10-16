@@ -32,6 +32,10 @@ wgpu = { version = "30", default-features = false, features = ["metal", "vulkan"
 pollster = "1"
 # The kernel's region, mapped from the system (src/memory.rs).
 libc = "0.2"
+# The bodies the app's fetch hands over still zstd (src/unpack.rs): a reader
+# of RFC 8878's frame, as a browser's decoder is, in Rust, so no target's
+# build needs a C compiler for it.
+ruzstd = { version = "0.9", default-features = false, features = ["std"] }
 
 # What an Android app reaches the kernel through (src/android.rs): the NDK's
 # own headers — JNI, the native window a view's surface is, and the log —

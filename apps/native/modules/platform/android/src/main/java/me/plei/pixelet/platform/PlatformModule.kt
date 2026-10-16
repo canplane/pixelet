@@ -34,7 +34,7 @@ class PlatformModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PxlPlatform")
 
-    // ---- the kernel (platform/guest.ts, gpu.ts, image.ts) ----
+    // ---- the kernel (platform/guest.ts, gpu.ts) ----
 
     // The region is the guest's for the app's life: nothing is let go when
     // the buffer is.
@@ -44,6 +44,14 @@ class PlatformModule : Module() {
 
     /** Whether the device opened; what it is, the kernel reads from the host. */
     Function("gpuOpen") { PxlGuest.gpuOpen() }
+
+    // ---- the transport (platform/origin.ts) ----
+
+    /** A body fetched still zstd, decoded off the JavaScript thread on the
+     * module's queue, into a direct buffer JavaScript takes without a copy. */
+    AsyncFunction("unpack") { packed: ByteArray ->
+      NativeArrayBuffer(PxlGuest.unpack(packed) ?: throw CodedException("a body sent zstd does not decode"))
+    }
 
     // ---- storage (platform/storage.ts) ----
     //

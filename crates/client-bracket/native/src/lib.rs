@@ -15,6 +15,7 @@ mod android;
 mod memory;
 mod surface;
 mod thread;
+mod unpack;
 
 use thread::on_kernel;
 

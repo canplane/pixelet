@@ -35,4 +35,8 @@ object PxlGuest {
 
   /** Lets `handle`'s surface go. */
   external fun surfaceUnbind(handle: Int)
+
+  /** A zstd body decoded into a direct buffer, or null where it does not
+   * decode. It never reaches the kernel: any thread, at any time. */
+  external fun unpack(packed: ByteArray): ByteBuffer?
 }

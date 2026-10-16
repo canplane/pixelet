@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 // The doorbell: a turn of quota_ms, and when the kernel wants the next, in ms
@@ -27,3 +28,10 @@ int32_t pxl_gpu_open(void);
 int32_t pxl_surface_bind(uint32_t handle, void *layer);
 // Lets `handle`'s layer go, if it is still the one bound under its slot.
 void pxl_surface_unbind(uint32_t handle);
+
+// A body the app's fetch hands over still zstd (src/unpack.rs), which never
+// reaches the kernel and so runs on the caller's thread, off the JavaScript
+// thread: 0 with the decoded bytes at *out, *out_len long, the library's
+// until pxl_unpacked_free; -1 where it does not decode.
+int32_t pxl_unpack(const uint8_t *src, size_t len, uint8_t **out, size_t *out_len);
+void pxl_unpacked_free(uint8_t *out, size_t len);

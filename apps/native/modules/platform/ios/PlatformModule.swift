@@ -28,7 +28,7 @@ public class PlatformModule: Module {
       ViewModifierRegistry.unregister(contentScrollsModifier)
     }
 
-    // ---- the kernel (platform/guest.ts, gpu.ts, image.ts) ----
+    // ---- the kernel (platform/guest.ts, gpu.ts) ----
 
     Function("memory") { () throws -> NativeArrayBuffer in
       var bytes: UInt32 = 0
@@ -45,6 +45,21 @@ public class PlatformModule: Module {
     /// Whether the device opened; what it is, the kernel reads from the host.
     Function("gpuOpen") { () -> Bool in
       pxl_gpu_open() == 0
+    }
+
+    // ---- the transport (platform/origin.ts) ----
+
+    /// A body fetched still zstd, decoded off the JavaScript thread on the
+    /// module's queue, into the library's bytes, which JavaScript takes
+    /// without a copy and the library lets go with the buffer.
+    AsyncFunction("unpack") { (packed: Data) throws -> NativeArrayBuffer in
+      var out: UnsafeMutablePointer<UInt8>?
+      var count = 0
+      let decoded = packed.withUnsafeBytes { (src: UnsafeRawBufferPointer) in
+        pxl_unpack(src.bindMemory(to: UInt8.self).baseAddress, src.count, &out, &count)
+      }
+      guard decoded == 0, let bytes = out else { throw UnpackException() }
+      return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: bytes, count: count), cleanup: { pxl_unpacked_free(bytes, count) })
     }
 
     // ---- storage (platform/storage.ts) ----
@@ -140,5 +155,11 @@ public class PlatformModule: Module {
 internal final class MemoryException: Exception, @unchecked Sendable {
   override var reason: String {
     "the guest has no memory"
+  }
+}
+
+internal final class UnpackException: Exception, @unchecked Sendable {
+  override var reason: String {
+    "a body sent zstd does not decode"
   }
 }

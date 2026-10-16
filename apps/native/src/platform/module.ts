@@ -10,6 +10,8 @@ interface PxlPlatform {
   interrupt(quotaMs: f64): f64;
   /** Whether the device opened; what it is, the kernel reads from the host. */
   gpuOpen(): boolean;
+  /** A body sent zstd, decoded off the JavaScript thread (origin.ts). */
+  unpack(packed: Uint8Array): Promise<ArrayBuffer>;
   storageGet(key: string): string | null;
   storageSet(key: string, value: string): void;
   clipboardSet(text: string): void;
