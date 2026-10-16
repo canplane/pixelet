@@ -6,6 +6,7 @@
 
 pub mod abi;
 pub mod approach;
+pub mod asset;
 pub mod billboard;
 pub mod chunk;
 pub mod control;

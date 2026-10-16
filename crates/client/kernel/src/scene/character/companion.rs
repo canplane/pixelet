@@ -8,8 +8,9 @@
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::approach::damp_alpha;
+use crate::asset::Load;
 use crate::billboard::chat::speak_from;
-use crate::io::load::{load_image, Load};
+use crate::io::load::load_image;
 use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;

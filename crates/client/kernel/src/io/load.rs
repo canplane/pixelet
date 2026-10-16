@@ -11,10 +11,10 @@
 use std::rc::Rc;
 
 use pxl_render::asset::gltf::{parse_gltf, Gltf};
-use pxl_spec::asset::ingested::Asset;
-use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
+use xpute_guest::sched::edge::{next_turn, yield_if_spent};
 
 use crate::abi::host::root;
+use crate::asset::{Load, LoadKind, LOADS};
 use crate::io::demand::Ask;
 use crate::io::failure::Ended;
 use crate::io::file::{self, Opened, Owner, Path};
@@ -29,56 +29,19 @@ use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LoadKind {
-    Gltf = 0,
-    Image = 1,
-}
-
-/// The texture pack's image is written beside the asset table, not as a row of
-/// it; the Earth's picture whole is the earth layer's, under its version.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Load {
-    Asset(Asset),
-    Pack,
-    Sphere,
-}
-
-impl Load {
-    pub fn number(self) -> u32 {
-        match self {
-            Load::Asset(a) => a as u32,
-            Load::Pack => Asset::ALL.len() as u32,
-            Load::Sphere => Asset::ALL.len() as u32 + 1,
-        }
-    }
-
-    pub fn of(number: u32) -> Option<Load> {
-        match number.checked_sub(Asset::ALL.len() as u32) {
-            Some(0) => Some(Load::Pack),
-            Some(1) => Some(Load::Sphere),
-            Some(_) => None,
-            None => u16::try_from(number).ok().and_then(Asset::of).map(Load::Asset),
-        }
-    }
-}
-
 /// `Arrived` exists because the read's credit is released when the bytes
 /// land (parsing is not I/O and would starve tile reads), but the asset is
 /// not usable yet. Without it, "not usable" read as "not asked for" and one
 /// model was re-read 38 times, once a turn, for as long as its parse took.
 enum Entry<T> {
     Pending,
-    /// Open as this descriptor, this long, unread.
-    Arrived(u32, u32),
+    /// Its file in its arrival's task, being read.
+    Arrived,
     /// An image read: the handle its texture is arriving under.
     Landing(u32),
     Ready(T),
     Failed,
 }
-
-/// Every asset, the pack and the sphere.
-pub const LOADS: usize = Asset::ALL.len() + 2;
 
 struct Loader {
     gltf: Vec<Option<Entry<Rc<Gltf>>>>,
@@ -163,8 +126,6 @@ fn ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
     what
 }
 
-static ARRIVALS: Global<Notify> = Global::new();
-
 static SETTLED: Global<bool> = Global::new();
 
 /// Whether a load settled, arrived or failed, since last taken: what waits on
@@ -175,10 +136,6 @@ pub fn take_settled() -> bool {
 
 fn settled() {
     *SETTLED.get(|| false) = true;
-}
-
-fn arrivals() -> &'static mut Notify {
-    ARRIVALS.get(Notify::new)
 }
 
 pub fn open_asset(credit: Credit, kind: LoadKind, load: Load) {
@@ -218,8 +175,7 @@ pub fn image_opened(fd: u32, key: u64, opened: Opened) {
         file::close(fd);
         return;
     };
-    loader().image[load.number() as usize] = Some(Entry::Arrived(fd, n));
-    arrivals().notify();
+    arrive(LoadKind::Image, load.number() as usize, fd, n);
 }
 
 /// The GPU is gone, and with it every image the textures took: each is loaded
@@ -277,61 +233,54 @@ pub fn model_opened(fd: u32, key: u64, opened: Opened) {
         file::close(fd);
         return;
     };
-    loader().gltf[load.number() as usize] = Some(Entry::Arrived(fd, n));
-    arrivals().notify();
+    arrive(LoadKind::Gltf, load.number() as usize, fd, n);
 }
 
-/// A file opened and not yet read: a model's or an image's, its descriptor
-/// and length.
-fn next_arrival() -> Option<(LoadKind, usize, u32, u32)> {
-    let l = loader();
-    let gltf = (0..LOADS).find_map(|n| match l.gltf[n] {
-        Some(Entry::Arrived(fd, bytes)) => Some((LoadKind::Gltf, n, fd, bytes)),
-        _ => None,
-    });
-    gltf.or_else(|| {
-        (0..LOADS).find_map(|n| match l.image[n] {
-            Some(Entry::Arrived(fd, bytes)) => Some((LoadKind::Image, n, fd, bytes)),
-            _ => None,
-        })
-    })
-}
-
-/// Each asset file that arrives, read whole: a model parsed, an image put
-/// into its texture.
-pub async fn arrival_task() {
-    loop {
-        notified(arrivals).await;
-        while let Some((kind, n, fd, bytes)) = next_arrival() {
-            yield_if_spent(world_edge).await;
-            let mut buf = Vec::new();
-            if buf.try_reserve_exact(bytes as usize).is_err() {
-                file::close(fd);
-                match kind {
-                    LoadKind::Gltf => loader().gltf[n] = Some(Entry::Failed),
-                    LoadKind::Image => loader().image[n] = Some(Entry::Failed),
-                }
-                continue;
-            }
-            buf.resize(bytes as usize, 0);
-            // SAFETY: `buf` is held across the turn the host fills it in.
-            unsafe { file::read(fd, &mut buf) };
-            file::close(fd);
-            // In once the host has run the turn's records.
-            next_turn(world_edge).await;
-            if kind == LoadKind::Image {
-                image_arrived(n, buf).await;
-                continue;
-            }
-            let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
-                Ok(g) => Entry::Ready(Rc::new(g)),
-                Err(_) => Entry::Failed,
-            };
-            loader().gltf[n] = Some(entry);
-            settled();
-            request_world_tick();
-        }
+/// A file opened, read in its own task: no arrival waits on another's
+/// parse or landing. Where the turn's quota is spent before the tasks run, as
+/// it is while the frame outweighs its share, each task advances a step a
+/// turn, so k arrivals advance k steps, not one.
+fn arrive(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
+    match kind {
+        LoadKind::Gltf => loader().gltf[n] = Some(Entry::Arrived),
+        LoadKind::Image => loader().image[n] = Some(Entry::Arrived),
     }
+    // The pool holds a task for each kind of every load (TASKS), and each
+    // has one file in flight at most, so there is always room.
+    let spawned = xpute_guest::sched::task::spawn(arrival(kind, n, fd, bytes), crate::turn::TaskPriority::Arrival as u8);
+    xpute_kit::ensure!(spawned, ENOSPC, n);
+}
+
+/// An asset file arrived, read whole: a model parsed, an image put into its
+/// texture.
+async fn arrival(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
+    yield_if_spent(world_edge).await;
+    let mut buf = Vec::new();
+    if buf.try_reserve_exact(bytes as usize).is_err() {
+        file::close(fd);
+        match kind {
+            LoadKind::Gltf => loader().gltf[n] = Some(Entry::Failed),
+            LoadKind::Image => loader().image[n] = Some(Entry::Failed),
+        }
+        return;
+    }
+    buf.resize(bytes as usize, 0);
+    // SAFETY: `buf` is held across the turn the host fills it in.
+    unsafe { file::read(fd, &mut buf) };
+    file::close(fd);
+    // In once the host has run the turn's records.
+    next_turn(world_edge).await;
+    if kind == LoadKind::Image {
+        image_arrived(n, buf).await;
+        return;
+    }
+    let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
+        Ok(g) => Entry::Ready(Rc::new(g)),
+        Err(_) => Entry::Failed,
+    };
+    loader().gltf[n] = Some(entry);
+    settled();
+    request_world_tick();
 }
 
 /// The transport failed, not the asset: it is wanted again, and the request scheduler

@@ -16,9 +16,9 @@
 
 use core::cmp::Ordering;
 
+use crate::asset::LOAD_FILES;
 use crate::io::demand::{Ask, Phases, Stream};
 use crate::io::failure::{Ended, Failure};
-use crate::io::load::LOADS;
 use crate::io::policy::Policy;
 use crate::profiler::record::profiler_record;
 use crate::profiler::task::TaskRow;
@@ -71,7 +71,7 @@ pub type Bounds = [usize; Stream::ALL.len()];
 
 fn bounds_of(frames: impl Fn(Stream) -> u32) -> Bounds {
     Stream::ALL.map(|c| match c {
-        Stream::asset => 2 * LOADS,
+        Stream::asset => LOAD_FILES,
         Stream::terrain | Stream::place | Stream::earth | Stream::division => frames(c) as usize,
     })
 }

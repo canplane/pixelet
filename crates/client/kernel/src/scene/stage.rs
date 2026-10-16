@@ -22,9 +22,10 @@ use crate::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_PIPELIN
 use pxl_spec::asset::ingested::Asset;
 use xpute_kit::math::scalar::round;
 
+use crate::asset::Load;
 use crate::billboard::sheet::billboard_sheet;
 use crate::decor::assets::decor_assets;
-use crate::io::load::{load_image, Load};
+use crate::io::load::load_image;
 use crate::io::text::text_raster;
 use crate::kernel;
 use crate::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};

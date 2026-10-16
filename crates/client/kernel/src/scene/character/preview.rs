@@ -5,7 +5,8 @@
 //! model is registered again at one unit tall, since the cases compare
 //! silhouettes, not scale.
 
-use crate::io::load::{load_image, Load};
+use crate::asset::Load;
+use crate::io::load::load_image;
 use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;

@@ -4,7 +4,8 @@
 
 use pxl_spec::asset::ingested::Asset;
 
-use crate::io::load::{load_gltf, Load};
+use crate::asset::Load;
+use crate::io::load::load_gltf;
 use crate::model::asset::{register_model, ModelHandle};
 use xpute_guest::global::Global;
 

@@ -21,7 +21,8 @@ use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::frame_budget::FrameBudget;
 
-use crate::io::load::{load_failed, load_gltf, load_image, Load};
+use crate::asset::Load;
+use crate::io::load::{load_failed, load_gltf, load_image};
 use crate::kernel;
 use crate::model::asset::register_model;
 use crate::scene::decor::cell::{present_block, Shown};

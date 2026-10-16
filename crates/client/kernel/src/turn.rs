@@ -147,7 +147,7 @@ pub fn boot() {
 /// The executor may ignore this order; nothing relies on it.
 #[repr(u8)]
 #[derive(Clone, Copy)]
-enum TaskPriority {
+pub(crate) enum TaskPriority {
     Frame,
     Arrival,
     Background,
@@ -159,7 +159,6 @@ fn world_tasks() {
     use TaskPriority::*;
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
-        && spawn(crate::io::load::arrival_task(), Arrival as u8)
         && spawn(crate::decor::assets::decor_asset_task(), Background as u8)
         && spawn(crate::layer::object::repository::task(), Background as u8);
     if !spawned {

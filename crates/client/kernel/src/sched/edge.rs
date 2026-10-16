@@ -7,8 +7,10 @@ use xpute_guest::sched::edge::Edge;
 
 use xpute_guest::global::Global;
 
-/// The kernel's tasks (`world_tasks`); an executor sizes its pool by it.
-pub const TASKS: usize = 6;
+/// The kernel's tasks: the four that run for good (`world_tasks`) and one for
+/// each file in flight, a load's model and its image (io/load.rs
+/// `arrival`); an executor sizes its pool by it.
+pub const TASKS: usize = 4 + crate::asset::LOAD_FILES;
 
 static EDGE: Global<Edge<TASKS>> = Global::new();
 
