@@ -47,7 +47,7 @@ import {
 type GpuObject =
   | GPUBuffer
   | GPUTexture
-  | GPUTextureView
+  | View
   | GPUSampler
   | GPUShaderModule
   | GPUBindGroupLayout
@@ -59,6 +59,9 @@ type GpuObject =
   | GPUCommandEncoder
   | GPURenderPassEncoder
   | GPUComputePassEncoder;
+
+/** A view with its format, which a pass's depth attachment asks of it. */
+type View = { readonly view: GPUTextureView; readonly format: GPUTextureFormat };
 
 /** `copyExternalImageToTexture`, which the lib's `GPUQueue` does not list. */
 type ExternalImageQueue = GPUQueue & {
@@ -102,8 +105,6 @@ class Words {
 
 export class GpuHost {
   private readonly objects: (GpuObject | undefined)[] = [];
-  /** Each view's format, which a pass's depth attachment asks of it. */
-  private readonly formats = new Map<u32, GPUTextureFormat>();
   private readonly surfaces = new Map<u32, GPUCanvasContext>();
   /** Where the guest asked the device's block written, for its status. */
   private block: { address: u32; words: u32 } | undefined;
@@ -123,7 +124,6 @@ export class GpuHost {
   /** The device went: every object with it, and the guest told in its block. */
   lost(): void {
     this.objects.length = 0;
-    this.formats.clear();
     if (this.block) new Uint32Array(this.memory(), this.block.address, this.block.words)[this.block.words - 1] = STATUS.LOST;
   }
 
@@ -142,7 +142,6 @@ export class GpuHost {
 
   private forget(id: u32): void {
     this.objects[handle_slot(id)] = undefined;
-    this.formats.delete(id);
   }
 
   private bytesAt(address: u32, size: u32): Uint8Array {
@@ -200,11 +199,10 @@ export class GpuHost {
         const aspect = TEXTURE_ASPECT[r.u()];
         const [baseMipLevel, mipLevelCount, baseArrayLayer, arrayLayerCount] = [r.u(), r.opt(), r.u(), r.opt()];
         const format = f === undefined ? undefined : TEXTURE_FORMAT[f];
-        this.formats.set(id, format ?? texture.format);
-        this.put(
-          id,
-          texture.createView({ format, dimension: dim === undefined ? undefined : TEXTURE_VIEW_DIMENSION[dim], aspect, baseMipLevel, mipLevelCount, baseArrayLayer, arrayLayerCount }),
-        );
+        this.put(id, {
+          view: texture.createView({ format, dimension: dim === undefined ? undefined : TEXTURE_VIEW_DIMENSION[dim], aspect, baseMipLevel, mipLevelCount, baseArrayLayer, arrayLayerCount }),
+          format: format ?? texture.format,
+        });
         return;
       }
       case op.SAMPLER: {
@@ -262,7 +260,7 @@ export class GpuHost {
         const entries = Array.from({ length: r.u() }, (): GPUBindGroupEntry => {
           const [binding, kind, object, offset, size] = [r.u(), r.u(), r.u(), r.u(), r.u()];
           if (kind === 0) return { binding, resource: { buffer: this.get<GPUBuffer>(object), offset, size: size === NONE ? undefined : size } };
-          return { binding, resource: this.get<GPUSampler | GPUTextureView>(object) };
+          return { binding, resource: kind === 1 ? this.get<GPUSampler>(object) : this.get<View>(object).view };
         });
         this.put(id, d.createBindGroup({ layout, entries }));
         return;
@@ -409,18 +407,18 @@ export class GpuHost {
         const id = r.u();
         const e = this.get<GPUCommandEncoder>(r.u());
         const colorAttachments = Array.from({ length: r.u() }, (): GPURenderPassColorAttachment => {
-          const [view, resolve, load, store] = [this.get<GPUTextureView>(r.u()), r.opt(), LOAD_OP[r.u()], STORE_OP[r.u()]];
-          return { view, resolveTarget: resolve === undefined ? undefined : this.get<GPUTextureView>(resolve), loadOp: load, storeOp: store, clearValue: [r.f32(), r.f32(), r.f32(), r.f32()] };
+          const [view, resolve, load, store] = [this.get<View>(r.u()).view, r.opt(), LOAD_OP[r.u()], STORE_OP[r.u()]];
+          return { view, resolveTarget: resolve === undefined ? undefined : this.get<View>(resolve).view, loadOp: load, storeOp: store, clearValue: [r.f32(), r.f32(), r.f32(), r.f32()] };
         });
         const depth = r.opt();
         const [dload, dstore, dclear, dro, sload, sstore, sclear, sro] = [r.u(), r.u(), r.f32(), r.flag(), r.u(), r.u(), r.u(), r.flag()];
         let depthStencilAttachment: GPURenderPassDepthStencilAttachment | undefined;
         if (depth !== undefined) {
           // WebGPU refuses ops on an aspect the format lacks, or one read only.
-          const format = this.formats.get(depth) ?? "depth32float";
+          const { view, format } = this.get<View>(depth);
           const [hasDepth, hasStencil] = [format.startsWith("depth"), format.includes("stencil")];
           depthStencilAttachment = {
-            view: this.get<GPUTextureView>(depth),
+            view,
             ...(hasDepth && !dro ? { depthLoadOp: LOAD_OP[dload], depthStoreOp: STORE_OP[dstore], depthClearValue: dclear } : { depthReadOnly: dro }),
             ...(hasStencil && !sro ? { stencilLoadOp: LOAD_OP[sload], stencilStoreOp: STORE_OP[sstore], stencilClearValue: sclear } : { stencilReadOnly: sro }),
           };
@@ -541,8 +539,7 @@ export class GpuHost {
         const id = r.u();
         const texture = this.surfaces.get(r.u())?.getCurrentTexture();
         if (!texture) return;
-        this.formats.set(id, texture.format);
-        this.put(id, texture.createView());
+        this.put(id, { view: texture.createView(), format: texture.format });
         return;
       }
       case op.DEVICE: {
