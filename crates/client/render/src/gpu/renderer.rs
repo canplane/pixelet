@@ -1148,8 +1148,9 @@ impl ScreenCellsPass {
     /// On a device, a mapping that completes after the last asked turn is
     /// seen at the next turn: the host learns of it only by polling the
     /// device, and a thread waiting there (wgpu `poll(Wait)`) holds the lock a
-    /// surface's present takes (wgpu-core device/resource.rs:916,
-    /// present.rs:364), so none waits. Where read-backs matter on a settled
+    /// surface's present takes (wgpu-core's `Device::poll` reads its
+    /// `snatchable_lock` across the fence wait, `Surface::present` writes
+    /// it), so none waits. Where read-backs matter on a settled
     /// view, the platform's own completion (a command buffer's handler, a
     /// timeline semaphore) is the wake.
     fn read_back(&mut self, g: &Gpu) {
