@@ -1010,17 +1010,18 @@ impl ScreenCellsPass {
             g.dispatch(pass, side, side, c.fresh_len);
         }
         g.end(pass);
-        c.fresh_len = 0;
     }
 
     /// The squares the grids wrote read back where the CPU looks them up,
     /// once the encoder that wrote them is submitted: a square's heights and
-    /// levels lie together, so one read brings both.
+    /// levels lie together, so one read brings both. The turn's squares are
+    /// done with here, the last to read their count.
     fn read_back(&mut self, g: &Gpu) {
         let Some(c) = self.ground.as_mut() else { return };
         for &(square, back) in &c.backs[..c.fresh_len as usize] {
             g.read_buffer(c.ground, square * SQUARE_BYTES + HEIGHTS_AT * 4, BACK_WORDS * 4, back.cells, back.word, back.ticket);
         }
+        c.fresh_len = 0;
     }
 
     /// The GPU's cast into the lane, a ray a cell, where it runs; then the
