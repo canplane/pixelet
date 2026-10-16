@@ -7,7 +7,7 @@
 //! and nothing else decides them.
 
 use pxl_spec::block::cube::sentinel;
-use pxl_spec::block::limit::{at_edge, ceiling, floor};
+use pxl_spec::block::limit::{at_edge, bedrock, ceiling};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::units;
@@ -40,13 +40,14 @@ impl World<'_> {
             cells(0).all(|x| {
                 let center = point((x as f64 + 0.5) * unit, (y as f64 + 0.5) * unit, space.min[2]);
                 // The shards first, which need no ground; then the limits of the
-                // ground there, not its runs: a fold draws no bedrock.
+                // ground there, not its runs: a fold draws no bedrock. A leaf's
+                // top is whole leaf cells, a unit each.
                 self.within(&center)
                     && self
                         .surface(&center, LEAF_ZOOM)
                         .exact()
                         .flatten()
-                        .is_some_and(|s| s.block != sentinel::unknown && floor(s.top) <= space.min[2] && space.max[2] <= ceiling(s.top))
+                        .is_some_and(|s| s.block != sentinel::unknown && f64::from(bedrock(s.top as i32)) <= space.min[2] && space.max[2] <= ceiling(s.top))
             })
         })
     }

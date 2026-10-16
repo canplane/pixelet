@@ -39,6 +39,10 @@ pub const LEAF_ZOOM: Zoom = 15;
 /// ground's finest cell (`lattice::GROUND`).
 pub const LEAF_CELL: Zoom = LEAF_ZOOM + 9;
 
+/// Sea level, in leaf cells: the height heights are counted from, where the
+/// water stands and under which the Earth past the service area is rock.
+pub const SEA_LEVEL: i32 = 0;
+
 /// A Q3 position's fraction bits: a unit is 256 steps (pxl-spec
 /// space/coord/q3.rs).
 pub const FRAC_W: u32 = 8;

@@ -118,7 +118,7 @@ impl<'a> World<'a> {
         self.window_ground((cell, c), cell, cell, 1, window).map(|_| {
             if window.earth {
                 return Some(Surface {
-                    top: 0.0,
+                    top: f64::from(pxl_portable::SEA_LEVEL),
                     block: pxl_spec::block::cube::sentinel::unknown,
                 });
             }

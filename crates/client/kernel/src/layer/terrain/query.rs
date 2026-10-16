@@ -266,7 +266,7 @@ impl Query for Residency<TerrainTile> {
             }
         }
         if edge {
-            lo = lo.min(bedrock(lo, 1));
+            lo = lo.min(bedrock(lo));
         }
         let r = Relief {
             extent: (f64::from(lo) * units(GROUND.cell()) - units(cell), f64::from(hi) * units(GROUND.cell())),

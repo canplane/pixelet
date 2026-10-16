@@ -21,7 +21,7 @@ use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::GROUND;
 pub use crate::lattice::TILE_CELLS;
-use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
+use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
 
 // The catalog's looks this rule names, read into a word.
 const VOID: u32 = sentinel::void as u32;
@@ -53,8 +53,14 @@ const FILLER_DEPTH: i32 = 3;
 /// Sandstone under a sand or beach face's filler, in leaf cells.
 const SANDSTONE_DEPTH: i32 = 2;
 /// The bedrock's top under a face, this far under it or under sea level,
-/// whichever is lower, in leaf cells (pxl-spec block/limit.rs `floor`).
+/// whichever is lower, in leaf cells (`bedrock`).
 pub const BEDROCK_DEPTH: i32 = 64;
+
+/// The bedrock's top under a face at `face` leaf cells, in leaf cells: the
+/// lowest a block may reach there, every walk's, edit's and column's.
+pub fn bedrock(face: i32) -> i32 {
+    face.min(SEA_LEVEL) - BEDROCK_DEPTH
+}
 
 /// The height the surface draws at the center of a tile's cell `(x, y)`,
 /// in leaf cells, off its padded elevation samples `ele` (`ele_index`): the
@@ -110,7 +116,7 @@ pub fn fold(four: [(u32, i32); 4], cell: Zoom) -> (u32, f32, [u32; 4]) {
         }
         k += 1;
     }
-    let h = if count > 0 { sum as f32 / count as f32 } else { 0.0 };
+    let h = if count > 0 { sum as f32 / count as f32 } else { SEA_LEVEL as f32 };
     (majority(looks, cell), h, looks)
 }
 
@@ -260,7 +266,7 @@ pub fn face_height(cell: Zoom, top: i32) -> i32 {
 
 /// The bedrock's top under a face at `face` leaf cells, in blocks of `cell`.
 pub fn rock(cell: Zoom, face: i32) -> i32 {
-    blocks(cell, (face.min(0) - BEDROCK_DEPTH) as f32)
+    blocks(cell, bedrock(face) as f32)
 }
 
 /// What the ground is in block `z` of a cell of `cell` whose look is `look`
@@ -346,7 +352,7 @@ pub fn lay(cell: Zoom, [lo, hi]: [i32; 2], wall: bool, [z0, z1]: [i32; 2]) -> La
 /// says it. One zoom's cells cannot be over the ground where another's are
 /// under it, so one of the two holds for every zoom or neither does.
 pub fn empty(area: &impl Area, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far, near]: [Zoom; 2], hollow: bool) -> bool {
-    let [lo, hi] = if zoom < SHARD_ZOOM { [lo.min(0), hi.max(0)] } else { [lo, hi] };
+    let [lo, hi] = if zoom < SHARD_ZOOM { [lo.min(SEA_LEVEL), hi.max(SEA_LEVEL)] } else { [lo, hi] };
     let coarsest = if far > zoom + 1 { far } else { zoom + 1 };
     if coarsest > near {
         return true;
@@ -365,7 +371,7 @@ pub fn empty(area: &impl Area, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], 
     // Under a face block at every zoom: past half the coarsest's block over
     // the top, or at the leaves or finer, a leaf cell over it.
     let under = if coarsest < LEAF_CELL { lo << e > top + half(coarsest) } else { lo << e >= top + (1 << e) };
-    let rock = (hi.min(0) - BEDROCK_DEPTH) << e;
+    let rock = bedrock(hi) << e;
     hollow && under && rock <= bottom + half(near) && !walled(area, near, (zoom, [c[0], c[1]]))
 }
 

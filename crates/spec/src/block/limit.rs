@@ -12,23 +12,13 @@
 //! outer face stands on the area's edge at every zoom (`pxl-spec
 //! block/sample.rs` `wall_off`).
 
-pub use pxl_portable::ground::BEDROCK_DEPTH;
+pub use pxl_portable::ground::{bedrock, BEDROCK_DEPTH};
+use pxl_portable::SEA_LEVEL;
 pub const HEADROOM: f64 = 128.0;
-
-/// The lowest a block may reach under ground whose face is at `ele`, in
-/// units: the bedrock's top.
-pub fn floor(ele: f64) -> f64 {
-    ele.min(0.0) - f64::from(BEDROCK_DEPTH)
-}
-
-/// `floor` in a column whose face is at `ele`, both in cells `per_u` a unit.
-pub fn bedrock(ele: i32, per_u: i32) -> i32 {
-    (floor(f64::from(ele) / f64::from(per_u)) * f64::from(per_u)) as i32
-}
 
 /// The highest a block may reach over ground whose face is at `ele`, in units.
 pub fn ceiling(ele: f64) -> f64 {
-    ele.max(0.0) + HEADROOM
+    ele.max(f64::from(SEA_LEVEL)) + HEADROOM
 }
 
 /// Whether a leaf column is the area's edge or past it: it or one of the eight

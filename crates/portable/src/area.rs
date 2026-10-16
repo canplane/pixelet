@@ -9,7 +9,7 @@
 //! straddles.
 
 use crate::cube::{sentinel, Ground};
-use crate::{wrap_index as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
+use crate::{wrap_index as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM};
 
 const VOID: u32 = sentinel::void as u32;
 const UNKNOWN: u32 = sentinel::unknown as u32;
@@ -120,7 +120,7 @@ pub fn wall(look: u32, cell: Zoom, gone: bool, beside: bool) -> u32 {
 /// Block `z` past the service area: the Earth's ground, bedrock under sea
 /// level, air over it.
 pub fn earth(z: i32) -> u32 {
-    if z < 0 {
+    if z < SEA_LEVEL {
         UNKNOWN
     } else {
         VOID
