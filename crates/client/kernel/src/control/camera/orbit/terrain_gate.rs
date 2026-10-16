@@ -7,6 +7,7 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::GROUND;
+use xpute_guest::global::Global;
 use xpute_kit::math::scalar::wrap;
 
 use crate::control::camera::orbit::orbit_eye_offset;
@@ -156,8 +157,44 @@ const CLIMB_PASSES: u32 = 2;
 /// The shallowest pitch that clears terrain, solved as `acos(h / dist)`
 /// rather than scanned: a scan's fixed angles made the camera judder on flat
 /// ground.
+///
+/// It stands while what it is made of stands: the pose, where its target is
+/// on the world, and the ground its walks read (`walked`).
 pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
-    pose(ViewTriple { dist, polar, azimuth }).map_or(polar, |at| climbed(at).polar)
+    let Some(at) = pose(ViewTriple { dist, polar, azimuth }) else { return polar };
+    let climb = Climb {
+        at,
+        center: world_to_canonical(&at.target),
+    };
+    let last = CLIMBED.get(|| None);
+    match *last {
+        Some((c, polar)) if c == climb && !crate::query::changed::within(walked(&at)) => polar,
+        _ => {
+            let polar = climbed(at).polar;
+            *last = Some((climb, polar));
+            polar
+        }
+    }
+}
+
+/// What a climb is made of, by value.
+#[derive(Clone, Copy, PartialEq)]
+struct Climb {
+    at: ViewPose,
+    center: Q3,
+}
+
+/// The last climb and the pitch it gave.
+static CLIMBED: Global<Option<(Climb, f64)>> = Global::new();
+
+/// The columns a climb from `at` reads, corners in units: its eyes stay on
+/// the line from the target to `at`'s eye, as steepening only draws the eye
+/// in, and each walk and floor reads its cells and a cell about them.
+fn walked(at: &ViewPose) -> [[f64; 2]; 2] {
+    let [center, eye] = [world_to_canonical(&at.target), eye(at).1].map(|q| [0, 1].map(|k| q3::to_real(i64::from(q[k]))));
+    let eye = [world::nearest(eye[0], center[0]), eye[1]];
+    let margin = 2.0 * units(GROUND.cell());
+    [[0, 1].map(|k| center[k].min(eye[k]) - margin), [0, 1].map(|k| center[k].max(eye[k]) + margin)]
 }
 
 fn climbed(mut at: ViewPose) -> ViewPose {
