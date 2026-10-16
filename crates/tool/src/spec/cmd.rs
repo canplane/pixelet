@@ -331,7 +331,11 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
     tail.splice(0..0, helpers.iter().map(|l| l.to_string()));
     let xtp: Vec<&str> = ["BranchCursor", "NodeCursor", "PacketRoom", "PacketWriter"].into_iter().filter(|c| reads(&tail, c)).collect();
     out.push(String::new());
-    for (names, from) in [(xtp.iter().map(|s| s.to_string()).collect(), "wire/xtp/mod.ts"), (uses.arrays, "abi/array.ts"), (uses.words, "abi/word.ts")] {
+    for (names, from) in [
+        (xtp.iter().map(|s| s.to_string()).collect(), "wire/xtp/mod.ts"),
+        (uses.arrays, "abi/array.ts"),
+        (uses.words, "abi/word.ts"),
+    ] {
         let names: Vec<String> = names;
         if !names.is_empty() {
             out.push(format!("import type {{ {} }} from \"@xpute/kit/{from}\";", names.join(", ")));
