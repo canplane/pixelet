@@ -130,6 +130,7 @@ use crate::frame::draw::{
     PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
     PIPELINE_SKINNED,
 };
+use crate::frame::shader::floor;
 use crate::mesh::ghost::BOX_WORDS;
 
 const fn f(v: f32) -> u32 {
@@ -139,6 +140,7 @@ const fn i(v: i32) -> u32 {
     v as u32
 }
 
+#[derive(Clone, Copy)]
 struct Head {
     shader: u32,
     fragment: bool,
@@ -215,54 +217,12 @@ const fn prepass(shader: u32, cull: u32) -> Head {
     }
 }
 
-/// A billboard set's uniform and instances, and what its pass reads at an
-/// anchor: the world's depth for the regions, the regions for the sprites.
-fn badge_group(read: u32) -> Vec<u32> {
-    group(&[[0, UNIFORM], [1, STORAGE], [2, read]])
-}
-
 const fn screen(shader: u32) -> Head {
     Head {
         depth_compare: NO_DEPTH,
         blend: OPAQUE,
         ..blended(shader, CULL_NONE, 0, 0.0)
     }
-}
-
-fn lane(stride: u32, location: u32, format: u32) -> Vec<u32> {
-    vec![stride, PER_VERTEX, 1, location, 0, format]
-}
-
-fn group(entries: &[[u32; 2]]) -> Vec<u32> {
-    let mut out = vec![entries.len() as u32];
-    for e in entries {
-        out.extend_from_slice(e);
-    }
-    out
-}
-
-fn record(h: Head, lanes: &[Vec<u32>], groups: &[Vec<u32>]) -> Vec<u32> {
-    let mut out = vec![
-        h.shader,
-        h.fragment as u32,
-        h.topology,
-        h.cull,
-        h.depth_write as u32,
-        h.depth_compare,
-        h.depth_bias,
-        h.depth_bias_slope,
-        h.blend,
-        h.vertex,
-    ];
-    out.push(lanes.len() as u32);
-    for l in lanes {
-        out.extend_from_slice(l);
-    }
-    out.push(groups.len() as u32);
-    for g in groups {
-        out.extend_from_slice(g);
-    }
-    out
 }
 
 /// The air's bindings, numbered alike in every pass that reads it.
@@ -309,17 +269,6 @@ const CLOUD_GROUP: [[u32; 2]; 14] = {
 };
 const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 
-/// The boxes are a per-instance vertex buffer, so a draw reaches its boxes by
-/// its first instance.
-fn box_lanes() -> Vec<Vec<u32>> {
-    let stride = BOX_WORDS * 4;
-    vec![vec![stride, PER_INSTANCE, 1, 0, 0, U32X4], vec![stride, PER_INSTANCE, 1, 1, 16, U32X2]]
-}
-fn box_groups() -> Vec<Vec<u32>> {
-    let mut g0 = LIT_FRAME.to_vec();
-    g0.extend([[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
-    vec![group(&g0)]
-}
 /// The lit pass's frame, occlusion, air and layers, all read where
 /// a pixel is painted; then the rays, the sky's words, the looks and the
 /// eye's Q3 steps: the most entries any group has (`GROUP_ENTRIES`).
@@ -351,51 +300,102 @@ const SCREEN_GROUP: [[u32; 2]; 19] = {
 /// screen's (and renderer.rs's lit entries, which it extends); a group past
 /// it is refused where it is made.
 pub const GROUP_ENTRIES: usize = SCREEN_GROUP.len();
-fn model_lanes(skinned: bool) -> Vec<Vec<u32>> {
-    let mut lanes = vec![lane(12, 0, F32X3), lane(12, 1, F32X3), lane(8, 2, F32X2)];
-    if skinned {
-        lanes.push(lane(16, 3, U32X4));
-        lanes.push(lane(16, 4, F32X4));
-    }
-    lanes
-}
-fn model_groups() -> Vec<Vec<u32>> {
-    vec![group(&LIT_FRAME), group(&[[0, UNIFORM_DYNAMIC]]), group(&SKIN), group(&[[0, STORAGE]])]
+/// A vertex buffer: its stride, whether it steps by vertex or instance, and
+/// its attributes, each (location, offset, format).
+#[derive(Clone, Copy)]
+struct Lane {
+    stride: u32,
+    step: u32,
+    attributes: &'static [[u32; 3]],
 }
 
-/// A pipeline's record before its groups' stages: each group's entries
-/// (binding, kind), which `pipeline` sees from the stages that read them.
-fn plan(id: u32) -> Vec<u32> {
-    let frame = || group(&[[0, UNIFORM]]);
+const fn vertex(stride: u32, attributes: &'static [[u32; 3]]) -> Lane {
+    Lane { stride, step: PER_VERTEX, attributes }
+}
+
+const MODEL_LANES: [Lane; 3] = [vertex(12, &[[0, 0, F32X3]]), vertex(12, &[[1, 0, F32X3]]), vertex(8, &[[2, 0, F32X2]])];
+const SKINNED_LANES: [Lane; 5] = [MODEL_LANES[0], MODEL_LANES[1], MODEL_LANES[2], vertex(16, &[[3, 0, U32X4]]), vertex(16, &[[4, 0, F32X4]])];
+/// The boxes are a per-instance vertex buffer, so a draw reaches its boxes by
+/// its first instance.
+const BOX_LANES: [Lane; 2] = [
+    Lane {
+        stride: BOX_WORDS * 4,
+        step: PER_INSTANCE,
+        attributes: &[[0, 0, U32X4]],
+    },
+    Lane {
+        stride: BOX_WORDS * 4,
+        step: PER_INSTANCE,
+        attributes: &[[1, 16, U32X2]],
+    },
+];
+const PUCK_ZONE_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];
+const PUCK_BEACON_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(12, &[[1, 0, F32X3]])];
+const DEBUG_LANES: [Lane; 1] = [Lane {
+    stride: 56,
+    step: PER_INSTANCE,
+    attributes: &[[0, 0, F32X3], [1, 12, F32X4], [2, 28, F32X3]],
+}];
+const DEBUG_FACE_LANES: [Lane; 1] = [vertex(12, &[[0, 0, F32X3]])];
+
+/// `a` then `b`: a group laid out as another and more.
+const fn and<const N: usize, const M: usize, const R: usize>(a: [[u32; 2]; N], b: [[u32; 2]; M]) -> [[u32; 2]; R] {
+    let mut out = [[0; 2]; R];
+    let mut k = 0;
+    while k < R {
+        out[k] = if k < N { a[k] } else { b[k - N] };
+        k += 1;
+    }
+    out
+}
+
+type Group = &'static [[u32; 2]];
+const FRAME: Group = &[[0, UNIFORM]];
+const BOX_GROUP: [[u32; 2]; 16] = and(LIT_FRAME, [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
+const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &[[0, UNIFORM_DYNAMIC]], &SKIN, &[[0, STORAGE]]];
+/// A billboard set's uniform and instances, and what its pass reads at an
+/// anchor: the world's depth for the regions, the regions for the sprites.
+const BADGE_SPRITES: Group = &[[0, UNIFORM], [1, STORAGE], [2, TEXTURE_UNFILTERED]];
+const BADGE_REGIONS: Group = &[[0, UNIFORM], [1, STORAGE], [2, DEPTH]];
+const SKY_GROUP: [[u32; 2]; 14] = and([[0, UNIFORM], [19, UNIFORM], [2, TEXTURE_ARRAY], [3, SAMPLER]], AIR);
+
+/// A pipeline's record before its groups' stages: its head, its lanes and
+/// each group's entries (binding, kind), which `record` sees from the
+/// stages that read them.
+#[derive(Clone, Copy)]
+struct Plan {
+    head: Head,
+    lanes: &'static [Lane],
+    groups: &'static [Group],
+}
+
+const fn plan(head: Head, lanes: &'static [Lane], groups: &'static [Group]) -> Option<Plan> {
+    Some(Plan { head, lanes, groups })
+}
+
+/// Pipeline `id`'s plan; none for one no record lays out.
+const fn plan_of(id: u32) -> Option<Plan> {
     match id {
-        PIPELINE_DECOR => record(lit(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
+        PIPELINE_DECOR => plan(lit(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS),
         // Slightly clear of a surface it sits on, strongly clear of one it sits in.
-        PIPELINE_GHOST_BOX => record(blended(SHADER_BOX, CULL_BACK, 1, 1.0), &box_lanes(), &box_groups()),
-        PIPELINE_GHOST_BOX_COPLANAR => record(blended(SHADER_BOX, CULL_BACK, 8, 2.0), &box_lanes(), &box_groups()),
-        PIPELINE_GHOST_DECOR => record(blended(SHADER_DECOR, CULL_NONE, 1, 1.0), &model_lanes(false), &model_groups()),
+        PIPELINE_GHOST_BOX => plan(blended(SHADER_BOX, CULL_BACK, 1, 1.0), &BOX_LANES, &[&BOX_GROUP]),
+        PIPELINE_GHOST_BOX_COPLANAR => plan(blended(SHADER_BOX, CULL_BACK, 8, 2.0), &BOX_LANES, &[&BOX_GROUP]),
+        PIPELINE_GHOST_DECOR => plan(blended(SHADER_DECOR, CULL_NONE, 1, 1.0), &MODEL_LANES, &MODEL_GROUPS),
         // Back faces culled: drawn both sides, a closed body's inner faces fight its
         // outer ones at a distance and the character shimmers.
-        PIPELINE_SKINNED => record(lit(SHADER_SKINNED, CULL_BACK), &model_lanes(true), &model_groups()),
-        PIPELINE_PUCK_ZONE => record(
-            blended(SHADER_PUCK_ZONE, CULL_NONE, 4, 1.0),
-            &[lane(12, 0, F32X3), lane(8, 1, F32X2)],
-            &[frame(), group(&[[0, UNIFORM]]), group(&[[0, STORAGE]])],
-        ),
-        PIPELINE_PUCK_BEACON => record(
-            lit(SHADER_PUCK_BEACON, CULL_BACK),
-            &[lane(12, 0, F32X3), lane(12, 1, F32X3)],
-            &[group(&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]]), group(&[[0, UNIFORM]])],
-        ),
-        PIPELINE_BADGE => record(
+        PIPELINE_SKINNED => plan(lit(SHADER_SKINNED, CULL_BACK), &SKINNED_LANES, &MODEL_GROUPS),
+        PIPELINE_PUCK_ZONE => plan(blended(SHADER_PUCK_ZONE, CULL_NONE, 4, 1.0), &PUCK_ZONE_LANES, &[FRAME, &[[0, UNIFORM]], &[[0, STORAGE]]]),
+        PIPELINE_PUCK_BEACON => plan(lit(SHADER_PUCK_BEACON, CULL_BACK), &PUCK_BEACON_LANES, &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &[[0, UNIFORM]]]),
+        PIPELINE_BADGE => plan(
             Head {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
                 ..blended(SHADER_BADGE, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[frame(), badge_group(TEXTURE_UNFILTERED), group(&SKIN)],
+            &[FRAME, BADGE_SPRITES, &SKIN],
         ),
-        PIPELINE_BADGE_REGION => record(
+        PIPELINE_BADGE_REGION => plan(
             Head {
                 topology: STRIP,
                 depth_write: true,
@@ -404,20 +404,20 @@ fn plan(id: u32) -> Vec<u32> {
                 ..blended(SHADER_BADGE_REGION, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[frame(), badge_group(DEPTH)],
+            &[FRAME, BADGE_REGIONS],
         ),
         // Against the gizmos' own faces, not the world's depth.
-        PIPELINE_DEBUG => record(
+        PIPELINE_DEBUG => plan(
             Head {
                 blend: ALPHA,
                 ..blended(SHADER_DEBUG, CULL_NONE, 0, 0.0)
             },
-            &[vec![56, PER_INSTANCE, 3, 0, 0, F32X3, 1, 12, F32X4, 2, 28, F32X3]],
-            &[frame(), group(&[[0, UNIFORM]])],
+            &DEBUG_LANES,
+            &[FRAME, &[[0, UNIFORM]]],
         ),
         // Pushed back by their slope as a rasterizer's polygon offset is, so
         // the lines that bound a face stay in front of it.
-        PIPELINE_DEBUG_FACE => record(
+        PIPELINE_DEBUG_FACE => plan(
             Head {
                 cull: CULL_NONE,
                 depth_compare: GREATER,
@@ -425,114 +425,94 @@ fn plan(id: u32) -> Vec<u32> {
                 depth_bias_slope: f(-2.0),
                 ..depth_only(SHADER_DEBUG)
             },
-            &[lane(12, 0, F32X3)],
-            &[frame(), group(&[[0, UNIFORM]])],
+            &DEBUG_FACE_LANES,
+            &[FRAME, &[[0, UNIFORM]]],
         ),
-        PIPELINE_SCREEN_RAYS => record(
+        PIPELINE_SCREEN_RAYS => plan(
             Head {
                 depth_write: true,
                 blend: OPAQUE,
                 ..blended(SHADER_SCREEN_RAYS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&SCREEN_GROUP)],
+            &[&SCREEN_GROUP],
         ),
-        PIPELINE_DECOR_PREPASS => record(prepass(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
-        PIPELINE_SKINNED_PREPASS => record(prepass(SHADER_SKINNED, CULL_BACK), &model_lanes(true), &model_groups()),
+        PIPELINE_DECOR_PREPASS => plan(prepass(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS),
+        PIPELINE_SKINNED_PREPASS => plan(prepass(SHADER_SKINNED, CULL_BACK), &SKINNED_LANES, &MODEL_GROUPS),
         // Only where the opaque world left the far plane, so covered pixels never run it.
-        PIPELINE_SKY => record(
+        PIPELINE_SKY => plan(
             Head {
                 depth_compare: GREATER_EQUAL,
                 blend: OPAQUE,
                 ..blended(SHADER_SKY, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[
-                [0, UNIFORM],
-                [19, UNIFORM],
-                [2, TEXTURE_ARRAY],
-                [3, SAMPLER],
-                AIR[0],
-                AIR[1],
-                AIR[2],
-                AIR[3],
-                AIR[4],
-                AIR[5],
-                AIR[6],
-                AIR[7],
-                AIR[8],
-                AIR[9],
-            ])],
+            &[&SKY_GROUP],
         ),
-        PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
+        PIPELINE_MIPS => plan(screen(SHADER_MIPS), &[], &[&SKIN]),
         // Every pixel, its depth too, so what is drawn over it meets the world's.
-        PIPELINE_BLIT => record(
+        PIPELINE_BLIT => plan(
             Head {
                 depth_write: true,
                 depth_compare: ALWAYS,
                 ..screen(SHADER_BLIT)
             },
             &[],
-            &[group(&[[0, TEXTURE_UNFILTERED], [1, DEPTH]])],
+            &[&[[0, TEXTURE_UNFILTERED], [1, DEPTH]]],
         ),
-        PIPELINE_IMPOSTOR => record(
+        PIPELINE_IMPOSTOR => plan(
             Head {
                 topology: STRIP,
                 ..lit(SHADER_IMPOSTOR, CULL_NONE)
             },
             &[],
-            &[
-                group(&LIT_FRAME),
-                group(&[[0, UNIFORM_DYNAMIC]]),
-                group(&[[0, TEXTURE_ARRAY], [1, SAMPLER], [2, UNIFORM]]),
-                group(&[[0, STORAGE]]),
-            ],
+            &[&LIT_FRAME, &[[0, UNIFORM_DYNAMIC]], &[[0, TEXTURE_ARRAY], [1, SAMPLER], [2, UNIFORM]], &[[0, STORAGE]]],
         ),
-        PIPELINE_IMPOSTOR_BAKE => record(
+        PIPELINE_IMPOSTOR_BAKE => plan(
             Head {
                 fragment: true,
                 vertex: VS,
                 ..depth_only(SHADER_IMPOSTOR_BAKE)
             },
-            &model_lanes(false),
-            &[group(&[[0, UNIFORM_DYNAMIC]]), group(&SKIN)],
+            &MODEL_LANES,
+            &[&[[0, UNIFORM_DYNAMIC]], &SKIN],
         ),
-        PIPELINE_SHEET => record(
+        PIPELINE_SHEET => plan(
             Head {
                 topology: STRIP,
                 blend: ALPHA,
                 ..screen(SHADER_SHEET)
             },
             &[],
-            &[group(&[[0, UNIFORM], [1, STORAGE]]), group(&[[0, TEXTURE_ARRAY], [1, SAMPLER]])],
+            &[&[[0, UNIFORM], [1, STORAGE]], &[[0, TEXTURE_ARRAY], [1, SAMPLER]]],
         ),
-        PIPELINE_AO_DOWNSAMPLE => record(screen(SHADER_AO_DOWNSAMPLE), &[], &[group(&[[0, UNIFORM], [1, DEPTH], [6, UNIFORM]])]),
-        PIPELINE_AO_SAMPLE => record(screen(SHADER_AO_SAMPLE), &[], &[group(&[[1, TEXTURE_UNFILTERED], [2, TEXTURE], [6, UNIFORM]])]),
-        PIPELINE_AO_BLUR => record(
+        PIPELINE_AO_DOWNSAMPLE => plan(screen(SHADER_AO_DOWNSAMPLE), &[], &[&[[0, UNIFORM], [1, DEPTH], [6, UNIFORM]]]),
+        PIPELINE_AO_SAMPLE => plan(screen(SHADER_AO_SAMPLE), &[], &[&[[1, TEXTURE_UNFILTERED], [2, TEXTURE], [6, UNIFORM]]]),
+        PIPELINE_AO_BLUR => plan(
             screen(SHADER_AO_BLUR),
             &[],
-            &[group(&[[1, TEXTURE_UNFILTERED], [2, TEXTURE], [3, TEXTURE], [4, SAMPLER], [5, UNIFORM_DYNAMIC], [6, UNIFORM]])],
+            &[&[[1, TEXTURE_UNFILTERED], [2, TEXTURE], [3, TEXTURE], [4, SAMPLER], [5, UNIFORM_DYNAMIC], [6, UNIFORM]]],
         ),
-        PIPELINE_AO_UPSAMPLE => record(
+        PIPELINE_AO_UPSAMPLE => plan(
             screen(SHADER_AO_UPSAMPLE),
             &[],
-            &[group(&[[0, UNIFORM], [1, DEPTH], [2, TEXTURE_UNFILTERED], [3, TEXTURE], [4, SAMPLER], [6, UNIFORM]])],
+            &[&[[0, UNIFORM], [1, DEPTH], [2, TEXTURE_UNFILTERED], [3, TEXTURE], [4, SAMPLER], [6, UNIFORM]]],
         ),
-        PIPELINE_ATMOS_TRANSMITTANCE => record(screen(SHADER_ATMOS_TRANSMITTANCE), &[], &[group(&[AIR[0]])]),
-        PIPELINE_ATMOS_MULTISCATTER => record(screen(SHADER_ATMOS_MULTISCATTER), &[], &[group(&[AIR[0], AIR[1], AIR[3]])]),
-        PIPELINE_ATMOS_SKY_VIEW => record(
+        PIPELINE_ATMOS_TRANSMITTANCE => plan(screen(SHADER_ATMOS_TRANSMITTANCE), &[], &[&[AIR[0]]]),
+        PIPELINE_ATMOS_MULTISCATTER => plan(screen(SHADER_ATMOS_MULTISCATTER), &[], &[&[AIR[0], AIR[1], AIR[3]]]),
+        PIPELINE_ATMOS_SKY_VIEW => plan(
             screen(SHADER_ATMOS_SKY_VIEW),
             &[],
-            &[group(&[[0, UNIFORM], AIR[0], AIR[1], AIR[3], AIR[8], [12, TEXTURE], [14, UNIFORM], [20, STORAGE_RW]])],
+            &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3], AIR[8], [12, TEXTURE], [14, UNIFORM], [20, STORAGE_RW]]],
         ),
-        PIPELINE_ATMOS_IRRADIANCE => record(screen(SHADER_ATMOS_IRRADIANCE), &[], &[group(&[AIR[0], AIR[1], AIR[3], [12, TEXTURE]])]),
+        PIPELINE_ATMOS_IRRADIANCE => plan(screen(SHADER_ATMOS_IRRADIANCE), &[], &[&[AIR[0], AIR[1], AIR[3], [12, TEXTURE]]]),
         // The light on the land under the eye: the air's words and the tables it is lit by.
-        PIPELINE_ATMOS_EXPOSURE => record(
+        PIPELINE_ATMOS_EXPOSURE => plan(
             screen(SHADER_ATMOS_EXPOSURE),
             &[],
-            &[group(&[[0, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9]])],
+            &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9]]],
         ),
-        PIPELINE_STARS => record(
+        PIPELINE_STARS => plan(
             Head {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
@@ -540,27 +520,27 @@ fn plan(id: u32) -> Vec<u32> {
                 ..blended(SHADER_STARS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, UNIFORM], [8, UNIFORM], [9, TEXTURE], [11, SAMPLER]]), group(&[[0, UNIFORM], [1, STORAGE]])],
+            &[&[[0, UNIFORM], [8, UNIFORM], [9, TEXTURE], [11, SAMPLER]], &[[0, UNIFORM], [1, STORAGE]]],
         ),
         // From under the sheets only where the world left the far plane; from over them everywhere.
-        PIPELINE_CLOUDS => record(
+        PIPELINE_CLOUDS => plan(
             Head {
                 depth_compare: GREATER_EQUAL,
                 ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&CLOUD_GROUP)],
+            &[&CLOUD_GROUP],
         ),
-        PIPELINE_CLOUDS_ABOVE => record(
+        PIPELINE_CLOUDS_ABOVE => plan(
             Head {
                 depth_compare: ALWAYS,
                 ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&CLOUD_GROUP)],
+            &[&CLOUD_GROUP],
         ),
-        PIPELINE_CLOUD_FIELD => record(screen(SHADER_CLOUD_FIELD), &[], &[]),
-        _ => Vec::new(),
+        PIPELINE_CLOUD_FIELD => plan(screen(SHADER_CLOUD_FIELD), &[], &[]),
+        _ => None,
     }
 }
 
@@ -568,50 +548,223 @@ include!(concat!(env!("OUT_DIR"), "/stages.rs"));
 
 /// The stages of shader `shader` that read binding `binding` of its group
 /// `group`, as build.rs read them off it; none where none does.
-fn stages_of(shader: u32, group: u32, binding: u32) -> u32 {
-    STAGES[shader as usize].iter().find(|e| e[0] == group && e[1] == binding).map_or(NONE, |e| e[2])
+const fn stages_of(shader: u32, group: u32, binding: u32) -> u32 {
+    let entries = STAGES[shader as usize];
+    let mut k = 0;
+    while k < entries.len() {
+        if entries[k][0] == group && entries[k][1] == binding {
+            return entries[k][2];
+        }
+        k += 1;
+    }
+    NONE
 }
 
-/// A plan's shader and its groups' entries, as `plan` lays them out.
-fn groups_of(plan: &[u32]) -> (u32, Vec<&[u32]>) {
-    let mut at = HEAD as usize;
-    let lanes = plan[at];
-    at += 1;
-    for _ in 0..lanes {
-        at += 3 + 3 * plan[at + 2] as usize;
+/// Whether two groups are one entry for entry.
+const fn alike(a: Group, b: Group) -> bool {
+    if a.len() != b.len() {
+        return false;
     }
-    let groups = plan[at];
-    at += 1;
-    let mut out = Vec::new();
-    for _ in 0..groups {
-        let n = plan[at] as usize;
-        out.push(&plan[at + 1..at + 1 + 2 * n]);
-        at += 1 + 2 * n;
+    let mut k = 0;
+    while k < a.len() {
+        if a[k][0] != b[k][0] || a[k][1] != b[k][1] {
+            return false;
+        }
+        k += 1;
     }
-    (plan[0], out)
+    true
 }
 
-/// Pipeline `id`'s record, each group entry seen from the stages that read
-/// it: in every shader whose pipeline lays out the same group at the same
+/// The stages binding `binding` of group `k` is seen from: those that read
+/// it in every shader whose pipeline lays out the same group at the same
 /// place, so the one layout those pipelines share holds for each, and from
 /// no stage written by hand.
-pub fn pipeline(id: u32) -> Vec<u32> {
-    let own = plan(id);
-    if own.is_empty() {
-        return own;
-    }
-    let plans: Vec<Vec<u32>> = (0..PIPELINES).map(plan).collect();
-    let others: Vec<(u32, Vec<&[u32]>)> = plans.iter().filter(|p| !p.is_empty()).map(|p| groups_of(p)).collect();
-    let (_, groups) = groups_of(&own);
-    let head = own.len() - groups.iter().map(|g| 1 + g.len()).sum::<usize>() - 1;
-    let mut out = own[..head].to_vec();
-    out.push(groups.len() as u32);
-    for (k, g) in groups.iter().enumerate() {
-        out.push((g.len() / 2) as u32);
-        for e in g.chunks(2) {
-            let seen = others.iter().filter(|(_, gs)| gs.get(k) == Some(g)).fold(NONE, |s, (shader, _)| s | stages_of(*shader, k as u32, e[0]));
-            out.extend_from_slice(&[e[0], seen, e[1]]);
+const fn seen(group: Group, k: usize, binding: u32) -> u32 {
+    let mut stages = NONE;
+    let mut id = 0;
+    while id < PIPELINES {
+        if let Some(p) = plan_of(id) {
+            if k < p.groups.len() && alike(p.groups[k], group) {
+                stages |= stages_of(p.head.shader, k as u32, binding);
+            }
         }
+        id += 1;
     }
-    out
+    stages
 }
+
+/// A plan's record's words (see Record words above).
+const fn words(p: &Plan) -> usize {
+    let mut n = HEAD as usize + 1 + 1;
+    let mut k = 0;
+    while k < p.lanes.len() {
+        n += 3 + 3 * p.lanes[k].attributes.len();
+        k += 1;
+    }
+    k = 0;
+    while k < p.groups.len() {
+        n += 1 + 3 * p.groups[k].len();
+        k += 1;
+    }
+    n
+}
+
+/// The most words a record has.
+const RECORD_WORDS: usize = {
+    let (mut most, mut id) = (0, 0);
+    while id < PIPELINES {
+        if let Some(p) = plan_of(id) {
+            let n = words(&p);
+            most = if n > most { n } else { most };
+        }
+        id += 1;
+    }
+    most
+};
+
+/// Pipeline `id`'s record and its length, each group entry seen from the
+/// stages that read it (`seen`); none for one no record lays out.
+const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
+    let mut out = [0; RECORD_WORDS];
+    let Some(p) = plan_of(id) else { return (out, 0) };
+    let h = p.head;
+    let head = [
+        h.shader,
+        h.fragment as u32,
+        h.topology,
+        h.cull,
+        h.depth_write as u32,
+        h.depth_compare,
+        h.depth_bias,
+        h.depth_bias_slope,
+        h.blend,
+        h.vertex,
+    ];
+    let mut n = 0;
+    while n < head.len() {
+        out[n] = head[n];
+        n += 1;
+    }
+    out[n] = p.lanes.len() as u32;
+    n += 1;
+    let mut k = 0;
+    while k < p.lanes.len() {
+        let l = p.lanes[k];
+        (out[n], out[n + 1], out[n + 2]) = (l.stride, l.step, l.attributes.len() as u32);
+        n += 3;
+        let mut a = 0;
+        while a < l.attributes.len() {
+            (out[n], out[n + 1], out[n + 2]) = (l.attributes[a][0], l.attributes[a][1], l.attributes[a][2]);
+            (n, a) = (n + 3, a + 1);
+        }
+        k += 1;
+    }
+    out[n] = p.groups.len() as u32;
+    n += 1;
+    k = 0;
+    while k < p.groups.len() {
+        let g = p.groups[k];
+        out[n] = g.len() as u32;
+        n += 1;
+        let mut e = 0;
+        while e < g.len() {
+            (out[n], out[n + 1], out[n + 2]) = (g[e][0], seen(g, k, g[e][0]), g[e][1]);
+            (n, e) = (n + 3, e + 1);
+        }
+        k += 1;
+    }
+    (out, n)
+}
+
+/// Every pipeline's record, worked out as the crate is built.
+#[allow(long_running_const_eval)]
+const RECORDS: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = {
+    let mut r = [([0; RECORD_WORDS], 0); PIPELINES as usize];
+    let mut id = 0;
+    while id < PIPELINES {
+        r[id as usize] = record(id);
+        id += 1;
+    }
+    r
+};
+static TABLE: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = RECORDS;
+
+/// Pipeline `id`'s record (see Record words above), each group entry seen
+/// from the stages that read it; empty for one no record lays out.
+pub fn pipeline(id: u32) -> &'static [u32] {
+    let (words, n) = &TABLE[id as usize];
+    &words[..*n]
+}
+
+/// Whether pipeline `id`'s layout binds within what every WebGPU device
+/// binds (`floor::holds`), its groups as its record lays them out.
+const fn floored(id: u32) -> bool {
+    let (words, n) = &RECORDS[id as usize];
+    if *n == 0 {
+        return true;
+    }
+    let mut at = HEAD as usize;
+    let lanes = words[at];
+    at += 1;
+    let mut k = 0;
+    while k < lanes {
+        at += 3 + 3 * words[at + 2] as usize;
+        k += 1;
+    }
+    let groups = words[at] as usize;
+    at += 1;
+    if groups > floor::BIND_GROUPS {
+        return false;
+    }
+    let mut stated: [&[u32]; floor::BIND_GROUPS] = [&[]; floor::BIND_GROUPS];
+    let mut g = 0;
+    while g < groups {
+        let m = words[at] as usize;
+        stated[g] = words.split_at(at + 1).1.split_at(3 * m).0;
+        at += 1 + 3 * m;
+        g += 1;
+    }
+    floor::holds(stated.split_at(groups).0)
+}
+
+/// Each pipeline's layout within the floor, checked as the crate is built.
+macro_rules! floored {
+    ($($id:ident),* $(,)?) => {
+        $(const _: () = assert!(floored($id), concat!(stringify!($id), "'s layout binds past WebGPU's floor"));)*
+    };
+}
+floored!(
+    PIPELINE_DECOR,
+    PIPELINE_GHOST_BOX,
+    PIPELINE_GHOST_BOX_COPLANAR,
+    PIPELINE_GHOST_DECOR,
+    PIPELINE_SKINNED,
+    PIPELINE_PUCK_ZONE,
+    PIPELINE_PUCK_BEACON,
+    PIPELINE_BADGE,
+    PIPELINE_BADGE_REGION,
+    PIPELINE_DEBUG,
+    PIPELINE_DEBUG_FACE,
+    PIPELINE_SCREEN_RAYS,
+    PIPELINE_DECOR_PREPASS,
+    PIPELINE_SKINNED_PREPASS,
+    PIPELINE_SKY,
+    PIPELINE_MIPS,
+    PIPELINE_BLIT,
+    PIPELINE_IMPOSTOR,
+    PIPELINE_IMPOSTOR_BAKE,
+    PIPELINE_SHEET,
+    PIPELINE_AO_DOWNSAMPLE,
+    PIPELINE_AO_SAMPLE,
+    PIPELINE_AO_BLUR,
+    PIPELINE_AO_UPSAMPLE,
+    PIPELINE_ATMOS_TRANSMITTANCE,
+    PIPELINE_ATMOS_MULTISCATTER,
+    PIPELINE_ATMOS_SKY_VIEW,
+    PIPELINE_ATMOS_IRRADIANCE,
+    PIPELINE_ATMOS_EXPOSURE,
+    PIPELINE_STARS,
+    PIPELINE_CLOUDS,
+    PIPELINE_CLOUDS_ABOVE,
+    PIPELINE_CLOUD_FIELD,
+);
