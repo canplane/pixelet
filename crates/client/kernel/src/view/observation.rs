@@ -8,16 +8,14 @@ use pxl_spec::space::layer::lattice::demand_reach;
 
 use pxl_spec::space::camera::eye::{Frustum, Observation};
 use pxl_spec::space::camera::grid::{Tau, CHUNK_STEPS};
-use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::hierarchy::tree::{region, Node};
+use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::layer::residency::floor;
-use crate::layer::Answer;
+use crate::layer::residency::{floor, Lines};
 use crate::query::World;
 use crate::view::frame::pose::globe;
 use crate::view::frame::pose::view;
@@ -48,15 +46,6 @@ pub fn observation() -> Option<Observation> {
     })
 }
 
-/// Where anything stands in a node as the world answers it at `cell`: none
-/// where nothing does, the whole node where nothing is known.
-pub fn within<const D: usize>(node: Node<D>, cell: Zoom) -> Option<Aabb> {
-    match World::now().bounds(node, cell) {
-        Answer::Nothing(_) => Some(region(node)),
-        held => held.value().flatten().map(|b| b.aabb),
-    }
-}
-
 /// The cubes `CHUNK_STEPS` zooms over the cells a reader draws, the ground
 /// about the eye cut into one partition: from the coarsest squares within the
 /// far edge, a square splits into its four while its nearest point is nearer
@@ -78,6 +67,8 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
     let zoom = coarsest - CHUNK_STEPS;
     let flat = (o.far() * o.far() - over * over).max(0.0).sqrt();
     let mut stack: Vec<(Zoom, [i64; 2])> = squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)).collect();
+    // Depth first, so each square's ground line steps from its neighbour's.
+    let (world, mut lines) = (World::now(), Lines::default());
     while let Some((zoom, xy)) = stack.pop() {
         let (cell, d) = (zoom + CHUNK_STEPS, near(zoom, xy));
         if d > o.far() {
@@ -87,7 +78,7 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
             stack.extend((0..4).map(|k| (zoom + 1, [2 * xy[0] + (k & 1), 2 * xy[1] + (k >> 1)])));
             continue;
         }
-        let Some(b) = World::now().bounds((zoom, xy), cell).value().flatten() else { continue };
+        let Some(b) = world.bounds(&mut lines, (zoom, xy), cell).value().flatten() else { continue };
         let side = units(zoom);
         for z in (b.aabb.min[2] / side).floor() as i64..=(b.aabb.max[2] / side).floor() as i64 {
             each((zoom, [xy[0], xy[1], z]));
@@ -137,8 +128,10 @@ impl ByEye {
     }
 }
 
-/// A layer's tile's order, read in the grid's cells its own fold into: all
-/// of it where nothing is known.
-pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile) -> Order {
-    Order::of(o, &within(p.node(), lattice.grid_zoom(p.zoom)).unwrap_or(p.region()))
+/// A layer's tile's order, from where anything stands in it as the grid's
+/// cells its own fold into read it, its ground's line stepped from where
+/// `lines` last walked: all of it where nothing is known or nothing stands.
+pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, lines: &mut Lines) -> Order {
+    let stands = World::now().bounds(lines, p.node(), lattice.grid_zoom(p.zoom));
+    Order::of(o, &stands.value().flatten().map_or(p.region(), |b| b.aabb))
 }

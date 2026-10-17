@@ -18,7 +18,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, Tile};
 
 use crate::io::source;
-use crate::layer::residency::{Line, Residency};
+use crate::layer::residency::{Line, Lines, Residency};
 use crate::layer::terrain::window::Windowed;
 use pxl_portable::window::FIRST_CELL;
 
@@ -60,6 +60,12 @@ impl Residency<TerrainTile> {
         }
         let (r, from, here) = relief(line.tile, node);
         held(line, from, here, Some(r))
+    }
+
+    /// `bound`, its line stepped from where `lines` last walked: a walk in
+    /// key order pays one look-up a node.
+    pub fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Bound>> {
+        self.bound(&self.seek(lines, bound_tile(node, cell)), node, cell)
     }
 
     /// Whether the windows hold the cells of `line`'s tile under `node` as

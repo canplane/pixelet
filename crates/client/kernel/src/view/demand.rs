@@ -38,9 +38,10 @@ use crate::io::failure::Failure;
 use crate::io::request::declare;
 use crate::io::source;
 use crate::layer::residency::floor::{self, Fallback, Floor};
-use crate::layer::residency::{Candidate, Residency, Victim};
+use crate::layer::residency::{Candidate, Lines, Residency, Victim};
 use crate::view::observation::{observation, ByEye};
 use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::hierarchy::morton::key_of;
 
 /// A layer as the view asks of it: its demand, held beside its records.
 pub trait Observed: Base {
@@ -100,7 +101,8 @@ struct Farthest<'a>(Option<&'a Observation>, Lattice);
 
 impl Victim for Farthest<'_> {
     fn victim(&self, candidates: &[Candidate]) -> Option<usize> {
-        let order = |c: &Candidate| self.0.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, self.1, c.tile));
+        let mut lines = Lines::default();
+        let mut order = |c: &Candidate| self.0.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, self.1, c.tile, &mut lines));
         (0..candidates.len()).max_by_key(|&i| order(&candidates[i]))
     }
 }
@@ -189,15 +191,18 @@ impl<L: Observed> Demand<L> {
         let ask = |asks: &mut FnvHashMap<Tile, Ask>, p: Tile, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
-        let order = |o: &Observation, p: Tile| crate::view::observation::order_of_tile(o, L::LATTICE, p);
+        // One walk down the pyramid in key order, so each tile's line, its
+        // own and the ground's it is ordered by, steps from its neighbour's.
+        let (mut lines, mut ground) = (Lines::default(), Lines::default());
+        let mut order = |o: &Observation, p: Tile| crate::view::observation::order_of_tile(o, L::LATTICE, p, &mut ground);
         if let Some(o) = o {
             if matches!(L::ASKS, Asks::View) {
                 estimator.requirements(o, &mut |p| demand.push(p));
             }
-            demand.sort_unstable();
+            demand.sort_unstable_by_key(|p| key_of::<2>(p.zoom, p.at));
             demand.dedup();
             for &p in &demand {
-                let at = L::residency().source(p).unwrap_or(p);
+                let at = L::residency().seek(&mut lines, p).source.unwrap_or(p);
                 ask(&mut asks, at, Ask { why: Why::Demand, order: order(o, p) });
                 // A line already asked is asked to the top.
                 for q in std::iter::successors(Some(at), |q| (q.zoom > top).then(|| q.parent())).skip(1) {

@@ -13,7 +13,7 @@ use crate::layer::object::store::EntryAt;
 use super::decor::Grown;
 use crate::kernel;
 use crate::layer::object::store::Store;
-use crate::layer::residency::Residency;
+use crate::layer::residency::{Lines, Residency};
 use crate::layer::Answer;
 use crate::layer::Base as _;
 use crate::layer::{Bound, Query};
@@ -84,10 +84,11 @@ impl<'a> World<'a> {
 }
 
 impl World<'_> {
-    /// What can show of the ground and what is placed, which a chunk finer
-    /// under the node may draw at any zoom it is asked at.
-    pub fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+    /// Where the ground and what is placed stand in the node, as its cells
+    /// at `cell` are read; the ground's line stepped from where `lines` last
+    /// walked.
+    pub fn bounds(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Bound>> {
         let objects = self.objects.bounds(node, cell).value().flatten();
-        self.terrain.bounds(node, cell).map(|ground| Bound::join(ground, objects))
+        self.terrain.bound_walked(lines, node, cell).map(|ground| Bound::join(ground, objects))
     }
 }
