@@ -1,8 +1,7 @@
 // pxl-render/gpu/renderer.rs
 
-//! Executes the scheduler's draw lists on the device, in the kernel's own turn.
-//! Depth is reversed f32 throughout, near 1 and far 0: float precision and
-//! perspective depth cancel, so far coplanar faces stop fighting.
+//! Executes the scheduler's draw lists on the device, in the kernel's own turn,
+//! in the device's depth (`mat4::perspective`).
 
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -1285,6 +1284,8 @@ struct Case {
 const CASE_EYE: V3 = [0.0, -2.2, 0.9];
 const CASE_TARGET: V3 = [0.0, 0.0, 0.55];
 const CASE_FOV_DEG: f64 = 35.0;
+/// The case's near plane: a room of its own, a model a unit tall in it.
+const CASE_NEAR: f64 = 0.1;
 
 impl Case {
     fn new(g: &Gpu, pipelines: &mut Pipelines, ao: &ScreenAo, air: [Entry; AIR_ENTRIES], align: u32) -> Case {
@@ -1775,7 +1776,7 @@ impl Renderer {
             let mut frame = self.frame;
             let u = &mut frame;
             let (mut proj, mut view, mut t, mut m, mut n) = (mat4::new(), mat4::new(), mat4::new(), mat4::new(), mat4::new());
-            mat4::perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, 0.1);
+            mat4::perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, CASE_NEAR);
             mat4::look_at(&mut view, CASE_EYE, CASE_TARGET, [0.0, 0.0, 1.0]);
             mat4::translation(&mut t, -actor[0], -actor[1], -actor[2]);
             mat4::mul(&mut n, &proj, &view);

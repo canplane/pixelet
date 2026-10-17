@@ -16,13 +16,15 @@
 // (`EYE_ORIGIN`), FRAC_W bits a unit and wrapping, a block's place on the
 // lattice read off their low bits, and whether a ray reports its steps
 // (`EYE_STEPS`).
-@group(0) @binding(21) var<uniform> eye: array<vec4u, 1>;
+@group(0) @binding(21) var<uniform> eye: array<vec4u, EYE_READ_VEC4S>;
+
+fn eye_word(k: u32) -> u32 {
+  return eye[k / 4u][k % 4u];
+}
 
 // The steps a ray's colour runs up to, on a log scale, the same on every
 // screen so two compare.
 const STEPS_MOST: f32 = 1024.0;
-// Where a ray that met nothing is put when it is coloured by its steps.
-const FAR: f32 = 1.0e6;
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -100,7 +102,7 @@ fn drawn(c: vec4u) -> Drawn {
 // world's side.
 fn eye_phase(axis: u32, k: i32) -> f32 {
   let bits = u32(k + i32(FRAC_W));
-  let steps = eye[0][EYE_ORIGIN + axis];
+  let steps = eye_word(EYE_ORIGIN + axis);
   let low = select(steps, steps & ((1u << bits) - 1u), bits < 32u);
   return f32(low) / f32(1u << FRAC_W);
 }
@@ -151,8 +153,10 @@ fn fs(v: VertexOut) -> FragOut {
   let ddx = dpdx(uv);
   let ddy = dpdy(uv);
   let pixel = sqrt(dpdx(h.at) * dpdx(h.at) + dpdy(h.at) * dpdy(h.at));
-  if (eye[0][EYE_STEPS] != 0u) {
-    let t = select(bitcast<f32>(c.y), FAR, kind == RAY_KIND_NONE);
+  if (eye_word(EYE_STEPS) != 0u) {
+    // A ray that met nothing at the end of what the eye observes, nearer than
+    // the far plane's 0 the sky stands at.
+    let t = select(bitcast<f32>(c.y), bitcast<f32>(eye_word(EYE_REACH)), kind == RAY_KIND_NONE);
     let clip = frame_view_proj() * vec4f(d * t, 1.0);
     var o: FragOut;
     o.color = vec4f(turbo(log2(1.0 + f32(c.w)) / log2(1.0 + STEPS_MOST)), 1.0);

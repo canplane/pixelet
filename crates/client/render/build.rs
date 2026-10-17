@@ -49,9 +49,13 @@ fn main() {
     ];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
     // The eye's words the screen pass reads (pxl-portable eye.rs), each its
-    // place in the eye's first vec4, which is all the pass binds of it.
-    const _: () = assert!(pxl_portable::eye::ORIGIN + 2 < 4 && pxl_portable::eye::STEPS < 4);
-    let eye = format!("const EYE_ORIGIN: u32 = {}u;\nconst EYE_STEPS: u32 = {}u;\n", pxl_portable::eye::ORIGIN, pxl_portable::eye::STEPS);
+    // word, and the vec4s it binds to reach the last of them.
+    use pxl_portable::eye::{ORIGIN, REACH, STEPS};
+    let last = (ORIGIN + 2).max(STEPS).max(REACH);
+    let eye = format!(
+        "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_STEPS: u32 = {STEPS}u;\nconst EYE_REACH: u32 = {REACH}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
+        last / 4 + 1
+    );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
     std::fs::write(Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"), compute(dir)).expect("the compute layouts");
     println!("cargo:rerun-if-changed=src/frame/shader");
