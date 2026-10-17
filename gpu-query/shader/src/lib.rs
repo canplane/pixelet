@@ -24,7 +24,7 @@ use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
 use pxl_portable::scatter::{self, drawn, Grounds, PLACED_BLOCK, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
-use pxl_portable::{at, mask, ray, wrap_index, LEAF_CELL, UNIT_ZOOM};
+use pxl_portable::{at, mask, ray, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::{spirv, Image};
@@ -266,11 +266,17 @@ pub struct At {
     ground: Found,
 }
 
+const _: () = assert!(window::FOUND_BITS + pxl_portable::caves::CAVE_BITS <= 32, "a kept entry's second word holds a Found and a cave");
+
 /// What a node is on the GPU: its value, and for the ground the four looks
 /// a coarse block folds, a byte each, `dx + 2·dy` (`ground::Cell`), what
 /// the screen paints a hit with.
 impl Query for World<'_> {
     type At = At;
+    /// What was handed the node, but its shard: its placed cursor, then
+    /// where its cells are held (`Found`, `window::FOUND_BITS`) with its
+    /// caves' word (`caves::CAVE_BITS`) over it.
+    type Kept = [u32; 2];
     type Block = [u32; 2];
     const AIR: [u32; 2] = [VOID, 0];
 
@@ -333,6 +339,26 @@ impl Query for World<'_> {
 
     fn fills(&self, block: &[u32; 2]) -> bool {
         block[0] != VOID && block[0] != PLACED_AIR
+    }
+
+    /// The caves' draws and what is placed are a hash's state and a slot,
+    /// had again only from the top, so they are kept; and where the node's
+    /// cells are held, which `window::step` steps a sibling's from, as a
+    /// node over it holds them and a sibling's own child does not.
+    fn keep(at: &At) -> [u32; 2] {
+        [at.placed.word(), at.ground.word() | at.cave.word() << window::FOUND_BITS]
+    }
+
+    /// The shard is not kept: a node at a shard's zoom or finer lies in one
+    /// shard, the one the node come back from lies in, under it; a coarser
+    /// one's is unknown, as its own was.
+    fn unkeep(kept: [u32; 2], live: &At, zoom: u32) -> At {
+        At {
+            cave: Cave::of_word(kept[1] >> window::FOUND_BITS),
+            placed: Held::of_word(kept[0]),
+            shard: if zoom >= SHARD_ZOOM { live.shard } else { Shard::UNKNOWN },
+            ground: Found::of_word(kept[1] & ((1 << window::FOUND_BITS) - 1)),
+        }
     }
 }
 

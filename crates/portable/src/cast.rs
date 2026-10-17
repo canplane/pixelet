@@ -280,6 +280,11 @@ pub struct In<B> {
 pub trait Query {
     type At: Copy;
     type Block: Copy;
+    /// What a descent's stack keeps of what was handed a node it went
+    /// into (`keep`), in the fewest words: only what it cannot get again
+    /// from what it holds when it comes back for the node's next child
+    /// (`unkeep`).
+    type Kept: Copy;
     /// What no block fills: air, or void.
     const AIR: Self::Block;
     /// A root of zoom 0, `node` the world's.
@@ -291,6 +296,11 @@ pub trait Query {
     /// it, asked from `far` to `near`, the ray in it from `t0`.
     fn node(&mut self, at: &mut Self::At, zoom: Zoom, node: [i32; 3], asked: [Zoom; 2], t0: f32) -> In<Self::Block>;
     fn fills(&self, block: &Self::Block) -> bool;
+    /// What the stack keeps of `at`, handed a node the descent goes into.
+    fn keep(at: &Self::At) -> Self::Kept;
+    /// What was handed the node at `zoom` the stack kept `kept` of, `live`
+    /// what was handed the node the descent comes back from, under it.
+    fn unkeep(kept: Self::Kept, live: &Self::At, zoom: Zoom) -> Self::At;
 }
 
 /// Where a ray stopped: how far, the axis it entered across, the node and
@@ -515,7 +525,7 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
     let dlen = length(ray.direction);
     // What was handed each node the descent went into, from its start's
     // zoom; over it, `over`'s.
-    let (top, mut stack) = (from.0.zoom, [from.1; DEPTH]);
+    let (top, mut stack) = (from.0.zoom, [Q::keep(&from.1); DEPTH]);
     // The node being entered, and the ray within it.
     let (mut at, mut place, (mut t0, mut t1, mut axis)) = (from.1, from.0, span);
     let mut visits = 0;
@@ -525,21 +535,25 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
         if t1 > t0 {
             let i = q.node(&mut at, place.zoom, place.node(o), asked(o, detail, place, t1 * dlen), t0);
             visits += 1;
-            let stop = Stop {
-                t: t0,
-                axis,
-                place,
-                at,
-                block: i.block,
-            };
-            match i.kind {
-                Kind::Lacks => return Met { ends: Ends::Lacks, stop, visits },
-                Kind::Block => {
-                    if stops(q, o, until, place, &i.block) {
-                        return Met { ends: Ends::Stop, stop, visits };
-                    }
+            // Where the walk ends, its stop, made there and nowhere else.
+            let ends = match i.kind {
+                Kind::Lacks => Ends::Lacks,
+                Kind::Block if stops(q, o, until, place, &i.block) => Ends::Stop,
+                Kind::Block => Ends::On,
+                Kind::Split => {
+                    into = true;
+                    Ends::On
                 }
-                Kind::Split => into = true,
+            };
+            if ends != Ends::On {
+                let stop = Stop {
+                    t: t0,
+                    axis,
+                    place,
+                    at,
+                    block: i.block,
+                };
+                return Met { ends, stop, visits };
             }
         }
         // The child gone into next, what was handed its parent, and the span
@@ -560,7 +574,7 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
                 }) as u32
             };
             let k = upper(ray.direction[0], half[0]) | upper(ray.direction[1], half[1]) << 1 | upper(ray.direction[2], half[2]) << 2;
-            stack[place.zoom as usize] = at;
+            stack[place.zoom as usize] = Q::keep(&at);
             (place.child(k), at, t0, t1)
         } else {
             loop {
@@ -588,7 +602,11 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
                     (place, t1) = (parent, end);
                     continue;
                 }
-                let handed = if parent.zoom < top { over.over(parent.zoom) } else { stack[parent.zoom as usize] };
+                let handed = if parent.zoom < top {
+                    over.over(parent.zoom)
+                } else {
+                    Q::unkeep(stack[parent.zoom as usize], &at, parent.zoom)
+                };
                 break (parent.child(k ^ bit), handed, t1, end);
             }
         };

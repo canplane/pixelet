@@ -110,6 +110,8 @@ struct Walker<'w, 'a> {
 impl<'a> Query for Walker<'_, 'a> {
     type At = At;
     type Block = Option<Block>;
+    /// Kept whole: the CPU's walk holds its stack where it is cheap.
+    type Kept = At;
     const AIR: Option<Block> = None;
 
     fn root(&mut self, node: [i32; 3]) -> At {
@@ -156,6 +158,14 @@ impl<'a> Query for Walker<'_, 'a> {
 
     fn fills(&self, block: &Option<Block>) -> bool {
         block.is_some_and(|b| b.fills())
+    }
+
+    fn keep(at: &At) -> At {
+        *at
+    }
+
+    fn unkeep(kept: At, _: &At, _: Zoom) -> At {
+        kept
     }
 }
 
