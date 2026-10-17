@@ -17,8 +17,10 @@ use crate::{wrap_index, Zoom, LEAF_CELL};
 pub const SQUARE_SHIFT: u32 = 6;
 pub const SQUARE: u32 = 1 << SQUARE_SHIFT;
 pub const SQUARE_CELLS: u32 = SQUARE * SQUARE;
-/// Squares a window holds a side, and in all.
-pub const ACROSS: u32 = 4;
+/// Squares a window holds a side, and in all: as many as hold `RADIUS`
+/// about a centre anywhere in a square, to a power of two, as `slot` masks
+/// by it.
+pub const ACROSS: u32 = ((2 * RADIUS + SQUARE).div_ceil(SQUARE)).next_power_of_two();
 pub const SLOTS: u32 = ACROSS * ACROSS;
 /// A window's side in cells.
 pub const WINDOW: u32 = ACROSS * SQUARE;
@@ -49,7 +51,6 @@ pub const FRESH_WORDS: u32 = 3;
 /// How far from its centre a window holds every cell, in its own cells: a
 /// zoom's band ends `SPLIT` of its cells from the eye (`cast::SPLIT`).
 pub const RADIUS: u32 = crate::cast::SPLIT as u32;
-const _: () = assert!(2 * RADIUS + SQUARE <= WINDOW, "a window holds its radius about any centre in a square");
 
 /// The first square of the window at `cell` about the cell `c`:
 /// ⌊(c − RADIUS) / SQUARE⌋ a side, X wrapped round the world. Its squares
