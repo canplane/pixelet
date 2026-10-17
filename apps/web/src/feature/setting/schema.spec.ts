@@ -135,51 +135,42 @@ export const SETTINGS = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
-  /** The pixels the world is filled at, the GPU's largest cost: two to a
-   * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
-  resolution: {
-    key: 11 as number,
-    kind: "choice",
-    default: "auto",
-    options: ["auto", "fixed", "low"],
-    section: "display",
-  },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
   view_overlay: {
-    key: 12 as number,
+    key: 11 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
   performance_overlay: {
-    key: 13 as number,
+    key: 12 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
   world_gizmo: {
-    key: 14 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 15 as number,
+    key: 14 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 16 as number,
+    key: 15 as number,
     kind: "index",
     default: 5 as number,
     section: "character",
   },
   /** How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each. */
   rays: {
-    key: 17 as number,
+    key: 16 as number,
     kind: "choice",
     default: "half",
     options: ["cells", "half", "full"],
@@ -188,7 +179,7 @@ export const SETTINGS = {
   },
   /** Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl). */
   ray_steps: {
-    key: 18 as number,
+    key: 17 as number,
     kind: "toggle",
     default: false,
     section: "debug",
@@ -305,44 +296,35 @@ export const SETTINGS_SHIPPED = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
-  /** The pixels the world is filled at, the GPU's largest cost: two to a
-   * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
-  resolution: {
-    key: 11 as number,
-    kind: "choice",
-    default: "auto",
-    options: ["auto", "fixed", "low"],
-    section: "display",
-  },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
   view_overlay: {
-    key: 12 as number,
+    key: 11 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
   performance_overlay: {
-    key: 13 as number,
+    key: 12 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
   world_gizmo: {
-    key: 14 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 15 as number,
+    key: 14 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 16 as number,
+    key: 15 as number,
     kind: "index",
     default: 5 as number,
     section: "character",

@@ -21,23 +21,6 @@ pub const RESOLUTION_MAX: f64 = pxl_render::gpu::sheet::SHEET_SCALE;
 /// The picker shows a case at thumbnail size: its buffer's long side, in pixels.
 pub const CASE_LONG_SIDE_MAX: f64 = 256.0;
 
-pub const RESOLUTION_STEP: f64 = 0.25;
-
-/// Over budget this long before a step down, so one slow frame is not taken for load.
-pub const RESOLUTION_OVER_HOLD_MS: f64 = 500.0;
-
-pub const RESOLUTION_ROOM_HOLD_MS: f64 = 2000.0;
-
-/// A step up adds at most (2.0 / 1.75)² ≈ 1.3× fill, so half the budget leaves room.
-pub const RESOLUTION_ROOM: f64 = 0.5;
-
-/// The tightest budget: 60 Hz. Faster displays would trade sharpness for
-/// frames the eye gains less from.
-pub const RESOLUTION_BUDGET_FLOOR_MS: f64 = 1000.0 / 60.0;
-
-/// A ratio change rebuilds the render targets, so changes are spaced out.
-pub const RESOLUTION_CHANGE_GAP_MS: f64 = 1000.0;
-
 // ---- the projection ----
 
 pub const FOV: f64 = 50.0;

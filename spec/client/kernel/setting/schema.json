@@ -26,19 +26,6 @@
       "buttons floating over the world (feature/world/ui/control/)."
     ]
   },
-  "RESOLUTION_MODES": {
-    "$value": ["auto", "fixed", "low"],
-    "$doc": [
-      "How many device pixels the world is drawn at to a CSS pixel.",
-      "",
-      "  auto  — the device's, at most two, lowered while the frames run over",
-      "          their budget — the display's interval, no tighter than a",
-      "          sixtieth of a second — and raised again once they have room",
-      "          (crates/client/kernel/src/view/frame/resolution.rs).",
-      "  fixed — the device's, at most two, whatever the frames cost.",
-      "  low   — one."
-    ]
-  },
   "CAMERA_MODES": {
     "$value": ["orbit", "free"],
     "$doc": [
@@ -214,16 +201,6 @@
       "options": "AO_MODES",
       "costs": ["", "low", "high"],
       "section": "lighting"
-    },
-    "resolution": {
-      "$doc": [
-        "The pixels the world is filled at, the GPU's largest cost: two to a",
-        "CSS pixel is four times the fragments of one. RESOLUTION_MODES says each."
-      ],
-      "kind": "choice",
-      "default": "auto",
-      "options": "RESOLUTION_MODES",
-      "section": "display"
     },
     "view_overlay": {
       "$doc": ["Where the camera and the pointer are, read live (profiler/summary.rs, its view section)."],

@@ -104,31 +104,6 @@ impl AoMode {
     }
 }
 
-/// How many device pixels the world is drawn at to a CSS pixel.
-///
-///   auto  — the device's, at most two, lowered while the frames run over
-///           their budget — the display's interval, no tighter than a
-///           sixtieth of a second — and raised again once they have room
-///           (crates/client/kernel/src/view/frame/resolution.rs).
-///   fixed — the device's, at most two, whatever the frames cost.
-///   low   — one.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ResolutionMode {
-    auto = 0,
-    fixed = 1,
-    low = 2,
-}
-
-impl ResolutionMode {
-    pub const ALL: [ResolutionMode; 3] = [ResolutionMode::auto, ResolutionMode::fixed, ResolutionMode::low];
-
-    /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<ResolutionMode> {
-        ResolutionMode::ALL.get(index as usize).copied()
-    }
-}
-
 /// How many of the eye's rays the GPU casts for the screen's cells.
 ///
 ///   cells — one a cell of the camera grid.
@@ -211,25 +186,22 @@ pub enum SettingKey {
     /// screen-space pass; screen, N8AO's screen-space pass, the costliest of
     /// the three. AO_MODES says each.
     ao = 10,
-    /// The pixels the world is filled at, the GPU's largest cost: two to a
-    /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 11,
     /// Where the camera and the pointer are, read live (profiler/summary.rs, its view section).
-    view_overlay = 12,
+    view_overlay = 11,
     /// The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
-    performance_overlay = 13,
+    performance_overlay = 12,
     /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs).
-    world_gizmo = 14,
-    person = 15,
-    pet = 16,
+    world_gizmo = 13,
+    person = 14,
+    pet = 15,
     /// How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each.
-    rays = 17,
+    rays = 16,
     /// Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl).
-    ray_steps = 18,
+    ray_steps = 17,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 19] = [
+    pub const ALL: [SettingKey; 18] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -241,7 +213,6 @@ impl SettingKey {
         SettingKey::edge_shade,
         SettingKey::rim_light,
         SettingKey::ao,
-        SettingKey::resolution,
         SettingKey::view_overlay,
         SettingKey::performance_overlay,
         SettingKey::world_gizmo,
@@ -269,7 +240,6 @@ impl SettingKey {
             SettingKey::edge_shade => SettingKind::Toggle,
             SettingKey::rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
-            SettingKey::resolution => SettingKind::Choice,
             SettingKey::view_overlay => SettingKind::Toggle,
             SettingKey::performance_overlay => SettingKind::Toggle,
             SettingKey::world_gizmo => SettingKind::Toggle,
@@ -294,7 +264,6 @@ impl SettingKey {
             SettingKey::edge_shade => "edge_shade",
             SettingKey::rim_light => "rim_light",
             SettingKey::ao => "ao",
-            SettingKey::resolution => "resolution",
             SettingKey::view_overlay => "view_overlay",
             SettingKey::performance_overlay => "performance_overlay",
             SettingKey::world_gizmo => "world_gizmo",
@@ -311,7 +280,6 @@ impl SettingKey {
             SettingKey::camera_mode => &["orbit", "free"],
             SettingKey::orbit_obstacle => &["through", "stop", "climb"],
             SettingKey::ao => &["off", "corner", "screen"],
-            SettingKey::resolution => &["auto", "fixed", "low"],
             SettingKey::rays => &["cells", "half", "full"],
             _ => &[],
         }
@@ -345,7 +313,6 @@ pub struct Settings {
     pub edge_shade: bool,
     pub rim_light: bool,
     pub ao: AoMode,
-    pub resolution: ResolutionMode,
     pub view_overlay: bool,
     pub performance_overlay: bool,
     pub world_gizmo: bool,
@@ -369,7 +336,6 @@ impl Settings {
         edge_shade: true,
         rim_light: true,
         ao: AoMode::corner,
-        resolution: ResolutionMode::auto,
         view_overlay: false,
         performance_overlay: false,
         world_gizmo: false,
@@ -394,7 +360,6 @@ impl Settings {
             SettingKey::edge_shade => self.edge_shade as u32,
             SettingKey::rim_light => self.rim_light as u32,
             SettingKey::ao => self.ao as u32,
-            SettingKey::resolution => self.resolution as u32,
             SettingKey::view_overlay => self.view_overlay as u32,
             SettingKey::performance_overlay => self.performance_overlay as u32,
             SettingKey::world_gizmo => self.world_gizmo as u32,
@@ -427,10 +392,6 @@ impl Settings {
             SettingKey::rim_light if value <= 1 => self.rim_light = value == 1,
             SettingKey::ao => match AoMode::of(value) {
                 Some(o) => self.ao = o,
-                None => return false,
-            },
-            SettingKey::resolution => match ResolutionMode::of(value) {
-                Some(o) => self.resolution = o,
                 None => return false,
             },
             SettingKey::view_overlay if value <= 1 => self.view_overlay = value == 1,

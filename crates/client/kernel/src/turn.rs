@@ -311,7 +311,6 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let report = run_tick(state, step, quota_ms, edge_at);
     let after_tick = now();
     pump();
-    crate::view::frame::resolution::resolution_step(state);
     crate::scene::stage::stage_write();
     crate::scene::stage::stage_render();
     let done = now();

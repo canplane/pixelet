@@ -36,7 +36,6 @@ use crate::scene::environment::cloud::cloud_groups;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::{settings_store, AoMode};
 use crate::view::demand::Observed as _;
-use crate::view::frame::resolution::{resolution_observe, resolution_reads_gpu};
 
 /// The device the last frame went to the screen on (`device_generation`).
 static DRAWN: Global<Option<u32>> = Global::new();
@@ -147,10 +146,8 @@ pub fn stage_render() {
         text: text_raster,
         billboards: billboard_sheet(),
         admit: crate::io::host::admit_frame,
-        // The spans are the profiler's, which records only while its setting is on.
-        // The spans are the resolution's while it adapts to them, and the
-        // profiler's while it records; the draws the profiler's alone.
-        timed: resolution_reads_gpu() || settings_store().performance_overlay,
+        // The spans and the draws are the profiler's, which records only while its setting is on.
+        timed: settings_store().performance_overlay,
         counted: settings_store().performance_overlay,
     });
     if out.redraw {
@@ -164,9 +161,6 @@ pub fn stage_render() {
         return;
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
-    if stat.gpu_read {
-        resolution_observe(pxl_render::gpu::renderer::gpu_ms(&stat.gpu_spans));
-    }
     set_host_frame(
         out.kind,
         GpuSample {

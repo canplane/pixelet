@@ -25,21 +25,6 @@
       "textures": {
         "label": "Textures",
         "description": "Textures cube faces instead of a flat color."
-      },
-      "resolution": {
-        "label": "Resolution",
-        "auto": {
-          "label": "Auto",
-          "description": "Draws at the device's resolution, lowering it for a while when frames stutter and restoring it once there is room."
-        },
-        "fixed": {
-          "label": "Fixed",
-          "description": "Always draws at the device's resolution. Sharpest, but may stutter on slower devices."
-        },
-        "low": {
-          "label": "Low",
-          "description": "Draws at a lower resolution to save battery and heat. Looks a little softer."
-        }
       }
     },
     "camera": {
