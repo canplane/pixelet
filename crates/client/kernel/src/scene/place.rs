@@ -31,7 +31,7 @@ use core::hash::Hasher;
 use pxl_render::gpu::sheet::shelf::NO_SLOT;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::block::object::{marker_cell_of, marker_shows, object_value_is_marker};
-use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -68,6 +68,8 @@ struct Placement {
     /// The place tiles whose answer moved, beside the ground's
     /// (query/changed.rs): a chunk they touch is read again.
     moved_places: Vec<Tile>,
+    /// The chunks this turn would read, by how far from the eye.
+    entering: Vec<(f64, Chunk)>,
     labeled: Vec<(Label, Q3)>,
     /// Last turn's `labeled`, its buffer reused.
     spare: Vec<(Label, Q3)>,
@@ -81,7 +83,7 @@ struct Placement {
     /// and nothing left waiting, the labels it laid out stand.
     last: Option<Seen>,
     /// The last run left a label not laid out or not painted, which a later
-    /// turn has: the next runs again.
+    /// turn has, or a chunk not read yet: the next runs again.
     waiting: bool,
 }
 
@@ -293,7 +295,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let places = now.places;
     // What was read stands for a chunk still drawn whose columns no change
     // touches (query/changed.rs), while places did not turn: a chunk left or
-    // touched drops its run, and only one entered or touched is read.
+    // touched drops its run, and only one entered or touched is read, as
+    // many a turn as `PLACE_CHUNKS_READ`, nearest the eye first; the rest are
+    // not read yet, so a later turn reads them.
     p.moved = false;
     let before = match &p.found_for {
         Some(f) if f.places == places => f.drawn.as_slice(),
@@ -306,12 +310,22 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     };
     let mut found = core::mem::take(&mut p.found);
     found.retain(|s| now.drawn.binary_search(&s.chunk).is_ok() && stands(&s.chunk));
-    for &chunk in now.drawn.iter().filter(|c| !stands(c)) {
+    let entering = &mut p.entering;
+    entering.clear();
+    entering.extend(now.drawn.iter().filter(|c| !stands(c)).map(|&c| (v3::len(&v3::sub(&c.region().center(), &o.eye)), c)));
+    entering.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+    let read = entering.len().min(crate::param::PLACE_CHUNKS_READ);
+    let unread = entering.len() - read;
+    for &(_, chunk) in &entering[..read] {
         markers(chunk, &mut found);
         if places {
             places_in(chunk, &mut found);
         }
     }
+    // Not read, so not what `found` was read from.
+    let later = &mut entering[read..];
+    later.sort_unstable_by_key(|e| e.1);
+    now.drawn.retain(|c| later.binary_search_by_key(c, |e| e.1).is_err());
     p.moved_places.clear();
     if p.found_for.as_ref() != Some(&p.now) {
         let now = core::mem::take(&mut p.now);
@@ -367,7 +381,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     badge::retain(&labeled.iter().map(|l| l.0).chain(p.pending.iter().copied()).chain(line).collect());
     // Painted at render, or laid out by the host, neither of which asks a
     // turn: one looks again.
-    p.waiting = !p.pending.is_empty() || unlaid;
+    p.waiting = !p.pending.is_empty() || unlaid || unread > 0;
     if p.waiting {
         crate::sched::edge::request_world_tick();
     }

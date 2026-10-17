@@ -17,6 +17,17 @@ enum Frame {
     Sent(u32),
 }
 
+/// What became of a packet offered to the turn's stream.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Offered {
+    /// Taken whole: freed.
+    Taken,
+    /// Taken in part, the rest a later turn's: kept, and the next offered.
+    Kept,
+    /// The stream ran out: kept, and nothing more offered this turn.
+    Full,
+}
+
 pub struct Kept(Vec<Frame>);
 
 impl Kept {
@@ -46,16 +57,19 @@ impl Kept {
         }
     }
 
-    /// Each waiting packet to `send` with its frame, freed once sent to the
-    /// device `on`, while `send` takes them.
-    pub fn send(&mut self, on: u32, send: &mut dyn FnMut(u32, &[u8]) -> bool) {
+    /// Each waiting packet to `send` with its frame, freed once taken whole
+    /// by the device `on`, until the stream runs out.
+    pub fn send(&mut self, on: u32, send: &mut dyn FnMut(u32, &[u8]) -> Offered) {
         for (record, frame) in self.0.iter_mut().enumerate() {
             let Frame::Waiting(block) = *frame else { continue };
-            if !send(record as u32, body(block)) {
-                return;
+            match send(record as u32, body(block)) {
+                Offered::Full => return,
+                Offered::Kept => {}
+                Offered::Taken => {
+                    release(Some(block));
+                    *frame = Frame::Sent(on);
+                }
             }
-            release(Some(block));
-            *frame = Frame::Sent(on);
         }
     }
 }

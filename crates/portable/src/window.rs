@@ -42,6 +42,17 @@ pub const WINDOWS: u32 = EYE_WINDOWS + 3;
 /// Squares every window holds, the eye's first: the most the GPU holds, and
 /// so the most of their cells read back at once.
 pub const SQUARES: u32 = WINDOWS * SLOTS;
+/// What the GPU's fill costs a frame, measured at dpr 2 on an M-series Mac
+/// (2026-10-17, the `fill` span): its passes whatever it is handed, and each
+/// square more; handed one square a frame it took 2.2 ms, sixteen 5.5 ms.
+pub const FILL_MS: f32 = 2.0;
+pub const FILL_SQUARE_MS: f32 = 0.22;
+/// The share of a frame the fill may take.
+pub const FILL_SHARE_MS: f32 = 4.0;
+/// The squares a frame hands the fill at most, nearest first (pxl-kernel
+/// layer/terrain/window.rs `due`): its share less its passes, over a square.
+pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_SQUARE_MS) as u32;
+
 /// A square handed to the GPU's fill, in words: its index, where it lies in
 /// its tile (`x | y << 16`, in squares), and its cells' zoom, its window's
 /// as the window holds it (pxl-kernel layer/terrain/window.rs `Window::cell`;

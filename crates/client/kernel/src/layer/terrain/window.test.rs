@@ -21,20 +21,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
         looks: vec![0; (SQUARES * LOOK_LANE_BYTES) as usize].leak(),
         back: vec![0; SQUARES as usize].leak(),
     });
-    WINDOWS_STATE.set(Windows {
-        windows: core::array::from_fn(|w| Window {
-            cell: layout(w as u32).1,
-            first: None,
-        }),
-        slots: [Slot {
-            square: [i32::MIN; 2],
-            state: State::Absent,
-            on: 0,
-        }; SQUARES as usize],
-        ticket: 0,
-        table: [0; TABLE_WORDS],
-        pinned: List::new(),
-    });
+    WINDOWS_STATE.set(fresh());
     let w = windows();
     for win in 0..WINDOWS {
         let (centre_of, cell) = layout(win);

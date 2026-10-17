@@ -14,6 +14,7 @@ use xpute_guest::global::Global;
 use xpute_kit::collection::list::List;
 
 use crate::kernel;
+use crate::layer::kept::Offered;
 use crate::layer::object::preview;
 use crate::layer::object::store::EntryAt;
 use crate::layer::residency::Residency;
@@ -90,8 +91,8 @@ pub fn overwrites() -> Overwrites<'static> {
 pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::residency();
     kept().send(pxl_render::gpu::api::device_generation(), &mut |frame, pkt| {
-        let Some(t) = terrain.in_frame(frame) else { return true };
-        let Some(held) = terrain.get(t) else { return true };
+        let Some(t) = terrain.in_frame(frame) else { return Offered::Taken };
+        let Some(held) = terrain.get(t) else { return Offered::Taken };
         window::fill(t, Handed::Packet(pkt, held), write)
     });
     // Taken first, as filling reads the residency. A tile held with no frame
@@ -101,7 +102,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
         void.push(p);
     }
     for p in void {
-        if !window::fill(p, Handed::Void, write) {
+        if window::fill(p, Handed::Void, write) == Offered::Full {
             return;
         }
     }

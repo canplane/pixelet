@@ -48,7 +48,7 @@ use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
 use pxl_portable::scatter::GROUPS;
-use pxl_spec::block::window::{BACK_WORDS, ELE_AT, FRESH_WORDS, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
+use pxl_spec::block::window::{BACK_WORDS, ELE_AT, FRESH_WORDS, HANDED, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -127,6 +127,12 @@ pub struct FrameInput<'a> {
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
 }
+
+/// The buffers squares' cells come back through: what a frame hands, a
+/// mapping still out a frame more (pxl-portable `window::HANDED`).
+const READS: usize = 2 * HANDED as usize;
+/// A buffer of them carrying no square.
+const FREE: u32 = u32::MAX;
 
 /// The earth layer's tiles as the GPU reads them: the floor's window, its
 /// south-west tile first, and per tile its layer plus one; `upload` hands each
@@ -763,14 +769,18 @@ struct GroundBuffers {
     fresh: u32,
     fresh_len: u32,
     /// Per square place (`window::SQUARES`), its cells' way back: the fill
-    /// the next landing must be of (its ticket 0 where none is asked), the
-    /// buffer its cells are copied into and mapped back through, and that
-    /// mapping's own word (`read_back`), which the host writes: held where
-    /// the guest's allocator puts it, inside the region the host addresses,
-    /// as an arriving image's word is. A static is outside it on a device.
+    /// the next landing must be of (its ticket 0 where none is asked).
     asked: [CellsBack; SQUARES as usize],
-    reads: [u32; SQUARES as usize],
-    mapping: Box<[u32; SQUARES as usize]>,
+    /// The buffers cells are copied into and mapped back through, as many as
+    /// a frame hands squares a mapping still out a frame more (`READS`);
+    /// each one's square and the fill it carries (`FREE` where none), and
+    /// its mapping's own word (`read_back`), which the host writes: held
+    /// where the guest's allocator puts it, inside the region the host
+    /// addresses, as an arriving image's word is. A static is outside it on
+    /// a device.
+    reads: [u32; READS],
+    held: [(u32, u32); READS],
+    mapping: Box<[u32; READS]>,
     heights_built: Built,
     heights_group: u32,
     bound_built: Built,
@@ -979,7 +989,8 @@ impl ScreenCellsPass {
                 fresh_len: 0,
                 asked: [CellsBack::default(); SQUARES as usize],
                 reads: core::array::from_fn(|_| buffer(BACK_WORDS * 4, buffer_usage::MAP_READ | buffer_usage::COPY_DST)),
-                mapping: Box::new([0; SQUARES as usize]),
+                held: [(FREE, 0); READS],
+                mapping: Box::new([0; READS]),
                 heights_built,
                 heights_group,
                 bound_built,
@@ -1180,16 +1191,17 @@ impl ScreenCellsPass {
     /// once the encoder that wrote them is submitted: a square's heights and
     /// levels lie together, so one mapping brings both.
     ///
-    /// A square's buffer maps once at a time, and its mapping lands whatever
-    /// fill it was asked for. One that landed for the square's latest fill
-    /// marks it read: the kernel's word takes `ticket | DONE`. One that
-    /// landed for an earlier fill is discarded, and the latest fill asked for
-    /// again: its bytes went into the square's cells while the kernel holds
-    /// the square Sent (or Absent, if it moved), which nothing reads, and the
-    /// latest fill's landing writes them again before the word says read. A
-    /// mapping still on its way is waited for, looked at only when a turn
-    /// runs: nothing asks a turn for it. The turn's squares are done with
-    /// here.
+    /// A square asked takes a free buffer of `READS`, which maps once at a
+    /// time and lands whatever fill it carried. One that landed for the
+    /// square's latest fill marks it read: the kernel's word takes `ticket |
+    /// DONE`. One that landed for an earlier fill is discarded, and the
+    /// latest fill copied again: its bytes went into the square's cells while
+    /// the kernel holds the square Sent (or Absent, if it moved), which
+    /// nothing reads, and the latest fill's landing writes them again before
+    /// the word says read. A landed buffer is free again; a square with none
+    /// free waits, Sent, for a later turn. A mapping still on its way is
+    /// waited for, looked at only when a turn runs: nothing asks a turn for
+    /// it. The turn's squares are done with here.
     ///
     /// On a device, a mapping that completes after the last asked turn is
     /// seen at the next turn: the host learns of it only by polling the
@@ -1202,29 +1214,39 @@ impl ScreenCellsPass {
     fn read_back(&mut self, g: &Gpu) {
         let Some(c) = self.ground.as_mut() else { return };
         c.fresh_len = 0;
-        let mut copy = None;
-        for i in 0..SQUARES as usize {
-            let (back, word) = (c.asked[i], c.mapping[i]);
-            if back.ticket == 0 || word != 0 && word & DONE == 0 {
+        for k in 0..READS {
+            let (s, ticket) = c.held[k];
+            if s == FREE || c.mapping[k] & DONE == 0 {
                 continue;
             }
-            if word == back.ticket | DONE {
+            let back = &mut c.asked[s as usize];
+            if back.ticket == ticket {
                 // SAFETY: the kernel's word for the square, which it handed
                 // with this fill (pxl-kernel layer/terrain/window.rs).
-                unsafe { *ptr_at::<u32>(back.word as usize) = word };
-                c.asked[i].ticket = 0;
+                unsafe { *ptr_at::<u32>(back.word as usize) = ticket | DONE };
+                back.ticket = 0;
+            }
+            c.held[k] = (FREE, 0);
+        }
+        let mut copy = None;
+        let mut taken = [false; READS];
+        let mut free = 0;
+        for s in 0..SQUARES {
+            let ticket = c.asked[s as usize].ticket;
+            if ticket == 0 || c.held.iter().any(|h| h.0 == s) {
                 continue;
             }
+            let Some(k) = (free..READS).find(|&k| c.held[k].0 == FREE) else { break };
+            free = k + 1;
             let e = *copy.get_or_insert_with(|| g.encoder());
-            g.copy_buffer(e, (c.ground, i as u32 * SQUARE_BYTES + HEIGHTS_AT * 4), (c.reads[i], 0), BACK_WORDS * 4);
+            g.copy_buffer(e, (c.ground, s * SQUARE_BYTES + HEIGHTS_AT * 4), (c.reads[k], 0), BACK_WORDS * 4);
+            (c.held[k], taken[k]) = ((s, ticket), true);
         }
         let Some(e) = copy else { return };
         g.submit(e);
-        for i in 0..SQUARES as usize {
-            let (back, word) = (c.asked[i], c.mapping[i]);
-            if back.ticket != 0 && (word == 0 || word & DONE != 0) {
-                g.map_read(c.reads[i], 0, BACK_WORDS * 4, back.cells, &mut c.mapping[i], back.ticket);
-            }
+        for k in (0..READS).filter(|&k| taken[k]) {
+            let (s, ticket) = c.held[k];
+            g.map_read(c.reads[k], 0, BACK_WORDS * 4, c.asked[s as usize].cells, &mut c.mapping[k], ticket);
         }
     }
 

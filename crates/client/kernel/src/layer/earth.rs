@@ -18,7 +18,7 @@ use xpute_guest::mem::heap::Block;
 
 use crate::io::demand::{Phases, Stream};
 use crate::io::failure::Failure;
-use crate::layer::kept::Kept;
+use crate::layer::kept::{Kept, Offered};
 use crate::layer::residency::Residency;
 use crate::layer::{Asks, Base};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -75,7 +75,10 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
         }
     }
     // A packet `receive` read reads again.
-    kept.send(on, &mut |record, pkt| earth::decode(pkt).map_or(true, |texels| write(record, texels)));
+    kept.send(on, &mut |record, pkt| match earth::decode(pkt).map(|texels| write(record, texels)) {
+        Err(_) | Ok(true) => Offered::Taken,
+        Ok(false) => Offered::Full,
+    });
 }
 
 /// The floor's tiles (`floor`, the view's) at the top as a window, its south-west tile first, and
