@@ -11,6 +11,7 @@ use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::sched::tick::TickReport;
 
+use crate::io::demand::Stream;
 use crate::io::request::stream_counts;
 use crate::layer::Base;
 use crate::profiler::frame::{DeviceSample, FrameSample, GpuSample, HeapSample, TileSample};
@@ -86,10 +87,7 @@ pub fn profiler_frame(t: FrameTurn) {
     }
     tiles.place = PlaceTile::residency().held().count() as f64;
     let (worst_effect_ms, worst_effect) = crate::turn::worst_effect();
-    let [(waiting_terrain, out_terrain), (waiting_place, out_place)] = [TerrainTile::STREAM, PlaceTile::STREAM].map(|s| {
-        let (waiting, out) = stream_counts(s);
-        (f64::from(waiting), f64::from(out))
-    });
+    let counts = Stream::ALL.map(stream_counts);
     let record = FrameSample {
         t: now(),
         display_ms: t.display_ms,
@@ -107,10 +105,8 @@ pub fn profiler_frame(t: FrameTurn) {
         tiles,
         heap: heap_sample(),
         rings,
-        waiting_terrain,
-        out_terrain,
-        waiting_place,
-        out_place,
+        waiting: counts.map(|c| f64::from(c.0)),
+        out: counts.map(|c| f64::from(c.1)),
         terrain_refused,
         // The interval's: its turns' as they end, and its length as the next frame closes it.
         ..FrameSample::default()

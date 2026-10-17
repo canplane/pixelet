@@ -474,10 +474,6 @@ pub fn credits() -> u32 {
     sched().credits()
 }
 
-pub fn counts() -> (u32, u32) {
-    sched().counts()
-}
-
 pub fn stream_counts(stream: Stream) -> (u32, u32) {
     sched().stream_counts(stream)
 }

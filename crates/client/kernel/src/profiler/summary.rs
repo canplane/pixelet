@@ -7,7 +7,7 @@
 use crate::billboard::sheet::billboard_sheet;
 use crate::control::camera::controller;
 use crate::io::failure::Outcome;
-use crate::io::request::{counts, credits};
+use crate::io::request::credits;
 use crate::layer::Base as _;
 use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
@@ -197,16 +197,7 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let (queued, running) = counts();
-    put(
-        out,
-        SUMMARY::fetch::AT,
-        &FetchBlock {
-            queued: queued as f64,
-            running: running as f64,
-            credits: credits() as f64,
-        },
-    );
+    put(out, SUMMARY::fetch::AT, &FetchBlock { credits: credits() as f64 });
 
     let residency = TerrainTile::residency();
     let [admitted, evicted] = residency.churn();

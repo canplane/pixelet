@@ -173,14 +173,10 @@ words!(SheetBlock, SUMMARY::sheet::WORDS,
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FetchBlock {
-    pub queued: f64,
-    pub running: f64,
     pub credits: f64,
 }
 
-words!(FetchBlock, SUMMARY::fetch::WORDS,
-    queued => SUMMARY::fetch::queued, running => SUMMARY::fetch::running, credits => SUMMARY::fetch::credits,
-);
+words!(FetchBlock, SUMMARY::fetch::WORDS, credits => SUMMARY::fetch::credits);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

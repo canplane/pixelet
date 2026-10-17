@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
+import { STREAM_NAMES } from "@/kernel/io/demand.spec.ts";
 import { drawn, MB, n1, pct, tris, valueText, zoomName } from "./lane.ts";
 
 const bytes = (b: number) => valueText("_bytes", b);
@@ -149,8 +150,9 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
       <Head>Requests</Head>
       {f !== null && (
         <>
-          <Row k="terrain waiting/out" v={`${f.last.waiting_terrain}/${f.last.out_terrain}`} warn={f.last.waiting_terrain > 12} />
-          <Row k="place waiting/out" v={`${f.last.waiting_place}/${f.last.out_place}`} warn={f.last.waiting_place > 12} />
+          {STREAM_NAMES.map((name, s) => (f.last.waiting[s] > 0 || f.last.out[s] > 0) && (
+            <Row key={name} k={`${name} waiting/out`} v={`${f.last.waiting[s]}/${f.last.out[s]}`} warn={f.last.waiting[s] > 12} />
+          ))}
         </>
       )}
       {g.tasks.length === 0 && <Note>none in the window</Note>}

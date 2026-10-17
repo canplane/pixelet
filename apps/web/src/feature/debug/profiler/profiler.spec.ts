@@ -22,7 +22,7 @@ export const LIMITS = {
   ZOOMS: 24 as number,
 } as const;
 
-/** One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `door_ms`, `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k in slot k (xpute spec/gpu/api.json `op`, below DESTROY). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, and `_name` for an index into a list of names. */
+/** One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `door_ms`, `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k in slot k (xpute spec/gpu/api.json `op`, below DESTROY). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, and `_name` for an index into a list of names. */
 export const FRAME = {
   t: 0 as number,
   interval_ms: 1 as number,
@@ -63,12 +63,10 @@ export const FRAME = {
   heap_releases: 100 as number,
   ring_cq_peak: 101 as number,
   ring_held_peak: 102 as number,
-  waiting_terrain: 103 as number,
-  out_terrain: 104 as number,
-  waiting_place: 105 as number,
-  out_place: 106 as number,
-  cap_terrain_refused: 107 as number,
-  WORDS: 108 as number,
+  waiting: 103 as number,
+  out: 108 as number,
+  cap_terrain_refused: 113 as number,
+  WORDS: 114 as number,
 } as const;
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it. */
@@ -78,7 +76,7 @@ export const FRAME_GROUPS = {
   frame: ["kind_name", "wake_name", "wake_in_ms"],
   gpu: ["gpu_ms", "gpu_spans", "census", "px"],
   cap: ["cap_terrain_refused"],
-  requests: ["waiting_terrain", "out_terrain", "waiting_place", "out_place"],
+  requests: ["waiting", "out"],
   tiles: ["zoom_tiles", "tiles_place"],
   device: ["buffers", "buffer_mb", "tex_depth_mb", "tex_layers_mb", "gpu_objects"],
   heap: ["heap_peak_bytes", "heap_lent_bytes", "heap_run_bytes", "heap_held_bytes", "heap_range_bytes", "heap_largest_free_bytes", "heap_refusals", "heap_releases"],
@@ -108,9 +106,9 @@ export const TASK = {
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */
 export const WORST = {
   sample: 0 as number,
-  has_prev: 108 as number,
-  prev: 109 as number,
-  WORDS: 217 as number,
+  has_prev: 114 as number,
+  prev: 115 as number,
+  WORDS: 229 as number,
 } as const;
 
 export const SPREAD = {
@@ -176,28 +174,28 @@ export const SUMMARY = {
     heap_peak_delta_bytes: 77 as number,
     census: 78 as number,
     last: 98 as number,
-    WORDS: 206 as number,
+    WORDS: 212 as number,
   },
   /** The interval in progress, which no frame turn has closed yet: its turns and their time, rise to fall. A settled view's turns are here, if any run. */
   open: {
-    AT: 209 as number,
+    AT: 215 as number,
     turns: 0 as number,
     busy_ms: 1 as number,
     WORDS: 2 as number,
   },
   tasks: {
-    AT: 211 as number,
+    AT: 217 as number,
     slots: 0 as number,
     WORDS: 125 as number,
   },
   counters: {
-    AT: 336 as number,
+    AT: 342 as number,
     sheet_repacks: 0 as number,
     sheet_uploads: 1 as number,
     WORDS: 2 as number,
   },
   sheet: {
-    AT: 338 as number,
+    AT: 344 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -206,20 +204,18 @@ export const SUMMARY = {
     WORDS: 5 as number,
   },
   fetch: {
-    AT: 343 as number,
-    queued: 0 as number,
-    running: 1 as number,
-    credits: 2 as number,
-    WORDS: 3 as number,
+    AT: 349 as number,
+    credits: 0 as number,
+    WORDS: 1 as number,
   },
   steps: {
-    AT: 346 as number,
+    AT: 350 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   quality: {
-    AT: 507 as number,
+    AT: 511 as number,
     frames_held: 0 as number,
     admitted: 1 as number,
     evicted: 2 as number,
@@ -227,7 +223,7 @@ export const SUMMARY = {
   },
   /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at. */
   view: {
-    AT: 510 as number,
+    AT: 514 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -244,7 +240,7 @@ export const SUMMARY = {
     cell_want: 13 as number,
     WORDS: 14 as number,
   },
-  WORDS: 524 as number,
+  WORDS: 528 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

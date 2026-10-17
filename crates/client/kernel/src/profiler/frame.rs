@@ -112,11 +112,9 @@ pub struct FrameSample {
     pub tiles: TileSample,
     pub heap: HeapSample,
     pub rings: RingSample,
-    /// Requests waiting for a credit, and out on one, per stream.
-    pub waiting_terrain: f64,
-    pub out_terrain: f64,
-    pub waiting_place: f64,
-    pub out_place: f64,
+    /// Requests waiting for a credit, and out on one, by stream.
+    pub waiting: [f64; STREAMS],
+    pub out: [f64; STREAMS],
     pub terrain_refused: f64,
 }
 
@@ -144,14 +142,14 @@ words!(FrameSample, FRAME::WORDS,
     heap.held_bytes => FRAME::heap_held_bytes, heap.range_bytes => FRAME::heap_range_bytes,
     heap.largest_free_bytes => FRAME::heap_largest_free_bytes, heap.refusals => FRAME::heap_refusals, heap.releases => FRAME::heap_releases,
     rings.cq_peak => FRAME::ring_cq_peak, rings.held_peak => FRAME::ring_held_peak,
-    waiting_terrain => FRAME::waiting_terrain, out_terrain => FRAME::out_terrain,
-    waiting_place => FRAME::waiting_place, out_place => FRAME::out_place,
+    waiting => FRAME::waiting, out => FRAME::out,
     terrain_refused => FRAME::cap_terrain_refused,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
+pub const STREAMS: usize = crate::io::spec::STREAM_NAMES.len();
 pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
 
 const _: () = assert!(
