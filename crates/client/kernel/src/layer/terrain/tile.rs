@@ -1,8 +1,8 @@
 // pxl-kernel/layer/terrain/tile.rs
 
 //! Terrain as a layer of the pyramid; a tile's record is a room in
-//! `.fixed.terrain` for what is read of it whole, its lines and the ways'
-//! bound, decoded into straight from the packet. Its cells are its
+//! `.fixed.terrain` for what is read of it whole, its lines, decoded into
+//! straight from the packet. Its cells are its
 //! windows' (layer/terrain/window.rs), filled off the packet, which is kept
 //! only until the GPU has what they want of it (`kept`). A tile the bake
 //! left as no object is drawn from the tile over it, whose cells there are

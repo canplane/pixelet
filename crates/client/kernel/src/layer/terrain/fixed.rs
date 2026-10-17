@@ -3,9 +3,8 @@
 //! `.fixed.terrain`: the room every resident terrain tile and every held
 //! square lies in, and where a record's bytes are. A plane is one lane of
 //! every frame, or of every square, end to end; planes in order: the
-//! separation's eight and the ways' bound, a tile's; then a square's cells,
-//! its looks, and the word its cells come back under; then the room a fill
-//! works in, once.
+//! separation's eight, a tile's; then a square's cells, its looks, and the
+//! word its cells come back under; then the room a fill works in, once.
 
 use pxl_portable::window::{BACK_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
 use pxl_spec::bake::separation::{MAX_BOXES, MAX_LINES, MAX_POINTS};
@@ -72,10 +71,8 @@ pub const FILL_LANE_BYTES: [u32; 4] = [
     lane(WAYS_SQUARE_SEGMENTS as usize, 8),
 ];
 
-const TILES_BYTES: u32 = SEPARATION_BYTES;
-
 /// Where the fill's room starts, on a cache line.
-const FILL_AT: u32 = lane((TILES_BYTES + SQUARES * (CELLS_LANE_BYTES + LOOK_LANE_BYTES + BACK_LANE_BYTES)) as usize, 1);
+const FILL_AT: u32 = lane((SEPARATION_BYTES + SQUARES * (CELLS_LANE_BYTES + LOOK_LANE_BYTES + BACK_LANE_BYTES)) as usize, 1);
 
 pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_LANE_BYTES);
 
@@ -92,15 +89,15 @@ pub const fn separation_off(record: u32, lane: usize) -> u32 {
 }
 
 pub const fn cells_off(square: u32) -> u32 {
-    TILES_BYTES + square * CELLS_LANE_BYTES
+    SEPARATION_BYTES + square * CELLS_LANE_BYTES
 }
 
 pub const fn looks_off(square: u32) -> u32 {
-    TILES_BYTES + SQUARES * CELLS_LANE_BYTES + square * LOOK_LANE_BYTES
+    SEPARATION_BYTES + SQUARES * CELLS_LANE_BYTES + square * LOOK_LANE_BYTES
 }
 
 pub const fn back_off(square: u32) -> u32 {
-    TILES_BYTES + SQUARES * (CELLS_LANE_BYTES + LOOK_LANE_BYTES) + square * BACK_LANE_BYTES
+    SEPARATION_BYTES + SQUARES * (CELLS_LANE_BYTES + LOOK_LANE_BYTES) + square * BACK_LANE_BYTES
 }
 
 pub const fn fill_off(lane: usize) -> u32 {
