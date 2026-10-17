@@ -31,12 +31,10 @@ use crate::space::coord::zoom::units;
 
 /// What is in a block: the ground's look, a way's or a pier's, or what is
 /// placed, air included (pxl-kernel query/node.rs `drawn` answers which).
-/// Where there is none, it is void. The ground's carries the looks its block
-/// folds: coarser than the leaves a cell folds the cells under it, its color
-/// theirs; at the leaves and finer, its own four times.
+/// Where there is none, it is void.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Block {
-    Ground(GroundId, [GroundId; 4]),
+    Ground(GroundId),
     Placed(u32),
 }
 

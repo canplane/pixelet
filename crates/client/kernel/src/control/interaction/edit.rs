@@ -71,7 +71,7 @@ fn place_value_is_redundant(at: &Q3, size: f64, cube: Cube) -> bool {
     let entry = EntryAt::new(zoom, index_of(zoom, at));
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
     let ground = World::now().previewing(Some(entry), None).block_of(&middle(entry)).exact();
-    matches!(ground, Some(Some(pxl_spec::block::Block::Ground(g, _))) if g == look as u8)
+    matches!(ground, Some(Some(pxl_spec::block::Block::Ground(g))) if g == look as u8)
 }
 
 /// The middle of the cube `at` names.

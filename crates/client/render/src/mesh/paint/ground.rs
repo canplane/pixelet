@@ -47,7 +47,7 @@ pub fn look_words() -> Vec<[u32; 2]> {
 /// What a block that fills is drawn as: its swatch and layer.
 pub fn look(block: Block) -> ([u8; 3], u8) {
     match block {
-        Block::Ground(g, _) => ground(g),
+        Block::Ground(g) => ground(g),
         Block::Placed(state) => PAINTER.look_of(state).or_bug(Errno::ENOTRECOVERABLE),
     }
 }

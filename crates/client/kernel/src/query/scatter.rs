@@ -77,7 +77,7 @@ impl Grounds for Asked<'_, '_> {
             at = self.world.child(&at, (0..3).map(|i| (((c[i] >> s) & 1) as usize) << i).sum());
         }
         match self.world.drawn(&mut at).value().flatten() {
-            Some(Block::Ground(g, _)) => u32::from(g),
+            Some(Block::Ground(g)) => u32::from(g),
             Some(Block::Placed(v)) => PLACED_BLOCK | v,
             None => u32::from(sentinel::void),
         }

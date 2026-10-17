@@ -161,8 +161,8 @@ impl World<'_> {
         let c = b.map(|v| v as i32);
         let (ground, cell, found) = ground::node(&mut reading, cave, &mut shard, &mut place, (zoom, c), [zoom, zoom], true);
         let answer = reading.answer(ground.kind != Kind::Lacks, || {
-            let (g, fold) = window::ways_over(&Windowed, shard, found, cell, zoom, c, ground.block);
-            (g != u32::from(sentinel::void)).then(|| Block::Ground(g as GroundId, fold.map(|v| v as GroundId)))
+            let (g, _) = window::ways_over(&Windowed, shard, found, cell, zoom, c, ground.block);
+            (g != u32::from(sentinel::void)).then_some(Block::Ground(g as GroundId))
         });
         (at.shard, at.ground) = (shard, place);
         answer
