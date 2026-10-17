@@ -153,12 +153,14 @@ pub struct BindGroupLayoutEntry {
     pub layout: BindingLayout,
 }
 
+#[derive(Clone, Copy)]
 pub enum Resource {
     Buffer { buffer: Id, offset: u32, size: Option<u32> },
     Sampler(Id),
     View(Id),
 }
 
+#[derive(Clone, Copy)]
 pub struct BindGroupEntry {
     pub binding: u32,
     pub resource: Resource,
