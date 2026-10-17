@@ -49,7 +49,7 @@ use crate::mesh::paint::ground::look_words;
 use pxl_portable::eye;
 use pxl_portable::ray;
 use pxl_portable::scatter::GROUPS;
-use pxl_spec::block::window::{BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_WORDS, HANDED, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
+use pxl_portable::window::{self, BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_WORDS, HANDED, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::world;
 use xpute_kit::status::bug::OrBug;
@@ -958,7 +958,7 @@ impl ScreenCellsPass {
         });
         let mut fresh = 0;
         (ground.upload)(&mut |q| {
-            let fresh_entry = pxl_portable::window::fresh(q.square, q.place, q.cell);
+            let fresh_entry = window::fresh(q.square, q.place, q.cell);
             if !room(write_buffer_bytes(q.looks) + write_buffer_bytes(q.samples) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&fresh_entry))) {
                 return false;
             }

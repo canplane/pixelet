@@ -190,10 +190,8 @@ impl Grown {
         // The boxes the slots they meet grow again in: the edits, and each
         // cut that moved as it was and as it is.
         let mut boxes = [[0i32; 4]; scatter::BOXES as usize];
-        let mut n = 0;
-        for &e in f.edits.iter().take(scatter::EDITS as usize) {
-            (boxes[n], n) = (e, n + 1);
-        }
+        boxes[..f.edits.len()].copy_from_slice(f.edits);
+        let mut n = f.edits.len();
         for k in [0, eye::CUT_WORDS] {
             let (was, is) = (&self.cuts[k..k + eye::CUT_WORDS], &grows.cuts[k..k + eye::CUT_WORDS]);
             if was != is {
