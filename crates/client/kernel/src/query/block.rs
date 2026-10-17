@@ -82,8 +82,8 @@ impl<'a> World<'a> {
         let mut first = tile.at.map(|v| v << (cell - tile.zoom));
         let x = node.1[0] << (cell - node.0);
         first[0] = x - wrap_index(cell, x - first[0]);
-        let held = self.terrain.cells_held(line, node);
-        self.terrain.cells_of(line).and_then(|own| held.map(|()| Ground { own, beside, tile, first, cell }))
+        let Some(own) = self.terrain.source_of(line) else { return Answer::Nothing(tile) };
+        self.terrain.cells_held(line, node).map(|()| Ground { own, beside, tile, first, cell })
     }
 
     /// The ground of `node`'s cells at `zoom` and `ring` about them, read off

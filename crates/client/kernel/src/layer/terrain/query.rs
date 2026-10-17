@@ -49,36 +49,6 @@ impl<'a> Source<'a> {
     }
 }
 
-/// A tile as the resident tile it is drawn from answers it.
-#[derive(Clone, Copy)]
-pub(crate) struct Drawn<'a> {
-    tile: Tile,
-    pub from: Tile,
-    pub body: &'a TerrainTile,
-    exact: bool,
-}
-
-impl<'a> Drawn<'a> {
-    /// Its tile's cells as they are read from the tile it is drawn from.
-    pub(crate) fn source(&self) -> Source<'a> {
-        let corner = GROUND.cell_at(self.tile, GROUND.cell_index(0, 0));
-        Source {
-            tile: self.body,
-            from: self.from,
-            origin: corner.in_tile_above(self.tile.zoom - self.from.zoom),
-            n: count(GROUND.cell_zoom(self.tile.zoom), GROUND.cell_zoom(self.from.zoom)),
-        }
-    }
-
-    /// Exact where a resident tile says the tile's ground, else coarser.
-    pub(crate) fn answer<T>(&self, v: T) -> Answer<T> {
-        match self.exact {
-            true => Answer::Exact(v),
-            false => Answer::Coarser(v, self.tile),
-        }
-    }
-}
-
 impl Residency<TerrainTile> {
     /// The lowest and highest the ground holds over the column `node`'s own
     /// cells, in leaf cells: the bound over the cells of `line`'s tile, off
@@ -117,22 +87,16 @@ impl Residency<TerrainTile> {
         held(line, coarsest, true, ())
     }
 
-    /// The lines over the tile `line` walked to, read off the tile it is
-    /// drawn from: exact where a resident tile says it, coarser where one
-    /// over it only draws it, the lack where none is held.
-    pub fn cells_of(&self, line: &Line) -> Answer<Source<'_>> {
-        let Some(d) = self.drawn_of(line) else { return Answer::Nothing(line.tile) };
-        d.answer(d.source())
-    }
-
-    /// As `drawn`, its tile's line already walked.
-    pub(crate) fn drawn_of(&self, line: &Line) -> Option<Drawn<'_>> {
+    /// The cells of the tile `line` walked to as the resident tile it is
+    /// drawn from holds them; none where none is held.
+    pub fn source_of(&self, line: &Line) -> Option<Source<'_>> {
         let from = line.drawn?;
-        Some(Drawn {
-            tile: line.tile,
+        let corner = GROUND.cell_at(line.tile, GROUND.cell_index(0, 0));
+        Some(Source {
+            tile: self.get(from)?,
             from,
-            body: self.get(from)?,
-            exact: line.source.is_some(),
+            origin: corner.in_tile_above(line.tile.zoom - from.zoom),
+            n: count(GROUND.cell_zoom(line.tile.zoom), GROUND.cell_zoom(from.zoom)),
         })
     }
 }
@@ -285,7 +249,13 @@ impl Query for Residency<TerrainTile> {
         })
     }
 
+    /// The lines over the node's tile, as `held` says the tile it is drawn
+    /// from: exact where a resident tile says it, else coarser.
     fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Source<'_>> {
-        self.cells_of(&self.cursor(node, cell))
+        let line = self.cursor(node, cell);
+        match self.source_of(&line) {
+            Some(s) => held(&line, GROUND.cell_zoom(s.from.zoom), true, s),
+            None => Answer::Nothing(line.tile),
+        }
     }
 }
