@@ -153,7 +153,7 @@ fn compose() {
     let altitude = e[2];
     v.near = near_clip_at(altitude);
     v.far = far_clip_at(altitude);
-    mat4::perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near, v.far);
+    mat4::perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near);
     let proj = v.proj;
     mat4::mul(&mut v.world_view_proj, &proj, &vm);
     let lvp = v.world_view_proj;

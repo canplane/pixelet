@@ -53,9 +53,6 @@ use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-/// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
-const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
-
 pub(crate) const VIEW_PROJ: usize = FRAME_AT[0];
 const CAMERA_POS: usize = FRAME_AT[1];
 const EDGE_STRENGTH: usize = FRAME_AT[2];
@@ -1480,9 +1477,8 @@ impl Renderer {
 
     fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32]) {
         let s = stage_lane();
-        let (mut a, mut m, mut proj) = (mat4::new(), mat4::new(), mat4::new());
-        a.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
-        mat4::mul(&mut proj, &GL_TO_WGPU, &a);
+        let (mut m, mut proj) = (mat4::new(), mat4::new());
+        proj.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
         // The badges measure their size in view space.
         let b = &mut self.badges;
         put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
@@ -1490,8 +1486,7 @@ impl Renderer {
         b.px_k = (s[STAGE_AT::VIEWPORT + 1] / (2.0 * libm::tan(s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0))) as f32;
 
         let u = &mut self.frame;
-        a.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
-        mat4::mul(&mut m, &GL_TO_WGPU, &a);
+        m.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
         put_mat(u, VIEW_PROJ, &m);
         // Everything is drawn in the eye's frame; positions are taken against the eye
         // in f64 before they are narrowed.
@@ -1802,11 +1797,10 @@ impl Renderer {
             let mut frame = self.frame;
             let u = &mut frame;
             let (mut proj, mut view, mut t, mut m, mut n) = (mat4::new(), mat4::new(), mat4::new(), mat4::new(), mat4::new());
-            mat4::perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, 0.1, 100.0);
+            mat4::perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, 0.1);
             mat4::look_at(&mut view, CASE_EYE, CASE_TARGET, [0.0, 0.0, 1.0]);
             mat4::translation(&mut t, -actor[0], -actor[1], -actor[2]);
-            mat4::mul(&mut m, &GL_TO_WGPU, &proj);
-            mat4::mul(&mut n, &m, &view);
+            mat4::mul(&mut n, &proj, &view);
             mat4::mul(&mut m, &n, &t);
             put_mat(u, VIEW_PROJ, &m);
             u[CAMERA_POS] = (CASE_EYE[0] + actor[0]) as f32;
