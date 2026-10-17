@@ -6,12 +6,14 @@
 //! between its bedrock and its ceiling. Every walk and every edit asks these,
 //! and nothing else decides them.
 
+use pxl_portable::area::Shard;
+use pxl_portable::wrap_index;
 use pxl_spec::block::cube::sentinel;
 use pxl_spec::block::limit::{at_edge, bedrock, ceiling};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::lattice::{Cells, GROUND};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use super::World;
@@ -21,11 +23,15 @@ use pxl_spec::space::coord::q3::{self, Q3};
 impl World<'_> {
     /// Whether the leaf cell under `at` is the service area's and off its
     /// edge (`pxl-spec block/limit.rs` `at_edge`), where the wall stands:
-    /// known before any of its ground arrives.
+    /// known before any of its ground arrives, off its shard's nine as the
+    /// fill lays the wall (pxl-portable `area::gone_ring`), the area's index
+    /// asked once (`Shard::at`).
     pub fn within(&self, at: &Q3) -> bool {
         let [x, y] = [i64::from(at[0]), i64::from(at[1])].map(q3::to_real);
-        let leaf = units(GROUND.cell());
-        !at_edge(|dx, dy| source::past_at([x + dx as f64 * leaf, y + dy as f64 * leaf]))
+        let leaf = GROUND.cell_of(LEAF_ZOOM, &point(x, y, 0.0)).tile().at.map(|v| v as i32);
+        let node = (LEAF_ZOOM, leaf);
+        let shard = Shard::UNKNOWN.at(&source::Declared, node);
+        !at_edge(|dx, dy| shard.past_leaf(node, [wrap_index(LEAF_ZOOM, leaf[0] + dx as i32), leaf[1] + dy as i32]))
     }
 
     /// Whether `space` may hold an edit: every leaf cell under it is the
