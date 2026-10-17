@@ -203,10 +203,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     for (&key, b) in &c.blocks {
         let corner = [key[0] as f64 * BLOCK - moved[0], key[1] as f64 * BLOCK - moved[1]];
         let [zlo, zhi] = b.heights.map(f64::from);
-        let middle = [corner[0] + BLOCK / 2.0, corner[1] + BLOCK / 2.0, (zlo + zhi) / 2.0];
-        let [across, up] = [BLOCK / 2.0 + largest / 2.0, (zhi - zlo) / 2.0 + largest / 2.0];
-        let radius = libm::sqrt(2.0 * across * across + up * up);
-        if !frame.sees(middle, radius) {
+        let reach = largest / 2.0;
+        if !frame.sees_box([corner[0] - reach, corner[1] - reach, zlo - reach], [corner[0] + BLOCK + reach, corner[1] + BLOCK + reach, zhi + reach]) {
             continue;
         }
         // The nearest cloud the view holds, each as the box it stands in.

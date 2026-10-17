@@ -271,8 +271,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     crate::view::observation::cubes(&o, tau, &mut |(zoom, at)| {
         let chunk = Chunk::indexed(zoom, at);
         let b = chunk.region();
-        let center = core::array::from_fn(|k| (b.min[k] + b.max[k]) / 2.0);
-        if frame.sees(center, pxl_spec::space::coord::zoom::units(zoom) * 3f64.sqrt() / 2.0) {
+        if frame.sees_box(b.min, b.max) {
             p.mounted.push((chunk, true, true));
         }
     });

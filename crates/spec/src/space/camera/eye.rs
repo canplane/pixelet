@@ -13,7 +13,9 @@ pub struct Frustum {
 }
 
 impl Frustum {
-    /// Conservative: a sphere near a corner can pass every plane and still lie outside.
+    /// Whether a sphere may show: for a round bound (a box is `sees_box`'s).
+    /// Conservative: a sphere near a corner can pass every plane and still
+    /// lie outside.
     pub fn sees(&self, center: V3, radius: f64) -> bool {
         self.planes.as_chunks::<4>().0.iter().all(|p| v3::dot(&[p[0], p[1], p[2]], &center) + p[3] >= -radius)
     }
@@ -75,7 +77,7 @@ impl Observation {
         let (along, reach_along) = (libm::hypot(gap(b, 0), gap(b, 1)), libm::hypot(reach(b, 0), reach(b, 1)));
         let mut drawn = *b;
         drawn.min[2] -= reach_along * reach_along / (2.0 * self.planet);
-        let seen = !drawn.bounded() || self.frustum.is_none_or(|f| f.sees(drawn.center(), drawn.radius()));
+        let seen = !drawn.bounded() || self.frustum.is_none_or(|f| f.sees_box(drawn.min, drawn.max));
         Measure {
             seen,
             near: libm::hypot(along, gap(&drawn, 2)),
