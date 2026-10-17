@@ -35,7 +35,7 @@ use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use fnv::FnvHashSet;
+use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::bake::tile::place::{stands, PlaceTile, PLACE_FIRST, PLACE_LATTICE, SPACING_CELLS};
 use pxl_spec::space::camera::grid::px_per_unit;
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -74,6 +74,10 @@ struct Placement {
     spare: Vec<(Label, Q3)>,
     /// Markers and lines not ready yet, kept to become so.
     pending: Vec<Label>,
+    /// What was drawn last by the thing it shows, and the labels the badges
+    /// keep: made each run, their room kept.
+    before: FnvHashMap<Thing, Label>,
+    keep: FnvHashSet<Label>,
     /// What the billboard set holds, and the buffer the next run lays out
     /// into, swapped as `labeled` and `spare` are.
     instances: Vec<f32>,
@@ -354,7 +358,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     // What was drawn last by the thing it shows, read once: a marker's
     // words or the line changed, and what was drawn stays until the new one
     // is ready to show.
-    let before: fnv::FnvHashMap<Thing, Label> = drawn_before.iter().filter_map(|&(l, _)| Some((thing(l)?, l))).collect();
+    let before = &mut p.before;
+    before.clear();
+    before.extend(drawn_before.iter().filter_map(|&(l, _)| Some((thing(l)?, l))));
     let mut unlaid = false;
     // Laid out last, so a line wins a tie with a badge (the sort's tiebreak).
     for (label, center, cell_zoom) in drafted.into_iter().chain(shown).chain(said) {
@@ -377,7 +383,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         labeled.push((label, center));
     }
     // The line's slot is kept while it is said, wherever its speaker is.
-    let freed = badge::retain(&labeled.iter().map(|l| l.0).chain(p.pending.iter().copied()).chain(line).collect());
+    p.keep.clear();
+    p.keep.extend(labeled.iter().map(|l| l.0).chain(p.pending.iter().copied()).chain(line));
+    let freed = badge::retain(&p.keep);
     // Painted at render, or laid out by the host, neither of which asks a
     // turn: one looks again, while a label is on its way (`badge::coming`),
     // or once a slot let go may make room for one that had none.
@@ -460,13 +468,13 @@ fn places_in(chunk: Chunk, found: &mut Vec<Shown>) {
     }
     let t = PLACE_LATTICE.read_zoom(chunk.cell_zoom());
     let (z, column) = chunk.column();
-    let tiles: Vec<_> = if t <= z {
-        vec![tile_at(t, ancestor_of(column, z - t))]
+    // The tile over the column, or its tiles under it: `n` a side from the first.
+    let ([x0, y0], n) = if t <= z {
+        (ancestor_of(column, z - t), 1)
     } else {
-        let n = 1i64 << (t - z);
-        let [x0, y0] = first_descendant_of(column, t - z);
-        (y0..y0 + n).filter(|y| tile_rows(t).contains(y)).flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y]))).collect()
+        (first_descendant_of(column, t - z), 1i64 << (t - z))
     };
+    let tiles = (y0..y0 + n).filter(|y| tile_rows(t).contains(y)).flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y])));
     let (h0, h1) = chunk.z_range();
     let detail = GROUND.read_zoom(chunk.cell_zoom());
     let held = PlaceTile::residency();

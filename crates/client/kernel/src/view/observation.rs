@@ -83,7 +83,11 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
     };
     let zoom = coarsest - CHUNK_STEPS;
     let flat = (o.reach * o.reach - over * over).max(0.0).sqrt();
-    let mut stack: Vec<(Zoom, [i64; 2])> = squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)).collect();
+    // Its room kept from one walk to the next.
+    static STACK: Global<Vec<(Zoom, [i64; 2])>> = Global::new();
+    let mut stack = core::mem::take(STACK.get(Vec::new));
+    stack.clear();
+    stack.extend(squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)));
     // Depth first, so each square's ground line steps from its neighbour's.
     let (world, mut lines) = (World::now(), Lines::default());
     while let Some((zoom, xy)) = stack.pop() {
@@ -101,6 +105,7 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
             each((zoom, [xy[0], xy[1], z]));
         }
     }
+    *STACK.get(Vec::new) = stack;
 }
 
 /// The cell zoom the eye's rays draw at `at`: the camera grid's rule at its
