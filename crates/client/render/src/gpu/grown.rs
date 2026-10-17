@@ -16,7 +16,7 @@ use pxl_portable::decor::{COUNTS, DECORS};
 use pxl_portable::eye;
 use pxl_portable::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
 
-use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
+use crate::frame::shader::record::compute;
 use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, release, word_bytes, Gpu};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -55,24 +55,6 @@ pub struct Grows<'a> {
     pub cuts: &'a [u32; eye::CUTS],
     pub filled: u32,
 }
-
-/// The workgroups' sides: `decor_cs`'s, and a record a thread's.
-const GROW_WORKGROUP: u32 = 8;
-const RECORD_WORKGROUP: u32 = 64;
-
-const MARK_GROUP: [u32; 18] = [
-    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE_RW, 5, COMPUTE, STORAGE,
-];
-const GROW_GROUP: [u32; 27] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE, STORAGE_RW, 7, COMPUTE, STORAGE, 8, COMPUTE, STORAGE,
-];
-const COUNT_GROUP: [u32; 18] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE_RW, 5, COMPUTE, STORAGE,
-];
-const ARGS_GROUP: [u32; 12] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE_RW];
-const PLACE_GROUP: [u32; 18] = [
-    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE_RW, 5, COMPUTE, STORAGE,
-];
 
 pub struct Grown {
     mark: Built,
@@ -128,11 +110,11 @@ impl Grown {
         let words = unsafe { core::slice::from_raw_parts(table.as_ptr().cast::<u32>(), core::mem::size_of_val(&table) / 4) };
         g.write_buffer(rows, 0, bytes(words));
         Grown {
-            mark: pipelines.build_compute(g, SHADER_GROWN_MARK, &MARK_GROUP),
-            grow: pipelines.build_compute(g, SHADER_GROWN, &GROW_GROUP),
-            count: pipelines.build_compute(g, SHADER_GROWN_COUNT, &COUNT_GROUP),
-            args_built: pipelines.build_compute(g, SHADER_GROWN_ARGS, &ARGS_GROUP),
-            place: pipelines.build_compute(g, SHADER_GROWN_PLACE, &PLACE_GROUP),
+            mark: pipelines.build_compute(g, SHADER_GROWN_MARK, &compute::DECOR_MARK_GROUP),
+            grow: pipelines.build_compute(g, SHADER_GROWN, &compute::DECOR_GROUP),
+            count: pipelines.build_compute(g, SHADER_GROWN_COUNT, &compute::DECOR_COUNT_GROUP),
+            args_built: pipelines.build_compute(g, SHADER_GROWN_ARGS, &compute::DECOR_ARGS_GROUP),
+            place: pipelines.build_compute(g, SHADER_GROWN_PLACE, &compute::DECOR_PLACE_GROUP),
             groups: [0; 5],
             marks: buffer(word_bytes(scatter::MARKS_WORDS as usize), storage),
             grows: buffer(word_bytes((scatter::GROWS_AT + scatter::EYE_SLOTS * DECORS.len() as u32) as usize), storage | buffer_usage::INDIRECT),
@@ -216,7 +198,8 @@ impl Grown {
         if self.marking {
             g.write_buffer(self.marks, 0, bytes(&[u32::from(all), grows.filled, n as u32, 0]));
             g.write_buffer(self.marks, scatter::MARKS_AT * 4, bytes(boxes[..n].as_flattened()));
-            g.write_buffer(self.grows, 0, bytes(&[(COUNTS as u32).div_ceil(GROW_WORKGROUP), SQUARE_BLOCKS.div_ceil(GROW_WORKGROUP), 0, 0]));
+            let w = compute::DECOR_WORKGROUP;
+            g.write_buffer(self.grows, 0, bytes(&[(COUNTS as u32).div_ceil(w[0]), SQUARE_BLOCKS.div_ceil(w[1]), 0, 0]));
             g.write_buffer(self.shown, 0, bytes(f.shown));
         }
         let p = &mut self.placed;
@@ -288,14 +271,18 @@ impl Grown {
         if self.marking {
             g.set_pipeline(pass, self.mark.pipeline);
             g.set_bind_group(pass, 0, self.groups[0], &[]);
-            g.dispatch(pass, scatter::EYE_SLOTS.div_ceil(RECORD_WORKGROUP), 1, 1);
+            g.dispatch(pass, scatter::EYE_SLOTS.div_ceil(compute::DECOR_MARK_WORKGROUP[0]), 1, 1);
             g.set_pipeline(pass, self.grow.pipeline);
             g.set_bind_group(pass, 0, self.groups[1], &[]);
             g.dispatch_indirect(pass, self.grows, 0);
         }
-        let records = self.room.div_ceil(RECORD_WORKGROUP);
-        for (k, built) in [&self.count, &self.args_built, &self.place].into_iter().enumerate() {
-            let x = if k == 1 { 1 } else { records };
+        let records = |w: [u32; 3]| self.room.div_ceil(w[0]);
+        let passes = [
+            (&self.count, records(compute::DECOR_COUNT_WORKGROUP)),
+            (&self.args_built, 1),
+            (&self.place, records(compute::DECOR_PLACE_WORKGROUP)),
+        ];
+        for (k, (built, x)) in passes.into_iter().enumerate() {
             g.set_pipeline(pass, built.pipeline);
             g.set_bind_group(pass, 0, self.groups[2 + k], &[]);
             g.dispatch(pass, x, 1, 1);

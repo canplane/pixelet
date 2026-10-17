@@ -46,6 +46,7 @@ fn main() {
     const _: () = assert!(pxl_portable::eye::ORIGIN + 2 < 4 && pxl_portable::eye::STEPS < 4);
     let eye = format!("const EYE_ORIGIN: u32 = {}u;\nconst EYE_STEPS: u32 = {}u;\n", pxl_portable::eye::ORIGIN, pxl_portable::eye::STEPS);
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
+    std::fs::write(Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"), compute(dir)).expect("the compute layouts");
     println!("cargo:rerun-if-changed=src/frame/shader");
     println!("cargo:rerun-if-changed=../../portable/src/mask.bits.rs");
 }
@@ -72,6 +73,52 @@ fn stripped(text: &str) -> String {
         }
         out.push_str(code);
         out.push('\n');
+    }
+    out
+}
+
+/// Each generated compute entry's group 0 as its WGSL declares it, a binding
+/// its index, its stages and its kind (frame/shader/record.rs's codes), and
+/// its workgroup: what a pipeline's layout is made of and a dispatch counts
+/// by, read off the one module rust-gpu wrote, never stated again.
+fn compute(dir: &Path) -> String {
+    let mut out = String::new();
+    let mut files: Vec<_> = std::fs::read_dir(dir).expect("the shaders").map(|e| e.expect("a shader").path()).collect();
+    files.sort();
+    for path in files {
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        let Some(stem) = name.strip_suffix(".gen.wgsl") else { continue };
+        let text = std::fs::read_to_string(&path).expect("a generated shader");
+        let lines: Vec<&str> = text.lines().collect();
+        let mut group = Vec::new();
+        let mut workgroup = None;
+        for (k, line) in lines.iter().enumerate() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix("@group(0) @binding(") {
+                let binding: u32 = rest.split(')').next().and_then(|n| n.parse().ok()).expect("a binding's index");
+                let var = lines.get(k + 1).map(|l| l.trim()).unwrap_or_default();
+                let kind = if var.starts_with("var<uniform>") {
+                    "UNIFORM"
+                } else if var.starts_with("var<storage, read_write>") {
+                    "STORAGE_RW"
+                } else if var.starts_with("var<storage>") {
+                    "STORAGE"
+                } else if var.contains("texture_storage_2d_array<r32uint,read_write>") {
+                    "STORAGE_TEXTURE_RW"
+                } else {
+                    panic!("{name}: binding {binding} is of no kind a layout names: {var}");
+                };
+                group.push((binding, kind));
+            }
+            if let Some(rest) = line.strip_prefix("@compute @workgroup_size(") {
+                workgroup = Some(rest.split(')').next().expect("a workgroup").replace(' ', ""));
+            }
+        }
+        group.sort();
+        let upper = stem.to_uppercase();
+        let entries: Vec<String> = group.iter().map(|(b, k)| format!("{b}, COMPUTE, {k}")).collect();
+        out += &format!("pub const {upper}_GROUP: [u32; {}] = [{}];\n", 3 * group.len(), entries.join(", "));
+        out += &format!("pub const {upper}_WORKGROUP: [u32; 3] = [{}];\n", workgroup.expect("an entry's workgroup"));
     }
     out
 }

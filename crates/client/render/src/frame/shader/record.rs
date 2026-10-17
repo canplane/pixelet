@@ -330,6 +330,61 @@ pub use xpute_gpu::spec::SHADER_STAGE::{COMPUTE, FRAGMENT, VERTEX};
 pub const NONE: u32 = 0;
 pub const BOTH: u32 = VERTEX | FRAGMENT;
 
+/// Each generated compute entry's group 0 and its workgroup as its WGSL
+/// declares them (build.rs `compute`): `CAST_GROUP`, `CAST_WORKGROUP` and
+/// so on, by the stem of the entry's file.
+pub mod compute {
+    use super::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM};
+    include!(concat!(env!("OUT_DIR"), "/compute.rs"));
+}
+
+/// `group` with its uniform at `binding` taken at a dynamic offset: how a
+/// host binds it, which the shader does not say.
+pub const fn dynamic<const N: usize>(mut group: [u32; N], binding: u32) -> [u32; N] {
+    let mut k = 0;
+    while k < N {
+        if group[k] == binding && group[k + 2] == UNIFORM {
+            group[k + 2] = UNIFORM_DYNAMIC;
+        }
+        k += 3;
+    }
+    group
+}
+
+/// Whether every entry of `a` is one of `b`'s: a pipeline over `a` takes a
+/// group laid out as `b`.
+pub const fn within<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) -> bool {
+    let mut k = 0;
+    while k < N {
+        let mut found = false;
+        let mut j = 0;
+        while j < M {
+            found |= a[k] == b[j] && a[k + 1] == b[j + 1] && a[k + 2] == b[j + 2];
+            j += 3;
+        }
+        if !found {
+            return false;
+        }
+        k += 3;
+    }
+    true
+}
+
+/// Whether two groups are one layout, entry for entry.
+pub const fn same<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) -> bool {
+    if N != M {
+        return false;
+    }
+    let mut k = 0;
+    while k < N {
+        if a[k] != b[k] {
+            return false;
+        }
+        k += 1;
+    }
+    true
+}
+
 use crate::frame::draw::{
     PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
     PIPELINE_SKINNED,

@@ -17,7 +17,7 @@ use crate::frame::draw::{
     census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
     PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
-use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM, UNIFORM_DYNAMIC};
+use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
     FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_FACE, SHADER_HEIGHTS, SHADER_START, SHADER_WAYS,
 };
@@ -870,39 +870,16 @@ impl Read {
 /// A square on the GPU, in bytes.
 const SQUARE_BYTES: u32 = SQUARE_WORDS * 4;
 
-/// The cast's group 0: the eye, the window, the tiles' frames, the rays it
-/// writes, the served shards, the overwrites and where its rays start.
-const CAST_GROUP: [u32; 21] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    1,
-    COMPUTE,
-    STORAGE,
-    2,
-    COMPUTE,
-    STORAGE,
-    3,
-    COMPUTE,
-    STORAGE_TEXTURE_RW,
-    5,
-    COMPUTE,
-    STORAGE,
-    6,
-    COMPUTE,
-    STORAGE,
-    7,
-    COMPUTE,
-    STORAGE_RW,
-];
-
-/// `heights_cs`'s group 0: the fresh frames and the frames it writes the
-/// cells of.
-const HEIGHTS_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
-
-/// `bound_cs`'s and `ways_cs`'s group 0: its level or its pass, the fresh
-/// frames and the frames it writes the levels or the runs of.
-const BOUND_GROUP: [u32; 9] = [0, COMPUTE, UNIFORM_DYNAMIC, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE_RW];
+/// `bound_cs`'s and `ways_cs`'s one group: its level or its pass at a
+/// dynamic offset (`SLOT_STRIDE`), the fresh frames and the frames it writes
+/// the levels or the runs of. The cast's, `start_cs`'s and `face_cs`'s one
+/// group is the cast's, which binds all theirs.
+const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
+const _: () = assert!(same(compute::BOUND_GROUP, compute::WAYS_GROUP), "the levels' and the ways' passes share a group");
+const _: () = assert!(
+    within(compute::START_GROUP, compute::CAST_GROUP) && within(compute::FACE_GROUP, compute::CAST_GROUP),
+    "the start and the face bits bind the cast's group"
+);
 
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
 /// device's dynamic offset alignment.
@@ -960,7 +937,7 @@ impl ScreenCellsPass {
             let (storage, squares) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, SQUARES);
             let frames_buffer = buffer(squares * SQUARE_BYTES, storage | buffer_usage::COPY_SRC);
             let fresh = buffer(word_bytes((FRESH_WORDS * squares) as usize), storage);
-            let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &HEIGHTS_GROUP);
+            let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &compute::HEIGHTS_GROUP);
             let heights_group = g.bind_group(heights_built.layouts[0], &[buffer_entry(0, fresh), buffer_entry(1, frames_buffer)]);
             // Each slot's number in it, written once: `bound_cs`'s level,
             // `ways_cs`'s pass.
@@ -1021,9 +998,9 @@ impl ScreenCellsPass {
             return;
         };
         if self.cast.is_none() {
-            let built = pipelines.build_compute(g, SHADER_CAST, &CAST_GROUP);
-            let start_built = pipelines.build_compute(g, SHADER_START, &CAST_GROUP);
-            let face_built = pipelines.build_compute(g, SHADER_FACE, &CAST_GROUP);
+            let built = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);
+            let start_built = pipelines.build_compute(g, SHADER_START, &compute::CAST_GROUP);
+            let face_built = pipelines.build_compute(g, SHADER_FACE, &compute::CAST_GROUP);
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             let c = CastBuffers {
@@ -1150,20 +1127,21 @@ impl ScreenCellsPass {
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_pipeline(pass, c.heights_built.pipeline);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
-        g.dispatch(pass, SQUARE.div_ceil(BOUND_WORKGROUP), SQUARE.div_ceil(BOUND_WORKGROUP), c.fresh_len);
+        let w = compute::HEIGHTS_WORKGROUP;
+        g.dispatch(pass, SQUARE.div_ceil(w[0]), SQUARE.div_ceil(w[1]), c.fresh_len);
         // A column a thread, over the tops just drawn: the columns' runs
         // counted, summed a square a thread, written, before the levels
         // fold them.
         g.set_pipeline(pass, c.ways_built.pipeline);
         for k in 0..3 {
             g.set_bind_group(pass, 0, c.ways_group, &[k * SLOT_STRIDE]);
-            let across = if k == 1 { 1 } else { SQUARE_CELLS / WAYS_WORKGROUP };
+            let across = if k == 1 { 1 } else { SQUARE_CELLS / compute::WAYS_WORKGROUP[0] };
             g.dispatch(pass, across, 1, c.fresh_len);
         }
         g.set_pipeline(pass, c.bound_built.pipeline);
         for j in 0..=LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
-            let side = (SQUARE >> j).div_ceil(BOUND_WORKGROUP);
+            let side = (SQUARE >> j).div_ceil(compute::BOUND_WORKGROUP[0]);
             g.dispatch(pass, side, side, c.fresh_len);
         }
         g.end(pass);
@@ -1238,7 +1216,8 @@ impl ScreenCellsPass {
     /// candidate a thread.
     fn dispatch(&self, g: &Gpu, encoder: u32, cast: &mut Stamp, faces: &mut Stamp) {
         let Some(c) = self.cast.as_ref().filter(|_| self.kind == FrameKind::cast) else { return };
-        let cells = c.size.map(|n| n.div_ceil(CAST_WORKGROUP));
+        let w = compute::CAST_WORKGROUP;
+        let cells = [c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1])];
         let pass = g.compute_pass(encoder, cast.pass());
         g.set_bind_group(pass, 0, c.group, &[]);
         g.set_pipeline(pass, c.start_built.pipeline);
@@ -1271,13 +1250,6 @@ impl ScreenCellsPass {
         self.group
     }
 }
-
-/// The cast's workgroup, a side: `cast_cs`'s.
-const CAST_WORKGROUP: u32 = 8;
-/// `heights_cs`'s and `bound_cs`'s workgroup, a side, a frame a layer.
-const BOUND_WORKGROUP: u32 = 8;
-/// `ways_cs`'s workgroup: columns in a row.
-const WAYS_WORKGROUP: u32 = 64;
 
 /// The cast's group 0 over `bound`: the eye, the window, the tiles' frames,
 /// the surface's rays, the served shards, the overwrites and where its rays
