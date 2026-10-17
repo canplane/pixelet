@@ -10,10 +10,7 @@ use pxl_spec::space::camera::grid::CHUNK_STEPS;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::wrap_cell;
-use pxl_spec::space::coord::zoom::{index_of, units, Zoom, SHARD_ZOOM};
-use pxl_spec::space::hierarchy::tree::{child_of, parent_of};
-
-pub const CHILDREN: usize = 8;
+use pxl_spec::space::coord::zoom::{index_of, units, Zoom};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Chunk {
@@ -29,20 +26,6 @@ impl Chunk {
 
     pub fn indexed(zoom: Zoom, at: [i64; 3]) -> Chunk {
         Chunk { zoom, at }
-    }
-
-    /// As the bounds of a range in chunk order.
-    pub fn column_holding(zoom: Zoom, at: &Q3) -> std::ops::RangeInclusive<Chunk> {
-        let [x, y, _] = index_of(zoom, at);
-        Chunk { zoom, at: [x, y, i64::MIN] }..=Chunk { zoom, at: [x, y, i64::MAX] }
-    }
-
-    pub fn beside(self, dx: i64, dy: i64, dh: i64) -> Chunk {
-        let [x, y, h] = self.at;
-        Chunk {
-            zoom: self.zoom,
-            at: [x + dx, y + dy, h + dh],
-        }
     }
 
     pub fn zoom(self) -> Zoom {
@@ -93,25 +76,5 @@ impl Chunk {
     pub fn column(self) -> (Zoom, [i64; 2]) {
         let [x, y, _] = self.at;
         (self.zoom, [x, y])
-    }
-
-    /// None for a 3D root.
-    pub fn parent(self) -> Option<Chunk> {
-        (self.zoom > SHARD_ZOOM).then(|| Chunk {
-            zoom: self.zoom - 1,
-            at: parent_of(self.at),
-        })
-    }
-
-    pub fn ancestors(self) -> impl Iterator<Item = Chunk> {
-        std::iter::successors(self.parent(), |k| k.parent())
-    }
-
-    /// In `slot_of`'s order.
-    pub fn children(self) -> [Chunk; CHILDREN] {
-        std::array::from_fn(|slot| Chunk {
-            zoom: self.zoom + 1,
-            at: child_of(self.at, slot),
-        })
     }
 }
