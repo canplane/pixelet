@@ -20,7 +20,7 @@ use crate::frame::draw::{
 use crate::frame::screen_cells::SCREEN_CELLS_MAX;
 use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
 use crate::frame::shader::record::{
-    FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_START, SHADER_WAYS,
+    FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_FACE, SHADER_HEIGHTS, SHADER_START, SHADER_WAYS,
 };
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
@@ -94,6 +94,7 @@ const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
 const SPAN_CASES: usize = GpuSpanName::cases as usize;
 const SPAN_FILL: usize = GpuSpanName::fill as usize;
 const SPAN_CAST: usize = GpuSpanName::cast as usize;
+const SPAN_FACE: usize = GpuSpanName::face as usize;
 
 type Frame = [f32; FRAME_FLOATS];
 
@@ -794,8 +795,10 @@ struct GroundBuffers {
 /// What the GPU's cast reads and the lane it writes.
 struct CastBuffers {
     built: Built,
-    /// Where its rays start, asked before it (`start_cs`), over its group.
+    /// Where its rays start, asked before it (`start_cs`), and its blocks'
+    /// face bits, asked after it (`face_cs`), over its group.
     start_built: Built,
+    face_built: Built,
     starts: u32,
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
@@ -1043,11 +1046,13 @@ impl ScreenCellsPass {
         if self.cast.is_none() {
             let built = pipelines.build_compute(g, SHADER_CAST, &CAST_GROUP);
             let start_built = pipelines.build_compute(g, SHADER_START, &CAST_GROUP);
+            let face_built = pipelines.build_compute(g, SHADER_FACE, &CAST_GROUP);
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             let c = CastBuffers {
                 built,
                 start_built,
+                face_built,
                 starts: buffer(word_bytes(START_WORDS), buffer_usage::STORAGE),
                 group: 0,
                 bound: [0; 8],
@@ -1252,15 +1257,22 @@ impl ScreenCellsPass {
 
     /// The GPU's cast into the lane, a ray a cell, where it runs; then the
     /// decor the ground grows over the same world, a candidate a thread.
-    fn dispatch(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) {
+    fn dispatch(&self, g: &Gpu, encoder: u32, cast: &mut Stamp, faces: &mut Stamp) {
         let Some(c) = self.cast.as_ref().filter(|_| self.kind == FrameKind::cast) else { return };
-        let pass = g.compute_pass(encoder, stamp.pass());
+        let cells = [c.across[0].div_ceil(CAST_WORKGROUP), c.across[1].div_ceil(CAST_WORKGROUP)];
+        let pass = g.compute_pass(encoder, cast.pass());
         g.set_bind_group(pass, 0, c.group, &[]);
         g.set_pipeline(pass, c.start_built.pipeline);
         g.dispatch(pass, 1, 1, 1);
         g.set_pipeline(pass, c.built.pipeline);
-        g.dispatch(pass, c.across[0].div_ceil(CAST_WORKGROUP), c.across[1].div_ceil(CAST_WORKGROUP), 1);
+        g.dispatch(pass, cells[0], cells[1], 1);
         c.grown.dispatch(g, pass);
+        g.end(pass);
+        // A kernel a job: the face bits over what the cast found.
+        let pass = g.compute_pass(encoder, faces.pass());
+        g.set_bind_group(pass, 0, c.group, &[]);
+        g.set_pipeline(pass, c.face_built.pipeline);
+        g.dispatch(pass, cells[0], cells[1], 1);
         g.end(pass);
     }
 
@@ -1668,7 +1680,8 @@ impl Renderer {
         // for the stream is dropped whole and the screen keeps the last.
         frame_begin();
         let encoder = g.encoder();
-        self.screen.dispatch(g, encoder, &mut stamps[SPAN_CAST]);
+        let [cast, faces] = stamps.get_disjoint_mut([SPAN_CAST, SPAN_FACE]).or_bug(Errno::ENOTRECOVERABLE);
+        self.screen.dispatch(g, encoder, cast, faces);
         if !still {
             if self.screen_ao {
                 let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);

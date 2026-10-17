@@ -61,7 +61,10 @@ pub const SHADER_BLIT: u32 = 34;
 /// generated with the cast from pxl-portable's `cast::start`: its one
 /// compute entry.
 pub const SHADER_START: u32 = 35;
-pub const SHADERS: u32 = 36;
+/// The face bits of each block the cast found, over the lane, generated
+/// with the cast from pxl-portable's `mask`: its one compute entry.
+pub const SHADER_FACE: u32 = 36;
+pub const SHADERS: u32 = 37;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -74,6 +77,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
     match kind {
         SHADER_CAST => "cast_cs",
         SHADER_START => "start_cs",
+        SHADER_FACE => "face_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHTS => "heights_cs",
         SHADER_GROWN => "decor_cs",
@@ -205,6 +209,7 @@ pub fn source(kind: u32) -> &'static str {
         // As generated: no constants of ours before it to clash with its names.
         SHADER_CAST => include_str!(concat!(env!("OUT_DIR"), "/shader/cast.gen.wgsl")),
         SHADER_START => include_str!(concat!(env!("OUT_DIR"), "/shader/start.gen.wgsl")),
+        SHADER_FACE => include_str!(concat!(env!("OUT_DIR"), "/shader/face.gen.wgsl")),
         SHADER_BOUND => include_str!(concat!(env!("OUT_DIR"), "/shader/bound.gen.wgsl")),
         SHADER_HEIGHTS => include_str!(concat!(env!("OUT_DIR"), "/shader/heights.gen.wgsl")),
         SHADER_GROWN => include_str!(concat!(env!("OUT_DIR"), "/shader/decor.gen.wgsl")),

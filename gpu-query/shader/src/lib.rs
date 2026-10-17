@@ -23,7 +23,7 @@ use pxl_portable::scatter::{self, drawn, Grounds, GROWN_AT, GROWN_WORDS, PLACED_
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS, WAYS_AT};
 use pxl_portable::window::{Ran, FRESH_WORDS, RUNS_AT};
 use pxl_portable::ways;
-use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM};
+use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
@@ -427,8 +427,9 @@ impl Grounds for Growing<'_> {
 
 /// The lane's cell for a ray: the value it stopped on, its kind (ground or
 /// placed) and the face it entered through, then how far as f32 bits, then
-/// the nodes its descent asked about; where it met nothing, the first two
-/// zero.
+/// the block's index's low bits, for `face_cs` to find the block by and
+/// write its face bits over, then the nodes its descent asked about; where
+/// it met nothing, the first two zero.
 fn word(world: &mut World, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> UVec4 {
     if met.ends != Ends::Stop {
         return UVec4::new(0, 0, 0, met.visits);
@@ -439,11 +440,92 @@ fn word(world: &mut World, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool)
     let [value, folds] = s.block;
     let kind = if value & PLACED_BLOCK != 0 { 2 } else { 1 };
     let (zoom, c) = (s.place.zoom, s.place.node(ray));
-    // The hit's face bits, the blocks about it asked at its zoom, each once
-    // (pxl-portable `mask`), as a chunk's box takes them.
-    let filled = world.about(zoom, c);
     let w3 = if steps { met.visits } else { folds };
-    UVec4::new(value & 0xffff | kind << 16 | face << 18 | zoom << 21, s.t.to_bits(), mask::mask(filled), w3)
+    UVec4::new(value & 0xffff | kind << 16 | face << 18 | zoom << 21, s.t.to_bits(), low_bits(c), w3)
+}
+
+/// Bits of a block's index the lane keeps on each axis, enough to tell it
+/// from the block its ray's hit point rounds to, which f32 holds to within
+/// a few blocks.
+const LOW_BITS: u32 = 10;
+
+/// The greatest integer at most `v`.
+fn floor(v: f32) -> i32 {
+    let i = v as i32;
+    if (i as f32) > v { i - 1 } else { i }
+}
+
+fn low_bits(c: [i32; 3]) -> u32 {
+    let m = (1 << LOW_BITS) - 1;
+    (c[0] & m) as u32 | ((c[1] & m) as u32) << LOW_BITS | ((c[2] & m) as u32) << (2 * LOW_BITS)
+}
+
+/// The block at `zoom` a ray stopped on, entering across `axis`, `t` along
+/// it, its index's low bits `low` (`low_bits`): the block its hit point
+/// rounds to, moved half a block into it across the face it entered,
+/// corrected to the one whose low bits the cast kept.
+fn hit_block(ray: &cast::Ray, t: f32, axis: u32, zoom: u32, low: u32) -> [i32; 3] {
+    let side = cast::Place { zoom, corner: [0; 3] }.side();
+    let half = (1 << LOW_BITS) / 2;
+    let mut c = [0; 3];
+    let mut a = 0;
+    while a < 3 {
+        let d = pxl_portable::axis(ray.direction, a as u32);
+        let into = if a as u32 == axis { if d > 0.0 { 0.5 * side } else { -0.5 * side } } else { 0.0 };
+        let rel = ray.frac[a] + d * t + into;
+        let near = if zoom <= UNIT_ZOOM {
+            (ray.unit[a] + floor(rel)) >> (UNIT_ZOOM - zoom)
+        } else {
+            (ray.unit[a] << (zoom - UNIT_ZOOM)) + floor(rel * (1 << (zoom - UNIT_ZOOM)) as f32)
+        };
+        let kept = ((low >> (LOW_BITS * a as u32)) & ((1 << LOW_BITS) - 1)) as i32;
+        c[a] = near + ((kept - near + half) & ((1 << LOW_BITS) - 1)) - half;
+        a += 1;
+    }
+    [wrap_index(zoom, c[0]), c[1], c[2]]
+}
+
+/// The face bits of each ray's block the cast found (`word`): the blocks
+/// about it asked at its zoom, each once (pxl-portable `mask`), as a
+/// chunk's box takes them, over the lane's index bits. A pass of its own, so
+/// the cast's kernel holds the descent alone.
+#[spirv(compute(threads(8, 8, 1)))]
+pub fn face_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] lane: &mut [UVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] tangents: &[f32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+) {
+    let across = eye.across_range;
+    if id.x >= across.x || id.y >= across.y {
+        return;
+    }
+    let i = (1 + id.y * across.x + id.x) as usize;
+    if i >= lane.len() {
+        return;
+    }
+    // SAFETY: just bounded by the lane's own length.
+    let w = unsafe { *lane.get_unchecked(i) };
+    if (w.x >> 16) & 3 == 0 {
+        return;
+    }
+    let (ray, _) = eye_ray(eye, at(tangents, id.x), at(tangents, across.x + id.y));
+    let mut world = World {
+        window,
+        ground,
+        shards,
+        overwrites,
+        eye,
+    };
+    let (axis, zoom) = (((w.x >> 18) & 7) / 2, (w.x >> 21) & 63);
+    let c = hit_block(&ray, f32::from_bits(w.y), axis, zoom, w.z);
+    let filled = world.about(zoom, c);
+    // SAFETY: as above.
+    unsafe { *lane.get_unchecked_mut(i) = UVec4::new(w.x, w.y, mask::mask(filled), w.w) };
 }
 
 /// Where every ray from the eye starts alike (pxl-portable `cast::start`),
