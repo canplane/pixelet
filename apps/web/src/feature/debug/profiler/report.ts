@@ -62,9 +62,7 @@ function windowSection(r: ProfilerReport): string[] {
     `  interval ${spread(f.interval)} ms   missed ${f.missed} (${pct(f.missed, f.moving)}% of moving frames)`,
     `  busy    ${spread(f.busy)} ms   (the interval's turns, rise to fall)`,
     `  off-turn ${spread(f.off_turn)} ms   long ${f.long} (turns past their interval)`,
-    `  tick    ${spread(f.tick)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${
-      f.phases.map((p) => `${p.name} ${n1(p.p95)}`).join("  ")
-    }`,
+    `  tick    ${spread(f.tick)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${f.phases.map((p) => `${p.name} ${n1(p.p95)}`).join("  ")}`,
     `  tasks   ${spread(f.tasks)} ms   (the turns' tasks past the frame)`,
     `  gpu     ${spread(f.gpu)} ms${last.gpu_ms === 0 ? "   (no timestamps: no renderer yet, or the device keeps none)" : ""}`,
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,

@@ -59,8 +59,7 @@ function frameArgs(f: Frame): Args {
         args[`census_${names[i]}_draws`] = d;
         args[`census_${names[i]}_tris`] = t;
       });
-    }
-    else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed_n(v, 2)));
+    } else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed_n(v, 2)));
   }
   // Vsync wait, compositor, GPU, GC, the shell's glue.
   return args;

@@ -168,7 +168,7 @@ pub fn stage_render() {
             ms: stat.gpu_ms,
             spans: stat.gpu_spans,
             census: stat.census,
-            px: stat.px,
+            world_px: stat.world_px,
         },
         DeviceSample {
             blocks: stat.blocks,

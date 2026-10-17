@@ -27,7 +27,8 @@ pub struct GpuSample {
     pub spans: [f64; GPU_SPANS],
     /// Every draw by its pipeline: the frame's draws and triangles are its sums.
     pub census: DrawCensus,
-    pub px: f64,
+    /// The world surface's pixels.
+    pub world_px: f64,
 }
 
 #[repr(C)]
@@ -137,7 +138,7 @@ words!(FrameSample, FRAME::WORDS,
     worst_effect_ms => FRAME::worst_effect_ms, worst_effect_name => FRAME::worst_effect_name,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
     gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans,
-    gpu.census => FRAME::census, gpu.px => FRAME::px,
+    gpu.census => FRAME::census, gpu.world_px => FRAME::world_px,
     device.blocks => FRAME::blocks, device.blocks_mb => FRAME::blocks_mb,
     device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb, device.objects => FRAME::gpu_objects,
     tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,

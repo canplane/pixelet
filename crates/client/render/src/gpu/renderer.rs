@@ -227,7 +227,7 @@ pub struct FrameStat {
     pub block_bytes: f64,
     pub depth_mb: f64,
     pub layers_mb: f64,
-    pub px: f64,
+    pub world_px: f64,
     /// Every draw's, counted only while timed: its sums are the frame's
     /// draws and triangles.
     pub census: DrawCensus,
@@ -1793,7 +1793,7 @@ impl Renderer {
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the badges' regions'.
             depth_mb: round((px * 4.0 + self.ao.depth_bytes() + self.badges.depth_bytes()) / MB),
             layers_mb: round(self.layers.bytes as f64 / MB),
-            px,
+            world_px: px,
             census,
             gpu_spans,
         }

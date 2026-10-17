@@ -60,7 +60,7 @@ pub mod LIMITS {
     pub const KEYS: &[&str] = &["REASONS", "STEP_SLOTS", "ZOOMS"];
 }
 
-/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `blocks` and `blocks_mb` are the renderer's block table (pxl-render gpu/renderer.rs `Blocks`), and the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, and `_name` for an index into a list of names.
+/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `blocks` and `blocks_mb` are the renderer's block table (pxl-render gpu/renderer.rs `Blocks`), and the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, `_px`, and `_name` for an index into a list of names.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const interval_ms: u32 = 1;
@@ -82,7 +82,7 @@ pub mod FRAME {
     pub const gpu_ms: u32 = 21;
     pub const gpu_spans: u32 = 22;
     pub const census: u32 = 30;
-    pub const px: u32 = 50;
+    pub const world_px: u32 = 50;
     pub const blocks: u32 = 51;
     pub const blocks_mb: u32 = 52;
     pub const tex_depth_mb: u32 = 53;
@@ -125,7 +125,7 @@ pub mod FRAME {
         "gpu_ms",
         "gpu_spans",
         "census",
-        "px",
+        "world_px",
         "blocks",
         "blocks_mb",
         "tex_depth_mb",
@@ -155,7 +155,7 @@ pub mod FRAME_GROUPS {
     pub const time: &[&str] = &["t", "interval_ms", "display_ms", "settled", "turns", "busy_ms", "budget_ms"];
     pub const turn: &[&str] = &["effects_ms", "tick_ms", "phases", "stage_ms", "tasks_ms", "worst_effect_ms", "worst_effect_name"];
     pub const frame: &[&str] = &["kind_name", "wake_name", "wake_in_ms"];
-    pub const gpu: &[&str] = &["gpu_ms", "gpu_spans", "census", "px"];
+    pub const gpu: &[&str] = &["gpu_ms", "gpu_spans", "census", "world_px"];
     pub const cap: &[&str] = &["cap_terrain_refused"];
     pub const requests: &[&str] = &["waiting", "out"];
     pub const tiles: &[&str] = &["zoom_tiles", "tiles_place"];

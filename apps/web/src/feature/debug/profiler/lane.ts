@@ -2,8 +2,9 @@
 
 /**
  * One table of lanes the report, panel and trace all read. A lane's unit is
- * its name's suffix (`_ms`, `_mb`, `_zooms`, `_name`), so a lane the kernel
- * adds needs no word here; only list lanes are spelled out.
+ * its name's suffix (`_ms`, `_mb`, `_bytes`, `_px`, `_name`, as profiler.json
+ * FRAME says), so a lane the kernel adds needs no word here; only list
+ * lanes are spelled out.
  */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
@@ -63,7 +64,7 @@ export function frameAt(words: ArrayLike<f64>, o: u32): Frame {
   return f as Frame;
 }
 
-type FrameGroup = Exclude<keyof typeof FRAME_GROUPS, "$doc">;
+export type FrameGroup = Exclude<keyof typeof FRAME_GROUPS, "$doc">;
 export const GROUPS = Object.keys(FRAME_GROUPS).filter((g) => !g.startsWith("$")) as FrameGroup[];
 
 export const n1 = (n: number) => fixed(n ?? 0, 1);
@@ -80,12 +81,6 @@ export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(r
 /** A frame's draws and triangles: its census's sums, every pipeline a draw names. */
 export const drawn = (f: Frame): [f64, f64] => f.census.reduce(([d, t], [cd, ct]) => [d + cd, t + ct], [0, 0]);
 
-export function zoomsText(bits: f64): string {
-  const out: string[] = [];
-  for (let z = 0; z < 32; z++) if (bits & (1 << z)) out.push(zoomName(z));
-  return out.length > 0 ? out.join(",") : "-";
-}
-
 const NAME_TABLES: Record<string, readonly string[]> = { worst_effect_name: EFFECT_NAMES, kind_name: FRAME_KINDS, wake_name: WAKES };
 
 export function valueText(name: string, v: f64): string {
@@ -93,9 +88,7 @@ export function valueText(name: string, v: f64): string {
   if (name.endsWith("_ms")) return `${n1(v)}ms`;
   if (name.endsWith("_mb")) return `${+fixed(v, 1)}MB`;
   if (name.endsWith("_bytes")) return `${+fixed(v / MB, 1)}MB`;
-  if (name.endsWith("_zooms")) return zoomsText(v);
-  if (name === "triangles" || name.endsWith("_tris")) return tris(v);
-  if (name === "px") return `${fixed(v / 1e6, 1)}Mpx`;
+  if (name.endsWith("_px")) return `${fixed(v / 1e6, 1)}Mpx`;
   return Number.isInteger(v) ? String(v) : n1(v);
 }
 
