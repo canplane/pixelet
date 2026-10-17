@@ -12,15 +12,6 @@ export const surface_role = {
   CASE: 1 as number,
 } as const;
 
-/** A bind group entry's kind, the second of its five words (binding, kind,
- * object, offset, size; a size of 0 the rest of the buffer), as gpu/api.rs
- * expands them into xpute's entries. */
-export const resource = {
-  BUFFER: 0 as number,
-  VIEW: 1 as number,
-  SAMPLER: 2 as number,
-} as const;
-
 /** The one place the renderer's calls cross (gpu/api.rs): a stream
  * (xpute-guest ipc/stream.rs) in a range of the kernel's memory, which the
  * kernel writes its calls into during a turn and the host runs once the turn
@@ -43,56 +34,4 @@ export const stream = {
    * refused, so an upload, which can wait a turn, is taken only while this much
    * is left after it. */
   RESERVE: 1048576 as number,
-} as const;
-
-/** A pipeline record's codes (frame/shader/record.rs, expanded into xpute's
- * descriptors by gpu/api.rs), and HEAD, the words it opens with before its
- * vertex buffers. Then: the topology, the cull mode, the depth compare under
- * reversed Z (LESS is plain depth, for a depth-only pass; NO_DEPTH, no
- * depth attachment), the blend, which vertex entry point of
- * its shader the pipeline enters, a vertex step and format, a
- * binding's stages, and a binding's kind — TEXTURE_UNFILTERED a texture in a
- * format no sampler
- * filters (RGBA32F), read by textureLoad alone. */
-export const record = {
-  HEAD: 10 as number,
-  TRIANGLES: 0 as number,
-  STRIP: 1 as number,
-  LINES: 2 as number,
-  CULL_NONE: 0 as number,
-  CULL_BACK: 1 as number,
-  ALWAYS: 0 as number,
-  GREATER: 1 as number,
-  GREATER_EQUAL: 2 as number,
-  LESS: 3 as number,
-  NO_DEPTH: 4 as number,
-  OPAQUE: 0 as number,
-  ALPHA: 1 as number,
-  ADD: 2 as number,
-  VS: 0 as number,
-  VS_DEPTH: 1 as number,
-  PER_VERTEX: 0 as number,
-  PER_INSTANCE: 1 as number,
-  U32X2: 6 as number,
-  F32: 0 as number,
-  F32X2: 1 as number,
-  F32X3: 2 as number,
-  F32X4: 3 as number,
-  U32X4: 4 as number,
-  U32: 5 as number,
-  NONE: 0 as number,
-  VERTEX: 1 as number,
-  FRAGMENT: 2 as number,
-  BOTH: 3 as number,
-  COMPUTE: 4 as number,
-  UNIFORM: 0 as number,
-  UNIFORM_DYNAMIC: 1 as number,
-  STORAGE: 2 as number,
-  TEXTURE: 3 as number,
-  TEXTURE_ARRAY: 4 as number,
-  DEPTH: 5 as number,
-  SAMPLER: 6 as number,
-  SAMPLER_COMPARISON: 7 as number,
-  TEXTURE_UNFILTERED: 8 as number,
-  STORAGE_RW: 9 as number,
 } as const;

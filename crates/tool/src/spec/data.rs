@@ -242,7 +242,7 @@ const DATA_SPECS: [DataSpec; 25] = [
         rs: Some("crates/client/render/src/gpu/api.spec.rs"),
         module: Some("api_spec"),
         enums: Enums::None,
-        ts_names: None,
+        ts_names: Some(&["surface_role", "stream"]),
         cpp: None,
     },
     DataSpec {
