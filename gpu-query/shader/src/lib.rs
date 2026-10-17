@@ -19,7 +19,7 @@ use pxl_portable::fill::{self, column_of, level_of, put};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
-use pxl_portable::scatter::{self, drawn, Grounds, GROWN_AT, GROWN_WORDS, PLACED_BLOCK, SQUARE_BLOCKS};
+use pxl_portable::scatter::{self, drawn, Grounds, PLACED_BLOCK, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
 use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
@@ -636,17 +636,77 @@ pub fn ways_cs(
     fill::ways(ground, base, [place & 0xffff, place >> 16], cell, pass.x, id.x);
 }
 
-/// Decor the ground grows in the eye's windows, one candidate a thread: `x`
-/// its index in its block, `y` the block among those meeting its square
-/// (pxl-portable `scatter::block_of`), `z` the window's zoom over the first
-/// one's, its slot and the kind. Each one that stands, stands on its cell
-/// and grows there (`scatter::stands`, `stand`, `grows`) is appended to
-/// `out` after its count (`scatter::GROWN_AT`, `GROWN_WORDS`), naming that
-/// window's zoom, the one it is drawn at where the rays ask it
-/// (`decor_count_cs`). A kind is grown at a zoom where bit
-/// `zoom − FIRST_CELL` of its `shown` word is set; the kinds are the
-/// catalog's rows as handed (`rows`). What it grows is the windows' squares'
-/// and what is placed alone, never the eye's: it runs where they change.
+/// The eye's slots whose decor grows again this frame, a thread a slot,
+/// listed with each kind for `decor_cs` (pxl-portable `scatter::GROWS_AT`),
+/// its count the dispatch's: every one where `marks` asks it, else one whose
+/// square its records were not grown for (`scatter::grown_for`), beside a
+/// square filled this frame (`fresh`), or met by a box (`scatter::meets`):
+/// an edit, or a preview's cut as it was or is. A listed slot's head is
+/// laid anew, its count none.
+#[spirv(compute(threads(64, 1, 1)))]
+pub fn decor_mark_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] marks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] fresh: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] records: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] grows: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] rows: &[Decor],
+) {
+    let s = id.x;
+    if s >= scatter::EYE_SLOTS {
+        return;
+    }
+    let held = at(window, s);
+    if held.z == 0 {
+        return;
+    }
+    let (cell, q, h) = (window::eye_cell(s / SLOTS), [held.x, held.y], scatter::head_at(s));
+    let head = [at(records, h), at(records, h + 1), at(records, h + 2), at(records, h + 3)];
+    let mut marked = at(marks, 0) != 0 || !scatter::grown_for(head, q);
+    let mut k = 0;
+    while k < at(marks, 1) {
+        let f = at(fresh, FRESH_WORDS * k);
+        if f < scatter::EYE_SLOTS && f / SLOTS == s / SLOTS {
+            let other = at(window, f);
+            marked = marked || scatter::beside(cell, q, [other.x, other.y]);
+        }
+        k += 1;
+    }
+    k = 0;
+    while k < at(marks, 2) {
+        let b = scatter::MARKS_AT + 4 * k;
+        let edit = [at(marks, b) as i32, at(marks, b + 1) as i32, at(marks, b + 2) as i32, at(marks, b + 3) as i32];
+        marked = marked || scatter::meets(cell, q, edit);
+        k += 1;
+    }
+    if !marked {
+        return;
+    }
+    put(records, h, 0);
+    put(records, h + 1, q[0] as u32);
+    put(records, h + 2, q[1] as u32);
+    put(records, h + 3, 1);
+    let kinds = rows.len() as u32;
+    // SAFETY: an atomic add on the list's count, the dispatch's z.
+    let n = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut grows[2], kinds) };
+    let mut j = 0;
+    while j < kinds {
+        put(grows, scatter::GROWS_AT + n + j, s | j << 16);
+        j += 1;
+    }
+}
+
+/// Decor the ground grows in a slot `decor_mark_cs` listed, one candidate a
+/// thread: `x` its index in its block, `y` the block among those meeting the
+/// slot's square (pxl-portable `scatter::block_of`), `z` the slot and kind
+/// listed. Each one that stands, stands on its cell and grows there
+/// (`scatter::stands`, `stand`, `grows`) is added to the slot's records
+/// (`scatter::record_at`), naming the slot's window zoom, the one it is
+/// drawn at where the rays ask it (`decor_count_cs`). A kind is grown at a
+/// zoom where bit `zoom − FIRST_CELL` of its `shown` word is set; the kinds
+/// are the catalog's rows as handed (`rows`). What it grows is the windows'
+/// squares' and what is placed alone, never the eye's.
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn decor_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -658,14 +718,15 @@ pub fn decor_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shown: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] out: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] rows: &[Decor],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] grows: &[u32],
 ) {
-    let kinds = rows.len() as u32;
-    let (kind, square) = (id.z % kinds, id.z / kinds);
+    let listed = at(grows, scatter::GROWS_AT + id.z);
+    let (square, kind) = (listed & 0xffff, listed >> 16);
     let (cell, slot) = (window::eye_cell(square / SLOTS), square % SLOTS);
     if id.x >= COUNTS as u32 || id.y >= SQUARE_BLOCKS || cell > LEAF_CELL || at(shown, kind) >> (cell - FIRST_CELL) & 1 == 0 {
         return;
     }
-    let held = at(window, (cell - FIRST_CELL) * SLOTS + slot);
+    let held = at(window, square);
     if held.z == 0 {
         return;
     }
@@ -693,10 +754,10 @@ pub fn decor_cs(
     if !here || !scatter::grows(&mut world, decor, cell, &g) {
         return;
     }
-    // SAFETY: an atomic add on the buffer's first word, its count.
-    let n = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut out[0], 1) };
-    let i = (GROWN_AT + GROWN_WORDS * n) as usize;
-    if i + 3 < out.len() {
+    // SAFETY: an atomic add on the slot's head, its count.
+    let n = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut out[scatter::head_at(square) as usize], 1) };
+    let i = scatter::record_at(square * SQUARE_GROWN + n).0 as usize;
+    if n < SQUARE_GROWN && i + 3 < out.len() {
         out[i] = scatter::record_word(kind, g.variant, g.turn, cell);
         out[i + 1] = g.at[0] as u32;
         out[i + 2] = g.at[1] as u32;
@@ -704,16 +765,17 @@ pub fn decor_cs(
     }
 }
 
-/// The records `out` holds, placed decor's and what `decor_cs` grew: the
-/// count, held to the records' room.
-fn records(grown: &[u32]) -> u32 {
-    let room = (grown.len() as u32 - GROWN_AT) / GROWN_WORDS;
-    let n = at(grown, 0);
-    if n < room {
-        n
-    } else {
-        room
-    }
+/// Record `n` of `grown` (pxl-portable `scatter::record_at`): its first
+/// word, and whether its head holds it, of a slot whose square the windows
+/// still hold there (`scatter::grown_for`) or of placed decor.
+fn record(grown: &[u32], window: &[IVec4], n: u32) -> (usize, bool) {
+    let (w, h, i) = scatter::record_at(n);
+    let count = at(grown, h);
+    let stands = n >= scatter::SLOT_RECORDS || {
+        let q = at(window, h / scatter::HEAD_WORDS);
+        q.z != 0 && scatter::grown_for([count, at(grown, h + 1), at(grown, h + 2), at(grown, h + 3)], [q.x, q.y])
+    };
+    (w as usize, i < count && stands && w + 3 < grown.len() as u32)
 }
 
 /// Each record for the eye this frame, its region written into its first
@@ -730,11 +792,12 @@ pub fn decor_count_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] grown: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] regions: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] window: &[IVec4],
 ) {
-    if id.x >= records(grown) {
+    let (i, held) = record(grown, window, id.x);
+    if !held {
         return;
     }
-    let i = (GROWN_AT + GROWN_WORDS * id.x) as usize;
     let w = grown[i];
     let (kind, variant, _, cell) = scatter::record_of(w);
     let corner = [grown[i + 1] as i32, grown[i + 2] as i32, grown[i + 3] as i32];
@@ -813,12 +876,13 @@ pub fn decor_place_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] grown: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] regions: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] block: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] window: &[IVec4],
 ) {
-    if id.x >= records(grown) {
+    let (i, held) = record(grown, window, id.x);
+    if !held {
         return;
     }
-    let i = GROWN_AT + GROWN_WORDS * id.x;
-    let w = at(grown, i);
+    let w = grown[i];
     let region = w >> drawn::REGION_SHIFT;
     if region == drawn::NONE {
         return;
@@ -832,7 +896,6 @@ pub fn decor_place_cs(
         return;
     }
     let anchor = drawn::ANCHOR as usize;
-    let i = i as usize;
     // X about the anchor the short way round: leaf cells wrap at 2^24.
     let x = (((grown[i + 1] as i32).wrapping_sub(params[anchor] as i32)) << 8 >> 8) as f32 + across as f32 / 2.0;
     let y = (grown[i + 2] as i32).wrapping_sub(params[anchor + 1] as i32) as f32 + deep as f32 / 2.0;

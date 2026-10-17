@@ -20,7 +20,8 @@ use crate::cube::{sentinel, Ground};
 use crate::decor::{Counts, Decor, Orientation, BLOCK, DECORS};
 use crate::lattice::GROUND;
 use crate::placed::{self, Lanes, PLACED};
-use crate::{Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, UNIT_ZOOM};
+use crate::window::{EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
+use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, UNIT_ZOOM};
 
 const BLOCK_SHIFT: u32 = BLOCK.trailing_zeros();
 const _: () = assert!(BLOCK.is_power_of_two(), "a block's side is a power of two, so a uniform cell in it is a draw's top bits");
@@ -139,11 +140,96 @@ pub const SQUARE_GROWN: u32 = {
 
 const _: () = assert!(size_of::<Decor>().is_multiple_of(4), "a row is whole words, as a GPU reads the table");
 
-/// What the GPU's decor pass writes, a record a decor it grows after a
-/// count and its pad: its first word (`record_word`), then its box's min
-/// corner in leaf cells.
-pub const GROWN_AT: u32 = 4;
+/// A record of decor the GPU draws: its first word (`record_word`), then
+/// its box's min corner in leaf cells.
 pub const GROWN_WORDS: u32 = 4;
+
+/// The eye's windows' squares, a slot each: what the GPU grows decor in,
+/// slot `s` the square the windows' table holds at `s`.
+pub const EYE_SLOTS: u32 = EYE_WINDOWS * SLOTS;
+
+/// The GPU's decor in one buffer of words: a head per eye slot, then each
+/// slot's `SQUARE_GROWN` records, then placed decor's head and its records.
+/// A head is its records' count, the square they were grown for, X and Y,
+/// and 1 once they were: a slot whose square the windows no longer hold
+/// there is skipped by it (`grown_for`). Placed decor's head is its count.
+pub const HEAD_WORDS: u32 = 4;
+const SLOTS_AT: u32 = EYE_SLOTS * HEAD_WORDS;
+/// Records the slots hold, every one, ahead of placed decor's.
+pub const SLOT_RECORDS: u32 = EYE_SLOTS * SQUARE_GROWN;
+pub const PLACED_HEAD: u32 = SLOTS_AT + SLOT_RECORDS * GROWN_WORDS;
+
+/// Slot `s`'s head.
+pub const fn head_at(s: u32) -> u32 {
+    s * HEAD_WORDS
+}
+
+/// Record `n`, the slots' first, slot by slot, then placed decor's: its
+/// first word, its head, and its index under that head, which the head's
+/// count bounds.
+pub const fn record_at(n: u32) -> (u32, u32, u32) {
+    if n < SLOT_RECORDS {
+        (SLOTS_AT + n * GROWN_WORDS, head_at(n / SQUARE_GROWN), n % SQUARE_GROWN)
+    } else {
+        let i = n - SLOT_RECORDS;
+        (PLACED_HEAD + HEAD_WORDS + i * GROWN_WORDS, PLACED_HEAD, i)
+    }
+}
+
+/// Whether a slot's head says its records were grown for the square `q`.
+pub const fn grown_for(head: [u32; 4], q: [i32; 2]) -> bool {
+    head[3] == 1 && head[1] as i32 == q[0] && head[2] as i32 == q[1]
+}
+
+/// The edits a frame hands decor's growth at most (pxl-kernel
+/// scene/decor/drawn.rs): each the columns an overwrite wrote, a box of
+/// leaf cells `[x0, y0, x1, y1)`, X on any lap; past them the kernel unions
+/// the rest into the last.
+pub const EDITS: u32 = 8;
+/// The boxes a frame's growth is asked over: the edits, and a preview's
+/// cut and left-out leaf as they were and as they are.
+pub const BOXES: u32 = EDITS + 4;
+/// What `decor_mark_cs` reads first: whether every slot grows, the squares
+/// filled this frame, the boxes; then the boxes, four words each.
+pub const MARKS_AT: u32 = 4;
+pub const MARKS_WORDS: u32 = MARKS_AT + 4 * BOXES;
+/// What `decor_mark_cs` writes and `decor_cs` is dispatched by: its
+/// workgroups across, up and the slot-kinds listed, a pad, then the list,
+/// a slot and its kind (`<< 16`) each.
+pub const GROWS_AT: u32 = 4;
+
+/// The leaf cells a preview's entry at `zoom` and `at` covers, as a box.
+pub const fn cut_box(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
+    if zoom <= LEAF_CELL {
+        let s = LEAF_CELL - zoom;
+        [at[0] << s, at[1] << s, (at[0] + 1) << s, (at[1] + 1) << s]
+    } else {
+        let s = zoom - LEAF_CELL;
+        [at[0] >> s, at[1] >> s, (at[0] >> s) + 1, (at[1] >> s) + 1]
+    }
+}
+
+/// Whether the box `b` of leaf cells meets square `q` of the window at
+/// `cell` or a square beside it: what decor in the square stands and grows
+/// on reads that far (`stand`'s faces), X round the world.
+pub fn meets(cell: Zoom, q: [i32; 2], b: [i32; 4]) -> bool {
+    let k = SQUARE_SHIFT + LEAF_CELL - cell;
+    let side = 1i32 << k;
+    let (lo, wide) = ([(q[0] << k) - side, (q[1] << k) - side], 3 * side);
+    // The box's first column from the region's, the short way round.
+    let (from, width) = (wrap_index(LEAF_CELL, b[0] - lo[0]), b[2] - b[0]);
+    // Met where it starts in the region or over it, or runs on round the
+    // world into it.
+    let across = width >= 1 << LEAF_CELL || (from < wide && from + width > 0) || from + width > 1 << LEAF_CELL;
+    across && b[1] < lo[1] + wide && b[3] > lo[1]
+}
+
+/// Whether squares `a` and `b` of the window at `cell` are one or beside
+/// each other, X round the world.
+pub fn beside(cell: Zoom, a: [i32; 2], b: [i32; 2]) -> bool {
+    let (dx, dy) = (wrap_index(cell - SQUARE_SHIFT, a[0] - b[0]), a[1] - b[1]);
+    dx.abs() <= 1 && dy.abs() <= 1
+}
 
 /// The zoom a record names where it is drawn at any distance: placed decor,
 /// which no window grows. No window's cells are at it (`FIRST_CELL`).

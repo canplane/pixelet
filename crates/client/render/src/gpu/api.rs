@@ -843,6 +843,12 @@ impl Gpu {
         call::dispatch(&mut self.s().stream, pass, [x, y, z]);
     }
 
+    /// Workgroups as `buffer` holds them from `offset`, across, up and deep:
+    /// a count only the GPU knows.
+    pub fn dispatch_indirect(&self, pass: Id, buffer: Id, offset: u32) {
+        call::dispatch_indirect(&mut self.s().stream, pass, buffer, offset);
+    }
+
     pub fn set_pipeline(&self, pass: Id, pipeline: Id) {
         call::set_pipeline(&mut self.s().stream, pass, pipeline);
     }

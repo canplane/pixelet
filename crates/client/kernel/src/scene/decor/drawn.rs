@@ -165,5 +165,6 @@ pub fn frame() -> Option<DecorFrame<'static>> {
         params: &h.params,
         placed: &h.placed,
         translation: h.translation,
+        edits: &[],
     })
 }

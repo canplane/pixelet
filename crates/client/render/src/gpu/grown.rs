@@ -2,8 +2,9 @@
 
 //! The decor the GPU grows and draws (pxl-portable `scatter`): what the
 //! ground grows in the eye's windows over the cast's world (`decor_cs`),
-//! placed decor handed as records beside it — grown where what it reads
-//! changed, the records standing otherwise (`Grows`); then each frame each
+//! placed decor handed as records beside it — grown again only in the eye
+//! slots what it reads changed in (`decor_mark_cs`, `Grows`), the records
+//! standing otherwise; then each frame each
 //! record taken where the rays ask the zoom it was grown at and sized for
 //! the screen, counted a draw region (`decor_count_cs`), the regions laid
 //! out with their indirect args (`decor_args_cs`), and each record drawn
@@ -12,11 +13,10 @@
 //! what is grown.
 
 use pxl_portable::decor::{COUNTS, DECORS};
-use pxl_portable::scatter::{drawn, GROUPS, GROWN_AT, GROWN_WORDS, SQUARE_BLOCKS, SQUARE_GROWN};
-use pxl_portable::window::{EYE_WINDOWS, SLOTS};
+use pxl_portable::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
 
 use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
-use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_PLACE};
+use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, release, word_bytes, Gpu};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Read;
@@ -34,42 +34,56 @@ pub struct DecorFrame<'a> {
     /// The anchor the lanes are about, less the frame's eye: where the decor
     /// block is drawn.
     pub translation: [f32; 3],
+    /// What overwrites wrote since the last frame, `scatter::EDITS` boxes
+    /// of leaf cells at most (pxl-portable `scatter::meets`): the slots
+    /// whose decor they reach grow again.
+    pub edits: &'a [[i32; 4]],
 }
 
 /// What decor's growth reads besides the frame's decor, none of it the
 /// eye's place: the windows' table and the served shards, what is placed
-/// (the overwrites' revision) and a preview's cuts, and whether squares
-/// were filled this frame. Where none of it changed, nor the decor handed,
-/// the records stand and nothing is grown.
+/// (the overwrites' revision, with the frame's `edits`) and a preview's
+/// cuts, and the squares filled this frame. A slot grows again where its
+/// square is another, one beside it was filled, or an edit or a cut as it
+/// was or is meets it; every one where the kinds shown or the shards moved,
+/// what is placed moved with no edit named, or the records were made again.
 pub struct Grows<'a> {
     pub window: &'a [i32],
     pub shards: &'a [[i32; 4]],
     pub revision: u32,
-    pub cuts: &'a [u32],
-    pub filled: bool,
+    pub cuts: &'a [u32; 8],
+    pub filled: u32,
 }
-
-/// The most records `decor_cs` grows: every window's squares at their most
-/// (pxl-portable `scatter::SQUARE_GROWN`).
-const GROWN_ROOM: u32 = SQUARE_GROWN * EYE_WINDOWS * SLOTS;
 
 /// The workgroups' sides: `decor_cs`'s, and a record a thread's.
 const GROW_WORKGROUP: u32 = 8;
 const RECORD_WORKGROUP: u32 = 64;
 
-const GROW_GROUP: [u32; 24] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE, STORAGE_RW, 7, COMPUTE, STORAGE,
+const MARK_GROUP: [u32; 18] = [
+    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE_RW, 5, COMPUTE, STORAGE,
 ];
-const COUNT_GROUP: [u32; 15] = [0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE_RW];
+const GROW_GROUP: [u32; 27] = [
+    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE, STORAGE_RW, 7, COMPUTE, STORAGE, 8, COMPUTE, STORAGE,
+];
+const COUNT_GROUP: [u32; 18] = [
+    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE_RW, 5, COMPUTE, STORAGE,
+];
 const ARGS_GROUP: [u32; 12] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE_RW];
-const PLACE_GROUP: [u32; 15] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE_RW];
+const PLACE_GROUP: [u32; 18] = [
+    0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE_RW, 5, COMPUTE, STORAGE,
+];
 
 pub struct Grown {
+    mark: Built,
     grow: Built,
     count: Built,
     args_built: Built,
     place: Built,
-    groups: [u32; 4],
+    groups: [u32; 5],
+    /// `decor_mark_cs`'s words (`scatter::MARKS_AT`), and what it lists for
+    /// `decor_cs`'s dispatch (`scatter::GROWS_AT`).
+    marks: u32,
+    grows: u32,
     shown: u32,
     params: u32,
     rows: u32,
@@ -79,23 +93,29 @@ pub struct Grown {
     /// Each region's draw uniform (`drawn::UNIFORM_WORDS` apart), as the
     /// decor and impostor shaders read one, its index set by the args pass.
     uniforms: u32,
-    /// The records, the count first; then the decor block, `drawn::LANES`
-    /// lanes and the index list, `room` slots each.
+    /// The records, laid by slot (`scatter::record_at`); then the decor
+    /// block, `drawn::LANES` lanes and the index list, `room` slots each.
     records: u32,
     block: u32,
     room: u32,
     /// The world its groups bind: grouped again exactly when it is another.
     bound: World,
     on: bool,
-    /// What the records were grown from (`Grows`), and whether this frame
-    /// grows them again.
+    /// What every slot was grown from (`Grows`); the windows' table, the
+    /// overwrites' revision, the cuts and the placed decor as last handed;
+    /// and whether this frame marks slots to grow.
     read: Read,
-    regrow: bool,
+    window: Read,
+    revision: Option<u32>,
+    cuts: [u32; 8],
+    placed: Read,
+    marking: bool,
 }
 
 /// The world `decor_cs` asks: the cast's eye, window, the tiles' frames, the
-/// served shards and the overwrites.
-pub type World = [u32; 5];
+/// served shards and the overwrites; and the squares filled this frame,
+/// which `decor_mark_cs` reads.
+pub type World = [u32; 6];
 
 impl Grown {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Grown {
@@ -107,11 +127,14 @@ impl Grown {
         let words = unsafe { core::slice::from_raw_parts(table.as_ptr().cast::<u32>(), core::mem::size_of_val(&table) / 4) };
         g.write_buffer(rows, 0, bytes(words));
         Grown {
+            mark: pipelines.build_compute(g, SHADER_GROWN_MARK, &MARK_GROUP),
             grow: pipelines.build_compute(g, SHADER_GROWN, &GROW_GROUP),
             count: pipelines.build_compute(g, SHADER_GROWN_COUNT, &COUNT_GROUP),
             args_built: pipelines.build_compute(g, SHADER_GROWN_ARGS, &ARGS_GROUP),
             place: pipelines.build_compute(g, SHADER_GROWN_PLACE, &PLACE_GROUP),
-            groups: [0; 4],
+            groups: [0; 5],
+            marks: buffer(word_bytes(scatter::MARKS_WORDS as usize), storage),
+            grows: buffer(word_bytes((scatter::GROWS_AT + scatter::EYE_SLOTS * DECORS.len() as u32) as usize), storage | buffer_usage::INDIRECT),
             shown: buffer(word_bytes(DECORS.len()), storage),
             params: buffer(word_bytes(drawn::PARAM_WORDS as usize), storage),
             rows,
@@ -122,10 +145,14 @@ impl Grown {
             records: 0,
             block: 0,
             room: 0,
-            bound: [0; 5],
+            bound: [0; 6],
             on: false,
             read: Read::default(),
-            regrow: false,
+            window: Read::default(),
+            revision: None,
+            cuts: [0; 8],
+            placed: Read::default(),
+            marking: false,
         }
     }
 
@@ -140,38 +167,64 @@ impl Grown {
             self.read.forget();
             return;
         };
-        let need = GROWN_ROOM + (f.placed.len() as u32).next_power_of_two().max(64);
+        let need = scatter::SLOT_RECORDS + (f.placed.len() as u32).next_power_of_two().max(64);
         let grow = need > self.room;
         if grow {
             release(self.records);
             release(self.block);
             self.room = need;
-            self.records = g.buffer(
-                word_bytes((GROWN_AT + GROWN_WORDS * need) as usize),
-                buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
-            );
+            self.records = g.buffer(word_bytes(scatter::record_at(need).0 as usize), buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC);
             self.block = g.buffer(word_bytes(((drawn::LANES + 1) * need) as usize), buffer_usage::STORAGE);
+            self.placed.forget();
         }
         let regroup = grow || world != self.bound;
         if regroup {
             self.regroup(g, world);
             self.bound = world;
         }
+        // Every slot, where what every slot grows from moved.
+        let unnamed = self.revision != Some(grows.revision) && f.edits.is_empty();
         let r = &mut self.read;
         r.begin();
-        r.read(grows.window);
-        r.read(grows.shards);
-        r.read(&[grows.revision]);
-        r.read(grows.cuts);
         r.read(f.shown);
-        r.read(f.placed);
-        r.mark(grows.filled || regroup);
-        self.regrow = !r.end();
-        if self.regrow {
+        r.read(grows.shards);
+        r.mark(regroup || unnamed);
+        let all = !r.end();
+        self.revision = Some(grows.revision);
+        // The boxes the slots they meet grow again in: the edits, and each
+        // cut that moved as it was and as it is.
+        let mut boxes = [[0i32; 4]; scatter::BOXES as usize];
+        let mut n = 0;
+        for &e in f.edits.iter().take(scatter::EDITS as usize) {
+            (boxes[n], n) = (e, n + 1);
+        }
+        for k in [0, 4] {
+            let (was, is) = (&self.cuts[k..k + 4], &grows.cuts[k..k + 4]);
+            if was != is {
+                for c in [was, is].into_iter().filter(|c| (c[3] as i32) >= 0) {
+                    (boxes[n], n) = (scatter::cut_box(c[3], [c[0] as i32, c[1] as i32, c[2] as i32]), n + 1);
+                }
+            }
+        }
+        self.cuts = *grows.cuts;
+        let w = &mut self.window;
+        w.begin();
+        w.read(grows.window);
+        let moved = !w.end();
+        self.marking = all || moved || grows.filled != 0 || n != 0;
+        if self.marking {
+            g.write_buffer(self.marks, 0, bytes(&[u32::from(all), grows.filled, n as u32, 0]));
+            g.write_buffer(self.marks, scatter::MARKS_AT * 4, bytes(boxes[..n].as_flattened()));
+            g.write_buffer(self.grows, 0, bytes(&[(COUNTS as u32).div_ceil(GROW_WORKGROUP), SQUARE_BLOCKS.div_ceil(GROW_WORKGROUP), 0, 0]));
             g.write_buffer(self.shown, 0, bytes(f.shown));
-            g.write_buffer(self.records, 0, bytes(&[f.placed.len() as u32, 0, 0, 0]));
+        }
+        let p = &mut self.placed;
+        p.begin();
+        p.read(f.placed);
+        if !p.end() {
+            g.write_buffer(self.records, scatter::PLACED_HEAD * 4, bytes(&[f.placed.len() as u32, 0, 0, 0]));
             if !f.placed.is_empty() {
-                g.write_buffer(self.records, GROWN_AT * 4, bytes(f.placed.as_flattened()));
+                g.write_buffer(self.records, scatter::record_at(scatter::SLOT_RECORDS).0 * 4, bytes(f.placed.as_flattened()));
             }
         }
         g.write_buffer(self.params, 0, bytes(f.params));
@@ -192,7 +245,7 @@ impl Grown {
 
     fn regroup(&mut self, g: &Gpu, world: World) {
         let group = |built: &Built, ids: &[u32]| {
-            let mut entries = [buffer_entry(0, 0); 8];
+            let mut entries = [buffer_entry(0, 0); 9];
             for (k, &b) in ids.iter().enumerate() {
                 entries[k] = buffer_entry(k as u32, b);
             }
@@ -202,12 +255,13 @@ impl Grown {
         for id in self.groups {
             release(id);
         }
-        let [eye, window, ground, shards, overwrites] = world;
+        let [eye, window, ground, shards, overwrites, fresh] = world;
         self.groups = [
-            group(&self.grow, &[eye, window, ground, shards, overwrites, self.shown, self.records, self.rows]),
-            group(&self.count, &[eye, self.params, self.rows, self.records, self.regions]),
+            group(&self.mark, &[self.marks, window, fresh, self.records, self.grows, self.rows]),
+            group(&self.grow, &[eye, window, ground, shards, overwrites, self.shown, self.records, self.rows, self.grows]),
+            group(&self.count, &[eye, self.params, self.rows, self.records, self.regions, window]),
             group(&self.args_built, &[self.meshes, self.regions, self.args, self.uniforms]),
-            group(&self.place, &[self.params, self.rows, self.records, self.regions, self.block]),
+            group(&self.place, &[self.params, self.rows, self.records, self.regions, self.block, window]),
         ];
     }
 
@@ -217,33 +271,33 @@ impl Grown {
         self.read.forget();
     }
 
-    /// The frame that grew was dropped: the next grows again.
+    /// The frame that grew was dropped, or never drawn after its decor was
+    /// handed: the next grows every slot again.
     pub fn forget(&mut self) {
         self.read.forget();
     }
 
-    /// Within a compute pass over the cast's world, after the cast: grown
-    /// where what it reads changed, then counted, laid out and placed.
+    /// Within a compute pass over the cast's world, after the cast: the
+    /// slots to grow again marked and grown where any may be, then every
+    /// record counted, laid out and placed.
     pub fn dispatch(&self, g: &Gpu, pass: u32) {
         if !self.on || self.groups[0] == 0 {
             return;
         }
+        if self.marking {
+            g.set_pipeline(pass, self.mark.pipeline);
+            g.set_bind_group(pass, 0, self.groups[0], &[]);
+            g.dispatch(pass, scatter::EYE_SLOTS.div_ceil(RECORD_WORKGROUP), 1, 1);
+            g.set_pipeline(pass, self.grow.pipeline);
+            g.set_bind_group(pass, 0, self.groups[1], &[]);
+            g.dispatch_indirect(pass, self.grows, 0);
+        }
         let records = self.room.div_ceil(RECORD_WORKGROUP);
-        let steps = [
-            (
-                &self.grow,
-                (COUNTS as u32).div_ceil(GROW_WORKGROUP),
-                SQUARE_BLOCKS.div_ceil(GROW_WORKGROUP),
-                EYE_WINDOWS * SLOTS * DECORS.len() as u32,
-            ),
-            (&self.count, records, 1, 1),
-            (&self.args_built, 1, 1, 1),
-            (&self.place, records, 1, 1),
-        ];
-        for (k, (built, x, y, z)) in steps.into_iter().enumerate().skip(usize::from(!self.regrow)) {
+        for (k, built) in [&self.count, &self.args_built, &self.place].into_iter().enumerate() {
+            let x = if k == 1 { 1 } else { records };
             g.set_pipeline(pass, built.pipeline);
-            g.set_bind_group(pass, 0, self.groups[k], &[]);
-            g.dispatch(pass, x, y, z);
+            g.set_bind_group(pass, 0, self.groups[2 + k], &[]);
+            g.dispatch(pass, x, 1, 1);
         }
     }
 

@@ -64,7 +64,10 @@ pub const SHADER_START: u32 = 35;
 /// The face bits of each block the cast found, over the lane, generated
 /// with the cast from pxl-portable's `mask`: its one compute entry.
 pub const SHADER_FACE: u32 = 36;
-pub const SHADERS: u32 = 37;
+/// Which eye slots' decor grows again this frame, listed for
+/// `SHADER_GROWN`'s dispatch: its one compute entry.
+pub const SHADER_GROWN_MARK: u32 = 37;
+pub const SHADERS: u32 = 38;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -80,6 +83,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_FACE => "face_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHTS => "heights_cs",
+        SHADER_GROWN_MARK => "decor_mark_cs",
         SHADER_GROWN => "decor_cs",
         SHADER_GROWN_COUNT => "decor_count_cs",
         SHADER_GROWN_ARGS => "decor_args_cs",
@@ -200,6 +204,7 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_FACE => include_str!(concat!(env!("OUT_DIR"), "/shader/face.gen.wgsl")),
         SHADER_BOUND => include_str!(concat!(env!("OUT_DIR"), "/shader/bound.gen.wgsl")),
         SHADER_HEIGHTS => include_str!(concat!(env!("OUT_DIR"), "/shader/heights.gen.wgsl")),
+        SHADER_GROWN_MARK => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_mark.gen.wgsl")),
         SHADER_GROWN => include_str!(concat!(env!("OUT_DIR"), "/shader/decor.gen.wgsl")),
         SHADER_GROWN_COUNT => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_count.gen.wgsl")),
         SHADER_GROWN_ARGS => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_args.gen.wgsl")),

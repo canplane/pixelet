@@ -1080,11 +1080,18 @@ impl ScreenCellsPass {
         // A surface made again holds no rays.
         r.read(&[*room as u32, *revision, rays.0]);
         match decor {
-            Some(DecorFrame { shown, params, placed, translation }) => {
+            Some(DecorFrame {
+                shown,
+                params,
+                placed,
+                translation,
+                edits,
+            }) => {
                 r.read(shown);
                 r.read(params);
                 r.read(placed);
                 r.read(translation);
+                r.read(edits);
             }
             None => r.read::<u32>(&[]),
         }
@@ -1131,13 +1138,14 @@ impl ScreenCellsPass {
             c.group = cast_group(g, &c.built, bound);
             c.bound = bound;
         }
-        let world = [c.eye, c.window, ground, c.shards, c.overwrites];
+        let fresh_squares = self.ground.as_ref().map_or(0, |gb| gb.fresh);
+        let world = [c.eye, c.window, ground, c.shards, c.overwrites, fresh_squares];
         let grows = Grows {
             window: cast.window,
             shards: cast.shards,
             revision: o.revision,
-            cuts: &cast.eye[CAST_EYE_WORDS - EYE_CUTS..],
-            filled: fresh != 0,
+            cuts: cast.eye[CAST_EYE_WORDS - EYE_CUTS..].try_into().or_bug(Errno::ENOTRECOVERABLE),
+            filled: fresh,
         };
         c.grown.prepare(g, cast.decor, grows, meshes, world);
         let eye = c.eye;
@@ -1906,11 +1914,23 @@ fn targets(g: &Gpu, s: &mut Surface) {
     s.height = height;
 }
 
+/// A frame's cast handed and never drawn: edits its decor named are not
+/// named again, so every slot grows at the next that is.
+fn unconsumed(cast: &Option<Cast>) {
+    let named = cast.as_ref().and_then(|c| c.decor.as_ref()).is_some_and(|d| !d.edits.is_empty());
+    if let (true, Some(r)) = (named, RENDERER.get(|| None).as_mut()) {
+        if let Some(c) = r.screen.cast.as_mut() {
+            c.grown.forget();
+        }
+    }
+}
+
 /// Without a device or the world's canvas, the lists are recorded for the frame that has both.
 pub fn render_frame(input: FrameInput) -> FrameOutput {
     REDRAW.set(false);
     let world = surfaces().find(|s| s.role == surface_role::WORLD);
     let (Some(g), Some(device), Some(world)) = (gpu(), device(), world) else {
+        unconsumed(&input.cast);
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
         return FrameOutput {
             kind: FrameKind::unready,
@@ -1920,6 +1940,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     };
     // The surfaces would block: skip rather than wait.
     if !(input.admit)() {
+        unconsumed(&input.cast);
         take_lists(Some(g), input.lists);
         return FrameOutput {
             kind: FrameKind::held,
