@@ -93,14 +93,6 @@ function geolocationFail(watch: Watch, code: GeolocationErrorCode): void {
   kernel_position_error(code);
 }
 
-function geolocationRearm(watch: Watch): void {
-  if (geolocation !== watch) return;
-  kernel_position_error(GeolocationErrorCode.PositionUnavailable);
-  watchEnd(watch);
-  geolocation = null;
-  geolocationStart();
-}
-
 export function geolocationStart(): void {
   if (geolocation !== null) return;
   const watch: Watch = { subscription: null, stopped: false };
@@ -115,11 +107,10 @@ export function geolocationStart(): void {
       },
       // Android's watch never ends on its own (expo's watch callbacks leave
       // onLocationError empty, and the fused provider keeps the request);
-      // iOS ends the stream on any CoreLocation failure but locationUnknown,
-      // which it rides out as CoreLocation keeps trying. A W3C watch outlives
-      // a momentary error, so this one does too: the kernel hears it, and the
-      // watch is armed again, a denial then ending it there.
-      () => geolocationRearm(watch),
+      // iOS rides out locationUnknown as CoreLocation keeps trying, and ends
+      // the stream on any other failure. An ended watch is said as one: the
+      // kernel starts it again on a grant or a return to the foreground.
+      () => geolocationFail(watch, GeolocationErrorCode.Other),
     );
     watchKeep(watch, subscription);
   })().catch(() => geolocationFail(watch, GeolocationErrorCode.Other));
