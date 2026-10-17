@@ -8,7 +8,7 @@
 //! held in the slot its place names modulo `ACROSS`, so the window follows
 //! its centre a square at a time and no held cell moves. A square is
 //! present once its cells are drawn; a reader of one absent reads the
-//! coarser window's (`find`), as a coarser tile stood in before.
+//! coarser window's (`find`).
 
 use crate::ground::{ELE_WORDS, UNKNOWN, VOID};
 use crate::lattice::{GROUND, TILE_CELLS};
@@ -107,7 +107,7 @@ const WAYS_BINS_ACROSS: u32 = SQUARE >> WAYS_SHIFT;
 pub const WAYS_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
 
 /// The most entries a square holds of its tile's ways: one a segment and a
-/// bin of the bound (`WAYS_SHIFT`) its footprint reaches. The densest square
+/// bin (`WAYS_SHIFT`) its footprint reaches. The densest square
 /// of the format-12 set, z15 010332102333322 (2026-10-17; z14's most 711);
 /// a tile past it fails its bake (pxl-spec bake/tile/terrain.rs `ways_fit`).
 pub const WAYS_SQUARE_SEGMENTS: u32 = 1065;
@@ -278,8 +278,8 @@ impl<Q: Square> crate::ways::Columns for Q {
     fn stations(&self, _: [i32; 2]) -> crate::ways::Stations {
         header_of(self).1
     }
-    /// Its own look, as the grid reads a cell before the service area's
-    /// wall is laid: the wall is the descent's to lay (`ran`'s reader).
+    /// Its own look, before the service area's wall is laid: the wall is the
+    /// descent's to lay (`ran`'s reader).
     fn look(&self, c: [i32; 2]) -> u32 {
         let i = cell_index(c);
         if i == SQUARE_CELLS {
@@ -482,7 +482,7 @@ pub fn gone(w: &impl Windows, l: [i32; 2]) -> bool {
     crate::area::past(w, crate::area::tile_at(LEAF_CELL, l)) || crate::ground::own(look, f.from()) == UNKNOWN
 }
 
-/// Column `b` at `zoom` as the grid reads it: the cell drawing it, past
+/// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
 /// the leaves a leaf's, stepped from `place`, with the area's edge laid on
 /// it (`area::edge`), none in a shard known `inside` the area, whose leaf
 /// cells about it are none of them gone; and where it is held.
@@ -506,7 +506,7 @@ pub fn ground(w: &impl Windows, shard: crate::area::Shard, place: Found, zoom: Z
 /// The ways about block `own` at `zoom` as the windows hold them (`ran`),
 /// off the window its ground's cell was read at (`found`) and the columns
 /// about it read off it: none in a column past the area or walled, as the
-/// rule writes none there (`ways::at`) — the own column's wall its cell as
+/// rule writes none there (`ways::column`) — the own column's wall its cell as
 /// read (`cell`), each other's its own, none where its shard is `inside`.
 /// It holds the windows by value: a GPU holds no pointer in a struct.
 struct Over<W> {
@@ -601,7 +601,8 @@ pub fn join(w: &impl Squares, cell: Zoom, slot: u32, j: u32, [x, y]: [u32; 2]) -
 pub const WINDOW_LEVELS: u32 = LEVELS + ACROSS.trailing_zeros();
 
 /// The lowest and highest the cells at `cell` reach under the node
-/// `(zoom, c)`: off the finest window holding them present (`find`), one
+/// `(zoom, c)`: off the finest window holding them present, stepped from
+/// `place`, which becomes where they are held (`step`), one
 /// entry of its square's levels, level 0 the column holding a node no wider
 /// than a cell; and that window's zoom. A node wider than a square is the join of
 /// its squares' whole, each held at `cell`. None (`ground::UNBOUNDED`) for a

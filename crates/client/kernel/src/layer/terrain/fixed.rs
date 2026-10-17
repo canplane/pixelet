@@ -3,7 +3,7 @@
 //! `.fixed.terrain`: the room every resident terrain tile and every held
 //! square lies in, and where a record's bytes are. A plane is one lane of
 //! every frame, or of every square, end to end; planes in order: the
-//! separation's eight, a tile's; then a square's cells, its looks, and the
+//! separation's seven, a tile's; then a square's cells, its looks, and the
 //! word its cells come back under; then the room a fill works in, once.
 
 use pxl_portable::window::{BACK_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
@@ -48,9 +48,9 @@ const fn sum(lanes: &[u32]) -> u32 {
 
 pub const SEPARATION_BYTES: u32 = FRAMES * sum(&SEPARATION_LANE_BYTES);
 
-/// One square's cells as the GPU drew them, read back whole: each cell's
-/// height, an i16, then its levels and its ways' bound, a word an entry
-/// (pxl-portable `window::BACK_WORDS`).
+/// One square's cells as the GPU drew them, read back whole: its columns,
+/// a word a cell (its ground's top and its first run), then its levels and
+/// its runs (pxl-portable `window::BACK_WORDS`).
 pub const CELLS_BYTES: u32 = BACK_WORDS * 4;
 pub const CELLS_LANE_BYTES: u32 = lane(CELLS_BYTES as usize, 1);
 

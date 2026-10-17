@@ -30,8 +30,8 @@
 //!   hold under the node (`Residency::relief`, off the finest window holding
 //!   its cells), every cell under it at each zoom asked over the ground, or
 //!   ground a cave may take with a cave through all of it;
-//! - the ways: the same levels, which join each bin's ways' bound with the
-//!   ground's (pxl-portable `window`); a way a coarser tile drops as
+//! - the ways: the same levels, whose level 0 joins each column's runs with
+//!   its ground's top (pxl-portable fill.rs `level`); a way a coarser tile drops as
 //!   narrower than half its cell is dropped there, as its level of detail
 //!   does;
 //! - the caves: the hash node hollow and drawing nothing again under it
@@ -96,7 +96,7 @@ pub(super) struct At {
 }
 
 impl World<'_> {
-    /// What is in the block `b` of `zoom`, X on the asker's lap, at its own
+    /// What is in the block `node`, X on the asker's lap, at its own
     /// zoom, `coarsest` or finer, for an asker with nothing handed down
     /// (`drawn`).
     pub fn block(&self, node: Node<3>) -> Answer<Option<Block>> {
@@ -134,7 +134,7 @@ impl World<'_> {
     /// top down, each handed down — what is placed, the objects' record, a
     /// preview's cut its air; what the ways write; and the ground's, by its
     /// one answer for a node (pxl-portable `ground::node`): the Earth's past
-    /// the service area, air over its tile's bound, else its column off the
+    /// the service area, air over the windows' bound, else its column off the
     /// windows and the caves' value. The column and the ways' runs over it
     /// are read as the GPU reads them (pxl-portable `window::ground`,
     /// `window::ways_over`), off what it drew and read back.
@@ -274,9 +274,10 @@ impl Area for Reading<'_, '_> {
 }
 
 impl ground::Held for Reading<'_, '_> {
-    /// The bound over the node of the tile `cell` reads its cells from, off
-    /// its line (pxl-portable `Held::relief`); a node with no ground under
-    /// it, `EMPTY`.
+    /// The bound over the node of the cells at `cell`, off the windows,
+    /// stepped from `place` (pxl-portable `Held::relief`); its line names the
+    /// tile a lack or a coarser window stands for; a node with no ground
+    /// under it, `EMPTY`.
     fn relief(&mut self, place: &mut Found, cell: Zoom, _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
         let (zoom, c) = self.at.node;
         let line = self.world.line(self.at, cell);

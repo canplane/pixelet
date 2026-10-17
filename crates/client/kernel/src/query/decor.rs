@@ -64,7 +64,7 @@ impl<'a> World<'a> {
     /// What the ground stands on the leaf `cell`, each decor's, handed to
     /// `each` with the face it stands on until `each` says it has what it
     /// wants: the leaf's ground read once about the cell for every decor.
-    /// Nothing where the leaf is not resident.
+    /// Nothing where the windows do not hold the leaf's cells.
     fn grown_in(&self, cell: [i64; 2], mut each: impl FnMut(&mut Surfaces, &Decor, Instance) -> bool) -> bool {
         let node = (GROUND.cell_zoom(LEAF_ZOOM), cell);
         self.surfaces(node, GROUND.grid_zoom(LEAF_ZOOM), |face| {
@@ -139,7 +139,7 @@ impl<'a> World<'a> {
     }
 
     /// What the ground grows of `decor` standing in the leaf cell `at` lies
-    /// in; none where it grows nothing there or its leaf tile is not resident.
+    /// in; none where it grows nothing there or the windows do not hold it.
     pub fn grown(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
         let [x, y, z] = index_of(GROUND.cell(), at);
         let mut met = None;
@@ -203,7 +203,7 @@ impl<'a> World<'a> {
     /// the asker's lap, where no block under it fills: decor stands on the
     /// ground or where something is placed, and reaches no farther than its
     /// reach from there, so a node is out of it where, about it and as wide
-    /// as the reach, the ground's index holds no top over its bottom less the
+    /// as the reach, the windows' relief holds no top over its bottom less the
     /// reach and the objects' pyramid no record. What is not held may.
     pub(super) fn may_strike(&self, s: &Strike<'a>, (zoom, c): Node<3>) -> bool {
         // The nodes about it as wide as the reach, at the finest zoom that is.

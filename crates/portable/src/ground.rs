@@ -1,6 +1,6 @@
 // pxl-portable/ground.rs
 
-//! gpu-portable: the ground's grid at a cell, the one rule a node's ground
+//! gpu-portable: the ground's column at a cell, the one rule a node's ground
 //! is answered by (`node`) before what overwrites it: a cell's look and
 //! height off the window drawing it (`window::ground`), and its blocks by
 //! depth with a cave's air where a cave may take them. What overwrites it
@@ -97,12 +97,12 @@ pub fn word([a, b, c, d]: [u32; 4]) -> u32 {
 }
 
 /// A cell's own look at `cell`: the majority of the four it folds, as the
-/// bake folded it (`fold`).
+/// bake folds a tile's (pxl-spec bake/fold.rs `fold_ground`).
 pub fn own(w: u32, cell: Zoom) -> u32 {
     majority(looks(w), cell)
 }
 
-/// A held cell as a grid reads it, off its word `w`, its height `h` and
+/// A held cell as a column reads it, off its word `w`, its height `h` and
 /// `from`, the zoom the word is a cell of (a coarser window's where one
 /// stands in, the leaf's past the leaves): its look, height and the four
 /// looks it folds. A cell's look is decided at the zoom of the cell it is
@@ -431,9 +431,9 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: &mut Shard, place: &mut Fo
     (answer, Cell::NONE, none)
 }
 
-/// A cell's ground, as the grid reads it: its look (`unknown` for the wall),
-/// its top in blocks of its zoom, its fold's four looks, and whether the
-/// service area's wall stands in it.
+/// A cell's ground, as a column reads it: its look (`unknown` for the
+/// service area's wall), its top in blocks of its zoom, and its fold's four
+/// looks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub look: u32,

@@ -4,7 +4,7 @@
 //! (layer/terrain/window.rs) at the cells of the tile its cells fold from,
 //! off the finest window holding them: exact where that is the zoom its
 //! tile's line says its ground at, coarser where only one over holds them.
-//! Its lines are read from the resident tile it is drawn from.
+//! A column's ways are the runs the GPU wrote, read back with its cells.
 
 use pxl_portable::area::Shard;
 use pxl_portable::ground::Cell;
@@ -133,8 +133,8 @@ impl Query for Residency<TerrainTile> {
         }
     }
 
-    /// From the relief of the tile it is drawn from over the node's own
-    /// cells, down to a cell at `cell` under its lowest, within the node. A
+    /// From the windows' relief over the node's own cells (`relief`), down
+    /// to a cell at `cell` under its lowest, within the node. A
     /// node past the service area, no look in it, holds nothing.
     fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let node = (zoom, [at[0], at[1]]);

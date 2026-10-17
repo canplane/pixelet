@@ -72,8 +72,7 @@ pub const EYE_WORDS: usize = 20;
 /// each ray reports the nodes its descent asked, not what it met; the unit
 /// forward and the reach; the unit right and τ; the unit up; the tangents of
 /// the screen's half-angles across and up and the zooms a block is asked at.
-/// A ray a drawn pixel, through its middle, the lane the drawn pixels'. None
-/// without a screen.
+/// A ray a drawn pixel, through its middle. None without a screen.
 pub fn gpu_cast(o: &Observation, tau: Tau, steps: bool, eye: &mut [u32]) -> Option<()> {
     let lens = Lens::of(o)?;
     let q = point(o.eye[0], o.eye[1], o.eye[2]);

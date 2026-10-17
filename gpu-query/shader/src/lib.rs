@@ -2,9 +2,10 @@
 
 //! The cast's compute entry (`cast_cs`): each drawn pixel's ray down the
 //! pyramid by pxl-portable's descent, the one the CPU's cast runs, over
-//! the world as the GPU holds it; and the ground a held tile is drawn from,
-//! its cells' heights off the samples it was handed (`heights_cs`) and their
-//! bound's levels (`bound_cs`), which the CPU reads back; and the decor the
+//! the world as the GPU holds it; and the ground of each square the eye's
+//! windows hold, filled once as it is handed: its columns' tops off its
+//! tile's samples (`heights_cs`), its ways' runs off its lines (`ways_cs`)
+//! and its levels (`bound_cs`), which the CPU reads back; and the decor the
 //! ground grows in the eye's windows (`decor_cs`). Each entry is a
 //! module of its own.
 
@@ -70,13 +71,13 @@ fn square_at(square: u32) -> u32 {
 }
 
 /// The world as the GPU holds it (pxl-kernel scene/cast.rs fills it): the
-/// ground's held tiles, the service area, the caves, and what is placed with
-/// a preview's cuts. Decor is not here (pxl-portable `cast::Query`); the
-/// ways are, their bound and their runs in each square's lane.
+/// squares the eye's windows hold, their columns, levels and runs, the
+/// service area, and what is placed with a preview's cuts; the caves are a
+/// hash, held nowhere. Decor is not here (pxl-portable `cast::Query`).
 #[derive(Clone, Copy)]
 pub struct World<'a> {
-    /// Per window of the eye's, from the top's, a word a slot: the square
-    /// it holds, and whether it is present (pxl-portable `window`).
+    /// Per window of the eye's, from the top's, a row a slot: the square it
+    /// holds, and whether it is present (pxl-portable `window`).
     window: &'a [IVec4],
     /// Per square of every window, its looks as handed, its cells' heights
     /// (`heights_cs`), their levels (`bound_cs`), its tile's samples and
@@ -192,8 +193,9 @@ impl ground::Held for World<'_> {
         (r, here)
     }
 
-    /// The block's column off the tile drawing that zoom's cells, the area's
-    /// edge laid on it (pxl-kernel query/node.rs `drawn`).
+    /// The block's column off the windows, the area's edge laid on it
+    /// (pxl-portable `window::ground`), as the CPU reads it (pxl-kernel
+    /// query/node.rs `Reading::cell`).
     fn cell(&mut self, shard: Shard, place: Found, zoom: u32, c: [i32; 3]) -> (ground::Cell, bool) {
         (window::ground(self, shard, place, zoom, [c[0], c[1]]).0, true)
     }
@@ -334,8 +336,9 @@ impl Grounds for Growing<'_> {
 /// A ray's words, a layer each of `Rays`: the value it stopped on, its kind (ground or
 /// placed) and the face it entered through, then how far as f32 bits, then
 /// the block's index's low bits, for `face_cs` to find the block by and
-/// write its face bits over, then the nodes its descent asked about; where
-/// it met nothing, the first two zero.
+/// write its face bits over, then the four looks a coarse ground block
+/// folds or, in the steps view, the nodes its descent asked about; where it
+/// met nothing, the first three zero.
 fn word(ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> UVec4 {
     if met.ends != Ends::Stop {
         return UVec4::new(0, 0, 0, met.visits);

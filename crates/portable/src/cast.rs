@@ -276,10 +276,9 @@ pub struct In<B> {
 }
 
 /// The world as a descent asks it, each node handed what its parent found
-/// (the `At`). The CPU answers it from everything it holds; a GPU from the
-/// ground's tiles and the caves alone. What only the CPU answers yet —
-/// separation (the ways), what is placed, decor — is this experiment's
-/// stated gap: a GPU's answer holds none of it.
+/// (the `At`). The CPU and a GPU answer it from the same reading of the
+/// ground's windows, the caves, the ways' runs and what is placed; only the
+/// CPU's answer strikes decor.
 pub trait Query {
     type At: Copy;
     type Block: Copy;

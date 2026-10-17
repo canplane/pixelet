@@ -2,8 +2,9 @@
 
 //! gpu-portable: the ways off the ground, as a block asks them — a bridge's
 //! deck and its piers, a tunnel's bore and the way's block about it, an
-//! approach's embankment or cutting — one rule for the CPU's grid and the
-//! GPU's descent (pxl-spec bake/separation.rs keeps the lines, solved
+//! approach's embankment or cutting — one rule for a square's fill, which
+//! writes each column's runs once, and the descent on both sides, which
+//! reads them (pxl-spec bake/separation.rs keeps the lines, solved
 //! offline). A block is asked of the lines over its column, each visit of a
 //! line its own crossing: the run of its segments, one after another, that
 //! are over the column. A column's visits make its spans once (`column`),
@@ -429,10 +430,10 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupies {
     }
 }
 
-/// The columns a grid of one zoom reads its ways off: each one's segments, in
-/// its own tile's cells, with its center there and the tile's stations, and
-/// its ground — its look as read, and its face's height in leaf cells. A
-/// column the grid does not hold has no segment.
+/// The columns a square's fill reads its ways off (`window::Square`): each
+/// one's segments, in its own tile's cells, with its center there and the
+/// tile's stations, and its ground — its look as read, and its face's height
+/// in leaf cells. A column the square does not hold has no segment.
 pub trait Columns {
     /// The cells' zoom, and leaf cells a ground metre over the grid.
     fn cell(&self) -> Zoom;
@@ -609,7 +610,8 @@ pub const SPANS: usize = 10;
 /// A column's spans, in leaf cells, in the order its visits come: each a
 /// deck's slab or an embankment (its way's look), a pier (`PIER`), or a
 /// bore's or a cutting's air (`AIR_OF` over its way's look); `n` of them.
-/// The sweep's working set: its visits found once, read at each block.
+/// The sweep's working set: its visits found once, made into the column's
+/// runs (`runs`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spans {
     pub run: [[i32; 2]; SPANS],
@@ -702,8 +704,8 @@ fn air_way(v: u32) -> u32 {
     }
 }
 
-/// What the ways write in block `b`, its own column read off its spans
-/// (`at`): a deck's slab or its pier; else a bore's air (`AIR`); else, where
+/// What the ways write in block `b`, its own column read off its runs
+/// (`Airs`): a deck's slab or its pier; else a bore's air (`AIR`); else, where
 /// a cave carves ground the grid fills (`carved`), the way's block about the
 /// air a way leaves beside it — the column's own under and over it, the four
 /// across its faces, in the grid's order, the first that is a way's air — so
