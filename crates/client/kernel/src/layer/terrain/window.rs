@@ -207,7 +207,8 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     let w = windows();
     let terrain = TerrainTile::residency();
     let lost = core::mem::replace(&mut w.on, on) != on;
-    let mut moved = [false; WINDOWS as usize];
+    // Per window, whether its zoom moved, and whether it moved at all.
+    let (mut moved, mut changed) = ([false; WINDOWS as usize], [lost; WINDOWS as usize]);
     let mut stale = lost || core::mem::take(&mut w.filled) || terrain.revision() != w.read;
     for win in 0..WINDOWS {
         let (centre, laid) = layout(win);
@@ -226,6 +227,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         };
         let was = core::mem::replace(&mut w.windows[win as usize], now);
         moved[win as usize] = was.cell != cell;
+        changed[win as usize] |= was != now;
         stale |= was != now;
     }
     if !stale {
@@ -239,19 +241,29 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
                 *slot = Slot::absent(slot.square);
                 continue;
             };
-            let want = wanted(cell, f, s);
-            let t = tile_of(cell, want).0;
-            if lost || moved[win as usize] || slot.square != want {
-                *slot = Slot::absent(want);
-                terrain.moved_at(t);
+            // A window that did not move wants its squares where they are:
+            // only an absent one's tile is asked of again.
+            if changed[win as usize] {
+                let want = wanted(cell, f, s);
+                if moved[win as usize] || lost || slot.square != want {
+                    *slot = Slot::absent(want);
+                    terrain.moved_at(tile_of(cell, want).0);
+                }
             }
-            if slot.is_absent() && !crate::layer::terrain::tile::kept_for(t) {
-                terrain.again(t);
+            if slot.is_absent() {
+                let t = tile_of(cell, slot.square).0;
+                if !crate::layer::terrain::tile::kept_for(t) {
+                    terrain.again(t);
+                }
             }
         }
     }
     due(w);
     w.read = terrain.revision();
+    // What the windows apart from the eye's want moves only with them.
+    if !changed[EYE_WINDOWS as usize..].contains(&true) {
+        return false;
+    }
     let was = core::mem::take(&mut w.pinned);
     for win in EYE_WINDOWS..WINDOWS {
         let Window { cell, first } = w.windows[win as usize];

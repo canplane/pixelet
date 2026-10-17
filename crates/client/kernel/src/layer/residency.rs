@@ -76,8 +76,13 @@ impl<L> Entry<L> {
 
 pub struct Residency<L: Base> {
     tiles: FnvHashMap<Tile, Entry<L>>,
-    /// The tile each frame holds, the frames' side of `Held::frame`,
-    /// written where a frame is taken or given up (`put`, `remove`).
+    /// The tile each frame holds: the frames' side of `Held::frame`, one
+    /// association read both ways — a tile's frame by every reader of a
+    /// tile (`frame`, `framed`; layer/earth.rs `earth_window`,
+    /// layer/terrain/tile.rs `kept_for`, layer/terrain/window.rs `voids`),
+    /// a frame's tile by the GPU's hand-offs, which walk the frames
+    /// (scene/cast.rs `upload`, layer/earth.rs `earth_upload`). Written only
+    /// where a frame is taken or given up (`put`, `remove`).
     in_frame: Vec<Option<Tile>>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
