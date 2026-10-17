@@ -145,10 +145,23 @@ pub const fn level_at(j: u32) -> u32 {
     (4 * SQUARE_CELLS - ((4 * SQUARE_CELLS) >> (2 * j))) / 3
 }
 
-/// Entry `[x, y]` of level `j` among a square's levels, row by row.
+/// Entry `[x, y]` of level `j` among a square's levels, in Morton order:
+/// a level is a quadtree's row of nodes laid as the curve visits them, so
+/// an entry's four children at the level under it are four words in a row
+/// and the cells about one lie near it, as a texture's tiling lays them for
+/// its 2D cache (decision 20261014, the grid's storage by the 2D cache).
 pub const fn level_index(j: u32, [x, y]: [u32; 2]) -> u32 {
-    level_at(j) + y * (SQUARE >> j) + x
+    level_at(j) + (spread(x) | spread(y) << 1)
 }
+
+/// `v`'s bits spread to the even ones: a Morton code's half.
+const fn spread(v: u32) -> u32 {
+    let v = (v | v << 8) & 0x00ff_00ff;
+    let v = (v | v << 4) & 0x0f0f_0f0f;
+    let v = (v | v << 2) & 0x3333_3333;
+    (v | v << 1) & 0x5555_5555
+}
+const _: () = assert!(SQUARE <= 1 << 16, "a level's side spreads in sixteen bits");
 pub const LEVELS: u32 = SQUARE_SHIFT;
 pub const LEVEL_WORDS: u32 = level_at(LEVELS + 1);
 
