@@ -12,7 +12,6 @@ use crate::block::cube::sentinel;
 
 use crate::block::Block;
 use crate::procedural::Frame;
-use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::{units, Zoom, SHARD_ZOOM};
 use crate::space::hierarchy::tree::ancestor_of;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -329,7 +328,7 @@ impl Grid {
             *start = at as u32;
         }
         self.over = over;
-        self.per_m = u_per_m(around.own.frame.corner[1]) as f32;
+        self.per_m = around.own.frame.per_m();
         Ok(())
     }
 
