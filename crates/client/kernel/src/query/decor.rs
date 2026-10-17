@@ -29,7 +29,6 @@ use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Meta};
 use crate::layer::object::meta::placed;
 use crate::layer::residency::Lines;
-use crate::layer::terrain::window::Windowed;
 use crate::layer::Query;
 use crate::model::registry::Models;
 use pxl_portable::area::{self, Shard};
@@ -226,7 +225,7 @@ impl<'a> World<'a> {
             (-1..=1).any(|dx| {
                 let xy = (z, [a[0] + dx, a[1] + dy]);
                 // Past the area no ground stands.
-                if z >= SHARD_ZOOM && shard.past_leaf(&Windowed, node, area::tile_at(z, [xy.1[0] as i32, xy.1[1] as i32])) {
+                if z >= SHARD_ZOOM && shard.past_leaf(node, area::tile_at(z, [xy.1[0] as i32, xy.1[1] as i32])) {
                     return false;
                 }
                 let mut place = Found::NONE;

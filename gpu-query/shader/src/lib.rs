@@ -154,7 +154,7 @@ impl World<'_> {
         let mut k = 0;
         while k < 9 {
             let n = [wrap_index(zoom, c[0] + (k % 3) as i32 - 1), c[1] + (k / 3) as i32 - 1];
-            let past = zoom >= SHARD_ZOOM && shard.past_leaf(self, own, area::tile_at(zoom, n));
+            let past = zoom >= SHARD_ZOOM && shard.past_leaf(own, area::tile_at(zoom, n));
             let cell = window::ground(self, (shard, own), Found::NONE, zoom, n).0;
             let mut dz = 0;
             while dz < 3 {
@@ -290,7 +290,7 @@ impl Query for World<'_> {
                 return In { kind: Kind::Split, block: [VOID, 0] };
             }
         }
-        let (i, cell, found) = ground::node(self, at.cave, &mut at.shard, &mut at.ground, (zoom, c), asked, block);
+        let (i, cell, found) = ground::node(self, at.cave, at.shard, &mut at.ground, (zoom, c), asked, block);
         // What the ways write over the ground's block, read as the CPU reads
         // it (pxl-portable `window::ways_over`).
         let (value, f) = if block && i.kind == Kind::Block {
@@ -337,7 +337,8 @@ impl Grounds for Growing<'_> {
     }
 
     fn face(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
-        let c = ground::Held::cell(&mut self.world, Shard::UNKNOWN, Found::NONE, cell, [g[0], g[1], 0]);
+        let shard = Shard::UNKNOWN.at(&self.world, (cell, g));
+        let c = ground::Held::cell(&mut self.world, shard, Found::NONE, cell, [g[0], g[1], 0]);
         (c.look, c.top, c.grounded())
     }
 

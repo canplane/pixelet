@@ -141,19 +141,20 @@ impl World<'_> {
     pub(super) fn drawn(&self, at: &mut At) -> Answer<Option<Block>> {
         let (zoom, b) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
+        let c = b.map(|v| v as i32);
+        at.shard = at.shard.at(&Windowed, (zoom, [c[0], c[1]]));
         let placed = placed::over(&self.objects.lanes(), at.placed, self.cut(self.carve), self.cut(self.hide), zoom, b.map(|v| v as i32), true);
         if placed.says == BLOCK {
             return Answer::Exact(Some(Block::Placed(placed.block)));
         }
-        let (cave, mut shard, mut place) = (at.cave, at.shard, at.ground);
+        let (cave, shard, mut place) = (at.cave, at.shard, at.ground);
         let mut reading = Reading::new(self, at);
-        let c = b.map(|v| v as i32);
-        let (ground, cell, found) = ground::node(&mut reading, cave, &mut shard, &mut place, (zoom, c), [zoom, zoom], true);
+        let (ground, cell, found) = ground::node(&mut reading, cave, shard, &mut place, (zoom, c), [zoom, zoom], true);
         let answer = reading.answer(ground.kind != Kind::Lacks, || {
             let (g, _) = window::ways_over(&Windowed, shard, found, cell, zoom, c, ground.block);
             (g != u32::from(sentinel::void)).then_some(Block::Ground(g as GroundId))
         });
-        (at.shard, at.ground) = (shard, place);
+        at.ground = place;
         answer
     }
 
@@ -197,20 +198,24 @@ impl World<'_> {
     /// those zooms.
     pub(super) fn node(&self, at: &mut At, [far, near]: [Zoom; 2]) -> Answer<In> {
         let (zoom, c) = at.node;
+        // What is known of the area at it, asked once a node at its entry,
+        // here and in `drawn`, as the GPU's `Query::node` asks it: every
+        // reader of the node's shard after it reads it known.
+        at.shard = at.shard.at(&Windowed, (zoom, [c[0] as i32, c[1] as i32]));
         if zoom >= near || self.whole(at) {
             return self.drawn(at).map(In::Block);
         }
         if placed::over(&self.objects.lanes(), at.placed, Cut::NONE, Cut::NONE, zoom, c.map(|v| v as i32), false).says == SPLIT {
             return Answer::Exact(In::Split);
         }
-        let (cave, mut shard, mut place) = (at.cave, at.shard, at.ground);
+        let (cave, shard, mut place) = (at.cave, at.shard, at.ground);
         let mut reading = Reading::new(self, at);
-        let (ground, _, _) = ground::node(&mut reading, cave, &mut shard, &mut place, (zoom, c.map(|v| v as i32)), [far, near], false);
+        let (ground, _, _) = ground::node(&mut reading, cave, shard, &mut place, (zoom, c.map(|v| v as i32)), [far, near], false);
         let answer = reading.answer(ground.kind != Kind::Lacks, || match ground.kind {
             Kind::Split => In::Split,
             _ => In::Empty,
         });
-        (at.shard, at.ground) = (shard, place);
+        at.ground = place;
         answer
     }
 }

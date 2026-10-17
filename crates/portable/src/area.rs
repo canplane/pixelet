@@ -138,18 +138,17 @@ impl Shard {
     pub const fn inside(self) -> bool {
         self.served() == SHARD_ALL
     }
-    /// Whether the leaf tile `leaf` is past the area (`past`): off what
-    /// `self`, the node `(zoom, c)`'s, knows where the leaf lies in its
-    /// shard or the eight about it, else asked of the area.
-    pub fn past_leaf(self, area: &impl Area, (zoom, c): (Zoom, [i32; 2]), leaf: [i32; 2]) -> bool {
-        if self.known() && zoom >= SHARD_ZOOM {
-            let (s, t) = (zoom - SHARD_ZOOM, LEAF_ZOOM - SHARD_ZOOM);
-            let d = [wrap(SHARD_ZOOM, (leaf[0] >> t) - (c[0] >> s)), (leaf[1] >> t) - (c[1] >> s)];
-            if d[0] >= -1 && d[0] <= 1 && d[1] >= -1 && d[1] <= 1 {
-                return self.served() >> ((d[1] + 1) * 3 + d[0] + 1) & 1 == 0;
-            }
-        }
-        past(area, leaf)
+    /// Whether the leaf tile `leaf` is past the area (`past`): off the nine
+    /// bits of what `self`, the node `(zoom, c)`'s, knows, never the area's
+    /// index. Asked only where `self` is known and the leaf lies in the
+    /// node's shard or the eight about it, which every asker's shape gives:
+    /// a node no wider than a shard, and a leaf a cell or a node beside it.
+    /// The area is searched once a shard, where it is first known (`at`).
+    pub fn past_leaf(self, (zoom, c): (Zoom, [i32; 2]), leaf: [i32; 2]) -> bool {
+        let (s, t) = (zoom - SHARD_ZOOM, LEAF_ZOOM - SHARD_ZOOM);
+        let d = [wrap(SHARD_ZOOM, (leaf[0] >> t) - (c[0] >> s)), (leaf[1] >> t) - (c[1] >> s)];
+        debug_assert!(self.known() && d[0].abs() <= 1 && d[1].abs() <= 1, "a leaf in the node's shard's nine");
+        self.served() >> ((d[1] + 1) * 3 + d[0] + 1) & 1 == 0
     }
     pub const fn word(self) -> u32 {
         self.0
@@ -175,7 +174,7 @@ pub fn tile_at(zoom: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// ground beside one past the area. A node wider than a shard may hold the
 /// area's edge; one no wider in a shard known `inside` cannot, and else is
 /// asked at its corners a leaf cell out.
-pub fn walled(area: &impl Area, shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool {
+pub fn walled(shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool {
     if cell < LEAF_CELL {
         return false;
     }
@@ -188,7 +187,7 @@ pub fn walled(area: &impl Area, shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32
     let leaf = |v: i32| index_at(zoom, v, LEAF_CELL);
     let lo = [leaf(c[0]) - 1, leaf(c[1]) - 1];
     let hi = [leaf(c[0] + 1) + 1, leaf(c[1] + 1) + 1];
-    let past = |l: [i32; 2]| shard.past_leaf(area, (zoom, c), tile_at(LEAF_CELL, l));
+    let past = |l: [i32; 2]| shard.past_leaf((zoom, c), tile_at(LEAF_CELL, l));
     past(lo) || past([hi[0], lo[1]]) || past([lo[0], hi[1]]) || past(hi)
 }
 

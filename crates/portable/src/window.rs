@@ -522,7 +522,7 @@ pub fn ground(w: &impl Windows, (shard, owner): (crate::area::Shard, (Zoom, [i32
     let gone_at = |dx: i32, dy: i32| {
         let s = zoom - LEAF_CELL;
         let l = [wrap_index(LEAF_CELL, (b[0] >> s) + dx), (b[1] >> s) + dy];
-        !shard.inside() && shard.past_leaf(w, owner, crate::area::tile_at(LEAF_CELL, l))
+        !shard.inside() && shard.past_leaf(owner, crate::area::tile_at(LEAF_CELL, l))
     };
     let cell = crate::ground::Cell {
         look: crate::area::edge(look, zoom, b, look == UNKNOWN, gone_at),
@@ -562,7 +562,7 @@ impl<W: Windows> crate::ways::Airs for Over<W> {
             // wall, only at the leaves' cells or finer and never inside the
             // area (`area::edge`), its ring within the own shard's nine.
             let own = (self.zoom, self.own);
-            (self.zoom >= crate::SHARD_ZOOM && self.shard.past_leaf(&self.w, own, crate::area::tile_at(self.zoom, c)))
+            (self.zoom >= crate::SHARD_ZOOM && self.shard.past_leaf(own, crate::area::tile_at(self.zoom, c)))
                 || (self.zoom >= LEAF_CELL && !self.shard.inside() && ground(&self.w, (self.shard, own), Found::NONE, self.zoom, c).0.look == UNKNOWN)
         };
         if walled {

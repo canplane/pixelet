@@ -284,7 +284,7 @@ pub fn by_depth(cell: Zoom, look: u32, top: i32, z: i32) -> u32 {
 /// that height is more than half a block over the top, and the coarsest
 /// says it. One zoom's cells cannot be over the ground where another's are
 /// under it, so one of the two holds for every zoom or neither does.
-pub fn empty(area: &impl Area, shard: Shard, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far, near]: [Zoom; 2], hollow: bool) -> bool {
+pub fn empty(shard: Shard, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far, near]: [Zoom; 2], hollow: bool) -> bool {
     let [lo, hi] = if zoom < SHARD_ZOOM { [lo.min(SEA_LEVEL), hi.max(SEA_LEVEL)] } else { [lo, hi] };
     let coarsest = if far > zoom + 1 { far } else { zoom + 1 };
     if coarsest > near {
@@ -305,7 +305,7 @@ pub fn empty(area: &impl Area, shard: Shard, (zoom, c): (Zoom, [i32; 3]), [lo, h
     // the top, or at the leaves or finer, a leaf cell over it.
     let under = if coarsest < LEAF_CELL { lo << e > top + half(coarsest) } else { lo << e >= top + (1 << e) };
     let rock = bedrock(hi) << e;
-    hollow && under && rock <= bottom + half(near) && !walled(area, shard, near, (zoom, [c[0], c[1]]))
+    hollow && under && rock <= bottom + half(near) && !walled(shard, near, (zoom, [c[0], c[1]]))
 }
 
 /// Whether the block `z` of a cell at `cell` lies over the ground wherever
@@ -352,12 +352,13 @@ pub type Answer = In<(u32, [u32; 4])>;
 /// else its cell's block (`Cell::block`), its look and its fold's four; a
 /// coarser node nothing under fills at the zooms asked (`empty`) a block of
 /// air its size, else split; where no tile over it is held, the lack.
-/// `shard` and `place` are what a descent established over it, of the area
-/// (`Shard`) and where the cells of a node over it were held
-/// (`Held::relief`), each `UNKNOWN`/`NONE` where none did, and become the
-/// node's. With the answer the cell its block was read off and where, none
+/// `shard` is what is known of the area at the node, known a shard or
+/// finer: its asker's, which asks it once at its entry (`Shard::at`).
+/// `place` is where the cells of a node over it were held
+/// (`Held::relief`), `NONE` where none were, and becomes the node's. With
+/// the answer the cell its block was read off and where, none
 /// (`Cell::NONE`, `Found::NONE`) where it read none.
-pub fn node<H: Held>(held: &mut H, cave: Cave, shard: &mut Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, Found) {
+pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, Found) {
     let none = Found::NONE;
     let air = In {
         kind: Kind::Block,
@@ -373,7 +374,6 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: &mut Shard, place: &mut Fo
     };
     // Past the area: a block's own Earth, or a node's where it is all over
     // sea level. No node a shard or finer straddles the area.
-    *shard = shard.at(held, (zoom, [c[0], c[1]]));
     if shard.past() {
         let earth = earth(c[2]);
         let answer = if block {
@@ -413,7 +413,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: &mut Shard, place: &mut Fo
         if above(zoom, c[2], relief[1]) {
             return (air, Cell::NONE, none);
         }
-        let column = held.cell(*shard, *place, zoom, c);
+        let column = held.cell(shard, *place, zoom, c);
         let answer = In {
             kind: Kind::Block,
             block: column.block(zoom, c[2], cave.hollow()),
@@ -421,7 +421,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: &mut Shard, place: &mut Fo
         return (answer, column, *place);
     }
     let (known, hollow) = cave.whole(zoom);
-    let answer = if empty(held, *shard, (zoom, c), relief, [far, near], known && hollow) { air } else { split };
+    let answer = if empty(shard, (zoom, c), relief, [far, near], known && hollow) { air } else { split };
     (answer, Cell::NONE, none)
 }
 
