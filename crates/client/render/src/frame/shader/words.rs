@@ -40,7 +40,3 @@ pub const NO_SLOT: u32 = (1 << SLOT_BITS) - 1;
 pub const IMAGE_TOP: u32 = 0;
 pub const IMAGE_SIDE: u32 = 1;
 pub const IMAGE_BOTTOM: u32 = 2;
-
-/// The ground's looks, first in the looks table (mesh/paint/ground.rs
-/// `look_words`); each placed value's after them.
-pub const GROUND_LOOKS: u32 = 256;

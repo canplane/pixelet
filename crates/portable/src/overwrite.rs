@@ -37,7 +37,7 @@ const AIR: u32 = object::air as u32;
 /// filled, the mean of theirs, and the kind most of that fill is, a tie to
 /// the corner `majority`'s alternates to (pxl-portable `ground::majority`).
 /// The objects' store folds its tree by it as it is written (pxl-kernel
-/// layer/object/store.rs), and a square's fill its ways (`fill::ways`).
+/// layer/object/store.rs).
 pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
     let (kind, fill) = (|c: u32| c & 0xffff, |c: u32| c >> 16);
     let mut sum = 0;

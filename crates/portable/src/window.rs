@@ -286,8 +286,6 @@ pub trait Squares {
     /// The square the eye's window at `cell` holds in `slot`, and whether
     /// present: `present` the other way.
     fn square(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool);
-    /// The four looks of cell `i` of the square in `slot` (`ground::looks`).
-    fn look(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Column word `i` of the square in `slot` (`COLUMN_WORDS`), `i` to
     /// `SQUARE_CELLS`.
     fn column(&self, cell: Zoom, slot: u32, i: u32) -> u32;
@@ -578,16 +576,16 @@ pub const fn held_to(cell: Zoom) -> Zoom {
 }
 
 /// The ground's cell `g` at `cell`, off the finest window holding it
-/// present, stepped from `place` (`step`): its four looks, its column's
-/// word and the next's (its height, its runs), it as laid, and where it is
-/// held; `void` at sea level where none holds it.
-pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, [u32; 2], u32, Found) {
+/// present, stepped from `place` (`step`): its column's word and the
+/// next's (its height, its runs), it as laid, and where it is held; `void`
+/// at sea level where none holds it.
+pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> ([u32; 2], u32, Found) {
     let (f, i) = step(w, place, cell, g);
     if !f.here() {
-        return (VOID, [0; 2], laid_half(VOID, 0), f);
+        return ([0; 2], laid_half(VOID, 0), f);
     }
     let (from, slot) = (f.from(), f.slot());
-    (w.look(from, slot, i), [w.column(from, slot, i), w.column(from, slot, i + 1)], w.laid(from, slot, i), f)
+    ([w.column(from, slot, i), w.column(from, slot, i + 1)], w.laid(from, slot, i), f)
 }
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
@@ -602,32 +600,31 @@ pub fn ground(w: &impl Windows, owner: (Zoom, [i32; 2]), place: Found, zoom: Zoo
     let (q, o) = (square_of(g).0, square_of(cell_at(owner.0, read, owner.1)).0);
     // Component-wise: a GPU has no array equality.
     let place = if q[0] == o[0] && q[1] == o[1] { place } else { Found::NONE };
-    let (word, [column, next], laid, f) = cell(w, place, read, g);
+    let ([column, next], laid, f) = cell(w, place, read, g);
     let cell = crate::ground::Cell {
         look: crate::area::laid(laid, zoom, b),
         top: crate::ground::blocks(zoom, column_top(column) as f32),
-        fold: crate::ground::looks(word),
         runs: [column_first(column), column_first(next)],
     };
     (cell, f)
 }
 
 /// Block `z` at `zoom` of a column with what the ways write over the
-/// ground's block there, `block` its look and its fold's four, `found`
+/// ground's block there, `block` its look, `found`
 /// where its column was read and `runs` its runs, as the visit read them
-/// (`ground::Cell::runs`): a bore's air, or a way's look whole, its own
+/// (`ground::Cell::runs`): a bore's air, or a way's look, its own
 /// column's alone, the lining of a bore's air beside it written there by
 /// its fill (`ways::lined`). A column read off a coarser window standing in
 /// for its own holds that window's runs, laid at its coarser cells: the
 /// coarser zoom's world.
-pub fn ways_over(w: &impl Ran, found: Found, runs: [u32; 2], zoom: Zoom, z: i32, block: (u32, [u32; 4])) -> (u32, [u32; 4]) {
+pub fn ways_over(w: &impl Ran, found: Found, runs: [u32; 2], zoom: Zoom, z: i32, block: u32) -> u32 {
     if runs[1] <= runs[0] {
         return block;
     }
     match ran(w, found, runs, zoom, z) {
         crate::ways::NOTHING => block,
         // A bore's air is the ground's void, `ways::AIR`.
-        way => (way, [way; 4]),
+        way => way,
     }
 }
 

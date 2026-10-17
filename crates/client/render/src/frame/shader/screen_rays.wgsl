@@ -4,13 +4,12 @@
 // the face its ray entered, painted by paint.wgsl's `paint`, as the ghost's
 // boxes are. A pixel whose ray met nothing is left to the sky.
 
-// The rays, a layer a word: what a ray met (value, kind, face, zoom), how far
-// it went (f32 bits), and its fold's looks or, in the steps view, the nodes
-// its descent asked. A block is painted from these, its own, alone.
+// The rays, a layer a word: what a ray met (value, face, zoom), how far it
+// went (f32 bits), and the nodes its descent asked, which the steps view
+// reads. A block is painted from these, its own, alone.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
-// Each look's swatch and layer, then the colour it reads as from afar
-// (`mesh/paint/ground.rs` `look_words`): the ground's looks, then each
-// placed value's.
+// Each value's swatch and layer, then the colour it reads as from afar
+// (`mesh/paint/ground.rs` `look_words`), by value whichever source holds it.
 @group(0) @binding(20) var<storage, read> looks: array<vec2u>;
 // The eye the rays left (pxl-portable `eye`), its first vec4: its Q3 steps
 // (`EYE_ORIGIN`), FRAC_W bits a unit and wrapping, a block's place on the
@@ -79,20 +78,14 @@ struct Drawn {
   taps: vec4f,
 };
 
-// What the block a pixel's ray met is drawn as: at the ground's cell or finer, its swatch and
-// its layer in all four taps; coarser, one colour, a ground fold's the mean
-// of the looks it folds where its face's own is among them.
-fn drawn(c: vec3u) -> Drawn {
-  let value = ray_value(c.x);
-  let ground = ray_kind(c.x) == RAY_KIND_GROUND;
-  let l = look(select(GROUND_LOOKS + value, value, ground));
-  if (ray_zoom(c.x) >= GROUND_CELL) {
+// What the block a pixel's ray met is drawn as, by its value alone,
+// whichever source holds it: at the ground's cell or finer, its swatch and
+// its layer in all four taps; coarser, its fold's majority as it reads from
+// afar (doc/minutes/20261005-the-ground-is-a-carto-palette.md).
+fn drawn(w: u32) -> Drawn {
+  let l = look(ray_value(w));
+  if (ray_zoom(w) >= GROUND_CELL) {
     return Drawn(linear_of(l.x), vec4f(f32(l.x >> 24u)));
-  }
-  let fold = vec4u(c.z & 0xffu, (c.z >> 8u) & 0xffu, (c.z >> 16u) & 0xffu, c.z >> 24u);
-  if (ground && any(fold == vec4u(value))) {
-    let sum = far(look(fold.x)) + far(look(fold.y)) + far(look(fold.z)) + far(look(fold.w));
-    return Drawn(sum * 0.25, vec4f(NO_LAYER));
   }
   return Drawn(far(l), vec4f(NO_LAYER));
 }
@@ -144,7 +137,8 @@ fn fs(v: VertexOut) -> FragOut {
   let d = normalize(sky_ray() * vec3f(v.ndc, 1.0));
   let at = vec2i(v.clip.xy);
   let c = vec3u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x, textureLoad(rays, at, 2, 0).x);
-  let kind = ray_kind(c.x);
+  // A ray that met nothing leaves its first word zero: no stop is void.
+  let met = c.x != 0u;
   let h = hit_of(c, d);
   // Taken before any branch: a derivative needs the quad whole.
   let uv = box_uv(h);
@@ -153,17 +147,17 @@ fn fs(v: VertexOut) -> FragOut {
   if (eye_word(EYE_STEPS) != 0u) {
     // A ray that met nothing at the end of what the eye observes, nearer than
     // the far plane's 0 the sky stands at.
-    let t = select(bitcast<f32>(c.y), bitcast<f32>(eye_word(EYE_REACH)), kind == RAY_KIND_NONE);
+    let t = select(bitcast<f32>(eye_word(EYE_REACH)), bitcast<f32>(c.y), met);
     let clip = frame_view_proj() * vec4f(d * t, 1.0);
     var o: FragOut;
     o.color = vec4f(turbo(log2(1.0 + f32(c.z)) / log2(1.0 + STEPS_MOST)), 1.0);
     o.depth = clip.z / clip.w;
     return o;
   }
-  if (kind == RAY_KIND_NONE) {
+  if (!met) {
     discard;
   }
-  let painted = drawn(c);
+  let painted = drawn(c.x);
   let s = Surface(
     painted.rgb,
     painted.taps,

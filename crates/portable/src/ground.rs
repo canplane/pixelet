@@ -354,14 +354,14 @@ pub trait Held: Area {
 }
 
 /// What the ground answers of a node (`node`): its kind, and a block's
-/// look and its fold's four.
-pub type Answer = In<(u32, [u32; 4])>;
+/// look.
+pub type Answer = In<u32>;
 
 /// The ground's answer for a node, the one way a descent asks the ground,
 /// `cave` the caves there and `block` whether it is asked at its own zoom:
 /// past the service area, the Earth's; else the node's own bound first, of
 /// each zoom's tile its cells are read from (`Held::relief`) — a block over it is air,
-/// else its cell's block (`Cell::block`), its look and its fold's four; a
+/// else its cell's block (`Cell::block`), its look; a
 /// coarser node nothing under fills at the zooms asked (`empty`) a block of
 /// air its size, else split; where no tile over it is held, the lack.
 /// `shard` is what is known of the area at the node, known a shard or
@@ -375,27 +375,15 @@ pub type Answer = In<(u32, [u32; 4])>;
 /// with its own (`Held::relief`), `EMPTY` where none was.
 pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, Found, [i32; 2]) {
     let none = Found::NONE;
-    let air = In {
-        kind: Kind::Block,
-        block: (VOID, [VOID; 4]),
-    };
-    let split = In {
-        kind: Kind::Split,
-        block: (VOID, [VOID; 4]),
-    };
-    let lacks = In {
-        kind: Kind::Lacks,
-        block: (VOID, [VOID; 4]),
-    };
+    let air = In { kind: Kind::Block, block: VOID };
+    let split = In { kind: Kind::Split, block: VOID };
+    let lacks = In { kind: Kind::Lacks, block: VOID };
     // Past the area: a block's own Earth, or a node's where it is all over
     // sea level. No node a shard or finer straddles the area.
     if shard.past() {
         let earth = earth(c[2]);
         let answer = if block {
-            In {
-                kind: Kind::Block,
-                block: (earth, [earth; 4]),
-            }
+            In { kind: Kind::Block, block: earth }
         } else if earth == VOID {
             air
         } else {
@@ -440,8 +428,8 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
 }
 
 /// A cell's ground, as a column reads it: its look (`unknown` for the
-/// service area's wall), its top in blocks of its zoom, its fold's four
-/// looks, and its runs among its square's, first to past its last
+/// service area's wall), its top in blocks of its zoom, and its runs among
+/// its square's, first to past its last
 /// (`window::column_first` of its column's word and the next's), which the
 /// visit that read it reads what the ways write in it off
 /// (`window::ways_over`).
@@ -449,18 +437,12 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
 pub struct Cell {
     pub look: u32,
     pub top: i32,
-    pub fold: [u32; 4],
     pub runs: [u32; 2],
 }
 
 impl Cell {
     /// No ground: void at sea level, as a column no tile is read for.
-    pub const NONE: Cell = Cell {
-        look: VOID,
-        top: 0,
-        fold: [VOID; 4],
-        runs: [0; 2],
-    };
+    pub const NONE: Cell = Cell { look: VOID, top: 0, runs: [0; 2] };
 
     /// Whether it has ground at all: a look the catalog grounds, or the wall.
     pub fn grounded(&self) -> bool {
@@ -478,20 +460,17 @@ impl Cell {
 
     /// Block `z` of the cell at `cell`, a cave's air where a cave may take
     /// it (`opens`) and `hollow` says one does, asked only there: the
-    /// ground's look and its fold's four, `void` for air.
-    pub fn block(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> (u32, [u32; 4]) {
-        let air = (VOID, [VOID; 4]);
+    /// ground's look, its fold's majority at a coarser cell, as what is
+    /// placed is its fold's (doc/minutes/20261005-the-ground-is-a-carto-palette.md,
+    /// "One value space"), `void` for air.
+    pub fn block(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> u32 {
         if !self.grounded() {
-            return air;
+            return VOID;
         }
         let g = by_depth(cell, self.look, self.top, z);
-        if g == VOID {
-            return air;
+        if g == VOID || self.opens(cell, z) && hollow() {
+            return VOID;
         }
-        if self.opens(cell, z) && hollow() {
-            return air;
-        }
-        let folds = cell >= LEAF_CELL || g != self.look;
-        (g, if folds { [g; 4] } else { self.fold })
+        g
     }
 }

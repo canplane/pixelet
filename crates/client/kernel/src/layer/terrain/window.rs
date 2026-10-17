@@ -11,7 +11,6 @@
 //! which the browser's cache answers.
 
 use pxl_portable::area::{Area, Shard};
-use pxl_portable::ground::word;
 use pxl_portable::window::{self, CellsBack, FreshSquare, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
 use pxl_portable::wrap_index;
 use pxl_portable::LEAF_CELL;
@@ -529,12 +528,6 @@ impl Squares for Windowed {
     fn joined(&self, cell: Zoom, e: u32) -> [u32; window::JOINED_WORDS as usize] {
         let at = (((cell - FIRST_CELL) * window::JOINED_ENTRIES + e) * window::JOINED_WORDS) as usize;
         core::array::from_fn(|k| planes().joined[at + k])
-    }
-
-    /// The CPU reads a cell's own look alone, as laid: its four are it four
-    /// times.
-    fn look(&self, cell: Zoom, s: u32, i: u32) -> u32 {
-        word([self.laid(cell, s, i) & 0xff; 4])
     }
 
     fn laid(&self, _: Zoom, s: u32, i: u32) -> u32 {

@@ -4,6 +4,7 @@
 // tiles given present at once, its cells as a GPU would hand them back.
 
 use super::*;
+use pxl_portable::ground::word;
 
 /// A tile as `hold` takes it: a cell's own look and its height, row by row
 /// from its first, and its lines.

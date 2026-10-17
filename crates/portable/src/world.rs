@@ -28,8 +28,10 @@ use crate::{Zoom, LEAF_CELL};
 /// cells where nothing placed or carved is finer in it (`overwrite::whole`):
 /// the world holds nothing finer than the node there. A block is what is
 /// placed in it, air included, else the ground's block with what the ways
-/// write over it (`window::ways_over`); `PLACED_BLOCK` over a placed value,
-/// the ground's fold's four with it (`ground::word`). Coarser, a split where
+/// write over it (`window::ways_over`), one value whichever source holds it
+/// (doc/minutes/20261005-the-ground-is-a-carto-palette.md, "One value
+/// space"); `PLACED_BLOCK` over a placed value, the source control tells an
+/// edit by, which nothing drawn reads. Coarser, a split where
 /// any layer may fill under it at a zoom asked, each by its own bound —
 /// the ground's (`ground::empty`), the ways' (`ways::misses`) — else air;
 /// where the ground is not held, the lack. With it, whether it is a block.
@@ -43,7 +45,7 @@ pub fn node<H: Held, W: Windows, L: Lanes>(
     (zoom, c): (Zoom, [i32; 3]),
     [far, near]: [Zoom; 2],
     [carve, hide]: [Cut; 2],
-) -> (In<[u32; 2]>, bool) {
+) -> (In<u32>, bool) {
     let mut block = zoom >= near || zoom >= LEAF_CELL;
     // Asked of what is placed only where something is, or a preview cuts.
     if put.holds() || carve.zoom != Cut::NONE.zoom {
@@ -53,17 +55,17 @@ pub fn node<H: Held, W: Windows, L: Lanes>(
             return (
                 In {
                     kind: Kind::Block,
-                    block: [PLACED_BLOCK | over.block, 0],
+                    block: PLACED_BLOCK | over.block,
                 },
                 block,
             );
         }
         if over.says == SPLIT {
-            return (In { kind: Kind::Split, block: [VOID, 0] }, block);
+            return (In { kind: Kind::Split, block: VOID }, block);
         }
     }
     let (i, cell, found, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
-    let (value, f) = if block && i.kind == Kind::Block {
+    let value = if block && i.kind == Kind::Block {
         window::ways_over(ways, found, cell.runs, zoom, c[2], i.block)
     } else {
         i.block
@@ -74,11 +76,5 @@ pub fn node<H: Held, W: Windows, L: Lanes>(
     } else {
         i.kind
     };
-    (
-        In {
-            kind,
-            block: [value, ground::word(f)],
-        },
-        block,
-    )
+    (In { kind, block: value }, block)
 }

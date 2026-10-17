@@ -181,7 +181,7 @@ impl World<'_> {
         let (i, block) = world::node(&mut reading, &Windowed, &lanes, handed, &mut place, (zoom, c), asked, cuts);
         let answer = reading.answer(i.kind != Kind::Lacks, || match (i.kind, block) {
             (Kind::Split, _) => In::Split,
-            (_, true) => In::Block(block_of(i.block[0])),
+            (_, true) => In::Block(block_of(i.block)),
             _ => In::Empty,
         });
         at.ground = place;

@@ -41,13 +41,7 @@ fn main() {
     // ray.rs), and each field read as the cast reads it.
     use pxl_portable::ray::*;
     let field = |name: &str, shift: u32, bits: u32| format!("fn ray_{name}(w: u32) -> u32 {{ return (w >> {shift}u) & {}u; }}\n", (1u32 << bits) - 1);
-    let ray = [
-        format!("const RAY_KIND_NONE: u32 = {KIND_NONE}u;\nconst RAY_KIND_GROUND: u32 = {KIND_GROUND}u;\nconst RAY_KIND_PLACED: u32 = {KIND_PLACED}u;\n"),
-        field("value", 0, VALUE_BITS),
-        field("kind", KIND_SHIFT, KIND_BITS),
-        field("face", FACE_SHIFT, FACE_BITS),
-        field("zoom", ZOOM_SHIFT, ZOOM_BITS),
-    ];
+    let ray = [field("value", 0, VALUE_BITS), field("face", FACE_SHIFT, FACE_BITS), field("zoom", ZOOM_SHIFT, ZOOM_BITS)];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
     // The eye's words the screen pass reads (pxl-portable eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.
@@ -150,7 +144,7 @@ fn words() -> String {
         format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\n"),
         format!("const SLOT_BITS: u32 = {SLOT_BITS}u;\nconst NO_SLOT: u32 = {NO_SLOT}u;\n"),
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
-        format!("const GROUND_LOOKS: u32 = {GROUND_LOOKS}u;\nconst EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
+        format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
     ]
     .concat()
 }

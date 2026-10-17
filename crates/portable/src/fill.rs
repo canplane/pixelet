@@ -66,9 +66,6 @@ impl Squares for Fresh<'_> {
     fn joined(&self, _: u32, _: u32) -> [u32; window::JOINED_WORDS as usize] {
         [0; window::JOINED_WORDS as usize]
     }
-    fn look(&self, _: u32, _: u32, i: u32) -> u32 {
-        at(self.ground, self.base + i)
-    }
     fn column(&self, _: u32, _: u32, i: u32) -> u32 {
         column_of(self.ground, self.base, i)
     }

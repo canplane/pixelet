@@ -78,7 +78,6 @@ fn cut(e: IVec4) -> Cut {
 }
 
 use pxl_portable::ground::VOID;
-const PLACED_AIR: u32 = PLACED_BLOCK | object::air as u32;
 
 /// Square `square`'s first word in the ground's buffer (pxl-portable
 /// `window::SQUARE_WORDS`).
@@ -168,9 +167,6 @@ impl Squares for World<'_> {
         let r = at(self.window, window::JOINED_AT + (cell - FIRST_CELL) * window::JOINED_ENTRIES + e);
         [r.x as u32, r.y as u32, r.z as u32, r.w as u32]
     }
-    fn look(&self, cell: u32, slot: u32, i: u32) -> u32 {
-        at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + i)
-    }
     fn column(&self, cell: u32, slot: u32, i: u32) -> u32 {
         column_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
     }
@@ -232,9 +228,8 @@ const LEVELS: usize = 8;
 
 const _: () = assert!(window::FOUND_BITS + pxl_portable::caves::CAVE_BITS <= 32, "a kept entry's second word holds a Found and a cave");
 
-/// What a node is on the GPU: its value, and for the ground the four looks
-/// a coarse block folds, a byte each, `dx + 2·dy` (`ground::Cell`), what
-/// the screen paints a hit with.
+/// What a node is on the GPU: its value, one of the catalog's whichever
+/// source holds it, what the screen paints a hit with.
 impl Query for World<'_> {
     type At = At;
     /// What was handed the node, but its shard: its placed cursor, then
@@ -242,8 +237,8 @@ impl Query for World<'_> {
     /// caves' word (`caves::CAVE_BITS`) over it.
     type Kept = [u32; 2];
     type Stack = [[u32; 2]; LEVELS];
-    type Block = [u32; 2];
-    const AIR: [u32; 2] = [VOID, 0];
+    type Block = u32;
+    const AIR: u32 = VOID;
 
     fn root(&mut self, node: [i32; 3]) -> At {
         At {
@@ -267,14 +262,17 @@ impl Query for World<'_> {
     /// (pxl-portable `world::node`), after its shard, known before any
     /// layer answers it, so a stop's shard is its own whichever layer stops
     /// it.
-    fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<[u32; 2]> {
+    fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<u32> {
         at.shard = at.shard.at(self, (zoom, [c[0], c[1]]));
         let (w, cuts) = (*self, [cut(self.eye.carve), cut(self.eye.hide)]);
         world::node(self, &w, &w, (at.cave, at.placed, at.shard), &mut at.ground, (zoom, c), asked, cuts).0
     }
 
-    fn fills(&self, block: &[u32; 2]) -> bool {
-        block[0] != VOID && block[0] != PLACED_AIR
+    /// A value of the one value space, whichever source holds it: neither
+    /// void nor air.
+    fn fills(&self, block: &u32) -> bool {
+        let v = block & !PLACED_BLOCK;
+        v != VOID && v != object::air as u32
     }
 
     /// The caves' draws and what is placed are a hash's state and a slot,
@@ -347,25 +345,22 @@ impl Grounds for Growing<'_> {
             let s = zoom - z;
             at = self.world.child(&at, z, [c[0] >> s, c[1] >> s, c[2] >> s]);
         }
-        self.world.node(&mut at, zoom, c, [zoom, zoom], 0.0).block[0]
+        self.world.node(&mut at, zoom, c, [zoom, zoom], 0.0).block
     }
 }
 
-/// A ray's words, a layer each of `Rays`: the value it stopped on, its kind (ground or
-/// placed) and the face it entered through, then how far as f32 bits, then
-/// the four looks a coarse ground block folds or, in the steps view, the
-/// nodes its descent asked about; where it met nothing, the first two zero.
-fn word(ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> [u32; ray::WORDS as usize] {
+/// A ray's words, a layer each of `Rays`: the value it stopped on and the
+/// face it entered through, then how far as f32 bits, then the nodes its
+/// descent asked about, which the steps view reads; where it met nothing,
+/// the first two zero.
+fn word(ray: &cast::Ray, met: Met<At, u32>) -> [u32; ray::WORDS as usize] {
     if met.ends != Ends::Stop {
         return [0, 0, met.visits];
     }
     let s = met.stop;
     let down = pxl_portable::axis(ray.direction, s.axis) > 0.0;
     let face = 2 * s.axis + down as u32;
-    let [value, folds] = s.block;
-    let kind = if value & PLACED_BLOCK != 0 { ray::KIND_PLACED } else { ray::KIND_GROUND };
-    let w2 = if steps { met.visits } else { folds };
-    [ray::first_word(value, kind, face, s.place.zoom), s.t.to_bits(), w2]
+    [ray::first_word(s.block, face, s.place.zoom), s.t.to_bits(), met.visits]
 }
 
 /// The start's stack as `start_cs` hands it (pxl-portable `cast::Over`).
@@ -504,7 +499,7 @@ pub fn cast_cs(
         corner: [at(read, cast::START_PLACE + 1) as i32, at(read, cast::START_PLACE + 2) as i32, at(read, cast::START_PLACE + 3) as i32],
     };
     let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, (place, at_of(read, cast::START_AT)), &Starts(read));
-    let w = word(&ray, met, eye.origin.w != 0);
+    let w = word(&ray, met);
     let mut k = 0;
     while k < ray::WORDS {
         // SAFETY: within the rays, just bounded by their size.
