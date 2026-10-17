@@ -259,23 +259,32 @@ pub const fn laid_half(look: u32, gone: u32) -> u32 {
     look & 0xff | gone << 8
 }
 
-/// A square's words on a GPU, its lanes in order: its four looks a cell, its
-/// columns, its levels, its columns' runs, its cells as laid, then its
-/// tile's padded samples, two a word, and its lines, which only its fill
-/// reads. Its columns, levels, runs and laid cells follow one another, read
-/// back whole.
-pub const LOOK_WORDS: u32 = SQUARE_CELLS;
-pub const SQUARE_WORDS: u32 = LOOK_WORDS + COLUMN_WORDS + LEVEL_WORDS + RUNS_SQUARE + LAID_WORDS + ELE_WORDS + LINES_WORDS;
-pub const COLUMNS_AT: u32 = LOOK_WORDS;
+/// A square's words on a GPU, what outlives its fill, its lanes in order:
+/// its columns, its levels, its columns' runs and its cells as laid. The
+/// windows' squares are one storage buffer bound whole, under WebGPU's
+/// floor (pxl-render gpu/renderer.rs `GROUND_BYTES`).
+pub const COLUMNS_AT: u32 = 0;
 pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const RUNS_AT: u32 = LEVELS_AT + LEVEL_WORDS;
 pub const LAID_AT: u32 = RUNS_AT + RUNS_SQUARE;
-pub const ELE_AT: u32 = LAID_AT + LAID_WORDS;
+pub const SQUARE_WORDS: u32 = LAID_AT + LAID_WORDS;
+/// What comes back of a square: all of it, so the CPU reads a column as the
+/// GPU does, never working it out again.
+pub const BACK_WORDS: u32 = SQUARE_WORDS;
+
+/// A square handed to the fill as a frame's fresh list holds it, a record
+/// each, `HANDED` at most: its words (`fresh`), then what only its fill
+/// reads, gone with the frame — its four looks a cell, its tile's padded
+/// samples, two a word, and its lines.
+pub const LOOKS_AT: u32 = FRESH_WORDS;
+pub const ELE_AT: u32 = LOOKS_AT + SQUARE_CELLS;
 pub const LINES_AT: u32 = ELE_AT + ELE_WORDS;
-/// What comes back of a square, from `COLUMNS_AT`: its columns, levels,
-/// runs and laid cells, so the CPU reads a column as the GPU does, never
-/// working it out again.
-pub const BACK_WORDS: u32 = COLUMN_WORDS + LEVEL_WORDS + RUNS_SQUARE + LAID_WORDS;
+pub const HANDED_WORDS: u32 = LINES_AT + LINES_WORDS;
+
+/// Where the `k`-th square a frame hands begins in its fresh list.
+pub const fn handed_at(k: u32) -> u32 {
+    k * HANDED_WORDS
+}
 
 /// The windows as one side holds them: per window, a zoom's cells about
 /// its centre, which square each slot holds once present, and its cells.

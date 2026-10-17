@@ -23,7 +23,7 @@ use pxl_portable::lattice::GROUND;
 use pxl_portable::overwrite::{self, Cut, Held, Lanes, PLACED};
 use pxl_portable::scatter::{self, drawn, Grounds, PLACED_BLOCK, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
-use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
+use pxl_portable::window::{Found, Ran, RUNS_AT};
 use pxl_portable::{at, ray, world, LEAF_CELL, SHARD_ZOOM};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::arch::IndexUnchecked;
@@ -84,17 +84,6 @@ use pxl_portable::ground::VOID;
 /// `window::SQUARE_WORDS`).
 fn square_at(square: u32) -> u32 {
     square * SQUARE_WORDS
-}
-
-/// Entry `z` of the squares `fresh` names, as handed (`window::FRESH_WORDS`).
-fn fresh_entry(fresh: &[u32], z: u32) -> [u32; FRESH_WORDS as usize] {
-    let mut entry = [0; FRESH_WORDS as usize];
-    let mut k = 0;
-    while k < FRESH_WORDS {
-        entry[k as usize] = at(fresh, FRESH_WORDS * z + k);
-        k += 1;
-    }
-    entry
 }
 
 /// The world as the GPU holds it (pxl-kernel scene/cast.rs fills it): the
@@ -552,9 +541,9 @@ pub fn joined_cs(
 }
 
 /// The columns' ground tops of the squares `fresh` names, the squares
-/// handed their tiles' samples this turn, one a `z`, as handed
-/// (`window::FRESH_WORDS`); a thread a column (`ground::height`) off the
-/// samples handed there, an even column's laying its cell and the next
+/// handed their tiles' samples this turn, one a `z`, each a record as
+/// handed (`window::HANDED_WORDS`); a thread a column (`ground::height`)
+/// off the samples in it, an even column's laying its cell and the next
 /// (`fill::heights`).
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn heights_cs(
@@ -565,7 +554,7 @@ pub fn heights_cs(
     if id.x >= SQUARE || id.y >= SQUARE {
         return;
     }
-    fill::heights(ground, fresh_entry(fresh, id.z), [id.x, id.y]);
+    fill::heights(ground, fresh, id.z, [id.x, id.y]);
 }
 
 /// Level `level.x` of the squares `fresh` names, one a `z`: level 0 each
@@ -584,8 +573,9 @@ pub fn bound_cs(
     if id.x >= side || id.y >= side {
         return;
     }
-    let base = square_at(at(fresh, FRESH_WORDS * id.z + window::FRESH_SQUARE));
-    fill::level(ground, base, at(fresh, FRESH_WORDS * id.z + window::FRESH_CELL), j, [id.x, id.y]);
+    let rec = window::handed_at(id.z);
+    let base = square_at(at(fresh, rec + window::FRESH_SQUARE));
+    fill::level(ground, base, at(fresh, rec + window::FRESH_CELL), j, [id.x, id.y]);
 }
 
 /// The ways of the squares `fresh` names, one a `z`, a thread a column
@@ -610,9 +600,8 @@ pub fn ways_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
     #[spirv(workgroup)] sums: &mut [u32; fill::SCAN_THREADS as usize],
 ) {
-    let entry = fresh_entry(fresh, id.z);
     if pass.x != 1 {
-        fill::ways(ground, entry, pass.x == 2, id.x);
+        fill::ways(ground, fresh, id.z, pass.x == 2, id.x);
         return;
     }
     // An inclusive scan, a step a doubling: each sum adds the one `d` before
@@ -624,7 +613,7 @@ pub fn ways_cs(
     // (gpu-query-builder's `workgroupUniformLoad`).
     let (t, mask) = (lane.x, fill::SCAN_THREADS - 1);
     let at = |v: u32| (v & mask) as usize;
-    let own = fill::stretch_runs(ground, entry, t);
+    let own = fill::stretch_runs(ground, fresh, id.z, t);
     // SAFETY: every index is masked under the array's length.
     unsafe { *sums.index_unchecked_mut(at(t)) = own };
     let mut d = 1;
@@ -638,7 +627,7 @@ pub fn ways_cs(
         d *= 2;
     }
     // SAFETY: masked, as above.
-    fill::scanned(ground, entry, t, unsafe { *sums.index_unchecked(at(t)) } - own);
+    fill::scanned(ground, fresh, id.z, t, unsafe { *sums.index_unchecked(at(t)) } - own);
 }
 
 /// The eye's slots whose decor grows again this frame, a thread a slot,
@@ -672,7 +661,7 @@ pub fn decor_mark_cs(
     let mut marked = at(marks, 0) != 0 || !scatter::grown_for(head, q);
     let mut k = 0;
     while k < at(marks, 1) {
-        let f = at(fresh, FRESH_WORDS * k + window::FRESH_SQUARE);
+        let f = at(fresh, window::handed_at(k) + window::FRESH_SQUARE);
         if f < scatter::EYE_SLOTS && f / SLOTS == s / SLOTS {
             let other = at(window, f);
             marked = marked || scatter::beside(cell, q, [other.x, other.y]);

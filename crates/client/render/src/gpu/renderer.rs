@@ -49,7 +49,7 @@ use crate::mesh::paint::ground::look_words;
 use pxl_portable::eye;
 use pxl_portable::ray;
 use pxl_portable::scatter::GROUPS;
-use pxl_portable::window::{self, CellsBack, FreshSquare, BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_WORDS, HANDED, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
+use pxl_portable::window::{self, CellsBack, FreshSquare, BACK_WORDS, COLUMNS_AT, ELE_AT, HANDED, HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::world;
 use xpute_kit::status::bug::OrBug;
@@ -727,13 +727,13 @@ struct RaysPass {
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
 struct GroundBuffers {
-    /// Per square of the windows, its looks as handed, its columns and
-    /// levels, which `heights_cs`, `ways_cs` and `bound_cs` write in the
-    /// turn it is handed, its tile's samples and lines as handed, and its
-    /// columns' runs, which `ways_cs` writes then (pxl-portable
-    /// `window::SQUARE_WORDS`).
+    /// Per square of the windows, its columns, levels, runs and cells as
+    /// laid, which `heights_cs`, `ways_cs` and `bound_cs` write in the turn
+    /// it is handed (pxl-portable `window::SQUARE_WORDS`).
     ground: u32,
-    /// The squares that turn handed, `window::FRESH_WORDS` each, `heights_cs`'s,
+    /// The squares the turn handed, `window::HANDED` at most, a record each
+    /// (`window::HANDED_WORDS`): its words, then its looks, its tile's
+    /// samples and its lines, which only its fill reads; `heights_cs`'s,
     /// `bound_cs`'s and `ways_cs`'s one per `id.z`.
     fresh: u32,
     fresh_len: u32,
@@ -934,9 +934,9 @@ impl RaysPass {
     fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, upload: &mut TerrainUpload) {
         let gb = self.ground.get_or_insert_with(|| {
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
-            let (storage, squares) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, SQUARES);
+            let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             let frames_buffer = buffer(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
-            let fresh = buffer(word_bytes((FRESH_WORDS * squares) as usize), storage);
+            let fresh = buffer(word_bytes((HANDED_WORDS * HANDED) as usize), storage);
             let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &compute::HEIGHTS_GROUP);
             let heights_group = g.bind_group(heights_built.layouts[0], &[buffer_entry(0, fresh), buffer_entry(1, frames_buffer)]);
             // Each slot's number in it, written once: `bound_cs`'s level,
@@ -966,15 +966,14 @@ impl RaysPass {
         });
         let mut fresh = 0;
         upload(&mut |q| {
-            if !room(write_buffer_bytes(q.looks) + write_buffer_bytes(bytes(q.samples)) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&q.fresh))) {
+            if fresh == HANDED || !room(write_buffer_bytes(q.looks) + write_buffer_bytes(bytes(q.samples)) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&q.fresh))) {
                 return false;
             }
-            let square = q.fresh[window::FRESH_SQUARE as usize];
-            let at = square * SQUARE_BYTES;
-            g.write_buffer(gb.ground, at, q.looks);
-            g.write_buffer(gb.ground, at + ELE_AT * 4, bytes(q.samples));
-            g.write_buffer(gb.ground, at + LINES_AT * 4, bytes(q.lines));
-            g.write_buffer(gb.fresh, word_bytes((FRESH_WORDS * fresh) as usize), bytes(&q.fresh));
+            let (square, at) = (q.fresh[window::FRESH_SQUARE as usize], window::handed_at(fresh) * 4);
+            g.write_buffer(gb.fresh, at, bytes(&q.fresh));
+            g.write_buffer(gb.fresh, at + LOOKS_AT * 4, q.looks);
+            g.write_buffer(gb.fresh, at + ELE_AT * 4, bytes(q.samples));
+            g.write_buffer(gb.fresh, at + LINES_AT * 4, bytes(q.lines));
             gb.asked[square as usize] = q.back;
             fresh += 1;
             true

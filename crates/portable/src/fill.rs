@@ -1,7 +1,9 @@
 // pxl-portable/fill.rs
 
-//! gpu-portable: a square's fill, a thread at a time, over the buffer its
-//! words lie in from `base` (`window::SQUARE_WORDS`): each column's ground
+//! gpu-portable: a square's fill, a thread at a time, off its record in the
+//! frame's fresh list (`window::HANDED_WORDS`, its words, looks, samples and
+//! lines) into the buffer its words lie in from `base`
+//! (`window::SQUARE_WORDS`): each column's ground
 //! top off its tile's samples and its cell as laid (`heights`), its ways'
 //! runs off its lines in three passes (`ways`, a workgroup's scan between
 //! them, `stretch_runs` and `scanned`), and its levels, level 0 each column's own
@@ -12,8 +14,8 @@
 
 use crate::area::Shard;
 use crate::window::{
-    self, column_first, column_top, Squares, COLUMNS_AT, ELE_AT, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_SQUARE, FRESH_WORDS, LAID_AT, LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT,
-    RUNS_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS, SQUARE_WORDS,
+    self, column_first, column_top, handed_at, Squares, COLUMNS_AT, ELE_AT, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_SQUARE, FRESH_WORDS, LAID_AT, LEVELS_AT, LEVEL_ENTRY_WORDS,
+    LINES_AT, LOOKS_AT, RUNS_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS, SQUARE_WORDS,
 };
 use crate::{at, ground, ways, Zoom};
 
@@ -43,10 +45,23 @@ pub fn laid_of(ground: &[u32], base: u32, i: u32) -> u32 {
     window::laid_at(at(ground, base + LAID_AT + i / 2), i)
 }
 
-/// The samples handed the square at `base` (`ELE_AT`), two a word, low
-/// first, each its half's sign carried up: `ground::height`'s.
-fn samples(ground: &[u32], base: u32) -> impl Fn(usize) -> i32 + '_ {
-    move |i: usize| ((at(ground, base + ELE_AT + i as u32 / 2) >> (16 * (i as u32 % 2))) << 16) as i32 >> 16
+/// The samples handed in the record at `rec` of a fresh list (`ELE_AT`),
+/// two a word, low first, each its half's sign carried up:
+/// `ground::height`'s.
+fn samples(fresh: &[u32], rec: u32) -> impl Fn(usize) -> i32 + '_ {
+    move |i: usize| ((at(fresh, rec + ELE_AT + i as u32 / 2) >> (16 * (i as u32 % 2))) << 16) as i32 >> 16
+}
+
+/// The handed square `k` of a fresh list: its record's first word, its
+/// square's first, where it lies in its tile and its cells' zoom.
+fn handed(fresh: &[u32], k: u32) -> (u32, u32, [u32; 2], Zoom) {
+    let rec = handed_at(k);
+    (
+        rec,
+        at(fresh, rec + FRESH_SQUARE) * SQUARE_WORDS,
+        window::place_of(at(fresh, rec + FRESH_PLACE)),
+        at(fresh, rec + FRESH_CELL),
+    )
 }
 
 /// A square being filled, on its own: what `level` folds.
@@ -78,11 +93,13 @@ impl Squares for Fresh<'_> {
 }
 
 /// A square being filled, as the ways' rule reads it (`window::Square`):
-/// its lines, laid cells and heights in its lane, and where it is
-/// as handed (`window::FRESH_WORDS`).
+/// its laid cells in its lane, its lines and samples in its record, and
+/// where it is as handed (`window::FRESH_WORDS`).
 struct Filling<'a> {
     ground: &'a [u32],
     base: u32,
+    fresh: &'a [u32],
+    rec: u32,
     cell: u32,
     place: [u32; 2],
 }
@@ -95,7 +112,7 @@ impl window::Square for Filling<'_> {
         self.place
     }
     fn line(&self, k: u32) -> u32 {
-        at(self.ground, self.base + LINES_AT + k)
+        at(self.fresh, self.rec + LINES_AT + k)
     }
     fn laid(&self, i: u32) -> u32 {
         laid_of(self.ground, self.base, i)
@@ -104,11 +121,11 @@ impl window::Square for Filling<'_> {
     /// the ring about the square too.
     fn height(&self, c: [i32; 2]) -> i32 {
         let first = [(self.place[0] * SQUARE) as i32, (self.place[1] * SQUARE) as i32];
-        ground::height(samples(self.ground, self.base), [first[0] + c[0], first[1] + c[1]])
+        ground::height(samples(self.fresh, self.rec), [first[0] + c[0], first[1] + c[1]])
     }
 }
 
-/// Column `[x, y]` of the square `fresh` hands (`window::fresh`): its
+/// Column `[x, y]` of the square a frame hands `k`-th in `fresh`: its
 /// ground's top (`ground::height`) off its tile's samples, a gone cell's
 /// (its own look `UNKNOWN`, past the area) the Earth's at sea level, so it
 /// reads as the Earth (`area::laid`); its runs' first the ways' to write
@@ -118,17 +135,18 @@ impl window::Square for Filling<'_> {
 /// (`ground::own`), and at a leaf's cells or finer, which of the leaf
 /// cells about its own are past the area (`area::gone_ring`), off the
 /// square's shard.
-pub fn heights(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], [x, y]: [u32; 2]) {
-    let word = |k: u32| fresh[k as usize];
-    let (base, place, cell) = (word(FRESH_SQUARE) * SQUARE_WORDS, window::place_of(word(FRESH_PLACE)), word(FRESH_CELL));
-    let (first, shard) = ([word(FRESH_FIRST) as i32, word(FRESH_FIRST + 1) as i32], Shard::of_word(word(FRESH_SHARD)));
+pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
+    let (rec, base, place, cell) = handed(fresh, k);
+    let (first, shard) = (
+        [at(fresh, rec + FRESH_FIRST) as i32, at(fresh, rec + FRESH_FIRST + 1) as i32],
+        Shard::of_word(at(fresh, rec + FRESH_SHARD)),
+    );
     let i = window::index_of([x, y]);
-    let own = ground::own(at(ground, base + i), cell);
+    let own = ground::own(at(fresh, rec + LOOKS_AT + i), cell);
     let top = if own == ground::UNKNOWN {
         crate::SEA_LEVEL
     } else {
-        let lane: &[u32] = ground;
-        ground::height(samples(lane, base), [(place[0] * SQUARE + x) as i32, (place[1] * SQUARE + y) as i32])
+        ground::height(samples(fresh, rec), [(place[0] * SQUARE + x) as i32, (place[1] * SQUARE + y) as i32])
     };
     put(ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
     if x % 2 == 1 {
@@ -143,27 +161,33 @@ pub fn heights(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], [x, y]: [
     };
     let gone0 = if cell >= crate::LEAF_CELL { gone(0) } else { 0 };
     let gone1 = if cell == crate::LEAF_CELL { gone(1) } else { gone0 };
-    let next = ground::own(at(ground, base + i + 1), cell);
+    let next = ground::own(at(fresh, rec + LOOKS_AT + i + 1), cell);
     put(ground, base + LAID_AT + i / 2, window::laid_half(own, gone0) | window::laid_half(next, gone1) << 16);
 }
 
-/// The ways of the square `fresh` hands (`window::fresh`), for column `i`:
+/// The ways of the square a frame hands `k`-th in `fresh`, for column `i`:
 /// unless `write`, its runs counted into its column word's first; where
 /// `write`, once each column's first is where its runs begin (`scanned`),
 /// its runs written from it — each off its spans and those beside it
 /// (`ways::around`) read along z (`ways::runs`). A column's spans,
 /// `u32::MAX` where its or those beside it do not fit `ways::SPANS`; 0 for
 /// the rest.
-pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], write: bool, i: u32) -> u32 {
-    let word = |k: u32| fresh[k as usize];
-    let (base, place, cell) = (word(FRESH_SQUARE) * SQUARE_WORDS, window::place_of(word(FRESH_PLACE)), word(FRESH_CELL));
+pub fn ways(ground: &mut [u32], fresh: &[u32], k: u32, write: bool, i: u32) -> u32 {
+    let (rec, base, place, cell) = handed(fresh, k);
     let columns = base + COLUMNS_AT;
     if i >= SQUARE_CELLS {
         return 0;
     }
     let (around, fits) = {
         let lane: &[u32] = ground;
-        let filling = Filling { ground: lane, base, cell, place };
+        let filling = Filling {
+            ground: lane,
+            base,
+            fresh,
+            rec,
+            cell,
+            place,
+        };
         let [x, y] = window::of_index(i);
         crate::ways::around(&filling, [x as i32, y as i32])
     };
@@ -186,10 +210,10 @@ pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], write: bool,
 pub const SCAN_THREADS: u32 = 64;
 const STRETCH: u32 = SQUARE_CELLS / SCAN_THREADS;
 
-/// Thread `t`'s stretch of the square `fresh` hands: its columns' runs, as
+/// Thread `t`'s stretch of the square handed `k`-th in `fresh`: its columns' runs, as
 /// counted into their words' firsts (`ways`), summed.
-pub fn stretch_runs(ground: &[u32], fresh: [u32; FRESH_WORDS as usize], t: u32) -> u32 {
-    let columns = fresh[FRESH_SQUARE as usize] * SQUARE_WORDS + COLUMNS_AT + t * STRETCH;
+pub fn stretch_runs(ground: &[u32], fresh: &[u32], k: u32, t: u32) -> u32 {
+    let columns = handed(fresh, k).1 + COLUMNS_AT + t * STRETCH;
     let (mut n, mut k) = (0, 0);
     while k < STRETCH {
         (n, k) = (n + column_first(at(ground, columns + k)), k + 1);
@@ -197,13 +221,13 @@ pub fn stretch_runs(ground: &[u32], fresh: [u32; FRESH_WORDS as usize], t: u32) 
     n
 }
 
-/// Thread `t`'s stretch of the square `fresh` hands, its columns' firsts
+/// Thread `t`'s stretch of the square handed `k`-th in `fresh`, its columns' firsts
 /// written where their runs begin, `before` the runs of the stretches
 /// before it (an exclusive scan of `stretch_runs` over the threads,
 /// Blelloch 1990): each column's the runs before it; the last thread's,
 /// the square's count in the word past them (`window::COLUMN_WORDS`).
-pub fn scanned(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], t: u32, before: u32) {
-    let columns = fresh[FRESH_SQUARE as usize] * SQUARE_WORDS + COLUMNS_AT;
+pub fn scanned(ground: &mut [u32], fresh: &[u32], k: u32, t: u32, before: u32) {
+    let columns = handed(fresh, k).1 + COLUMNS_AT;
     let (mut n, mut k) = (before, t * STRETCH);
     while k < (t + 1) * STRETCH {
         let w = at(ground, columns + k);
@@ -262,31 +286,32 @@ pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
 }
 
 /// A square filled whole, its passes in a GPU's order (pxl-render
-/// gpu/renderer.rs `grids`): `lane` its words, its looks, samples and lines
-/// as handed; its cells at `cell`, lying at `place` in its tile; its
-/// columns, the levels no bake reads; inside the area, so no wall cuts its
-/// ways and the runs are the most a client's fill writes. The runs its ways
-/// read as, and the most spans a column makes (`u32::MAX` past
-/// `ways::SPANS`).
-pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) -> [u32; 2] {
-    let fresh = window::fresh(0, window::place_word(place), cell, [0; 2], Shard::INSIDE);
+/// gpu/renderer.rs `grids`): `fresh` its record (`window::HANDED_WORDS`),
+/// its looks, samples and lines as handed, its words laid here; `lane` its
+/// words; its cells at `cell`, lying at `place` in its tile; its columns,
+/// the levels no bake reads; inside the area, so no wall cuts its ways and
+/// the runs are the most a client's fill writes. The runs its ways read as,
+/// and the most spans a column makes (`u32::MAX` past `ways::SPANS`).
+pub fn square(fresh: &mut [u32], lane: &mut [u32], place: [u32; 2], cell: Zoom) -> [u32; 2] {
+    fresh[..FRESH_WORDS as usize].copy_from_slice(&window::fresh(0, window::place_word(place), cell, [0; 2], Shard::INSIDE));
+    let fresh: &[u32] = fresh;
     for y in 0..SQUARE {
         for x in 0..SQUARE {
-            heights(lane, fresh, [x, y]);
+            heights(lane, fresh, 0, [x, y]);
         }
     }
     let mut most = 0;
     for i in 0..SQUARE_CELLS {
-        most = most.max(ways(lane, fresh, false, i));
+        most = most.max(ways(lane, fresh, 0, false, i));
     }
     let mut before = 0;
     for t in 0..SCAN_THREADS {
-        let n = stretch_runs(lane, fresh, t);
-        scanned(lane, fresh, t, before);
+        let n = stretch_runs(lane, fresh, 0, t);
+        scanned(lane, fresh, 0, t, before);
         before += n;
     }
     for i in 0..SQUARE_CELLS {
-        ways(lane, fresh, true, i);
+        ways(lane, fresh, 0, true, i);
     }
     [column_first(column_of(lane, 0, SQUARE_CELLS)), most]
 }
