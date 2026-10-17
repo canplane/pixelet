@@ -3,11 +3,8 @@
 //! What is placed, as the records an edit would change: the world's answer
 //! for what a player wrote, beside what the blocks compose to.
 
-use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::block::object::object_value_is_air;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::index_of;
 use pxl_spec::space::hierarchy::tree::Node;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -30,11 +27,6 @@ impl<'a> World<'a> {
             }
         });
         met
-    }
-
-    /// Whether anything, air included, is written in the coarsest object cell `at` lies in.
-    pub fn written_in(&self, at: &Q3) -> bool {
-        self.cells((OBJECT_COARSEST, index_of(OBJECT_COARSEST, at))).holds()
     }
 
     /// The objects' cells at a node read whole; all resident, so always answered.

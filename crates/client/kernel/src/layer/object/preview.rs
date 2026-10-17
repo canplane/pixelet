@@ -1,7 +1,7 @@
 // pxl-kernel/layer/object/preview.rs
 
 //! An edit not yet made, as what it changes in what is drawn: the pointer
-//! decides it, the world as drawn composes it (`World::previewed`); and a
+//! decides it, the world as drawn composes it (`World::previewing`); and a
 //! marker waiting for its words, drawn with the words it has so far.
 
 use crate::sched::edge::request_world_tick;

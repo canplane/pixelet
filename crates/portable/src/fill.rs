@@ -5,11 +5,11 @@
 //! top off its tile's samples (`heights`), its ways' runs off its lines in
 //! three passes (`ways`), and its levels, level 0 each column's own
 //! (`level`). A GPU runs each pass a thread a column or entry
-//! (gpu-query-shader `heights_cs`, `ways_cs`, `bound_cs`); a bake runs the
-//! same passes in order over one square (`square`), so the bound it keeps
-//! of a tile is the one a GPU draws of it.
+//! (gpu-query-shader `heights_cs`, `ways_cs`, `bound_cs`); a bake runs its
+//! columns' passes in order over one square (`square`), so the runs it
+//! sizes a tile's room by are the ones a GPU writes.
 
-use crate::window::{self, column_first, column_top, Squares, COLUMNS_AT, ELE_AT, LEVELS, LEVELS_AT, LINES_AT, RUNS_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS};
+use crate::window::{self, column_first, column_top, Squares, COLUMNS_AT, ELE_AT, LEVELS_AT, LINES_AT, RUNS_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS};
 use crate::{at, ground, ways, Zoom};
 
 /// Word `i` of `s` set to `v`, as `at` reads: totally, none past it, so no
@@ -182,9 +182,9 @@ pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
 
 /// A square filled whole, its passes in a GPU's order (pxl-render
 /// gpu/renderer.rs `grids`): `lane` its words, its looks, samples and lines
-/// as handed; its cells at `cell`, lying at `place` in its tile. What it
-/// reaches is its last level's one entry (`bound`). The runs its ways read
-/// as, and the most spans a column makes (`u32::MAX` past `ways::SPANS`).
+/// as handed; its cells at `cell`, lying at `place` in its tile; its
+/// columns, the levels no bake reads. The runs its ways read as, and the
+/// most spans a column makes (`u32::MAX` past `ways::SPANS`).
 pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) -> [u32; 2] {
     for y in 0..SQUARE {
         for x in 0..SQUARE {
@@ -197,18 +197,5 @@ pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) -> [u32; 2] {
             most = most.max(ways(lane, 0, place, cell, pass, i));
         }
     }
-    for j in 0..=LEVELS {
-        for y in 0..SQUARE >> j {
-            for x in 0..SQUARE >> j {
-                level(lane, 0, cell, j, [x, y]);
-            }
-        }
-    }
     [column_first(column_of(lane, 0, SQUARE_CELLS)), most]
-}
-
-/// The lowest and highest a filled square's cells reach, in leaf cells:
-/// its last level, whole.
-pub fn bound(lane: &[u32]) -> [i32; 2] {
-    ground::bound_of(level_of(lane, 0, LEVELS, [0, 0]))
 }

@@ -7,7 +7,6 @@
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 
-use crate::layer::object::preview;
 use crate::layer::object::store::EntryAt;
 
 use super::decor::Grown;
@@ -28,7 +27,6 @@ pub struct World<'a> {
     pub(super) objects: &'a Store,
     /// How decor is struck; none, and a ray passes through decor.
     pub(super) decor: Option<Grown<'a>>,
-    pub(super) visits: Option<&'a std::cell::Cell<u64>>,
     /// What of what is placed a preview hides, and what it cuts to air.
     pub(super) hide: Option<EntryAt>,
     pub(super) carve: Option<EntryAt>,
@@ -56,17 +54,9 @@ impl<'a> World<'a> {
             terrain,
             objects,
             decor: None,
-            visits: None,
             hide: None,
             carve: None,
         }
-    }
-
-    /// As the pointer's preview draws it (`preview::current`): what the eye's
-    /// cast asks, and nothing else.
-    pub fn previewed(self) -> World<'a> {
-        let edits = preview::current();
-        self.previewing(edits.hide, edits.carve)
     }
 
     /// As a preview shows it: `hide` left out, `carve` cut to air, at the
@@ -74,12 +64,6 @@ impl<'a> World<'a> {
     /// fold stands.
     pub fn previewing(self, hide: Option<EntryAt>, carve: Option<EntryAt>) -> World<'a> {
         World { hide, carve, ..self }
-    }
-
-    /// Each ray it casts adds the nodes its descent asked about to `visits`
-    /// (pxl-portable `cast::Met::visits`).
-    pub fn counting(self, visits: &'a std::cell::Cell<u64>) -> World<'a> {
-        World { visits: Some(visits), ..self }
     }
 }
 

@@ -191,12 +191,6 @@ impl Segment {
             u32::from(width) | u32::from(kind) << 8 | u32::from(flags) << 16 | u32::from(clear) << 24,
         ]
     }
-
-    /// Whether its footprint reaches the box `[lo, hi]` of the tile's cells.
-    pub fn reaches(&self, lo: [f32; 2], hi: [f32; 2]) -> bool {
-        let half = footprint(self.width);
-        self.a[0].max(self.b[0]) + half >= lo[0] && self.a[0].min(self.b[0]) - half <= hi[0] && self.a[1].max(self.b[1]) + half >= lo[1] && self.a[1].min(self.b[1]) - half <= hi[1]
-    }
 }
 
 /// Where a tile's piers may stand: the bents' lattice along each axis, a

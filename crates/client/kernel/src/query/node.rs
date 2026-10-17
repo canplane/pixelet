@@ -25,8 +25,8 @@
 //! the node's parent found, handed down, as surely or more cautiously, which
 //! only splits more, never from detail finer than asked:
 //!
-//! - the ground: by its one rule (pxl-portable `ground::lay`, as a cell's
-//!   block asks it of one block) over the lowest and highest the windows
+//! - the ground: by its one rule (pxl-portable `ground::empty`, as a cell's
+//!   block asks `Cell::opens` of one block) over the lowest and highest the windows
 //!   hold under the node (`Residency::relief`, off the finest window holding
 //!   its cells), every cell under it at each zoom asked over the ground, or
 //!   ground a cave may take with a cave through all of it;
@@ -45,7 +45,6 @@ use pxl_portable::area::{Area, Shard};
 use pxl_portable::cast::Kind;
 use pxl_portable::cube::sentinel;
 use pxl_portable::ground::{self, Cell};
-use pxl_portable::mask::{filled, mask};
 use pxl_portable::window::{self, Found};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::tile::terrain::GroundId;
@@ -102,16 +101,6 @@ impl World<'_> {
     /// (`drawn`).
     pub fn block(&self, node: Node<3>) -> Answer<Option<Block>> {
         self.drawn(&mut self.start(node))
-    }
-
-    /// The face bits of the block `b` of `zoom` (pxl-portable `mask`): the
-    /// blocks about it asked of the world's one query (`block`), each once,
-    /// as a chunk's box reads its own; one not held fills nothing.
-    pub fn faces(&self, (zoom, b): Node<3>) -> u32 {
-        mask(filled(|[x, y, z]| {
-            let n = [b[0] + i64::from(x), b[1] + i64::from(y), b[2] + i64::from(z)];
-            self.block((zoom, n)).value().flatten().is_some_and(Block::fills)
-        }))
     }
 
     /// A node with nothing handed down, a descent's root among them: each

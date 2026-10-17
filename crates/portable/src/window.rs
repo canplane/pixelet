@@ -82,14 +82,6 @@ pub fn slot(q: [i32; 2]) -> u32 {
     ((q[1] & m) as u32) * ACROSS + (q[0] & m) as u32
 }
 
-/// Whether the window at `cell` from `first` holds square `q`, X wrapped.
-pub fn covers(cell: Zoom, first: [i32; 2], q: [i32; 2]) -> bool {
-    let dx = wrap_index(squares_zoom(cell), q[0] - first[0]);
-    let dx = if dx < 0 { dx + (1 << squares_zoom(cell)) } else { dx };
-    let dy = q[1] - first[1];
-    dx >= 0 && dx < ACROSS as i32 && dy >= 0 && dy < ACROSS as i32
-}
-
 /// The square holding cell `g`, and the cell's index in it.
 pub fn square_of(g: [i32; 2]) -> ([i32; 2], u32) {
     let m = (SQUARE - 1) as i32;

@@ -19,7 +19,7 @@ use crate::area::{earth, walled, Area, Shard};
 use crate::cast::{In, Kind};
 use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
-pub use crate::lattice::TILE_CELLS;
+use crate::lattice::TILE_CELLS;
 use crate::lattice::{CELL_CENTER, GROUND};
 use crate::window::Found;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
@@ -267,46 +267,14 @@ pub fn by_depth(cell: Zoom, look: u32, top: i32, z: i32) -> u32 {
     }
 }
 
-/// What the ground is over some blocks of its cells, its tag a word, as a
-/// GPU has no byte.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum Lay {
-    /// Over every top: none of it is ground.
-    Air,
-    /// Ground a cave may take, all of it: under every face block, over every
-    /// bedrock, off the service area's wall; the caves' hash says which.
-    Open,
-    /// Some of it may be ground no cave takes: a face block, the bedrock,
-    /// the wall.
-    Kept,
-}
-
-/// What the ground is over the blocks `z0..z1` of `cell`, in cells whose
-/// faces lie between `lo` and `hi` leaf cells and where the service area's
-/// wall may stand or not: the ground's one rule of where it stands and where
-/// a cave may take it, asked of one block or of the blocks under a node at
-/// each zoom a reader asks within it. A top and a bedrock are the face's,
-/// rounded to blocks as the grid rounds them.
-pub fn lay(cell: Zoom, [lo, hi]: [i32; 2], wall: bool, [z0, z1]: [i32; 2]) -> Lay {
-    let top = |h: i32| blocks(cell, h as f32);
-    if z0 >= top(hi) {
-        Lay::Air
-    } else if !wall && z1 <= top(lo) - leaf_blocks(cell) && z0 >= rock(cell, hi) {
-        Lay::Open
-    } else {
-        Lay::Kept
-    }
-}
-
 /// Whether nothing under the node `(zoom, c)` fills at the zooms from `far`
-/// to `near` a reader asks within it, by the ground's one rule (`lay`),
+/// to `near` a reader asks within it, by the ground's one rule (`blocks`, `Cell::opens`),
 /// where the faces under it lie between `lo` and `hi` leaf cells: every
 /// cell under it over the ground at each of those zooms, or ground a cave
 /// may take with a cave through all of it (`hollow`). Coarser than a shard,
 /// the Earth past the service area may be in it too, its face at sea level.
 ///
-/// `lay` at each zoom, in one test. The node's bottom and top are whole
+/// That rule at each zoom, in one test. The node's bottom and top are whole
 /// blocks of every zoom finer than it, an even count of each, and `blocks`
 /// rounds a height to the nearest block, a tie to the even one: so a height
 /// rounds to at most the bottom at a zoom exactly when it is at most half
@@ -481,11 +449,13 @@ impl Cell {
         self.look == UNKNOWN || Ground::grounds(self.look)
     }
 
-    /// Whether a cave may take block `z` of the cell at `cell` (`lay`): ground
-    /// under its face, over its bedrock, off the area's wall.
+    /// Whether a cave may take block `z` of the cell at `cell`: the ground's
+    /// one rule of where a cave may take it, ground under its face block, over
+    /// its bedrock, off the area's wall, the face and the bedrock rounded to
+    /// blocks as the column rounds them.
     pub fn opens(&self, cell: Zoom, z: i32) -> bool {
         let face = face_height(cell, self.top);
-        lay(cell, [face, face], self.look == UNKNOWN, [z, z + 1]) == Lay::Open
+        self.look != UNKNOWN && z < blocks(cell, face as f32) - leaf_blocks(cell) && z >= rock(cell, face)
     }
 
     /// Block `z` of the cell at `cell`, a cave's air where `hollow` and a

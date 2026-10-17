@@ -42,7 +42,7 @@ pub fn shards() -> &'static [[i32; 4]] {
 
 /// The eye as the GPU's rays leave it, a ray a drawn pixel (`lens::gpu_cast`),
 /// then the pointer's preview as the world answers through it (query/world.rs
-/// `previewed`), its cut to air and its left-out leaf, each X, Y, Z and the
+/// `previewing`), its cut to air and its left-out leaf, each X, Y, Z and the
 /// zoom, the zoom `u32::MAX` for none. None without a screen.
 pub fn eye(o: &Observation) -> Option<[u32; CAST_EYE_WORDS]> {
     let mut eye = [0u32; CAST_EYE_WORDS];
