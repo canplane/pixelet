@@ -180,7 +180,8 @@ pub struct Overwrites<'a> {
 }
 
 /// Where a square's cells, which the GPU draws, come back to in the
-/// module's memory (`ScreenCellsPass::read_back`): its heights then its levels,
+/// module's memory (`ScreenCellsPass::read_back`): its columns, levels and
+/// runs (pxl-portable `window::BACK_WORDS`),
 /// the kernel's word that takes `ticket | DONE` once this fill's are in,
 /// and the ticket.
 #[derive(Clone, Copy, Default)]
@@ -1151,8 +1152,9 @@ impl ScreenCellsPass {
     }
 
     /// The squares the grids wrote mapped back where the CPU looks them up,
-    /// once the encoder that wrote them is submitted: a square's heights and
-    /// levels lie together, so one mapping brings both.
+    /// once the encoder that wrote them is submitted: a square's columns,
+    /// levels and runs lie together (`window::BACK_WORDS`), so one mapping
+    /// brings them all.
     ///
     /// A square asked takes a free buffer of `READS`, which maps once at a
     /// time and lands whatever fill it carried. One that landed for the

@@ -24,10 +24,8 @@ struct Atmosphere {
   shown_fall: f32,
   moon_dir: vec3f,
   moon_light: f32,
-  // Free.
-  free: vec3f,
-  // Free.
-  free_lon: f32,
+  // Free (32 to 35).
+  free: vec4f,
   // Lights the ground, never drawn: drawn, the sky went pale blue.
   night_sky: vec3f,
   // The Earth's face under the eye: at sea level the terrain floated on it.

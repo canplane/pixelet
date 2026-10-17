@@ -12,7 +12,7 @@ pub const STAGE_WORDS: usize = STAGE_AT::CLOUDS + 1;
 pub mod STAGE_AT {
     /// The view matrix through the root frame (16).
     pub const BADGE_VIEW: usize = 0;
-    /// Camera to GL clip (16).
+    /// Camera to the device's clip, as `mat4::perspective` makes it (16).
     pub const PROJ: usize = 16;
     /// Eye-relative, so the matrix holds no eye translation for a point's to cancel against (16).
     pub const EYE_VIEW_PROJ: usize = 32;

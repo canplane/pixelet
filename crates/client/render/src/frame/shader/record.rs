@@ -34,11 +34,11 @@ pub const SHADER_SCREEN_CELLS: u32 = 25;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
 /// pxl-portable's descent (script/portable-wgsl.ts): its one compute entry.
 pub const SHADER_CAST: u32 = 26;
-/// Each newly held terrain frame's bound over its cells' heights, a level a
-/// dispatch, generated with the cast from pxl-portable's `window::join`: its
-/// one compute entry.
+/// Each newly held square's levels over its columns, a level a dispatch,
+/// generated with the cast from pxl-portable's `fill::level` and
+/// `window::join`: its one compute entry.
 pub const SHADER_BOUND: u32 = 27;
-/// Each newly held terrain frame's cells' heights off its samples,
+/// Each newly held square's columns' ground tops off its samples,
 /// generated with the cast from pxl-portable's `ground::height`: its one
 /// compute entry.
 pub const SHADER_HEIGHTS: u32 = 28;

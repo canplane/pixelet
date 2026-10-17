@@ -50,7 +50,7 @@ pub(crate) const NIGHT_STOPS: usize = 26;
 pub(crate) const SHOWN_FALL: usize = 27;
 pub(crate) const MOON_DIR: usize = 28;
 pub(crate) const MOON_LIGHT: usize = 31;
-// 32 to 34 free.
+// 32 to 35 free.
 pub(crate) const NIGHT_SKY: usize = 36;
 pub(crate) const LAND_ALTITUDE: usize = 39;
 pub(crate) const CITY_LIGHT: usize = 40;
