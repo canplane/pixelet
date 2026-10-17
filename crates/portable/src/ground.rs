@@ -347,10 +347,11 @@ pub type Answer = In<(u32, [u32; 4])>;
 /// finer: its asker's, which asks it once at its entry (`Shard::at`).
 /// `place` is where the cells of a node over it were held
 /// (`Held::relief`), `NONE` where none were, and becomes the node's. With
-/// the answer whether a cave carved its block (`Cell::block`) and where its
-/// cell was read, what the ways write over it read off
-/// (`window::ways_over`); none (`Found::NONE`) where it read none.
-pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, bool, Found) {
+/// the answer the cell its block was read off, whether a cave carved the
+/// block (`Cell::block`) and where the cell was read, what the ways write
+/// over it read off (`window::ways_over`); none (`Cell::NONE`,
+/// `Found::NONE`) where it read none.
+pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, bool, Found) {
     let none = Found::NONE;
     let air = In {
         kind: Kind::Block,
@@ -378,11 +379,11 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
         } else {
             split
         };
-        return (answer, false, none);
+        return (answer, Cell::NONE, false, none);
     }
     // Coarser than any tile, no one index holds it.
     if zoom < GROUND.top() {
-        return (split, false, none);
+        return (split, Cell::NONE, false, none);
     }
     // A block's cells are its zoom's. A coarser node's are read at the
     // finest zoom asked within it, no finer than a tile at the node's own
@@ -399,34 +400,44 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
     };
     let (relief, ok) = held.relief(place, read, (zoom, c));
     if !ok {
-        return (lacks, false, none);
+        return (lacks, Cell::NONE, false, none);
     }
     if block {
         if above(zoom, c[2], relief[1]) {
-            return (air, false, none);
+            return (air, Cell::NONE, false, none);
         }
-        let (block, carved) = held.cell(*place, zoom, c).block(zoom, c[2], || cave.hollow());
+        let column = held.cell(*place, zoom, c);
+        let (block, carved) = column.block(zoom, c[2], || cave.hollow());
         let answer = In { kind: Kind::Block, block };
-        return (answer, carved, *place);
+        return (answer, column, carved, *place);
     }
     let (known, hollow) = cave.whole(zoom);
     let answer = if empty(shard, (zoom, c), relief, [far, near], known && hollow) { air } else { split };
-    (answer, false, none)
+    (answer, Cell::NONE, false, none)
 }
 
 /// A cell's ground, as a column reads it: its look (`unknown` for the
-/// service area's wall), its top in blocks of its zoom, and its fold's four
-/// looks.
+/// service area's wall), its top in blocks of its zoom, its fold's four
+/// looks, and its runs among its square's, first to past its last
+/// (`window::column_first` of its column's word and the next's), which the
+/// visit that read it reads what the ways write in it off
+/// (`window::ways_over`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub look: u32,
     pub top: i32,
     pub fold: [u32; 4],
+    pub runs: [u32; 2],
 }
 
 impl Cell {
     /// No ground: void at sea level, as a column no tile is read for.
-    pub const NONE: Cell = Cell { look: VOID, top: 0, fold: [VOID; 4] };
+    pub const NONE: Cell = Cell {
+        look: VOID,
+        top: 0,
+        fold: [VOID; 4],
+        runs: [0; 2],
+    };
 
     /// Whether it has ground at all: a look the catalog grounds, or the wall.
     pub fn grounded(&self) -> bool {

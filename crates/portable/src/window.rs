@@ -234,10 +234,6 @@ pub trait Squares {
     /// Entry `at` of level `j` of the square in `slot`, as a bound word
     /// (`ground::bound_word`): its columns' joined (`join`), level 0 one.
     fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> i32;
-    /// Cell `i`'s ground's top, in leaf cells, as the GPU drew it.
-    fn height(&self, cell: Zoom, slot: u32, i: u32) -> i32 {
-        column_top(self.column(cell, slot, i))
-    }
     /// Cell `i` as its fill laid it (`LAID_WORDS`, `laid_at`).
     fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `e` of the eye's window at `cell`'s levels over its squares
@@ -482,23 +478,28 @@ pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, 
 
 /// What the ways write in block `z` of the column `c` of blocks at `zoom`,
 /// as its window holds it run along z (`ways::at`'s): the block it lies in
-/// there, off its cell, past the leaves a leaf's. A column whose cell lies
-/// in the square holding `own`'s, which `near` found, is read off it, as
-/// the columns about one mostly are (`step`); one past it finds its own.
+/// there, off its cell, past the leaves a leaf's. `own` is the cell the
+/// visit read (`ground`) and its runs, found at `near`: a column of it reads
+/// those runs, one whose cell lies in its square is read off it, as the
+/// columns about one mostly are (`step`), and one past it finds its own.
 /// `ways::NOTHING` where no way writes, or no window holds it.
-pub fn ran(w: &impl Ran, near: Found, own: [i32; 2], zoom: Zoom, c: [i32; 2], z: i32) -> u32 {
+pub fn ran(w: &impl Ran, near: Found, (own, runs): ([i32; 2], [u32; 2]), zoom: Zoom, c: [i32; 2], z: i32) -> u32 {
     let read = held_to(zoom);
     let g = cell_at(zoom, read, c);
-    let q = square_of(g).0;
     // Component-wise: a GPU has no array equality.
-    let above = if q[0] == own[0] && q[1] == own[1] { near } else { Found::NONE };
-    let (f, i) = step(w, above, read, g);
-    if !f.here() {
-        return crate::ways::NOTHING;
-    }
+    let (f, [mut r, to]) = if g[0] == own[0] && g[1] == own[1] {
+        (near, runs)
+    } else {
+        let (q, o) = (square_of(g).0, square_of(own).0);
+        let above = if q[0] == o[0] && q[1] == o[1] { near } else { Found::NONE };
+        let (f, i) = step(w, above, read, g);
+        if !f.here() {
+            return crate::ways::NOTHING;
+        }
+        (f, [column_first(w.column(f.from(), f.slot(), i)), column_first(w.column(f.from(), f.slot(), i + 1))])
+    };
     let (from, slot) = (f.from(), f.slot());
-    let (zr, to) = (z >> (zoom - from), column_first(w.column(from, slot, i + 1)));
-    let (mut r, mut value) = (column_first(w.column(from, slot, i)), crate::ways::NOTHING);
+    let (zr, mut value) = (z >> (zoom - from), crate::ways::NOTHING);
     while r < to {
         let (lo, v) = crate::ways::run_of(w.ran(from, slot, r));
         if zr < lo {
@@ -507,17 +508,6 @@ pub fn ran(w: &impl Ran, near: Found, own: [i32; 2], zoom: Zoom, c: [i32; 2], z:
         (value, r) = (v, r + 1);
     }
     value
-}
-
-/// Whether column `c` of blocks at `zoom`, its window `f`, holds a run: a
-/// way writes in it.
-pub fn runs_in(w: &impl Squares, f: Found, zoom: Zoom, c: [i32; 2]) -> bool {
-    if !f.here() {
-        return false;
-    }
-    let (from, slot) = (f.from(), f.slot());
-    let i = square_of(cell_at(zoom, from, c)).1;
-    column_first(w.column(from, slot, i + 1)) > column_first(w.column(from, slot, i))
 }
 
 /// The ground as a side's windows hold it, one reading for the GPU's
@@ -538,15 +528,16 @@ pub const fn held_to(cell: Zoom) -> Zoom {
 }
 
 /// The ground's cell `g` at `cell`, off the finest window holding it
-/// present, stepped from `place` (`step`): its four looks, its height and
-/// where it is held; `void` at sea level where none holds it.
-pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, i32, u32, Found) {
+/// present, stepped from `place` (`step`): its four looks, its column's
+/// word and the next's (its height, its runs), it as laid, and where it is
+/// held; `void` at sea level where none holds it.
+pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, [u32; 2], u32, Found) {
     let (f, i) = step(w, place, cell, g);
     if !f.here() {
-        return (VOID, 0, laid_half(VOID, 0), f);
+        return (VOID, [0; 2], laid_half(VOID, 0), f);
     }
     let (from, slot) = (f.from(), f.slot());
-    (w.look(from, slot, i), w.height(from, slot, i), w.laid(from, slot, i), f)
+    (w.look(from, slot, i), [w.column(from, slot, i), w.column(from, slot, i + 1)], w.laid(from, slot, i), f)
 }
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
@@ -561,11 +552,12 @@ pub fn ground(w: &impl Windows, owner: (Zoom, [i32; 2]), place: Found, zoom: Zoo
     let (q, o) = (square_of(g).0, square_of(cell_at(owner.0, read, owner.1)).0);
     // Component-wise: a GPU has no array equality.
     let place = if q[0] == o[0] && q[1] == o[1] { place } else { Found::NONE };
-    let (word, h, laid, f) = cell(w, place, read, g);
+    let (word, [column, next], laid, f) = cell(w, place, read, g);
     let cell = crate::ground::Cell {
         look: crate::area::laid(laid, zoom, b),
-        top: crate::ground::blocks(zoom, h as f32),
+        top: crate::ground::blocks(zoom, column_top(column) as f32),
         fold: crate::ground::looks(word),
+        runs: [column_first(column), column_first(next)],
     };
     (cell, f)
 }
@@ -578,33 +570,34 @@ pub fn ground(w: &impl Windows, owner: (Zoom, [i32; 2]), place: Found, zoom: Zoo
 struct Over<W> {
     w: W,
     zoom: Zoom,
-    /// The square at its cells' zoom its own column's cell lies in.
-    square: [i32; 2],
+    /// Its own column's cell, at its cells' zoom, and its runs.
+    own: ([i32; 2], [u32; 2]),
     found: Found,
 }
 
 impl<W: Windows> crate::ways::Airs for Over<W> {
     fn at(&self, c: [i32; 2], z: i32) -> u32 {
-        ran(&self.w, self.found, self.square, self.zoom, c, z)
+        ran(&self.w, self.found, self.own, self.zoom, c, z)
     }
 }
 
 /// Block `c` at `zoom` with what the ways write over the ground's block
 /// there (`ways::block`), `block` its look and its fold's four, `carved`
-/// whether a cave made its ground air (`ground::Cell::block`), and `found`
-/// where its column was read: air, or a way's look whole.
-/// Only a way in the block's own column writes in it, or the air of one
-/// beside where the caves carved the ground (`runs_in`). A column read off
+/// whether a cave made its ground air (`ground::Cell::block`), `found`
+/// where its column was read and `runs` its runs, as the visit read them
+/// (`ground::Cell::runs`): air, or a way's look whole. Only a way in the
+/// block's own column writes in it, none where the column holds no run, or
+/// the air of one beside where the caves carved the ground. A column read off
 /// a coarser window standing in for its own holds that window's runs, laid
 /// at its coarser cells, where no wall stands: the coarser zoom's world.
-pub fn ways_over(w: &(impl Windows + Copy), found: Found, zoom: Zoom, c: [i32; 3], (block, carved): ((u32, [u32; 4]), bool)) -> (u32, [u32; 4]) {
-    if !carved && !runs_in(w, found, zoom, [c[0], c[1]]) {
+pub fn ways_over(w: &(impl Windows + Copy), found: Found, runs: [u32; 2], zoom: Zoom, c: [i32; 3], (block, carved): ((u32, [u32; 4]), bool)) -> (u32, [u32; 4]) {
+    if !carved && runs[1] <= runs[0] {
         return block;
     }
     let over = Over {
         w: *w,
         zoom,
-        square: square_of(cell_at(zoom, held_to(zoom), [c[0], c[1]])).0,
+        own: (cell_at(zoom, held_to(zoom), [c[0], c[1]]), runs),
         found,
     };
     match crate::ways::block(&over, c, carved) {

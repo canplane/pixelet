@@ -149,9 +149,9 @@ impl World<'_> {
         }
         let (cave, shard, mut place) = (at.cave, at.shard, at.ground);
         let mut reading = Reading::new(self, at);
-        let (ground, carved, found) = ground::node(&mut reading, cave, shard, &mut place, (zoom, c), [zoom, zoom], true);
+        let (ground, cell, carved, found) = ground::node(&mut reading, cave, shard, &mut place, (zoom, c), [zoom, zoom], true);
         let answer = reading.answer(ground.kind != Kind::Lacks, || {
-            let (g, _) = window::ways_over(&Windowed, found, zoom, c, (ground.block, carved));
+            let (g, _) = window::ways_over(&Windowed, found, cell.runs, zoom, c, (ground.block, carved));
             (g != u32::from(sentinel::void)).then_some(Block::Ground(g as GroundId))
         });
         at.ground = place;
@@ -210,7 +210,7 @@ impl World<'_> {
         }
         let (cave, shard, mut place) = (at.cave, at.shard, at.ground);
         let mut reading = Reading::new(self, at);
-        let (ground, _, _) = ground::node(&mut reading, cave, shard, &mut place, (zoom, c.map(|v| v as i32)), [far, near], false);
+        let (ground, _, _, _) = ground::node(&mut reading, cave, shard, &mut place, (zoom, c.map(|v| v as i32)), [far, near], false);
         let answer = reading.answer(ground.kind != Kind::Lacks, || match ground.kind {
             Kind::Split => In::Split,
             _ => In::Empty,

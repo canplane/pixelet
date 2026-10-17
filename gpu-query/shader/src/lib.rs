@@ -186,7 +186,7 @@ impl World<'_> {
                         self.fills(&[PLACED_BLOCK | over.block, 0])
                     } else {
                         let g = cell.block(zoom, b[2], || Cave::of(zoom, b).hollow());
-                        window::ways_over(self, found, zoom, b, g).0 != VOID
+                        window::ways_over(self, found, cell.runs, zoom, b, g).0 != VOID
                     };
                     filled |= (fills as u32) * bit;
                 }
@@ -317,11 +317,11 @@ impl Query for World<'_> {
                 return In { kind: Kind::Split, block: [VOID, 0] };
             }
         }
-        let (i, carved, found) = ground::node(self, at.cave, at.shard, &mut at.ground, (zoom, c), asked, block);
+        let (i, cell, carved, found) = ground::node(self, at.cave, at.shard, &mut at.ground, (zoom, c), asked, block);
         // What the ways write over the ground's block, read as the CPU reads
         // it (pxl-portable `window::ways_over`).
         let (value, f) = if block && i.kind == Kind::Block {
-            window::ways_over(self, found, zoom, c, (i.block, carved))
+            window::ways_over(self, found, cell.runs, zoom, c, (i.block, carved))
         } else {
             i.block
         };
