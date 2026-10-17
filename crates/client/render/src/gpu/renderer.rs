@@ -794,12 +794,13 @@ struct CastBuffers {
     face_built: Built,
     starts: u32,
     /// The eye's windows folded over their squares (`joined_cs`), over its
-    /// group, written where the windows' slots moved (`refold`); then
-    /// copied into `joined_read` and mapped back (`read_back`), once a
-    /// mapping is free, while `joined_back`; the mapping's own word where
-    /// the guest's allocator puts it, as a square's is.
+    /// group, the window buffer's rows past their slot table
+    /// (`window::JOINED_AT`), written where the windows' slots moved
+    /// (`refold`); then copied into `joined_read` and mapped back
+    /// (`read_back`), once a mapping is free, while `joined_back`; the
+    /// mapping's own word where the guest's allocator puts it, as a
+    /// square's is.
     joined_built: Built,
-    joined: u32,
     joined_read: u32,
     joined_mapping: Box<u32>,
     refold: bool,
@@ -807,10 +808,9 @@ struct CastBuffers {
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
     group: u32,
-    bound: [u32; 8],
+    bound: [u32; 7],
     eye: u32,
     window: u32,
-    window_words: usize,
     shards: u32,
     /// Shards the buffer holds.
     shard_room: usize,
@@ -1028,16 +1028,14 @@ impl RaysPass {
                 face_built,
                 starts: buffer(word_bytes(pxl_portable::cast::START_WORDS as usize), buffer_usage::STORAGE),
                 joined_built,
-                joined: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::STORAGE | buffer_usage::COPY_SRC),
                 joined_read: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::MAP_READ | buffer_usage::COPY_DST),
                 joined_mapping: Box::new(DONE),
                 refold: false,
                 joined_back: false,
                 group: 0,
-                bound: [0; 8],
+                bound: [0; 7],
                 eye: buffer(word_bytes(eye::WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
-                window: buffer(word_bytes(cast.window.len()), storage),
-                window_words: cast.window.len(),
+                window: buffer(word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize), storage | buffer_usage::COPY_SRC),
                 shards: 0,
                 shard_room: 0,
                 size: [0; 2],
@@ -1094,7 +1092,8 @@ impl RaysPass {
             return;
         }
         self.kind = FrameKind::cast;
-        xpute_kit::ensure!(cast.window.len() <= c.window_words, ENOTRECOVERABLE, cast.window.len());
+        // The slot table fills the rows before the fold's (`window::JOINED_AT`).
+        xpute_kit::ensure!(cast.window.len() == (4 * window::JOINED_AT) as usize, ENOTRECOVERABLE, cast.window.len());
         if window_moved {
             g.write_buffer(c.window, 0, bytes(cast.window));
             c.refold = true;
@@ -1130,14 +1129,14 @@ impl RaysPass {
             g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
             c.overwrite_revision = Some(o.revision);
         }
-        let bound = [c.eye, c.window, ground, rays.0, c.shards, c.overwrites, c.starts, c.joined];
+        let bound = [c.eye, c.window, ground, rays.0, c.shards, c.overwrites, c.starts];
         if bound != c.bound {
             release(c.group);
             c.group = cast_group(g, &c.built, bound);
             c.bound = bound;
         }
         let fresh_squares = self.ground.as_ref().map_or(0, |gb| gb.fresh);
-        let world = [c.eye, c.window, ground, c.shards, c.overwrites, fresh_squares, c.joined];
+        let world = [c.eye, c.window, ground, c.shards, c.overwrites, fresh_squares];
         let grows = Grows {
             window: cast.window,
             shards: cast.shards,
@@ -1213,7 +1212,7 @@ impl RaysPass {
         // as an entry answers only for the block whose key it holds.
         if let Some(c) = self.cast.as_mut().filter(|c| c.joined_back && *c.joined_mapping & DONE != 0) {
             let (e, size) = (g.encoder(), word_bytes(window::EYE_JOINED_WORDS as usize));
-            g.copy_buffer(e, (c.joined, 0), (c.joined_read, 0), size);
+            g.copy_buffer(e, (c.window, word_bytes((4 * window::JOINED_AT) as usize)), (c.joined_read, 0), size);
             g.submit(e);
             g.map_read(c.joined_read, 0, size, joined, &mut c.joined_mapping, 1);
             c.joined_back = false;
@@ -1308,12 +1307,12 @@ impl RaysPass {
     }
 }
 
-/// The cast's group 0 over `bound`: the eye, the window, the tiles' frames,
-/// the surface's rays, the service area's index, the overwrites, where its
-/// rays start (`start_cs` writes it, `cast_cs` reads it) and the windows
-/// folded over their squares (`joined_cs` writes it, the cast reads it).
-fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
-    let [eye, window, ground, rays, shards, overwrites, starts, joined] = bound;
+/// The cast's group 0 over `bound`: the eye, the window and its fold
+/// (`joined_cs` writes it, the cast reads it), the tiles' frames, the
+/// surface's rays, the service area's index, the overwrites and where its
+/// rays start (`start_cs` writes it, `cast_cs` reads it).
+fn cast_group(g: &Gpu, built: &Built, bound: [u32; 7]) -> u32 {
+    let [eye, window, ground, rays, shards, overwrites, starts] = bound;
     let entries = [
         buffer_entry(0, eye),
         buffer_entry(1, window),
@@ -1322,7 +1321,6 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
         buffer_entry(5, shards),
         buffer_entry(6, overwrites),
         buffer_entry(7, starts),
-        buffer_entry(8, joined),
     ];
     g.bind_group(built.layouts[0], &entries)
 }

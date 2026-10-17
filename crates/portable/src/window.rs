@@ -663,8 +663,12 @@ pub const JOINED_ENTRIES: u32 = joined_index(JOINED_LEVELS + 1, [0, 0]);
 /// An entry's words: its key, the block's first square at its cells' zoom,
 /// X then Y, each with its sign flipped (`key_word`), so the zero entry,
 /// as fresh memory holds it, names no square; then the join's bound
-/// (`ground::bound_word`).
-pub const JOINED_WORDS: u32 = 3;
+/// (`ground::bound_word`), and 0: a row of the windows' buffer, an `IVec4`
+/// as their slot table's are, after it (`JOINED_AT`).
+pub const JOINED_WORDS: u32 = 4;
+/// The row of the windows' buffer the eye's windows' entries begin at:
+/// past their slot table, a row a slot (pxl-kernel scene/cast.rs `window`).
+pub const JOINED_AT: u32 = EYE_WINDOWS * SLOTS;
 /// The eye's windows' entries, as the GPU lays them and the CPU reads them
 /// back: window `cell − FIRST_CELL` a run of `JOINED_ENTRIES`.
 pub const EYE_JOINED_WORDS: u32 = JOINED_ENTRIES * JOINED_WORDS * EYE_WINDOWS;
@@ -724,7 +728,7 @@ pub fn fold(w: &impl Squares, cell: Zoom, e: u32) -> [u32; JOINED_WORDS as usize
     if lo == crate::ground::UNBOUNDED[0] && hi == crate::ground::UNBOUNDED[1] {
         return [0; JOINED_WORDS as usize];
     }
-    [key_word(q[0]), key_word(q[1]), crate::ground::bound_word([lo, hi]) as u32]
+    [key_word(q[0]), key_word(q[1]), crate::ground::bound_word([lo, hi]) as u32, 0]
 }
 
 /// The join an entry `e` holds for the block of squares from `q`

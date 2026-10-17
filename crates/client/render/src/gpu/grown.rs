@@ -106,10 +106,9 @@ pub struct Grown {
 }
 
 /// The world `decor_cs` asks: the cast's eye, window, the tiles' frames, the
-/// service area's index and the overwrites; the squares filled this frame, which
-/// `decor_mark_cs` reads; and the windows folded over their squares
-/// (`joined_cs`).
-pub type World = [u32; 7];
+/// service area's index and the overwrites, and the squares filled this
+/// frame, which `decor_mark_cs` reads.
+pub type World = [u32; 6];
 
 impl Grown {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Grown {
@@ -139,7 +138,7 @@ impl Grown {
             records: 0,
             block: 0,
             room: 0,
-            bound: [0; 7],
+            bound: [0; 6],
             on: false,
             read: Read::default(),
             window: Read::default(),
@@ -254,7 +253,7 @@ impl Grown {
 
     fn regroup(&mut self, g: &Gpu, world: World) {
         let group = |built: &Built, ids: &[u32]| {
-            let mut entries = [buffer_entry(0, 0); 10];
+            let mut entries = [buffer_entry(0, 0); 9];
             for (k, &b) in ids.iter().enumerate() {
                 entries[k] = buffer_entry(k as u32, b);
             }
@@ -264,10 +263,10 @@ impl Grown {
         for id in self.groups {
             release(id);
         }
-        let [eye, window, ground, shards, overwrites, fresh, joined] = world;
+        let [eye, window, ground, shards, overwrites, fresh] = world;
         self.groups = [
             group(&self.mark, &[self.marks, window, fresh, self.records, self.grows, self.rows]),
-            group(&self.grow, &[eye, window, ground, shards, overwrites, self.shown, self.records, self.rows, self.grows, joined]),
+            group(&self.grow, &[eye, window, ground, shards, overwrites, self.shown, self.records, self.rows, self.grows]),
             group(&self.count, &[eye, self.params, self.rows, self.records, self.regions, window]),
             group(&self.args_built, &[self.meshes, self.regions, self.args, self.uniforms]),
             group(&self.place, &[self.params, self.rows, self.records, self.regions, self.block, window]),

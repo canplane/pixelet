@@ -3,6 +3,7 @@
 //! Pipelines made once each. Bind group layouts are shared by their words, so a
 //! bind group made for one pipeline serves every one declaring the same group.
 
+use crate::frame::shader::floor;
 use crate::frame::shader::record::{compute_entry, pipeline as record_of, source, HEAD, PIPELINES, SHADERS};
 use crate::gpu::api::{Format, Gpu};
 
@@ -89,11 +90,17 @@ impl Pipelines {
         }
         let groups = words[at] as usize;
         at += 1;
-        for group in 0..groups {
+        let mut stated: [&[u32]; floor::BIND_GROUPS] = [&[]; floor::BIND_GROUPS];
+        xpute_kit::ensure!(groups <= floor::BIND_GROUPS, ENOTRECOVERABLE, id);
+        for (group, entries) in stated.iter_mut().enumerate().take(groups) {
             let n = words[at] as usize;
-            b.layouts[group] = self.layout(g, &words[at + 1..at + 1 + 3 * n]);
+            *entries = &words[at + 1..at + 1 + 3 * n];
+            b.layouts[group] = self.layout(g, entries);
             at += 1 + 3 * n;
         }
+        // Its layout within what every device binds, each group's stages the
+        // union record.rs sees them from.
+        xpute_kit::ensure!(floor::holds(&stated[..groups]), ENOTRECOVERABLE, id);
         b.pipeline = g.pipeline(&words, &b.layouts[..groups], module, format);
         xpute_kit::ensure!(self.built_len < BUILT, ENOSPC, BUILT);
         self.built[self.built_len] = (key, b);

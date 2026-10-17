@@ -121,9 +121,6 @@ pub struct World<'a> {
     /// The eye, whose preview cuts are read where something placed or cut
     /// is asked about, not held through the descent.
     eye: &'a Eye,
-    /// The eye's windows folded over their squares (`joined_cs`,
-    /// pxl-portable `window::fold`), each window's `JOINED_ENTRIES` a run.
-    joined: &'a [u32],
 }
 
 impl Lanes for World<'_> {
@@ -213,10 +210,10 @@ impl Squares for World<'_> {
         let h = at(self.window, (cell - FIRST_CELL) * SLOTS + slot);
         ([h.x, h.y], h.z != 0)
     }
-    /// Off the fold's lane (`joined_cs`).
+    /// Off the windows' rows past their table (`joined_cs`).
     fn joined(&self, cell: u32, e: u32) -> [u32; window::JOINED_WORDS as usize] {
-        let k = ((cell - FIRST_CELL) * window::JOINED_ENTRIES + e) * window::JOINED_WORDS;
-        [at(self.joined, k), at(self.joined, k + 1), at(self.joined, k + 2)]
+        let r = at(self.window, window::JOINED_AT + (cell - FIRST_CELL) * window::JOINED_ENTRIES + e);
+        [r.x as u32, r.y as u32, r.z as u32, r.w as u32]
     }
     fn look(&self, cell: u32, slot: u32, i: u32) -> u32 {
         at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + i)
@@ -473,14 +470,13 @@ fn hit_block(o: &cast::Origin, ray: &cast::Ray, t: f32, axis: u32, zoom: u32, lo
 pub fn face_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] joined: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
 ) {
-    let joined: &[u32] = joined;
+    let window: &[IVec4] = window;
     let size: UVec3 = rays.query_size();
     if id.x >= size.x || id.y >= size.y {
         return;
@@ -497,7 +493,6 @@ pub fn face_cs(
         shards,
         overwrites,
         eye,
-        joined,
     };
     let (axis, zoom) = (ray::face_of(w.x) / 2, ray::zoom_of(w.x));
     let c = hit_block(&origin, &ray, f32::from_bits(w.y), axis, zoom, w.z);
@@ -582,14 +577,13 @@ type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 #[spirv(compute(threads(1, 1, 1)))]
 pub fn start_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] joined: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
 ) {
-    let joined: &[u32] = joined;
+    let window: &[IVec4] = window;
     let (origin, detail) = eye_origin(eye);
     let mut world = World {
         window,
@@ -597,7 +591,6 @@ pub fn start_cs(
         shards,
         overwrites,
         eye,
-        joined,
     };
     let s = cast::start(&mut world, &origin, detail);
     put(starts, cast::START_PLACE, s.place.zoom);
@@ -616,15 +609,14 @@ pub fn start_cs(
 pub fn cast_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] joined: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
 ) {
-    let joined: &[u32] = joined;
+    let window: &[IVec4] = window;
     let size: UVec3 = rays.query_size();
     if id.x >= size.x || id.y >= size.y {
         return;
@@ -636,7 +628,6 @@ pub fn cast_cs(
         shards,
         overwrites,
         eye,
-        joined,
     };
     // Started where every ray from the eye starts alike (`start_cs`), what
     // was handed the nodes over it read only where a ray climbs past it.
@@ -656,41 +647,39 @@ pub fn cast_cs(
 }
 
 /// The eye's windows folded over their squares, a thread an entry
-/// (pxl-portable `window::fold`): each window's levels over a square, the
-/// join of its aligned blocks of squares, which a node wider than a square
-/// reads as one entry (`window::bounded`). Run where the windows' slots
-/// moved; a present square's levels stand while it does.
+/// (pxl-portable `window::fold`), each a row of the windows' buffer past
+/// their slot table (`window::JOINED_AT`): each window's levels over a
+/// square, the join of its aligned blocks of squares, which a node wider
+/// than a square reads as one entry (`window::bounded`). Run where the
+/// windows' slots moved; a present square's levels stand while it does.
 #[spirv(compute(threads(64, 1, 1)))]
 #[allow(clippy::too_many_arguments)]
 pub fn joined_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] joined: &mut [u32],
 ) {
     if id.x >= window::JOINED_ENTRIES * window::EYE_WINDOWS {
         return;
     }
     let (cell, e) = (FIRST_CELL + id.x / window::JOINED_ENTRIES, id.x % window::JOINED_ENTRIES);
-    let entry = {
-        let read: &[u32] = joined;
+    let [x, y, bound, pad] = {
+        let read: &[IVec4] = window;
         let world = World {
-            window,
+            window: read,
             ground,
             shards,
             overwrites,
             eye,
-            joined: read,
         };
         window::fold(&world, cell, e)
     };
-    let mut k = 0;
-    while k < window::JOINED_WORDS {
-        put(joined, id.x * window::JOINED_WORDS + k, entry[k as usize]);
-        k += 1;
+    let k = (window::JOINED_AT + id.x) as usize;
+    if k < window.len() {
+        window[k] = IVec4::new(x as i32, y as i32, bound as i32, pad as i32);
     }
 }
 
@@ -833,7 +822,6 @@ pub fn decor_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] out: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] grows: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] joined: &[u32],
 ) {
     let listed = at(grows, scatter::GROWS_AT + id.z);
     let (square, kind) = (listed & 0xffff, listed >> 16);
@@ -856,7 +844,6 @@ pub fn decor_cs(
             shards,
             overwrites,
             eye,
-            joined,
         },
         rows,
     };

@@ -135,6 +135,8 @@ fn compute(dir: &Path) -> String {
         let entries: Vec<String> = group.iter().map(|(b, k)| format!("{b}, COMPUTE, {k}")).collect();
         out += &format!("pub const {upper}_GROUP: [u32; {}] = [{}];\n", 3 * group.len(), entries.join(", "));
         out += &format!("pub const {upper}_WORKGROUP: [u32; 3] = [{}];\n", workgroup.expect("an entry's workgroup"));
+        // Its layout within what every device binds (frame/shader/floor.rs).
+        out += &format!("const _: () = assert!(crate::frame::shader::floor::holds(&[&{upper}_GROUP]), \"{stem}'s group binds past WebGPU's floor\");\n");
     }
     out
 }
