@@ -87,16 +87,16 @@ impl<'a> World<'a> {
     }
 
     /// The ground of `node`'s cells at `zoom` and `ring` about them, read off
-    /// the ground its cells at `cell` are read from, into `into`; past the
-    /// service area, where no tile is held, the Earth's. Nothing where its
-    /// ground is not held or the heap refused it room.
-    pub(super) fn window_ground(&self, node: (Zoom, [i64; 2]), cell: Zoom, zoom: Zoom, ring: u32, into: &mut Window) -> Answer<()> {
+    /// the ground its cells at `cell` are read from, `line`'s tile, into
+    /// `into`; past the service area, where no tile is held, the Earth's.
+    /// Nothing where its ground is not held or the heap refused it room.
+    pub(super) fn patch_ground(&self, line: &Line, node: (Zoom, [i64; 2]), cell: Zoom, zoom: Zoom, ring: u32, into: &mut Patch) -> Answer<()> {
         into.cell = zoom;
         into.earth = source::past_at(node.1.map(|v| (v as f64 + 0.5) * units(node.0)));
         if into.earth {
             return Answer::Exact(());
         }
-        self.ground(&self.terrain.cursor(node, cell), node, cell, ring).and_then(|g| {
+        self.ground(line, node, cell, ring).and_then(|g| {
             let d = zoom as i32 - node.0 as i32;
             let (own, across) = match d {
                 0.. => (node.1.map(|v| v << d), 1 << d),
@@ -112,15 +112,15 @@ impl<'a> World<'a> {
     /// The surface of the cell `c` of `cell`: its ground's top, in units,
     /// and its face; none where it has no ground.
     pub fn surface_of(&self, cell: Zoom, c: [i64; 2]) -> Answer<Option<Surface>> {
-        let window = WINDOW.get(Window::default);
-        self.window_ground((cell, c), cell, cell, 1, window).map(|()| {
-            if window.earth {
+        let patch = PATCH.get(Patch::default);
+        self.patch_ground(&self.terrain.cursor((cell, c), cell), (cell, c), cell, cell, 1, patch).map(|()| {
+            if patch.earth {
                 return Some(Surface {
                     top: f64::from(pxl_portable::SEA_LEVEL),
                     block: pxl_spec::block::cube::sentinel::unknown,
                 });
             }
-            let g = &window.grid;
+            let g = &patch.grid;
             g.index(c).and_then(|i| {
                 g.top(i).map(|t| Surface {
                     top: f64::from(t) * units(cell),
@@ -131,17 +131,17 @@ impl<'a> World<'a> {
     }
 }
 
-/// The ground's grid a reader reads its cells into (`World::window_ground`),
+/// The ground's grid a reader reads its cells into (`World::patch_ground`),
 /// kept between asks so a settled ask takes nothing from the heap.
 #[derive(Default)]
-pub(super) struct Window {
+pub(super) struct Patch {
     grid: Grid,
     cell: Zoom,
     /// Past the service area: the Earth's ground, solid to sea level.
     earth: bool,
 }
 
-impl Window {
+impl Patch {
     /// Its cells' grid; none past the service area, where no tile is held.
     pub(super) fn grid(&self) -> Option<&Grid> {
         (!self.earth).then_some(&self.grid)
@@ -152,5 +152,5 @@ impl Window {
     }
 }
 
-/// The window kept for a reader.
-static WINDOW: Global<Window> = Global::new();
+/// The patch kept for a reader.
+static PATCH: Global<Patch> = Global::new();

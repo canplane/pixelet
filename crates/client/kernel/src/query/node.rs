@@ -47,7 +47,6 @@ use pxl_portable::mask::{filled, mask};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::placed::{self, Cut, Held, BLOCK, SPLIT};
-use pxl_spec::block::sample::Grid;
 use pxl_spec::block::Block;
 use pxl_spec::procedural::Cave;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -56,6 +55,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 
+use super::block::Patch;
 use super::world::World;
 use crate::io::source;
 use crate::layer::residency::Line;
@@ -88,9 +88,9 @@ pub(super) struct At {
     line: Option<Line>,
 }
 
-/// The grid a block reads its cell and the ring about it into, kept so a
+/// The patch a block reads its cell and the ring about it into, kept so a
 /// settled ask takes nothing from the heap.
-static CELL: Global<Grid> = Global::new();
+static CELL: Global<Patch> = Global::new();
 
 impl World<'_> {
     /// What is in the block `b` of `zoom`, X on the asker's lap, at its own
@@ -153,7 +153,7 @@ impl World<'_> {
         let mut reading = Reading::new(self, at);
         let (ground, _, ()) = ground::node(&mut reading, cave, (zoom, b.map(|v| v as i32)), [zoom, zoom], true);
         // The ways are read with the cell, and stand within its tile's bound.
-        let grid = reading.read.then(|| CELL.get(Grid::default));
+        let grid = reading.read.then(|| CELL.get(Patch::default).grid()).flatten();
         reading.answer(ground.kind != Kind::Lacks, || match grid {
             Some(grid) => grid.ways_over(b, ground.block),
             None => (ground.block.0 != u32::from(sentinel::void)).then(|| {
@@ -304,26 +304,20 @@ impl ground::Held for Reading<'_, '_> {
         )
     }
 
-    /// The block's cell and the ring about it read into the grid (`CELL`),
-    /// as the ways over it are read with it, off the grid itself: no place.
+    /// The block's cell and the ring about it read into the patch (`CELL`)
+    /// off the line the descent carries, as the ways over it are read with
+    /// it, off the patch itself: no place.
     fn cell(&mut self, zoom: Zoom, _: [i32; 3]) -> (Cell, (), bool) {
         let (_, b) = self.at.node;
-        let none = Cell::NONE;
         let line = self.world.line(self.at, zoom);
-        let Some(g) = self.take(self.world.ground(&line, (zoom, [b[0], b[1]]), zoom, 1)) else {
-            return (none, (), false);
-        };
-        let grid = CELL.get(Grid::default);
-        match grid.read(&g.around(), zoom, g.tile.zoom, g.first_at(zoom), [b[0] - 1, b[1] - 1], 3) {
-            Ok(()) => {
+        let patch = CELL.get(Patch::default);
+        let read = self.take(self.world.patch_ground(&line, (zoom, [b[0], b[1]]), zoom, zoom, 1, patch));
+        match read.and(patch.grid()) {
+            Some(grid) => {
                 self.read = true;
-                (grid.cell_at([b[0], b[1]]).unwrap_or(none), (), true)
+                (grid.cell_at([b[0], b[1]]).unwrap_or(Cell::NONE), (), true)
             }
-            // The heap refused a 3 × 3 grid's room.
-            Err(_) => {
-                self.lacked = Some(g.tile);
-                (none, (), false)
-            }
+            None => (Cell::NONE, (), false),
         }
     }
 }
