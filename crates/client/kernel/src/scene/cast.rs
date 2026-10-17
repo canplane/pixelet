@@ -25,18 +25,24 @@ use crate::layer::Base as _;
 use crate::setting::store::settings_store;
 use crate::view::lens;
 
-/// The shards the service area serves, as the GPU reads them.
-static SHARDS: Global<Vec<[i32; 4]>> = Global::new();
+/// The shards the service area serves, as the GPU reads them, and whether
+/// a declared source made them: one is declared once (io/source.rs
+/// `declare`), so they are made then and not again.
+static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 
 /// Each shard the service area serves: its tile zoom, x (as `wrap_index`
 /// names it) and y, and a spare; one serving nothing (zoom 255) where none
 /// is declared, since a binding holds at least one.
 pub fn shards() -> &'static [[i32; 4]] {
-    let s = SHARDS.get(Vec::new);
-    s.clear();
-    crate::io::source::served(&mut |zoom, [x, y]| s.push([zoom as i32, x, y, 0]));
-    if s.is_empty() {
-        s.push([255, 0, 0, 0]);
+    let declared = crate::io::source::top().is_some();
+    let (made, s) = SHARDS.get(|| (false, Vec::new()));
+    if s.is_empty() || *made != declared {
+        s.clear();
+        crate::io::source::served(&mut |zoom, [x, y]| s.push([zoom as i32, x, y, 0]));
+        if s.is_empty() {
+            s.push([255, 0, 0, 0]);
+        }
+        *made = declared;
     }
     s
 }
