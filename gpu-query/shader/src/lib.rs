@@ -609,13 +609,11 @@ pub fn cast_cs(
     };
     let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, (place, at_of(read, cast::START_AT)), &Starts(read));
     let w = word(&origin, &ray, met, eye.origin.w != 0);
-    // SAFETY: within the rays, just bounded by their size.
-    unsafe {
-        rays.write(UVec3::new(id.x, id.y, 0), w[0]);
-        rays.write(UVec3::new(id.x, id.y, 1), w[1]);
-        rays.write(UVec3::new(id.x, id.y, 2), w[2]);
-        rays.write(UVec3::new(id.x, id.y, 3), w[3]);
-        rays.write(UVec3::new(id.x, id.y, ray::PLACE), w[ray::PLACE as usize]);
+    let mut k = 0;
+    while k < ray::WORDS {
+        // SAFETY: within the rays, just bounded by their size.
+        unsafe { rays.write(UVec3::new(id.x, id.y, k), w[k as usize]) };
+        k += 1;
     }
 }
 
