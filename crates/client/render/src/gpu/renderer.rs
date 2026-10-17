@@ -841,11 +841,6 @@ impl Read {
         self.take(bytes(lane));
     }
 
-    /// Whether anything read so far differs from the last time.
-    pub(crate) fn moved(&self) -> bool {
-        !self.same
-    }
-
     /// What this frame changed of the stage's input that has no words, as
     /// an image come or a table drawn.
     pub(crate) fn mark(&mut self, changed: bool) {
@@ -1616,7 +1611,7 @@ impl Renderer {
         let baked = self.impostor.bake(g, ahead, &mut self.decor, b);
         read.mark(baked);
         let gridded = self.screen.grids(g, ahead, &mut stamps[SPAN_FILL]);
-        let (tables, exposed) = self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR], read.moved());
+        let (tables, exposed) = self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR]);
         read.mark(tables);
         if baked || gridded || exposed {
             g.submit(ahead);

@@ -22,6 +22,7 @@ use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sample
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::Mips;
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::renderer::Read;
 use crate::gpu::renderer::Upload;
 use crate::look::atmosphere as model;
 use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_SUN_LIGHT};
@@ -108,6 +109,11 @@ pub struct Atmosphere {
     steps: [Option<f32>; 2],
     sun_mu: f32,
     moon_mu: f32,
+    /// The words and the eye's up as last laid out, and whether this frame's
+    /// moved: what the uniform and the exposure texel stand on, read here
+    /// alone.
+    read: Read,
+    moved: bool,
     earth: ImageMap,
     earth_tiles: (u32, u32),
 }
@@ -183,6 +189,8 @@ impl Atmosphere {
             landed: [0; 2],
             landed_word: 0,
             steps: [None; 2],
+            read: Read::default(),
+            moved: false,
             sun_mu: 1.0,
             moon_mu: 1.0,
             earth: ImageMap::new(g, EARTH_SIZE.0, EARTH_SIZE.1),
@@ -297,16 +305,24 @@ impl Atmosphere {
         self.words[LAND_ALTITUDE] = env[ENV_AIR + 3];
         let height = |d: &[f32]| (d[0] as f64 * up[0] + d[1] as f64 * up[1] + d[2] as f64 * up[2]) as f32;
         (self.sun_mu, self.moon_mu) = (height(sun), height(moon));
-        g.write_buffer(self.uniform, 0, bytes(&self.words));
+        let r = &mut self.read;
+        r.begin();
+        r.read(&self.words);
+        r.read(&up[..]);
+        self.moved = !r.end();
+        if self.moved {
+            g.write_buffer(self.uniform, 0, bytes(&self.words));
+        }
     }
 
     /// Whether a table the world reads was drawn again, and whether it
     /// recorded anything. A light's view is drawn again when its height or
     /// the eye's altitude has moved (`moved`), and only while no slopes are on
     /// their way, which it writes; it takes its light's slope as it is drawn.
-    /// The exposure texel is a function of the words it reads and the tables,
-    /// so it is drawn where `words_moved` says the words did, or a table was.
-    pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp, words_moved: bool) -> (bool, bool) {
+    /// The exposure texel is a function of the words it reads, the eye's up
+    /// and the tables, so it is drawn where `lay_out` found the words or the
+    /// up moved, or a table was drawn.
+    pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> (bool, bool) {
         let mut drew = !self.baked;
         if !self.baked {
             self.table(g, encoder, TRANSMITTANCE, stamp);
@@ -332,7 +348,7 @@ impl Atmosphere {
         if self.slopes_of.contains(&true) && free {
             g.copy_buffer(encoder, (self.slopes.0, 0), (self.slopes.1, 0), 8);
         }
-        let exposed = drew || words_moved;
+        let exposed = drew || self.moved;
         if exposed {
             self.table(g, encoder, EXPOSURE_TEXEL, stamp);
         }
