@@ -34,6 +34,11 @@ pub(crate) fn take() -> bool {
     !c.ground.is_empty() || !c.written.is_empty()
 }
 
+/// Where the objects were written, as the last take found them.
+pub fn written() -> &'static [Aabb] {
+    &changed().written
+}
+
 /// Whether a ground change, or one of `layer`'s tiles a reader also reads
 /// whose answer moved, touches the columns over `xy`, its corners in units,
 /// X on any lap. Taken once a frame turn, in its visible phase, after its

@@ -338,6 +338,7 @@ fn changes_step() {
     static MOVED: Global<[Vec<pxl_spec::space::layer::tile::Tile>; 3]> = Global::new();
     let [places, earth, divisions] = MOVED.get(Default::default);
     let shared = crate::query::changed::take();
+    crate::scene::decor::drawn::edited(crate::query::changed::written());
     PlaceTile::residency().take_moved(places);
     Earth::residency().take_moved(earth);
     DivisionTile::residency().take_moved(divisions);

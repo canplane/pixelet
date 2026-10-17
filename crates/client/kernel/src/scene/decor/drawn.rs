@@ -5,7 +5,8 @@
 //! the CPU knows, handed over and never read back. Each kind's zooms where
 //! it is a sprite's worth, a pixel's size and the tiers' floors, the anchor
 //! the decor block is drawn about, the decor the eraser leaves out, each
-//! variant's extent, and placed decor as records.
+//! variant's extent, placed decor as records, and the boxes the objects
+//! were written in, where what the ground grows may have changed.
 
 use pxl_portable::scatter::{self, drawn, row_of};
 use pxl_portable::LEAF_CELL;
@@ -14,7 +15,7 @@ use pxl_spec::block::decor::DECORS;
 use pxl_spec::space::camera::grid::{split_distance, target_cell_px, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::zoom::{index_of, Zoom, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{index_of, units, Zoom, UNIT_ZOOM};
 use xpute_guest::global::Global;
 
 use crate::layer::object::meta::user_decor_pick;
@@ -56,6 +57,10 @@ struct Handed {
     shown: [u32; DECORS.len()],
     params: [u32; drawn::PARAM_WORDS as usize],
     placed: Vec<[u32; 4]>,
+    /// The boxes the objects were written in at the last take, in leaf
+    /// cells, and how many the next frame hands (`edited`, `frame`).
+    edits: [[i32; 4]; scatter::EDITS as usize],
+    edited: usize,
     translation: [f32; 3],
     /// What it was last made of, by value.
     seen: Option<Seen>,
@@ -84,6 +89,8 @@ fn handed() -> &'static mut Handed {
         shown: core::array::from_fn(|k| (FIRST_CELL..=LEAF_CELL).filter(|&c| decor_shown(DECORS[k].extent(), c)).fold(0, |w, c| w | 1 << (c - FIRST_CELL))),
         params: [0; drawn::PARAM_WORDS as usize],
         placed: Vec::new(),
+        edits: [[0; 4]; scatter::EDITS as usize],
+        edited: 0,
         translation: [0.0; 3],
         seen: None,
         revision: 0,
@@ -157,14 +164,36 @@ pub fn revision() -> u32 {
     handed().revision
 }
 
-/// The hand-over `step` made, none where decor is off.
+/// Where the objects were written, as the turn's change took them
+/// (query/changed.rs), for the next frame to hand: each region's columns in
+/// leaf cells, `[x0, y0, x1, y1)`, X on its own lap; past `scatter::EDITS`,
+/// the rest joined into the last, so every write is met.
+pub fn edited(regions: &[Aabb]) {
+    let h = handed();
+    let leaf = units(LEAF_CELL);
+    h.edited = 0;
+    for r in regions {
+        let b = [libm::floor(r.min[0] / leaf), libm::floor(r.min[1] / leaf), libm::ceil(r.max[0] / leaf), libm::ceil(r.max[1] / leaf)].map(|v| v as i32);
+        if h.edited < h.edits.len() {
+            h.edits[h.edited] = b;
+            h.edited += 1;
+        } else {
+            let last = &mut h.edits[h.edited - 1];
+            *last = [last[0].min(b[0]), last[1].min(b[1]), last[2].max(b[2]), last[3].max(b[3])];
+        }
+    }
+}
+
+/// The hand-over `step` made, none where decor is off; the edits `edited`
+/// gave, once.
 pub fn frame() -> Option<DecorFrame<'static>> {
     let h = handed();
+    let edited = core::mem::take(&mut h.edited);
     h.on.then_some(DecorFrame {
         shown: &h.shown,
         params: &h.params,
         placed: &h.placed,
         translation: h.translation,
-        edits: &[],
+        edits: &h.edits[..edited],
     })
 }
