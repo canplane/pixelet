@@ -11,7 +11,7 @@ use pxl_portable::ground::Cell;
 use pxl_portable::window::{self as cells, Found, SQUARE_SHIFT};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::q3;
-use pxl_spec::space::coord::zoom::{base_of, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{base_of, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, Tile};
@@ -28,15 +28,13 @@ impl Residency<TerrainTile> {
     /// cells, in leaf cells: the bound over the cells of `line`'s tile, off
     /// the finest window holding them, one look-up whatever the node's size
     /// (`relief`). A coarser window standing in holds its own cells, which
-    /// its bound holds, and names the tile lacked. None for a column a shard
-    /// or finer past the service area, where no tile is; where no window
-    /// holds it, the lack, never nothing. `place` is where a node over it
-    /// found its cells, or `Found::NONE`, and becomes where its own are
+    /// its bound holds, and names the tile lacked; where no window holds it,
+    /// the lack, never nothing. Past the service area no window holds
+    /// anything: a reader asks that first, the descent of its shard
+    /// (pxl-portable `area::Shard`). `place` is where a node over it found
+    /// its cells, or `Found::NONE`, and becomes where its own are
     /// (pxl-portable `window::step`).
     pub fn relief(&self, line: &Line, place: &mut Found, node: Node<2>) -> Answer<Option<[i32; 2]>> {
-        if node.0 >= SHARD_ZOOM && past(node) {
-            return Answer::Exact(None);
-        }
         let (r, from, here) = relief(line.tile, place, node);
         held(line, from, here, Some(r))
     }

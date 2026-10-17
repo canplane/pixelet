@@ -52,12 +52,17 @@ pub fn past(area: &impl Area, leaf: [i32; 2]) -> bool {
 /// is past, nor walled (`walled`), nor has a leaf cell gone beside it
 /// (`edge`), which a leaf cell's reach out of the shard ends in the eight.
 /// `UNKNOWN` coarser than a shard, or before it is asked.
+/// One word: known, then which of the nine shards are served, bit `(dy +
+/// 1)·3 + (dx + 1)` for the shard `dx, dy` from its own; past where its own
+/// is not, `inside` where all nine are, and a leaf tile in any of them past
+/// or not without asking the area again (`past_leaf`).
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub struct Shard(u32);
 
 const SHARD_KNOWN: u32 = 1;
-const SHARD_PAST: u32 = 2;
-const SHARD_INSIDE: u32 = 4;
+const SHARD_SERVED_SHIFT: u32 = 1;
+const SHARD_ALL: u32 = 0x1ff;
+const _: () = assert!(LEAF_ZOOM >= SHARD_ZOOM);
 
 impl Shard {
     pub const UNKNOWN: Shard = Shard(0);
@@ -70,7 +75,7 @@ impl Shard {
             return self;
         }
         if !area.ends() {
-            return Shard(SHARD_KNOWN | SHARD_INSIDE);
+            return Shard(SHARD_KNOWN | SHARD_ALL << SHARD_SERVED_SHIFT);
         }
         let s = zoom - SHARD_ZOOM;
         let own = [c[0] >> s, c[1] >> s];
@@ -92,17 +97,34 @@ impl Shard {
             }
             i += 1;
         }
-        let past = if served & 1 << 4 == 0 { SHARD_PAST } else { 0 };
-        let inside = if served == 0x1ff { SHARD_INSIDE } else { 0 };
-        Shard(SHARD_KNOWN | past | inside)
+        Shard(SHARD_KNOWN | served << SHARD_SERVED_SHIFT)
+    }
+    const fn known(self) -> bool {
+        self.0 & SHARD_KNOWN != 0
+    }
+    const fn served(self) -> u32 {
+        self.0 >> SHARD_SERVED_SHIFT
     }
     /// Past the area: known so.
     pub const fn past(self) -> bool {
-        self.0 & SHARD_PAST != 0
+        self.known() && self.served() & 1 << 4 == 0
     }
     /// Known to lie, a leaf cell about it too, inside the area.
     pub const fn inside(self) -> bool {
-        self.0 & SHARD_INSIDE != 0
+        self.served() == SHARD_ALL
+    }
+    /// Whether the leaf tile `leaf` is past the area (`past`): off what
+    /// `self`, the node `(zoom, c)`'s, knows where the leaf lies in its
+    /// shard or the eight about it, else asked of the area.
+    pub fn past_leaf(self, area: &impl Area, (zoom, c): (Zoom, [i32; 2]), leaf: [i32; 2]) -> bool {
+        if self.known() && zoom >= SHARD_ZOOM {
+            let (s, t) = (zoom - SHARD_ZOOM, LEAF_ZOOM - SHARD_ZOOM);
+            let d = [wrap(SHARD_ZOOM, (leaf[0] >> t) - (c[0] >> s)), (leaf[1] >> t) - (c[1] >> s)];
+            if d[0] >= -1 && d[0] <= 1 && d[1] >= -1 && d[1] <= 1 {
+                return self.served() >> ((d[1] + 1) * 3 + d[0] + 1) & 1 == 0;
+            }
+        }
+        past(area, leaf)
     }
     pub const fn word(self) -> u32 {
         self.0
@@ -155,7 +177,8 @@ pub fn walled(area: &impl Area, shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32
     }
     let lo = [in_leaf_cells(zoom, c[0]) - 1, in_leaf_cells(zoom, c[1]) - 1];
     let hi = [in_leaf_cells(zoom, c[0] + 1) + 1, in_leaf_cells(zoom, c[1] + 1) + 1];
-    past(area, tile_of(lo)) || past(area, tile_of([hi[0], lo[1]])) || past(area, tile_of([lo[0], hi[1]])) || past(area, tile_of(hi))
+    let past = |l: [i32; 2]| shard.past_leaf(area, (zoom, c), tile_of(l));
+    past(lo) || past([hi[0], lo[1]]) || past([lo[0], hi[1]]) || past(hi)
 }
 
 /// The leaf cells about the leaf cell holding the block `b` at `cell`, a

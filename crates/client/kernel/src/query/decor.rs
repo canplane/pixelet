@@ -16,7 +16,7 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::wrap_cell;
-use pxl_spec::space::coord::zoom::{cube, index_of, units};
+use pxl_spec::space::coord::zoom::{cube, index_of, units, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -28,8 +28,10 @@ use super::world::World;
 use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Meta};
 use crate::layer::object::meta::placed;
+use crate::layer::terrain::window::Windowed;
 use crate::layer::Query;
 use crate::model::registry::Models;
+use pxl_portable::area::{self, Shard};
 use pxl_portable::window::Found;
 
 /// How decor is struck: against its models, where the frame drawing at `tau` holds it.
@@ -214,9 +216,16 @@ impl<'a> World<'a> {
         let a = c.map(|v| v >> (zoom - z));
         let low = cube(zoom, c).min[2] - s.reach;
         let leaf = units(GROUND.cell());
+        // Past the area no ground stands: one pass over the shards, for the
+        // nine about the node's (pxl-portable `area::Shard`).
+        let own = (z, [a[0] as i32, a[1] as i32]);
+        let shard = Shard::UNKNOWN.at(&Windowed, own);
         let ground = (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
                 let xy = (z, [a[0] + dx, a[1] + dy]);
+                if z >= SHARD_ZOOM && shard.past_leaf(&Windowed, own, area::tile_at(z, [xy.1[0] as i32, xy.1[1] as i32])) {
+                    return false;
+                }
                 let mut place = Found::NONE;
                 match self.terrain.relief(&self.terrain.cursor(xy, GROUND.grid_zoom(z.min(LEAF_ZOOM))), &mut place, xy).value() {
                     Some(r) => r.is_some_and(|[_, hi]| f64::from(hi) * leaf > low),
