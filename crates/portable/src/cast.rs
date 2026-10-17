@@ -542,9 +542,13 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
                 Kind::Split => into = true,
             }
         }
-        if into {
-            // The child holding where the ray enters: past a mid plane on
-            // each axis the ray has crossed by then.
+        // The child gone into next, what was handed its parent, and the span
+        // the ray is in it within: into this node, the child holding where
+        // the ray enters, past a mid plane on each axis the ray has crossed
+        // by then; on past it, the next child of the nearest ancestor that
+        // has one across the face the ray leaves its current child by, the
+        // ray in that ancestor up to where it leaves the ancestor's box.
+        let (kid, handed, from, to) = if into {
             let half = place.child(7).min(o);
             let upper = |d: f32, half: f32| {
                 (if d > 0.0 {
@@ -557,44 +561,38 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
             };
             let k = upper(ray.direction[0], half[0]) | upper(ray.direction[1], half[1]) << 1 | upper(ray.direction[2], half[2]) << 2;
             stack[place.zoom as usize] = at;
-            let kid = place.child(k);
-            at = q.child(&at, kid.zoom, kid.node(o));
-            (place, (t0, t1, axis)) = (kid, slab(ray, kid.min(o), kid.side(), t0, t1));
-            continue;
-        }
-        // On past it: to the next child of the nearest ancestor that has
-        // one across the face the ray leaves its current child by, the ray
-        // in that ancestor up to where it leaves the ancestor's box.
-        loop {
-            if place.zoom == 0 {
-                return Met {
-                    ends: Ends::On,
-                    stop: Stop {
-                        t: t1,
-                        axis,
-                        place,
-                        at,
-                        block: Q::AIR,
-                    },
-                    visits,
-                };
+            (place.child(k), at, t0, t1)
+        } else {
+            loop {
+                if place.zoom == 0 {
+                    return Met {
+                        ends: Ends::On,
+                        stop: Stop {
+                            t: t1,
+                            axis,
+                            place,
+                            at,
+                            block: Q::AIR,
+                        },
+                        visits,
+                    };
+                }
+                let e = leaves(ray, place.min(o), place.side());
+                let k = place.slot(o);
+                let parent = place.parent(o);
+                let bit = 1 << e;
+                let d = crate::axis(ray.direction, e);
+                let end = slab(ray, parent.min(o), parent.side(), 0.0, ray.reach).1;
+                if (d > 0.0) == (k & bit != 0) || d == 0.0 {
+                    // The face is the parent's own: on past the parent.
+                    (place, t1) = (parent, end);
+                    continue;
+                }
+                let handed = if parent.zoom < top { over.over(parent.zoom) } else { stack[parent.zoom as usize] };
+                break (parent.child(k ^ bit), handed, t1, end);
             }
-            let e = leaves(ray, place.min(o), place.side());
-            let k = place.slot(o);
-            let parent = place.parent(o);
-            let bit = 1 << e;
-            let d = crate::axis(ray.direction, e);
-            if (d > 0.0) == (k & bit != 0) || d == 0.0 {
-                // The face is the parent's own: on past the parent.
-                (place, t1) = (parent, slab(ray, parent.min(o), parent.side(), 0.0, ray.reach).1);
-                continue;
-            }
-            let kid = parent.child(k ^ bit);
-            let end = slab(ray, parent.min(o), parent.side(), 0.0, ray.reach).1;
-            let handed = if parent.zoom < top { over.over(parent.zoom) } else { stack[parent.zoom as usize] };
-            at = q.child(&handed, kid.zoom, kid.node(o));
-            (place, (t0, t1, axis)) = (kid, slab(ray, kid.min(o), kid.side(), t1, end));
-            break;
-        }
+        };
+        at = q.child(&handed, kid.zoom, kid.node(o));
+        (place, (t0, t1, axis)) = (kid, slab(ray, kid.min(o), kid.side(), from, to));
     }
 }
