@@ -1,13 +1,13 @@
 // pxl-kernel/profiler/frame.rs
 
-//! A frame's record, the worst ones kept, and the peaks since recording began.
+//! A frame's record, and the worst ones kept.
 
 use core::mem::{offset_of, size_of};
 
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use xpute_guest::sched::tick::PHASES;
 
-use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, SUMMARY, WORST};
+use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, WORST};
 use crate::profiler::word::{words, Words};
 use pxl_render::frame::draw::{
     PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
@@ -63,7 +63,6 @@ pub struct DeviceSample {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TileSample {
-    pub total: f64,
     pub by_zoom: [f64; ZOOMS],
     pub place: f64,
 }
@@ -112,10 +111,6 @@ pub struct FrameSample {
     /// frame, and their time, rise to fall each.
     pub turns: f64,
     pub busy_ms: f64,
-    /// The interval less the turns, and what the turns ran past it: one of
-    /// the two 0, so neither is ever negative.
-    pub off_turn_ms: f64,
-    pub over_ms: f64,
     pub budget_ms: f64,
     /// The parts of `busy_ms`: what is left of it is unmeasured.
     pub door_ms: f64,
@@ -152,27 +147,9 @@ pub struct WorstFrame {
     pub prev: FrameSample,
 }
 
-/// The largest of each since recording began, kept past the ring's minute.
-/// Written through `words!`: a hand-ordered copy once shifted every lane
-/// from the fifth on by one (2026-09-23).
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct FramePeak {
-    pub present: f64,
-    pub interval_ms: f64,
-    pub busy_ms: f64,
-    pub tick_ms: f64,
-    pub gpu_ms: f64,
-    pub draw_calls: f64,
-    pub triangles: f64,
-    pub waiting_terrain: f64,
-    pub waiting_place: f64,
-}
-
 words!(FrameSample, FRAME::WORDS,
     t => FRAME::t, interval_ms => FRAME::interval_ms, display_ms => FRAME::display_ms, settled => FRAME::settled,
-    turns => FRAME::turns, busy_ms => FRAME::busy_ms, off_turn_ms => FRAME::off_turn_ms, over_ms => FRAME::over_ms,
-    budget_ms => FRAME::budget_ms, door_ms => FRAME::door_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
+    turns => FRAME::turns, busy_ms => FRAME::busy_ms, budget_ms => FRAME::budget_ms, door_ms => FRAME::door_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     worst_effect_ms => FRAME::worst_effect_ms, worst_effect_name => FRAME::worst_effect_name,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
@@ -180,7 +157,7 @@ words!(FrameSample, FRAME::WORDS,
     gpu.census => FRAME::census, gpu.px => FRAME::px,
     device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb,
     device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb, device.objects => FRAME::gpu_objects,
-    tiles.total => FRAME::tiles_total, tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
+    tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
     heap.peak_bytes => FRAME::heap_peak_bytes, heap.lent_bytes => FRAME::heap_lent_bytes, heap.run_bytes => FRAME::heap_run_bytes,
     heap.held_bytes => FRAME::heap_held_bytes, heap.range_bytes => FRAME::heap_range_bytes,
     heap.largest_free_bytes => FRAME::heap_largest_free_bytes, heap.refusals => FRAME::heap_refusals, heap.releases => FRAME::heap_releases,
@@ -191,12 +168,6 @@ words!(FrameSample, FRAME::WORDS,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
-
-words!(FramePeak, SUMMARY::peak::WORDS,
-    present => SUMMARY::peak::present, interval_ms => SUMMARY::peak::interval_ms, busy_ms => SUMMARY::peak::busy_ms,
-    tick_ms => SUMMARY::peak::tick_ms, gpu_ms => SUMMARY::peak::gpu_ms, draw_calls => SUMMARY::peak::draw_calls,
-    triangles => SUMMARY::peak::triangles, waiting_terrain => SUMMARY::peak::waiting_terrain, waiting_place => SUMMARY::peak::waiting_place,
-);
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
 pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
@@ -219,7 +190,17 @@ pub fn overran(f: &FrameSample) -> bool {
     f.tick_ms > f.budget_ms + crate::sched::tick::HARD_SLACK_MS
 }
 
+/// What the interval's turns left of it, and what they ran past it: one of
+/// the two 0, read off the interval and the turns rather than kept beside them.
+pub fn off_turn_ms(f: &FrameSample) -> f64 {
+    (f.interval_ms - f.busy_ms).max(0.0)
+}
+
+pub fn over_ms(f: &FrameSample) -> f64 {
+    (f.busy_ms - f.interval_ms).max(0.0)
+}
+
 /// The interval's turns ran past it: a long frame, and `over_ms` by how much.
 pub fn long(f: &FrameSample) -> bool {
-    f.over_ms > 0.0
+    over_ms(f) > 0.0
 }

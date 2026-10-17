@@ -84,7 +84,6 @@ pub fn profiler_frame(t: FrameTurn) {
     for (p, _) in TerrainTile::residency().held() {
         tiles.by_zoom[p.zoom as usize] += 1.0;
     }
-    tiles.total = tiles.by_zoom.iter().sum();
     tiles.place = PlaceTile::residency().held().count() as f64;
     let (worst_effect_ms, worst_effect) = crate::turn::worst_effect();
     let [(waiting_terrain, out_terrain), (waiting_place, out_place)] = [TerrainTile::STREAM, PlaceTile::STREAM].map(|s| {

@@ -13,8 +13,9 @@ const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 /** A count of bytes as the one MB the figures are shown in, signed. */
 const signedBytes = (b: number) => `${b >= 0 ? "+" : ""}${valueText("_bytes", b)}`;
 const bytes = (b: number) => valueText("_bytes", b);
-/** Where the interval's turns ended: before it, by the time left, or past it, by how much. */
-const pastText = (f: Frame) => (f.over_ms > 0 ? `over by ${n1(f.over_ms)}` : `off-turn ${n1(f.off_turn_ms)}`);
+/** Where the interval's turns ended: before it, by the time left, or past it,
+ * by how much (the kernel's profiler/frame.rs `off_turn_ms`, `over_ms`). */
+const pastText = (f: Frame) => (f.busy_ms > f.interval_ms ? `over by ${n1(f.busy_ms - f.interval_ms)}` : `off-turn ${n1(f.interval_ms - f.busy_ms)}`);
 const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 
 export function failText(fail: u32, detail: u32): string {
@@ -90,8 +91,6 @@ function sideSection(r: ProfilerReport): string[] {
   return lines.length === 0 ? [] : ["state", ...lines];
 }
 
-const peakSection = (p: Record<string, f64>) => ["peak (since recording)", `  ${Object.entries(p).map(([k, v]) => fieldText(k, v)).join("  ")}`];
-
 function tasksSection(tasks: TaskSummary[]): string[] {
   const n = tasks.reduce((sum, t) => sum + t.n, 0);
   if (n === 0) return ["tasks n=0"];
@@ -115,7 +114,6 @@ export function profilerReportText(r: ProfilerReport): string {
   out.push(...windowSection(r));
   if (r.frames !== null) out.push(...lastSection(r.frames.last));
   out.push(...sideSection(r));
-  if (r.peak !== null) out.push(...peakSection(r.peak));
   out.push(...tasksSection(r.tasks));
   out.push(`long frames n=${r.longs.length}${loafSupported() ? "" : " (LoAF unsupported; longtask only)"}`);
 

@@ -123,7 +123,6 @@ export interface ProfilerReport {
   frames: FrameSummary | null;
   sections: Record<"open" | "counters" | "sheet" | "fetch" | "quality" | "view", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
-  peak: Record<string, f64> | null;
   tasks: TaskSummary[];
   recent: TaskRecord[];
   worst: { sample: Frame; prev: Frame | null }[];
@@ -212,6 +211,7 @@ function read(windowMs: f64 | null): Read {
 }
 
 export interface Gauge {
+  /** The frames and tasks the rings hold, which READ counts. */
   rec: { recording: boolean; elapsed_ms: f64; tasks: u32; frames: u32; truncated: boolean };
   frames: FrameSummary | null;
   /** The interval in progress, which no frame turn has closed. */
@@ -234,10 +234,10 @@ function worstAt([at, count]: [u32, u32]): ProfilerReport["worst"] {
 }
 
 export function profilerGaugeRead(windowMs: f64): Gauge {
-  const { summary: s } = read(windowMs);
+  const { summary: s, frames, tasks } = read(windowMs);
   const r = section(s, SUMMARY.rec);
   return {
-    rec: { recording: r.recording !== 0, elapsed_ms: r.elapsed_ms, tasks: r.tasks, frames: r.frames, truncated: r.truncated !== 0 },
+    rec: { recording: r.recording !== 0, elapsed_ms: r.elapsed_ms, tasks: tasks[1], frames: frames[1], truncated: r.truncated !== 0 },
     frames: frameSummary(s),
     open: section(s, SUMMARY.open) as Gauge["open"],
     tasks: taskSummaries(s),
@@ -251,7 +251,6 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
 
 export function profilerReportRead(): ProfilerReport {
   const { summary: s, tasks, worst } = read(null);
-  const peak = section(s, SUMMARY.peak);
   const stepsAt = SUMMARY.steps.AT;
   const steps = Array.from({ length: s[stepsAt + SUMMARY.steps.count] }, (_, i) => {
     const w = stepsAt + SUMMARY.steps.slots + i * STEP.WORDS;
@@ -277,7 +276,6 @@ export function profilerReportRead(): ProfilerReport {
       view: section(s, SUMMARY.view),
     },
     steps,
-    peak: peak.present === 0 ? null : Object.fromEntries(Object.entries(peak).filter(([k]) => k !== "present")),
     tasks: taskSummaries(s),
     recent: tasksAt(tasks[0] + recentFrom * TASK.WORDS * WORD, tasks[1] - recentFrom),
     worst: worstAt(worst),

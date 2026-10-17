@@ -34,14 +34,11 @@ words!(Spread, SPREAD::WORDS, p50 => SPREAD::p50, p95 => SPREAD::p95, max => SPR
 pub struct RecBlock {
     pub recording: f64,
     pub elapsed_ms: f64,
-    pub tasks: f64,
-    pub frames: f64,
     pub truncated: f64,
 }
 
 words!(RecBlock, SUMMARY::rec::WORDS,
-    recording => SUMMARY::rec::recording, elapsed_ms => SUMMARY::rec::elapsed_ms,
-    tasks => SUMMARY::rec::tasks, frames => SUMMARY::rec::frames, truncated => SUMMARY::rec::truncated,
+    recording => SUMMARY::rec::recording, elapsed_ms => SUMMARY::rec::elapsed_ms, truncated => SUMMARY::rec::truncated,
 );
 
 #[repr(C)]

@@ -13,9 +13,9 @@ use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
 use crate::profiler::block::{FetchBlock, FramesBlock, OpenBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::profiler::frame::FrameSample;
-use crate::profiler::frame::{long, missed, overran};
+use crate::profiler::frame::{long, missed, off_turn_ms, overran};
 use crate::profiler::log::window_baseline;
-use crate::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_open_interval, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
+use crate::profiler::record::{fixed_lane, profiler_frames_since, profiler_open_interval, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
 use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
@@ -79,8 +79,6 @@ pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
         &RecBlock {
             recording: rec.recording as u8 as f64,
             elapsed_ms: rec.elapsed_ms,
-            tasks: rec.tasks as f64,
-            frames: rec.frames as f64,
             truncated: rec.truncated as u8 as f64,
         },
     );
@@ -89,7 +87,6 @@ pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
     let open = profiler_open_interval().map_or(OpenBlock::default(), |f| OpenBlock { turns: f.turns, busy_ms: f.busy_ms });
     put(out, SUMMARY::open::AT, &open);
     put(out, SUMMARY::tasks::AT, &tasks(scratch, profiler_tasks_since(since)));
-    put(out, SUMMARY::peak::AT, &profiler_frame_peak());
     side(out);
     out
 }
@@ -115,7 +112,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         turns: sum(&|f| f.turns),
         interval: spread(scratch, moving().map(|f| f.interval_ms)),
         busy: spread(scratch, frames.iter().map(|f| f.busy_ms)),
-        off_turn: spread(scratch, frames.iter().map(|f| f.off_turn_ms)),
+        off_turn: spread(scratch, frames.iter().map(off_turn_ms)),
         tick: spread(scratch, frames.iter().map(|f| f.tick_ms)),
         tasks: spread(scratch, frames.iter().map(|f| f.tasks_ms)),
         gpu: spread(scratch, frames.iter().map(|f| f.gpu.ms)),

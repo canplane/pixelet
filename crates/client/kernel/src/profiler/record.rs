@@ -12,7 +12,7 @@ use xpute_guest::global::Global;
 use xpute_guest::mem::section::span_of;
 
 use crate::mem::fixed::{lane, Held};
-use crate::profiler::frame::{FramePeak, FrameSample, RingSample, WorstFrame};
+use crate::profiler::frame::{FrameSample, RingSample, WorstFrame};
 use crate::profiler::log::PENDING;
 use crate::profiler::task::TaskRow;
 
@@ -99,8 +99,6 @@ pub struct ProfilerSink {
 pub struct RecordingState {
     pub recording: bool,
     pub elapsed_ms: f64,
-    pub tasks: usize,
-    pub frames: usize,
     pub truncated: bool,
 }
 
@@ -118,7 +116,6 @@ struct Profiler {
     recording: bool,
     started_at: f64,
     stopped_at: Option<f64>,
-    frame_peak: FramePeak,
     worst: &'static mut [WorstFrame],
     worst_len: usize,
     rings: RingSample,
@@ -145,7 +142,6 @@ fn profiler() -> &'static mut Profiler {
         recording: false,
         started_at: now(),
         stopped_at: None,
-        frame_peak: FramePeak::default(),
         worst: &mut [],
         worst_len: 0,
         rings: RingSample::default(),
@@ -167,8 +163,6 @@ pub fn profiler_recording_state() -> RecordingState {
     RecordingState {
         recording: l.recording,
         elapsed_ms: l.stopped_at.unwrap_or_else(now) - l.started_at,
-        tasks: l.task_len - l.task_head,
-        frames: l.frame_len - l.frame_head,
         truncated: l.truncated,
     }
 }
@@ -177,7 +171,6 @@ pub fn profiler_recording_start() {
     let l = profiler();
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
     (l.task_head, l.frame_head) = (0, 0);
-    l.frame_peak = FramePeak::default();
     l.open = None;
     l.truncated = false;
     l.started_at = now();
@@ -214,10 +207,6 @@ pub fn profiler_record(row: impl FnOnce() -> TaskRow) {
     }
 }
 
-pub fn profiler_frame_peak() -> FramePeak {
-    profiler().frame_peak
-}
-
 pub fn profiler_note_rings(cq_len: u32, held: u32) {
     let r = &mut profiler().rings;
     r.cq_peak = r.cq_peak.max(cq_len as f64);
@@ -241,8 +230,6 @@ pub fn profiler_record_frame(s: FrameSample, interval_ms: f64, frame_task_ms: f6
     let Some(mut f) = l.open.replace(s) else { return };
     f.interval_ms = interval_ms;
     f.settled = s.settled;
-    // One of the two is 0: a turn past its interval is a long frame, and that is its figure.
-    (f.off_turn_ms, f.over_ms) = ((interval_ms - f.busy_ms).max(0.0), (f.busy_ms - interval_ms).max(0.0));
     land(l, f);
 }
 
@@ -276,17 +263,6 @@ fn land(l: &mut Profiler, s: FrameSample) {
         };
         l.worst_len = kept + 1;
     }
-
-    let p = &mut l.frame_peak;
-    p.present = 1.0;
-    p.interval_ms = p.interval_ms.max(s.interval_ms);
-    p.busy_ms = p.busy_ms.max(s.busy_ms);
-    p.tick_ms = p.tick_ms.max(s.tick_ms);
-    p.gpu_ms = p.gpu_ms.max(s.gpu.ms);
-    p.draw_calls = p.draw_calls.max(s.gpu.draw_calls);
-    p.triangles = p.triangles.max(s.gpu.triangles);
-    p.waiting_terrain = p.waiting_terrain.max(s.waiting_terrain);
-    p.waiting_place = p.waiting_place.max(s.waiting_place);
 
     if let Some(frame) = l.sink.frame {
         frame(&s);

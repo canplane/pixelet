@@ -98,6 +98,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
   const f = g.frames;
   const sheetPct = pct(g.sheet.used_px, g.sheet.size * g.sheet.size);
   const heaviest = <T,>(rows: T[], by: (r: T) => number, n: number) => [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) => by(r) > 0);
+  // The terrain's tiles, read off its zooms.
+  const terrain = f === null ? 0 : f.last.zoom_tiles.reduce((n, z) => n + z, 0);
   const worstLong = g.longs.reduce<LongFrame | null>((w, l) => (!w || l.durationMs > w.durationMs ? l : w), null);
 
   return (
@@ -185,9 +187,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Row k="releases" v={`${f.last.heap_releases}`} />
           <Row
             k="tiles terrain/place"
-            v={`${f.last.tiles_total}/${f.last.tiles_place}${
-              f.last.tiles_total > 0 ? ` ${zoomName(f.last.zoom_tiles.findLastIndex((n) => n > 0))}..${zoomName(f.last.zoom_tiles.findIndex((n) => n > 0))}` : ""
-            }`}
+            v={`${terrain}/${f.last.tiles_place}${terrain > 0 ? ` ${zoomName(f.last.zoom_tiles.findLastIndex((n) => n > 0))}..${zoomName(f.last.zoom_tiles.findIndex((n) => n > 0))}` : ""}`}
           />
           <Row k="kernel memory" v={bytes(kernel_memory().byteLength)} />
           <Row k="buffers" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}`} />

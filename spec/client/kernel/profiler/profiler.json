@@ -39,7 +39,7 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall; `off_turn_ms` is the interval less them and `over_ms` what they ran past it, one of the two 0. `door_ms`, `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, `zoom_tiles` holds zoom z in slot z, and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k in slot k (xpute spec/gpu/api.json `op`, below DESTROY). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, and `_name` for an index into a list of names."
+      "One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `door_ms`, `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, `zoom_tiles` holds zoom z in slot z, and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k in slot k (xpute spec/gpu/api.json `op`, below DESTROY). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, and `_name` for an index into a list of names."
     ],
     "t": 1,
     "interval_ms": 1,
@@ -47,8 +47,6 @@
     "settled": 1,
     "turns": 1,
     "busy_ms": 1,
-    "off_turn_ms": 1,
-    "over_ms": 1,
     "budget_ms": 1,
     "door_ms": 1,
     "effects_ms": 1,
@@ -72,7 +70,6 @@
     "tex_depth_mb": 1,
     "tex_layers_mb": 1,
     "gpu_objects": "op.DESTROY",
-    "tiles_total": 1,
     "zoom_tiles": "LIMITS.ZOOMS",
     "tiles_place": 1,
     "heap_peak_bytes": 1,
@@ -102,8 +99,6 @@
       "settled",
       "turns",
       "busy_ms",
-      "off_turn_ms",
-      "over_ms",
       "budget_ms"
     ],
     "turn": [
@@ -139,7 +134,6 @@
       "out_place"
     ],
     "tiles": [
-      "tiles_total",
       "zoom_tiles",
       "tiles_place"
     ],
@@ -241,8 +235,6 @@
     "rec": {
       "recording": 1,
       "elapsed_ms": 1,
-      "tasks": 1,
-      "frames": 1,
       "truncated": 1
     },
     "frames": {
@@ -293,20 +285,6 @@
       "queued": 1,
       "running": 1,
       "credits": 1
-    },
-    "peak": {
-      "$doc": [
-        "The largest of each since recording began, kept past the ring's minute."
-      ],
-      "present": 1,
-      "interval_ms": 1,
-      "busy_ms": 1,
-      "tick_ms": 1,
-      "gpu_ms": 1,
-      "draw_calls": 1,
-      "triangles": 1,
-      "waiting_terrain": 1,
-      "waiting_place": 1
     },
     "steps": {
       "count": 1,
