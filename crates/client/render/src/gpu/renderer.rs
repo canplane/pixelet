@@ -1629,6 +1629,10 @@ impl Renderer {
         self.debug.prepare(g, &draws);
         let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
         self.screen.prepare(g, &mut self.pipelines, cast, &meshes, (world.rays_view, [world.width, world.height]));
+        // The image draws the decor grown, so it reads whether that is on:
+        // decor turned off grows nothing and casts no ray again, yet the
+        // image stands without it.
+        read.read(&[u32::from(self.screen.grown().is_some())]);
         self.decor.prepare_grown(g, self.screen.grown());
         self.impostor.prepare_grown(g, self.screen.grown());
         self.prepare_cases(g, &draws, uniforms, input.cases, lists_moved);
