@@ -18,6 +18,16 @@ impl Frustum {
         self.planes.as_chunks::<4>().0.iter().all(|p| v3::dot(&[p[0], p[1], p[2]], &center) + p[3] >= -radius)
     }
 
+    /// Whether the box from `min` to `max` may show: each plane has its corner
+    /// farthest along the plane's normal inside. Conservative as `sees` is,
+    /// but no wider than the box.
+    pub fn sees_box(&self, min: V3, max: V3) -> bool {
+        self.planes.as_chunks::<4>().0.iter().all(|p| {
+            let far: V3 = core::array::from_fn(|k| if p[k] >= 0.0 { max[k] } else { min[k] });
+            v3::dot(&[p[0], p[1], p[2]], &far) + p[3] >= 0.0
+        })
+    }
+
     /// The same planes for points measured from `at`.
     pub fn about(mut self, at: V3) -> Frustum {
         for p in self.planes.as_chunks_mut::<4>().0 {

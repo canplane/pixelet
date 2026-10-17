@@ -45,10 +45,14 @@ pub struct EnvironmentDraw {
     from: [[f64; 3]; 2],
     eased: f64,
     stars: f64,
-    /// Seconds of wall time since the first observation: a tick's delta is
-    /// clamped and sparse at rest, which ran clouds and stars slow, and the
-    /// epoch would not survive the shader's f32.
+    /// Seconds of wall time since the first observation, the clouds' clock,
+    /// held between their steps (`observe`): a tick's delta is clamped and
+    /// sparse at rest, which ran the clouds slow, and the epoch would not
+    /// survive the shader's f32.
     time: f64,
+    /// Unix ms where the sky's days and the clouds' time last stepped.
+    sky_at: f64,
+    clouds_at: f64,
     first_ms: Option<f64>,
     pub out: [f32; ENV_FLOATS],
 }
@@ -65,6 +69,8 @@ impl Default for EnvironmentDraw {
             eased: 1.0,
             stars: 0.0,
             time: 0.0,
+            sky_at: 0.0,
+            clouds_at: 0.0,
             first_ms: None,
             out: [0.0; ENV_FLOATS],
         }
@@ -77,33 +83,40 @@ impl EnvironmentDraw {
         self.started && self.sun[2] < 0.0
     }
 
-    /// Unix milliseconds: the time, and the sky's days a step at a time, a
-    /// step where the sun's or the moon's height over the anchor has moved
-    /// its step since the last, the height over which the sky as drawn moves
-    /// one display level (pxl-render `sky_steps`, its views' own slopes) — so
-    /// the sky's words stay the same between steps, and its tables are drawn
-    /// again by the same measure; and how many milliseconds on the next step
-    /// falls, as their heights move now. A light with no step landed yet
-    /// asks none: its view's first slope landing wakes the turn.
+    /// Unix milliseconds: the sky's days and the clouds' time, each held and
+    /// stepped a quantum at a time, and how many milliseconds on the earlier
+    /// of their next steps falls. A clock steps once its next step's time is
+    /// reached, that time taken where it last stepped: one quantum at the rate
+    /// it moved there. The sky's quantum is its step, the height over which
+    /// the sky as drawn moves one display level (pxl-render `sky_steps`, its
+    /// views' own slopes), at the rate the sun's or the moon's height moves;
+    /// a light with no step landed yet asks none, its view's first slope
+    /// landing waking the turn. The clouds' is the wind carrying them a camera
+    /// cell at the nearest (`cloud::drift_step_s`). Between steps their words
+    /// stand.
     pub fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
-        self.time = (unix_ms - first) / 1000.0;
         let [lon, lat, _] = anchor();
         // The cosine of each one's zenith angle: its direction's up, the
         // positions standing at a distance.
         let mu = |p: [f64; 3]| p[2] / v3::len(&p);
         let heights = |days: f64| [mu(sun_position(days, lat, lon)), mu(moon_position(days, lat, lon))];
-        let (step, days) = (sky_steps().map(|s| s.map_or(f64::INFINITY, f64::from)), j2000_days(unix_ms));
-        let moved = |from: [f64; 2], to: [f64; 2]| [0, 1].map(|k| (to[k] - from[k]).abs());
-        if !self.started || moved(heights(self.days), heights(days)).iter().zip(step).any(|(&d, step)| d >= step) {
-            self.days = days;
-        }
-        // As fast as each height moves over the next minute, when it will have moved a step.
+        let step = sky_steps().map(|s| s.map_or(f64::INFINITY, f64::from));
+        // As fast as each height moves over the minute from `at`, when it will have moved a step.
         const MINUTE_MS: f64 = 60_000.0;
-        let (now, drawn) = (heights(days), heights(self.days));
-        let rate = moved(now, heights(days + MINUTE_MS / 86_400_000.0));
-        let gone = moved(drawn, now);
-        (0..2).map(|k| (step[k] - gone[k]).max(0.0) * MINUTE_MS / rate[k]).fold(f64::INFINITY, f64::min)
+        let sky_next = |at: f64| {
+            let days = j2000_days(at);
+            let (now, then) = (heights(days), heights(days + MINUTE_MS / 86_400_000.0));
+            at + (0..2).map(|k| step[k] * MINUTE_MS / (then[k] - now[k]).abs()).fold(f64::INFINITY, f64::min)
+        };
+        let clouds_next = |at: f64| at + cloud::drift_step_s() * 1000.0;
+        if !self.started || unix_ms >= sky_next(self.sky_at) {
+            (self.days, self.sky_at) = (j2000_days(unix_ms), unix_ms);
+        }
+        if !self.started || unix_ms >= clouds_next(self.clouds_at) {
+            (self.time, self.clouds_at) = ((unix_ms - first) / 1000.0, unix_ms);
+        }
+        (sky_next(self.sky_at).min(clouds_next(self.clouds_at)) - unix_ms).max(0.0)
     }
 
     /// Whether a transition is still in flight and wants frames: the sun

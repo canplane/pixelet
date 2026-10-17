@@ -20,6 +20,12 @@ pub fn cell_angle(tau: Tau) -> f64 {
     tau.scale() / SPLIT
 }
 
+/// The camera grid's cell `distance` from the eye, in units: what spans it is
+/// observed there, and a motion that carries something this far is seen.
+pub fn cell_there(distance: f64) -> f64 {
+    cell_angle(tau()) * distance
+}
+
 /// The quality: a cell spans as many logical pixels at the optical axis as
 /// the camera grid's at the reference view (`target_cell_px`), never finer
 /// than `SPLIT`, and the grid holds no more than `GRID_CELLS_MAX` cells. The

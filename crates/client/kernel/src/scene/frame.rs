@@ -45,6 +45,17 @@ impl Frame {
             })
     }
 
+    /// Whether the box from `min` to `max`, in the world's doubles, may show:
+    /// placed on the globe as `sees` places a sphere, by its middle.
+    pub fn sees_box(&self, min: V3, max: V3) -> bool {
+        let lo = self.world_of(min);
+        let hi: V3 = core::array::from_fn(|k| lo[k] + max[k] - min[k]);
+        let middle: V3 = core::array::from_fn(|k| (lo[k] + hi[k]) / 2.0);
+        let placed = self.globe.map_or(middle, |globe| globe.place(middle));
+        let shift: V3 = core::array::from_fn(|k| placed[k] - middle[k]);
+        self.frustum.sees_box(core::array::from_fn(|k| lo[k] + shift[k]), core::array::from_fn(|k| hi[k] + shift[k]))
+    }
+
     /// A point about the anchor, its X on the anchor's lap.
     pub fn world_of(&self, at: V3) -> V3 {
         let x = pxl_spec::space::coord::world::nearest(at[0], self.anchor[0]);

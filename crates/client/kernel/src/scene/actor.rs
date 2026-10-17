@@ -123,7 +123,6 @@ impl Actors {
     /// comes close enough to see it move.
     pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
         let dt = frame.delta_s as f32;
-        let cell = crate::view::lens::cell_angle(crate::view::lens::tau());
         let mut animating = false;
         let Actors { actors, from } = self;
         for a in actors.values_mut() {
@@ -131,7 +130,7 @@ impl Actors {
             let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
             let (about, r) = (v3::sub(&a.at, &frame.anchor), f64::from(m.radius() * m.scale()));
             // What spans a camera cell at the actor's distance is observed.
-            let cell_there = cell * v3::len(&v3::sub(&about, &frame.camera));
+            let cell_there = crate::view::lens::cell_there(v3::len(&v3::sub(&about, &frame.camera)));
             let seen = a.visible && frame.frustum.sees(about, r) && 2.0 * r >= cell_there;
             // A clip of some length plays, or one fades into the next.
             let playing = a.current.filter(|p| length(p).is_some());
