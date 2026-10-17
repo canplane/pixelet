@@ -43,16 +43,6 @@ pub struct Ground {
     pub cells: Cow<'static, [GroundId]>,
 }
 
-impl Ground {
-    pub fn len(&self) -> usize {
-        self.cells.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.cells.is_empty()
-    }
-}
-
 /// A tile: one lane a fact the client cannot make. What it draws by rule —
 /// a slab, a bore, a pier — is not here. The bake holds what goes on the
 /// wire; a client what it reads of a tile as a whole, its lines. Its cells
@@ -286,17 +276,6 @@ impl TerrainTile {
             ground,
             separation,
             ele: ele.into(),
-            occupancy,
-        }
-    }
-
-    /// A tile as a client holds it: its lines, its cells none of its own (a
-    /// client's windows hold them).
-    pub fn held(separation: Separation, occupancy: Occupancy) -> TerrainTile {
-        TerrainTile {
-            ground: Ground { cells: Cow::Borrowed(&[]) },
-            separation,
-            ele: Cow::Borrowed(&[]),
             occupancy,
         }
     }

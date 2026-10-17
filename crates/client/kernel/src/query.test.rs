@@ -90,7 +90,7 @@ fn resident(centre: [f64; 2], held: &[(Tile, Leaf)]) -> Residency<TerrainTile> {
 /// A leaf as a client holds it once its cells are back: each cell's height and look given.
 fn drawn(heights: Vec<i16>, ground: Ground, separation: pxl_spec::bake::separation::Separation) -> Leaf {
     Leaf {
-        tile: TerrainTile::held(separation, pxl_spec::bake::tile::Occupancy::LEAF),
+        tile: TerrainTile::of(Vec::new(), Ground { cells: Vec::new().into() }, separation, pxl_spec::bake::tile::Occupancy::LEAF),
         looks: ground.cells.into_owned(),
         heights,
     }
