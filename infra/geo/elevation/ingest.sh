@@ -16,9 +16,10 @@ ELEV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$ELEV_ROOT/../../.." && pwd)"
 # Gigabytes, gitignored and dockerignored.
 WARPED_DIR="$ELEV_ROOT/warped"
+TOOLS="$REPO_ROOT/infra/geo/tools/run"
 
 set -a; . "$REPO_ROOT/.env"; set +a
-psql_geo() { psql "$DB_GEO_URL" -v ON_ERROR_STOP=1 "$@"; }
+psql_geo() { "$TOOLS" psql "$DB_GEO_URL" -v ON_ERROR_STOP=1 "$@"; }
 
 SOURCE="$ELEV_ROOT/source.json"
 DOWNLOAD_URL=$(jq -r '.provider.url' "$SOURCE")
@@ -56,10 +57,10 @@ while read -r NAME MINX MINY MAXX MAXY STRIDE BLOCK BLOCK_M <&3; do
     FILE="$NAME.tif"
     echo "[elevation/$NAME] warping"
     # The shard's apron's edges and the bake's stride, so every shard's pixels are one grid.
-    gdalwarp -q -t_srs EPSG:3857 -te "$MINX" "$MINY" "$MAXX" "$MAXY" -tr "$STRIDE" "$STRIDE" \
+    "$TOOLS" gdalwarp -q -t_srs EPSG:3857 -te "$MINX" "$MINY" "$MAXX" "$MAXY" -tr "$STRIDE" "$STRIDE" \
         -overwrite -r bilinear -of GTiff -co COMPRESS=DEFLATE \
         "/vsicurl/$DOWNLOAD_URL" "$WARPED_DIR/$FILE"
-    (cd "$WARPED_DIR" && raster2pgsql -d -s 3857 -t "${BLOCK}x${BLOCK}" "$FILE" elevation_stage) | psql_geo > /dev/null
+    (cd "$WARPED_DIR" && "$TOOLS" raster2pgsql -d -s 3857 -t "${BLOCK}x${BLOCK}" "$FILE" elevation_stage) | psql_geo > /dev/null
     # A block's place on the grid is its west and north edges over a block's side; its tile is the one there.
     BLOCKS=$("$BAKE_BIN" --blocks "$NAME" | awk '{ printf "%s(%s, %s, '\''%s'\'')", (NR > 1 ? ", " : ""), $1, $2, $3 }')
     PLACE="round(ST_UpperLeftX(s.rast) / $BLOCK_M)::int = b.bx AND round(ST_UpperLeftY(s.rast) / $BLOCK_M)::int = b.by"

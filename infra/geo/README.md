@@ -27,6 +27,9 @@ role it fills.
 ```
 infra/geo/
 ├── coverage.json          the shards
+├── tools/
+│   ├── Dockerfile         every tool the ingests run, pinned
+│   └── run                a tool, run in that image
 ├── overture/
 │   ├── source.json        the release
 │   └── ingest.rs          every type, a table each
@@ -58,7 +61,6 @@ column a reader filters on is generated from `properties`.
 ## Run
 
 ```sh
-brew install gdal postgis jq gettext && brew link --force gettext
 rustup toolchain install nightly        # ingest.rs is a cargo script
 
 docker compose -f infra/local/docker-compose.yml --env-file .env up -d db-geo
@@ -68,18 +70,21 @@ docker compose -f infra/local/docker-compose.yml --env-file .env up -d db-geo
 ./infra/geo/coastline/ingest.sh
 ```
 
-Each reads the repository's `.env`; no source needs a key. Never
-`down -v`: the volume is the only copy, and filling it again takes hours.
+Each reads the repository's `.env`; no source needs a key. Every tool they
+run — GDAL, PostGIS's raster loader, psql, Overture's CLI — is `tools/`'s
+image's, which `tools/run` builds from its Dockerfile before each call, so
+the host needs Docker and cargo alone. Ubuntu 24.04's are PostgreSQL 16 and
+PostGIS 3.4, db-geo's own majors. Never `down -v`: the volume is the only
+copy, and filling it again takes hours.
 
 **Overture.** A run takes the types it names (every one by default) and the
 shards it names (the coverage's by default), and adds them to each table as it
 is, leaving a feature held already; `--whole` makes each table anew from every
 shard and swaps it in. Each type's write is one transaction, its catalog rows
 with it, so a type stopped partway leaves nothing of itself. The official
-`overturemaps` CLI, pinned and installed into `overture/.venv` on first use,
-downloads each type's GeoParquet to `overture/raw/`, kept until the release or
-the shards change. Divisions come with their ancestors, which may lie past
-every shard.
+`overturemaps` CLI, pinned in the tools' image, downloads each type's
+GeoParquet to `overture/raw/`, kept until the release or the shards change.
+Divisions come with their ancestors, which may lie past every shard.
 
 **Elevation.** Each shard is warped out of the remote GeoTIFF over HTTP onto
 one grid, at the stride the bake samples, into blocks each named by the

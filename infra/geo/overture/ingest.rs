@@ -120,14 +120,9 @@ const TYPES: &[Type] = &[
     Type { overture: "water", table: "overture_base_water", columns: &[SUBTYPE, CLASS], indexes: &["class"] },
 ];
 
-/// The official CLI, a tool regenerable under `cache/`, and what it downloads,
-/// the source, kept beside this script.
-const VENV: &str = "./infra/geo/overture/.venv";
-
-/// The CLI's release this script was written against: a new one is taken by
-/// changing this, not by whatever `pip` finds that day, so a change in the
-/// CLI's behaviour arrives with a commit rather than unnoticed.
-const CLI_VERSION: &str = "1.0.2";
+/// What runs the official CLI, at the release `tools/Dockerfile` pins, and
+/// what it downloads, the source, kept beside this script.
+const TOOLS: &str = "./infra/geo/tools/run";
 const EXTRACTS: &str = "./infra/geo/overture/raw";
 const SOURCE: &str = "./infra/geo/overture/source.json";
 
@@ -183,7 +178,6 @@ fn run() -> Result<(), String> {
     }
     let shards: Vec<&Shard> = all.iter().filter(|s| named.is_empty() || named.contains(&s.name)).collect();
     let mut client = Client::connect(&db_geo_url()?, NoTls).map_err(|e| e.to_string())?;
-    let cli = ensure_cli()?;
     let (release, accessed_at) = (pinned("version")?, pinned("accessed_at")?);
     println!("[ingest] release {release}, {} shards{}", shards.len(), if whole { ", whole" } else { "" });
     client.batch_execute(&format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{CATALOG_SQL}")).map_err(|e| e.to_string())?;
@@ -198,11 +192,11 @@ fn run() -> Result<(), String> {
             client.batch_execute(&format!("{}{}", table(ty, ty.table), indexes(ty, ty.table))).map_err(|e| e.to_string())?;
         }
         let started = std::time::Instant::now();
-        let extracts = download(&cli, ty, &groups(&shards), &release)?;
+        let extracts = download(ty, &groups(&shards), &release)?;
         let fetched = started.elapsed().as_secs_f64();
         stage(&mut client, ty, &extracts)?;
         if ty.overture == PARENT.0 {
-            let fetched = ancestors(&cli, &mut client, ty, &release, !whole)?;
+            let fetched = ancestors(&mut client, ty, &release, !whole)?;
             println!("[ingest/{}] {fetched} ancestors past the shards", ty.table);
         }
         let rows = if whole { build_and_swap(&mut client, ty, &shards, &release, &accessed_at)? } else { add(&mut client, ty, &shards, &release, &accessed_at)? };
@@ -262,7 +256,7 @@ fn groups<'a>(shards: &[&'a Shard]) -> Vec<Vec<&'a Shard>> {
 /// CLI's own state file is its private format, not read. The type's other
 /// files, another release's or bbox's and that state beside them, are
 /// removed.
-fn download<'a>(cli: &Path, ty: &Type, groups: &[Vec<&'a Shard>], release: &str) -> Result<Vec<(PathBuf, Vec<&'a Shard>)>, String> {
+fn download<'a>(ty: &Type, groups: &[Vec<&'a Shard>], release: &str) -> Result<Vec<(PathBuf, Vec<&'a Shard>)>, String> {
     std::fs::create_dir_all(EXTRACTS).map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     for shards in groups {
@@ -276,7 +270,7 @@ fn download<'a>(cli: &Path, ty: &Type, groups: &[Vec<&'a Shard>], release: &str)
         if !extract.exists() {
             let part = Path::new(EXTRACTS).join(format!("{name}.part"));
             let args = ["download", &format!("--bbox={bbox}"), "-f", "geoparquet", &format!("--type={}", ty.overture), &format!("--release={release}"), "-o", &part.to_string_lossy()];
-            overture(cli, &args)?;
+            overture(&args)?;
             std::fs::rename(&part, &extract).map_err(|e| e.to_string())?;
         }
         out.push((extract, shards.clone()));
@@ -333,7 +327,7 @@ fn copy_extracts<'a>(client: &mut Client, t: &str, extracts: impl Iterator<Item 
 /// the registry finds in another release than the run's fails the run. An
 /// ancestor's extract is named by its release and id, so a run fetches it
 /// once.
-fn ancestors(cli: &Path, client: &mut Client, ty: &Type, release: &str, live: bool) -> Result<usize, String> {
+fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Result<usize, String> {
     let t = staging(ty);
     let held = if live { format!(" AND NOT EXISTS (SELECT 1 FROM {} l WHERE l.gers_id = p.id)", ty.table) } else { String::new() };
     let missing_sql = format!(
@@ -357,7 +351,7 @@ fn ancestors(cli: &Path, client: &mut Client, ty: &Type, release: &str, live: bo
             let extract = Path::new(EXTRACTS).join(format!("{prefix}{release}.{id}.parquet"));
             if !extract.exists() {
                 let part = extract.with_extension("parquet.part");
-                let out = Command::new(cli).args(["gers", id, "-f", "geoparquet", "-o", &part.to_string_lossy()]).output().map_err(|e| format!("{}: {e}", cli.display()))?;
+                let out = cli().args(["gers", id, "-f", "geoparquet", "-o", &part.to_string_lossy()]).output().map_err(|e| format!("{TOOLS}: {e}"))?;
                 let said = String::from_utf8_lossy(&out.stderr);
                 if !out.status.success() {
                     return Err(format!("gers {id}: {}", said.trim()));
@@ -665,40 +659,21 @@ fn indexes(ty: &Type, t: &str) -> String {
     sql
 }
 
-/// The official CLI by a public command: what it prints to stderr is shown
-/// as it runs, and a failure is the run's.
-fn overture(cli: &Path, args: &[&str]) -> Result<Output, String> {
-    let out = Command::new(cli).args(args).stderr(Stdio::inherit()).output().map_err(|e| format!("{}: {e}", cli.display()))?;
-    if !out.status.success() {
-        return Err(format!("{} {} exited {}", cli.display(), args.join(" "), out.status.code().unwrap_or(-1)));
-    }
-    Ok(out)
+/// The official CLI, in the tools' image.
+fn cli() -> Command {
+    let mut cmd = Command::new(TOOLS);
+    cmd.arg("overturemaps");
+    cmd
 }
 
-fn run_cmd(cmd: &Path, args: &[&str]) -> Result<(), String> {
-    let status = Command::new(cmd).args(args).status().map_err(|e| format!("{}: {e}", cmd.display()))?;
-    if !status.success() {
-        return Err(format!("{} {} exited {}", cmd.display(), args.join(" "), status.code().unwrap_or(-1)));
+/// The official CLI by a public command: what it prints to stderr is shown
+/// as it runs, and a failure is the run's.
+fn overture(args: &[&str]) -> Result<Output, String> {
+    let out = cli().args(args).stderr(Stdio::inherit()).output().map_err(|e| format!("{TOOLS}: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("overturemaps {} exited {}", args.join(" "), out.status.code().unwrap_or(-1)));
     }
-    Ok(())
-}
-fn ensure_cli() -> Result<PathBuf, String> {
-    let cli = Path::new(VENV).join("bin/overturemaps");
-    // Run it rather than stat it: a venv that moved keeps a shebang to an
-    // interpreter that is gone, and exists without being able to run. Its
-    // `--version` is public: "overturemaps, version 1.0.2".
-    let version = Command::new(&cli).arg("--version").output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
-    if version.as_deref().is_some_and(|v| v.ends_with(&format!("version {CLI_VERSION}"))) {
-        return Ok(cli);
-    }
-    if Path::new(VENV).exists() {
-        std::fs::remove_dir_all(VENV).map_err(|e| e.to_string())?;
-    }
-    println!("[ingest] creating {VENV} and installing overturemaps {CLI_VERSION}...");
-    std::fs::create_dir_all(Path::new(VENV).parent().unwrap_or(Path::new("."))).map_err(|e| e.to_string())?;
-    run_cmd(Path::new("python3"), &["-m", "venv", VENV])?;
-    run_cmd(&Path::new(VENV).join("bin/pip"), &["install", "--quiet", &format!("overturemaps=={CLI_VERSION}")])?;
-    Ok(cli)
+    Ok(out)
 }
 /// A field of `source.json`'s pin: the release (Overture's name for its
 /// version) and when it was taken, which the catalog repeats.
