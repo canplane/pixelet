@@ -87,8 +87,8 @@ pub fn view() -> &'static mut View {
     VIEW.get(View::new)
 }
 
-/// The sea under the eye: where the globe placement is the identity at the
-/// eye. The sphere is the same whichever point it is laid about.
+/// The sea under the eye: what is drawn about it in f32 is held to a unit
+/// near the eye.
 pub fn sea_under_eye() -> V3 {
     let e = view().at().eye;
     [e[0], e[1], 0.0]
@@ -101,8 +101,8 @@ pub fn globe_anchor() -> Option<G4326> {
     Some(epsg4326::from_mercator(&[epsg3857::mer_from_u(nearest(x, 0.0)), epsg3857::mer_from_u(y), 0.0]))
 }
 
-/// Where the world is laid on the planet: the anchor, or before the camera
-/// stands anywhere the place it starts from.
+/// The eye's longitude and latitude, which the sky is seen from: the
+/// anchor, or before the camera stands anywhere the place it starts from.
 pub fn anchor() -> G4326 {
     globe_anchor().unwrap_or(FALLBACK_G4326)
 }
@@ -152,9 +152,10 @@ fn compose() {
 pub fn view_ray(ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
     let v = view();
     *origin = v.at().eye;
-    let mut far = [0.0; 3];
-    mat4::transform_point(&mut far, &v.inv_world_view_proj, ndc_x, ndc_y, 1.0);
-    mat4::transform_direction(direction, &mat4::new(), far[0] - origin[0], far[1] - origin[1], far[2] - origin[2]);
+    // Depth 1 is the near plane: a point on the ray.
+    let mut near = [0.0; 3];
+    mat4::transform_point(&mut near, &v.inv_world_view_proj, ndc_x, ndc_y, 1.0);
+    mat4::transform_direction(direction, &mat4::new(), near[0] - origin[0], near[1] - origin[1], near[2] - origin[2]);
 }
 
 /// `ndc` in [−1, 1], y up, as logical pixels from the view's top left.

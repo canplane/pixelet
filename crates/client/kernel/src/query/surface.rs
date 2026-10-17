@@ -24,7 +24,8 @@ pub struct Surface {
     pub block: GroundId,
 }
 
-/// A node's ground at its tile's own cells, held: each cell read off the
+/// A node's ground at its tile's own cells, its own held, a ring past it
+/// read as it is: each cell read off the
 /// windows as it is asked (`ground`), what is known of the area at the
 /// node's shard found once for them all.
 pub struct Surfaces {

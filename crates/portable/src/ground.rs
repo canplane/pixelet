@@ -322,8 +322,9 @@ pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 /// The bound of no ground, lowest over highest: what joins as nothing.
 pub const EMPTY: [i32; 2] = [i16::MAX as i32, i16::MIN as i32];
 
-/// How the ground is held where a node reads it: the CPU's residency, a
-/// GPU's window over the tiles it was handed.
+/// How the ground is held where a node reads it: the windows, as the CPU
+/// read them back or a GPU filled them, read the one way (`window::ground`,
+/// `window::bounded`).
 pub trait Held: Area {
     /// The lowest and highest the ground's cells at `cell` reach over the
     /// node `(zoom, c)`, off the finest held tile they are read from

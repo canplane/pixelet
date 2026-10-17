@@ -95,9 +95,9 @@ pub struct World<'a> {
     /// Per window of the eye's, from the top's, a row a slot: the square it
     /// holds, and whether it is present (pxl-portable `window`).
     window: &'a [IVec4],
-    /// Per square of every window, its looks as handed, its cells' heights
-    /// (`heights_cs`), their levels (`bound_cs`), its tile's samples and
-    /// lines as handed, and its ways' runs (`ways_cs`)
+    /// Per square of every window, its looks as handed, its columns
+    /// (`heights_cs`, `ways_cs`), their levels (`bound_cs`), their runs
+    /// (`ways_cs`), and its tile's samples and lines as handed
     /// (`window::SQUARE_WORDS`); the eye's windows first.
     ground: &'a [u32],
     /// The served shards: zoom, x, y.
@@ -373,7 +373,7 @@ fn word(ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> UVec4 {
     UVec4::new(ray::first_word(value, kind, face, zoom), s.t.to_bits(), low_bits(c), w3)
 }
 
-/// Bits of a block's index the lane keeps on each axis, enough to tell it
+/// Bits of a block's index a ray keeps on each axis (`word`), enough to tell it
 /// from the block its ray's hit point rounds to, which f32 holds to within
 /// a few blocks.
 const LOW_BITS: u32 = 10;
@@ -428,7 +428,7 @@ fn hit_block(ray: &cast::Ray, t: f32, axis: u32, zoom: u32, low: u32) -> [i32; 3
 
 /// The face bits of each ray's block the cast found (`word`): the blocks
 /// about it asked at its zoom, each once (pxl-portable `mask`), as a
-/// chunk's box takes them, over the lane's index bits. A pass of its own, so
+/// chunk's box takes them, over the ray's index bits. A pass of its own, so
 /// the cast's kernel holds the descent alone.
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn face_cs(

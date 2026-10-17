@@ -1,8 +1,8 @@
 // pxl-kernel/query/decor.rs
 
 //! Decor as the world answers it: what the ground grows, evaluated cell by
-//! cell as the frame grows it (`grown_at`), on one read of the ground about
-//! the cell (`World::surfaces`), and what objects place, each
+//! cell as the frame grows it (`grown_at`), off the ground's cells about the
+//! cell, each read as asked (`World::surfaces`), and what objects place, each
 //! struck by its model. A ray strikes it as the ground walk passes, only
 //! where the frame draws it as held, at the leaf cells: a fold strikes none of
 //! it. The walk follows the detail rule, not the chunk the view chose, which
@@ -65,7 +65,7 @@ impl<'a> World<'a> {
 
     /// What the ground stands on the leaf `cell`, each decor's, handed to
     /// `each` with the face it stands on until `each` says it has what it
-    /// wants: the leaf's ground read once about the cell for every decor.
+    /// wants: the leaf's ground, held, read for every decor.
     /// Nothing where the windows do not hold the leaf's cells.
     fn grown_in(&self, cell: [i64; 2], mut each: impl FnMut(&mut Surfaces, &Decor, Instance) -> bool) -> bool {
         let node = (GROUND.cell_zoom(LEAF_ZOOM), cell);

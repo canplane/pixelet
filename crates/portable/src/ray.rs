@@ -8,7 +8,7 @@
 //! the face pass writes over the block's index bits it finds the block by;
 //! and the four looks a coarse ground block folds (`ground::word`), or in the
 //! steps view the nodes its descent asked. Where it met nothing, the first
-//! two are zero.
+//! three are zero.
 
 use crate::Zoom;
 

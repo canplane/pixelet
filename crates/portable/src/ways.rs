@@ -435,7 +435,7 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupies {
 /// tile's stations, and its ground — its look as read, and its face's height
 /// in leaf cells. A column the square does not hold has no segment.
 pub trait Columns {
-    /// The cells' zoom, and leaf cells a ground metre over the grid.
+    /// The cells' zoom, and leaf cells a ground metre over the ground.
     fn cell(&self) -> Zoom;
     fn per_m(&self) -> f32;
     /// How many segments may be over column `c`, and the `k`-th of them.

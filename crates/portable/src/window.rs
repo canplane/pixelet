@@ -138,8 +138,8 @@ pub const WAYS_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
 pub const WAYS_SQUARE_SEGMENTS: u32 = 1065;
 
 /// A square's lines, laid by the CPU as the square is filled (pxl-spec
-/// bake/tile/terrain.rs `square_lines`) for the one rule to ask of a block
-/// there (`ways::block`): its tile's header (`ways::header`), a word a bin
+/// bake/tile/terrain.rs `square_lines`) for its fill to write its columns'
+/// runs off (`fill::ways`): its tile's header (`ways::header`), a word a bin
 /// (`WAYS_BINS`), its first entry and its count over it; the entries, two a
 /// word, each one of the square's segments, a bin's in their order; then
 /// the segments a bin reaches, in their lines' order, `ways::SEGMENT_WORDS`
