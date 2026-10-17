@@ -15,17 +15,6 @@ fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Separation {
 }
 
 #[test]
-fn a_column_is_under_a_deck_within_its_reach() {
-    // Four cells wide: two either side of the line.
-    let d = one(&[[10.0, 10.0], [30.0, 10.0]], &[100, 120], 4.0);
-    let over: Vec<Crossing> = d.crossing_point(NOWHERE, [20.0, 12.0], 1.0).collect();
-    assert_eq!(over.len(), 1);
-    // rising a cell a cell, a column a cell wide sweeps half a cell either side of its middle
-    assert_eq!((over[0].low, over[0].top), (109.5, 110.5));
-    assert_eq!(d.crossing_point(NOWHERE, [20.0, 12.5], 1.0).count(), 0);
-}
-
-#[test]
 fn a_narrow_line_along_a_diagonal_is_one_band() {
     let d = one(&[[0.0, 0.0], [40.0, 40.0]], &[10, 10], 0.5);
     let mut covered = fnv::FnvHashSet::default();

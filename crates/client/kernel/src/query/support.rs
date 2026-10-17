@@ -189,14 +189,6 @@ impl<'a> World<'a> {
         c.done(nearest)
     }
 
-    /// The bottom of the first solid over `at`; none under open sky.
-    pub fn ceiling_over(&self, at: &Q3) -> Answer<Option<f64>> {
-        let z = q3::to_real(i64::from(at[2]));
-        let mut c = Upright::new(self, xy(at), LEAF_ZOOM);
-        let over = c.above(z, REACH.max[2]);
-        c.done(over)
-    }
-
     /// Where a walker standing at the center `from` ends going toward `to`,
     /// a leaf cell at a time. Our rule after Quake III's PM_StepSlideMove
     /// (id Software, code/game/bg_slidemove.c), which steps up and slides a

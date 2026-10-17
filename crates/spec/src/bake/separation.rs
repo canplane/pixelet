@@ -120,8 +120,7 @@ pub struct Separation {
     /// so a client's record holds none (`Lanes::into_room`).
     pub coarsest: Cow<'static, [u8]>,
     /// Derived: a tree of boxes over the points in order, each the segments it
-    /// covers widened by their reach, in points; what `crossing_point` and
-    /// `segments_over` walk.
+    /// covers widened by their reach, in points; what `segments_over` walks.
     pub boxes: Cow<'static, [[i16; 4]]>,
 }
 
@@ -244,26 +243,6 @@ impl Separation {
         });
     }
 
-    /// Every line over the column of side `side` about `at`.
-    pub fn crossing_point(&self, frame: Frame, at: [f64; 2], side: f64) -> impl Iterator<Item = Crossing> + '_ {
-        let stations = frame.stations();
-        Near::new(&self.boxes, self.points.len(), [at[0], at[1], at[0], at[1]].map(|v| v * POINT_SCALE)).filter_map(move |p| {
-            let d = self.starts.partition_point(|&s| s as usize <= p) - 1;
-            (p + 1 < self.starts[d + 1] as usize).then(|| crossing_at(&self.segment(p), at, side, &stations)).flatten()
-        })
-    }
-
-    /// The lowest surface of a line that can sink inside the box, conservatively.
-    pub fn lowest_in(&self, x: [f64; 2], y: [f64; 2]) -> Option<i16> {
-        self.segments_in(Form::sinks, x, y).map(|[lo, _]| lo).min()
-    }
-
-    /// The highest surface of a line that can rise inside the box,
-    /// conservatively: its highest point counts wherever its footprint reaches the box.
-    pub fn highest_in(&self, x: [f64; 2], y: [f64; 2]) -> Option<i16> {
-        self.segments_in(Form::rises, x, y).map(|[_, hi]| hi).max()
-    }
-
     /// Each segment of a line that can rise or sink, by its line and its
     /// place in it, with every square of a tile of `side` cells cut `across`
     /// a side, row by row, that its footprint reaches: the one sweep a
@@ -286,20 +265,6 @@ impl Separation {
                 }
             }
         }
-    }
-
-    /// The lower and higher end of each segment whose footprint reaches the
-    /// box, of the lines whose form `keeps`.
-    fn segments_in(&self, keeps: fn(Form) -> bool, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> impl Iterator<Item = [i16; 2]> + '_ {
-        self.iter().filter(move |d| keeps(d.form)).flat_map(move |line| {
-            let half = line.footprint();
-            (0..line.points.len().saturating_sub(1)).filter_map(move |s| {
-                let (a, b) = (line.point(s), line.point(s + 1));
-                let apart = a[0].max(b[0]) + half < x0 || a[0].min(b[0]) - half > x1 || a[1].max(b[1]) + half < y0 || a[1].min(b[1]) - half > y1;
-                let (ta, tb) = (line.tops[s], line.tops[s + 1]);
-                (!apart).then_some([ta.min(tb), ta.max(tb)])
-            })
-        })
     }
 }
 

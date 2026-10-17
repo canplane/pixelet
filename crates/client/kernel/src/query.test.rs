@@ -247,9 +247,9 @@ fn a_dig_is_met_as_the_cells_asked_fold_it() {
 }
 
 /// In a stack with a cell left out, what stands in the gap stands on the
-/// cube under it, and the cube over it is its ceiling.
+/// cube under it.
 #[test]
-fn a_gap_in_a_stack_is_floored_and_roofed_by_its_cubes() {
+fn a_gap_in_a_stack_is_floored_by_the_cube_under_it() {
     let _g = serial();
     let (residency, [x, y]) = flat_at_five();
     let mut store = Store::default();
@@ -260,7 +260,6 @@ fn a_gap_in_a_stack_is_floored_and_roofed_by_its_cubes() {
     let access = World::new(&residency, &store);
     let gap = world::point(x + 0.5, y + 0.5, 6.5);
     assert_eq!(access.floor_under(&gap, LEAF_ZOOM), Answer::Exact(Some(6.0)));
-    assert_eq!(access.ceiling_over(&gap), Answer::Exact(Some(7.0)));
     assert_eq!(access.surface_support(&gap), Answer::Exact(Some(6.0)));
 }
 
