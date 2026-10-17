@@ -224,7 +224,11 @@ impl Models {
 
     pub fn clip(&mut self, model: u32, duration: f32) -> u32 {
         let Some(m) = self.models.get_mut(model as usize) else { return u32::MAX };
-        m.clips.push(Clip { duration, channels: Vec::new(), motion: 0.0 });
+        m.clips.push(Clip {
+            duration,
+            channels: Vec::new(),
+            motion: 0.0,
+        });
         (m.clips.len() - 1) as u32
     }
 

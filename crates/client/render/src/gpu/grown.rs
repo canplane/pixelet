@@ -13,9 +13,9 @@ use pxl_portable::decor::{COUNTS, DECORS};
 use pxl_portable::scatter::{drawn, GROUPS, GROWN_AT, GROWN_WORDS, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{EYE_WINDOWS, SLOTS};
 
+use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
 use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_PLACE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, release, word_bytes, Gpu};
-use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
 use crate::gpu::pipeline::{Built, Pipelines};
 
 /// What the CPU hands the GPU's decor this frame.

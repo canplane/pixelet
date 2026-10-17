@@ -350,9 +350,7 @@ impl BadgePass {
                 set.uniform = g.buffer(word_bytes(BADGE_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             }
             if set.block != block || set.depth != depth || set.numbers != self.numbers_view || set.group == 0 {
-                let bound = |layout: u32, before: u32| {
-                    g.bind_group(layout, &[buffer_entry(0, set.uniform), buffer_entry(1, block), view_entry(2, before)])
-                };
+                let bound = |layout: u32, before: u32| g.bind_group(layout, &[buffer_entry(0, set.uniform), buffer_entry(1, block), view_entry(2, before)]);
                 release(set.group);
                 release(set.region_group);
                 set.group = bound(self.built.layouts[1], self.numbers_view);

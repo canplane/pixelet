@@ -14,11 +14,11 @@ use crate::io::load::load_image;
 use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
+use crate::model::variant_spec::IDLE_CLIP;
 use crate::query::World;
 use crate::query::{over, under};
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
-use crate::model::variant_spec::IDLE_CLIP;
 use crate::sched::edge::wake_at;
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
@@ -337,7 +337,10 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 /// loader has it now, which a lost device takes back until it lands again.
 pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
     let c: &'static _ = companion();
-    [&c.person, &c.pet].into_iter().flatten().filter_map(|w| Some((w.held.as_ref()?.model.model, load_image(Load::Asset(w.variant.skin))?)))
+    [&c.person, &c.pet]
+        .into_iter()
+        .flatten()
+        .filter_map(|w| Some((w.held.as_ref()?.model.model, load_image(Load::Asset(w.variant.skin))?)))
 }
 
 /// The world's step-slide from `from`, its floor at `stands`, toward `to`:

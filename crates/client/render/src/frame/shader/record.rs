@@ -141,7 +141,19 @@ pub fn source(kind: u32) -> &'static str {
             "skinned"
         ),
         SHADER_PUCK_ZONE => wgsl!("frame", "globe", "encode", "finish", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!("frame", "globe", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "place", "puck", "puck_beacon"),
+        SHADER_PUCK_BEACON => wgsl!(
+            "frame",
+            "globe",
+            "encode",
+            "finish",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_eye_unit",
+            "place",
+            "puck",
+            "puck_beacon"
+        ),
         SHADER_BADGE => wgsl!("frame", "globe", "encode", "badge", "badge_sprite"),
         SHADER_BADGE_REGION => wgsl!("frame", "globe", "encode", "badge", "badge_region"),
         SHADER_SKY => wgsl!(
@@ -728,7 +740,16 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_ATMOS_SKY_VIEW => record(
             screen(SHADER_ATMOS_SKY_VIEW),
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[3], AIR[8], [12, FRAGMENT, TEXTURE], [14, FRAGMENT, UNIFORM], [20, FRAGMENT, STORAGE_RW]])],
+            &[group(&[
+                [0, FRAGMENT, UNIFORM],
+                AIR[0],
+                AIR[1],
+                AIR[3],
+                AIR[8],
+                [12, FRAGMENT, TEXTURE],
+                [14, FRAGMENT, UNIFORM],
+                [20, FRAGMENT, STORAGE_RW],
+            ])],
         ),
         PIPELINE_ATMOS_IRRADIANCE => record(screen(SHADER_ATMOS_IRRADIANCE), &[], &[group(&[AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE]])]),
         // The light on the land under the eye: the air's words and the tables it is lit by.
@@ -756,7 +777,10 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_STARS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, VERTEX, UNIFORM], [8, VERTEX, UNIFORM], [9, VERTEX, TEXTURE], [11, VERTEX, SAMPLER]]), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]])],
+            &[
+                group(&[[0, VERTEX, UNIFORM], [8, VERTEX, UNIFORM], [9, VERTEX, TEXTURE], [11, VERTEX, SAMPLER]]),
+                group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]]),
+            ],
         ),
         // From under the sheets only where the world left the far plane; from over them everywhere.
         PIPELINE_CLOUDS => record(

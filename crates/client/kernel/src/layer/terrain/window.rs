@@ -223,7 +223,11 @@ pub fn step(at: [Option<[f64; 2]>; 3]) -> bool {
             let t = tile_of(cell, want).0;
             let slot = &mut w.slots[i];
             if moved || slot.square != want || slot.on != on {
-                *slot = Slot { square: want, state: State::Absent, on };
+                *slot = Slot {
+                    square: want,
+                    state: State::Absent,
+                    on,
+                };
                 *back_word(i as u32) = 0;
                 terrain.moved_at(t);
             }

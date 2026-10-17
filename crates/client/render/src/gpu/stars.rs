@@ -10,9 +10,9 @@ use pxl_spec::space::coord::mat4::Mat4;
 use crate::frame::shader::record::PIPELINE_STARS;
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, word_bytes, Entry, Gpu};
+use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_mat;
-use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::look::atmosphere::BOTTOM_RADIUS_KM;
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_STARS};
 

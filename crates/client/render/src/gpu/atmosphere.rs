@@ -321,10 +321,7 @@ impl Atmosphere {
         self.take_slopes();
         let altitude = self.words[CAMERA_ALTITUDE];
         let free = self.landed_word == 0;
-        let views = [
-            (SKY_VIEW, (self.sun_mu, altitude), true),
-            (MOON_VIEW, (self.moon_mu, altitude), self.words[MOON_LIGHT] > 0.0),
-        ];
+        let views = [(SKY_VIEW, (self.sun_mu, altitude), true), (MOON_VIEW, (self.moon_mu, altitude), self.words[MOON_LIGHT] > 0.0)];
         for (k, (table, now, lit)) in views.into_iter().enumerate() {
             if !(free && lit && moved(self.drawn_for[k], now)) {
                 continue;

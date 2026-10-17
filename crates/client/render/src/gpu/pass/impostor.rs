@@ -71,7 +71,10 @@ impl ImpostorPass {
         let depth = g.texture(SPRITE, SPRITE, 1, Format::depth32float, 1, texture_usage::RENDER_ATTACHMENT);
         let depth_view = g.view(depth, false, 0, 1, 0, 1);
         let fits = g.buffer((GROUPS * 16) as u32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let group = g.bind_group(draw.layouts[2], &[view_entry(0, atlas_view), sampler_entry(1, sampler), buffer_range_entry(2, fits, 0, (GROUPS * 16) as u32)]);
+        let group = g.bind_group(
+            draw.layouts[2],
+            &[view_entry(0, atlas_view), sampler_entry(1, sampler), buffer_range_entry(2, fits, 0, (GROUPS * 16) as u32)],
+        );
         ImpostorPass {
             draw,
             bake,

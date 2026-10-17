@@ -149,20 +149,32 @@ pub use xpute_gpu::encode::BindGroupEntry as Entry;
 
 /// A buffer's entry, whole.
 pub const fn buffer_entry(binding: u32, buffer: Id) -> Entry {
-    Entry { binding, resource: encode::Resource::Buffer { buffer, offset: 0, size: None } }
+    Entry {
+        binding,
+        resource: encode::Resource::Buffer { buffer, offset: 0, size: None },
+    }
 }
 
 /// `size` bytes of a buffer from `offset`.
 pub const fn buffer_range_entry(binding: u32, buffer: Id, offset: u32, size: u32) -> Entry {
-    Entry { binding, resource: encode::Resource::Buffer { buffer, offset, size: Some(size) } }
+    Entry {
+        binding,
+        resource: encode::Resource::Buffer { buffer, offset, size: Some(size) },
+    }
 }
 
 pub const fn view_entry(binding: u32, view: Id) -> Entry {
-    Entry { binding, resource: encode::Resource::View(view) }
+    Entry {
+        binding,
+        resource: encode::Resource::View(view),
+    }
 }
 
 pub const fn sampler_entry(binding: u32, sampler: Id) -> Entry {
-    Entry { binding, resource: encode::Resource::Sampler(sampler) }
+    Entry {
+        binding,
+        resource: encode::Resource::Sampler(sampler),
+    }
 }
 
 pub fn bytes<T: Copy>(lane: &[T]) -> &[u8] {
@@ -440,7 +452,6 @@ fn vertex_format(code: u32) -> VertexFormat {
         _ => xpute_kit::bug!(EINVAL, code),
     }
 }
-
 
 fn binding_layout(kind: u32) -> encode::BindingLayout {
     use encode::BindingLayout as L;

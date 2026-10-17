@@ -18,6 +18,7 @@ use crate::frame::draw::{
     PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::frame::screen_cells::SCREEN_CELLS_MAX;
+use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
 use crate::frame::shader::record::{
     FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_WAYS,
 };
@@ -27,7 +28,6 @@ use crate::gpu::api::{
     buffer_entry, buffer_range_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, sampler_entry, texture_usage, view_entry, word_bytes, Device,
     Entry, Format, Gpu, Load, Stamp, DONE,
 };
-use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
 use crate::gpu::api_spec::surface_role;
 use crate::gpu::atmosphere::{Atmosphere, AIR_ENTRIES};
 use crate::gpu::clouds::CloudPass;
@@ -1388,7 +1388,13 @@ impl Renderer {
     /// What a block's face is painted by, wherever it is drawn from
     /// (paint.wgsl): the frame, the layers, the occlusion and the air.
     fn lit_entries(&self, frame: u32) -> Vec<Entry> {
-        let mut e = vec![buffer_entry(0, frame), view_entry(4, self.layers.view), buffer_entry(5, self.layers.table), sampler_entry(6, self.layers.sampler), self.ao.entry(7)];
+        let mut e = vec![
+            buffer_entry(0, frame),
+            view_entry(4, self.layers.view),
+            buffer_entry(5, self.layers.table),
+            sampler_entry(6, self.layers.sampler),
+            self.ao.entry(7),
+        ];
         e.extend(self.atmosphere.entries());
         e
     }

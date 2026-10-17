@@ -42,10 +42,7 @@ struct Orientation {
 static ORIENTATION: Global<Orientation> = Global::new();
 
 fn orientation() -> &'static mut Orientation {
-    ORIENTATION.get(|| Orientation {
-        last_event_at: None,
-        command: None,
-    })
+    ORIENTATION.get(|| Orientation { last_event_at: None, command: None })
 }
 
 /// iOS's compass heading preferred, the alpha-derived one otherwise.
