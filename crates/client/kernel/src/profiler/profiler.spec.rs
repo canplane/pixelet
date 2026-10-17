@@ -60,7 +60,7 @@ pub mod LIMITS {
     pub const KEYS: &[&str] = &["REASONS", "STEP_SLOTS", "ZOOMS"];
 }
 
-/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `door_ms`, `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, `zoom_tiles` holds zoom z in slot z, and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k in slot k (xpute spec/gpu/api.json `op`, below DESTROY). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, and `_name` for an index into a list of names.
+/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `door_ms`, `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k in slot k (xpute spec/gpu/api.json `op`, below DESTROY). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, and `_name` for an index into a list of names.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const interval_ms: u32 = 1;
@@ -82,33 +82,31 @@ pub mod FRAME {
     pub const wake_in_ms: u32 = 21;
     pub const gpu_ms: u32 = 22;
     pub const gpu_spans: u32 = 23;
-    pub const draw_calls: u32 = 31;
-    pub const triangles: u32 = 32;
-    pub const census: u32 = 33;
-    pub const px: u32 = 53;
-    pub const buffers: u32 = 54;
-    pub const buffer_mb: u32 = 55;
-    pub const tex_depth_mb: u32 = 56;
-    pub const tex_layers_mb: u32 = 57;
-    pub const gpu_objects: u32 = 58;
-    pub const zoom_tiles: u32 = 70;
-    pub const tiles_place: u32 = 94;
-    pub const heap_peak_bytes: u32 = 95;
-    pub const heap_lent_bytes: u32 = 96;
-    pub const heap_run_bytes: u32 = 97;
-    pub const heap_held_bytes: u32 = 98;
-    pub const heap_range_bytes: u32 = 99;
-    pub const heap_largest_free_bytes: u32 = 100;
-    pub const heap_refusals: u32 = 101;
-    pub const heap_releases: u32 = 102;
-    pub const ring_cq_peak: u32 = 103;
-    pub const ring_held_peak: u32 = 104;
-    pub const waiting_terrain: u32 = 105;
-    pub const out_terrain: u32 = 106;
-    pub const waiting_place: u32 = 107;
-    pub const out_place: u32 = 108;
-    pub const cap_terrain_refused: u32 = 109;
-    pub const WORDS: u32 = 110;
+    pub const census: u32 = 31;
+    pub const px: u32 = 51;
+    pub const buffers: u32 = 52;
+    pub const buffer_mb: u32 = 53;
+    pub const tex_depth_mb: u32 = 54;
+    pub const tex_layers_mb: u32 = 55;
+    pub const gpu_objects: u32 = 56;
+    pub const zoom_tiles: u32 = 68;
+    pub const tiles_place: u32 = 92;
+    pub const heap_peak_bytes: u32 = 93;
+    pub const heap_lent_bytes: u32 = 94;
+    pub const heap_run_bytes: u32 = 95;
+    pub const heap_held_bytes: u32 = 96;
+    pub const heap_range_bytes: u32 = 97;
+    pub const heap_largest_free_bytes: u32 = 98;
+    pub const heap_refusals: u32 = 99;
+    pub const heap_releases: u32 = 100;
+    pub const ring_cq_peak: u32 = 101;
+    pub const ring_held_peak: u32 = 102;
+    pub const waiting_terrain: u32 = 103;
+    pub const out_terrain: u32 = 104;
+    pub const waiting_place: u32 = 105;
+    pub const out_place: u32 = 106;
+    pub const cap_terrain_refused: u32 = 107;
+    pub const WORDS: u32 = 108;
     pub const KEYS: &[&str] = &[
         "t",
         "interval_ms",
@@ -130,8 +128,6 @@ pub mod FRAME {
         "wake_in_ms",
         "gpu_ms",
         "gpu_spans",
-        "draw_calls",
-        "triangles",
         "census",
         "px",
         "buffers",
@@ -165,7 +161,7 @@ pub mod FRAME_GROUPS {
     pub const time: &[&str] = &["t", "interval_ms", "display_ms", "settled", "turns", "busy_ms", "budget_ms"];
     pub const turn: &[&str] = &["door_ms", "effects_ms", "tick_ms", "phases", "stage_ms", "tasks_ms", "worst_effect_ms", "worst_effect_name"];
     pub const frame: &[&str] = &["kind_name", "wake_name", "wake_in_ms"];
-    pub const gpu: &[&str] = &["gpu_ms", "gpu_spans", "draw_calls", "triangles", "census", "px"];
+    pub const gpu: &[&str] = &["gpu_ms", "gpu_spans", "census", "px"];
     pub const cap: &[&str] = &["cap_terrain_refused"];
     pub const requests: &[&str] = &["waiting_terrain", "out_terrain", "waiting_place", "out_place"];
     pub const tiles: &[&str] = &["zoom_tiles", "tiles_place"];
@@ -225,9 +221,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 110;
-    pub const prev: u32 = 111;
-    pub const WORDS: u32 = 221;
+    pub const has_prev: u32 = 108;
+    pub const prev: u32 = 109;
+    pub const WORDS: u32 = 217;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -298,7 +294,7 @@ pub mod SUMMARY {
         pub const heap_peak_delta_bytes: u32 = 77;
         pub const census: u32 = 78;
         pub const last: u32 = 98;
-        pub const WORDS: u32 = 208;
+        pub const WORDS: u32 = 206;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -327,27 +323,27 @@ pub mod SUMMARY {
     }
     /// The interval in progress, which no frame turn has closed yet: its turns and their time, rise to fall. A settled view's turns are here, if any run.
     pub mod open {
-        pub const AT: u32 = 211;
+        pub const AT: u32 = 209;
         pub const turns: u32 = 0;
         pub const busy_ms: u32 = 1;
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "turns", "busy_ms", "WORDS"];
     }
     pub mod tasks {
-        pub const AT: u32 = 213;
+        pub const AT: u32 = 211;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 125;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 338;
+        pub const AT: u32 = 336;
         pub const sheet_repacks: u32 = 0;
         pub const sheet_uploads: u32 = 1;
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "sheet_repacks", "sheet_uploads", "WORDS"];
     }
     pub mod sheet {
-        pub const AT: u32 = 340;
+        pub const AT: u32 = 338;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -357,7 +353,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 345;
+        pub const AT: u32 = 343;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -365,14 +361,14 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod steps {
-        pub const AT: u32 = 348;
+        pub const AT: u32 = 346;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 509;
+        pub const AT: u32 = 507;
         pub const frames_held: u32 = 0;
         pub const admitted: u32 = 1;
         pub const evicted: u32 = 2;
@@ -381,7 +377,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at.
     pub mod view {
-        pub const AT: u32 = 512;
+        pub const AT: u32 = 510;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -416,7 +412,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 526;
+    pub const WORDS: u32 = 524;
     pub const KEYS: &[&str] = &["rec", "frames", "open", "tasks", "counters", "sheet", "fetch", "steps", "quality", "view", "WORDS"];
 }
 

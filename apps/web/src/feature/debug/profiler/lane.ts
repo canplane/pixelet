@@ -74,6 +74,9 @@ export const pct = (part: number, whole: number) => (whole > 0 ? round((part / w
 
 export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
 
+/** A frame's draws and triangles: its census's sums, every pipeline a draw names. */
+export const drawn = (f: Frame): [f64, f64] => f.census.reduce(([d, t], [cd, ct]) => [d + cd, t + ct], [0, 0]);
+
 export function zoomsText(bits: f64): string {
   const out: string[] = [];
   for (let z = 0; z < 32; z++) if (bits & (1 << z)) out.push(zoomName(z));

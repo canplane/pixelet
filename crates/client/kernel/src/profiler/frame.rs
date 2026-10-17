@@ -9,32 +9,15 @@ use xpute_guest::sched::tick::PHASES;
 
 use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, WORST};
 use crate::profiler::word::{words, Words};
-use pxl_render::frame::draw::{
-    PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
-    PIPELINE_SKINNED,
-};
+use pxl_render::frame::draw::{DrawCensus, DRAW_PIPELINES};
 use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
 
-/// (draws, triangles) per pipeline, in CENSUS_TAGS' order.
-pub type DrawCensus = [[f64; 2]; CENSUS_LEN];
-
-/// The pipeline each tag counts, the tag its name: one a tag, so a tag added
-/// without its pipeline does not compile.
-pub const CENSUS_PIPELINES: [u32; CENSUS_LEN] = [
-    PIPELINE_DECOR,
-    PIPELINE_GHOST_BOX,
-    PIPELINE_GHOST_BOX_COPLANAR,
-    PIPELINE_GHOST_DECOR,
-    PIPELINE_SKINNED,
-    PIPELINE_PUCK_ZONE,
-    PIPELINE_PUCK_BEACON,
-    PIPELINE_BADGE,
-    PIPELINE_DEBUG,
-    PIPELINE_IMPOSTOR,
-];
+/// A tag a draw pipeline, in the renderer's order (pxl-render frame/draw.rs
+/// `DRAW_PIPELINES`): a pipeline added without its tag does not compile.
+const _: () = assert!(CENSUS_LEN == DRAW_PIPELINES.len(), "a census tag for every pipeline a draw names");
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -42,8 +25,7 @@ pub struct GpuSample {
     /// Lags a frame or two; 0 before the renderer exists or without GPU timing.
     pub ms: f64,
     pub spans: [f64; GPU_SPANS],
-    pub draw_calls: f64,
-    pub triangles: f64,
+    /// Every draw by its pipeline: the frame's draws and triangles are its sums.
     pub census: DrawCensus,
     pub px: f64,
 }
@@ -153,7 +135,7 @@ words!(FrameSample, FRAME::WORDS,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     worst_effect_ms => FRAME::worst_effect_ms, worst_effect_name => FRAME::worst_effect_name,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
-    gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans, gpu.draw_calls => FRAME::draw_calls, gpu.triangles => FRAME::triangles,
+    gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans,
     gpu.census => FRAME::census, gpu.px => FRAME::px,
     device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb,
     device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb, device.objects => FRAME::gpu_objects,

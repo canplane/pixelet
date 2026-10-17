@@ -17,7 +17,7 @@ use pxl_spec::space::coord::v3;
 use xpute_guest::global::Global;
 
 use crate::mem::MB;
-use crate::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_PIPELINES};
+use crate::profiler::frame::{DeviceSample, GpuSample};
 use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_spec::asset::ingested::Asset;
 use xpute_kit::math::scalar::round;
@@ -161,15 +161,12 @@ pub fn stage_render() {
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
     resolution_observe(stat.gpu_ms);
-    let census: DrawCensus = CENSUS_PIPELINES.map(|p| stat.census[p as usize]);
     set_host_frame(
         out.kind,
         GpuSample {
             ms: stat.gpu_ms,
             spans: stat.gpu_spans,
-            draw_calls: stat.draw_calls,
-            triangles: stat.triangles,
-            census,
+            census: stat.census,
             px: stat.px,
         },
         DeviceSample {

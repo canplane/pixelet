@@ -14,8 +14,8 @@ use xpute_guest::mem::heap::{alloc, free};
 use xpute_kit::math::scalar::round;
 
 use crate::frame::draw::{
-    uniform_of, Lists, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON,
-    PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
+    census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
+    PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::frame::screen_cells::SCREEN_CELLS_MAX;
 use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
@@ -222,14 +222,14 @@ pub struct FrameOutput {
 #[derive(Clone, Copy)]
 pub struct FrameStat {
     pub gpu_ms: f64,
-    pub draw_calls: f64,
-    pub triangles: f64,
     pub buffers: f64,
     pub buffer_bytes: f64,
     pub depth_mb: f64,
     pub layers_mb: f64,
     pub px: f64,
-    pub census: [[f64; 2]; PIPELINES as usize],
+    /// Every draw's, counted only while timed: its sums are the frame's
+    /// draws and triangles.
+    pub census: DrawCensus,
     pub gpu_spans: [f64; GPU_SPAN_NAMES.len()],
 }
 
@@ -1610,7 +1610,7 @@ impl Renderer {
         if still && rest.end() && !gridded {
             self.world = read;
             self.frame_read = rest;
-            let stat = self.stat(draws.records, world, (0.0, [0.0; GPU_SPAN_NAMES.len()]));
+            let stat = self.stat(draws.records, world, input.timed, (0.0, [0.0; GPU_SPAN_NAMES.len()]));
             self.order = order;
             return (FrameKind::stood, stat);
         }
@@ -1697,7 +1697,7 @@ impl Renderer {
             (false, true) => FrameKind::still,
             (false, false) => self.screen.kind,
         };
-        let stat = self.stat(draws.records, world, (gpu_ms, gpu_spans));
+        let stat = self.stat(draws.records, world, input.timed, (gpu_ms, gpu_spans));
         self.order = order;
         (kind, stat)
     }
@@ -1762,12 +1762,12 @@ impl Renderer {
     }
 
     /// What the scheduler asked for: a draw passed over because its block, skin or
-    /// sprite is not on the device yet is still counted.
-    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, (gpu_ms, gpu_spans): (f64, [f64; GPU_SPAN_NAMES.len()])) -> FrameStat {
+    /// sprite is not on the device yet is still counted. The draws are counted
+    /// only while `timed`, the profiler's, so a frame no one reads counts none.
+    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, timed: bool, (gpu_ms, gpu_spans): (f64, [f64; GPU_SPAN_NAMES.len()])) -> FrameStat {
         let b = blocks();
-        let mut triangles = 0u32;
-        let mut census = [[0.0; 2]; PIPELINES as usize];
-        for d in draws {
+        let mut census: DrawCensus = [[0.0; 2]; DRAW_PIPELINES.len()];
+        for d in draws.iter().filter(|_| timed) {
             let tris = match d[4] {
                 PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[1] * 12,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
@@ -1780,17 +1780,13 @@ impl Renderer {
                 PIPELINE_DEBUG => d[1] + d[2] / 3,
                 _ => 0,
             };
-            triangles += tris;
-            if let Some(c) = census.get_mut(d[4] as usize) {
-                c[0] += 1.0;
-                c[1] += tris as f64;
-            }
+            let c = &mut census[census_slot(d[4])];
+            c[0] += 1.0;
+            c[1] += tris as f64;
         }
         let px = world.width as f64 * world.height as f64;
         FrameStat {
             gpu_ms,
-            draw_calls: draws.len() as f64,
-            triangles: triangles as f64,
             buffers: b.count as f64,
             buffer_bytes: b.bytes as f64,
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the badges' regions'.

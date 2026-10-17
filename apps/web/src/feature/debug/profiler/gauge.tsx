@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
-import { MB, n1, pct, tris, valueText, zoomName } from "./lane.ts";
+import { drawn, MB, n1, pct, tris, valueText, zoomName } from "./lane.ts";
 
 const bytes = (b: number) => valueText("_bytes", b);
 import { BOUND, failText } from "./report.ts";
@@ -140,7 +140,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
 
           <Head>Draw</Head>
           <Row k="terrain refused" v={`${round(f.last.cap_terrain_refused)}`} warn={f.last.cap_terrain_refused > 0} />
-          <Row k="draws/triangles" v={`${f.last.draw_calls}/${tris(f.last.triangles)}`} />
+          <Row k="draws/triangles" v={`${drawn(f.last)[0]}/${tris(drawn(f.last)[1])}`} />
           {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
           <Row k="world surface" v={valueText("px", f.last.px)} />
         </>

@@ -44,6 +44,30 @@ pub const PIPELINE_BADGE: u32 = 8;
 pub const PIPELINE_DEBUG: u32 = 9;
 /// Decor drawn as sprites where a variant is too small on screen for its model.
 pub const PIPELINE_IMPOSTOR: u32 = 34;
+
+/// Every pipeline a draw record names, in the order a frame's census counts
+/// them (pxl-kernel profiler.json CENSUS_TAGS): what the list draws is these.
+pub const DRAW_PIPELINES: [u32; 10] = [
+    PIPELINE_DECOR,
+    PIPELINE_GHOST_BOX,
+    PIPELINE_GHOST_BOX_COPLANAR,
+    PIPELINE_GHOST_DECOR,
+    PIPELINE_SKINNED,
+    PIPELINE_PUCK_ZONE,
+    PIPELINE_PUCK_BEACON,
+    PIPELINE_BADGE,
+    PIPELINE_DEBUG,
+    PIPELINE_IMPOSTOR,
+];
+
+/// A draw record's (draws, triangles), by its pipeline's place in `DRAW_PIPELINES`.
+pub type DrawCensus = [[f64; 2]; DRAW_PIPELINES.len()];
+
+/// `pipeline`'s place in `DRAW_PIPELINES`; a draw naming another is a bug.
+pub fn census_slot(pipeline: u32) -> usize {
+    use xpute_kit::status::bug::OrBug;
+    DRAW_PIPELINES.iter().position(|&p| p == pipeline).or_bug(xpute_kit::status::errno::Errno::EINVAL)
+}
 /// Rewrite record: handle, address, byte offset, length.
 pub const REWRITE_WORDS: usize = 4;
 

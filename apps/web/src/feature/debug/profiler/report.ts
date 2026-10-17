@@ -5,7 +5,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { type Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
 import { copyText } from "@platform/save.ts";
 
-import { fieldText, type Frame, GROUPS, groupText, n1, pct, phaseText, tris, valueText } from "./lane.ts";
+import { drawn, fieldText, type Frame, GROUPS, groupText, n1, pct, phaseText, tris, valueText } from "./lane.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
 import type { ProfilerReport, Spread, TaskRecord, TaskSummary } from "./view.ts";
 
@@ -37,10 +37,11 @@ export function taskLine(r: TaskRecord): string {
 
 /** Geometry, textures and heap only mean anything as deltas from `prev`. */
 export function frameLine(s: Frame, prev: Frame | null): string {
+  const [draws, triangles] = drawn(s);
   const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap peak ${signedBytes(s.heap_peak_bytes - prev.heap_peak_bytes)}`;
   return `[${n1(s.t).padStart(9)}] ${valueText("kind_name", s.kind_name)}  interval ${n1(s.interval_ms)} = ${s.turns} turns ${n1(s.busy_ms)} + ${pastText(s)}  tick ${n1(s.tick_ms)}/${
     n1(s.budget_ms)
-  }${s.settled ? " (still)" : ""}  gpu ${n1(s.gpu_ms)}  draws ${s.draw_calls} tris ${tris(s.triangles)}  buf ${s.buffers}  heap peak ${bytes(s.heap_peak_bytes)}${d}`;
+  }${s.settled ? " (still)" : ""}  gpu ${n1(s.gpu_ms)}  draws ${draws} tris ${tris(triangles)}  buf ${s.buffers}  heap peak ${bytes(s.heap_peak_bytes)}${d}`;
 }
 
 export const longFrameLine = (l: LongFrame) =>
