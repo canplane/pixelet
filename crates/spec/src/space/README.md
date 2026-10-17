@@ -129,7 +129,7 @@ measures its own step against the same cell zoom
 Every tree in this world is dyadic. A node's parent is its coordinate
 halved and its children are the 2^D under it (`hierarchy/tree.rs`), its size is a
 zoom, a cube at a zoom is one box (`coord/zoom.rs` `cube`), and a ray crosses a
-box by one slab test (`Aabb::span_along`, in `coord/v3.rs`). That much is one law,
+box by one slab test (pxl-portable `cast.rs` `slab`). That much is one law,
 written once. What a node holds, whether it is resident, how it is stored
 and how a reader walks it are each tree's own, and follow from what it
 represents:

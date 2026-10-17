@@ -27,9 +27,4 @@ impl Globe {
         }
     }
 
-    /// Stretched as the map is there, so the sphere meets the flat map under
-    /// the eye.
-    pub fn radius_u(&self) -> f64 {
-        MERCATOR_RADIUS_U / self.cos_lat
-    }
 }

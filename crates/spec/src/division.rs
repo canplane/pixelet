@@ -89,9 +89,3 @@ pub struct DivisionPart {
     #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "std::ops::Not::not"))]
     pub approx: bool,
 }
-
-impl DivisionPart {
-    pub fn in_language(&self, lang: &str) -> &str {
-        self.names.get(lang).map(String::as_str).unwrap_or(&self.name)
-    }
-}

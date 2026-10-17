@@ -202,11 +202,6 @@ pub fn transform_direction<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64
     out
 }
 
-/// The clip-space w of m × (x, y, z, 1): the point's depth for a projection.
-pub fn clip_w(m: &Mat4, x: f64, y: f64, z: f64) -> f64 {
-    m[3] * x + m[7] * y + m[11] * z + m[15]
-}
-
 /// The frustum's planes (nx, ny, nz, d), normals in, normalized, of a
 /// projection as `perspective` makes one: left, right, bottom, top and near
 /// (depth at most 1). Its far plane is at infinity, which holds every point,

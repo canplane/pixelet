@@ -44,28 +44,6 @@ impl Aabb {
         v3::len(&self.extent()) / 2.0
     }
 
-    /// The slab test: where the ray enters and leaves, unclipped, and the axis
-    /// it enters across. An axis the ray does not move along is inside where
-    /// the origin is.
-    pub fn span_along(self, origin: V3, direction: V3) -> Option<(f64, f64, usize)> {
-        let (mut enter, mut leave, mut axis) = (f64::NEG_INFINITY, f64::INFINITY, 0);
-        for k in 0..3 {
-            if direction[k].abs() < 1e-12 {
-                if origin[k] < self.min[k] || origin[k] > self.max[k] {
-                    return None;
-                }
-                continue;
-            }
-            let (a, b) = ((self.min[k] - origin[k]) / direction[k], (self.max[k] - origin[k]) / direction[k]);
-            let (near, far) = if direction[k] > 0.0 { (a, b) } else { (b, a) };
-            if near > enter {
-                (enter, axis) = (near, k);
-            }
-            leave = leave.min(far);
-        }
-        (enter <= leave).then_some((enter, leave, axis))
-    }
-
     /// Closed.
     pub fn holds(self, p: V3) -> bool {
         (0..3).all(|k| self.min[k] <= p[k] && p[k] <= self.max[k])
@@ -79,14 +57,6 @@ impl Aabb {
         Aabb {
             min: std::array::from_fn(|k| self.min[k] + by[k]),
             max: std::array::from_fn(|k| self.max[k] + by[k]),
-        }
-    }
-
-    /// Grown outward to whole cells of `side`.
-    pub fn snapped_out(self, side: f64) -> Aabb {
-        Aabb {
-            min: v3::floor(&self.min, side),
-            max: v3::ceil(&self.max, side),
         }
     }
 
