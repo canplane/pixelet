@@ -479,11 +479,11 @@ impl Area for Windowed {
     fn ends(&self) -> bool {
         Declared.ends()
     }
-    fn shards(&self) -> u32 {
-        Declared.shards()
+    fn keys(&self) -> u32 {
+        Declared.keys()
     }
-    fn shard(&self, i: u32) -> (Zoom, [i32; 2]) {
-        Declared.shard(i)
+    fn key(&self, i: u32) -> u32 {
+        Declared.key(i)
     }
 }
 

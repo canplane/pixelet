@@ -22,23 +22,22 @@ use crate::layer::Base as _;
 use crate::setting::store::settings_store;
 use crate::view::lens;
 
-/// The shards the service area serves, as the GPU reads them, and whether
-/// a declared source made them: one is declared once (io/source.rs
-/// `declare`), so they are made then and not again.
+/// The service area's index as the GPU reads it, and whether a declared
+/// source made it: one is declared once (io/source.rs `declare`), so it is
+/// made then and not again.
 static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 
-/// Each shard the service area serves: its tile zoom, x (as `wrap_index`
-/// names it) and y, and a spare; one serving nothing (zoom 255) where none
-/// is declared, since a binding holds at least one.
+/// The area's index (pxl-portable `area::Area`), its keys four a row, the
+/// last row's tail `NO_KEY`, which sorts last; a row of them where none is
+/// declared, since a binding holds at least one.
 pub fn shards() -> &'static [[i32; 4]] {
     let declared = crate::io::source::top().is_some();
     let (made, s) = SHARDS.get(|| (false, Vec::new()));
     if s.is_empty() || *made != declared {
         s.clear();
-        crate::io::source::served(&mut |zoom, [x, y]| s.push([zoom as i32, x, y, 0]));
-        if s.is_empty() {
-            s.push([255, 0, 0, 0]);
-        }
+        let keys = crate::io::source::keys();
+        let key = |i: usize| keys.get(i).copied().unwrap_or(pxl_portable::area::NO_KEY) as i32;
+        s.extend((0..keys.len().div_ceil(4).max(1)).map(|r| core::array::from_fn(|k| key(4 * r + k))));
         *made = declared;
     }
     s

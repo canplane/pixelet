@@ -265,11 +265,11 @@ impl Area for Reading<'_, '_> {
     fn ends(&self) -> bool {
         source::Declared.ends()
     }
-    fn shards(&self) -> u32 {
-        source::Declared.shards()
+    fn keys(&self) -> u32 {
+        source::Declared.keys()
     }
-    fn shard(&self, i: u32) -> (Zoom, [i32; 2]) {
-        source::Declared.shard(i)
+    fn key(&self, i: u32) -> u32 {
+        source::Declared.key(i)
     }
 }
 

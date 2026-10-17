@@ -13,35 +13,60 @@ use crate::{index_at, wrap_index as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL,
 
 use crate::ground::{UNKNOWN, VOID};
 
-/// The shards a source serves: on the CPU its declaration, on a GPU a
-/// buffer of it.
+/// The shards a source serves, as one index both sides search
+/// (`serves`): every cell at `SHARD_ZOOM` a served shard covers, a coarser
+/// shard's each, by key (`shard_key`) in ascending order. On the CPU its
+/// declaration's, on a GPU a buffer of it.
 pub trait Area {
     /// Whether the area ends at all: before a source is declared, nothing
     /// is past it.
     fn ends(&self) -> bool;
-    fn shards(&self) -> u32;
-    /// Shard `i`: its tile's zoom and index, X named as the world names it.
-    fn shard(&self, i: u32) -> (Zoom, [i32; 2]);
+    /// How many keys the index holds; past its served cells' it may hold
+    /// `NO_KEY`s, which sort last and name none.
+    fn keys(&self) -> u32;
+    fn key(&self, i: u32) -> u32;
+}
+
+/// A cell at `SHARD_ZOOM`'s key: its quadkey, its X's and Y's bits
+/// interleaved from the top, as a tile pyramid orders its tiles, so the
+/// cells about one lie near it in the index; `NO_KEY` for a row off the
+/// world. X is named as the world names it (`wrap`).
+pub const fn shard_key(c: [i32; 2]) -> u32 {
+    if c[1] < 0 || c[1] >= 1 << SHARD_ZOOM {
+        return NO_KEY;
+    }
+    let (mut k, mut b) = (0, SHARD_ZOOM);
+    while b > 0 {
+        b -= 1;
+        k = k << 2 | (c[0] as u32 >> b & 1) | (c[1] as u32 >> b & 1) << 1;
+    }
+    k
+}
+
+/// No cell's key: past every one, so it sorts last.
+pub const NO_KEY: u32 = u32::MAX;
+
+/// Whether the cell `c` at `SHARD_ZOOM` is served: its key found in the
+/// index by halving it, a look a step.
+pub fn serves(area: &impl Area, c: [i32; 2]) -> bool {
+    let k = shard_key(c);
+    let (mut lo, mut hi) = (0, area.keys());
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if area.key(mid) < k {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    k != NO_KEY && lo < area.keys() && area.key(lo) == k
 }
 
 /// Whether the leaf tile `leaf` is past the area: it ends, and no served
 /// shard is over the tile.
 pub fn past(area: &impl Area, leaf: [i32; 2]) -> bool {
-    if !area.ends() {
-        return false;
-    }
-    let mut i = 0;
-    while i < area.shards() {
-        let (z, at) = area.shard(i);
-        if z <= LEAF_ZOOM {
-            let s = LEAF_ZOOM - z;
-            if leaf[0] >> s == at[0] && leaf[1] >> s == at[1] {
-                return false;
-            }
-        }
-        i += 1;
-    }
-    true
+    let s = LEAF_ZOOM - SHARD_ZOOM;
+    area.ends() && !serves(area, [leaf[0] >> s, leaf[1] >> s])
 }
 
 /// What a descent establishes of the service area at a node a shard or
@@ -67,9 +92,9 @@ const _: () = assert!(LEAF_ZOOM >= SHARD_ZOOM);
 impl Shard {
     pub const UNKNOWN: Shard = Shard(0);
 
-    /// The node `(zoom, c)`'s, as `self` knows it, else found: one pass over
-    /// the served shards for its shard and the eight about it. Unknown
-    /// coarser than a shard.
+    /// The node `(zoom, c)`'s, as `self` knows it, else found: its shard and
+    /// the eight about it each looked up in the area's index (`serves`).
+    /// Unknown coarser than a shard.
     pub fn at(self, area: &impl Area, (zoom, c): (Zoom, [i32; 2])) -> Shard {
         if self.0 & SHARD_KNOWN != 0 || zoom < SHARD_ZOOM {
             return self;
@@ -81,21 +106,11 @@ impl Shard {
         let own = [c[0] >> s, c[1] >> s];
         // Bit `(dy + 1)·3 + (dx + 1)` for the shard `dx, dy` from its own.
         let mut served = 0u32;
-        let mut i = 0;
-        while i < area.shards() {
-            let (z, at) = area.shard(i);
-            if z <= SHARD_ZOOM {
-                let d = SHARD_ZOOM - z;
-                let mut k = 0u32;
-                while k < 9 {
-                    let n = [wrap(SHARD_ZOOM, own[0] + (k % 3) as i32 - 1), own[1] + (k / 3) as i32 - 1];
-                    if n[0] >> d == at[0] && n[1] >> d == at[1] {
-                        served |= 1 << k;
-                    }
-                    k += 1;
-                }
-            }
-            i += 1;
+        let mut k = 0u32;
+        while k < 9 {
+            let n = [wrap(SHARD_ZOOM, own[0] + (k % 3) as i32 - 1), own[1] + (k / 3) as i32 - 1];
+            served |= (serves(area, n) as u32) << k;
+            k += 1;
         }
         Shard(SHARD_KNOWN | served << SHARD_SERVED_SHIFT)
     }
