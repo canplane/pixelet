@@ -37,16 +37,23 @@ enum Entry<T> {
     Pending,
     /// Its file in its arrival's task, being read.
     Arrived,
-    /// An image handed to the device under this handle, ready once the host's
-    /// word says it landed (`load_image`).
-    Landing(u32),
+    /// An image handed to the device, ready once the host's word says it
+    /// landed (`load_image`).
+    Landing(T),
     Ready(T),
     Failed,
 }
 
+/// An image's handle and the device it was handed to (`device_generation`).
+#[derive(Clone, Copy)]
+struct Image {
+    handle: u32,
+    on: u32,
+}
+
 struct Loader {
     gltf: Vec<Option<Entry<Rc<Gltf>>>>,
-    image: Vec<Option<Entry<u32>>>,
+    image: Vec<Option<Entry<Image>>>,
     /// Kept so saying the wants every turn allocates nothing.
     wants: Vec<(u64, Ask)>,
 }
@@ -75,17 +82,25 @@ pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
 
 /// An image's handle once its texture is there. Its landing is the word the
 /// host writes, read here where the image is read, so nothing waits on it;
-/// once read it stays, since the texture is taken from the host's record.
+/// once read it stays, since the texture is taken from the host's record,
+/// while the device it went to does: one handed to a device since gone is
+/// asked for again.
 pub fn load_image(load: Load) -> Option<u32> {
     let l = loader();
     let entry = &mut l.image[load.number() as usize];
-    if let Some(Entry::Landing(h)) = *entry {
-        if pxl_render::gpu::api::image_landed(h) {
-            *entry = Some(Entry::Ready(h));
+    if let Some(Entry::Landing(i) | Entry::Ready(i)) = entry {
+        if i.on != pxl_render::gpu::api::device_generation() {
+            IMAGES.get(Slots::default).remove(i.handle);
+            *entry = None;
+        }
+    }
+    if let Some(Entry::Landing(i)) = entry {
+        if pxl_render::gpu::api::image_landed(i.handle) {
+            *entry = Some(Entry::Ready(*i));
         }
     }
     match entry {
-        Some(Entry::Ready(h)) => Some(*h),
+        Some(Entry::Ready(i)) => Some(i.handle),
         Some(_) => None,
         None => {
             *entry = Some(Entry::Pending);
@@ -191,20 +206,10 @@ pub fn image_opened(fd: u32, key: u64, opened: Opened) {
 
 /// The GPU is gone, and with it every image the textures took: each is loaded
 /// again, under a new handle, when it is next asked for.
-pub fn images_lost() {
-    let l = loader();
-    for entry in &mut l.image {
-        if let Some(Entry::Ready(h) | Entry::Landing(h)) = *entry {
-            IMAGES.get(Slots::default).remove(h);
-            *entry = None;
-        }
-    }
-}
-
 /// An image's bytes, read, into a texture where the device is: landing until
 /// the host says it is there (`load_image`). A file the device cannot decode is
 /// the asset's own failure, so it is final; a device gone since it was asked
-/// for takes it again when one is back (`images_lost`).
+/// for takes it again when one is back (`load_image`).
 fn image_arrived(n: usize, file: Vec<u8>) {
     if pxl_render::gpu::api::device().is_none() {
         loader().image[n] = None;
@@ -217,7 +222,10 @@ fn image_arrived(n: usize, file: Vec<u8>) {
         settled();
         return;
     }
-    loader().image[n] = Some(Entry::Landing(image));
+    loader().image[n] = Some(Entry::Landing(Image {
+        handle: image,
+        on: pxl_render::gpu::api::device_generation(),
+    }));
 }
 
 pub fn model_opened(fd: u32, key: u64, opened: Opened) {

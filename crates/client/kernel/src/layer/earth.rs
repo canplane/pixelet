@@ -5,6 +5,7 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
+use pxl_render::gpu::api::device_generation;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::world::{around, wrap_index};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
@@ -62,10 +63,19 @@ fn kept() -> &'static mut Kept {
 }
 
 /// Each waiting packet's texels to `write`, into its frame's layer, while it
-/// takes them.
+/// takes them; a tile whose texels went to a device since gone is fetched
+/// again, as its packet was freed once sent.
 pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
+    let (kept, on) = (kept(), device_generation());
+    for record in 0..EARTH_FRAMES {
+        if kept.sent_on(record).is_some_and(|s| s != on) {
+            if let Some(p) = Earth::residency().in_frame(record) {
+                Earth::residency().again(p);
+            }
+        }
+    }
     // A packet `receive` read reads again.
-    kept().send(&mut |record, pkt| earth::decode(pkt).map_or(true, |texels| write(record, texels)));
+    kept.send(on, &mut |record, pkt| earth::decode(pkt).map_or(true, |texels| write(record, texels)));
 }
 
 /// The floor's tiles (`floor`, the view's) at the top as a window, its south-west tile first, and
@@ -82,7 +92,7 @@ pub fn earth_window(floor: impl Iterator<Item = Tile> + Clone) -> ([i32; 2], [u3
     let y0 = floor.clone().map(|p| at(p)[1]).min().unwrap_or(0);
     for p in floor {
         let Some(record) = Earth::residency().frame(p) else { continue };
-        if !kept().waiting(record) {
+        if kept().sent_on(record) == Some(device_generation()) {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
             layers[(dy * REACH_ACROSS + dx) as usize] = record + 1;

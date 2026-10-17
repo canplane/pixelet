@@ -89,7 +89,7 @@ pub fn overwrites() -> Overwrites<'static> {
 /// packets kept for them, and off each void tile, held with none.
 pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::residency();
-    kept().send(&mut |frame, pkt| {
+    kept().send(pxl_render::gpu::api::device_generation(), &mut |frame, pkt| {
         let Some(t) = terrain.in_frame(frame) else { return true };
         let Some(held) = terrain.get(t) else { return true };
         window::fill(t, Handed::Packet(pkt, held), write)

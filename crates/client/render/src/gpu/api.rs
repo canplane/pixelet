@@ -196,6 +196,9 @@ struct State {
     gpu_ms: [f64; SPANS + 1],
     /// The images on their way into textures (`image_arrive`).
     images: Vec<Arriving>,
+    /// The devices gone so far: what was handed to the GPU under another
+    /// count is on none there is.
+    generation: u32,
 }
 
 /// An image file copied into its texture: the file's bytes kept until the
@@ -251,6 +254,7 @@ pub unsafe fn install(at: u32) -> u32 {
         stamps_written: 0,
         gpu_ms: [0.0; SPANS + 1],
         images: Vec::new(),
+        generation: 0,
     }));
     at
 }
@@ -312,6 +316,12 @@ pub fn take_device_lost() -> bool {
     true
 }
 
+/// The devices gone so far (`device_lost`): whoever hands the GPU anything
+/// says under which, and what went under another is not there.
+pub fn device_generation() -> u32 {
+    STATE.get(|| None).as_ref().map_or(0, |s| s.generation)
+}
+
 /// The device went, and every object on it: the handles start over.
 pub fn device_lost() {
     if let Some(s) = STATE.get(|| None).as_mut() {
@@ -319,6 +329,7 @@ pub fn device_lost() {
         unsafe { core::ptr::write_bytes(core::ptr::from_mut(s.encoder), 0, 1) };
         (s.asked, s.device, s.stamps) = (false, None, None);
         s.images.clear();
+        s.generation = s.generation.wrapping_add(1);
         *head(STAMPS_WORD_AT) = 0;
     }
 }

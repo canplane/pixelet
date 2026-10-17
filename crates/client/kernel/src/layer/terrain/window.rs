@@ -74,11 +74,13 @@ enum State {
     Present,
 }
 
-/// What a slot holds: the square its window wants there, and how far it is.
+/// What a slot holds: the square its window wants there, how far it is, and
+/// on which device (`device_generation`): one that went took the square.
 #[derive(Clone, Copy)]
 struct Slot {
     square: [i32; 2],
     state: State,
+    on: u32,
 }
 
 /// A window: its cells' zoom, and its first square; none while its centre
@@ -110,6 +112,7 @@ fn windows() -> &'static mut Windows {
         slots: [Slot {
             square: [i32::MIN; 2],
             state: State::Absent,
+            on: 0,
         }; SQUARES as usize],
         ticket: 0,
         table: [0; TABLE_WORDS],
@@ -188,6 +191,7 @@ fn looks(s: u32) -> &'static mut [GroundId] {
 pub fn step(at: [Option<[f64; 2]>; 3]) -> bool {
     let w = windows();
     let terrain = TerrainTile::residency();
+    let on = pxl_render::gpu::api::device_generation();
     for win in 0..WINDOWS {
         let (centre, laid) = layout(win);
         let p = at[centre as usize];
@@ -218,8 +222,8 @@ pub fn step(at: [Option<[f64; 2]>; 3]) -> bool {
             let want = wanted(cell, f, s);
             let t = tile_of(cell, want).0;
             let slot = &mut w.slots[i];
-            if moved || slot.square != want {
-                *slot = Slot { square: want, state: State::Absent };
+            if moved || slot.square != want || slot.on != on {
+                *slot = Slot { square: want, state: State::Absent, on };
                 *back_word(i as u32) = 0;
                 terrain.moved_at(t);
             }

@@ -38,24 +38,13 @@ use crate::setting::store::{settings_store, AoMode};
 use crate::view::demand::Observed as _;
 use crate::view::frame::resolution::resolution_observe;
 
-/// What the screen holds of the world: nothing yet, nothing since the device
-/// went, or a frame.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Screen {
-    Blank,
-    Lost,
-    Drawn,
-}
+/// The device the last frame went to the screen on (`device_generation`).
+static DRAWN: Global<Option<u32>> = Global::new();
 
-static SCREEN: Global<Screen> = Global::new();
-
-pub fn screen() -> Screen {
-    *SCREEN.get(|| Screen::Blank)
-}
-
-/// The device went, and what it drew with it; a frame on the next one ends this.
-pub fn screen_lost() {
-    SCREEN.set(Screen::Lost);
+/// Whether the screen holds a frame of the world: one drawn on the device
+/// there is, as a device that went took what it drew.
+pub fn screen_drawn() -> bool {
+    *DRAWN.get(|| None) == Some(pxl_render::gpu::api::device_generation())
 }
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
@@ -170,7 +159,7 @@ pub fn stage_render() {
         set_host_frame(out.kind, GpuSample::default(), DeviceSample { objects, ..DeviceSample::default() });
         return;
     };
-    SCREEN.set(Screen::Drawn);
+    DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
     resolution_observe(stat.gpu_ms);
     let census: DrawCensus = CENSUS_PIPELINES.map(|p| stat.census[p as usize]);
     set_host_frame(

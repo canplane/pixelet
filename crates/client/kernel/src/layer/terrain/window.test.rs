@@ -29,6 +29,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
         slots: [Slot {
             square: [i32::MIN; 2],
             state: State::Absent,
+            on: 0,
         }; SQUARES as usize],
         ticket: 0,
         table: [0; TABLE_WORDS],

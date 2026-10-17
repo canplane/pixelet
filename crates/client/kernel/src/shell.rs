@@ -23,7 +23,7 @@ use crate::control::sensor::reading::{device_location_store, device_orientation_
 use crate::layer::division::named;
 use crate::scene::character::companion::companion_load_store;
 use crate::scene::character::preview::{preview_rows, CASES_MAX};
-use crate::scene::stage::{screen, Screen};
+use crate::scene::stage::screen_drawn;
 use crate::setting::store::{settings_store, SettingKey};
 use crate::turn::world_platform;
 use crate::view::frame::pose::units_per_px_at;
@@ -74,9 +74,9 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let snapshot = Snapshot {
         focus: FocusState {
             // Shown once a frame went to the screen over a view whose tiles all answered.
-            status: match (crate::view::observation::eye(), screen()) {
+            status: match (crate::view::observation::eye(), screen_drawn()) {
                 (None, _) => GroundStatus::Idle,
-                (Some(_), Screen::Drawn) if TerrainTile::demand().answered() => GroundStatus::Success,
+                (Some(_), true) if TerrainTile::demand().answered() => GroundStatus::Success,
                 _ => GroundStatus::Loading,
             },
             is_off_center: off_center().is_off_center,
