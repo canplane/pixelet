@@ -86,6 +86,26 @@ pub fn bound_of(w: i32) -> [i32; 2] {
     [w << 16 >> 16, w >> 16]
 }
 
+/// What the windows bound under a node, each source its own: the ground's
+/// faces, the lowest and highest, and the leaf cells the ways fill, the
+/// lowest and past the highest (`window::LEVEL_WORDS`, `fill::level`).
+pub type Bounds = [[i32; 2]; 2];
+
+/// Bounds as their two bound words.
+pub fn bounds_word(b: Bounds) -> [i32; 2] {
+    [bound_word(b[0]), bound_word(b[1])]
+}
+
+/// `bounds_word`'s bounds.
+pub fn bounds_of(w: [i32; 2]) -> Bounds {
+    [bound_of(w[0]), bound_of(w[1])]
+}
+
+/// Two bounds joined, each source's its own.
+pub fn joined(a: Bounds, b: Bounds) -> Bounds {
+    [[a[0][0].min(b[0][0]), a[0][1].max(b[0][1])], [a[1][0].min(b[1][0]), a[1][1].max(b[1][1])]]
+}
+
 /// A cell's word's four looks, `dx + 2·dy`.
 pub fn looks(word: u32) -> [u32; 4] {
     [word & 0xff, word >> 8 & 0xff, word >> 16 & 0xff, word >> 24]
@@ -318,13 +338,14 @@ pub const EMPTY: [i32; 2] = [i16::MAX as i32, i16::MIN as i32];
 /// `window::bounded`).
 pub trait Held: Area {
     /// The lowest and highest the ground's cells at `cell` reach over the
-    /// node `(zoom, c)`, off the finest held tile they are read from
-    /// (`window::bounded`); a bound no tighter than the heights' whole range
-    /// (`UNBOUNDED`) where no square it reads is held, which only splits
-    /// more; false where no tile over it is held.
+    /// node `(zoom, c)`, and the ways' over them, apart (`Bounds`), off the
+    /// finest held tile they are read from (`window::bounded`); bounds no
+    /// tighter than the heights' whole range (`UNBOUNDED`) where no square
+    /// it reads is held, which only splits more; false where no tile over
+    /// it is held.
     /// `place` is where the cells at `cell` of a node over it were found,
     /// or `Found::NONE`, and becomes where its own are (`window::step`).
-    fn relief(&mut self, place: &mut Found, cell: Zoom, node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
+    fn relief(&mut self, place: &mut Found, cell: Zoom, node: (Zoom, [i32; 3])) -> (Bounds, bool);
     /// The column of the block `c` at `zoom` off the windows
     /// (`window::ground`), the service area's edge laid on it as its fill
     /// laid it (`Cell`); its cell where `place` found it, the zoom's cells'
@@ -349,8 +370,10 @@ pub type Answer = In<(u32, [u32; 4])>;
 /// (`Held::relief`), `NONE` where none were, and becomes the node's. With
 /// the answer the cell its block was read off and where it was read, what
 /// the ways write over it read off (`window::ways_over`); none
-/// (`Cell::NONE`, `Found::NONE`) where it read none.
-pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, Found) {
+/// (`Cell::NONE`, `Found::NONE`) where it read none, as over the ground
+/// where the ways miss the block (`ways::misses`); and the ways' bound read
+/// with its own (`Held::relief`), `EMPTY` where none was.
+pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, Found, [i32; 2]) {
     let none = Found::NONE;
     let air = In {
         kind: Kind::Block,
@@ -378,11 +401,11 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
         } else {
             split
         };
-        return (answer, Cell::NONE, none);
+        return (answer, Cell::NONE, none, EMPTY);
     }
     // Coarser than any tile, no one index holds it.
     if zoom < GROUND.top() {
-        return (split, Cell::NONE, none);
+        return (split, Cell::NONE, none, EMPTY);
     }
     // A block's cells are its zoom's. A coarser node's are read at the
     // finest zoom asked within it, no finer than a tile at the node's own
@@ -397,22 +420,23 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
     } else {
         fit
     };
-    let (relief, ok) = held.relief(place, read, (zoom, c));
+    let ([relief, ways], ok) = held.relief(place, read, (zoom, c));
     if !ok {
-        return (lacks, Cell::NONE, none);
+        return (lacks, Cell::NONE, none, EMPTY);
     }
     if block {
-        if above(zoom, c[2], relief[1]) {
-            return (air, Cell::NONE, none);
+        // Its column read where the ground or the ways may fill it.
+        if above(zoom, c[2], relief[1]) && crate::ways::misses(ways, (zoom, c[2]), zoom) {
+            return (air, Cell::NONE, none, ways);
         }
         let column = held.cell(*place, zoom, c);
         let block = column.block(zoom, c[2], || cave.hollow());
         let answer = In { kind: Kind::Block, block };
-        return (answer, column, *place);
+        return (answer, column, *place, ways);
     }
     let (known, hollow) = cave.whole(zoom);
     let answer = if empty(shard, (zoom, c), relief, [far, near], known && hollow) { air } else { split };
-    (answer, Cell::NONE, none)
+    (answer, Cell::NONE, none, ways)
 }
 
 /// A cell's ground, as a column reads it: its look (`unknown` for the

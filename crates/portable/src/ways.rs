@@ -711,6 +711,23 @@ fn near(k: u32) -> [i32; 3] {
     d
 }
 
+/// Whether nothing the ways write fills a block of the node at `zoom` whose
+/// z is `z`, at the zooms a reader asks within it to `near`, where what
+/// they fill under it lies in the leaf cells `[lo, hi)` (`ground::Bounds`,
+/// a bore's air none): a block is filled where more than half of it is
+/// (`fills`), so none of the node's is where at most half the finest
+/// asked's block of its bottom or its top is reached, and a coarser zoom's
+/// block, more than twice its, holds less still. Past the leaves a leaf
+/// cell is cut 2^e a side, so every height is a whole count, and a block
+/// fills as its leaf does.
+pub fn misses([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32), near: Zoom) -> bool {
+    let e = near.max(LEAF_CELL) - LEAF_CELL;
+    let s = LEAF_CELL + e - zoom;
+    let (bottom, top) = (z << s, (z + 1) << s);
+    let half = if near < LEAF_CELL { 1 << (LEAF_CELL - near - 1) } else { 0 };
+    hi << e <= bottom + half || lo << e >= top - half
+}
+
 /// A run along z as a square holds it, a word: its first block, an `i16`,
 /// and its value (`at`'s, its air `AIR_OF` over its way's look), `NOTHING`
 /// as `0xffff`. It holds to the next run's first block.

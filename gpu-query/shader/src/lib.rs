@@ -174,7 +174,7 @@ impl Squares for World<'_> {
     fn column(&self, cell: u32, slot: u32, i: u32) -> u32 {
         column_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
     }
-    fn level(&self, cell: u32, slot: u32, j: u32, at: [u32; 2]) -> i32 {
+    fn level(&self, cell: u32, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         level_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), j, at)
     }
     fn laid(&self, cell: u32, slot: u32, i: u32) -> u32 {
@@ -194,7 +194,7 @@ impl ground::Held for World<'_> {
     /// The bound over the node of the window `cell` reads its cells from,
     /// the finest holding them present (`window::bounded`), as the CPU reads
     /// it (pxl-portable `Held::relief`).
-    fn relief(&mut self, place: &mut Found, cell: u32, (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
+    fn relief(&mut self, place: &mut Found, cell: u32, (zoom, c): (u32, [i32; 3])) -> (ground::Bounds, bool) {
         let (r, _, here) = window::bounded(self, place, window::held_to(cell), (zoom, [c[0], c[1]]));
         (r, here)
     }

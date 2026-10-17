@@ -30,10 +30,11 @@
 //!   hold under the node (`Residency::relief`, off the finest window holding
 //!   its cells), every cell under it at each zoom asked over the ground, or
 //!   ground a cave may take with a cave through all of it;
-//! - the ways: the same levels, whose level 0 joins each column's runs with
-//!   its ground's top (pxl-portable fill.rs `level`); a way a coarser tile drops as
-//!   narrower than half its cell is dropped there, as its level of detail
-//!   does;
+//! - the ways: by their own rule (pxl-portable `ways::misses`) over their
+//!   own bound in the same levels, the leaf cells each column's runs fill
+//!   joined apart from the ground's (pxl-portable fill.rs `level`); a way a
+//!   coarser tile drops as narrower than half its cell is dropped there, as
+//!   its level of detail does;
 //! - the caves: the hash node hollow and drawing nothing again under it
 //!   (`procedural::Cave`, one draw of its parent's);
 //! - what is placed: no record of the objects' pyramid at the node.
@@ -263,12 +264,12 @@ impl ground::Held for Reading<'_, '_> {
     /// stepped from `place` (pxl-portable `Held::relief`); its line names the
     /// tile a lack or a coarser window stands for; where it lacks, `EMPTY`
     /// and false.
-    fn relief(&mut self, place: &mut Found, cell: Zoom, _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
+    fn relief(&mut self, place: &mut Found, cell: Zoom, _: (Zoom, [i32; 3])) -> (ground::Bounds, bool) {
         let (zoom, c) = self.at.node;
         let line = self.world.line(self.at, cell);
         match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]))) {
             Some(r) => (r, true),
-            None => (ground::EMPTY, false),
+            None => ([ground::EMPTY; 2], false),
         }
     }
 

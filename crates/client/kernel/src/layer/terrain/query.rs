@@ -6,7 +6,7 @@
 //! tile's line says its ground at, coarser where only one over holds them.
 //! A column's ways are the runs the GPU wrote, read back with its cells.
 
-use pxl_portable::ground::Cell;
+use pxl_portable::ground::{Bounds, Cell};
 use pxl_portable::window::{self as cells, Found, SQUARE_SHIFT};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::q3;
@@ -23,7 +23,8 @@ use crate::layer::{Answer, Bound, Query};
 
 impl Residency<TerrainTile> {
     /// The lowest and highest the ground holds over the column `node`'s own
-    /// cells, in leaf cells: the bound over the cells of `line`'s tile, off
+    /// cells, in leaf cells, and the ways apart (pxl-portable
+    /// `ground::Bounds`): the bounds over the cells of `line`'s tile, off
     /// the finest window holding them, one look-up whatever the node's size
     /// (`relief`). A coarser window standing in holds its own cells, which
     /// its bound holds, and names the tile lacked; where no window holds it,
@@ -32,7 +33,7 @@ impl Residency<TerrainTile> {
     /// (pxl-portable `area::Shard`). `place` is where a node over it found
     /// its cells, or `Found::NONE`, and becomes where its own are
     /// (pxl-portable `window::step`).
-    pub fn relief(&self, line: &Line, place: &mut Found, node: Node<2>) -> Answer<[i32; 2]> {
+    pub fn relief(&self, line: &Line, place: &mut Found, node: Node<2>) -> Answer<Bounds> {
         let (r, from, here) = relief(line.tile, place, node);
         held(line, from, here, r)
     }
@@ -52,7 +53,7 @@ impl Residency<TerrainTile> {
     /// `relief` over `node`'s cells at `cell`, its line stepped from where
     /// `lines` last walked: nodes beside each other share their lines down
     /// to where they part, and pay a look-up a zoom only past it.
-    pub fn relief_walked(&self, lines: &mut Lines, place: &mut Found, node: Node<2>, cell: Zoom) -> Answer<[i32; 2]> {
+    pub fn relief_walked(&self, lines: &mut Lines, place: &mut Found, node: Node<2>, cell: Zoom) -> Answer<Bounds> {
         self.relief(&self.seek(lines, bound_tile(node, cell)), place, node)
     }
 
@@ -113,10 +114,10 @@ fn held<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
     }
 }
 
-/// The bound under a node over the cells of `tile`, off the finest window
+/// The bounds under a node over the cells of `tile`, off the finest window
 /// holding them (pxl-portable `window::bounded`), stepped from `place`, and
 /// that window's zoom.
-fn relief(tile: Tile, place: &mut Found, (zoom, at): Node<2>) -> ([i32; 2], Zoom, bool) {
+fn relief(tile: Tile, place: &mut Found, (zoom, at): Node<2>) -> (Bounds, Zoom, bool) {
     cells::bounded(&Windowed, place, GROUND.cell_zoom(tile.zoom), (zoom, at.map(|v| v as i32)))
 }
 
@@ -154,9 +155,10 @@ impl Query for Residency<TerrainTile> {
         }
     }
 
-    /// From the windows' relief over the node's own cells (`relief`), down
-    /// to a cell at `cell` under its lowest, within the node. A
-    /// node past the service area, no look in it, holds nothing.
+    /// From the windows' relief over the node's own cells (`relief`), the
+    /// ground's and the ways' joined, down to a cell at `cell` under its
+    /// lowest, within the node. A node past the service area, no look in
+    /// it, holds nothing.
     fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let node = (zoom, [at[0], at[1]]);
         // Known before any of its ground arrives.
@@ -165,7 +167,8 @@ impl Query for Residency<TerrainTile> {
         }
         let whole = region((zoom, at));
         let mut place = Found::NONE;
-        self.relief(line, &mut place, node).map(|[lo, hi]| {
+        self.relief(line, &mut place, node).map(|[ground, ways]| {
+            let [lo, hi] = [ground[0].min(ways[0]), ground[1].max(ways[1])];
             let lo = (f64::from(lo) * units(GROUND.cell()) - units(cell)).max(whole.min[2]);
             let hi = (f64::from(hi) * units(GROUND.cell())).min(whole.max[2]);
             (lo <= hi).then(|| Bound {

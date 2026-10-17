@@ -12,8 +12,8 @@
 
 use crate::area::Shard;
 use crate::window::{
-    self, column_first, column_top, Squares, COLUMNS_AT, ELE_AT, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_SQUARE, FRESH_WORDS, LAID_AT, LEVELS_AT, LINES_AT, RUNS_AT, RUNS_SQUARE,
-    SQUARE, SQUARE_CELLS, SQUARE_WORDS,
+    self, column_first, column_top, Squares, COLUMNS_AT, ELE_AT, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_SQUARE, FRESH_WORDS, LAID_AT, LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT,
+    RUNS_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS, SQUARE_WORDS,
 };
 use crate::{at, ground, ways, Zoom};
 
@@ -31,9 +31,11 @@ pub fn column_of(ground: &[u32], base: u32, i: u32) -> u32 {
     at(ground, base + COLUMNS_AT + i)
 }
 
-/// Entry `at` of level `j` off the square at `base`.
-pub fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> i32 {
-    at(ground, base + LEVELS_AT + window::level_index(j, [x, y])) as i32
+/// Entry `at` of level `j` off the square at `base`, its two bound words
+/// (`window::LEVEL_ENTRY_WORDS`).
+pub fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
+    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * window::level_index(j, [x, y]);
+    [at(ground, e) as i32, at(ground, e + 1) as i32]
 }
 
 /// Cell `i` as laid off the square at `base` (`window::LAID_WORDS`).
@@ -70,7 +72,7 @@ impl Squares for Fresh<'_> {
     fn column(&self, _: u32, _: u32, i: u32) -> u32 {
         column_of(self.ground, self.base, i)
     }
-    fn level(&self, _: u32, _: u32, j: u32, at: [u32; 2]) -> i32 {
+    fn level(&self, _: u32, _: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         level_of(self.ground, self.base, j, at)
     }
     fn laid(&self, _: u32, _: u32, i: u32) -> u32 {
@@ -210,29 +212,31 @@ fn put_runs(ground: &mut [u32], base: u32, around: &ways::Around, cell: u32, fir
 }
 
 /// Entry `[x, y]` of level `j` of the square at `base`, its cells at `cell`:
-/// level 0 column `[x, y]`'s own — its ground's top joined with what its
-/// runs write; a higher one over the level under it, written before
-/// (`window::join`).
+/// level 0 column `[x, y]`'s own — its ground's top, and the leaf cells
+/// what its runs write fills, a bore's air none (`ground::Bounds`); a higher
+/// one over the level under it, written before (`window::join`).
 pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
     let w = if j == 0 {
         let i = window::index_of(at);
         let (w, to) = (column_of(ground, base, i), column_first(column_of(ground, base, i + 1)));
         let (top, s) = (column_top(w), 1i32 << (crate::LEAF_CELL - cell));
-        let (mut lo, mut hi, mut r) = (top, top, column_first(w));
+        let ([mut lo, mut hi], mut r) = (ground::EMPTY, column_first(w));
         while r + 1 < to {
             let (z, value) = ways::run_of(crate::at(ground, base + RUNS_AT + r));
-            if value != ways::NOTHING {
+            if value != ways::NOTHING && value != ways::AIR {
                 let end = ways::run_of(crate::at(ground, base + RUNS_AT + r + 1)).0;
                 (lo, hi) = (lo.min(z * s), hi.max(end * s));
             }
             r += 1;
         }
-        ground::bound_word([lo, hi])
+        ground::bounds_word([[top, top], [lo, hi]])
     } else {
         let under: &[u32] = ground;
         window::join(&Fresh { ground: under, base }, 0, 0, j, at)
     };
-    put(ground, base + LEVELS_AT + window::level_index(j, at), w as u32);
+    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * window::level_index(j, at);
+    put(ground, e, w[0] as u32);
+    put(ground, e + 1, w[1] as u32);
 }
 
 /// A square filled whole, its passes in a GPU's order (pxl-render

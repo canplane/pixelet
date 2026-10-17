@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: 1dc6be083f8b3b834ef96e1ce6d297f5274f28f01b9526188f9fb7e906bae6cc
+// Inputs: 5521ba7b2b05adc7cbbd1c97a6643cf489b5ac0293c3a3ae6a3f186b2fe18694
 struct type_4 {
     member: array<u32>,
 }
@@ -195,7 +195,7 @@ fn function_() {
                         break;
                     }
                     let _e97 = local_4;
-                    let _e104 = (_e97[0] * 36487u);
+                    let _e104 = (_e97[0] * 41948u);
                     let _e108 = bitcast<i32>(_e97[3]);
                     let _e109 = bitcast<i32>(_e97[4]);
                     let _e113 = ((_e68.x | (_e68.x << bitcast<u32>(8i))) & 16711935u);
@@ -452,7 +452,7 @@ fn function_() {
                                         }
                                         let _e378 = phi_502_;
                                         let _e381 = ((bitcast<u32>(_e362) * 36u) + bitcast<u32>(_e378));
-                                        let _e384 = ((_e104 + 31022u) + (_e381 / 2u));
+                                        let _e384 = ((_e104 + 36483u) + (_e381 / 2u));
                                         if (_e384 < _e73) {
                                             let _e387 = global_2.member[_e384];
                                             phi_524_ = _e387;
@@ -847,7 +847,7 @@ fn function_() {
                         }
                         let _e783 = phi_1101_;
                         let _e784 = select(select(_e763, false, _e767), false, _e770);
-                        let _e791 = ((_e104 + 28974u) + (_e144 / 2u));
+                        let _e791 = ((_e104 + 34435u) + (_e144 / 2u));
                         if (_e791 < _e73) {
                             global_2.member[_e791] = (((_e274 & 255u) | (_e572 << bitcast<u32>(8i))) | (((select(_e783, select(_e769, _e684, _e784), select(select(_e767, false, _e770), true, _e784)) & 255u) | (_e665 << bitcast<u32>(8i))) << bitcast<u32>(16i)));
                         }

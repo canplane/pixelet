@@ -229,7 +229,7 @@ impl<'a> World<'a> {
                 }
                 let mut place = Found::NONE;
                 match self.terrain.relief_walked(&mut lines, &mut place, xy, GROUND.grid_zoom(z.min(LEAF_ZOOM))).value() {
-                    Some([_, hi]) => f64::from(hi) * leaf > low,
+                    Some([[_, hi], _]) => f64::from(hi) * leaf > low,
                     None => true,
                 }
             })

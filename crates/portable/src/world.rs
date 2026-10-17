@@ -30,8 +30,9 @@ use crate::{Zoom, LEAF_CELL};
 /// placed in it, air included, else the ground's block with what the ways
 /// write over it (`window::ways_over`); `PLACED_BLOCK` over a placed value,
 /// the ground's fold's four with it (`ground::word`). Coarser, a split where
-/// any layer may fill under it at a zoom asked, else air; where the ground
-/// is not held, the lack. With it, whether it is a block.
+/// any layer may fill under it at a zoom asked, each by its own bound —
+/// the ground's (`ground::empty`), the ways' (`ways::misses`) — else air;
+/// where the ground is not held, the lack. With it, whether it is a block.
 #[allow(clippy::too_many_arguments)]
 pub fn node<H: Held, W: Windows, L: Lanes>(
     held: &mut H,
@@ -61,15 +62,21 @@ pub fn node<H: Held, W: Windows, L: Lanes>(
             return (In { kind: Kind::Split, block: [VOID, 0] }, block);
         }
     }
-    let (i, cell, found) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
+    let (i, cell, found, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
     let (value, f) = if block && i.kind == Kind::Block {
         window::ways_over(ways, found, cell.runs, zoom, c[2], i.block)
     } else {
         i.block
     };
+    // Coarser, the ways split what the ground leaves air where they may fill.
+    let kind = if !block && i.kind == Kind::Block && !crate::ways::misses(bound, (zoom, c[2]), near) {
+        Kind::Split
+    } else {
+        i.kind
+    };
     (
         In {
-            kind: i.kind,
+            kind,
             block: [value, ground::word(f)],
         },
         block,

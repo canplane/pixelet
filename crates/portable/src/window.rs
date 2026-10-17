@@ -139,8 +139,9 @@ pub fn square_of(g: [i32; 2]) -> ([i32; 2], u32) {
 }
 
 /// Where a square's levels begin among them, in entries: level `j`, from 0,
-/// each entry the lowest and highest of the 2^j × 2^j cells under it — level
-/// 0 a cell's own column (`fill::level`).
+/// each entry the lowest and highest of the 2^j × 2^j cells under it, the
+/// ground's and the ways' apart (`ground::Bounds`) — level 0 a cell's own
+/// column (`fill::level`).
 pub const fn level_at(j: u32) -> u32 {
     (4 * SQUARE_CELLS - ((4 * SQUARE_CELLS) >> (2 * j))) / 3
 }
@@ -184,7 +185,9 @@ const fn gather(v: u32) -> u32 {
 }
 const _: () = assert!(SQUARE <= 1 << 16, "a square's side spreads in sixteen bits");
 pub const LEVELS: u32 = SQUARE_SHIFT;
-pub const LEVEL_WORDS: u32 = level_at(LEVELS + 1);
+/// A level entry's words: its bounds' (`ground::Bounds`), each a bound word.
+pub const LEVEL_ENTRY_WORDS: u32 = 2;
+pub const LEVEL_WORDS: u32 = LEVEL_ENTRY_WORDS * level_at(LEVELS + 1);
 
 /// A tile's ways are cut into bins `WAYS_ACROSS` a side, each
 /// `1 << WAYS_SHIFT` cells: a square lays its lines by them (`LINES_AT`),
@@ -288,9 +291,10 @@ pub trait Squares {
     /// Column word `i` of the square in `slot` (`COLUMN_WORDS`), `i` to
     /// `SQUARE_CELLS`.
     fn column(&self, cell: Zoom, slot: u32, i: u32) -> u32;
-    /// Entry `at` of level `j` of the square in `slot`, as a bound word
-    /// (`ground::bound_word`): its columns' joined (`join`), level 0 one.
-    fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> i32;
+    /// Entry `at` of level `j` of the square in `slot`, its bounds
+    /// (`ground::Bounds`) as bound words (`ground::bound_word`): its
+    /// columns' joined (`join`), level 0 one.
+    fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
     /// Cell `i` as its fill laid it (`LAID_WORDS`, `laid_at`).
     fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `e` of the eye's window at `cell`'s levels over its squares
@@ -647,17 +651,17 @@ pub fn find(w: &impl Squares, cell: Zoom, g: [i32; 2]) -> (Zoom, u32, u32, bool)
 }
 
 /// Entry `at` of level `j` of a square, from 1, over the level under it,
-/// written before: the join of the four under it.
-pub fn join(w: &impl Squares, cell: Zoom, slot: u32, j: u32, [x, y]: [u32; 2]) -> i32 {
-    let under = |q: u32| crate::ground::bound_of(w.level(cell, slot, j - 1, [2 * x + q % 2, 2 * y + q / 2]));
-    let [mut lo, mut hi] = under(0);
+/// written before: the join of the four under it, each source's its own
+/// (`ground::joined`), as bound words.
+pub fn join(w: &impl Squares, cell: Zoom, slot: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
+    let under = |q: u32| crate::ground::bounds_of(w.level(cell, slot, j - 1, [2 * x + q % 2, 2 * y + q / 2]));
+    let mut b = under(0);
     let mut q = 1;
     while q < 4 {
-        let [l, h] = under(q);
-        (lo, hi) = (lo.min(l), hi.max(h));
+        b = crate::ground::joined(b, under(q));
         q += 1;
     }
-    crate::ground::bound_word([lo, hi])
+    crate::ground::bounds_word(b)
 }
 
 /// Levels a window bounds a node over, its squares' own and then theirs
@@ -717,42 +721,44 @@ pub fn fold(w: &impl Squares, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS 
     let [x, y] = of_index(b);
     let (q, here) = w.square(cell, slot([(x << l) as i32, (y << l) as i32]));
     let half = 1 << (l - 1);
-    let [mut lo, mut hi] = [i32::MAX, i32::MIN];
+    let mut joined = [crate::ground::EMPTY; 2];
     let mut k = 0;
     while here && k < 4 {
         let (dx, dy) = ((k & 1) * half, (k >> 1) * half);
         let h = [wrap_index(squares_zoom(cell), q[0] + dx as i32), q[1] + dy as i32];
-        let [l0, h0] = if l == 1 {
+        let got = if l == 1 {
             let (s, held) = w.present(cell, h);
             if held {
-                crate::ground::bound_of(w.level(cell, s, LEVELS, [0, 0]))
+                crate::ground::bounds_of(w.level(cell, s, LEVELS, [0, 0]))
             } else {
-                crate::ground::UNBOUNDED
+                [crate::ground::UNBOUNDED; 2]
             }
         } else {
             unfold(w.joined(cell, joined_index(l - 1, [0, 0]) + 4 * b + k), h)
         };
-        // Component-wise: a GPU has no array equality.
-        if l0 == crate::ground::UNBOUNDED[0] && h0 == crate::ground::UNBOUNDED[1] {
+        // Component-wise: a GPU has no array equality. A half not held is
+        // none of either source.
+        if got[0][0] == crate::ground::UNBOUNDED[0] && got[0][1] == crate::ground::UNBOUNDED[1] {
             return [0; JOINED_WORDS as usize];
         }
-        (lo, hi) = (lo.min(l0), hi.max(h0));
+        joined = crate::ground::joined(joined, got);
         k += 1;
     }
     if !here {
         return [0; JOINED_WORDS as usize];
     }
-    [key_word(q[0]), key_word(q[1]), crate::ground::bound_word([lo, hi]) as u32, 0]
+    let [g, ways] = crate::ground::bounds_word(joined);
+    [key_word(q[0]), key_word(q[1]), g as u32, ways as u32]
 }
 
-/// The join an entry `e` holds for the block of squares from `q`
-/// (`fold`): its bound where its key is `q`, else none
+/// The joins an entry `e` holds for the block of squares from `q`
+/// (`fold`): its bounds where its key is `q`, else none
 /// (`ground::UNBOUNDED`), the zero entry and another block's alike.
-pub fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> [i32; 2] {
+pub fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> crate::ground::Bounds {
     if e[0] == key_word(q[0]) && e[1] == key_word(q[1]) {
-        crate::ground::bound_of(e[2] as i32)
+        crate::ground::bounds_of([e[2] as i32, e[3] as i32])
     } else {
-        crate::ground::UNBOUNDED
+        [crate::ground::UNBOUNDED; 2]
     }
 }
 
@@ -765,7 +771,7 @@ pub fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> [i32; 2] {
 /// (`ground::UNBOUNDED`) for a node wider than a window, or over a square
 /// not held at `cell`, which reads nothing and only splits more; false where
 /// no window holds it, a lack.
-pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> ([i32; 2], Zoom, bool) {
+pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> (crate::ground::Bounds, Zoom, bool) {
     // The node's first cell at `cell`, or the cell holding it.
     let g = [crate::index_at(zoom, c[0], cell), crate::index_at(zoom, c[1], cell)];
     if cell > zoom + LEVELS {
@@ -775,14 +781,14 @@ pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom
     *place = f;
     let (from, slot) = (f.from(), f.slot());
     if !f.here() {
-        return ([0, 0], from, false);
+        return ([[0, 0]; 2], from, false);
     }
     // rust-gpu has no `saturating_sub`.
     #[allow(clippy::implicit_saturating_sub)]
     let j = if zoom >= from { 0 } else { from - zoom };
     let [x, y] = of_index(i);
     let at = [x >> j, y >> j];
-    (crate::ground::bound_of(w.level(from, slot, j, at)), from, true)
+    (crate::ground::bounds_of(w.level(from, slot, j, at)), from, true)
 }
 
 /// The join of the squares at `cell` a node `j` levels over a cell covers,
@@ -792,9 +798,9 @@ pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom
 /// another block's or none, which only splits more. An entry a frame old
 /// is its own block's join or names another (the key), so never a wrong
 /// bound.
-fn whole(w: &impl Squares, cell: Zoom, g: [i32; 2], j: u32) -> [i32; 2] {
+fn whole(w: &impl Squares, cell: Zoom, g: [i32; 2], j: u32) -> crate::ground::Bounds {
     if j > WINDOW_LEVELS {
-        return crate::ground::UNBOUNDED;
+        return [crate::ground::UNBOUNDED; 2];
     }
     let (l, (q, _)) = (j - LEVELS, square_of([wrap_index(cell, g[0]), g[1]]));
     let m = (ACROSS - 1) as i32;
