@@ -3,8 +3,9 @@
 //! What every WebGPU device binds, the platform's floor: each limit's
 //! default (WebGPU, "Limits", https://www.w3.org/TR/webgpu/#limit-default),
 //! which a device past it is no target for, so no pipeline layout binds more
-//! (`holds`). Counted as the device counts them at a pipeline layout: per
-//! stage, over every group, of what each group's layout makes visible to it.
+//! (`holds`), and no buffer is larger than one binds (`fits`). Counted as the
+//! device counts them at a pipeline layout: per stage, over every group, of
+//! what each group's layout makes visible to it.
 
 use crate::frame::shader::record::{
     COMPUTE, DEPTH, FRAGMENT, SAMPLER, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE, TEXTURE_ARRAY, TEXTURE_UINT_ARRAY, TEXTURE_UNFILTERED, UNIFORM, UNIFORM_DYNAMIC, VERTEX,
@@ -18,6 +19,15 @@ pub const STORAGE_TEXTURES_PER_STAGE: u32 = 4;
 pub const SAMPLED_TEXTURES_PER_STAGE: u32 = 16;
 pub const SAMPLERS_PER_STAGE: u32 = 16;
 pub const DYNAMIC_UNIFORM_BUFFERS_PER_LAYOUT: u32 = 8;
+pub const MAX_STORAGE_BUFFER_BINDING_SIZE: u64 = 134_217_728;
+pub const MAX_BUFFER_SIZE: u64 = 268_435_456;
+
+/// Whether a buffer of `bytes` is one every device makes, and, where
+/// `storage`, binds whole as storage: each is bound whole, as no binding
+/// here takes a range of a storage buffer.
+pub const fn fits(bytes: u64, storage: bool) -> bool {
+    bytes <= MAX_BUFFER_SIZE && (!storage || bytes <= MAX_STORAGE_BUFFER_BINDING_SIZE)
+}
 
 /// Whether a pipeline layout of `groups`, each a group's (binding, stages,
 /// kind) words as record.rs and build.rs `compute` state them, binds within

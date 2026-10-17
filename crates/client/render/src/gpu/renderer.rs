@@ -861,6 +861,14 @@ impl Read {
 /// A square on the GPU, in bytes.
 const SQUARE_BYTES: u32 = SQUARE_WORDS * 4;
 
+/// The windows' squares on the GPU, in bytes: one storage buffer, bound
+/// whole by the cast's, the levels' and the ways' groups.
+const GROUND_BYTES: u64 = SQUARES as u64 * SQUARE_BYTES as u64;
+const _: () = assert!(
+    crate::frame::shader::floor::fits(GROUND_BYTES, true),
+    "GROUND_BYTES: the windows' squares bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
+);
+
 /// `bound_cs`'s and `ways_cs`'s one group: its level or its pass at a
 /// dynamic offset (`SLOT_STRIDE`), the fresh frames and the frames it writes
 /// the levels or the runs of. The cast's, `start_cs`'s and `joined_cs`'s one
@@ -927,7 +935,7 @@ impl RaysPass {
         let gb = self.ground.get_or_insert_with(|| {
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let (storage, squares) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, SQUARES);
-            let frames_buffer = buffer(squares * SQUARE_BYTES, storage | buffer_usage::COPY_SRC);
+            let frames_buffer = buffer(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
             let fresh = buffer(word_bytes((FRESH_WORDS * squares) as usize), storage);
             let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &compute::HEIGHTS_GROUP);
             let heights_group = g.bind_group(heights_built.layouts[0], &[buffer_entry(0, fresh), buffer_entry(1, frames_buffer)]);

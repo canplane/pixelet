@@ -493,7 +493,11 @@ impl Gpu {
         state()
     }
 
+    /// A buffer of `size` bytes, one every device makes and, as storage,
+    /// binds (frame/shader/floor.rs `fits`): a size past that is a bug the
+    /// structure let through, not a device to fall short on.
     pub fn buffer(&self, size: u32, usage: u32) -> Id {
+        xpute_kit::ensure!(crate::frame::shader::floor::fits(u64::from(size), usage & buffer_usage::STORAGE != 0), ENOSPC, size);
         let s = self.s();
         made(s.encoder.buffer(
             &mut s.stream,
