@@ -32,12 +32,12 @@ tiles ────────────────────────�
 ```
 
 - **Real geography is baked ahead; what you build is live.** [Overture Maps](https://overturemaps.org/)' geometry, OpenStreetMap's coastline and [GEDTM30](https://doi.org/10.5281/zenodo.18887460)'s elevation are painted into tiles before anyone asks; what players place is kept as they place it, and the trees and cars the ground grows are worked out where they stand, never stored.
-- **Cells express detail, chunks are drawn, tiles are fetched.** One cell of the eye's view is one thing drawn, a chunk is a cube of those cells, and a tile is what arrives when the view lacks it.
+- **Cells express detail, tiles are fetched.** One cell of the eye's view is one ray the cast draws, and a tile is what arrives when the view lacks it.
 - **The same world runs in a browser and on a device**, through one Rust kernel drawing with WebGPU.
 
 ## The eye decides
 
-The world has its own fixed lattice. The eye lays a second grid over it, cells of equal solid angle, so they grow with distance. Where the eye can tell more apart, chunks split; where it cannot, they fold into one thing drawn.
+The world has its own fixed lattice. The eye lays a second grid over it, cells of equal solid angle, so they grow with distance. Where the eye can tell more apart, its cells are finer; where it cannot, one cell draws what they fold into.
 
 ---
 
@@ -197,7 +197,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | Crate / package | What it is                                                                                                                                       |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `pxl-spec`      | The model: the position, the zooms and lattices, the block catalog, the command numbers, the tile formats, the asset tables. One implementation. |
-| `pxl-render`    | The view: the mesher, glTF, the badge sheet, the draw list, the shaders, the renderer. It knows no kernel.                                       |
+| `pxl-render`    | The view: glTF, the badge sheet, the draw list, the shaders, the renderer. It knows no kernel.                                                   |
 | `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                            |
 | `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                       |
 | `pxl-native`    | The guest on a device: a static library that runs every call on a thread of its own and exports `pxl_interrupt` through the C ABI.               |

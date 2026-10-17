@@ -2,7 +2,7 @@
 
 Everything in this world has a position: three integers, an axis each,
 counting 256ths of a unit. Every coarser grouping of the world — the cell an
-object fills, the chunk a renderer draws, the tile a request fetches — is
+object fills, the camera grid's cell a ray draws, the tile a request fetches — is
 that position shifted down on each axis. A size is a **zoom**, one number
 for all of them, and grouping is a shift, never a division.
 
@@ -120,7 +120,7 @@ together (`Tile`, `layer/tile.rs`); `idx(LEAF_ZOOM, addr)` always answers the le
 question: which 512u square.
 
 The distance chooses a cell zoom (`camera/grid.rs` `cell_at`), and terrain's tile
-zoom is the one whose cells those are (`Lattice::tile_zoom`); the kernel's mesher
+zoom is the one whose cells those are (`Lattice::tile_zoom`); the cast
 measures its own step against the same cell zoom
 ([every size is a zoom](../../../../doc/minutes/20261006-every-size-is-a-zoom.md)).
 
@@ -159,7 +159,7 @@ holds two places, so the tree of places is only as deep as a crowd needs,
 and terrain marks only a child that is the zero tile, its vote being lossy.
 
 They stay two because one is resident by tile and the other is not. Objects
-keep no coarse zoom: a chunk folds a node's leaves when it is built. Were
+keep no coarse zoom: their query folds a node's leaves when it is asked. Were
 objects ever resident by tile, their branches would be a layer of the
 pyramid, and a block of equal leaves joined its occupancy.
 
