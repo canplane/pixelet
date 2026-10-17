@@ -218,18 +218,17 @@ pub fn profiler_take_rings() -> RingSample {
 }
 
 /// A frame turn, `s` its record: closes the interval in progress with
-/// `interval_ms`, the host's gap that just ended, lands it, and opens `s`'s.
-/// `frame_task_ms` is how long the frame task ran, the turn's end's to take
-/// out of the tasks' time.
-pub fn profiler_record_frame(s: FrameSample, interval_ms: f64, frame_task_ms: f64) {
+/// `interval_ms`, the host's gap that just ended, and `settled`, whether the
+/// host settled it, lands it, and opens `s`'s. `frame_task_ms` is how long
+/// the frame task ran, the turn's end's to take out of the tasks' time.
+pub fn profiler_record_frame(s: FrameSample, interval_ms: f64, settled: bool, frame_task_ms: f64) {
     let l = profiler();
     if !l.recording {
         return;
     }
     l.frame_task_ms = frame_task_ms;
     let Some(mut f) = l.open.replace(s) else { return };
-    f.interval_ms = interval_ms;
-    f.settled = s.settled;
+    (f.interval_ms, f.settled) = (interval_ms, f64::from(u8::from(settled)));
     land(l, f);
 }
 

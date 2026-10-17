@@ -87,7 +87,8 @@ pub struct FrameSample {
     /// it filled: not the world's step, which stops at MAX_STEP_S.
     pub interval_ms: f64,
     pub display_ms: f64,
-    /// 1 when the tick took the large settled budget, so a long interval was chosen.
+    /// 1 where the host settled the interval, not interactive, as it says
+    /// with the frame that closes it: written once, as the interval lands.
     pub settled: f64,
     /// Every turn the interval held, the frame's and those without a host
     /// frame, and their time, rise to fall each.

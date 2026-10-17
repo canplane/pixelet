@@ -62,7 +62,7 @@ fn heap_sample() -> HeapSample {
 pub struct FrameTurn {
     pub tick: TickReport,
     /// The host's gap that ended at this frame, which closes the interval
-    /// before it.
+    /// before it, and whether the host settled it, as it says with this frame.
     pub interval_ms: f64,
     pub display_ms: f64,
     pub settled: bool,
@@ -91,7 +91,6 @@ pub fn profiler_frame(t: FrameTurn) {
     let record = FrameSample {
         t: now(),
         display_ms: t.display_ms,
-        settled: if t.settled { 1.0 } else { 0.0 },
         budget_ms: t.tick.budget_ms,
         effects_ms: t.effects_ms,
         tick_ms: t.tick.total_ms,
@@ -111,5 +110,5 @@ pub fn profiler_frame(t: FrameTurn) {
         // The interval's: its turns' as they end, and its length as the next frame closes it.
         ..FrameSample::default()
     };
-    profiler_record_frame(record, t.interval_ms, t.task_ms);
+    profiler_record_frame(record, t.interval_ms, t.settled, t.task_ms);
 }
