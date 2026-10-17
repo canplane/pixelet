@@ -9,7 +9,7 @@
 //! words, then into the room the stream reserved for them, so nothing is
 //! built on the heap first.
 
-use xpute_guest::abi::handle::HandleTable;
+use xpute_guest::abi::handle::{handle_slot, HandleTable};
 use xpute_guest::ipc::stream::Stream;
 use xpute_guest::mem::base::off_of_slice;
 
@@ -343,10 +343,27 @@ fn stencil_face(s: &mut dyn Sink, f: &StencilFaceState) {
     [f.compare as u32, f.fail as u32, f.depth_fail as u32, f.pass as u32].into_iter().for_each(|w| s.word(w));
 }
 
+/// The ops below DESTROY make what lasts until it is destroyed, the objects a
+/// program holds; those past it make what a turn lets go (an encoder, a
+/// pass, a surface's current texture).
+pub const OBJECT_OPS: usize = op::DESTROY as usize;
+
 /// The calls, over a table of `N` handles. All-zero bytes are one that has
 /// made nothing, as its table's are an empty table.
 pub struct Gpu<const N: usize> {
     handles: HandleTable<N>,
+    /// The op that made each slot's live object, where it lasts; 0 otherwise.
+    made_by: [u8; N],
+    /// The live objects by the op that made them, slot `op`.
+    objects: [u32; OBJECT_OPS],
+}
+
+/// Slot `id`'s object let go from the count of what made it.
+fn forget(made_by: &mut [u8], objects: &mut [u32; OBJECT_OPS], id: Id) {
+    let op = core::mem::take(&mut made_by[handle_slot(id) as usize]);
+    if op != 0 {
+        objects[op as usize] -= 1;
+    }
 }
 
 impl<const N: usize> Default for Gpu<N> {
@@ -357,22 +374,38 @@ impl<const N: usize> Default for Gpu<N> {
 
 impl<const N: usize> Gpu<N> {
     pub const fn new() -> Self {
-        Gpu { handles: HandleTable::new() }
+        Gpu {
+            handles: HandleTable::new(),
+            made_by: [0; N],
+            objects: [0; OBJECT_OPS],
+        }
     }
 
     /// An object's handle, written by `op` as the record's first word; none
     /// where the table is full or the record did not fit.
     fn make(&mut self, stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> Option<Id> {
         let id = self.handles.acquire()?;
-        if emit(stream, op, &|s| {
+        if !emit(stream, op, &|s| {
             s.word(id);
             put(s);
         }) {
-            Some(id)
-        } else {
             self.handles.release(id);
-            None
+            return None;
         }
+        if (op as usize) < OBJECT_OPS {
+            self.made_by[handle_slot(id) as usize] = op as u8;
+            self.objects[op as usize] += 1;
+        }
+        Some(id)
+    }
+
+    /// `id` let go, where it was live.
+    fn release(&mut self, id: Id) -> bool {
+        let live = self.handles.release(id);
+        if live {
+            forget(&mut self.made_by, &mut self.objects, id);
+        }
+        live
     }
 
     pub fn buffer(&mut self, stream: &mut Stream, d: &BufferDescriptor) -> Option<Id> {
@@ -620,7 +653,8 @@ impl<const N: usize> Gpu<N> {
     pub fn commit(&mut self, stream: &mut Stream) -> bool {
         let fit = stream.commit();
         if !fit {
-            self.handles.rollback();
+            let (made_by, objects) = (&mut self.made_by, &mut self.objects);
+            self.handles.rollback(|id| forget(made_by, objects, id));
         }
         fit
     }
@@ -630,7 +664,7 @@ impl<const N: usize> Gpu<N> {
     /// with its transaction left nothing on the host.
     pub fn end(&mut self, stream: &mut Stream, pass: Id) -> bool {
         let sent = emit(stream, op::END, &|s| s.word(pass));
-        self.handles.release(pass);
+        self.release(pass);
         sent
     }
 
@@ -642,14 +676,14 @@ impl<const N: usize> Gpu<N> {
             encoders.iter().for_each(|e| s.word(*e));
         });
         encoders.iter().for_each(|e| {
-            self.handles.release(*e);
+            self.release(*e);
         });
         sent
     }
 
     /// Lets the object go: the host destroys it, and its handle is free.
     pub fn destroy(&mut self, stream: &mut Stream, id: Id) {
-        if self.handles.release(id) {
+        if self.release(id) {
             emit(stream, op::DESTROY, &|s| s.word(id));
         }
     }
@@ -657,6 +691,12 @@ impl<const N: usize> Gpu<N> {
     /// Whether `id` is an object this encoder made and has not let go.
     pub fn live(&self, id: Id) -> bool {
         self.handles.live(id)
+    }
+
+    /// The objects this encoder made and has not let go, by the op that made
+    /// them (slot `op`, below DESTROY).
+    pub fn objects(&self) -> &[u32; OBJECT_OPS] {
+        &self.objects
     }
 }
 

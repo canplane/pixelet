@@ -99,12 +99,14 @@ impl<const N: usize> HandleTable<N> {
         self.epoch += 1;
     }
 
-    /// Every handle taken since `begin` and not yet released, released: what a
-    /// transaction that did not commit made, which the other side never saw.
-    pub fn rollback(&mut self) {
+    /// Every handle taken since `begin` and not yet released, released and
+    /// handed to `gone`: what a transaction that did not commit made, which
+    /// the other side never saw.
+    pub fn rollback(&mut self, mut gone: impl FnMut(u32)) {
         for s in 1..=self.top {
-            if self.made[s as usize] == self.epoch + 1 {
-                self.release(handle_of(s, self.generation[s as usize]));
+            let handle = handle_of(s, self.generation[s as usize]);
+            if self.made[s as usize] == self.epoch + 1 && self.release(handle) {
+                gone(handle);
             }
         }
     }

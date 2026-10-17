@@ -71,11 +71,13 @@ template <std::size_t N> class HandleTable {
     // From here, what is taken is what `rollback` gives back.
     void begin() noexcept { epoch_++; }
 
-    // Every handle taken since `begin` and not yet released, released: what a
-    // transaction that did not commit made, which the other side never saw.
-    void rollback() noexcept {
+    // Every handle taken since `begin` and not yet released, released and
+    // handed to `gone`: what a transaction that did not commit made, which
+    // the other side never saw.
+    template <class F> void rollback(F &&gone) noexcept {
         for (std::uint32_t slot = 1; slot <= top_; slot++) {
-            if (made_[slot] == epoch_ + 1) release(slot | std::uint32_t{generation_[slot]} << HANDLE_SLOT_BITS);
+            std::uint32_t handle = slot | std::uint32_t{generation_[slot]} << HANDLE_SLOT_BITS;
+            if (made_[slot] == epoch_ + 1 && release(handle)) gone(handle);
         }
     }
 

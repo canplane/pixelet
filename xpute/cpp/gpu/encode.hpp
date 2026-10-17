@@ -19,6 +19,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <variant>
 
 #include "../guest/abi/handle.hpp"
@@ -344,6 +345,11 @@ template <class S> void stencil_face(S &s, const StencilFaceState &f) noexcept {
 
 } // namespace detail
 
+// The ops below DESTROY make what lasts until it is destroyed, the objects a
+// program holds; those past it make what a turn lets go (an encoder, a pass,
+// a surface's current texture).
+inline constexpr std::size_t OBJECT_OPS = op::DESTROY;
+
 // The calls, over a table of `N` handles.
 template <std::size_t N> class Gpu {
   public:
@@ -528,7 +534,7 @@ template <std::size_t N> class Gpu {
     // and every handle taken since is free again, as the host never saw it.
     bool commit(Stream &stream) noexcept {
         bool fit = stream.commit();
-        if (!fit) handles_.rollback();
+        if (!fit) handles_.rollback([this](Id id) { forget(id); });
         return fit;
     }
 
@@ -537,7 +543,7 @@ template <std::size_t N> class Gpu {
     // with its transaction left nothing on the host.
     bool end(Stream &stream, Id pass) noexcept {
         bool sent = detail::emit(stream, op::END, [&](auto &s) { s.word(pass); });
-        handles_.release(pass);
+        release(pass);
         return sent;
     }
 
@@ -548,17 +554,21 @@ template <std::size_t N> class Gpu {
             s.word(static_cast<std::uint32_t>(encoders.size()));
             for (Id e : encoders) s.word(e);
         });
-        for (Id e : encoders) handles_.release(e);
+        for (Id e : encoders) release(e);
         return sent;
     }
 
     // Lets the object go: the host destroys it, and its handle is free.
     void destroy(Stream &stream, Id id) noexcept {
-        if (handles_.release(id)) detail::emit(stream, op::DESTROY, [&](auto &s) { s.word(id); });
+        if (release(id)) detail::emit(stream, op::DESTROY, [&](auto &s) { s.word(id); });
     }
 
     // Whether `id` is an object this encoder made and has not let go.
     bool live(Id id) const noexcept { return handles_.live(id); }
+
+    // The objects this encoder made and has not let go, by the op that made
+    // them (slot `op`, below DESTROY).
+    const std::array<std::uint32_t, OBJECT_OPS> &objects() const noexcept { return objects_; }
 
   private:
     // An object's handle, written by `op` as the record's first word; none
@@ -566,17 +576,38 @@ template <std::size_t N> class Gpu {
     template <class F> std::optional<Id> make(Stream &stream, std::uint32_t op, F &&put) noexcept {
         std::optional<std::uint32_t> id = handles_.acquire();
         if (!id) return std::nullopt;
-        if (detail::emit(stream, op, [&](auto &s) {
+        if (!detail::emit(stream, op, [&](auto &s) {
                 s.word(*id);
                 put(s);
             })) {
-            return id;
+            handles_.release(*id);
+            return std::nullopt;
         }
-        handles_.release(*id);
-        return std::nullopt;
+        if (op < OBJECT_OPS) {
+            made_by_[handle_slot(*id)] = static_cast<std::uint8_t>(op);
+            objects_[op]++;
+        }
+        return id;
+    }
+
+    // `id` let go, where it was live.
+    bool release(Id id) noexcept {
+        bool live = handles_.release(id);
+        if (live) forget(id);
+        return live;
+    }
+
+    // Slot `id`'s object let go from the count of what made it.
+    void forget(Id id) noexcept {
+        std::uint8_t op = std::exchange(made_by_[handle_slot(id)], 0);
+        if (op != 0) objects_[op]--;
     }
 
     HandleTable<N> handles_;
+    // The op that made each slot's live object, where it lasts; 0 otherwise.
+    std::array<std::uint8_t, N> made_by_{};
+    // The live objects by the op that made them, slot `op`.
+    std::array<std::uint32_t, OBJECT_OPS> objects_{};
 };
 
 // The calls that make no object: an op's words straight to the stream, false
