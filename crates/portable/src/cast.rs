@@ -354,6 +354,19 @@ pub struct Start<A: Copy> {
     pub stack: [A; DEPTH],
 }
 
+/// What was handed each node over a descent's start, asked by its zoom, and
+/// only where a ray climbs past the start: the start's stack as found
+/// (`start`), or as a GPU holds it, read where asked.
+pub trait Over<A: Copy> {
+    fn over(&self, zoom: Zoom) -> A;
+}
+
+impl<A: Copy> Over<A> for [A; DEPTH] {
+    fn over(&self, zoom: Zoom) -> A {
+        self[zoom as usize]
+    }
+}
+
 /// The world's root holding `o`: its corner the origin's unit cell's offset
 /// into it, negated.
 fn root_of(o: &Origin) -> Place {
@@ -420,12 +433,13 @@ pub fn start<Q: Query>(q: &mut Q, o: &Origin, detail: Detail) -> Start<Q::At> {
 pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until) -> Met<Q::At, Q::Block> {
     let root = root_of(o);
     let at = q.root(root.node(o));
-    first_from(q, o, ray, detail, until, Start { place: root, at, stack: [at; DEPTH] })
+    first_from(q, o, ray, detail, until, (root, at), &[at; DEPTH])
 }
 
 /// `first`, the ray's descent started at `from`, a node holding its origin
-/// with the stack down to it (`start`).
-pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: Start<Q::At>) -> Met<Q::At, Q::Block> {
+/// and what was handed it, `over` what was handed the nodes over it
+/// (`start`).
+pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Met<Q::At, Q::Block> {
     let side = Place { zoom: 0, corner: [0; 3] }.side() as i32;
     let mut root = root_of(o);
     let mut met = Met {
@@ -433,8 +447,8 @@ pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, un
         stop: Stop {
             t: 0.0,
             axis: 0,
-            place: from.place,
-            at: from.at,
+            place: from.0,
+            at: from.1,
             block: Q::AIR,
         },
         visits: 0,
@@ -447,14 +461,14 @@ pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, un
             break;
         }
         let visits = met.visits;
-        // The first root from `from`, each after it from its own top.
+        // The first root from `from`, each after it from its own top, over
+        // which nothing is asked.
         let (here, span) = if started {
-            let at = q.root(root.node(o));
-            (Start { place: root, at, stack: [at; DEPTH] }, span)
+            ((root, q.root(root.node(o))), span)
         } else {
-            (from, slab(ray, from.place.min(o), from.place.side(), t, ray.reach))
+            (from, slab(ray, from.0.min(o), from.0.side(), t, ray.reach))
         };
-        met = descend(q, o, ray, detail, until, here, span);
+        met = descend(q, o, ray, detail, until, here, over, span);
         started = true;
         met.visits += visits;
         if met.ends != Ends::On {
@@ -488,19 +502,22 @@ fn stops<Q: Query>(q: &Q, o: &Origin, until: Until, place: Place, block: &Q::Blo
     }
 }
 
-/// The first block in a root's node the walk stops at, the ray within it
-/// from `t0` to `t1`, entering across `axis`. A node is entered once: asked
+/// The first block in a root's node the walk stops at, from `from`, the
+/// ray within it from `t0` to `t1`, entering across `axis`. A node is entered once: asked
 /// whether anything under it fills at the zooms the ray asks within it, at
 /// its point nearest the origin and where the ray leaves it; a block — the
 /// block at that zoom, or air where nothing under it fills — the walk stops
 /// at or goes on past; else its child the ray enters first, and from a child
 /// the next across the face the ray leaves that one by, back up a zoom where
 /// that face is the node's own.
-fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: Start<Q::At>, span: (f32, f32, u32)) -> Met<Q::At, Q::Block> {
+#[allow(clippy::too_many_arguments)]
+fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>, span: (f32, f32, u32)) -> Met<Q::At, Q::Block> {
     let dlen = length(ray.direction);
-    let mut stack = from.stack;
+    // What was handed each node the descent went into, from its start's
+    // zoom; over it, `over`'s.
+    let (top, mut stack) = (from.0.zoom, [from.1; DEPTH]);
     // The node being entered, and the ray within it.
-    let (mut at, mut place, (mut t0, mut t1, mut axis)) = (from.at, from.place, span);
+    let (mut at, mut place, (mut t0, mut t1, mut axis)) = (from.1, from.0, span);
     let mut visits = 0;
     loop {
         // Only touched, at a face or an edge: not entered, nothing in it met.
@@ -574,7 +591,8 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
             }
             let kid = parent.child(k ^ bit);
             let end = slab(ray, parent.min(o), parent.side(), 0.0, ray.reach).1;
-            at = q.child(&stack[parent.zoom as usize], kid.zoom, kid.node(o));
+            let handed = if parent.zoom < top { over.over(parent.zoom) } else { stack[parent.zoom as usize] };
+            at = q.child(&handed, kid.zoom, kid.node(o));
             (place, (t0, t1, axis)) = (kid, slab(ray, kid.min(o), kid.side(), t1, end));
             break;
         }

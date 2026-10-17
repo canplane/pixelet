@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: 72c579ca7096486c01028498ce2a603ce5adf1bd30dde06f4145b4f56d73bc05
+// Inputs: b7e3a6187925d04864b7dfdf3562da2ae9f1adfed116b00dbe0058610f13d97a
 struct type_2 {
     member: array<u32>,
 }
@@ -44,7 +44,7 @@ struct type_34 {
     member_1: array<i32, 3>,
 }
 
-struct type_37 {
+struct type_36 {
     member: array<u32, 4>,
     member_1: u32,
     member_2: i32,
@@ -72,7 +72,7 @@ struct type_43 {
 
 struct type_44 {
     member: type_43,
-    member_1: type_37,
+    member_1: type_36,
     member_2: u32,
 }
 
@@ -1713,7 +1713,7 @@ fn function_() {
                             let _e3232 = phi_2880_;
                             phi_13160_ = _e287;
                             phi_5555_ = _e860;
-                            phi_5556_ = type_44(_e3232, type_37(array<u32, 4>(0u, 0u, 0u, 0u), 0u, 0i), 0u);
+                            phi_5556_ = type_44(_e3232, type_36(array<u32, 4>(0u, 0u, 0u, 0u), 0u, 0i), 0u);
                             phi_5557_ = type_31();
                             phi_5558_ = type_44();
                             phi_5559_ = true;
@@ -1721,7 +1721,7 @@ fn function_() {
                             if (_e291.member < 4u) {
                                 phi_13161_ = _e287;
                                 phi_5550_ = _e860;
-                                phi_5551_ = type_44(type_43(0u, type_42(0u, array<u32, 4>(0u, 0u, 0u, 0u))), type_37(array<u32, 4>(0u, 0u, 0u, 0u), 0u, 0i), 0u);
+                                phi_5551_ = type_44(type_43(0u, type_42(0u, array<u32, 4>(0u, 0u, 0u, 0u))), type_36(array<u32, 4>(0u, 0u, 0u, 0u), 0u, 0i), 0u);
                                 phi_5552_ = type_31();
                                 phi_5553_ = type_44();
                                 phi_5554_ = true;
@@ -2160,7 +2160,7 @@ fn function_() {
                                         let _e2222 = phi_10469_;
                                         if (_e387 >= _e2222) {
                                             phi_13307_ = _e1323;
-                                            phi_4318_ = type_44(type_43(1u, type_42(0u, array<u32, 4>(0u, 0u, 0u, 0u))), type_37(array<u32, 4>(0u, 0u, 0u, 0u), 0u, 0i), 0u);
+                                            phi_4318_ = type_44(type_43(1u, type_42(0u, array<u32, 4>(0u, 0u, 0u, 0u))), type_36(array<u32, 4>(0u, 0u, 0u, 0u), 0u, 0i), 0u);
                                         } else {
                                             let _e2226 = select(_e291.member, 24u, _e295);
                                             let _e2228 = ((_e291.member - _e2226) & 31u);
@@ -3129,7 +3129,7 @@ fn function_() {
                                             }
                                             let _e3189 = phi_10957_;
                                             phi_13307_ = _e2629;
-                                            phi_4318_ = type_44(type_43(1u, _e3189), type_37(array<u32, 4>(_e2534, _e2537, _e2540, _e2542), _e2947, _e2973), _e1335.member_2);
+                                            phi_4318_ = type_44(type_43(1u, _e3189), type_36(array<u32, 4>(_e2534, _e2537, _e2540, _e2542), _e2947, _e2973), _e1335.member_2);
                                         }
                                         let _e3195 = phi_13307_;
                                         let _e3197 = phi_4318_;
@@ -4181,7 +4181,7 @@ fn function_() {
                                         let _e2190 = phi_5539_;
                                         phi_13163_ = _e1323;
                                         phi_5541_ = type_44();
-                                        phi_5542_ = type_44(_e2190, type_37(array<u32, 4>(0u, 0u, 0u, 0u), 0u, 0i), 0u);
+                                        phi_5542_ = type_44(_e2190, type_36(array<u32, 4>(0u, 0u, 0u, 0u), 0u, 0i), 0u);
                                     }
                                     let _e3199 = phi_13163_;
                                     let _e3201 = phi_5541_;
@@ -4191,7 +4191,7 @@ fn function_() {
                                     phi_5545_ = _e3203;
                                 } else {
                                     phi_13162_ = _e1323;
-                                    phi_5544_ = type_44(type_43(2u, type_42(0u, array<u32, 4>(0u, 0u, 0u, 0u))), type_37(array<u32, 4>(0u, 0u, 0u, 0u), 0u, 0i), 0u);
+                                    phi_5544_ = type_44(type_43(2u, type_42(0u, array<u32, 4>(0u, 0u, 0u, 0u))), type_36(array<u32, 4>(0u, 0u, 0u, 0u), 0u, 0i), 0u);
                                     phi_5545_ = type_44();
                                 }
                                 let _e3205 = phi_13162_;

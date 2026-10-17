@@ -470,6 +470,15 @@ pub fn face_cs(
     unsafe { rays.write(UVec3::new(id.x, id.y, 2), mask::mask(filled)) };
 }
 
+/// The start's stack as `start_cs` hands it (pxl-portable `cast::Over`).
+struct Starts<'a>(&'a [u32]);
+
+impl cast::Over<At> for Starts<'_> {
+    fn over(&self, zoom: u32) -> At {
+        at_of(self.0, cast::start_stack(zoom))
+    }
+}
+
 /// An `At`'s words as `start_cs` hands it to `cast_cs` (pxl-portable
 /// `cast::START_WORDS`), each its place among them.
 const AT_CAVE: usize = 0;
@@ -587,22 +596,14 @@ pub fn cast_cs(
         overwrites,
         eye,
     };
-    // Started where every ray from the eye starts alike (`start_cs`).
+    // Started where every ray from the eye starts alike (`start_cs`), what
+    // was handed the nodes over it read only where a ray climbs past it.
     let read: &[u32] = starts;
-    let mut from = cast::Start {
-        place: cast::Place {
-            zoom: at(read, cast::START_PLACE),
-            corner: [at(read, cast::START_PLACE + 1) as i32, at(read, cast::START_PLACE + 2) as i32, at(read, cast::START_PLACE + 3) as i32],
-        },
-        at: at_of(read, cast::START_AT),
-        stack: [at_of(read, cast::START_AT); cast::DEPTH],
+    let place = cast::Place {
+        zoom: at(read, cast::START_PLACE),
+        corner: [at(read, cast::START_PLACE + 1) as i32, at(read, cast::START_PLACE + 2) as i32, at(read, cast::START_PLACE + 3) as i32],
     };
-    let mut k = 0;
-    while k < cast::DEPTH {
-        from.stack[k] = at_of(read, cast::start_stack(k as u32));
-        k += 1;
-    }
-    let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, from);
+    let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, (place, at_of(read, cast::START_AT)), &Starts(read));
     let w = word(&origin, &ray, met, eye.origin.w != 0);
     // SAFETY: within the rays, just bounded by their size.
     unsafe {
