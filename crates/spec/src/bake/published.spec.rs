@@ -16,7 +16,7 @@ pub const FORMAT: Format = Format {
     terrain: 12,
     place: 10,
     division: 7,
-    earth: 1,
+    earth: 2,
 };
 
 /// The base layers a version is published for: the kinds of `FORMAT`,
