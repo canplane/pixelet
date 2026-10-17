@@ -194,6 +194,13 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
     let rise = now();
     crate::io::host::host_rise();
     crate::sched::edge::world_edge().rise(quota_ms);
+    // The device's loss, as its host wrote it into the device's block: before
+    // the commands, as a device answering again among them asks that block anew.
+    if pxl_render::gpu::api::take_device_lost() {
+        pxl_render::gpu::renderer::gpu_lost();
+        crate::scene::stage::screen_lost();
+        crate::io::load::images_lost();
+    }
     door().drain(|number, pkt| apply::apply(s, number, pkt));
     let drained = now();
     if quota_ms > 0.0 || world_frame_waiting() {

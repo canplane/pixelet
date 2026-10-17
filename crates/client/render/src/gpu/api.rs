@@ -302,6 +302,16 @@ pub fn device_answered() {
     s.asked = true;
 }
 
+/// Whether the device went since this was last asked, as its host says in
+/// the device's block (xpute STATUS.LOST); taken once.
+pub fn take_device_lost() -> bool {
+    if STATE.get(|| None).is_none() || *head(DEVICE_AT + DEVICE_WORDS - 1) != STATUS::LOST {
+        return false;
+    }
+    *head(DEVICE_AT + DEVICE_WORDS - 1) = 0;
+    true
+}
+
 /// The device went, and every object on it: the handles start over.
 pub fn device_lost() {
     if let Some(s) = STATE.get(|| None).as_mut() {

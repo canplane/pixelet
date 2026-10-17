@@ -35,9 +35,10 @@ function askAgain(): void {
 }
 
 export function gpuBoot(): void {
+  // The kernel hears of the loss from the device's host (xpute GpuHost);
+  // asking again is the page's.
   const lost = () => {
     setGpu(Gpu.Waiting);
-    send_next(Command.GPU_LOST);
     askAgain();
   };
   tries += 1;

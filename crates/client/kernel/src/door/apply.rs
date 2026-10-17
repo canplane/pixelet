@@ -267,12 +267,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             request_world_tick();
             Ok(Some(0))
         }
-        Command::GPU_LOST => {
-            pxl_render::gpu::renderer::gpu_lost();
-            crate::scene::stage::screen_lost();
-            crate::io::load::images_lost();
-            Ok(Some(0))
-        }
         Command::SURFACE_OPEN => {
             let handle = pxl_render::gpu::surface::surface_open(abi::SurfaceOpen::read(packet(pkt)?)?.role);
             if handle != 0 {

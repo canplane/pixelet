@@ -174,11 +174,10 @@ impl SensorMinor {
 #[repr(u32)]
 pub enum GpuMinor {
     READY = 0x01,
-    LOST = 0x02,
 }
 
 impl GpuMinor {
-    pub const ALL: [GpuMinor; 2] = [GpuMinor::READY, GpuMinor::LOST];
+    pub const ALL: [GpuMinor; 1] = [GpuMinor::READY];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<GpuMinor> {
@@ -570,10 +569,8 @@ pub enum Command {
     INPUT_WHEEL = 0x1103,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_KEYS = 0x1106,
-    /// A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (crates/client/render/src/gpu/api.rs).
+    /// A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (crates/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge.
     GPU_READY = 0x1401,
-    /// The device went away, and every object on it.
-    GPU_LOST = 0x1402,
 
     // ---- the shell and the process: what the UI asks of it, and what it shows the UI ----
     /// A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on.
@@ -632,7 +629,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 43] = [
+    pub const ALL: [Command; 42] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::SENSOR_POSITION,
@@ -653,7 +650,6 @@ impl Command {
         Command::INPUT_WHEEL,
         Command::INPUT_KEYS,
         Command::GPU_READY,
-        Command::GPU_LOST,
         Command::SURFACE_OPEN,
         Command::SURFACE_RESIZE,
         Command::SURFACE_CLOSE,
