@@ -211,11 +211,12 @@ pub const LINES_ENTRIES_AT: u32 = crate::ways::HEADER_WORDS + WAYS_BINS;
 pub const LINES_SEGMENTS_AT: u32 = LINES_ENTRIES_AT + WAYS_SQUARE_SEGMENTS.div_ceil(2);
 pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::ways::SEGMENT_WORDS as u32;
 
-/// The most runs a square's columns read as (`ways::runs`): the most of the
-/// format-12 set (2026-10-17), measured with every tile at every zoom (z15's
-/// 8600; z14's most 3674); a tile past it fails its bake (pxl-spec
-/// bake/tile/terrain.rs `runs_fit`).
-pub const RUNS_SQUARE: u32 = 8600;
+/// The most runs a square's columns read as (`ways::runs`), a bore's
+/// lining among them: the most of the format-12 set (2026-10-18), measured
+/// with every tile at every zoom (z15's 15320, tile [11707, 3502] square (7, 6); z14's most
+/// 7867); a tile past it fails its bake (pxl-spec bake/tile/terrain.rs
+/// `runs_fit`).
+pub const RUNS_SQUARE: u32 = 15320;
 
 /// A square's columns, a word a cell, row by row, and one more after the
 /// last: a cell's ground's top in leaf cells, an `i16`, low (`column_top`),
@@ -420,6 +421,12 @@ impl<Q: Square> crate::ways::Columns for Q {
         let cell = Square::cell(self);
         crate::ground::face_height(cell, crate::ground::blocks(cell, self.height(c) as f32))
     }
+    fn top(&self, c: [i32; 2]) -> i32 {
+        if !held(c) {
+            return i32::MIN;
+        }
+        crate::ground::blocks(Square::cell(self), self.height(c) as f32)
+    }
     /// The entry is the one after the one before it, and its segment
     /// continues the one stored before it.
     fn joins(&self, c: [i32; 2], k: u32) -> bool {
@@ -532,28 +539,11 @@ pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, 
     (f, square_of(cell_at(cell, f.from(), g)).1)
 }
 
-/// What the ways write in block `z` of the column `c` of blocks at `zoom`,
-/// as its window holds it run along z (`ways::at`'s): the block it lies in
-/// there, off its cell, past the leaves a leaf's. `own` is the cell the
-/// visit read (`ground`) and its runs, found at `near`: a column of it reads
-/// those runs, one whose cell lies in its square is read off it, as the
-/// columns about one mostly are (`step`), and one past it finds its own.
-/// `ways::NOTHING` where no way writes, or no window holds it.
-pub fn ran(w: &impl Ran, near: Found, (own, runs): ([i32; 2], [u32; 2]), zoom: Zoom, c: [i32; 2], z: i32) -> u32 {
-    let read = held_to(zoom);
-    let g = cell_at(zoom, read, c);
-    // Component-wise: a GPU has no array equality.
-    let (f, [mut r, to]) = if g[0] == own[0] && g[1] == own[1] {
-        (near, runs)
-    } else {
-        let (q, o) = (square_of(g).0, square_of(own).0);
-        let above = if q[0] == o[0] && q[1] == o[1] { near } else { Found::NONE };
-        let (f, i) = step(w, above, read, g);
-        if !f.here() {
-            return crate::ways::NOTHING;
-        }
-        (f, [column_first(w.column(f.from(), f.slot(), i)), column_first(w.column(f.from(), f.slot(), i + 1))])
-    };
+/// What the ways write in block `z` at `zoom` of a column whose runs are
+/// `runs`, held where `f` found its cell (`ground`), run along z
+/// (`ways::lined`'s): the block it lies in at the window's zoom, past the
+/// leaves a leaf's. `ways::NOTHING` where no way writes.
+pub fn ran(w: &impl Ran, f: Found, [mut r, to]: [u32; 2], zoom: Zoom, z: i32) -> u32 {
     let (from, slot) = (f.from(), f.slot());
     let (zr, mut value) = (z >> (zoom - from), crate::ways::NOTHING);
     while r < to {
@@ -618,47 +608,21 @@ pub fn ground(w: &impl Windows, owner: (Zoom, [i32; 2]), place: Found, zoom: Zoo
     (cell, f)
 }
 
-/// The ways about block `own` at `zoom` as the windows hold them (`ran`),
-/// off the window its ground's cell was read at (`found`) and the columns
-/// about it read off it: none in a column past the area or walled, as the
-/// fill writes none there (`ways::column`, `ways::Columns::walled`).
-/// It holds the windows by value: a GPU holds no pointer in a struct.
-struct Over<W> {
-    w: W,
-    zoom: Zoom,
-    /// Its own column's cell, at its cells' zoom, and its runs.
-    own: ([i32; 2], [u32; 2]),
-    found: Found,
-}
-
-impl<W: Windows> crate::ways::Airs for Over<W> {
-    fn at(&self, c: [i32; 2], z: i32) -> u32 {
-        ran(&self.w, self.found, self.own, self.zoom, c, z)
-    }
-}
-
-/// Block `c` at `zoom` with what the ways write over the ground's block
-/// there (`ways::block`), `block` its look and its fold's four, `carved`
-/// whether a cave made its ground air (`ground::Cell::block`), `found`
+/// Block `z` at `zoom` of a column with what the ways write over the
+/// ground's block there, `block` its look and its fold's four, `found`
 /// where its column was read and `runs` its runs, as the visit read them
-/// (`ground::Cell::runs`): air, or a way's look whole. Only a way in the
-/// block's own column writes in it, none where the column holds no run, or
-/// the air of one beside where the caves carved the ground. A column read off
-/// a coarser window standing in for its own holds that window's runs, laid
-/// at its coarser cells, where no wall stands: the coarser zoom's world.
-pub fn ways_over(w: &(impl Windows + Copy), found: Found, runs: [u32; 2], zoom: Zoom, c: [i32; 3], (block, carved): ((u32, [u32; 4]), bool)) -> (u32, [u32; 4]) {
-    if !carved && runs[1] <= runs[0] {
+/// (`ground::Cell::runs`): a bore's air, or a way's look whole, its own
+/// column's alone, the lining of a bore's air beside it written there by
+/// its fill (`ways::lined`). A column read off a coarser window standing in
+/// for its own holds that window's runs, laid at its coarser cells: the
+/// coarser zoom's world.
+pub fn ways_over(w: &impl Ran, found: Found, runs: [u32; 2], zoom: Zoom, z: i32, block: (u32, [u32; 4])) -> (u32, [u32; 4]) {
+    if runs[1] <= runs[0] {
         return block;
     }
-    let over = Over {
-        w: *w,
-        zoom,
-        own: (cell_at(zoom, held_to(zoom), [c[0], c[1]]), runs),
-        found,
-    };
-    match crate::ways::block(&over, c, carved) {
+    match ran(w, found, runs, zoom, z) {
         crate::ways::NOTHING => block,
-        crate::ways::AIR => (VOID, [VOID; 4]),
+        // A bore's air is the ground's void, `ways::AIR`.
         way => (way, [way; 4]),
     }
 }

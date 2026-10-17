@@ -152,8 +152,9 @@ pub fn heights(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], [x, y]: [
 /// for column `i`: 0 counts its runs into its column
 /// word's first, 1 (`i` 0 alone) sums them in order into each column's
 /// first and the last word's, 2 writes its runs from its first, each off
-/// its spans (`ways::column`) read along z (`ways::runs`). A column's spans,
-/// `u32::MAX` where they do not fit `ways::SPANS`; 0 for the rest.
+/// its spans and those beside it (`ways::around`) read along z
+/// (`ways::runs`). A column's spans, `u32::MAX` where its or those beside
+/// it do not fit `ways::SPANS`; 0 for the rest.
 pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], pass: u32, i: u32) -> u32 {
     let word = |k: u32| fresh[k as usize];
     let (base, place, cell) = (word(FRESH_SQUARE) * SQUARE_WORDS, window::place_of(word(FRESH_PLACE)), word(FRESH_CELL));
@@ -173,20 +174,20 @@ pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], pass: u32, i
     if i >= SQUARE_CELLS {
         return 0;
     }
-    let (spans, fits) = {
+    let (around, fits) = {
         let lane: &[u32] = ground;
         let filling = Filling { ground: lane, base, cell, place };
         let [x, y] = window::of_index(i);
-        crate::ways::column(&filling, [x as i32, y as i32])
+        crate::ways::around(&filling, [x as i32, y as i32])
     };
     let w = at(ground, columns + i);
     let (from, room) = if pass == 2 { (column_first(w), RUNS_SQUARE) } else { (0, 0) };
-    let n = put_runs(ground, base, &spans, cell, from, room);
+    let n = put_runs(ground, base, &around, cell, from, room);
     if pass == 0 {
         put(ground, columns + i, with_first(w, n));
     }
     if fits {
-        spans.n
+        around.spans[0].n
     } else {
         u32::MAX
     }
@@ -197,10 +198,11 @@ fn with_first(w: u32, n: u32) -> u32 {
     w & 0xffff | n << 16
 }
 
-/// A column's runs off its spans (`ways::runs`) into the square at `base`'s
-/// runs from `first`, as far as `room`; how many there are.
-fn put_runs(ground: &mut [u32], base: u32, spans: &ways::Spans, cell: u32, first: u32, room: u32) -> u32 {
-    ways::runs(spans, cell, move |k, w| {
+/// A column's runs off its spans and those beside it (`ways::runs`) into
+/// the square at `base`'s runs from `first`, as far as `room`; how many
+/// there are.
+fn put_runs(ground: &mut [u32], base: u32, around: &ways::Around, cell: u32, first: u32, room: u32) -> u32 {
+    ways::runs(around, cell, move |k, w| {
         if first + k < room {
             put(ground, base + RUNS_AT + first + k, w);
         }
@@ -209,9 +211,8 @@ fn put_runs(ground: &mut [u32], base: u32, spans: &ways::Spans, cell: u32, first
 
 /// Entry `[x, y]` of level `j` of the square at `base`, its cells at `cell`:
 /// level 0 column `[x, y]`'s own — its ground's top joined with what its
-/// runs write, a way's air a block either side of it, as `ways::block`
-/// recolours over and under it; a higher one over the level under it,
-/// written before (`window::join`).
+/// runs write; a higher one over the level under it, written before
+/// (`window::join`).
 pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
     let w = if j == 0 {
         let i = window::index_of(at);
@@ -221,9 +222,8 @@ pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
         while r + 1 < to {
             let (z, value) = ways::run_of(crate::at(ground, base + RUNS_AT + r));
             if value != ways::NOTHING {
-                let d = if value & ways::AIR_OF != 0 { 1 } else { 0 };
                 let end = ways::run_of(crate::at(ground, base + RUNS_AT + r + 1)).0;
-                (lo, hi) = (lo.min((z - d) * s), hi.max((end + d) * s));
+                (lo, hi) = (lo.min(z * s), hi.max(end * s));
             }
             r += 1;
         }

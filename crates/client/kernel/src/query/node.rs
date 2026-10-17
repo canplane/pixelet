@@ -11,8 +11,8 @@
 //!
 //! - the ground: its column off the windows, as the GPU drew it and the CPU
 //!   read it back, and the area's edge laid on it; the ways off the runs the
-//!   GPU wrote in its column and those about it, read as the GPU reads them
-//!   (pxl-portable `window::ground`, `window::ways_over`);
+//!   GPU wrote in its column, read as the GPU reads them (pxl-portable
+//!   `window::ground`, `window::ways_over`);
 //! - the caves: the hash pyramid's node at that zoom, its value
 //!   (`procedural.rs` `Cave`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by

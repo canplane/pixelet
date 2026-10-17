@@ -33,7 +33,7 @@ use crate::{Zoom, LEAF_CELL};
 /// any layer may fill under it at a zoom asked, else air; where the ground
 /// is not held, the lack. With it, whether it is a block.
 #[allow(clippy::too_many_arguments)]
-pub fn node<H: Held, W: Windows + Copy, L: Lanes>(
+pub fn node<H: Held, W: Windows, L: Lanes>(
     held: &mut H,
     ways: &W,
     lanes: &L,
@@ -61,9 +61,9 @@ pub fn node<H: Held, W: Windows + Copy, L: Lanes>(
             return (In { kind: Kind::Split, block: [VOID, 0] }, block);
         }
     }
-    let (i, cell, carved, found) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
+    let (i, cell, found) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
     let (value, f) = if block && i.kind == Kind::Block {
-        window::ways_over(ways, found, cell.runs, zoom, c, (i.block, carved))
+        window::ways_over(ways, found, cell.runs, zoom, c[2], i.block)
     } else {
         i.block
     };

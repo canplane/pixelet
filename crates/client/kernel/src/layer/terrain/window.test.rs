@@ -76,16 +76,17 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
 /// A square's columns as a GPU's fill writes them (pxl-portable
 /// `fill::heights`, `fill::ways`), over cells whose tops are given
 /// (`top`) rather than drawn off samples: each column's word, its top and
-/// its first run, and its spans off its lines (`ways::column`) read along z
-/// as runs (`ways::runs`), into `lane`, none past `RUNS_SQUARE`.
+/// its first run, and its spans and those beside it off its lines
+/// (`ways::around`) read along z as runs (`ways::runs`), into `lane`, none
+/// past `RUNS_SQUARE`.
 fn fill_columns(sq: &impl window::Square, top: impl Fn(u32) -> i32, lane: &mut [u32]) {
     use pxl_portable::window::{COLUMNS_AT, RUNS_AT, RUNS_SQUARE};
     let mut runs = 0;
     for i in 0..SQUARE_CELLS {
         lane[(COLUMNS_AT + i) as usize] = top(i) as u32 & 0xffff | runs << 16;
         let [x, y] = window::of_index(i);
-        let spans = pxl_portable::ways::column(sq, [x as i32, y as i32]).0;
-        runs += pxl_portable::ways::runs(&spans, sq.cell(), |k, w| {
+        let around = pxl_portable::ways::around(sq, [x as i32, y as i32]).0;
+        runs += pxl_portable::ways::runs(&around, sq.cell(), |k, w| {
             if runs + k < RUNS_SQUARE {
                 lane[(RUNS_AT + runs + k) as usize] = w;
             }
