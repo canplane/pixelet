@@ -242,15 +242,11 @@ impl Place {
 }
 
 /// Where the ray is within a box from `min`, `side` wide, between `t0` and
-/// `t1`: its entry and exit, empty where the entry is past the exit, and the
-/// axis it enters across, which is the box's own even where the entry is
-/// held to `t0`.
-pub fn slab(ray: &Ray, min: [f32; 3], side: f32, t0: f32, t1: f32) -> (f32, f32, u32) {
-    let (mut enter, mut leave, mut axis) = (t0, t1, 0);
-    // The nearest plane yet, once an axis the ray moves along gave one.
-    let (mut near_most, mut moved) = (0.0, false);
+/// `t1`: its entry and exit, empty where the entry is past the exit.
+pub fn slab(ray: &Ray, min: [f32; 3], side: f32, t0: f32, t1: f32) -> (f32, f32) {
+    let (mut enter, mut leave) = (t0, t1);
     // Each axis in turn, its components named, not indexed.
-    let mut each = |a: u32, d: f32, inv: f32, min: f32| {
+    let mut each = |d: f32, inv: f32, min: f32| {
         // An axis the ray runs beside: within the box, any t; outside it,
         // none past the span's ends.
         let (near, far) = if d == 0.0 {
@@ -261,19 +257,36 @@ pub fn slab(ray: &Ray, min: [f32; 3], side: f32, t0: f32, t1: f32) -> (f32, f32,
             }
         } else {
             let (p, q) = (min * inv, (min + side) * inv);
-            let (near, far) = if d > 0.0 { (p, q) } else { (q, p) };
-            if !moved || near > near_most {
-                (near_most, moved, axis) = (near, true, a);
+            if d > 0.0 {
+                (p, q)
+            } else {
+                (q, p)
             }
-            (near, far)
         };
         enter = enter.max(near);
         leave = leave.min(far);
     };
+    each(ray.direction[0], ray.inverse[0], min[0]);
+    each(ray.direction[1], ray.inverse[1], min[1]);
+    each(ray.direction[2], ray.inverse[2], min[2]);
+    (enter, leave)
+}
+
+/// The axis across which the ray enters the box from `min`, `side` wide:
+/// the last of its near faces it reaches, the box's own wherever the walk
+/// came into it from (`leaves`'s mirror).
+fn enters(ray: &Ray, min: [f32; 3], side: f32) -> u32 {
+    let (mut best, mut moved, mut axis) = (0.0, false, 0);
+    let mut each = |a: u32, d: f32, inv: f32, min: f32| {
+        let t = if d > 0.0 { min * inv } else { (min + side) * inv };
+        if d != 0.0 && (!moved || t > best) {
+            (best, moved, axis) = (t, true, a);
+        }
+    };
     each(0, ray.direction[0], ray.inverse[0], min[0]);
     each(1, ray.direction[1], ray.inverse[1], min[1]);
     each(2, ray.direction[2], ray.inverse[2], min[2]);
-    (enter, leave, axis)
+    axis
 }
 
 /// The axis across which the ray leaves the box from `min`, `side` wide:
@@ -530,8 +543,7 @@ pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: 
 /// and what was handed it, `over` what was handed the nodes over it
 /// (`start`).
 pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Met<Q::At, Q::Block> {
-    let span = slab(ray, from.0.min(o), from.0.side(), 0.0, ray.reach);
-    descend(q, o, ray, detail, until, from, over, span)
+    descend(q, o, ray, detail, until, from, over)
 }
 
 /// What the walk does at a node, `block` what it is: for an eye, stops
@@ -555,24 +567,25 @@ fn stops<Q: Query>(q: &Q, o: &Origin, until: Until, place: Place, block: &Q::Blo
 /// the ray leaves that one by, back up a zoom where that face is the
 /// node's own, and past a root on into the next.
 #[allow(clippy::too_many_arguments)]
-fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>, span: (f32, f32, u32)) -> Met<Q::At, Q::Block> {
-    let (dlen2, mut start) = (squared(ray.direction), from);
-    // What was handed each node the descent went into; on the origin's
-    // line over the start, `over`'s. `floor` is the coarsest zoom whose
-    // entry is still its own: a level written takes the place of the one
-    // `LEVELS` over it, and every one over that went before it, gone into
-    // on the way down.
+fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Met<Q::At, Q::Block> {
+    // What the walk carries is what nothing it holds gives again: the node
+    // and what was handed it, the ray within it, the levels it went into
+    // (`stack`, from `floor` its own), the zoom over which the origin's
+    // line is `over`'s (`top`, 0 past the start's root), and its visits.
+    // The node's box, the ray's length, the axis it entered across and
+    // the walk's start are worked out from those where they are asked.
     let (mut top, mut stack, mut floor) = (from.0.zoom, Q::Stack::filled(Q::keep(&from.1)), 0);
     // The node being entered, and the ray within it: from where it enters
     // to where it leaves the node's own box, so a node is asked the same
     // however the walk came to it.
-    let (mut at, mut place, (mut t0, mut t1, mut axis)) = (from.1, from.0, span);
+    let (mut at, mut place) = (from.1, from.0);
+    let (mut t0, mut t1) = slab(ray, place.min(o), place.side(), 0.0, ray.reach);
     let mut visits = 0;
     loop {
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
         if t1 > t0 {
-            let i = q.node(&mut at, place.zoom, place.node(o), asked(o, detail, place, t1 * t1 * dlen2), t0);
+            let i = q.node(&mut at, place.zoom, place.node(o), asked(o, detail, place, t1 * t1 * squared(ray.direction)), t0);
             visits += 1;
             // Where the walk ends, its stop, made there and nowhere else.
             let ends = match i.kind {
@@ -587,7 +600,7 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
             if ends != Ends::On {
                 let stop = Stop {
                     t: t0,
-                    axis,
+                    axis: enters(ray, place.min(o), place.side()),
                     place,
                     at,
                     block: i.block,
@@ -603,8 +616,8 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
         // that ancestor's entry is no longer the stack's, the walk goes
         // down again to there, as kd-restart does (Foley & Sugerman 2005),
         // from the nearest node over it it holds without a stack: one on
-        // the origin's line over the start, handed `over`'s, or the start,
-        // `fresh`, its own At as handed. Each node on the way is asked as
+        // the origin's line over the start, handed `over`'s, or a root,
+        // `fresh`, its At its own (`Query::root`). Each node on the way is asked as
         // it was, the ray in it over its own box and its At of what was
         // handed it alone (`Query::node`), and goes into the child holding
         // where the ray now is, so the walk comes down that line again and
@@ -641,11 +654,12 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
                     root.corner[e as usize] += step;
                     let span = slab(ray, root.min(o), root.side(), t1, ray.reach);
                     if span.0 > span.1 {
+                        // Gone on to its reach: no stop, which no asker reads.
                         return Met {
                             ends: Ends::On,
                             stop: Stop {
                                 t: t1,
-                                axis,
+                                axis: 0,
                                 place,
                                 at,
                                 block: Q::AIR,
@@ -653,9 +667,8 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
                             visits,
                         };
                     }
-                    start = (root, q.root(root.node(o)));
                     (top, floor) = (0, 0);
-                    break (root, start.1, t1, true);
+                    break (root, at, t1, true);
                 }
                 let k = place.slot(o);
                 let parent = place.parent(o);
@@ -677,16 +690,15 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
                     break (parent.child(k ^ bit), Q::unkeep(stack.at(parent.zoom), &at, parent.zoom), t1, false);
                 }
                 let mut again = parent;
-                while again != start.0 && !(again.zoom <= top && again.parent(o).holds(o)) {
+                while again.zoom > 0 && !(again.zoom <= top && again.parent(o).holds(o)) {
                     again = again.parent(o);
                 }
                 floor = again.zoom;
-                let fresh = again == start.0 && top == 0;
-                let handed = if fresh { start.1 } else { over.over(again.zoom - 1) };
-                break (again, handed, t1, fresh);
+                let fresh = again.zoom == 0;
+                break (again, if fresh { at } else { over.over(again.zoom - 1) }, t1, fresh);
             }
         };
-        at = if fresh { handed } else { q.child(&handed, kid.zoom, kid.node(o)) };
-        (place, (t0, t1, axis)) = (kid, slab(ray, kid.min(o), kid.side(), from, ray.reach));
+        at = if fresh { q.root(kid.node(o)) } else { q.child(&handed, kid.zoom, kid.node(o)) };
+        (place, (t0, t1)) = (kid, slab(ray, kid.min(o), kid.side(), from, ray.reach));
     }
 }
