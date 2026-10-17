@@ -7,7 +7,7 @@
 //! the decor block is drawn about, the decor the eraser leaves out, each
 //! variant's extent, and placed decor as records.
 
-use pxl_portable::scatter::{drawn, row_of};
+use pxl_portable::scatter::{self, drawn, row_of};
 use pxl_portable::LEAF_CELL;
 use pxl_render::gpu::grown::DecorFrame;
 use pxl_spec::block::decor::DECORS;
@@ -148,7 +148,7 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i6
         }
         let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
         let [x, y, z] = index_of(UNIT_ZOOM, &e.corner());
-        placed.push([k | variant << 8 | turn << 16, x.rem_euclid(ROUND) as u32, y as u32, z as u32]);
+        placed.push([scatter::record_word(k, variant, turn, scatter::PLACED_AT), x.rem_euclid(ROUND) as u32, y as u32, z as u32]);
     });
 }
 

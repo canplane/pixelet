@@ -14,7 +14,7 @@
 
 use xpute_kit::math::rng::{derive_seed_u32, SplitMix32};
 
-use crate::cast::{Detail, SPLIT};
+use crate::cast::Detail;
 use crate::caves::node_seed;
 use crate::cube::{sentinel, Ground};
 use crate::decor::{Counts, Decor, Orientation, BLOCK, DECORS};
@@ -140,10 +140,28 @@ pub const SQUARE_GROWN: u32 = {
 const _: () = assert!(size_of::<Decor>().is_multiple_of(4), "a row is whole words, as a GPU reads the table");
 
 /// What the GPU's decor pass writes, a record a decor it grows after a
-/// count and its pad: its kind, variant and turn, a byte each, then its
-/// box's min corner in leaf cells.
+/// count and its pad: its first word (`record_word`), then its box's min
+/// corner in leaf cells.
 pub const GROWN_AT: u32 = 4;
 pub const GROWN_WORDS: u32 = 4;
+
+/// The zoom a record names where it is drawn at any distance: placed decor,
+/// which no window grows. No window's cells are at it (`FIRST_CELL`).
+pub const PLACED_AT: Zoom = 0;
+const _: () = assert!(crate::window::FIRST_CELL > PLACED_AT);
+
+/// A record's first word: its kind and variant, a byte each, its turn in
+/// quarters, and the window zoom it was grown at, the one it is drawn at
+/// where the rays ask it (`drawn_at`), `PLACED_AT` for placed decor; past
+/// them, once sized, its region (`drawn::REGION_SHIFT`).
+pub const fn record_word(kind: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
+    kind | variant << 8 | turn << 16 | cell << 18
+}
+
+/// A record's kind, variant, turn and zoom (`record_word`).
+pub const fn record_of(w: u32) -> (u32, u32, u32, Zoom) {
+    (w & 0xff, (w >> 8) & 0xff, (w >> 16) & 3, (w >> 18) & 63)
+}
 
 /// Every variant of every kind, numbered kind by kind in the catalog's
 /// order: a decor's draw group (`first_group`).
@@ -443,39 +461,6 @@ pub fn distance(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// decor is drawn at one zoom, where the rays draw the ground about it.
 pub fn drawn_at(detail: Detail, origin: [i32; 3], at: [i32; 3], cell: Zoom) -> bool {
     detail.at(distance(origin, at)) == cell
-}
-
-/// Whether the square of leaf cells `region`, its heights within `[lo, hi]`
-/// (leaf cells), may hold decor drawn at `cell` for an eye at `origin`
-/// (`drawn_at`): some of it nearer than where the rays ask a coarser zoom,
-/// and some farther than where they ask a finer one.
-pub fn meets_band(detail: Detail, origin: [i32; 3], region: [[i32; 2]; 2], [lo, hi]: [i32; 2], cell: Zoom) -> bool {
-    if cell < detail.range[0] || cell > detail.range[1] {
-        return false;
-    }
-    let [min, max] = region;
-    // The nearest and farthest a span of leaf cells `[a, b)` (`[a, b]` up)
-    // lies from the eye on an axis, in units, as the steps wrap.
-    let unit = (1 << FRAC_W) as f32;
-    let span = |a: i32, b: i32, o: i32| {
-        let (a, b) = (a.wrapping_shl(FRAC_W).wrapping_sub(o) as f32 / unit, b.wrapping_shl(FRAC_W).wrapping_sub(o) as f32 / unit);
-        let near = if a > 0.0 {
-            a
-        } else if b < 0.0 {
-            -b
-        } else {
-            0.0
-        };
-        (near, if -a > b { -a } else { b })
-    };
-    let (nx, fx) = span(min[0], max[0], origin[0]);
-    let (ny, fy) = span(min[1], max[1], origin[1]);
-    let (nz, fz) = span(lo, hi, origin[2]);
-    let near = libm::sqrtf(nx * nx + ny * ny + nz * nz) * detail.tau;
-    let far = (libm::sqrtf(fx * fx + fy * fy + fz * fz) + 1.0) * detail.tau;
-    // Where the rays ask `cell`: [split / 2 · 2^(UNIT_ZOOM − cell), twice that).
-    let from = SPLIT / 2.0 * (1u32 << (UNIT_ZOOM - cell)) as f32;
-    (cell == detail.range[0] || near < 2.0 * from) && (cell == detail.range[1] || far >= from)
 }
 
 /// Placed decor's tag (`node_seed`).

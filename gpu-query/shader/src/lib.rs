@@ -641,11 +641,12 @@ pub fn ways_cs(
 /// (pxl-portable `scatter::block_of`), `z` the window's zoom over the first
 /// one's, its slot and the kind. Each one that stands, stands on its cell
 /// and grows there (`scatter::stands`, `stand`, `grows`) is appended to
-/// `out` after its count (`scatter::GROWN_AT`, `GROWN_WORDS`), where it is
-/// drawn at that window's zoom, the one the rays ask at its distance
-/// (`scatter::drawn_at`). A kind is grown at a zoom where bit
+/// `out` after its count (`scatter::GROWN_AT`, `GROWN_WORDS`), naming that
+/// window's zoom, the one it is drawn at where the rays ask it
+/// (`decor_count_cs`). A kind is grown at a zoom where bit
 /// `zoom − FIRST_CELL` of its `shown` word is set; the kinds are the
-/// catalog's rows as handed (`rows`).
+/// catalog's rows as handed (`rows`). What it grows is the windows' squares'
+/// and what is placed alone, never the eye's: it runs where they change.
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn decor_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -682,17 +683,6 @@ pub fn decor_cs(
         },
         rows,
     };
-    // Only where the rays ask this zoom (`scatter::drawn_at`): the square
-    // as its heights' bound has it, then each decor where it stands.
-    let detail = Detail {
-        tau: eye.right_tau.w,
-        range: [eye.range.x, eye.range.y],
-    };
-    let origin = [eye.origin.x, eye.origin.y, eye.origin.z];
-    let heights = ground::bound_of(world.world.level(cell, slot, window::LEVELS, [0, 0]));
-    if !scatter::meets_band(detail, origin, region, heights, cell) {
-        return;
-    }
     let decor = &rows[kind as usize];
     let zoom = GROUND.read_zoom(cell);
     let (c, here) = scatter::candidate_of(decor, zoom, region, id.y, id.x);
@@ -700,14 +690,14 @@ pub fn decor_cs(
         return;
     }
     let (g, here) = scatter::stand(&mut world, decor, cell, &c);
-    if !here || !scatter::drawn_at(detail, origin, g.at, cell) || !scatter::grows(&mut world, decor, cell, &g) {
+    if !here || !scatter::grows(&mut world, decor, cell, &g) {
         return;
     }
     // SAFETY: an atomic add on the buffer's first word, its count.
     let n = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut out[0], 1) };
     let i = (GROWN_AT + GROWN_WORDS * n) as usize;
     if i + 3 < out.len() {
-        out[i] = kind | g.variant << 8 | g.turn << 16;
+        out[i] = scatter::record_word(kind, g.variant, g.turn, cell);
         out[i + 1] = g.at[0] as u32;
         out[i + 2] = g.at[1] as u32;
         out[i + 3] = g.at[2] as u32;
@@ -726,10 +716,12 @@ fn records(grown: &[u32]) -> u32 {
     }
 }
 
-/// Each record sized for the screen (pxl-portable `scatter::drawn`): a
-/// model where its group's extent spans `MODEL_PX` at its distance, a
-/// sprite down to `SPRITE_PX`, else nothing, or nothing where it is the
-/// decor left out; its region written into its first word and counted.
+/// Each record for the eye this frame, its region written into its first
+/// word and counted: nothing where the rays ask another zoom at its
+/// distance than the one it was grown at (`scatter::drawn_at`), or where it
+/// is the decor left out; else sized for the screen (pxl-portable
+/// `scatter::drawn`), a model where its group's extent spans `MODEL_PX` at
+/// its distance, a sprite down to `SPRITE_PX`, else nothing.
 #[spirv(compute(threads(64, 1, 1)))]
 pub fn decor_count_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -744,15 +736,21 @@ pub fn decor_count_cs(
     }
     let i = (GROWN_AT + GROWN_WORDS * id.x) as usize;
     let w = grown[i];
-    let (kind, variant) = (w & 0xff, (w >> 8) & 0xff);
+    let (kind, variant, _, cell) = scatter::record_of(w);
     let corner = [grown[i + 1] as i32, grown[i + 2] as i32, grown[i + 3] as i32];
+    let origin = [eye.origin.x, eye.origin.y, eye.origin.z];
+    let detail = Detail {
+        tau: eye.right_tau.w,
+        range: [eye.range.x, eye.range.y],
+    };
+    let here = cell == scatter::PLACED_AT || scatter::drawn_at(detail, origin, corner, cell);
     let group = scatter::first_group(rows, kind) + variant;
     let hide = drawn::HIDE as usize;
     let hidden = params[hide + 3] != 0 && corner[0] == params[hide] as i32 && corner[1] == params[hide + 1] as i32 && corner[2] == params[hide + 2] as i32;
-    let d = scatter::distance([eye.origin.x, eye.origin.y, eye.origin.z], corner);
+    let d = scatter::distance(origin, corner);
     let d = if d > 1e-3 { d } else { 1e-3 };
     let px = f32::from_bits(params[(drawn::EXTENTS + group) as usize]) / (d * f32::from_bits(params[drawn::UPP as usize]));
-    let region = if hidden {
+    let region = if hidden || !here {
         drawn::NONE
     } else if px >= f32::from_bits(params[drawn::MODEL_PX as usize]) {
         2 * group
@@ -827,7 +825,7 @@ pub fn decor_place_cs(
     }
     // SAFETY: an atomic add on the region's next slot, a word of the buffer.
     let slot = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut regions[(drawn::REGIONS + region) as usize], 1) };
-    let (kind, variant, turn) = (w & 0xff, (w >> 8) & 0xff, (w >> 16) & 0xff);
+    let (kind, variant, turn, _) = scatter::record_of(w);
     let [across, deep, _] = rows[kind as usize].cells(variant, turn);
     let room = block.len() as u32 / (drawn::LANES + 1);
     if slot >= room {

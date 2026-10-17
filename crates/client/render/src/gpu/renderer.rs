@@ -31,7 +31,7 @@ use crate::gpu::api::{
 use crate::gpu::api_spec::surface_role;
 use crate::gpu::atmosphere::{Atmosphere, AIR_ENTRIES};
 use crate::gpu::clouds::CloudPass;
-use crate::gpu::grown::{DecorFrame, Drawn, Grown};
+use crate::gpu::grown::{DecorFrame, Drawn, Grown, Grows};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::{Layers, Mips};
 use crate::gpu::pass::badges::BadgePass;
@@ -177,6 +177,10 @@ pub struct Cast<'a> {
 }
 
 pub const CAST_EYE_WORDS: usize = 28;
+
+/// The eye's last words, a preview's cut and its left-out leaf (`Cast::eye`):
+/// what decor's growth reads of it.
+const EYE_CUTS: usize = 8;
 
 /// The overwrites' tree (pxl-kernel layer/object/store.rs) as it lives: its
 /// heap and data lanes, unwritten until the page replays the turn, the room
@@ -1128,7 +1132,14 @@ impl ScreenCellsPass {
             c.bound = bound;
         }
         let world = [c.eye, c.window, ground, c.shards, c.overwrites];
-        c.grown.prepare(g, cast.decor, meshes, world);
+        let grows = Grows {
+            window: cast.window,
+            shards: cast.shards,
+            revision: o.revision,
+            cuts: &cast.eye[CAST_EYE_WORDS - EYE_CUTS..],
+            filled: fresh != 0,
+        };
+        c.grown.prepare(g, cast.decor, grows, meshes, world);
         let eye = c.eye;
         self.regroup(g, [rays.0, eye]);
     }
@@ -1730,6 +1741,7 @@ impl Renderer {
             // image hold older ones.
             if let Some(c) = self.screen.cast.as_mut() {
                 c.read.forget();
+                c.grown.forget();
             }
             read.forget();
             rest.forget();

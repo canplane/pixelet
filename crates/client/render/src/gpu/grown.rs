@@ -1,10 +1,12 @@
 // pxl-render/gpu/grown.rs
 
-//! The decor the GPU grows and draws, each frame (pxl-portable `scatter`):
-//! what the ground grows in the eye's windows over the cast's world
-//! (`decor_cs`), placed decor handed as records beside it, each record sized
-//! for the screen and counted a draw region (`decor_count_cs`), the regions
-//! laid out with their indirect args (`decor_args_cs`), and each record drawn
+//! The decor the GPU grows and draws (pxl-portable `scatter`): what the
+//! ground grows in the eye's windows over the cast's world (`decor_cs`),
+//! placed decor handed as records beside it — grown where what it reads
+//! changed, the records standing otherwise (`Grows`); then each frame each
+//! record taken where the rays ask the zoom it was grown at and sized for
+//! the screen, counted a draw region (`decor_count_cs`), the regions laid
+//! out with their indirect args (`decor_args_cs`), and each record drawn
 //! into one decor block in the layout the decor and impostor shaders read
 //! (`decor_place_cs`). The CPU hands what only it knows and never reads
 //! what is grown.
@@ -17,6 +19,7 @@ use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
 use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_PLACE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, release, word_bytes, Gpu};
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::renderer::Read;
 
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {
@@ -31,6 +34,19 @@ pub struct DecorFrame<'a> {
     /// The anchor the lanes are about, less the frame's eye: where the decor
     /// block is drawn.
     pub translation: [f32; 3],
+}
+
+/// What decor's growth reads besides the frame's decor, none of it the
+/// eye's place: the windows' table and the served shards, what is placed
+/// (the overwrites' revision) and a preview's cuts, and whether squares
+/// were filled this frame. Where none of it changed, nor the decor handed,
+/// the records stand and nothing is grown.
+pub struct Grows<'a> {
+    pub window: &'a [i32],
+    pub shards: &'a [[i32; 4]],
+    pub revision: u32,
+    pub cuts: &'a [u32],
+    pub filled: bool,
 }
 
 /// The most records `decor_cs` grows: every window's squares at their most
@@ -71,6 +87,10 @@ pub struct Grown {
     /// The world its groups bind: grouped again exactly when it is another.
     bound: World,
     on: bool,
+    /// What the records were grown from (`Grows`), and whether this frame
+    /// grows them again.
+    read: Read,
+    regrow: bool,
 }
 
 /// The world `decor_cs` asks: the cast's eye, window, the tiles' frames, the
@@ -104,16 +124,22 @@ impl Grown {
             room: 0,
             bound: [0; 5],
             on: false,
+            read: Read::default(),
+            regrow: false,
         }
     }
 
-    /// The frame's decor handed over, none where decor is off; `meshes`
-    /// each group's index count, none while its model loads. Grouped again
-    /// where `world` is not the one its groups bind or the records' room
-    /// grew, so a frame without decor misses no change.
-    pub fn prepare(&mut self, g: &Gpu, frame: Option<DecorFrame>, meshes: &[u32; GROUPS as usize], world: World) {
+    /// The frame's decor handed over, none where decor is off, and what its
+    /// growth reads (`grows`); `meshes` each group's index count, none while
+    /// its model loads. Grouped again where `world` is not the one its
+    /// groups bind or the records' room grew, so a frame without decor
+    /// misses no change.
+    pub fn prepare(&mut self, g: &Gpu, frame: Option<DecorFrame>, grows: Grows, meshes: &[u32; GROUPS as usize], world: World) {
         self.on = frame.is_some();
-        let Some(f) = frame else { return };
+        let Some(f) = frame else {
+            self.read.forget();
+            return;
+        };
         let need = GROWN_ROOM + (f.placed.len() as u32).next_power_of_two().max(64);
         let grow = need > self.room;
         if grow {
@@ -126,18 +152,31 @@ impl Grown {
             );
             self.block = g.buffer(word_bytes(((drawn::LANES + 1) * need) as usize), buffer_usage::STORAGE);
         }
-        if grow || world != self.bound {
+        let regroup = grow || world != self.bound;
+        if regroup {
             self.regroup(g, world);
             self.bound = world;
         }
-        g.write_buffer(self.shown, 0, bytes(f.shown));
+        let r = &mut self.read;
+        r.begin();
+        r.read(grows.window);
+        r.read(grows.shards);
+        r.read(&[grows.revision]);
+        r.read(grows.cuts);
+        r.read(f.shown);
+        r.read(f.placed);
+        r.mark(grows.filled || regroup);
+        self.regrow = !r.end();
+        if self.regrow {
+            g.write_buffer(self.shown, 0, bytes(f.shown));
+            g.write_buffer(self.records, 0, bytes(&[f.placed.len() as u32, 0, 0, 0]));
+            if !f.placed.is_empty() {
+                g.write_buffer(self.records, GROWN_AT * 4, bytes(f.placed.as_flattened()));
+            }
+        }
         g.write_buffer(self.params, 0, bytes(f.params));
         g.write_buffer(self.meshes, 0, bytes(meshes));
         g.write_buffer(self.regions, 0, bytes(&[0u32; 2 * drawn::REGIONS as usize]));
-        g.write_buffer(self.records, 0, bytes(&[f.placed.len() as u32, 0, 0, 0]));
-        if !f.placed.is_empty() {
-            g.write_buffer(self.records, GROWN_AT * 4, bytes(f.placed.as_flattened()));
-        }
         // Each region's uniform, its index the lanes' base until the args
         // pass adds its first slot: a model's group drawn about the anchor,
         // a sprite's its group's layer too.
@@ -172,13 +211,19 @@ impl Grown {
         ];
     }
 
-    /// No decor this frame: none grown, none drawn.
+    /// No decor this frame: none grown, none drawn, and the next grows.
     pub fn off(&mut self) {
         self.on = false;
+        self.read.forget();
     }
 
-    /// Within a compute pass over the cast's world, after the cast: grown,
-    /// counted, laid out, placed.
+    /// The frame that grew was dropped: the next grows again.
+    pub fn forget(&mut self) {
+        self.read.forget();
+    }
+
+    /// Within a compute pass over the cast's world, after the cast: grown
+    /// where what it reads changed, then counted, laid out and placed.
     pub fn dispatch(&self, g: &Gpu, pass: u32) {
         if !self.on || self.groups[0] == 0 {
             return;
@@ -195,7 +240,7 @@ impl Grown {
             (&self.args_built, 1, 1, 1),
             (&self.place, records, 1, 1),
         ];
-        for (k, (built, x, y, z)) in steps.into_iter().enumerate() {
+        for (k, (built, x, y, z)) in steps.into_iter().enumerate().skip(usize::from(!self.regrow)) {
             g.set_pipeline(pass, built.pipeline);
             g.set_bind_group(pass, 0, self.groups[k], &[]);
             g.dispatch(pass, x, y, z);

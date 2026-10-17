@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-naga-wgsl.
-// Inputs: 0f9e17ab87bd03c864e8ce0cabf3af6a8a67b7580aaf9201cbe987ffd49fecd1
+// Inputs: dbf0f916399f1515071cf1ac9dfe50f5a7ef70a702486d1b06008676e88b55c3
 struct type_4 {
     member: array<u32>,
 }
@@ -45,9 +45,9 @@ var<storage, read_write> global_4: type_22;
 var<storage, read_write> global_5: type_4;
 
 fn function_() {
-    var phi_91_: u32;
-    var phi_118_: u32;
-    var phi_179_: array<u32, 3>;
+    var phi_106_: u32;
+    var phi_133_: u32;
+    var phi_193_: array<u32, 3>;
 
     switch bitcast<i32>(0u) {
         default: {
@@ -58,22 +58,22 @@ fn function_() {
             let _e39 = ((_e32 - 4u) / 4u);
             if (0u < _e32) {
                 let _e43 = global_3.member[0u];
-                phi_91_ = _e43;
+                phi_106_ = _e43;
             } else {
-                phi_91_ = 0u;
+                phi_106_ = 0u;
             }
-            let _e45 = phi_91_;
+            let _e45 = phi_106_;
             if (_e26.x >= select(_e39, _e45, (_e45 < _e39))) {
             } else {
                 let _e49 = (4u * _e26.x);
                 let _e50 = (4u + _e49);
                 if (_e50 < _e32) {
                     let _e54 = global_3.member[_e50];
-                    phi_118_ = _e54;
+                    phi_133_ = _e54;
                 } else {
-                    phi_118_ = 0u;
+                    phi_133_ = 0u;
                 }
-                let _e56 = phi_118_;
+                let _e56 = phi_133_;
                 let _e58 = (_e56 >> bitcast<u32>(24u));
                 if (_e58 == 255u) {
                 } else {
@@ -85,7 +85,7 @@ fn function_() {
                     let _e64 = atomicAdd((&global_4.member[_e60]), 1u);
                     let _e65 = (_e56 & 255u);
                     let _e68 = ((_e56 >> bitcast<u32>(8i)) & 255u);
-                    let _e71 = ((_e56 >> bitcast<u32>(16i)) & 255u);
+                    let _e71 = ((_e56 >> bitcast<u32>(16i)) & 3u);
                     if (_e65 < arrayLength((&global_2.member))) {
                     } else {
                         break;
@@ -98,11 +98,11 @@ fn function_() {
                     let _e85 = global_2.member[_e65].member_7[_e68][1u];
                     let _e91 = global_2.member[_e65].member_7[_e68][2u];
                     if ((_e71 % 2u) == 0u) {
-                        phi_179_ = array<u32, 3>(_e79, _e85, _e91);
+                        phi_193_ = array<u32, 3>(_e79, _e85, _e91);
                     } else {
-                        phi_179_ = array<u32, 3>(_e85, _e79, _e91);
+                        phi_193_ = array<u32, 3>(_e85, _e79, _e91);
                     }
-                    let _e97 = phi_179_;
+                    let _e97 = phi_193_;
                     let _e100 = (_e36 / 6u);
                     if (_e64 >= _e100) {
                     } else {
