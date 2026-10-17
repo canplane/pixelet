@@ -94,7 +94,7 @@ pub const LEVEL_WORDS: u32 = level_at(LEVELS + 1);
 
 /// A tile's ways are cut into bins `WAYS_ACROSS` a side, each
 /// `1 << WAYS_SHIFT` cells: a square lays its lines by them (`LINES_AT`),
-/// and its fill writes a bound word a bin off its runs (`bin_word`), which
+/// and its fill writes a bound word a bin off its runs (`walk_ways`), which
 /// each cell's reach joins (`reach`); an empty one `[i16::MAX, i16::MIN]`,
 /// which a join passes over.
 pub const WAYS_ACROSS: u32 = 32;
@@ -172,7 +172,7 @@ pub trait Squares {
     /// Cell `i`'s height, in leaf cells, as the GPU drew it.
     fn height(&self, cell: Zoom, slot: u32, i: u32) -> i32;
     /// Bin `k`'s ways' bound of the square in `slot`, a bound word
-    /// (`bin_word`).
+    /// (`walk_ways`).
     fn way(&self, cell: Zoom, slot: u32, k: u32) -> u32;
     /// Entry `at` of level `j` of the square in `slot`, as a bound word
     /// (`ground::bound_word`): its cells' reach joined (`join`).
@@ -357,38 +357,50 @@ pub fn ran(w: &impl Ran, near: &Found, zoom: Zoom, c: [i32; 2], z: i32, top: Zoo
     value
 }
 
-/// The ways' word of bin `b` of square `sq` whose runs are written
-/// (`RUNS_AT`), word `k` of its runs lane `run(k)`: the leaf cells its
-/// cells' runs span, and of the columns beside them their air — the square's
-/// off its runs, its ring's off the rule (`ways::column`), stored nowhere —
-/// a block either side, the ground `ways::block` recolours beside air and
-/// over and under its own; so no block the rule writes or recolours in the
-/// bin lies outside it; empty where it has none.
-pub fn bin_word(sq: &impl Square, run: impl Fn(u32) -> u32, b: u32) -> i32 {
+/// The one walk over a square's columns its ways read, a column's
+/// `ways::column` taken in one place, as a GPU inlines a call once a site;
+/// what is walked is data, `bin` and `i`: the square's cell `i`, row by row,
+/// whose spans it answers, its runs' making (`ways::runs`); or bin `i`, whose
+/// word it answers, the square's runs being written (`RUNS_AT`), word `k` of its runs lane
+/// `run(k)`: the leaf cells its cells' runs span, and of the columns beside
+/// them their air — the square's off its runs, its ring's off the rule
+/// (`ways::column`), stored nowhere — a block either side, the ground
+/// `ways::block` recolours beside air and over and under its own; so no block
+/// the rule writes or recolours in the bin lies outside it; empty where it has
+/// none. The bin's cells and its ring are walked a row at a time from its
+/// south-west, a column read where the square holds none.
+pub fn walk_ways(sq: &impl Square, run: impl Fn(u32) -> u32, bin: bool, i: u32) -> (crate::ways::Spans, i32) {
     let cell = sq.cell();
     let (n, s) = (1i32 << WAYS_SHIFT, 1 << (crate::LEAF_CELL - cell));
-    let first = [(b % WAYS_BINS_ACROSS) as i32 * n, (b / WAYS_BINS_ACROSS) as i32 * n];
-    let (mut lo, mut hi) = (i32::MAX, i32::MIN);
-    let mut y = first[1] - 1;
-    while y <= first[1] + n {
-        let mut x = first[0] - 1;
-        while x <= first[0] + n {
+    // The bin's first cell, and the walk's: its ring's, a cell a side past it;
+    // a column's own alone.
+    let (first, side) = if bin {
+        ([(i % WAYS_BINS_ACROSS) as i32 * n, (i / WAYS_BINS_ACROSS) as i32 * n], n + 2)
+    } else {
+        ([(i % SQUARE) as i32, (i / SQUARE) as i32], 1)
+    };
+    let from = if bin { [first[0] - 1, first[1] - 1] } else { first };
+    let (mut lo, mut hi, mut out) = (i32::MAX, i32::MIN, crate::ways::Spans::NONE);
+    let mut j = 0;
+    while j < side * side {
+        let [x, y] = [from[0] + j % side, from[1] + j / side];
+        let k = cell_index([x, y]);
+        if bin && k < SQUARE_CELLS {
             let inside = x >= first[0] && x < first[0] + n && y >= first[1] && y < first[1] + n;
-            let i = cell_index([x, y]);
-            if i < SQUARE_CELLS {
-                let (mut r, to) = (run(i), run(i + 1));
-                while r + 1 < to {
-                    let (z, value) = crate::ways::run_of(run(RUNS_RUN_AT + r));
-                    let end = crate::ways::run_of(run(RUNS_RUN_AT + r + 1)).0;
-                    let air = value != crate::ways::NOTHING && value & crate::ways::AIR_OF != 0;
-                    if value != crate::ways::NOTHING && (inside || air) {
-                        let d = if air { 1 } else { 0 };
-                        (lo, hi) = (lo.min((z - d) * s), hi.max((end + d) * s));
-                    }
-                    r += 1;
+            let (mut r, to) = (run(k), run(k + 1));
+            while r + 1 < to {
+                let (z, value) = crate::ways::run_of(run(RUNS_RUN_AT + r));
+                let end = crate::ways::run_of(run(RUNS_RUN_AT + r + 1)).0;
+                let air = value != crate::ways::NOTHING && value & crate::ways::AIR_OF != 0;
+                if value != crate::ways::NOTHING && (inside || air) {
+                    let d = if air { 1 } else { 0 };
+                    (lo, hi) = (lo.min((z - d) * s), hi.max((end + d) * s));
                 }
-            } else {
-                let spans = crate::ways::column(sq, [x, y]).0;
+                r += 1;
+            }
+        } else {
+            let spans = crate::ways::column(sq, [x, y]).0;
+            if bin {
                 let mut k = 0;
                 while k < spans.n as usize {
                     if spans.value[k] & crate::ways::AIR_OF != 0 {
@@ -396,16 +408,17 @@ pub fn bin_word(sq: &impl Square, run: impl Fn(u32) -> u32, b: u32) -> i32 {
                     }
                     k += 1;
                 }
+            } else {
+                out = spans;
             }
-            x += 1;
         }
-        y += 1;
+        j += 1;
     }
-    crate::ground::bound_word(if lo > hi { [i16::MAX as i32, i16::MIN as i32] } else { [lo, hi] })
+    (out, crate::ground::bound_word(if lo > hi { [i16::MAX as i32, i16::MIN as i32] } else { [lo, hi] }))
 }
 
 /// Whether the descent asks the ways at block `c` of `zoom`, its column's
-/// window `f`: where its bin's word (`bin_word`) meets the block.
+/// window `f`: where its bin's word (`walk_ways`) meets the block.
 pub fn asks(w: &impl Ran, f: &Found, zoom: Zoom, c: [i32; 3]) -> bool {
     if !f.here {
         return false;

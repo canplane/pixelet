@@ -624,7 +624,7 @@ pub struct Spans {
 }
 
 impl Spans {
-    const NONE: Spans = Spans {
+    pub const NONE: Spans = Spans {
         run: [[0, 0]; SPANS],
         value: [0; SPANS],
         n: 0,
@@ -782,16 +782,19 @@ fn edge_after(spans: &Spans, cell: Zoom, z: i32) -> i32 {
 /// a run (`run_word`), lowest first, the last `NOTHING` on; the `k`-th to
 /// `put`, and how many. Between two edges of its spans' blocks (`filled`)
 /// the same spans fill every block, so `at` is read once a piece, never a
-/// block at a time: of `n` spans, at most `2n` runs.
+/// block at a time: of `n` spans, at most `2n` runs. The walk steps from
+/// edge to edge in one place, as a GPU inlines a call once a site.
 pub fn runs(spans: &Spans, cell: Zoom, mut put: impl FnMut(u32, u32)) -> u32 {
-    let (mut z, mut held, mut n) = (edge_after(spans, cell, i32::MIN), NOTHING, 0);
-    while z != i32::MAX {
+    let (mut z, mut held, mut n) = (i32::MIN, NOTHING, 0);
+    loop {
+        z = edge_after(spans, cell, z);
+        if z == i32::MAX {
+            return n;
+        }
         let v = at(spans, cell, z);
         if v != held {
             put(n, run_word(z, v));
             (held, n) = (v, n + 1);
         }
-        z = edge_after(spans, cell, z);
     }
-    n
 }

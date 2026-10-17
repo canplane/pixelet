@@ -156,11 +156,12 @@ impl window::Square for Filling<'_> {
 /// Column `c` of the square at `base`, its spans off its lines read along z
 /// (pxl-portable `ways::column`, `ways::runs`): its runs written from the
 /// `n`-th as `room` holds them, and how many it holds.
-fn fill_column(ground: &mut [u32], (base, cell, place): (u32, u32, [u32; 2]), c: [i32; 2], n: u32, room: u32) -> u32 {
-    let spans = ways::column(&Filling { ground, base, cell, place }, c).0;
-    ways::runs(&spans, cell, move |k, w| {
-        if n + k < room {
-            put(ground, base + RUNS_AT + RUNS_RUN_AT + n + k, w);
+/// A column's runs off its spans (`ways::runs`) into the square at `base`'s
+/// runs lane from `first`, as far as `room`; how many there are.
+fn put_runs(ground: &mut [u32], base: u32, spans: &ways::Spans, cell: u32, first: u32, room: u32) -> u32 {
+    ways::runs(spans, cell, move |k, w| {
+        if first + k < room {
+            put(ground, base + RUNS_AT + RUNS_RUN_AT + first + k, w);
         }
     })
 }
@@ -629,8 +630,10 @@ pub fn bound_cs(
 /// them (`window::RUNS_AT`). Four dispatches, `pass.x` 0 to 3: each
 /// column counts its runs into its table word; one thread a square sums
 /// them in order into each cell's first; each column writes its runs from
-/// its first; a thread a bin writes its ways' word off them
-/// (`window::bin_word`), which the levels join after. Over `heights_cs`'s
+/// its first; a thread a bin writes its ways' word off them, which the
+/// levels join after. A thread's columns are walked in one place, a column's
+/// spans or a bin's word as the pass says (`window::walk_ways`), and its runs
+/// made in one (`ways::runs`). Over `heights_cs`'s
 /// cells: a way is told from their faces.
 #[spirv(compute(threads(64, 1, 1)))]
 pub fn ways_cs(
@@ -646,17 +649,6 @@ pub fn ways_cs(
     // destination's is not its index's.
     let cell = at(fresh, FRESH_WORDS * id.z + 2);
     let table = base + RUNS_AT;
-    if pass.x == 3 {
-        if i < WAYS_BINS {
-            let word = {
-                let lane: &[u32] = ground;
-                let filling = Filling { ground: lane, base, cell, place: [place & 0xffff, place >> 16] };
-                window::bin_word(&filling, move |k: u32| at(lane, table + k), i)
-            };
-            put(ground, base + WAYS_AT + i, word as u32);
-        }
-        return;
-    }
     if pass.x == 1 {
         if i == 0 {
             let (mut n, mut k) = (0, 0);
@@ -669,13 +661,21 @@ pub fn ways_cs(
         }
         return;
     }
-    if i >= SQUARE_CELLS {
+    let (bins, writes) = (pass.x == 3, pass.x == 2);
+    if i >= if bins { WAYS_BINS } else { SQUARE_CELLS } {
         return;
     }
-    let (writes, c) = (pass.x == 2, [(i % SQUARE) as i32, (i / SQUARE) as i32]);
-    let first = if writes { at(ground, table + i) } else { 0 };
-    let square = (base, cell, [place & 0xffff, place >> 16]);
-    let n = fill_column(ground, square, c, first, if writes { RUNS_SQUARE } else { 0 });
+    let (spans, word) = {
+        let lane: &[u32] = ground;
+        let filling = Filling { ground: lane, base, cell, place: [place & 0xffff, place >> 16] };
+        window::walk_ways(&filling, move |k: u32| at(lane, table + k), bins, i)
+    };
+    if bins {
+        put(ground, base + WAYS_AT + i, word as u32);
+        return;
+    }
+    let (first, room) = if writes { (at(ground, table + i), RUNS_SQUARE) } else { (0, 0) };
+    let n = put_runs(ground, base, &spans, cell, first, room);
     if !writes {
         put(ground, table + i, n);
     }

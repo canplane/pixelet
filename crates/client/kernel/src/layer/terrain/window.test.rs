@@ -75,7 +75,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             };
             pxl_spec::bake::tile::terrain::fill_runs(&laid, &mut runs);
             for b in 0..window::WAYS_BINS {
-                words[(window::HEIGHT_WORDS + window::LEVEL_WORDS + b) as usize] = window::bin_word(&laid, |k| runs[k as usize], b) as u32;
+                words[(window::HEIGHT_WORDS + window::LEVEL_WORDS + b) as usize] = window::walk_ways(&laid, |k| runs[k as usize], true, b).1 as u32;
             }
             let write = |words: &[u32]| {
                 let c = &mut planes().cells[(i * CELLS_LANE_BYTES) as usize..];
