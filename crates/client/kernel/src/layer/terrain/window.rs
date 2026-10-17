@@ -308,6 +308,21 @@ fn due(w: &mut Windows) {
     }
 }
 
+/// The tiles of the squares this turn hands (`due`) held with no frame,
+/// each once: void tiles, whose squares are filled off their looks alone
+/// (`Handed::Void`).
+pub fn voids() -> List<Tile, { HANDED as usize }> {
+    let (w, terrain) = (windows(), TerrainTile::residency());
+    let mut voids = List::new();
+    for &i in w.due.iter() {
+        let t = tile_of(w.windows[(i / SLOTS) as usize].cell, w.slots[i as usize].square).0;
+        if terrain.get(t).is_some() && terrain.frame(t).is_none() && !voids.contains(&t) {
+            voids.push(t);
+        }
+    }
+    voids
+}
+
 /// How far square `q` at `cell` lies from the centre of the window whose
 /// first square is `first`, squared, in cells, X the short way round: the
 /// centre as the window places it, the middle of the square's worth of

@@ -10,15 +10,12 @@ use pxl_portable::eye;
 use pxl_render::gpu::renderer::{Overwrites, TerrainWrite};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
-use xpute_kit::collection::list::List;
 
 use crate::kernel;
 use crate::layer::kept::Offered;
 use crate::layer::object::preview;
 use crate::layer::object::store::EntryAt;
-use crate::layer::residency::Residency;
 use crate::layer::terrain::tile::kept;
 use crate::layer::terrain::window::{self, Handed};
 use crate::layer::Base as _;
@@ -84,13 +81,8 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
         let Some(held) = terrain.get(t) else { return Offered::Taken };
         window::fill(t, Handed::Packet(pkt, held), write)
     });
-    // Taken first, as filling reads the residency. A tile held with no frame
-    // is held only while asked, and no more are asked than its frames.
-    let mut void = List::<Tile, { Residency::<TerrainTile>::FRAMES as usize }>::new();
-    for (p, _) in terrain.held().filter(|&(p, _)| terrain.frame(p).is_none()) {
-        void.push(p);
-    }
-    for p in void {
+    // The due squares' void tiles, not every tile held.
+    for p in window::voids() {
         if window::fill(p, Handed::Void, write) == Offered::Full {
             return;
         }
