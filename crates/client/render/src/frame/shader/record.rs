@@ -29,13 +29,13 @@ pub const SHADER_IMPOSTOR: u32 = 21;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
 pub const SHADER_BADGE_REGION: u32 = 24;
-/// The camera grid's cells drawn straight to the screen (frame/screen_cells.rs).
+/// The eye's rays drawn at their pixels (frame/screen_cells.rs).
 pub const SHADER_SCREEN_CELLS: u32 = 25;
-/// The eye's rays cast on the GPU into the screen's lane, generated from
+/// The eye's rays cast on the GPU into the world surface's rays, generated from
 /// pxl-portable's descent (script/portable-wgsl.ts): its one compute entry.
 pub const SHADER_CAST: u32 = 26;
 /// Each newly held terrain frame's bound over its cells' heights, a level a
-/// dispatch, generated with the cast from pxl-portable's `ground::join`: its
+/// dispatch, generated with the cast from pxl-portable's `window::join`: its
 /// one compute entry.
 pub const SHADER_BOUND: u32 = 27;
 /// Each newly held terrain frame's cells' heights off its samples,
@@ -61,7 +61,7 @@ pub const SHADER_BLIT: u32 = 34;
 /// generated with the cast from pxl-portable's `cast::start`: its one
 /// compute entry.
 pub const SHADER_START: u32 = 35;
-/// The face bits of each block the cast found, over the lane, generated
+/// The face bits of each block the cast found, over its rays, generated
 /// with the cast from pxl-portable's `mask`: its one compute entry.
 pub const SHADER_FACE: u32 = 36;
 /// Which eye slots' decor grows again this frame, listed for
@@ -537,8 +537,8 @@ fn box_groups() -> Vec<Vec<u32>> {
     vec![group(&g0)]
 }
 /// The lit pass's frame, occlusion, air and layers, all read where
-/// a pixel is painted; then the lane, the sky's words, the looks and the
-/// eye's place.
+/// a pixel is painted; then the rays, the sky's words, the looks and the
+/// eye's Q3 steps.
 fn screen_groups() -> Vec<u32> {
     let a = air([FRAGMENT, FRAGMENT, NONE, FRAGMENT, FRAGMENT, NONE, NONE, NONE, FRAGMENT, FRAGMENT]);
     let mut g = vec![[0, FRAGMENT, UNIFORM], [7, FRAGMENT, TEXTURE]];

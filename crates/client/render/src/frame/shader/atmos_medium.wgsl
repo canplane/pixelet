@@ -42,7 +42,7 @@ struct Atmosphere {
   earth_tiles: vec4u,
 };
 
-// The test holds both to the host's (gpu/atmosphere.rs).
+// The host's (gpu/atmosphere.rs ATMOS_FLOATS, TILE_BITS).
 const ATMOS_VEC4S: u32 = 13u;
 const EARTH_TILE_BITS: u32 = 4u;
 

@@ -89,7 +89,7 @@ struct Drawn {
   taps: vec4f,
 };
 
-// What the block a cell's ray met is drawn as: at the ground's cell or finer, its swatch and
+// What the block a pixel's ray met is drawn as: at the ground's cell or finer, its swatch and
 // its layer in all four taps; coarser, one colour, a ground fold's the mean
 // of the looks it folds where its face's own is among them.
 fn drawn(c: vec4u) -> Drawn {

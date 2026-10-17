@@ -196,7 +196,7 @@ pub struct Overwrites<'a> {
 }
 
 /// Where a square's cells, which the GPU draws, come back to in the
-/// module's memory (`Renderer::read_back`): its heights then its levels,
+/// module's memory (`ScreenCellsPass::read_back`): its heights then its levels,
 /// the kernel's word that takes `ticket | DONE` once this fill's are in,
 /// and the ticket.
 #[derive(Clone, Copy, Default)]
@@ -207,10 +207,9 @@ pub struct CellsBack {
 }
 
 /// A square handed to the GPU: its place among the windows' squares, where
-/// it lies in its tile in squares (X low, Y high), its four looks a cell,
-/// its share of its tile's ways' bound, its tile's padded samples, its lines
-/// as far as they are written, and where its cells, joined with the ways,
-/// come back to.
+/// it lies in its tile in squares (X low, Y high), its cells' zoom, its four
+/// looks a cell, its tile's padded samples, its lines as far as they are
+/// written, and where its cells, joined with the ways, come back to.
 pub struct Square<'a> {
     pub square: u32,
     pub place: u32,
@@ -654,7 +653,7 @@ pub fn surface_closed(s: Surface) {
 /// The dev gizmos, over the finished world in passes of their own: their
 /// faces into the world's depth, cleared once the world is done with it, then
 /// their lines against those faces alone, so a gizmo hides gizmos and nothing
-/// of the world hides one; the camera grid follows them.
+/// of the world hides one.
 ///
 /// Each set takes its own translation, so a buffer and a group a set, grown
 /// to the most sets a frame has drawn.
@@ -763,7 +762,7 @@ struct GroundBuffers {
     /// columns' runs, which `ways_cs` writes then (pxl-portable
     /// `window::SQUARE_WORDS`).
     ground: u32,
-    /// The squares that turn handed, two words each, `heights_cs`'s,
+    /// The squares that turn handed, `window::FRESH_WORDS` each, `heights_cs`'s,
     /// `bound_cs`'s and `ways_cs`'s one per `id.z`.
     fresh: u32,
     fresh_len: u32,
@@ -1580,7 +1579,7 @@ impl Renderer {
     }
 
     /// A frame in three stages, each standing while what it reads stands:
-    /// the cast's lane (stage 1, `ScreenCellsPass::prepare`); the world
+    /// the cast's rays (stage 1, `ScreenCellsPass::prepare`); the world
     /// image, everything the world and its light make, into the surface's own
     /// colour and depth (stage 2, `world`); and the frame, the image laid on
     /// it whole and over it what moves on its own — the actors, whose clips
@@ -1667,7 +1666,7 @@ impl Renderer {
         }
         self.atmosphere.read_back(g);
         self.screen.read_back(g);
-        // The image stands where it read all as last time over a lane that stood.
+        // The image stands where it read all as last time over rays that stood.
         let still = read.end() && self.screen.kind != FrameKind::cast;
         rest.read(self.clouds.words());
         // The frame stands where the image does and the rest of what it
