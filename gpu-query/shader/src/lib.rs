@@ -709,7 +709,7 @@ pub fn decor_cs(
 ) {
     let kinds = rows.len() as u32;
     let (kind, square) = (id.z % kinds, id.z / kinds);
-    let (cell, slot) = (FIRST_CELL + square / SLOTS, square % SLOTS);
+    let (cell, slot) = (window::eye_cell(square / SLOTS), square % SLOTS);
     if id.x >= COUNTS as u32 || id.y >= SQUARE_BLOCKS || cell > LEAF_CELL || at(shown, kind) >> (cell - FIRST_CELL) & 1 == 0 {
         return;
     }

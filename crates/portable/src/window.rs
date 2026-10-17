@@ -27,6 +27,12 @@ pub const FIRST_CELL: Zoom = GROUND.cell_zoom(GROUND.top());
 /// The eye's windows, every zoom the pyramid draws, coarsest first, which
 /// the GPU's cast reads: the one at `cell` is `cell − FIRST_CELL`.
 pub const EYE_WINDOWS: u32 = LEAF_CELL - FIRST_CELL + 1;
+
+/// The cells' zoom of the eye's window `w`, coarsest first: what the layout
+/// lays it at and the GPU's decor reads a square's window at.
+pub const fn eye_cell(w: u32) -> Zoom {
+    FIRST_CELL + w
+}
 /// Every window: the eye's; the focus's, the leaves' and one over, what
 /// walking and editing read; a destination's one, at the zoom its line says
 /// its ground, found exactly (pxl-kernel layer/terrain/window.rs).

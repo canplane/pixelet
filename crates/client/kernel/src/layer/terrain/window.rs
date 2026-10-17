@@ -48,7 +48,7 @@ const _: () = assert!(window::WINDOW <= TILE_CELLS + 1, "a window spans two tile
 /// destination's is its line's.
 const fn layout(w: u32) -> (Centre, Zoom) {
     match w {
-        w if w < EYE_WINDOWS => (Centre::Eye, FIRST_CELL + w),
+        w if w < EYE_WINDOWS => (Centre::Eye, window::eye_cell(w)),
         w if w < EYE_WINDOWS + 2 => (Centre::Focus, LEAF_CELL - 1 + (w - EYE_WINDOWS)),
         _ => (Centre::Destination, LEAF_CELL),
     }
