@@ -8,36 +8,17 @@
 //! the face pass writes over the block's index bits it finds the block by;
 //! the four looks a coarse ground block folds (`ground::word`), or in the
 //! steps view the nodes its descent asked; and where the stop's column is
-//! held and which shards about it are served (`place_word`), which the face
-//! pass reads its block's neighbourhood off. Where it met nothing, the first
+//! held (`window::Found`), which the face pass reads its block's
+//! neighbourhood off. Where it met nothing, the first
 //! three are zero.
 
-use crate::area::{Shard, SHARD_SERVED_BITS};
-use crate::window::{Found, FIRST_CELL, FOUND_BITS};
-use crate::{Zoom, SHARD_ZOOM};
+use crate::Zoom;
 
 /// A ray's words.
 pub const WORDS: u32 = 5;
 
-/// The fifth word, `place_word`'s.
+/// The fifth word: where the stop's column is held (`window::Found`'s word).
 pub const PLACE: u32 = 4;
-const _: () = assert!(FOUND_BITS + SHARD_SERVED_BITS <= 32);
-// A block a window's cells are read at is a shard's zoom or finer, so its
-// shard is known wherever its column's place is.
-const _: () = assert!(FIRST_CELL > SHARD_ZOOM);
-
-/// Where the stop's column is held (`window::Found`) and, over it, which
-/// of the nine shards about the stop are served (`area::Shard`): known at
-/// a shard's zoom or finer and none coarser, as a node's shard is.
-pub const fn place_word(found: Found, shard: Shard) -> u32 {
-    found.word() | shard.served() << FOUND_BITS
-}
-
-/// `place_word`'s, for a stop at `zoom`.
-pub const fn place_of(w: u32, zoom: Zoom) -> (Found, Shard) {
-    let shard = if zoom >= SHARD_ZOOM { Shard::of_served(w >> FOUND_BITS) } else { Shard::UNKNOWN };
-    (Found::of_word(w & ((1 << FOUND_BITS) - 1)), shard)
-}
 
 /// The first word's fields: the value, a ground look or a placed catalog
 /// value; what it met (`KIND_*`); the face it entered through, 2·axis plus

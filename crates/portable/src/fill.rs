@@ -113,8 +113,10 @@ impl window::Square for Filling<'_> {
 }
 
 /// Column `[x, y]` of the square `fresh` hands (`window::fresh`): its
-/// ground's top (`ground::height`) off its tile's samples, its runs' first
-/// the ways' to write (`ways`); and, a column of an even `x`, its cell and
+/// ground's top (`ground::height`) off its tile's samples, a gone cell's
+/// (its own look `UNKNOWN`, past the area) the Earth's at sea level, so it
+/// reads as the Earth (`area::laid`); its runs' first the ways' to write
+/// (`ways`); and, a column of an even `x`, its cell and
 /// the next as laid, the word they share (`window::LAID_WORDS`), so each
 /// word has one writer: its own look off its four at the square's zoom
 /// (`ground::own`), and at a leaf's cells or finer, which of the leaf
@@ -125,11 +127,13 @@ pub fn heights(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], [x, y]: [
     let (base, place, cell) = (word(FRESH_SQUARE) * SQUARE_WORDS, window::place_of(word(FRESH_PLACE)), word(FRESH_CELL));
     let (first, shard) = ([word(FRESH_FIRST) as i32, word(FRESH_FIRST + 1) as i32], Shard::of_word(word(FRESH_SHARD)));
     let i = y * SQUARE + x;
-    let w = {
+    let top = if ground::own(at(ground, base + i), cell) == ground::UNKNOWN {
+        crate::SEA_LEVEL
+    } else {
         let lane: &[u32] = ground;
-        ground::height(samples(lane, base), [(place[0] * SQUARE + x) as i32, (place[1] * SQUARE + y) as i32]) as u32 & 0xffff
+        ground::height(samples(lane, base), [(place[0] * SQUARE + x) as i32, (place[1] * SQUARE + y) as i32])
     };
-    put(ground, base + COLUMNS_AT + i, w);
+    put(ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
     if x % 2 == 1 {
         return;
     }

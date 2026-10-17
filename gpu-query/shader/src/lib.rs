@@ -11,7 +11,7 @@
 
 #![cfg_attr(target_arch = "spirv", no_std)]
 
-use pxl_portable::area::{self, Area, Shard};
+use pxl_portable::area::{Area, Shard};
 use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
 use pxl_portable::caves::Cave;
 use pxl_portable::cube::object;
@@ -24,7 +24,7 @@ use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
 use pxl_portable::scatter::{self, drawn, Grounds, PLACED_BLOCK, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
-use pxl_portable::{at, mask, ray, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
+use pxl_portable::{at, mask, ray, wrap_index, LEAF_CELL, UNIT_ZOOM};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::{spirv, Image};
@@ -161,18 +161,17 @@ impl World<'_> {
     /// what is placed asked of each block, the caves only where one may open
     /// it (`Cell::opens`).
     ///
-    /// `shard` and `place` are the cast's at its stop (`ray::place_of`):
-    /// what is known of the area there, and where the block's own column
-    /// was held, which every column in its square is read off and none
-    /// searched for anew (`window::ground`).
-    fn about(&mut self, zoom: u32, c: [i32; 3], shard: Shard, place: Found) -> u32 {
+    /// `place` is the cast's at its stop (`ray::PLACE`): where the block's
+    /// own column was held, which every column in its square is read off and
+    /// none searched for anew (`window::ground`). A column past the area is
+    /// the Earth's, as its cell reads (`area::laid`).
+    fn about(&mut self, zoom: u32, c: [i32; 3], place: Found) -> u32 {
         let (carve, hide) = (cut(self.eye.carve), cut(self.eye.hide));
         let own = (zoom, [c[0], c[1]]);
         let mut filled = 0;
         let mut k = 0;
         while k < 9 {
             let n = [wrap_index(zoom, c[0] + (k % 3) as i32 - 1), c[1] + (k / 3) as i32 - 1];
-            let past = zoom >= SHARD_ZOOM && shard.past_leaf(own, area::tile_at(zoom, n));
             let cell = window::ground(self, own, place, zoom, n).0;
             let mut dz = 0;
             while dz < 3 {
@@ -186,8 +185,6 @@ impl World<'_> {
                     };
                     let fills = if over.says == BLOCK {
                         self.fills(&[PLACED_BLOCK | over.block, 0])
-                    } else if past {
-                        area::earth(b[2]) != VOID
                     } else {
                         cell.block(zoom, b[2], false).0 != VOID && !(cell.opens(zoom, b[2]) && Cave::of(zoom, b).hollow())
                     };
@@ -397,8 +394,7 @@ impl Grounds for Growing<'_> {
 /// the block's index's low bits, for `face_cs` to find the block by and
 /// write its face bits over, then the four looks a coarse ground block
 /// folds or, in the steps view, the nodes its descent asked about, then
-/// where the stop's column is held and the shards about it served
-/// (`ray::place_word`); where it met nothing, the first three zero.
+/// where the stop's column is held (`ray::PLACE`); where it met nothing, the first three zero.
 fn word(o: &cast::Origin, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> [u32; ray::WORDS as usize] {
     if met.ends != Ends::Stop {
         return [0, 0, 0, met.visits, 0];
@@ -410,7 +406,7 @@ fn word(o: &cast::Origin, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) 
     let kind = if value & PLACED_BLOCK != 0 { ray::KIND_PLACED } else { ray::KIND_GROUND };
     let (zoom, c) = (s.place.zoom, s.place.node(o));
     let w3 = if steps { met.visits } else { folds };
-    [ray::first_word(value, kind, face, zoom), s.t.to_bits(), low_bits(c), w3, ray::place_word(s.at.ground, s.at.shard)]
+    [ray::first_word(value, kind, face, zoom), s.t.to_bits(), low_bits(c), w3, s.at.ground.word()]
 }
 
 /// Bits of a block's index a ray keeps on each axis (`word`), enough to tell it
@@ -502,8 +498,7 @@ pub fn face_cs(
     };
     let (axis, zoom) = (ray::face_of(w.x) / 2, ray::zoom_of(w.x));
     let c = hit_block(&origin, &ray, f32::from_bits(w.y), axis, zoom, w.z);
-    let (place, shard) = ray::place_of(ray_word(ray::PLACE), zoom);
-    let filled = world.about(zoom, c, shard, place);
+    let filled = world.about(zoom, c, Found::of_word(ray_word(ray::PLACE)));
     // SAFETY: within the rays, just bounded by their size.
     unsafe { rays.write(UVec3::new(id.x, id.y, 2), mask::mask(filled)) };
 }

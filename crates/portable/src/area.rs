@@ -205,7 +205,7 @@ pub const fn beside(k: u32) -> [i32; 2] {
 /// leaf's or finer, that its eight neighbours lie in (`beside`'s bits). A
 /// block within its leaf cell touches none; one on a leaf's edge or corner,
 /// the cells across them; at the leaves, all eight. Whether the block has
-/// ground beside one gone (`wall`) is whether any of these is.
+/// ground beside one gone (`laid`) is whether any of these is.
 pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
     let m = (1 << (cell - LEAF_CELL)) - 1;
     // Per axis, the leaf offsets its neighbours reach: 0 always, -1 at the
@@ -221,20 +221,6 @@ pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
         k += 1;
     }
     r
-}
-
-/// A cell's look with the area's edge laid (`laid`), `gone` where the cell
-/// is past the area, `beside` where one of the eight about it is: gone,
-/// void; at a leaf's cells or finer, ground beside one gone is the wall,
-/// bedrock.
-pub fn wall(look: u32, cell: Zoom, gone: bool, beside: bool) -> u32 {
-    if gone {
-        VOID
-    } else if cell >= LEAF_CELL && Ground::grounds(look) && beside {
-        UNKNOWN
-    } else {
-        look
-    }
 }
 
 /// Which of the eight leaf cells about the leaf cell `l` are past the area
@@ -270,17 +256,22 @@ pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
 /// byte its own look, high the leaf cells about it gone, `gone_ring`), with
 /// the area's edge laid, the one rule a column is read by (pxl-portable
 /// `window::ground`) and the ways' fill walls one by
-/// (`ways::Columns::walled`), on the CPU and a GPU alike: gone, void, where
-/// its look is unknown; at a leaf's cells or finer, ground beside a gone
-/// leaf cell is the wall (`wall`), of those the block touches (`ring`). A
-/// block read off a square coarser than a leaf's cells, a stand-in, has
-/// none gone about it, so no wall: the stand-in is the world at its zoom,
-/// and the wall is a fact of the leaves it does not hold.
+/// (`ways::Columns::walled`), on the CPU and a GPU alike: at a leaf's cells
+/// or finer, ground beside a gone leaf cell, of those the block touches
+/// (`ring`), is the wall, bedrock (`UNKNOWN`) up to its own face. A gone
+/// cell is bedrock already, its look `UNKNOWN` (gone is past), and its top
+/// the Earth's at sea level as its fill lays it (pxl-portable
+/// `fill::heights`): the wall at sea level, so a block of it is the Earth's
+/// (`earth`). A block read off a square coarser than a leaf's cells, a
+/// stand-in, has none gone about it, so no wall: the stand-in is the world
+/// at its zoom, and the wall is a fact of the leaves it does not hold.
 pub fn laid(laid: u32, cell: Zoom, b: [i32; 2]) -> u32 {
     let look = laid & 0xff;
-    let gone = look == UNKNOWN;
-    let beside = !gone && cell >= LEAF_CELL && Ground::grounds(look) && ring(cell, b) & laid >> 8 != 0;
-    wall(look, cell, gone, beside)
+    if cell >= LEAF_CELL && Ground::grounds(look) && ring(cell, b) & laid >> 8 != 0 {
+        UNKNOWN
+    } else {
+        look
+    }
 }
 
 /// Block `z` past the service area: the Earth's ground, bedrock under sea
