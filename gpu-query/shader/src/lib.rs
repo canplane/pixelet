@@ -271,6 +271,9 @@ impl Query for World<'_> {
     /// world holds nothing finer — past the ground's cells, with nothing
     /// placed or carved finer in it.
     fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<[u32; 2]> {
+        // What is known of the service area at the node, before any layer
+        // answers it: a stop's shard is its own, whichever layer stops it.
+        at.shard = at.shard.at(self, (zoom, [c[0], c[1]]));
         let mut block = zoom >= asked[1] || zoom >= LEAF_CELL;
         // Asked of what is placed only where something is, or a preview cuts.
         if at.placed.holds() || self.eye.carve.w as u32 != eye::NO_CUT {
@@ -363,11 +366,12 @@ impl Grounds for Growing<'_> {
 /// placed) and the face it entered through, then how far as f32 bits, then
 /// the block's index's low bits, for `face_cs` to find the block by and
 /// write its face bits over, then the four looks a coarse ground block
-/// folds or, in the steps view, the nodes its descent asked about; where it
-/// met nothing, the first three zero.
-fn word(o: &cast::Origin, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> UVec4 {
+/// folds or, in the steps view, the nodes its descent asked about, then
+/// where the stop's column is held and the shards about it served
+/// (`ray::place_word`); where it met nothing, the first three zero.
+fn word(o: &cast::Origin, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> [u32; ray::WORDS as usize] {
     if met.ends != Ends::Stop {
-        return UVec4::new(0, 0, 0, met.visits);
+        return [0, 0, 0, met.visits, 0];
     }
     let s = met.stop;
     let down = pxl_portable::axis(ray.direction, s.axis) > 0.0;
@@ -376,7 +380,7 @@ fn word(o: &cast::Origin, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) 
     let kind = if value & PLACED_BLOCK != 0 { ray::KIND_PLACED } else { ray::KIND_GROUND };
     let (zoom, c) = (s.place.zoom, s.place.node(o));
     let w3 = if steps { met.visits } else { folds };
-    UVec4::new(ray::first_word(value, kind, face, zoom), s.t.to_bits(), low_bits(c), w3)
+    [ray::first_word(value, kind, face, zoom), s.t.to_bits(), low_bits(c), w3, ray::place_word(s.at.ground, s.at.shard)]
 }
 
 /// Bits of a block's index a ray keeps on each axis (`word`), enough to tell it
@@ -607,10 +611,11 @@ pub fn cast_cs(
     let w = word(&origin, &ray, met, eye.origin.w != 0);
     // SAFETY: within the rays, just bounded by their size.
     unsafe {
-        rays.write(UVec3::new(id.x, id.y, 0), w.x);
-        rays.write(UVec3::new(id.x, id.y, 1), w.y);
-        rays.write(UVec3::new(id.x, id.y, 2), w.z);
-        rays.write(UVec3::new(id.x, id.y, 3), w.w);
+        rays.write(UVec3::new(id.x, id.y, 0), w[0]);
+        rays.write(UVec3::new(id.x, id.y, 1), w[1]);
+        rays.write(UVec3::new(id.x, id.y, 2), w[2]);
+        rays.write(UVec3::new(id.x, id.y, 3), w[3]);
+        rays.write(UVec3::new(id.x, id.y, ray::PLACE), w[ray::PLACE as usize]);
     }
 }
 
