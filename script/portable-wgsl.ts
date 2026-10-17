@@ -7,8 +7,7 @@
 // ground, its cells off its samples (heights.gen.wgsl), their bound
 // (bound.gen.wgsl) and its ways' runs off its lines (ways.gen.wgsl). An
 // everyday build reads that file and needs neither rust-gpu nor its nightly
-// nor the container. The harness's entries are built too, beside them in
-// gpu-query's target, for gpu-query/runner; they are not checked in.
+// nor the container.
 //
 //   deno run -A script/portable-wgsl.ts            write them
 //   deno run -A script/portable-wgsl.ts --check    fail if one is not current
@@ -99,7 +98,7 @@ const HEADER = (digest: string) =>
 function generate(digest: string): Map<string, string> {
   // The toolchain comes from gpu-query/rust-toolchain.toml, which rustup's
   // cargo installs on first use.
-  const script = "cargo run -q --release -p gpu-query-builder && cargo run -q --release -p gpu-query-builder -- --harness";
+  const script = "cargo run -q --release -p gpu-query-builder";
   const out = new Deno.Command("docker", {
     args: [
       "run",

@@ -4,9 +4,8 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
+# What its examples run on: wgpu on the device, with the workspace's naga
+# patch (gpu-query/Cargo.toml).
 [dependencies]
-# The same source, compiled for the CPU: pxl-spec itself.
-pxl-spec = { path = "../../crates/spec" }
-pxl-portable = { path = "../../crates/portable" }
 wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
 pollster = "1"

@@ -6,13 +6,9 @@
 //! its cells' heights off the samples it was handed (`heights_cs`) and their
 //! bound's levels (`bound_cs`), which the CPU reads back; and the decor the
 //! ground grows in the eye's windows (`decor_cs`). Each entry is a
-//! module of its own. The harness's entries are behind its feature
-//! (`harness`).
+//! module of its own.
 
 #![cfg_attr(target_arch = "spirv", no_std)]
-
-#[cfg(feature = "harness")]
-pub mod harness;
 
 use pxl_portable::area::{self, Area};
 use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};

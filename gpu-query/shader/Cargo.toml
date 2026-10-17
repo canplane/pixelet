@@ -12,6 +12,3 @@ spirv-std = "=0.10.0-alpha.1"
 # The one source, as pxl-spec takes it.
 pxl-portable = { path = "../../crates/portable" }
 
-[features]
-# The harness's entries (gpu-query/runner), kept out of the WGSL a page loads.
-harness = []

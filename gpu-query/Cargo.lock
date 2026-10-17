@@ -347,12 +347,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fnv"
-version = "1.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
-
-[[package]]
 name = "foldhash"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -429,8 +423,6 @@ name = "gpu-query-runner"
 version = "0.0.0"
 dependencies = [
  "pollster",
- "pxl-portable",
- "pxl-spec",
  "wgpu",
 ]
 
@@ -1060,16 +1052,6 @@ name = "pxl-portable"
 version = "0.0.0"
 dependencies = [
  "libm",
- "xpute-kit",
-]
-
-[[package]]
-name = "pxl-spec"
-version = "0.0.0"
-dependencies = [
- "fnv",
- "libm",
- "pxl-portable",
  "xpute-kit",
 ]
 
