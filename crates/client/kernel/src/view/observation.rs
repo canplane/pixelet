@@ -17,7 +17,7 @@ use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::layer::residency::floor;
-use crate::layer::{Answer, Query};
+use crate::layer::Answer;
 use crate::query::World;
 use crate::view::frame::pose::globe;
 use crate::view::frame::pose::view;

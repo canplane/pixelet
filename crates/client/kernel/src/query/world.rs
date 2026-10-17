@@ -4,11 +4,9 @@
 //! place. Objects are all resident, so what the world knows is what the
 //! ground knows.
 
-use crate::layer::residency::Line;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 
-use super::block::Ground;
 use crate::layer::object::preview;
 use crate::layer::object::store::EntryAt;
 
@@ -85,33 +83,11 @@ impl<'a> World<'a> {
     }
 }
 
-impl Query for World<'_> {
-    type Record<'b>
-        = Ground<'b>
-    where
-        Self: 'b;
-
-    type Cursor = Line;
-
-    fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Line {
-        self.terrain.cursor(node, cell)
-    }
-
-    fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell: Zoom) -> Line {
-        self.terrain.child(parent, node, cell)
-    }
-
+impl World<'_> {
     /// What can show of the ground and what is placed, which a chunk finer
     /// under the node may draw at any zoom it is asked at.
-    fn bound<const D: usize>(&self, at: &Line, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+    pub fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let objects = self.objects.bounds(node, cell).value().flatten();
-        self.terrain.bound(at, node, cell).map(|ground| Bound::join(ground, objects))
-    }
-
-    /// What answered the ground a node's cells are read from, the tiles
-    /// beside it included, which a build is keyed by; what is in its blocks
-    /// is the world's one query's (`World::node`).
-    fn read(&self, node @ (zoom, [x, y, _]): Node<3>, cell: Zoom) -> Answer<Ground<'_>> {
-        self.ground(&self.terrain.cursor(node, cell), (zoom, [x, y]), cell, 1)
+        self.terrain.bounds(node, cell).map(|ground| Bound::join(ground, objects))
     }
 }
