@@ -102,33 +102,6 @@ impl Names {
             storage_access: named(STORAGE_TEXTURE_ACCESS),
         }
     }
-
-    /// The names wgpu reads none of: what a guest asks by them it cannot be given.
-    fn unread(&self) -> Vec<&'static str> {
-        fn none<'a, T>(names: &'static [&'static str], of: &'a [Option<T>]) -> impl Iterator<Item = &'static str> + 'a {
-            names.iter().zip(of).filter(|(_, v)| v.is_none()).map(|(n, _)| *n)
-        }
-        let mut out = Vec::new();
-        out.extend(none(TEXTURE_FORMAT, &self.texture_format));
-        out.extend(none(VERTEX_FORMAT, &self.vertex_format));
-        out.extend(none(PRIMITIVE_TOPOLOGY, &self.topology));
-        out.extend(none(INDEX_FORMAT, &self.index_format));
-        out.extend(none(FRONT_FACE, &self.front_face));
-        out.extend(none(COMPARE_FUNCTION, &self.compare));
-        out.extend(none(STENCIL_OPERATION, &self.stencil));
-        out.extend(none(BLEND_OPERATION, &self.blend_operation));
-        out.extend(none(BLEND_FACTOR, &self.blend_factor));
-        out.extend(none(VERTEX_STEP_MODE, &self.step));
-        out.extend(none(ADDRESS_MODE, &self.address));
-        out.extend(none(FILTER_MODE, &self.filter));
-        out.extend(none(MIPMAP_FILTER_MODE, &self.mipmap));
-        out.extend(none(TEXTURE_DIMENSION, &self.dimension));
-        out.extend(none(TEXTURE_VIEW_DIMENSION, &self.view_dimension));
-        out.extend(none(TEXTURE_ASPECT, &self.aspect));
-        out.extend(none(SAMPLER_BINDING_TYPE, &self.sampler_binding));
-        out.extend(none(STORAGE_TEXTURE_ACCESS, &self.storage_access));
-        out
-    }
 }
 
 /// Each flag set's members as wgpu's flags of the same name: a guest's word
@@ -435,12 +408,6 @@ impl GpuHost {
             finished: Vec::new(),
             uploads: None,
         }
-    }
-
-    /// The spec's names wgpu gives no value of, which a guest naming them
-    /// cannot be given.
-    pub fn unread_names(&self) -> Vec<&'static str> {
-        self.names.unread()
     }
 
     /// The window's surface for the guest's `surface`, configured as the
