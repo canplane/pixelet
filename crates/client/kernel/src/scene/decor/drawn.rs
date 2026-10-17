@@ -11,7 +11,7 @@ use pxl_portable::scatter::{drawn, row_of};
 use pxl_portable::LEAF_CELL;
 use pxl_render::gpu::grown::DecorFrame;
 use pxl_spec::block::decor::DECORS;
-use pxl_spec::space::camera::grid::{px_per_unit, split_distance, REFERENCE_FOV_DEG, REFERENCE_VIEWPORT_H};
+use pxl_spec::space::camera::grid::{split_distance, target_cell_px, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{index_of, Zoom, UNIT_ZOOM};
@@ -24,20 +24,28 @@ use crate::view::frame::pose::units_per_px_at;
 use pxl_portable::window::FIRST_CELL;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
-/// down to `DECOR_SPRITE_PX`. No fade: the edge is per instance, so it staggers.
+/// down to `DECOR_SPRITE_CELLS` of a camera cell. No fade: the edge is per
+/// instance, so it staggers.
 pub fn decor_gone_px() -> f64 {
     crate::param::DECOR_MODEL_PX
 }
 
+/// The sprite's edge in pixels, at the reference view's cell.
 pub fn decor_sprite_px() -> f64 {
-    crate::param::DECOR_SPRITE_PX
+    crate::param::DECOR_SPRITE_CELLS * target_cell_px()
+}
+
+/// How far a thing `extent_u` wide is a sprite's worth: where it spans
+/// `DECOR_SPRITE_CELLS` of the camera grid's cells, an angle about the eye
+/// whatever the screen.
+pub const fn sprite_reach(extent_u: f64) -> f64 {
+    extent_u * SPLIT / crate::param::DECOR_SPRITE_CELLS
 }
 
 /// Whether a decor `extent_u` wide is a sprite's worth anywhere cells of
-/// `cell_zoom` are drawn: as it spans where that zoom begins, at the
-/// reference view.
+/// `cell_zoom` are drawn: as it spans where that zoom begins.
 fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
-    extent_u / split_distance(cell_zoom) * px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) >= decor_sprite_px()
+    split_distance(cell_zoom) <= sprite_reach(extent_u)
 }
 
 /// The frame's hand-over, kept so a settled frame asks the heap for nothing,

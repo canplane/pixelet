@@ -27,7 +27,7 @@ use crate::io::load::{load_failed, load_gltf, load_image};
 use crate::kernel;
 use crate::model::asset::register_model;
 use crate::scene::decor::cell::{present_block, Shown};
-use crate::scene::decor::drawn::decor_sprite_px;
+use crate::scene::decor::drawn::{decor_sprite_px, sprite_reach};
 use crate::scene::decor::instance::GroupLanes;
 use crate::scene::frame::Frame;
 use crate::setting::store::settings_store;
@@ -61,6 +61,14 @@ const BLOCK: f64 = CELL * BLOCK_CELLS as f64;
 /// A cloud's width in units, at the least and the most: about 2 to 3.5 km,
 /// whatever the spacing.
 const WIDTH: [f64; 2] = [1024.0, 1840.0];
+/// The farthest a block is built: where the widest cloud is a sprite's worth.
+const REACH_MAX: f64 = sprite_reach(WIDTH[1]);
+/// The most blocks the reach spans, the keys of a side squared: its share of
+/// the renderer's block table.
+pub const BLOCKS_MAX: usize = {
+    let side = (2.0 * REACH_MAX / BLOCK) as usize + 2;
+    side * side
+};
 /// The share of cells holding a cloud, the same everywhere: tied to the
 /// field, the cumulus gathered in patches with bare country between.
 const SHARE: f64 = 0.5;
@@ -156,7 +164,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     // To the horizon over the layer, and no farther than its largest cloud is a sprite's worth.
     let r = globe().radius_u();
     let horizon = |h: f64| libm::sqrt(2.0 * r * h + h * h);
-    let reach = (horizon(eye[2].max(0.0)) + horizon(base)).min(largest / units_per_px_at(1.0) / decor_sprite_px());
+    let reach = (horizon(eye[2].max(0.0)) + horizon(base)).min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
     let span = |k: usize| libm::floor((on_map[k] - reach) / BLOCK) as i64..=libm::floor((on_map[k] + reach) / BLOCK) as i64;
     let near = |key: [i64; 2]| {
