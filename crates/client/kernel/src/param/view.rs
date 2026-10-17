@@ -2,21 +2,14 @@
 
 //! What the eye observes and how finely the world is drawn for it.
 
-// ---- the camera grid ----
-
-/// The most camera grid cells a screen holds: past it a cell grows. It bounds
-/// what a screen draws (chunks, triangles) up front, where the arena would
-/// coarsen only once its slots ran short. About a 1780 × 1110 window at
-/// twelve-pixel cells; a phone holds a fifth of it.
-pub const GRID_CELLS_MAX: f64 = 10_000.0;
-
 // ---- the drawn resolution ----
 
 /// Device pixels per CSS pixel the world is drawn at: one at least, and no
 /// finer than labels' sheets are drawn, so a label is never shown smaller
 /// than drawn.
 pub const RESOLUTION_MIN: f64 = 1.0;
-pub const RESOLUTION_MAX: f64 = pxl_render::gpu::sheet::SHEET_SCALE;
+pub const RESOLUTION_MAX: f64 = pxl_spec::space::camera::grid::RATIO_MAX;
+const _: () = assert!(RESOLUTION_MAX <= pxl_render::gpu::sheet::SHEET_SCALE, "a label's sheet is drawn at least as fine as the world");
 
 /// The picker shows a case at thumbnail size: its buffer's long side, in pixels.
 pub const CASE_LONG_SIDE_MAX: f64 = 256.0;

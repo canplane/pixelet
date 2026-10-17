@@ -24,9 +24,15 @@
 
 use crate::{wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
+/// Drawn pixels per CSS pixel at most: the finest ratio a surface is drawn at.
+pub const RATIO_MAX: f32 = 2.0;
+
 /// The camera grid, the one knob of resolution: a cell is an angle of
-/// 1/`SPLIT` radians about the eye (pxl-spec space/camera/grid.rs).
-pub const SPLIT: f32 = 96.0;
+/// 1/`SPLIT` radians about the eye (pxl-spec space/camera/grid.rs), stated
+/// at `RATIO_MAX`: 96 a radian a CSS pixel asks, in drawn pixels. A lower
+/// ratio's cells are wider by `RATIO_MAX` over it, its τ, so whatever is
+/// sized by `SPLIT` holds at every ratio.
+pub const SPLIT: f32 = 96.0 * RATIO_MAX;
 
 /// The camera grid's cell zoom at `r` units from the eye: the widest cell
 /// whose split distance (`SPLIT` of its sides, halved) is within `r`, held

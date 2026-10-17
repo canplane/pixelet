@@ -11,9 +11,9 @@ use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::point;
 
-use crate::param;
 use crate::query::asked;
 use crate::view::frame::pose::view;
+use crate::view::frame::resolution::world_ratio;
 
 /// The camera grid's cell at `tau`, as an angle.
 pub fn cell_angle(tau: Tau) -> f64 {
@@ -26,23 +26,17 @@ pub fn cell_there(distance: f64) -> f64 {
     cell_angle(tau()) * distance
 }
 
-/// The quality: a cell spans as many logical pixels at the optical axis as
+/// The quality: a cell spans as many drawn pixels at the optical axis as
 /// the camera grid's at the reference view (`target_cell_px`), never finer
-/// than `SPLIT`, and the grid holds no more than `GRID_CELLS_MAX` cells. The
-/// screen plane stands `height / (2 · tan(fov / 2))` pixels from the eye, so
-/// `n` of them span `2 · atan(n / 2 / that)`. The grid is the screen's angles
-/// across, `a`, and up, `b`, cut into cells `c` a side, ⌈a / c⌉ · ⌈b / c⌉ of
-/// them, at most (a / c + 1)(b / c + 1): the least `c` that keeps that within
-/// the most is the root of `ab·u² + (a + b)·u + 1 − most` in `u = 1 / c`.
+/// than `SPLIT`, which is stated at the finest ratio: at a lower one the
+/// cell is wider by as much. The screen plane stands `height / (2 · tan(fov /
+/// 2))` drawn pixels from the eye, so `n` of them span `2 · atan(n / 2 /
+/// that)`.
 pub fn tau() -> Tau {
     let v = view();
     let tan_up = libm::tan(v.fov.to_radians() / 2.0);
-    let half = target_cell_px() * tan_up / v.height;
-    let [a, b] = [libm::atan(tan_up * v.width / v.height), libm::atan(tan_up)].map(|t| 2.0 * t);
-    let most = param::GRID_CELLS_MAX;
-    let u = (-(a + b) + libm::sqrt((a + b) * (a + b) + 4.0 * a * b * (most - 1.0))) / (2.0 * a * b);
-    let cell = (2.0 * libm::atan(half)).max(1.0 / u);
-    Tau::of((cell * SPLIT).max(1.0))
+    let half = target_cell_px() * tan_up / (v.height * world_ratio());
+    Tau::of((2.0 * libm::atan(half) * SPLIT).max(1.0))
 }
 
 /// The screen as the eye sees it: its axes and the tangents of its half-angles.

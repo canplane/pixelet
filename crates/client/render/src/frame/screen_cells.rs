@@ -6,8 +6,7 @@
 //! (pxl-portable `mask`); and the four looks a coarse ground block folds, or
 //! in the steps view the nodes its descent asked.
 
-/// Cells the lane holds at first: the camera grid's most (`pxl-kernel
-/// param/view.rs` `GRID_CELLS_MAX`); it grows to the cast's.
+/// Cells the lane holds at first; it grows to the cast's.
 pub const SCREEN_CELLS_MAX: usize = 10_000;
 
 /// Word 0's fields: the value, a ground look or a placed catalog value.

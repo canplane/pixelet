@@ -14,7 +14,8 @@ use crate::space::coord::zoom::{units, Zoom};
 /// its cells by too).
 pub const SPLIT: f64 = pxl_portable::cast::SPLIT as f64;
 
-/// The view `SPLIT` is stated at: 1080 px high and 50° across it.
+/// The view `SPLIT` is stated at: 1080 CSS px high, drawn at
+/// `RATIO_MAX`, and 50° across it.
 pub const REFERENCE_VIEWPORT_H: f64 = 1080.0;
 pub const REFERENCE_FOV_DEG: f64 = 50.0;
 
@@ -24,10 +25,13 @@ pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
     viewport_h / (2.0 * libm::tan((fov_deg * core::f64::consts::PI) / 360.0))
 }
 
-/// The pixels a camera grid's cell spans, at the reference view: about
-/// twelve. A block drawn for it spans that to twice that.
+/// Drawn pixels per CSS pixel at most (pxl-portable `cast::RATIO_MAX`).
+pub const RATIO_MAX: f64 = pxl_portable::cast::RATIO_MAX as f64;
+
+/// The drawn pixels a camera grid's cell spans, at the reference view: about
+/// twelve, at every ratio. A block drawn for it spans that to twice that.
 pub fn target_cell_px() -> f64 {
-    px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / SPLIT
+    px_per_unit(REFERENCE_VIEWPORT_H * RATIO_MAX, REFERENCE_FOV_DEG) / SPLIT
 }
 
 /// Where ground starts being drawn with cells at `cell_zoom` at `Tau::FINEST`,

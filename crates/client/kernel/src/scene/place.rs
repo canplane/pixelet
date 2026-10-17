@@ -231,12 +231,15 @@ fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
 }
 
 /// The cell a place keeps to itself, as wide as the camera grid's cells are
-/// at the view's own τ: its name wraps to it and its billboard's region is it.
-/// Not the τ in force, which coarsens while the view moves and would lay
-/// every name out again; whole pixels, so only the view's size or angle does.
+/// at the view's own τ, its drawn pixels counted as the CSS pixels a name is
+/// laid out in, so it is one width at every ratio: its name wraps to it and
+/// its billboard's region is it. Not the τ in force, which coarsens while
+/// the view moves and would lay every name out again; whole pixels, so only
+/// the view's size or angle does.
 fn spacing_px() -> f64 {
     let v = crate::view::frame::pose::view();
-    let cell = crate::view::lens::cell_angle(crate::view::lens::tau()) * px_per_unit(v.height, v.fov);
+    let drawn = v.height * crate::view::frame::resolution::world_ratio();
+    let cell = crate::view::lens::cell_angle(crate::view::lens::tau()) * px_per_unit(drawn, v.fov);
     libm::rint(f64::from(SPACING_CELLS) * cell)
 }
 
