@@ -28,7 +28,7 @@ use crate::kernel;
 use crate::model::asset::register_model;
 use crate::scene::decor::cell::{present_block, Shown};
 use crate::scene::decor::drawn::{decor_sprite_px, sprite_reach};
-use crate::scene::decor::instance::GroupLanes;
+use crate::scene::decor::instance::{decor_groups, GroupLanes};
 use crate::scene::frame::Frame;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::{km_per_u, units_per_px_at};
@@ -217,9 +217,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
         // The nearest cloud the view holds, each as the box it stands in, no
         // nearer than the near plane, short of which nothing is drawn: from
         // inside a box the drift is still a cell's at that distance.
-        for cloud in clouds_of(key, base) {
-            let at = [corner[0] + cloud.local[0], corner[1] + cloud.local[1], cloud.z];
-            let half = [cloud.width / 2.0, cloud.width / 2.0, cloud.height / 2.0];
+        for (local, half) in built(b) {
+            let at = [corner[0] + local[0], corner[1] + local[1], local[2]];
             if frame.sees_box(core::array::from_fn(|k| at[k] - half[k]), core::array::from_fn(|k| at[k] + half[k])) {
                 let gap: V3 = core::array::from_fn(|k| ((if k == 0 { nearest(at[0], eye[0]) } else { at[k] }) - eye[k]).abs() - half[k]);
                 c.seen = c.seen.min(v3::len(&gap.map(|g| g.max(0.0))).max(crate::param::NEAR));
@@ -244,10 +243,9 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
 struct Cloud {
     variant: usize,
     local: [f64; 2],
-    /// Its middle's height, its width, and its height, in units.
+    /// Its middle's height and its width, in units.
     z: f64,
     width: f64,
-    height: f64,
     spin: f64,
     scale: f64,
 }
@@ -272,9 +270,28 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
             local,
             z: base + 0.5 * height,
             width,
-            height,
             spin: core::f64::consts::TAU * lattice_hash(at, SALT + 5),
             scale,
+        })
+    })
+}
+
+/// The block's clouds as `build` laid them, read off its lanes: each one's
+/// middle about the block's corner, its height over the datum, and its half
+/// extent. The field's hash is asked once a block, where it is built.
+fn built(b: &Block) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
+    // SAFETY: the block's bytes, held until it goes, which is after this turn reads them.
+    let words: &[u32] = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(b.at as usize), b.bytes as usize / 4) };
+    decor_groups(words).zip(VARIANTS).flat_map(move |((first, n), asset)| {
+        let lane = GroupLanes {
+            first: first as usize,
+            count: n as usize,
+        };
+        (0..n as usize).map(move |i| {
+            let at = |k: usize| f64::from(f32::from_bits(words[lane.f32_at(k, i)]));
+            let scale = at(4);
+            let side = widest(asset) * scale / 2.0;
+            ([at(0), at(1), at(2)], [side, side, extent(asset)[2] * scale / 2.0])
         })
     })
 }
