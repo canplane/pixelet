@@ -6,6 +6,7 @@
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::PIPELINE_SKINNED_PREPASS;
+use crate::gpu::renderer::Image;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{bytes, release, Gpu};
@@ -49,7 +50,7 @@ impl SkinnedPass {
     }
 
     /// One not yet arrived is asked for again next frame.
-    pub fn set_skin(&mut self, g: &Gpu, model: u32, image: u32) {
+    pub fn set_skin(&mut self, g: &Gpu, model: u32, image: Image) {
         let at = self
             .skins
             .iter()
@@ -62,13 +63,13 @@ impl SkinnedPass {
         self.seq += 1;
         let seq = self.seq;
         let s = &mut self.skins[at];
-        if s.model == model && s.image == image && s.group != 0 {
+        if s.model == model && s.image == image.0 && s.group != 0 {
             s.seq = seq;
             return;
         }
+        let Some(group) = skin_group(g, self.lit.layouts[2], self.sampler, image) else { return };
         release(s.group);
-        let group = skin_group(g, self.lit.layouts[2], self.sampler, image);
-        *s = Skin { model, image, group, seq };
+        *s = Skin { model, image: image.0, group, seq };
     }
 
     fn skin_of(&self, model: u32) -> Option<u32> {

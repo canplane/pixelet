@@ -7,6 +7,7 @@
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::PIPELINE_DECOR_PREPASS;
+use crate::gpu::renderer::Image;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_entry, buffer_range_entry, release, Gpu};
@@ -25,7 +26,7 @@ const NO_SKIN: usize = usize::MAX;
 #[derive(Clone, Copy)]
 struct Group {
     mesh: u32,
-    image: Option<u32>,
+    image: Option<Image>,
     skin: usize,
 }
 
@@ -73,10 +74,10 @@ impl DecorPass {
     }
 
     /// 0 for a model not yet registered; a group whose model or skin changed lets its skin go.
-    pub fn set_models(&mut self, groups: &[(u32, Option<u32>, Extent)]) {
+    pub fn set_models(&mut self, groups: &[(u32, Option<Image>, Extent)]) {
         for (group, &(mesh, image, _)) in groups.iter().take(GROUPS).enumerate() {
             let gr = self.groups[group];
-            if gr.mesh != mesh || gr.image != image {
+            if gr.mesh != mesh || gr.image.map(|i| i.0) != image.map(|i| i.0) {
                 self.groups[group] = Group { mesh, image, skin: NO_SKIN };
                 self.release_skin(gr.skin);
             }
@@ -91,14 +92,15 @@ impl DecorPass {
         Some((buffer, vertex_cnt, index_cnt, self.skins[at].group))
     }
 
-    fn take_skin(&mut self, g: &Gpu, image: u32) -> Option<usize> {
-        if let Some(at) = self.skins.iter().position(|s| s.uses > 0 && s.image == image) {
+    /// None while its image lands.
+    fn take_skin(&mut self, g: &Gpu, image: Image) -> Option<usize> {
+        if let Some(at) = self.skins.iter().position(|s| s.uses > 0 && s.image == image.0) {
             self.skins[at].uses += 1;
             return Some(at);
         }
         let at = self.skins.iter().position(|s| s.uses == 0)?;
-        let group = skin_group(g, self.lit.layouts[2], self.sampler, image);
-        self.skins[at] = Skin { image, group, uses: 1 };
+        let group = skin_group(g, self.lit.layouts[2], self.sampler, image)?;
+        self.skins[at] = Skin { image: image.0, group, uses: 1 };
         Some(at)
     }
 

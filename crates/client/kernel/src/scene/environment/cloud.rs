@@ -103,7 +103,7 @@ fn clouds() -> &'static mut Clouds {
 }
 
 /// Each variant's draw group: its mesh, 0 while it loads, its skin and its extent.
-pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<u32>, [f32; 3])> {
+pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<pxl_render::gpu::renderer::Image>, [f32; 3])> {
     let models = &kernel().models;
     let skin = load_image(Load::Asset(SKIN));
     clouds().models.iter().zip(VARIANTS).enumerate().map(move |(k, (m, asset))| {

@@ -372,48 +372,10 @@ pub fn gpu_publish() {
     }
 }
 
-/// The width and height a PNG's or a WebP's header gives; none for any other file.
-fn image_size(file: &[u8]) -> Option<(u32, u32)> {
-    let be = |at: usize| Some(u32::from_be_bytes(file.get(at..at + 4)?.try_into().ok()?));
-    let le24 = |at: usize| Some(u32::from_le_bytes([*file.get(at)?, *file.get(at + 1)?, *file.get(at + 2)?, 0]));
-    let le16 = |at: usize| Some(u32::from(u16::from_le_bytes(file.get(at..at + 2)?.try_into().ok()?)));
-    if file.starts_with(b"\x89PNG\r\n\x1a\n") {
-        return Some((be(16)?, be(20)?));
-    }
-    if !(file.starts_with(b"RIFF") && file.get(8..12) == Some(b"WEBP")) {
-        return None;
-    }
-    match file.get(12..16)? {
-        // Lossy: the frame's 14-bit width and height after its start code.
-        b"VP8 " => Some((le16(26)? & 0x3fff, le16(28)? & 0x3fff)),
-        // Lossless: 14 bits each, less one, after the signature byte.
-        b"VP8L" => {
-            let bits = u32::from_le_bytes(file.get(21..25)?.try_into().ok()?);
-            Some(((bits & 0x3fff) + 1, (bits >> 14 & 0x3fff) + 1))
-        }
-        // Extended: the canvas's 24-bit width and height, less one.
-        b"VP8X" => Some((le24(24)? + 1, le24(27)? + 1)),
-        _ => None,
-    }
-}
-
-/// The image file `file`, which the kernel read as `image`, copied into a
-/// texture of its size where the device decodes it; false for a file whose
-/// size no header here gives, as a device that cannot decode it.
-pub fn image_arrive(image: u32, file: Vec<u8>) -> bool {
-    let Some(g) = gpu() else { return false };
-    let Some((width, height)) = image_size(&file) else { return false };
-    let usage = TEXTURE_USAGE::TEXTURE_BINDING | TEXTURE_USAGE::COPY_SRC | TEXTURE_USAGE::COPY_DST | TEXTURE_USAGE::RENDER_ATTACHMENT;
-    let texture = g.texture(width, height, 1, Format::rgba8unorm_srgb, 1, usage);
-    let mut word = Box::new(0);
-    g.copy_image(texture, &file, &mut word, image & !DONE | 1);
-    state().images.push(Arriving { image, texture, word, _file: file });
-    true
-}
-
-/// Whether `image`'s texture is there to be taken (`Gpu::image_texture`).
-pub fn image_landed(image: u32) -> bool {
-    STATE.get(|| None).as_ref().is_some_and(|s| s.images.iter().any(|a| a.image == image && *a.word & DONE != 0))
+/// Whether an image handed to the device has yet to land (`Gpu::image`):
+/// another turn is wanted to take it.
+pub fn images_landing() -> bool {
+    STATE.get(|| None).as_ref().is_some_and(|s| s.images.iter().any(|a| *a.word & DONE == 0))
 }
 
 /// A frame's records are one: past the range they are dropped whole, with
@@ -770,12 +732,24 @@ impl Gpu {
         call::copy_external_image(&mut self.s().stream, &to, false, false, file, word, ticket);
     }
 
-    /// The texture `image` arrived in, taken: each image is copied in once,
-    /// for the one that takes it. 0 for one not yet there.
-    pub fn image_texture(&self, image: u32) -> Id {
+    /// The texture the image file `file`, named `image` by whoever hands it,
+    /// is copied into, taken once it has landed: each image is copied in
+    /// once, on this device, for the one that takes it. None while it
+    /// lands, the first ask handing it to the device; none for good for a
+    /// file whose size no header gives (pxl-spec `asset::image_size`),
+    /// which the kernel does not hand.
+    pub fn image(&self, image: u32, file: &[u8]) -> Option<Id> {
         let images = &mut self.s().images;
-        let Some(k) = images.iter().position(|a| a.image == image && *a.word & DONE != 0) else { return 0 };
-        images.swap_remove(k).texture
+        if let Some(k) = images.iter().position(|a| a.image == image) {
+            return (*images[k].word & DONE != 0).then(|| images.swap_remove(k).texture);
+        }
+        let (width, height) = pxl_spec::asset::image_size(file)?;
+        let usage = TEXTURE_USAGE::TEXTURE_BINDING | TEXTURE_USAGE::COPY_SRC | TEXTURE_USAGE::COPY_DST | TEXTURE_USAGE::RENDER_ATTACHMENT;
+        let texture = self.texture(width, height, 1, Format::rgba8unorm_srgb, 1, usage);
+        let (file, mut word) = (file.to_vec(), Box::new(0));
+        self.copy_image(texture, &file, &mut word, image & !DONE | 1);
+        self.s().images.push(Arriving { image, texture, word, _file: file });
+        None
     }
 
     pub fn encoder(&self) -> Id {

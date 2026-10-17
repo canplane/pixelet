@@ -23,8 +23,9 @@ pub struct DecorAssets {
 }
 
 impl DecorAssets {
-    /// The shell's image handle for a variant's skin; None while it loads.
-    pub fn skin(&self, variant: usize) -> Option<u32> {
+    /// A variant's skin as the renderer takes it (`load_image`); None while
+    /// it loads.
+    pub fn skin(&self, variant: usize) -> Option<(u32, &'static [u8])> {
         load_image(Load::Asset(self.decor.variants.get(variant)?.skin))
     }
 }

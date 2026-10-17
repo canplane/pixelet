@@ -7,6 +7,7 @@
 //! Without the mip chain the far ground crawls as the camera moves.
 
 use crate::frame::shader::words::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
+use crate::gpu::renderer::Image;
 use pxl_spec::asset::ingested::{CubeFace, PACK};
 use pxl_spec::asset::{shipped_texture_tile, TileOrigin};
 
@@ -142,13 +143,12 @@ impl Layers {
     }
 
     /// Whether the pack came this frame.
-    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<u32>) -> bool {
+    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<Image>) -> bool {
         if self.loaded {
             return false;
         }
-        let Some(image) = pack() else { return false };
+        let Some(texture) = pack().and_then(|(image, file)| g.image(image, file)) else { return false };
         let (tiles, table) = plan();
-        let texture = g.image_texture(image);
         let encoder = g.encoder();
         for (slot, tile) in tiles.iter().enumerate() {
             g.copy_texture(encoder, texture, tile.x, tile.y, self.tex, 0, 0, slot as u32, LAYER_TEX_SZ, LAYER_TEX_SZ);

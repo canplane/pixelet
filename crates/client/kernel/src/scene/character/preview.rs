@@ -112,7 +112,7 @@ pub fn preview_step(ctx: &mut TickContext) {
 }
 
 /// (case, model, skin image), the image as the loader has it now.
-pub fn preview_rows() -> impl Iterator<Item = (u32, u32, u32)> {
+pub fn preview_rows() -> impl Iterator<Item = (u32, u32, (u32, &'static [u8]))> {
     let c: &'static _ = cases();
     c.cases.iter().filter_map(|case| match (&case.model, case.actor) {
         (Some(model), Some(_)) => Some((case.id, model.model, load_image(Load::Asset(case.variant.skin))?)),

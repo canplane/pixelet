@@ -388,7 +388,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
 /// (model, image handle) for the shell's skinned pass: the image as the
 /// loader has it now, which a lost device takes back until it lands again.
-pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
+pub fn companion_skins() -> impl Iterator<Item = (u32, (u32, &'static [u8]))> {
     let c: &'static _ = companion();
     [&c.person, &c.pet]
         .into_iter()

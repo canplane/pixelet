@@ -96,13 +96,13 @@ pub struct FrameInput<'a> {
     pub lists: Lists<'a>,
     pub environment: &'a [f32],
     /// 0 while it loads.
-    pub decor: &'a [(u32, Option<u32>, Extent)],
-    pub skins: &'a [(u32, u32)],
-    pub cases: &'a [(u32, u32, u32)],
+    pub decor: &'a [(u32, Option<Image>, Extent)],
+    pub skins: &'a [(u32, Image)],
+    pub cases: &'a [(u32, u32, Image)],
     /// The texture pack's image; none while it loads.
-    pub pack: fn() -> Option<u32>,
-    pub moon: fn() -> Option<u32>,
-    pub earth: fn() -> Option<u32>,
+    pub pack: fn() -> Option<Image>,
+    pub moon: fn() -> Option<Image>,
+    pub earth: fn() -> Option<Image>,
     pub earth_tiles: EarthTiles<'a>,
     /// The terrain's held tiles, whose cells the GPU draws whether or not
     /// an eye casts.
@@ -268,25 +268,32 @@ pub fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: Entry, air: [Entry; AIR
     g.bind_group(layout, &e)
 }
 
+/// An image file as its asker hands it: its name, the asker's own and the
+/// same for one file wherever it is handed, and its bytes, handed for as
+/// long as the image is wanted, so a device gone takes it again from them
+/// (`Gpu::image`).
+pub type Image = (u32, &'static [u8]);
+
 /// Each skin image as one texture's view, made the first time a skin binds it:
-/// an image's texture is taken once (`Gpu::image_texture`), so
+/// an image's texture is taken once (`Gpu::image`), so
 /// a skin made again, or by another pass, binds what is here. As many as the
 /// skins the asset table names.
 static SKIN_VIEWS: Global<Vec<(u32, u32)>> = Global::new();
 
-fn skin_view(g: &Gpu, image: u32) -> u32 {
+fn skin_view(g: &Gpu, (image, file): Image) -> Option<u32> {
     let views = SKIN_VIEWS.get(Vec::new);
     if let Some(&(_, view)) = views.iter().find(|&&(i, _)| i == image) {
-        return view;
+        return Some(view);
     }
-    let texture = g.image_texture(image);
+    let texture = g.image(image, file)?;
     let view = g.view(texture, false, 0, 1, 0, 1);
     views.push((image, view));
-    view
+    Some(view)
 }
 
-pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> u32 {
-    g.bind_group(layout, &[view_entry(0, skin_view(g, image)), sampler_entry(1, sampler)])
+/// A skin's bind group; none while its image lands.
+pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: Image) -> Option<u32> {
+    Some(g.bind_group(layout, &[view_entry(0, skin_view(g, image)?), sampler_entry(1, sampler)]))
 }
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
@@ -1557,7 +1564,7 @@ impl Renderer {
         let mut rest = core::mem::take(&mut self.frame_read);
         rest.begin();
         self.decor.set_models(input.decor);
-        self.impostor.set_models(input.decor);
+        self.impostor.set_models(input.decor.iter().map(|&(mesh, image, extent)| (mesh, image.map(|i| i.0), extent)));
         for &(model, image) in input.skins {
             self.skinned.set_skin(g, model, image);
         }
@@ -1753,7 +1760,7 @@ impl Renderer {
     }
 
     /// The cases drawn this frame: a surface still a case, and its actor's draw.
-    fn cases<'a, 'd>(draws: &'a Draws<'d>, cases: &'a [(u32, u32, u32)]) -> impl Iterator<Item = (u32, u32, u32, &'d [u32; DRAW_WORDS])> + 'a {
+    fn cases<'a, 'd>(draws: &'a Draws<'d>, cases: &'a [(u32, u32, Image)]) -> impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])> + 'a {
         cases.iter().filter_map(move |&(id, model, image)| {
             surface(id).filter(|s| s.role == surface_role::CASE)?;
             let own = draws.of(PIPELINE_SKINNED).find(|d| d[2] == model)?;
@@ -1763,7 +1770,7 @@ impl Renderer {
 
     /// Each case's targets, passes and skin, made here so drawing makes nothing
     /// that outlives its frame.
-    fn prepare_cases(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, u32)], moved: bool) {
+    fn prepare_cases(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, Image)], moved: bool) {
         for (id, model, image, own) in Self::cases(draws, cases) {
             let Some(s) = surface(id) else { continue };
             targets(g, s);
@@ -1779,7 +1786,7 @@ impl Renderer {
 
     /// Each case whose picture's makings moved, `moved` what moved without
     /// words: the models' blocks, the air's tables or its exposure.
-    fn draw_cases<'d>(&mut self, g: &Gpu, encoder: u32, cases: impl Iterator<Item = (u32, u32, u32, &'d [u32; DRAW_WORDS])>, uniforms: &[f32], moved: bool, stamp: &mut Stamp) {
+    fn draw_cases<'d>(&mut self, g: &Gpu, encoder: u32, cases: impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])>, uniforms: &[f32], moved: bool, stamp: &mut Stamp) {
         for (id, model, image, own) in cases {
             let Some(s) = surface(id) else { continue };
             let Some(case) = self.cases[handle_slot(id) as usize].as_mut() else { continue };
@@ -1806,7 +1813,7 @@ impl Renderer {
             r.read(&frame);
             r.read(own);
             r.read(uniform_of(uniforms, own));
-            r.read(&[model, image, s.width, s.height, s.depth]);
+            r.read(&[model, image.0, s.width, s.height, s.depth]);
             r.mark(moved);
             if r.end() {
                 continue;
@@ -1947,7 +1954,8 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     let (kind, stat) = r.frame(g, world, input);
     FrameOutput {
         kind,
-        redraw: *REDRAW.get(|| false),
+        // An image landing is taken on a turn to come.
+        redraw: *REDRAW.get(|| false) || crate::gpu::api::images_landing(),
         stat: Some(stat),
     }
 }

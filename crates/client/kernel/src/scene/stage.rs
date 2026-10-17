@@ -101,13 +101,14 @@ pub fn stage_render() {
     for (group, mesh, image, extent) in cloud_groups() {
         decor[group] = (mesh, image, extent);
     }
-    let mut skins = [(0u32, 0u32); 2];
+    let none: (u32, &'static [u8]) = (0, &[]);
+    let mut skins = [(0u32, none); 2];
     let mut skin_cnt = 0;
     for (slot, row) in skins.iter_mut().zip(companion_skins()) {
         *slot = row;
         skin_cnt += 1;
     }
-    let mut cases = [(0u32, 0u32, 0u32); SURFACES];
+    let mut cases = [(0u32, 0u32, none); SURFACES];
     let mut case_cnt = 0;
     for (slot, row) in cases.iter_mut().zip(preview_rows()) {
         *slot = row;

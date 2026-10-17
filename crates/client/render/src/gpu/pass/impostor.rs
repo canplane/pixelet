@@ -92,8 +92,8 @@ impl ImpostorPass {
         }
     }
 
-    pub fn set_models(&mut self, groups: &[(u32, Option<u32>, Extent)]) {
-        for (group, &want) in groups.iter().take(GROUPS).enumerate() {
+    pub fn set_models(&mut self, groups: impl Iterator<Item = (u32, Option<u32>, Extent)>) {
+        for (group, want) in groups.take(GROUPS).enumerate() {
             self.wanted[group] = Some(want);
         }
     }

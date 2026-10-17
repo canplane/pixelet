@@ -283,7 +283,7 @@ impl Atmosphere {
 
     /// This month's Earth: the kernel draws nothing before its image has
     /// come; whether it came this frame.
-    pub fn earth_step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<u32>) -> bool {
+    pub fn earth_step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<crate::gpu::renderer::Image>) -> bool {
         self.earth.step(g, mips, image)
     }
 
