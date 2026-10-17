@@ -144,18 +144,20 @@ impl World<'_> {
     /// cell, or the Earth past the area), its three blocks decided on values;
     /// what is placed asked of each block, the caves only where one may open
     /// it (`Cell::opens`).
-    fn about(&mut self, zoom: u32, c: [i32; 3]) -> u32 {
+    ///
+    /// `shard` and `place` are the cast's at its stop (`ray::place_of`):
+    /// what is known of the area there, and where the block's own column
+    /// was held, which every column in its square is read off and none
+    /// searched for anew (`window::ground`).
+    fn about(&mut self, zoom: u32, c: [i32; 3], shard: Shard, place: Found) -> u32 {
         let (carve, hide) = (cut(self.eye.carve), cut(self.eye.hide));
-        // What is known of the area about the block, one pass over the
-        // shards for its nine columns.
         let own = (zoom, [c[0], c[1]]);
-        let shard = Shard::UNKNOWN.at(self, own);
         let mut filled = 0;
         let mut k = 0;
         while k < 9 {
             let n = [wrap_index(zoom, c[0] + (k % 3) as i32 - 1), c[1] + (k / 3) as i32 - 1];
             let past = zoom >= SHARD_ZOOM && shard.past_leaf(own, area::tile_at(zoom, n));
-            let cell = window::ground(self, (shard, own), Found::NONE, zoom, n).0;
+            let cell = window::ground(self, (shard, own), place, zoom, n).0;
             let mut dz = 0;
             while dz < 3 {
                 let (bit, b) = (1 << (dz * 9 + k), [n[0], n[1], c[2] + dz as i32 - 1]);
@@ -470,7 +472,8 @@ pub fn face_cs(
     };
     let (axis, zoom) = (ray::face_of(w.x) / 2, ray::zoom_of(w.x));
     let c = hit_block(&origin, &ray, f32::from_bits(w.y), axis, zoom, w.z);
-    let filled = world.about(zoom, c);
+    let (place, shard) = ray::place_of(ray_word(ray::PLACE), zoom);
+    let filled = world.about(zoom, c, shard, place);
     // SAFETY: within the rays, just bounded by their size.
     unsafe { rays.write(UVec3::new(id.x, id.y, 2), mask::mask(filled)) };
 }
