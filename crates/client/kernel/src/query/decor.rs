@@ -22,7 +22,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use super::ray::Ray;
-use super::scatter::{grown_at, grown_of, ring, Asked};
+use super::scatter::{grown_at, grown_of, Asked};
 use super::surface::Surfaces;
 use super::world::World;
 use crate::decor::strike::{reach, strike};
@@ -67,7 +67,7 @@ impl<'a> World<'a> {
     /// Nothing where the leaf is not resident.
     fn grown_in(&self, cell: [i64; 2], mut each: impl FnMut(&mut Surfaces, &Decor, Instance) -> bool) -> bool {
         let node = (GROUND.cell_zoom(LEAF_ZOOM), cell);
-        self.surfaces(node, GROUND.grid_zoom(LEAF_ZOOM), ring(&DECORS), |face| {
+        self.surfaces(node, GROUND.grid_zoom(LEAF_ZOOM), |face| {
             DECORS.iter().any(|decor| grown_at(&mut Asked::new(self, face), decor, cell).is_some_and(|i| each(face, decor, i)))
         })
         .exact()

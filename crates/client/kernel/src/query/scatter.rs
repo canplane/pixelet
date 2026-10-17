@@ -8,7 +8,7 @@
 //! (`World::surfaces`).
 
 use pxl_portable::placed;
-use pxl_portable::scatter::{self as portable, Grounds, Grown, ALIGN_NEIGHBOR_RADIUS, PLACED_BLOCK};
+use pxl_portable::scatter::{self as portable, Grounds, Grown, PLACED_BLOCK};
 use pxl_spec::block::cube::sentinel;
 use pxl_spec::block::decor::Decor;
 use pxl_spec::block::Block;
@@ -21,23 +21,17 @@ use super::world::World;
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::store;
 
-/// Cells about a node its decor reads: the faces a turn is voted from, and
-/// the widest box's footing past the cell it stands in.
-pub fn ring(decors: &[Decor]) -> u32 {
-    decors.iter().map(|d| d.row.widest()).fold(ALIGN_NEIGHBOR_RADIUS as u32, u32::max)
-}
-
 /// The world as decor's growth asks it on the CPU (pxl-portable
-/// `Grounds`): the ground's cells off `face`, read once about what is
-/// asked, the world's one query, and what is placed.
-pub(super) struct Asked<'a, 'w, 'f> {
+/// `Grounds`): the ground's cells off `face`, each read as it is asked, the
+/// world's one query, and what is placed.
+pub(super) struct Asked<'a, 'w> {
     world: &'a World<'w>,
-    face: &'a Surfaces<'f>,
+    face: &'a Surfaces,
     lanes: store::Lanes<'a>,
 }
 
-impl<'a, 'w, 'f> Asked<'a, 'w, 'f> {
-    pub(super) fn new(world: &'a World<'w>, face: &'a Surfaces<'f>) -> Asked<'a, 'w, 'f> {
+impl<'a, 'w> Asked<'a, 'w> {
+    pub(super) fn new(world: &'a World<'w>, face: &'a Surfaces) -> Asked<'a, 'w> {
         Asked {
             world,
             face,
@@ -46,7 +40,7 @@ impl<'a, 'w, 'f> Asked<'a, 'w, 'f> {
     }
 }
 
-impl placed::Lanes for Asked<'_, '_, '_> {
+impl placed::Lanes for Asked<'_, '_> {
     fn heap(&self, slot: u32) -> u32 {
         self.lanes.heap(slot)
     }
@@ -55,7 +49,7 @@ impl placed::Lanes for Asked<'_, '_, '_> {
     }
 }
 
-impl Grounds for Asked<'_, '_, '_> {
+impl Grounds for Asked<'_, '_> {
     type At = super::node::At;
 
     fn rows(&self) -> &[pxl_portable::decor::Decor] {

@@ -6,6 +6,8 @@
 //! tile's line says its ground at, coarser where only one over holds them.
 //! Its lines are read from the resident tile it is drawn from.
 
+use pxl_portable::area::Shard;
+use pxl_portable::ground::Cell;
 use pxl_portable::window::{self as cells, Found, SQUARE_SHIFT};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::q3;
@@ -37,6 +39,17 @@ impl Residency<TerrainTile> {
         }
         let (r, from, here) = relief(line.tile, place, node);
         held(line, from, here, Some(r))
+    }
+
+    /// The column `c` at `zoom` off the windows, the area's edge laid on
+    /// it, as the GPU reads it (pxl-portable `window::ground`), stepped from
+    /// `place`, `shard` what is known of the area there: exact where `line`
+    /// says the ground at the window it was read off or coarser, else
+    /// coarser, naming its tile (`held`); where no window holds it, the
+    /// lack.
+    pub fn column(&self, line: &Line, shard: Shard, place: Found, (zoom, c): Node<2>) -> Answer<Cell> {
+        let (cell, f) = cells::ground(&Windowed, shard, place, zoom, c.map(|v| v as i32));
+        held(line, f.from(), f.here(), cell)
     }
 
     /// `bound`, its line stepped from where `lines` last walked: a walk in

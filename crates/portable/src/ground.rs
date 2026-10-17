@@ -1,9 +1,9 @@
 // pxl-portable/ground.rs
 
-//! gpu-portable: the ground's grid at a cell, the one rule pxl-spec
-//! block/sample.rs `at` composes before what overwrites it: a cell's look and
-//! height off the tile drawing it, their fold a zoom coarser, and its blocks
-//! by depth with a cave's air where a cave may take them. What overwrites it
+//! gpu-portable: the ground's grid at a cell, the one rule a node's ground
+//! is answered by (`node`) before what overwrites it: a cell's look and
+//! height off the window drawing it (`window::ground`), and its blocks by
+//! depth with a cave's air where a cave may take them. What overwrites it
 //! is not here: the ways by their own rule (`ways.rs`), and what is placed
 //! by its own (`placed.rs`).
 //!
@@ -101,26 +101,6 @@ pub fn own(w: u32, cell: Zoom) -> u32 {
     majority(looks(w), cell)
 }
 
-/// Four cells a zoom finer, `dx + 2·dy`, as one: the looks' majority, the
-/// mean height of those grounded (none grounded, sea level), and the four
-/// looks it folds.
-pub fn fold(four: [(u32, i32); 4], cell: Zoom) -> (u32, f32, [u32; 4]) {
-    let mut looks = [VOID; 4];
-    let (mut sum, mut count) = (0i32, 0i32);
-    let mut k = 0;
-    while k < 4 {
-        let (look, h) = four[k];
-        looks[k] = look;
-        if Ground::grounds(look) {
-            sum += h;
-            count += 1;
-        }
-        k += 1;
-    }
-    let h = if count > 0 { sum as f32 / count as f32 } else { SEA_LEVEL as f32 };
-    (majority(looks, cell), h, looks)
-}
-
 /// A held cell as a grid reads it, off its word `w`, its height `h` and
 /// `from`, the zoom the word is a cell of (a coarser window's where one
 /// stands in, the leaf's past the leaves): its look, height and the four
@@ -128,23 +108,6 @@ pub fn fold(four: [(u32, i32); 4], cell: Zoom) -> (u32, f32, [u32; 4]) {
 /// made of, so a word's tie breaks at `from` (`majority`).
 pub fn read_cell(w: u32, h: i32, from: Zoom) -> (u32, f32, [u32; 4]) {
     (own(w, from), h as f32, looks(w))
-}
-
-/// A cell one zoom coarser than those held, `zoom`'s, as a grid reads it: the
-/// fold of its four children (`dx + 2·dy`), each read as held (`read_cell`), its look
-/// decided at its own zoom. No coarser is asked: a ray's zooms start at the
-/// top tile's cells (pxl-kernel view/lens.rs `asked`), and only a ground read
-/// for a tile under the top reaches this one (pxl-spec block/sample.rs
-/// `Grid::read`, which refuses more).
-pub fn coarser(four: [(u32, i32, Zoom); 4], zoom: Zoom) -> (u32, f32, [u32; 4]) {
-    let mut children = [(VOID, 0); 4];
-    let mut k = 0;
-    while k < 4 {
-        let (w, h, from) = four[k];
-        children[k] = (own(w, from), h);
-        k += 1;
-    }
-    fold(children, zoom)
 }
 
 /// Tile cells an elevation sample spans.

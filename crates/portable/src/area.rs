@@ -175,10 +175,10 @@ pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
     (row(0) | row(1) | row(2)) & !(1 << 4)
 }
 
-/// A cell's look with the area's edge laid (pxl-spec block/sample.rs
-/// `Grid::wall_off`), `gone` where the cell is past the area or nothing is
-/// known of it, `beside` where one of the eight about it is: gone, void;
-/// at a leaf's cells or finer, ground beside one gone is the wall, bedrock.
+/// A cell's look with the area's edge laid (`edge`), `gone` where the cell
+/// is past the area or nothing is known of it, `beside` where one of the
+/// eight about it is: gone, void; at a leaf's cells or finer, ground beside
+/// one gone is the wall, bedrock.
 pub fn wall(look: u32, cell: Zoom, gone: bool, beside: bool) -> u32 {
     if gone {
         VOID
@@ -189,8 +189,8 @@ pub fn wall(look: u32, cell: Zoom, gone: bool, beside: bool) -> u32 {
     }
 }
 
-/// A cell's look with the area's edge laid, the one rule every grid reads it
-/// by (pxl-spec block/sample.rs `Grid::wall_off`, `window::ground`):
+/// A cell's look with the area's edge laid, the one rule a column is read
+/// by (`window::ground`), on the CPU and a GPU alike:
 /// `gone` where the cell is past the area or nothing is known of it; at a
 /// leaf's cells or finer, ground beside one gone is the wall (`wall`), where
 /// the leaf cells the eight about the block `b` at `cell` lie in (`ring`) are

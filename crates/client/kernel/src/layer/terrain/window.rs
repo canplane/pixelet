@@ -30,7 +30,6 @@ use crate::layer::kept::Offered;
 use crate::layer::terrain::fixed::{back_off, cells_off, fill_off, looks_off, CELLS_BYTES, CELLS_LANE_BYTES, LOOK_LANE_BYTES, RANGE};
 use crate::layer::Base;
 use crate::mem::fixed::lane;
-use pxl_spec::block::sample::Cells;
 
 /// Who a window is about.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -458,15 +457,6 @@ impl Area for Windowed {
     }
     fn shard(&self, i: u32) -> (Zoom, [i32; 2]) {
         Declared.shard(i)
-    }
-}
-
-impl Cells for Windowed {
-    fn cell(&self, cell: Zoom, g: [i32; 2]) -> (u32, i32, Zoom) {
-        match window::find(self, cell, g, FIRST_CELL) {
-            (from, slot, i, true) => (self.look(from, slot, i), self.height(from, slot, i), from),
-            _ => (word([u32::from(pxl_spec::block::cube::sentinel::void); 4]), 0, cell),
-        }
     }
 }
 

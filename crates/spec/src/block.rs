@@ -2,9 +2,7 @@
 
 //! The block catalog: the generated tables — the ids' kinds, the cubes and
 //! their colors, the decors, the marker, what an id carries beyond itself —
-//! `object`, where a block becomes the value the object store keeps, and what
-//! is in each block of the world (`sample`): the ground's grid, then what
-//! overwrites it.
+//! and `object`, where a block becomes the value the object store keeps.
 
 #[path = "block/color.spec.rs"]
 pub mod color;
@@ -23,7 +21,6 @@ pub mod limit;
 #[path = "block/marker.spec.rs"]
 pub mod marker;
 pub mod object;
-pub mod sample;
 pub mod volume;
 
 pub use decor::DecorId;

@@ -9,8 +9,8 @@
 //! (`spec/spec/block/cube.json` `unknown`), and the service area is walled by
 //! it from inside: a leaf column with ground beside one past the area is
 //! bedrock up to its own face, a block of the leaves as any is, so the wall's
-//! outer face stands on the area's edge at every zoom (`pxl-spec
-//! block/sample.rs` `wall_off`).
+//! outer face stands on the area's edge at every zoom (pxl-portable
+//! area.rs `edge`).
 
 pub use pxl_portable::ground::{bedrock, BEDROCK_DEPTH};
 use pxl_portable::SEA_LEVEL;

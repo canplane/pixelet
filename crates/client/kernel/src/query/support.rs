@@ -19,8 +19,8 @@ use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::block::Surface;
 use super::ray::{Detail, Ray, Until};
+use super::surface::Surface;
 use super::world::World;
 use crate::layer::*;
 use pxl_spec::space::layer::tile::Tile;

@@ -93,7 +93,7 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
             // A block wears what the pack ships for it: a side or a bottom of its
             // own where it has one, its top's image on every face where it has
             // not, as a cube_all. The dirt under a face is its own block, the
-            // stratum under it (`pxl-spec block/sample.rs` `strata`), never a side.
+            // stratum under it (pxl-portable ground.rs `Cell::block`), never a side.
             let top = shipped_texture_tile(cube, CubeFace::Top);
             let side = shipped_texture_tile(cube, CubeFace::Side).or(top);
             let bottom = shipped_texture_tile(cube, CubeFace::Bottom).or(top);
