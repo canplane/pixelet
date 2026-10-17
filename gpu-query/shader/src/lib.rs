@@ -427,10 +427,7 @@ fn pixel_ray(eye: &Eye, p: UVec3, size: UVec3) -> cast::Ray {
     let ndc_x = (p.x as f32 + 0.5) / size.x as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p.y as f32 + 0.5) / size.y as f32 * 2.0;
     let v3 = |v: Vec4| [v.x, v.y, v.z];
-    cast::Ray {
-        direction: cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), ndc_x * eye.tan.x, ndc_y * eye.tan.y),
-        reach: eye.forward_far.w,
-    }
+    cast::Ray::new(cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), ndc_x * eye.tan.x, ndc_y * eye.tan.y), eye.forward_far.w)
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;

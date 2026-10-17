@@ -221,10 +221,7 @@ impl<'a> World<'a> {
             strike,
         };
         let o = ray.origin;
-        let from = cast::Ray {
-            direction: ray.direction.map(|v| v as f32),
-            reach: ray.reach as f32,
-        };
+        let from = cast::Ray::new(ray.direction.map(|v| v as f32), ray.reach as f32);
         let met = cast::first(&mut walker, &cast::Origin::of(point(o[0], o[1], o[2])), &from, detail.portable(), until);
         let met = (met.ends == Ends::Stop).then(|| self.hit(ray, met.stop));
         let answer = match (met, walker.lack, walker.answered) {

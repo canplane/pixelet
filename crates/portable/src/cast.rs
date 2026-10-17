@@ -115,11 +115,27 @@ impl Origin {
     }
 }
 
-/// A ray from an origin: its direction, and how far it reaches, in units.
+/// A ray from an origin: its direction, how far it reaches, in units, and
+/// its direction's reciprocal on each axis, 0 where it does not move along
+/// one: a plane's crossing is a product, not a division made again at every
+/// node (Laine and Karras, _Efficient Sparse Voxel Octrees_, 2010, the
+/// per-ray coefficients).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ray {
     pub direction: [f32; 3],
     pub reach: f32,
+    inverse: [f32; 3],
+}
+
+impl Ray {
+    pub fn new(direction: [f32; 3], reach: f32) -> Ray {
+        let inv = |d: f32| if d == 0.0 { 0.0 } else { 1.0 / d };
+        Ray {
+            direction,
+            reach,
+            inverse: [inv(direction[0]), inv(direction[1]), inv(direction[2])],
+        }
+    }
 }
 
 /// A node's place from an origin: its zoom and its corner's offset from the
@@ -234,7 +250,7 @@ pub fn slab(ray: &Ray, min: [f32; 3], side: f32, t0: f32, t1: f32) -> (f32, f32,
     // The nearest plane yet, once an axis the ray moves along gave one.
     let (mut near_most, mut moved) = (0.0, false);
     // Each axis in turn, its components named, not indexed.
-    let mut each = |a: u32, d: f32, min: f32| {
+    let mut each = |a: u32, d: f32, inv: f32, min: f32| {
         // An axis the ray runs beside: within the box, any t; outside it,
         // none past the span's ends.
         let (near, far) = if d == 0.0 {
@@ -244,7 +260,7 @@ pub fn slab(ray: &Ray, min: [f32; 3], side: f32, t0: f32, t1: f32) -> (f32, f32,
                 (t0, t1)
             }
         } else {
-            let (p, q) = (min / d, (min + side) / d);
+            let (p, q) = (min * inv, (min + side) * inv);
             let (near, far) = if d > 0.0 { (p, q) } else { (q, p) };
             if !moved || near > near_most {
                 (near_most, moved, axis) = (near, true, a);
@@ -254,9 +270,9 @@ pub fn slab(ray: &Ray, min: [f32; 3], side: f32, t0: f32, t1: f32) -> (f32, f32,
         enter = enter.max(near);
         leave = leave.min(far);
     };
-    each(0, ray.direction[0], min[0]);
-    each(1, ray.direction[1], min[1]);
-    each(2, ray.direction[2], min[2]);
+    each(0, ray.direction[0], ray.inverse[0], min[0]);
+    each(1, ray.direction[1], ray.inverse[1], min[1]);
+    each(2, ray.direction[2], ray.inverse[2], min[2]);
     (enter, leave, axis)
 }
 
@@ -264,15 +280,15 @@ pub fn slab(ray: &Ray, min: [f32; 3], side: f32, t0: f32, t1: f32) -> (f32, f32,
 /// the first of its far faces it reaches.
 fn leaves(ray: &Ray, min: [f32; 3], side: f32) -> u32 {
     let (mut best, mut moved, mut axis) = (0.0, false, 0);
-    let mut each = |a: u32, d: f32, min: f32| {
-        let t = if d > 0.0 { (min + side) / d } else { min / d };
+    let mut each = |a: u32, d: f32, inv: f32, min: f32| {
+        let t = if d > 0.0 { (min + side) * inv } else { min * inv };
         if d != 0.0 && (!moved || t < best) {
             (best, moved, axis) = (t, true, a);
         }
     };
-    each(0, ray.direction[0], min[0]);
-    each(1, ray.direction[1], min[1]);
-    each(2, ray.direction[2], min[2]);
+    each(0, ray.direction[0], ray.inverse[0], min[0]);
+    each(1, ray.direction[1], ray.inverse[1], min[1]);
+    each(2, ray.direction[2], ray.inverse[2], min[2]);
     axis
 }
 
@@ -638,16 +654,16 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
         // is written before it is read.
         let (kid, handed, from, fresh) = if into {
             let half = place.child(7).min(o);
-            let upper = |d: f32, half: f32| {
+            let upper = |d: f32, inv: f32, half: f32| {
                 (if d > 0.0 {
-                    half / d <= t0
+                    half * inv <= t0
                 } else if d < 0.0 {
-                    half / d > t0
+                    half * inv > t0
                 } else {
                     half <= 0.0
                 }) as u32
             };
-            let k = upper(ray.direction[0], half[0]) | upper(ray.direction[1], half[1]) << 1 | upper(ray.direction[2], half[2]) << 2;
+            let k = upper(ray.direction[0], ray.inverse[0], half[0]) | upper(ray.direction[1], ray.inverse[1], half[1]) << 1 | upper(ray.direction[2], ray.inverse[2], half[2]) << 2;
             stack.put(place.zoom, Q::keep(&at));
             if place.zoom + 1 > Q::Stack::LEVELS {
                 floor = floor.max(place.zoom + 1 - Q::Stack::LEVELS);
