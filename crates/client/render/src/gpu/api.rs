@@ -17,7 +17,7 @@ use xpute_gpu::enums::{
     AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction, CullMode, FilterMode, FrontFace, IndexFormat, LoadOp, MipmapFilterMode, PrimitiveTopology,
     QueryType, SamplerBindingType, StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat, VertexStepMode, FEATURE_NAME, LIMIT_NAME,
 };
-use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, SHADER_STAGE, STATUS, TEXTURE_USAGE};
+use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, STATUS, TEXTURE_USAGE};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_guest::ipc::stream::{Stream, WORD};
@@ -405,19 +405,6 @@ fn vertex_format(code: u32) -> VertexFormat {
     }
 }
 
-fn stages(code: u32) -> u32 {
-    let mut s = 0;
-    if code & record::VERTEX != 0 {
-        s |= SHADER_STAGE::VERTEX;
-    }
-    if code & record::FRAGMENT != 0 {
-        s |= SHADER_STAGE::FRAGMENT;
-    }
-    if code & record::COMPUTE != 0 {
-        s |= SHADER_STAGE::COMPUTE;
-    }
-    s
-}
 
 fn binding_layout(kind: u32) -> encode::BindingLayout {
     use encode::BindingLayout as L;
@@ -547,7 +534,7 @@ impl Gpu {
             let [binding, stage, kind] = words.get(i).copied().unwrap_or_default();
             encode::BindGroupLayoutEntry {
                 binding,
-                visibility: stages(stage),
+                visibility: stage,
                 layout: binding_layout(kind),
             }
         });

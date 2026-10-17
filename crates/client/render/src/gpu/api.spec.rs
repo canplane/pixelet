@@ -61,8 +61,8 @@ pub mod stream {
 /// vertex buffers. Then: the topology, the cull mode, the depth compare under
 /// reversed Z (LESS is plain depth, for a depth-only pass; NO_DEPTH, no
 /// depth attachment), the blend, which vertex entry point of
-/// its shader the pipeline enters, a vertex step and format, a
-/// binding's stages, and a binding's kind — TEXTURE_UNFILTERED a texture in a
+/// its shader the pipeline enters, a vertex step and format, and a binding's
+/// kind (its stages are xpute's SHADER_STAGE) — TEXTURE_UNFILTERED a texture in a
 /// format no sampler
 /// filters (RGBA32F), read by textureLoad alone.
 pub mod record {
@@ -91,11 +91,6 @@ pub mod record {
     pub const F32X4: u32 = 3;
     pub const U32X4: u32 = 4;
     pub const U32: u32 = 5;
-    pub const NONE: u32 = 0;
-    pub const VERTEX: u32 = 1;
-    pub const FRAGMENT: u32 = 2;
-    pub const BOTH: u32 = 3;
-    pub const COMPUTE: u32 = 4;
     pub const UNIFORM: u32 = 0;
     pub const UNIFORM_DYNAMIC: u32 = 1;
     pub const STORAGE: u32 = 2;
@@ -132,11 +127,6 @@ pub mod record {
         "F32X4",
         "U32X4",
         "U32",
-        "NONE",
-        "VERTEX",
-        "FRAGMENT",
-        "BOTH",
-        "COMPUTE",
         "UNIFORM",
         "UNIFORM_DYNAMIC",
         "STORAGE",

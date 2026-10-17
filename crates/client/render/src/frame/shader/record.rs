@@ -295,6 +295,10 @@ pub const PIPELINES: u32 = 42;
 // buffers (count; stride, step, attribute count, (location, offset, format)
 // each); then bind groups (count; entry count, (binding, visibility, kind) each).
 pub use crate::gpu::api_spec::record::*;
+/// A binding's stages are xpute's own bits (SHADER_STAGE), none, one or both.
+pub use xpute_gpu::spec::SHADER_STAGE::{COMPUTE, FRAGMENT, VERTEX};
+pub const NONE: u32 = 0;
+pub const BOTH: u32 = VERTEX | FRAGMENT;
 
 use crate::frame::draw::{
     PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
