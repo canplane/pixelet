@@ -291,6 +291,6 @@ impl ground::Held for Reading<'_, '_> {
     /// the GPU reads it (pxl-portable `window::ground`), stepped from where
     /// its relief found its cells.
     fn cell(&mut self, shard: Shard, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell {
-        window::ground(&Windowed, shard, place, zoom, [c[0], c[1]]).0
+        window::ground(&Windowed, (shard, (zoom, [c[0], c[1]])), place, zoom, [c[0], c[1]]).0
     }
 }

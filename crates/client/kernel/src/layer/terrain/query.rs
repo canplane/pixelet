@@ -45,7 +45,8 @@ impl Residency<TerrainTile> {
     /// coarser, naming its tile (`held`); where no window holds it, the
     /// lack.
     pub fn column(&self, line: &Line, shard: Shard, place: Found, (zoom, c): Node<2>) -> Answer<Cell> {
-        let (cell, f) = cells::ground(&Windowed, shard, place, zoom, c.map(|v| v as i32));
+        let c = c.map(|v| v as i32);
+        let (cell, f) = cells::ground(&Windowed, (shard, (zoom, c)), place, zoom, c);
         held(line, f.from(), f.here(), cell)
     }
 

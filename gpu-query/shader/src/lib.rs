@@ -140,12 +140,16 @@ impl World<'_> {
     /// it (`Cell::opens`).
     fn about(&mut self, zoom: u32, c: [i32; 3]) -> u32 {
         let (carve, hide) = (cut(self.eye.carve), cut(self.eye.hide));
+        // What is known of the area about the block, one pass over the
+        // shards for its nine columns.
+        let own = (zoom, [c[0], c[1]]);
+        let shard = Shard::UNKNOWN.at(self, own);
         let mut filled = 0;
         let mut k = 0;
         while k < 9 {
             let n = [wrap_index(zoom, c[0] + (k % 3) as i32 - 1), c[1] + (k / 3) as i32 - 1];
-            let past = zoom >= SHARD_ZOOM && area::past(self, area::tile_at(zoom, n));
-            let cell = ground::Held::cell(self, Shard::UNKNOWN, Found::NONE, zoom, [n[0], n[1], c[2]]);
+            let past = zoom >= SHARD_ZOOM && shard.past_leaf(self, own, area::tile_at(zoom, n));
+            let cell = window::ground(self, (shard, own), Found::NONE, zoom, n).0;
             let mut dz = 0;
             while dz < 3 {
                 let (bit, b) = (1 << (dz * 9 + k), [n[0], n[1], c[2] + dz as i32 - 1]);
@@ -213,7 +217,7 @@ impl ground::Held for World<'_> {
     /// (pxl-portable `window::ground`), as the CPU reads it (pxl-kernel
     /// query/node.rs `Reading::cell`).
     fn cell(&mut self, shard: Shard, place: Found, zoom: u32, c: [i32; 3]) -> ground::Cell {
-        window::ground(self, shard, place, zoom, [c[0], c[1]]).0
+        window::ground(self, (shard, (zoom, [c[0], c[1]])), place, zoom, [c[0], c[1]]).0
     }
 }
 

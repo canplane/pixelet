@@ -25,16 +25,18 @@ pub struct Surface {
 }
 
 /// A node's ground at its tile's own cells, held: each cell read off the
-/// windows as it is asked (`ground`).
+/// windows as it is asked (`ground`), what is known of the area at the
+/// node's shard found once for them all.
 pub struct Surfaces {
     cell: Zoom,
+    shard: (Shard, (Zoom, [i32; 2])),
 }
 
 impl Surfaces {
     /// The cell `g` at its zoom, where it has ground: its face's look and
     /// its top, in blocks.
     pub fn ground(&self, g: [i64; 2]) -> Option<(GroundId, i32)> {
-        let (c, _) = pxl_portable::window::ground(&Windowed, Shard::UNKNOWN, Found::NONE, self.cell, g.map(|v| v as i32));
+        let (c, _) = pxl_portable::window::ground(&Windowed, self.shard, Found::NONE, self.cell, g.map(|v| v as i32));
         c.grounded().then_some((c.look as GroundId, c.top))
     }
 
@@ -71,6 +73,8 @@ impl World<'_> {
     /// a time, a ring past the node too.
     pub fn surfaces<R>(&self, node: Node<2>, cell: Zoom, f: impl FnOnce(&mut Surfaces) -> R) -> Answer<R> {
         let own = GROUND.cell_zoom(GROUND.read_zoom(cell));
-        self.terrain.cells_held(&self.terrain.cursor(node, cell), node).map(|()| f(&mut Surfaces { cell: own }))
+        let at = (node.0, node.1.map(|v| v as i32));
+        let shard = (Shard::UNKNOWN.at(&Windowed, at), at);
+        self.terrain.cells_held(&self.terrain.cursor(node, cell), node).map(|()| f(&mut Surfaces { cell: own, shard }))
     }
 }

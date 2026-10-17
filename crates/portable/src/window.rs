@@ -439,9 +439,9 @@ pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, 
 pub fn ran(w: &impl Ran, near: Found, own: [i32; 2], zoom: Zoom, c: [i32; 2], z: i32) -> u32 {
     let read = held_to(zoom);
     let g = cell_at(zoom, read, c);
-    let (q, o) = (square_of(g).0, square_of(cell_at(zoom, read, own)).0);
+    let q = square_of(g).0;
     // Component-wise: a GPU has no array equality.
-    let above = if q[0] == o[0] && q[1] == o[1] { near } else { Found::NONE };
+    let above = if q[0] == own[0] && q[1] == own[1] { near } else { Found::NONE };
     let (f, i) = step(w, above, read, g);
     if !f.here() {
         return crate::ways::NOTHING;
@@ -501,9 +501,12 @@ pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, i3
 /// Whether the leaf cell `l` is gone: past the area, off what `shard`, the
 /// node `node`'s, knows (`Shard::past_leaf`), or nothing known of it, its
 /// look off the window drawing it.
-pub fn gone(w: &impl Windows, shard: crate::area::Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> bool {
-    let (look, _, f) = cell(w, Found::NONE, LEAF_CELL, l);
-    shard.past_leaf(w, node, crate::area::tile_at(LEAF_CELL, l)) || crate::ground::own(look, f.from()) == UNKNOWN
+pub fn gone(w: &impl Windows, shard: crate::area::Shard, node: (Zoom, [i32; 2]), near: Found, l: [i32; 2]) -> bool {
+    if shard.past_leaf(w, node, crate::area::tile_at(LEAF_CELL, l)) {
+        return true;
+    }
+    let (look, _, f) = cell(w, near, LEAF_CELL, l);
+    crate::ground::own(look, f.from()) == UNKNOWN
 }
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
@@ -511,14 +514,21 @@ pub fn gone(w: &impl Windows, shard: crate::area::Shard, node: (Zoom, [i32; 2]),
 /// it (`area::edge`), `shard` what is known of the area at its own shard:
 /// none in a shard known `inside` the area, whose leaf cells about it are
 /// none of them gone; and where it is held.
-pub fn ground(w: &impl Windows, shard: crate::area::Shard, place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
+pub fn ground(w: &impl Windows, (shard, owner): (crate::area::Shard, (Zoom, [i32; 2])), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
     let read = held_to(zoom);
-    let (word, h, f) = cell(w, place, read, cell_at(zoom, read, b));
+    let g = cell_at(zoom, read, b);
+    let (word, h, f) = cell(w, place, read, g);
     let (look, h, fold) = crate::ground::read_cell(word, h, f.from());
-    // The leaf cells about it read by their offset, each its look alone.
+    // The leaf cells about it read by their offset, each its look alone;
+    // one in its own leaf cell's square off the window its cell was read at
+    // (`step`), which is the leaves' wherever a ring is asked.
+    let own = square_of(g).0;
     let gone_at = |dx: i32, dy: i32| {
         let s = zoom - LEAF_CELL;
-        !shard.inside() && gone(w, shard, (zoom, b), [wrap_index(LEAF_CELL, (b[0] >> s) + dx), (b[1] >> s) + dy])
+        let l = [wrap_index(LEAF_CELL, (b[0] >> s) + dx), (b[1] >> s) + dy];
+        let q = square_of(l).0;
+        let near = if q[0] == own[0] && q[1] == own[1] { f } else { Found::NONE };
+        !shard.inside() && gone(w, shard, owner, near, l)
     };
     let cell = crate::ground::Cell {
         look: crate::area::edge(look, zoom, b, look == UNKNOWN, gone_at),
@@ -538,6 +548,8 @@ struct Over<W> {
     w: W,
     zoom: Zoom,
     own: [i32; 2],
+    /// The square at its cells' zoom its own column's cell lies in.
+    square: [i32; 2],
     cell: crate::ground::Cell,
     found: Found,
     shard: crate::area::Shard,
@@ -545,23 +557,19 @@ struct Over<W> {
 
 impl<W: Windows> crate::ways::Airs for Over<W> {
     fn at(&self, c: [i32; 2], z: i32) -> u32 {
-        let v = ran(&self.w, self.found, self.own, self.zoom, c, z);
+        let v = ran(&self.w, self.found, self.square, self.zoom, c, z);
         if v == crate::ways::NOTHING {
             return v;
         }
         let walled = if c[0] == self.own[0] && c[1] == self.own[1] {
             self.cell.look == UNKNOWN
         } else {
-            // A neighbour's wall: only at the leaves' cells or finer, and
-            // never inside the area (`area::edge`).
-            let past = self.zoom >= crate::SHARD_ZOOM && self.shard.past_leaf(&self.w, (self.zoom, self.own), crate::area::tile_at(self.zoom, c));
-            // rust-gpu has no `saturating_sub`.
-            #[allow(clippy::implicit_saturating_sub)]
-            let s = if self.zoom > crate::SHARD_ZOOM { self.zoom - crate::SHARD_ZOOM } else { 0 };
-            let same = c[0] >> s == self.own[0] >> s && c[1] >> s == self.own[1] >> s;
-            let shard = if same { self.shard } else { crate::area::Shard::UNKNOWN };
-            let walled = self.zoom >= LEAF_CELL && !self.shard.inside() && ground(&self.w, shard, Found::NONE, self.zoom, c).0.look == UNKNOWN;
-            past || walled
+            // Past the area, off the own shard's nine; else a neighbour's
+            // wall, only at the leaves' cells or finer and never inside the
+            // area (`area::edge`), its ring within the own shard's nine.
+            let own = (self.zoom, self.own);
+            (self.zoom >= crate::SHARD_ZOOM && self.shard.past_leaf(&self.w, own, crate::area::tile_at(self.zoom, c)))
+                || (self.zoom >= LEAF_CELL && !self.shard.inside() && ground(&self.w, (self.shard, own), Found::NONE, self.zoom, c).0.look == UNKNOWN)
         };
         if walled {
             crate::ways::NOTHING
@@ -585,6 +593,7 @@ pub fn ways_over(w: &(impl Windows + Copy), shard: crate::area::Shard, found: Fo
         w: *w,
         zoom,
         own: [c[0], c[1]],
+        square: square_of(cell_at(zoom, held_to(zoom), [c[0], c[1]])).0,
         cell,
         found,
         shard,
