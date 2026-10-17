@@ -675,17 +675,14 @@ pub const EYE_JOINED_WORDS: u32 = JOINED_ENTRIES * JOINED_WORDS * EYE_WINDOWS;
 
 /// Entry of level `l` (from 1) over a square, its block `at` in blocks of
 /// that level, among a window's: the levels' entries in order, a level's
-/// row by row.
+/// row by row. The levels under `l` hold `(ACROSS >> m)²` each, `m` from 1:
+/// a geometric sum, `(ACROSS² − (ACROSS >> (l − 1))²) / 3`, whole as a
+/// difference of two powers of four.
 pub const fn joined_index(l: u32, at: [u32; 2]) -> u32 {
-    let mut e = 0;
-    let mut m = 1;
-    while m < l {
-        let across = ACROSS >> m;
-        e += across * across;
-        m += 1;
-    }
-    e + at[1] * (ACROSS >> l) + at[0]
+    let under = ACROSS >> (l - 1);
+    (ACROSS * ACROSS - under * under) / 3 + at[1] * (ACROSS >> l) + at[0]
 }
+const _: () = assert!(ACROSS.is_power_of_two() && JOINED_LEVELS < ACROSS.trailing_zeros() + 1);
 
 /// A key's word: `v` with its sign flipped, so no square's is 0.
 const fn key_word(v: i32) -> u32 {
