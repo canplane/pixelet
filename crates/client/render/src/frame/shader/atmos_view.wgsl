@@ -33,23 +33,6 @@ fn moon_shown() -> vec3f {
   return shown() * atmos_moon_light();
 }
 
-// Each light through the air above a point, and the sky's on an up-facing face there.
-struct Light {
-  sun: vec3f,
-  other: vec3f,
-  fill: vec3f,
-};
-
-// Before the eye: what the exposure meters.
-fn light_unexposed(r: f32, up: vec3f) -> Light {
-  let sky = sky_ground(r, dot(up, atmos_sun_dir())).rgb + sky_ground(r, dot(up, atmos_moon_dir())).rgb * atmos_moon_light();
-  return Light(
-    frame_sun_color() * sun_transmittance(r, dot(up, frame_sun_dir())),
-    frame_other_color() * sun_transmittance(r, dot(up, frame_other_dir())),
-    sky * atmos_white() + atmos_night_sky(),
-  );
-}
-
 fn light_at(r: f32, up: vec3f) -> Light {
   let l = light_unexposed(r, up);
   let e = exposure();
@@ -59,25 +42,6 @@ fn light_at(r: f32, up: vec3f) -> Light {
 fn light_of(world_pos: vec3f) -> Light {
   return light_at(radius_of(world_pos), up_at(world_pos));
 }
-
-// The ground under a down-facing face, at the Earth's mean albedo.
-fn ground_bounce(up: vec3f, l: Light) -> vec3f {
-  return atmos_ground_albedo() * (l.sun * max(dot(up, frame_sun_dir()), 0.0) + l.other * max(dot(up, frame_other_dir()), 0.0) + l.fill);
-}
-
-// The share that keeps its direction; the rest, an up-facing face's, reaches
-// every face alike. Directed alone, a wall turned from the sun read as a toy's.
-const DIRECTED: f32 = 0.25;
-
-// A matte face of albedo one, over pi, Lambert as three's standard material at
-// roughness 1: every lit pass's, and the Earth's past the terrain.
-fn surface_light(n: vec3f, up: vec3f, l: Light) -> vec3f {
-  let alike = l.sun * max(dot(up, frame_sun_dir()), 0.0) + l.other * max(dot(up, frame_other_dir()), 0.0) + l.fill;
-  let hemi = mix(ground_bounce(up, l), l.fill, dot(n, up) * 0.5 + 0.5);
-  let directed = l.sun * max(dot(n, frame_sun_dir()), 0.0) + l.other * max(dot(n, frame_other_dir()), 0.0) + hemi;
-  return mix(alike, directed, DIRECTED) / PI;
-}
-
 
 /* sky */
 

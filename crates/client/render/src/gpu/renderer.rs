@@ -593,6 +593,13 @@ fn blocks() -> &'static mut Blocks {
 
 static RENDERER: Global<Option<Renderer>> = Global::new();
 
+/// Each light's step, the sun's first: the height it moves before the sky as
+/// drawn moves a display level (gpu/atmosphere.rs `steps`); none before any
+/// view's slope has landed.
+pub fn sky_steps() -> [Option<f32>; 2] {
+    RENDERER.get(|| None).as_ref().map_or([None; 2], |r| r.atmosphere.steps())
+}
+
 static REDRAW: Global<bool> = Global::new();
 
 /// WebGPU's default minUniformBufferOffsetAlignment: an adapter's limit is a
@@ -1583,6 +1590,7 @@ impl Renderer {
         self.screen.grids(g, ahead);
         read.mark(self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR]));
         g.submit(ahead);
+        self.atmosphere.read_back(g);
         self.screen.read_back(g);
         // The image stands where it read all as last time over a lane that stood.
         let still = read.end() && self.screen.kind != FrameKind::cast;

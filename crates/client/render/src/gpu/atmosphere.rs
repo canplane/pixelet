@@ -15,7 +15,9 @@ use pxl_spec::space::coord::world::around;
 use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, texture_usage, word_bytes, Format, Gpu, Load, Stamp};
+use xpute_guest::mem::base::off_of;
+
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, texture_usage, word_bytes, Format, Gpu, Load, Stamp, DONE};
 use crate::gpu::api_spec::resource;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::Mips;
@@ -80,7 +82,6 @@ const EXPOSURE_TEXEL: usize = 3;
 pub(crate) const IRRADIANCE: usize = 4;
 const MOON_VIEW: usize = 5;
 
-use crate::look::atmosphere::SUN_MU_STEP;
 /// A share of the altitude, and at least a meter.
 const ALTITUDE_SHARE: f32 = 0.005;
 const ALTITUDE_FLOOR_KM: f32 = 0.001;
@@ -93,8 +94,21 @@ pub struct Atmosphere {
     passes: [Built; 5],
     groups: [u32; TABLES],
     baked: bool,
-    drawn_for: Option<(f32, f32)>,
-    moon_drawn_for: Option<(f32, f32)>,
+    /// The light's height and the eye's altitude each view was drawn for,
+    /// the sun's first.
+    drawn_for: [Option<(f32, f32)>; 2],
+    /// Each light's slope as its sky view was last drawn, in display levels
+    /// per unit of its height (atmos_skyview.wgsl `slopes`), the sun's
+    /// first; and the buffer they are mapped back through.
+    slopes: (u32, u32),
+    /// Which lights' views the slopes now on their way are of.
+    slopes_of: [bool; 2],
+    /// The slopes' bits as they land, and their word (`DONE` once in).
+    landed: [u32; 2],
+    landed_word: u32,
+    /// The height each light moves before its sky changes by a display
+    /// level, as the last landed slopes say; none before any landed.
+    steps: [Option<f32>; 2],
     sun_mu: f32,
     moon_mu: f32,
     earth: ImageMap,
@@ -165,8 +179,15 @@ impl Atmosphere {
             passes,
             groups: [0; TABLES],
             baked: false,
-            drawn_for: None,
-            moon_drawn_for: None,
+            drawn_for: [None; 2],
+            slopes: (
+                g.buffer(8, buffer_usage::STORAGE | buffer_usage::COPY_SRC | buffer_usage::COPY_DST),
+                g.buffer(8, buffer_usage::MAP_READ | buffer_usage::COPY_DST),
+            ),
+            slopes_of: [false; 2],
+            landed: [0; 2],
+            landed_word: 0,
+            steps: [None; 2],
             sun_mu: 1.0,
             moon_mu: 1.0,
             earth: ImageMap::new(g, EARTH_SIZE.0, EARTH_SIZE.1),
@@ -203,9 +224,10 @@ impl Atmosphere {
             (TRANSMITTANCE, of(&[8], &[])),
             (MULTISCATTER, of(&medium, &[])),
             (IRRADIANCE, of(&medium, &[multiscatter])),
-            // The views are measured from the frame's up.
-            (SKY_VIEW, of(&medium, &[multiscatter, light(0.0), frame])),
-            (MOON_VIEW, of(&medium, &[multiscatter, light(1.0), frame])),
+            // The views are measured from the frame's up, and take their
+            // slopes off the land's light too.
+            (SKY_VIEW, of(&[8, 9, 11, 18], &[multiscatter, light(0.0), frame, buffer_entry(20, atmosphere.slopes.0)])),
+            (MOON_VIEW, of(&[8, 9, 11, 18], &[multiscatter, light(1.0), frame, buffer_entry(20, atmosphere.slopes.0)])),
             (EXPOSURE_TEXEL, of(&unexposed, &[frame])),
         ];
         for (k, entries) in reads {
@@ -288,7 +310,10 @@ impl Atmosphere {
     }
 
     /// Whether a table the world reads was drawn again, past the exposure
-    /// texel, which is a function of the words and the tables.
+    /// texel, which is a function of the words and the tables. A light's view
+    /// is drawn again when its height or the eye's altitude has moved
+    /// (`moved`), and only while no slopes are on their way, which it writes;
+    /// it takes its light's slope as it is drawn.
     pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
         let mut drew = !self.baked;
         if !self.baked {
@@ -296,24 +321,59 @@ impl Atmosphere {
             self.table(g, encoder, MULTISCATTER, stamp);
             self.table(g, encoder, IRRADIANCE, stamp);
             self.baked = true;
-            self.drawn_for = None;
-            self.moon_drawn_for = None;
+            self.drawn_for = [None; 2];
         }
+        self.take_slopes();
         let altitude = self.words[CAMERA_ALTITUDE];
-        let now = (self.sun_mu, altitude);
-        if moved(self.drawn_for, now) {
-            self.table(g, encoder, SKY_VIEW, stamp);
-            self.drawn_for = Some(now);
+        let free = self.landed_word == 0;
+        let views = [
+            (SKY_VIEW, (self.sun_mu, altitude), true),
+            (MOON_VIEW, (self.moon_mu, altitude), self.words[MOON_LIGHT] > 0.0),
+        ];
+        for (k, (table, now, lit)) in views.into_iter().enumerate() {
+            if !(free && lit && moved(self.drawn_for[k], now)) {
+                continue;
+            }
+            g.write_buffer(self.slopes.0, 4 * k as u32, bytes(&[0u32]));
+            self.table(g, encoder, table, stamp);
+            self.drawn_for[k] = Some(now);
+            self.slopes_of[k] = true;
             drew = true;
         }
-        let moon = (self.moon_mu, altitude);
-        if self.words[MOON_LIGHT] > 0.0 && moved(self.moon_drawn_for, moon) {
-            self.table(g, encoder, MOON_VIEW, stamp);
-            self.moon_drawn_for = Some(moon);
-            drew = true;
+        if self.slopes_of.contains(&true) && free {
+            g.copy_buffer(encoder, (self.slopes.0, 0), (self.slopes.1, 0), 8);
         }
         self.table(g, encoder, EXPOSURE_TEXEL, stamp);
         drew
+    }
+
+    /// The slopes the views just drawn took, mapped back once their encoder
+    /// is submitted; their landing wakes the turn that reads them.
+    pub fn read_back(&mut self, g: &Gpu) {
+        if self.slopes_of.contains(&true) && self.landed_word == 0 {
+            let address = off_of(self.landed.as_ptr()) as u32;
+            g.map_read(self.slopes.1, 0, 8, address, &mut self.landed_word, 1);
+        }
+    }
+
+    /// Landed slopes become their lights' steps: the height over which the
+    /// sky as drawn moves one display level at the slope it moves at now.
+    fn take_slopes(&mut self) {
+        if self.landed_word != 1 | DONE {
+            return;
+        }
+        for k in 0..2 {
+            if core::mem::take(&mut self.slopes_of[k]) {
+                self.steps[k] = Some(1.0 / f32::from_bits(self.landed[k]));
+            }
+        }
+        self.landed_word = 0;
+    }
+
+    /// Each light's step as the last landed slopes say (`take_slopes`), the
+    /// sun's first; none before any landed.
+    pub fn steps(&self) -> [Option<f32>; 2] {
+        self.steps
     }
 
     fn table(&self, g: &Gpu, encoder: u32, k: usize, stamp: &mut Stamp) {
@@ -334,9 +394,12 @@ fn pass_of(table: usize) -> usize {
     }
 }
 
+/// A view is drawn again for any new height of its light, which the sky's
+/// clock moves only a step at a time (pxl-kernel scene/environment.rs, by
+/// `steps`), or for the eye's altitude moved its share.
 fn moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
     match drawn {
         None => true,
-        Some((mu, h)) => (now.0 - mu).abs() > SUN_MU_STEP || (now.1 - h).abs() > (h.abs() * ALTITUDE_SHARE).max(ALTITUDE_FLOOR_KM),
+        Some((mu, h)) => mu != now.0 || (now.1 - h).abs() > (h.abs() * ALTITUDE_SHARE).max(ALTITUDE_FLOOR_KM),
     }
 }

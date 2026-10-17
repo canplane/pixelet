@@ -7,7 +7,7 @@
 pub mod celestial_position;
 pub mod cloud;
 
-use pxl_render::look::atmosphere::SUN_MU_STEP;
+use pxl_render::gpu::renderer::sky_steps;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3;
 
@@ -79,10 +79,12 @@ impl EnvironmentDraw {
 
     /// Unix milliseconds: the time, and the sky's days a step at a time, a
     /// step where the sun's or the moon's height over the anchor has moved
-    /// `SUN_MU_STEP` since the last — so the sky's words stay the same
-    /// between steps, and its tables are drawn again by the same measure;
-    /// and how many milliseconds on the next step falls, as their heights
-    /// move now.
+    /// its step since the last, the height over which the sky as drawn moves
+    /// one display level (pxl-render `sky_steps`, its views' own slopes) — so
+    /// the sky's words stay the same between steps, and its tables are drawn
+    /// again by the same measure; and how many milliseconds on the next step
+    /// falls, as their heights move now. A light with no step landed yet
+    /// asks none: its view's first slope landing wakes the turn.
     pub fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
         self.time = (unix_ms - first) / 1000.0;
@@ -91,9 +93,9 @@ impl EnvironmentDraw {
         // positions standing at a distance.
         let mu = |p: [f64; 3]| p[2] / v3::len(&p);
         let heights = |days: f64| [mu(sun_position(days, lat, lon)), mu(moon_position(days, lat, lon))];
-        let (step, days) = (f64::from(SUN_MU_STEP), j2000_days(unix_ms));
+        let (step, days) = (sky_steps().map(|s| s.map_or(f64::INFINITY, f64::from)), j2000_days(unix_ms));
         let moved = |from: [f64; 2], to: [f64; 2]| [0, 1].map(|k| (to[k] - from[k]).abs());
-        if !self.started || moved(heights(self.days), heights(days)).iter().any(|&d| d > step) {
+        if !self.started || moved(heights(self.days), heights(days)).iter().zip(step).any(|(&d, step)| d >= step) {
             self.days = days;
         }
         // As fast as each height moves over the next minute, when it will have moved a step.
@@ -101,13 +103,13 @@ impl EnvironmentDraw {
         let (now, drawn) = (heights(days), heights(self.days));
         let rate = moved(now, heights(days + MINUTE_MS / 86_400_000.0));
         let gone = moved(drawn, now);
-        (0..2).map(|k| (step - gone[k]).max(0.0) * MINUTE_MS / rate[k]).fold(f64::INFINITY, f64::min)
+        (0..2).map(|k| (step[k] - gone[k]).max(0.0) * MINUTE_MS / rate[k]).fold(f64::INFINITY, f64::min)
     }
 
     /// Whether a transition is still in flight and wants frames: the sun
     /// and moon on their way across a jump of the anchor, the stars fading
-    /// in. The clock's steps are taken as they come (`observe`), each too
-    /// small to see, so a still sky's words stand between them.
+    /// in. The clock's steps are taken as they come (`observe`), a display
+    /// level each, so a still sky's words stand between them.
     pub fn tick(&mut self, frame: &Frame) -> bool {
         if self.first_ms.is_none() {
             return false;
