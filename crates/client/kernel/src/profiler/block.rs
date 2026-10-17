@@ -54,6 +54,8 @@ pub struct FramesBlock {
     /// Intervals whose turns ran past them.
     pub long: f64,
     pub turns: f64,
+    /// Frames a GPU read landed with: the GPU's figures are over these alone.
+    pub gpu_read: f64,
     pub interval: Spread,
     pub busy: Spread,
     pub off_turn: Spread,
@@ -78,7 +80,7 @@ const _: () = assert!(SUMMARY::frames::last + FRAME::WORDS <= SUMMARY::frames::W
 words!(FramesBlock, SUMMARY::frames::WORDS,
     present => SUMMARY::frames::present, n => SUMMARY::frames::n, seconds => SUMMARY::frames::seconds,
     moving => SUMMARY::frames::moving, missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
-    long => SUMMARY::frames::long, turns => SUMMARY::frames::turns,
+    long => SUMMARY::frames::long, turns => SUMMARY::frames::turns, gpu_read => SUMMARY::frames::gpu_read,
     interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy, off_turn => SUMMARY::frames::off_turn,
     tick => SUMMARY::frames::tick, tasks => SUMMARY::frames::tasks, gpu => SUMMARY::frames::gpu,
     phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95, gpu_spans_max => SUMMARY::frames::gpu_spans_max,

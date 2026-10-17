@@ -166,6 +166,7 @@ pub fn stage_render() {
         out.kind,
         GpuSample {
             ms: stat.gpu_ms,
+            read: f64::from(u8::from(stat.gpu_read)),
             spans: stat.gpu_spans,
             census: stat.census,
             world_px: stat.world_px,

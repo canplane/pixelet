@@ -22,8 +22,10 @@ const _: () = assert!(CENSUS_LEN == DRAW_PIPELINES.len(), "a census tag for ever
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GpuSample {
-    /// Lags a frame or two; 0 before the renderer exists or without GPU timing.
+    /// Lags a frame or two: the read that landed with this frame, where
+    /// `read` is 1; where it is 0, nothing was measured with this frame.
     pub ms: f64,
+    pub read: f64,
     pub spans: [f64; GPU_SPANS],
     /// Every draw by its pipeline: the frame's draws and triangles are its sums.
     pub census: DrawCensus,
@@ -137,7 +139,7 @@ words!(FrameSample, FRAME::WORDS,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     worst_effect_ms => FRAME::worst_effect_ms, worst_effect_name => FRAME::worst_effect_name,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
-    gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans,
+    gpu.ms => FRAME::gpu_ms, gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans,
     gpu.census => FRAME::census, gpu.world_px => FRAME::world_px,
     device.blocks => FRAME::blocks, device.blocks_mb => FRAME::blocks_mb,
     device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb, device.objects => FRAME::gpu_objects,

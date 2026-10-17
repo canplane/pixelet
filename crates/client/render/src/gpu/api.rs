@@ -206,6 +206,9 @@ struct State {
     stamps: Option<(Id, Id, Id)>,
     stamps_written: u32,
     gpu_ms: [f64; SPANS + 1],
+    /// Whether the last frame submitted took a read in: its figures are then
+    /// that read's, and else the read before it, not measured again.
+    gpu_landed: bool,
     /// The images on their way into textures (`image_arrive`).
     images: Vec<Arriving>,
     /// The devices gone so far: what was handed to the GPU under another
@@ -265,6 +268,7 @@ pub unsafe fn install(at: u32) -> u32 {
         stamps: None,
         stamps_written: 0,
         gpu_ms: [0.0; SPANS + 1],
+        gpu_landed: false,
         images: Vec::new(),
         generation: 0,
     }));
@@ -335,11 +339,11 @@ pub fn device_generation() -> u32 {
 }
 
 /// The last read's ticks, where its word says they landed: each span's ms and
-/// the frame's, and the word let go for the next read.
-fn take_stamps(s: &mut State) {
+/// the frame's, and the word let go for the next read; whether one landed.
+fn take_stamps(s: &mut State) -> bool {
     let word = head(STAMPS_WORD_AT);
     if *word & DONE == 0 {
-        return;
+        return false;
     }
     *word = 0;
     let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
@@ -354,6 +358,7 @@ fn take_stamps(s: &mut State) {
         }
     }
     s.gpu_ms[SPANS] = last.saturating_sub(first.min(last)) as f64 * period_ms;
+    true
 }
 
 /// The device went, and every object on it: the handles start over.
@@ -888,7 +893,7 @@ impl Gpu {
     /// ticket over the word that says so.
     pub fn submit_frame(&self, encoder: Id, written: u32) {
         let s = self.s();
-        take_stamps(s);
+        s.gpu_landed = take_stamps(s);
         let stamps_free = *head(STAMPS_WORD_AT) == 0;
         if let (Some((set, resolve, mapped)), true) = (s.stamps, stamps_free && written != 0) {
             let bytes = 2 * SPANS as u32 * 8;
@@ -960,6 +965,12 @@ impl Gpu {
     /// span, the whole frame's.
     pub fn gpu_ms(&self, span: u32) -> f64 {
         self.s().gpu_ms[(span as usize).min(SPANS)]
+    }
+
+    /// Whether the frame just submitted took a read in, so its figures were
+    /// measured with it.
+    pub fn gpu_landed(&self) -> bool {
+        self.s().gpu_landed
     }
 
     /// `size` bytes of `from` from `at` into `to` from `to_at`, on `encoder`.

@@ -39,7 +39,7 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `blocks` and `blocks_mb` are the renderer's block table (pxl-render gpu/renderer.rs `Blocks`), and the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, `_px`, and `_name` for an index into a list of names."
+      "One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `gpu_read` is 1 where a GPU read landed with the frame, whose `gpu_ms` and `gpu_spans` are then that read's, and 0 where nothing was measured with it (no read landed, or the device keeps no timestamps). `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `blocks` and `blocks_mb` are the renderer's block table (pxl-render gpu/renderer.rs `Blocks`), and the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, `_px`, and `_name` for an index into a list of names."
     ],
     "t": 1,
     "interval_ms": 1,
@@ -59,6 +59,7 @@
     "wake_name": 1,
     "wake_in_ms": 1,
     "gpu_ms": 1,
+    "gpu_read": 1,
     "gpu_spans": "GPU_SPAN_NAMES",
     "census": "2 * CENSUS_TAGS",
     "world_px": 1,
@@ -112,6 +113,7 @@
     ],
     "gpu": [
       "gpu_ms",
+      "gpu_read",
       "gpu_spans",
       "census",
       "world_px"
@@ -237,6 +239,7 @@
       "overran": 1,
       "long": 1,
       "turns": 1,
+      "gpu_read": 1,
       "interval": "SPREAD",
       "busy": "SPREAD",
       "off_turn": "SPREAD",

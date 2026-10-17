@@ -102,7 +102,9 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
 
     let count = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
     // A span the frame did not run reads 0 and is left out.
-    let spans: [Spread; GPU_SPANS] = core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0)));
+    // The GPU's figures over the frames a read landed with, each read once.
+    let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
+    let spans: [Spread; GPU_SPANS] = core::array::from_fn(|k| spread(scratch, read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0)));
     FramesBlock {
         present: 1.0,
         n,
@@ -117,7 +119,8 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         off_turn: spread(scratch, frames.iter().map(off_turn_ms)),
         tick: spread(scratch, frames.iter().map(|f| f.tick_ms)),
         tasks: spread(scratch, frames.iter().map(|f| f.tasks_ms)),
-        gpu: spread(scratch, frames.iter().map(|f| f.gpu.ms)),
+        gpu_read: count(&|f| f.gpu.read != 0.0),
+        gpu: spread(scratch, read().map(|f| f.gpu.ms)),
         phases_p95: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k])).p95),
         gpu_spans_p95: spans.map(|s| s.p95),
         gpu_spans_max: spans.map(|s| s.max),

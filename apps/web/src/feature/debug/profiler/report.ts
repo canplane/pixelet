@@ -64,7 +64,7 @@ function windowSection(r: ProfilerReport): string[] {
     `  off-turn ${spread(f.off_turn)} ms   long ${f.long} (turns past their interval)`,
     `  tick    ${spread(f.tick)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${f.phases.map((p) => `${p.name} ${n1(p.p95)}`).join("  ")}`,
     `  tasks   ${spread(f.tasks)} ms   (the turns' tasks past the frame)`,
-    `  gpu     ${spread(f.gpu)} ms${last.gpu_ms === 0 ? "   (no timestamps: no renderer yet, or the device keeps none)" : ""}`,
+    f.gpu_read > 0 ? `  gpu     ${spread(f.gpu)} ms   (over the ${f.gpu_read} frames a read landed with)` : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms per frame, max)`,

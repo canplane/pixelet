@@ -149,7 +149,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
     ),
     gpu: f !== null && (
       <>
-        <Row k="gpu p95" v={f.gpu.p95 > 0 ? `${n1(f.gpu.p95)} ms` : "n/a"} warn={f.gpu.p95 > f.last.display_ms} />
+        {/* Over the frames a GPU read landed with; none landed is no measure, not 0. */}
+        <Row k="gpu p95" v={f.gpu_read > 0 ? `${n1(f.gpu.p95)} ms of ${f.gpu_read}` : "no timestamps"} warn={f.gpu_read > 0 && f.gpu.p95 > f.last.display_ms} />
         {heaviest(f.gpu_spans, (s) => s.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.p95)} ms`} />)}
         <Row k="draws/triangles" v={`${drawn(f.last)[0]}/${tris(drawn(f.last)[1])}`} />
         {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}

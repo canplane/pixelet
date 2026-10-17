@@ -75,6 +75,8 @@ export interface FrameSummary {
   /** Intervals whose turns ran past them. */
   long: f64;
   turns: f64;
+  /** Frames a GPU read landed with, which the GPU's figures are over. */
+  gpu_read: f64;
   interval: Spread;
   busy: Spread;
   off_turn: Spread;
@@ -144,6 +146,7 @@ function frameSummary(s: F64Array): FrameSummary | null {
     overran: s[a + F.overran],
     long: s[a + F.long],
     turns: s[a + F.turns],
+    gpu_read: s[a + F.gpu_read],
     interval: spreadAt(s, a + F.interval),
     busy: spreadAt(s, a + F.busy),
     off_turn: spreadAt(s, a + F.off_turn),

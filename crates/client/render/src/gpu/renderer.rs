@@ -222,6 +222,9 @@ pub struct FrameOutput {
 #[derive(Clone, Copy)]
 pub struct FrameStat {
     pub gpu_ms: f64,
+    /// Whether a GPU read landed with this frame: its spans and `gpu_ms` are
+    /// then that read's, and else an earlier frame's, not this one's.
+    pub gpu_read: bool,
     /// The block table's blocks and their bytes.
     pub blocks: f64,
     pub block_bytes: f64,
@@ -1675,6 +1678,7 @@ impl Renderer {
         g.submit_frame(encoder, written);
         release(canvas_view);
         let (mut gpu_ms, mut gpu_spans) = (0.0, [0.0; GPU_SPAN_NAMES.len()]);
+        let gpu_read = q != 0 && g.gpu_landed();
         if q != 0 {
             gpu_spans = core::array::from_fn(|k| g.gpu_ms(k as u32));
             gpu_ms = g.gpu_ms(GPU_SPAN_NAMES.len() as u32);
@@ -1698,7 +1702,8 @@ impl Renderer {
             (false, true) => FrameKind::still,
             (false, false) => self.screen.kind,
         };
-        let stat = self.stat(draws.records, world, input.timed, (gpu_ms, gpu_spans));
+        let mut stat = self.stat(draws.records, world, input.timed, (gpu_ms, gpu_spans));
+        stat.gpu_read = gpu_read;
         self.order = order;
         (kind, stat)
     }
@@ -1788,6 +1793,7 @@ impl Renderer {
         let px = world.width as f64 * world.height as f64;
         FrameStat {
             gpu_ms,
+            gpu_read: false,
             blocks: b.count as f64,
             block_bytes: b.bytes as f64,
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the badges' regions'.
