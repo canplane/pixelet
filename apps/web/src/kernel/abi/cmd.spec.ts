@@ -34,7 +34,6 @@ export const enum Major {
   WORLD = 0x10,
   INPUT = 0x11,
   SENSOR = 0x12,
-  IMAGE = 0x13,
   GPU = 0x14,
   SURFACE = 0x15,
   SETTING = 0x16,
@@ -82,11 +81,6 @@ export const enum SensorMinor {
   OPEN = 0x08,
   CLOSE = 0x09,
   ORIENTATION_LOST = 0x0a,
-}
-
-/** An image's verbs. */
-export const enum ImageMinor {
-  DECODED = 0x01,
 }
 
 /** The GPU's verbs. */

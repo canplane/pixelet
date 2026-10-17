@@ -42,7 +42,6 @@ pub enum Major {
     WORLD = 0x10,
     INPUT = 0x11,
     SENSOR = 0x12,
-    IMAGE = 0x13,
     GPU = 0x14,
     SURFACE = 0x15,
     SETTING = 0x16,
@@ -52,11 +51,10 @@ pub enum Major {
 }
 
 impl Major {
-    pub const ALL: [Major; 10] = [
+    pub const ALL: [Major; 9] = [
         Major::WORLD,
         Major::INPUT,
         Major::SENSOR,
-        Major::IMAGE,
         Major::GPU,
         Major::SURFACE,
         Major::SETTING,
@@ -168,22 +166,6 @@ impl SensorMinor {
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<SensorMinor> {
         SensorMinor::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// An image's verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ImageMinor {
-    DECODED = 0x01,
-}
-
-impl ImageMinor {
-    pub const ALL: [ImageMinor; 1] = [ImageMinor::DECODED];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<ImageMinor> {
-        ImageMinor::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 

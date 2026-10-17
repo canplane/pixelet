@@ -67,10 +67,6 @@
           "value": 18
         },
         {
-          "name": "IMAGE",
-          "value": 19
-        },
-        {
           "name": "GPU",
           "value": 20
         },
@@ -236,19 +232,6 @@
         {
           "name": "ORIENTATION_LOST",
           "value": 10
-        }
-      ]
-    },
-    {
-      "name": "ImageMinor",
-      "$doc": [
-        "An image's verbs."
-      ],
-      "format": "hex2",
-      "entries": [
-        {
-          "name": "DECODED",
-          "value": 1
         }
       ]
     },
