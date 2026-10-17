@@ -26,6 +26,7 @@ pub mod ray;
 pub mod scatter;
 pub mod ways;
 pub mod window;
+pub mod world;
 
 /// Every size is a zoom (pxl-spec space/coord/zoom.rs).
 pub type Zoom = u32;

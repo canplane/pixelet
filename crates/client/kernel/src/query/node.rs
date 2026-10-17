@@ -45,10 +45,12 @@ use pxl_portable::area::{Area, Shard};
 use pxl_portable::cast::Kind;
 use pxl_portable::cube::sentinel;
 use pxl_portable::ground::{self, Cell};
+use pxl_portable::scatter::PLACED_BLOCK;
 use pxl_portable::window::{self, Found};
+use pxl_portable::world;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::tile::terrain::GroundId;
-use pxl_spec::block::placed::{self, Cut, Held, BLOCK, SPLIT};
+use pxl_spec::block::placed::{Cut, Held};
 use pxl_spec::block::Block;
 use pxl_spec::procedural::Cave;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -130,42 +132,15 @@ impl World<'_> {
     }
 
     /// What is in `at`'s block, at its own zoom, `coarsest` or finer: none
-    /// where it is air or void, else what fills it or not, the layers read
-    /// top down, each handed down — what is placed, the objects' record, a
-    /// preview's cut its air; what the ways write; and the ground's, by its
-    /// one answer for a node (pxl-portable `ground::node`): the Earth's past
-    /// the service area, air over the windows' bound, else its column off the
-    /// windows and the caves' value. The column and the ways' runs over it
-    /// are read as the GPU reads them (pxl-portable `window::ground`,
-    /// `window::ways_over`), off what it drew and read back.
+    /// where it is air or void, else what fills it (`node`, asked at its
+    /// own zoom).
     pub(super) fn drawn(&self, at: &mut At) -> Answer<Option<Block>> {
-        let (zoom, b) = at.node;
+        let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        let c = b.map(|v| v as i32);
-        at.shard = at.shard.at(&Windowed, (zoom, [c[0], c[1]]));
-        let placed = placed::over(&self.objects.lanes(), at.placed, self.cut(self.carve), self.cut(self.hide), zoom, b.map(|v| v as i32), zoom);
-        if placed.says == BLOCK {
-            return Answer::Exact(Some(Block::Placed(placed.block)));
-        }
-        let (cave, shard, mut place) = (at.cave, at.shard, at.ground);
-        let mut reading = Reading::new(self, at);
-        let (ground, cell, carved, found) = ground::node(&mut reading, cave, shard, &mut place, (zoom, c), [zoom, zoom], true);
-        let answer = reading.answer(ground.kind != Kind::Lacks, || {
-            let (g, _) = window::ways_over(&Windowed, found, cell.runs, zoom, c, (ground.block, carved));
-            (g != u32::from(sentinel::void)).then_some(Block::Ground(g as GroundId))
-        });
-        at.ground = place;
-        answer
-    }
-
-    /// Whether the world holds nothing finer than `at`'s node, so every node
-    /// under it is the node itself (the ground decision's "Level of detail is
-    /// the world there"): the ground, its ways and the caves have no detail
-    /// past the ground's cells, and nothing placed or carved is finer in it,
-    /// none placed under it or one placed covering it whole.
-    fn whole(&self, at: &At) -> bool {
-        let (zoom, c) = at.node;
-        zoom >= GROUND.cell() && placed::whole(at.placed, self.cut(self.carve), zoom, c.map(|v| v as i32))
+        self.node(at, [zoom, zoom]).map(|i| match i {
+            In::Block(b) => b,
+            _ => None,
+        })
     }
 
     /// A preview's entry as pxl-portable `placed` takes it.
@@ -191,32 +166,37 @@ impl World<'_> {
     }
 
     /// What is in `at`'s node, asked from `far` to `near`, the zooms a reader
-    /// asks within it: at `near` (or finer), or where the world holds nothing
-    /// finer than the node (`whole`), the block (`drawn`); coarser, what is
-    /// placed under it splits it, else the ground's one answer for a node
-    /// (pxl-portable `ground::node`), whether anything under it fills at
-    /// those zooms.
-    pub(super) fn node(&self, at: &mut At, [far, near]: [Zoom; 2]) -> Answer<In> {
+    /// asks within it: the world's one query (pxl-portable `world::node`),
+    /// the ground read as the GPU reads it, off what it drew and read back
+    /// (`Windowed`), down the node's line through the residency
+    /// (`Reading`), after its shard, known before any layer answers it.
+    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2]) -> Answer<In> {
         let (zoom, c) = at.node;
-        // What is known of the area at it, asked once a node at its entry,
-        // here and in `drawn`, as the GPU's `Query::node` asks it: every
-        // reader of the node's shard after it reads it known.
-        at.shard = at.shard.at(&Windowed, (zoom, [c[0] as i32, c[1] as i32]));
-        if zoom >= near || self.whole(at) {
-            return self.drawn(at).map(In::Block);
-        }
-        if placed::over(&self.objects.lanes(), at.placed, Cut::NONE, Cut::NONE, zoom, c.map(|v| v as i32), near).says == SPLIT {
-            return Answer::Exact(In::Split);
-        }
-        let (cave, shard, mut place) = (at.cave, at.shard, at.ground);
+        let c = c.map(|v| v as i32);
+        at.shard = at.shard.at(&Windowed, (zoom, [c[0], c[1]]));
+        let (handed, mut place) = ((at.cave, at.placed, at.shard), at.ground);
+        let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);
         let mut reading = Reading::new(self, at);
-        let (ground, _, _, _) = ground::node(&mut reading, cave, shard, &mut place, (zoom, c.map(|v| v as i32)), [far, near], false);
-        let answer = reading.answer(ground.kind != Kind::Lacks, || match ground.kind {
-            Kind::Split => In::Split,
+        let (i, block) = world::node(&mut reading, &Windowed, &lanes, handed, &mut place, (zoom, c), asked, cuts);
+        let answer = reading.answer(i.kind != Kind::Lacks, || match (i.kind, block) {
+            (Kind::Split, _) => In::Split,
+            (_, true) => In::Block(block_of(i.block[0])),
             _ => In::Empty,
         });
         at.ground = place;
         answer
+    }
+}
+
+/// The block a composed value names (pxl-portable `world::node`): none
+/// for air or void, what is placed over `PLACED_BLOCK`, else the ground's.
+fn block_of(v: u32) -> Option<Block> {
+    if v == u32::from(sentinel::void) {
+        None
+    } else if v & PLACED_BLOCK != 0 {
+        Some(Block::Placed(v & !PLACED_BLOCK))
+    } else {
+        Some(Block::Ground(v as GroundId))
     }
 }
 

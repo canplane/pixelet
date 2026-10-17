@@ -448,7 +448,7 @@ impl Cell {
     /// one rule of where a cave may take it, ground under its face block, over
     /// its bedrock, off the area's wall, the face and the bedrock rounded to
     /// blocks as the column rounds them.
-    pub fn opens(&self, cell: Zoom, z: i32) -> bool {
+    fn opens(&self, cell: Zoom, z: i32) -> bool {
         let face = face_height(cell, self.top);
         self.look != UNKNOWN && z < blocks(cell, face as f32) - leaf_blocks(cell) && z >= rock(cell, face)
     }

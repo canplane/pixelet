@@ -12,7 +12,7 @@
 #![cfg_attr(target_arch = "spirv", no_std)]
 
 use pxl_portable::area::{Area, Shard};
-use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
+use pxl_portable::cast::{self, Detail, Ends, In, Met, Query, Until};
 use pxl_portable::caves::Cave;
 use pxl_portable::cube::object;
 use pxl_portable::decor::{Decor, COUNTS};
@@ -20,11 +20,11 @@ use pxl_portable::eye;
 use pxl_portable::fill::{self, column_of, level_of, put};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
-use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
+use pxl_portable::placed::{self, Cut, Held, Lanes, PLACED};
 use pxl_portable::scatter::{self, drawn, Grounds, PLACED_BLOCK, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
-use pxl_portable::{at, ray, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
+use pxl_portable::{at, ray, world, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::{spirv, Image};
@@ -263,43 +263,14 @@ impl Query for World<'_> {
         }
     }
 
-    /// What is in the node `c` at `zoom`, the layers top down: what is
-    /// placed, then the ground's one answer for a node (pxl-portable
-    /// `ground::node`); asked as a block at `near` or finer, or where the
-    /// world holds nothing finer — past the ground's cells, with nothing
-    /// placed or carved finer in it.
+    /// What is in the node `c` at `zoom`: the world's one query
+    /// (pxl-portable `world::node`), after its shard, known before any
+    /// layer answers it, so a stop's shard is its own whichever layer stops
+    /// it.
     fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<[u32; 2]> {
-        // What is known of the service area at the node, before any layer
-        // answers it: a stop's shard is its own, whichever layer stops it.
         at.shard = at.shard.at(self, (zoom, [c[0], c[1]]));
-        let mut block = zoom >= asked[1] || zoom >= LEAF_CELL;
-        // Asked of what is placed only where something is, or a preview cuts.
-        if at.placed.holds() || self.eye.carve.w as u32 != eye::NO_CUT {
-            let carve = cut(self.eye.carve);
-            block = zoom >= asked[1] || zoom >= LEAF_CELL && placed::whole(at.placed, carve, zoom, c);
-            let over = placed::over(self, at.placed, carve, cut(self.eye.hide), zoom, c, if block { zoom } else { asked[1] });
-            if over.says == BLOCK {
-                return In {
-                    kind: Kind::Block,
-                    block: [PLACED_BLOCK | over.block, 0],
-                };
-            }
-            if over.says == SPLIT {
-                return In { kind: Kind::Split, block: [VOID, 0] };
-            }
-        }
-        let (i, cell, carved, found) = ground::node(self, at.cave, at.shard, &mut at.ground, (zoom, c), asked, block);
-        // What the ways write over the ground's block, read as the CPU reads
-        // it (pxl-portable `window::ways_over`).
-        let (value, f) = if block && i.kind == Kind::Block {
-            window::ways_over(self, found, cell.runs, zoom, c, (i.block, carved))
-        } else {
-            i.block
-        };
-        In {
-            kind: i.kind,
-            block: [value, ground::word(f)],
-        }
+        let (w, cuts) = (*self, [cut(self.eye.carve), cut(self.eye.hide)]);
+        world::node(self, &w, &w, (at.cave, at.placed, at.shard), &mut at.ground, (zoom, c), asked, cuts).0
     }
 
     fn fills(&self, block: &[u32; 2]) -> bool {
