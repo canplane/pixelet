@@ -69,7 +69,6 @@ pub mod record {
     pub const HEAD: u32 = 10;
     pub const TRIANGLES: u32 = 0;
     pub const STRIP: u32 = 1;
-    pub const LINES: u32 = 2;
     pub const CULL_NONE: u32 = 0;
     pub const CULL_BACK: u32 = 1;
     pub const ALWAYS: u32 = 0;
@@ -85,12 +84,10 @@ pub mod record {
     pub const PER_VERTEX: u32 = 0;
     pub const PER_INSTANCE: u32 = 1;
     pub const U32X2: u32 = 6;
-    pub const F32: u32 = 0;
     pub const F32X2: u32 = 1;
     pub const F32X3: u32 = 2;
     pub const F32X4: u32 = 3;
     pub const U32X4: u32 = 4;
-    pub const U32: u32 = 5;
     pub const UNIFORM: u32 = 0;
     pub const UNIFORM_DYNAMIC: u32 = 1;
     pub const STORAGE: u32 = 2;
@@ -98,14 +95,12 @@ pub mod record {
     pub const TEXTURE_ARRAY: u32 = 4;
     pub const DEPTH: u32 = 5;
     pub const SAMPLER: u32 = 6;
-    pub const SAMPLER_COMPARISON: u32 = 7;
     pub const TEXTURE_UNFILTERED: u32 = 8;
     pub const STORAGE_RW: u32 = 9;
     pub const KEYS: &[&str] = &[
         "HEAD",
         "TRIANGLES",
         "STRIP",
-        "LINES",
         "CULL_NONE",
         "CULL_BACK",
         "ALWAYS",
@@ -121,12 +116,10 @@ pub mod record {
         "PER_VERTEX",
         "PER_INSTANCE",
         "U32X2",
-        "F32",
         "F32X2",
         "F32X3",
         "F32X4",
         "U32X4",
-        "U32",
         "UNIFORM",
         "UNIFORM_DYNAMIC",
         "STORAGE",
@@ -134,7 +127,6 @@ pub mod record {
         "TEXTURE_ARRAY",
         "DEPTH",
         "SAMPLER",
-        "SAMPLER_COMPARISON",
         "TEXTURE_UNFILTERED",
         "STORAGE_RW",
     ];

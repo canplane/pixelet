@@ -71,7 +71,6 @@
     "HEAD": 10,
     "TRIANGLES": 0,
     "STRIP": 1,
-    "LINES": 2,
     "CULL_NONE": 0,
     "CULL_BACK": 1,
     "ALWAYS": 0,
@@ -87,12 +86,10 @@
     "PER_VERTEX": 0,
     "PER_INSTANCE": 1,
     "U32X2": 6,
-    "F32": 0,
     "F32X2": 1,
     "F32X3": 2,
     "F32X4": 3,
     "U32X4": 4,
-    "U32": 5,
     "UNIFORM": 0,
     "UNIFORM_DYNAMIC": 1,
     "STORAGE": 2,
@@ -100,7 +97,6 @@
     "TEXTURE_ARRAY": 4,
     "DEPTH": 5,
     "SAMPLER": 6,
-    "SAMPLER_COMPARISON": 7,
     "TEXTURE_UNFILTERED": 8,
     "STORAGE_RW": 9
   }

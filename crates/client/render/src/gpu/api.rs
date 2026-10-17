@@ -399,9 +399,8 @@ fn vertex_format(code: u32) -> VertexFormat {
         record::F32X3 => VertexFormat::float32x3,
         record::F32X4 => VertexFormat::float32x4,
         record::U32X4 => VertexFormat::uint32x4,
-        record::U32 => VertexFormat::uint32,
         record::U32X2 => VertexFormat::uint32x2,
-        _ => VertexFormat::float32,
+        _ => xpute_kit::bug!(EINVAL, code),
     }
 }
 
@@ -427,7 +426,6 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
         record::TEXTURE_ARRAY => texture(TextureSampleType::float, TextureViewDimension::_2d_array),
         record::DEPTH => texture(TextureSampleType::depth, TextureViewDimension::_2d),
         record::TEXTURE_UNFILTERED => texture(TextureSampleType::unfilterable_float, TextureViewDimension::_2d),
-        record::SAMPLER_COMPARISON => L::Sampler(SamplerBindingType::comparison),
         _ => L::Sampler(SamplerBindingType::filtering),
     }
 }
@@ -611,7 +609,6 @@ impl Gpu {
                 primitive: encode::PrimitiveState {
                     topology: match words[2] {
                         record::STRIP => PrimitiveTopology::triangle_strip,
-                        record::LINES => PrimitiveTopology::line_list,
                         _ => PrimitiveTopology::triangle_list,
                     },
                     strip_index_format: None,
