@@ -31,7 +31,7 @@ use crate::scene::decor::drawn::{decor_sprite_px, sprite_reach};
 use crate::scene::decor::instance::GroupLanes;
 use crate::scene::frame::Frame;
 use crate::setting::store::settings_store;
-use crate::view::frame::pose::{globe, km_per_u, units_per_px_at};
+use crate::view::frame::pose::{km_per_u, units_per_px_at};
 use crate::view::observation::eye;
 
 const VARIANTS: [Asset; 3] = [Asset::sky_cloud_cumulus_1_glb, Asset::sky_cloud_cumulus_2_glb, Asset::sky_cloud_stratus_glb];
@@ -161,10 +161,9 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     let moved = drift(f64::from(env[ENV_SKY + 1]));
     let base = layer_u();
     let largest = WIDTH[1];
-    // To the horizon over the layer, and no farther than its largest cloud is a sprite's worth.
-    let r = globe().radius_u();
-    let horizon = |h: f64| libm::sqrt(2.0 * r * h + h * h);
-    let reach = (horizon(eye[2].max(0.0)) + horizon(base)).min(REACH_MAX);
+    // As far as the eye observes, a flat layer hiding under no horizon, and no
+    // farther than its largest cloud is a sprite's worth.
+    let reach = crate::view::observation::observation().map_or(0.0, |o| o.reach).min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
     let span = |k: usize| libm::floor((on_map[k] - reach) / BLOCK) as i64..=libm::floor((on_map[k] + reach) / BLOCK) as i64;
     let near = |key: [i64; 2]| {
