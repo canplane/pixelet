@@ -5,13 +5,14 @@
 //! "The query between them"), one record of a node answering two sizes.
 //!
 //! At the zoom a reader asks, it is what the node is, the block, by the one
-//! rule (`pxl-spec block/sample.rs` `at`), each source answering from its own
+//! rule (pxl-portable `ground::node`), each source answering from its own
 //! level of detail at that zoom and from what the node's parent found,
 //! handed down (`At`; `World::block` for an asker with none):
 //!
-//! - the ground: its tile drawing that zoom's cells, the cell's height and
-//!   face as it folds them, and the ways whose boxes reach the cell, found
-//!   on that tile (`Grid::read`, the cell and the ring about it);
+//! - the ground: its column off the windows, as the GPU drew it and the CPU
+//!   read it back, and the area's edge laid on it; the ways off the runs the
+//!   GPU wrote in its column and those about it, read as the GPU reads them
+//!   (pxl-portable `window::ground`, `window::ways_over`);
 //! - the caves: the hash pyramid's node at that zoom, its value
 //!   (`procedural.rs` `Cave`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
@@ -45,7 +46,7 @@ use pxl_portable::cast::Kind;
 use pxl_portable::cube::sentinel;
 use pxl_portable::ground::{self, Cell};
 use pxl_portable::mask::{filled, mask};
-use pxl_portable::window::Found;
+use pxl_portable::window::{self, Found};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::placed::{self, Cut, Held, BLOCK, SPLIT};
@@ -55,12 +56,11 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::{child_of, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
-use xpute_guest::global::Global;
 
-use super::block::Patch;
 use super::world::World;
 use crate::io::source;
 use crate::layer::residency::Line;
+use crate::layer::terrain::window::Windowed;
 use crate::layer::{Answer, Query};
 
 /// The coarsest zoom a block is asked at: the coarsest cells a tile draws.
@@ -95,10 +95,6 @@ pub(super) struct At {
     /// its own read steps from (pxl-portable `window::step`).
     ground: Found,
 }
-
-/// The patch a block reads its cell and the ring about it into, kept so a
-/// settled ask takes nothing from the heap.
-static CELL: Global<Patch> = Global::new();
 
 impl World<'_> {
     /// What is in the block `b` of `zoom`, X on the asker's lap, at its own
@@ -149,9 +145,10 @@ impl World<'_> {
     /// top down, each handed down — what is placed, the objects' record, a
     /// preview's cut its air; what the ways write; and the ground's, by its
     /// one answer for a node (pxl-portable `ground::node`): the Earth's past
-    /// the service area, air over its tile's bound, else its cell off the
-    /// tile drawing that zoom's cells, with the ring about it, and the caves'
-    /// value.
+    /// the service area, air over its tile's bound, else its column off the
+    /// windows and the caves' value. The column and the ways' runs over it
+    /// are read as the GPU reads them (pxl-portable `window::ground`,
+    /// `window::ways_over`), off what it drew and read back.
     pub(super) fn drawn(&self, at: &mut At) -> Answer<Option<Block>> {
         let (zoom, b) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
@@ -161,15 +158,11 @@ impl World<'_> {
         }
         let (cave, mut shard, mut place) = (at.cave, at.shard, at.ground);
         let mut reading = Reading::new(self, at);
-        let (ground, _, _) = ground::node(&mut reading, cave, &mut shard, &mut place, (zoom, b.map(|v| v as i32)), [zoom, zoom], true);
-        // The ways are read with the cell, and stand within its tile's bound.
-        let grid = reading.read.then(|| CELL.get(Patch::default).grid()).flatten();
-        let answer = reading.answer(ground.kind != Kind::Lacks, || match grid {
-            Some(grid) => grid.ways_over(b, ground.block),
-            None => (ground.block.0 != u32::from(sentinel::void)).then(|| {
-                let g = ground.block.0 as GroundId;
-                Block::Ground(g, ground.block.1.map(|v| v as GroundId))
-            }),
+        let c = b.map(|v| v as i32);
+        let (ground, cell, found) = ground::node(&mut reading, cave, &mut shard, &mut place, (zoom, c), [zoom, zoom], true);
+        let answer = reading.answer(ground.kind != Kind::Lacks, || {
+            let (g, fold) = window::ways_over(&Windowed, shard, found, cell, zoom, c, ground.block);
+            (g != u32::from(sentinel::void)).then(|| Block::Ground(g as GroundId, fold.map(|v| v as GroundId)))
         });
         (at.shard, at.ground) = (shard, place);
         answer
@@ -234,15 +227,13 @@ impl World<'_> {
 }
 
 /// The ground as a node's reading holds it (pxl-portable `ground::Held`):
-/// the world's residency down the node's line, the first tile it found
-/// lacked or only a coarser one standing in for, and whether the cell's grid
-/// was read, so the ways over it can be.
+/// the world's residency down the node's line, and the first tile it found
+/// lacked or only a coarser one standing in for.
 struct Reading<'r, 'a> {
     world: &'r World<'a>,
     at: &'r mut At,
     lacked: Option<Tile>,
     coarser: Option<Tile>,
-    read: bool,
 }
 
 impl<'r, 'a> Reading<'r, 'a> {
@@ -252,7 +243,6 @@ impl<'r, 'a> Reading<'r, 'a> {
             at,
             lacked: None,
             coarser: None,
-            read: false,
         }
     }
 
@@ -307,20 +297,10 @@ impl ground::Held for Reading<'_, '_> {
         }
     }
 
-    /// The block's cell and the ring about it read into the patch (`CELL`)
-    /// off the line the descent carries, as the ways over it are read with
-    /// it, off the patch itself: the patch reads its own place.
-    fn cell(&mut self, _: Shard, _: Found, zoom: Zoom, _: [i32; 3]) -> (Cell, bool) {
-        let (_, b) = self.at.node;
-        let line = self.world.line(self.at, zoom);
-        let patch = CELL.get(Patch::default);
-        let read = self.take(self.world.patch_ground(&line, (zoom, [b[0], b[1]]), zoom, zoom, 1, patch));
-        match read.and(patch.grid()) {
-            Some(grid) => {
-                self.read = true;
-                (grid.cell_at([b[0], b[1]]).unwrap_or(Cell::NONE), true)
-            }
-            None => (Cell::NONE, false),
-        }
+    /// The block's column off the windows, the area's edge laid on it, as
+    /// the GPU reads it (pxl-portable `window::ground`), stepped from where
+    /// its relief found its cells.
+    fn cell(&mut self, shard: Shard, place: Found, zoom: Zoom, c: [i32; 3]) -> (Cell, bool) {
+        (window::ground(&Windowed, shard, place, zoom, [c[0], c[1]]).0, true)
     }
 }

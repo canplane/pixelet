@@ -373,7 +373,9 @@ pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found,
 
 /// `found_at` for a node's cells at `cell` from its first, `g`, stepped
 /// from `above`, what a node over it found, or `NONE`: no find where it
-/// holds the answer. Asked at `cell`, the node's cells lie in the square
+/// holds the answer. Only a node a square wide or less sets a place
+/// (`bounded`), so every node a descent asks under it, a sibling from its
+/// parent's stack entry too, lies in that node. Asked at `cell`, the node's cells lie in the square
 /// that held `above`'s, so `find` reads what it read; asked a zoom finer,
 /// they lie in a square at `cell` whose cells fold into that one, so
 /// `find` reads that square alone and then what it read: one look. Else,
@@ -430,6 +432,125 @@ pub fn runs_in(w: &impl Squares, f: Found, zoom: Zoom, c: [i32; 2]) -> bool {
     let (from, slot) = (f.from(), f.slot());
     let i = square_of(cell_at(zoom, from, c)).1;
     column_first(w.column(from, slot, i + 1)) > column_first(w.column(from, slot, i))
+}
+
+/// The ground as a side's windows hold it, one reading for the GPU's
+/// query (gpu-query-shader `World`) and the CPU's (pxl-kernel
+/// layer/terrain/window.rs `Windowed`): the cells, the area's edge laid on
+/// them, and the ways their runs write.
+pub trait Windows: Ran + crate::area::Area {}
+
+impl<W: Ran + crate::area::Area> Windows for W {}
+
+const VOID: u32 = crate::cube::sentinel::void as u32;
+const UNKNOWN: u32 = crate::cube::sentinel::unknown as u32;
+
+/// The zoom a cell at `cell` is read at: past the leaves, a leaf's.
+pub const fn held_to(cell: Zoom) -> Zoom {
+    if cell > LEAF_CELL {
+        LEAF_CELL
+    } else {
+        cell
+    }
+}
+
+/// The ground's cell `g` at `cell`, off the finest window holding it
+/// present, stepped from `place` (`step`): its four looks, its height and
+/// where it is held; `void` at sea level where none holds it.
+pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, i32, Found) {
+    let (f, i) = step(w, place, cell, g, FIRST_CELL);
+    if !f.here() {
+        return (VOID, 0, f);
+    }
+    (w.look(f.from(), f.slot(), i), w.height(f.from(), f.slot(), i), f)
+}
+
+/// Whether the leaf cell `l` is gone: past the area, or nothing known of
+/// it, its look off the window drawing it.
+pub fn gone(w: &impl Windows, l: [i32; 2]) -> bool {
+    let (look, _, f) = cell(w, Found::NONE, LEAF_CELL, l);
+    crate::area::past(w, crate::area::tile_at(LEAF_CELL, l)) || crate::ground::own(look, f.from()) == UNKNOWN
+}
+
+/// Column `b` at `zoom` as the grid reads it: the cell drawing it, past
+/// the leaves a leaf's, stepped from `place`, with the area's edge laid on
+/// it (`area::edge`), none in a shard known `inside` the area, whose leaf
+/// cells about it are none of them gone; and where it is held.
+pub fn ground(w: &impl Windows, shard: crate::area::Shard, place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
+    let read = held_to(zoom);
+    let (word, h, f) = cell(w, place, read, [b[0] >> (zoom - read), b[1] >> (zoom - read)]);
+    let (look, h, fold) = crate::ground::read_cell(word, h, f.from());
+    // The leaf cells about it read by their offset, each its look alone.
+    let gone_at = |dx: i32, dy: i32| {
+        let s = zoom - LEAF_CELL;
+        !shard.inside() && gone(w, [wrap_index(LEAF_CELL, (b[0] >> s) + dx), (b[1] >> s) + dy])
+    };
+    let cell = crate::ground::Cell {
+        look: crate::area::edge(look, zoom, b, look == UNKNOWN, gone_at),
+        top: crate::ground::blocks(zoom, h),
+        fold,
+    };
+    (cell, f)
+}
+
+/// The ways about block `own` at `zoom` as the windows hold them (`ran`),
+/// off the window its ground's cell was read at (`found`) and the columns
+/// about it read off it: none in a column past the area or walled, as the
+/// rule writes none there (`ways::at`) — the own column's wall its cell as
+/// read (`cell`), each other's its own, none where its shard is `inside`.
+/// It holds the windows by value: a GPU holds no pointer in a struct.
+struct Over<W> {
+    w: W,
+    zoom: Zoom,
+    own: [i32; 2],
+    cell: crate::ground::Cell,
+    found: Found,
+    shard: crate::area::Shard,
+}
+
+impl<W: Windows> crate::ways::Airs for Over<W> {
+    fn at(&self, c: [i32; 2], z: i32) -> u32 {
+        let v = ran(&self.w, self.found, self.own, self.zoom, c, z, FIRST_CELL);
+        if v == crate::ways::NOTHING {
+            return v;
+        }
+        let walled = if c[0] == self.own[0] && c[1] == self.own[1] {
+            self.cell.look == UNKNOWN
+        } else {
+            let past = self.zoom >= crate::SHARD_ZOOM && !self.shard.inside() && crate::area::past(&self.w, crate::area::tile_at(self.zoom, c));
+            past || ground(&self.w, self.shard, Found::NONE, self.zoom, c).0.look == UNKNOWN
+        };
+        if walled {
+            crate::ways::NOTHING
+        } else {
+            v
+        }
+    }
+}
+
+/// Block `c` at `zoom` with what the ways write over the ground's block
+/// there (`ways::block`), `block` its look and its fold's four, `cell` the
+/// column it was read off and `found` where: air, or a way's look whole.
+/// Only a way in the block's own column writes in it, or the air of one
+/// beside where the caves carved the ground (`runs_in`).
+pub fn ways_over(w: &(impl Windows + Copy), shard: crate::area::Shard, found: Found, cell: crate::ground::Cell, zoom: Zoom, c: [i32; 3], block: (u32, [u32; 4])) -> (u32, [u32; 4]) {
+    let carved = block.0 == VOID && cell.block(zoom, c[2], false).0 != VOID;
+    if !carved && !runs_in(w, found, zoom, [c[0], c[1]]) {
+        return block;
+    }
+    let over = Over {
+        w: *w,
+        zoom,
+        own: [c[0], c[1]],
+        cell,
+        found,
+        shard,
+    };
+    match crate::ways::block(&over, c, carved) {
+        crate::ways::NOTHING => block,
+        crate::ways::AIR => (VOID, [VOID; 4]),
+        way => (way, [way; 4]),
+    }
 }
 
 /// The finest window, at `cell` or coarser to `top`, holding cell `g` (at

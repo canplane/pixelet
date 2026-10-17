@@ -190,7 +190,7 @@ pub fn wall(look: u32, cell: Zoom, gone: bool, beside: bool) -> u32 {
 }
 
 /// A cell's look with the area's edge laid, the one rule every grid reads it
-/// by (pxl-spec block/sample.rs `Grid::wall_off`, gpu-query's `column`):
+/// by (pxl-spec block/sample.rs `Grid::wall_off`, `window::ground`):
 /// `gone` where the cell is past the area or nothing is known of it; at a
 /// leaf's cells or finer, ground beside one gone is the wall (`wall`), where
 /// the leaf cells the eight about the block `b` at `cell` lie in (`ring`) are

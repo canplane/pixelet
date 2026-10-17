@@ -21,7 +21,6 @@ use crate::chunk::Chunk;
 use crate::layer::object::preview::draft;
 use crate::layer::place::carto_zoom;
 use crate::layer::Base;
-use crate::layer::Query;
 use crate::query::{Detail, Ray, World};
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;

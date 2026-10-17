@@ -20,7 +20,6 @@ use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
 use pxl_portable::scatter::{self, drawn, Grounds, GROWN_AT, GROWN_WORDS, PLACED_BLOCK, SQUARE_BLOCKS};
-use pxl_portable::ways;
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
 use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
@@ -63,18 +62,6 @@ fn cut(e: IVec4) -> Cut {
 
 const VOID: u32 = sentinel::void as u32;
 const PLACED_AIR: u32 = PLACED_BLOCK | object::air as u32;
-const UNKNOWN: u32 = sentinel::unknown as u32;
-
-/// A cell's or a window's zoom, held to the eye's windows: past the leaves,
-/// the leaves'. None coarser than the first is asked: a ray's range starts at
-/// the top tile's cells (pxl-kernel view/lens.rs `gpu_cast`, `asked`).
-fn held_to(cell: u32) -> u32 {
-    if cell > LEAF_CELL {
-        LEAF_CELL
-    } else {
-        cell
-    }
-}
 
 /// Square `square`'s first word in the ground's buffer (pxl-portable
 /// `window::SQUARE_WORDS`).
@@ -167,34 +154,6 @@ impl World<'_> {
         }
         filled
     }
-
-    /// The ground's cell `g` at `cell`, off the finest window holding it
-    /// present, stepped from `place` (`window::step`): its four looks, its
-    /// height and where it is held; `void` at sea level where none holds it.
-    fn cell_at(&self, place: Found, cell: u32, g: [i32; 2]) -> (u32, i32, Found) {
-        let (f, i) = window::step(self, place, cell, g, FIRST_CELL);
-        if !f.here() {
-            return (VOID, 0, f);
-        }
-        (self.look(f.from(), f.slot(), i), self.height(f.from(), f.slot(), i), f)
-    }
-
-    /// The ground's cell `b` of `zoom` as the grid reads it, before the
-    /// area's edge is laid: the cell drawing it, past the leaves a leaf's;
-    /// and where it is held, stepped from `place`.
-    fn ground_at(&self, place: Found, zoom: u32, b: [i32; 2]) -> (u32, f32, [u32; 4], Found) {
-        let read = held_to(zoom);
-        let (w, h, f) = self.cell_at(place, read, [b[0] >> (zoom - read), b[1] >> (zoom - read)]);
-        let (look, h, fold) = ground::read_cell(w, h, f.from());
-        (look, h, fold, f)
-    }
-
-    /// Whether the leaf cell `l` is gone: past the area, or nothing known
-    /// of it, its look off the window drawing it.
-    fn gone(&self, l: [i32; 2]) -> bool {
-        let (w, _, f) = self.cell_at(Found::NONE, LEAF_CELL, l);
-        area::past(self, area::tile_at(LEAF_CELL, l)) || ground::own(w, f.from()) == UNKNOWN
-    }
 }
 
 /// The eye's windows, as the GPU holds them.
@@ -223,76 +182,20 @@ impl Ran for World<'_> {
     }
 }
 
-/// The ways about block `own` the descent asks at `zoom`, as the windows
-/// hold them (`window::ran`), off the window its ground's cell was read at
-/// (`found`) and the columns about it read off it: none in a column past
-/// the area or walled, as the rule writes none there (pxl-portable
-/// `ways::at`) — the own column's wall its cell as read (`cell`), each
-/// other's its own, none where the node's shard is `inside` the area.
-struct Ways<'w> {
-    world: World<'w>,
-    zoom: u32,
-    own: [i32; 2],
-    cell: ground::Cell,
-    found: Found,
-    shard: Shard,
-}
-
-impl ways::Airs for Ways<'_> {
-    fn at(&self, c: [i32; 2], z: i32) -> u32 {
-        let v = window::ran(&self.world, self.found, self.own, self.zoom, c, z, FIRST_CELL);
-        if v == ways::NOTHING {
-            return v;
-        }
-        let walled = if c[0] == self.own[0] && c[1] == self.own[1] {
-            self.cell.look == UNKNOWN
-        } else {
-            let past = self.zoom >= SHARD_ZOOM && !self.shard.inside() && area::past(&self.world, area::tile_at(self.zoom, c));
-            past || self.world.column(self.shard, Found::NONE, self.zoom, c).0.look == UNKNOWN
-        };
-        if walled {
-            ways::NOTHING
-        } else {
-            v
-        }
-    }
-}
-
 /// The ground as the GPU holds it, for pxl-portable's one answer for a node.
 impl ground::Held for World<'_> {
     /// The bound over the node of the window `cell` reads its cells from,
     /// the finest holding them present (`window::bounded`), as the CPU reads
     /// it (pxl-portable `Held::relief`).
     fn relief(&mut self, place: &mut Found, cell: u32, (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
-        let (r, _, here) = window::bounded(self, place, held_to(cell), (zoom, [c[0], c[1]]), FIRST_CELL);
+        let (r, _, here) = window::bounded(self, place, window::held_to(cell), (zoom, [c[0], c[1]]), FIRST_CELL);
         (r, here)
     }
 
     /// The block's column off the tile drawing that zoom's cells, the area's
     /// edge laid on it (pxl-kernel query/node.rs `drawn`).
     fn cell(&mut self, shard: Shard, place: Found, zoom: u32, c: [i32; 3]) -> (ground::Cell, bool) {
-        (self.column(shard, place, zoom, [c[0], c[1]]).0, true)
-    }
-}
-
-impl World<'_> {
-    /// Column `b` at `zoom` off the tile drawing that zoom's cells, the
-    /// area's edge laid on it, and the window it is read off, stepped from
-    /// `place`. In a shard known `inside` the area no leaf cell about it is
-    /// gone, so none is read.
-    fn column(&self, shard: Shard, place: Found, zoom: u32, b: [i32; 2]) -> (ground::Cell, Found) {
-        let (look, h, fold, found) = self.ground_at(place, zoom, b);
-        // The leaf cells about it read by their offset, each its look alone.
-        let gone_at = |dx: i32, dy: i32| {
-            let s = zoom - LEAF_CELL;
-            !shard.inside() && self.gone([wrap_index(LEAF_CELL, (b[0] >> s) + dx), (b[1] >> s) + dy])
-        };
-        let cell = ground::Cell {
-            look: area::edge(look, zoom, b, look == UNKNOWN, gone_at),
-            top: ground::blocks(zoom, h),
-            fold,
-        };
-        (cell, found)
+        (window::ground(self, shard, place, zoom, [c[0], c[1]]).0, true)
     }
 }
 
@@ -357,32 +260,13 @@ impl Query for World<'_> {
             }
         }
         let (i, cell, found) = ground::node(self, at.cave, &mut at.shard, &mut at.ground, (zoom, c), asked, block);
-        let (mut value, mut f) = i.block;
-        // What the ways write over the ground's block (pxl-portable
-        // `ways::block`), as the CPU lays them (pxl-spec block/sample.rs
-        // `ways_over`): air, or a way's look whole.
-        if block && i.kind == Kind::Block {
-            // Off the window the ground's cell was read at: one find a block.
-            // Carved: air as the caves answer it where the grid's ground fills,
-            // which the air of a way beside it recolours; else only a way in
-            // the block's own column writes in it.
-            let carved = value == VOID && cell.block(zoom, c[2], false).0 != VOID;
-            if carved || window::runs_in(self, found, zoom, [c[0], c[1]]) {
-                let ways = Ways {
-                    world: *self,
-                    zoom,
-                    own: [c[0], c[1]],
-                    cell,
-                    found,
-                    shard: at.shard,
-                };
-                let way = ways::block(&ways, c, carved);
-                if way != ways::NOTHING {
-                    value = if way == ways::AIR { VOID } else { way };
-                    f = [value; 4];
-                }
-            }
-        }
+        // What the ways write over the ground's block, read as the CPU reads
+        // it (pxl-portable `window::ways_over`).
+        let (value, f) = if block && i.kind == Kind::Block {
+            window::ways_over(self, at.shard, found, cell, zoom, c, i.block)
+        } else {
+            i.block
+        };
         In {
             kind: i.kind,
             block: [value, f[0] & 0xff | (f[1] & 0xff) << 8 | (f[2] & 0xff) << 16 | (f[3] & 0xff) << 24],

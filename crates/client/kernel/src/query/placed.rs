@@ -14,7 +14,6 @@ use xpute_kit::status::errno::Errno;
 
 use super::world::World;
 use crate::layer::object::store::{Cells, Entry, EntryAt};
-use crate::layer::Query;
 
 impl<'a> World<'a> {
     /// What is placed at exactly `at`, air left out.

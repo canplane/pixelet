@@ -10,6 +10,7 @@
 //! still to come: one that enters asks its tile again (`Residency::again`),
 //! which the browser's cache answers.
 
+use pxl_portable::area::Area;
 use pxl_portable::ground::{own, word};
 use pxl_portable::window::{self, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
 use pxl_portable::wrap_index;
@@ -24,6 +25,7 @@ use xpute_guest::global::Global;
 use xpute_guest::mem::base::{off_of, off_of_slice};
 use xpute_kit::collection::list::List;
 
+use crate::io::source::Declared;
 use crate::layer::kept::Offered;
 use crate::layer::terrain::fixed::{back_off, cells_off, fill_off, looks_off, CELLS_BYTES, CELLS_LANE_BYTES, LOOK_LANE_BYTES, RANGE};
 use crate::layer::Base;
@@ -442,9 +444,22 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> Offered {
 
 /// The windows as the CPU holds them, for pxl-portable's one reading of a
 /// cell (`window::find`, `window::bounded`, `window::ran`): each square's
-/// columns, levels and runs as the GPU drew and folded them, read back.
+/// columns, levels and runs as the GPU drew and folded them, read back; and
+/// the service area they end at (`window::Windows`).
 #[derive(Clone, Copy)]
 pub struct Windowed;
+
+impl Area for Windowed {
+    fn ends(&self) -> bool {
+        Declared.ends()
+    }
+    fn shards(&self) -> u32 {
+        Declared.shards()
+    }
+    fn shard(&self, i: u32) -> (Zoom, [i32; 2]) {
+        Declared.shard(i)
+    }
+}
 
 impl Cells for Windowed {
     fn cell(&self, cell: Zoom, g: [i32; 2]) -> (u32, i32, Zoom) {

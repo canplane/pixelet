@@ -95,8 +95,6 @@ pub const fn boxes_for(points: usize) -> usize {
     }
 }
 
-pub const MAX_BOXES: usize = boxes_for(MAX_POINTS);
-
 /// Whether a record's room holds `lines` lines of `points` points.
 pub const fn holds(lines: usize, points: usize) -> bool {
     lines <= MAX_LINES && points <= MAX_POINTS
@@ -604,15 +602,15 @@ impl Lanes<'_> {
     }
 
     /// Into a client's record: every lane but `coarsest`, which only a fold
-    /// reads, and only the bake folds.
+    /// reads, and `boxes`, which only a bake's sweep over a grid reads
+    /// (`segments_over`); a client reads a square's lines whole
+    /// (bake/tile/terrain.rs `square_lines`).
     pub fn into_room(&self, room: Room) -> Separation {
         fn put<T: Copy>(dst: &'static mut [T], src: &[T]) -> &'static [T] {
             let dst = &mut dst[..src.len()];
             dst.copy_from_slice(src);
             dst
         }
-        let boxes = &mut room.boxes[..boxes_for(self.points.len())];
-        build_boxes(self.starts, self.points, self.width, boxes);
         Separation {
             starts: put(room.starts, self.starts).into(),
             points: put(room.points, self.points).into(),
@@ -622,7 +620,7 @@ impl Lanes<'_> {
             kind: put(room.kind, self.kind).into(),
             form: put(room.form, self.form).into(),
             clear: put(room.clear, self.clear).into(),
-            boxes: (&*boxes).into(),
+            boxes: Cow::Borrowed(&[]),
         }
     }
 }
@@ -737,7 +735,7 @@ impl Iterator for Near<'_> {
     }
 }
 
-/// A record's room for lines, each lane `MAX_LINES` or `MAX_POINTS` long, and `MAX_BOXES` for the boxes.
+/// A record's room for lines, each lane `MAX_LINES` or `MAX_POINTS` long.
 pub struct Room {
     pub starts: &'static mut [u32],
     pub points: &'static mut [[i16; 2]],
@@ -746,7 +744,6 @@ pub struct Room {
     pub kind: &'static mut [u8],
     pub form: &'static mut [u8],
     pub clear: &'static mut [u8],
-    pub boxes: &'static mut [[i16; 4]],
 }
 
 #[cfg(test)]

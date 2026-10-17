@@ -1,14 +1,12 @@
 // pxl-kernel/query/block.rs
 
-//! The ground a block's cell reads (`World::ground`: its tile and those beside
-//! it) and a cell's surface, for the world's one query (`World::block`,
-//! node.rs). Neither reads a layer's storage.
+//! The ground a patch of cells reads (`World::ground`: its tile's cells
+//! off the windows) and a cell's surface. Neither reads a layer's storage.
 
 use pxl_spec::bake::tile::terrain::GroundId;
-use pxl_spec::block::sample::{beside_index, Around, Grid, Refused};
+use pxl_spec::block::sample::{Around, Grid, Refused};
 use pxl_spec::space::coord::world::wrap_index;
 use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
@@ -17,7 +15,6 @@ use super::world::World;
 use crate::io::source;
 use crate::layer::residency::Line;
 use crate::layer::terrain::window::Windowed;
-use crate::layer::terrain::Source;
 use crate::layer::{Answer, Query};
 
 /// The ground's top in a cell, in units, and the block its face is.
@@ -27,12 +24,10 @@ pub struct Surface {
     pub block: GroundId,
 }
 
-/// The ground a node's cells are read from (`World::ground`), which a
-/// build is keyed by: its own tile's source and those beside it.
+/// The ground a node's cells are read from (`World::ground`): its own
+/// tile's cells, off the windows.
 #[derive(Clone, Copy)]
-pub struct Ground<'a> {
-    pub own: Source<'a>,
-    pub beside: [Option<Source<'a>>; 8],
+pub struct Ground {
     pub(super) tile: Tile,
     /// The own tile's first cell at `cell`, named on the node's lap round
     /// the world as the node is.
@@ -40,16 +35,14 @@ pub struct Ground<'a> {
     cell: Zoom,
 }
 
-impl<'a> Ground<'a> {
-    /// The tiles as the one rule reads them, their cells off the windows.
-    pub(super) fn around(&self) -> Around<'a, Windowed> {
+impl Ground {
+    /// The tile's cells as the grid reads them, off the windows.
+    pub(super) fn around(&self) -> Around<Windowed> {
         let zoom = GROUND.cell_zoom(self.tile.zoom);
         Around {
             cells: Windowed,
             first: self.first_at(zoom),
             zoom,
-            own: self.own.view(),
-            beside: self.beside.map(|b| b.map(|s| s.view())),
             past: source::past_at,
         }
     }
@@ -61,29 +54,15 @@ impl<'a> Ground<'a> {
     }
 }
 
-/// Drawn tile cells a grid cell at `cell` spans upright and across, as a
-/// shift: past the leaves none.
-fn folds(cell: Zoom) -> u32 {
-    let tile = GROUND.read_zoom(cell);
-    GROUND.cell_zoom(tile).saturating_sub(cell)
-}
-
 impl<'a> World<'a> {
-    /// The ground the cells of `node` at `cell` are read from, a ring of
-    /// `ring` cells about them included: its own tile, the one `line` walked
-    /// to, read as a chunk reads it, and the tiles beside it the ring reaches.
-    pub(super) fn ground(&self, line: &Line, node: (Zoom, [i64; 2]), cell: Zoom, ring: u32) -> Answer<Ground<'a>> {
-        let mut beside = [None; 8];
-        for ([qx, qy], p) in GROUND.read_beside(node, cell, ring << folds(cell)) {
-            // A tile is read at its own cells.
-            beside[beside_index(qx, qy)] = self.terrain.read((p.zoom, [p.at[0], p.at[1], 0]), GROUND.grid_zoom(p.zoom)).value();
-        }
+    /// The ground the cells of `node` at `cell` are read from: the tile
+    /// `line` walked to, where the windows hold its cells under the node.
+    pub(super) fn ground(&self, line: &Line, node: (Zoom, [i64; 2]), cell: Zoom) -> Answer<Ground> {
         let tile = line.tile;
         let mut first = tile.at.map(|v| v << (cell - tile.zoom));
         let x = node.1[0] << (cell - node.0);
         first[0] = x - wrap_index(cell, x - first[0]);
-        let Some(own) = self.terrain.source_of(line) else { return Answer::Nothing(tile) };
-        self.terrain.cells_held(line, node).map(|()| Ground { own, beside, tile, first, cell })
+        self.terrain.cells_held(line, node).map(|()| Ground { tile, first, cell })
     }
 
     /// The ground of `node`'s cells at `zoom` and `ring` about them, read off
@@ -96,7 +75,7 @@ impl<'a> World<'a> {
         if into.earth {
             return Answer::Exact(());
         }
-        self.ground(line, node, cell, ring).and_then(|g| {
+        self.ground(line, node, cell).and_then(|g| {
             let d = zoom as i32 - node.0 as i32;
             let (own, across) = match d {
                 0.. => (node.1.map(|v| v << d), 1 << d),

@@ -10,7 +10,7 @@
 
 use crate::layer::kept::Kept;
 use crate::layer::residency::Residency;
-use pxl_spec::bake::separation::{self, MAX_BOXES, MAX_LINES, MAX_POINTS};
+use pxl_spec::bake::separation::{self, MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::Tile;
@@ -95,7 +95,6 @@ unsafe fn room_of(record: u32) -> separation::Room {
             kind: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(4)), MAX_LINES),
             form: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(5)), MAX_LINES),
             clear: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(6)), MAX_LINES),
-            boxes: core::slice::from_raw_parts_mut(ptr_at::<[i16; 4]>(separation_lane(7)), MAX_BOXES),
         }
     }
 }

@@ -8,12 +8,9 @@
 
 use pxl_portable::window::{self as cells, Found, SQUARE_SHIFT};
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::block::sample::TileSource;
-use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::q3;
-use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{base_of, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
-use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, Tile};
 
@@ -23,28 +20,6 @@ use crate::layer::terrain::window::Windowed;
 use pxl_portable::window::FIRST_CELL;
 
 use crate::layer::{Answer, Bound, Query};
-
-/// Where a node's cells are read from: the tile that answered, and where the
-/// first cell of the tile asked lies in it, `n` of the asked tile's cells to
-/// one of its own.
-#[derive(Clone, Copy)]
-pub struct Source<'a> {
-    pub tile: &'a TerrainTile,
-    pub from: Tile,
-    pub origin: [i64; 2],
-    pub n: u32,
-}
-
-impl<'a> Source<'a> {
-    pub fn view(&self) -> TileSource<'a> {
-        TileSource {
-            separation: &self.tile.separation,
-            frame: Frame::of(self.from),
-            origin: self.origin,
-            n: self.n,
-        }
-    }
-}
 
 impl Residency<TerrainTile> {
     /// The lowest and highest the ground holds over the column `node`'s own
@@ -91,19 +66,6 @@ impl Residency<TerrainTile> {
         }
         held(line, coarsest, true, ())
     }
-
-    /// The cells of the tile `line` walked to as the resident tile it is
-    /// drawn from holds them; none where none is held.
-    pub fn source_of(&self, line: &Line) -> Option<Source<'_>> {
-        let from = line.drawn?;
-        let corner = GROUND.cell_at(line.tile, GROUND.cell_index(0, 0));
-        Some(Source {
-            tile: self.get(from)?,
-            from,
-            origin: corner.in_tile_above(line.tile.zoom - from.zoom),
-            n: count(GROUND.cell_zoom(line.tile.zoom), GROUND.cell_zoom(from.zoom)),
-        })
-    }
 }
 
 /// The tile a node's bound is read from: its cells' tile, within the
@@ -143,8 +105,6 @@ fn past(node: Node<2>) -> bool {
 }
 
 impl Query for Residency<TerrainTile> {
-    type Record<'a> = Source<'a>;
-
     type Cursor = Line;
 
     fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Line {
@@ -182,15 +142,5 @@ impl Query for Residency<TerrainTile> {
                 finest: GROUND.cell(),
             })
         })
-    }
-
-    /// The lines over the node's tile, as `held` says the tile it is drawn
-    /// from: exact where a resident tile says it, else coarser.
-    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Source<'_>> {
-        let line = self.cursor(node, cell);
-        match self.source_of(&line) {
-            Some(s) => held(&line, GROUND.cell_zoom(s.from.zoom), true, s),
-            None => Answer::Nothing(line.tile),
-        }
     }
 }

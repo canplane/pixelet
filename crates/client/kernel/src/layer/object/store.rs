@@ -429,7 +429,6 @@ impl Cells<'_> {
 }
 
 impl Query for Store {
-    type Record<'a> = Cells<'a>;
     /// What a cube holds, its parent's handed down (pxl-portable `placed`);
     /// a node over the ground's two axes is read under it.
     type Cursor = Held;
@@ -485,8 +484,12 @@ impl Query for Store {
         }
         Answer::Exact(out)
     }
+}
 
-    fn read(&self, node: Node<3>, _: Zoom) -> Answer<Cells<'_>> {
+impl Store {
+    /// What is placed in the node, read where it stands: all resident, so
+    /// exact.
+    pub fn read(&self, node: Node<3>, _: Zoom) -> Answer<Cells<'_>> {
         Answer::Exact(Cells { store: self, node })
     }
 }

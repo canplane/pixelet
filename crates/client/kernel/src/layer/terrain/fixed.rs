@@ -7,7 +7,7 @@
 //! word its cells come back under; then the room a fill works in, once.
 
 use pxl_portable::window::{BACK_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
-use pxl_spec::bake::separation::{MAX_BOXES, MAX_LINES, MAX_POINTS};
+use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::LOOK_LANE;
 
 use crate::layer::residency::Residency;
@@ -25,8 +25,8 @@ const fn lane(count: usize, size: usize) -> u32 {
 }
 
 /// The separation's lanes, a plane each in order: line starts, points, tops,
-/// width, kind, form, clear, boxes.
-pub const SEPARATION_LANE_BYTES: [u32; 8] = [
+/// width, kind, form, clear.
+pub const SEPARATION_LANE_BYTES: [u32; 7] = [
     lane(MAX_LINES + 1, 4),
     lane(MAX_POINTS, 4),
     lane(MAX_POINTS, 2),
@@ -34,7 +34,6 @@ pub const SEPARATION_LANE_BYTES: [u32; 8] = [
     lane(MAX_LINES, 1),
     lane(MAX_LINES, 1),
     lane(MAX_LINES, 1),
-    lane(MAX_BOXES, 8),
 ];
 
 const fn sum(lanes: &[u32]) -> u32 {

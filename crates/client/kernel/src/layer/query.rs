@@ -47,13 +47,6 @@ impl Bound {
 
 /// A layer's answers, by the node asked.
 pub trait Query {
-    /// A node's cells at the zoom asked: a view over what holds them, never
-    /// a copy, so reading one only for what answered costs nothing; it names
-    /// what answered, which a build is keyed by.
-    type Record<'a>
-    where
-        Self: 'a;
-
     /// What a descent carries from a node to its children.
     type Cursor: Copy;
 
@@ -72,7 +65,4 @@ pub trait Query {
     fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         self.bound(&self.cursor(node, cell), node, cell)
     }
-
-    /// The node's cells at `cell`, no coarser than the node.
-    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Self::Record<'_>>;
 }
