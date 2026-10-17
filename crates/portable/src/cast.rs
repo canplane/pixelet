@@ -433,8 +433,8 @@ pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, un
         stop: Stop {
             t: 0.0,
             axis: 0,
-            place: root,
-            at: q.root(root.node(o)),
+            place: from.place,
+            at: from.at,
             block: Q::AIR,
         },
         visits: 0,
