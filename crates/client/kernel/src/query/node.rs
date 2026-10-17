@@ -270,11 +270,11 @@ impl Area for Reading<'_, '_> {
     fn ends(&self) -> bool {
         source::Declared.ends()
     }
-    fn keys(&self) -> u32 {
-        source::Declared.keys()
+    fn entries(&self) -> u32 {
+        source::Declared.entries()
     }
-    fn key(&self, i: u32) -> u32 {
-        source::Declared.key(i)
+    fn entry(&self, i: u32) -> u32 {
+        source::Declared.entry(i)
     }
 }
 

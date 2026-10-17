@@ -27,17 +27,17 @@ use crate::view::lens;
 /// made then and not again.
 static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 
-/// The area's index (pxl-portable `area::Area`), its keys four a row, the
-/// last row's tail `NO_KEY`, which sorts last; a row of them where none is
-/// declared, since a binding holds at least one.
+/// The area's index (pxl-portable `area::Area`), its entries four a row,
+/// the last row's tail `NO_KEY`, which sorts last; a row of them where none
+/// is declared, since a binding holds at least one.
 pub fn shards() -> &'static [[i32; 4]] {
     let declared = crate::io::source::top().is_some();
     let (made, s) = SHARDS.get(|| (false, Vec::new()));
     if s.is_empty() || *made != declared {
         s.clear();
-        let keys = crate::io::source::keys();
-        let key = |i: usize| keys.get(i).copied().unwrap_or(pxl_portable::area::NO_KEY) as i32;
-        s.extend((0..keys.len().div_ceil(4).max(1)).map(|r| core::array::from_fn(|k| key(4 * r + k))));
+        let entries = crate::io::source::entries();
+        let entry = |i: usize| entries.get(i).copied().unwrap_or(pxl_portable::area::NO_KEY) as i32;
+        s.extend((0..entries.len().div_ceil(4).max(1)).map(|r| core::array::from_fn(|k| entry(4 * r + k))));
         *made = declared;
     }
     s

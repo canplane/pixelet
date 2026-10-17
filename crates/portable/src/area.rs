@@ -13,18 +13,20 @@ use crate::{index_at, wrap_index as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL,
 
 use crate::ground::{UNKNOWN, VOID};
 
-/// The shards a source serves, as one index both sides search
-/// (`serves`): every cell at `SHARD_ZOOM` a served shard covers, a coarser
-/// shard's each, by key (`shard_key`) in ascending order. On the CPU its
-/// declaration's, on a GPU a buffer of it.
+/// The shards a source serves, as one index both sides search (`found`):
+/// every cell at `SHARD_ZOOM` a served shard covers, a coarser shard's
+/// each, and every cell beside one, an entry a cell (`index_entry`: its
+/// key, `shard_key`, over which of the nine about it are served), by key in
+/// ascending order. A cell with none is beside no served one, none of its
+/// nine served. On the CPU its declaration's, on a GPU a buffer of it.
 pub trait Area {
     /// Whether the area ends at all: before a source is declared, nothing
     /// is past it.
     fn ends(&self) -> bool;
-    /// How many keys the index holds; past its served cells' it may hold
-    /// `NO_KEY`s, which sort last and name none.
-    fn keys(&self) -> u32;
-    fn key(&self, i: u32) -> u32;
+    /// How many entries the index holds; past its served cells' it may
+    /// hold `NO_KEY`s, which sort last and name none.
+    fn entries(&self) -> u32;
+    fn entry(&self, i: u32) -> u32;
 }
 
 /// A cell at `SHARD_ZOOM`'s key: its quadkey, its X's and Y's bits
@@ -46,27 +48,58 @@ pub const fn shard_key(c: [i32; 2]) -> u32 {
 /// No cell's key: past every one, so it sorts last.
 pub const NO_KEY: u32 = u32::MAX;
 
-/// Whether the cell `c` at `SHARD_ZOOM` is served: its key found in the
-/// index by halving it, a look a step.
-pub fn serves(area: &impl Area, c: [i32; 2]) -> bool {
+/// An entry of the index (`Area`): a cell's key (`shard_key`) over which
+/// of the nine about it are served (`nine`), bit `(dy + 1)·3 + (dx + 1)` as
+/// `Shard::served` holds them, its own among them. The nine are a fact of
+/// the area a cell at a time, laid in its entry once where the index is
+/// made (pxl-kernel io/source.rs), so a node's shard is one search
+/// (`Shard::at`); `NO_KEY` names none, past every key.
+pub const fn index_entry(key: u32, nine: u32) -> u32 {
+    key << SHARD_SERVED_BITS | nine
+}
+const _: () = assert!(2 * SHARD_ZOOM + SHARD_SERVED_BITS < 32, "an entry's key and nine in a word, under NO_KEY's");
+
+/// Which of the nine cells at `SHARD_ZOOM` about `own` are served, as
+/// `served` says of each, bit `(dy + 1)·3 + (dx + 1)` for the cell `dx, dy`
+/// from it: an entry's nine (`index_entry`).
+pub fn nine(served: impl Fn([i32; 2]) -> bool, own: [i32; 2]) -> u32 {
+    let mut bits = 0u32;
+    let mut k = 0u32;
+    while k < 9 {
+        let n = [wrap(SHARD_ZOOM, own[0] + (k % 3) as i32 - 1), own[1] + (k / 3) as i32 - 1];
+        bits |= (served(n) as u32) << k;
+        k += 1;
+    }
+    bits
+}
+
+/// The cell `c` at `SHARD_ZOOM`'s nine (`index_entry`): its entry found in
+/// the index by halving it, a look a step; none served where it has none.
+pub fn found(area: &impl Area, c: [i32; 2]) -> u32 {
     let k = shard_key(c);
-    let (mut lo, mut hi) = (0, area.keys());
+    let n = area.entries();
+    let (mut lo, mut hi) = (0, n);
     while lo < hi {
         let mid = lo + (hi - lo) / 2;
-        if area.key(mid) < k {
+        if area.entry(mid) >> SHARD_SERVED_BITS < k {
             lo = mid + 1;
         } else {
             hi = mid;
         }
     }
-    k != NO_KEY && lo < area.keys() && area.key(lo) == k
+    let e = if lo < n { area.entry(lo) } else { NO_KEY };
+    if k != NO_KEY && e >> SHARD_SERVED_BITS == k {
+        e & SHARD_ALL
+    } else {
+        0
+    }
 }
 
 /// Whether the leaf tile `leaf` is past the area: it ends, and no served
 /// shard is over the tile.
 pub fn past(area: &impl Area, leaf: [i32; 2]) -> bool {
     let s = LEAF_ZOOM - SHARD_ZOOM;
-    area.ends() && !serves(area, [leaf[0] >> s, leaf[1] >> s])
+    area.ends() && found(area, [leaf[0] >> s, leaf[1] >> s]) & OWN == 0
 }
 
 /// What a descent establishes of the service area at a node a shard or
@@ -87,8 +120,10 @@ pub struct Shard(u32);
 const SHARD_KNOWN: u32 = 1;
 const SHARD_SERVED_SHIFT: u32 = 1;
 /// The bits of which of the nine are served (`Shard::served`).
-pub const SHARD_SERVED_BITS: u32 = 9;
+const SHARD_SERVED_BITS: u32 = 9;
 const SHARD_ALL: u32 = (1 << SHARD_SERVED_BITS) - 1;
+/// Its own among the nine, the centre.
+const OWN: u32 = 1 << 4;
 const _: () = assert!(LEAF_ZOOM >= SHARD_ZOOM);
 
 impl Shard {
@@ -96,9 +131,9 @@ impl Shard {
     /// Known, every one of its nine served: nothing about it is past.
     pub const INSIDE: Shard = Shard::of_served(SHARD_ALL);
 
-    /// The node `(zoom, c)`'s, as `self` knows it, else found: its shard and
-    /// the eight about it each looked up in the area's index (`serves`).
-    /// Unknown coarser than a shard.
+    /// The node `(zoom, c)`'s, as `self` knows it, else found: its shard's
+    /// nine off its entry in the area's index (`found`). Unknown coarser
+    /// than a shard.
     pub fn at(self, area: &impl Area, (zoom, c): (Zoom, [i32; 2])) -> Shard {
         if self.0 & SHARD_KNOWN != 0 || zoom < SHARD_ZOOM {
             return self;
@@ -107,16 +142,7 @@ impl Shard {
             return Shard(SHARD_KNOWN | SHARD_ALL << SHARD_SERVED_SHIFT);
         }
         let s = zoom - SHARD_ZOOM;
-        let own = [c[0] >> s, c[1] >> s];
-        // Bit `(dy + 1)·3 + (dx + 1)` for the shard `dx, dy` from its own.
-        let mut served = 0u32;
-        let mut k = 0u32;
-        while k < 9 {
-            let n = [wrap(SHARD_ZOOM, own[0] + (k % 3) as i32 - 1), own[1] + (k / 3) as i32 - 1];
-            served |= (serves(area, n) as u32) << k;
-            k += 1;
-        }
-        Shard(SHARD_KNOWN | served << SHARD_SERVED_SHIFT)
+        Shard(SHARD_KNOWN | found(area, [c[0] >> s, c[1] >> s]) << SHARD_SERVED_SHIFT)
     }
     const fn known(self) -> bool {
         self.0 & SHARD_KNOWN != 0
@@ -134,7 +160,7 @@ impl Shard {
     }
     /// Past the area: known so.
     pub const fn past(self) -> bool {
-        self.known() && self.served() & 1 << 4 == 0
+        self.known() && self.served() & OWN == 0
     }
     /// Known to lie, a leaf cell about it too, inside the area.
     pub const fn inside(self) -> bool {

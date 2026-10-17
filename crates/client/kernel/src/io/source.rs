@@ -33,8 +33,9 @@ struct Source {
     version: [String; BaseLayer::ALL.len()],
     shard: Vec<Shard>,
     /// The served cells at `SHARD_ZOOM` as the area's index (pxl-portable
-    /// `area::Area`): each shard's, a coarser one's every cell, by key.
-    keys: Vec<u32>,
+    /// `area::Area`): each shard's, a coarser one's every cell, by key, each
+    /// its key over its nine (`area::index_entry`).
+    entries: Vec<u32>,
 }
 
 static DECLARED: Global<Option<Source>> = Global::new();
@@ -83,17 +84,17 @@ impl Area for Declared {
     fn ends(&self) -> bool {
         declared().is_some()
     }
-    fn keys(&self) -> u32 {
-        declared().map_or(0, |s| s.keys.len() as u32)
+    fn entries(&self) -> u32 {
+        declared().map_or(0, |s| s.entries.len() as u32)
     }
-    fn key(&self, i: u32) -> u32 {
-        declared().or_bug(Errno::ENOTRECOVERABLE).keys[i as usize]
+    fn entry(&self, i: u32) -> u32 {
+        declared().or_bug(Errno::ENOTRECOVERABLE).entries[i as usize]
     }
 }
 
 /// The area's index, as a GPU's area reads it (`Area`).
-pub fn keys() -> &'static [u32] {
-    declared().map_or(&[], |s| &s.keys)
+pub fn entries() -> &'static [u32] {
+    declared().map_or(&[], |s| &s.entries)
 }
 
 /// The kind's own version, over every shard's: an object no shard holds
@@ -156,24 +157,40 @@ fn parse(text: &str) -> Option<Source> {
     if version.iter().any(Option::is_none) {
         return None;
     }
-    // Every cell a shard covers at `SHARD_ZOOM`, a key no finer (`key`).
-    let mut keys = Vec::new();
+    // Every cell a shard covers at `SHARD_ZOOM`, a key no finer (`key`);
+    // then it and every cell beside it on the world, each its entry, its
+    // nine laid once (`area::index_entry`).
+    let mut served = Vec::new();
     for k in &shard {
         let d = SHARD_ZOOM - k.tile.zoom;
         let [x, y] = k.tile.at.map(|v| (v << d) as i32);
         for j in 0..1 << d {
             for i in 0..1 << d {
-                keys.push(area::shard_key([x + i, y + j]));
+                served.push((area::shard_key([x + i, y + j]), [x + i, y + j]));
             }
         }
     }
-    keys.sort_unstable();
-    keys.dedup();
+    served.sort_unstable_by_key(|c| c.0);
+    served.dedup_by_key(|c| c.0);
+    let serves = |c: [i32; 2]| served.binary_search_by_key(&area::shard_key(c), |c| c.0).is_ok();
+    let mut cells = Vec::new();
+    for &(_, [x, y]) in &served {
+        for k in 0..9 {
+            let n = [pxl_portable::wrap_index(SHARD_ZOOM, x + k % 3 - 1), y + k / 3 - 1];
+            let key = area::shard_key(n);
+            if key != area::NO_KEY {
+                cells.push((key, n));
+            }
+        }
+    }
+    cells.sort_unstable_by_key(|c| c.0);
+    cells.dedup_by_key(|c| c.0);
+    let entries = cells.iter().map(|&(key, c)| area::index_entry(key, area::nine(serves, c))).collect();
     Some(Source {
         top_zoom,
         version: version.map(Option::unwrap_or_default),
         shard,
-        keys,
+        entries,
     })
 }
 

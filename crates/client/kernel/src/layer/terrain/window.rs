@@ -483,11 +483,11 @@ impl Area for Windowed {
     fn ends(&self) -> bool {
         Declared.ends()
     }
-    fn keys(&self) -> u32 {
-        Declared.keys()
+    fn entries(&self) -> u32 {
+        Declared.entries()
     }
-    fn key(&self, i: u32) -> u32 {
-        Declared.key(i)
+    fn entry(&self, i: u32) -> u32 {
+        Declared.entry(i)
     }
 }
 

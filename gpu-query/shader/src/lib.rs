@@ -136,11 +136,11 @@ impl Area for World<'_> {
     fn ends(&self) -> bool {
         true
     }
-    /// Its keys four a row (pxl-kernel scene/cast.rs `shards`).
-    fn keys(&self) -> u32 {
+    /// Its entries four a row (pxl-kernel scene/cast.rs `shards`).
+    fn entries(&self) -> u32 {
         4 * self.shards.len() as u32
     }
-    fn key(&self, i: u32) -> u32 {
+    fn entry(&self, i: u32) -> u32 {
         let r = at(self.shards, i / 4);
         (match i % 4 {
             0 => r.x,
