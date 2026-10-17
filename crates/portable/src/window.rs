@@ -372,25 +372,33 @@ pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found,
 }
 
 /// `found_at` for a node's cells at `cell` from its first, `g`, stepped
-/// from `above`, what a node over it found, or `NONE`: no find where it
-/// holds the answer. Only a node a square wide or less sets a place
+/// from `above`, what a node over it found, or `NONE`, reading only what
+/// `above` leaves unknown. Only a node a square wide or less sets a place
 /// (`bounded`), so every node a descent asks under it, a sibling from its
-/// parent's stack entry too, lies in that node. Asked at `cell`, the node's cells lie in the square
-/// that held `above`'s, so `find` reads what it read; asked a zoom finer,
-/// they lie in a square at `cell` whose cells fold into that one, so
-/// `find` reads that square alone and then what it read: one look. Else,
-/// `found_at`.
+/// parent's stack entry too, lies in that node, and at each zoom to
+/// `above`'s cell in the square that held `above`'s cells there. `find`
+/// asks those zooms finest first and stops at the first holding them, so
+/// `above` says what each of them answers: none present over `above`'s
+/// window, it present. Asked at `above`'s cell or coarser down to its
+/// window, the answer is that window, read nowhere; coarser than the window,
+/// `found_at`. Asked finer, only the zooms finer than `above`'s are unknown:
+/// they are looked at finest first, then `above`'s answer stands, a look a
+/// zoom of the step.
 pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found, u32) {
-    let f = if above.cell() == cell {
-        above
-    } else if above.cell() + 1 == cell {
-        match w.present(cell, square_of([wrap_index(cell, g[0]), g[1]]).0) {
-            (slot, true) => Found::of(cell, cell, slot, true),
-            _ => Found::of(cell, above.from(), above.slot(), above.here()),
-        }
-    } else {
+    if above == Found::NONE || cell < above.from() {
         return found_at(w, cell, g, top);
-    };
+    }
+    let mut f = Found::of(cell, above.from(), above.slot(), above.here());
+    let mut c = cell;
+    while c > above.cell() {
+        let s = cell - c;
+        let (slot, here) = w.present(c, square_of([wrap_index(c, g[0] >> s), g[1] >> s]).0);
+        if here {
+            f = Found::of(cell, c, slot, true);
+            break;
+        }
+        c -= 1;
+    }
     (f, square_of(cell_at(cell, f.from(), g)).1)
 }
 
