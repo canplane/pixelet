@@ -63,7 +63,6 @@ const FOLLOW_WALK_LINGER_S: f64 = 1.5;
 struct Held {
     actor: u32,
     model: ModelHandle,
-    skin: u32,
 }
 
 struct Figure {
@@ -115,13 +114,13 @@ impl Figure {
         if self.held.is_some() {
             return;
         }
-        let (Some(model), Some(skin)) = (model_of(variant.model, variant.height_u), load_image(Load::Asset(variant.skin))) else {
+        let (Some(model), Some(_)) = (model_of(variant.model, variant.height_u), load_image(Load::Asset(variant.skin))) else {
             return;
         };
         let Some(Some(actor)) = laid().map(|k| k.scene.actors.new_actor(&mut k.draw, &k.models, model.model)) else {
             return;
         };
-        self.held = Some(Held { actor, model, skin });
+        self.held = Some(Held { actor, model });
         self.at = target;
         self.set_ready(true);
     }
@@ -334,10 +333,11 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     }
 }
 
-/// (model, image handle) for the shell's skinned pass.
+/// (model, image handle) for the shell's skinned pass: the image as the
+/// loader has it now, which a lost device takes back until it lands again.
 pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
     let c: &'static _ = companion();
-    [&c.person, &c.pet].into_iter().flatten().filter_map(|w| w.held.as_ref()).map(|h| (h.model.model, h.skin))
+    [&c.person, &c.pet].into_iter().flatten().filter_map(|w| Some((w.held.as_ref()?.model.model, load_image(Load::Asset(w.variant.skin))?)))
 }
 
 /// The world's step-slide from `from`, its floor at `stands`, toward `to`:

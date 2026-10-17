@@ -25,7 +25,6 @@ struct Case {
     variant: CharacterVariant,
     actor: Option<u32>,
     model: Option<ModelHandle>,
-    skin: Option<u32>,
     spin: f64,
 }
 
@@ -53,7 +52,6 @@ pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
         variant,
         actor: None,
         model: None,
-        skin: None,
         spin: 0.0,
     });
     request_world_tick();
@@ -87,11 +85,8 @@ pub fn preview_step(ctx: &mut TickContext) {
         if case.model.is_none() {
             case.model = model_of(case.variant.model, 1.0);
         }
-        if case.skin.is_none() {
-            case.skin = load_image(Load::Asset(case.variant.skin));
-        }
         if case.actor.is_none() {
-            if let (Some(model), Some(_)) = (&case.model, case.skin) {
+            if let (Some(model), Some(_)) = (&case.model, load_image(Load::Asset(case.variant.skin))) {
                 let id = model.model;
                 case.actor = laid().and_then(|k| k.scene.actors.new_actor(&mut k.draw, &k.models, id));
                 if let (Some(actor), true) = (case.actor, IDLE_CLIP < model.clip_count) {
@@ -110,11 +105,11 @@ pub fn preview_step(ctx: &mut TickContext) {
     ctx.invalidate();
 }
 
-/// (case, model, skin image).
+/// (case, model, skin image), the image as the loader has it now.
 pub fn preview_rows() -> impl Iterator<Item = (u32, u32, u32)> {
     let c: &'static _ = cases();
-    c.cases.iter().filter_map(|case| match (&case.model, case.skin, case.actor) {
-        (Some(model), Some(skin), Some(_)) => Some((case.id, model.model, skin)),
+    c.cases.iter().filter_map(|case| match (&case.model, case.actor) {
+        (Some(model), Some(_)) => Some((case.id, model.model, load_image(Load::Asset(case.variant.skin))?)),
         _ => None,
     })
 }
