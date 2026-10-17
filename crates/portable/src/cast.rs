@@ -299,17 +299,18 @@ fn index_of(n: &Node, r0: [i32; 3]) -> [i32; 3] {
 }
 
 /// The ray's t at the near and far planes on one axis, `lo` and `hi` units
-/// from the origin (Revelles, Ureña & Lastra 2000): an axis it runs beside
-/// any t inside the slab, none outside.
-fn planes(d: f32, inv: f32, lo: f32, hi: f32) -> (f32, f32) {
+/// from the origin (Revelles, Ureña & Lastra 2000); an axis it runs beside,
+/// the walk's span whole inside the slab (from `t` to `reach`), none
+/// outside: no extreme a float literal could name past a shader's range.
+fn planes(d: f32, inv: f32, lo: f32, hi: f32, (t, reach): (f32, f32)) -> (f32, f32) {
     if d > 0.0 {
         (lo * inv, hi * inv)
     } else if d < 0.0 {
         (hi * inv, lo * inv)
     } else if lo <= 0.0 && 0.0 < hi {
-        (f32::MIN, f32::MAX)
+        (t, reach)
     } else {
-        (f32::MAX, f32::MIN)
+        (reach, t)
     }
 }
 
@@ -623,9 +624,9 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
             [side(n.corner[0], og[0], n.roots[0]).1, side(n.corner[1], og[1], n.roots[1]).1, side(n.corner[2], og[2], n.roots[2]).1],
         );
         let (x, y, z) = (
-            planes(ray.direction[0], ray.inverse[0], lo[0], hi[0]),
-            planes(ray.direction[1], ray.inverse[1], lo[1], hi[1]),
-            planes(ray.direction[2], ray.inverse[2], lo[2], hi[2]),
+            planes(ray.direction[0], ray.inverse[0], lo[0], hi[0], (t, ray.reach)),
+            planes(ray.direction[1], ray.inverse[1], lo[1], hi[1], (t, ray.reach)),
+            planes(ray.direction[2], ray.inverse[2], lo[2], hi[2], (t, ray.reach)),
         );
         let (t0, t1) = (t.max(x.0).max(y.0).max(z.0), ray.reach.min(x.1).min(y.1).min(z.1));
         // Only touched, at a face or an edge: not entered, nothing in it met.
