@@ -4,7 +4,7 @@
 //! every zoom, and its scale on the camera grid's cells.
 
 use super::tile::{tile_at, tile_rows, Cell, Tile};
-use crate::space::camera::grid::{split_distance, Tau, CHUNK_CELLS};
+use crate::space::camera::grid::{split_distance, Tau};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{index_of, Zoom};
 use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, slot_of};
@@ -105,11 +105,3 @@ impl Cells for Lattice {
         (slot_of([x / n, y / n]), cells)
     }
 }
-
-/// The zooms a grid cell folds of the ground's cells, which the chunk's runs
-/// and the mesher are laid out by: the ground's scale, never finer than the grid.
-pub const GROUND_FOLD: Zoom = GROUND.scale_steps() as Zoom;
-const _: () = assert!(GROUND.scale_steps() >= 0, "the ground's cells are finer than the grid's");
-
-/// Chunks a tile's side holds at the zoom whose cells fold it.
-pub const TILE_CHUNKS: u32 = TILE_CELLS / (CHUNK_CELLS << GROUND_FOLD);

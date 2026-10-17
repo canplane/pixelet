@@ -77,5 +77,3 @@ impl Tau {
 /// A chunk, what is built and drawn as one, is 2^CHUNK_STEPS of the camera
 /// grid's cells a side: its zoom is its cells' less this.
 pub use pxl_portable::CHUNK_STEPS;
-
-pub const CHUNK_CELLS: u32 = 1 << CHUNK_STEPS;

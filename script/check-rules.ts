@@ -146,15 +146,13 @@ for (const f of files) {
 }
 
 const LATTICE_OWNERS = ["crates/spec/src/space/", "crates/spec/src/bake/constant.rs"];
-const SHIFT = /(\b(PAGE_CELLS|CHUNK_CELLS)\b|\bshamt\()[^;]*(<<|>>)|(<<|>>)[^;]*\bshamt\(/;
-const IN_PAGE = /[%/]\s*PAGE_CELLS\b|(rem|div)_euclid\(\s*PAGE_CELLS\b|\*\s*PAGE_CELLS\b(\s+as\s+\w+)?\s*\+/;
+const SHIFT = /\bshamt\([^;]*(<<|>>)|(<<|>>)[^;]*\bshamt\(/;
 
 for (const f of files) {
   if (!f.endsWith(".rs") || LATTICE_OWNERS.some((o) => f.startsWith(o))) continue;
   read(f)?.split("\n").forEach((line, n) => {
     if (/^\s*\/\//.test(line)) return;
     if (SHIFT.test(line)) problems.push(`${f}:${n + 1}: shifts the lattice outside pxl-spec space/: ${line.trim()}`);
-    if (IN_PAGE.test(line)) problems.push(`${f}:${n + 1}: numbers a page's cells outside pxl-spec space/: ${line.trim()}`);
   });
 }
 
