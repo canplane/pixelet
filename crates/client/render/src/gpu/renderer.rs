@@ -18,7 +18,7 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_FACE, SHADER_HEIGHTS, SHADER_START, SHADER_WAYS,
+    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_FACE, SHADER_HEIGHTS, SHADER_START, SHADER_WAYS,
 };
 use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
@@ -180,7 +180,7 @@ pub struct Overwrites<'a> {
 }
 
 /// Where a square's cells, which the GPU draws, come back to in the
-/// module's memory (`ScreenCellsPass::read_back`): its columns, levels and
+/// module's memory (`RaysPass::read_back`): its columns, levels and
 /// runs (pxl-portable `window::BACK_WORDS`),
 /// the kernel's word that takes `ticket | DONE` once this fill's are in,
 /// and the ticket.
@@ -716,7 +716,7 @@ impl DebugPass {
 /// The eye's rays, each drawn at its own pixel where it met a face, painted
 /// by paint.wgsl's `paint` (pxl-portable ray.rs), from the world surface's
 /// `rays` the GPU's cast leaves (`Cast`).
-struct ScreenCellsPass {
+struct RaysPass {
     built: Built,
     /// Its group 0 over the lit pass's entries and what it binds besides
     /// (`bound`, the surface's rays and the cast's eye): made again exactly
@@ -878,13 +878,13 @@ const _: () = assert!(
 /// device's dynamic offset alignment.
 const SLOT_STRIDE: u32 = UNIFORM_ALIGN_MAX;
 
-impl ScreenCellsPass {
-    fn new(g: &Gpu, pipelines: &mut Pipelines, sky_buffer: u32) -> ScreenCellsPass {
-        let built = pipelines.build(g, PIPELINE_SCREEN_CELLS, g.canvas());
+impl RaysPass {
+    fn new(g: &Gpu, pipelines: &mut Pipelines, sky_buffer: u32) -> RaysPass {
+        let built = pipelines.build(g, PIPELINE_SCREEN_RAYS, g.canvas());
         let words = look_words();
         let looks = g.buffer(word_bytes(2 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(looks, 0, bytes(&words));
-        ScreenCellsPass {
+        RaysPass {
             built,
             group: 0,
             bound: [0; 2],
@@ -1337,7 +1337,7 @@ pub struct Renderer {
     puck: PuckPass,
     badges: BadgePass,
     debug: DebugPass,
-    screen: ScreenCellsPass,
+    screen: RaysPass,
     /// The world image's whole input as the last image drew it (stage 2):
     /// the frame's, the sky's and the stars' words, the air's, the image's
     /// own textures, and what came or was drawn again without words.
@@ -1385,7 +1385,7 @@ impl Renderer {
             puck: PuckPass::new(g, &mut pipelines, frame_buffer, air),
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer),
-            screen: ScreenCellsPass::new(g, &mut pipelines, sky_buffer),
+            screen: RaysPass::new(g, &mut pipelines, sky_buffer),
             world: Read::default(),
             frame_read: Read::default(),
             blit: pipelines.build(g, PIPELINE_BLIT, g.canvas()),
@@ -1535,7 +1535,7 @@ impl Renderer {
     }
 
     /// A frame in three stages, each standing while what it reads stands:
-    /// the cast's rays (stage 1, `ScreenCellsPass::prepare`); the world
+    /// the cast's rays (stage 1, `RaysPass::prepare`); the world
     /// image, everything the world and its light make, into the surface's own
     /// colour and depth (stage 2, `world`); and the frame, the image laid on
     /// it whole and over it what moves on its own — the actors, whose clips

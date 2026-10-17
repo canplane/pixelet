@@ -136,7 +136,7 @@ A version is never changed once written, so a tile never changes under its key (
 
 ## Inside a cell
 
-A block drawn coarser than a leaf's cell is what its zoom holds, not a summary made for drawing (`pxl-spec space/layer/lattice.rs` `Lattice::fold`): the ground's cell of a coarse tile stands at its own folded height, a whole cube, its look the mean of the four looks it folds where its face's own is among them (`frame/shader/screen_cells.wgsl` `drawn`); what is placed folds to the kind most of its fill is, a whole cube where half or more is filled and nothing where less is (`pxl-portable placed.rs` `value`). Heights are units at every zoom, so no ground is ever a cell part full.
+A block drawn coarser than a leaf's cell is what its zoom holds, not a summary made for drawing (`pxl-spec space/layer/lattice.rs` `Lattice::fold`): the ground's cell of a coarse tile stands at its own folded height, a whole cube, its look the mean of the four looks it folds where its face's own is among them (`frame/shader/screen_rays.wgsl` `drawn`); what is placed folds to the kind most of its fill is, a whole cube where half or more is filled and nothing where less is (`pxl-portable placed.rs` `value`). Heights are units at every zoom, so no ground is ever a cell part full.
 
 Flat ground at a distance therefore reads as separated cubes rather than a sheet — the cost of a rule that treats every axis alike, taken over rules where orientation would decide whether a thing exists. What is folded is a summary, not what is held: nothing in a folded cell is struck, hidden or cut by a preview (`control/interaction.rs` `folded_at`, the camera grid's zoom at the struck point by `view/observation.rs` `cell_at`), and nothing in one is pointed at.
 

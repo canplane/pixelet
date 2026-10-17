@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/paint.wgsl
 
 // What a block's face is painted, wherever it is drawn from: the ghost's
-// boxes (box.wgsl) and the screen's rays (screen_cells.wgsl) both fill a
+// boxes (box.wgsl) and the screen's rays (screen_rays.wgsl) both fill a
 // `Surface` and call `paint`, so the two cannot paint one face differently. Its swatch or its layers' taps,
 // the creases and corners its face bits name, lit by `shade`.
 

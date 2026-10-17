@@ -30,7 +30,7 @@ pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
 pub const SHADER_BADGE_REGION: u32 = 24;
 /// The eye's rays drawn at their pixels (pxl-portable ray.rs).
-pub const SHADER_SCREEN_CELLS: u32 = 25;
+pub const SHADER_SCREEN_RAYS: u32 = 25;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
 /// pxl-portable's descent (script/portable-wgsl.ts): its one compute entry.
 pub const SHADER_CAST: u32 = 26;
@@ -172,7 +172,7 @@ pub fn source(kind: u32) -> &'static str {
             "sky"
         ),
         SHADER_DEBUG => wgsl!("frame", "encode", "debug"),
-        SHADER_SCREEN_CELLS => wgsl!(
+        SHADER_SCREEN_RAYS => wgsl!(
             "frame",
             "encode",
             "atmos_medium",
@@ -193,7 +193,7 @@ pub fn source(kind: u32) -> &'static str {
             "eye",
             "paint",
             "sky_words",
-            "screen_cells"
+            "screen_rays"
         ),
         // As generated: no constants of ours before it to clash with its names.
         SHADER_CAST => include_str!(concat!(env!("OUT_DIR"), "/shader/cast.gen.wgsl")),
@@ -317,7 +317,7 @@ pub const PIPELINE_BADGE_REGION: u32 = 39;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 40;
 /// The eye's rays, opaque at their depth (pxl-portable ray.rs).
-pub const PIPELINE_SCREEN_CELLS: u32 = 41;
+pub const PIPELINE_SCREEN_RAYS: u32 = 41;
 pub const PIPELINES: u32 = 42;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
@@ -700,11 +700,11 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[lane(12, 0, F32X3)],
             &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM]])],
         ),
-        PIPELINE_SCREEN_CELLS => record(
+        PIPELINE_SCREEN_RAYS => record(
             Head {
                 depth_write: true,
                 blend: OPAQUE,
-                ..blended(SHADER_SCREEN_CELLS, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_SCREEN_RAYS, CULL_NONE, 0, 0.0)
             },
             &[],
             &[group(&SCREEN_GROUP)],

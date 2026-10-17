@@ -216,7 +216,7 @@
     "pet": { "kind": "index", "default": { "$value": 5, "$type": "u8", "$doc": ["chick, by its number in variant.json's pet keys."] }, "section": "character" },
     "ray_steps": {
       "$doc": [
-        "Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl)."
+        "Each ray's pixel coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_rays.wgsl)."
       ],
       "kind": "toggle",
       "default": false,

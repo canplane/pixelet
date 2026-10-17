@@ -32,7 +32,7 @@ pub fn ground(g: GroundId) -> ([u8; 3], u8) {
     LOOKS[g as usize]
 }
 
-/// Each look as a ray's cell paints it (frame/shader/screen_cells.wgsl
+/// Each look as a ray's pixel paints it (frame/shader/screen_rays.wgsl
 /// `drawn`), two words: its swatch with its layer in the top byte, then
 /// what it reads as from afar (`layer_mean`). The ground's looks by byte,
 /// then each placed value's, a value no look with its swatch alone.

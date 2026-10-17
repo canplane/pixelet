@@ -2,7 +2,7 @@
 
 //! gpu-portable: a ray's words as the GPU's cast leaves them at its drawn
 //! pixel and the screen pass reads them there (pxl-render
-//! frame/shader/screen_cells.wgsl), a layer of the world surface's rays a
+//! frame/shader/screen_rays.wgsl), a layer of the world surface's rays a
 //! word: what it stopped on, through which face and at which zoom
 //! (`first_word`); how far, f32 bits; the block's face bits (`mask`), which
 //! the face pass writes over the block's index bits it finds the block by;
