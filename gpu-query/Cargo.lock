@@ -414,6 +414,7 @@ dependencies = [
 name = "gpu-query-builder"
 version = "0.0.0"
 dependencies = [
+ "naga 30.0.0",
  "rustc_codegen_spirv",
  "spirv-builder",
 ]
@@ -787,7 +788,9 @@ dependencies = [
  "naga-types",
  "num-traits",
  "once_cell",
+ "petgraph",
  "rustc-hash",
+ "spirv 0.4.0+sdk-1.4.341.0",
  "thiserror",
  "unicode-ident",
 ]

@@ -2,8 +2,8 @@
 // `deno run -A script/portable-wgsl.ts`; `--check` fails when it is stale.
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
-// rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-naga-wgsl.
-// Inputs: 46690563bb697c65f6020d8b301675cec3f1854247d12857d8bceaaf0a524e79
+// rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
+// Inputs: d43a619f1cb855a23dd411fc3f49d7352bc5f6cdfee46288030e7275faa50add
 struct type_2 {
     member: array<u32>,
 }
@@ -100,17 +100,17 @@ struct type_50 {
     member_1: i32,
 }
 
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage> global: type_12;
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<uniform> global_1: type_22;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var<storage> global_2: type_2;
-@group(0) @binding(5) 
+@group(0) @binding(5)
 var<storage> global_3: type_12;
-@group(0) @binding(6) 
+@group(0) @binding(6)
 var<storage> global_4: type_2;
-@group(0) @binding(7) 
+@group(0) @binding(7)
 var<storage, read_write> global_5: type_2;
 var<private> global_6: type_30 = type_30(true, true);
 
@@ -6279,7 +6279,7 @@ fn function_() {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn start_cs() {
     function_();
 }

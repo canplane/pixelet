@@ -42,18 +42,18 @@ const ENTRIES = [
 // rust-gpu's own pin (rustc_codegen_spirv 0.10.0-alpha.1 build.rs), as gpu-query/rust-toolchain.toml holds it.
 const NIGHTLY = "nightly-2026-04-11";
 const IMAGE = "rust:1-bookworm";
-const BUILT = "gpu-query/target-linux/spirv-builder/spirv-unknown-naga-wgsl/release/deps/gpu_query_shader.spvs";
+const BUILT = "gpu-query/target-linux/spirv-builder/spirv-unknown-vulkan1.3/release/deps/gpu_query_shader.spvs";
 
 /** Where a generated file names the digest of the sources that made it. */
 export const INPUTS = "// Inputs: ";
 
-/** What rust-gpu compiles into the entries: pxl-portable, the shader crate,
- * xpute-kit beneath them, their lock and the toolchain's pin — every Rust,
+/** What makes the entries: pxl-portable, the shader crate, the builder that
+ * reads its SPIR-V into WGSL, xpute-kit beneath them, their lock and the toolchain's pin — every Rust,
  * TOML and lock file under them the tree holds (`git ls-files -co
  * --exclude-standard`, as check:rules lists it), so a new one counts before
  * it is added and nothing ignored does. Wider than what reaches a shader: a
  * change elsewhere in them asks for a regenerate that differs only here. */
-const INPUT_ROOTS = ["crates/portable/", "gpu-query/shader/", "xpute/rust/kit/", "gpu-query/Cargo.lock", "gpu-query/rust-toolchain.toml"];
+const INPUT_ROOTS = ["crates/portable/", "gpu-query/shader/", "gpu-query/builder/", "xpute/rust/kit/", "gpu-query/Cargo.lock", "gpu-query/rust-toolchain.toml"];
 
 /** SHA-256 over each input's path and bytes, in path order. */
 export async function inputsDigest(root: string): Promise<string> {
@@ -93,7 +93,7 @@ const HEADER = (digest: string) =>
     "// `deno run -A script/portable-wgsl.ts`; `--check` fails when it is stale.",
     "// Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,",
     "// through gpu-query/shader, by",
-    `// rust-gpu 0.10.0-alpha.1 (${NIGHTLY}) for spirv-unknown-naga-wgsl.`,
+    `// rust-gpu 0.10.0-alpha.1 (${NIGHTLY}) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.`,
     `${INPUTS}${digest}`,
     "",
   ].join("\n");

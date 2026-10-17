@@ -2,8 +2,8 @@
 // `deno run -A script/portable-wgsl.ts`; `--check` fails when it is stale.
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
-// rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-naga-wgsl.
-// Inputs: 46690563bb697c65f6020d8b301675cec3f1854247d12857d8bceaaf0a524e79
+// rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
+// Inputs: d43a619f1cb855a23dd411fc3f49d7352bc5f6cdfee46288030e7275faa50add
 struct type_4 {
     member: array<u32>,
 }
@@ -127,19 +127,19 @@ struct type_59 {
 }
 
 var<private> global: vec3<u32>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage> global_1: type_14;
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<uniform> global_2: type_24;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var<storage> global_3: type_4;
-@group(0) @binding(5) 
+@group(0) @binding(5)
 var<storage> global_4: type_14;
-@group(0) @binding(6) 
+@group(0) @binding(6)
 var<storage> global_5: type_4;
-@group(0) @binding(7) 
+@group(0) @binding(7)
 var<storage, read_write> global_6: type_4;
-@group(0) @binding(3) 
+@group(0) @binding(3)
 var global_7: texture_storage_2d_array<r32uint,read_write>;
 var<private> global_8: type_34 = type_34(true, true);
 
@@ -8241,7 +8241,7 @@ fn function_() {
     return;
 }
 
-@compute @workgroup_size(8, 8, 1) 
+@compute @workgroup_size(8, 8, 1)
 fn cast_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     function_();
