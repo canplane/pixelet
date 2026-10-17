@@ -488,13 +488,13 @@ impl Squares for Windowed {
     }
 
     fn level(&self, _: Zoom, s: u32, j: u32, at: [u32; 2]) -> i32 {
-        back_at(s, (window::COLUMN_WORDS + window::level_at(j) + at[1] * (SQUARE >> j) + at[0]) as usize) as i32
+        back_at(s, (window::LEVELS_AT - window::COLUMNS_AT + window::level_at(j) + at[1] * (SQUARE >> j) + at[0]) as usize) as i32
     }
 }
 
 impl window::Ran for Windowed {
     fn ran(&self, _: Zoom, s: u32, r: u32) -> u32 {
-        back_at(s, (window::COLUMN_WORDS + window::LEVEL_WORDS + r) as usize)
+        back_at(s, (window::RUNS_AT - window::COLUMNS_AT + r) as usize)
     }
 }
 

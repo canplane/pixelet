@@ -217,7 +217,8 @@ impl<'a> World<'a> {
         let ground = (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
                 let xy = (z, [a[0] + dx, a[1] + dy]);
-                match self.terrain.relief(&self.terrain.cursor(xy, GROUND.grid_zoom(z.min(LEAF_ZOOM))), &mut Found::default(), xy).value() {
+                let mut place = Found::NONE;
+                match self.terrain.relief(&self.terrain.cursor(xy, GROUND.grid_zoom(z.min(LEAF_ZOOM))), &mut place, xy).value() {
                     Some(r) => r.is_some_and(|[_, hi]| f64::from(hi) * leaf > low),
                     None => true,
                 }

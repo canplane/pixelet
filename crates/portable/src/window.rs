@@ -10,6 +10,7 @@
 //! present once its cells are drawn; a reader of one absent reads the
 //! coarser window's (`find`), as a coarser tile stood in before.
 
+use crate::ground::{ELE_WORDS, UNKNOWN, VOID};
 use crate::lattice::{GROUND, TILE_CELLS};
 use crate::{wrap_index, Zoom, LEAF_CELL};
 
@@ -153,7 +154,6 @@ pub const fn column_first(w: u32) -> u32 {
 /// two a word, and its lines, which only its fill reads. Its columns, levels
 /// and runs follow one another, read back whole.
 pub const LOOK_WORDS: u32 = SQUARE_CELLS;
-pub const ELE_WORDS: u32 = crate::ground::ELE_WORDS;
 pub const SQUARE_WORDS: u32 = LOOK_WORDS + COLUMN_WORDS + LEVEL_WORDS + RUNS_SQUARE + ELE_WORDS + LINES_WORDS;
 pub const COLUMNS_AT: u32 = LOOK_WORDS;
 pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
@@ -233,11 +233,23 @@ fn entry_of(sq: &impl Square, e: u32) -> u32 {
 
 fn segment_at(sq: &impl Square, at: u32) -> crate::ways::Segment {
     let base = LINES_SEGMENTS_AT + at * crate::ways::SEGMENT_WORDS as u32;
-    crate::ways::Segment::of([sq.line(base), sq.line(base + 1), sq.line(base + 2), sq.line(base + 3)])
+    let mut w = [0; crate::ways::SEGMENT_WORDS];
+    let mut k = 0;
+    while k < w.len() {
+        w[k] = sq.line(base + k as u32);
+        k += 1;
+    }
+    crate::ways::Segment::of(w)
 }
 
 fn header_of(sq: &impl Square) -> (f32, crate::ways::Stations) {
-    crate::ways::of_header([sq.line(0), sq.line(1), sq.line(2), sq.line(3), sq.line(4), sq.line(5), sq.line(6), sq.line(7)])
+    let mut w = [0; crate::ways::HEADER_WORDS as usize];
+    let mut k = 0;
+    while k < w.len() {
+        w[k] = sq.line(k as u32);
+        k += 1;
+    }
+    crate::ways::of_header(w)
 }
 
 /// A square's columns as its lines and its cells give them.
@@ -271,7 +283,7 @@ impl<Q: Square> crate::ways::Columns for Q {
     fn look(&self, c: [i32; 2]) -> u32 {
         let i = cell_index(c);
         if i == SQUARE_CELLS {
-            crate::cube::sentinel::void as u32
+            VOID
         } else {
             crate::ground::own(self.looks(i), Square::cell(self))
         }
@@ -309,7 +321,7 @@ pub trait Ran: Squares {
 /// it, so every node whose cells lie in that square has this answer: a
 /// descent hands it from a node to the nodes under it (`step`). `NONE` was
 /// asked at no zoom.
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Found(u32);
 
 /// A slot as a source names it: a GPU's in the eye's window at `from`, the
@@ -317,9 +329,11 @@ pub struct Found(u32);
 const FOUND_SLOT_BITS: u32 = SQUARES.next_power_of_two().trailing_zeros();
 const FOUND_HERE: u32 = 1 << FOUND_SLOT_BITS;
 const FOUND_FROM_SHIFT: u32 = FOUND_SLOT_BITS + 1;
-const FOUND_CELL_SHIFT: u32 = FOUND_FROM_SHIFT + 6;
-const FOUND_ZOOM_MASK: u32 = (1 << 6) - 1;
-const _: () = assert!(crate::FINEST_ZOOM <= FOUND_ZOOM_MASK && FOUND_CELL_SHIFT + 6 <= 32);
+/// A zoom's bits, as many as every zoom needs.
+const FOUND_ZOOM_BITS: u32 = 6;
+const FOUND_CELL_SHIFT: u32 = FOUND_FROM_SHIFT + FOUND_ZOOM_BITS;
+const FOUND_ZOOM_MASK: u32 = (1 << FOUND_ZOOM_BITS) - 1;
+const _: () = assert!(crate::FINEST_ZOOM <= FOUND_ZOOM_MASK && FOUND_CELL_SHIFT + FOUND_ZOOM_BITS <= 32);
 const _: () = assert!(FIRST_CELL >= 2, "a zoom asked is never NONE's, nor one finer");
 
 impl Found {
@@ -383,8 +397,7 @@ pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2], top: Zoom) 
     let mut f = Found::of(cell, above.from(), above.slot(), above.here());
     let mut c = cell;
     while c > above.cell() {
-        let s = cell - c;
-        let (slot, here) = w.present(c, square_of([wrap_index(c, g[0] >> s), g[1] >> s]).0);
+        let (slot, here) = w.present(c, square_of(cell_at(cell, c, g)).0);
         if here {
             f = Found::of(cell, c, slot, true);
             break;
@@ -401,7 +414,7 @@ pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2], top: Zoom) 
 /// the columns about one mostly are (`step`); one past it finds its own.
 /// `ways::NOTHING` where no way writes, or no window to `top` holds it.
 pub fn ran(w: &impl Ran, near: Found, own: [i32; 2], zoom: Zoom, c: [i32; 2], z: i32, top: Zoom) -> u32 {
-    let read = if zoom > crate::LEAF_CELL { crate::LEAF_CELL } else { zoom };
+    let read = held_to(zoom);
     let g = cell_at(zoom, read, c);
     let (q, o) = (square_of(g).0, square_of(cell_at(zoom, read, own)).0);
     // Component-wise: a GPU has no array equality.
@@ -441,9 +454,6 @@ pub fn runs_in(w: &impl Squares, f: Found, zoom: Zoom, c: [i32; 2]) -> bool {
 pub trait Windows: Ran + crate::area::Area {}
 
 impl<W: Ran + crate::area::Area> Windows for W {}
-
-const VOID: u32 = crate::cube::sentinel::void as u32;
-const UNKNOWN: u32 = crate::cube::sentinel::unknown as u32;
 
 /// The zoom a cell at `cell` is read at: past the leaves, a leaf's.
 pub const fn held_to(cell: Zoom) -> Zoom {
@@ -560,8 +570,7 @@ pub fn ways_over(w: &(impl Windows + Copy), shard: crate::area::Shard, found: Fo
 pub fn find(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Zoom, u32, u32, bool) {
     let mut c = cell;
     loop {
-        let s = cell - c;
-        let (q, i) = square_of([wrap_index(c, g[0] >> s), g[1] >> s]);
+        let (q, i) = square_of(cell_at(cell, c, g));
         let (slot, here) = w.present(c, q);
         if here {
             return (c, slot, i, true);

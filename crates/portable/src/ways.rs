@@ -642,7 +642,7 @@ impl Spans {
 /// ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     let (mut spans, mut fits) = (Spans::NONE, true);
-    if cols.look(c) == sentinel::unknown as u32 {
+    if cols.look(c) == crate::ground::UNKNOWN {
         return (spans, fits);
     }
     let mut k = 0;

@@ -143,7 +143,8 @@ impl Query for Residency<TerrainTile> {
             return Answer::Exact(None);
         }
         let whole = region((zoom, at));
-        self.relief(line, &mut Found::default(), node).map(|r| {
+        let mut place = Found::NONE;
+        self.relief(line, &mut place, node).map(|r| {
             let [lo, hi] = r.unwrap_or_default();
             let lo = (f64::from(lo) * units(GROUND.cell()) - units(cell)).max(whole.min[2]);
             let hi = (f64::from(hi) * units(GROUND.cell())).min(whole.max[2]);

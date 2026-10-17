@@ -8,11 +8,10 @@
 //! zoom. The area runs on shards' edges, which no node a shard or finer
 //! straddles.
 
-use crate::cube::{sentinel, Ground};
+use crate::cube::Ground;
 use crate::{wrap_index as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM};
 
-const VOID: u32 = sentinel::void as u32;
-const UNKNOWN: u32 = sentinel::unknown as u32;
+use crate::ground::{UNKNOWN, VOID};
 
 /// The shards a source serves: on the CPU its declaration, on a GPU a
 /// buffer of it.

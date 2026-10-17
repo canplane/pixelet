@@ -13,7 +13,7 @@
 use pxl_portable::area::{self, Area, Shard};
 use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
 use pxl_portable::caves::Cave;
-use pxl_portable::cube::{object, sentinel};
+use pxl_portable::cube::object;
 use pxl_portable::decor::{Decor, COUNTS};
 use pxl_portable::fill::{self, column_of, level_of, put};
 use pxl_portable::ground;
@@ -60,7 +60,7 @@ fn cut(e: IVec4) -> Cut {
     }
 }
 
-const VOID: u32 = sentinel::void as u32;
+use pxl_portable::ground::VOID;
 const PLACED_AIR: u32 = PLACED_BLOCK | object::air as u32;
 
 /// Square `square`'s first word in the ground's buffer (pxl-portable

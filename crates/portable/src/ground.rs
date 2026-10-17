@@ -25,8 +25,9 @@ use crate::window::Found;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
 
 // The catalog's looks this rule names, read into a word.
-const VOID: u32 = sentinel::void as u32;
-const UNKNOWN: u32 = sentinel::unknown as u32;
+/// The catalog's void and unknown as the words a look is read into.
+pub const VOID: u32 = sentinel::void as u32;
+pub const UNKNOWN: u32 = sentinel::unknown as u32;
 const SAND: u32 = ground::sand as u32;
 const BEACH: u32 = ground::beach as u32;
 const WATER: u32 = ground::water as u32;
