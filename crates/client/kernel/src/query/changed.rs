@@ -34,19 +34,20 @@ pub(crate) fn take() -> bool {
     !c.ground.is_empty() || !c.written.is_empty()
 }
 
-/// Whether a ground change touches the columns over `xy`, its corners in
-/// units, X on any lap. Taken once a frame turn, in its visible phase, after
-/// its arrivals are admitted, and held until the next; what moves between
-/// frame turns waits in the residency and the store for the next take. So a
+/// Whether a ground change, or one of `layer`'s tiles a reader also reads
+/// whose answer moved, touches the columns over `xy`, its corners in units,
+/// X on any lap. Taken once a frame turn, in its visible phase, after its
+/// arrivals are admitted, and held until the next; what moves between frame
+/// turns waits in the residency and the store for the next take. So a
 /// reader asking every frame turn, in its effects or its interaction phase,
 /// sees each change exactly once.
-pub fn within(xy: [[f64; 2]; 2]) -> bool {
+pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {
     let columns = Aabb {
         min: [xy[0][0], xy[0][1], REACH.min[2]],
         max: [xy[1][0], xy[1][1], REACH.max[2]],
     };
     let about = (columns.min[0] + columns.max[0]) / 2.0;
     let c = changed();
-    let mut regions = c.ground.iter().map(|t| t.region()).chain(c.written.iter().copied());
+    let mut regions = c.ground.iter().chain(layer).map(|t| t.region()).chain(c.written.iter().copied());
     regions.any(|r| nearest_box(&r, about).shares(columns))
 }

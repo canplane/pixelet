@@ -347,7 +347,7 @@ fn changes_step() {
     }
     if shared || !places.is_empty() {
         PlaceTile::demand().moved();
-        crate::scene::place::moved();
+        crate::scene::place::moved(places);
     }
     if shared || !earth.is_empty() {
         Earth::demand().moved();

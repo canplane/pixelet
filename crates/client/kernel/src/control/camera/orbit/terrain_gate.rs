@@ -168,7 +168,7 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
     };
     let last = CLIMBED.get(|| None);
     match *last {
-        Some((c, polar)) if c == climb && !crate::query::changed::within(walked(&at)) => polar,
+        Some((c, polar)) if c == climb && !crate::query::changed::within(walked(&at), &[]) => polar,
         _ => {
             let polar = climbed(at).polar;
             *last = Some((climb, polar));

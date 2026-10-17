@@ -44,7 +44,7 @@ use pxl_spec::space::coord::world::{point, REACH};
 use pxl_spec::space::coord::zoom::{cube, units, Zoom, FINEST_ZOOM};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{tile_at, tile_rows};
+use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile};
 
 #[derive(Default)]
 struct Placement {
@@ -54,17 +54,20 @@ struct Placement {
     drawn: Vec<u32>,
     /// Nearest the eye first: screen box, label, and where it stands.
     hits: Vec<([f64; 4], Label, Q3)>,
-    /// Kept so a settled turn asks the heap for nothing; a chunk's markers
-    /// in a run a cell.
+    /// Kept so a settled turn asks the heap for nothing; a chunk's in a
+    /// run, its markers in a run a cell.
     found: Vec<Shown>,
-    /// The drawn chunks `found` was read from: an eye move that changes them
-    /// not, and nothing it reads moved, casts no ray.
+    /// The drawn chunks `found` was read from: a chunk drawn still keeps
+    /// what was read from it, so an eye move casts rays only in the chunks it
+    /// enters.
     found_for: Option<Found>,
     /// The same, read this turn.
     now: Found,
     /// Places, ground or objects moved since `found` was read.
     moved: bool,
-    mounted: Vec<(Chunk, bool, bool)>,
+    /// The place tiles whose answer moved, beside the ground's
+    /// (query/changed.rs): a chunk they touch is read again.
+    moved_places: Vec<Tile>,
     labeled: Vec<(Label, Q3)>,
     /// Last turn's `labeled`, its buffer reused.
     spare: Vec<(Label, Q3)>,
@@ -120,6 +123,7 @@ static PLACEMENT: Global<Placement> = Global::new();
 /// cell zoom it is drawn at; a marker with its cell.
 #[derive(Clone, Copy)]
 struct Shown {
+    chunk: Chunk,
     label: Label,
     stands: Q3,
     cell_zoom: Zoom,
@@ -147,8 +151,10 @@ struct Found {
     places: bool,
 }
 
-pub fn moved() {
-    PLACEMENT.get(Placement::default).moved = true;
+pub fn moved(places: &[Tile]) {
+    let p = PLACEMENT.get(Placement::default);
+    p.moved = true;
+    p.moved_places.extend_from_slice(places);
 }
 
 /// The markers put up in `chunk`, by the chunk their base is in, a run a
@@ -170,6 +176,7 @@ fn markers(chunk: Chunk, found: &mut Vec<Shown>) {
         if (0..3).all(|k| (region.min[k]..region.max[k]).contains(&at[k])) {
             let cell = marker_cell_of(cell_zoom, e.id());
             found.push(Shown {
+                chunk,
                 label,
                 stands,
                 cell_zoom,
@@ -241,7 +248,8 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
             ctx.invalidate();
         }
         // Nothing is drawn now: what comes back is laid out afresh.
-        (p.last, p.waiting) = (None, false);
+        (p.last, p.waiting, p.found_for) = (None, false, None);
+        p.moved_places.clear();
         p.instances.clear();
         p.hits.clear();
         badge::retain(&FnvHashSet::default());
@@ -267,35 +275,44 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     }
     p.last = Some(seen);
     // The eye's cubes in view (view/observation.rs `cubes`), as decor's are.
-    p.mounted.clear();
+    let now = &mut p.now;
+    now.drawn.clear();
     crate::view::observation::cubes(&o, tau, &mut |(zoom, at)| {
         let chunk = Chunk::indexed(zoom, at);
         let b = chunk.region();
         if frame.sees_box(b.min, b.max) {
-            p.mounted.push((chunk, true, true));
+            now.drawn.push(chunk);
         }
     });
-    p.now.drawn.clear();
-    p.now.drawn.extend(p.mounted.iter().filter(|m| m.1).map(|m| m.0));
-    p.now.drawn.sort_unstable();
+    now.drawn.sort_unstable();
     // Places are a setting; what someone placed is always shown.
-    p.now.places = settings_store().place;
-    let places = p.now.places;
-    let stale = core::mem::take(&mut p.moved) | (p.found_for.as_ref() != Some(&p.now));
-    if stale {
-        let now = core::mem::take(&mut p.now);
-        p.now = p.found_for.replace(now).unwrap_or_default();
-    }
+    now.places = settings_store().place;
+    let places = now.places;
+    // What was read stands for a chunk still drawn whose columns no change
+    // touches (query/changed.rs), while places did not turn: a chunk left or
+    // touched drops its run, and only one entered or touched is read.
+    p.moved = false;
+    let before = match &p.found_for {
+        Some(f) if f.places == places => f.drawn.as_slice(),
+        _ => &[],
+    };
+    let moved_places = &p.moved_places;
+    let stands = |c: &Chunk| {
+        let r = c.region();
+        before.binary_search(c).is_ok() && !crate::query::changed::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
+    };
     let mut found = core::mem::take(&mut p.found);
-    if stale {
-        found.clear();
-    }
-    let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
-    for &(chunk, _, _) in read.iter().filter(|m| m.1) {
+    found.retain(|s| now.drawn.binary_search(&s.chunk).is_ok() && stands(&s.chunk));
+    for &chunk in now.drawn.iter().filter(|c| !stands(c)) {
         markers(chunk, &mut found);
         if places {
             places_in(chunk, &mut found);
         }
+    }
+    p.moved_places.clear();
+    if p.found_for.as_ref() != Some(&p.now) {
+        let now = core::mem::take(&mut p.now);
+        p.now = p.found_for.replace(now).unwrap_or_default();
     }
     p.batch.reset();
     let drawn_before = core::mem::take(&mut p.labeled);
@@ -453,6 +470,7 @@ fn places_in(chunk: Chunk, found: &mut Vec<Shown>) {
                 continue;
             }
             found.push(Shown {
+                chunk,
                 label: Label::Place {
                     tile: src,
                     place,

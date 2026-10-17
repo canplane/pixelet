@@ -113,7 +113,7 @@ pub fn location_puck_step(device_coord: Option<Q3>) {
         pos: crate::view::frame::coord::to_world(&device),
     };
     let center_pos = match p.grounded {
-        Some((s, center)) if s == seen && !crate::query::changed::within(read(&device)) => center,
+        Some((s, center)) if s == seen && !crate::query::changed::within(read(&device), &[]) => center,
         _ => {
             let center = ground(p, seen);
             p.grounded = Some((seen, center));
