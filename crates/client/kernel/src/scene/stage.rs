@@ -171,8 +171,8 @@ pub fn stage_render() {
             px: stat.px,
         },
         DeviceSample {
-            buffers: stat.buffers,
-            buffer_mb: round(stat.buffer_bytes / MB),
+            blocks: stat.blocks,
+            blocks_mb: round(stat.block_bytes / MB),
             depth_mb: stat.depth_mb,
             layers_mb: stat.layers_mb,
             objects,

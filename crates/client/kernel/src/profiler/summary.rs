@@ -123,7 +123,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         gpu_spans_max: spans.map(|s| s.max),
         kinds: core::array::from_fn(|k| count(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| count(&|f| f.wake == k as f64)),
-        heap_peak_delta_bytes: last.heap.peak_bytes - first.heap.peak_bytes,
+        heap_used_delta_bytes: last.heap.used_bytes - first.heap.used_bytes,
         census: core::array::from_fn(|k| [sum(&|f| f.gpu.census[k][0]) / n, sum(&|f| f.gpu.census[k][1]) / n]),
         last: *last,
     }

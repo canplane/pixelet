@@ -68,7 +68,7 @@ pub struct FramesBlock {
     /// Frames by the renderer's FRAME_KINDS, and turns' last ask by WAKES.
     pub kinds: [f64; FRAME_KINDS.len()],
     pub wakes: [f64; WAKES.len()],
-    pub heap_peak_delta_bytes: f64,
+    pub heap_used_delta_bytes: f64,
     pub census: [[f64; 2]; CENSUS_LEN],
     pub last: FrameSample,
 }
@@ -83,7 +83,7 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     tick => SUMMARY::frames::tick, tasks => SUMMARY::frames::tasks, gpu => SUMMARY::frames::gpu,
     phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95, gpu_spans_max => SUMMARY::frames::gpu_spans_max,
     kinds => SUMMARY::frames::kinds, wakes => SUMMARY::frames::wakes,
-    heap_peak_delta_bytes => SUMMARY::frames::heap_peak_delta_bytes, census => SUMMARY::frames::census,
+    heap_used_delta_bytes => SUMMARY::frames::heap_used_delta_bytes, census => SUMMARY::frames::census,
     last => SUMMARY::frames::last,
 );
 

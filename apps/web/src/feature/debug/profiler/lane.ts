@@ -99,10 +99,8 @@ export function valueText(name: string, v: f64): string {
   return Number.isInteger(v) ? String(v) : n1(v);
 }
 
-function label(group: string, name: string): string {
-  const bare = name.startsWith(`${group}_`) ? name.slice(group.length + 1) : name;
-  return bare.replace(UNIT, "") || name;
-}
+/** A lane by its name, its unit left to its value. */
+const label = (name: string) => name.replace(UNIT, "");
 
 function listText(lane: ListLane, f: Frame): string {
   const names = LIST_NAMES[lane];
@@ -117,7 +115,7 @@ function listText(lane: ListLane, f: Frame): string {
 
 export function groupText(group: FrameGroup, f: Frame): string {
   return (FRAME_GROUPS[group] as readonly FrameLane[]).map((lane) => {
-    const l = label(group, lane);
+    const l = label(lane);
     return isList(lane) ? `${l} [${listText(lane, f)}]` : `${l} ${valueText(lane, f[lane])}`;
   }).join("  ");
 }

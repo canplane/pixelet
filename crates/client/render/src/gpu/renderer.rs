@@ -222,8 +222,9 @@ pub struct FrameOutput {
 #[derive(Clone, Copy)]
 pub struct FrameStat {
     pub gpu_ms: f64,
-    pub buffers: f64,
-    pub buffer_bytes: f64,
+    /// The block table's blocks and their bytes.
+    pub blocks: f64,
+    pub block_bytes: f64,
     pub depth_mb: f64,
     pub layers_mb: f64,
     pub px: f64,
@@ -1787,8 +1788,8 @@ impl Renderer {
         let px = world.width as f64 * world.height as f64;
         FrameStat {
             gpu_ms,
-            buffers: b.count as f64,
-            buffer_bytes: b.bytes as f64,
+            blocks: b.count as f64,
+            block_bytes: b.bytes as f64,
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the badges' regions'.
             depth_mb: round((px * 4.0 + self.ao.depth_bytes() + self.badges.depth_bytes()) / MB),
             layers_mb: round(self.layers.bytes as f64 / MB),

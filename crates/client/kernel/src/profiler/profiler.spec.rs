@@ -60,7 +60,7 @@ pub mod LIMITS {
     pub const KEYS: &[&str] = &["REASONS", "STEP_SLOTS", "ZOOMS"];
 }
 
-/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, and `_name` for an index into a list of names.
+/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `blocks` and `blocks_mb` are the renderer's block table (pxl-render gpu/renderer.rs `Blocks`), and the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, and `_name` for an index into a list of names.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const interval_ms: u32 = 1;
@@ -83,17 +83,17 @@ pub mod FRAME {
     pub const gpu_spans: u32 = 22;
     pub const census: u32 = 30;
     pub const px: u32 = 50;
-    pub const buffers: u32 = 51;
-    pub const buffer_mb: u32 = 52;
+    pub const blocks: u32 = 51;
+    pub const blocks_mb: u32 = 52;
     pub const tex_depth_mb: u32 = 53;
     pub const tex_layers_mb: u32 = 54;
     pub const gpu_objects: u32 = 55;
     pub const zoom_tiles: u32 = 66;
     pub const tiles_place: u32 = 90;
-    pub const heap_peak_bytes: u32 = 91;
-    pub const heap_lent_bytes: u32 = 92;
+    pub const heap_used_bytes: u32 = 91;
+    pub const heap_live_bytes: u32 = 92;
     pub const heap_run_bytes: u32 = 93;
-    pub const heap_held_bytes: u32 = 94;
+    pub const heap_slot_bytes: u32 = 94;
     pub const heap_range_bytes: u32 = 95;
     pub const heap_largest_free_bytes: u32 = 96;
     pub const heap_refusals: u32 = 97;
@@ -126,17 +126,17 @@ pub mod FRAME {
         "gpu_spans",
         "census",
         "px",
-        "buffers",
-        "buffer_mb",
+        "blocks",
+        "blocks_mb",
         "tex_depth_mb",
         "tex_layers_mb",
         "gpu_objects",
         "zoom_tiles",
         "tiles_place",
-        "heap_peak_bytes",
-        "heap_lent_bytes",
+        "heap_used_bytes",
+        "heap_live_bytes",
         "heap_run_bytes",
-        "heap_held_bytes",
+        "heap_slot_bytes",
         "heap_range_bytes",
         "heap_largest_free_bytes",
         "heap_refusals",
@@ -159,12 +159,12 @@ pub mod FRAME_GROUPS {
     pub const cap: &[&str] = &["cap_terrain_refused"];
     pub const requests: &[&str] = &["waiting", "out"];
     pub const tiles: &[&str] = &["zoom_tiles", "tiles_place"];
-    pub const device: &[&str] = &["buffers", "buffer_mb", "tex_depth_mb", "tex_layers_mb", "gpu_objects"];
+    pub const device: &[&str] = &["blocks", "blocks_mb", "tex_depth_mb", "tex_layers_mb", "gpu_objects"];
     pub const heap: &[&str] = &[
-        "heap_peak_bytes",
-        "heap_lent_bytes",
+        "heap_used_bytes",
+        "heap_live_bytes",
         "heap_run_bytes",
-        "heap_held_bytes",
+        "heap_slot_bytes",
         "heap_range_bytes",
         "heap_largest_free_bytes",
         "heap_refusals",
@@ -287,7 +287,7 @@ pub mod SUMMARY {
         pub const gpu_spans_max: u32 = 39;
         pub const kinds: u32 = 47;
         pub const wakes: u32 = 56;
-        pub const heap_peak_delta_bytes: u32 = 59;
+        pub const heap_used_delta_bytes: u32 = 59;
         pub const census: u32 = 60;
         pub const last: u32 = 80;
         pub const WORDS: u32 = 192;
@@ -312,7 +312,7 @@ pub mod SUMMARY {
             "gpu_spans_max",
             "kinds",
             "wakes",
-            "heap_peak_delta_bytes",
+            "heap_used_delta_bytes",
             "census",
             "last",
             "WORDS",

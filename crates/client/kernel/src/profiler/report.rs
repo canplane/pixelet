@@ -47,10 +47,10 @@ pub fn set_host_frame(kind: FrameKind, gpu: GpuSample, device: DeviceSample) {
 fn heap_sample() -> HeapSample {
     let h = crate::io::host::heap_stat();
     HeapSample {
-        peak_bytes: h.used as f64,
-        lent_bytes: h.live as f64,
+        used_bytes: h.used as f64,
+        live_bytes: h.live as f64,
         run_bytes: h.run as f64,
-        held_bytes: h.slot as f64,
+        slot_bytes: h.slot as f64,
         range_bytes: h.range as f64,
         largest_free_bytes: h.largest_free as f64,
         refusals: h.refusals as f64,

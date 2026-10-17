@@ -172,20 +172,20 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Row k="answers/held peak" v={`${f.last.ring_cq_peak}/${f.last.ring_held_peak}`} warn={f.last.ring_held_peak > 0} />
 
           <Head>Memory</Head>
-          <Row k="heap peak change" v={`${f.heap_peak_delta_bytes >= 0 ? "+" : ""}${bytes(f.heap_peak_delta_bytes)}`} />
+          <Row k="heap used change" v={`${f.heap_used_delta_bytes >= 0 ? "+" : ""}${bytes(f.heap_used_delta_bytes)}`} />
           {
-            /* `lent` counts a carved run whole; `held` is what slots hold. The
+            /* `live` counts a carved run whole; `slot` is what slots hold. The
                           shares are computed here, not separate lanes. */
           }
           <Row
-            k="heap peak/lent of"
-            v={`${bytes(f.last.heap_peak_bytes)}/${bytes(f.last.heap_lent_bytes)} of ${bytes(f.last.heap_range_bytes)} ${pct(f.last.heap_lent_bytes, f.last.heap_range_bytes)}%`}
-            warn={f.last.heap_lent_bytes >= f.last.heap_range_bytes * 0.8}
+            k="heap used/live of"
+            v={`${bytes(f.last.heap_used_bytes)}/${bytes(f.last.heap_live_bytes)} of ${bytes(f.last.heap_range_bytes)} ${pct(f.last.heap_live_bytes, f.last.heap_range_bytes)}%`}
+            warn={f.last.heap_live_bytes >= f.last.heap_range_bytes * 0.8}
           />
           <Row
-            k="slab runs/held"
-            v={`${bytes(f.last.heap_run_bytes)}/${bytes(f.last.heap_held_bytes)} ${pct(f.last.heap_held_bytes, f.last.heap_run_bytes)}%`}
-            warn={f.last.heap_run_bytes > MB && f.last.heap_held_bytes < f.last.heap_run_bytes / 2}
+            k="slab runs/slots"
+            v={`${bytes(f.last.heap_run_bytes)}/${bytes(f.last.heap_slot_bytes)} ${pct(f.last.heap_slot_bytes, f.last.heap_run_bytes)}%`}
+            warn={f.last.heap_run_bytes > MB && f.last.heap_slot_bytes < f.last.heap_run_bytes / 2}
           />
           <Row k="refused/largest free" v={`${f.last.heap_refusals}/${bytes(f.last.heap_largest_free_bytes)}`} warn={f.last.heap_refusals > 0} />
           <Row k="releases" v={`${f.last.heap_releases}`} />
@@ -197,7 +197,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
             v={`${terrain}/${f.last.tiles_place}${terrain > 0 ? ` ${zoomName(f.last.zoom_tiles.findLastIndex((n) => n > 0))}..${zoomName(f.last.zoom_tiles.findIndex((n) => n > 0))}` : ""}`}
           />
           <Row k="kernel memory" v={bytes(kernel_memory().byteLength)} />
-          <Row k="buffers" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}`} />
+          <Row k="blocks" v={`${f.last.blocks} ${valueText("_mb", f.last.blocks_mb)}`} />
           <Row k="depth/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_layers_mb} MB`} />
           {/* The leak bar's figure: flat over a pan loop and across a lost device. */}
           <Row k="gpu objects" v={`${f.last.gpu_objects.reduce((n, o) => n + o, 0)}`} />

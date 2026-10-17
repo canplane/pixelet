@@ -87,7 +87,7 @@ export interface FrameSummary {
   /** Frames by the renderer's kind, and the turns' last ask by wake. */
   kinds: { name: string; n: f64 }[];
   wakes: { name: string; n: f64 }[];
-  heap_peak_delta_bytes: f64;
+  heap_used_delta_bytes: f64;
   census: { tag: string; draws: f64; tris: f64 }[];
   last: Frame;
 }
@@ -154,7 +154,7 @@ function frameSummary(s: F64Array): FrameSummary | null {
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, p95: s[a + F.gpu_spans_p95 + k], max: s[a + F.gpu_spans_max + k] })),
     kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
     wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
-    heap_peak_delta_bytes: s[a + F.heap_peak_delta_bytes],
+    heap_used_delta_bytes: s[a + F.heap_used_delta_bytes],
     census: CENSUS_TAGS.map((tag, k) => ({ tag, draws: s[a + F.census + 2 * k], tris: s[a + F.census + 2 * k + 1] }))
       .filter((r) => r.draws > 0)
       .sort((x, y) => y.tris - x.tris),

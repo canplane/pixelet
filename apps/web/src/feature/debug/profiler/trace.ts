@@ -112,8 +112,8 @@ function profilerTraceJson(): string {
     for (const w of worst) {
       const f = w.sample;
       const args = frameArgs(f);
-      args.d_buffers = w.prev === null ? null : f.buffers - w.prev.buffers;
-      args.d_heap_peak_bytes = w.prev === null ? null : f.heap_peak_bytes - w.prev.heap_peak_bytes;
+      args.d_blocks = w.prev === null ? null : f.blocks - w.prev.blocks;
+      args.d_heap_used_bytes = w.prev === null ? null : f.heap_used_bytes - w.prev.heap_used_bytes;
       // From where the frame turn began, over the interval it opened.
       const began = f.t - (f.effects_ms + f.tick_ms + f.stage_ms);
       events.push(event(`interval ${fixed(f.interval_ms, 0)}ms`, "worst", "X", us(began), us(f.interval_ms), TID_WORST, args));

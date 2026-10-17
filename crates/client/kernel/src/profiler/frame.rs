@@ -33,8 +33,9 @@ pub struct GpuSample {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DeviceSample {
-    pub buffers: f64,
-    pub buffer_mb: f64,
+    /// The renderer's block table: its blocks and their bytes in MB.
+    pub blocks: f64,
+    pub blocks_mb: f64,
     pub depth_mb: f64,
     pub layers_mb: f64,
     /// The GPU objects the renderer holds, by the op that made them, as its
@@ -51,18 +52,19 @@ pub struct TileSample {
 }
 
 /// The heap as its allocator states it (xpute-guest mem/heap.rs `HeapStat`),
-/// in bytes as it counts them: each figure what it is, not a rounding of it.
+/// by its names and in bytes as it counts them: each figure what it is, not
+/// a rounding of it.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct HeapSample {
     /// The high-water mark: how far the heap has ever reached, never less.
-    pub peak_bytes: f64,
+    pub used_bytes: f64,
     /// Pages lent out, a carved run counted whole.
-    pub lent_bytes: f64,
+    pub live_bytes: f64,
     /// Of what is lent, what was carved into slots, and what is held in
     /// slots; their difference is what the carving costs.
     pub run_bytes: f64,
-    pub held_bytes: f64,
+    pub slot_bytes: f64,
     pub range_bytes: f64,
     pub largest_free_bytes: f64,
     pub refusals: f64,
@@ -136,11 +138,11 @@ words!(FrameSample, FRAME::WORDS,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
     gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans,
     gpu.census => FRAME::census, gpu.px => FRAME::px,
-    device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb,
+    device.blocks => FRAME::blocks, device.blocks_mb => FRAME::blocks_mb,
     device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb, device.objects => FRAME::gpu_objects,
     tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
-    heap.peak_bytes => FRAME::heap_peak_bytes, heap.lent_bytes => FRAME::heap_lent_bytes, heap.run_bytes => FRAME::heap_run_bytes,
-    heap.held_bytes => FRAME::heap_held_bytes, heap.range_bytes => FRAME::heap_range_bytes,
+    heap.used_bytes => FRAME::heap_used_bytes, heap.live_bytes => FRAME::heap_live_bytes, heap.run_bytes => FRAME::heap_run_bytes,
+    heap.slot_bytes => FRAME::heap_slot_bytes, heap.range_bytes => FRAME::heap_range_bytes,
     heap.largest_free_bytes => FRAME::heap_largest_free_bytes, heap.refusals => FRAME::heap_refusals, heap.releases => FRAME::heap_releases,
     rings.cq_peak => FRAME::ring_cq_peak, rings.held_peak => FRAME::ring_held_peak,
     waiting => FRAME::waiting, out => FRAME::out,

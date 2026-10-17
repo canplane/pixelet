@@ -38,10 +38,10 @@ export function taskLine(r: TaskRecord): string {
 /** Geometry, textures and heap only mean anything as deltas from `prev`. */
 export function frameLine(s: Frame, prev: Frame | null): string {
   const [draws, triangles] = drawn(s);
-  const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap peak ${signedBytes(s.heap_peak_bytes - prev.heap_peak_bytes)}`;
+  const d = prev === null ? "" : `  Δblocks ${signed(s.blocks - prev.blocks)} Δblocks_mb ${signed(s.blocks_mb - prev.blocks_mb)} Δheap used ${signedBytes(s.heap_used_bytes - prev.heap_used_bytes)}`;
   return `[${n1(s.t).padStart(9)}] ${valueText("kind_name", s.kind_name)}  interval ${n1(s.interval_ms)} = ${s.turns} turns ${n1(s.busy_ms)} + ${pastText(s)}  tick ${n1(s.tick_ms)}/${
     n1(s.budget_ms)
-  }${s.settled ? " (still)" : ""}  gpu ${n1(s.gpu_ms)}  draws ${draws} tris ${tris(triangles)}  buf ${s.buffers}  heap peak ${bytes(s.heap_peak_bytes)}${d}`;
+  }${s.settled ? " (still)" : ""}  gpu ${n1(s.gpu_ms)}  draws ${draws} tris ${tris(triangles)}  blocks ${s.blocks}  heap used ${bytes(s.heap_used_bytes)}${d}`;
 }
 
 export const longFrameLine = (l: LongFrame) =>
@@ -71,11 +71,11 @@ function windowSection(r: ProfilerReport): string[] {
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms per frame, max)`,
     `  by tag  ${f.census.map((t) => `${t.tag} ${round(t.draws)}/${tris(t.tris)}`).join("  ")}   (draws/tris a frame, mean)`,
-    `  heap peak Δ ${signedBytes(f.heap_peak_delta_bytes)}`,
-    // `lent` counts a carved run whole, so it is committed, not held.
-    `  heap    lent ${pct(last.heap_lent_bytes, last.heap_range_bytes)}% of the range   ${bytes(last.heap_lent_bytes - last.heap_run_bytes)} of it whole pages   runs hold ${
-      pct(last.heap_held_bytes, last.heap_run_bytes)
-    }% of themselves, the other ${bytes(last.heap_run_bytes - last.heap_held_bytes)} what the carving costs`,
+    `  heap used Δ ${signedBytes(f.heap_used_delta_bytes)}   (the high-water mark)`,
+    // `live` counts a carved run whole, so it is committed, not held in slots.
+    `  heap    live ${pct(last.heap_live_bytes, last.heap_range_bytes)}% of the range   ${bytes(last.heap_live_bytes - last.heap_run_bytes)} of it whole pages   runs hold ${
+      pct(last.heap_slot_bytes, last.heap_run_bytes)
+    }% of themselves, the other ${bytes(last.heap_run_bytes - last.heap_slot_bytes)} what the carving costs`,
   ];
 }
 
