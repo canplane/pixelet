@@ -25,6 +25,7 @@ const shaders = join(root, "crates/client/render/src/frame/shader");
 // Each entry and the file it is checked in as.
 const ENTRIES = [
   ["cast_cs", "cast.gen.wgsl"],
+  ["start_cs", "start.gen.wgsl"],
   ["heights_cs", "heights.gen.wgsl"],
   ["bound_cs", "bound.gen.wgsl"],
   ["decor_cs", "decor.gen.wgsl"],

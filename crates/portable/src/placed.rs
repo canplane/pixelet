@@ -53,6 +53,15 @@ impl Held {
     /// Nothing is placed under the node.
     pub const NOTHING: Held = Held(u32::MAX);
 
+    /// As a word a GPU's storage holds.
+    pub const fn word(self) -> u32 {
+        self.0
+    }
+
+    pub const fn of_word(w: u32) -> Held {
+        Held(w)
+    }
+
     /// The branch at `slot` of `zoom`.
     pub const fn branch(slot: u32, zoom: Zoom) -> Held {
         Held(slot << SLOT_SHIFT | FOLDED | zoom)

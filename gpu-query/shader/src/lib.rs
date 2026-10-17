@@ -535,6 +535,68 @@ fn word(world: &mut World, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool)
     UVec4::new(value & 0xffff | kind << 16 | face << 18 | zoom << 21, s.t.to_bits(), mask::mask(filled), w3)
 }
 
+/// Where every ray from the eye starts alike (pxl-portable `cast::start`),
+/// as `start_cs` writes it for `cast_cs`: its node's zoom and corner, what
+/// was handed it, then the stack down to it, an `At` two words.
+const START_WORDS: u32 = 4 + 2 * (1 + cast::DEPTH as u32);
+
+fn at_words(a: At) -> [u32; 2] {
+    [a.cave.word(), a.placed.word()]
+}
+
+fn at_of(w: &[u32], k: u32) -> At {
+    At {
+        cave: Cave::of_word(at(w, k)),
+        placed: Held::of_word(at(w, k + 1)),
+    }
+}
+
+/// The ray through the middle of the view, and the zooms each distance asks.
+fn eye_ray(eye: &Eye, tx: f32, ty: f32) -> (cast::Ray, Detail) {
+    let v3 = |v: Vec4| [v.x, v.y, v.z];
+    let direction = cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), tx, ty);
+    let ray = cast::Ray::of([eye.origin.x, eye.origin.y, eye.origin.z], direction, eye.forward_far.w);
+    let across = eye.across_range;
+    (ray, Detail { tau: eye.right_tau.w, range: [across.z, across.w] })
+}
+
+/// The nodes over where every ray from the eye starts alike, asked once a
+/// frame (pxl-portable `cast::start`) for every ray of `cast_cs` to start
+/// from, one thread.
+#[spirv(compute(threads(1, 1, 1)))]
+pub fn start_cs(
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
+) {
+    let (ray, detail) = eye_ray(eye, 0.0, 0.0);
+    let mut world = World {
+        window,
+        ground,
+        shards,
+        overwrites,
+        eye,
+    };
+    let s = cast::start(&mut world, &ray, detail);
+    put(starts, 0, s.place.zoom);
+    put(starts, 1, s.place.corner[0] as u32);
+    put(starts, 2, s.place.corner[1] as u32);
+    put(starts, 3, s.place.corner[2] as u32);
+    let w = at_words(s.at);
+    put(starts, 4, w[0]);
+    put(starts, 5, w[1]);
+    let mut k = 0;
+    while k < cast::DEPTH {
+        let w = at_words(s.stack[k]);
+        put(starts, 6 + 2 * k as u32, w[0]);
+        put(starts, 7 + 2 * k as u32, w[1]);
+        k += 1;
+    }
+}
+
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn cast_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -545,18 +607,13 @@ pub fn cast_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] tangents: &[f32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
 ) {
     let across = eye.across_range;
     if id.x >= across.x || id.y >= across.y {
         return;
     }
-    let v3 = |v: Vec4| [v.x, v.y, v.z];
-    let direction = cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), at(tangents, id.x), at(tangents, across.x + id.y));
-    let ray = cast::Ray::of([eye.origin.x, eye.origin.y, eye.origin.z], direction, eye.forward_far.w);
-    let detail = Detail {
-        tau: eye.right_tau.w,
-        range: [across.z, across.w],
-    };
+    let (ray, detail) = eye_ray(eye, at(tangents, id.x), at(tangents, across.x + id.y));
     let mut world = World {
         window,
         ground,
@@ -564,7 +621,22 @@ pub fn cast_cs(
         overwrites,
         eye,
     };
-    let met = cast::first(&mut world, &ray, detail, Until::Fills);
+    // Started where every ray from the eye starts alike (`start_cs`).
+    let read: &[u32] = starts;
+    let mut from = cast::Start {
+        place: cast::Place {
+            zoom: at(read, 0),
+            corner: [at(read, 1) as i32, at(read, 2) as i32, at(read, 3) as i32],
+        },
+        at: at_of(read, 4),
+        stack: [at_of(read, 4); cast::DEPTH],
+    };
+    let mut k = 0;
+    while k < cast::DEPTH {
+        from.stack[k] = at_of(read, 6 + 2 * k as u32);
+        k += 1;
+    }
+    let met = cast::first_from(&mut world, &ray, detail, Until::Fills, from);
     let steps = at(&*lane, 0).z != 0;
     let w = word(&mut world, &ray, met, steps);
     let i = (1 + id.y * across.x + id.x) as usize;

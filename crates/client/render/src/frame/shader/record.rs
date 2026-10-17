@@ -57,7 +57,11 @@ pub const SHADER_GROWN_PLACE: u32 = 32;
 pub const SHADER_WAYS: u32 = 33;
 /// The world image laid on a frame (blit.wgsl).
 pub const SHADER_BLIT: u32 = 34;
-pub const SHADERS: u32 = 35;
+/// Where every ray of the cast starts alike, asked once a frame before it,
+/// generated with the cast from pxl-portable's `cast::start`: its one
+/// compute entry.
+pub const SHADER_START: u32 = 35;
+pub const SHADERS: u32 = 36;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -69,6 +73,7 @@ macro_rules! wgsl {
 pub fn compute_entry(kind: u32) -> &'static str {
     match kind {
         SHADER_CAST => "cast_cs",
+        SHADER_START => "start_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHTS => "heights_cs",
         SHADER_GROWN => "decor_cs",
@@ -199,6 +204,7 @@ pub fn source(kind: u32) -> &'static str {
         ),
         // As generated: no constants of ours before it to clash with its names.
         SHADER_CAST => include_str!(concat!(env!("OUT_DIR"), "/shader/cast.gen.wgsl")),
+        SHADER_START => include_str!(concat!(env!("OUT_DIR"), "/shader/start.gen.wgsl")),
         SHADER_BOUND => include_str!(concat!(env!("OUT_DIR"), "/shader/bound.gen.wgsl")),
         SHADER_HEIGHTS => include_str!(concat!(env!("OUT_DIR"), "/shader/heights.gen.wgsl")),
         SHADER_GROWN => include_str!(concat!(env!("OUT_DIR"), "/shader/decor.gen.wgsl")),

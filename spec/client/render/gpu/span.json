@@ -12,7 +12,9 @@
     "overlay",
     "badges",
     "debug",
-    "cases"
+    "cases",
+    "fill",
+    "cast"
   ],
   "FRAME_KINDS": [
     "none",

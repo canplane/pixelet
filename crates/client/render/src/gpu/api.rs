@@ -826,9 +826,10 @@ impl Gpu {
         ))
     }
 
-    pub fn compute_pass(&self, encoder: Id) -> Id {
+    /// Timed in `stamp`'s span where the frame is timed.
+    pub fn compute_pass(&self, encoder: Id, stamp: Option<encode::TimestampWrites>) -> Id {
         let s = self.s();
-        made(s.encoder.compute_pass(&mut s.stream, encoder, &None))
+        made(s.encoder.compute_pass(&mut s.stream, encoder, &stamp))
     }
 
     pub fn dispatch(&self, pass: Id, x: u32, y: u32, z: u32) {
