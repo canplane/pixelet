@@ -66,7 +66,6 @@ fn the_formats_write_and_read_what_the_record_holds() {
     let resident = decode_into(&terrain, room()).unwrap();
     let held = separation::Separation {
         coarsest: Default::default(),
-        boxes: Default::default(),
         ..tile.separation.clone()
     };
     assert_eq!(resident.separation, held, "its lines");

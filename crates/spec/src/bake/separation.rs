@@ -78,30 +78,10 @@ impl Form {
 pub const MAX_LINES: usize = 438;
 pub const MAX_POINTS: usize = 4193;
 
-/// Points a leaf of `Separation::boxes` covers, and children a node has: a ray
-/// cast 20–25% faster than at 8 and twice 16's, for 16 KiB a record (measured
-/// 2026-10-03, Namsan and Gangnam).
-const FANOUT: usize = 4;
-
-/// Boxes of the tree over `points` points: the leaves, then each level up to one.
-pub const fn boxes_for(points: usize) -> usize {
-    let (mut n, mut sum) = (points.div_ceil(FANOUT), 0);
-    loop {
-        sum += n;
-        if n <= 1 {
-            return sum;
-        }
-        n = n.div_ceil(FANOUT);
-    }
-}
-
 /// Whether a record's room holds `lines` lines of `points` points.
 pub const fn holds(lines: usize, points: usize) -> bool {
     lines <= MAX_LINES && points <= MAX_POINTS
 }
-
-/// Holds no point.
-const EMPTY: [i16; 4] = [i16::MAX, i16::MAX, i16::MIN, i16::MIN];
 
 /// A tile's lines, structure-of-arrays: a lane a line, then a lane a point.
 #[derive(Clone, Debug, PartialEq)]
@@ -117,9 +97,6 @@ pub struct Separation {
     /// what a fold keeps of a line, the bake's alone — no client path folds,
     /// so a client's record holds none (`Lanes::into_room`).
     pub coarsest: Cow<'static, [u8]>,
-    /// Derived: a tree of boxes over the points in order, each the segments it
-    /// covers widened by their reach, in points; what `segments_over` walks.
-    pub boxes: Cow<'static, [[i16; 4]]>,
 }
 
 impl Default for Separation {
@@ -184,25 +161,19 @@ impl Separation {
     /// box. Row by row, each segment's in turn, in the points' order.
     pub fn segments_over(&self, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize)) {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - f64::from(CELL_CENTER);
-        let far = [0, 1].map(|k| origin[k] + size[k] as f64 * step);
-        let area = [origin[0], origin[1], far[0], far[1]].map(|v| v * POINT_SCALE);
-        // Only the segments whose boxes reach the grid.
-        for p in Near::new(&self.boxes, self.points.len(), area) {
-            let d = self.starts.partition_point(|&s| s as usize <= p) - 1;
+        for d in 0..self.starts.len() - 1 {
             let line = self.line(d);
-            let s = p - self.starts[d] as usize;
-            if s + 1 >= line.points.len() {
-                continue;
-            }
             let half = line.reach();
-            let (a, b) = (line.point(s), line.point(s + 1));
-            let range = |k: usize| {
-                let (lo, hi) = (cell(a[k].min(b[k]) - half, k).ceil() as i64, cell(a[k].max(b[k]) + half, k).floor() as i64);
-                lo.max(0)..=hi.min(size[k] - 1)
-            };
-            for j in range(1) {
-                for i in range(0) {
-                    each(i, j, p);
+            for s in 0..line.points.len().saturating_sub(1) {
+                let (a, b) = (line.point(s), line.point(s + 1));
+                let range = |k: usize| {
+                    let (lo, hi) = (cell(a[k].min(b[k]) - half, k).ceil() as i64, cell(a[k].max(b[k]) + half, k).floor() as i64);
+                    lo.max(0)..=hi.min(size[k] - 1)
+                };
+                for j in range(1) {
+                    for i in range(0) {
+                        each(i, j, self.starts[d] as usize + s);
+                    }
                 }
             }
         }
@@ -511,8 +482,6 @@ impl Builder {
 
     pub fn finish(mut self) -> Separation {
         self.starts.push(self.points.len() as u32);
-        let mut boxes = vec![EMPTY; boxes_for(self.points.len())];
-        build_boxes(&self.starts, &self.points, &self.width, &mut boxes);
         Separation {
             starts: self.starts.into(),
             points: self.points.into(),
@@ -522,7 +491,6 @@ impl Builder {
             kind: self.kind.into(),
             form: self.form.into(),
             clear: self.clear.into(),
-            boxes: boxes.into(),
         }
     }
 }
@@ -586,8 +554,6 @@ pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
 
 impl Lanes<'_> {
     pub fn to_separation(&self) -> Separation {
-        let mut boxes = vec![EMPTY; boxes_for(self.points.len())];
-        build_boxes(self.starts, self.points, self.width, &mut boxes);
         Separation {
             starts: self.starts.to_vec().into(),
             points: self.points.to_vec().into(),
@@ -597,14 +563,12 @@ impl Lanes<'_> {
             kind: self.kind.to_vec().into(),
             form: self.form.to_vec().into(),
             clear: self.clear.to_vec().into(),
-            boxes: boxes.into(),
         }
     }
 
     /// Into a client's record: every lane but `coarsest`, which only a fold
-    /// reads, and `boxes`, which only a bake's sweep over a grid reads
-    /// (`segments_over`); a client reads a square's lines whole
-    /// (bake/tile/terrain.rs `square_lines`).
+    /// reads; a client reads a square's lines whole (bake/tile/terrain.rs
+    /// `square_lines`).
     pub fn into_room(&self, room: Room) -> Separation {
         fn put<T: Copy>(dst: &'static mut [T], src: &[T]) -> &'static [T] {
             let dst = &mut dst[..src.len()];
@@ -620,117 +584,6 @@ impl Lanes<'_> {
             kind: put(room.kind, self.kind).into(),
             form: put(room.form, self.form).into(),
             clear: put(room.clear, self.clear).into(),
-            boxes: Cow::Borrowed(&[]),
-        }
-    }
-}
-
-/// Fills `out`, `boxes_for(points.len())` long: a leaf the segments starting
-/// at its points, each widened by its line's reach; a node its children's union.
-fn build_boxes(starts: &[u32], points: &[[i16; 2]], width: &[u8], out: &mut [[i16; 4]]) {
-    let n = points.len();
-    let mut d = 0;
-    for (k, b) in out[..n.div_ceil(FANOUT)].iter_mut().enumerate() {
-        *b = EMPTY;
-        for i in k * FANOUT..((k + 1) * FANOUT).min(n) {
-            while starts[d + 1] as usize <= i {
-                d += 1;
-            }
-            if i + 1 >= starts[d + 1] as usize {
-                continue;
-            }
-            // Within reach of the segment is within its box widened by the reach.
-            let r = (f64::from(way::reach(f32::from(width[d]) / ways::POINT_SCALE)) * POINT_SCALE).ceil() as i32;
-            let (a, c) = (points[i], points[i + 1]);
-            let lo = |k: usize| (i32::from(a[k].min(c[k])) - r).max(i32::from(i16::MIN)) as i16;
-            let hi = |k: usize| (i32::from(a[k].max(c[k])) + r).min(i32::from(i16::MAX)) as i16;
-            *b = union(*b, [lo(0), lo(1), hi(0), hi(1)]);
-        }
-    }
-    let (mut below, mut len) = (0, n.div_ceil(FANOUT));
-    while len > 1 {
-        let up = len.div_ceil(FANOUT);
-        for k in 0..up {
-            let children = below + k * FANOUT..below + ((k + 1) * FANOUT).min(len);
-            out[below + len + k] = out[children].iter().fold(EMPTY, |u, &b| union(u, b));
-        }
-        (below, len) = (below + len, up);
-    }
-}
-
-fn union(a: [i16; 4], b: [i16; 4]) -> [i16; 4] {
-    [a[0].min(b[0]), a[1].min(b[1]), a[2].max(b[2]), a[3].max(b[3])]
-}
-
-/// The points whose segment's box meets `area`, low corner then high, in
-/// order: the tree walked depth first.
-struct Near<'a> {
-    boxes: &'a [[i16; 4]],
-    area: [f64; 4],
-    /// each level's first box, leaves at 0
-    level_at: [usize; 8],
-    stack: [(u8, u16); 8 * FANOUT],
-    len: usize,
-    leaf: core::ops::Range<usize>,
-    points: usize,
-}
-
-impl<'a> Near<'a> {
-    fn new(boxes: &'a [[i16; 4]], points: usize, area: [f64; 4]) -> Near<'a> {
-        let mut near = Near {
-            boxes,
-            area,
-            level_at: [0; 8],
-            stack: [(0, 0); 8 * FANOUT],
-            len: 0,
-            leaf: 0..0,
-            points,
-        };
-        let (mut level, mut len) = (0, points.div_ceil(FANOUT));
-        while len > 1 {
-            near.level_at[level + 1] = near.level_at[level] + len;
-            (level, len) = (level + 1, len.div_ceil(FANOUT));
-        }
-        if len == 1 {
-            near.stack[0] = (level as u8, 0);
-            near.len = 1;
-        }
-        near
-    }
-
-    fn meets(&self, b: [i16; 4]) -> bool {
-        let a = self.area;
-        f64::from(b[0]) <= a[2] && a[0] <= f64::from(b[2]) && f64::from(b[1]) <= a[3] && a[1] <= f64::from(b[3])
-    }
-}
-
-impl Iterator for Near<'_> {
-    type Item = usize;
-
-    fn next(&mut self) -> Option<usize> {
-        loop {
-            if let Some(i) = self.leaf.next() {
-                return Some(i);
-            }
-            if self.len == 0 {
-                return None;
-            }
-            self.len -= 1;
-            let (level, k) = self.stack[self.len];
-            let (level, k) = (level as usize, k as usize);
-            if !self.meets(self.boxes[self.level_at[level] + k]) {
-                continue;
-            }
-            if level == 0 {
-                self.leaf = k * FANOUT..((k + 1) * FANOUT).min(self.points);
-                continue;
-            }
-            // children pushed last first, so they come off in order
-            let below = self.points.div_ceil(FANOUT.pow(level as u32));
-            for c in (k * FANOUT..((k + 1) * FANOUT).min(below)).rev() {
-                self.stack[self.len] = ((level - 1) as u8, c as u16);
-                self.len += 1;
-            }
         }
     }
 }
