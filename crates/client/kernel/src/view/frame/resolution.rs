@@ -44,9 +44,17 @@ pub fn world_ratio() -> f64 {
     resolution().ratio
 }
 
-/// 0 is a device that reports none.
+/// A frame's GPU time as a read landed with it; one that timed nothing
+/// reports none. A device that keeps no timestamps lands none, so the
+/// resolution probes.
 pub fn resolution_observe(gpu_ms: f64) {
     resolution().gpu_ms = (gpu_ms > 0.0).then_some(gpu_ms);
+}
+
+/// Whether the resolution steps on the GPU's time, which the frame then
+/// times for it (scene/stage.rs).
+pub fn resolution_reads_gpu() -> bool {
+    settings_store().resolution == ResolutionMode::auto
 }
 
 /// The world's surfaces take a changed ratio.

@@ -121,6 +121,9 @@ pub struct FrameInput<'a> {
     /// Whether its GPU spans are timed and read back (GPU_SPAN_NAMES): only
     /// for a reader of them, as their read's landing wakes a turn.
     pub timed: bool,
+    /// Whether its draws are counted (`FrameStat::census`): the profiler's
+    /// alone, so a frame it does not record counts none.
+    pub counted: bool,
 }
 
 /// The earth layer's tiles as the GPU reads them: the floor's window, its
@@ -230,7 +233,7 @@ pub struct FrameStat {
     pub depth_mb: f64,
     pub layers_mb: f64,
     pub world_px: f64,
-    /// Every draw's, counted only while timed: its sums are the frame's
+    /// Every draw's, counted only while `counted`: its sums are the frame's
     /// draws and triangles.
     pub census: DrawCensus,
     pub gpu_spans: [f64; GPU_SPAN_NAMES.len()],
@@ -1619,7 +1622,7 @@ impl Renderer {
         if still && rest.end() && !gridded {
             self.world = read;
             self.frame_read = rest;
-            let stat = self.stat(draws.records, world, input.timed, [0.0; GPU_SPAN_NAMES.len()]);
+            let stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES.len()]);
             self.order = order;
             return (FrameKind::stood, stat);
         }
@@ -1706,7 +1709,7 @@ impl Renderer {
             (false, true) => FrameKind::still,
             (false, false) => self.screen.kind,
         };
-        let mut stat = self.stat(draws.records, world, input.timed, gpu_spans);
+        let mut stat = self.stat(draws.records, world, input.counted, gpu_spans);
         stat.gpu_read = gpu_read;
         self.order = order;
         (kind, stat)
@@ -1773,11 +1776,11 @@ impl Renderer {
 
     /// What the scheduler asked for: a draw passed over because its block, skin or
     /// sprite is not on the device yet is still counted. The draws are counted
-    /// only while `timed`, the profiler's, so a frame no one reads counts none.
-    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, timed: bool, gpu_spans: [f64; GPU_SPAN_NAMES.len()]) -> FrameStat {
+    /// only while `counted`, the profiler's, so a frame no one reads counts none.
+    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, counted: bool, gpu_spans: [f64; GPU_SPAN_NAMES.len()]) -> FrameStat {
         let b = blocks();
         let mut census: DrawCensus = [[0.0; 2]; DRAW_PIPELINES.len()];
-        for d in draws.iter().filter(|_| timed) {
+        for d in draws.iter().filter(|_| counted) {
             let tris = match d[4] {
                 PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[1] * 12,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
