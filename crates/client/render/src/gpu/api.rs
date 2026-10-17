@@ -334,6 +334,28 @@ pub fn device_generation() -> u32 {
     STATE.get(|| None).as_ref().map_or(0, |s| s.generation)
 }
 
+/// The last read's ticks, where its word says they landed: each span's ms and
+/// the frame's, and the word let go for the next read.
+fn take_stamps(s: &mut State) {
+    let word = head(STAMPS_WORD_AT);
+    if *word & DONE == 0 {
+        return;
+    }
+    *word = 0;
+    let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
+    let tick = |k: usize| u64::from(*head(STAMPS_AT + 2 * k)) | u64::from(*head(STAMPS_AT + 2 * k + 1)) << 32;
+    let (mut first, mut last) = (u64::MAX, 0u64);
+    for k in 0..SPANS {
+        let (b, e) = (tick(2 * k), tick(2 * k + 1));
+        let ran = s.stamps_written & 1 << k != 0 && e >= b;
+        s.gpu_ms[k] = if ran { (e - b) as f64 * period_ms } else { 0.0 };
+        if ran {
+            (first, last) = (first.min(b), last.max(e));
+        }
+    }
+    s.gpu_ms[SPANS] = last.saturating_sub(first.min(last)) as f64 * period_ms;
+}
+
 /// The device went, and every object on it: the handles start over.
 pub fn device_lost() {
     if let Some(s) = STATE.get(|| None).as_mut() {
@@ -862,9 +884,12 @@ impl Gpu {
     /// The frame's encoder, its spans resolved, copied out and mapped back
     /// where it wrote any and no mapping is still on its way, submitted. One
     /// mapping at most is on its way, so its ticket need not tell them apart.
+    /// A mapping that landed is taken in first: asking for the next writes its
+    /// ticket over the word that says so.
     pub fn submit_frame(&self, encoder: Id, written: u32) {
         let s = self.s();
-        let stamps_free = *head(STAMPS_WORD_AT) == 0 || *head(STAMPS_WORD_AT) & DONE != 0;
+        take_stamps(s);
+        let stamps_free = *head(STAMPS_WORD_AT) == 0;
         if let (Some((set, resolve, mapped)), true) = (s.stamps, stamps_free && written != 0) {
             let bytes = 2 * SPANS as u32 * 8;
             call::resolve_query_set(&mut s.stream, encoder, set, 0, 2 * SPANS as u32, resolve, 0);
@@ -931,27 +956,10 @@ impl Gpu {
         self.s().encoder.objects()
     }
 
-    /// Span `span`'s time in ms from the last read in; past the last span,
-    /// the whole frame's: the read's ticks taken in once its word is done.
+    /// Span `span`'s time in ms from the last read taken in; past the last
+    /// span, the whole frame's.
     pub fn gpu_ms(&self, span: u32) -> f64 {
-        let s = self.s();
-        let word = head(STAMPS_WORD_AT);
-        if *word & DONE != 0 {
-            *word = 0;
-            let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
-            let tick = |k: usize| u64::from(*head(STAMPS_AT + 2 * k)) | u64::from(*head(STAMPS_AT + 2 * k + 1)) << 32;
-            let (mut first, mut last) = (u64::MAX, 0u64);
-            for k in 0..SPANS {
-                let (b, e) = (tick(2 * k), tick(2 * k + 1));
-                let ran = s.stamps_written & 1 << k != 0 && e >= b;
-                s.gpu_ms[k] = if ran { (e - b) as f64 * period_ms } else { 0.0 };
-                if ran {
-                    (first, last) = (first.min(b), last.max(e));
-                }
-            }
-            s.gpu_ms[SPANS] = last.saturating_sub(first.min(last)) as f64 * period_ms;
-        }
-        s.gpu_ms[(span as usize).min(SPANS)]
+        self.s().gpu_ms[(span as usize).min(SPANS)]
     }
 
     /// `size` bytes of `from` from `at` into `to` from `to_at`, on `encoder`.
