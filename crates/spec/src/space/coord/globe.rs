@@ -1,10 +1,10 @@
 // pxl-spec/space/coord/globe.rs
 
 //! The planet the air is drawn about, at the latitude of the sea under the
-//! eye: its radius as the map is stretched there, and what the sky reads the
-//! planet's map past the terrain by (pxl-render frame/shader/globe.wgsl
-//! `off_globe_of`). What is drawn is flat, where the eye's rays find it:
-//! nothing is placed on the sphere.
+//! eye: its radius as the map is stretched there, and the map's ordinate
+//! there, which the sky reads the land past the terrain at (pxl-render
+//! frame/shader/atmos_view.wgsl `map_of`). What is drawn is flat, where the
+//! eye's rays find it: nothing is placed on the sphere.
 
 use crate::space::coord::adapter::epsg4326;
 use crate::space::coord::world::ROUND;

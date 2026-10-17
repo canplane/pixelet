@@ -5,11 +5,9 @@
 // the map (look/cloud.rs `LATTICE_SHAMT`).
 const CLOUD_LATTICE_CELLS: u32 = 4096u;
 
-// Taken back to the flat map so a cloud stays over its ground wherever the view is centered.
+// On the map under it, so a cloud stays over its ground wherever the eye is.
 fn cloud_lattice(point: vec3f) -> vec2f {
-  let on_map = off_globe_of(point, frame_planet(), frame_globe());
-  let cells = frame_planet().xy + on_map + clouds_drift();
-  return clouds_frac() + cells / f32(CLOUD_LATTICE_CELLS);
+  return clouds_frac() + (point.xy + clouds_drift()) / f32(CLOUD_LATTICE_CELLS);
 }
 
 // Read at the footprint's mip, so a pixel wider than a cloud is as opaque as its covered share.
@@ -44,13 +42,6 @@ fn weather(p: vec2f, salt: u32) -> f32 {
   let v = lattice_noise(base / WEATHER_CELL, at, clouds_count() / WEATHER_CELL - 1u, salt);
   let even = 1.0 / (1.0 + exp(-LOGISTIC_SCALE * (v - 0.5) / WEATHER_SIGMA));
   return smoothstep(WEATHER_CLEAR, WEATHER_CROWDED, even);
-}
-
-// Where a layer `km` over the ground meets the horizon from the eye, in km.
-fn cloud_reach(km: f32) -> f32 {
-  let r = atmos_bottom_radius();
-  let layer = r + km;
-  return sqrt(max(camera_r() * camera_r() - r * r, 0.0)) + sqrt(layer * layer - r * r);
 }
 
 // Thins out over the reach's farther part.

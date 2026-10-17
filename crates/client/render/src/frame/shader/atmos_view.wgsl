@@ -1,4 +1,4 @@
-// The air as the frame shows it: sky, ground past the terrain, and aerial perspective.
+// The air as the frame shows it: sky, the land past the terrain, and aerial perspective.
 
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
 @group(0) @binding(16) var earth_map: texture_2d_array<f32>;
@@ -49,57 +49,27 @@ fn moon_view(dir: vec3f) -> vec3f {
   return table_view(moon_view_lut, dir, atmos_moon_dir());
 }
 
-struct Air {
-  light: vec3f,
-  end: vec3f,
-  ground: bool,
-  // The ground past the terrain is lit on its own slope of the sphere.
-  normal: vec3f,
-  // Its distance from the eye against the earth layer's reach, in octaves.
-  octaves: f32,
-};
-
-fn air_along(dir: vec3f) -> Air {
-  let r = camera_r();
-  var air: Air;
-  air.light = sky_view(dir, atmos_sun_dir()) * shown();
-  if (atmos_moon_light() > 0.0) {
-    air.light += moon_view(dir) * moon_shown();
-  }
-  let mu = dot(dir, frame_up());
-  air.ground = meets_land(r, mu);
-  air.normal = frame_up();
-  if (air.ground) {
-    // The light is the sky view's, gathered to the ground along this ray.
-    let d = to_land(r, mu);
-    let low = ray_low(r, mu, d);
-    air.end = exp(depth_along(r, mu, low, 0.0) - depth_along(r, mu, low, d));
-    air.normal = normalize(frame_up() * r + dir * d);
-    air.octaves = log2(d / atmos_km_per_u() / atmos_earth_reach());
-  } else {
-    air.end = transmittance_to_top(r, mu);
-  }
-  return air;
-}
-
 
 /* the Earth past the terrain */
 
-// Reflectance, and in alpha its lights' square root, where `n` is the ground's up
-// in the east, north and up of the sea under the eye. The global picture is read at the
-// point's latitude and longitude, a held tile at the globe's inverse of it.
-fn earth_face(n: vec3f, octaves: f32) -> vec4f {
-  let sin_lat = frame_globe().y;
-  let cos_lat = frame_globe().z;
-  let center_lon = atmos_center_lon();
-  let east = vec3f(-sin(center_lon), cos(center_lon), 0.0);
-  let north = vec3f(-sin_lat * cos(center_lon), -sin_lat * sin(center_lon), cos_lat);
-  let up = vec3f(cos_lat * cos(center_lon), cos_lat * sin(center_lon), sin_lat);
-  let p = east * n.x + north * n.y + up * n.z;
-  let uv = vec2f(fract(atan2(p.y, p.x) / TAU + 0.5), 0.5 - asin(clamp(p.z, -1.0, 1.0)) / PI);
+// The land the eye's ground lies on, as far as it runs: the plane at that
+// height, from the eye, in units.
+fn land_z() -> f32 {
+  return frame_planet().w + atmos_land_altitude_km() / atmos_km_per_u();
+}
+
+// Where a point lies on the map, as Mercator's longitude and ordinate.
+fn map_of(p: vec3f) -> vec2f {
+  return frame_map().xy + (p.xy - frame_planet().xy) / frame_map().z;
+}
+
+// Reflectance, and in alpha its lights' square root, at the map's place
+// `mercator`: the global picture at its latitude and longitude, a held tile
+// over it.
+fn earth_face(mercator: vec2f, octaves: f32) -> vec4f {
+  let lat = 2.0 * atan(exp(mercator.y)) - 0.5 * PI;
+  let uv = vec2f(fract(mercator.x / TAU + 0.5), 0.5 - lat / PI);
   let global = textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0);
-  let flat = off_globe_of(planet_center() + n * frame_planet().z, frame_planet(), frame_globe());
-  let mercator = vec2f(center_lon, log(frame_globe().x)) + flat / frame_globe().w;
   // A tile, a ground cell a texel, takes over from the global picture, eight
   // times coarser, over the octave a pixel goes from two cells, at the tiles'
   // reach, to one.
@@ -130,19 +100,28 @@ fn city_shown(lights: f32, up: vec3f) -> vec3f {
 // Doubled, picked by eye beside the original; the cities are not its to scale.
 const EARTH_GAIN: f32 = 2.0;
 
-// Lit by the terrain's own light, so the drawn edge is no seam. It comes in
-// over the octave to the earth layer's reach, where
-// the terrain ends seen from the globe; nearer, the ground is the voxels' or
-// the air's alone.
-fn beyond(air: Air) -> vec3f {
-  var light = air.light;
-  let shown = clamp(air.octaves + 1.0, 0.0, 1.0);
-  if (air.ground && shown > 0.0) {
-    let n = air.normal;
-    let face = earth_face(n, air.octaves);
-    light += air.end * shown * (EARTH_GAIN * face.rgb * surface_light(n, n, light_at(land_radius(), n)) + city_shown(face.a, n));
+// What the eye sees along `dir` where nothing was drawn: the sky where it
+// rises; where it falls, the land it meets, the plane under the eye at its
+// ground's height, seen through the air to it and lit as the terrain is, so
+// the drawn edge is no seam. Its picture comes in over the octave to the
+// earth layer's reach; nearer, the ground is the voxels', or the air's alone.
+fn beyond(dir: vec3f) -> vec3f {
+  let rise = dot(dir, frame_up());
+  if (rise >= 0.0 || land_z() >= 0.0) {
+    var sky = sky_view(dir, atmos_sun_dir()) * shown();
+    if (atmos_moon_light() > 0.0) {
+      sky += moon_view(dir) * moon_shown();
+    }
+    return sky;
   }
-  return light;
+  let d = land_z() / rise;
+  let p = dir * d;
+  let seen = seen_from_eye(p);
+  let octaves = log2(d / atmos_earth_reach());
+  let n = frame_up();
+  let face = earth_face(map_of(p), octaves);
+  let lit = EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);
+  return seen.scattered + seen.through * clamp(octaves + 1.0, 0.0, 1.0) * lit;
 }
 
 

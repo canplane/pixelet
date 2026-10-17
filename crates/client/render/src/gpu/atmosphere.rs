@@ -23,7 +23,7 @@ use crate::gpu::layers::Mips;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Upload;
 use crate::look::atmosphere as model;
-use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_SUN};
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SUN};
 
 /// One past the last field: the device rounds the struct up to a 16-byte row.
 pub const ATMOS_FLOATS: usize = 52;
@@ -51,7 +51,6 @@ pub(crate) const SHOWN_FALL: usize = 27;
 pub(crate) const MOON_DIR: usize = 28;
 pub(crate) const MOON_LIGHT: usize = 31;
 // 32 to 34 free.
-pub(crate) const CENTER_LON: usize = 35;
 pub(crate) const NIGHT_SKY: usize = 36;
 pub(crate) const LAND_ALTITUDE: usize = 39;
 pub(crate) const CITY_LIGHT: usize = 40;
@@ -297,7 +296,6 @@ impl Atmosphere {
         self.words[CAMERA_ALTITUDE] = altitude_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
         self.words[LAND_ALTITUDE] = env[ENV_AIR + 3];
-        self.words[CENTER_LON] = env[ENV_SKY + 2];
         let height = |d: &[f32]| (d[0] as f64 * up[0] + d[1] as f64 * up[1] + d[2] as f64 * up[2]) as f32;
         (self.sun_mu, self.moon_mu) = (height(sun), height(moon));
         g.write_buffer(self.uniform, 0, bytes(&self.words));

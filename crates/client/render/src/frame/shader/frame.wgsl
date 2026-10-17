@@ -24,10 +24,12 @@ struct Frame {
   _p3: f32,
   other_color: vec3f,
   _p4: f32,
-  // The sea under the eye in the root frame, planet radius (0 for none), center ground
-  // height; then the center's Mercator exponential, sin and cos of latitude, Mercator radius.
+  // The sea under the eye in the root frame, the planet's radius (0 for
+  // none) and the sea's height: the air's centre lies under it. Then the
+  // map's place there, Mercator's longitude and ordinate, and the map's
+  // radius in units.
   planet: vec4f,
-  globe: vec4f,
+  map: vec4f,
   // Away from the planet's center, which lies under the eye, at the eye.
   up: vec3f,
   // The camera grid's cell angle, radians.
@@ -53,6 +55,6 @@ fn frame_screen_ao() -> f32 { return frame_words[12].x; }
 fn frame_other_dir() -> vec3f { return frame_words[13].xyz; }
 fn frame_other_color() -> vec3f { return frame_words[14].xyz; }
 fn frame_planet() -> vec4f { return frame_words[15]; }
-fn frame_globe() -> vec4f { return frame_words[16]; }
+fn frame_map() -> vec4f { return frame_words[16]; }
 fn frame_up() -> vec3f { return frame_words[17].xyz; }
 fn frame_cell() -> f32 { return frame_words[17].w; }

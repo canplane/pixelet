@@ -26,8 +26,8 @@ struct Atmosphere {
   moon_light: f32,
   // Free.
   free: vec3f,
-  // Radians; the latitude is the frame's globe's.
-  center_lon: f32,
+  // Free.
+  free_lon: f32,
   // Lights the ground, never drawn: drawn, the sky went pale blue.
   night_sky: vec3f,
   // The Earth's face under the eye: at sea level the terrain floated on it.
@@ -70,7 +70,6 @@ fn atmos_night_stops() -> f32 { return atmos_words[6].z; }
 fn atmos_shown_fall() -> f32 { return atmos_words[6].w; }
 fn atmos_moon_dir() -> vec3f { return atmos_words[7].xyz; }
 fn atmos_moon_light() -> f32 { return atmos_words[7].w; }
-fn atmos_center_lon() -> f32 { return atmos_words[8].w; }
 fn atmos_night_sky() -> vec3f { return atmos_words[9].xyz; }
 fn atmos_land_altitude_km() -> f32 { return atmos_words[9].w; }
 fn atmos_city_light() -> vec3f { return atmos_words[10].xyz; }

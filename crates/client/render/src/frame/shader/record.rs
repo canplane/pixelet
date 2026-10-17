@@ -97,7 +97,6 @@ pub fn source(kind: u32) -> &'static str {
     match kind {
         SHADER_BOX => wgsl!(
             "frame",
-            "globe",
             "encode",
             "atmos_medium",
             "atmos_bind",
@@ -117,7 +116,6 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_DECOR => wgsl!(
             "frame",
-            "globe",
             "encode",
             "atmos_medium",
             "atmos_bind",
@@ -136,7 +134,6 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_SKINNED => wgsl!(
             "frame",
-            "globe",
             "encode",
             "atmos_medium",
             "atmos_bind",
@@ -159,7 +156,6 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_BADGE_REGION => wgsl!("frame", "encode", "badge", "badge_region"),
         SHADER_SKY => wgsl!(
             "frame",
-            "globe",
             "encode",
             "finish",
             "dither",
@@ -178,7 +174,6 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_DEBUG => wgsl!("frame", "encode", "debug"),
         SHADER_SCREEN_CELLS => wgsl!(
             "frame",
-            "globe",
             "encode",
             "atmos_medium",
             "atmos_bind",
@@ -215,7 +210,6 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_SHEET => wgsl!("sheet"),
         SHADER_IMPOSTOR => wgsl!(
             "frame",
-            "globe",
             "encode",
             "atmos_medium",
             "atmos_bind",
@@ -232,15 +226,14 @@ pub fn source(kind: u32) -> &'static str {
             "impostor"
         ),
         SHADER_IMPOSTOR_BAKE => wgsl!("impostor_bake"),
-        SHADER_AO_DOWNSAMPLE => wgsl!("frame", "globe", "ao_view", "ao_downsample"),
+        SHADER_AO_DOWNSAMPLE => wgsl!("frame", "ao_view", "ao_downsample"),
         SHADER_AO_SAMPLE => wgsl!("ao_view", "ao_sample"),
         SHADER_AO_BLUR => wgsl!("ao_view", "ao_blur"),
-        SHADER_AO_UPSAMPLE => wgsl!("frame", "globe", "ao_view", "ao_upsample"),
+        SHADER_AO_UPSAMPLE => wgsl!("frame", "ao_view", "ao_upsample"),
         SHADER_ATMOS_TRANSMITTANCE => wgsl!("atmos_medium", "atmos_pass", "atmos_transmittance"),
         SHADER_ATMOS_MULTISCATTER => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_multiscatter"),
         SHADER_ATMOS_SKY_VIEW => wgsl!(
             "frame",
-            "globe",
             "encode",
             "atmos_medium",
             "atmos_bind",
@@ -255,7 +248,6 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_ATMOS_IRRADIANCE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "atmos_pass", "atmos_march", "atmos_irradiance"),
         SHADER_ATMOS_EXPOSURE => wgsl!(
             "frame",
-            "globe",
             "encode",
             "atmos_medium",
             "atmos_bind",
@@ -269,11 +261,10 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_pass",
             "atmos_exposure"
         ),
-        SHADER_STARS => wgsl!("frame", "globe", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "stars"),
+        SHADER_STARS => wgsl!("frame", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "stars"),
         SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
         SHADER_CLOUDS => wgsl!(
             "frame",
-            "globe",
             "encode",
             "finish",
             "noise",

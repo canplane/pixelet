@@ -45,7 +45,7 @@ use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
-use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
+use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_SKY, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
 use pxl_portable::scatter::GROUPS;
 use pxl_spec::block::window::{BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_WORDS, HANDED, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
@@ -66,7 +66,7 @@ const AO_STRENGTH: usize = FRAME_AT[9];
 const SCREEN_AO: usize = FRAME_AT[10];
 const OTHER: usize = FRAME_AT[11];
 const PLANET: usize = FRAME_AT[12];
-const GLOBE: usize = FRAME_AT[13];
+const MAP: usize = FRAME_AT[13];
 const UP: usize = FRAME_AT[14];
 const CELL: usize = FRAME_AT[15];
 
@@ -179,6 +179,10 @@ pub const CAST_EYE_WORDS: usize = 28;
 /// what decor's growth reads of it.
 const EYE_CUTS: usize = 8;
 
+/// The eye's reach, f32 bits, its forward word's last (`Cast::eye`): how far
+/// it observes, as far as the clouds are drawn.
+const EYE_REACH: usize = 7;
+
 /// The overwrites' tree (pxl-kernel layer/object/store.rs) as it lives: its
 /// heap and data lanes, unwritten until the page replays the turn, the room
 /// either has before it grows, and the revision they are at.
@@ -262,10 +266,10 @@ pub fn put_u32(buf: &mut [u8], at: usize, v: u32) {
     buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
 }
 
-/// The planet's and the globe's four floats each into a frame.
-pub(crate) fn put_globe(frame: &mut [f32], globe: &[f32; 8]) {
-    frame[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
-    frame[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
+/// The air's planet and the map's place under the eye, four floats each, into a frame.
+pub(crate) fn put_planet(frame: &mut [f32], planet: &[f32; 8]) {
+    frame[PLANET..PLANET + 4].copy_from_slice(&planet[..4]);
+    frame[MAP..MAP + 4].copy_from_slice(&planet[4..]);
 }
 
 pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
@@ -1475,7 +1479,8 @@ impl Renderer {
         self.models.rebind(g, self.frame_buffer, [self.ao.entry(7), self.ao.blank_entry(7)]);
     }
 
-    fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32]) {
+    /// `reach` how far the eye observes, in units; none without an eye.
+    fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32], reach: f32) {
         let s = stage_lane();
         let (mut m, mut proj) = (mat4::new(), mat4::new());
         proj.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
@@ -1498,7 +1503,7 @@ impl Renderer {
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let up = v3::norm(&v3::sub(&eye, &planet_center));
-        self.clouds.lay_out(g, &m, &eye, [eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS]);
+        self.clouds.lay_out(g, &m, [eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS], reach * env[ENV_AIR + 1]);
         self.stars.lay_out(g, &m, env, width);
         put_ray(&mut self.sky, 0, &m, &eye);
         self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
@@ -1523,17 +1528,19 @@ impl Renderer {
         if self.screen_ao {
             self.ao.lay_out(g, &proj, width, height);
         }
-        let globe = [
+        // The air's centre under the sea under the eye, and the map's place
+        // there: its longitude and Mercator's ordinate, ln tan(π/4 + φ/2).
+        let planet = [
             center[0] as f32,
             center[1] as f32,
             sphere.radius_u() as f32,
             center[2] as f32,
-            sphere.e0 as f32,
-            sphere.sin_lat as f32,
-            sphere.cos_lat as f32,
+            env[ENV_SKY + 2],
+            libm::log(sphere.e0) as f32,
             MERCATOR_RADIUS_U as f32,
+            0.0,
         ];
-        put_globe(u, &globe);
+        put_planet(u, &planet);
 
         self.atmosphere.lay_out(g, env, &up);
     }
@@ -1605,7 +1612,8 @@ impl Renderer {
         rest.read(input.cases);
 
         targets(g, world);
-        self.lay_out(g, world.width, world.height, input.environment);
+        let reach = cast.as_ref().map_or(0.0, |c| f32::from_bits(c.eye[EYE_REACH]));
+        self.lay_out(g, world.width, world.height, input.environment, reach);
         if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
             self.rebind(g);
             read.mark(true);

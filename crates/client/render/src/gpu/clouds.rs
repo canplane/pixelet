@@ -5,7 +5,6 @@
 //! The cumulus is drawn as decor is (`pxl-kernel scene/environment/cloud.rs`).
 
 use pxl_spec::space::coord::mat4::Mat4;
-use pxl_spec::space::coord::v3::V3;
 
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
@@ -25,6 +24,7 @@ const SHOWN: usize = 3;
 const BASE: usize = 12;
 const FRAC: usize = 14;
 const COUNT: usize = 16;
+const REACH: usize = 17;
 const DRIFT: usize = 18;
 
 pub struct CloudPass {
@@ -69,9 +69,12 @@ impl CloudPass {
     /// `shown`, how much of the clouds the kernel shows; `over`, the eye's
     /// place on the map in the world's doubles. The field moves with the
     /// wind, so its words are the clouds' own, apart from the sky's.
-    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, eye: &V3, over: [f64; 2], env: &[f32], shown: f64) {
-        put_ray(&mut self.words, 0, view_proj, eye);
+    /// In the eye's frame, the eye at its origin, over `over` in the world;
+    /// `reach_km` how far it observes: past it no sheet is drawn.
+    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, over: [f64; 2], env: &[f32], shown: f64, reach_km: f32) {
+        put_ray(&mut self.words, 0, view_proj, &[0.0; 3]);
         self.words[SHOWN] = shown as f32;
+        self.words[REACH] = reach_km;
         field(&mut self.words, over, env);
         self.over = env[ENV_AIR] as f64 > CUMULUS_KM;
         g.write_buffer(self.uniform, 0, bytes(&self.words));
