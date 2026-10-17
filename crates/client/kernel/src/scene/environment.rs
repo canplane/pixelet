@@ -16,7 +16,6 @@ use crate::kernel;
 use crate::scene::frame::Frame;
 use crate::sched::edge::wake_at;
 use crate::view::frame::pose::{anchor, km_per_u};
-use crate::view::reach::eye_ground;
 use celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use xpute_guest::clock::now;
 
@@ -53,6 +52,10 @@ pub struct EnvironmentDraw {
     days: f64,
     sun: [f64; 3],
     moon: [f64; 3],
+    /// Where the sun and moon stand and how the stars turn at the days and
+    /// the anchor the sky is seen at, made where either steps (`aim`).
+    aimed: [[f64; 3]; 2],
+    star_frame: [[f64; 3]; 3],
     /// The anchor the sky is observed from, which follows the eye's only
     /// where the sun or the moon stands a display level higher or lower
     /// from it (`steps`), where they stood when it last moved, and how far
@@ -80,6 +83,8 @@ impl Default for EnvironmentDraw {
             days: 0.0,
             sun: [0.0; 3],
             moon: [0.0; 3],
+            aimed: [[0.0; 3]; 2],
+            star_frame: [[0.0; 3]; 3],
             anchor: [0.0; 2],
             from: [[0.0; 3]; 2],
             eased: 1.0,
@@ -140,13 +145,23 @@ impl EnvironmentDraw {
             at + (0..2).map(|k| step[k] * MINUTE_MS / (then[k] - now[k]).abs()).fold(f64::INFINITY, f64::min)
         };
         let clouds_next = |at: f64| at + cloud::drift_step_s() * 1000.0;
-        if !self.started || unix_ms >= sky_next(self.sky_at) {
+        let mut next = sky_next(self.sky_at);
+        if !self.started || unix_ms >= next {
             (self.days, self.sky_at) = (j2000_days(unix_ms), unix_ms);
+            next = sky_next(self.sky_at);
+            self.aim();
         }
         if !self.started || unix_ms >= clouds_next(self.clouds_at) {
             (self.time, self.clouds_at) = ((unix_ms - first) / 1000.0, unix_ms);
         }
-        (sky_next(self.sky_at).min(clouds_next(self.clouds_at)) - unix_ms).max(0.0)
+        (next.min(clouds_next(self.clouds_at)) - unix_ms).max(0.0)
+    }
+
+    /// The sun and moon and the stars' turn at the sky's days and anchor.
+    fn aim(&mut self) {
+        let [lon, lat] = self.anchor;
+        self.aimed = [sun_position(self.days, lat, lon), moon_position(self.days, lat, lon)];
+        self.star_frame = equatorial_to_local(self.days, lat, lon);
     }
 
     /// Whether a transition is still in flight and wants frames: the sun
@@ -160,13 +175,15 @@ impl EnvironmentDraw {
         // Observed from the anchor the sky follows: a pan that moves neither
         // light a display level moves no word of the sky.
         let live = self.observed();
-        if self.started && live != self.anchor {
-            (self.from, self.eased) = ([self.sun, self.moon], 0.0);
+        if !self.started || live != self.anchor {
+            if self.started {
+                (self.from, self.eased) = ([self.sun, self.moon], 0.0);
+            }
+            self.anchor = live;
+            self.aim();
         }
-        self.anchor = live;
         let [lon, lat] = self.anchor;
-        let sun = sun_position(self.days, lat, lon);
-        let moon = moon_position(self.days, lat, lon);
+        let [sun, moon] = self.aimed;
         if !self.started {
             (self.sun, self.moon) = (sun, moon);
             self.started = true;
@@ -185,17 +202,19 @@ impl EnvironmentDraw {
         // Height over the sea under the eye, which the camera stands over.
         let km_per_u = km_per_u();
         let over = frame.camera[2];
+        // The ground under the eye, as the turn observed it.
+        let ground = crate::view::observation::observation().map_or(0.0, |o| o.ground);
         let light = Light {
             sun: self.sun,
             moon: self.moon,
             stars: self.stars,
             time: self.time,
             altitude_km: over * km_per_u,
-            ground_km: eye_ground() * km_per_u,
+            ground_km: ground * km_per_u,
             km_per_u,
             latitude: lat.to_radians(),
             longitude: lon.to_radians(),
-            star_frame: equatorial_to_local(self.days, lat, lon),
+            star_frame: self.star_frame,
         };
         write_environment(&mut self.out, &light);
         self.eased < 1.0 || self.stars < 1.0

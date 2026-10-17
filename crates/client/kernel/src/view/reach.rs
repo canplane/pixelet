@@ -1,7 +1,6 @@
 // pxl-kernel/view/reach.rs
 
-//! Where the ground under a point stands: the eye's height over it, and the
-//! ground the sky draws under the eye.
+//! Where the ground under a point stands: the eye's height over it.
 
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
@@ -15,11 +14,6 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 fn ground_under(at: V3) -> f64 {
     let point = world::point(at[0], at[1], at[2]);
     World::now().floor_under(&point, LEAF_ZOOM).value().flatten().unwrap_or(0.0)
-}
-
-/// Where the sky draws its own ground, so the terrain does not stand over it.
-pub fn eye_ground() -> f64 {
-    eye().map_or(0.0, ground_under)
 }
 
 /// What the origin grain is measured from.
