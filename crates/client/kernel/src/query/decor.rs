@@ -1,10 +1,10 @@
 // pxl-kernel/query/decor.rs
 
 //! Decor as the world answers it: what the ground grows, evaluated cell by
-//! cell as the chunks grow it (`grown_at`), on one read of the ground about
+//! cell as the frame grows it (`grown_at`), on one read of the ground about
 //! the cell (`World::surfaces`), and what objects place, each
 //! struck by its model. A ray strikes it as the ground walk passes, only
-//! where the chunks draw it as held, at the leaf cells: a fold strikes none of
+//! where the frame draws it as held, at the leaf cells: a fold strikes none of
 //! it. The walk follows the detail rule, not the chunk the view chose, which
 //! may differ at a chunk's edge.
 
@@ -31,7 +31,7 @@ use crate::layer::object::meta::placed;
 use crate::layer::Query;
 use crate::model::registry::Models;
 
-/// How decor is struck: against its models, where the chunks drawing at `tau` hold it.
+/// How decor is struck: against its models, where the frame drawing at `tau` holds it.
 #[derive(Clone, Copy)]
 pub(super) struct Grown<'a> {
     pub(super) models: &'a Models,
@@ -53,7 +53,7 @@ pub(super) struct Strike<'a> {
 
 impl<'a> World<'a> {
     /// Whether the ground grows `i`, a candidate of `decor` standing on
-    /// `face`, as the chunks drawing its cells draw it (pxl-portable
+    /// `face`, as the frame drawing its cells draws it (pxl-portable
     /// `grows`): its box void, the ground under it one it grows on, and no
     /// placed decor claiming its room.
     pub fn grows(&self, face: &Surfaces, decor: &Decor, i: &Instance) -> bool {

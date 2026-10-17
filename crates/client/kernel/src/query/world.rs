@@ -42,8 +42,8 @@ impl World<'static> {
         World::new(TerrainTile::residency(), objects)
     }
 
-    /// As `now`, and decor is struck too, where the chunks drawing at `tau`
-    /// hold it: the pointer's pick, which alone asks what a decor thing is.
+    /// As `now`, and decor is struck too, where the frame drawing at `tau`
+    /// holds it: the pointer's pick, which alone asks what a decor thing is.
     pub fn striking_decor(self, tau: Tau) -> World<'static> {
         let decor = Grown { models: &kernel().models, tau };
         World { decor: Some(decor), ..self }
@@ -63,7 +63,7 @@ impl<'a> World<'a> {
     }
 
     /// As the pointer's preview draws it (`preview::current`): what the eye's
-    /// cast and the chunks' bake ask, and nothing else.
+    /// cast asks, and nothing else.
     pub fn previewed(self) -> World<'a> {
         let edits = preview::current();
         self.previewing(edits.hide, edits.carve)

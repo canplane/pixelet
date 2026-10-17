@@ -25,13 +25,14 @@
 //! only splits more, never from detail finer than asked:
 //!
 //! - the ground: by its one rule (pxl-portable `ground::lay`, as a cell's
-//!   block asks it of one block) over the lowest and highest its tile index
-//!   holds under the node (`Residency::relief`, its lane the union of the
-//!   finer ones'), every cell under it at each zoom asked over the ground, or
+//!   block asks it of one block) over the lowest and highest the windows
+//!   hold under the node (`Residency::relief`, off the finest window holding
+//!   its cells), every cell under it at each zoom asked over the ground, or
 //!   ground a cave may take with a cave through all of it;
-//! - the ways: the ground's index pyramid as it is, which carries the ways'
-//!   heights with the ground's; a way a coarser tile drops as narrower than
-//!   half its cell is dropped there, as its level of detail does;
+//! - the ways: the same levels, which join each bin's ways' bound with the
+//!   ground's (pxl-portable `window`); a way a coarser tile drops as
+//!   narrower than half its cell is dropped there, as its level of detail
+//!   does;
 //! - the caves: the hash node hollow and drawing nothing again under it
 //!   (`procedural::Cave`, one draw of its parent's);
 //! - what is placed: no record of the objects' pyramid at the node.

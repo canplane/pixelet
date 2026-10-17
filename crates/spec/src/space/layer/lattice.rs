@@ -9,9 +9,9 @@ use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{index_of, Zoom};
 use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, slot_of};
 
-/// A lattice's integer core — its zooms, its cells' indices, the ground's
-/// and the index lane's — is pxl-portable's, which a GPU reads tiles by
-/// too; placing it in the world is here (`Cells`).
+/// A lattice's integer core — its zooms, its cells' indices, the ground's —
+/// is pxl-portable's, which a GPU reads tiles by too; placing it in the
+/// world is here (`Cells`).
 pub use pxl_portable::lattice::{Lattice, GROUND, TILE_CELLS};
 
 /// How far from an observer's foot a demand at `zoom` can lie: where the

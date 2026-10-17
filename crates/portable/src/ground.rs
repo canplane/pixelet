@@ -3,9 +3,9 @@
 //! gpu-portable: the ground's grid at a cell, the one rule pxl-spec
 //! block/sample.rs `at` composes before what overwrites it: a cell's look and
 //! height off the tile drawing it, their fold a zoom coarser, and its blocks
-//! by depth with a cave's air where a cave may take them. Separation (the
-//! ways) and what is placed are not here yet: they overwrite the ground on
-//! the CPU alone.
+//! by depth with a cave's air where a cave may take them. What overwrites it
+//! is not here: the ways by their own rule (`ways.rs`), and what is placed
+//! by its own (`placed.rs`).
 //!
 //! A look and a height are stored as a byte and an i16 and read into a word
 //! here, since WGSL has no narrower integer.

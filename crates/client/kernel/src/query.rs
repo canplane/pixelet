@@ -8,7 +8,7 @@
 //! anything; it returns an exact answer, a coarser one with the tile it
 //! lacked, or nothing and that tile.
 //!
-//! A block is what the chunks draw, by one rule, so picks and footing stand
+//! A block is what the cast draws, by one rule, so picks and footing stand
 //! on what is on screen. A node coarser than asked is not what is drawn
 //! there: it is asked only whether anything under it fills, at any zoom.
 

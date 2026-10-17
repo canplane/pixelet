@@ -233,7 +233,7 @@ fn side(out: &mut [f64]) {
             reach: crate::view::frame::pose::view().far,
         };
         let hit = crate::query::World::now().first_hit(&ray, crate::query::Detail::Distance(tau)).value().flatten()?;
-        // The grid's cell there is the distance's (`Tau::cell_at`), as the chunks are cut.
+        // The grid's cell there is the distance's (`Tau::cell_at`), as the camera grid is cut.
         Some((crate::view::frame::coord::world_to_canonical(&hit.point), tau.cell_at(hit.t)))
     });
     let (hover, cell_want) = (met.map(|m| m.0), met.map(|m| m.1));

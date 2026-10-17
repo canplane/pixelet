@@ -129,14 +129,14 @@ impl<'w, 'a> Upright<'w, 'a> {
 }
 
 impl<'a> World<'a> {
-    /// The ground's surface under `at`, as the tile zoom `zoom`'s chunks draw
-    /// it; none where the cell has no ground.
+    /// The ground's surface under `at`, as the frame draws it at the tile
+    /// zoom `zoom`; none where the cell has no ground.
     pub fn surface(&self, at: &Q3, zoom: Zoom) -> Answer<Option<Surface>> {
         let (cell, c) = GROUND.cell_of(zoom, at).node();
         self.surface_of(cell, c)
     }
 
-    /// What is in the leaf block at `at`, as the chunks draw it; none where
+    /// What is in the leaf block at `at`, as the cast draws it; none where
     /// it is void.
     pub fn block_of(&self, at: &Q3) -> Answer<Option<Block>> {
         let side = units(GROUND.cell());
@@ -162,7 +162,7 @@ impl<'a> World<'a> {
     }
 
     /// From the center `at` down to the first solid's top, or up out of what
-    /// fills it, as the tile zoom `zoom`'s chunks draw it; none where
+    /// fills it, as the frame draws it at the tile zoom `zoom`; none where
     /// nothing stands under `at`.
     pub fn floor_under(&self, at: &Q3, zoom: Zoom) -> Answer<Option<f64>> {
         let start = q3::to_real(i64::from(at[2]));
