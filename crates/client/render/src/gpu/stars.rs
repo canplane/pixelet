@@ -14,7 +14,7 @@ use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_mat;
 use crate::look::atmosphere::BOTTOM_RADIUS_KM;
-use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_STARS};
+use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_SKY, ENV_STARS};
 
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-stars.bin");
 const STAR_BYTES: usize = 8;
@@ -82,7 +82,7 @@ impl StarPass {
         let land = BOTTOM_RADIUS_KM + env[ENV_AIR + 3] as f64;
         let s = (land / eye).min(1.0);
         u[HORIZON] = -(1.0 - s * s).sqrt() as f32;
-        u[MOON..MOON + 3].copy_from_slice(&env[ENV_MOON..ENV_MOON + 3]);
+        u[MOON..MOON + 3].copy_from_slice(&env[ENV_MOON_LIGHT..ENV_MOON_LIGHT + 3]);
         g.write_buffer(self.uniform, 0, bytes(u));
     }
 

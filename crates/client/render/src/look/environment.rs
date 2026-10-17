@@ -9,16 +9,18 @@ use pxl_spec::space::coord::v3::{self, V3};
 
 use crate::look::atmosphere::{moon_phase_light, MOON_LIGHT, NIGHT_COLOR};
 
-/// Lighting run (24), stars' fade, clock and the anchor's longitude (4),
-/// air (4), second light (8), sun direction (4), stars' frame (12), moon
-/// direction and sky brightness (4).
-pub const ENV_FLOATS: usize = 60;
-pub const ENV_SKY: usize = 24;
-pub const ENV_AIR: usize = 28;
-pub const ENV_OTHER_LIGHT: usize = 32;
-pub const ENV_SUN: usize = 40;
-pub const ENV_STARS: usize = 44;
-pub const ENV_MOON: usize = 56;
+/// The sun's light (8): its direction, a pad, its colour, a pad; the
+/// Moon's (8): its direction, its light, its colour, a pad; the stars'
+/// fade, clock and the anchor's longitude (4); air (4); the stars' frame
+/// (12).
+pub const ENV_FLOATS: usize = 36;
+pub const ENV_SUN_LIGHT: usize = 0;
+pub const ENV_MOON_LIGHT: usize = 8;
+/// A light's colour, past its direction.
+pub const LIGHT_COLOR: usize = 4;
+pub const ENV_SKY: usize = 16;
+pub const ENV_AIR: usize = 20;
+pub const ENV_STARS: usize = 24;
 
 #[derive(Clone, Copy)]
 pub struct Light {
@@ -50,10 +52,11 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     let phase = moon_phase_light(core::f64::consts::PI - elongation);
     // Wherever the Moon is up; by day the sun outshines it.
     let moon_color: [f64; 3] = core::array::from_fn(|k| NIGHT_COLOR[k] * MOON_LIGHT * phase);
-    for (at, (d, color)) in [(0, (sun_dir, [1.0; 3])), (ENV_OTHER_LIGHT, (moon_dir, moon_color))] {
+    for (at, (d, color)) in [(ENV_SUN_LIGHT, (sun_dir, [1.0; 3])), (ENV_MOON_LIGHT, (moon_dir, moon_color))] {
         put3(o, at, f32s(&d));
-        put3(o, at + 4, [color[0] as f32, color[1] as f32, color[2] as f32]);
+        put3(o, at + LIGHT_COLOR, [color[0] as f32, color[1] as f32, color[2] as f32]);
     }
+    o[ENV_MOON_LIGHT + 3] = (MOON_LIGHT * phase) as f32;
     o[ENV_SKY] = (light.stars * night) as f32;
     o[ENV_SKY + 1] = light.time as f32;
     o[ENV_SKY + 2] = light.longitude as f32;
@@ -62,10 +65,6 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     o[ENV_AIR + 1] = light.km_per_u as f32;
     o[ENV_AIR + 2] = light.latitude as f32;
     o[ENV_AIR + 3] = light.ground_km as f32;
-    put3(o, ENV_SUN, f32s(&sun_dir));
-
-    put3(o, ENV_MOON, f32s(&moon_dir));
-    o[ENV_MOON + 3] = (MOON_LIGHT * phase) as f32;
 
     let columns: [V3; 3] = core::array::from_fn(|k| light.star_frame.map(|row| row[k]));
     for (k, column) in columns.iter().enumerate() {

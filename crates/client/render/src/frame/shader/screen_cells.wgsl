@@ -15,7 +15,7 @@
 // The eye the rays left (pxl-kernel view/lens.rs `gpu_cast`): its Q3 steps,
 // FRAC_W bits a unit and wrapping, a block's place on the lattice read off
 // their low bits, and whether a ray reports its steps.
-@group(0) @binding(21) var<uniform> eye: array<vec4u, 7>;
+@group(0) @binding(21) var<uniform> eye: array<vec4u, 1>;
 
 const KIND_GROUND: u32 = 1u;
 const KIND_SHIFT: u32 = 16u;

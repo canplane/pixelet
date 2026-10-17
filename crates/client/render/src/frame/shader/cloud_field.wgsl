@@ -10,12 +10,8 @@ fn cloud_lattice(point: vec3f) -> vec2f {
   return clouds_frac() + (point.xy + clouds_drift()) / f32(CLOUD_LATTICE_CELLS);
 }
 
-// Read at the footprint's mip, so a pixel wider than a cloud is as opaque as its covered share.
-fn cloud_opacity(p: vec2f, footprint: f32) -> f32 {
-  return cloud_opacity_finer(p, footprint, 1u);
-}
-
-// The tile `finer` times smaller over the lattice. The base's share is scaled
+// Read at the footprint's mip, so a pixel wider than a cloud is as opaque as
+// its covered share: the tile `finer` times smaller over the lattice. The base's share is scaled
 // with the rest, so the pattern stays on its ground as the origin moves.
 fn cloud_opacity_finer(p: vec2f, footprint: f32, finer: u32) -> f32 {
   let texels_per_unit = f32(CLOUD_TILE_TEXELS) / f32(CLOUD_TILE_UNITS);

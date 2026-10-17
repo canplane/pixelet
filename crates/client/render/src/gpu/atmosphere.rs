@@ -23,7 +23,7 @@ use crate::gpu::layers::Mips;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Upload;
 use crate::look::atmosphere as model;
-use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SUN};
+use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_SUN_LIGHT};
 
 /// One past the last field: the device rounds the struct up to a 16-byte row.
 pub const ATMOS_FLOATS: usize = 52;
@@ -288,7 +288,7 @@ impl Atmosphere {
 
     /// `up` is straight up where the eye stands, which every light and ray height is measured from.
     pub fn lay_out(&mut self, g: &Gpu, env: &[f32], up: &V3) {
-        let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
+        let (sun, moon) = (&env[ENV_SUN_LIGHT..ENV_SUN_LIGHT + 3], &env[ENV_MOON_LIGHT..ENV_MOON_LIGHT + 4]);
         let altitude_km = env[ENV_AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
         self.words[MOON_DIR..MOON_DIR + 3].copy_from_slice(&moon[..3]);

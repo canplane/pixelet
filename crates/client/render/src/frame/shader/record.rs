@@ -285,9 +285,9 @@ pub fn source(kind: u32) -> &'static str {
     }
 }
 
-pub const FRAME_FLOATS: usize = 72;
+pub const FRAME_FLOATS: usize = 52;
 /// Frame uniform field offsets in floats, in frame.wgsl's order.
-pub const FRAME_AT: [usize; 16] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 52, 60, 64, 68, 71];
+pub const FRAME_AT: [usize; 18] = [0, 16, 19, 20, 23, 24, 27, 28, 31, 32, 35, 36, 38, 39, 40, 44, 48, 51];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_SKY: u32 = 13;
