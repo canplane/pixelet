@@ -50,8 +50,8 @@ fn wgsl(spv: &[u8]) -> Result<String, String> {
 }
 
 /// Every `ControlBarrier(WORK_GROUP)`, load of a workgroup pointer,
-/// `ControlBarrier(WORK_GROUP)` in a block, with nothing between but that
-/// pointer's own access chain, becomes `WorkGroupUniformLoad`: the same
+/// `ControlBarrier(WORK_GROUP)` in a block, nothing else between reading
+/// memory (`load_between`), becomes `WorkGroupUniformLoad`: the same
 /// barriers about the same load, said as one. A triple that does not match
 /// fully is left as it is.
 fn uniform_loads(module: &mut Module, info: &ModuleInfo) {
@@ -111,12 +111,12 @@ fn block(b: &mut Block, f: &Function, globals: &Arena<GlobalVariable>, loads: &m
     while i < s.len() {
         let close = (i + 1..s.len()).find(|&k| !matches!(s[k].0, Statement::Emit(_)));
         if let Some(k) = close.filter(|&k| barrier(i) && barrier(k)) {
-            if let Some((chain, load, pointer)) = load_between(&s[i + 1..k], f, globals) {
-                for h in chain {
-                    b.push(Statement::Emit(Range::new_from_bounds(h, h)), s[i].1);
-                }
-                b.push(Statement::WorkGroupUniformLoad { pointer, result: load }, s[i].1);
-                loads.push(load);
+            if let Some(t) = load_between(&s[i + 1..k], f, globals) {
+                let emit = |b: &mut Block, hs: &[Handle<Expression>]| hs.iter().for_each(|&h| b.push(Statement::Emit(Range::new_from_bounds(h, h)), s[i].1));
+                emit(b, &t.before);
+                b.push(Statement::WorkGroupUniformLoad { pointer: t.pointer, result: t.load }, s[i].1);
+                emit(b, &t.after);
+                loads.push(t.load);
                 i = k + 1;
                 continue;
             }
@@ -127,9 +127,12 @@ fn block(b: &mut Block, f: &Function, globals: &Arena<GlobalVariable>, loads: &m
 }
 
 /// What the emits between two barriers hold, when that is one load of a
-/// workgroup pointer and the links of its access chain alone: those links
-/// in order, the load, and its pointer.
-fn load_between(emits: &[(Statement, Span)], f: &Function, globals: &Arena<GlobalVariable>) -> Option<(Vec<Handle<Expression>>, Handle<Expression>, Handle<Expression>)> {
+/// workgroup pointer, all else pure: what was made before the load, which
+/// its pointer is among, then the load, then what was made after it, which
+/// reads its value. An expression is made after those it reads, so each
+/// side keeps what it needs; a read of memory besides the load, which the
+/// load's own barriers would move, matches nothing.
+fn load_between(emits: &[(Statement, Span)], f: &Function, globals: &Arena<GlobalVariable>) -> Option<Taken> {
     let mut held = Vec::new();
     for (st, _) in emits {
         let Statement::Emit(r) = st else { return None };
@@ -138,20 +141,44 @@ fn load_between(emits: &[(Statement, Span)], f: &Function, globals: &Arena<Globa
     let mut loads = held.iter().filter(|h| matches!(f.expressions[**h], Expression::Load { .. }));
     let (Some(&load), None) = (loads.next(), loads.next()) else { return None };
     let Expression::Load { pointer } = f.expressions[load] else { return None };
-    let mut chain = Vec::new();
     let mut at = pointer;
     loop {
         match f.expressions[at] {
             Expression::GlobalVariable(g) if globals[g].space == AddressSpace::WorkGroup => break,
-            Expression::Access { base, .. } | Expression::AccessIndex { base, .. } => {
-                if held.contains(&at) {
-                    chain.push(at);
-                }
-                at = base;
-            }
+            Expression::Access { base, .. } | Expression::AccessIndex { base, .. } => at = base,
             _ => return None,
         }
     }
-    chain.reverse();
-    (chain.len() + 1 == held.len()).then_some((chain, load, pointer))
+    let pure = |h: &Handle<Expression>| {
+        *h == load
+            || matches!(
+                f.expressions[*h],
+                Expression::Access { .. }
+                    | Expression::AccessIndex { .. }
+                    | Expression::Splat { .. }
+                    | Expression::Swizzle { .. }
+                    | Expression::Compose { .. }
+                    | Expression::Unary { .. }
+                    | Expression::Binary { .. }
+                    | Expression::Select { .. }
+                    | Expression::Relational { .. }
+                    | Expression::Math { .. }
+                    | Expression::As { .. }
+            )
+    };
+    held.sort();
+    held.iter().all(pure).then(|| Taken {
+        before: held.iter().copied().filter(|h| *h < load).collect(),
+        load,
+        pointer,
+        after: held.iter().copied().filter(|h| *h > load).collect(),
+    })
+}
+
+/// A triple `load_between` takes.
+struct Taken {
+    before: Vec<Handle<Expression>>,
+    load: Handle<Expression>,
+    pointer: Handle<Expression>,
+    after: Vec<Handle<Expression>>,
 }
