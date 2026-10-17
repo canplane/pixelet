@@ -157,19 +157,21 @@ pub const fn column_first(w: u32) -> u32 {
 }
 
 /// A square's words on a GPU, its lanes in order: its four looks a cell, its
-/// columns, its levels, its tile's padded samples, two a word, its lines,
-/// then its columns' runs. Its columns and levels follow one another, read
-/// back whole.
+/// columns, its levels, its columns' runs, then its tile's padded samples,
+/// two a word, and its lines, which only its fill reads. Its columns, levels
+/// and runs follow one another, read back whole.
 pub const LOOK_WORDS: u32 = SQUARE_CELLS;
 pub const ELE_WORDS: u32 = crate::ground::ELE_WORDS;
-pub const SQUARE_WORDS: u32 = LOOK_WORDS + COLUMN_WORDS + LEVEL_WORDS + ELE_WORDS + LINES_WORDS + RUNS_SQUARE;
+pub const SQUARE_WORDS: u32 = LOOK_WORDS + COLUMN_WORDS + LEVEL_WORDS + RUNS_SQUARE + ELE_WORDS + LINES_WORDS;
 pub const COLUMNS_AT: u32 = LOOK_WORDS;
 pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
-pub const ELE_AT: u32 = LEVELS_AT + LEVEL_WORDS;
+pub const RUNS_AT: u32 = LEVELS_AT + LEVEL_WORDS;
+pub const ELE_AT: u32 = RUNS_AT + RUNS_SQUARE;
 pub const LINES_AT: u32 = ELE_AT + ELE_WORDS;
-pub const RUNS_AT: u32 = LINES_AT + LINES_WORDS;
-/// What comes back of a square, from `COLUMNS_AT`: its columns and levels.
-pub const BACK_WORDS: u32 = COLUMN_WORDS + LEVEL_WORDS;
+/// What comes back of a square, from `COLUMNS_AT`: its columns, levels and
+/// runs, so the CPU reads a column as the GPU does, never working it out
+/// again.
+pub const BACK_WORDS: u32 = COLUMN_WORDS + LEVEL_WORDS + RUNS_SQUARE;
 
 /// The windows as one side holds them: per window, a zoom's cells about
 /// its centre, which square each slot holds once present, and its cells.
