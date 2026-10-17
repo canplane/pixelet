@@ -39,13 +39,20 @@ pub const RATIO_MAX: f32 = 2.0;
 /// sized by `SPLIT` holds at every ratio.
 pub const SPLIT: f32 = 96.0 * RATIO_MAX;
 
-/// The camera grid's cell zoom at `r` units from the eye: the widest cell
-/// whose split distance (`SPLIT` of its sides, halved) is within `r`, held
-/// to what a zoom can name. The power of two is the float's own exponent,
-/// so no logarithm rounds it.
-pub fn cell_at(r: f32) -> Zoom {
-    let x = r / (SPLIT / 2.0);
-    let e = ((x.to_bits() >> 23) & 0xff) as i32 - 127;
+/// The camera grid's cell zoom at `r2`, a distance from the eye squared,
+/// in units: the widest cell whose split distance (`SPLIT` of its sides,
+/// halved) is within the distance, held to what a zoom can name. The power
+/// of two is the float's own exponent, halved, so neither a logarithm nor a
+/// square root rounds it: a distance over the half split, `m·2^e` with `m`
+/// in [1, 2), squares to `m²·2^2e` with `m²` in [1, 4), whose exponent is
+/// `2e` or `2e + 1`, so halving it, rounding down, is `e`; and rounding the
+/// square never reaches 4, since the widest `m` short of 2, `2 − 2⁻²³`,
+/// squares to `4 − 2⁻²¹` and a bit, which rounds down to it. Every asker
+/// passes a square (pxl-spec space/camera/grid.rs, `scatter::drawn_at`), so
+/// a distance on a power of two falls the same side everywhere.
+pub fn cell_at(r2: f32) -> Zoom {
+    let x2 = r2 / (SPLIT * SPLIT / 4.0);
+    let e = (((x2.to_bits() >> 23) & 0xff) as i32 - 127) >> 1;
     (UNIT_ZOOM as i32 - e).clamp(0, FINEST_ZOOM as i32) as Zoom
 }
 
@@ -64,7 +71,8 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
 }
 
 /// The zoom asked at each distance: the camera grid's cells there
-/// (`cell_at`), the distance scaled by `tau`, at least 1, held to `range`. A
+/// (`cell_at`), the distance scaled by `tau`, at least 1, held to `range`,
+/// asked of a distance squared (`at`). A
 /// stated zoom's cells wherever they are is a range of that zoom alone.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
@@ -73,8 +81,9 @@ pub struct Detail {
 }
 
 impl Detail {
-    pub fn at(self, d: f32) -> Zoom {
-        cell_at(d * self.tau).clamp(self.range[0], self.range[1])
+    /// At `d2`, a distance squared.
+    pub fn at(self, d2: f32) -> Zoom {
+        cell_at(d2 * (self.tau * self.tau)).clamp(self.range[0], self.range[1])
     }
 }
 
@@ -395,16 +404,17 @@ fn root_of(o: &Origin) -> Place {
 }
 
 /// The zooms a node is asked at by the rays from `o` in it reaching at most
-/// `far` from it: from there to the node's point nearest `o`
-/// (`Detail::at`).
-fn asked(o: &Origin, detail: Detail, place: Place, far: f32) -> [Zoom; 2] {
+/// `far` from it, `far2` that squared: from there to the node's point
+/// nearest `o` (`Detail::at`), no root taken.
+fn asked(o: &Origin, detail: Detail, place: Place, far2: f32) -> [Zoom; 2] {
     let (min, side) = (place.min(o), place.side());
     let near = [min[0].max(0.0).min(min[0] + side), min[1].max(0.0).min(min[1] + side), min[2].max(0.0).min(min[2] + side)];
-    [detail.at(far), detail.at(length(near))]
+    [detail.at(far2), detail.at(squared(near))]
 }
 
-fn length(v: [f32; 3]) -> f32 {
-    libm::sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+/// A vector's length squared.
+fn squared(v: [f32; 3]) -> f32 {
+    v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
 }
 
 /// Where every ray from `o` starts alike: down from the
@@ -424,9 +434,9 @@ pub fn start<Q: Query>(q: &mut Q, o: &Origin, detail: Detail) -> Start<Q::At> {
     let mut stack = [at; DEPTH];
     while (place.zoom as usize) + 1 < DEPTH {
         let (min, side) = (place.min(o), place.side());
-        let far = length([(-min[0]).max(min[0] + side), (-min[1]).max(min[1] + side), (-min[2]).max(min[2] + side)]);
+        let far2 = squared([(-min[0]).max(min[0] + side), (-min[1]).max(min[1] + side), (-min[2]).max(min[2] + side)]);
         let mut asking = at;
-        if q.node(&mut asking, place.zoom, place.node(o), asked(o, detail, place, far), 0.0).kind != Kind::Split {
+        if q.node(&mut asking, place.zoom, place.node(o), asked(o, detail, place, far2), 0.0).kind != Kind::Split {
             break;
         }
         let half = place.child(7).min(o);
@@ -525,7 +535,7 @@ fn stops<Q: Query>(q: &Q, o: &Origin, until: Until, place: Place, block: &Q::Blo
 /// that face is the node's own.
 #[allow(clippy::too_many_arguments)]
 fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>, span: (f32, f32, u32)) -> Met<Q::At, Q::Block> {
-    let dlen = length(ray.direction);
+    let dlen2 = squared(ray.direction);
     // What was handed each node the descent went into, from its start's
     // zoom; over it, `over`'s.
     let (top, mut stack) = (from.0.zoom, [Q::keep(&from.1); DEPTH]);
@@ -536,7 +546,7 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
         if t1 > t0 {
-            let i = q.node(&mut at, place.zoom, place.node(o), asked(o, detail, place, t1 * dlen), t0);
+            let i = q.node(&mut at, place.zoom, place.node(o), asked(o, detail, place, t1 * t1 * dlen2), t0);
             visits += 1;
             // Where the walk ends, its stop, made there and nowhere else.
             let ends = match i.kind {

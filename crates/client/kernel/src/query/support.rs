@@ -41,7 +41,7 @@ pub fn under(z: f64) -> f64 {
 fn seen_zoom(at: &Q3, eye: &Q3, tau: Tau) -> Zoom {
     let [a, e] = [at, eye].map(|p| [i64::from(p[0]), i64::from(p[1]), i64::from(p[2])].map(q3::to_real));
     let d = [wrap(a[0] - e[0], -ROUND / 2.0, ROUND / 2.0), a[1] - e[1], a[2] - e[2]];
-    GROUND.z_at(tau, libm::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2])).min(LEAF_ZOOM)
+    GROUND.z_at(tau, d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).min(LEAF_ZOOM)
 }
 
 /// Whether a walker at `at`, seen from `eye`, walks: the camera grid at the

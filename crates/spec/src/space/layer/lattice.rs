@@ -24,7 +24,7 @@ pub const fn demand_reach(lattice: Lattice, zoom: Zoom) -> f64 {
 /// index names.
 pub trait Cells {
     fn read_tile(self, node: (Zoom, [i64; 2]), cell: Zoom) -> Tile;
-    fn z_at(self, tau: Tau, r: f64) -> Zoom;
+    fn z_at(self, tau: Tau, r2: f64) -> Zoom;
     fn cell_of(self, zoom: Zoom, at: &Q3) -> Cell;
     fn cell_at(self, tile: Tile, index: u32) -> Cell;
     fn parent_cell(self, q: usize, index: u32) -> u32;
@@ -37,9 +37,10 @@ impl Cells for Lattice {
         tile_at(z, ancestor_of(column, zoom - z))
     }
 
-    /// The tile whose records fold into the grid's cell at `r`; held to the pyramid.
-    fn z_at(self, tau: Tau, r: f64) -> Zoom {
-        self.read_zoom(tau.cell_at(r))
+    /// The tile whose records fold into the grid's cell at `r2`, a distance
+    /// squared; held to the pyramid.
+    fn z_at(self, tau: Tau, r2: f64) -> Zoom {
+        self.read_zoom(tau.cell_at(r2))
     }
 
     /// The cell at `z` a point stands in; a point, since a cell may be finer than a unit.

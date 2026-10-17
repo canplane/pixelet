@@ -533,20 +533,26 @@ pub fn grows(q: &mut impl Grounds, decor: &Decor, cell: Zoom, g: &Grown) -> bool
 }
 
 /// How far decor standing at `at` (leaf cells) lies from `origin` (Q3
-/// steps), in units: from its cell's middle at its base, X round the world
-/// as the steps wrap.
-pub fn distance(origin: [i32; 3], at: [i32; 3]) -> f32 {
+/// steps), in units, squared: from its cell's middle at its base, X round
+/// the world as the steps wrap.
+pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
     let half = 1 << (FRAC_W - 1);
     let step = |v: i32, o: i32, mid: i32| (v.wrapping_shl(FRAC_W).wrapping_add(mid).wrapping_sub(o)) as f32 / (1 << FRAC_W) as f32;
     let [dx, dy, dz] = [step(at[0], origin[0], half), step(at[1], origin[1], half), step(at[2], origin[2], 0)];
-    libm::sqrtf(dx * dx + dy * dy + dz * dz)
+    dx * dx + dy * dy + dz * dz
+}
+
+/// How far decor standing at `at` lies from `origin`, in units
+/// (`distance2`'s root).
+pub fn distance(origin: [i32; 3], at: [i32; 3]) -> f32 {
+    libm::sqrtf(distance2(origin, at))
 }
 
 /// Whether decor standing at `at` is drawn at `cell` for an eye at
 /// `origin`: the zoom the rays ask at its distance (`Detail::at`), so each
 /// decor is drawn at one zoom, where the rays draw the ground about it.
 pub fn drawn_at(detail: Detail, origin: [i32; 3], at: [i32; 3], cell: Zoom) -> bool {
-    detail.at(distance(origin, at)) == cell
+    detail.at(distance2(origin, at)) == cell
 }
 
 /// Placed decor's tag (`node_seed`).

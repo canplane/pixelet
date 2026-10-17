@@ -113,8 +113,8 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
 /// the ground's cells.
 pub fn cell_at(o: &Observation, tau: Tau, at: V3) -> Option<Zoom> {
     let top = floor::top()?;
-    let d = pxl_spec::space::coord::v3::len(&pxl_spec::space::coord::v3::sub(&at, &o.eye));
-    Some(tau.cell_at(d).clamp(GROUND.grid_zoom(top.max(GROUND.top())), GROUND.cell()))
+    let v = pxl_spec::space::coord::v3::sub(&at, &o.eye);
+    Some(tau.cell_at(pxl_spec::space::coord::v3::dot(&v, &v)).clamp(GROUND.grid_zoom(top.max(GROUND.top())), GROUND.cell()))
 }
 
 /// How far from the eye a layer's tiles at `zoom` are asked for: at the

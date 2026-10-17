@@ -412,8 +412,8 @@ fn walk_to(from: [f64; 2], stands: f64, to: [f64; 2], p: &CompanionProps) -> Opt
 fn drawn_floor(asked: &mut Asked<([f64; 2], f64, Zoom), f64>, at: [f64; 2], stands: f64, p: &CompanionProps) -> f64 {
     let center = [at[0], at[1], over(stands)];
     let eye = to_world(&p.eye);
-    let r = libm::sqrt((0..3).map(|k| (center[k] - eye[k]) * (center[k] - eye[k])).sum());
-    let zoom = GROUND.z_at(p.tau, r);
+    let r2 = (0..3).map(|k| (center[k] - eye[k]) * (center[k] - eye[k])).sum();
+    let zoom = GROUND.z_at(p.tau, r2);
     asked.of((at, stands, zoom), [at, at], || {
         World::now().floor_under(&world_to_canonical(&center), zoom).value().flatten().unwrap_or(stands)
     })
