@@ -26,6 +26,9 @@ struct Channel {
 struct Clip {
     duration: f32,
     channels: Vec<Channel>,
+    /// The farthest any point of the mesh moves over it, unscaled; set when
+    /// the model is sealed (`Model::moved`).
+    motion: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -221,7 +224,7 @@ impl Models {
 
     pub fn clip(&mut self, model: u32, duration: f32) -> u32 {
         let Some(m) = self.models.get_mut(model as usize) else { return u32::MAX };
-        m.clips.push(Clip { duration, channels: Vec::new() });
+        m.clips.push(Clip { duration, channels: Vec::new(), motion: 0.0 });
         (m.clips.len() - 1) as u32
     }
 
@@ -266,6 +269,10 @@ impl Models {
                 }
             }
         }
+        for c in 0..m.clips.len() {
+            let motion = m.moved(c);
+            m.clips[c].motion = motion;
+        }
     }
 
     pub fn mesh(&self, model: u32) -> Option<MeshRef> {
@@ -306,6 +313,40 @@ impl Model {
     /// A clip's length, where it has one.
     pub fn duration(&self, clip: u32) -> Option<f32> {
         self.clips.get(clip as usize).map(|c| c.duration)
+    }
+
+    /// The farthest any point of its mesh moves over a clip, unscaled.
+    pub fn motion(&self, clip: u32) -> f32 {
+        self.clips.get(clip as usize).map_or(0.0, |c| c.motion)
+    }
+
+    /// A clip's motion, off its own pose and palette at each of its keys: a
+    /// vertex is its joints' palettes blended, so it moves no farther than
+    /// the farthest joint's palette moves a point within the radius — its
+    /// translation's change and its linear part's (Frobenius) times the
+    /// radius. Twice the farthest from the first key bounds any two.
+    fn moved(&self, clip: usize) -> f32 {
+        let c = &self.clips[clip];
+        let mut times: Vec<f32> = c.channels.iter().flat_map(|ch| ch.times.iter().copied()).chain([0.0, c.duration]).collect();
+        times.sort_by(f32::total_cmp);
+        times.dedup();
+        let n = self.joints();
+        let (mut local, mut global) = (vec![[0.0; 10]; n], vec![[0.0; 16]; n]);
+        let (mut first, mut palette) = (vec![0.0; n * 16], vec![0.0; n * 16]);
+        self.pose(Some((clip as u32, times[0])), &mut local);
+        self.palette(&local, &mut global, &mut first);
+        let mut far = 0.0f32;
+        for &t in &times[1..] {
+            self.pose(Some((clip as u32, t)), &mut local);
+            self.palette(&local, &mut global, &mut palette);
+            for (a, b) in palette.as_chunks::<16>().0.iter().zip(first.as_chunks::<16>().0) {
+                let d: [f32; 16] = core::array::from_fn(|i| a[i] - b[i]);
+                let linear = [0, 1, 2, 4, 5, 6, 8, 9, 10].iter().map(|&i| d[i] * d[i]).sum::<f32>().sqrt();
+                let moved = (d[12] * d[12] + d[13] * d[13] + d[14] * d[14]).sqrt();
+                far = far.max(moved + linear * self.radius);
+            }
+        }
+        2.0 * far
     }
 
     /// The joints' local transforms at a clip's time, or at rest.

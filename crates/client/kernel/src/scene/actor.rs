@@ -117,8 +117,10 @@ impl Actors {
     /// for the next frame.
     /// Every actor's clock advanced; true where one the eye can see moves: in
     /// the view and a cell of the camera grid across or more, as the rays
-    /// observe nothing smaller. So a frame is asked only for what can be seen
-    /// to change.
+    /// observe nothing smaller, and its clip moving it a cell or more, or
+    /// fading into the next. So a frame is asked only for what can be seen to
+    /// change. A clip moving it less holds its time and its pose until the eye
+    /// comes close enough to see it move.
     pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
         let dt = frame.delta_s as f32;
         let cell = crate::view::lens::cell_angle(crate::view::lens::tau());
@@ -128,10 +130,13 @@ impl Actors {
             let Some(m) = models.get(a.model) else { continue };
             let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
             let (about, r) = (v3::sub(&a.at, &frame.anchor), f64::from(m.radius() * m.scale()));
-            let seen = a.visible && frame.frustum.sees(about, r) && 2.0 * r >= cell * v3::len(&v3::sub(&about, &frame.camera));
+            // What spans a camera cell at the actor's distance is observed.
+            let cell_there = cell * v3::len(&v3::sub(&about, &frame.camera));
+            let seen = a.visible && frame.frustum.sees(about, r) && 2.0 * r >= cell_there;
             // A clip of some length plays, or one fades into the next.
-            let moving = a.current.as_ref().and_then(length).is_some() || a.previous.is_some();
-            let moves = seen && moving;
+            let playing = a.current.filter(|p| length(p).is_some());
+            let moving = playing.is_some() || a.previous.is_some();
+            let moves = seen && (a.previous.is_some() || playing.is_some_and(|p| f64::from(m.motion(p.clip) * m.scale()) >= cell_there));
             animating |= moves;
             let wrap = |p: &mut Playing| {
                 p.time += dt;
@@ -139,25 +144,30 @@ impl Actors {
                     p.time %= d;
                 }
             };
-            if let Some(p) = a.current.as_mut() {
-                wrap(p);
-            }
-            if let Some(p) = a.previous.as_mut() {
-                wrap(p);
-            }
-            if a.previous.is_some() {
-                a.fade += dt;
-                if a.fade >= a.fade_len {
-                    a.previous = None;
+            // Seen, its clip holds where its motion is too small to see.
+            let runs = moves || !seen;
+            if runs {
+                if let Some(p) = a.current.as_mut() {
+                    wrap(p);
+                }
+                if let Some(p) = a.previous.as_mut() {
+                    wrap(p);
+                }
+                if a.previous.is_some() {
+                    a.fade += dt;
+                    if a.fade >= a.fade_len {
+                        a.previous = None;
+                    }
                 }
             }
             let joints = m.joints();
             if joints == 0 {
                 continue;
             }
-            // Unseen, its clocks run on and its palette waits for it to be seen.
+            // Unseen, its clocks run on and its palette waits for it to be
+            // seen; held, its pose stands as it was.
             if !moves && (a.posed || !seen) {
-                a.posed &= !moving;
+                a.posed &= !(moving && runs);
                 continue;
             }
             a.posed = true;
