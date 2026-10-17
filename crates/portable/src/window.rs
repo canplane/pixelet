@@ -590,14 +590,14 @@ impl<W: Windows> crate::ways::Airs for Over<W> {
 }
 
 /// Block `c` at `zoom` with what the ways write over the ground's block
-/// there (`ways::block`), `block` its look and its fold's four, `cell` the
-/// column it was read off and `found` where: air, or a way's look whole.
+/// there (`ways::block`), `block` its look and its fold's four, `carved`
+/// whether a cave made its ground air (`ground::Cell::block`), and `found`
+/// where its column was read: air, or a way's look whole.
 /// Only a way in the block's own column writes in it, or the air of one
 /// beside where the caves carved the ground (`runs_in`). A column read off
 /// a coarser window standing in for its own holds that window's runs, laid
 /// at its coarser cells, where no wall stands: the coarser zoom's world.
-pub fn ways_over(w: &(impl Windows + Copy), found: Found, cell: crate::ground::Cell, zoom: Zoom, c: [i32; 3], block: (u32, [u32; 4])) -> (u32, [u32; 4]) {
-    let carved = block.0 == VOID && cell.block(zoom, c[2], false).0 != VOID;
+pub fn ways_over(w: &(impl Windows + Copy), found: Found, zoom: Zoom, c: [i32; 3], (block, carved): ((u32, [u32; 4]), bool)) -> (u32, [u32; 4]) {
     if !carved && !runs_in(w, found, zoom, [c[0], c[1]]) {
         return block;
     }

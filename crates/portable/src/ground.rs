@@ -347,9 +347,10 @@ pub type Answer = In<(u32, [u32; 4])>;
 /// finer: its asker's, which asks it once at its entry (`Shard::at`).
 /// `place` is where the cells of a node over it were held
 /// (`Held::relief`), `NONE` where none were, and becomes the node's. With
-/// the answer the cell its block was read off and where, none
-/// (`Cell::NONE`, `Found::NONE`) where it read none.
-pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, Found) {
+/// the answer whether a cave carved its block (`Cell::block`) and where its
+/// cell was read, what the ways write over it read off
+/// (`window::ways_over`); none (`Found::NONE`) where it read none.
+pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, bool, Found) {
     let none = Found::NONE;
     let air = In {
         kind: Kind::Block,
@@ -377,11 +378,11 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
         } else {
             split
         };
-        return (answer, Cell::NONE, none);
+        return (answer, false, none);
     }
     // Coarser than any tile, no one index holds it.
     if zoom < GROUND.top() {
-        return (split, Cell::NONE, none);
+        return (split, false, none);
     }
     // A block's cells are its zoom's. A coarser node's are read at the
     // finest zoom asked within it, no finer than a tile at the node's own
@@ -398,22 +399,19 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
     };
     let (relief, ok) = held.relief(place, read, (zoom, c));
     if !ok {
-        return (lacks, Cell::NONE, none);
+        return (lacks, false, none);
     }
     if block {
         if above(zoom, c[2], relief[1]) {
-            return (air, Cell::NONE, none);
+            return (air, false, none);
         }
-        let column = held.cell(*place, zoom, c);
-        let answer = In {
-            kind: Kind::Block,
-            block: column.block(zoom, c[2], cave.hollow()),
-        };
-        return (answer, column, *place);
+        let (block, carved) = held.cell(*place, zoom, c).block(zoom, c[2], || cave.hollow());
+        let answer = In { kind: Kind::Block, block };
+        return (answer, carved, *place);
     }
     let (known, hollow) = cave.whole(zoom);
     let answer = if empty(shard, (zoom, c), relief, [far, near], known && hollow) { air } else { split };
-    (answer, Cell::NONE, none)
+    (answer, false, none)
 }
 
 /// A cell's ground, as a column reads it: its look (`unknown` for the
@@ -444,19 +442,24 @@ impl Cell {
         self.look != UNKNOWN && z < blocks(cell, face as f32) - leaf_blocks(cell) && z >= rock(cell, face)
     }
 
-    /// Block `z` of the cell at `cell`, a cave's air where `hollow` and a
-    /// cave may take it (`opens`): the ground's look and its fold's four,
-    /// `void` for air.
-    pub fn block(&self, cell: Zoom, z: i32, hollow: bool) -> (u32, [u32; 4]) {
+    /// Block `z` of the cell at `cell`, a cave's air where a cave may take
+    /// it (`opens`) and `hollow` says one does, asked only there: the
+    /// ground's look and its fold's four, `void` for air; and whether a cave
+    /// carved it, ground made air, which the ways' air beside reads
+    /// (`window::ways_over`).
+    pub fn block(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> ((u32, [u32; 4]), bool) {
         let air = (VOID, [VOID; 4]);
         if !self.grounded() {
-            return air;
+            return (air, false);
         }
         let g = by_depth(cell, self.look, self.top, z);
-        if g == VOID || hollow && self.opens(cell, z) {
-            return air;
+        if g == VOID {
+            return (air, false);
+        }
+        if self.opens(cell, z) && hollow() {
+            return (air, true);
         }
         let folds = cell >= LEAF_CELL || g != self.look;
-        (g, if folds { [g; 4] } else { self.fold })
+        ((g, if folds { [g; 4] } else { self.fold }), false)
     }
 }
