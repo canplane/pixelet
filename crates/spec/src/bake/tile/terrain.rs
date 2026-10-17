@@ -164,8 +164,9 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_portable::window::Square for
 
 /// Cell `i` of the square at `place` (in squares), in its tile's cells.
 fn square_cell(place: [u32; 2], i: u32) -> [u32; 2] {
-    use pxl_portable::window::SQUARE;
-    [place[0] * SQUARE + i % SQUARE, place[1] * SQUARE + i / SQUARE]
+    use pxl_portable::window::{of_index, SQUARE};
+    let [x, y] = of_index(i);
+    [place[0] * SQUARE + x, place[1] * SQUARE + y]
 }
 
 /// The window's square at `place` (in squares) of `tile` as its fill reads

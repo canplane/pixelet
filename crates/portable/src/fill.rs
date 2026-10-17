@@ -123,7 +123,7 @@ pub fn heights(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], [x, y]: [
     let word = |k: u32| fresh[k as usize];
     let (base, place, cell) = (word(FRESH_SQUARE) * SQUARE_WORDS, window::place_of(word(FRESH_PLACE)), word(FRESH_CELL));
     let (first, shard) = ([word(FRESH_FIRST) as i32, word(FRESH_FIRST + 1) as i32], Shard::of_word(word(FRESH_SHARD)));
-    let i = y * SQUARE + x;
+    let i = window::index_of([x, y]);
     let own = ground::own(at(ground, base + i), cell);
     let top = if own == ground::UNKNOWN {
         crate::SEA_LEVEL
@@ -176,7 +176,8 @@ pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], pass: u32, i
     let (spans, fits) = {
         let lane: &[u32] = ground;
         let filling = Filling { ground: lane, base, cell, place };
-        crate::ways::column(&filling, [(i % SQUARE) as i32, (i / SQUARE) as i32])
+        let [x, y] = window::of_index(i);
+        crate::ways::column(&filling, [x as i32, y as i32])
     };
     let w = at(ground, columns + i);
     let (from, room) = if pass == 2 { (column_first(w), RUNS_SQUARE) } else { (0, 0) };
@@ -213,7 +214,7 @@ fn put_runs(ground: &mut [u32], base: u32, spans: &ways::Spans, cell: u32, first
 /// written before (`window::join`).
 pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
     let w = if j == 0 {
-        let i = at[1] * SQUARE + at[0];
+        let i = window::index_of(at);
         let (w, to) = (column_of(ground, base, i), column_first(column_of(ground, base, i + 1)));
         let (top, s) = (column_top(w), 1i32 << (crate::LEAF_CELL - cell));
         let (mut lo, mut hi, mut r) = (top, top, column_first(w));

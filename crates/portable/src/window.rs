@@ -135,7 +135,7 @@ pub fn slot(q: [i32; 2]) -> u32 {
 /// The square holding cell `g`, and the cell's index in it.
 pub fn square_of(g: [i32; 2]) -> ([i32; 2], u32) {
     let m = (SQUARE - 1) as i32;
-    ([g[0] >> SQUARE_SHIFT, g[1] >> SQUARE_SHIFT], ((g[1] & m) as u32) * SQUARE + (g[0] & m) as u32)
+    ([g[0] >> SQUARE_SHIFT, g[1] >> SQUARE_SHIFT], index_of([(g[0] & m) as u32, (g[1] & m) as u32]))
 }
 
 /// Where a square's levels begin among them, in entries: level `j`, from 0,
@@ -145,23 +145,44 @@ pub const fn level_at(j: u32) -> u32 {
     (4 * SQUARE_CELLS - ((4 * SQUARE_CELLS) >> (2 * j))) / 3
 }
 
-/// Entry `[x, y]` of level `j` among a square's levels, in Morton order:
-/// a level is a quadtree's row of nodes laid as the curve visits them, so
-/// an entry's four children at the level under it are four words in a row
-/// and the cells about one lie near it, as a texture's tiling lays them for
-/// its 2D cache (decision 20261014, the grid's storage by the 2D cache).
-pub const fn level_index(j: u32, [x, y]: [u32; 2]) -> u32 {
-    level_at(j) + (spread(x) | spread(y) << 1)
+/// Entry `[x, y]` of level `j` among a square's levels, each level laid as
+/// its cells are (`index_of`).
+pub const fn level_index(j: u32, at: [u32; 2]) -> u32 {
+    level_at(j) + index_of(at)
 }
 
-/// `v`'s bits spread to the even ones: a Morton code's half.
+/// Cell `[x, y]`'s index among a square's cells (or a level's entries), the
+/// one place it is worked out: Morton order, a quadtree's nodes laid as the
+/// Z curve visits them, so an entry's four children a level under it are
+/// four in a row and the cells about one lie near it, as a texture's tiling
+/// lays them for its 2D cache (decision 20261014, the grid's storage by the
+/// 2D cache). A cell and the one after it in x, x even, are two in a row.
+pub const fn index_of([x, y]: [u32; 2]) -> u32 {
+    spread(x) | spread(y) << 1
+}
+
+/// The cell at index `i` (`index_of`'s inverse).
+pub const fn of_index(i: u32) -> [u32; 2] {
+    [gather(i), gather(i >> 1)]
+}
+
+/// `v`'s low sixteen bits spread to the even ones: a Morton code's half.
 const fn spread(v: u32) -> u32 {
     let v = (v | v << 8) & 0x00ff_00ff;
     let v = (v | v << 4) & 0x0f0f_0f0f;
     let v = (v | v << 2) & 0x3333_3333;
     (v | v << 1) & 0x5555_5555
 }
-const _: () = assert!(SQUARE <= 1 << 16, "a level's side spreads in sixteen bits");
+
+/// `v`'s even bits gathered to the low sixteen: `spread`'s inverse.
+const fn gather(v: u32) -> u32 {
+    let v = v & 0x5555_5555;
+    let v = (v | v >> 1) & 0x3333_3333;
+    let v = (v | v >> 2) & 0x0f0f_0f0f;
+    let v = (v | v >> 4) & 0x00ff_00ff;
+    (v | v >> 8) & 0x0000_ffff
+}
+const _: () = assert!(SQUARE <= 1 << 16, "a square's side spreads in sixteen bits");
 pub const LEVELS: u32 = SQUARE_SHIFT;
 pub const LEVEL_WORDS: u32 = level_at(LEVELS + 1);
 
@@ -306,7 +327,7 @@ fn cell_index(c: [i32; 2]) -> u32 {
     if c[0] < 0 || c[1] < 0 || c[0] >= SQUARE as i32 || c[1] >= SQUARE as i32 {
         return SQUARE_CELLS;
     }
-    c[1] as u32 * SQUARE + c[0] as u32
+    index_of([c[0] as u32, c[1] as u32])
 }
 
 /// Column `c`'s bin word, a ring column's the edge bin it borders: its
@@ -791,7 +812,8 @@ pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom
     // rust-gpu has no `saturating_sub`.
     #[allow(clippy::implicit_saturating_sub)]
     let j = if zoom >= from { 0 } else { from - zoom };
-    let at = [(i % SQUARE) >> j, (i / SQUARE) >> j];
+    let [x, y] = of_index(i);
+    let at = [x >> j, y >> j];
     (crate::ground::bound_of(w.level(from, slot, j, at)), from, true)
 }
 

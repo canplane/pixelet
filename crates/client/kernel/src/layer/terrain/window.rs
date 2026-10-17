@@ -436,12 +436,14 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
             continue;
         }
         let place = tile_of(cell, w.slots[i as usize].square).1;
-        // The square's rows out of the tile's, four looks a cell.
+        // The square's cells out of the tile's, four looks a cell, each at
+        // its index in the square (`window::index_of`).
         let side = GROUND.tile_cells() as usize;
         let (x0, y0) = ((place[0] * SQUARE) as usize, (place[1] * SQUARE) as usize);
-        for y in 0..SQUARE as usize {
-            let from_row = 4 * ((y0 + y) * side + x0);
-            cut[4 * y * SQUARE as usize..4 * (y + 1) * SQUARE as usize].copy_from_slice(&lane[from_row..from_row + 4 * SQUARE as usize]);
+        for i in 0..SQUARE_CELLS {
+            let [x, y] = window::of_index(i);
+            let from = 4 * ((y0 + y as usize) * side + x0 + x as usize);
+            cut[4 * i as usize..4 * i as usize + 4].copy_from_slice(&lane[from..from + 4]);
         }
         let written = square_lines(tile, &held.separation, place, scratch, lines);
         w.ticket = w.ticket % u32::MAX + 1;

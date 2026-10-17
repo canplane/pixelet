@@ -38,7 +38,10 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
                 continue;
             };
             let side = GROUND.tile_cells();
-            let at = |k: u32| ((place[1] * SQUARE + k / SQUARE) * side + place[0] * SQUARE + k % SQUARE) as usize;
+            let at = |k: u32| {
+                let [x, y] = window::of_index(k);
+                ((place[1] * SQUARE + y) * side + place[0] * SQUARE + x) as usize
+            };
             let (mut scratch, mut lines) = (vec![(0, 0); window::WAYS_SQUARE_SEGMENTS as usize], vec![0; window::LINES_WORDS as usize]);
             let n = pxl_spec::bake::tile::terrain::square_lines(t, separation, place, &mut scratch, &mut lines);
             let laid = pxl_spec::bake::tile::terrain::Laid {
@@ -46,7 +49,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
                 place,
                 lines: &lines[..n],
                 looks: |k: u32| word([u32::from(looks_of[at(k)]); 4]),
-                height: |c: [i32; 2]| i32::from(heights[at((c[1].clamp(0, SQUARE as i32 - 1) as u32) * SQUARE + c[0].clamp(0, SQUARE as i32 - 1) as u32)]),
+                height: |c: [i32; 2]| i32::from(heights[at(window::index_of([c[0].clamp(0, SQUARE as i32 - 1) as u32, c[1].clamp(0, SQUARE as i32 - 1) as u32]))]),
             };
             let mut lane = vec![0u32; window::SQUARE_WORDS as usize];
             fill_columns(&laid, |k| i32::from(heights[at(k)]), &mut lane);
@@ -80,7 +83,8 @@ fn fill_columns(sq: &impl window::Square, top: impl Fn(u32) -> i32, lane: &mut [
     let mut runs = 0;
     for i in 0..SQUARE_CELLS {
         lane[(COLUMNS_AT + i) as usize] = top(i) as u32 & 0xffff | runs << 16;
-        let spans = pxl_portable::ways::column(sq, [(i % SQUARE) as i32, (i / SQUARE) as i32]).0;
+        let [x, y] = window::of_index(i);
+        let spans = pxl_portable::ways::column(sq, [x as i32, y as i32]).0;
         runs += pxl_portable::ways::runs(&spans, sq.cell(), |k, w| {
             if runs + k < RUNS_SQUARE {
                 lane[(RUNS_AT + runs + k) as usize] = w;
