@@ -498,17 +498,6 @@ pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, i3
     (w.look(f.from(), f.slot(), i), w.height(f.from(), f.slot(), i), f)
 }
 
-/// Whether the leaf cell `l` is gone: past the area, off what `shard`, the
-/// node `node`'s, knows (`Shard::past_leaf`), or nothing known of it, its
-/// look off the window drawing it.
-pub fn gone(w: &impl Windows, shard: crate::area::Shard, node: (Zoom, [i32; 2]), near: Found, l: [i32; 2]) -> bool {
-    if shard.past_leaf(w, node, crate::area::tile_at(LEAF_CELL, l)) {
-        return true;
-    }
-    let (look, _, f) = cell(w, near, LEAF_CELL, l);
-    crate::ground::own(look, f.from()) == UNKNOWN
-}
-
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
 /// the leaves a leaf's, stepped from `place`, with the area's edge laid on
 /// it (`area::edge`), `shard` what is known of the area at its own shard:
@@ -525,15 +514,13 @@ pub fn ground(w: &impl Windows, (shard, owner): (crate::area::Shard, (Zoom, [i32
     let place = if q[0] == o[0] && q[1] == o[1] { place } else { Found::NONE };
     let (word, h, f) = cell(w, place, read, g);
     let (look, h, fold) = crate::ground::read_cell(word, h, f.from());
-    // The leaf cells about it read by their offset, each its look alone;
-    // one in its own leaf cell's square off the window its cell was read at
-    // (`step`), which is the leaves' wherever a ring is asked.
+    // Gone is past (`area::edge`): the column's own off its look, read
+    // anyway; the leaf cells about it by their offset, each off what
+    // `shard` knows, none of them read; none past in a shard known `inside`.
     let gone_at = |dx: i32, dy: i32| {
         let s = zoom - LEAF_CELL;
         let l = [wrap_index(LEAF_CELL, (b[0] >> s) + dx), (b[1] >> s) + dy];
-        let r = square_of(l).0;
-        let near = if r[0] == q[0] && r[1] == q[1] { f } else { Found::NONE };
-        !shard.inside() && gone(w, shard, owner, near, l)
+        !shard.inside() && shard.past_leaf(w, owner, crate::area::tile_at(LEAF_CELL, l))
     };
     let cell = crate::ground::Cell {
         look: crate::area::edge(look, zoom, b, look == UNKNOWN, gone_at),

@@ -199,9 +199,9 @@ pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
 }
 
 /// A cell's look with the area's edge laid (`edge`), `gone` where the cell
-/// is past the area or nothing is known of it, `beside` where one of the
-/// eight about it is: gone, void; at a leaf's cells or finer, ground beside
-/// one gone is the wall, bedrock.
+/// is past the area, `beside` where one of the eight about it is: gone,
+/// void; at a leaf's cells or finer, ground beside one gone is the wall,
+/// bedrock.
 pub fn wall(look: u32, cell: Zoom, gone: bool, beside: bool) -> u32 {
     if gone {
         VOID
@@ -214,11 +214,19 @@ pub fn wall(look: u32, cell: Zoom, gone: bool, beside: bool) -> u32 {
 
 /// A cell's look with the area's edge laid, the one rule a column is read
 /// by (`window::ground`), on the CPU and a GPU alike:
-/// `gone` where the cell is past the area or nothing is known of it; at a
-/// leaf's cells or finer, ground beside one gone is the wall (`wall`), where
-/// the leaf cells the eight about the block `b` at `cell` lie in (`ring`) are
-/// asked by their offset in leaf cells (`gone_at`), each once, none past
-/// the first gone.
+/// `gone` where the cell is past the area; at a leaf's cells or finer,
+/// ground beside one gone is the wall (`wall`), where the leaf cells the
+/// eight about the block `b` at `cell` lie in (`ring`) are asked by their
+/// offset in leaf cells (`gone_at`), each once, none past the first gone.
+///
+/// Gone is past, one fact two ways: a cell whose look is `UNKNOWN`
+/// (nothing known) is exactly one past the area. The bake writes `unknown`
+/// only for tiles its coverage does not meet (pxl-geo-bake
+/// terrain/absent.rs `Absence::at`), its coverage is the served shards, and
+/// no window's cell is coarser than a shard, so none straddles the area's
+/// edge. So the leaf cells about a column are never read to know them gone:
+/// `Shard::past_leaf` answers each off the shard a descent carries, and a
+/// column's own look, read anyway, answers its own.
 pub fn edge(look: u32, cell: Zoom, b: [i32; 2], gone: bool, gone_at: impl Fn(i32, i32) -> bool) -> u32 {
     let beside = !gone && cell >= LEAF_CELL && Ground::grounds(look) && {
         let r = ring(cell, b);
