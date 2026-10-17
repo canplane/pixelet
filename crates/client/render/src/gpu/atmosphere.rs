@@ -33,7 +33,7 @@ pub(crate) const RAYLEIGH_SCATTERING: usize = 0;
 pub(crate) const BOTTOM_RADIUS: usize = 3;
 pub(crate) const OZONE_ABSORPTION: usize = 4;
 pub(crate) const TOP_RADIUS: usize = 7;
-pub(crate) const WHITE: usize = 8;
+// 8 to 10 free.
 pub(crate) const RAYLEIGH_SCALE_HEIGHT: usize = 11;
 pub(crate) const SUN_DIR: usize = 12;
 pub(crate) const MIE_SCATTERING: usize = 15;
@@ -118,14 +118,12 @@ pub struct Atmosphere {
 impl Atmosphere {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> Atmosphere {
         let uniform = g.buffer(word_bytes(ATMOS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let white = model::white();
         let mut words = [0.0f32; ATMOS_FLOATS];
         for (at, rgb) in [
             (RAYLEIGH_SCATTERING, model::RAYLEIGH_SCATTERING),
             (OZONE_ABSORPTION, model::OZONE_ABSORPTION),
-            (WHITE, white),
-            (NIGHT_SKY, core::array::from_fn(|k| model::NIGHT_COLOR[k] * model::NIGHT_SKY * white[k])),
-            (CITY_LIGHT, core::array::from_fn(|k| model::CITY_COLOR[k] * model::CITY_LIGHT * white[k])),
+            (NIGHT_SKY, core::array::from_fn(|k| model::NIGHT_COLOR[k] * model::NIGHT_SKY)),
+            (CITY_LIGHT, core::array::from_fn(|k| model::CITY_COLOR[k] * model::CITY_LIGHT)),
         ] {
             for (w, v) in words[at..at + 3].iter_mut().zip(rgb) {
                 *w = v as f32;

@@ -124,7 +124,7 @@ fn earth_face(n: vec3f, octaves: f32) -> vec4f {
 
 // On where night falls on them, as the sky's night falls (look/environment.rs).
 fn city_shown(lights: f32, up: vec3f) -> vec3f {
-  return atmos_city_light() * lights * lights * exposure() * (1.0 - smoothstep(-0.1, 0.0, dot(up, atmos_sun_dir())));
+  return atmos_city_light() * atmos_white() * lights * lights * exposure() * (1.0 - smoothstep(-0.1, 0.0, dot(up, atmos_sun_dir())));
 }
 
 // Doubled, picked by eye beside the original; the cities are not its to scale.

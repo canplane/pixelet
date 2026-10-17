@@ -5,8 +5,8 @@ struct Atmosphere {
   bottom_radius: f32,
   ozone_absorption: vec3f,
   top_radius: f32,
-  // A sun overhead at sea level as white.
-  white: vec3f,
+  // Free.
+  white_free: vec3f,
   rayleigh_scale_height: f32,
   sun_dir: vec3f,
   mie_scattering: f32,
@@ -53,7 +53,6 @@ fn atmos_rayleigh_scattering() -> vec3f { return atmos_words[0].xyz; }
 fn atmos_bottom_radius() -> f32 { return atmos_words[0].w; }
 fn atmos_ozone_absorption() -> vec3f { return atmos_words[1].xyz; }
 fn atmos_top_radius() -> f32 { return atmos_words[1].w; }
-fn atmos_white() -> vec3f { return atmos_words[2].xyz; }
 fn atmos_rayleigh_scale_height() -> f32 { return atmos_words[2].w; }
 fn atmos_sun_dir() -> vec3f { return atmos_words[3].xyz; }
 fn atmos_mie_scattering() -> f32 { return atmos_words[3].w; }

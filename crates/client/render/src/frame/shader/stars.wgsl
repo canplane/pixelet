@@ -4,7 +4,7 @@
 struct Stars {
   view_proj: mat4x4f,
   sky: mat4x4f,
-  depth: vec3f,
+  free: vec3f,
   // Sized in CSS pixels so a dense screen does not shrink them.
   density: f32,
   intensity: f32,
@@ -22,7 +22,6 @@ struct Stars {
 
 fn stars_view_proj() -> mat4x4f { return mat4x4f(stars_words[0], stars_words[1], stars_words[2], stars_words[3]); }
 fn stars_sky() -> mat4x4f { return mat4x4f(stars_words[4], stars_words[5], stars_words[6], stars_words[7]); }
-fn stars_depth() -> vec3f { return stars_words[8].xyz; }
 fn stars_density() -> f32 { return stars_words[8].w; }
 fn stars_intensity() -> f32 { return stars_words[9].x; }
 fn stars_horizon() -> f32 { return stars_words[9].y; }
@@ -66,7 +65,9 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut
   // No twinkle: the frame redraws only on motion, so a twinkle would become a
   // blink, and redrawing every frame for it costs the device.
   let height = dot(dir, frame_up());
-  let light = color * flux * STAR_GAIN * exp(-stars_depth() * airmass(height)) * stars_intensity();
+  // The air straight up from the eye, from orbit none.
+  let depth = depth_to_top(camera_r(), 1.0);
+  let light = color * flux * STAR_GAIN * exp(-depth * airmass(height)) * stars_intensity();
   var clip = stars_view_proj() * vec4f(dir, 0.0);
   let behind_moon = length(cross(dir, stars_moon())) < MOON_ANGULAR_RADIUS * DISC_SCALE && dot(dir, stars_moon()) > 0.0;
   if (height < stars_horizon() || behind_moon || clip.w <= 0.0 || max(light.r, max(light.g, light.b)) < STAR_FLOOR) {

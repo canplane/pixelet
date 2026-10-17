@@ -8,6 +8,13 @@ fn transmittance_to_top(r: f32, mu: f32) -> vec3f {
   return exp(-depth_to_top(r, mu));
 }
 
+// A sun overhead at sea level as white: the inverse of what the table leaves
+// of it there, its own texel (mu 1, the bottom). The exposure pass writes it
+// beside the eye's stops, where every pass after it reads it (atmos_eye.wgsl).
+fn table_white() -> vec3f {
+  return 1.0 / transmittance_to_top(atmos_bottom_radius(), 1.0);
+}
+
 // The disc sets across its own width, so the air's light does not switch off in one frame.
 fn sun_transmittance(r: f32, mu_s: f32) -> vec3f {
   let horizon = -sqrt(max(1.0 - (atmos_bottom_radius() / r) * (atmos_bottom_radius() / r), 0.0));

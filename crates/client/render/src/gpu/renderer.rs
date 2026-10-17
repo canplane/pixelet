@@ -1343,7 +1343,7 @@ impl Renderer {
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buffer);
         let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer);
         let air = atmosphere.entries();
-        let stars = StarPass::new(g, &mut pipelines, frame_buffer);
+        let stars = StarPass::new(g, &mut pipelines, frame_buffer, air);
         let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
         let mips = Mips::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let layers = Layers::new(g);

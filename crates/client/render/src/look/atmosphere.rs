@@ -1,7 +1,7 @@
 // pxl-render/look/atmosphere.rs
 
-//! The Earth's atmosphere, its numbers here only: the GPU's tables and the CPU's
-//! sunlight both read them. Bruneton and Hillaire (EGSR 2020) with Unreal's
+//! The Earth's atmosphere, its numbers here only: the GPU's tables are drawn
+//! from them, and every light through the air is read off those tables. Bruneton and Hillaire (EGSR 2020) with Unreal's
 //! Earth; km, and coefficients per km.
 
 /// The map's sphere, so ground and horizon are one; the literature's 6,360 km
@@ -54,44 +54,4 @@ pub const CITY_COLOR: [f64; 3] = [0.9473, 0.8714, 0.7011];
 pub fn moon_phase_light(alpha: f64) -> f64 {
     let a = alpha.to_degrees().abs();
     libm::pow(10f64, -0.4 * (0.026 * a + 4e-9 * (a * a) * (a * a)))
-}
-
-const STEPS: u32 = 64;
-
-fn extinction(h: f64) -> [f64; 3] {
-    let r = libm::exp(-h / RAYLEIGH_SCALE_HEIGHT_KM);
-    let m = libm::exp(-h / MIE_SCALE_HEIGHT_KM);
-    let o = (1.0 - (h - OZONE_CENTER_KM).abs() / OZONE_HALF_WIDTH_KM).max(0.0);
-    core::array::from_fn(|k| RAYLEIGH_SCATTERING[k] * r + MIE_EXTINCTION * m + OZONE_ABSORPTION[k] * o)
-}
-
-fn horizon_mu(r: f64) -> f64 {
-    let s = BOTTOM_RADIUS_KM / r;
-    -(1.0 - s * s).max(0.0).sqrt()
-}
-
-/// Zero for a direction the ground stands in.
-pub fn transmittance(altitude_km: f64, mu: f64) -> [f64; 3] {
-    let r = BOTTOM_RADIUS_KM + altitude_km.max(0.0);
-    if mu < horizon_mu(r) {
-        return [0.0; 3];
-    }
-    let d = -r * mu + (r * r * (mu * mu - 1.0) + TOP_RADIUS_KM * TOP_RADIUS_KM).max(0.0).sqrt();
-    let dt = d / STEPS as f64;
-    let mut depth = [0.0; 3];
-    for i in 0..STEPS {
-        let t = (i as f64 + 0.5) * dt;
-        let h = (t * t + 2.0 * r * mu * t + r * r).sqrt() - BOTTOM_RADIUS_KM;
-        let e = extinction(h);
-        for k in 0..3 {
-            depth[k] += e[k] * dt;
-        }
-    }
-    depth.map(|d| libm::exp(-d))
-}
-
-/// The inverse of what the air leaves of a sun overhead at sea level.
-pub fn white() -> [f64; 3] {
-    static WHITE: std::sync::LazyLock<[f64; 3]> = std::sync::LazyLock::new(|| transmittance(0.0, 1.0).map(|t| 1.0 / t));
-    *WHITE
 }

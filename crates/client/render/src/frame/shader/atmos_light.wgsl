@@ -14,7 +14,8 @@ struct Lights {
 };
 
 fn lights_now() -> Lights {
-  return Lights(atmos_sun_dir(), atmos_moon_dir(), frame_sun_dir(), frame_sun_color(), frame_other_dir(), frame_other_color());
+  let white = atmos_white();
+  return Lights(atmos_sun_dir(), atmos_moon_dir(), frame_sun_dir(), frame_sun_color() * white, frame_other_dir(), frame_other_color() * white);
 }
 
 // `d` raised by `h` in its cosine over `up`, its azimuth kept.
@@ -51,7 +52,7 @@ fn light_unexposed_in(r: f32, up: vec3f, s: Lights) -> Light {
   return Light(
     s.first_color * sun_transmittance(r, dot(up, s.first)),
     s.other_color * sun_transmittance(r, dot(up, s.other)),
-    sky * atmos_white() + atmos_night_sky(),
+    (sky + atmos_night_sky()) * atmos_white(),
   );
 }
 

@@ -141,7 +141,7 @@ pub fn source(kind: u32) -> &'static str {
             "skinned"
         ),
         SHADER_PUCK_ZONE => wgsl!("frame", "globe", "encode", "finish", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!("frame", "globe", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "place", "puck", "puck_beacon"),
+        SHADER_PUCK_BEACON => wgsl!("frame", "globe", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "place", "puck", "puck_beacon"),
         SHADER_BADGE => wgsl!("frame", "globe", "encode", "badge", "badge_sprite"),
         SHADER_BADGE_REGION => wgsl!("frame", "globe", "encode", "badge", "badge_region"),
         SHADER_SKY => wgsl!(
@@ -230,12 +230,13 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_ground",
+            "atmos_eye_unit",
             "atmos_light",
             "atmos_pass",
             "atmos_march",
             "atmos_skyview"
         ),
-        SHADER_ATMOS_IRRADIANCE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_march", "atmos_irradiance"),
+        SHADER_ATMOS_IRRADIANCE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "atmos_pass", "atmos_march", "atmos_irradiance"),
         SHADER_ATMOS_EXPOSURE => wgsl!(
             "frame",
             "globe",
@@ -252,7 +253,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_pass",
             "atmos_exposure"
         ),
-        SHADER_STARS => wgsl!("frame", "globe", "encode", "stars"),
+        SHADER_STARS => wgsl!("frame", "globe", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "stars"),
         SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
         SHADER_CLOUDS => wgsl!(
             "frame",
@@ -489,9 +490,10 @@ const AIR: [[u32; 3]; 10] = air([FRAGMENT; 10]);
 const AIR_UNREAD: [[u32; 3]; 10] = air([NONE; 10]);
 const LIT_FRAME: [[u32; 3]; 12] = {
     // The air in the vertex stage, where each point's lights and veil are
-    // worked out; a fragment reads only its words. The sky's views and the
-    // Earth's picture are the sky pass's, laid out unread.
-    let a = air([BOTH, VERTEX, NONE, VERTEX, VERTEX, NONE, NONE, NONE, VERTEX, VERTEX]);
+    // worked out; a fragment reads its words and the eye's texel, whose white
+    // it shows by (atmos_eye.wgsl). The sky's views and the Earth's picture
+    // are the sky pass's, laid out unread.
+    let a = air([BOTH, VERTEX, NONE, VERTEX, BOTH, NONE, NONE, NONE, VERTEX, VERTEX]);
     [[0, BOTH, UNIFORM], [7, FRAGMENT, TEXTURE], a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9]]
 };
 /// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
@@ -754,7 +756,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_STARS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]])],
+            &[group(&[[0, VERTEX, UNIFORM], [8, VERTEX, UNIFORM], [9, VERTEX, TEXTURE], [11, VERTEX, SAMPLER]]), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]])],
         ),
         // From under the sheets only where the world left the far plane; from over them everywhere.
         PIPELINE_CLOUDS => record(
