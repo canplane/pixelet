@@ -5,7 +5,7 @@
 //! shows is the tool's (`control/interaction/ghost.rs`); this draws it.
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
-use pxl_render::mesh::ghost::{on_whole_units, write_lone_box, Heights, BOX_WORDS};
+use pxl_render::mesh::ghost::{on_whole_units, write_lone_box, BOX_WORDS};
 use pxl_render::mesh::paint::object::PAINTER;
 use pxl_render::mesh::word::NO_LAYER;
 use pxl_spec::space::coord::v3::V3;
@@ -35,7 +35,7 @@ struct Held {
     at: usize,
     bytes: u32,
     handle: u32,
-    heights: Heights,
+    z_step: f64,
 }
 
 #[derive(Default)]
@@ -66,8 +66,8 @@ impl GhostDraw {
         let Some(block) = self.replace(draw, shape, bytes) else { return true };
         // SAFETY: a block of the words asked for, this ghost's until replaced.
         let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), bytes as usize / 4) };
-        let heights = write_lone_box(m, offset, size, rgb, layer);
-        self.held.as_mut().unwrap().heights = heights;
+        let z_step = write_lone_box(m, offset, size, rgb, layer);
+        self.held.as_mut().unwrap().z_step = z_step;
         self.upload(draw, 1, 0);
         true
     }
@@ -109,7 +109,7 @@ impl GhostDraw {
             at,
             bytes,
             handle: 0,
-            heights: Heights::default(),
+            z_step: 1.0,
         });
         Some(at)
     }
@@ -127,7 +127,7 @@ impl GhostDraw {
                 let t = DrawList::translation(on_whole_units(self.at).0, eye);
                 // Written in a cell of its own size (write_lone_box).
                 let unit = f64::from_bits(size_bits) as f32;
-                draw.draw_in(pipeline, h.handle, 1, 0, t, GHOST_OPACITY, unit, h.heights.step as f32);
+                draw.draw_in(pipeline, h.handle, 1, 0, t, GHOST_OPACITY, unit, h.z_step as f32);
             }
             Shape::Decor { group, .. } => draw.draw_instances(PIPELINE_GHOST_DECOR, h.handle, group, 1, [0, 1, 6], DrawList::translation(self.at, eye), GHOST_OPACITY),
         }

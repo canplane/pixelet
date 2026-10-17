@@ -151,7 +151,7 @@ fn box_vertex(v: u32, words: BoxWords) -> VertexOut {
   o.fill = seen.light.fill;
   // Real-size tile UV, one repeat a unit, read from where the face stands and
   // not from its box: a leaf cut into several boxes still wears one tile. The
-  // mesh's corner and floor stand on whole units (Heights::of), so its own
+  // mesh's corner and floor stand on whole units (ghost.rs `on_whole_units`), so its own
   // coordinates are the world's modulo the repeat; v runs down a side.
   let p = vec3f(b.min_xy, b.z.x) + size * (local + 0.5);
   let is_side = abs(normal.z) < 0.5;
