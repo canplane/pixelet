@@ -1,9 +1,12 @@
 // pxl-kernel/view/frame/resolution.rs
 
 //! Device pixels per CSS pixel the world is drawn at; fill cost goes with
-//! its square. `auto` steps down while moving frames run over budget and up
-//! once they show room. Without GPU timing a step up is a probe, and a
-//! failed probe doubles the wait before the next. Still frames are not judged.
+//! its square. `auto` steps on the GPU's own time, the one quantity fill
+//! moves: down while moving frames' GPU time runs over budget, up once it
+//! shows room. A frame's gap is the CPU's as much as the GPU's, and fewer
+//! pixels make no CPU frame faster, so without a GPU time (none landed yet,
+//! or the device keeps no timestamps) it holds where it is, from the
+//! device's ratio. Still frames are not judged.
 
 use crate::param;
 use crate::sched::tick::TickState;
@@ -19,8 +22,6 @@ struct Resolution {
     over_ms: f64,
     room_ms: f64,
     since_change_ms: f64,
-    probe_hold_ms: f64,
-    probing: bool,
     moving: bool,
 }
 
@@ -33,8 +34,6 @@ fn resolution() -> &'static mut Resolution {
         over_ms: 0.0,
         room_ms: 0.0,
         since_change_ms: 0.0,
-        probe_hold_ms: param::RESOLUTION_PROBE_HOLD_MS,
-        probing: false,
         moving: false,
     })
 }
@@ -44,9 +43,9 @@ pub fn world_ratio() -> f64 {
     resolution().ratio
 }
 
-/// A frame's GPU time as a read landed with it; one that timed nothing
-/// reports none. A device that keeps no timestamps lands none, so the
-/// resolution probes.
+/// A frame's GPU time as a read landed with it, kept until the next lands;
+/// one that timed nothing reports none. A device that keeps no timestamps
+/// lands none, so the resolution holds.
 pub fn resolution_observe(gpu_ms: f64) {
     resolution().gpu_ms = (gpu_ms > 0.0).then_some(gpu_ms);
 }
@@ -83,27 +82,17 @@ pub fn resolution_step(state: &TickState) {
 }
 
 fn judge(r: &mut Resolution, top: f64, gap_ms: f64, budget_ms: f64) {
+    let Some(gpu) = r.gpu_ms else { return };
     r.since_change_ms += gap_ms;
-    let (over, room) = match r.gpu_ms {
-        Some(gpu) => (gpu > budget_ms, gpu < param::RESOLUTION_ROOM * budget_ms),
-        None => (gap_ms > param::RESOLUTION_MISSED * budget_ms, gap_ms <= param::RESOLUTION_MISSED * budget_ms),
-    };
+    let (over, room) = (gpu > budget_ms, gpu < param::RESOLUTION_ROOM * budget_ms);
     r.over_ms = if over { r.over_ms + gap_ms } else { 0.0 };
     r.room_ms = if room { r.room_ms + gap_ms } else { 0.0 };
-    if r.probing && r.since_change_ms >= param::RESOLUTION_PROBE_TRUST_MS {
-        r.probing = false;
-    }
     if r.since_change_ms < param::RESOLUTION_CHANGE_GAP_MS {
         return;
     }
     if r.over_ms >= param::RESOLUTION_OVER_HOLD_MS && r.ratio > param::RESOLUTION_MIN {
-        if r.probing {
-            r.probe_hold_ms = (r.probe_hold_ms * 2.0).min(param::RESOLUTION_PROBE_HOLD_MAX_MS);
-            r.probing = false;
-        }
         change(r, (r.ratio - param::RESOLUTION_STEP).max(param::RESOLUTION_MIN));
-    } else if r.ratio < top && r.room_ms >= if r.gpu_ms.is_some() { param::RESOLUTION_ROOM_HOLD_MS } else { r.probe_hold_ms } {
-        r.probing = r.gpu_ms.is_none();
+    } else if r.ratio < top && r.room_ms >= param::RESOLUTION_ROOM_HOLD_MS {
         change(r, (r.ratio + param::RESOLUTION_STEP).min(top));
     }
 }

@@ -31,16 +31,6 @@ pub const RESOLUTION_ROOM_HOLD_MS: f64 = 2000.0;
 /// A step up adds at most (2.0 / 1.75)² ≈ 1.3× fill, so half the budget leaves room.
 pub const RESOLUTION_ROOM: f64 = 0.5;
 
-/// Interval in budgets that counts as a missed frame when the device reports no GPU time.
-pub const RESOLUTION_MISSED: f64 = 1.5;
-
-/// First probe up, and the longest backoff between probes, when the device
-/// reports no GPU time.
-pub const RESOLUTION_PROBE_HOLD_MS: f64 = 5000.0;
-pub const RESOLUTION_PROBE_HOLD_MAX_MS: f64 = 60_000.0;
-
-pub const RESOLUTION_PROBE_TRUST_MS: f64 = 2000.0;
-
 /// The tightest budget: 60 Hz. Faster displays would trade sharpness for
 /// frames the eye gains less from.
 pub const RESOLUTION_BUDGET_FLOOR_MS: f64 = 1000.0 / 60.0;
