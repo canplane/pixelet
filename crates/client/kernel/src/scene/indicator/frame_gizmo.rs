@@ -27,7 +27,6 @@ const RING_SEGMENTS: u32 = 64;
 /// Segments as pairs of vertices: position about `about`, then color. Outlines
 /// only, with no faces: a ring is an outline, and a cube's faces would hide the
 /// focus inside it.
-#[derive(PartialEq)]
 struct Sketch {
     about: V3,
     lines: Vec<f32>,
@@ -98,8 +97,14 @@ fn sketch(s: &mut Sketch, focus: &Q3, heading: Option<f64>) {
     s.point(tip(up), linear_rgb(frame::up::rgb));
 }
 
-/// What is drawn, whether it is, and the next sketch, kept so a step allocates nothing.
-static GIZMOS: Global<(Sketch, bool, Sketch)> = Global::new();
+/// What is drawn, kept so a step allocates nothing, and what it was drawn
+/// of, the focus and the heading; none while nothing is.
+struct Drawn {
+    sketch: Sketch,
+    of: Option<(Q3, Option<f64>)>,
+}
+
+static GIZMO: Global<Drawn> = Global::new();
 
 fn set_lines(at: V3, lines: &[f32]) {
     let Some((scene, draw)) = kernel().parts() else { return };
@@ -107,21 +112,28 @@ fn set_lines(at: V3, lines: &[f32]) {
 }
 
 /// `heading` is the camera's azimuth third person, none first person.
+/// Sketched again only where the focus or the heading moved, or a change to
+/// the ground touched the focus's column, whose floor it reads
+/// (`changed::within`): a step each frame turn sees each change once, and
+/// one hidden sketches afresh when shown.
 pub fn frame_gizmo_step(show: bool, focus: Option<Q3>, heading: Option<f64>) {
-    let empty = || Sketch { about: [0.0; 3], lines: Vec::new() };
-    let (drawn, shown, next) = GIZMOS.get(|| (empty(), false, empty()));
+    let Drawn { sketch: drawn, of } = GIZMO.get(|| Drawn {
+        sketch: Sketch { about: [0.0; 3], lines: Vec::new() },
+        of: None,
+    });
     let Some(center) = focus.filter(|_| show) else {
-        if core::mem::take(shown) {
+        if of.take().is_some() {
             set_lines([0.0; 3], &[]);
         }
         return;
     };
-    sketch(next, &center, heading);
-    if *shown && drawn == next {
+    let at = to_world(&center);
+    let column = [[at[0], at[1]]; 2];
+    if *of == Some((center, heading)) && !crate::query::changed::within(column, &[]) {
         return;
     }
-    set_lines(next.about, &next.lines);
-    core::mem::swap(drawn, next);
-    *shown = true;
+    sketch(drawn, &center, heading);
+    set_lines(drawn.about, &drawn.lines);
+    *of = Some((center, heading));
     request_world_tick();
 }
