@@ -107,11 +107,18 @@ struct Walker<'w, 'a> {
     strike: Option<Strike<'a>>,
 }
 
+/// The CPU's walk keeps every level, so it never asks a node again: its
+/// `node` strikes decor and keeps the first lack (pxl-portable
+/// `cast::Levels`).
+const _: () = assert!(<<Walker<'static, 'static> as Query>::Stack as cast::Levels<At>>::LEVELS as usize == cast::DEPTH);
+
 impl<'a> Query for Walker<'_, 'a> {
     type At = At;
     type Block = Option<Block>;
-    /// Kept whole: the CPU's walk holds its stack where it is cheap.
+    /// Kept whole, every level: the CPU's walk holds its stack where it is
+    /// cheap, and never makes an entry again.
     type Kept = At;
+    type Stack = [At; cast::DEPTH];
     const AIR: Option<Block> = None;
 
     fn root(&mut self, node: [i32; 3]) -> At {

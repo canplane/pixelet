@@ -266,6 +266,17 @@ pub struct At {
     ground: Found,
 }
 
+/// The levels a ray's stack keeps (pxl-portable `cast::Levels`), its
+/// private memory. An entry lives until the walk comes back to its node,
+/// and under it the walk goes down to a stop a camera cell wide at its
+/// distance (`cast::cell_at`: a side over 1/192 of it), so as many levels
+/// deeper as the node's side is to its distance over 192, in powers of
+/// two. On flat ground from 120 and 600 units, every direction down to the
+/// horizon, no entry outlived more than 7 deeper writes; a node far wider
+/// than its distance, one gone into right by the eye, outlives more, and
+/// its entry is made again (`cast::again`).
+const LEVELS: usize = 8;
+
 const _: () = assert!(window::FOUND_BITS + pxl_portable::caves::CAVE_BITS <= 32, "a kept entry's second word holds a Found and a cave");
 
 /// What a node is on the GPU: its value, and for the ground the four looks
@@ -277,6 +288,7 @@ impl Query for World<'_> {
     /// where its cells are held (`Found`, `window::FOUND_BITS`) with its
     /// caves' word (`caves::CAVE_BITS`) over it.
     type Kept = [u32; 2];
+    type Stack = [[u32; 2]; LEVELS];
     type Block = [u32; 2];
     const AIR: [u32; 2] = [VOID, 0];
 
