@@ -64,17 +64,16 @@ struct Handed {
     translation: [f32; 3],
     /// What it was last made of, by value.
     seen: Option<Seen>,
-    /// Moves each time it is made again: what the renderer reads to know
-    /// the hand-over changed.
-    revision: u32,
 }
 
-/// Everything the hand-over is made of: the eye, a pixel's size there, what
-/// the eraser leaves out, and the placed objects as the store's revision
-/// counts them. A new input goes here or the hand-over never sees it change.
+/// Everything the hand-over is made of: the unit the eye stands in (its
+/// anchor), a pixel's size there, what the eraser leaves out, and the placed
+/// objects as the store's revision counts them. A new input goes here or the
+/// hand-over never sees it change. The eye within its unit moves only the
+/// translation.
 #[derive(Clone, Copy, PartialEq)]
 struct Seen {
-    eye: V3,
+    anchor: V3,
     upp: f64,
     hide: Option<EntryAt>,
     scattered: Option<[i64; 3]>,
@@ -93,7 +92,6 @@ fn handed() -> &'static mut Handed {
         edited: 0,
         translation: [0.0; 3],
         seen: None,
-        revision: 0,
     })
 }
 
@@ -110,8 +108,10 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i6
         h.seen = None;
         return;
     }
+    let anchor = eye.map(libm::floor);
+    h.translation = [0, 1, 2].map(|k| (anchor[k] - eye[k]) as f32);
     let seen = Seen {
-        eye,
+        anchor,
         upp: units_per_px_at(1.0),
         hide,
         scattered,
@@ -121,8 +121,6 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i6
         return;
     }
     h.seen = Some(seen);
-    h.revision = h.revision.wrapping_add(1);
-    let anchor = eye.map(libm::floor);
     let p = &mut h.params;
     p.fill(0);
     p[drawn::UPP as usize] = (seen.upp as f32).to_bits();
@@ -140,11 +138,11 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i6
     for (k, e) in extents.enumerate() {
         p[drawn::EXTENTS as usize + k] = e.to_bits();
     }
-    h.translation = [0, 1, 2].map(|k| (anchor[k] - eye[k]) as f32);
+    // Out to the reach from anywhere in the anchor's unit.
     let reach = DECORS.iter().map(|d| d.extent()).fold(0.0, f64::max) / (decor_sprite_px() * seen.upp);
     let around = Aabb {
-        min: eye.map(|v| v - reach),
-        max: eye.map(|v| v + reach),
+        min: anchor.map(|v| v - reach),
+        max: anchor.map(|v| v + 1.0 + reach),
     };
     h.placed.clear();
     let placed = &mut h.placed;
@@ -157,11 +155,6 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i6
         let [x, y, z] = index_of(UNIT_ZOOM, &e.corner());
         placed.push([scatter::record_word(k, variant, turn, scatter::PLACED_AT), x.rem_euclid(ROUND) as u32, y as u32, z as u32]);
     });
-}
-
-/// Moves each time the hand-over is made again, so it is the same while this is.
-pub fn revision() -> u32 {
-    handed().revision
 }
 
 /// Where the objects were written, as the turn's change took them
