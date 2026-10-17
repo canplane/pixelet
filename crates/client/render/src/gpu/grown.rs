@@ -18,6 +18,7 @@ use pxl_portable::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
 
 use crate::frame::shader::record::compute;
 use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE};
+use crate::frame::shader::words::DRAW_FLOATS;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, release, word_bytes, Gpu};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Read;
@@ -222,7 +223,7 @@ impl Grown {
         for r in 0..drawn::REGIONS {
             let u = (r * drawn::UNIFORM_WORDS) as usize;
             let layer = if r % 2 == 1 { r / 2 } else { 0 };
-            uniforms[u..u + 8].copy_from_slice(&[x.to_bits(), y.to_bits(), z.to_bits(), 0, self.room, 1.0f32.to_bits(), layer, drawn::LANES * self.room]);
+            uniforms[u..u + DRAW_FLOATS].copy_from_slice(&[x.to_bits(), y.to_bits(), z.to_bits(), 0, self.room, 1.0f32.to_bits(), layer, drawn::LANES * self.room]);
         }
         g.write_buffer(self.uniforms, 0, bytes(&uniforms));
     }

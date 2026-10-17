@@ -15,12 +15,13 @@ use xpute_kit::math::scalar::round;
 
 use crate::frame::draw::{
     census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
-    PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
+    PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_FACE, SHADER_HEIGHTS, SHADER_START, SHADER_WAYS,
+    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_FACE, SHADER_HEIGHTS, SHADER_START, SHADER_WAYS,
 };
+use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{
@@ -74,14 +75,11 @@ const UP: usize = FRAME_AT[16];
 const CELL: usize = FRAME_AT[17];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
-pub(crate) const SKY_FLOATS: usize = 16;
 pub(crate) const SKY_POLE: usize = 12;
 pub(crate) const SKY_MAPPED: usize = 15;
 const BOX_VERTICES: u32 = 36;
-const DRAWS_INITIAL: u32 = 256 * UNIFORM_FLOATS as u32;
+const DRAWS_INITIAL: u32 = 256 * DRAW_FLOATS as u32;
 const MB: f64 = 1_048_576.0;
-/// The Moon's near side as download_moon cuts it; sky.wgsl reads its half.
-const MOON_TEX_SZ: u32 = 512;
 
 const _: () = assert!(GPU_SPAN_NAMES.len() <= 32, "a span a bit of the mask the host is told");
 const SPAN_AIR: usize = GpuSpanName::air as usize;
@@ -1357,7 +1355,7 @@ impl Renderer {
         let mips = Mips::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let layers = Layers::new(g);
         let sky_built = pipelines.build(g, PIPELINE_SKY, g.canvas());
-        let moon = ImageMap::new(g, MOON_TEX_SZ, MOON_TEX_SZ);
+        let moon = ImageMap::new(g, MOON_TEXELS, MOON_TEXELS);
         let mut sky_entries = vec![buffer_entry(0, frame_buffer), buffer_entry(19, sky_buffer), view_entry(2, moon.view), sampler_entry(3, moon.sampler)];
         sky_entries.extend(air);
         let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);

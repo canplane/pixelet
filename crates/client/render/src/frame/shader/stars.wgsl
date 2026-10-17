@@ -18,7 +18,7 @@ struct Stars {
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process. The viewport and the up are the frame's.
-@group(1) @binding(0) var<uniform> stars_words: array<vec4f, 11>;
+@group(1) @binding(0) var<uniform> stars_words: array<vec4f, STARS_VEC4S>;
 
 fn stars_view_proj() -> mat4x4f { return mat4x4f(stars_words[0], stars_words[1], stars_words[2], stars_words[3]); }
 fn stars_sky() -> mat4x4f { return mat4x4f(stars_words[4], stars_words[5], stars_words[6], stars_words[7]); }

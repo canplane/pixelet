@@ -287,8 +287,8 @@ pub fn source(kind: u32) -> &'static str {
     }
 }
 
-pub const FRAME_FLOATS: usize = 52;
-/// Frame uniform field offsets in floats, in frame.wgsl's order.
+/// Frame uniform field offsets in floats, in frame.wgsl's order (its size
+/// frame/shader/words.rs's `FRAME_FLOATS`).
 pub const FRAME_AT: [usize; 18] = [0, 16, 19, 20, 23, 24, 27, 28, 31, 32, 35, 36, 38, 39, 40, 44, 48, 51];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
@@ -595,15 +595,36 @@ fn box_groups() -> Vec<Vec<u32>> {
 }
 /// The lit pass's frame, occlusion, air and layers, all read where
 /// a pixel is painted; then the rays, the sky's words, the looks and the
-/// eye's Q3 steps.
-fn screen_groups() -> Vec<u32> {
+/// eye's Q3 steps: the most entries any group has (`GROUP_ENTRIES`).
+const SCREEN_GROUP: [[u32; 3]; 19] = {
     let a = air([FRAGMENT, FRAGMENT, NONE, FRAGMENT, FRAGMENT, NONE, NONE, NONE, FRAGMENT, FRAGMENT]);
-    let mut g = vec![[0, FRAGMENT, UNIFORM], [7, FRAGMENT, TEXTURE]];
-    g.extend(a);
-    g.extend([[3, FRAGMENT, TEXTURE_UINT_ARRAY], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
-    g.extend([[19, FRAGMENT, UNIFORM], [20, FRAGMENT, STORAGE], [21, FRAGMENT, UNIFORM]]);
-    group(&g)
-}
+    [
+        [0, FRAGMENT, UNIFORM],
+        [7, FRAGMENT, TEXTURE],
+        a[0],
+        a[1],
+        a[2],
+        a[3],
+        a[4],
+        a[5],
+        a[6],
+        a[7],
+        a[8],
+        a[9],
+        [3, FRAGMENT, TEXTURE_UINT_ARRAY],
+        [4, FRAGMENT, TEXTURE_ARRAY],
+        [5, FRAGMENT, STORAGE],
+        [6, FRAGMENT, SAMPLER],
+        [19, FRAGMENT, UNIFORM],
+        [20, FRAGMENT, STORAGE],
+        [21, FRAGMENT, UNIFORM],
+    ]
+};
+
+/// The most entries a group has, a layout's and a bind group's alike: the
+/// screen's (and renderer.rs's lit entries, which it extends); a group past
+/// it is refused where it is made.
+pub const GROUP_ENTRIES: usize = SCREEN_GROUP.len();
 fn model_lanes(skinned: bool) -> Vec<Vec<u32>> {
     let mut lanes = vec![lane(12, 0, F32X3), lane(12, 1, F32X3), lane(8, 2, F32X2)];
     if skinned {
@@ -686,7 +707,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_SCREEN_CELLS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[screen_groups()],
+            &[group(&SCREEN_GROUP)],
         ),
         PIPELINE_DECOR_PREPASS => record(prepass(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
         PIPELINE_SKINNED_PREPASS => record(prepass(SHADER_SKINNED, CULL_BACK), &model_lanes(true), &model_groups()),

@@ -4,6 +4,9 @@
 
 use std::path::Path;
 
+#[path = "src/frame/shader/words.rs"]
+mod words;
+
 fn main() {
     let dir = Path::new("src/frame/shader");
     let out = Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("shader");
@@ -15,7 +18,11 @@ fn main() {
         }
         let text = std::fs::read_to_string(&path).expect("a shader's text");
         let name = path.file_name().expect("a shader's name");
-        std::fs::write(out.join(name), stripped(&text)).expect("the stripped shader");
+        let mut shipped = stripped(&text);
+        if name == "constant.wgsl" {
+            shipped += &words();
+        }
+        std::fs::write(out.join(name), shipped).expect("the stripped shader");
     }
     // A block's face bits, from their one statement (pxl-portable mask.bits.rs).
     std::fs::write(out.join("faces.wgsl"), MASK.iter().map(|(name, v)| format!("const {name}: u32 = {v}u;\n")).collect::<String>()).expect("the mask's shader");
@@ -48,6 +55,7 @@ fn main() {
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
     std::fs::write(Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"), compute(dir)).expect("the compute layouts");
     println!("cargo:rerun-if-changed=src/frame/shader");
+    println!("cargo:rerun-if-changed=src/frame/shader/words.rs");
     println!("cargo:rerun-if-changed=../../portable/src/mask.bits.rs");
 }
 
@@ -121,4 +129,28 @@ fn compute(dir: &Path) -> String {
         out += &format!("pub const {upper}_WORKGROUP: [u32; 3] = [{}];\n", workgroup.expect("an entry's workgroup"));
     }
     out
+}
+
+/// What the host lays out and every shader reads (frame/shader/words.rs), as
+/// WGSL: a uniform's floats as its vec4s.
+fn words() -> String {
+    use words::*;
+    let vec4s = |name: &str, floats: usize| {
+        assert!(floats.is_multiple_of(4), "{name} is whole vec4s");
+        format!("const {name}_VEC4S: u32 = {}u;\n", floats / 4)
+    };
+    [
+        vec4s("DRAW", DRAW_FLOATS),
+        vec4s("FRAME", FRAME_FLOATS),
+        vec4s("SKY", SKY_FLOATS),
+        vec4s("ATMOS", ATMOS_FLOATS),
+        vec4s("CLOUDS", CLOUDS_FLOATS),
+        vec4s("STARS", STARS_FLOATS),
+        vec4s("AO", AO_FLOATS),
+        format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\n"),
+        format!("const SLOT_BITS: u32 = {SLOT_BITS}u;\nconst NO_SLOT: u32 = {NO_SLOT}u;\n"),
+        format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
+        format!("const GROUND_LOOKS: u32 = {GROUND_LOOKS}u;\nconst EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
+    ]
+    .concat()
 }

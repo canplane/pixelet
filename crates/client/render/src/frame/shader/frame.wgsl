@@ -9,7 +9,7 @@
 // it; the map's place there, Mercator's longitude and ordinate, and the
 // map's radius in units; up at the eye, away from the planet's centre, and
 // the camera grid's cell angle in radians.
-@group(0) @binding(0) var<uniform> frame_words: array<vec4f, 13>;
+@group(0) @binding(0) var<uniform> frame_words: array<vec4f, FRAME_VEC4S>;
 
 fn frame_view_proj() -> mat4x4f { return mat4x4f(frame_words[0], frame_words[1], frame_words[2], frame_words[3]); }
 fn frame_camera_pos() -> vec3f { return frame_words[4].xyz; }

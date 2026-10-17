@@ -45,10 +45,7 @@ pub mod texture_usage {
 /// The objects the renderer may hold at once.
 pub const OBJECTS: usize = 1 << 15;
 
-/// The most entries a group has, a layout's and a bind group's alike: the
-/// screen's lit group (frame/shader/record.rs, and renderer.rs's lit
-/// entries), its 19; a group past it is refused where it is made.
-pub const GROUP_ENTRIES: usize = 19;
+use crate::frame::shader::record::GROUP_ENTRIES;
 
 const SPANS: usize = GPU_SPAN_NAMES.len();
 

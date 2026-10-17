@@ -2,7 +2,7 @@
 
 //! A box's texture taps, packed.
 
-pub const NO_LAYER: u32 = 255;
+pub use crate::frame::shader::words::NO_LAYER;
 
 /// One layer in all four of a box's texture taps.
 pub fn taps_of(layer_idx: u8) -> u32 {

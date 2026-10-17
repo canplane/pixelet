@@ -10,13 +10,23 @@
 @group(0) @binding(5) var<storage, read> layer_slot: array<u32>;
 @group(0) @binding(6) var layer_sampler: sampler;
 
-// A tap past the last layer means the vertex color.
-const NO_LAYER: f32 = 255.0;
-const NO_SLOT: u32 = 0x3ffu;
-const SLOT_BITS: u32 = 10u;
-const IMAGE_TOP: u32 = 0u;
-const IMAGE_SIDE: u32 = 1u;
-const IMAGE_BOTTOM: u32 = 2u;
+// NO_LAYER, a tap past the last layer, means the vertex color; the slots'
+// words are frame/shader/words.rs's.
+
+// A face's outward normal by its number, 2·axis plus one down the axis, the
+// order of the mask's face bits (pxl-portable mask.rs) and of a ray's face
+// (pxl-portable ray.rs).
+const FACE_NORMAL = array<vec3f, 6>(
+  vec3f(1.0, 0.0, 0.0), vec3f(-1.0, 0.0, 0.0),
+  vec3f(0.0, 1.0, 0.0), vec3f(0.0, -1.0, 0.0),
+  vec3f(0.0, 0.0, 1.0), vec3f(0.0, 0.0, -1.0),
+);
+
+fn srgb_to_linear(c: vec3f) -> vec3f {
+  let low = c / 12.92;
+  let high = pow((c + 0.055) / 1.055, vec3f(2.4));
+  return select(high, low, c <= vec3f(0.04045));
+}
 
 // A face as it is painted: its swatch and four layer taps, its normal, where
 // in its box the point is and the box's size, the cell it is drawn at, its

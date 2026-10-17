@@ -8,6 +8,7 @@
 use pxl_spec::space::coord::mat4::Mat4;
 
 use crate::frame::shader::record::PIPELINE_STARS;
+use crate::frame::shader::words::STARS_FLOATS;
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, word_bytes, Entry, Gpu};
 use crate::gpu::atmosphere::AIR_ENTRIES;
@@ -21,7 +22,6 @@ const STAR_BYTES: usize = 8;
 /// Direction and flux, then color and padding.
 const STAR_FLOATS: usize = 8;
 
-pub(crate) const STARS_FLOATS: usize = 16 + 16 + 4 + 4 + 4;
 pub(crate) const SKY: usize = 16;
 pub(crate) const DENSITY: usize = 35;
 pub(crate) const INTENSITY: usize = 36;

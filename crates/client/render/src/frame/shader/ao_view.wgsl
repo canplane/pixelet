@@ -10,7 +10,7 @@ struct Ao {
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process. The screen's size and the fog are the frame's.
-@group(0) @binding(6) var<uniform> ao_words: array<vec4f, 9>;
+@group(0) @binding(6) var<uniform> ao_words: array<vec4f, AO_VEC4S>;
 
 fn ao_proj() -> mat4x4f { return mat4x4f(ao_words[0], ao_words[1], ao_words[2], ao_words[3]); }
 fn ao_inv_proj() -> mat4x4f { return mat4x4f(ao_words[4], ao_words[5], ao_words[6], ao_words[7]); }

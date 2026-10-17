@@ -7,7 +7,7 @@
 const SUN_LIMB: f32 = 0.6;
 const MOON_ALBEDO: f32 = 0.12;
 // The map's mean over the disc (printed by download_moon) scales it to MOON_ALBEDO.
-const MOON_MAP_RADIUS_TEXELS: f32 = 256.0;
+const MOON_MAP_RADIUS_TEXELS: f32 = f32(MOON_TEXELS) / 2.0;
 const MOON_MAP_MEAN: f32 = 0.2459;
 // The eye adapts to the Moon, so its seas show where the sky's exposure would
 // drown the disc white.

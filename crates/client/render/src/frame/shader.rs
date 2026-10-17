@@ -4,3 +4,4 @@
 //! pipeline layout cannot disagree.
 
 pub mod record;
+pub mod words;

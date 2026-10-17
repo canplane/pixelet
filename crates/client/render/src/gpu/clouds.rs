@@ -9,6 +9,7 @@ use pxl_spec::space::coord::mat4::Mat4;
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
+use crate::frame::shader::words::CLOUDS_FLOATS;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::layers::{mip_levels, Mips};
@@ -19,7 +20,6 @@ use crate::look::environment::{ENV_AIR, ENV_SKY};
 
 /// The ray, its first word's last lane how much of the clouds shows, then
 /// the field the eye is over (frame/shader/clouds.wgsl `Clouds`).
-pub(crate) const CLOUDS_FLOATS: usize = 20;
 const SHOWN: usize = 3;
 const BASE: usize = 12;
 const FRAC: usize = 14;

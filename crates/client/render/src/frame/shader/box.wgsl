@@ -43,12 +43,7 @@ fn box_of(words: BoxWords, d: Draw) -> Box {
   return b;
 }
 
-// Wound counter-clockwise from outside, in the order of the mask's face bits.
-const FACE_NORMAL = array<vec3f, 6>(
-  vec3f(1.0, 0.0, 0.0), vec3f(-1.0, 0.0, 0.0),
-  vec3f(0.0, 1.0, 0.0), vec3f(0.0, -1.0, 0.0),
-  vec3f(0.0, 0.0, 1.0), vec3f(0.0, 0.0, -1.0),
-);
+// Wound counter-clockwise from outside, in paint.wgsl's FACE_NORMAL order.
 const FACE_CORNER = array<vec3f, 24>(
   vec3f(0.5, -0.5, -0.5), vec3f(0.5, 0.5, -0.5), vec3f(0.5, 0.5, 0.5), vec3f(0.5, -0.5, 0.5),
   vec3f(-0.5, -0.5, -0.5), vec3f(-0.5, -0.5, 0.5), vec3f(-0.5, 0.5, 0.5), vec3f(-0.5, 0.5, -0.5),
@@ -59,12 +54,6 @@ const FACE_CORNER = array<vec3f, 24>(
 );
 const FACE_TRIANGLES = array<u32, 6>(0u, 1u, 2u, 0u, 2u, 3u);
 const BOX_VERTICES: u32 = 36u;
-
-fn srgb_to_linear(c: vec3f) -> vec3f {
-  let low = c / 12.92;
-  let high = pow((c + 0.055) / 1.055, vec3f(2.4));
-  return select(high, low, c <= vec3f(0.04045));
-}
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

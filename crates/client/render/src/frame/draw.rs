@@ -4,6 +4,7 @@
 //! A free cancels its block's pending upload and rewrites: the block may be
 //! reused before the list runs.
 
+use crate::frame::shader::words::DRAW_FLOATS;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
@@ -13,12 +14,9 @@ use xpute_guest::mem::heap::{alloc, free};
 pub const UPLOAD_WORDS: usize = 5;
 /// Draw record: handle, two pipeline-specific words, uniform index, pipeline.
 pub const DRAW_WORDS: usize = 5;
-/// Draw uniforms: eye-relative translation (3), a pipeline-specific float,
-/// opacity, padding to 32 bytes.
-pub const UNIFORM_FLOATS: usize = 8;
 
 pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
-    &uniforms[d[3] as usize * UNIFORM_FLOATS..][..UNIFORM_FLOATS]
+    &uniforms[d[3] as usize * DRAW_FLOATS..][..DRAW_FLOATS]
 }
 
 /// Box draw: (block handle, box count, first box, uniform, pipeline).
@@ -189,14 +187,14 @@ impl DrawList {
     /// An actor's draw: a draw_as whose sixth uniform float is the model's scale.
     #[allow(clippy::too_many_arguments)]
     pub fn draw_scaled(&mut self, pipeline: u32, handle: u32, a: u32, b: u32, translation: [f32; 3], fourth: f32, opacity: f32, scale: f32) {
-        let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
+        let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], fourth, opacity, scale, 0.0, 0.0]);
         self.draws.extend_from_slice(&[handle, a, b, uniform, pipeline]);
     }
 
     #[allow(clippy::too_many_arguments)]
     pub fn draw_as(&mut self, pipeline: u32, handle: u32, a: u32, b: u32, translation: [f32; 3], fourth: f32, opacity: f32) {
-        let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
+        let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], fourth, opacity, 0.0, 0.0, 0.0]);
         self.draws.extend_from_slice(&[handle, a, b, uniform, pipeline]);
     }
@@ -205,7 +203,7 @@ impl DrawList {
     /// array cannot read two ways.
     #[allow(clippy::too_many_arguments)]
     pub fn draw_in(&mut self, pipeline: u32, handle: u32, vertex_cnt: u32, index_cnt: u32, translation: [f32; 3], opacity: f32, unit: f32, z_step: f32) {
-        let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
+        let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], 0.0, opacity, unit, z_step, 0.0]);
         self.draws.extend_from_slice(&[handle, vertex_cnt, index_cnt, uniform, pipeline]);
     }
@@ -214,7 +212,7 @@ impl DrawList {
     #[allow(clippy::too_many_arguments)]
     pub fn draw_instances(&mut self, pipeline: u32, handle: u32, group: u32, count: u32, lanes: [u32; 3], translation: [f32; 3], opacity: f32) {
         let [offset, stride, index] = lanes;
-        let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
+        let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
         self.uniforms
             .extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, opacity, stride as f32, index as f32, 0.0]);
         self.draws.extend_from_slice(&[handle, group, count, uniform, pipeline]);

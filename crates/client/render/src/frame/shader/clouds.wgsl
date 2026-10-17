@@ -17,7 +17,7 @@ struct Clouds {
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process.
-@group(0) @binding(1) var<uniform> clouds_words: array<vec4f, 5>;
+@group(0) @binding(1) var<uniform> clouds_words: array<vec4f, CLOUDS_VEC4S>;
 @group(0) @binding(2) var cloud_tile: texture_2d<f32>;
 @group(0) @binding(3) var cloud_tile_sampler: sampler;
 

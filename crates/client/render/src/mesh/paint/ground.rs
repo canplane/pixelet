@@ -12,14 +12,15 @@ use std::sync::LazyLock;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use crate::frame::shader::words::GROUND_LOOKS;
 use crate::mesh::paint::object::PAINTER;
 use crate::mesh::paint::palette::{layer_mean, rgb255, LAYER_IDX};
 use crate::mesh::word::NO_LAYER;
 
 /// Each byte's swatch and layer; a byte that is no look is drawn as unknown.
-static LOOKS: LazyLock<[([u8; 3], u8); 256]> = LazyLock::new(|| {
+static LOOKS: LazyLock<[([u8; 3], u8); GROUND_LOOKS as usize]> = LazyLock::new(|| {
     let unknown = (color::sentinel(sentinel::unknown).map_or([0; 3], |s| rgb255(s.rgb)), NO_LAYER as u8);
-    let mut looks = [unknown; 256];
+    let mut looks = [unknown; GROUND_LOOKS as usize];
     for g in Ground::ALL {
         looks[g as usize] = (color::ground(g as u8).map_or([0; 3], |s| rgb255(s.rgb)), LAYER_IDX(Cube::Ground(g)) as u8);
     }

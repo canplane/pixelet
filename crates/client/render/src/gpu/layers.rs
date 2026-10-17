@@ -6,6 +6,7 @@
 //! pack ships nothing for takes none and reads as the box's color.
 //! Without the mip chain the far ground crawls as the camera moves.
 
+use crate::frame::shader::words::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
 use pxl_spec::asset::ingested::{CubeFace, PACK};
 use pxl_spec::asset::{shipped_texture_tile, TileOrigin};
 
@@ -66,12 +67,8 @@ impl Mips {
     }
 }
 
-/// Ten bits, past any array WebGPU gives (maxTextureArrayLayers is 256).
-const NO_SLOT: u32 = 0x3ff;
-const SLOT_BITS: u32 = 10;
-
 const fn slot_word(top: u32, side: u32, bottom: u32) -> u32 {
-    top | (side << SLOT_BITS) | (bottom << (2 * SLOT_BITS))
+    top << (IMAGE_TOP * SLOT_BITS) | side << (IMAGE_SIDE * SLOT_BITS) | bottom << (IMAGE_BOTTOM * SLOT_BITS)
 }
 
 const NO_SLOTS: u32 = slot_word(NO_SLOT, NO_SLOT, NO_SLOT);

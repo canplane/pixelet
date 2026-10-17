@@ -17,6 +17,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use xpute_guest::mem::base::off_of;
 
+use crate::frame::shader::words::{ATMOS_FLOATS, EARTH_TILE_BITS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::Mips;
@@ -26,7 +27,6 @@ use crate::look::atmosphere as model;
 use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_SUN_LIGHT};
 
 /// One past the last field: the device rounds the struct up to a 16-byte row.
-pub const ATMOS_FLOATS: usize = 52;
 /// Offsets in floats into the struct.
 pub(crate) const RAYLEIGH_SCATTERING: usize = 0;
 pub(crate) const BOTTOM_RADIUS: usize = 3;
@@ -64,8 +64,7 @@ pub const AIR_ENTRIES: usize = 10;
 /// A layer for each tile the earth layer's floor holds at once: its residency's frames.
 pub const EARTH_LAYERS: u32 = REACH_TILES;
 /// A tile's layer plus one in four bits, eight to a word.
-pub(crate) const TILE_BITS: u32 = 4;
-const _: () = assert!(EARTH_LAYERS < 1 << TILE_BITS && EARTH_LAYERS <= 32 / TILE_BITS * 4, "the window's layers fit their word");
+const _: () = assert!(EARTH_LAYERS < 1 << EARTH_TILE_BITS && EARTH_LAYERS <= 32 / EARTH_TILE_BITS * 4, "the window's layers fit their word");
 
 /// The size bake_earth writes the Earth's global picture at.
 const EARTH_SIZE: (u32, u32) = (2048, 1024);
@@ -264,10 +263,10 @@ impl Atmosphere {
         let w = &mut self.words;
         w[EARTH_WINDOW] = f32::from_bits(window[0] as u32);
         w[EARTH_WINDOW + 1] = f32::from_bits(window[1] as u32);
-        let per_word = (32 / TILE_BITS) as usize;
+        let per_word = (32 / EARTH_TILE_BITS) as usize;
         let mut packed = [0u32; 4];
         for (k, &layer) in layers.iter().enumerate() {
-            packed[k / per_word] |= layer << (TILE_BITS * (k % per_word) as u32);
+            packed[k / per_word] |= layer << (EARTH_TILE_BITS * (k % per_word) as u32);
         }
         for (w, p) in w[EARTH_TILES..EARTH_TILES + 4].iter_mut().zip(packed) {
             *w = f32::from_bits(p);

@@ -18,14 +18,11 @@
 // (`EYE_STEPS`).
 @group(0) @binding(21) var<uniform> eye: array<vec4u, 1>;
 
-const GROUND_LOOKS: u32 = 256u;
 // The steps a ray's colour runs up to, on a log scale, the same on every
 // screen so two compare.
 const STEPS_MOST: f32 = 1024.0;
 // Where a ray that met nothing is put when it is coloured by its steps.
 const FAR: f32 = 1.0e6;
-
-const FACE_NORMAL = array<vec3f, 6>(vec3f(1.0, 0.0, 0.0), vec3f(-1.0, 0.0, 0.0), vec3f(0.0, 1.0, 0.0), vec3f(0.0, -1.0, 0.0), vec3f(0.0, 0.0, 1.0), vec3f(0.0, 0.0, -1.0));
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -55,12 +52,6 @@ fn turbo(x: f32) -> vec3f {
   let g = dot(v, vec4f(0.09140261, 2.19418839, 4.84296658, -14.18503333)) + dot(v2, vec2f(4.27729857, 2.82956604));
   let b = dot(v, vec4f(0.10667330, 12.64194608, -60.58204836, 110.36276771)) + dot(v2, vec2f(-89.90310912, 27.34824973));
   return clamp(vec3f(r, g, b), vec3f(0.0), vec3f(1.0));
-}
-
-fn srgb_to_linear(c: vec3f) -> vec3f {
-  let low = c / 12.92;
-  let high = pow((c + 0.055) / 1.055, vec3f(2.4));
-  return select(high, low, c <= vec3f(0.04045));
 }
 
 // A look's words; past the table, black and no layer.
