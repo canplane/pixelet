@@ -192,7 +192,7 @@ pub fn take_draw() -> bool {
 
 pub fn visible_step(ctx: &mut TickContext) {
     let c = pass();
-    view_resize(ctx.state.width, ctx.state.height);
+    view_resize(ctx.state.width, ctx.state.height, crate::view::frame::resolution::world_ratio());
     let v = view();
 
     let anchor = sea_under_eye();

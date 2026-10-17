@@ -14,7 +14,6 @@ use pxl_spec::space::coord::world::point;
 
 use crate::query::asked;
 use crate::view::frame::pose::view;
-use crate::view::frame::resolution::world_ratio;
 
 /// The camera grid's cell at `tau`, as an angle.
 pub fn cell_angle(tau: Tau) -> f64 {
@@ -33,10 +32,17 @@ pub fn cell_there(distance: f64) -> f64 {
 /// cell is wider by as much. The screen plane stands `height / (2 · tan(fov /
 /// 2))` drawn pixels from the eye, so `n` of them span `2 · atan(n / 2 /
 /// that)`.
+/// Held by the view, worked out where its height, its field of view or its
+/// surface's ratio change (`tau_of`).
 pub fn tau() -> Tau {
-    let v = view();
-    let tan_up = libm::tan(v.fov.to_radians() / 2.0);
-    let half = target_cell_px() * tan_up / (v.height * world_ratio());
+    view().tau
+}
+
+/// `tau` of a view `height` CSS pixels tall at `fov` degrees, drawn at
+/// `ratio`.
+pub fn tau_of(height: f64, fov: f64, ratio: f64) -> Tau {
+    let tan_up = libm::tan(fov.to_radians() / 2.0);
+    let half = target_cell_px() * tan_up / (height * ratio);
     Tau::of((2.0 * libm::atan(half) * SPLIT).max(1.0))
 }
 

@@ -5,6 +5,7 @@
 //! the pose; nothing here knows which.
 
 use pxl_spec::space::camera::eye::Frustum;
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -29,6 +30,11 @@ pub struct View {
     pub width: f64,
     pub height: f64,
     pub fov: f64,
+    /// The world surface's drawn pixels a CSS pixel (`resolution::world_ratio`).
+    pub ratio: f64,
+    /// The quality the eye's rays are cast at (`lens::tau`), of the three
+    /// above.
+    pub tau: Tau,
 
     pub view_matrix: Mat4,
     pub inv_view_matrix: Mat4,
@@ -45,6 +51,8 @@ impl View {
             width: 1.0,
             height: 1.0,
             fov: crate::param::FOV,
+            ratio: crate::param::RESOLUTION_MIN,
+            tau: crate::view::lens::tau_of(1.0, crate::param::FOV, crate::param::RESOLUTION_MIN),
             view_matrix: mat4::new(),
             inv_view_matrix: mat4::new(),
             proj: mat4::new(),
@@ -113,18 +121,29 @@ pub fn km_per_u() -> f64 {
     libm::cos(anchor()[1].to_radians()) / epsg3857::u_per_m(0.0) / 1000.0
 }
 
-pub fn view_resize(width: f64, height: f64) {
+/// The view `width` × `height` CSS pixels, its world surface drawn at
+/// `ratio`: what its matrices and its τ are made of, made again only where
+/// one moved.
+pub fn view_resize(width: f64, height: f64, ratio: f64) {
     let v = view();
-    if width == v.width && height == v.height {
+    let (width, height) = (width.max(1.0), height.max(1.0));
+    if width == v.width && height == v.height && ratio == v.ratio {
         return;
     }
-    v.width = width.max(1.0);
-    v.height = height.max(1.0);
+    (v.width, v.height, v.ratio) = (width, height, ratio);
+    v.tau = crate::view::lens::tau_of(height, v.fov, ratio);
+    crate::view::observation::forget();
     compose();
 }
 
-/// Takes the pose the controllers hold and composes the matrices from it.
+/// Takes the pose the controllers hold and composes the matrices from it,
+/// where it moved. A turn's observation is the eye's as it stands at the
+/// turn's start (`observation::observation`), so it is made again then.
 pub fn view_compose(pose: Option<ObserverPose>) {
+    crate::view::observation::forget();
+    if view().pose == pose {
+        return;
+    }
     view().pose = pose;
     compose();
 }

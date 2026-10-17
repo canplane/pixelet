@@ -5,6 +5,7 @@
 
 use crate::io::demand::Order;
 use pxl_spec::space::layer::lattice::demand_reach;
+use xpute_guest::global::Global;
 
 use pxl_spec::space::camera::eye::{Frustum, Observation};
 use pxl_spec::space::camera::grid::{Tau, CHUNK_STEPS};
@@ -35,17 +36,30 @@ pub fn eye_reach() -> Option<f64> {
     floor::top().map(|top| demand_reach(GROUND, top))
 }
 
+/// The turn's observation, made by its first reader after the view is
+/// composed (`forget`): the eye and its ground's floor asked once a turn,
+/// however many read it.
+static OBSERVED: Global<Option<Option<Observation>>> = Global::new();
+
+/// The turn's view moved, or a new turn began: the next reader makes the
+/// observation again.
+pub fn forget() {
+    *OBSERVED.get(|| None) = None;
+}
+
 /// Out to `eye_reach`. None before the camera stands anywhere or the source
 /// declares its top.
 pub fn observation() -> Option<Observation> {
-    let eye = eye()?;
-    let reach = eye_reach()?;
-    let height = eye_height();
-    Some(Observation {
-        eye,
-        frustum: Some(frustum_of_view()),
-        reach,
-        ground: eye[2] - height,
+    *OBSERVED.get(|| None).get_or_insert_with(|| {
+        let eye = eye()?;
+        let reach = eye_reach()?;
+        let height = eye_height();
+        Some(Observation {
+            eye,
+            frustum: Some(frustum_of_view()),
+            reach,
+            ground: eye[2] - height,
+        })
     })
 }
 
