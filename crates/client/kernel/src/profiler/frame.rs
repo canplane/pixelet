@@ -13,6 +13,7 @@ use pxl_render::frame::draw::{
     PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
     PIPELINE_SKINNED,
 };
+use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
@@ -54,6 +55,9 @@ pub struct DeviceSample {
     pub buffer_mb: f64,
     pub depth_mb: f64,
     pub layers_mb: f64,
+    /// The GPU objects the renderer holds, by the op that made them, as its
+    /// encoder counts them (xpute-gpu encode `Gpu::objects`).
+    pub objects: [f64; OBJECT_OPS],
 }
 
 #[repr(C)]
@@ -175,7 +179,7 @@ words!(FrameSample, FRAME::WORDS,
     gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans, gpu.draw_calls => FRAME::draw_calls, gpu.triangles => FRAME::triangles,
     gpu.census => FRAME::census, gpu.px => FRAME::px,
     device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb,
-    device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb,
+    device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb, device.objects => FRAME::gpu_objects,
     tiles.total => FRAME::tiles_total, tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
     heap.peak_bytes => FRAME::heap_peak_bytes, heap.lent_bytes => FRAME::heap_lent_bytes, heap.run_bytes => FRAME::heap_run_bytes,
     heap.held_bytes => FRAME::heap_held_bytes, heap.range_bytes => FRAME::heap_range_bytes,

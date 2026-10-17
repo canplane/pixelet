@@ -39,7 +39,7 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall; `off_turn_ms` is the interval less them and `over_ms` what they ran past it, one of the two 0. `door_ms`, `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tiles` holds zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, `_bytes`, and `_name` for an index into a list of names."
+      "One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall; `off_turn_ms` is the interval less them and `over_ms` what they ran past it, one of the two 0. `door_ms`, `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, `zoom_tiles` holds zoom z in slot z, and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k in slot k (xpute spec/gpu/api.json `op`, below DESTROY). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, and `_name` for an index into a list of names."
     ],
     "t": 1,
     "interval_ms": 1,
@@ -71,6 +71,7 @@
     "buffer_mb": 1,
     "tex_depth_mb": 1,
     "tex_layers_mb": 1,
+    "gpu_objects": "op.DESTROY",
     "tiles_total": 1,
     "zoom_tiles": "LIMITS.ZOOMS",
     "tiles_place": 1,
@@ -146,7 +147,8 @@
       "buffers",
       "buffer_mb",
       "tex_depth_mb",
-      "tex_layers_mb"
+      "tex_layers_mb",
+      "gpu_objects"
     ],
     "heap": [
       "heap_peak_bytes",

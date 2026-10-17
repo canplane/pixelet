@@ -13,28 +13,32 @@ import { PHASES } from "@xpute/host/sched/tick.spec.ts";
 import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS, WAKES } from "./profiler.spec.ts";
 import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
+import { op } from "@xpute/gpu/api.spec.ts";
 import { fixed } from "@/shared/fixed.ts";
 
 /** The one megabyte every figure in bytes is shown in. */
 export const MB = 1048576;
 
-type ListLane = "phases" | "gpu_spans" | "census" | "zoom_tiles";
+type ListLane = "phases" | "gpu_spans" | "census" | "zoom_tiles" | "gpu_objects";
 type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
 type ScalarLane = Exclude<FrameLane, ListLane>;
 
 export type Frame =
   & { [K in ScalarLane]: f64 }
-  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; zoom_tiles: f64[] };
+  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; zoom_tiles: f64[]; gpu_objects: f64[] };
 
 /** The kernel counts by zoom: slot z, bit z or a value z is zoom z. */
 export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
 
 const ZOOM_NAMES = Array.from({ length: LIMITS.ZOOMS }, (_, z) => zoomName(z));
+/** Slot k is the objects op k made: its name, lower case. */
+const OBJECT_NAMES = Array.from({ length: op.DESTROY }, (_, k) => Object.entries(op).find(([, v]) => v === k)?.[0].toLowerCase() ?? "-");
 export const LIST_NAMES: Record<ListLane, readonly string[]> = {
   phases: PHASES,
   gpu_spans: GPU_SPAN_NAMES,
   census: CENSUS_TAGS,
   zoom_tiles: ZOOM_NAMES,
+  gpu_objects: OBJECT_NAMES,
 };
 
 export const LANES: readonly { name: FrameLane; at: u32; width: u32 }[] = (() => {

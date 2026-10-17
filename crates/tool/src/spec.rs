@@ -172,8 +172,8 @@ impl Node {
 /// `WORDS` where the last ends; a section inside is a packed table given its
 /// `AT`. A width is a number or a product of terms (`"2 * CENSUS_TAGS"`), a
 /// term a number, a list or a packed table above it in the file (its length,
-/// its `WORDS`) or a number in one (`LIMITS.ZOOMS`), else one in a file it
-/// uses (`used`). So a lane grown moves everything after it.
+/// its `WORDS`) or a number in one (`LIMITS.ZOOMS`, `op.DESTROY`), else one
+/// in a file it uses (`used`). So a lane grown moves everything after it.
 pub fn laid_out(node: Node, used: &[(String, Node)]) -> Result<Node, String> {
     let Node::Obj(entries) = node else { return Ok(node) };
     let mut above: Vec<(String, Node)> = Vec::with_capacity(entries.len());
@@ -230,7 +230,7 @@ fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<
             return Ok(n);
         }
         let found = match t.split_once('.') {
-            Some((table, field)) => named(table).and_then(|n| n.get(field)).and_then(Node::num),
+            Some((table, field)) => named(table).and_then(|n| n.get(field)).and_then(|f| f.value().num()),
             None => named(t).and_then(|n| match n {
                 Node::Arr(a) => Some(a.len() as f64),
                 Node::Obj(_) if n.is_wrapper() => n.value().num(),

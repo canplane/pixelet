@@ -292,6 +292,7 @@ const DATA_SPECS: [DataSpec; 25] = [
             "spec/client/kernel/io/demand.json",
             "spec/client/kernel/turn/step.json",
             "spec/client/render/gpu/span.json",
+            "xpute/spec/gpu/api.json",
         ],
         ts: Some("apps/web/src/feature/debug/profiler/profiler.spec.ts"),
         rs: Some("crates/client/kernel/src/profiler/profiler.spec.rs"),

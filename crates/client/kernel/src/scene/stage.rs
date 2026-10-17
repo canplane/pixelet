@@ -18,6 +18,7 @@ use xpute_guest::global::Global;
 
 use crate::mem::MB;
 use crate::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_PIPELINES};
+use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_spec::asset::ingested::Asset;
 use xpute_kit::math::scalar::round;
 
@@ -161,8 +162,10 @@ pub fn stage_render() {
     if out.redraw {
         request_world_tick();
     }
+    // What the renderer holds, drawn this frame or not.
+    let objects = pxl_render::gpu::api::gpu().map_or([0; OBJECT_OPS], |g| *g.objects()).map(f64::from);
     let Some(stat) = out.stat else {
-        set_host_frame(out.kind, GpuSample::default(), DeviceSample::default());
+        set_host_frame(out.kind, GpuSample::default(), DeviceSample { objects, ..DeviceSample::default() });
         return;
     };
     SCREEN.set(Screen::Drawn);
@@ -183,6 +186,7 @@ pub fn stage_render() {
             buffer_mb: round(stat.buffer_bytes / MB),
             depth_mb: stat.depth_mb,
             layers_mb: stat.layers_mb,
+            objects,
         },
     );
 }

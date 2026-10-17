@@ -11,6 +11,7 @@
 //! block (limits, features, timestamp period, preferred surface format,
 //! status) and the spans' times.
 
+pub use xpute_gpu::encode::OBJECT_OPS;
 use xpute_gpu::encode::{self, call, Gpu as Encoder, Id};
 use xpute_gpu::enums::{
     AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction, CullMode, FilterMode, FrontFace, IndexFormat, LoadOp, MipmapFilterMode, PrimitiveTopology,
@@ -907,6 +908,12 @@ impl Gpu {
         ));
         s.stamps = Some((set, resolve, mapped));
         set
+    }
+
+    /// The objects made and not let go, by the op that made them (xpute-gpu
+    /// encode `Gpu::objects`).
+    pub fn objects(&self) -> &'static [u32; OBJECT_OPS] {
+        self.s().encoder.objects()
     }
 
     /// Span `span`'s time in ms from the last read in; past the last span,
