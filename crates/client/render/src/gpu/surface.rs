@@ -39,8 +39,8 @@ pub struct Surface {
     pub world_depth: u32,
     pub world_depth_view: u32,
     /// The eye's rays as the cast leaves them, a drawn pixel each, made with
-    /// the world image: `RAY_WORDS` layers of `r32uint`, a word of the ray's a
-    /// layer (frame/screen_cells.rs).
+    /// the world image: `ray::WORDS` layers of `r32uint`, a word of the ray's a
+    /// layer (pxl-portable `ray`).
     pub rays: u32,
     pub rays_view: u32,
 }

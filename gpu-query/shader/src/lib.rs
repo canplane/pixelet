@@ -23,7 +23,7 @@ use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
 use pxl_portable::scatter::{self, drawn, Grounds, PLACED_BLOCK, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
-use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
+use pxl_portable::{at, mask, ray, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::{spirv, Image};
@@ -271,7 +271,7 @@ impl Query for World<'_> {
         };
         In {
             kind: i.kind,
-            block: [value, f[0] & 0xff | (f[1] & 0xff) << 8 | (f[2] & 0xff) << 16 | (f[3] & 0xff) << 24],
+            block: [value, ray::fold_word(f)],
         }
     }
 
@@ -347,10 +347,10 @@ fn word(ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> UVec4 {
     let down = pxl_portable::axis(ray.direction, s.axis) > 0.0;
     let face = 2 * s.axis + down as u32;
     let [value, folds] = s.block;
-    let kind = if value & PLACED_BLOCK != 0 { 2 } else { 1 };
+    let kind = if value & PLACED_BLOCK != 0 { ray::KIND_PLACED } else { ray::KIND_GROUND };
     let (zoom, c) = (s.place.zoom, s.place.node(ray));
     let w3 = if steps { met.visits } else { folds };
-    UVec4::new(value & 0xffff | kind << 16 | face << 18 | zoom << 21, s.t.to_bits(), low_bits(c), w3)
+    UVec4::new(ray::first_word(value, kind, face, zoom), s.t.to_bits(), low_bits(c), w3)
 }
 
 /// Bits of a block's index the lane keeps on each axis, enough to tell it
@@ -426,7 +426,7 @@ pub fn face_cs(
     }
     let ray_word = |k: u32| rays.read(UVec3::new(id.x, id.y, k));
     let w = UVec4::new(ray_word(0), ray_word(1), ray_word(2), ray_word(3));
-    if (w.x >> 16) & 3 == 0 {
+    if ray::kind_of(w.x) == ray::KIND_NONE {
         return;
     }
     let (ray, _) = pixel_ray(eye, id, size);
@@ -437,7 +437,7 @@ pub fn face_cs(
         overwrites,
         eye,
     };
-    let (axis, zoom) = (((w.x >> 18) & 7) / 2, (w.x >> 21) & 63);
+    let (axis, zoom) = (ray::face_of(w.x) / 2, ray::zoom_of(w.x));
     let c = hit_block(&ray, f32::from_bits(w.y), axis, zoom, w.z);
     let filled = world.about(zoom, c);
     // SAFETY: within the rays, just bounded by their size.
@@ -492,7 +492,7 @@ fn pixel_ray(eye: &Eye, p: UVec3, size: UVec3) -> (cast::Ray, Detail) {
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
-/// pxl-render frame/screen_cells.rs): the cast writes them, the face bits
+/// pxl-portable `ray`): the cast writes them, the face bits
 /// write the third over.
 type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 

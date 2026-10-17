@@ -29,7 +29,7 @@ pub const SHADER_IMPOSTOR: u32 = 21;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
 pub const SHADER_BADGE_REGION: u32 = 24;
-/// The eye's rays drawn at their pixels (frame/screen_cells.rs).
+/// The eye's rays drawn at their pixels (pxl-portable ray.rs).
 pub const SHADER_SCREEN_CELLS: u32 = 25;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
 /// pxl-portable's descent (script/portable-wgsl.ts): its one compute entry.
@@ -189,6 +189,7 @@ pub fn source(kind: u32) -> &'static str {
             "ao_map",
             "faces",
             "lattice",
+            "ray",
             "paint",
             "sky_words",
             "screen_cells"
@@ -314,7 +315,7 @@ pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 37;
 pub const PIPELINE_BADGE_REGION: u32 = 39;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 40;
-/// The camera grid's cells, opaque at their rays' depth (frame/screen_cells.rs).
+/// The eye's rays, opaque at their depth (pxl-portable ray.rs).
 pub const PIPELINE_SCREEN_CELLS: u32 = 41;
 pub const PIPELINES: u32 = 42;
 

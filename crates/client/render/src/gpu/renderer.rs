@@ -17,7 +17,6 @@ use crate::frame::draw::{
     census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
     PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
-use crate::frame::screen_cells::RAY_WORDS;
 use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM, UNIFORM_DYNAMIC};
 use crate::frame::shader::record::{
     FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_FACE, SHADER_HEIGHTS, SHADER_START, SHADER_WAYS,
@@ -47,6 +46,7 @@ use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURN
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_SKY, ENV_STARS, ENV_SUN_LIGHT, LIGHT_COLOR};
 use crate::mesh::paint::ground::look_words;
+use pxl_portable::ray;
 use pxl_portable::scatter::GROUPS;
 use pxl_spec::block::window::{BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_WORDS, HANDED, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
@@ -732,7 +732,7 @@ impl DebugPass {
 }
 
 /// The eye's rays, each drawn at its own pixel where it met a face, painted
-/// by paint.wgsl's `paint` (frame/screen_cells.rs), from the world surface's
+/// by paint.wgsl's `paint` (pxl-portable ray.rs), from the world surface's
 /// `rays` the GPU's cast leaves (`Cast`).
 struct ScreenCellsPass {
     built: Built,
@@ -1908,8 +1908,8 @@ fn targets(g: &Gpu, s: &mut Surface) {
         s.world_depth_view = g.view(s.world_depth, false, 0, 1, 0, 1);
         // Written by the cast, read by the face bits and the screen pass.
         let rays = texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING;
-        s.rays = g.texture(width, height, RAY_WORDS, Format::r32uint, 1, rays);
-        s.rays_view = g.view(s.rays, true, 0, 1, 0, RAY_WORDS);
+        s.rays = g.texture(width, height, ray::WORDS, Format::r32uint, 1, rays);
+        s.rays_view = g.view(s.rays, true, 0, 1, 0, ray::WORDS);
     }
     s.width = width;
     s.height = height;

@@ -22,6 +22,7 @@ pub mod ground;
 pub mod lattice;
 pub mod mask;
 pub mod placed;
+pub mod ray;
 pub mod scatter;
 pub mod ways;
 pub mod window;

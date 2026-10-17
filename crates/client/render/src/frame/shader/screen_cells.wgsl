@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/screen_cells.wgsl
 
-// The eye's rays (`frame/screen_cells.rs`), a drawn pixel each: each pixel
+// The eye's rays (pxl-portable `ray`), a drawn pixel each: each pixel
 // the face its ray entered, painted by paint.wgsl's `paint`, as the ghost's
 // boxes are. A pixel whose ray met nothing is left to the sky.
 
@@ -17,10 +17,6 @@
 // their low bits, and whether a ray reports its steps.
 @group(0) @binding(21) var<uniform> eye: array<vec4u, 1>;
 
-const KIND_GROUND: u32 = 1u;
-const KIND_SHIFT: u32 = 16u;
-const FACE_SHIFT: u32 = 18u;
-const ZOOM_SHIFT: u32 = 21u;
 const GROUND_LOOKS: u32 = 256u;
 // The steps a ray's colour runs up to, on a log scale, the same on every
 // screen so two compare.
@@ -93,10 +89,10 @@ struct Drawn {
 // its layer in all four taps; coarser, one colour, a ground fold's the mean
 // of the looks it folds where its face's own is among them.
 fn drawn(c: vec4u) -> Drawn {
-  let value = c.x & 0xffffu;
-  let ground = ((c.x >> KIND_SHIFT) & 3u) == KIND_GROUND;
+  let value = ray_value(c.x);
+  let ground = ray_kind(c.x) == RAY_KIND_GROUND;
   let l = look(select(GROUND_LOOKS + value, value, ground));
-  if (((c.x >> ZOOM_SHIFT) & 63u) >= GROUND_CELL) {
+  if (ray_zoom(c.x) >= GROUND_CELL) {
     return Drawn(linear_of(l.x), vec4f(f32(l.x >> 24u)));
   }
   let fold = vec4u(c.w & 0xffu, (c.w >> 8u) & 0xffu, (c.w >> 16u) & 0xffu, c.w >> 24u);
@@ -127,10 +123,10 @@ struct Hit {
 };
 
 fn hit_of(c: vec4u, d: vec3f) -> Hit {
-  let face = min((c.x >> FACE_SHIFT) & 7u, 5u);
+  let face = min(ray_face(c.x), 5u);
   let axis = face / 2u;
   let n = FACE_NORMAL[face];
-  let k = i32(UNIT_ZOOM) - i32((c.x >> ZOOM_SHIFT) & 63u);
+  let k = i32(UNIT_ZOOM) - i32(ray_zoom(c.x));
   let side = exp2(f32(k));
   let e = vec3f(eye_phase(0u, k), eye_phase(1u, k), eye_phase(2u, k));
   let t = bitcast<f32>(c.y);
@@ -155,7 +151,7 @@ fn fs(v: VertexOut) -> FragOut {
   let d = normalize(sky_ray() * vec3f(v.ndc, 1.0));
   let at = vec2i(v.clip.xy);
   let c = vec4u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x, textureLoad(rays, at, 2, 0).x, textureLoad(rays, at, 3, 0).x);
-  let kind = (c.x >> KIND_SHIFT) & 3u;
+  let kind = ray_kind(c.x);
   let h = hit_of(c, d);
   // Taken before any branch: a derivative needs the quad whole.
   let uv = box_uv(h);
@@ -163,14 +159,14 @@ fn fs(v: VertexOut) -> FragOut {
   let ddy = dpdy(uv);
   let pixel = sqrt(dpdx(h.at) * dpdx(h.at) + dpdy(h.at) * dpdy(h.at));
   if (eye[0].w != 0u) {
-    let t = select(bitcast<f32>(c.y), FAR, kind == 0u);
+    let t = select(bitcast<f32>(c.y), FAR, kind == RAY_KIND_NONE);
     let clip = frame_view_proj() * vec4f(d * t, 1.0);
     var o: FragOut;
     o.color = vec4f(turbo(log2(1.0 + f32(c.w)) / log2(1.0 + STEPS_MOST)), 1.0);
     o.depth = clip.z / clip.w;
     return o;
   }
-  if (kind == 0u) {
+  if (kind == RAY_KIND_NONE) {
     discard;
   }
   let painted = drawn(c);
