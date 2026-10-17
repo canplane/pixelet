@@ -354,11 +354,9 @@ pub struct Found(u32);
 const FOUND_SLOT_BITS: u32 = SQUARES.next_power_of_two().trailing_zeros();
 const FOUND_HERE: u32 = 1 << FOUND_SLOT_BITS;
 const FOUND_FROM_SHIFT: u32 = FOUND_SLOT_BITS + 1;
-/// A zoom's bits, as many as every zoom needs.
-const FOUND_ZOOM_BITS: u32 = 6;
-const FOUND_CELL_SHIFT: u32 = FOUND_FROM_SHIFT + FOUND_ZOOM_BITS;
-const FOUND_ZOOM_MASK: u32 = (1 << FOUND_ZOOM_BITS) - 1;
-const _: () = assert!(crate::FINEST_ZOOM <= FOUND_ZOOM_MASK && FOUND_CELL_SHIFT + FOUND_ZOOM_BITS <= 32);
+const FOUND_CELL_SHIFT: u32 = FOUND_FROM_SHIFT + crate::ZOOM_BITS;
+const FOUND_ZOOM_MASK: u32 = (1 << crate::ZOOM_BITS) - 1;
+const _: () = assert!(FOUND_CELL_SHIFT + crate::ZOOM_BITS <= 32);
 const _: () = assert!(FIRST_CELL >= 2, "a zoom asked is never NONE's, nor one finer");
 
 impl Found {
@@ -515,7 +513,7 @@ pub fn gone(w: &impl Windows, shard: crate::area::Shard, node: (Zoom, [i32; 2]),
 /// none of them gone; and where it is held.
 pub fn ground(w: &impl Windows, shard: crate::area::Shard, place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
     let read = held_to(zoom);
-    let (word, h, f) = cell(w, place, read, [b[0] >> (zoom - read), b[1] >> (zoom - read)]);
+    let (word, h, f) = cell(w, place, read, cell_at(zoom, read, b));
     let (look, h, fold) = crate::ground::read_cell(word, h, f.from());
     // The leaf cells about it read by their offset, each its look alone.
     let gone_at = |dx: i32, dy: i32| {
@@ -646,11 +644,7 @@ pub const WINDOW_LEVELS: u32 = LEVELS + ACROSS.trailing_zeros();
 /// lack.
 pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> ([i32; 2], Zoom, bool) {
     // The node's first cell at `cell`, or the cell holding it.
-    let g = if zoom <= cell {
-        [c[0] << (cell - zoom), c[1] << (cell - zoom)]
-    } else {
-        [c[0] >> (zoom - cell), c[1] >> (zoom - cell)]
-    };
+    let g = [crate::index_at(zoom, c[0], cell), crate::index_at(zoom, c[1], cell)];
     if cell > zoom + LEVELS {
         return (whole(w, cell, g, cell - zoom), cell, true);
     }

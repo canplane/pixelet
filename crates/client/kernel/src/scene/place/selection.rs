@@ -29,9 +29,6 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>)
         if !v.frustum.sees(pos, dist2.sqrt() * ANCHOR_REACH) {
             continue;
         }
-        batch.world_x[i] = pos[0];
-        batch.world_y[i] = pos[1];
-        batch.world_z[i] = pos[2];
         batch.d2[i] = dist2;
         batch.order[n] = i as u32;
         n += 1;
@@ -48,7 +45,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>)
     for k in 0..n {
         let i = batch.order[k] as usize;
 
-        mat4::transform_point(&mut ndc, &v.world_view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
+        mat4::transform_point(&mut ndc, &v.world_view_proj, batch.local_x[i], batch.local_y[i], batch.local_z[i]);
         let [sx, sy] = ndc_to_px([ndc[0], ndc[1]]);
 
         let w = batch.region_px[i] as f64;

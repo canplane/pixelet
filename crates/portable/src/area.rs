@@ -9,7 +9,7 @@
 //! straddles.
 
 use crate::cube::Ground;
-use crate::{wrap_index as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM};
+use crate::{index_at, wrap_index as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM};
 
 use crate::ground::{UNKNOWN, VOID};
 
@@ -134,29 +134,14 @@ impl Shard {
     }
 }
 
-/// The leaf tile holding leaf cell `cell`.
-fn tile_of(cell: [i32; 2]) -> [i32; 2] {
-    let s = LEAF_CELL - LEAF_ZOOM;
-    [wrap(LEAF_ZOOM, cell[0] >> s), cell[1] >> s]
-}
-
-/// A node's index along an axis in leaf cells, the floor where it is finer.
-fn in_leaf_cells(zoom: Zoom, v: i32) -> i32 {
-    if zoom <= LEAF_CELL {
-        v << (LEAF_CELL - zoom)
-    } else {
-        v >> (zoom - LEAF_CELL)
-    }
-}
-
-/// The leaf tile holding the node's middle.
+/// The leaf tile holding the node's middle, X named as the world names it.
 pub fn tile_at(zoom: Zoom, c: [i32; 2]) -> [i32; 2] {
     if zoom < LEAF_ZOOM {
         let s = LEAF_ZOOM - zoom;
         [wrap(LEAF_ZOOM, (c[0] << s) + (1 << (s - 1))), (c[1] << s) + (1 << (s - 1))]
     } else {
         let s = zoom - LEAF_ZOOM;
-        [c[0] >> s, c[1] >> s]
+        [wrap(LEAF_ZOOM, c[0] >> s), c[1] >> s]
     }
 }
 
@@ -175,9 +160,10 @@ pub fn walled(area: &impl Area, shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32
     if shard.inside() {
         return false;
     }
-    let lo = [in_leaf_cells(zoom, c[0]) - 1, in_leaf_cells(zoom, c[1]) - 1];
-    let hi = [in_leaf_cells(zoom, c[0] + 1) + 1, in_leaf_cells(zoom, c[1] + 1) + 1];
-    let past = |l: [i32; 2]| shard.past_leaf(area, (zoom, c), tile_of(l));
+    let leaf = |v: i32| index_at(zoom, v, LEAF_CELL);
+    let lo = [leaf(c[0]) - 1, leaf(c[1]) - 1];
+    let hi = [leaf(c[0] + 1) + 1, leaf(c[1] + 1) + 1];
+    let past = |l: [i32; 2]| shard.past_leaf(area, (zoom, c), tile_at(LEAF_CELL, l));
     past(lo) || past([hi[0], lo[1]]) || past([lo[0], hi[1]]) || past(hi)
 }
 

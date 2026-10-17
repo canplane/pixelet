@@ -68,7 +68,7 @@ pub fn bedrock(face: i32) -> i32 {
 /// in leaf cells, off its padded elevation samples `ele` (`ele_index`): the
 /// one producer of a cell's height, which a GPU runs once a cell of a held
 /// tile (`heights_cs`), and the CPU reads back.
-pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [u32; 2]) -> i32 {
+pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
     bicubic(ele, x as f32 + CELL_CENTER, y as f32 + CELL_CENTER)
 }
 

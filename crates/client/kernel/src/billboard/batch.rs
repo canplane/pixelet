@@ -22,10 +22,6 @@ pub struct BillboardBatch {
     pub tiebreak: Vec<f64>,
 
     // Filled by the selector, kept here so the pass has one allocation site.
-    /// Where the eye's rays find it, in the root frame.
-    pub world_x: Vec<f64>,
-    pub world_y: Vec<f64>,
-    pub world_z: Vec<f64>,
     /// Squared: only the order is used.
     pub d2: Vec<f64>,
     /// Its region in viewport pixels: left, top, right, bottom.
@@ -70,9 +66,6 @@ impl BillboardBatch {
         self.region_px.resize(n, 0.0);
         self.anchor_px.resize(n, 0.0);
         self.tiebreak.resize(n, 0.0);
-        self.world_x.resize(n, 0.0);
-        self.world_y.resize(n, 0.0);
-        self.world_z.resize(n, 0.0);
         self.d2.resize(n, 0.0);
         self.screen.resize(n, [0.0; 4]);
         self.order.resize(n, 0);

@@ -6,7 +6,7 @@
 //! word: what it stopped on, through which face and at which zoom
 //! (`first_word`); how far, f32 bits; the block's face bits (`mask`), which
 //! the face pass writes over the block's index bits it finds the block by;
-//! and the four looks a coarse ground block folds (`fold_word`), or in the
+//! and the four looks a coarse ground block folds (`ground::word`), or in the
 //! steps view the nodes its descent asked. Where it met nothing, the first
 //! two are zero.
 
@@ -22,11 +22,11 @@ pub const WORDS: u32 = 4;
 pub const VALUE_BITS: u32 = 16;
 pub const KIND_BITS: u32 = 2;
 pub const FACE_BITS: u32 = 3;
-pub const ZOOM_BITS: u32 = 6;
+pub use crate::ZOOM_BITS;
 pub const KIND_SHIFT: u32 = VALUE_BITS;
 pub const FACE_SHIFT: u32 = KIND_SHIFT + KIND_BITS;
 pub const ZOOM_SHIFT: u32 = FACE_SHIFT + FACE_BITS;
-const _: () = assert!(ZOOM_SHIFT + ZOOM_BITS <= 32 && crate::FINEST_ZOOM < 1 << ZOOM_BITS);
+const _: () = assert!(ZOOM_SHIFT + ZOOM_BITS <= 32);
 pub const KIND_NONE: u32 = 0;
 pub const KIND_GROUND: u32 = 1;
 pub const KIND_PLACED: u32 = 2;
@@ -50,9 +50,4 @@ pub const fn face_of(w: u32) -> u32 {
 
 pub const fn zoom_of(w: u32) -> Zoom {
     field(w, ZOOM_SHIFT, ZOOM_BITS)
-}
-
-/// A coarse ground block's four looks, a byte each, `dx + 2·dy`.
-pub const fn fold_word(f: [u32; 4]) -> u32 {
-    f[0] & 0xff | (f[1] & 0xff) << 8 | (f[2] & 0xff) << 16 | (f[3] & 0xff) << 24
 }

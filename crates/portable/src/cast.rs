@@ -335,11 +335,17 @@ pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 
 /// A descent's start as a GPU hands it from the kernel that finds it to the
 /// kernels that cast from it (gpu-query-shader `start_cs`), in words: the
-/// node's zoom and corner, what was handed it, and the stack, each `Query::At`
-/// `AT_WORDS` — its caves, what is placed, the service area at its shard, and
-/// where the ground is held.
+/// node's zoom then its corner (`START_PLACE`), what was handed it
+/// (`START_AT`), and the stack (`start_stack`), each `Query::At` `AT_WORDS`
+/// (gpu-query-shader `at_words`).
 pub const AT_WORDS: u32 = 4;
-pub const START_WORDS: u32 = 4 + AT_WORDS * (1 + DEPTH as u32);
+pub const START_PLACE: u32 = 0;
+pub const START_AT: u32 = START_PLACE + 4;
+/// The stack's entry `k`.
+pub const fn start_stack(k: u32) -> u32 {
+    START_AT + AT_WORDS * (1 + k)
+}
+pub const START_WORDS: u32 = start_stack(DEPTH as u32);
 
 /// A descent's start: the node entered first, what was handed it, and the
 /// stack down to it.

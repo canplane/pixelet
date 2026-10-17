@@ -50,7 +50,7 @@ pub struct Eye {
     /// off an arrayed image's coordinate (`Rays`).
     pub range: UVec2,
     /// A preview's cut to air and its left-out leaf: X, Y, Z and the zoom,
-    /// `eye::NO_CUT` (negative) for none.
+    /// `eye::NO_CUT` for none.
     pub carve: IVec4,
     pub hide: IVec4,
 }
@@ -151,7 +151,7 @@ impl World<'_> {
                 let (bit, b) = (1 << (dz * 9 + k), [n[0], n[1], c[2] + dz as i32 - 1]);
                 if mask::READS & bit != 0 {
                     let held = placed::cursor(self, PLACED, zoom, b);
-                    let over = if held.holds() || self.eye.carve.w >= 0 {
+                    let over = if held.holds() || self.eye.carve.w as u32 != eye::NO_CUT {
                         placed::over(self, held, carve, hide, zoom, b, true)
                     } else {
                         placed::Over { says: placed::UNDER, block: VOID }
@@ -263,7 +263,7 @@ impl Query for World<'_> {
     fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<[u32; 2]> {
         let mut block = zoom >= asked[1] || zoom >= LEAF_CELL;
         // Asked of what is placed only where something is, or a preview cuts.
-        if at.placed.holds() || self.eye.carve.w >= 0 {
+        if at.placed.holds() || self.eye.carve.w as u32 != eye::NO_CUT {
             let carve = cut(self.eye.carve);
             block = zoom >= asked[1] || zoom >= LEAF_CELL && placed::whole(at.placed, carve, zoom, c);
             let over = placed::over(self, at.placed, carve, cut(self.eye.hide), zoom, c, block);
@@ -287,7 +287,7 @@ impl Query for World<'_> {
         };
         In {
             kind: i.kind,
-            block: [value, ray::fold_word(f)],
+            block: [value, ground::word(f)],
         }
     }
 
@@ -460,10 +460,18 @@ pub fn face_cs(
     unsafe { rays.write(UVec3::new(id.x, id.y, 2), mask::mask(filled)) };
 }
 
-/// An `At` as `start_cs` hands it to `cast_cs` (pxl-portable
-/// `cast::START_WORDS`).
+/// An `At`'s words as `start_cs` hands it to `cast_cs` (pxl-portable
+/// `cast::START_WORDS`), each its place among them.
+const AT_CAVE: usize = 0;
+const AT_PLACED: usize = 1;
+const AT_SHARD: usize = 2;
+const AT_GROUND: usize = 3;
+const _: () = assert!(AT_GROUND + 1 == cast::AT_WORDS as usize);
+
 fn at_words(a: At) -> [u32; cast::AT_WORDS as usize] {
-    [a.cave.word(), a.placed.word(), a.shard.word(), a.ground.word()]
+    let mut w = [0; cast::AT_WORDS as usize];
+    (w[AT_CAVE], w[AT_PLACED], w[AT_SHARD], w[AT_GROUND]) = (a.cave.word(), a.placed.word(), a.shard.word(), a.ground.word());
+    w
 }
 
 fn put_at(w: &mut [u32], k: u32, a: At) {
@@ -477,10 +485,10 @@ fn put_at(w: &mut [u32], k: u32, a: At) {
 
 fn at_of(w: &[u32], k: u32) -> At {
     At {
-        cave: Cave::of_word(at(w, k)),
-        placed: Held::of_word(at(w, k + 1)),
-        shard: Shard::of_word(at(w, k + 2)),
-        ground: Found::of_word(at(w, k + 3)),
+        cave: Cave::of_word(at(w, k + AT_CAVE as u32)),
+        placed: Held::of_word(at(w, k + AT_PLACED as u32)),
+        shard: Shard::of_word(at(w, k + AT_SHARD as u32)),
+        ground: Found::of_word(at(w, k + AT_GROUND as u32)),
     }
 }
 
@@ -533,14 +541,14 @@ pub fn start_cs(
         eye,
     };
     let s = cast::start(&mut world, &ray, detail);
-    put(starts, 0, s.place.zoom);
-    put(starts, 1, s.place.corner[0] as u32);
-    put(starts, 2, s.place.corner[1] as u32);
-    put(starts, 3, s.place.corner[2] as u32);
-    put_at(starts, 4, s.at);
+    put(starts, cast::START_PLACE, s.place.zoom);
+    put(starts, cast::START_PLACE + 1, s.place.corner[0] as u32);
+    put(starts, cast::START_PLACE + 2, s.place.corner[1] as u32);
+    put(starts, cast::START_PLACE + 3, s.place.corner[2] as u32);
+    put_at(starts, cast::START_AT, s.at);
     let mut k = 0;
     while k < cast::DEPTH {
-        put_at(starts, 4 + cast::AT_WORDS * (1 + k as u32), s.stack[k]);
+        put_at(starts, cast::start_stack(k as u32), s.stack[k]);
         k += 1;
     }
 }
@@ -572,15 +580,15 @@ pub fn cast_cs(
     let read: &[u32] = starts;
     let mut from = cast::Start {
         place: cast::Place {
-            zoom: at(read, 0),
-            corner: [at(read, 1) as i32, at(read, 2) as i32, at(read, 3) as i32],
+            zoom: at(read, cast::START_PLACE),
+            corner: [at(read, cast::START_PLACE + 1) as i32, at(read, cast::START_PLACE + 2) as i32, at(read, cast::START_PLACE + 3) as i32],
         },
-        at: at_of(read, 4),
-        stack: [at_of(read, 4); cast::DEPTH],
+        at: at_of(read, cast::START_AT),
+        stack: [at_of(read, cast::START_AT); cast::DEPTH],
     };
     let mut k = 0;
     while k < cast::DEPTH {
-        from.stack[k] = at_of(read, 4 + cast::AT_WORDS * (1 + k as u32));
+        from.stack[k] = at_of(read, cast::start_stack(k as u32));
         k += 1;
     }
     let met = cast::first_from(&mut world, &ray, detail, Until::Fills, from);

@@ -246,7 +246,7 @@ pub const fn record_word(kind: u32, variant: u32, turn: u32, cell: Zoom) -> u32 
 
 /// A record's kind, variant, turn and zoom (`record_word`).
 pub const fn record_of(w: u32) -> (u32, u32, u32, Zoom) {
-    (w & 0xff, (w >> 8) & 0xff, (w >> 16) & 3, (w >> 18) & 63)
+    (w & 0xff, (w >> 8) & 0xff, (w >> 16) & 3, (w >> 18) & ((1 << crate::ZOOM_BITS) - 1))
 }
 
 /// Every variant of every kind, numbered kind by kind in the catalog's

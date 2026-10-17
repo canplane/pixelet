@@ -31,6 +31,12 @@ pub fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> i32 {
     at(ground, base + LEVELS_AT + window::level_index(j, [x, y])) as i32
 }
 
+/// The samples handed the square at `base` (`ELE_AT`), two a word, low
+/// first, each its half's sign carried up: `ground::height`'s.
+fn samples(ground: &[u32], base: u32) -> impl Fn(usize) -> i32 + '_ {
+    move |i: usize| ((at(ground, base + ELE_AT + i as u32 / 2) >> (16 * (i as u32 % 2))) << 16) as i32 >> 16
+}
+
 /// A square being filled, on its own: what `level` folds.
 struct Fresh<'a> {
     ground: &'a [u32],
@@ -77,11 +83,8 @@ impl window::Square for Filling<'_> {
     /// Off its tile's samples as `heights` draws a cell (`ground::height`),
     /// the ring about the square too.
     fn height(&self, c: [i32; 2]) -> i32 {
-        let (samples, base) = (self.ground, self.base);
-        let ele = move |i: usize| ((at(samples, base + ELE_AT + i as u32 / 2) >> (16 * (i as u32 % 2))) << 16) as i32 >> 16;
         let first = [(self.place[0] * SQUARE) as i32, (self.place[1] * SQUARE) as i32];
-        let center = crate::lattice::CELL_CENTER;
-        ground::bicubic(ele, (first[0] + c[0]) as f32 + center, (first[1] + c[1]) as f32 + center)
+        ground::height(samples(self.ground, self.base), [first[0] + c[0], first[1] + c[1]])
     }
 }
 
@@ -90,9 +93,8 @@ impl window::Square for Filling<'_> {
 /// in it, in squares; its runs' first is the ways' to write (`ways`).
 pub fn heights(ground: &mut [u32], base: u32, place: [u32; 2], [x, y]: [u32; 2]) {
     let w = {
-        let samples: &[u32] = ground;
-        let ele = move |i: usize| ((at(samples, base + ELE_AT + i as u32 / 2) >> (16 * (i as u32 % 2))) << 16) as i32 >> 16;
-        ground::height(ele, [place[0] * SQUARE + x, place[1] * SQUARE + y]) as u32 & 0xffff
+        let lane: &[u32] = ground;
+        ground::height(samples(lane, base), [(place[0] * SQUARE + x) as i32, (place[1] * SQUARE + y) as i32]) as u32 & 0xffff
     };
     put(ground, base + COLUMNS_AT + y * SQUARE + x, w);
 }

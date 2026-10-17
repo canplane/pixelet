@@ -103,6 +103,20 @@ pub fn axis<T: Copy>(v: [T; 3], a: u32) -> T {
     }
 }
 
+/// A zoom's bits wherever one is packed in a word: every zoom fits them.
+pub const ZOOM_BITS: u32 = 6;
+const _: () = assert!(FINEST_ZOOM < 1 << ZOOM_BITS);
+
+/// Index `v` along an axis at `zoom` as an index at `to`: the first of the
+/// finer that lie in it, or the coarser it lies in, the floor.
+pub const fn index_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
+    if to >= zoom {
+        v << (to - zoom)
+    } else {
+        v >> (zoom - to)
+    }
+}
+
 /// X named as the world names it at `zoom`, X going round: from minus half
 /// its count to under half (pxl-spec space/coord/world.rs `wrap_index`).
 pub fn wrap_index(zoom: Zoom, x: i32) -> i32 {

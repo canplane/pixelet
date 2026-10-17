@@ -30,7 +30,7 @@ pub const HIDE: usize = 24;
 pub const CUT_WORDS: usize = 4;
 /// Both cuts, carve then hide, as one run of words.
 pub const CUTS: usize = 2 * CUT_WORDS;
-pub const NO_CUT: u32 = u32::MAX;
+pub const NO_CUT: u32 = crate::placed::Cut::NONE.zoom;
 /// Every word, the cuts last.
 pub const WORDS: usize = HIDE + CUT_WORDS;
 const _: () = assert!(STEPS == ORIGIN + 3 && REACH == FORWARD + 3 && TAU == RIGHT + 3 && TAN == UP + 4 && RANGE == TAN + 2 && CARVE == RANGE + 2 && HIDE == CARVE + CUT_WORDS);
