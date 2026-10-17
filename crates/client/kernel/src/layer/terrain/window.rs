@@ -488,7 +488,7 @@ impl Squares for Windowed {
     }
 
     fn level(&self, _: Zoom, s: u32, j: u32, at: [u32; 2]) -> i32 {
-        back_at(s, (window::LEVELS_AT - window::COLUMNS_AT + window::level_at(j) + at[1] * (SQUARE >> j) + at[0]) as usize) as i32
+        back_at(s, (window::LEVELS_AT - window::COLUMNS_AT + window::level_index(j, at)) as usize) as i32
     }
 }
 

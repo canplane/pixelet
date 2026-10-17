@@ -29,16 +29,22 @@ pub fn frustum_of_view() -> Frustum {
     view().frustum
 }
 
-/// Out to where the air ends the ground or the source's top ends, whichever
-/// is nearer. None before the source declares its top.
+/// How far the eye observes: as far as the source's top is demanded. None
+/// before the source declares its top.
+pub fn eye_reach() -> Option<f64> {
+    floor::top().map(|top| demand_reach(GROUND, top))
+}
+
+/// Out to `eye_reach`. None before the camera stands anywhere or the source
+/// declares its top.
 pub fn observation() -> Option<Observation> {
     let eye = eye()?;
-    let top = floor::top()?;
+    let reach = eye_reach()?;
     let height = eye_height();
     Some(Observation {
         eye,
         frustum: Some(frustum_of_view()),
-        reach: demand_reach(GROUND, top),
+        reach,
         ground: eye[2] - height,
     })
 }

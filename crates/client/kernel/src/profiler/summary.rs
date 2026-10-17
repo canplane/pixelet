@@ -221,7 +221,7 @@ fn side(out: &mut [f64]) {
         let ray = crate::query::Ray {
             origin,
             direction,
-            reach: crate::view::observation::observation().map_or(0.0, |o| o.reach),
+            reach: crate::view::observation::eye_reach().unwrap_or(0.0),
         };
         let hit = crate::query::World::now().first_hit(&ray, crate::query::Detail::Distance(tau)).value().flatten()?;
         // The grid's cell there is the distance's (`Tau::cell_at`), as the camera grid is cut.

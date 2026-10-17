@@ -115,6 +115,11 @@ pub fn square_of(g: [i32; 2]) -> ([i32; 2], u32) {
 pub const fn level_at(j: u32) -> u32 {
     (4 * SQUARE_CELLS - ((4 * SQUARE_CELLS) >> (2 * j))) / 3
 }
+
+/// Entry `[x, y]` of level `j` among a square's levels, row by row.
+pub const fn level_index(j: u32, [x, y]: [u32; 2]) -> u32 {
+    level_at(j) + y * (SQUARE >> j) + x
+}
 pub const LEVELS: u32 = SQUARE_SHIFT;
 pub const LEVEL_WORDS: u32 = level_at(LEVELS + 1);
 

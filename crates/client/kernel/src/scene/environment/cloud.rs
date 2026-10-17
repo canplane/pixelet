@@ -163,7 +163,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     let largest = WIDTH[1];
     // As far as the eye observes, a flat layer hiding under no horizon, and no
     // farther than its largest cloud is a sprite's worth.
-    let reach = crate::view::observation::observation().map_or(0.0, |o| o.reach).min(REACH_MAX);
+    let reach = crate::view::observation::eye_reach().unwrap_or(0.0).min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
     let span = |k: usize| libm::floor((on_map[k] - reach) / BLOCK) as i64..=libm::floor((on_map[k] + reach) / BLOCK) as i64;
     let near = |key: [i64; 2]| {

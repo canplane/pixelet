@@ -146,7 +146,7 @@ impl<'a> Query for Walker<'_, 'a> {
             Answer::Exact(i) => i,
         };
         self.answered = true;
-        let decor = zoom < GROUND.cell() && self.strike.as_ref().is_some_and(|s| t0 < s.held && self.world.may_strike(s, at.node));
+        let decor = zoom < GROUND.cell() && self.strike.as_ref().is_some_and(|s| t0 < s.held && self.world.may_strike(s, at.node, at.shard));
         match answer {
             In::Empty if !decor => cast::In { kind: Kind::Block, block: None },
             In::Empty | In::Split => cast::In { kind: Kind::Split, block: None },

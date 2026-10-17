@@ -28,7 +28,7 @@ pub fn column_of(ground: &[u32], base: u32, i: u32) -> u32 {
 
 /// Entry `at` of level `j` off the square at `base`.
 pub fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> i32 {
-    at(ground, base + LEVELS_AT + window::level_at(j) + y * (SQUARE >> j) + x) as i32
+    at(ground, base + LEVELS_AT + window::level_index(j, [x, y])) as i32
 }
 
 /// A square being filled, on its own: what `level` folds.
@@ -177,7 +177,7 @@ pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
         let under: &[u32] = ground;
         window::join(&Fresh { ground: under, base }, 0, 0, j, at)
     };
-    put(ground, base + LEVELS_AT + window::level_at(j) + at[1] * (SQUARE >> j) + at[0], w as u32);
+    put(ground, base + LEVELS_AT + window::level_index(j, at), w as u32);
 }
 
 /// A square filled whole, its passes in a GPU's order (pxl-render

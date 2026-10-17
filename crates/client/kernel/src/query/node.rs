@@ -89,7 +89,7 @@ pub(super) struct At {
     line: Option<Line>,
     /// What is known of the service area at its shard (pxl-portable
     /// `area::Shard`).
-    shard: Shard,
+    pub(super) shard: Shard,
     /// Where the windows hold the ground's cells of the nodes over it, which
     /// its own read steps from (pxl-portable `window::step`).
     ground: Found,

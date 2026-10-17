@@ -206,8 +206,10 @@ impl<'a> World<'a> {
     /// ground or where something is placed, and reaches no farther than its
     /// reach from there, so a node is out of it where, about it and as wide
     /// as the reach, the windows' relief holds no top over its bottom less the
-    /// reach and the objects' pyramid no record. What is not held may.
-    pub(super) fn may_strike(&self, s: &Strike<'a>, (zoom, c): Node<3>) -> bool {
+    /// reach and the objects' pyramid no record, past the area none, as
+    /// `shard`, what the descent established at the node, says. What is not
+    /// held may.
+    pub(super) fn may_strike(&self, s: &Strike<'a>, (zoom, c): Node<3>, shard: Shard) -> bool {
         // The nodes about it as wide as the reach, at the finest zoom that is.
         let mut z = zoom;
         while z > 0 && units(z) < s.reach {
@@ -216,14 +218,12 @@ impl<'a> World<'a> {
         let a = c.map(|v| v >> (zoom - z));
         let low = cube(zoom, c).min[2] - s.reach;
         let leaf = units(GROUND.cell());
-        // Past the area no ground stands: one pass over the shards, for the
-        // nine about the node's (pxl-portable `area::Shard`).
-        let own = (z, [a[0] as i32, a[1] as i32]);
-        let shard = Shard::UNKNOWN.at(&Windowed, own);
+        let node = (zoom, [c[0] as i32, c[1] as i32]);
         let ground = (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
                 let xy = (z, [a[0] + dx, a[1] + dy]);
-                if z >= SHARD_ZOOM && shard.past_leaf(&Windowed, own, area::tile_at(z, [xy.1[0] as i32, xy.1[1] as i32])) {
+                // Past the area no ground stands.
+                if z >= SHARD_ZOOM && shard.past_leaf(&Windowed, node, area::tile_at(z, [xy.1[0] as i32, xy.1[1] as i32])) {
                     return false;
                 }
                 let mut place = Found::NONE;
