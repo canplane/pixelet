@@ -6,6 +6,7 @@
 //! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md, "What is
 //! drawn").
 
+use pxl_portable::eye;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 use pxl_spec::space::coord::v3::{self, V3};
@@ -63,44 +64,27 @@ impl Lens {
     }
 }
 
-/// The eye's words `gpu_cast` writes.
-pub const EYE_WORDS: usize = 20;
-
-/// What a GPU's cast of the screen's rays reads (pxl-render
-/// frame/shader/cast.gen.wgsl `cast_cs`, group 0): `eye`'s first
-/// `EYE_WORDS`, binding 0, as five vec4s — the eye's Q3 position and whether
-/// each ray reports the nodes its descent asked, not what it met; the unit
-/// forward and the reach; the unit right and τ; the unit up; the tangents of
-/// the screen's half-angles across and up and the zooms a block is asked at.
-/// A ray a drawn pixel, through its middle. None without a screen.
-pub fn gpu_cast(o: &Observation, tau: Tau, steps: bool, eye: &mut [u32]) -> Option<()> {
+/// What a GPU's cast of the screen's rays reads of the eye (pxl-portable
+/// `eye`, gpu-query-shader `Eye`): its Q3 position and whether each ray
+/// reports the nodes its descent asked, not what it met; the unit forward
+/// and the reach; the unit right and τ; the unit up; the tangents of the
+/// screen's half-angles across and up and the zooms a block is asked at. A
+/// ray a drawn pixel, through its middle. The cuts are the scene's. None
+/// without a screen.
+pub fn gpu_cast(o: &Observation, tau: Tau, steps: bool, words: &mut [u32; eye::WORDS]) -> Option<()> {
     let lens = Lens::of(o)?;
     let q = point(o.eye[0], o.eye[1], o.eye[2]);
     let w = |v: f64| (v as f32).to_bits();
-    let [f, r, u] = [lens.forward, lens.right, lens.up];
-    let [coarsest, finest] = asked();
-    eye[..EYE_WORDS].copy_from_slice(&[
-        q[0] as u32,
-        q[1] as u32,
-        q[2] as u32,
-        u32::from(steps),
-        w(f[0]),
-        w(f[1]),
-        w(f[2]),
-        w(o.reach),
-        w(r[0]),
-        w(r[1]),
-        w(r[2]),
-        w(tau.scale()),
-        w(u[0]),
-        w(u[1]),
-        w(u[2]),
-        0,
-        w(lens.tan[0]),
-        w(lens.tan[1]),
-        coarsest,
-        finest,
-    ]);
+    let mut put = |at: usize, v: &[u32]| words[at..at + v.len()].copy_from_slice(v);
+    put(eye::ORIGIN, &q.map(|v| v as u32));
+    put(eye::STEPS, &[u32::from(steps)]);
+    put(eye::FORWARD, &lens.forward.map(w));
+    put(eye::REACH, &[w(o.reach)]);
+    put(eye::RIGHT, &lens.right.map(w));
+    put(eye::TAU, &[w(tau.scale())]);
+    put(eye::UP, &lens.up.map(w));
+    put(eye::TAN, &lens.tan.map(w));
+    put(eye::RANGE, &asked());
     Some(())
 }
 

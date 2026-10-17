@@ -17,6 +17,7 @@ pub mod caves;
 pub mod cube;
 #[path = "decor.spec.rs"]
 pub mod decor;
+pub mod eye;
 pub mod fill;
 pub mod ground;
 pub mod lattice;

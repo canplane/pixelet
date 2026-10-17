@@ -3,24 +3,24 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-naga-wgsl.
-// Inputs: 6c2985e3c109c4e88e141671c78fb47f611ae4914aea0def1aa9d277adb1ed18
+// Inputs: f38c6cfa8bfbcfb13a2b93091d83066b80f401dce697936a67ea8f0f40324263
 struct type_4 {
     member: array<u32>,
 }
 
-struct type_13 {
+struct type_14 {
     member: array<vec4<i32>>,
 }
 
-struct type_16 {
+struct type_17 {
     member: u32,
     member_1: array<u32, 36>,
 }
 
-struct type_21 {
+struct type_22 {
     member: u32,
     member_1: u32,
-    member_2: array<type_16, 2>,
+    member_2: array<type_17, 2>,
     member_3: u32,
     member_4: array<u32, 8>,
     member_5: i32,
@@ -28,11 +28,11 @@ struct type_21 {
     member_7: array<array<u32, 3>, 9>,
 }
 
-struct type_23 {
-    member: array<type_21>,
+struct type_24 {
+    member: array<type_22>,
 }
 
-struct type_32 {
+struct type_33 {
     member: vec4<i32>,
     member_1: vec4<f32>,
     member_2: vec4<f32>,
@@ -43,11 +43,11 @@ struct type_32 {
     member_7: vec4<i32>,
 }
 
-struct type_33 {
-    member: type_32,
+struct type_34 {
+    member: type_33,
 }
 
-struct type_37 {
+struct type_38 {
     member: u32,
     member_1: u32,
     member_2: u32,
@@ -149,14 +149,14 @@ struct type_66 {
 
 var<private> global: vec3<u32>;
 @group(0) @binding(1) 
-var<storage> global_1: type_13;
+var<storage> global_1: type_14;
 @group(0) @binding(0) 
-var<uniform> global_2: type_33;
+var<uniform> global_2: type_34;
 @group(0) @binding(2) 
 var<storage> global_3: type_4;
 var<private> global_4: type_43 = type_43(true, true);
 @group(0) @binding(3) 
-var<storage> global_5: type_13;
+var<storage> global_5: type_14;
 @group(0) @binding(4) 
 var<storage> global_6: type_4;
 @group(0) @binding(5) 
@@ -164,7 +164,7 @@ var<storage> global_7: type_4;
 @group(0) @binding(6) 
 var<storage, read_write> global_8: type_66;
 @group(0) @binding(7) 
-var<storage> global_9: type_23;
+var<storage> global_9: type_24;
 @group(0) @binding(8) 
 var<storage> global_10: type_4;
 
@@ -2105,7 +2105,7 @@ fn function_() {
     var phi_24108_: bool;
     var phi_15199_: bool;
     var phi_14791_: bool;
-    var phi_22457_: type_37;
+    var phi_22457_: type_38;
     var local_220: bool;
     var local_221: bool;
     var local_222: bool;
@@ -12732,10 +12732,10 @@ fn function_() {
                                                 let _e10364 = atomicAdd((&global_8.member[_e10360]), 1u);
                                                 let _e10366 = ((_e200 * 2070u) + _e10364);
                                                 if (_e10366 < 1589760u) {
-                                                    phi_22457_ = type_37((3072u + (_e10366 * 4u)), ((_e10366 / 2070u) * 4u), (_e10366 % 2070u));
+                                                    phi_22457_ = type_38((3072u + (_e10366 * 4u)), ((_e10366 / 2070u) * 4u), (_e10366 % 2070u));
                                                 } else {
                                                     let _e10368 = (_e10366 - 1589760u);
-                                                    phi_22457_ = type_37((6362116u + (_e10368 * 4u)), 6362112u, _e10368);
+                                                    phi_22457_ = type_38((6362116u + (_e10368 * 4u)), 6362112u, _e10368);
                                                 }
                                                 let _e10379 = phi_22457_;
                                                 if (_e10364 < 2070u) {

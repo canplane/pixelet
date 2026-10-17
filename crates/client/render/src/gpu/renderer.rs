@@ -46,6 +46,7 @@ use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURN
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_SKY, ENV_STARS, ENV_SUN_LIGHT, LIGHT_COLOR};
 use crate::mesh::paint::ground::look_words;
+use pxl_portable::eye;
 use pxl_portable::ray;
 use pxl_portable::scatter::GROUPS;
 use pxl_spec::block::window::{BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_WORDS, HANDED, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
@@ -158,12 +159,9 @@ pub struct GroundSquares<'a> {
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
 /// GPU holds them, and what is placed.
 pub struct Cast<'a> {
-    /// The eye as seven vec4s (pxl-kernel view/lens.rs `gpu_cast`, scene/
-    /// cast.rs `eye`): its origin in Q3 steps and whether a ray reports its
-    /// steps, forward and the reach, right and τ, up, the tangents of the
-    /// screen's half-angles with the zooms a block is asked at, and a
-    /// preview's cut to air and its left-out leaf.
-    pub eye: [u32; CAST_EYE_WORDS],
+    /// The eye (pxl-portable `eye`; pxl-kernel view/lens.rs `gpu_cast`,
+    /// scene/cast.rs `eye`).
+    pub eye: [u32; eye::WORDS],
     /// Per window of the eye's, from the top's, a row a slot: the square it
     /// holds, X and Y, and whether it is present, and a spare.
     pub window: &'a [i32],
@@ -174,16 +172,6 @@ pub struct Cast<'a> {
     /// decor is off (gpu/grown.rs).
     pub decor: Option<DecorFrame<'a>>,
 }
-
-pub const CAST_EYE_WORDS: usize = 28;
-
-/// The eye's last words, a preview's cut and its left-out leaf (`Cast::eye`):
-/// what decor's growth reads of it.
-const EYE_CUTS: usize = 8;
-
-/// The eye's reach, f32 bits, its forward word's last (`Cast::eye`): how far
-/// it observes, as far as the clouds are drawn.
-const EYE_REACH: usize = 7;
 
 /// The overwrites' tree (pxl-kernel layer/object/store.rs) as it lives: its
 /// heap and data lanes, unwritten until the page replays the turn, the room
@@ -1001,7 +989,7 @@ impl ScreenCellsPass {
         });
         let mut fresh = 0;
         (ground.upload)(&mut |q| {
-            let fresh_entry = [q.square, q.place, q.cell];
+            let fresh_entry = pxl_portable::window::fresh(q.square, q.place, q.cell);
             if !room(write_buffer_bytes(q.looks) + write_buffer_bytes(q.samples) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&fresh_entry))) {
                 return false;
             }
@@ -1045,7 +1033,7 @@ impl ScreenCellsPass {
                 starts: buffer(word_bytes(pxl_portable::cast::START_WORDS as usize), buffer_usage::STORAGE),
                 group: 0,
                 bound: [0; 7],
-                eye: buffer(word_bytes(CAST_EYE_WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
+                eye: buffer(word_bytes(eye::WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
                 window: buffer(word_bytes(cast.window.len()), storage),
                 window_words: cast.window.len(),
                 shards: 0,
@@ -1142,7 +1130,7 @@ impl ScreenCellsPass {
             window: cast.window,
             shards: cast.shards,
             revision: o.revision,
-            cuts: cast.eye[CAST_EYE_WORDS - EYE_CUTS..].try_into().or_bug(Errno::ENOTRECOVERABLE),
+            cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS].try_into().or_bug(Errno::ENOTRECOVERABLE),
             filled: fresh,
         };
         c.grown.prepare(g, cast.decor, grows, meshes, world);
@@ -1611,7 +1599,8 @@ impl Renderer {
         rest.read(input.cases);
 
         targets(g, world);
-        let reach = cast.as_ref().map_or(0.0, |c| f32::from_bits(c.eye[EYE_REACH]));
+        // How far the eye observes, as far as the clouds are drawn.
+        let reach = cast.as_ref().map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));
         self.lay_out(g, world.width, world.height, input.environment, reach);
         if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
             self.rebind(g);

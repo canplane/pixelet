@@ -41,6 +41,11 @@ fn main() {
         field("zoom", ZOOM_SHIFT, ZOOM_BITS),
     ];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
+    // The eye's words the screen pass reads (pxl-portable eye.rs), each its
+    // place in the eye's first vec4, which is all the pass binds of it.
+    const _: () = assert!(pxl_portable::eye::ORIGIN + 2 < 4 && pxl_portable::eye::STEPS < 4);
+    let eye = format!("const EYE_ORIGIN: u32 = {}u;\nconst EYE_STEPS: u32 = {}u;\n", pxl_portable::eye::ORIGIN, pxl_portable::eye::STEPS);
+    std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
     println!("cargo:rerun-if-changed=src/frame/shader");
     println!("cargo:rerun-if-changed=../../portable/src/mask.bits.rs");
 }

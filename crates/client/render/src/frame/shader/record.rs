@@ -190,6 +190,7 @@ pub fn source(kind: u32) -> &'static str {
             "faces",
             "lattice",
             "ray",
+            "eye",
             "paint",
             "sky_words",
             "screen_cells"

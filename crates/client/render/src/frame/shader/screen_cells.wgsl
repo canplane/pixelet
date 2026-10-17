@@ -12,9 +12,10 @@
 // (`mesh/paint/ground.rs` `look_words`): the ground's looks, then each
 // placed value's.
 @group(0) @binding(20) var<storage, read> looks: array<vec2u>;
-// The eye the rays left (pxl-kernel view/lens.rs `gpu_cast`): its Q3 steps,
-// FRAC_W bits a unit and wrapping, a block's place on the lattice read off
-// their low bits, and whether a ray reports its steps.
+// The eye the rays left (pxl-portable `eye`), its first vec4: its Q3 steps
+// (`EYE_ORIGIN`), FRAC_W bits a unit and wrapping, a block's place on the
+// lattice read off their low bits, and whether a ray reports its steps
+// (`EYE_STEPS`).
 @group(0) @binding(21) var<uniform> eye: array<vec4u, 1>;
 
 const GROUND_LOOKS: u32 = 256u;
@@ -108,7 +109,8 @@ fn drawn(c: vec4u) -> Drawn {
 // world's side.
 fn eye_phase(axis: u32, k: i32) -> f32 {
   let bits = u32(k + i32(FRAC_W));
-  let low = select(eye[0][axis], eye[0][axis] & ((1u << bits) - 1u), bits < 32u);
+  let steps = eye[0][EYE_ORIGIN + axis];
+  let low = select(steps, steps & ((1u << bits) - 1u), bits < 32u);
   return f32(low) / f32(1u << FRAC_W);
 }
 
@@ -158,7 +160,7 @@ fn fs(v: VertexOut) -> FragOut {
   let ddx = dpdx(uv);
   let ddy = dpdy(uv);
   let pixel = sqrt(dpdx(h.at) * dpdx(h.at) + dpdy(h.at) * dpdy(h.at));
-  if (eye[0].w != 0u) {
+  if (eye[0][EYE_STEPS] != 0u) {
     let t = select(bitcast<f32>(c.y), FAR, kind == RAY_KIND_NONE);
     let clip = frame_view_proj() * vec4f(d * t, 1.0);
     var o: FragOut;

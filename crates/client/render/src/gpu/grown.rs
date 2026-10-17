@@ -13,6 +13,7 @@
 //! what is grown.
 
 use pxl_portable::decor::{COUNTS, DECORS};
+use pxl_portable::eye;
 use pxl_portable::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
 
 use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
@@ -51,7 +52,7 @@ pub struct Grows<'a> {
     pub window: &'a [i32],
     pub shards: &'a [[i32; 4]],
     pub revision: u32,
-    pub cuts: &'a [u32; 8],
+    pub cuts: &'a [u32; eye::CUTS],
     pub filled: u32,
 }
 
@@ -107,7 +108,7 @@ pub struct Grown {
     read: Read,
     window: Read,
     revision: Option<u32>,
-    cuts: [u32; 8],
+    cuts: [u32; eye::CUTS],
     placed: Read,
     marking: bool,
 }
@@ -150,7 +151,7 @@ impl Grown {
             read: Read::default(),
             window: Read::default(),
             revision: None,
-            cuts: [0; 8],
+            cuts: [0; eye::CUTS],
             placed: Read::default(),
             marking: false,
         }
@@ -198,10 +199,10 @@ impl Grown {
         for &e in f.edits.iter().take(scatter::EDITS as usize) {
             (boxes[n], n) = (e, n + 1);
         }
-        for k in [0, 4] {
-            let (was, is) = (&self.cuts[k..k + 4], &grows.cuts[k..k + 4]);
+        for k in [0, eye::CUT_WORDS] {
+            let (was, is) = (&self.cuts[k..k + eye::CUT_WORDS], &grows.cuts[k..k + eye::CUT_WORDS]);
             if was != is {
-                for c in [was, is].into_iter().filter(|c| (c[3] as i32) >= 0) {
+                for c in [was, is].into_iter().filter(|c| c[3] != eye::NO_CUT) {
                     (boxes[n], n) = (scatter::cut_box(c[3], [c[0] as i32, c[1] as i32, c[2] as i32]), n + 1);
                 }
             }

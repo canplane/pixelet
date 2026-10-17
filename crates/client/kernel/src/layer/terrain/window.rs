@@ -422,7 +422,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> Offered {
         };
         let taken = write(Square {
             square: i,
-            place: place[0] | place[1] << 16,
+            place: window::place_word(place),
             cell,
             looks: cut,
             samples: pxl_render::gpu::api::bytes(ele),

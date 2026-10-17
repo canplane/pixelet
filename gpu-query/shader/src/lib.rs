@@ -16,6 +16,7 @@ use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
 use pxl_portable::caves::Cave;
 use pxl_portable::cube::object;
 use pxl_portable::decor::{Decor, COUNTS};
+use pxl_portable::eye;
 use pxl_portable::fill::{self, column_of, level_of, put};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
@@ -28,7 +29,8 @@ use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::{spirv, Image};
 
-/// The eye a cast is from (pxl-kernel view/lens.rs `gpu_cast`).
+/// The eye a cast is from (pxl-kernel view/lens.rs `gpu_cast`), its words
+/// where pxl-portable `eye` lays them (asserted below).
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Eye {
@@ -48,10 +50,24 @@ pub struct Eye {
     /// off an arrayed image's coordinate (`Rays`).
     pub range: UVec2,
     /// A preview's cut to air and its left-out leaf: X, Y, Z and the zoom,
-    /// -1 for none.
+    /// `eye::NO_CUT` (negative) for none.
     pub carve: IVec4,
     pub hide: IVec4,
 }
+
+/// Word `words`'s byte.
+const fn at_word(words: usize) -> usize {
+    words * core::mem::size_of::<u32>()
+}
+
+const _: () = {
+    use at_word as at;
+    use core::mem::{offset_of, size_of};
+    assert!(size_of::<Eye>() == at(eye::WORDS));
+    assert!(offset_of!(Eye, origin) == at(eye::ORIGIN) && offset_of!(Eye, forward_far) == at(eye::FORWARD) && offset_of!(Eye, right_tau) == at(eye::RIGHT));
+    assert!(offset_of!(Eye, up) == at(eye::UP) && offset_of!(Eye, tan) == at(eye::TAN) && offset_of!(Eye, range) == at(eye::RANGE));
+    assert!(offset_of!(Eye, carve) == at(eye::CARVE) && offset_of!(Eye, hide) == at(eye::HIDE));
+};
 
 /// A preview's entry as pxl-portable `placed` takes it.
 fn cut(e: IVec4) -> Cut {
@@ -591,9 +607,9 @@ pub fn heights_cs(
     if id.x >= SQUARE || id.y >= SQUARE {
         return;
     }
-    let base = square_at(at(fresh, FRESH_WORDS * id.z));
-    let place = at(fresh, FRESH_WORDS * id.z + 1);
-    fill::heights(ground, base, [place & 0xffff, place >> 16], [id.x, id.y]);
+    let base = square_at(at(fresh, FRESH_WORDS * id.z + window::FRESH_SQUARE));
+    let place = window::place_of(at(fresh, FRESH_WORDS * id.z + window::FRESH_PLACE));
+    fill::heights(ground, base, place, [id.x, id.y]);
 }
 
 /// Level `level.x` of the squares `fresh` names, one a `z`: level 0 each
@@ -612,8 +628,8 @@ pub fn bound_cs(
     if id.x >= side || id.y >= side {
         return;
     }
-    let base = square_at(at(fresh, FRESH_WORDS * id.z));
-    fill::level(ground, base, at(fresh, FRESH_WORDS * id.z + 2), j, [id.x, id.y]);
+    let base = square_at(at(fresh, FRESH_WORDS * id.z + window::FRESH_SQUARE));
+    fill::level(ground, base, at(fresh, FRESH_WORDS * id.z + window::FRESH_CELL), j, [id.x, id.y]);
 }
 
 /// The ways of the squares `fresh` names, one a `z`, a thread a column
@@ -631,12 +647,12 @@ pub fn ways_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
 ) {
-    let base = square_at(at(fresh, FRESH_WORDS * id.z));
-    let place = at(fresh, FRESH_WORDS * id.z + 1);
+    let base = square_at(at(fresh, FRESH_WORDS * id.z + window::FRESH_SQUARE));
+    let place = window::place_of(at(fresh, FRESH_WORDS * id.z + window::FRESH_PLACE));
     // The window's cells' zoom, as handed with the square: a focus's or a
     // destination's is not its index's.
-    let cell = at(fresh, FRESH_WORDS * id.z + 2);
-    fill::ways(ground, base, [place & 0xffff, place >> 16], cell, pass.x, id.x);
+    let cell = at(fresh, FRESH_WORDS * id.z + window::FRESH_CELL);
+    fill::ways(ground, base, place, cell, pass.x, id.x);
 }
 
 /// The eye's slots whose decor grows again this frame, a thread a slot,
@@ -669,7 +685,7 @@ pub fn decor_mark_cs(
     let mut marked = at(marks, 0) != 0 || !scatter::grown_for(head, q);
     let mut k = 0;
     while k < at(marks, 1) {
-        let f = at(fresh, FRESH_WORDS * k);
+        let f = at(fresh, FRESH_WORDS * k + window::FRESH_SQUARE);
         if f < scatter::EYE_SLOTS && f / SLOTS == s / SLOTS {
             let other = at(window, f);
             marked = marked || scatter::beside(cell, q, [other.x, other.y]);

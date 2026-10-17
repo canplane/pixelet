@@ -6,7 +6,8 @@
 //! windows want handed to the GPU once, off its tile's packet
 //! (layer/terrain/window.rs `fill`).
 
-use pxl_render::gpu::renderer::{Overwrites, TerrainWrite, CAST_EYE_WORDS};
+use pxl_portable::eye;
+use pxl_render::gpu::renderer::{Overwrites, TerrainWrite};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::layer::tile::Tile;
@@ -43,15 +44,15 @@ pub fn shards() -> &'static [[i32; 4]] {
 /// The eye as the GPU's rays leave it, a ray a drawn pixel (`lens::gpu_cast`),
 /// then the pointer's preview as the world answers through it (query/world.rs
 /// `previewing`), its cut to air and its left-out leaf, each X, Y, Z and the
-/// zoom, the zoom `u32::MAX` for none. None without a screen.
-pub fn eye(o: &Observation) -> Option<[u32; CAST_EYE_WORDS]> {
-    let mut eye = [0u32; CAST_EYE_WORDS];
-    lens::gpu_cast(o, lens::tau(), settings_store().ray_steps, &mut eye)?;
+/// zoom (pxl-portable `eye`). None without a screen.
+pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
+    let mut words = [0u32; eye::WORDS];
+    lens::gpu_cast(o, lens::tau(), settings_store().ray_steps, &mut words)?;
     let edits = preview::current();
-    let cut = |e: Option<EntryAt>| e.map_or([0, 0, 0, u32::MAX], |e| [e.at()[0] as u32, e.at()[1] as u32, e.at()[2] as u32, e.zoom()]);
-    eye[lens::EYE_WORDS..lens::EYE_WORDS + 4].copy_from_slice(&cut(edits.carve));
-    eye[lens::EYE_WORDS + 4..].copy_from_slice(&cut(edits.hide));
-    Some(eye)
+    let cut = |e: Option<EntryAt>| e.map_or([0, 0, 0, eye::NO_CUT], |e| [e.at()[0] as u32, e.at()[1] as u32, e.at()[2] as u32, e.zoom()]);
+    words[eye::CARVE..eye::CARVE + eye::CUT_WORDS].copy_from_slice(&cut(edits.carve));
+    words[eye::HIDE..eye::HIDE + eye::CUT_WORDS].copy_from_slice(&cut(edits.hide));
+    Some(words)
 }
 
 /// The eye's windows as the GPU's cast reads them (layer/terrain/window.rs

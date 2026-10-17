@@ -55,10 +55,30 @@ pub const FILL_SHARE_MS: f32 = 4.0;
 pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_SQUARE_MS) as u32;
 
 /// A square handed to the GPU's fill, in words: its index, where it lies in
-/// its tile (`x | y << 16`, in squares), and its cells' zoom, its window's
+/// its tile (`place_word`, in squares), and its cells' zoom, its window's
 /// as the window holds it (pxl-kernel layer/terrain/window.rs `Window::cell`;
 /// a destination's moves with its line), never derived from the index.
 pub const FRESH_WORDS: u32 = 3;
+pub const FRESH_SQUARE: u32 = 0;
+pub const FRESH_PLACE: u32 = 1;
+pub const FRESH_CELL: u32 = 2;
+
+/// A fresh square's words (`FRESH_WORDS`), `place` its `place_word`.
+pub const fn fresh(square: u32, place: u32, cell: Zoom) -> [u32; FRESH_WORDS as usize] {
+    let mut w = [0; FRESH_WORDS as usize];
+    (w[FRESH_SQUARE as usize], w[FRESH_PLACE as usize], w[FRESH_CELL as usize]) = (square, place, cell);
+    w
+}
+
+/// Where a square lies in its tile, in squares, as one word: X low, Y high.
+pub const fn place_word([x, y]: [u32; 2]) -> u32 {
+    x | y << 16
+}
+
+/// `place_word`'s place.
+pub const fn place_of(w: u32) -> [u32; 2] {
+    [w & 0xffff, w >> 16]
+}
 
 /// How far from its centre a window holds every cell, in its own cells: a
 /// zoom's band ends `SPLIT` of its cells from the eye (`cast::SPLIT`).
