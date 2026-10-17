@@ -142,7 +142,14 @@ export class GpuHost {
    * guest's memory between turns is read only by a turn, so it asks for one,
    * as an executor's pender asks for a poll (embassy-executor's `Pender`).
    */
-  constructor(private readonly device: GPUDevice, private readonly memory: () => ArrayBufferLike, private readonly wake: () => void) {}
+  constructor(private readonly device: GPUDevice, private readonly memory: () => ArrayBufferLike, private readonly wake: () => void) {
+    // Its device's loss is its own to hear: the guest is told in its block,
+    // and a turn asked to read it. Nothing here destroys the device.
+    device.lost.then(() => {
+      this.lost();
+      this.wake();
+    });
+  }
 
   /** A surface the guest names by `surface` in CONFIGURE, RESIZE and CURRENT. */
   bindSurface(surface: u32, context: GPUCanvasContext): void {
@@ -155,7 +162,7 @@ export class GpuHost {
   }
 
   /** The device went: every object with it, and the guest told in its block. */
-  lost(): void {
+  private lost(): void {
     this.objects.length = 0;
     if (this.block) new Uint32Array(this.memory(), this.block.address, this.block.words)[this.block.words - 1] = STATUS.LOST;
   }

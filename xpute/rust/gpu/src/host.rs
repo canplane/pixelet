@@ -12,7 +12,7 @@
 //! guest finds its word at `ticket | DONE` a turn or more later, as on the
 //! web, and nothing here waits.
 
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 
 use serde::de::value::{Error as NameError, StrDeserializer};
@@ -361,6 +361,9 @@ pub struct GpuHost {
     configure_at: ConfigureAt,
     /// Where the guest asked the device's block written, for its status.
     block: Option<(u32, u32)>,
+    /// The device went, as wgpu said from its own thread; taken at the
+    /// turn's edge (`poll`).
+    gone: Arc<AtomicBool>,
     pending: Vec<Pending>,
     decoder: Decoder,
     decoding: std::collections::VecDeque<Decoding>,
@@ -399,7 +402,20 @@ impl GpuHost {
     /// memory only at a turn's poll, so whoever learns of one between turns
     /// asks for it, as an executor's pender asks for a poll
     /// (embassy-executor's `Pender`; its std one signals the sleeping loop).
+    ///
+    /// Its device's loss is its own to hear: wgpu calls back, from any thread,
+    /// for a loss of the device's (`Unknown`), and for its destruction or drop
+    /// by its owner (`Destroyed`), which is no loss; the host tells the guest
+    /// in its block at the next turn's edge and asks for that turn.
     pub fn new(adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue, preferred: wgpu::TextureFormat, configure_at: ConfigureAt, wake: fn()) -> GpuHost {
+        let gone = Arc::new(AtomicBool::new(false));
+        let lost = gone.clone();
+        device.set_device_lost_callback(move |reason, _| {
+            if reason == wgpu::DeviceLostReason::Unknown {
+                lost.store(true, Ordering::Release);
+                wake();
+            }
+        });
         GpuHost {
             adapter,
             belt: wgpu::util::StagingBelt::new(device.clone(), BELT_CHUNK_BYTES),
@@ -411,6 +427,7 @@ impl GpuHost {
             preferred,
             configure_at,
             block: None,
+            gone,
             pending: Vec::new(),
             decoder: Decoder::new(wake),
             decoding: std::collections::VecDeque::new(),
@@ -550,7 +567,7 @@ impl GpuHost {
     }
 
     /// The device went: every object with it, and the guest told in its block.
-    pub fn lost(&mut self, memory: &mut [u8]) {
+    fn lost(&mut self, memory: &mut [u8]) {
         self.objects.clear();
         self.pending.clear();
         self.decoding.clear();
@@ -559,11 +576,16 @@ impl GpuHost {
         }
     }
 
-    /// What the device has answered since: each mapping's bytes copied to
-    /// its address, its own word set and the buffer unmapped; each done's
-    /// word set where its ticket still stands.
+    /// What the device has answered since: its loss, which ends everything
+    /// else; else each mapping's bytes copied to its address, its own word set
+    /// and the buffer unmapped; each done's word set where its ticket still
+    /// stands.
     /// Run at the turn's edge, before the turn reads its words.
     pub fn poll(&mut self, memory: &mut [u8]) {
+        if self.gone.swap(false, Ordering::AcqRel) {
+            self.lost(memory);
+            return;
+        }
         let _ = self.device.poll(wgpu::PollType::Poll);
         self.pending.retain(|p| match p.state.load(Ordering::Acquire) {
             WAITING => true,
