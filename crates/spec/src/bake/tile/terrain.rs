@@ -148,6 +148,15 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_portable::window::Square for
     fn place(&self) -> [u32; 2] {
         self.place
     }
+    /// None read: inside the area, nothing about it is past.
+    fn first(&self) -> [i32; 2] {
+        [0; 2]
+    }
+    /// Inside: a bake sizes the most runs a client's fill writes, and no
+    /// wall cuts its ways.
+    fn shard(&self) -> pxl_portable::area::Shard {
+        pxl_portable::area::Shard::INSIDE
+    }
     fn line(&self, k: u32) -> u32 {
         self.lines[k as usize]
     }

@@ -93,6 +93,8 @@ const _: () = assert!(LEAF_ZOOM >= SHARD_ZOOM);
 
 impl Shard {
     pub const UNKNOWN: Shard = Shard(0);
+    /// Known, every one of its nine served: nothing about it is past.
+    pub const INSIDE: Shard = Shard::of_served(SHARD_ALL);
 
     /// The node `(zoom, c)`'s, as `self` knows it, else found: its shard and
     /// the eight about it each looked up in the area's index (`serves`).
@@ -221,12 +223,12 @@ pub fn wall(look: u32, cell: Zoom, gone: bool, beside: bool) -> u32 {
     }
 }
 
-/// A cell's look with the area's edge laid, the one rule a column is read
-/// by (`window::ground`), on the CPU and a GPU alike:
-/// `gone` where the cell is past the area; at a leaf's cells or finer,
-/// ground beside one gone is the wall (`wall`), where the leaf cells the
-/// eight about the block `b` at `cell` lie in (`ring`) are asked by their
-/// offset in leaf cells (`gone_at`), each once, none past the first gone.
+/// Column `b` at `cell`, its look `look`, with the area's edge laid, the
+/// one rule a column is read by (pxl-portable `window::ground`) and the ways'
+/// fill walls one by (`ways::Columns::walled`), on the CPU and a GPU alike:
+/// gone, void, where its look is unknown; at a leaf's cells or finer, ground
+/// beside a gone leaf cell is the wall (`wall`), the leaf cells the eight
+/// about it lie in (`ring`) asked each once, none past the first gone.
 ///
 /// Gone is past, one fact two ways: a cell whose look is `UNKNOWN`
 /// (nothing known) is exactly one past the area. The bake writes `unknown`
@@ -234,15 +236,22 @@ pub fn wall(look: u32, cell: Zoom, gone: bool, beside: bool) -> u32 {
 /// terrain/absent.rs `Absence::at`), its coverage is the served shards, and
 /// no window's cell is coarser than a shard, so none straddles the area's
 /// edge. So the leaf cells about a column are never read to know them gone:
-/// `Shard::past_leaf` answers each off the shard a descent carries, and a
-/// column's own look, read anyway, answers its own.
-pub fn edge(look: u32, cell: Zoom, b: [i32; 2], gone: bool, gone_at: impl Fn(i32, i32) -> bool) -> u32 {
+/// each is past or not off `shard`, the shard of `owner`, by its nine bits
+/// (`Shard::past_leaf`), none past in a shard known `inside`; a column's own
+/// look, read anyway, answers its own. They are asked only at a leaf's cells
+/// or finer, where they lie a leaf cell past the column, within its shard's
+/// nine wherever `owner`'s shard is the column's or one beside it: a block
+/// a read is made for and the columns about it, or a window's square there,
+/// a node far narrower than a shard.
+pub fn edge(look: u32, cell: Zoom, b: [i32; 2], shard: Shard, owner: (Zoom, [i32; 2])) -> u32 {
+    let gone = look == UNKNOWN;
     let beside = !gone && cell >= LEAF_CELL && Ground::grounds(look) && {
-        let r = ring(cell, b);
+        let (r, s) = (ring(cell, b), cell - LEAF_CELL);
         let mut any = false;
         let mut k = 0u32;
         while k < 9 {
-            any = any || (r >> k & 1 == 1 && gone_at((k % 3) as i32 - 1, (k / 3) as i32 - 1));
+            let l = [wrap(LEAF_CELL, (b[0] >> s) + (k % 3) as i32 - 1), (b[1] >> s) + (k / 3) as i32 - 1];
+            any = any || (r >> k & 1 == 1 && !shard.inside() && shard.past_leaf(owner, tile_at(LEAF_CELL, l)));
             k += 1;
         }
         any

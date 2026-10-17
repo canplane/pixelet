@@ -446,6 +446,10 @@ pub trait Columns {
     fn side(&self, c: [i32; 2]) -> f32;
     fn stations(&self, c: [i32; 2]) -> Stations;
     fn look(&self, c: [i32; 2]) -> u32;
+    /// Whether the area's edge walls the column: ground beside cells past
+    /// the area (pxl-portable `area::edge`), where no way writes, as none
+    /// does past it.
+    fn walled(&self, c: [i32; 2]) -> bool;
     fn face(&self, c: [i32; 2]) -> i32;
     /// Whether the `k`-th segment over column `c` is the next of its line
     /// after the one before it there, so the two are one visit.
@@ -644,7 +648,7 @@ impl Spans {
 /// ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     let (mut spans, mut fits) = (Spans::NONE, true);
-    if cols.look(c) == crate::ground::UNKNOWN {
+    if cols.look(c) == crate::ground::UNKNOWN || cols.walled(c) {
         return (spans, fits);
     }
     let mut k = 0;

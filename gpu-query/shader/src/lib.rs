@@ -296,7 +296,7 @@ impl Query for World<'_> {
         // What the ways write over the ground's block, read as the CPU reads
         // it (pxl-portable `window::ways_over`).
         let (value, f) = if block && i.kind == Kind::Block {
-            window::ways_over(self, at.shard, found, cell, zoom, c, i.block)
+            window::ways_over(self, found, cell, zoom, c, i.block)
         } else {
             i.block
         };
@@ -666,7 +666,8 @@ pub fn bound_cs(
 /// `pass.x` 0 to 2: each column counts its runs into its word; one thread a
 /// square sums them in order into each column's first; each column writes
 /// its runs from its first. Over `heights_cs`'s tops: a way is told from
-/// their faces.
+/// their faces. Each square's entry as handed whole: where it lies and its
+/// shard lay the area's edge (pxl-portable `ways::Columns::walled`).
 #[spirv(compute(threads(64, 1, 1)))]
 pub fn ways_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -674,12 +675,13 @@ pub fn ways_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
 ) {
-    let base = square_at(at(fresh, FRESH_WORDS * id.z + window::FRESH_SQUARE));
-    let place = window::place_of(at(fresh, FRESH_WORDS * id.z + window::FRESH_PLACE));
-    // The window's cells' zoom, as handed with the square: a focus's or a
-    // destination's is not its index's.
-    let cell = at(fresh, FRESH_WORDS * id.z + window::FRESH_CELL);
-    fill::ways(ground, base, place, cell, pass.x, id.x);
+    let mut entry = [0; FRESH_WORDS as usize];
+    let mut k = 0;
+    while k < FRESH_WORDS {
+        entry[k as usize] = at(fresh, FRESH_WORDS * id.z + k);
+        k += 1;
+    }
+    fill::ways(ground, entry, pass.x, id.x);
 }
 
 /// The eye's slots whose decor grows again this frame, a thread a slot,

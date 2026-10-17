@@ -9,7 +9,11 @@
 //! columns' passes in order over one square (`square`), so the runs it
 //! sizes a tile's room by are the ones a GPU writes.
 
-use crate::window::{self, column_first, column_top, Squares, COLUMNS_AT, ELE_AT, LEVELS_AT, LINES_AT, RUNS_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS};
+use crate::area::Shard;
+use crate::window::{
+    self, column_first, column_top, Squares, COLUMNS_AT, ELE_AT, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_SQUARE, FRESH_WORDS, LEVELS_AT, LINES_AT, RUNS_AT, RUNS_SQUARE, SQUARE,
+    SQUARE_CELLS, SQUARE_WORDS,
+};
 use crate::{at, ground, ways, Zoom};
 
 /// Word `i` of `s` set to `v`, as `at` reads: totally, none past it, so no
@@ -59,12 +63,15 @@ impl Squares for Fresh<'_> {
 }
 
 /// A square being filled, as the ways' rule reads it (`window::Square`):
-/// its lines, looks and heights in its lane.
+/// its lines, looks and heights in its lane, and where it is as handed
+/// (`window::FRESH_WORDS`).
 struct Filling<'a> {
     ground: &'a [u32],
     base: u32,
     cell: u32,
     place: [u32; 2],
+    first: [i32; 2],
+    shard: Shard,
 }
 
 impl window::Square for Filling<'_> {
@@ -73,6 +80,12 @@ impl window::Square for Filling<'_> {
     }
     fn place(&self) -> [u32; 2] {
         self.place
+    }
+    fn first(&self) -> [i32; 2] {
+        self.first
+    }
+    fn shard(&self) -> Shard {
+        self.shard
     }
     fn line(&self, k: u32) -> u32 {
         at(self.ground, self.base + LINES_AT + k)
@@ -99,13 +112,16 @@ pub fn heights(ground: &mut [u32], base: u32, place: [u32; 2], [x, y]: [u32; 2])
     put(ground, base + COLUMNS_AT + y * SQUARE + x, w);
 }
 
-/// Pass `pass` of the square at `base`'s ways, its cells at `cell`, at
-/// `place` in its tile, for column `i`: 0 counts its runs into its column
+/// Pass `pass` of the ways of the square `fresh` hands (`window::fresh`),
+/// for column `i`: 0 counts its runs into its column
 /// word's first, 1 (`i` 0 alone) sums them in order into each column's
 /// first and the last word's, 2 writes its runs from its first, each off
 /// its spans (`ways::column`) read along z (`ways::runs`). A column's spans,
 /// `u32::MAX` where they do not fit `ways::SPANS`; 0 for the rest.
-pub fn ways(ground: &mut [u32], base: u32, place: [u32; 2], cell: Zoom, pass: u32, i: u32) -> u32 {
+pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], pass: u32, i: u32) -> u32 {
+    let word = |k: u32| fresh[k as usize];
+    let (base, place, cell) = (word(FRESH_SQUARE) * SQUARE_WORDS, window::place_of(word(FRESH_PLACE)), word(FRESH_CELL));
+    let (first, shard) = ([word(FRESH_FIRST) as i32, word(FRESH_FIRST + 1) as i32], Shard::of_word(word(FRESH_SHARD)));
     let columns = base + COLUMNS_AT;
     if pass == 1 {
         if i == 0 {
@@ -124,7 +140,15 @@ pub fn ways(ground: &mut [u32], base: u32, place: [u32; 2], cell: Zoom, pass: u3
     }
     let (spans, fits) = {
         let lane: &[u32] = ground;
-        crate::ways::column(&Filling { ground: lane, base, cell, place }, [(i % SQUARE) as i32, (i / SQUARE) as i32])
+        let filling = Filling {
+            ground: lane,
+            base,
+            cell,
+            place,
+            first,
+            shard,
+        };
+        crate::ways::column(&filling, [(i % SQUARE) as i32, (i / SQUARE) as i32])
     };
     let w = at(ground, columns + i);
     let (from, room) = if pass == 2 { (column_first(w), RUNS_SQUARE) } else { (0, 0) };
@@ -185,9 +209,12 @@ pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
 /// A square filled whole, its passes in a GPU's order (pxl-render
 /// gpu/renderer.rs `grids`): `lane` its words, its looks, samples and lines
 /// as handed; its cells at `cell`, lying at `place` in its tile; its
-/// columns, the levels no bake reads. The runs its ways read as, and the
-/// most spans a column makes (`u32::MAX` past `ways::SPANS`).
+/// columns, the levels no bake reads; inside the area, so no wall cuts its
+/// ways and the runs are the most a client's fill writes. The runs its ways
+/// read as, and the most spans a column makes (`u32::MAX` past
+/// `ways::SPANS`).
 pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) -> [u32; 2] {
+    let fresh = window::fresh(0, window::place_word(place), cell, [0; 2], Shard::INSIDE);
     for y in 0..SQUARE {
         for x in 0..SQUARE {
             heights(lane, 0, place, [x, y]);
@@ -196,7 +223,7 @@ pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) -> [u32; 2] {
     let mut most = 0;
     for pass in 0..3 {
         for i in 0..if pass == 1 { 1 } else { SQUARE_CELLS } {
-            most = most.max(ways(lane, 0, place, cell, pass, i));
+            most = most.max(ways(lane, fresh, pass, i));
         }
     }
     [column_first(column_of(lane, 0, SQUARE_CELLS)), most]

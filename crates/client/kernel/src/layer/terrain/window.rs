@@ -10,7 +10,7 @@
 //! still to come: one that enters asks its tile again (`Residency::again`),
 //! which the browser's cache answers.
 
-use pxl_portable::area::Area;
+use pxl_portable::area::{Area, Shard};
 use pxl_portable::ground::{own, word};
 use pxl_portable::window::{self, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
 use pxl_portable::wrap_index;
@@ -447,10 +447,13 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> Offered {
             cells: off_of_slice(cells(i)) as u32,
             ticket: w.ticket,
         };
+        let key = w.slots[i as usize].square;
         let taken = write(Square {
             square: i,
             place: window::place_word(place),
             cell,
+            first: [key[0] << SQUARE_SHIFT, key[1] << SQUARE_SHIFT],
+            shard: Shard::UNKNOWN.at(&Declared, (window::squares_zoom(cell), key)),
             looks: cut,
             samples: pxl_render::gpu::api::bytes(ele),
             lines: &lines[..written],

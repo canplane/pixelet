@@ -55,18 +55,25 @@ pub const FILL_SHARE_MS: f32 = 4.0;
 pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_SQUARE_MS) as u32;
 
 /// A square handed to the GPU's fill, in words: its index, where it lies in
-/// its tile (`place_word`, in squares), and its cells' zoom, its window's
-/// as the window holds it (pxl-kernel layer/terrain/window.rs `Window::cell`;
-/// a destination's moves with its line), never derived from the index.
-pub const FRESH_WORDS: u32 = 3;
+/// its tile (`place_word`, in squares), its cells' zoom, its window's as the
+/// window holds it (pxl-kernel layer/terrain/window.rs `Window::cell`; a
+/// destination's moves with its line), never derived from the index; its
+/// first cell at that zoom as the world names it, X wrapped there, then Y,
+/// two words; and what is known of the service area at it (`area::Shard`,
+/// its word), which the ways' fill lays the area's edge by
+/// (`ways::Columns::walled`).
 pub const FRESH_SQUARE: u32 = 0;
-pub const FRESH_PLACE: u32 = 1;
-pub const FRESH_CELL: u32 = 2;
+pub const FRESH_PLACE: u32 = FRESH_SQUARE + 1;
+pub const FRESH_CELL: u32 = FRESH_PLACE + 1;
+pub const FRESH_FIRST: u32 = FRESH_CELL + 1;
+pub const FRESH_SHARD: u32 = FRESH_FIRST + 2;
+pub const FRESH_WORDS: u32 = FRESH_SHARD + 1;
 
 /// A fresh square's words (`FRESH_WORDS`), `place` its `place_word`.
-pub const fn fresh(square: u32, place: u32, cell: Zoom) -> [u32; FRESH_WORDS as usize] {
+pub const fn fresh(square: u32, place: u32, cell: Zoom, first: [i32; 2], shard: crate::area::Shard) -> [u32; FRESH_WORDS as usize] {
     let mut w = [0; FRESH_WORDS as usize];
     (w[FRESH_SQUARE as usize], w[FRESH_PLACE as usize], w[FRESH_CELL as usize]) = (square, place, cell);
+    (w[FRESH_FIRST as usize], w[FRESH_FIRST as usize + 1], w[FRESH_SHARD as usize]) = (first[0] as u32, first[1] as u32, shard.word());
     w
 }
 
@@ -93,7 +100,7 @@ pub fn origin(cell: Zoom, c: [i32; 2]) -> [i32; 2] {
 }
 
 /// The zoom a window's squares are counted at: its cells' over `SQUARE_SHIFT`.
-const fn squares_zoom(cell: Zoom) -> Zoom {
+pub const fn squares_zoom(cell: Zoom) -> Zoom {
     cell - SQUARE_SHIFT
 }
 
@@ -221,6 +228,10 @@ pub trait Squares {
 pub trait Square {
     fn cell(&self) -> Zoom;
     fn place(&self) -> [u32; 2];
+    /// Its first cell as the world names it, at its cells' zoom.
+    fn first(&self) -> [i32; 2];
+    /// What is known of the service area at it.
+    fn shard(&self) -> crate::area::Shard;
     fn line(&self, k: u32) -> u32;
     fn looks(&self, i: u32) -> u32;
     fn height(&self, c: [i32; 2]) -> i32;
@@ -296,6 +307,16 @@ impl<Q: Square> crate::ways::Columns for Q {
         let p = self.place();
         let center = crate::lattice::CELL_CENTER;
         [(p[0] * SQUARE) as f32 + c[0] as f32 + center, (p[1] * SQUARE) as f32 + c[1] as f32 + center]
+    }
+    /// Off its own look and the square's shard (`area::edge`), the column
+    /// its own owner: the leaf cells about it are asked only at a leaf's
+    /// cells or finer, where a square is a node inside one shard, so the
+    /// column's shard is the square's; a coarser square's is unknown and
+    /// never asked.
+    fn walled(&self, c: [i32; 2]) -> bool {
+        let (cell, first) = (Square::cell(self), self.first());
+        let b = [wrap_index(cell, first[0] + c[0]), first[1] + c[1]];
+        crate::area::edge(crate::ways::Columns::look(self, c), cell, b, self.shard(), (cell, b)) == UNKNOWN
     }
     fn side(&self, _: [i32; 2]) -> f32 {
         1.0
@@ -516,16 +537,8 @@ pub fn ground(w: &impl Windows, (shard, owner): (crate::area::Shard, (Zoom, [i32
     let place = if q[0] == o[0] && q[1] == o[1] { place } else { Found::NONE };
     let (word, h, f) = cell(w, place, read, g);
     let (look, h, fold) = crate::ground::read_cell(word, h, f.from());
-    // Gone is past (`area::edge`): the column's own off its look, read
-    // anyway; the leaf cells about it by their offset, each off what
-    // `shard` knows, none of them read; none past in a shard known `inside`.
-    let gone_at = |dx: i32, dy: i32| {
-        let s = zoom - LEAF_CELL;
-        let l = [wrap_index(LEAF_CELL, (b[0] >> s) + dx), (b[1] >> s) + dy];
-        !shard.inside() && shard.past_leaf(owner, crate::area::tile_at(LEAF_CELL, l))
-    };
     let cell = crate::ground::Cell {
-        look: crate::area::edge(look, zoom, b, look == UNKNOWN, gone_at),
+        look: crate::area::edge(look, zoom, b, shard, owner),
         top: crate::ground::blocks(zoom, h),
         fold,
     };
@@ -535,41 +548,19 @@ pub fn ground(w: &impl Windows, (shard, owner): (crate::area::Shard, (Zoom, [i32
 /// The ways about block `own` at `zoom` as the windows hold them (`ran`),
 /// off the window its ground's cell was read at (`found`) and the columns
 /// about it read off it: none in a column past the area or walled, as the
-/// rule writes none there (`ways::column`) — the own column's wall its cell as
-/// read (`cell`), each other's its own, none where its shard is `inside`.
+/// fill writes none there (`ways::column`, `ways::Columns::walled`).
 /// It holds the windows by value: a GPU holds no pointer in a struct.
 struct Over<W> {
     w: W,
     zoom: Zoom,
-    own: [i32; 2],
     /// The square at its cells' zoom its own column's cell lies in.
     square: [i32; 2],
-    cell: crate::ground::Cell,
     found: Found,
-    shard: crate::area::Shard,
 }
 
 impl<W: Windows> crate::ways::Airs for Over<W> {
     fn at(&self, c: [i32; 2], z: i32) -> u32 {
-        let v = ran(&self.w, self.found, self.square, self.zoom, c, z);
-        if v == crate::ways::NOTHING {
-            return v;
-        }
-        let walled = if c[0] == self.own[0] && c[1] == self.own[1] {
-            self.cell.look == UNKNOWN
-        } else {
-            // Past the area, off the own shard's nine; else a neighbour's
-            // wall, only at the leaves' cells or finer and never inside the
-            // area (`area::edge`), its ring within the own shard's nine.
-            let own = (self.zoom, self.own);
-            (self.zoom >= crate::SHARD_ZOOM && self.shard.past_leaf(own, crate::area::tile_at(self.zoom, c)))
-                || (self.zoom >= LEAF_CELL && !self.shard.inside() && ground(&self.w, (self.shard, own), Found::NONE, self.zoom, c).0.look == UNKNOWN)
-        };
-        if walled {
-            crate::ways::NOTHING
-        } else {
-            v
-        }
+        ran(&self.w, self.found, self.square, self.zoom, c, z)
     }
 }
 
@@ -577,8 +568,10 @@ impl<W: Windows> crate::ways::Airs for Over<W> {
 /// there (`ways::block`), `block` its look and its fold's four, `cell` the
 /// column it was read off and `found` where: air, or a way's look whole.
 /// Only a way in the block's own column writes in it, or the air of one
-/// beside where the caves carved the ground (`runs_in`).
-pub fn ways_over(w: &(impl Windows + Copy), shard: crate::area::Shard, found: Found, cell: crate::ground::Cell, zoom: Zoom, c: [i32; 3], block: (u32, [u32; 4])) -> (u32, [u32; 4]) {
+/// beside where the caves carved the ground (`runs_in`). A column read off
+/// a coarser window standing in for its own holds that window's runs, laid
+/// at its coarser cells, where no wall stands: the coarser zoom's world.
+pub fn ways_over(w: &(impl Windows + Copy), found: Found, cell: crate::ground::Cell, zoom: Zoom, c: [i32; 3], block: (u32, [u32; 4])) -> (u32, [u32; 4]) {
     let carved = block.0 == VOID && cell.block(zoom, c[2], false).0 != VOID;
     if !carved && !runs_in(w, found, zoom, [c[0], c[1]]) {
         return block;
@@ -586,11 +579,8 @@ pub fn ways_over(w: &(impl Windows + Copy), shard: crate::area::Shard, found: Fo
     let over = Over {
         w: *w,
         zoom,
-        own: [c[0], c[1]],
         square: square_of(cell_at(zoom, held_to(zoom), [c[0], c[1]])).0,
-        cell,
         found,
-        shard,
     };
     match crate::ways::block(&over, c, carved) {
         crate::ways::NOTHING => block,

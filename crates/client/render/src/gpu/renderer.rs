@@ -196,14 +196,18 @@ pub struct CellsBack {
 }
 
 /// A square handed to the GPU: its place among the windows' squares, where
-/// it lies in its tile in squares (X low, Y high), its cells' zoom, its four
-/// looks a cell, its tile's padded samples, its lines as far as they are
-/// written, and where its cells, joined with the ways, come back to.
+/// it lies in its tile in squares (X low, Y high), its cells' zoom, its
+/// first cell as the world names it there and what is known of the service
+/// area at it, its four looks a cell, its tile's padded samples, its lines
+/// as far as they are written, and where its cells, joined with the ways,
+/// come back to (pxl-portable `window::FRESH_WORDS`).
 pub struct Square<'a> {
     pub square: u32,
     pub place: u32,
-    /// Its cells' zoom, its window's (pxl-portable `window::FRESH_WORDS`).
+    /// Its cells' zoom, its window's.
     pub cell: u32,
+    pub first: [i32; 2],
+    pub shard: pxl_portable::area::Shard,
     pub looks: &'a [u8],
     pub samples: &'a [u8],
     /// Its lines (pxl-portable `window::LINES_AT`), the words written.
@@ -964,7 +968,7 @@ impl RaysPass {
         });
         let mut fresh = 0;
         upload(&mut |q| {
-            let fresh_entry = window::fresh(q.square, q.place, q.cell);
+            let fresh_entry = window::fresh(q.square, q.place, q.cell, q.first, q.shard);
             if !room(write_buffer_bytes(q.looks) + write_buffer_bytes(q.samples) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&fresh_entry))) {
                 return false;
             }

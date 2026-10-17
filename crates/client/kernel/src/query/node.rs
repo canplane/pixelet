@@ -151,7 +151,7 @@ impl World<'_> {
         let mut reading = Reading::new(self, at);
         let (ground, cell, found) = ground::node(&mut reading, cave, shard, &mut place, (zoom, c), [zoom, zoom], true);
         let answer = reading.answer(ground.kind != Kind::Lacks, || {
-            let (g, _) = window::ways_over(&Windowed, shard, found, cell, zoom, c, ground.block);
+            let (g, _) = window::ways_over(&Windowed, found, cell, zoom, c, ground.block);
             (g != u32::from(sentinel::void)).then_some(Block::Ground(g as GroundId))
         });
         at.ground = place;
