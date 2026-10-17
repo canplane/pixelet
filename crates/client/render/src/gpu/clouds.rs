@@ -10,9 +10,8 @@ use pxl_spec::space::coord::v3::V3;
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu, Load};
-use crate::gpu::api_spec::resource;
-use crate::gpu::atmosphere::AIR_WORDS;
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load};
+use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_ray;
@@ -38,7 +37,7 @@ pub struct CloudPass {
 }
 
 impl CloudPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [u32; AIR_WORDS]) -> CloudPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [Entry; AIR_ENTRIES]) -> CloudPass {
         let below = pipelines.build(g, PIPELINE_CLOUDS, g.canvas());
         let above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, g.canvas());
         let tile = g.texture(
@@ -53,12 +52,8 @@ impl CloudPass {
         // Repeated, since the tile meets itself.
         let tile_sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::linear, AddressMode::repeat, None, 1);
         let uniform = g.buffer(word_bytes(CLOUDS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let mut e = [0u32; 20 + AIR_WORDS];
-        e[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
-        e[5..10].copy_from_slice(&buffer_entry(1, uniform));
-        e[10..15].copy_from_slice(&[2, resource::VIEW, tile_view, 0, 0]);
-        e[15..20].copy_from_slice(&[3, resource::SAMPLER, tile_sampler, 0, 0]);
-        e[20..].copy_from_slice(&air);
+        let mut e = vec![buffer_entry(0, frame_buffer), buffer_entry(1, uniform), view_entry(2, tile_view), sampler_entry(3, tile_sampler)];
+        e.extend(air);
         let group = g.bind_group(below.layouts[0], &e);
         bake(g, pipelines, tile, mip_levels(TILE_TEXELS, TILE_TEXELS));
         CloudPass {

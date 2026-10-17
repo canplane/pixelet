@@ -12,8 +12,7 @@ use pxl_spec::asset::{shipped_texture_tile, TileOrigin};
 use crate::frame::shader::record::PIPELINE_MIPS;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_usage, bytes, pass_desc, release, texture_usage, Format, Gpu, Load};
-use crate::gpu::api_spec::resource;
+use crate::gpu::api::{buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, Format, Gpu, Load};
 use crate::gpu::pipeline::Pipelines;
 use crate::mesh::paint::palette::{palette, LAYERS};
 
@@ -47,7 +46,7 @@ impl Mips {
             for level in 1..levels {
                 let above = g.view(texture, false, level - 1, 1, layer, 1);
                 let target = g.view(texture, false, level, 1, layer, 1);
-                let group = g.bind_group(self.layout, &[0, resource::VIEW, above, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
+                let group = g.bind_group(self.layout, &[view_entry(0, above), sampler_entry(1, self.sampler)]);
                 let pass = g.pass(encoder, &pass_desc(target, Load::Clear, 0, Load::Clear, 0.0, None));
                 g.set_pipeline(pass, self.pipeline);
                 g.set_bind_group(pass, 0, group, &[]);

@@ -17,8 +17,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use xpute_guest::mem::base::off_of;
 
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, texture_usage, word_bytes, Format, Gpu, Load, Stamp, DONE};
-use crate::gpu::api_spec::resource;
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, Stamp, DONE};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::Mips;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -60,8 +59,8 @@ pub(crate) const EARTH_REACH: usize = 43;
 pub(crate) const EARTH_WINDOW: usize = 44;
 pub(crate) const EARTH_TILES: usize = 48;
 
-/// Bindings 8 through 19, ten entries of five words.
-pub const AIR_WORDS: usize = 50;
+/// Bindings 8 through 18, ten entries.
+pub const AIR_ENTRIES: usize = 10;
 
 /// A layer for each tile the earth layer's floor holds at once: its residency's frames.
 pub const EARTH_LAYERS: u32 = REACH_TILES;
@@ -204,12 +203,12 @@ impl Atmosphere {
         };
         // Every table's group is the air's entries it reads and its own.
         let air = atmosphere.entries();
-        let of = |bindings: &[u32], own: &[[u32; 5]]| -> Vec<u32> {
-            let shared = air.as_chunks::<5>().0.iter().filter(|c| bindings.contains(&c[0]));
-            shared.chain(own).flatten().copied().collect()
+        let of = |bindings: &[u32], own: &[Entry]| -> Vec<Entry> {
+            let shared = air.iter().filter(|e| bindings.contains(&e.binding));
+            shared.chain(own).copied().collect()
         };
         let medium = [8, 9, 11];
-        let multiscatter = [12, resource::VIEW, views[MULTISCATTER], 0, 0];
+        let multiscatter = view_entry(12, views[MULTISCATTER]);
         let frame = buffer_entry(0, frame_buffer);
         let light = |which: f32| {
             let light = g.buffer(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
@@ -217,8 +216,8 @@ impl Atmosphere {
             buffer_entry(14, light)
         };
         // The exposure reads the air but what it writes.
-        let unexposed: Vec<u32> = air.as_chunks::<5>().0.iter().map(|c| c[0]).filter(|&b| b != 13).collect();
-        let reads: [(usize, Vec<u32>); TABLES] = [
+        let unexposed: Vec<u32> = air.iter().map(|e| e.binding).filter(|&b| b != 13).collect();
+        let reads: [(usize, Vec<Entry>); TABLES] = [
             (TRANSMITTANCE, of(&[8], &[])),
             (MULTISCATTER, of(&medium, &[])),
             (IRRADIANCE, of(&medium, &[multiscatter])),
@@ -234,19 +233,19 @@ impl Atmosphere {
         atmosphere
     }
 
-    pub fn entries(&self) -> [u32; AIR_WORDS] {
-        let mut e = [0u32; AIR_WORDS];
-        e[..5].copy_from_slice(&buffer_entry(8, self.uniform));
-        e[5..10].copy_from_slice(&[9, resource::VIEW, self.views[TRANSMITTANCE], 0, 0]);
-        e[10..15].copy_from_slice(&[10, resource::VIEW, self.views[SKY_VIEW], 0, 0]);
-        e[15..20].copy_from_slice(&[11, resource::SAMPLER, self.sampler, 0, 0]);
-        e[20..25].copy_from_slice(&[13, resource::VIEW, self.views[EXPOSURE_TEXEL], 0, 0]);
-        e[25..30].copy_from_slice(&[15, resource::VIEW, self.views[MOON_VIEW], 0, 0]);
-        e[30..35].copy_from_slice(&[16, resource::VIEW, self.earth.view, 0, 0]);
-        e[35..40].copy_from_slice(&[17, resource::VIEW, self.earth_tiles.1, 0, 0]);
-        e[40..45].copy_from_slice(&[18, resource::VIEW, self.views[IRRADIANCE], 0, 0]);
-        e[45..50].copy_from_slice(&[12, resource::VIEW, self.views[MULTISCATTER], 0, 0]);
-        e
+    pub fn entries(&self) -> [Entry; AIR_ENTRIES] {
+        [
+            buffer_entry(8, self.uniform),
+            view_entry(9, self.views[TRANSMITTANCE]),
+            view_entry(10, self.views[SKY_VIEW]),
+            sampler_entry(11, self.sampler),
+            view_entry(13, self.views[EXPOSURE_TEXEL]),
+            view_entry(15, self.views[MOON_VIEW]),
+            view_entry(16, self.earth.view),
+            view_entry(17, self.earth_tiles.1),
+            view_entry(18, self.views[IRRADIANCE]),
+            view_entry(12, self.views[MULTISCATTER]),
+        ]
     }
 
     /// The earth layer's tiles: what has come goes into its layer as the

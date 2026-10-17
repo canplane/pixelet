@@ -4,9 +4,8 @@
 //! uniform slots written once before the pass, and the draw loop.
 
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
-use crate::gpu::api::{buffer_usage, release, Gpu};
-use crate::gpu::api_spec::resource;
-use crate::gpu::atmosphere::AIR_WORDS;
+use crate::gpu::api::{buffer_range_entry, buffer_usage, release, Entry, Gpu};
+use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{frame_group, put_f32, put_u32, Scratch};
 
@@ -28,11 +27,11 @@ pub struct FrameGroups {
     pub frame: u32,
     pub over: u32,
     layout: u32,
-    air: [u32; AIR_WORDS],
+    air: [Entry; AIR_ENTRIES],
 }
 
 impl FrameGroups {
-    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, [ao, open]: [[u32; 5]; 2], air: [u32; AIR_WORDS]) -> FrameGroups {
+    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, [ao, open]: [Entry; 2], air: [Entry; AIR_ENTRIES]) -> FrameGroups {
         FrameGroups {
             frame: frame_group(g, layout, frame_buffer, ao, air),
             over: frame_group(g, layout, frame_buffer, open, air),
@@ -41,7 +40,7 @@ impl FrameGroups {
         }
     }
 
-    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, ao: [[u32; 5]; 2]) {
+    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, ao: [Entry; 2]) {
         self.release();
         *self = FrameGroups::new(g, self.layout, frame_buffer, ao, self.air);
     }
@@ -97,7 +96,7 @@ impl DrawUniforms {
             release(self.group);
             release(self.buffer);
             self.buffer = g.buffer(need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            self.group = g.bind_group(layout, &[0, resource::BUFFER, self.buffer, 0, self.bytes]);
+            self.group = g.bind_group(layout, &[buffer_range_entry(0, self.buffer, 0, self.bytes)]);
             self.capacity = need;
         }
         let stride = self.stride as usize;

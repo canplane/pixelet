@@ -21,16 +21,6 @@ pub mod surface_role {
     pub const KEYS: &[&str] = &["WORLD", "CASE"];
 }
 
-/// A bind group entry's kind, the second of its five words (binding, kind,
-/// object, offset, size; a size of 0 the rest of the buffer), as gpu/api.rs
-/// expands them into xpute's entries.
-pub mod resource {
-    pub const BUFFER: u32 = 0;
-    pub const VIEW: u32 = 1;
-    pub const SAMPLER: u32 = 2;
-    pub const KEYS: &[&str] = &["BUFFER", "VIEW", "SAMPLER"];
-}
-
 /// The one place the renderer's calls cross (gpu/api.rs): a stream
 /// (xpute-guest ipc/stream.rs) in a range of the kernel's memory, which the
 /// kernel writes its calls into during a turn and the host runs once the turn

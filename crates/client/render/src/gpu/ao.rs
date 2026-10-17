@@ -10,8 +10,7 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 use crate::frame::shader::record::{PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE, PIPELINE_AO_UPSAMPLE};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu, Load, Stamp};
-use crate::gpu::api_spec::resource;
+use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, Stamp};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_mat;
 
@@ -98,12 +97,12 @@ impl ScreenAo {
         }
     }
 
-    pub fn entry(&self, binding: u32) -> [u32; 5] {
-        [binding, resource::VIEW, if self.map_view != 0 { self.map_view } else { self.blank_view }, 0, 0]
+    pub fn entry(&self, binding: u32) -> Entry {
+        view_entry(binding, if self.map_view != 0 { self.map_view } else { self.blank_view })
     }
 
-    pub fn blank_entry(&self, binding: u32) -> [u32; 5] {
-        [binding, resource::VIEW, self.blank_view, 0, 0]
+    pub fn blank_entry(&self, binding: u32) -> Entry {
+        view_entry(binding, self.blank_view)
     }
 
     pub fn lay_out(&mut self, g: &Gpu, proj: &Mat4, width: u32, height: u32) {
@@ -138,13 +137,13 @@ impl ScreenAo {
         self.width = width;
         self.height = height;
 
-        let view = |binding: u32, id: u32| [binding, resource::VIEW, id, 0, 0];
-        let sampler = [4, resource::SAMPLER, self.sampler, 0, 0];
-        let run = [5, resource::BUFFER, self.run, 0, self.stride];
+        let view = view_entry;
+        let sampler = sampler_entry(4, self.sampler);
+        let run = buffer_range_entry(5, self.run, 0, self.stride);
         // The AO's uniform at 6; the frame's at 0 where a pass reads the screen's size or the fog.
-        let group = |layout: u32, frame: bool, between: &[[u32; 5]]| {
+        let group = |layout: u32, frame: bool, between: &[Entry]| {
             let frame = frame.then(|| buffer_entry(0, self.frame_buffer));
-            let e: Vec<u32> = frame.iter().chain(between).chain(&[buffer_entry(6, self.uniform)]).flatten().copied().collect();
+            let e: Vec<Entry> = frame.iter().chain(between).chain(&[buffer_entry(6, self.uniform)]).copied().collect();
 
             g.bind_group(layout, &e)
         };

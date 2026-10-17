@@ -9,8 +9,7 @@ use crate::frame::draw::{DRAW_WORDS, PIPELINE_IMPOSTOR};
 use crate::frame::shader::record::PIPELINE_IMPOSTOR_BAKE;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_usage, bytes, pass_desc, release, texture_usage, Format, Gpu, Load};
-use crate::gpu::api_spec::resource;
+use crate::gpu::api::{buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, Format, Gpu, Load};
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::decor::{block_group, uniform_group, DecorPass, GROUPS};
 use crate::gpu::pass::model::{draw_model, draw_models, put_instances, DrawUniforms, ModelDraw};
@@ -72,26 +71,7 @@ impl ImpostorPass {
         let depth = g.texture(SPRITE, SPRITE, 1, Format::depth32float, 1, texture_usage::RENDER_ATTACHMENT);
         let depth_view = g.view(depth, false, 0, 1, 0, 1);
         let fits = g.buffer((GROUPS * 16) as u32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let group = g.bind_group(
-            draw.layouts[2],
-            &[
-                0,
-                resource::VIEW,
-                atlas_view,
-                0,
-                0,
-                1,
-                resource::SAMPLER,
-                sampler,
-                0,
-                0,
-                2,
-                resource::BUFFER,
-                fits,
-                0,
-                (GROUPS * 16) as u32,
-            ],
-        );
+        let group = g.bind_group(draw.layouts[2], &[view_entry(0, atlas_view), sampler_entry(1, sampler), buffer_range_entry(2, fits, 0, (GROUPS * 16) as u32)]);
         ImpostorPass {
             draw,
             bake,

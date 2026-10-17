@@ -24,11 +24,12 @@ use crate::frame::shader::record::{
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, texture_usage, word_bytes, Device, Format, Gpu, Load, Stamp, DONE,
+    buffer_entry, buffer_range_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, sampler_entry, texture_usage, view_entry, word_bytes, Device,
+    Entry, Format, Gpu, Load, Stamp, DONE,
 };
 use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
-use crate::gpu::api_spec::{resource, surface_role};
-use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
+use crate::gpu::api_spec::surface_role;
+use crate::gpu::atmosphere::{Atmosphere, AIR_ENTRIES};
 use crate::gpu::clouds::CloudPass;
 use crate::gpu::grown::{DecorFrame, Drawn, Grown};
 use crate::gpu::image_map::ImageMap;
@@ -272,12 +273,9 @@ pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
     }
 }
 
-pub fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: [u32; 5], air: [u32; AIR_WORDS]) -> u32 {
-    let mut e = [0u32; 10 + AIR_WORDS];
-    e[..5].copy_from_slice(&buffer_entry(0, frame));
-    e[5..10].copy_from_slice(&ao);
-    e[10..].copy_from_slice(&air);
-
+pub fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: Entry, air: [Entry; AIR_ENTRIES]) -> u32 {
+    let mut e = vec![buffer_entry(0, frame), ao];
+    e.extend(air);
     g.bind_group(layout, &e)
 }
 
@@ -299,7 +297,7 @@ fn skin_view(g: &Gpu, image: u32) -> u32 {
 }
 
 pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> u32 {
-    g.bind_group(layout, &[0, resource::VIEW, skin_view(g, image), 0, 0, 1, resource::SAMPLER, sampler, 0, 0])
+    g.bind_group(layout, &[view_entry(0, skin_view(g, image)), sampler_entry(1, sampler)])
 }
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
@@ -578,7 +576,7 @@ impl Blocks {
     pub fn group(&mut self, g: &Gpu, handle: u32, layout: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
         if self.group[i] == 0 {
-            let id = g.bind_group(layout, &buffer_entry(0, self.buffer[i]));
+            let id = g.bind_group(layout, &[buffer_entry(0, self.buffer[i])]);
             self.group[i] = id;
         }
         Some(self.group[i])
@@ -648,7 +646,7 @@ impl DebugPass {
     fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> DebugPass {
         let built = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
         let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
-        let frame_group = g.bind_group(built.layouts[0], &buffer_entry(0, frame_buffer));
+        let frame_group = g.bind_group(built.layouts[0], &[buffer_entry(0, frame_buffer)]);
         DebugPass {
             built,
             faces,
@@ -662,7 +660,7 @@ impl DebugPass {
     fn prepare(&mut self, g: &Gpu, draws: &Draws) {
         while self.sets.len() < draws.of(PIPELINE_DEBUG).len() {
             let buffer = g.buffer(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            let group = g.bind_group(self.built.layouts[1], &buffer_entry(0, buffer));
+            let group = g.bind_group(self.built.layouts[1], &[buffer_entry(0, buffer)]);
             self.sets.push((buffer, group));
         }
     }
@@ -721,7 +719,7 @@ struct ScreenCellsPass {
     group: u32,
     /// The lit pass's entries it paints by (`Renderer::lit_entries`); none
     /// until the renderer hands them.
-    lit: Vec<u32>,
+    lit: Vec<Entry>,
     sky_buffer: u32,
     looks: u32,
     /// Where the eye is in the world, as `screen_cells.wgsl`'s `eye_at`.
@@ -919,7 +917,7 @@ impl ScreenCellsPass {
 
     /// The lit pass's entries, handed again whenever one of its objects is
     /// made again.
-    fn lit(&mut self, g: &Gpu, entries: Vec<u32>) {
+    fn lit(&mut self, g: &Gpu, entries: Vec<Entry>) {
         self.lit = entries;
         self.regroup(g);
     }
@@ -930,10 +928,10 @@ impl ScreenCellsPass {
         }
         release(self.group);
         let mut e = self.lit.clone();
-        e.extend(buffer_entry(3, self.lane));
-        e.extend(buffer_entry(19, self.sky_buffer));
-        e.extend(buffer_entry(20, self.looks));
-        e.extend(buffer_entry(21, self.eye_at));
+        e.push(buffer_entry(3, self.lane));
+        e.push(buffer_entry(19, self.sky_buffer));
+        e.push(buffer_entry(20, self.looks));
+        e.push(buffer_entry(21, self.eye_at));
         self.group = g.bind_group(self.built.layouts[0], &e);
     }
 
@@ -948,20 +946,14 @@ impl ScreenCellsPass {
             let frames_buffer = buffer(squares * SQUARE_BYTES, storage | buffer_usage::COPY_SRC);
             let fresh = buffer(word_bytes((FRESH_WORDS * squares) as usize), storage);
             let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &HEIGHTS_GROUP);
-            let mut entries = [0u32; 10];
-            entries[..5].copy_from_slice(&buffer_entry(0, fresh));
-            entries[5..].copy_from_slice(&buffer_entry(1, frames_buffer));
-            let heights_group = g.bind_group(heights_built.layouts[0], &entries);
-            let mut entries = [0u32; 15];
+            let heights_group = g.bind_group(heights_built.layouts[0], &[buffer_entry(0, fresh), buffer_entry(1, frames_buffer)]);
             // Each slot's number in it, written once: `bound_cs`'s level,
             // `ways_cs`'s pass.
             let slots = buffer((LEVELS + 1) * SLOT_STRIDE, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             for k in 0..=LEVELS {
                 g.write_buffer(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
             }
-            entries[..5].copy_from_slice(&[0, resource::BUFFER, slots, 0, 16]);
-            entries[5..10].copy_from_slice(&buffer_entry(1, fresh));
-            entries[10..].copy_from_slice(&buffer_entry(2, frames_buffer));
+            let entries = [buffer_range_entry(0, slots, 0, 16), buffer_entry(1, fresh), buffer_entry(2, frames_buffer)];
             let (bound_built, ways_built) = (pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP), pipelines.build_compute(g, SHADER_WAYS, &BOUND_GROUP));
             let (bound_group, ways_group) = (g.bind_group(bound_built.layouts[0], &entries), g.bind_group(ways_built.layouts[0], &entries));
             GroundBuffers {
@@ -1251,11 +1243,7 @@ const WAYS_WORKGROUP: u32 = 64;
 /// The cast's group 0 over `bound`: the eye, the window, the tiles' frames,
 /// the lane, its tangents, the served shards and the overwrites.
 fn cast_group(g: &Gpu, built: &Built, bound: [u32; 7]) -> u32 {
-    let mut entries = [0u32; 35];
-    for (k, id) in bound.into_iter().enumerate() {
-        entries[5 * k..5 * k + 5].copy_from_slice(&buffer_entry(k as u32, id));
-    }
-
+    let entries: [Entry; 7] = core::array::from_fn(|k| buffer_entry(k as u32, bound[k]));
     g.bind_group(built.layouts[0], &entries)
 }
 
@@ -1271,7 +1259,7 @@ const CASE_TARGET: V3 = [0.0, 0.0, 0.55];
 const CASE_FOV_DEG: f64 = 35.0;
 
 impl Case {
-    fn new(g: &Gpu, pipelines: &mut Pipelines, ao: &ScreenAo, air: [u32; AIR_WORDS], align: u32) -> Case {
+    fn new(g: &Gpu, pipelines: &mut Pipelines, ao: &ScreenAo, air: [Entry; AIR_ENTRIES], align: u32) -> Case {
         let frame_buffer = g.buffer(word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let layout = frame_layout(g, pipelines);
         Case {
@@ -1349,12 +1337,8 @@ impl Renderer {
         let layers = Layers::new(g);
         let sky_built = pipelines.build(g, PIPELINE_SKY, g.canvas());
         let moon = ImageMap::new(g, MOON_TEX_SZ, MOON_TEX_SZ);
-        let mut sky_entries = [0u32; 20 + AIR_WORDS];
-        sky_entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
-        sky_entries[5..10].copy_from_slice(&buffer_entry(19, sky_buffer));
-        sky_entries[10..15].copy_from_slice(&[2, resource::VIEW, moon.view, 0, 0]);
-        sky_entries[15..20].copy_from_slice(&[3, resource::SAMPLER, moon.sampler, 0, 0]);
-        sky_entries[20..].copy_from_slice(&air);
+        let mut sky_entries = vec![buffer_entry(0, frame_buffer), buffer_entry(19, sky_buffer), view_entry(2, moon.view), sampler_entry(3, moon.sampler)];
+        sky_entries.extend(air);
         let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
         let draws_buffer = g.buffer(DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
         let models = FrameGroups::new(g, frame_layout(g, &mut pipelines), frame_buffer, [ao.blank_entry(7); 2], air);
@@ -1403,13 +1387,8 @@ impl Renderer {
 
     /// What a block's face is painted by, wherever it is drawn from
     /// (paint.wgsl): the frame, the layers, the occlusion and the air.
-    fn lit_entries(&self, frame: u32) -> Vec<u32> {
-        let mut e = Vec::with_capacity(25 + AIR_WORDS);
-        e.extend(buffer_entry(0, frame));
-        e.extend([4, resource::VIEW, self.layers.view, 0, 0]);
-        e.extend(buffer_entry(5, self.layers.table));
-        e.extend([6, resource::SAMPLER, self.layers.sampler, 0, 0]);
-        e.extend(self.ao.entry(7));
+    fn lit_entries(&self, frame: u32) -> Vec<Entry> {
+        let mut e = vec![buffer_entry(0, frame), view_entry(4, self.layers.view), buffer_entry(5, self.layers.table), sampler_entry(6, self.layers.sampler), self.ao.entry(7)];
         e.extend(self.atmosphere.entries());
         e
     }
@@ -1418,7 +1397,7 @@ impl Renderer {
     fn box_groups(&mut self, g: &Gpu) {
         release(self.bind_group);
         let mut e = self.lit_entries(self.frame_buffer);
-        e.extend(buffer_entry(3, self.draws_buffer));
+        e.push(buffer_entry(3, self.draws_buffer));
         self.bind_group = g.bind_group(self.ghost[0].layouts[0], &e);
         let lit = self.lit_entries(self.frame_buffer);
         self.screen.lit(g, lit);
@@ -1659,7 +1638,7 @@ impl Renderer {
         let views = [world.world_view, world.world_depth_view];
         if views != self.blit_views {
             release(self.blit_group);
-            self.blit_group = g.bind_group(self.blit.layouts[0], &[0, resource::VIEW, views[0], 0, 0, 1, resource::VIEW, views[1], 0, 0]);
+            self.blit_group = g.bind_group(self.blit.layouts[0], &[view_entry(0, views[0]), view_entry(1, views[1])]);
             self.blit_views = views;
         }
         g.set_pipeline(pass, self.blit.pipeline);

@@ -30,7 +30,7 @@ pub use xpute_gpu::enums::TextureFormat as Format;
 pub use xpute_gpu::spec::DONE;
 
 use crate::frame::shader::record::VERTEX_ENTRY;
-use crate::gpu::api_spec::{record, resource, stream};
+use crate::gpu::api_spec::{record, stream};
 use crate::gpu::span_spec::GPU_SPAN_NAMES;
 
 pub mod buffer_usage {
@@ -144,9 +144,25 @@ pub fn pass_desc(color: Id, color_load: Load, depth: Id, depth_load: Load, depth
     }
 }
 
-/// A buffer's bind group entry, whole: (binding, kind, object, offset, size).
-pub fn buffer_entry(binding: u32, buffer: Id) -> [u32; 5] {
-    [binding, resource::BUFFER, buffer, 0, 0]
+/// A bind group's entry, as xpute's encoder takes it.
+pub use xpute_gpu::encode::BindGroupEntry as Entry;
+
+/// A buffer's entry, whole.
+pub const fn buffer_entry(binding: u32, buffer: Id) -> Entry {
+    Entry { binding, resource: encode::Resource::Buffer { buffer, offset: 0, size: None } }
+}
+
+/// `size` bytes of a buffer from `offset`.
+pub const fn buffer_range_entry(binding: u32, buffer: Id, offset: u32, size: u32) -> Entry {
+    Entry { binding, resource: encode::Resource::Buffer { buffer, offset, size: Some(size) } }
+}
+
+pub const fn view_entry(binding: u32, view: Id) -> Entry {
+    Entry { binding, resource: encode::Resource::View(view) }
+}
+
+pub const fn sampler_entry(binding: u32, sampler: Id) -> Entry {
+    Entry { binding, resource: encode::Resource::Sampler(sampler) }
 }
 
 pub fn bytes<T: Copy>(lane: &[T]) -> &[u8] {
@@ -649,27 +665,10 @@ impl Gpu {
         p
     }
 
-    /// Entries are (binding, kind, object, offset, size; 0 the rest of the buffer).
-    pub fn bind_group(&self, layout: Id, words: &[u32]) -> Id {
-        let words = words.as_chunks::<5>().0;
-        xpute_kit::ensure!(words.len() <= GROUP_ENTRIES, ENOSPC, words.len());
-        let entries: [encode::BindGroupEntry; GROUP_ENTRIES] = core::array::from_fn(|i| {
-            let [binding, kind, object, offset, size] = words.get(i).copied().unwrap_or_default();
-            encode::BindGroupEntry {
-                binding,
-                resource: match kind {
-                    resource::BUFFER => encode::Resource::Buffer {
-                        buffer: object,
-                        offset,
-                        size: (size != 0).then_some(size),
-                    },
-                    resource::VIEW => encode::Resource::View(object),
-                    _ => encode::Resource::Sampler(object),
-                },
-            }
-        });
+    pub fn bind_group(&self, layout: Id, entries: &[Entry]) -> Id {
+        xpute_kit::ensure!(entries.len() <= GROUP_ENTRIES, ENOSPC, entries.len());
         let s = self.s();
-        made(s.encoder.bind_group(&mut s.stream, layout, &entries[..words.len()]))
+        made(s.encoder.bind_group(&mut s.stream, layout, entries))
     }
 
     /// The format the device's surfaces show best, which the canvas's pipelines target.

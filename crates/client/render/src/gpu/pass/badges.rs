@@ -11,8 +11,7 @@ use crate::frame::draw::{uniform_of, PIPELINE_BADGE};
 use crate::frame::shader::record::PIPELINE_BADGE_REGION;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu, Load, Stamp};
-use crate::gpu::api_spec::resource;
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Format, Gpu, Load, Stamp};
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{Blocks, Draws};
@@ -240,7 +239,7 @@ impl BadgePass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> BadgePass {
         let sampler = g.sampler(FilterMode::nearest, FilterMode::linear, MipmapFilterMode::linear, AddressMode::clamp_to_edge, None, 1);
         let built = pipelines.build(g, PIPELINE_BADGE, g.canvas());
-        let frame_group = g.bind_group(built.layouts[0], &buffer_entry(0, frame_buffer));
+        let frame_group = g.bind_group(built.layouts[0], &[buffer_entry(0, frame_buffer)]);
         BadgePass {
             built,
             region_built: pipelines.build(g, PIPELINE_BADGE_REGION, Format::rgba8unorm),
@@ -288,7 +287,7 @@ impl BadgePass {
                 texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT,
             );
             self.sheet_view = g.view(self.sheet, false, 0, self.levels, 0, 1);
-            self.sheet_group = g.bind_group(self.built.layouts[2], &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
+            self.sheet_group = g.bind_group(self.built.layouts[2], &[view_entry(0, self.sheet_view), sampler_entry(1, self.sampler)]);
         }
         if self.dirty.is_empty() || self.sheet == 0 {
             return flush.whole;
@@ -352,12 +351,7 @@ impl BadgePass {
             }
             if set.block != block || set.depth != depth || set.numbers != self.numbers_view || set.group == 0 {
                 let bound = |layout: u32, before: u32| {
-                    let mut e = [0u32; 15];
-                    e[..5].copy_from_slice(&buffer_entry(0, set.uniform));
-                    e[5..10].copy_from_slice(&buffer_entry(1, block));
-                    e[10..].copy_from_slice(&[2, resource::VIEW, before, 0, 0]);
-
-                    g.bind_group(layout, &e)
+                    g.bind_group(layout, &[buffer_entry(0, set.uniform), buffer_entry(1, block), view_entry(2, before)])
                 };
                 release(set.group);
                 release(set.region_group);

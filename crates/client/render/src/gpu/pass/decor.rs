@@ -9,8 +9,7 @@ use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::PIPELINE_DECOR_PREPASS;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_entry, release, Gpu};
-use crate::gpu::api_spec::resource;
+use crate::gpu::api::{buffer_entry, buffer_range_entry, release, Gpu};
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::model::{bind_mesh, draw_models, put_instances, DrawUniforms, ModelDraw, Stage};
@@ -199,7 +198,7 @@ pub(crate) fn block_group(g: &Gpu, held: (u32, u32), block: u32, layout: u32) ->
         return held;
     }
     release(held.1);
-    let id = g.bind_group(layout, &buffer_entry(0, block));
+    let id = g.bind_group(layout, &[buffer_entry(0, block)]);
     (block, id)
 }
 
@@ -210,6 +209,6 @@ pub(crate) fn uniform_group(g: &Gpu, held: (u32, u32), uniforms: u32, layout: u3
         return held;
     }
     release(held.1);
-    let id = g.bind_group(layout, &[0, resource::BUFFER, uniforms, 0, DRAW_UNIFORM_BYTES]);
+    let id = g.bind_group(layout, &[buffer_range_entry(0, uniforms, 0, DRAW_UNIFORM_BYTES)]);
     (uniforms, id)
 }

@@ -153,12 +153,12 @@ impl Grown {
 
     fn regroup(&mut self, g: &Gpu, world: World) {
         let group = |built: &Built, ids: &[u32]| {
-            let mut entries = [0u32; 40];
+            let mut entries = [buffer_entry(0, 0); 8];
             for (k, &b) in ids.iter().enumerate() {
-                entries[5 * k..5 * k + 5].copy_from_slice(&buffer_entry(k as u32, b));
+                entries[k] = buffer_entry(k as u32, b);
             }
 
-            g.bind_group(built.layouts[0], &entries[..5 * ids.len()])
+            g.bind_group(built.layouts[0], &entries[..ids.len()])
         };
         for id in self.groups {
             release(id);

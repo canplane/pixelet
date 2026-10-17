@@ -9,8 +9,7 @@ pub mod shelf;
 use crate::frame::shader::record::PIPELINE_SHEET;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, texture_usage, Format, Gpu, Load};
-use crate::gpu::api_spec::resource;
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, Format, Gpu, Load};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::PAD;
 use crate::gpu::text::{Font, Raster, TextOf};
@@ -260,11 +259,8 @@ impl SheetPainter {
         let instances = g.buffer(instance_bytes.len().max(16) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(instances, 0, instance_bytes);
 
-        let mut e = [0u32; 10];
-        e[..5].copy_from_slice(&buffer_entry(0, size));
-        e[5..].copy_from_slice(&buffer_entry(1, instances));
-        let entry_group = g.bind_group(self.built.layouts[0], &e);
-        let lines_group = g.bind_group(self.built.layouts[1], &[0, resource::VIEW, lines_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
+        let entry_group = g.bind_group(self.built.layouts[0], &[buffer_entry(0, size), buffer_entry(1, instances)]);
+        let lines_group = g.bind_group(self.built.layouts[1], &[view_entry(0, lines_view), sampler_entry(1, self.sampler)]);
 
         let target = g.texture(w, h, 1, Format::rgba8unorm_srgb, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::COPY_SRC);
         let target_view = g.view(target, false, 0, 1, 0, 1);

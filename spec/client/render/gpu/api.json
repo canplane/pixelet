@@ -10,17 +10,6 @@
     "WORLD": 0,
     "CASE": 1
   },
-  "resource": {
-    "$type": "u32",
-    "$doc": [
-      "A bind group entry's kind, the second of its five words (binding, kind,",
-      "object, offset, size; a size of 0 the rest of the buffer), as gpu/api.rs",
-      "expands them into xpute's entries."
-    ],
-    "BUFFER": 0,
-    "VIEW": 1,
-    "SAMPLER": 2
-  },
   "stream": {
     "$type": "u32",
     "$doc": [
