@@ -1027,15 +1027,16 @@ impl RaysPass {
             self.cast = Some(c);
         }
         let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
-        // The cast and the decor it grows read exactly this, all of it here:
-        // a field the frame hands the cast fails to destructure until it is
-        // read. The overwrites' contents are their revision's.
+        // The cast reads exactly this, all of it here: a field the frame hands
+        // the cast fails to destructure until it is read. The overwrites'
+        // contents are their revision's. The decor it grows reads its own
+        // (`Grown::prepare`), so a change to decor alone casts no ray again.
         let Cast {
             eye,
             window,
             shards,
             overwrites: Overwrites { heap: _, data: _, room, revision },
-            decor,
+            decor: _,
         } = &cast;
         let r = &mut c.read;
         r.begin();
@@ -1045,34 +1046,9 @@ impl RaysPass {
         let shards_moved = r.read(shards);
         // A surface made again holds no rays.
         r.read(&[*room as u32, *revision, rays.0]);
-        match decor {
-            Some(DecorFrame {
-                shown,
-                params,
-                placed,
-                translation,
-                edits,
-            }) => {
-                r.read(shown);
-                r.read(params);
-                r.read(placed);
-                r.read(translation);
-                r.read(edits);
-            }
-            None => {
-                r.read::<u32>(&[]);
-            }
-        }
-        r.read(meshes);
-        // And boxes decor still holds from a frame not drawn.
-        r.mark(c.grown.holds());
         // And the ground's squares, written this frame or not.
         let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
-        if r.end() && fresh == 0 && c.group != 0 {
-            self.kind = FrameKind::standing;
-            return;
-        }
-        self.kind = FrameKind::cast;
+        self.kind = if r.end() && fresh == 0 && c.group != 0 { FrameKind::standing } else { FrameKind::cast };
         // The slot table fills the rows before the fold's (`window::JOINED_AT`).
         xpute_kit::ensure!(cast.window.len() == (4 * window::JOINED_AT) as usize, ENOTRECOVERABLE, cast.window.len());
         if window_moved {
@@ -1255,17 +1231,28 @@ impl RaysPass {
     /// runs; then the decor the ground grows over the same world, a
     /// candidate a thread.
     fn dispatch(&self, g: &Gpu, encoder: u32, cast: &mut Stamp) {
-        let Some(c) = self.cast.as_ref().filter(|_| self.kind == FrameKind::cast) else { return };
-        let w = compute::CAST_WORKGROUP;
-        let cells = [c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1])];
+        let Some(c) = self.cast.as_ref() else { return };
+        let casts = self.kind == FrameKind::cast;
+        if !casts && !self.grows() {
+            return;
+        }
         let pass = g.compute_pass(encoder, cast.pass());
-        g.set_bind_group(pass, 0, c.group, &[]);
-        g.set_pipeline(pass, c.start_built.pipeline);
-        g.dispatch(pass, 1, 1, 1);
-        g.set_pipeline(pass, c.built.pipeline);
-        g.dispatch(pass, cells[0], cells[1], 1);
+        if casts {
+            let w = compute::CAST_WORKGROUP;
+            let cells = [c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1])];
+            g.set_bind_group(pass, 0, c.group, &[]);
+            g.set_pipeline(pass, c.start_built.pipeline);
+            g.dispatch(pass, 1, 1, 1);
+            g.set_pipeline(pass, c.built.pipeline);
+            g.dispatch(pass, cells[0], cells[1], 1);
+        }
         c.grown.dispatch(g, pass);
         g.end(pass);
+    }
+
+    /// Whether the decor grown over the cast's world moves this frame.
+    fn grows(&self) -> bool {
+        self.cast.as_ref().is_some_and(|c| c.grown.works())
     }
 
     /// The decor the GPU grew this frame, as the draws read it.
@@ -1665,7 +1652,7 @@ impl Renderer {
         self.atmosphere.read_back(g);
         self.screen.read_back(g, input.ground.landed, input.ground.joined);
         // The image stands where it read all as last time over rays that stood.
-        let still = read.end() && self.screen.kind != FrameKind::cast;
+        let still = read.end() && self.screen.kind != FrameKind::cast && !self.screen.grows();
         if rest.read(self.clouds.words()) {
             self.clouds.write(g);
         }
@@ -1757,7 +1744,7 @@ impl Renderer {
             }
             read.forget();
             rest.forget();
-        } else if self.screen.kind == FrameKind::cast {
+        } else if self.screen.grows() {
             // Drawn: what its decor marked by is done with.
             if let Some(c) = self.screen.cast.as_mut() {
                 c.grown.drawn_frame();

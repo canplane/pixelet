@@ -336,9 +336,10 @@ impl Grown {
         self.counted.forget();
     }
 
-    /// Whether it holds boxes a frame not drawn handed: the next casts.
-    pub fn holds(&self) -> bool {
-        self.holding != 0
+    /// Whether it marks or counts this frame: its passes run, and the frame
+    /// draws what they leave.
+    pub fn works(&self) -> bool {
+        self.on && self.groups[0] != 0 && (self.marking || self.counting)
     }
 
     /// A frame's decor handed and never drawn: its edits held for the next.
