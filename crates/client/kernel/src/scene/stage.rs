@@ -158,6 +158,8 @@ pub fn stage_render() {
         text: text_raster,
         billboards: billboard_sheet(),
         admit: crate::io::host::admit_frame,
+        // The spans are the profiler's, which records only while its setting is on.
+        timed: settings_store().performance_overlay,
     });
     if out.redraw {
         request_world_tick();

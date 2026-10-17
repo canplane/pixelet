@@ -117,6 +117,9 @@ pub struct FrameInput<'a> {
     /// Whether the surfaces take a frame now without blocking; one admitted
     /// is drawn. Asked only once nothing else stops the frame.
     pub admit: fn() -> bool,
+    /// Whether its GPU spans are timed and read back (GPU_SPAN_NAMES): only
+    /// for a reader of them, as their read's landing wakes a turn.
+    pub timed: bool,
 }
 
 /// The earth layer's tiles as the GPU reads them: the floor's window, its
@@ -1570,7 +1573,7 @@ impl Renderer {
         self.decor.prepare_grown(g, self.screen.grown());
         self.impostor.prepare_grown(g, self.screen.grown());
         self.prepare_cases(g, &draws, uniforms, input.cases);
-        let q = self.query_set;
+        let q = if input.timed { self.query_set } else { 0 };
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [Stamp; GPU_SPAN_NAMES.len()] = core::array::from_fn(|span| Stamp::of(q, span));
         // What outlives the frame is drawn and submitted ahead of it: from here on

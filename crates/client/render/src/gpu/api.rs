@@ -845,12 +845,12 @@ impl Gpu {
     }
 
     /// The frame's encoder, its spans resolved, copied out and mapped back
-    /// where no mapping is still on its way, submitted. One mapping at most is
-    /// on its way, so its ticket need not tell them apart.
+    /// where it wrote any and no mapping is still on its way, submitted. One
+    /// mapping at most is on its way, so its ticket need not tell them apart.
     pub fn submit_frame(&self, encoder: Id, written: u32) {
         let s = self.s();
         let stamps_free = *head(STAMPS_WORD_AT) == 0 || *head(STAMPS_WORD_AT) & DONE != 0;
-        if let (Some((set, resolve, mapped)), true) = (s.stamps, stamps_free) {
+        if let (Some((set, resolve, mapped)), true) = (s.stamps, stamps_free && written != 0) {
             let bytes = 2 * SPANS as u32 * 8;
             call::resolve_query_set(&mut s.stream, encoder, set, 0, 2 * SPANS as u32, resolve, 0);
             call::copy_buffer_to_buffer(&mut s.stream, encoder, (resolve, 0), (mapped, 0), bytes);
