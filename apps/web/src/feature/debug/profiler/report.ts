@@ -5,7 +5,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { type Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
 import { copyText } from "@platform/save.ts";
 
-import { drawn, fieldText, type Frame, GROUPS, groupText, n1, pct, phaseText, tris, valueText } from "./lane.ts";
+import { drawn, fieldText, type Frame, gpuMs, GROUPS, groupText, n1, pct, phaseText, tris, valueText } from "./lane.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
 import type { ProfilerReport, Spread, TaskRecord, TaskSummary } from "./view.ts";
 
@@ -41,7 +41,7 @@ export function frameLine(s: Frame, prev: Frame | null): string {
   const d = prev === null ? "" : `  Δblocks ${signed(s.blocks - prev.blocks)} Δblocks_mb ${signed(s.blocks_mb - prev.blocks_mb)} Δheap used ${signedBytes(s.heap_used_bytes - prev.heap_used_bytes)}`;
   return `[${n1(s.t).padStart(9)}] ${valueText("kind_name", s.kind_name)}  interval ${n1(s.interval_ms)} = ${s.turns} turns ${n1(s.busy_ms)} + ${pastText(s)}  tick ${n1(s.tick_ms)}/${
     n1(s.budget_ms)
-  }${s.settled ? " (still)" : ""}  gpu ${n1(s.gpu_ms)}  draws ${draws} tris ${tris(triangles)}  blocks ${s.blocks}  heap used ${bytes(s.heap_used_bytes)}${d}`;
+  }${s.settled ? " (still)" : ""}  gpu ${s.gpu_read ? n1(gpuMs(s)) : "-"}  draws ${draws} tris ${tris(triangles)}  blocks ${s.blocks}  heap used ${bytes(s.heap_used_bytes)}${d}`;
 }
 
 export const longFrameLine = (l: LongFrame) =>

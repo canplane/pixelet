@@ -120,7 +120,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         tick: spread(scratch, frames.iter().map(|f| f.tick_ms)),
         tasks: spread(scratch, frames.iter().map(|f| f.tasks_ms)),
         gpu_read: count(&|f| f.gpu.read != 0.0),
-        gpu: spread(scratch, read().map(|f| f.gpu.ms)),
+        gpu: spread(scratch, read().map(|f| pxl_render::gpu::renderer::gpu_ms(&f.gpu.spans))),
         phases_p95: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k])).p95),
         gpu_spans_p95: spans.map(|s| s.p95),
         gpu_spans_max: spans.map(|s| s.max),

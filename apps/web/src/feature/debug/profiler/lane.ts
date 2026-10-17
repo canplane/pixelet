@@ -78,6 +78,9 @@ export const pct = (part: number, whole: number) => (whole > 0 ? round((part / w
 
 export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
 
+/** A frame's GPU time: its spans' sum (pxl-render renderer.rs `gpu_ms`). */
+export const gpuMs = (f: Frame): f64 => f.gpu_spans.reduce((n, ms) => n + ms, 0);
+
 /** A frame's draws and triangles: its census's sums, every pipeline a draw names. */
 export const drawn = (f: Frame): [f64, f64] => f.census.reduce(([d, t], [cd, ct]) => [d + cd, t + ct], [0, 0]);
 

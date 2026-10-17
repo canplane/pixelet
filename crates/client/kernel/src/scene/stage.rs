@@ -161,11 +161,10 @@ pub fn stage_render() {
         return;
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
-    resolution_observe(stat.gpu_ms);
+    resolution_observe(pxl_render::gpu::renderer::gpu_ms(&stat.gpu_spans));
     set_host_frame(
         out.kind,
         GpuSample {
-            ms: stat.gpu_ms,
             read: f64::from(u8::from(stat.gpu_read)),
             spans: stat.gpu_spans,
             census: stat.census,

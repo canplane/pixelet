@@ -221,9 +221,8 @@ pub struct FrameOutput {
 
 #[derive(Clone, Copy)]
 pub struct FrameStat {
-    pub gpu_ms: f64,
-    /// Whether a GPU read landed with this frame: its spans and `gpu_ms` are
-    /// then that read's, and else an earlier frame's, not this one's.
+    /// Whether a GPU read landed with this frame: its spans are then that
+    /// read's, and else an earlier frame's, not this one's.
     pub gpu_read: bool,
     /// The block table's blocks and their bytes.
     pub blocks: f64,
@@ -235,6 +234,12 @@ pub struct FrameStat {
     /// draws and triangles.
     pub census: DrawCensus,
     pub gpu_spans: [f64; GPU_SPAN_NAMES.len()],
+}
+
+/// A frame's GPU time: its spans' sum, the passes timed. The span from the
+/// first to the last would count what lies between submits.
+pub fn gpu_ms(spans: &[f64]) -> f64 {
+    spans.iter().sum()
 }
 
 pub fn put_f32(buf: &mut [u8], at: usize, v: f32) {
@@ -1614,7 +1619,7 @@ impl Renderer {
         if still && rest.end() && !gridded {
             self.world = read;
             self.frame_read = rest;
-            let stat = self.stat(draws.records, world, input.timed, (0.0, [0.0; GPU_SPAN_NAMES.len()]));
+            let stat = self.stat(draws.records, world, input.timed, [0.0; GPU_SPAN_NAMES.len()]);
             self.order = order;
             return (FrameKind::stood, stat);
         }
@@ -1677,11 +1682,10 @@ impl Renderer {
         let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
         g.submit_frame(encoder, written);
         release(canvas_view);
-        let (mut gpu_ms, mut gpu_spans) = (0.0, [0.0; GPU_SPAN_NAMES.len()]);
+        let mut gpu_spans = [0.0; GPU_SPAN_NAMES.len()];
         let gpu_read = q != 0 && g.gpu_landed();
         if q != 0 {
             gpu_spans = core::array::from_fn(|k| g.gpu_ms(k as u32));
-            gpu_ms = g.gpu_ms(GPU_SPAN_NAMES.len() as u32);
         }
         let skipped = !frame_commit();
         if skipped {
@@ -1702,7 +1706,7 @@ impl Renderer {
             (false, true) => FrameKind::still,
             (false, false) => self.screen.kind,
         };
-        let mut stat = self.stat(draws.records, world, input.timed, (gpu_ms, gpu_spans));
+        let mut stat = self.stat(draws.records, world, input.timed, gpu_spans);
         stat.gpu_read = gpu_read;
         self.order = order;
         (kind, stat)
@@ -1770,7 +1774,7 @@ impl Renderer {
     /// What the scheduler asked for: a draw passed over because its block, skin or
     /// sprite is not on the device yet is still counted. The draws are counted
     /// only while `timed`, the profiler's, so a frame no one reads counts none.
-    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, timed: bool, (gpu_ms, gpu_spans): (f64, [f64; GPU_SPAN_NAMES.len()])) -> FrameStat {
+    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, timed: bool, gpu_spans: [f64; GPU_SPAN_NAMES.len()]) -> FrameStat {
         let b = blocks();
         let mut census: DrawCensus = [[0.0; 2]; DRAW_PIPELINES.len()];
         for d in draws.iter().filter(|_| timed) {
@@ -1792,7 +1796,6 @@ impl Renderer {
         }
         let px = world.width as f64 * world.height as f64;
         FrameStat {
-            gpu_ms,
             gpu_read: false,
             blocks: b.count as f64,
             block_bytes: b.bytes as f64,

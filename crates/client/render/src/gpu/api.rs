@@ -205,7 +205,7 @@ struct State {
     /// whole frame's.
     stamps: Option<(Id, Id, Id)>,
     stamps_written: u32,
-    gpu_ms: [f64; SPANS + 1],
+    gpu_ms: [f64; SPANS],
     /// Whether the last frame submitted took a read in: its figures are then
     /// that read's, and else the read before it, not measured again.
     gpu_landed: bool,
@@ -267,7 +267,7 @@ pub unsafe fn install(at: u32) -> u32 {
         device: None,
         stamps: None,
         stamps_written: 0,
-        gpu_ms: [0.0; SPANS + 1],
+        gpu_ms: [0.0; SPANS],
         gpu_landed: false,
         images: Vec::new(),
         generation: 0,
@@ -338,8 +338,8 @@ pub fn device_generation() -> u32 {
     STATE.get(|| None).as_ref().map_or(0, |s| s.generation)
 }
 
-/// The last read's ticks, where its word says they landed: each span's ms and
-/// the frame's, and the word let go for the next read; whether one landed.
+/// The last read's ticks, where its word says they landed: each span's ms, and
+/// the word let go for the next read; whether one landed.
 fn take_stamps(s: &mut State) -> bool {
     let word = head(STAMPS_WORD_AT);
     if *word & DONE == 0 {
@@ -348,16 +348,11 @@ fn take_stamps(s: &mut State) -> bool {
     *word = 0;
     let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
     let tick = |k: usize| u64::from(*head(STAMPS_AT + 2 * k)) | u64::from(*head(STAMPS_AT + 2 * k + 1)) << 32;
-    let (mut first, mut last) = (u64::MAX, 0u64);
     for k in 0..SPANS {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));
         let ran = s.stamps_written & 1 << k != 0 && e >= b;
         s.gpu_ms[k] = if ran { (e - b) as f64 * period_ms } else { 0.0 };
-        if ran {
-            (first, last) = (first.min(b), last.max(e));
-        }
     }
-    s.gpu_ms[SPANS] = last.saturating_sub(first.min(last)) as f64 * period_ms;
     true
 }
 
@@ -961,10 +956,9 @@ impl Gpu {
         self.s().encoder.objects()
     }
 
-    /// Span `span`'s time in ms from the last read taken in; past the last
-    /// span, the whole frame's.
+    /// Span `span`'s time in ms from the last read taken in.
     pub fn gpu_ms(&self, span: u32) -> f64 {
-        self.s().gpu_ms[(span as usize).min(SPANS)]
+        self.s().gpu_ms[span as usize]
     }
 
     /// Whether the frame just submitted took a read in, so its figures were

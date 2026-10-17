@@ -21,7 +21,7 @@ Deno.test("LANES - a list lane spans a word a name, a census entry two", () => {
 Deno.test("frameAt - reads each lane at its word", () => {
   const words = Float64Array.from({ length: FRAME.WORDS }, (_, k) => k);
   const f = frameAt(words, 0);
-  assertEquals(f.gpu_ms, FRAME.gpu_ms);
+  assertEquals(f.budget_ms, FRAME.budget_ms);
   assertEquals(f.zoom_tiles[2], FRAME.zoom_tiles + 2);
   assertEquals(f.census[1], [FRAME.census + 2, FRAME.census + 3]);
 });
