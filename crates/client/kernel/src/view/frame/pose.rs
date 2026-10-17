@@ -138,10 +138,13 @@ pub fn view_resize(width: f64, height: f64, ratio: f64) {
 
 /// Takes the pose the controllers hold and composes the matrices from it,
 /// where it moved. A turn's observation is the eye's as it stands at the
-/// turn's start (`observation::observation`), so it is made again then.
+/// turn's start (`observation::observation`), which is what it was where
+/// neither the pose nor the ground under the eye moved
+/// (`observation::turn`), and is made again where either did.
 pub fn view_compose(pose: Option<ObserverPose>) {
-    crate::view::observation::forget();
-    if view().pose == pose {
+    let moved = view().pose != pose;
+    crate::view::observation::turn(moved);
+    if !moved {
         return;
     }
     view().pose = pose;

@@ -37,14 +37,29 @@ pub fn eye_reach() -> Option<f64> {
 }
 
 /// The turn's observation, made by its first reader after the view is
-/// composed (`forget`): the eye and its ground's floor asked once a turn,
-/// however many read it.
+/// composed where it moved (`turn`, `forget`): the eye and its ground's
+/// floor asked once where they moved, however many read it.
 static OBSERVED: Global<Option<Option<Observation>>> = Global::new();
 
-/// The turn's view moved, or a new turn began: the next reader makes the
-/// observation again.
+/// The turn's view moved: the next reader makes the observation again.
 pub fn forget() {
     *OBSERVED.get(|| None) = None;
+}
+
+/// A turn begins, the pose `moved` or not: the observation stands where it
+/// did not, the reach is what it was, and no change touched the ground under
+/// the eye, whose height over it it holds (`changed::within`, asked each
+/// frame turn, so each change is seen once); else it is made again.
+pub fn turn(moved: bool) {
+    let stands = !moved
+        && match *OBSERVED.get(|| None) {
+            Some(Some(o)) => Some(o.reach) == eye_reach() && !crate::query::changed::within([[o.eye[0], o.eye[1]]; 2], &[]),
+            Some(None) => eye().is_none() || eye_reach().is_none(),
+            None => false,
+        };
+    if !stands {
+        forget();
+    }
 }
 
 /// Out to `eye_reach`. None before the camera stands anywhere or the source
