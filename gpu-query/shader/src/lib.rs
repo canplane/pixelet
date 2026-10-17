@@ -254,16 +254,12 @@ impl ways::Airs for Ways<'_> {
 impl ground::Held for World<'_> {
     type Place = window::Found;
 
-    /// The join of the bounds over the node of each window the zooms
-    /// `cells` read their cells from, the finest holding them present at
-    /// each (`window::bounded`), by the CPU's one join (pxl-portable
-    /// `ground::relief_over`); none (`UNBOUNDED`) for a node wider than a
-    /// window, which only splits more.
-    fn relief(&mut self, cells: [u32; 2], (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
-        ground::relief_over(cells, held_to, |z| {
-            let (r, _, here) = window::bounded(self, held_to(z), (zoom, [c[0], c[1]]), FIRST_CELL);
-            (r, here)
-        })
+    /// The bound over the node of the window `cell` reads its cells from,
+    /// the finest holding them present (`window::bounded`), as the CPU reads
+    /// it (pxl-portable `Held::relief`).
+    fn relief(&mut self, cell: u32, (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
+        let (r, _, here) = window::bounded(self, held_to(cell), (zoom, [c[0], c[1]]), FIRST_CELL);
+        (r, here)
     }
 
     /// The block's column off the tile drawing that zoom's cells, the area's

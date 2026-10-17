@@ -282,27 +282,16 @@ impl Area for Reading<'_, '_> {
 impl ground::Held for Reading<'_, '_> {
     type Place = ();
 
-    /// The join of the bounds over the node of each tile the zooms `cells`
-    /// read their cells from, off its line, by the GPU's one join
-    /// (pxl-portable `ground::relief_over`): none (`UNBOUNDED`) for a node
-    /// wider than a tile it reads; a node with no ground under it, `EMPTY`.
-    fn relief(&mut self, cells: [Zoom; 2], _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
+    /// The bound over the node of the tile `cell` reads its cells from, off
+    /// its line (pxl-portable `Held::relief`); a node with no ground under
+    /// it, `EMPTY`.
+    fn relief(&mut self, cell: Zoom, _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
         let (zoom, c) = self.at.node;
-        ground::relief_over(
-            cells,
-            |z| GROUND.read_zoom(z),
-            |z| {
-                // A tile coarser than the node bounds none of it.
-                if GROUND.read_zoom(z) > zoom {
-                    return (ground::UNBOUNDED, true);
-                }
-                let line = self.world.line(self.at, z);
-                match self.take(self.world.terrain.relief(&line, (zoom, [c[0], c[1]]))) {
-                    Some(r) => (r.unwrap_or(ground::EMPTY), true),
-                    None => (ground::EMPTY, false),
-                }
-            },
-        )
+        let line = self.world.line(self.at, cell);
+        match self.take(self.world.terrain.relief(&line, (zoom, [c[0], c[1]]))) {
+            Some(r) => (r.unwrap_or(ground::EMPTY), true),
+            None => (ground::EMPTY, false),
+        }
     }
 
     /// The block's cell and the ring about it read into the patch (`CELL`)

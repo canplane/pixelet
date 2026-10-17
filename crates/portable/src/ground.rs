@@ -389,43 +389,15 @@ pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 /// The bound of no ground, lowest over highest: what joins as nothing.
 pub const EMPTY: [i32; 2] = [i16::MAX as i32, i16::MIN as i32];
 
-/// The join of a node's bounds over the zooms `cells` its cells are read at
-/// (`Held::relief`), one a source: the finest first, a zoom read from the
-/// same source as the one finer (`source`) passed. `at` gives a zoom's bound,
-/// `EMPTY` where no ground is under the node, and whether anything over it
-/// is held, false a lack. `UNBOUNDED` ends it: a node no source bounds only
-/// splits more.
-pub fn relief_over(cells: [Zoom; 2], source: impl Fn(Zoom) -> Zoom, mut at: impl FnMut(Zoom) -> ([i32; 2], bool)) -> ([i32; 2], bool) {
-    let [coarsest, finest] = cells;
-    let mut relief = EMPTY;
-    let mut z = finest + 1;
-    while z > coarsest {
-        z -= 1;
-        if z != finest && source(z) == source(z + 1) {
-            continue;
-        }
-        let (r, held) = at(z);
-        if !held {
-            return (EMPTY, false);
-        }
-        if r[0] == UNBOUNDED[0] && r[1] == UNBOUNDED[1] {
-            return (UNBOUNDED, true);
-        }
-        relief = [relief[0].min(r[0]), relief[1].max(r[1])];
-    }
-    (relief, true)
-}
-
 /// How the ground is held where a node reads it: the CPU's residency, a
 /// GPU's window over the tiles it was handed.
 pub trait Held: Area {
-    /// The lowest and highest the ground's cells at the zooms `cells`, from
-    /// the coarsest to the finest asked, reach over the node `(zoom, c)`,
-    /// each off the finest held tile it is read from (`bounded`), which
-    /// bounds that tile's own cells alone; a bound no tighter than the
-    /// heights' whole range (`UNBOUNDED`) where the source cannot bound them,
-    /// which only splits more; false where no tile over it is held.
-    fn relief(&mut self, cells: [Zoom; 2], node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
+    /// The lowest and highest the ground's cells at `cell` reach over the
+    /// node `(zoom, c)`, off the finest held tile they are read from
+    /// (`window::bounded`); a bound no tighter than the heights' whole range
+    /// (`UNBOUNDED`) where no square it reads is held, which only splits
+    /// more; false where no tile over it is held.
+    fn relief(&mut self, cell: Zoom, node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
     /// Where a column is held, as the source names it: the place its read
     /// found (a GPU's window, `window::Found`), none where it reads none.
     type Place: Copy + Default;
@@ -482,10 +454,20 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far
     if zoom < GROUND.top() {
         return (split, Cell::NONE, none);
     }
-    // A block's cells are its zoom's; a coarser node's, those of each zoom
-    // asked within it (`empty`).
-    let cells = if block { [zoom, zoom] } else { [if far > zoom + 1 { far } else { zoom + 1 }, near] };
-    let (relief, ok) = held.relief(cells, (zoom, c));
+    // A block's cells are its zoom's. A coarser node's are read at the
+    // finest zoom asked within it, no finer than a tile at the node's own
+    // zoom holds: heights fold by their mean, so the finest's bound holds
+    // every coarser one's over the node, and what a tile at the node's zoom
+    // flattened is not the world there.
+    let fit = GROUND.grid_zoom(zoom);
+    let read = if block {
+        zoom
+    } else if near < fit {
+        near
+    } else {
+        fit
+    };
+    let (relief, ok) = held.relief(read, (zoom, c));
     if !ok {
         return (lacks, Cell::NONE, none);
     }
