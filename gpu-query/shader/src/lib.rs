@@ -157,9 +157,11 @@ impl Area for World<'_> {
 impl World<'_> {
     /// Which of the blocks about the block `c` at `zoom` fill, as pxl-portable
     /// `mask::filled` names them: a column at a time, each read once (its
-    /// cell, or the Earth past the area), its three blocks decided on values;
-    /// what is placed asked of each block, the caves only where one may open
-    /// it (`Cell::opens`).
+    /// cell), its three blocks decided on values as the cast decides a block
+    /// (`Query::node`): what is placed asked of each, else the ground's
+    /// block, the caves only where one may open it (`Cell::opens`), then
+    /// what the ways write over it (`window::ways_over`), so a face is
+    /// shaded by the world it was stopped in.
     ///
     /// `place` is the cast's at its stop (`ray::PLACE`): where the block's
     /// own column was held, which every column in its square is read off and
@@ -172,7 +174,7 @@ impl World<'_> {
         let mut k = 0;
         while k < 9 {
             let n = [wrap_index(zoom, c[0] + (k % 3) as i32 - 1), c[1] + (k / 3) as i32 - 1];
-            let cell = window::ground(self, own, place, zoom, n).0;
+            let (cell, found) = window::ground(self, own, place, zoom, n);
             let mut dz = 0;
             while dz < 3 {
                 let (bit, b) = (1 << (dz * 9 + k), [n[0], n[1], c[2] + dz as i32 - 1]);
@@ -186,7 +188,9 @@ impl World<'_> {
                     let fills = if over.says == BLOCK {
                         self.fills(&[PLACED_BLOCK | over.block, 0])
                     } else {
-                        cell.block(zoom, b[2], false).0 != VOID && !(cell.opens(zoom, b[2]) && Cave::of(zoom, b).hollow())
+                        let g = cell.block(zoom, b[2], false);
+                        let g = if g.0 != VOID && cell.opens(zoom, b[2]) && Cave::of(zoom, b).hollow() { (VOID, [VOID; 4]) } else { g };
+                        window::ways_over(self, found, cell, zoom, b, g).0 != VOID
                     };
                     filled |= (fills as u32) * bit;
                 }
