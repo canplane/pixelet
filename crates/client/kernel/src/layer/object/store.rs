@@ -289,6 +289,21 @@ impl Store {
         });
     }
 
+    /// Whether anything, air included, is held in `space` at the cubes of
+    /// `zoom`: one walk of the tree, pruned to `space`, ended at the first
+    /// cube of `zoom` or coarser that holds something there.
+    pub fn holds_in(&self, space: &Aabb, zoom: Zoom) -> bool {
+        let mut any = false;
+        self.descend(about(space), &mut |z, _, c, leaf| {
+            if any || c.meet(*space).is_none() {
+                return false;
+            }
+            any = leaf.is_some() || z >= zoom;
+            !any
+        });
+        any
+    }
+
     /// Every leaf meeting the cube at `zoom`, X in the cube's frame.
     fn each_in(&self, zoom: Zoom, at: [i64; 3], visit: &mut dyn FnMut(&Entry)) {
         let about = about(&cube(zoom, at));
@@ -447,41 +462,31 @@ impl Query for Store {
         }
     }
 
-    /// All resident, so every answer is exact. Read at `cell`: a node held
-    /// finer than its cells is one cube and `finest` one past `cell`, so the
-    /// cost is the asker's resolution — one find for a node read whole.
+    /// All resident, so every answer is exact. The cubes of the node's own
+    /// zoom that hold anything, joined: a cube is its own, and a column (a
+    /// node over the ground's two axes) the cubes of it that hold, so the
+    /// tree is walked down to the node's zoom only, along the paths that
+    /// hold. Its readers tell apart no finer than the node (pxl-kernel
+    /// view/observation.rs `cubes`, `order_of_tile`).
     fn bound<const D: usize>(&self, held: &Held, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         if !held.holds() {
             return Answer::Exact(None);
         }
-        let mut out: Option<Bound> = None;
-        let mut hold = |aabb: Aabb, finest: Zoom| out = Bound::join(out, Some(Bound { aabb, finest }));
-        let whole = region(node);
-        // The tree holds a cube; a node over the ground's two axes, its leaves.
-        let Some(at) = (D == 3).then(|| [node.1[0], node.1[1], node.1[2]]) else {
-            self.entries_in(&whole, &mut |e| {
-                if let Some(b) = e.cube().meet(whole) {
-                    hold(b, e.zoom.min(cell + 1));
-                }
-            });
-            return Answer::Exact(out);
-        };
-        let zoom = node.0;
-        match self.find(zoom, at) {
-            (_, Slot::Leaf(v)) if v == EMPTY.word() => {}
-            (z, Slot::Leaf(_)) => hold(whole, z),
-            (_, branch) => self.walk(branch, zoom, at, about(&whole), &mut |z, _, c, leaf| {
-                if leaf.is_some() {
-                    hold(*c, z);
-                    false
-                } else if z >= cell {
-                    hold(*c, cell + 1);
-                    false
-                } else {
-                    true
-                }
-            }),
-        }
+        // A cube at the node's zoom held by a branch has what is finer than
+        // it, at most one past the cells asked.
+        let (mut out, whole) = (None, region(node));
+        self.descend(about(&whole), &mut |z, _, c, leaf| {
+            let Some(aabb) = c.meet(whole) else { return false };
+            let finest = if leaf.is_some() {
+                z.min(cell + 1)
+            } else if z >= node.0 {
+                cell + 1
+            } else {
+                return true;
+            };
+            out = Bound::join(out, Some(Bound { aabb, finest }));
+            false
+        });
         Answer::Exact(out)
     }
 }

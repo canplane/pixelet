@@ -15,7 +15,6 @@ use pxl_spec::block::DecorId;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::world::wrap_cell;
 use pxl_spec::space::coord::zoom::{cube, index_of, units, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -29,7 +28,6 @@ use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Meta};
 use crate::layer::object::meta::placed;
 use crate::layer::residency::Lines;
-use crate::layer::Query;
 use crate::model::registry::Models;
 use pxl_portable::area::{self, Shard};
 use pxl_portable::window::Found;
@@ -179,26 +177,27 @@ impl<'a> World<'a> {
         // Placed decor stands where the ray's height over the held span, widened by the reach, can meet it.
         let (za, zb) = (ray.at(0.0)[2], ray.at(s.held)[2]);
         let (z0, z1) = (za.min(zb) - s.reach, za.max(zb) + s.reach);
+        let fresh = |xy: [i64; 2]| !last.is_some_and(|l| near(xy, l));
         for y in cell[1] - r..=cell[1] + r {
             for x in cell[0] - r..=cell[0] + r {
-                if last.is_some_and(|l| near([x, y], l)) {
-                    continue;
+                if fresh([x, y]) {
+                    self.grown_near(s, ray, [x, y]);
                 }
-                self.grown_near(s, ray, [x, y]);
-                let space = Aabb {
-                    min: [x as f64, y as f64, z0],
-                    max: [(x + 1) as f64, (y + 1) as f64, z1],
-                };
-                // Met in the cell its box's corner is in, once.
-                self.objects.entries_in(&space, &mut |e| {
-                    let c = e.cube().min;
-                    let own = (0..2).all(|k| (space.min[k]..space.max[k]).contains(&c[k]));
-                    if let Some(i) = placed(e).filter(|_| own && space.holds(c)) {
-                        meet(s, ray, i);
-                    }
-                });
             }
         }
+        // What is placed about it, the objects' tree walked once over every
+        // cell: met in the cell its box's corner is in, once.
+        let space = Aabb {
+            min: [(cell[0] - r) as f64, (cell[1] - r) as f64, z0],
+            max: [(cell[0] + r + 1) as f64, (cell[1] + r + 1) as f64, z1],
+        };
+        self.objects.entries_in(&space, &mut |e| {
+            let c = e.cube().min;
+            let own = [c[0].floor() as i64, c[1].floor() as i64];
+            if let Some(i) = placed(e).filter(|_| space.holds(c) && fresh(own)) {
+                meet(s, ray, i);
+            }
+        });
     }
 
     /// Whether decor `s` strikes may reach into the node `(zoom, c)`, X on
@@ -235,15 +234,13 @@ impl<'a> World<'a> {
                 }
             })
         });
-        ground
-            || (-1..=1).any(|dz| {
-                (-1..=1).any(|dy| {
-                    (-1..=1).any(|dx| {
-                        let n = wrap_cell(z, [a[0] + dx, a[1] + dy, a[2] + dz]);
-                        self.objects.cursor((z, n), z).holds()
-                    })
-                })
-            })
+        // The 27 nodes about it at once, the objects' tree walked once.
+        let side = units(z);
+        let about = Aabb {
+            min: [(a[0] - 1) as f64 * side, (a[1] - 1) as f64 * side, (a[2] - 1) as f64 * side],
+            max: [(a[0] + 2) as f64 * side, (a[1] + 2) as f64 * side, (a[2] + 2) as f64 * side],
+        };
+        ground || self.objects.holds_in(&about, z)
     }
 
     fn grown_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i64; 2]) {
