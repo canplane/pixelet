@@ -26,6 +26,7 @@ use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIF
 use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
 use pxl_portable::{at, ray, world, LEAF_CELL, SHARD_ZOOM};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
+use spirv_std::arch::IndexUnchecked;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::{spirv, Image};
 
@@ -615,19 +616,29 @@ pub fn ways_cs(
         return;
     }
     // An inclusive scan, a step a doubling: each sum adds the one `d` before
-    // it, read before any is written.
-    let t = lane.x;
+    // it, both read before any is written. Each index is masked to the
+    // array's length and read unchecked (spirv-std `IndexUnchecked`), so no
+    // bounds check branches on the lane between the barriers, which WebGPU
+    // takes only in uniform control flow; and two loads lie between them, a
+    // lane's own, so they are no one load every lane shares
+    // (gpu-query-builder's `workgroupUniformLoad`).
+    let (t, mask) = (lane.x, fill::SCAN_THREADS - 1);
+    let at = |v: u32| (v & mask) as usize;
     let own = fill::stretch_runs(ground, entry, t);
-    sums[t as usize] = own;
+    // SAFETY: every index is masked under the array's length.
+    unsafe { *sums.index_unchecked_mut(at(t)) = own };
     let mut d = 1;
     while d < fill::SCAN_THREADS {
         spirv_std::arch::workgroup_memory_barrier_with_group_sync();
-        let add = if t >= d { sums[(t - d) as usize] } else { 0 };
+        // SAFETY: masked, as above.
+        let (before, sum) = unsafe { (*sums.index_unchecked(at(t.wrapping_sub(d))), *sums.index_unchecked(at(t))) };
         spirv_std::arch::workgroup_memory_barrier_with_group_sync();
-        sums[t as usize] += add;
+        // SAFETY: masked, as above.
+        unsafe { *sums.index_unchecked_mut(at(t)) = sum + if t >= d { before } else { 0 } };
         d *= 2;
     }
-    fill::scanned(ground, entry, t, sums[t as usize] - own);
+    // SAFETY: masked, as above.
+    fill::scanned(ground, entry, t, unsafe { *sums.index_unchecked(at(t)) } - own);
 }
 
 /// The eye's slots whose decor grows again this frame, a thread a slot,
