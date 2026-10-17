@@ -98,9 +98,9 @@ pub const WAYS_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
 
 /// The most entries a square holds of its tile's ways: one a segment and a
 /// bin of the bound (`WAYS_SHIFT`) its footprint reaches. The densest square
-/// of the format-10 set, z15 010332102333322 (2026-10-15); a tile past it
-/// fails its bake (pxl-spec bake/tile/terrain.rs `ways_fit`).
-pub const WAYS_SQUARE_SEGMENTS: u32 = 1068;
+/// of the format-12 set, z15 010332102333322 (2026-10-17; z14's most 711);
+/// a tile past it fails its bake (pxl-spec bake/tile/terrain.rs `ways_fit`).
+pub const WAYS_SQUARE_SEGMENTS: u32 = 1065;
 
 /// A square's lines, laid by the CPU as the square is filled (pxl-spec
 /// bake/tile/terrain.rs `square_lines`) for the one rule to ask of a block
@@ -114,9 +114,10 @@ pub const LINES_SEGMENTS_AT: u32 = LINES_ENTRIES_AT + WAYS_SQUARE_SEGMENTS.div_c
 pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::ways::SEGMENT_WORDS as u32;
 
 /// The most runs a square's columns read as (`ways::runs`): the most of the
-/// format-12 set, measured with every tile at every zoom; a tile past it
-/// fails its bake (pxl-spec bake/tile/terrain.rs `runs_fit`).
-pub const RUNS_SQUARE: u32 = 4312;
+/// format-12 set (2026-10-17), measured with every tile at every zoom (z15's
+/// 8600; z14's most 3674); a tile past it fails its bake (pxl-spec
+/// bake/tile/terrain.rs `runs_fit`).
+pub const RUNS_SQUARE: u32 = 8600;
 
 /// A square's ways as the descent reads them, written at fill (`ways_cs`)
 /// off its lines: each cell's first run, a word, cells row by row and one

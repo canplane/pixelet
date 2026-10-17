@@ -607,10 +607,10 @@ fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> (Writes, u32) {
 }
 
 /// The most spans one column's visits make (`column`): the most of the
-/// format-10 set (2026-10-16), measured with every tile at every zoom (z12's
-/// 23; z15's most 9); a tile past it fails its bake (pxl-spec
-/// bake/tile/terrain.rs `runs_fit`).
-pub const SPANS: usize = 23;
+/// format-12 set (2026-10-17), measured with every tile at every zoom (z14's
+/// 10 at 01033210230311; z15's most 9, none past z11); a tile past it fails
+/// its bake (pxl-spec bake/tile/terrain.rs `runs_fit`).
+pub const SPANS: usize = 10;
 
 /// A column's spans, in leaf cells, in the order its visits come: each a
 /// deck's slab or an embankment (its way's look), a pier (`PIER`), or a

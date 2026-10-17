@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-naga-wgsl.
-// Inputs: c8788572f4f483885534eaa4cd5dd399f29e0ef08595b248a08b6df850c65b5d
+// Inputs: aef5f9158b75bd466c607fecaa008493069ca4b596599f37b1bd6fa2b8b75fd6
 struct type_4 {
     member: array<u32>,
 }
@@ -99,7 +99,7 @@ fn function_() {
                         phi_111_ = 0u;
                     }
                     let _e61 = phi_111_;
-                    let _e62 = (_e61 * 21412u);
+                    let _e62 = (_e61 * 25687u);
                     let _e63 = (_e55 + 1u);
                     if (_e63 < _e46) {
                         let _e67 = global_1.member[_e63];

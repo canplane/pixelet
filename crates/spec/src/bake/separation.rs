@@ -72,11 +72,11 @@ impl Form {
 }
 
 /// A resident record's room for lines and their points: the most a tile of
-/// the format-10 set holds with the fold keeping every line its width keeps,
-/// lines at z12 010331021012 and points at z15 010332102302331
-/// (2026-10-15); a tile past either fails its bake (`Separation::fits`).
-pub const MAX_LINES: usize = 1973;
-pub const MAX_POINTS: usize = 4260;
+/// the format-12 set holds (2026-10-17), lines z13's 438 and points z15's
+/// 4193, a fold keeping each line's points its zoom holds; a tile past
+/// either fails its bake (`Separation::fits`).
+pub const MAX_LINES: usize = 438;
+pub const MAX_POINTS: usize = 4193;
 
 /// Points a leaf of `Separation::boxes` covers, and children a node has: a ray
 /// cast 20–25% faster than at 8 and twice 16's, for 16 KiB a record (measured
