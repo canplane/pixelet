@@ -48,7 +48,7 @@ use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
 use pxl_portable::scatter::GROUPS;
-use pxl_spec::block::window::{BACK_WORDS, ELE_AT, FRESH_WORDS, HANDED, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
+use pxl_spec::block::window::{BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_WORDS, HANDED, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -759,10 +759,10 @@ struct ScreenCellsPass {
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
 struct GroundBuffers {
-    /// Per square of the windows, its looks as handed, its cells' heights
-    /// and levels, which `heights_cs` and `bound_cs` write in the turn it
-    /// is handed, its tile's samples and lines as handed, and its ways'
-    /// runs, which `ways_cs` writes then (pxl-portable
+    /// Per square of the windows, its looks as handed, its columns and
+    /// levels, which `heights_cs`, `ways_cs` and `bound_cs` write in the
+    /// turn it is handed, its tile's samples and lines as handed, and its
+    /// columns' runs, which `ways_cs` writes then (pxl-portable
     /// `window::SQUARE_WORDS`).
     ground: u32,
     /// The squares that turn handed, two words each, `heights_cs`'s,
@@ -1160,9 +1160,9 @@ impl ScreenCellsPass {
         g.write_buffer(self.lane, 0, bytes(&[c.across[0], c.across[1], steps, 0]));
     }
 
-    /// The cells of the frames this turn uploaded, from their samples, then
-    /// their ways' runs, then their bounds a level a dispatch, each over the
-    /// one before, and cells and bounds read back where the CPU looks them
+    /// The columns of the frames this turn uploaded, their tops from their
+    /// samples, then their ways' runs, then their levels a dispatch, level 0
+    /// a column's own and each over the one before, and cells and bounds read back where the CPU looks them
     /// up: ahead of the frame, as they outlive it, so no frame the window
     /// names is cast before its cells are written, even when the frame
     /// proper is dropped.
@@ -1172,18 +1172,18 @@ impl ScreenCellsPass {
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_pipeline(pass, c.heights_built.pipeline);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
-        g.dispatch(pass, (SQUARE / 2).div_ceil(BOUND_WORKGROUP), SQUARE.div_ceil(BOUND_WORKGROUP), c.fresh_len);
-        // A column a thread, over the faces just drawn: the columns'
-        // runs counted, summed a square a thread, written, then each bin's
-        // ways' word off them, before the levels join it.
+        g.dispatch(pass, SQUARE.div_ceil(BOUND_WORKGROUP), SQUARE.div_ceil(BOUND_WORKGROUP), c.fresh_len);
+        // A column a thread, over the tops just drawn: the columns' runs
+        // counted, summed a square a thread, written, before the levels
+        // fold them.
         g.set_pipeline(pass, c.ways_built.pipeline);
-        for k in 0..4 {
+        for k in 0..3 {
             g.set_bind_group(pass, 0, c.ways_group, &[k * SLOT_STRIDE]);
-            let across = if k % 2 == 1 { 1 } else { SQUARE_CELLS / WAYS_WORKGROUP };
+            let across = if k == 1 { 1 } else { SQUARE_CELLS / WAYS_WORKGROUP };
             g.dispatch(pass, across, 1, c.fresh_len);
         }
         g.set_pipeline(pass, c.bound_built.pipeline);
-        for j in 1..=LEVELS {
+        for j in 0..=LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
             let side = (SQUARE >> j).div_ceil(BOUND_WORKGROUP);
             g.dispatch(pass, side, side, c.fresh_len);
@@ -1244,7 +1244,7 @@ impl ScreenCellsPass {
             let Some(k) = (free..READS).find(|&k| c.held[k].0 == FREE) else { break };
             free = k + 1;
             let e = *copy.get_or_insert_with(|| g.encoder());
-            g.copy_buffer(e, (c.ground, s * SQUARE_BYTES + HEIGHTS_AT * 4), (c.reads[k], 0), BACK_WORDS * 4);
+            g.copy_buffer(e, (c.ground, s * SQUARE_BYTES + COLUMNS_AT * 4), (c.reads[k], 0), BACK_WORDS * 4);
             (c.held[k], taken[k]) = ((s, ticket), true);
         }
         let Some(e) = copy else { return };

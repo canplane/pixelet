@@ -1,15 +1,15 @@
 // pxl-portable/fill.rs
 
 //! gpu-portable: a square's fill, a thread at a time, over the buffer its
-//! words lie in from `base` (`window::SQUARE_WORDS`): its cells' heights off
-//! its tile's samples (`heights`), its ways' runs off its lines in four
-//! passes (`ways`), and its levels over its cells' reach (`level`). A GPU
-//! runs each pass a thread a word, column or entry (gpu-query-shader
-//! `heights_cs`, `ways_cs`, `bound_cs`); a bake runs the same passes in
-//! order over one square (`square`), so the bound it keeps of a tile is the
-//! one a GPU draws of it.
+//! words lie in from `base` (`window::SQUARE_WORDS`): each column's ground
+//! top off its tile's samples (`heights`), its ways' runs off its lines in
+//! three passes (`ways`), and its levels, level 0 each column's own
+//! (`level`). A GPU runs each pass a thread a column or entry
+//! (gpu-query-shader `heights_cs`, `ways_cs`, `bound_cs`); a bake runs the
+//! same passes in order over one square (`square`), so the bound it keeps
+//! of a tile is the one a GPU draws of it.
 
-use crate::window::{self, Squares, ELE_AT, HEIGHTS_AT, LEVELS, LEVELS_AT, LINES_AT, RUNS_AT, RUNS_RUN_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS, WAYS_AT, WAYS_BINS};
+use crate::window::{self, column_first, column_top, Squares, COLUMNS_AT, ELE_AT, LEVELS, LEVELS_AT, LINES_AT, RUNS_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS};
 use crate::{at, ground, ways, Zoom};
 
 /// Word `i` of `s` set to `v`, as `at` reads: totally, none past it, so no
@@ -21,10 +21,9 @@ pub fn put(s: &mut [u32], i: u32, v: u32) {
     }
 }
 
-/// Cell `i`'s height off the square at `base`: two a word, low first, the
-/// half's sign carried up.
-pub fn height_of(ground: &[u32], base: u32, i: u32) -> i32 {
-    ((at(ground, base + HEIGHTS_AT + i / 2) >> (16 * (i % 2))) << 16) as i32 >> 16
+/// Column word `i` off the square at `base` (`window::COLUMN_WORDS`).
+pub fn column_of(ground: &[u32], base: u32, i: u32) -> u32 {
+    at(ground, base + COLUMNS_AT + i)
 }
 
 /// Entry `at` of level `j` off the square at `base`.
@@ -45,11 +44,8 @@ impl Squares for Fresh<'_> {
     fn look(&self, _: u32, _: u32, i: u32) -> u32 {
         at(self.ground, self.base + i)
     }
-    fn height(&self, _: u32, _: u32, i: u32) -> i32 {
-        height_of(self.ground, self.base, i)
-    }
-    fn way(&self, _: u32, _: u32, k: u32) -> u32 {
-        at(self.ground, self.base + WAYS_AT + k)
+    fn column(&self, _: u32, _: u32, i: u32) -> u32 {
+        column_of(self.ground, self.base, i)
     }
     fn level(&self, _: u32, _: u32, j: u32, at: [u32; 2]) -> i32 {
         level_of(self.ground, self.base, j, at)
@@ -89,59 +85,50 @@ impl window::Square for Filling<'_> {
     }
 }
 
-/// Word `[x, y]` of the square at `base`'s heights, two cells
+/// Column `[x, y]` of the square at `base`: its ground's top
 /// (`ground::height`) off its tile's samples, the square lying at `place`
-/// in it, in squares.
+/// in it, in squares; its runs' first is the ways' to write (`ways`).
 pub fn heights(ground: &mut [u32], base: u32, place: [u32; 2], [x, y]: [u32; 2]) {
-    let first = [place[0] * SQUARE, place[1] * SQUARE];
     let w = {
         let samples: &[u32] = ground;
         let ele = move |i: usize| ((at(samples, base + ELE_AT + i as u32 / 2) >> (16 * (i as u32 % 2))) << 16) as i32 >> 16;
-        let (cx, cy) = (first[0] + 2 * x, first[1] + y);
-        let (a, b) = (ground::height(ele, [cx, cy]), ground::height(ele, [cx + 1, cy]));
-        (a as u32 & 0xffff) | (b as u32) << 16
+        ground::height(ele, [place[0] * SQUARE + x, place[1] * SQUARE + y]) as u32 & 0xffff
     };
-    put(ground, base + HEIGHTS_AT + y * (SQUARE / 2) + x, w);
+    put(ground, base + COLUMNS_AT + y * SQUARE + x, w);
 }
 
 /// Pass `pass` of the square at `base`'s ways, its cells at `cell`, at
-/// `place` in its tile, for column or bin `i`: 0 counts each column's runs
-/// into its table word, 1 (`i` 0 alone) sums them in order into each cell's
-/// first, 2 writes each column's runs from its first, 3 writes each bin's
-/// ways' word off them (`window::walk_ways`, `ways::runs`), which the levels
-/// join after. A column's spans, `u32::MAX` where they do not fit
-/// `ways::SPANS`; 0 for the rest.
+/// `place` in its tile, for column `i`: 0 counts its runs into its column
+/// word's first, 1 (`i` 0 alone) sums them in order into each column's
+/// first and the last word's, 2 writes its runs from its first, each off
+/// its spans (`ways::column`) read along z (`ways::runs`). A column's spans,
+/// `u32::MAX` where they do not fit `ways::SPANS`; 0 for the rest.
 pub fn ways(ground: &mut [u32], base: u32, place: [u32; 2], cell: Zoom, pass: u32, i: u32) -> u32 {
-    let table = base + RUNS_AT;
+    let columns = base + COLUMNS_AT;
     if pass == 1 {
         if i == 0 {
             let (mut n, mut k) = (0, 0);
             while k < SQUARE_CELLS {
-                let count = at(ground, table + k);
-                put(ground, table + k, n);
-                (n, k) = (n + count, k + 1);
+                let w = at(ground, columns + k);
+                put(ground, columns + k, with_first(w, n));
+                (n, k) = (n + column_first(w), k + 1);
             }
-            put(ground, table + SQUARE_CELLS, n);
+            put(ground, columns + SQUARE_CELLS, with_first(0, n));
         }
         return 0;
     }
-    let (bins, writes) = (pass == 3, pass == 2);
-    if i >= if bins { WAYS_BINS } else { SQUARE_CELLS } {
+    if i >= SQUARE_CELLS {
         return 0;
     }
-    let (spans, word, fits) = {
+    let (spans, fits) = {
         let lane: &[u32] = ground;
-        let filling = Filling { ground: lane, base, cell, place };
-        window::walk_ways(&filling, move |k: u32| at(lane, table + k), bins, i)
+        crate::ways::column(&Filling { ground: lane, base, cell, place }, [(i % SQUARE) as i32, (i / SQUARE) as i32])
     };
-    if bins {
-        put(ground, base + WAYS_AT + i, word as u32);
-        return 0;
-    }
-    let (first, room) = if writes { (at(ground, table + i), RUNS_SQUARE) } else { (0, 0) };
-    let n = put_runs(ground, base, &spans, cell, first, room);
-    if !writes {
-        put(ground, table + i, n);
+    let w = at(ground, columns + i);
+    let (from, room) = if pass == 2 { (column_first(w), RUNS_SQUARE) } else { (0, 0) };
+    let n = put_runs(ground, base, &spans, cell, from, room);
+    if pass == 0 {
+        put(ground, columns + i, with_first(w, n));
     }
     if fits {
         spans.n
@@ -150,20 +137,43 @@ pub fn ways(ground: &mut [u32], base: u32, place: [u32; 2], cell: Zoom, pass: u3
     }
 }
 
+/// Column word `w` with its first run `n`, its top kept.
+fn with_first(w: u32, n: u32) -> u32 {
+    w & 0xffff | n << 16
+}
+
 /// A column's runs off its spans (`ways::runs`) into the square at `base`'s
-/// runs lane from `first`, as far as `room`; how many there are.
+/// runs from `first`, as far as `room`; how many there are.
 fn put_runs(ground: &mut [u32], base: u32, spans: &ways::Spans, cell: u32, first: u32, room: u32) -> u32 {
     ways::runs(spans, cell, move |k, w| {
         if first + k < room {
-            put(ground, base + RUNS_AT + RUNS_RUN_AT + first + k, w);
+            put(ground, base + RUNS_AT + first + k, w);
         }
     })
 }
 
-/// Entry `[x, y]` of level `j` of the square at `base`, over the level under
-/// it, written before (`window::join`); level 1 over its cells' reach.
-pub fn level(ground: &mut [u32], base: u32, j: u32, at: [u32; 2]) {
-    let w = {
+/// Entry `[x, y]` of level `j` of the square at `base`, its cells at `cell`:
+/// level 0 column `[x, y]`'s own — its ground's top joined with what its
+/// runs write, a way's air a block either side of it, as `ways::block`
+/// recolours over and under it; a higher one over the level under it,
+/// written before (`window::join`).
+pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
+    let w = if j == 0 {
+        let i = at[1] * SQUARE + at[0];
+        let (w, to) = (column_of(ground, base, i), column_first(column_of(ground, base, i + 1)));
+        let (top, s) = (column_top(w), 1i32 << (crate::LEAF_CELL - cell));
+        let (mut lo, mut hi, mut r) = (top, top, column_first(w));
+        while r + 1 < to {
+            let (z, value) = ways::run_of(crate::at(ground, base + RUNS_AT + r));
+            if value != ways::NOTHING {
+                let d = if value & ways::AIR_OF != 0 { 1 } else { 0 };
+                let end = ways::run_of(crate::at(ground, base + RUNS_AT + r + 1)).0;
+                (lo, hi) = (lo.min((z - d) * s), hi.max((end + d) * s));
+            }
+            r += 1;
+        }
+        ground::bound_word([lo, hi])
+    } else {
         let under: &[u32] = ground;
         window::join(&Fresh { ground: under, base }, 0, 0, j, at)
     };
@@ -177,29 +187,24 @@ pub fn level(ground: &mut [u32], base: u32, j: u32, at: [u32; 2]) {
 /// as, and the most spans a column makes (`u32::MAX` past `ways::SPANS`).
 pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) -> [u32; 2] {
     for y in 0..SQUARE {
-        for x in 0..SQUARE / 2 {
+        for x in 0..SQUARE {
             heights(lane, 0, place, [x, y]);
         }
     }
     let mut most = 0;
-    for pass in 0..4 {
-        let n = match pass {
-            1 => 1,
-            3 => WAYS_BINS,
-            _ => SQUARE_CELLS,
-        };
-        for i in 0..n {
+    for pass in 0..3 {
+        for i in 0..if pass == 1 { 1 } else { SQUARE_CELLS } {
             most = most.max(ways(lane, 0, place, cell, pass, i));
         }
     }
-    for j in 1..=LEVELS {
+    for j in 0..=LEVELS {
         for y in 0..SQUARE >> j {
             for x in 0..SQUARE >> j {
-                level(lane, 0, j, [x, y]);
+                level(lane, 0, cell, j, [x, y]);
             }
         }
     }
-    [at(lane, RUNS_AT + SQUARE_CELLS), most]
+    [column_first(column_of(lane, 0, SQUARE_CELLS)), most]
 }
 
 /// The lowest and highest a filled square's cells reach, in leaf cells:

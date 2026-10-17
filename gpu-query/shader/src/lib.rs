@@ -14,13 +14,13 @@ use pxl_portable::area::{self, Area};
 use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
 use pxl_portable::caves::Cave;
 use pxl_portable::cube::{object, sentinel};
-use pxl_portable::fill::{self, height_of, level_of, put};
+use pxl_portable::fill::{self, column_of, level_of, put};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
 use pxl_portable::decor::{Decor, COUNTS};
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
 use pxl_portable::scatter::{self, drawn, Grounds, GROWN_AT, GROWN_WORDS, PLACED_BLOCK, SQUARE_BLOCKS};
-use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS, WAYS_AT};
+use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Ran, FRESH_WORDS, RUNS_AT};
 use pxl_portable::ways;
 use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
@@ -203,11 +203,8 @@ impl Squares for World<'_> {
     fn look(&self, cell: u32, slot: u32, i: u32) -> u32 {
         at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + i)
     }
-    fn height(&self, cell: u32, slot: u32, i: u32) -> i32 {
-        height_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
-    }
-    fn way(&self, cell: u32, slot: u32, k: u32) -> u32 {
-        at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + WAYS_AT + k)
+    fn column(&self, cell: u32, slot: u32, i: u32) -> u32 {
+        column_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
     }
     fn level(&self, cell: u32, slot: u32, j: u32, at: [u32; 2]) -> i32 {
         level_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), j, at)
@@ -216,8 +213,8 @@ impl Squares for World<'_> {
 
 /// The ways' runs `ways_cs` wrote in the eye's windows.
 impl Ran for World<'_> {
-    fn ran(&self, cell: u32, slot: u32, k: u32) -> u32 {
-        at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + RUNS_AT + k)
+    fn ran(&self, cell: u32, slot: u32, r: u32) -> u32 {
+        at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + RUNS_AT + r)
     }
 }
 
@@ -348,10 +345,12 @@ impl Query for World<'_> {
         // `ways_over`): air, or a way's look whole.
         if block && i.kind == Kind::Block {
             // Off the window the ground's cell was read at: one find a block.
-            if window::asks(self, &found, zoom, c) {
+            // Carved: air as the caves answer it where the grid's ground fills,
+            // which the air of a way beside it recolours; else only a way in
+            // the block's own column writes in it.
+            let carved = value == VOID && cell.block(zoom, c[2], false).0 != VOID;
+            if carved || window::runs_in(self, &found, zoom, [c[0], c[1]]) {
                 let ways = Ways { world: *self, zoom, own: [c[0], c[1]], cell, found };
-                // Carved: air as the caves answer it where the grid's ground fills.
-                let carved = value == VOID && cell.block(zoom, c[2], false).0 != VOID;
                 let way = ways::block(&ways, c, carved);
                 if way != ways::NOTHING {
                     value = if way == ways::AIR { VOID } else { way };
@@ -635,9 +634,9 @@ pub fn cast_cs(
     }
 }
 
-/// The cells' heights of the squares `fresh` names, the squares handed
-/// their tiles' samples this turn, one a `z`, each two words: the square,
-/// and where it lies in its tile, in squares, X low: each word's two cells
+/// The columns' ground tops of the squares `fresh` names, the squares
+/// handed their tiles' samples this turn, one a `z`: the square, and where
+/// it lies in its tile, in squares, X low; a thread a column
 /// (`ground::height`) off the samples handed there.
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn heights_cs(
@@ -645,7 +644,7 @@ pub fn heights_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] ground: &mut [u32],
 ) {
-    if id.x >= SQUARE / 2 || id.y >= SQUARE {
+    if id.x >= SQUARE || id.y >= SQUARE {
         return;
     }
     let base = square_at(at(fresh, FRESH_WORDS * id.z));
@@ -653,9 +652,10 @@ pub fn heights_cs(
     fill::heights(ground, base, [place & 0xffff, place >> 16], [id.x, id.y]);
 }
 
-/// Level `level.x` of the squares `fresh` names, one a `z`, over the level
-/// under it, written before (`window::join`), level 1 over the cells
-/// `heights_cs` drew: a dispatch a level, from 1 up.
+/// Level `level.x` of the squares `fresh` names, one a `z`: level 0 each
+/// column's own, its top and its runs (`fill::level`), a higher one over the
+/// level under it, written before (`window::join`): a dispatch a level, from
+/// 0 up.
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn bound_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -669,21 +669,17 @@ pub fn bound_cs(
         return;
     }
     let base = square_at(at(fresh, FRESH_WORDS * id.z));
-    fill::level(ground, base, j, [id.x, id.y]);
+    fill::level(ground, base, at(fresh, FRESH_WORDS * id.z + 2), j, [id.x, id.y]);
 }
 
 /// The ways of the squares `fresh` names, one a `z`, a thread a column
 /// (`x`, cells row by row): each column's spans off the square's lines
-/// (pxl-portable `ways::column`) read along z as runs (`ways::runs`) into
-/// its runs lane, cells in order, each cell's first in the table before
-/// them (`window::RUNS_AT`). Four dispatches, `pass.x` 0 to 3: each
-/// column counts its runs into its table word; one thread a square sums
-/// them in order into each cell's first; each column writes its runs from
-/// its first; a thread a bin writes its ways' word off them, which the
-/// levels join after. A thread's columns are walked in one place, a column's
-/// spans or a bin's word as the pass says (`window::walk_ways`), and its runs
-/// made in one (`ways::runs`). Over `heights_cs`'s
-/// cells: a way is told from their faces.
+/// (pxl-portable `ways::column`) read along z as runs (`ways::runs`), from
+/// its column word's first (`window::COLUMN_WORDS`). Three dispatches,
+/// `pass.x` 0 to 2: each column counts its runs into its word; one thread a
+/// square sums them in order into each column's first; each column writes
+/// its runs from its first. Over `heights_cs`'s tops: a way is told from
+/// their faces.
 #[spirv(compute(threads(64, 1, 1)))]
 pub fn ways_cs(
     #[spirv(global_invocation_id)] id: UVec3,
