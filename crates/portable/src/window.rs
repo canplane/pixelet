@@ -226,9 +226,11 @@ pub trait Squares {
 
 /// One square as its fill reads it, for the ways' one rule
 /// (`ways::Columns`): its cells' zoom, where it lies in its tile (in
-/// squares), word `k` of its lines (`LINES_AT`), cell `i`'s four looks as
-/// its lane holds them, and column `c`'s height off its tile's samples, `c`
-/// counted from its first cell, the ring of columns about it included.
+/// squares), its first cell as the world names it and what is known of the
+/// service area at it (`FRESH_FIRST`, `FRESH_SHARD`), word `k` of its lines
+/// (`LINES_AT`), cell `i`'s four looks as its lane holds them, and column
+/// `c`'s height off its tile's samples, `c` counted from its first cell, the
+/// ring of columns about it included.
 /// Its columns are its cells and that ring, a ring column read off the
 /// edge bin it borders, whose lines hold every one that reaches it
 /// (`ways::footprint`); one past the ring has no segment.
@@ -724,11 +726,11 @@ pub fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> [i32; 2] {
 /// `(zoom, c)`: off the finest window holding them present, stepped from
 /// `place`, which becomes where they are held (`step`), one
 /// entry of its square's levels, level 0 the column holding a node no wider
-/// than a cell; and that window's zoom. A node wider than a square is the join of
-/// its squares' whole, each held at `cell`. None (`ground::UNBOUNDED`) for a
-/// node wider than a window, or over a square not held at `cell`, which
-/// reads nothing and only splits more; false where no window holds it, a
-/// lack.
+/// than a cell; and that window's zoom. A node wider than a square is the
+/// window's fold of its squares' whole (`whole`, `fold`), one entry. None
+/// (`ground::UNBOUNDED`) for a node wider than a window, or over a square
+/// not held at `cell`, which reads nothing and only splits more; false where
+/// no window holds it, a lack.
 pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> ([i32; 2], Zoom, bool) {
     // The node's first cell at `cell`, or the cell holding it.
     let g = [crate::index_at(zoom, c[0], cell), crate::index_at(zoom, c[1], cell)];

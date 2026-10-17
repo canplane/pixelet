@@ -171,7 +171,8 @@ pub struct Cast<'a> {
     /// Per window of the eye's, from the top's, a row a slot: the square it
     /// holds, X and Y, and whether it is present, and a spare.
     pub window: &'a [i32],
-    /// Each shard the service area serves: its tile zoom, x and y, a spare.
+    /// The service area's index (pxl-portable `area::Area`), its keys four a
+    /// row (pxl-kernel scene/cast.rs `shards`).
     pub shards: &'a [[i32; 4]],
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU grows and draws over the same world, none where
@@ -1308,8 +1309,9 @@ impl RaysPass {
 }
 
 /// The cast's group 0 over `bound`: the eye, the window, the tiles' frames,
-/// the surface's rays, the served shards, the overwrites and where its rays
-/// start (`start_cs` writes it, `cast_cs` reads it).
+/// the surface's rays, the service area's index, the overwrites, where its
+/// rays start (`start_cs` writes it, `cast_cs` reads it) and the windows
+/// folded over their squares (`joined_cs` writes it, the cast reads it).
 fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
     let [eye, window, ground, rays, shards, overwrites, starts, joined] = bound;
     let entries = [

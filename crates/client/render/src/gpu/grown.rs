@@ -43,7 +43,7 @@ pub struct DecorFrame<'a> {
 }
 
 /// What decor's growth reads besides the frame's decor, none of it the
-/// eye's place: the windows' table and the served shards, what is placed
+/// eye's place: the windows' table and the service area's index, what is placed
 /// (the overwrites' revision, with the frame's `edits`) and a preview's
 /// cuts, and the squares filled this frame. A slot grows again where its
 /// square is another, one beside it was filled, or an edit or a cut as it
@@ -106,7 +106,7 @@ pub struct Grown {
 }
 
 /// The world `decor_cs` asks: the cast's eye, window, the tiles' frames, the
-/// served shards and the overwrites; the squares filled this frame, which
+/// service area's index and the overwrites; the squares filled this frame, which
 /// `decor_mark_cs` reads; and the windows folded over their squares
 /// (`joined_cs`).
 pub type World = [u32; 7];

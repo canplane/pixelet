@@ -100,7 +100,8 @@ pub struct World<'a> {
     /// (`ways_cs`), and its tile's samples and lines as handed
     /// (`window::SQUARE_WORDS`); the eye's windows first.
     ground: &'a [u32],
-    /// The served shards: zoom, x, y.
+    /// The service area's index (pxl-portable `area::Area`), its keys four a
+    /// row.
     shards: &'a [IVec4],
     /// The overwrites' tree (pxl-kernel layer/object/store.rs): its heap
     /// lane, then its data lane from half the buffer.

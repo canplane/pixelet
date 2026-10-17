@@ -6,7 +6,8 @@
 
 // The rays, a layer a word: what a ray met (value, kind, face, zoom), how far
 // it went (f32 bits), its face bits, and its fold's looks or, in the steps
-// view, the nodes its descent asked.
+// view, the nodes its descent asked; the fifth, where its stop's column is
+// held (pxl-portable `ray::PLACE`), is the face pass's, not read here.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
 // Each look's swatch and layer, then the colour it reads as from afar
 // (`mesh/paint/ground.rs` `look_words`): the ground's looks, then each

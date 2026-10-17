@@ -644,7 +644,8 @@ impl Spans {
 
 /// Column `c`'s spans: what each visit of a line writes there that fills a
 /// block of the grid's zoom (`fills_any`), as `at` reads no other — none in
-/// a column of the bedrock, as bedrock wins over a way as it does over the
+/// a column of the bedrock, past the area or walled by its edge
+/// (`Columns::walled`), as bedrock wins over a way as it does over the
 /// ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     let (mut spans, mut fits) = (Spans::NONE, true);
