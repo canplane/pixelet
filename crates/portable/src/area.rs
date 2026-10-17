@@ -86,7 +86,9 @@ pub struct Shard(u32);
 
 const SHARD_KNOWN: u32 = 1;
 const SHARD_SERVED_SHIFT: u32 = 1;
-const SHARD_ALL: u32 = 0x1ff;
+/// The bits of which of the nine are served (`Shard::served`).
+pub const SHARD_SERVED_BITS: u32 = 9;
+const SHARD_ALL: u32 = (1 << SHARD_SERVED_BITS) - 1;
 const _: () = assert!(LEAF_ZOOM >= SHARD_ZOOM);
 
 impl Shard {
@@ -117,8 +119,16 @@ impl Shard {
     const fn known(self) -> bool {
         self.0 & SHARD_KNOWN != 0
     }
-    const fn served(self) -> u32 {
+    /// Which of the nine shards about it are served, bit `(dy + 1)·3 +
+    /// (dx + 1)`: what a word with no room for its known bit holds where it
+    /// is known by its zoom (pxl-portable `ray`'s stop).
+    pub const fn served(self) -> u32 {
         self.0 >> SHARD_SERVED_SHIFT
+    }
+
+    /// Known, the nine `served` (`served`).
+    pub const fn of_served(served: u32) -> Shard {
+        Shard(SHARD_KNOWN | (served & SHARD_ALL) << SHARD_SERVED_SHIFT)
     }
     /// Past the area: known so.
     pub const fn past(self) -> bool {

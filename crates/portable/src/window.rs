@@ -356,7 +356,9 @@ const FOUND_HERE: u32 = 1 << FOUND_SLOT_BITS;
 const FOUND_FROM_SHIFT: u32 = FOUND_SLOT_BITS + 1;
 const FOUND_CELL_SHIFT: u32 = FOUND_FROM_SHIFT + crate::ZOOM_BITS;
 const FOUND_ZOOM_MASK: u32 = (1 << crate::ZOOM_BITS) - 1;
-const _: () = assert!(FOUND_CELL_SHIFT + crate::ZOOM_BITS <= 32);
+/// A `Found`'s word's bits: its slot, here, and its two zooms.
+pub const FOUND_BITS: u32 = FOUND_CELL_SHIFT + crate::ZOOM_BITS;
+const _: () = assert!(FOUND_BITS <= 32);
 const _: () = assert!(FIRST_CELL >= 2, "a zoom asked is never NONE's, nor one finer");
 
 impl Found {
