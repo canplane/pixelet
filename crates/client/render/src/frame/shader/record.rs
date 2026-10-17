@@ -13,6 +13,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_CAST => "cast_cs",
         SHADER_START => "start_cs",
         SHADER_FACE => "face_cs",
+        SHADER_JOINED => "joined_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHTS => "heights_cs",
         SHADER_GROWN_MARK => "decor_mark_cs",

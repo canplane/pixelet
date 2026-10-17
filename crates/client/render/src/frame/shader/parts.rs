@@ -70,7 +70,10 @@ pub const SHADER_FACE: u32 = 36;
 /// Which eye slots' decor grows again this frame, listed for
 /// `SHADER_GROWN`'s dispatch: its one compute entry.
 pub const SHADER_GROWN_MARK: u32 = 37;
-pub const SHADERS: u32 = 38;
+/// The eye's windows folded over their squares, generated with the cast
+/// from pxl-portable's `window::fold`: its one compute entry.
+pub const SHADER_JOINED: u32 = 38;
+pub const SHADERS: u32 = 39;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -298,4 +301,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["face.gen"],
     // SHADER_GROWN_MARK
     &["decor_mark.gen"],
+    // SHADER_JOINED
+    &["joined.gen"],
 ];

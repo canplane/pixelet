@@ -136,6 +136,7 @@ pub fn stage_render() {
         ground: GroundSquares {
             upload: &mut terrain_upload,
             landed: &mut terrain_landed,
+            joined: crate::layer::terrain::window::joined_lane(),
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
