@@ -363,7 +363,8 @@ pub type Answer = In<u32>;
 /// each zoom's tile its cells are read from (`Held::relief`) — a block over it is air,
 /// else its cell's block (`Cell::block`), its look; a
 /// coarser node nothing under fills at the zooms asked (`empty`) a block of
-/// air its size, else split; where no tile over it is held, the lack.
+/// air its size, else split; where no tile over it is held, a block is the
+/// lack and a coarser node split, not known empty.
 /// `shard` is what is known of the area at the node, known a shard or
 /// finer: its asker's, which asks it once at its entry (`Shard::at`).
 /// `place` is where the cells of a node over it were held
@@ -409,8 +410,10 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
         fit
     };
     let ([relief, ways], ok) = held.relief(place, read, (zoom, c));
+    // Not held: a block is the lack; a coarser node is not known empty,
+    // so it is split, and a ray stops only at a block it meets not held.
     if !ok {
-        return (lacks, Cell::NONE, none, EMPTY);
+        return (if block { lacks } else { split }, Cell::NONE, none, EMPTY);
     }
     if block {
         // Its column read where the ground or the ways may fill it.
