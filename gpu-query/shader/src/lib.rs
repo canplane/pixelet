@@ -593,22 +593,46 @@ pub fn bound_cs(
 }
 
 /// The ways of the squares `fresh` names, one a `z`, a thread a column
-/// (`x`, cells row by row): each column's spans off the square's lines
-/// (pxl-portable `ways::column`) read along z as runs (`ways::runs`), from
-/// its column word's first (`window::COLUMN_WORDS`). Three dispatches,
-/// `pass.x` 0 to 2: each column counts its runs into its word; one thread a
-/// square sums them in order into each column's first; each column writes
-/// its runs from its first. Over `heights_cs`'s tops: a way is told from
-/// their faces. Each square's entry as handed whole: where it lies and its
-/// shard lay the area's edge (pxl-portable `ways::Columns::walled`).
+/// (`x`, cells row by row): each column's spans and those beside it off the
+/// square's lines (pxl-portable `ways::around`) read along z as runs
+/// (`ways::runs`), from its column word's first (`window::COLUMN_WORDS`).
+/// Three dispatches, `pass.x` 0 to 2: each column counts its runs into its
+/// word; a workgroup a square sums them into each column's first, each
+/// thread a stretch (`fill::stretch_runs`), the stretches' sums scanned in
+/// the workgroup's memory (Hillis and Steele 1986; GPU Gems 3, ch. 39) and
+/// each stretch's firsts written off it (`fill::scanned`); each column
+/// writes its runs from its first. Over `heights_cs`'s tops: a way is told
+/// from their faces. Each square's entry as handed whole: where it lies
+/// and its shard lay the area's edge (pxl-portable
+/// `ways::Columns::walled`).
 #[spirv(compute(threads(64, 1, 1)))]
 pub fn ways_cs(
     #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] pass: &UVec4,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
+    #[spirv(workgroup)] sums: &mut [u32; fill::SCAN_THREADS as usize],
 ) {
-    fill::ways(ground, fresh_entry(fresh, id.z), pass.x, id.x);
+    let entry = fresh_entry(fresh, id.z);
+    if pass.x != 1 {
+        fill::ways(ground, entry, pass.x == 2, id.x);
+        return;
+    }
+    // An inclusive scan, a step a doubling: each sum adds the one `d` before
+    // it, read before any is written.
+    let t = lane.x;
+    let own = fill::stretch_runs(ground, entry, t);
+    sums[t as usize] = own;
+    let mut d = 1;
+    while d < fill::SCAN_THREADS {
+        spirv_std::arch::workgroup_memory_barrier_with_group_sync();
+        let add = if t >= d { sums[(t - d) as usize] } else { 0 };
+        spirv_std::arch::workgroup_memory_barrier_with_group_sync();
+        sums[t as usize] += add;
+        d *= 2;
+    }
+    fill::scanned(ground, entry, t, sums[t as usize] - own);
 }
 
 /// The eye's slots whose decor grows again this frame, a thread a slot,

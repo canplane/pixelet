@@ -3,8 +3,8 @@
 //! gpu-portable: a square's fill, a thread at a time, over the buffer its
 //! words lie in from `base` (`window::SQUARE_WORDS`): each column's ground
 //! top off its tile's samples and its cell as laid (`heights`), its ways'
-//! runs off its lines in
-//! three passes (`ways`), and its levels, level 0 each column's own
+//! runs off its lines in three passes (`ways`, a workgroup's scan between
+//! them, `stretch_runs` and `scanned`), and its levels, level 0 each column's own
 //! (`level`). A GPU runs each pass a thread a column or entry
 //! (gpu-query-shader `heights_cs`, `ways_cs`, `bound_cs`); a bake runs its
 //! columns' passes in order over one square (`square`), so the runs it
@@ -150,29 +150,17 @@ pub fn heights(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], [x, y]: [
     put(ground, base + LAID_AT + i / 2, window::laid_half(own, gone0) | window::laid_half(next, gone1) << 16);
 }
 
-/// Pass `pass` of the ways of the square `fresh` hands (`window::fresh`),
-/// for column `i`: 0 counts its runs into its column
-/// word's first, 1 (`i` 0 alone) sums them in order into each column's
-/// first and the last word's, 2 writes its runs from its first, each off
-/// its spans and those beside it (`ways::around`) read along z
-/// (`ways::runs`). A column's spans, `u32::MAX` where its or those beside
-/// it do not fit `ways::SPANS`; 0 for the rest.
-pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], pass: u32, i: u32) -> u32 {
+/// The ways of the square `fresh` hands (`window::fresh`), for column `i`:
+/// unless `write`, its runs counted into its column word's first; where
+/// `write`, once each column's first is where its runs begin (`scanned`),
+/// its runs written from it — each off its spans and those beside it
+/// (`ways::around`) read along z (`ways::runs`). A column's spans,
+/// `u32::MAX` where its or those beside it do not fit `ways::SPANS`; 0 for
+/// the rest.
+pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], write: bool, i: u32) -> u32 {
     let word = |k: u32| fresh[k as usize];
     let (base, place, cell) = (word(FRESH_SQUARE) * SQUARE_WORDS, window::place_of(word(FRESH_PLACE)), word(FRESH_CELL));
     let columns = base + COLUMNS_AT;
-    if pass == 1 {
-        if i == 0 {
-            let (mut n, mut k) = (0, 0);
-            while k < SQUARE_CELLS {
-                let w = at(ground, columns + k);
-                put(ground, columns + k, with_first(w, n));
-                (n, k) = (n + column_first(w), k + 1);
-            }
-            put(ground, columns + SQUARE_CELLS, with_first(0, n));
-        }
-        return 0;
-    }
     if i >= SQUARE_CELLS {
         return 0;
     }
@@ -183,9 +171,9 @@ pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], pass: u32, i
         crate::ways::around(&filling, [x as i32, y as i32])
     };
     let w = at(ground, columns + i);
-    let (from, room) = if pass == 2 { (column_first(w), RUNS_SQUARE) } else { (0, 0) };
+    let (from, room) = if write { (column_first(w), RUNS_SQUARE) } else { (0, 0) };
     let n = put_runs(ground, base, &around, cell, from, room);
-    if pass == 0 {
+    if !write {
         put(ground, columns + i, with_first(w, n));
     }
     if fits {
@@ -194,6 +182,43 @@ pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], pass: u32, i
         u32::MAX
     }
 }
+
+/// The threads that sum a square's columns' counts into their firsts, a
+/// workgroup (gpu-query-shader `ways_cs`), each over a stretch of the
+/// columns in their order.
+pub const SCAN_THREADS: u32 = 64;
+const STRETCH: u32 = SQUARE_CELLS / SCAN_THREADS;
+
+/// Thread `t`'s stretch of the square `fresh` hands: its columns' runs, as
+/// counted into their words' firsts (`ways`), summed.
+pub fn stretch_runs(ground: &[u32], fresh: [u32; FRESH_WORDS as usize], t: u32) -> u32 {
+    let columns = fresh[FRESH_SQUARE as usize] * SQUARE_WORDS + COLUMNS_AT + t * STRETCH;
+    let (mut n, mut k) = (0, 0);
+    while k < STRETCH {
+        (n, k) = (n + column_first(at(ground, columns + k)), k + 1);
+    }
+    n
+}
+
+/// Thread `t`'s stretch of the square `fresh` hands, its columns' firsts
+/// written where their runs begin, `before` the runs of the stretches
+/// before it (an exclusive scan of `stretch_runs` over the threads,
+/// Blelloch 1990): each column's the runs before it; the last thread's,
+/// the square's count in the word past them (`window::COLUMN_WORDS`).
+pub fn scanned(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], t: u32, before: u32) {
+    let columns = fresh[FRESH_SQUARE as usize] * SQUARE_WORDS + COLUMNS_AT;
+    let (mut n, mut k) = (before, t * STRETCH);
+    while k < (t + 1) * STRETCH {
+        let w = at(ground, columns + k);
+        put(ground, columns + k, with_first(w, n));
+        (n, k) = (n + column_first(w), k + 1);
+    }
+    if t + 1 == SCAN_THREADS {
+        put(ground, columns + SQUARE_CELLS, with_first(0, n));
+    }
+}
+
+const _: () = assert!(STRETCH * SCAN_THREADS == SQUARE_CELLS, "the stretches cover the columns");
 
 /// Column word `w` with its first run `n`, its top kept.
 fn with_first(w: u32, n: u32) -> u32 {
@@ -254,10 +279,17 @@ pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) -> [u32; 2] {
         }
     }
     let mut most = 0;
-    for pass in 0..3 {
-        for i in 0..if pass == 1 { 1 } else { SQUARE_CELLS } {
-            most = most.max(ways(lane, fresh, pass, i));
-        }
+    for i in 0..SQUARE_CELLS {
+        most = most.max(ways(lane, fresh, false, i));
+    }
+    let mut before = 0;
+    for t in 0..SCAN_THREADS {
+        let n = stretch_runs(lane, fresh, t);
+        scanned(lane, fresh, t, before);
+        before += n;
+    }
+    for i in 0..SQUARE_CELLS {
+        ways(lane, fresh, true, i);
     }
     [column_first(column_of(lane, 0, SQUARE_CELLS)), most]
 }

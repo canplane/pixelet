@@ -867,6 +867,7 @@ const SQUARE_BYTES: u32 = SQUARE_WORDS * 4;
 /// group is the cast's, which binds all theirs.
 const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
 const _: () = assert!(same(compute::BOUND_GROUP, compute::WAYS_GROUP), "the levels' and the ways' passes share a group");
+const _: () = assert!(compute::WAYS_WORKGROUP[0] == pxl_portable::fill::SCAN_THREADS, "a square's columns are summed by one workgroup");
 const _: () = assert!(
     within(compute::START_GROUP, compute::CAST_GROUP) && within(compute::JOINED_GROUP, compute::CAST_GROUP),
     "the start and the fold bind the cast's group"
@@ -1136,8 +1137,8 @@ impl RaysPass {
         let w = compute::HEIGHTS_WORKGROUP;
         g.dispatch(pass, SQUARE.div_ceil(w[0]), SQUARE.div_ceil(w[1]), c.fresh_len);
         // A column a thread, over the tops just drawn: the columns' runs
-        // counted, summed a square a thread, written, before the levels
-        // fold them.
+        // counted, summed a square a workgroup (pxl-portable
+        // `fill::SCAN_THREADS`), written, before the levels fold them.
         g.set_pipeline(pass, c.ways_built.pipeline);
         for k in 0..3 {
             g.set_bind_group(pass, 0, c.ways_group, &[k * SLOT_STRIDE]);
