@@ -41,7 +41,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     // Both lights, summed so the light does not snap where they cross at
     // dusk, each as it reaches the air: the sun's first, the moon's second,
     // each against a sun overhead at sea level, which the shaders take as
-    // white (atmos_lut.wgsl `atmos_white`).
+    // white (atmos_lut.wgsl `table_white`).
     let sun_dir = v3::norm(&light.sun);
     let moon_dir = v3::norm(&light.moon);
     // The stars are lost in the day.
