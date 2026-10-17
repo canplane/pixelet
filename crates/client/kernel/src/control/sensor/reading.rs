@@ -94,9 +94,10 @@ pub struct DeviceLocationStore {
 }
 
 impl DeviceLocationStore {
-    /// Updates only on a significant change.
+    /// Updates only on a significant change; any fix says the watch delivers.
     pub fn set_location(&mut self, coords: [f64; 2], altitude: Option<f64>, accuracy: f64, course: Option<f64>) {
         let timestamp = now();
+        self.pose = Pose::Ready;
         let Some(prev) = self.location else {
             self.location = Some(DeviceLocation {
                 coords,
@@ -105,7 +106,6 @@ impl DeviceLocationStore {
                 course,
                 timestamp,
             });
-            self.pose = Pose::Ready;
             return;
         };
 
@@ -132,7 +132,6 @@ impl DeviceLocationStore {
             course,
             timestamp,
         });
-        self.pose = Pose::Ready;
     }
 
     pub fn set_is_tracking_location(&mut self, enabled: bool) {

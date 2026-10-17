@@ -18,7 +18,6 @@
   "EFFECT_NAMES": [
     "navigation",
     "bootstrap",
-    "geolocation",
     "orientation",
     "follow",
     "destination",

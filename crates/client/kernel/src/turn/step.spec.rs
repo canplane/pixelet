@@ -53,7 +53,6 @@ impl StepName {
 pub const EFFECT_NAMES: &[&str] = &[
     "navigation",
     "bootstrap",
-    "geolocation",
     "orientation",
     "follow",
     "destination",
@@ -72,27 +71,25 @@ pub const EFFECT_NAMES: &[&str] = &[
 pub enum EffectName {
     navigation = 0,
     bootstrap = 1,
-    geolocation = 2,
-    orientation = 3,
-    follow = 4,
-    destination = 5,
-    view = 6,
-    decor = 7,
-    objects = 8,
-    edit = 9,
-    hover = 10,
-    puck = 11,
-    settings = 12,
-    assets = 13,
-    pump = 14,
+    orientation = 2,
+    follow = 3,
+    destination = 4,
+    view = 5,
+    decor = 6,
+    objects = 7,
+    edit = 8,
+    hover = 9,
+    puck = 10,
+    settings = 11,
+    assets = 12,
+    pump = 13,
 }
 
 impl EffectName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [EffectName; 15] = [
+    pub const ALL: [EffectName; 14] = [
         EffectName::navigation,
         EffectName::bootstrap,
-        EffectName::geolocation,
         EffectName::orientation,
         EffectName::follow,
         EffectName::destination,

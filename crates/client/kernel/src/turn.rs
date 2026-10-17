@@ -17,7 +17,6 @@ use crate::control::navigation::bootstrap::map_bootstrap_step;
 use crate::control::navigation::follow_mode::follow_mode_step;
 use crate::control::navigation::off_center::{off_center, off_center_step};
 use crate::control::sensor::device_orientation::{orientation_watchdog_step, OrientationPlatform};
-use crate::control::sensor::geolocation::geolocation_step;
 use crate::io::request::{pump, set_credits};
 use crate::io::text::text_rise;
 use pxl_spec::bake::tile::place::PlaceTile;
@@ -184,7 +183,6 @@ pub fn world_turn() -> f64 {
     let mut worst = (0.0f64, None);
     effect!(worst, navigation, off_center_step());
     effect!(worst, bootstrap, map_bootstrap_step());
-    effect!(worst, geolocation, geolocation_step(platform.geolocation));
     effect!(worst, orientation, orientation_watchdog_step(platform.orientation));
     effect!(worst, follow, follow_mode_step());
     effect!(worst, destination, crate::control::navigation::destination::destination_step());

@@ -45,8 +45,10 @@ export function geolocationStart(): void {
       kernel_position(longitude, latitude, altitude, accuracy, heading);
     },
     (err) => {
-      // Cleared, not just forgotten: a dead watch keeps calling back and would race a later start.
-      geolocationStop();
+      // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT and ends
+      // only on PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method),
+      // so it is left running on any other; the kernel shows the failure until a fix lands.
+      if (err.code === err.PERMISSION_DENIED) geolocationStop();
       const code = err.code === err.PERMISSION_DENIED
         ? GeolocationErrorCode.PermissionDenied
         : err.code === err.POSITION_UNAVAILABLE
@@ -56,7 +58,9 @@ export function geolocationStart(): void {
         : GeolocationErrorCode.Other;
       kernel_position_error(code);
     },
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
+    // No timeout: one would raise TIMEOUT on a clock while no fix comes
+    // (PositionOptions.timeout, Infinity by default), each a turn for nothing.
+    { enableHighAccuracy: true, maximumAge: 5000 },
   );
 }
 

@@ -1,24 +1,21 @@
 // pxl-kernel/control/sensor/geolocation.rs
 
-//! The GPS sensor's decisions: when a watch runs, what an error means, and
-//! when to retry. The watch itself is the shell's.
+//! The GPS sensor's decisions: when a watch runs and what an error means.
+//! The watch itself is the shell's, and it outlives a momentary error: a
+//! W3C watch ends only on PERMISSION_DENIED or clearWatch, and keeps trying
+//! through POSITION_UNAVAILABLE and TIMEOUT
+//! (https://www.w3.org/TR/geolocation/#watchposition-method), so nothing is
+//! retried here; a device's module re-arms its own watch where its platform
+//! ends one (apps/native/src/platform/sensor.ts).
 
 pub use crate::abi::cmd::GeolocationErrorCode;
 use crate::abi::cmd::Message;
 use crate::control::sensor::reading::{device_location_store, Pose};
-use crate::sched::edge::wake_at;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use xpute_guest::clock::now;
 use xpute_guest::global::Global;
-
-/// A timeout or unavailable fix is momentary (indoors, tunnels). The watch
-/// must stop on error, or a dead one races the next, but nothing else
-/// restarted it: one bad minute underground ended tracking until the app was
-/// reopened. One pending retry, cleared by a stop.
-const GEOLOCATION_RETRY_MS: f64 = 5000.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GeolocationCommand {
@@ -30,7 +27,6 @@ struct Geolocation {
     /// What a return to the foreground resumes.
     open: bool,
     watching: bool,
-    retry_at: Option<f64>,
     /// The turn's last; the shell's watch follows it and ignores a repeat.
     command: Option<GeolocationCommand>,
 }
@@ -41,14 +37,12 @@ fn geolocation() -> &'static mut Geolocation {
     GEOLOCATION.get(|| Geolocation {
         open: false,
         watching: false,
-        retry_at: None,
         command: None,
     })
 }
 
 pub fn start_watching(supported: bool) {
     let g = geolocation();
-    g.retry_at = None;
     if g.watching {
         return;
     }
@@ -65,7 +59,6 @@ pub fn start_watching(supported: bool) {
 
 pub fn stop_watching() {
     let g = geolocation();
-    g.retry_at = None;
     if g.watching {
         g.watching = false;
         g.command = Some(GeolocationCommand::Stop);
@@ -108,28 +101,21 @@ pub fn geolocation_fix(longitude: f64, latitude: f64, altitude: Option<f64>, acc
     device_location_store().set_location([longitude, latitude], altitude, accuracy, course);
 }
 
-/// The shell stops the watch before this: a dead watch keeps calling back
-/// and a later start would race it.
+/// A momentary error (unavailable, timed out) leaves the watch running, the
+/// pose failed until its next fix; one that ended the watch (a denial, or a
+/// device's watch that could not start) leaves nothing watching, which a
+/// grant or a return to the foreground starts again.
 pub fn geolocation_error(code: GeolocationErrorCode) {
-    let g = geolocation();
-    g.watching = false;
     let store = device_location_store();
-    store.set_is_tracking_location(false);
     store.pose = Pose::Failed(match code {
         GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,
         GeolocationErrorCode::PositionUnavailable => Message::GeolocationPositionUnavailable,
         GeolocationErrorCode::Timeout => Message::GeolocationTimeout,
         GeolocationErrorCode::Other => Message::GeolocationGenericError,
     });
-    // Denial is the user's to undo; anything else is retried.
-    g.retry_at = (code != GeolocationErrorCode::PermissionDenied).then(|| now() + GEOLOCATION_RETRY_MS);
-}
-
-pub fn geolocation_step(supported: bool) {
-    match geolocation().retry_at {
-        Some(at) if now() >= at => start_watching(supported),
-        Some(at) => wake_at(at),
-        None => {}
+    if matches!(code, GeolocationErrorCode::PermissionDenied | GeolocationErrorCode::Other) {
+        geolocation().watching = false;
+        store.set_is_tracking_location(false);
     }
 }
 
