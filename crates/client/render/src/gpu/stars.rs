@@ -65,8 +65,8 @@ impl StarPass {
         &self.words
     }
 
-    /// Nothing is written while the stars are faded out.
-    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, env: &[f32], width: u32) {
+    /// Nothing is laid out past the intensity while the stars are faded out.
+    pub fn lay_out(&mut self, view_proj: &Mat4, env: &[f32], width: u32) {
         let u = &mut self.words;
         u[INTENSITY] = env[ENV_SKY];
         if u[INTENSITY] <= SHOWN {
@@ -83,7 +83,11 @@ impl StarPass {
         let s = (land / eye).min(1.0);
         u[HORIZON] = -(1.0 - s * s).sqrt() as f32;
         u[MOON..MOON + 3].copy_from_slice(&env[ENV_MOON_LIGHT..ENV_MOON_LIGHT + 3]);
-        g.write_buffer(self.uniform, 0, bytes(u));
+    }
+
+    /// `words` written, where the frame's read found them moved.
+    pub fn write(&self, g: &Gpu) {
+        g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
 
     pub fn draw(&self, g: &Gpu, pass: u32) {

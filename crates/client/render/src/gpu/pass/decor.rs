@@ -118,10 +118,11 @@ impl DecorPass {
 
     /// Every skin and block group the draws will bind is made here, so drawing
     /// makes nothing that outlives its frame.
-    pub fn prepare(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], blocks: &mut Blocks) {
+    /// `moved` whether the lists the draws are made from moved.
+    pub fn prepare(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], moved: bool, blocks: &mut Blocks) {
         let (opaque, ghost) = (draws.of(PIPELINE_DECOR), draws.of(PIPELINE_GHOST_DECOR));
         let count = (opaque.len() + ghost.len()) as u32;
-        self.uniforms.write(g, self.lit.layouts[1], count, opaque.clone().chain(ghost.clone()), |buf, d| {
+        self.uniforms.write(g, self.lit.layouts[1], count, opaque.clone().chain(ghost.clone()), moved, |buf, d| {
             put_instances(buf, uniform_of(uniforms, d), 0);
         });
         for d in opaque.chain(ghost) {

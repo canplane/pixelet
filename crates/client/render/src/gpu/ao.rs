@@ -105,7 +105,7 @@ impl ScreenAo {
         view_entry(binding, self.blank_view)
     }
 
-    pub fn lay_out(&mut self, g: &Gpu, proj: &Mat4, width: u32, height: u32) {
+    pub fn lay_out(&mut self, proj: &Mat4, width: u32, height: u32) {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
         mat4::invert(&mut inv, proj);
@@ -113,7 +113,16 @@ impl ScreenAo {
         put_mat(u, 16, &inv);
         u[HALF] = (width / 2) as f32;
         u[HALF + 1] = (height / 2) as f32;
-        g.write_buffer(self.uniform, 0, bytes(u));
+    }
+
+    /// The words its passes read, as `lay_out` wrote them.
+    pub fn words(&self) -> &[f32] {
+        &self.uniform_words
+    }
+
+    /// `words` written, where the frame's read found them moved.
+    pub fn write(&self, g: &Gpu) {
+        g.write_buffer(self.uniform, 0, bytes(&self.uniform_words));
     }
 
     /// True when the images were remade, so the groups that bind them must be too.

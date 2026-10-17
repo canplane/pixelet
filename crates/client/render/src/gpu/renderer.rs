@@ -265,6 +265,9 @@ pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
     }
 }
 
+/// The ray's words `put_ray` writes: its three columns, a vec4 each.
+pub(crate) const RAY_FLOATS: usize = 12;
+
 /// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, taken in f64. Un-
 /// projecting two points in the shader kept a direction to only ~1e-3 rad,
 /// which the secant carried out to kilometers at the horizon: the clouds shook.
@@ -824,9 +827,11 @@ impl Read {
         (self.at, self.same) = (0, true);
     }
 
-    pub(crate) fn take(&mut self, lane: &[u8]) {
+    /// Whether `lane` reads otherwise than it did at this place last time.
+    pub(crate) fn take(&mut self, lane: &[u8]) -> bool {
         let end = self.at + lane.len();
-        if self.bytes.get(self.at..end) != Some(lane) {
+        let moved = self.bytes.get(self.at..end) != Some(lane);
+        if moved {
             self.same = false;
             if self.bytes.len() < end {
                 self.bytes.resize(end, 0);
@@ -834,11 +839,13 @@ impl Read {
             self.bytes[self.at..end].copy_from_slice(lane);
         }
         self.at = end;
+        moved
     }
 
-    pub(crate) fn read<T: Copy>(&mut self, lane: &[T]) {
-        self.take(bytes(&[lane.len() as u32]));
-        self.take(bytes(lane));
+    /// Whether `lane`, with its length, moved: what its writer needs to
+    /// write again, and no more.
+    pub(crate) fn read<T: Copy>(&mut self, lane: &[T]) -> bool {
+        self.take(bytes(&[lane.len() as u32])) | self.take(bytes(lane))
     }
 
     /// What this frame changed of the stage's input that has no words, as
@@ -1030,9 +1037,10 @@ impl ScreenCellsPass {
         } = &cast;
         let r = &mut c.read;
         r.begin();
-        r.read(eye);
-        r.read(window);
-        r.read(shards);
+        // Each lane written again where it moved.
+        let eye_moved = r.read(eye);
+        let window_moved = r.read(window);
+        let shards_moved = r.read(shards);
         // A surface made again holds no rays.
         r.read(&[*room as u32, *revision, rays.0]);
         match decor {
@@ -1049,7 +1057,9 @@ impl ScreenCellsPass {
                 r.read(translation);
                 r.read(edits);
             }
-            None => r.read::<u32>(&[]),
+            None => {
+                r.read::<u32>(&[]);
+            }
         }
         r.read(meshes);
         // And the ground's squares, written this frame or not.
@@ -1060,8 +1070,12 @@ impl ScreenCellsPass {
         }
         self.kind = FrameKind::cast;
         xpute_kit::ensure!(cast.window.len() <= c.window_words, ENOTRECOVERABLE, cast.window.len());
-        g.write_buffer(c.window, 0, bytes(cast.window));
-        g.write_buffer(c.eye, 0, bytes(&cast.eye));
+        if window_moved {
+            g.write_buffer(c.window, 0, bytes(cast.window));
+        }
+        if eye_moved {
+            g.write_buffer(c.eye, 0, bytes(&cast.eye));
+        }
         c.size = rays.1;
         let shards_grow = cast.shards.len() > c.shard_room;
         if shards_grow {
@@ -1071,7 +1085,9 @@ impl ScreenCellsPass {
             c.shard_room = cast.shards.len();
             c.shards = g.buffer(word_bytes(4 * c.shard_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         }
-        g.write_buffer(c.shards, 0, bytes(cast.shards));
+        if shards_moved || shards_grow {
+            g.write_buffer(c.shards, 0, bytes(cast.shards));
+        }
         // Sized by the lanes' own room, so it is made again only when they grow.
         let o = &cast.overwrites;
         let overwrites_grow = o.room != c.overwrite_room;
@@ -1459,9 +1475,10 @@ impl Renderer {
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let up = v3::norm(&v3::sub(&eye, &planet_center));
-        self.clouds.lay_out(g, &m, [eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS], reach * env[ENV_AIR + 1]);
-        self.stars.lay_out(g, &m, env, width);
         put_ray(&mut self.sky, 0, &m, &eye);
+        self.clouds
+            .lay_out(&self.sky[..RAY_FLOATS], [eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS], reach * env[ENV_AIR + 1]);
+        self.stars.lay_out(&m, env, width);
         self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
         self.sky[SKY_MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         for i in 0..3 {
@@ -1484,7 +1501,7 @@ impl Renderer {
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
         if self.screen_ao {
-            self.ao.lay_out(g, &proj, width, height);
+            self.ao.lay_out(&proj, width, height);
         }
         // The air's centre under the sea under the eye, and the map's place
         // there: its longitude and Mercator's ordinate, ln tan(π/4 + φ/2).
@@ -1565,8 +1582,9 @@ impl Renderer {
         rest.mark(self.badges.sync_sheet(g, &self.mips, input.billboards, input.text));
         let (records, uniforms, blocks_moved) = take_lists(Some(g), input.lists);
         rest.mark(blocks_moved);
-        rest.read(records);
-        rest.read(uniforms);
+        // Each list's writers write again only where it moved.
+        let uniforms_moved = rest.read(uniforms);
+        let lists_moved = rest.read(records) | uniforms_moved;
         rest.read(input.cases);
 
         targets(g, world);
@@ -1577,29 +1595,38 @@ impl Renderer {
             self.rebind(g);
             read.mark(true);
         }
-        g.write_buffer(self.sky_buffer, 0, bytes(&self.sky));
         let uniform_bytes = word_bytes(uniforms.len());
-        if uniform_bytes > self.draws_bytes {
+        let grew = uniform_bytes > self.draws_bytes;
+        if grew {
             release(self.draws_buffer);
             self.draws_bytes = uniform_bytes * 2;
             self.draws_buffer = g.buffer(self.draws_bytes, buffer_usage::STORAGE | buffer_usage::COPY_DST);
             self.box_groups(g);
         }
-        if !uniforms.is_empty() {
+        if !uniforms.is_empty() && (grew || uniforms_moved) {
             g.write_buffer(self.draws_buffer, 0, bytes(uniforms));
         }
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
-        g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
-        read.read(&self.frame);
-        read.read(&self.sky);
-        read.read(self.stars.words());
+        // Each uniform written where the image's read finds it moved.
+        if read.read(&self.frame) {
+            g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
+        }
+        if read.read(&self.sky) {
+            g.write_buffer(self.sky_buffer, 0, bytes(&self.sky));
+        }
+        if read.read(self.stars.words()) {
+            self.stars.write(g);
+        }
+        if self.screen_ao && read.read(self.ao.words()) {
+            self.ao.write(g);
+        }
         read.read(self.atmosphere.words());
         read.read(&[world.world, world.world_depth, u32::from(self.screen_ao)]);
         let b = blocks();
-        self.decor.prepare(g, &draws, uniforms, b);
-        self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, b);
-        self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, b);
+        self.decor.prepare(g, &draws, uniforms, lists_moved, b);
+        self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
+        self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
         self.puck.prepare_zone(g, &draws, b);
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
@@ -1607,7 +1634,7 @@ impl Renderer {
         self.screen.prepare(g, &mut self.pipelines, cast, &meshes, (world.rays_view, [world.width, world.height]));
         self.decor.prepare_grown(g, self.screen.grown());
         self.impostor.prepare_grown(g, self.screen.grown());
-        self.prepare_cases(g, &draws, uniforms, input.cases);
+        self.prepare_cases(g, &draws, uniforms, input.cases, lists_moved);
         let q = if input.timed { self.query_set } else { 0 };
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [Stamp; GPU_SPAN_NAMES.len()] = core::array::from_fn(|span| Stamp::of(q, span));
@@ -1628,7 +1655,9 @@ impl Renderer {
         self.screen.read_back(g);
         // The image stands where it read all as last time over rays that stood.
         let still = read.end() && self.screen.kind != FrameKind::cast;
-        rest.read(self.clouds.words());
+        if rest.read(self.clouds.words()) {
+            self.clouds.write(g);
+        }
         // The frame stands where the image does and the rest of what it
         // draws from read as last time: nothing is drawn, nothing submitted,
         // and the canvases keep the frame they show.
@@ -1744,7 +1773,7 @@ impl Renderer {
 
     /// Each case's targets, passes and skin, made here so drawing makes nothing
     /// that outlives its frame.
-    fn prepare_cases(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, u32)]) {
+    fn prepare_cases(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, u32)], moved: bool) {
         for (id, model, image, own) in Self::cases(draws, cases) {
             let Some(s) = surface(id) else { continue };
             targets(g, s);
@@ -1754,7 +1783,7 @@ impl Renderer {
             }
             let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
             case.skinned.set_skin(g, model, image);
-            case.skinned.prepare(g, core::iter::once(own), uniforms, blocks());
+            case.skinned.prepare(g, core::iter::once(own), uniforms, moved, blocks());
         }
     }
 

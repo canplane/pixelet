@@ -77,8 +77,9 @@ impl SkinnedPass {
 
     /// Every palette group the draws will bind is made here, so drawing makes
     /// nothing that outlives its frame.
-    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone, uniforms: &[f32], blocks: &mut Blocks) {
-        self.uniforms.write(g, self.lit.layouts[1], draws.len() as u32, draws.clone(), |buf, d| {
+    /// `moved` whether the lists the draws are made from moved.
+    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone, uniforms: &[f32], moved: bool, blocks: &mut Blocks) {
+        self.uniforms.write(g, self.lit.layouts[1], draws.len() as u32, draws.clone(), moved, |buf, d| {
             let u = uniform_of(uniforms, d);
             buf[..24].copy_from_slice(bytes(&u[..6]));
             buf[24..32].fill(0);

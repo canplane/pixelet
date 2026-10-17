@@ -4,8 +4,6 @@
 //! reading the cloud field (`look/cloud.rs`) as a tile baked once per device.
 //! The cumulus is drawn as decor is (`pxl-kernel scene/environment/cloud.rs`).
 
-use pxl_spec::space::coord::mat4::Mat4;
-
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
@@ -14,7 +12,6 @@ use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, sam
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::put_ray;
 use crate::look::cloud::{drift, CUMULUS_KM, LATTICE_COUNT, LATTICE_SHAMT, TILE_TEXELS};
 use crate::look::environment::{ENV_AIR, ENV_SKY};
 
@@ -69,14 +66,21 @@ impl CloudPass {
     /// `shown`, how much of the clouds the kernel shows; `over`, the eye's
     /// place on the map in the world's doubles. The field moves with the
     /// wind, so its words are the clouds' own, apart from the sky's.
-    /// In the eye's frame, the eye at its origin, over `over` in the world;
-    /// `reach_km` how far it observes: past it no sheet is drawn.
-    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, over: [f64; 2], env: &[f32], shown: f64, reach_km: f32) {
-        put_ray(&mut self.words, 0, view_proj, &[0.0; 3]);
+    /// Along the sky's `ray` (`put_ray`, the eye at its origin), over `over`
+    /// in the world; `reach_km` how far it observes: past it no sheet is
+    /// drawn.
+    pub fn lay_out(&mut self, ray: &[f32], over: [f64; 2], env: &[f32], shown: f64, reach_km: f32) {
+        for k in 0..3 {
+            self.words[4 * k..4 * k + 3].copy_from_slice(&ray[4 * k..4 * k + 3]);
+        }
         self.words[SHOWN] = shown as f32;
         self.words[REACH] = reach_km;
         field(&mut self.words, over, env);
         self.over = env[ENV_AIR] as f64 > CUMULUS_KM;
+    }
+
+    /// `words` written, where the frame's read found them moved.
+    pub fn write(&self, g: &Gpu) {
         g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
 

@@ -111,7 +111,7 @@ impl ImpostorPass {
         if due.is_empty() {
             return false;
         }
-        self.fit_uniforms.write(g, self.bake.layouts[0], due.len() as u32, due.iter(), |buf, &(_, w)| {
+        self.fit_uniforms.write(g, self.bake.layouts[0], due.len() as u32, due.iter(), true, |buf, &(_, w)| {
             buf[..FIT_BYTES as usize].copy_from_slice(bytes(&fit_of(w.2)));
         });
         let Some(slots) = self.fit_uniforms.slots() else { return false };
@@ -137,8 +137,9 @@ impl ImpostorPass {
 
     /// Every block group the draws will bind is made here, so drawing makes
     /// nothing that outlives its frame.
-    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone, uniforms: &[f32], blocks: &mut Blocks) {
-        self.uniforms.write(g, self.draw.layouts[1], draws.len() as u32, draws.clone(), |buf, d| {
+    /// `moved` whether the lists the draws are made from moved.
+    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone, uniforms: &[f32], moved: bool, blocks: &mut Blocks) {
+        self.uniforms.write(g, self.draw.layouts[1], draws.len() as u32, draws.clone(), moved, |buf, d| {
             put_instances(buf, uniform_of(uniforms, d), d[1]);
         });
         for d in draws {
