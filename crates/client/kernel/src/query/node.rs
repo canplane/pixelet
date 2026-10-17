@@ -295,7 +295,7 @@ impl ground::Held for Reading<'_, '_> {
     /// The block's column off the windows, the area's edge laid on it, as
     /// the GPU reads it (pxl-portable `window::ground`), stepped from where
     /// its relief found its cells.
-    fn cell(&mut self, shard: Shard, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell {
-        window::ground(&Windowed, (shard, (zoom, [c[0], c[1]])), place, zoom, [c[0], c[1]]).0
+    fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell {
+        window::ground(&Windowed, (zoom, [c[0], c[1]]), place, zoom, [c[0], c[1]]).0
     }
 }

@@ -2,7 +2,8 @@
 
 //! gpu-portable: a square's fill, a thread at a time, over the buffer its
 //! words lie in from `base` (`window::SQUARE_WORDS`): each column's ground
-//! top off its tile's samples (`heights`), its ways' runs off its lines in
+//! top off its tile's samples and its cell as laid (`heights`), its ways'
+//! runs off its lines in
 //! three passes (`ways`), and its levels, level 0 each column's own
 //! (`level`). A GPU runs each pass a thread a column or entry
 //! (gpu-query-shader `heights_cs`, `ways_cs`, `bound_cs`); a bake runs its
@@ -11,8 +12,8 @@
 
 use crate::area::Shard;
 use crate::window::{
-    self, column_first, column_top, Squares, COLUMNS_AT, ELE_AT, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_SQUARE, FRESH_WORDS, LEVELS_AT, LINES_AT, RUNS_AT, RUNS_SQUARE, SQUARE,
-    SQUARE_CELLS, SQUARE_WORDS,
+    self, column_first, column_top, Squares, COLUMNS_AT, ELE_AT, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_SQUARE, FRESH_WORDS, LAID_AT, LEVELS_AT, LINES_AT, RUNS_AT, RUNS_SQUARE,
+    SQUARE, SQUARE_CELLS, SQUARE_WORDS,
 };
 use crate::{at, ground, ways, Zoom};
 
@@ -33,6 +34,11 @@ pub fn column_of(ground: &[u32], base: u32, i: u32) -> u32 {
 /// Entry `at` of level `j` off the square at `base`.
 pub fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> i32 {
     at(ground, base + LEVELS_AT + window::level_index(j, [x, y])) as i32
+}
+
+/// Cell `i` as laid off the square at `base` (`window::LAID_WORDS`).
+pub fn laid_of(ground: &[u32], base: u32, i: u32) -> u32 {
+    window::laid_at(at(ground, base + LAID_AT + i / 2), i)
 }
 
 /// The samples handed the square at `base` (`ELE_AT`), two a word, low
@@ -67,18 +73,19 @@ impl Squares for Fresh<'_> {
     fn level(&self, _: u32, _: u32, j: u32, at: [u32; 2]) -> i32 {
         level_of(self.ground, self.base, j, at)
     }
+    fn laid(&self, _: u32, _: u32, i: u32) -> u32 {
+        laid_of(self.ground, self.base, i)
+    }
 }
 
 /// A square being filled, as the ways' rule reads it (`window::Square`):
-/// its lines, looks and heights in its lane, and where it is as handed
-/// (`window::FRESH_WORDS`).
+/// its lines, looks, laid cells and heights in its lane, and where it is
+/// as handed (`window::FRESH_WORDS`).
 struct Filling<'a> {
     ground: &'a [u32],
     base: u32,
     cell: u32,
     place: [u32; 2],
-    first: [i32; 2],
-    shard: Shard,
 }
 
 impl window::Square for Filling<'_> {
@@ -88,17 +95,14 @@ impl window::Square for Filling<'_> {
     fn place(&self) -> [u32; 2] {
         self.place
     }
-    fn first(&self) -> [i32; 2] {
-        self.first
-    }
-    fn shard(&self) -> Shard {
-        self.shard
-    }
     fn line(&self, k: u32) -> u32 {
         at(self.ground, self.base + LINES_AT + k)
     }
     fn looks(&self, i: u32) -> u32 {
         at(self.ground, self.base + i)
+    }
+    fn laid(&self, i: u32) -> u32 {
+        laid_of(self.ground, self.base, i)
     }
     /// Off its tile's samples as `heights` draws a cell (`ground::height`),
     /// the ring about the square too.
@@ -108,15 +112,41 @@ impl window::Square for Filling<'_> {
     }
 }
 
-/// Column `[x, y]` of the square at `base`: its ground's top
-/// (`ground::height`) off its tile's samples, the square lying at `place`
-/// in it, in squares; its runs' first is the ways' to write (`ways`).
-pub fn heights(ground: &mut [u32], base: u32, place: [u32; 2], [x, y]: [u32; 2]) {
+/// Column `[x, y]` of the square `fresh` hands (`window::fresh`): its
+/// ground's top (`ground::height`) off its tile's samples, its runs' first
+/// the ways' to write (`ways`); and, a column of an even `x`, its cell and
+/// the next as laid, the word they share (`window::LAID_WORDS`), so each
+/// word has one writer: its own look off its four at the square's zoom
+/// (`ground::own`), and at a leaf's cells or finer, which of the leaf
+/// cells about its own are past the area (`area::gone_ring`), off the
+/// square's shard.
+pub fn heights(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], [x, y]: [u32; 2]) {
+    let word = |k: u32| fresh[k as usize];
+    let (base, place, cell) = (word(FRESH_SQUARE) * SQUARE_WORDS, window::place_of(word(FRESH_PLACE)), word(FRESH_CELL));
+    let (first, shard) = ([word(FRESH_FIRST) as i32, word(FRESH_FIRST + 1) as i32], Shard::of_word(word(FRESH_SHARD)));
+    let i = y * SQUARE + x;
     let w = {
         let lane: &[u32] = ground;
         ground::height(samples(lane, base), [(place[0] * SQUARE + x) as i32, (place[1] * SQUARE + y) as i32]) as u32 & 0xffff
     };
-    put(ground, base + COLUMNS_AT + y * SQUARE + x, w);
+    put(ground, base + COLUMNS_AT + i, w);
+    if x % 2 == 1 {
+        return;
+    }
+    let mut laid = 0;
+    let mut k = 0;
+    while k < 2 {
+        let b = [crate::wrap_index(cell, first[0] + (x + k) as i32), first[1] + y as i32];
+        let gone = if cell >= crate::LEAF_CELL {
+            let s = cell - crate::LEAF_CELL;
+            crate::area::gone_ring(shard, (cell, b), [b[0] >> s, b[1] >> s])
+        } else {
+            0
+        };
+        laid |= window::laid_half(ground::own(at(ground, base + i + k), cell), gone) << (16 * k);
+        k += 1;
+    }
+    put(ground, base + LAID_AT + i / 2, laid);
 }
 
 /// Pass `pass` of the ways of the square `fresh` hands (`window::fresh`),
@@ -128,7 +158,6 @@ pub fn heights(ground: &mut [u32], base: u32, place: [u32; 2], [x, y]: [u32; 2])
 pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], pass: u32, i: u32) -> u32 {
     let word = |k: u32| fresh[k as usize];
     let (base, place, cell) = (word(FRESH_SQUARE) * SQUARE_WORDS, window::place_of(word(FRESH_PLACE)), word(FRESH_CELL));
-    let (first, shard) = ([word(FRESH_FIRST) as i32, word(FRESH_FIRST + 1) as i32], Shard::of_word(word(FRESH_SHARD)));
     let columns = base + COLUMNS_AT;
     if pass == 1 {
         if i == 0 {
@@ -147,14 +176,7 @@ pub fn ways(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], pass: u32, i
     }
     let (spans, fits) = {
         let lane: &[u32] = ground;
-        let filling = Filling {
-            ground: lane,
-            base,
-            cell,
-            place,
-            first,
-            shard,
-        };
+        let filling = Filling { ground: lane, base, cell, place };
         crate::ways::column(&filling, [(i % SQUARE) as i32, (i / SQUARE) as i32])
     };
     let w = at(ground, columns + i);
@@ -224,7 +246,7 @@ pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) -> [u32; 2] {
     let fresh = window::fresh(0, window::place_word(place), cell, [0; 2], Shard::INSIDE);
     for y in 0..SQUARE {
         for x in 0..SQUARE {
-            heights(lane, 0, place, [x, y]);
+            heights(lane, fresh, [x, y]);
         }
     }
     let mut most = 0;

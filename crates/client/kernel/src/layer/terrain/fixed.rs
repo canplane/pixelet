@@ -3,7 +3,7 @@
 //! `.fixed.terrain`: the room every resident terrain tile and every held
 //! square lies in, and where a record's bytes are. A plane is one lane of
 //! every frame, or of every square, end to end; planes in order: the
-//! separation's seven, a tile's; then a square's cells and its looks; then
+//! separation's seven, a tile's; then a square's cells; then
 //! the eye's windows' levels over their squares as the GPU folded them,
 //! once; then the room a fill works in, once.
 
@@ -55,9 +55,6 @@ pub const SEPARATION_BYTES: u32 = FRAMES * sum(&SEPARATION_LANE_BYTES);
 pub const CELLS_BYTES: u32 = BACK_WORDS * 4;
 pub const CELLS_LANE_BYTES: u32 = lane(CELLS_BYTES as usize, 1);
 
-/// One square's looks: a cell's own, a byte.
-pub const LOOK_LANE_BYTES: u32 = SQUARE_CELLS;
-
 /// The eye's windows' levels over their squares (pxl-portable
 /// `window::fold`), read back as the GPU folded them (pxl-render
 /// `GroundSquares::joined`).
@@ -78,8 +75,6 @@ const FILL_AT: u32 = lane((joined_off() + JOINED_BYTES) as usize, 1);
 
 pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_LANE_BYTES);
 
-const _: () = assert!(LOOK_LANE_BYTES.is_multiple_of(64), "terrain: a look lane must be whole cache lines");
-
 pub const fn separation_off(record: u32, lane: usize) -> u32 {
     let mut plane = 0;
     let mut k = 0;
@@ -94,12 +89,8 @@ pub const fn cells_off(square: u32) -> u32 {
     SEPARATION_BYTES + square * CELLS_LANE_BYTES
 }
 
-pub const fn looks_off(square: u32) -> u32 {
-    SEPARATION_BYTES + SQUARES * CELLS_LANE_BYTES + square * LOOK_LANE_BYTES
-}
-
 pub const fn joined_off() -> u32 {
-    looks_off(SQUARES)
+    cells_off(SQUARES)
 }
 
 pub const fn fill_off(lane: usize) -> u32 {

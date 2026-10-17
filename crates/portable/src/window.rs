@@ -181,21 +181,41 @@ pub const fn column_first(w: u32) -> u32 {
     w >> 16
 }
 
+/// A square's cells as its fill lays them, two a word, cell `i` in the
+/// `i % 2`-th half (`laid_at`): its own look, low (`ground::own` of its four
+/// at the square's zoom), and which of the eight leaf cells about it are
+/// past the area, high (`area::gone_ring`, none at a square coarser than a
+/// leaf's): what a read of it lays the area's edge by (`area::laid`),
+/// never working out its majority or its ring again.
+pub const LAID_WORDS: u32 = SQUARE_CELLS / 2;
+
+/// Cell `i`'s half of a laid word `w`.
+pub const fn laid_at(w: u32, i: u32) -> u32 {
+    (w >> (16 * (i % 2))) & 0xffff
+}
+
+/// A cell's laid half: its own look and the leaf cells about it gone.
+pub const fn laid_half(look: u32, gone: u32) -> u32 {
+    look & 0xff | gone << 8
+}
+
 /// A square's words on a GPU, its lanes in order: its four looks a cell, its
-/// columns, its levels, its columns' runs, then its tile's padded samples,
-/// two a word, and its lines, which only its fill reads. Its columns, levels
-/// and runs follow one another, read back whole.
+/// columns, its levels, its columns' runs, its cells as laid, then its
+/// tile's padded samples, two a word, and its lines, which only its fill
+/// reads. Its columns, levels, runs and laid cells follow one another, read
+/// back whole.
 pub const LOOK_WORDS: u32 = SQUARE_CELLS;
-pub const SQUARE_WORDS: u32 = LOOK_WORDS + COLUMN_WORDS + LEVEL_WORDS + RUNS_SQUARE + ELE_WORDS + LINES_WORDS;
+pub const SQUARE_WORDS: u32 = LOOK_WORDS + COLUMN_WORDS + LEVEL_WORDS + RUNS_SQUARE + LAID_WORDS + ELE_WORDS + LINES_WORDS;
 pub const COLUMNS_AT: u32 = LOOK_WORDS;
 pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const RUNS_AT: u32 = LEVELS_AT + LEVEL_WORDS;
-pub const ELE_AT: u32 = RUNS_AT + RUNS_SQUARE;
+pub const LAID_AT: u32 = RUNS_AT + RUNS_SQUARE;
+pub const ELE_AT: u32 = LAID_AT + LAID_WORDS;
 pub const LINES_AT: u32 = ELE_AT + ELE_WORDS;
-/// What comes back of a square, from `COLUMNS_AT`: its columns, levels and
-/// runs, so the CPU reads a column as the GPU does, never working it out
-/// again.
-pub const BACK_WORDS: u32 = COLUMN_WORDS + LEVEL_WORDS + RUNS_SQUARE;
+/// What comes back of a square, from `COLUMNS_AT`: its columns, levels,
+/// runs and laid cells, so the CPU reads a column as the GPU does, never
+/// working it out again.
+pub const BACK_WORDS: u32 = COLUMN_WORDS + LEVEL_WORDS + RUNS_SQUARE + LAID_WORDS;
 
 /// The windows as one side holds them: per window, a zoom's cells about
 /// its centre, which square each slot holds once present, and its cells.
@@ -218,6 +238,8 @@ pub trait Squares {
     fn height(&self, cell: Zoom, slot: u32, i: u32) -> i32 {
         column_top(self.column(cell, slot, i))
     }
+    /// Cell `i` as its fill laid it (`LAID_WORDS`, `laid_at`).
+    fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `e` of the eye's window at `cell`'s levels over its squares
     /// (`JOINED_WORDS`, `fold`), as the GPU folded them; the zero entry,
     /// none, where a side holds no fold.
@@ -226,23 +248,21 @@ pub trait Squares {
 
 /// One square as its fill reads it, for the ways' one rule
 /// (`ways::Columns`): its cells' zoom, where it lies in its tile (in
-/// squares), its first cell as the world names it and what is known of the
-/// service area at it (`FRESH_FIRST`, `FRESH_SHARD`), word `k` of its lines
-/// (`LINES_AT`), cell `i`'s four looks as its lane holds them, and column
-/// `c`'s height off its tile's samples, `c` counted from its first cell, the
-/// ring of columns about it included.
+/// squares), word `k` of its lines (`LINES_AT`), cell `i`'s four looks as
+/// its lane holds them and as `heights` laid it (`LAID_WORDS`), the area's
+/// edge it is walled by, and column `c`'s height off its tile's samples, `c`
+/// counted from its first cell, the ring of columns about it included.
 /// Its columns are its cells and that ring, a ring column read off the
 /// edge bin it borders, whose lines hold every one that reaches it
 /// (`ways::footprint`); one past the ring has no segment.
 pub trait Square {
     fn cell(&self) -> Zoom;
     fn place(&self) -> [u32; 2];
-    /// Its first cell as the world names it, at its cells' zoom.
-    fn first(&self) -> [i32; 2];
-    /// What is known of the service area at it.
-    fn shard(&self) -> crate::area::Shard;
     fn line(&self, k: u32) -> u32;
     fn looks(&self, i: u32) -> u32;
+    /// Cell `i` as its fill laid it (`LAID_WORDS`), before its ways: what
+    /// they wall it by.
+    fn laid(&self, i: u32) -> u32;
     fn height(&self, c: [i32; 2]) -> i32;
 }
 
@@ -317,15 +337,13 @@ impl<Q: Square> crate::ways::Columns for Q {
         let center = crate::lattice::CELL_CENTER;
         [(p[0] * SQUARE) as f32 + c[0] as f32 + center, (p[1] * SQUARE) as f32 + c[1] as f32 + center]
     }
-    /// Off its own look and the square's shard (`area::edge`), the column
-    /// its own owner: the leaf cells about it are asked only at a leaf's
-    /// cells or finer, where a square is a node inside one shard, so the
-    /// column's shard is the square's; a coarser square's is unknown and
-    /// never asked.
+    /// Off its cell as laid (`area::laid`), as a read of it walls it: a
+    /// square's first cell lies on a leaf cell's first, so `c` places the
+    /// column in its leaf cell as its world index does. A ring column is
+    /// none of the square's, never walled.
     fn walled(&self, c: [i32; 2]) -> bool {
-        let (cell, first) = (Square::cell(self), self.first());
-        let b = [wrap_index(cell, first[0] + c[0]), first[1] + c[1]];
-        crate::area::edge(crate::ways::Columns::look(self, c), cell, b, self.shard(), (cell, b)) == UNKNOWN
+        let i = cell_index(c);
+        i != SQUARE_CELLS && crate::area::laid(self.laid(i), Square::cell(self), c) == UNKNOWN
     }
     fn side(&self, _: [i32; 2]) -> f32 {
         1.0
@@ -522,34 +540,32 @@ pub const fn held_to(cell: Zoom) -> Zoom {
 /// The ground's cell `g` at `cell`, off the finest window holding it
 /// present, stepped from `place` (`step`): its four looks, its height and
 /// where it is held; `void` at sea level where none holds it.
-pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, i32, Found) {
+pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, i32, u32, Found) {
     let (f, i) = step(w, place, cell, g);
     if !f.here() {
-        return (VOID, 0, f);
+        return (VOID, 0, laid_half(VOID, 0), f);
     }
-    (w.look(f.from(), f.slot(), i), w.height(f.from(), f.slot(), i), f)
+    let (from, slot) = (f.from(), f.slot());
+    (w.look(from, slot, i), w.height(from, slot, i), w.laid(from, slot, i), f)
 }
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
 /// the leaves a leaf's, stepped from `place`, with the area's edge laid on
-/// it (`area::edge`), `shard` what is known of the area at its own shard:
-/// none in a shard known `inside` the area, whose leaf cells about it are
-/// none of them gone; and where it is held. `place` is where the cells of
-/// `owner` were found: a column beside it is read off it where its cell lies
+/// it off the cell as its fill laid it (`area::laid`); and where it is
+/// held. `place` is where the cells of `owner` were found: a column beside it is read off it where its cell lies
 /// in the square holding `owner`'s, as `ran` reads the columns about one
 /// (`step`), and found anew past it.
-pub fn ground(w: &impl Windows, (shard, owner): (crate::area::Shard, (Zoom, [i32; 2])), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
+pub fn ground(w: &impl Windows, owner: (Zoom, [i32; 2]), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
     let read = held_to(zoom);
     let g = cell_at(zoom, read, b);
     let (q, o) = (square_of(g).0, square_of(cell_at(owner.0, read, owner.1)).0);
     // Component-wise: a GPU has no array equality.
     let place = if q[0] == o[0] && q[1] == o[1] { place } else { Found::NONE };
-    let (word, h, f) = cell(w, place, read, g);
-    let (look, h, fold) = crate::ground::read_cell(word, h, f.from());
+    let (word, h, laid, f) = cell(w, place, read, g);
     let cell = crate::ground::Cell {
-        look: crate::area::edge(look, zoom, b, shard, owner),
-        top: crate::ground::blocks(zoom, h),
-        fold,
+        look: crate::area::laid(laid, zoom, b),
+        top: crate::ground::blocks(zoom, h as f32),
+        fold: crate::ground::looks(word),
     };
     (cell, f)
 }

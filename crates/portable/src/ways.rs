@@ -447,7 +447,7 @@ pub trait Columns {
     fn stations(&self, c: [i32; 2]) -> Stations;
     fn look(&self, c: [i32; 2]) -> u32;
     /// Whether the area's edge walls the column: ground beside cells past
-    /// the area (pxl-portable `area::edge`), where no way writes, as none
+    /// the area (pxl-portable `area::laid`), where no way writes, as none
     /// does past it.
     fn walled(&self, c: [i32; 2]) -> bool;
     fn face(&self, c: [i32; 2]) -> i32;

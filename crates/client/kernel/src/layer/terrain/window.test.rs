@@ -18,7 +18,6 @@ pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, pxl_spec::bake::separ
 pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     PLANES.set(Planes {
         cells: vec![0; (SQUARES * CELLS_LANE_BYTES) as usize].leak(),
-        looks: vec![0; (SQUARES * LOOK_LANE_BYTES) as usize].leak(),
         joined: vec![0; window::EYE_JOINED_WORDS as usize].leak(),
     });
     WINDOWS_STATE.set(fresh());
@@ -40,9 +39,6 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             };
             let side = GROUND.tile_cells();
             let at = |k: u32| ((place[1] * SQUARE + k / SQUARE) * side + place[0] * SQUARE + k % SQUARE) as usize;
-            for (k, l) in looks(i).iter_mut().enumerate() {
-                *l = looks_of[at(k as u32)];
-            }
             let (mut scratch, mut lines) = (vec![(0, 0); window::WAYS_SQUARE_SEGMENTS as usize], vec![0; window::LINES_WORDS as usize]);
             let n = pxl_spec::bake::tile::terrain::square_lines(t, separation, place, &mut scratch, &mut lines);
             let laid = pxl_spec::bake::tile::terrain::Laid {
@@ -54,6 +50,10 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             };
             let mut lane = vec![0u32; window::SQUARE_WORDS as usize];
             fill_columns(&laid, |k| i32::from(heights[at(k)]), &mut lane);
+            for k in 0..window::LAID_WORDS {
+                let half = |j: u32| window::laid_half(u32::from(looks_of[at(2 * k + j)]), 0);
+                lane[(window::LAID_AT + k) as usize] = half(0) | half(1) << 16;
+            }
             for j in 0..=LEVELS {
                 for y in 0..SQUARE >> j {
                     for x in 0..SQUARE >> j {

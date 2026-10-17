@@ -3,18 +3,18 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: 907fcc2a6c3f0db1bac54a4abb29acd919d044e71205f1cae55e5096efb684d5
+// Inputs: aa597267aa1d95026edcbc14ebfd9cf447edbda012b472d87f4e998b6e606947
 struct type_4 {
     member: array<u32>,
 }
 
-struct type_12 {
+struct type_14 {
     member: array<vec4<i32>>,
 }
 
 var<private> global: vec3<u32>;
 @group(0) @binding(1)
-var<storage> global_1: type_12;
+var<storage> global_1: type_14;
 @group(0) @binding(2)
 var<storage> global_2: type_4;
 @group(0) @binding(8)
@@ -227,7 +227,7 @@ fn function_() {
                             let _e177 = phi_360_;
                             let _e178 = select(_e175, false, _e177);
                             if _e178 {
-                                let _e180 = ((_e159 * 27719u) + 13653u);
+                                let _e180 = ((_e159 * 29767u) + 13653u);
                                 if (_e180 < arrayLength((&global_2.member))) {
                                     let _e183 = global_2.member[_e180];
                                     phi_392_ = _e183;

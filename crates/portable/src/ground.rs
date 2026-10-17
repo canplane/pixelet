@@ -102,15 +102,6 @@ pub fn own(w: u32, cell: Zoom) -> u32 {
     majority(looks(w), cell)
 }
 
-/// A held cell as a column reads it, off its word `w`, its height `h` and
-/// `from`, the zoom the word is a cell of (a coarser window's where one
-/// stands in, the leaf's past the leaves): its look, height and the four
-/// looks it folds. A cell's look is decided at the zoom of the cell it is
-/// made of, so a word's tie breaks at `from` (`majority`).
-pub fn read_cell(w: u32, h: i32, from: Zoom) -> (u32, f32, [u32; 4]) {
-    (own(w, from), h as f32, looks(w))
-}
-
 /// Tile cells an elevation sample spans.
 const CELL_STEP: f32 = (TILE_CELLS / TILE_ELE_SPAN) as f32;
 
@@ -335,10 +326,10 @@ pub trait Held: Area {
     /// or `Found::NONE`, and becomes where its own are (`window::step`).
     fn relief(&mut self, place: &mut Found, cell: Zoom, node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
     /// The column of the block `c` at `zoom` off the windows
-    /// (`window::ground`), the service area's edge laid on it (`Cell`), none
-    /// where `shard` is known `inside` it; its cell where `place` found it,
-    /// the zoom's cells' (`relief`'s), or found anew where `place` is `NONE`.
-    fn cell(&mut self, shard: Shard, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell;
+    /// (`window::ground`), the service area's edge laid on it as its fill
+    /// laid it (`Cell`); its cell where `place` found it, the zoom's cells'
+    /// (`relief`'s), or found anew where `place` is `NONE`.
+    fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell;
 }
 
 /// What the ground answers of a node (`node`): its kind, and a block's
@@ -413,7 +404,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
         if above(zoom, c[2], relief[1]) {
             return (air, Cell::NONE, none);
         }
-        let column = held.cell(shard, *place, zoom, c);
+        let column = held.cell(*place, zoom, c);
         let answer = In {
             kind: Kind::Block,
             block: column.block(zoom, c[2], cave.hollow()),

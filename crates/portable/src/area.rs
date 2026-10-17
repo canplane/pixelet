@@ -75,7 +75,7 @@ pub fn past(area: &impl Area, leaf: [i32; 2]) -> bool {
 /// node in the shard. Whether the shard is past the area, and whether it and
 /// the eight shards about it are all served, `inside`: then no node in it
 /// is past, nor walled (`walled`), nor has a leaf cell gone beside it
-/// (`edge`), which a leaf cell's reach out of the shard ends in the eight.
+/// (`gone_ring`), which a leaf cell's reach out of the shard ends in the eight.
 /// `UNKNOWN` coarser than a shard, or before it is asked.
 /// One word: known, then which of the nine shards are served, bit `(dy +
 /// 1)·3 + (dx + 1)` for the shard `dx, dy` from its own; past where its own
@@ -193,11 +193,18 @@ pub fn walled(shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool {
     past(lo) || past([hi[0], lo[1]]) || past([lo[0], hi[1]]) || past(hi)
 }
 
+/// The eight leaf cells about one, the order a mask of them is in
+/// (`ring`, `gone_ring`): bit `k` the cell `beside(k)` from its own, row by
+/// row, its own never.
+pub const fn beside(k: u32) -> [i32; 2] {
+    let j = if k < 4 { k } else { k + 1 };
+    [(j % 3) as i32 - 1, (j / 3) as i32 - 1]
+}
+
 /// The leaf cells about the leaf cell holding the block `b` at `cell`, a
-/// leaf's or finer, that its eight neighbours lie in: bit `(dy + 1)·3 +
-/// (dx + 1)` for the leaf cell `dx, dy` from its own, its own never. A block
-/// within its leaf cell touches none; one on a leaf's edge or corner, the
-/// cells across them; at the leaves, all eight. Whether the block has
+/// leaf's or finer, that its eight neighbours lie in (`beside`'s bits). A
+/// block within its leaf cell touches none; one on a leaf's edge or corner,
+/// the cells across them; at the leaves, all eight. Whether the block has
 /// ground beside one gone (`wall`) is whether any of these is.
 pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
     let m = (1 << (cell - LEAF_CELL)) - 1;
@@ -205,11 +212,18 @@ pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
     // leaf cell's low edge, +1 at its high one.
     let reach = |v: i32| 0b010 | ((v & m == 0) as u32) | ((v & m == m) as u32) << 2;
     let (x, y) = (reach(b[0]), reach(b[1]));
-    let row = |o: u32| if y >> o & 1 == 1 { x << (3 * o) } else { 0 };
-    (row(0) | row(1) | row(2)) & !(1 << 4)
+    // Bit `k` where it reaches `beside(k)` along both axes.
+    let mut r = 0;
+    let mut k = 0;
+    while k < 8 {
+        let d = beside(k);
+        r |= ((x >> (d[0] + 1)) & (y >> (d[1] + 1)) & 1) << k;
+        k += 1;
+    }
+    r
 }
 
-/// A cell's look with the area's edge laid (`edge`), `gone` where the cell
+/// A cell's look with the area's edge laid (`laid`), `gone` where the cell
 /// is past the area, `beside` where one of the eight about it is: gone,
 /// void; at a leaf's cells or finer, ground beside one gone is the wall,
 /// bedrock.
@@ -223,39 +237,49 @@ pub fn wall(look: u32, cell: Zoom, gone: bool, beside: bool) -> u32 {
     }
 }
 
-/// Column `b` at `cell`, its look `look`, with the area's edge laid, the
-/// one rule a column is read by (pxl-portable `window::ground`) and the ways'
-/// fill walls one by (`ways::Columns::walled`), on the CPU and a GPU alike:
-/// gone, void, where its look is unknown; at a leaf's cells or finer, ground
-/// beside a gone leaf cell is the wall (`wall`), the leaf cells the eight
-/// about it lie in (`ring`) asked each once, none past the first gone.
+/// Which of the eight leaf cells about the leaf cell `l` are past the area
+/// (`beside`'s bits), off the nine bits of `shard`, the shard of `node`,
+/// none past in a shard known `inside`: what the fill lays a cell's edge by
+/// once (pxl-portable `fill::heights`), for every read of it after.
 ///
 /// Gone is past, one fact two ways: a cell whose look is `UNKNOWN`
 /// (nothing known) is exactly one past the area. The bake writes `unknown`
 /// only for tiles its coverage does not meet (pxl-geo-bake
 /// terrain/absent.rs `Absence::at`), its coverage is the served shards, and
 /// no window's cell is coarser than a shard, so none straddles the area's
-/// edge. So the leaf cells about a column are never read to know them gone:
-/// each is past or not off `shard`, the shard of `owner`, by its nine bits
-/// (`Shard::past_leaf`), none past in a shard known `inside`; a column's own
-/// look, read anyway, answers its own. They are asked only at a leaf's cells
-/// or finer, where they lie a leaf cell past the column, within its shard's
-/// nine wherever `owner`'s shard is the column's or one beside it: a block
-/// a read is made for and the columns about it, or a window's square there,
-/// a node far narrower than a shard.
-pub fn edge(look: u32, cell: Zoom, b: [i32; 2], shard: Shard, owner: (Zoom, [i32; 2])) -> u32 {
+/// edge. So the leaf cells about one are never read to know them gone:
+/// each is past or not off the shard's bits (`Shard::past_leaf`), and a
+/// cell's own look answers its own. They lie a leaf cell past `l`, inside
+/// its shard's nine wherever `node`'s shard is `l`'s, as a leaf window's
+/// square is, a node far narrower than a shard.
+pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
+    if shard.inside() {
+        return 0;
+    }
+    let mut gone = 0;
+    let mut k = 0;
+    while k < 8 {
+        let d = beside(k);
+        gone |= (shard.past_leaf(node, tile_at(LEAF_CELL, [wrap(LEAF_CELL, l[0] + d[0]), l[1] + d[1]])) as u32) << k;
+        k += 1;
+    }
+    gone
+}
+
+/// The block `b` at `cell` of a cell laid as the fill lays it (`laid` low
+/// byte its own look, high the leaf cells about it gone, `gone_ring`), with
+/// the area's edge laid, the one rule a column is read by (pxl-portable
+/// `window::ground`) and the ways' fill walls one by
+/// (`ways::Columns::walled`), on the CPU and a GPU alike: gone, void, where
+/// its look is unknown; at a leaf's cells or finer, ground beside a gone
+/// leaf cell is the wall (`wall`), of those the block touches (`ring`). A
+/// block read off a square coarser than a leaf's cells, a stand-in, has
+/// none gone about it, so no wall: the stand-in is the world at its zoom,
+/// and the wall is a fact of the leaves it does not hold.
+pub fn laid(laid: u32, cell: Zoom, b: [i32; 2]) -> u32 {
+    let look = laid & 0xff;
     let gone = look == UNKNOWN;
-    let beside = !gone && cell >= LEAF_CELL && Ground::grounds(look) && {
-        let (r, s) = (ring(cell, b), cell - LEAF_CELL);
-        let mut any = false;
-        let mut k = 0u32;
-        while k < 9 {
-            let l = [wrap(LEAF_CELL, (b[0] >> s) + (k % 3) as i32 - 1), (b[1] >> s) + (k / 3) as i32 - 1];
-            any = any || (r >> k & 1 == 1 && !shard.inside() && shard.past_leaf(owner, tile_at(LEAF_CELL, l)));
-            k += 1;
-        }
-        any
-    };
+    let beside = !gone && cell >= LEAF_CELL && Ground::grounds(look) && ring(cell, b) & laid >> 8 != 0;
     wall(look, cell, gone, beside)
 }
 

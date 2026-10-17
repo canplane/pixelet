@@ -4,14 +4,14 @@
 //! centre a reader declares — the eye, the focus where walking and editing
 //! happen, a destination being gone to — each as deep as its reader reads
 //! (pxl-portable `window`). A square is filled from its tile as it lands:
-//! its own looks here, its four looks and its tile's samples handed to the
-//! GPU, which draws its cells; they come back into `.fixed.terrain`, and the
+//! its four looks and its tile's samples handed to the GPU, which draws and
+//! lays its cells; they come back into `.fixed.terrain`, and the
 //! square is present from then on (`landed`). Nothing of a tile is kept for a square
 //! still to come: one that enters asks its tile again (`Residency::again`),
 //! which the browser's cache answers.
 
 use pxl_portable::area::{Area, Shard};
-use pxl_portable::ground::{own, word};
+use pxl_portable::ground::word;
 use pxl_portable::window::{self, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
 use pxl_portable::wrap_index;
 use pxl_portable::LEAF_CELL;
@@ -26,7 +26,7 @@ use xpute_kit::collection::list::List;
 
 use crate::io::source::Declared;
 use crate::layer::kept::Offered;
-use crate::layer::terrain::fixed::{cells_off, fill_off, joined_off, looks_off, CELLS_BYTES, CELLS_LANE_BYTES, LOOK_LANE_BYTES, RANGE};
+use crate::layer::terrain::fixed::{cells_off, fill_off, joined_off, CELLS_BYTES, CELLS_LANE_BYTES, RANGE};
 use crate::layer::Base;
 use crate::mem::fixed::lane;
 
@@ -163,7 +163,6 @@ fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
 /// cells as they come back and its own looks; a test's own.
 pub(crate) struct Planes {
     pub cells: &'static mut [u8],
-    pub looks: &'static mut [GroundId],
     /// The eye's windows' levels over their squares, as the GPU folded them
     /// and the renderer reads them back (pxl-portable `window::fold`).
     pub joined: &'static mut [u32],
@@ -178,7 +177,6 @@ fn planes() -> &'static mut Planes {
         unsafe {
             Planes {
                 cells: lane(r, cells_off(0), (SQUARES * CELLS_LANE_BYTES) as usize),
-                looks: lane(r, looks_off(0), (SQUARES * LOOK_LANE_BYTES) as usize),
                 joined: lane(r, joined_off(), window::EYE_JOINED_WORDS as usize),
             }
         }
@@ -195,11 +193,6 @@ pub fn joined_lane() -> u32 {
 fn cells(s: u32) -> &'static [u8] {
     let at = (s * CELLS_LANE_BYTES) as usize;
     &planes().cells[at..at + CELLS_BYTES as usize]
-}
-
-fn looks(s: u32) -> &'static mut [GroundId] {
-    let at = (s * LOOK_LANE_BYTES) as usize;
-    &mut planes().looks[at..at + LOOK_LANE_BYTES as usize]
 }
 
 /// The turn's windows: each centre where it now stands (`at`, in units, X
@@ -473,9 +466,6 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> Offered {
         if !taken {
             return Offered::Full;
         }
-        for (l, q) in looks(i).iter_mut().zip(cut.as_chunks::<4>().0) {
-            *l = own(u32::from_le_bytes(*q), cell) as GroundId;
-        }
         w.slots[i as usize].ticket = back.ticket;
         w.filled = true;
     }
@@ -532,9 +522,14 @@ impl Squares for Windowed {
         core::array::from_fn(|k| planes().joined[at + k])
     }
 
-    /// The CPU holds a cell's own look alone: its four are it four times.
-    fn look(&self, _: Zoom, s: u32, i: u32) -> u32 {
-        word([u32::from(looks(s)[i as usize]); 4])
+    /// The CPU reads a cell's own look alone, as laid: its four are it four
+    /// times.
+    fn look(&self, cell: Zoom, s: u32, i: u32) -> u32 {
+        word([self.laid(cell, s, i) & 0xff; 4])
+    }
+
+    fn laid(&self, _: Zoom, s: u32, i: u32) -> u32 {
+        window::laid_at(back_at(s, (window::LAID_AT - window::COLUMNS_AT + i / 2) as usize), i)
     }
 
     fn column(&self, _: Zoom, s: u32, i: u32) -> u32 {

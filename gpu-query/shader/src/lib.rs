@@ -86,6 +86,17 @@ fn square_at(square: u32) -> u32 {
     square * SQUARE_WORDS
 }
 
+/// Entry `z` of the squares `fresh` names, as handed (`window::FRESH_WORDS`).
+fn fresh_entry(fresh: &[u32], z: u32) -> [u32; FRESH_WORDS as usize] {
+    let mut entry = [0; FRESH_WORDS as usize];
+    let mut k = 0;
+    while k < FRESH_WORDS {
+        entry[k as usize] = at(fresh, FRESH_WORDS * z + k);
+        k += 1;
+    }
+    entry
+}
+
 /// The world as the GPU holds it (pxl-kernel scene/cast.rs fills it): the
 /// squares the eye's windows hold, their columns, levels and runs, the
 /// service area, and what is placed with a preview's cuts; the caves are a
@@ -97,7 +108,8 @@ pub struct World<'a> {
     window: &'a [IVec4],
     /// Per square of every window, its looks as handed, its columns
     /// (`heights_cs`, `ways_cs`), their levels (`bound_cs`), their runs
-    /// (`ways_cs`), and its tile's samples and lines as handed
+    /// (`ways_cs`), its cells as laid (`heights_cs`), and its tile's samples
+    /// and lines as handed
     /// (`window::SQUARE_WORDS`); the eye's windows first.
     ground: &'a [u32],
     /// The service area's index (pxl-portable `area::Area`), its keys four a
@@ -161,7 +173,7 @@ impl World<'_> {
         while k < 9 {
             let n = [wrap_index(zoom, c[0] + (k % 3) as i32 - 1), c[1] + (k / 3) as i32 - 1];
             let past = zoom >= SHARD_ZOOM && shard.past_leaf(own, area::tile_at(zoom, n));
-            let cell = window::ground(self, (shard, own), place, zoom, n).0;
+            let cell = window::ground(self, own, place, zoom, n).0;
             let mut dz = 0;
             while dz < 3 {
                 let (bit, b) = (1 << (dz * 9 + k), [n[0], n[1], c[2] + dz as i32 - 1]);
@@ -215,6 +227,9 @@ impl Squares for World<'_> {
     fn level(&self, cell: u32, slot: u32, j: u32, at: [u32; 2]) -> i32 {
         level_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), j, at)
     }
+    fn laid(&self, cell: u32, slot: u32, i: u32) -> u32 {
+        fill::laid_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
+    }
 }
 
 /// The ways' runs `ways_cs` wrote in the eye's windows.
@@ -237,8 +252,8 @@ impl ground::Held for World<'_> {
     /// The block's column off the windows, the area's edge laid on it
     /// (pxl-portable `window::ground`), as the CPU reads it (pxl-kernel
     /// query/node.rs `Reading::cell`).
-    fn cell(&mut self, shard: Shard, place: Found, zoom: u32, c: [i32; 3]) -> ground::Cell {
-        window::ground(self, (shard, (zoom, [c[0], c[1]])), place, zoom, [c[0], c[1]]).0
+    fn cell(&mut self, place: Found, zoom: u32, c: [i32; 3]) -> ground::Cell {
+        window::ground(self, (zoom, [c[0], c[1]]), place, zoom, [c[0], c[1]]).0
     }
 }
 
@@ -352,8 +367,7 @@ impl Grounds for Growing<'_> {
     }
 
     fn face(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
-        let shard = Shard::UNKNOWN.at(&self.world, (cell, g));
-        let c = ground::Held::cell(&mut self.world, shard, Found::NONE, cell, [g[0], g[1], 0]);
+        let c = ground::Held::cell(&mut self.world, Found::NONE, cell, [g[0], g[1], 0]);
         (c.look, c.top, c.grounded())
     }
 
@@ -683,9 +697,10 @@ pub fn joined_cs(
 }
 
 /// The columns' ground tops of the squares `fresh` names, the squares
-/// handed their tiles' samples this turn, one a `z`: the square, and where
-/// it lies in its tile, in squares, X low; a thread a column
-/// (`ground::height`) off the samples handed there.
+/// handed their tiles' samples this turn, one a `z`, as handed
+/// (`window::FRESH_WORDS`); a thread a column (`ground::height`) off the
+/// samples handed there, an even column's laying its cell and the next
+/// (`fill::heights`).
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn heights_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -695,9 +710,7 @@ pub fn heights_cs(
     if id.x >= SQUARE || id.y >= SQUARE {
         return;
     }
-    let base = square_at(at(fresh, FRESH_WORDS * id.z + window::FRESH_SQUARE));
-    let place = window::place_of(at(fresh, FRESH_WORDS * id.z + window::FRESH_PLACE));
-    fill::heights(ground, base, place, [id.x, id.y]);
+    fill::heights(ground, fresh_entry(fresh, id.z), [id.x, id.y]);
 }
 
 /// Level `level.x` of the squares `fresh` names, one a `z`: level 0 each
@@ -736,13 +749,7 @@ pub fn ways_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
 ) {
-    let mut entry = [0; FRESH_WORDS as usize];
-    let mut k = 0;
-    while k < FRESH_WORDS {
-        entry[k as usize] = at(fresh, FRESH_WORDS * id.z + k);
-        k += 1;
-    }
-    fill::ways(ground, entry, pass.x, id.x);
+    fill::ways(ground, fresh_entry(fresh, id.z), pass.x, id.x);
 }
 
 /// The eye's slots whose decor grows again this frame, a thread a slot,
