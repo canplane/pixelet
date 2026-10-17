@@ -724,12 +724,13 @@ pub const EYE_JOINED_WORDS: u32 = JOINED_ENTRIES * JOINED_WORDS * EYE_WINDOWS;
 
 /// Entry of level `l` (from 1) over a square, its block `at` in blocks of
 /// that level, among a window's: the levels' entries in order, a level's
-/// row by row. The levels under `l` hold `(ACROSS >> m)²` each, `m` from 1:
-/// a geometric sum, `(ACROSS² − (ACROSS >> (l − 1))²) / 3`, whole as a
-/// difference of two powers of four.
+/// in Morton order (`index_of`), so an entry's four halves are the four
+/// entries `4b..4b + 4` of the level under it. The levels under `l` hold
+/// `(ACROSS >> m)²` each, `m` from 1: a geometric sum, `(ACROSS² −
+/// (ACROSS >> (l − 1))²) / 3`, whole as a difference of two powers of four.
 pub const fn joined_index(l: u32, at: [u32; 2]) -> u32 {
     let under = ACROSS >> (l - 1);
-    (ACROSS * ACROSS - under * under) / 3 + at[1] * (ACROSS >> l) + at[0]
+    (ACROSS * ACROSS - under * under) / 3 + index_of(at)
 }
 const _: () = assert!(ACROSS.is_power_of_two() && JOINED_LEVELS < ACROSS.trailing_zeros() + 1);
 
@@ -738,40 +739,43 @@ const fn key_word(v: i32) -> u32 {
     v as u32 ^ 1 << 31
 }
 
-/// The join of the n × n squares at `cell` from `q`, each its whole (its
-/// last level); none (`ground::UNBOUNDED`) where one is not held present.
-pub fn joined(w: &impl Squares, cell: Zoom, q: [i32; 2], n: u32) -> [i32; 2] {
+/// Entry `b` of level `l` over a square, its Morton index there
+/// (`joined_index`), of the eye's
+/// window at `cell`, folded off the level under it: the block of squares
+/// its slots hold, aligned as the slots are (`ACROSS` a multiple of the
+/// block's side), keyed by the square in its first slot, and the join of
+/// its four halves' joins, each read once where the level under it laid it
+/// (`Squares::joined`, the squares' own whole at level 1) for the square it
+/// should start at; the zero entry where its first slot holds none present
+/// or a half is not held whole, as where the block straddles the window's
+/// range about its centre. A level is folded once the one under it is.
+pub fn fold(w: &impl Squares, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS as usize] {
+    let [x, y] = of_index(b);
+    let (q, here) = w.square(cell, slot([(x << l) as i32, (y << l) as i32]));
+    let half = 1 << (l - 1);
     let [mut lo, mut hi] = [i32::MAX, i32::MIN];
-    let mut k: u32 = 0;
-    while k < n * n {
-        let (slot, here) = w.present(cell, [wrap_index(squares_zoom(cell), q[0] + (k % n) as i32), q[1] + (k / n) as i32]);
-        if !here {
-            return crate::ground::UNBOUNDED;
+    let mut k = 0;
+    while here && k < 4 {
+        let (dx, dy) = ((k & 1) * half, (k >> 1) * half);
+        let h = [wrap_index(squares_zoom(cell), q[0] + dx as i32), q[1] + dy as i32];
+        let [l0, h0] = if l == 1 {
+            let (s, held) = w.present(cell, h);
+            if held {
+                crate::ground::bound_of(w.level(cell, s, LEVELS, [0, 0]))
+            } else {
+                crate::ground::UNBOUNDED
+            }
+        } else {
+            unfold(w.joined(cell, joined_index(l - 1, [0, 0]) + 4 * b + k), h)
+        };
+        // Component-wise: a GPU has no array equality.
+        if l0 == crate::ground::UNBOUNDED[0] && h0 == crate::ground::UNBOUNDED[1] {
+            return [0; JOINED_WORDS as usize];
         }
-        let [l, h] = crate::ground::bound_of(w.level(cell, slot, LEVELS, [0, 0]));
-        (lo, hi) = (lo.min(l), hi.max(h));
+        (lo, hi) = (lo.min(l0), hi.max(h0));
         k += 1;
     }
-    [lo, hi]
-}
-
-/// Entry `e` of the eye's window at `cell` (`joined_index`), folded off
-/// its slots: the block of squares its slots hold, aligned as the slots
-/// are (`ACROSS` a multiple of the block's side), keyed by the square in
-/// its first slot and joined (`joined`); the zero entry where that slot
-/// holds none present, or the block is not held whole, as where it
-/// straddles the window's range about its centre.
-pub fn fold(w: &impl Squares, cell: Zoom, e: u32) -> [u32; JOINED_WORDS as usize] {
-    let mut l = 1;
-    while l < JOINED_LEVELS && e >= joined_index(l + 1, [0, 0]) {
-        l += 1;
-    }
-    let (b, across) = (e - joined_index(l, [0, 0]), ACROSS >> l);
-    let first = [(b % across) << l, (b / across) << l];
-    let (q, here) = w.square(cell, first[1] * ACROSS + first[0]);
-    let [lo, hi] = if here { joined(w, cell, q, 1 << l) } else { crate::ground::UNBOUNDED };
-    // Component-wise: a GPU has no array equality.
-    if lo == crate::ground::UNBOUNDED[0] && hi == crate::ground::UNBOUNDED[1] {
+    if !here {
         return [0; JOINED_WORDS as usize];
     }
     [key_word(q[0]), key_word(q[1]), crate::ground::bound_word([lo, hi]) as u32, 0]

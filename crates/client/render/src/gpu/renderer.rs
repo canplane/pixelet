@@ -1232,7 +1232,12 @@ impl RaysPass {
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_bind_group(pass, 0, c.group, &[]);
         g.set_pipeline(pass, c.joined_built.pipeline);
-        g.dispatch(pass, (window::JOINED_ENTRIES * window::EYE_WINDOWS).div_ceil(compute::JOINED_WORKGROUP[0]), 1, 1);
+        // A level a dispatch, each over the one under it, its level the
+        // dispatch's depth (`joined_cs`).
+        for l in 1..=window::JOINED_LEVELS {
+            let blocks = (window::ACROSS >> l) * (window::ACROSS >> l);
+            g.dispatch(pass, (blocks * window::EYE_WINDOWS).div_ceil(compute::JOINED_WORKGROUP[0]), 1, l);
+        }
         g.end(pass);
         (c.refold, c.joined_back) = (false, true);
         true

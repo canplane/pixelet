@@ -517,22 +517,27 @@ pub fn cast_cs(
 /// (pxl-portable `window::fold`), each a row of the windows' buffer past
 /// their slot table (`window::JOINED_AT`): each window's levels over a
 /// square, the join of its aligned blocks of squares, which a node wider
-/// than a square reads as one entry (`window::bounded`). Run where the
-/// windows' slots moved; a present square's levels stand while it does.
+/// than a square reads as one entry (`window::bounded`), a level a dispatch
+/// off the one under it. Run where the windows' slots moved; a present
+/// square's levels stand while it does.
 #[spirv(compute(threads(64, 1, 1)))]
 #[allow(clippy::too_many_arguments)]
 pub fn joined_cs(
     #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(num_workgroups)] groups: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
 ) {
-    if id.x >= window::JOINED_ENTRIES * window::EYE_WINDOWS {
+    // The level this dispatch folds is its depth in workgroups, its last
+    // slice the one that runs: the levels under it were folded before.
+    let (l, blocks) = (groups.z, (window::ACROSS >> groups.z) * (window::ACROSS >> groups.z));
+    if id.z + 1 != l || id.x >= blocks * window::EYE_WINDOWS {
         return;
     }
-    let (cell, e) = (FIRST_CELL + id.x / window::JOINED_ENTRIES, id.x % window::JOINED_ENTRIES);
+    let (cell, b) = (FIRST_CELL + id.x / blocks, id.x % blocks);
     let [x, y, bound, pad] = {
         let read: &[IVec4] = window;
         let world = World {
@@ -542,9 +547,9 @@ pub fn joined_cs(
             overwrites,
             eye,
         };
-        window::fold(&world, cell, e)
+        window::fold(&world, cell, l, b)
     };
-    let k = (window::JOINED_AT + id.x) as usize;
+    let k = (window::JOINED_AT + (cell - FIRST_CELL) * window::JOINED_ENTRIES + window::joined_index(l, [0, 0]) + b) as usize;
     if k < window.len() {
         window[k] = IVec4::new(x as i32, y as i32, bound as i32, pad as i32);
     }
