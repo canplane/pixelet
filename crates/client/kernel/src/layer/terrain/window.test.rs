@@ -12,8 +12,8 @@ pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, pxl_spec::bake::separ
 /// The eye's and the focus's windows about `centre`, in units, X then Y,
 /// each square the tiles `held` cover present: per tile, a cell's own look
 /// and its height, row by row from its first, and its lines; each square's
-/// ways' words off its runs as its fill writes them (pxl-spec
-/// `terrain::fill_runs`, pxl-portable `window::bin_word`), and its levels
+/// ways' words off its runs as its fill writes them (`fill_runs`,
+/// pxl-portable `window::walk_ways`), and its levels
 /// joined over its cells and its ways as a GPU joins them (`window::join`).
 pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     PLANES.set(Planes {
@@ -60,7 +60,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
                 looks: |k: u32| word([u32::from(looks_of[at(k)]); 4]),
                 height: |c: [i32; 2]| i32::from(heights[at((c[1].clamp(0, SQUARE as i32 - 1) as u32) * SQUARE + c[0].clamp(0, SQUARE as i32 - 1) as u32)]),
             };
-            pxl_spec::bake::tile::terrain::fill_runs(&laid, &mut runs);
+            fill_runs(&laid, &mut runs);
             for b in 0..window::WAYS_BINS {
                 words[(window::HEIGHT_WORDS + window::LEVEL_WORDS + b) as usize] = window::walk_ways(&laid, |k| runs[k as usize], true, b).1 as u32;
             }
@@ -83,4 +83,24 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             }
         }
     }
+}
+
+/// A square's ways as a GPU's fill writes them (pxl-portable `fill::ways`),
+/// over cells whose heights are given rather than drawn off samples: each
+/// column's spans off its lines (`ways::column`) read along z as runs
+/// (`ways::runs`), into `out`, a square's runs lane, none past
+/// `RUNS_SQUARE`.
+fn fill_runs(sq: &impl window::Square, out: &mut [u32]) {
+    use pxl_portable::window::{RUNS_RUN_AT, RUNS_SQUARE};
+    let mut runs = 0;
+    for i in 0..SQUARE_CELLS {
+        out[i as usize] = runs;
+        let spans = pxl_portable::ways::column(sq, [(i % SQUARE) as i32, (i / SQUARE) as i32]).0;
+        runs += pxl_portable::ways::runs(&spans, sq.cell(), |k, w| {
+            if runs + k < RUNS_SQUARE {
+                out[(RUNS_RUN_AT + runs + k) as usize] = w;
+            }
+        });
+    }
+    out[SQUARE_CELLS as usize] = runs;
 }

@@ -380,8 +380,9 @@ pub fn ran(w: &impl Ran, near: &Found, zoom: Zoom, c: [i32; 2], z: i32, top: Zoo
 /// `ways::block` recolours beside air and over and under its own; so no block
 /// the rule writes or recolours in the bin lies outside it; empty where it has
 /// none. The bin's cells and its ring are walked a row at a time from its
-/// south-west, a column read where the square holds none.
-pub fn walk_ways(sq: &impl Square, run: impl Fn(u32) -> u32, bin: bool, i: u32) -> (crate::ways::Spans, i32) {
+/// south-west, a column read where the square holds none. Last, whether
+/// a column's spans fit `ways::SPANS`: a bin's always.
+pub fn walk_ways(sq: &impl Square, run: impl Fn(u32) -> u32, bin: bool, i: u32) -> (crate::ways::Spans, i32, bool) {
     let cell = sq.cell();
     let (n, s) = (1i32 << WAYS_SHIFT, 1 << (crate::LEAF_CELL - cell));
     // The bin's first cell, and the walk's: its ring's, a cell a side past it;
@@ -392,7 +393,7 @@ pub fn walk_ways(sq: &impl Square, run: impl Fn(u32) -> u32, bin: bool, i: u32) 
         ([(i % SQUARE) as i32, (i / SQUARE) as i32], 1)
     };
     let from = if bin { [first[0] - 1, first[1] - 1] } else { first };
-    let (mut lo, mut hi, mut out) = (i32::MAX, i32::MIN, crate::ways::Spans::NONE);
+    let (mut lo, mut hi, mut out, mut fits) = (i32::MAX, i32::MIN, crate::ways::Spans::NONE, true);
     let mut j = 0;
     while j < side * side {
         let [x, y] = [from[0] + j % side, from[1] + j / side];
@@ -411,7 +412,7 @@ pub fn walk_ways(sq: &impl Square, run: impl Fn(u32) -> u32, bin: bool, i: u32) 
                 r += 1;
             }
         } else {
-            let spans = crate::ways::column(sq, [x, y]).0;
+            let (spans, fit) = crate::ways::column(sq, [x, y]);
             if bin {
                 let mut k = 0;
                 while k < spans.n as usize {
@@ -421,12 +422,12 @@ pub fn walk_ways(sq: &impl Square, run: impl Fn(u32) -> u32, bin: bool, i: u32) 
                     k += 1;
                 }
             } else {
-                out = spans;
+                (out, fits) = (spans, fit);
             }
         }
         j += 1;
     }
-    (out, crate::ground::bound_word(if lo > hi { [i16::MAX as i32, i16::MIN as i32] } else { [lo, hi] }))
+    (out, crate::ground::bound_word(if lo > hi { [i16::MAX as i32, i16::MIN as i32] } else { [lo, hi] }), fits)
 }
 
 /// Whether the descent asks the ways at block `c` of `zoom`, its column's

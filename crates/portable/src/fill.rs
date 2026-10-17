@@ -109,8 +109,9 @@ pub fn heights(ground: &mut [u32], base: u32, place: [u32; 2], [x, y]: [u32; 2])
 /// into its table word, 1 (`i` 0 alone) sums them in order into each cell's
 /// first, 2 writes each column's runs from its first, 3 writes each bin's
 /// ways' word off them (`window::walk_ways`, `ways::runs`), which the levels
-/// join after.
-pub fn ways(ground: &mut [u32], base: u32, place: [u32; 2], cell: Zoom, pass: u32, i: u32) {
+/// join after. A column's spans, `u32::MAX` where they do not fit
+/// `ways::SPANS`; 0 for the rest.
+pub fn ways(ground: &mut [u32], base: u32, place: [u32; 2], cell: Zoom, pass: u32, i: u32) -> u32 {
     let table = base + RUNS_AT;
     if pass == 1 {
         if i == 0 {
@@ -122,25 +123,30 @@ pub fn ways(ground: &mut [u32], base: u32, place: [u32; 2], cell: Zoom, pass: u3
             }
             put(ground, table + SQUARE_CELLS, n);
         }
-        return;
+        return 0;
     }
     let (bins, writes) = (pass == 3, pass == 2);
     if i >= if bins { WAYS_BINS } else { SQUARE_CELLS } {
-        return;
+        return 0;
     }
-    let (spans, word) = {
+    let (spans, word, fits) = {
         let lane: &[u32] = ground;
         let filling = Filling { ground: lane, base, cell, place };
         window::walk_ways(&filling, move |k: u32| at(lane, table + k), bins, i)
     };
     if bins {
         put(ground, base + WAYS_AT + i, word as u32);
-        return;
+        return 0;
     }
     let (first, room) = if writes { (at(ground, table + i), RUNS_SQUARE) } else { (0, 0) };
     let n = put_runs(ground, base, &spans, cell, first, room);
     if !writes {
         put(ground, table + i, n);
+    }
+    if fits {
+        spans.n
+    } else {
+        u32::MAX
     }
 }
 
@@ -167,13 +173,15 @@ pub fn level(ground: &mut [u32], base: u32, j: u32, at: [u32; 2]) {
 /// A square filled whole, its passes in a GPU's order (pxl-render
 /// gpu/renderer.rs `grids`): `lane` its words, its looks, samples and lines
 /// as handed; its cells at `cell`, lying at `place` in its tile. What it
-/// reaches is its last level's one entry (`bound`).
-pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) {
+/// reaches is its last level's one entry (`bound`). The runs its ways read
+/// as, and the most spans a column makes (`u32::MAX` past `ways::SPANS`).
+pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) -> [u32; 2] {
     for y in 0..SQUARE {
         for x in 0..SQUARE / 2 {
             heights(lane, 0, place, [x, y]);
         }
     }
+    let mut most = 0;
     for pass in 0..4 {
         let n = match pass {
             1 => 1,
@@ -181,7 +189,7 @@ pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) {
             _ => SQUARE_CELLS,
         };
         for i in 0..n {
-            ways(lane, 0, place, cell, pass, i);
+            most = most.max(ways(lane, 0, place, cell, pass, i));
         }
     }
     for j in 1..=LEVELS {
@@ -191,6 +199,7 @@ pub fn square(lane: &mut [u32], place: [u32; 2], cell: Zoom) {
             }
         }
     }
+    [at(lane, RUNS_AT + SQUARE_CELLS), most]
 }
 
 /// The lowest and highest a filled square's cells reach, in leaf cells:
