@@ -25,8 +25,8 @@ use crate::frame::shader::record::{
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{
-    buffer_entry, buffer_range_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, sampler_entry, texture_usage, view_entry, word_bytes, Device,
-    Entry, Format, Gpu, Load, Stamp, DONE,
+    buffer_entry, buffer_range_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, sampler_entry, texture_usage, view_entry, word_bytes,
+    write_buffer_bytes, Device, Entry, Format, Gpu, Load, Stamp, DONE,
 };
 use crate::gpu::api_spec::surface_role;
 use crate::gpu::atmosphere::{Atmosphere, AIR_ENTRIES};
@@ -478,7 +478,7 @@ impl Blocks {
 
     /// False, the block still missing, where the turn's stream has no room.
     fn put(&mut self, g: &Gpu, i: usize) -> bool {
-        if !room(self.len[i]) {
+        if !room(write_buffer_bytes(memory(self.at[i], self.len[i] & !3))) {
             return false;
         }
         let buffer = g.buffer(buffer_size(self.len[i]), buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST);
@@ -538,7 +538,7 @@ impl Blocks {
         self.at[i] = at;
         let (Some(g), buffer @ 1..) = (g, self.buffer[i]) else { return };
         let bytes = len.min(self.len[i].saturating_sub(from)) & !3;
-        if room(bytes) {
+        if room(write_buffer_bytes(memory(at + from, bytes))) {
             g.write_buffer(buffer, from, memory(at + from, bytes));
         } else {
             release(self.group[i]);
@@ -985,14 +985,15 @@ impl ScreenCellsPass {
         });
         let mut fresh = 0;
         (ground.upload)(&mut |q| {
-            if !room((q.looks.len() + q.samples.len() + 4 * q.lines.len()) as u32) {
+            let fresh_entry = [q.square, q.place, q.cell];
+            if !room(write_buffer_bytes(q.looks) + write_buffer_bytes(q.samples) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&fresh_entry))) {
                 return false;
             }
             let at = q.square * SQUARE_BYTES;
             g.write_buffer(gb.ground, at, q.looks);
             g.write_buffer(gb.ground, at + ELE_AT * 4, q.samples);
             g.write_buffer(gb.ground, at + LINES_AT * 4, bytes(q.lines));
-            g.write_buffer(gb.fresh, word_bytes((FRESH_WORDS * fresh) as usize), bytes(&[q.square, q.place, q.cell]));
+            g.write_buffer(gb.fresh, word_bytes((FRESH_WORDS * fresh) as usize), bytes(&fresh_entry));
             gb.asked[q.square as usize] = q.back;
             fresh += 1;
             true

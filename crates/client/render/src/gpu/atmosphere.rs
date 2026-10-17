@@ -17,7 +17,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use xpute_guest::mem::base::off_of;
 
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, Stamp, DONE};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::Mips;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -255,7 +255,7 @@ impl Atmosphere {
     pub fn set_earth_tiles(&mut self, g: &Gpu, window: [i32; 2], layers: &[u32], upload: &mut Upload) -> bool {
         let (texture, mut came) = (self.earth_tiles.0, false);
         upload(&mut |layer, texels| {
-            if !room(texels.len() as u32) {
+            if !room(write_texture_bytes(texels)) {
                 return false;
             }
             g.write_texture(texture, layer, TILE_CELLS, TILE_CELLS, texels);

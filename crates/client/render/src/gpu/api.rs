@@ -433,14 +433,14 @@ pub fn frame_commit() -> bool {
     s.encoder.commit(&mut s.stream)
 }
 
-// Each upload's arguments before its bytes: buffer, offset; texture, mip,
-// origin, aspect, the row layout and the extent.
-const UPLOAD_ARGS: usize = 12;
+/// The bytes a write of `bytes` takes of the stream, as its writer measures
+/// it: what a caller sums over the writes it makes together and asks `room`.
+pub use xpute_gpu::encode::call::{write_buffer_bytes, write_texture_bytes};
 
-/// Whether a copy of `bytes` into the stream fits, leaving `stream::RESERVE`
-/// for what cannot wait.
-pub fn room(bytes: u32) -> bool {
-    STATE.get(|| None).as_ref().is_some_and(|s| s.stream.fits(xpute_guest::ipc::stream::record_bytes(UPLOAD_ARGS, Some(bytes as usize)), stream::RESERVE as usize))
+/// Whether records of `bytes` (`write_buffer_bytes`, `write_texture_bytes`)
+/// fit the stream, leaving `stream::RESERVE` for what cannot wait.
+pub fn room(bytes: usize) -> bool {
+    STATE.get(|| None).as_ref().is_some_and(|s| s.stream.fits(bytes, stream::RESERVE as usize))
 }
 
 /// An object's handle, or 0 where the frame it was made in no longer fits
