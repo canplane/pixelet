@@ -1102,6 +1102,7 @@ impl ScreenCellsPass {
             revision: o.revision,
             cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS].try_into().or_bug(Errno::ENOTRECOVERABLE),
             filled: fresh,
+            eye: &cast.eye,
         };
         c.grown.prepare(g, cast.decor, grows, meshes, world);
         let eye = c.eye;

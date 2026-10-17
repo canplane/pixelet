@@ -55,6 +55,9 @@ pub struct Grows<'a> {
     pub revision: u32,
     pub cuts: &'a [u32; eye::CUTS],
     pub filled: u32,
+    /// The eye as the cast's (pxl-portable `eye`), of which the count pass
+    /// reads its place and the zooms it asks (`ORIGIN`, `TAU`, `RANGE`).
+    pub eye: &'a [u32; eye::WORDS],
 }
 
 pub struct Grown {
@@ -94,6 +97,12 @@ pub struct Grown {
     cuts: [u32; eye::CUTS],
     placed: Read,
     marking: bool,
+    /// What the count, args and place passes read past the records, as they
+    /// last ran: the eye's place and zooms, the frame's words, the meshes,
+    /// the anchor and the records' room; and whether this frame runs them,
+    /// which it does where that moved or the records did.
+    counted: Read,
+    counting: bool,
 }
 
 /// The world `decor_cs` asks: the cast's eye, window, the tiles' frames, the
@@ -136,6 +145,8 @@ impl Grown {
             revision: None,
             cuts: [0; eye::CUTS],
             placed: Read::default(),
+            counted: Read::default(),
+            counting: false,
             marking: false,
         }
     }
@@ -149,6 +160,7 @@ impl Grown {
         self.on = frame.is_some();
         let Some(f) = frame else {
             self.read.forget();
+            self.counted.forget();
             return;
         };
         let need = scatter::SLOT_RECORDS + (f.placed.len() as u32).next_power_of_two().max(64);
@@ -206,11 +218,24 @@ impl Grown {
         let p = &mut self.placed;
         p.begin();
         p.read(f.placed);
-        if !p.end() {
+        let placed_moved = !p.end();
+        if placed_moved {
             g.write_buffer(self.records, scatter::PLACED_HEAD * 4, bytes(&[f.placed.len() as u32, 0, 0, 0]));
             if !f.placed.is_empty() {
                 g.write_buffer(self.records, scatter::record_at(scatter::SLOT_RECORDS).0 * 4, bytes(f.placed.as_flattened()));
             }
+        }
+        let c = &mut self.counted;
+        c.begin();
+        c.read(&grows.eye[eye::ORIGIN..eye::ORIGIN + 3]);
+        c.read(&[grows.eye[eye::TAU], grows.eye[eye::RANGE], grows.eye[eye::RANGE + 1], self.room]);
+        c.read(f.params);
+        c.read(meshes);
+        c.read(&f.translation);
+        c.mark(self.marking || placed_moved || regroup);
+        self.counting = !c.end();
+        if !self.counting {
+            return;
         }
         g.write_buffer(self.params, 0, bytes(f.params));
         g.write_buffer(self.meshes, 0, bytes(meshes));
@@ -254,12 +279,14 @@ impl Grown {
     pub fn off(&mut self) {
         self.on = false;
         self.read.forget();
+        self.counted.forget();
     }
 
     /// The frame that grew was dropped, or never drawn after its decor was
     /// handed: the next grows every slot again.
     pub fn forget(&mut self) {
         self.read.forget();
+        self.counted.forget();
     }
 
     /// Within a compute pass over the cast's world, after the cast: the
@@ -276,6 +303,9 @@ impl Grown {
             g.set_pipeline(pass, self.grow.pipeline);
             g.set_bind_group(pass, 0, self.groups[1], &[]);
             g.dispatch_indirect(pass, self.grows, 0);
+        }
+        if !self.counting {
+            return;
         }
         let records = |w: [u32; 3]| self.room.div_ceil(w[0]);
         let passes = [
