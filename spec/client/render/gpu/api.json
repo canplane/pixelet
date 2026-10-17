@@ -54,7 +54,10 @@
       "its shader the pipeline enters, a vertex step and format, and a binding's",
       "kind (its stages are xpute's SHADER_STAGE) — TEXTURE_UNFILTERED a texture in a",
       "format no sampler",
-      "filters (RGBA32F), read by textureLoad alone."
+      "filters (RGBA32F), read by textureLoad alone; TEXTURE_UINT_ARRAY a u32",
+      "texture's layers, read by textureLoad; STORAGE_TEXTURE_RW an r32uint",
+      "texture's layers read and written in place, the one format family WebGPU",
+      "lets a shader do both to."
     ],
     "HEAD": 10,
     "TRIANGLES": 0,
@@ -86,6 +89,8 @@
     "DEPTH": 5,
     "SAMPLER": 6,
     "TEXTURE_UNFILTERED": 8,
-    "STORAGE_RW": 9
+    "STORAGE_RW": 9,
+    "TEXTURE_UINT_ARRAY": 10,
+    "STORAGE_TEXTURE_RW": 11
   }
 }

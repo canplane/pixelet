@@ -81,7 +81,6 @@ pub fn stage_write() {
     s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH * crate::view::frame::resolution::world_ratio();
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { crate::param::RIM_INTENSITY } else { 0.0 };
     s[STAGE_AT::CLOUDS] = crate::scene::environment::cloud::clouds_shown();
-    s[STAGE_AT::RAY_STEPS] = if settings.ray_steps { 1.0 } else { 0.0 };
 }
 
 pub fn stage_render() {
@@ -135,9 +134,8 @@ pub fn stage_render() {
             upload: &mut earth_upload,
         },
         ground: GroundSquares { upload: &mut terrain_upload },
-        cast: o.as_ref().and(eye).map(|(eye, tangents)| Cast {
+        cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
-            tangents,
             window: crate::scene::cast::window(),
             shards: crate::scene::cast::shards(),
             overwrites: crate::scene::cast::overwrites(),

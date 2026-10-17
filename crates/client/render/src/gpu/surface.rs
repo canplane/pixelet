@@ -38,9 +38,28 @@ pub struct Surface {
     pub world_view: u32,
     pub world_depth: u32,
     pub world_depth_view: u32,
+    /// The eye's rays as the cast leaves them, a drawn pixel each, made with
+    /// the world image: `RAY_WORDS` layers of `r32uint`, a word of the ray's a
+    /// layer (frame/screen_cells.rs).
+    pub rays: u32,
+    pub rays_view: u32,
 }
 
 impl Surface {
+    /// What it holds on the GPU, every one made again with its size.
+    pub fn targets(&self) -> [u32; 8] {
+        [
+            self.depth_view,
+            self.depth,
+            self.world_view,
+            self.world,
+            self.world_depth_view,
+            self.world_depth,
+            self.rays_view,
+            self.rays,
+        ]
+    }
+
     pub fn buffer_px(&self) -> (u32, u32) {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);
         let dpr = if self.dpr > 0.0 { self.dpr } else { 1.0 };

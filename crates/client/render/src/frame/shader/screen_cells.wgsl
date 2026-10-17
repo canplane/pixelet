@@ -1,23 +1,21 @@
 // pxl-render/frame/shader/screen_cells.wgsl
 
-// The rays' cells (`frame/screen_cells.rs`), each drawn straight into its own
-// area of the screen: the lane's cells across and up, at equal steps of angle
-// over the view, each pixel the face its cell's ray entered, where the
-// pixel's own ray meets that face, painted by paint.wgsl's `paint`, as the
-// ghost's boxes are. A cell whose ray met nothing is left to the sky.
+// The eye's rays (`frame/screen_cells.rs`), a drawn pixel each: each pixel
+// the face its ray entered, painted by paint.wgsl's `paint`, as the ghost's
+// boxes are. A pixel whose ray met nothing is left to the sky.
 
-// The lane (`frame/screen_cells.rs`): the cells across and up and whether a
-// cell is coloured by its ray's steps, then a cell each, what its ray met
-// (value, kind, face, zoom), how far it went (f32 bits), its face bits, and
-// its fold's looks or, in the steps view, the nodes its descent asked.
-@group(0) @binding(3) var<storage, read> cells: array<vec4u>;
+// The rays, a layer a word: what a ray met (value, kind, face, zoom), how far
+// it went (f32 bits), its face bits, and its fold's looks or, in the steps
+// view, the nodes its descent asked.
+@group(0) @binding(3) var rays: texture_2d_array<u32>;
 // Each look's swatch and layer, then the colour it reads as from afar
 // (`mesh/paint/ground.rs` `look_words`): the ground's looks, then each
 // placed value's.
 @group(0) @binding(20) var<storage, read> looks: array<vec2u>;
-// Where the eye is in the world: its whole units, wrapping, then what is
-// left of a unit, f32 bits; a block's place on the lattice is read off it.
-@group(0) @binding(21) var<uniform> eye_at: array<vec4u, 2>;
+// The eye the rays left (pxl-kernel view/lens.rs `gpu_cast`): its Q3 steps,
+// FRAC_W bits a unit and wrapping, a block's place on the lattice read off
+// their low bits, and whether a ray reports its steps.
+@group(0) @binding(21) var<uniform> eye: array<vec4u, 7>;
 
 const KIND_GROUND: u32 = 1u;
 const KIND_SHIFT: u32 = 16u;
@@ -110,19 +108,17 @@ fn drawn(c: vec4u) -> Drawn {
 }
 
 // Along `axis`, how far the eye is past the start of the block of side
-// 2^k units it stands in.
+// 2^k units it stands in: its steps' low k + FRAC_W bits, every bit at the
+// world's side.
 fn eye_phase(axis: u32, k: i32) -> f32 {
-  let part = bitcast<f32>(eye_at[1][axis]);
-  if (k <= 0) {
-    let side = exp2(f32(k));
-    return part - floor(part / side) * side;
-  }
-  return f32(eye_at[0][axis] & ((1u << u32(k)) - 1u)) + part;
+  let bits = u32(k + i32(FRAC_W));
+  let low = select(eye[0][axis], eye[0][axis] & ((1u << bits) - 1u), bits < 32u);
+  return f32(low) / f32(1u << FRAC_W);
 }
 
-// Where a pixel's ray meets the face its cell's ray entered, from the eye,
-// kept on the block: the block, half its side in from where the cell's ray
-// entered it, its corner on the lattice, and the face's plane through it.
+// Where a ray meets the face it entered, from the eye, kept on the block:
+// the block, half its side in from where the ray entered it, its corner on
+// the lattice, and the face's plane through it.
 struct Hit {
   at: vec3f,
   corner: vec3f,
@@ -130,7 +126,7 @@ struct Hit {
   normal: vec3f,
 };
 
-fn hit_of(c: vec4u, ray: vec3f, d: vec3f) -> Hit {
+fn hit_of(c: vec4u, d: vec3f) -> Hit {
   let face = min((c.x >> FACE_SHIFT) & 7u, 5u);
   let axis = face / 2u;
   let n = FACE_NORMAL[face];
@@ -138,7 +134,7 @@ fn hit_of(c: vec4u, ray: vec3f, d: vec3f) -> Hit {
   let side = exp2(f32(k));
   let e = vec3f(eye_phase(0u, k), eye_phase(1u, k), eye_phase(2u, k));
   let t = bitcast<f32>(c.y);
-  let corner = floor((e + ray * t - n * (0.5 * side)) / side) * side - e;
+  let corner = floor((e + d * t - n * (0.5 * side)) / side) * side - e;
   let plane = corner[axis] + select(0.0, side, n[axis] > 0.0);
   let s = select(t, plane / d[axis], d[axis] * plane > 0.0);
   return Hit(clamp(d * s, corner, corner + vec3f(side)), corner, side, n);
@@ -146,7 +142,7 @@ fn hit_of(c: vec4u, ray: vec3f, d: vec3f) -> Hit {
 
 // The face's texture coordinate: the world's position, one repeat a unit.
 fn box_uv(h: Hit) -> vec2f {
-  let p = bitcast<vec3f>(eye_at[1].xyz) + h.at;
+  let p = vec3f(eye_phase(0u, 0), eye_phase(1u, 0), eye_phase(2u, 0)) + h.at;
   if (abs(h.normal.z) > 0.5) {
     return p.xy;
   }
@@ -155,32 +151,18 @@ fn box_uv(h: Hit) -> vec2f {
 
 @fragment
 fn fs(v: VertexOut) -> FragOut {
-  let m = sky_ray();
-  let dir = m * vec3f(v.ndc, 1.0);
-  let forward = length(m[2]);
-  let axes = mat3x3f(normalize(m[0]), normalize(m[1]), m[2] / forward);
-  let z = dot(dir, axes[2]);
-  // Each axis's angle from the view's edge, counted in cells.
-  let angle = vec2f(atan2(dot(dir, axes[0]), z), atan2(dot(dir, axes[1]), z));
-  let half = vec2f(atan2(length(m[0]), forward), atan2(length(m[1]), forward));
-  let across = cells[0].xy;
-  let at = vec2i(floor((angle + half) / (2.0 * half) * vec2f(across)));
-  if (any(at < vec2i(0)) || any(vec2u(at) >= across)) {
-    discard;
-  }
-  let c = cells[1u + u32(at.y) * across.x + u32(at.x)];
+  // This pixel's ray, through its middle, as the cast formed it.
+  let d = normalize(sky_ray() * vec3f(v.ndc, 1.0));
+  let at = vec2i(v.clip.xy);
+  let c = vec4u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x, textureLoad(rays, at, 2, 0).x, textureLoad(rays, at, 3, 0).x);
   let kind = (c.x >> KIND_SHIFT) & 3u;
-  // The cell's own ray, through its middle, as the cast formed it.
-  let mid = ((vec2f(at) + 0.5) / vec2f(across) * 2.0 - 1.0) * half;
-  let ray = normalize(axes * vec3f(tan(mid), 1.0));
-  let d = normalize(dir);
-  let h = hit_of(c, ray, d);
+  let h = hit_of(c, d);
   // Taken before any branch: a derivative needs the quad whole.
   let uv = box_uv(h);
   let ddx = dpdx(uv);
   let ddy = dpdy(uv);
   let pixel = sqrt(dpdx(h.at) * dpdx(h.at) + dpdy(h.at) * dpdy(h.at));
-  if (cells[0].z != 0u) {
+  if (eye[0].w != 0u) {
     let t = select(bitcast<f32>(c.y), FAR, kind == 0u);
     let clip = frame_view_proj() * vec4f(d * t, 1.0);
     var o: FragOut;

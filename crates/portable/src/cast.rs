@@ -24,7 +24,12 @@
 
 use crate::{wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
-/// Drawn pixels per CSS pixel at most: the finest ratio a surface is drawn at.
+/// Drawn pixels per CSS pixel at most: the finest ratio a surface is drawn at,
+/// and where more pixels stop being seen. The CSS reference pixel subtends
+/// 0.0213° (CSS Values and Units: 96 dpi at 28 inches), 46.9 a degree, and
+/// the fovea resolves 94 a degree at most (Ashraf, Chapiro & Mantiuk,
+/// "Resolution limit of the eye: how many pixels can we see?", Nature
+/// Communications, 2025, doi:10.1038/s41467-025-64679-2): 94 / 46.9 is 2.
 pub const RATIO_MAX: f32 = 2.0;
 
 /// The camera grid, the one knob of resolution: a cell is an angle of
@@ -44,11 +49,10 @@ pub fn cell_at(r: f32) -> Zoom {
     (UNIT_ZOOM as i32 - e).clamp(0, FINEST_ZOOM as i32) as Zoom
 }
 
-/// The direction through a cell of the camera grid whose middle is at the
-/// tangents `tx` across and `ty` up from the optical axis: the camera grid's
-/// cells at equal steps of angle (pxl-kernel view/lens.rs `Lens`), the
-/// tangents stated once by the CPU, since a tangent of an angle is libm's in
-/// f64 on the CPU and a WGSL has none.
+/// The direction at the tangents `tx` across and `ty` up from the optical
+/// axis: a drawn pixel's middle, its tangents the screen's half-angles'
+/// (pxl-kernel view/lens.rs `Lens`) scaled by where it lies on the screen,
+/// as a projection puts it.
 pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f32) -> [f32; 3] {
     let d = [
         forward[0] + tx * right[0] + ty * up[0],

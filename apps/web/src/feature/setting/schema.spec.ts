@@ -168,18 +168,9 @@ export const SETTINGS = {
     default: 5 as number,
     section: "character",
   },
-  /** How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each. */
-  rays: {
-    key: 16 as number,
-    kind: "choice",
-    default: "half",
-    options: ["cells", "half", "full"],
-    section: "debug",
-    dev: true,
-  },
   /** Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl). */
   ray_steps: {
-    key: 17 as number,
+    key: 16 as number,
     kind: "toggle",
     default: false,
     section: "debug",

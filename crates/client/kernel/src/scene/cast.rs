@@ -1,7 +1,7 @@
 // pxl-kernel/scene/cast.rs
 
 //! What the GPU's cast of the eye's rays reads (pxl-render gpu/renderer.rs
-//! `Cast`): the eye as the rays leave it and its lane's tangents, the eye's
+//! `Cast`): the eye as the rays leave it, a ray a drawn pixel, the eye's
 //! windows as a table of the squares each holds, and each square the
 //! windows want handed to the GPU once, off its tile's packet
 //! (layer/terrain/window.rs `fill`).
@@ -21,9 +21,7 @@ use crate::layer::residency::Residency;
 use crate::layer::terrain::tile::kept;
 use crate::layer::terrain::window::{self, Handed};
 use crate::layer::Base as _;
-use crate::setting::schema_spec::RayDensity;
 use crate::setting::store::settings_store;
-use crate::view::frame::pose::view;
 use crate::view::lens;
 
 /// The shards the service area serves, as the GPU reads them.
@@ -42,34 +40,18 @@ pub fn shards() -> &'static [[i32; 4]] {
     s
 }
 
-/// The tangents of the lane's columns then rows (`lens::gpu_cast`), kept
-/// until the next frame's cast rewrites them, after the page has replayed
-/// this turn.
-static TANGENTS: Global<Vec<f32>> = Global::new();
-
-/// The eye as the GPU's rays leave it, over a lane of the cells the `rays`
-/// setting asks, and the lane's column and row tangents (`lens::gpu_cast`),
+/// The eye as the GPU's rays leave it, a ray a drawn pixel (`lens::gpu_cast`),
 /// then the pointer's preview as the world answers through it (query/world.rs
 /// `previewed`), its cut to air and its left-out leaf, each X, Y, Z and the
 /// zoom, the zoom `u32::MAX` for none. None without a screen.
-pub fn eye(o: &Observation) -> Option<([u32; CAST_EYE_WORDS], &'static [f32])> {
-    let tau = lens::tau();
-    let v = view();
-    // The screen's CSS pixels, whatever the device draws them at: the screen
-    // pass spreads a cell over the pixels it covers.
-    let px = [v.width, v.height].map(|n| n.ceil().max(1.0) as u32);
-    let across = match settings_store().rays {
-        RayDensity::cells => lens::grid_across(o, tau)?,
-        RayDensity::half => px.map(|n| n.div_ceil(2)),
-        RayDensity::full => px,
-    };
-    let (mut eye, tangents) = ([0u32; CAST_EYE_WORDS], TANGENTS.get(Vec::new));
-    lens::gpu_cast(o, tau, across, &mut eye, tangents)?;
+pub fn eye(o: &Observation) -> Option<[u32; CAST_EYE_WORDS]> {
+    let mut eye = [0u32; CAST_EYE_WORDS];
+    lens::gpu_cast(o, lens::tau(), settings_store().ray_steps, &mut eye)?;
     let edits = preview::current();
     let cut = |e: Option<EntryAt>| e.map_or([0, 0, 0, u32::MAX], |e| [e.at()[0] as u32, e.at()[1] as u32, e.at()[2] as u32, e.zoom()]);
     eye[lens::EYE_WORDS..lens::EYE_WORDS + 4].copy_from_slice(&cut(edits.carve));
     eye[lens::EYE_WORDS + 4..].copy_from_slice(&cut(edits.hide));
-    Some((eye, tangents))
+    Some(eye)
 }
 
 /// The eye's windows as the GPU's cast reads them (layer/terrain/window.rs

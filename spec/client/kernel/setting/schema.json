@@ -53,16 +53,6 @@
       "            reachable at the cost of an angle nobody asked for."
     ]
   },
-  "RAY_DENSITIES": {
-    "$value": ["cells", "half", "full"],
-    "$doc": [
-      "How many of the eye's rays the GPU casts for the screen's cells.",
-      "",
-      "  cells — one a cell of the camera grid.",
-      "  half  — one every second CSS pixel each way.",
-      "  full  — one a CSS pixel, whatever the device draws it at."
-    ]
-  },
   "AO_MODES": {
     "$value": ["off", "corner", "screen"],
     "$doc": [
@@ -224,14 +214,6 @@
     },
     "person": { "kind": "index", "default": { "$value": 1, "$type": "u8", "$doc": ["female-2, by its number in variant.json's person keys."] }, "section": "character" },
     "pet": { "kind": "index", "default": { "$value": 5, "$type": "u8", "$doc": ["chick, by its number in variant.json's pet keys."] }, "section": "character" },
-    "rays": {
-      "$doc": ["How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each."],
-      "kind": "choice",
-      "default": "half",
-      "options": "RAY_DENSITIES",
-      "section": "debug",
-      "dev": true
-    },
     "ray_steps": {
       "$doc": [
         "Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl)."

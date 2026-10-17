@@ -19,11 +19,13 @@ fn main() {
     }
     // A block's face bits, from their one statement (pxl-portable mask.bits.rs).
     std::fs::write(out.join("faces.wgsl"), MASK.iter().map(|(name, v)| format!("const {name}: u32 = {v}u;\n")).collect::<String>()).expect("the mask's shader");
-    // A unit's zoom and the ground's cell, from pxl-portable, where the cast
-    // reads them: a ray's cell is painted by its block's zoom against these.
+    // A unit's zoom, a unit's fraction bits in Q3 and the ground's cell, from
+    // pxl-portable, where the cast reads them: a ray is painted by its
+    // block's zoom against these, its block placed off the eye's Q3 steps.
     let lattice = format!(
-        "const UNIT_ZOOM: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\n",
+        "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\n",
         pxl_portable::UNIT_ZOOM,
+        pxl_portable::FRAC_W,
         pxl_portable::lattice::GROUND.cell()
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");

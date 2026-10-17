@@ -15,7 +15,8 @@ pub use xpute_gpu::encode::OBJECT_OPS;
 use xpute_gpu::encode::{self, call, Gpu as Encoder, Id};
 use xpute_gpu::enums::{
     AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction, CullMode, FilterMode, FrontFace, IndexFormat, LoadOp, MipmapFilterMode, PrimitiveTopology,
-    QueryType, SamplerBindingType, StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat, VertexStepMode, FEATURE_NAME, LIMIT_NAME,
+    QueryType, SamplerBindingType, StorageTextureAccess, StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat, VertexStepMode, FEATURE_NAME,
+    LIMIT_NAME,
 };
 use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, STATUS, TEXTURE_USAGE};
 use xpute_guest::abi::handle::handle_slot;
@@ -38,7 +39,7 @@ pub mod buffer_usage {
 }
 
 pub mod texture_usage {
-    pub use xpute_gpu::spec::TEXTURE_USAGE::{COPY_DST, COPY_SRC, RENDER_ATTACHMENT, TEXTURE_BINDING};
+    pub use xpute_gpu::spec::TEXTURE_USAGE::{COPY_DST, COPY_SRC, RENDER_ATTACHMENT, STORAGE_BINDING, TEXTURE_BINDING};
 }
 
 /// The objects the renderer may hold at once.
@@ -496,6 +497,12 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
         record::TEXTURE_ARRAY => texture(TextureSampleType::float, TextureViewDimension::_2d_array),
         record::DEPTH => texture(TextureSampleType::depth, TextureViewDimension::_2d),
         record::TEXTURE_UNFILTERED => texture(TextureSampleType::unfilterable_float, TextureViewDimension::_2d),
+        record::TEXTURE_UINT_ARRAY => texture(TextureSampleType::uint, TextureViewDimension::_2d_array),
+        record::STORAGE_TEXTURE_RW => L::StorageTexture {
+            access: StorageTextureAccess::read_write,
+            format: TextureFormat::r32uint,
+            dimension: TextureViewDimension::_2d_array,
+        },
         _ => L::Sampler(SamplerBindingType::filtering),
     }
 }

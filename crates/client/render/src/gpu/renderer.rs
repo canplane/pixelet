@@ -17,8 +17,8 @@ use crate::frame::draw::{
     census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
     PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
-use crate::frame::screen_cells::SCREEN_CELLS_MAX;
-use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
+use crate::frame::screen_cells::RAY_WORDS;
+use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM, UNIFORM_DYNAMIC};
 use crate::frame::shader::record::{
     FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_FACE, SHADER_HEIGHTS, SHADER_START, SHADER_WAYS,
 };
@@ -113,8 +113,9 @@ pub struct FrameInput<'a> {
     /// The terrain's held tiles, whose cells the GPU draws whether or not
     /// an eye casts.
     pub ground: GroundSquares<'a>,
-    /// The eye's rays cast on the GPU into the lane the screen's cells draw;
-    /// none without an eye, and the lane holds no cells.
+    /// The eye's rays cast on the GPU into the world surface's rays the
+    /// screen pass draws, a drawn pixel each; none without an eye, and none
+    /// drawn.
     pub cast: Option<Cast<'a>>,
     pub billboards: &'a mut Sheet,
     pub text: TextOf,
@@ -154,18 +155,16 @@ pub struct GroundSquares<'a> {
     pub upload: &'a mut TerrainUpload,
 }
 
-/// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`): the
-/// eye, its lane's tangents, the terrain's tiles as the GPU holds them, and
-/// what is placed.
+/// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`), a ray
+/// a drawn pixel of the world surface: the eye, the terrain's tiles as the
+/// GPU holds them, and what is placed.
 pub struct Cast<'a> {
     /// The eye as seven vec4s (pxl-kernel view/lens.rs `gpu_cast`, scene/
-    /// cast.rs `eye`): its origin in Q3 steps, forward and the reach, right
-    /// and τ, up, the lane's cells across and up with the zooms a block is
-    /// asked at, and a preview's cut to air and its left-out leaf.
+    /// cast.rs `eye`): its origin in Q3 steps and whether a ray reports its
+    /// steps, forward and the reach, right and τ, up, the tangents of the
+    /// screen's half-angles with the zooms a block is asked at, and a
+    /// preview's cut to air and its left-out leaf.
     pub eye: [u32; CAST_EYE_WORDS],
-    /// Each column's tangent then each row's, where they live, unwritten
-    /// until the page replays the turn.
-    pub tangents: &'a [f32],
     /// Per window of the eye's, from the top's, a row a slot: the square it
     /// holds, X and Y, and whether it is present, and a spare.
     pub window: &'a [i32],
@@ -638,7 +637,7 @@ pub fn gpu_lost() {
 }
 
 pub fn surface_closed(s: Surface) {
-    for id in [s.depth_view, s.depth, s.world_view, s.world, s.world_depth_view, s.world_depth] {
+    for id in s.targets() {
         release(id);
     }
     let slot = handle_slot(s.handle) as usize;
@@ -730,29 +729,25 @@ impl DebugPass {
     }
 }
 
-/// The rays' cells, drawn straight to the screen where each pixel's ray
-/// meets the face its cell's ray met, painted by paint.wgsl's `paint`
-/// (frame/screen_cells.rs). The lane is written by the GPU's cast where it
-/// runs (`Cast`), else by the CPU's, uploaded from where it lives once a
-/// cast.
+/// The eye's rays, each drawn at its own pixel where it met a face, painted
+/// by paint.wgsl's `paint` (frame/screen_cells.rs), from the world surface's
+/// `rays` the GPU's cast leaves (`Cast`).
 struct ScreenCellsPass {
     built: Built,
+    /// Its group 0 over the lit pass's entries and what it binds besides
+    /// (`bound`, the surface's rays and the cast's eye): made again exactly
+    /// when one of them is another.
     group: u32,
+    bound: [u32; 2],
     /// The lit pass's entries it paints by (`Renderer::lit_entries`); none
     /// until the renderer hands them.
     lit: Vec<Entry>,
     sky_buffer: u32,
     looks: u32,
-    /// Where the eye is in the world, as `screen_cells.wgsl`'s `eye_at`.
-    eye_at: u32,
-    lane: u32,
-    /// Cells the lane holds past its header.
-    room: usize,
-    generation: u32,
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
     /// What this frame does with the cast, as `prepare` decided it: nothing
-    /// cast (`plain`), the ray lane standing (`standing`), or a cast run
+    /// cast (`plain`), the rays standing (`standing`), or a cast run
     /// (`cast`). `dispatch` and the frame's report read it.
     kind: FrameKind,
 }
@@ -792,7 +787,7 @@ struct GroundBuffers {
     ways_group: u32,
 }
 
-/// What the GPU's cast reads and the lane it writes.
+/// What the GPU's cast reads; it writes the world surface's rays.
 struct CastBuffers {
     built: Built,
     /// Where its rays start, asked before it (`start_cs`), and its blocks'
@@ -803,17 +798,15 @@ struct CastBuffers {
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
     group: u32,
-    bound: [u32; 8],
+    bound: [u32; 7],
     eye: u32,
     window: u32,
     window_words: usize,
-    tangents: u32,
-    /// Tangents the buffer holds.
-    tangent_room: usize,
     shards: u32,
     /// Shards the buffer holds.
     shard_room: usize,
-    across: [u32; 2],
+    /// The drawn pixels it casts, a ray each: the world surface's.
+    size: [u32; 2],
     /// The overwrites' heap lane then their data lane, each `overwrite_room`
     /// words, the lanes' own room; the revision it holds, none at first.
     overwrites: u32,
@@ -821,14 +814,14 @@ struct CastBuffers {
     overwrite_revision: Option<u32>,
     grown: Grown,
     /// What the last cast read (`Read`), and whether this frame's is the
-    /// same: the lane and the decor grown over it stand, and nothing is
+    /// same: the rays and the decor grown over them stand, and nothing is
     /// cast.
     read: Read,
 }
 
 /// A stage's whole input as it last read it, byte for byte: what the stage
 /// makes is one function of it, so a frame that reads the same stands on
-/// what it made — the cast's lane and the decor grown over it (stage 1),
+/// what it made — the cast's rays and the decor grown over them (stage 1),
 /// the world image (stage 2). Each lane is read with its length, so no two
 /// sets read alike; what changed without words to read is marked so.
 #[derive(Default)]
@@ -878,7 +871,7 @@ impl Read {
         same
     }
 
-    /// The lane no longer holds what was read: the next frame casts.
+    /// The rays no longer hold what was read: the next frame casts.
     pub(crate) fn forget(&mut self) {
         self.bytes.clear();
     }
@@ -887,10 +880,30 @@ impl Read {
 /// A square on the GPU, in bytes.
 const SQUARE_BYTES: u32 = SQUARE_WORDS * 4;
 
-/// The cast's group 0: the eye, the window, the tiles' frames, the lane it
-/// writes, the lane's tangents, the served shards and the overwrites.
-const CAST_GROUP: [u32; 24] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE_RW,
+/// The cast's group 0: the eye, the window, the tiles' frames, the rays it
+/// writes, the served shards, the overwrites and where its rays start.
+const CAST_GROUP: [u32; 21] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    1,
+    COMPUTE,
+    STORAGE,
+    2,
+    COMPUTE,
+    STORAGE,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    5,
+    COMPUTE,
+    STORAGE,
+    6,
+    COMPUTE,
+    STORAGE,
+    7,
+    COMPUTE,
+    STORAGE_RW,
 ];
 
 /// `heights_cs`'s group 0: the fresh frames and the frames it writes the
@@ -911,58 +924,40 @@ impl ScreenCellsPass {
         let words = look_words();
         let looks = g.buffer(word_bytes(2 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(looks, 0, bytes(&words));
-        let eye_at = g.buffer(word_bytes(8), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let mut p = ScreenCellsPass {
+        ScreenCellsPass {
             built,
             group: 0,
+            bound: [0; 2],
             lit: Vec::new(),
             sky_buffer,
             looks,
-            eye_at,
-            lane: 0,
-            room: 0,
-            generation: 0,
             ground: None,
             cast: None,
             kind: FrameKind::plain,
-        };
-        p.fit(g, SCREEN_CELLS_MAX);
-        p
-    }
-
-    /// A lane of at least `cells`, its groups made again over it.
-    fn fit(&mut self, g: &Gpu, cells: usize) {
-        if cells <= self.room {
-            return;
         }
-        if self.lane != 0 {
-            release(self.lane);
-        }
-        self.room = cells;
-        self.lane = g.buffer(word_bytes(4 * (1 + cells)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        self.regroup(g);
-        // A new lane holds no cast.
-        self.generation = 0;
     }
 
     /// The lit pass's entries, handed again whenever one of its objects is
-    /// made again.
-    fn lit(&mut self, g: &Gpu, entries: Vec<Entry>) {
+    /// made again: the group is made again over them when next drawn.
+    fn lit(&mut self, entries: Vec<Entry>) {
         self.lit = entries;
-        self.regroup(g);
+        self.bound = [0; 2];
     }
 
-    fn regroup(&mut self, g: &Gpu) {
-        if self.lit.is_empty() || self.lane == 0 {
+    /// The group over `bound`, the surface's rays and the cast's eye, made
+    /// again where either is another or the lit pass's entries were handed.
+    fn regroup(&mut self, g: &Gpu, bound: [u32; 2]) {
+        if bound == self.bound || self.lit.is_empty() {
             return;
         }
         release(self.group);
         let mut e = self.lit.clone();
-        e.push(buffer_entry(3, self.lane));
+        e.push(view_entry(3, bound[0]));
         e.push(buffer_entry(19, self.sky_buffer));
         e.push(buffer_entry(20, self.looks));
-        e.push(buffer_entry(21, self.eye_at));
+        e.push(buffer_entry(21, bound[1]));
         self.group = g.bind_group(self.built.layouts[0], &e);
+        self.bound = bound;
     }
 
     /// Each held tile the GPU does not yet hold handed to its frame, copied
@@ -1020,27 +1015,19 @@ impl ScreenCellsPass {
         gb.fresh_len = fresh;
     }
 
-    /// The lane for this frame: the GPU's cast where an eye casts, its eye
-    /// handed over first; else a lane of no cells.
-    fn prepare(&mut self, g: &Gpu, pipelines: &mut Pipelines, cast: Option<Cast>, meshes: &[u32; GROUPS as usize]) {
-        let s = stage_lane();
-        let steps = u32::from(s[STAGE_AT::RAY_STEPS] != 0.0);
-        // The eye's whole units wrap: a block's place is read off their low bits.
-        let eye: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::EYE + k]);
-        let whole = eye.map(|v| libm::floor(v) as i64 as u32);
-        let part = eye.map(|v| ((v - libm::floor(v)) as f32).to_bits());
-        g.write_buffer(self.eye_at, 0, bytes(&[whole[0], whole[1], whole[2], 0, part[0], part[1], part[2], 0]));
-        // No cast, no world: a lane of no cells, no ray cast into it and no
-        // decor grown. What the cast reads stands for the next: the ground
-        // it binds is made once.
+    /// The rays for this frame into the world surface's (`rays`, its view,
+    /// and its drawn pixels): the GPU's cast where an eye casts, its eye
+    /// handed over first.
+    fn prepare(&mut self, g: &Gpu, pipelines: &mut Pipelines, cast: Option<Cast>, meshes: &[u32; GROUPS as usize], rays: (u32, [u32; 2])) {
+        // No cast, no world: no ray cast, none drawn and no decor grown.
+        // What the cast reads stands for the next: the ground it binds is
+        // made once.
         let (Some(cast), Some(ground)) = (cast, self.ground.as_ref().map(|gb| gb.ground)) else {
             self.kind = FrameKind::plain;
             if let Some(c) = self.cast.as_mut() {
-                c.across = [0; 2];
                 c.grown.off();
                 c.read.forget();
             }
-            g.write_buffer(self.lane, 0, bytes(&[0u32, 0, steps, 0]));
             return;
         };
         if self.cast.is_none() {
@@ -1055,15 +1042,13 @@ impl ScreenCellsPass {
                 face_built,
                 starts: buffer(word_bytes(pxl_portable::cast::START_WORDS as usize), buffer_usage::STORAGE),
                 group: 0,
-                bound: [0; 8],
+                bound: [0; 7],
                 eye: buffer(word_bytes(CAST_EYE_WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
                 window: buffer(word_bytes(cast.window.len()), storage),
                 window_words: cast.window.len(),
-                tangents: 0,
-                tangent_room: 0,
                 shards: 0,
                 shard_room: 0,
-                across: [0; 2],
+                size: [0; 2],
                 overwrites: 0,
                 overwrite_room: 0,
                 overwrite_revision: None,
@@ -1078,7 +1063,6 @@ impl ScreenCellsPass {
         // read. The overwrites' contents are their revision's.
         let Cast {
             eye,
-            tangents,
             window,
             shards,
             overwrites: Overwrites { heap: _, data: _, room, revision },
@@ -1087,10 +1071,10 @@ impl ScreenCellsPass {
         let r = &mut c.read;
         r.begin();
         r.read(eye);
-        r.read(tangents);
         r.read(window);
         r.read(shards);
-        r.read(&[*room as u32, *revision, steps]);
+        // A surface made again holds no rays.
+        r.read(&[*room as u32, *revision, rays.0]);
         match decor {
             Some(DecorFrame { shown, params, placed, translation }) => {
                 r.read(shown);
@@ -1111,7 +1095,7 @@ impl ScreenCellsPass {
         xpute_kit::ensure!(cast.window.len() <= c.window_words, ENOTRECOVERABLE, cast.window.len());
         g.write_buffer(c.window, 0, bytes(cast.window));
         g.write_buffer(c.eye, 0, bytes(&cast.eye));
-        c.across = [cast.eye[16], cast.eye[17]];
+        c.size = rays.1;
         let shards_grow = cast.shards.len() > c.shard_room;
         if shards_grow {
             if c.shards != 0 {
@@ -1121,15 +1105,6 @@ impl ScreenCellsPass {
             c.shards = g.buffer(word_bytes(4 * c.shard_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         }
         g.write_buffer(c.shards, 0, bytes(cast.shards));
-        let tangents_grow = cast.tangents.len() > c.tangent_room;
-        if tangents_grow {
-            if c.tangents != 0 {
-                release(c.tangents);
-            }
-            c.tangent_room = cast.tangents.len();
-            c.tangents = g.buffer(word_bytes(c.tangent_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        }
-        g.upload_buffer(c.tangents, 0, bytes(cast.tangents));
         // Sized by the lanes' own room, so it is made again only when they grow.
         let o = &cast.overwrites;
         let overwrites_grow = o.room != c.overwrite_room;
@@ -1146,10 +1121,7 @@ impl ScreenCellsPass {
             g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
             c.overwrite_revision = Some(o.revision);
         }
-        let cells = (c.across[0] * c.across[1]) as usize;
-        self.fit(g, cells);
-        let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
-        let bound = [c.eye, c.window, ground, self.lane, c.tangents, c.shards, c.overwrites, c.starts];
+        let bound = [c.eye, c.window, ground, rays.0, c.shards, c.overwrites, c.starts];
         if bound != c.bound {
             release(c.group);
             c.group = cast_group(g, &c.built, bound);
@@ -1157,7 +1129,8 @@ impl ScreenCellsPass {
         }
         let world = [c.eye, c.window, ground, c.shards, c.overwrites];
         c.grown.prepare(g, cast.decor, meshes, world);
-        g.write_buffer(self.lane, 0, bytes(&[c.across[0], c.across[1], steps, 0]));
+        let eye = c.eye;
+        self.regroup(g, [rays.0, eye]);
     }
 
     /// The columns of the frames this turn uploaded, their tops from their
@@ -1255,11 +1228,12 @@ impl ScreenCellsPass {
         }
     }
 
-    /// The GPU's cast into the lane, a ray a cell, where it runs; then the
-    /// decor the ground grows over the same world, a candidate a thread.
+    /// The GPU's cast into the surface's rays, a ray a drawn pixel, where it
+    /// runs; then the decor the ground grows over the same world, a
+    /// candidate a thread.
     fn dispatch(&self, g: &Gpu, encoder: u32, cast: &mut Stamp, faces: &mut Stamp) {
         let Some(c) = self.cast.as_ref().filter(|_| self.kind == FrameKind::cast) else { return };
-        let cells = [c.across[0].div_ceil(CAST_WORKGROUP), c.across[1].div_ceil(CAST_WORKGROUP)];
+        let cells = c.size.map(|n| n.div_ceil(CAST_WORKGROUP));
         let pass = g.compute_pass(encoder, cast.pass());
         g.set_bind_group(pass, 0, c.group, &[]);
         g.set_pipeline(pass, c.start_built.pipeline);
@@ -1281,8 +1255,11 @@ impl ScreenCellsPass {
         self.cast.as_ref().and_then(|c| c.grown.drawn())
     }
 
-    /// Returns the group 0 it leaves bound.
+    /// Returns the group 0 it leaves bound: none where no eye casts.
     fn draw(&self, g: &Gpu, pass: u32) -> u32 {
+        if self.kind == FrameKind::plain || self.group == 0 {
+            return 0;
+        }
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.group, &[]);
         g.draw(pass, 3, 1, 0, 0);
@@ -1298,10 +1275,19 @@ const BOUND_WORKGROUP: u32 = 8;
 const WAYS_WORKGROUP: u32 = 64;
 
 /// The cast's group 0 over `bound`: the eye, the window, the tiles' frames,
-/// the lane, its tangents, the served shards, the overwrites and where its
-/// rays start (`start_cs` writes it, `cast_cs` reads it).
-fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
-    let entries: [Entry; 8] = core::array::from_fn(|k| buffer_entry(k as u32, bound[k]));
+/// the surface's rays, the served shards, the overwrites and where its rays
+/// start (`start_cs` writes it, `cast_cs` reads it).
+fn cast_group(g: &Gpu, built: &Built, bound: [u32; 7]) -> u32 {
+    let [eye, window, ground, rays, shards, overwrites, starts] = bound;
+    let entries = [
+        buffer_entry(0, eye),
+        buffer_entry(1, window),
+        buffer_entry(2, ground),
+        view_entry(3, rays),
+        buffer_entry(5, shards),
+        buffer_entry(6, overwrites),
+        buffer_entry(7, starts),
+    ];
     g.bind_group(built.layouts[0], &entries)
 }
 
@@ -1464,7 +1450,7 @@ impl Renderer {
         e.push(buffer_entry(3, self.draws_buffer));
         self.bind_group = g.bind_group(self.ghost[0].layouts[0], &e);
         let lit = self.lit_entries(self.frame_buffer);
-        self.screen.lit(g, lit);
+        self.screen.lit(lit);
     }
 
     /// The occlusion map is a new object, so every lit pass's group 0 is remade.
@@ -1637,7 +1623,7 @@ impl Renderer {
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
         let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
-        self.screen.prepare(g, &mut self.pipelines, cast, &meshes);
+        self.screen.prepare(g, &mut self.pipelines, cast, &meshes, (world.rays_view, [world.width, world.height]));
         self.decor.prepare_grown(g, self.screen.grown());
         self.impostor.prepare_grown(g, self.screen.grown());
         self.prepare_cases(g, &draws, uniforms, input.cases);
@@ -1740,7 +1726,7 @@ impl Renderer {
         let skipped = !frame_commit();
         if skipped {
             REDRAW.set(true);
-            // Its cast and its image were dropped with it: the lane and the
+            // Its cast and its image were dropped with it: the rays and the
             // image hold older ones.
             if let Some(c) = self.screen.cast.as_mut() {
                 c.read.forget();
@@ -1886,19 +1872,23 @@ fn targets(g: &Gpu, s: &mut Surface) {
     }
     s.waited = 0;
     g.resize(s.handle, width, height);
-    for id in [s.depth_view, s.depth, s.world_view, s.world, s.world_depth_view, s.world_depth] {
+    for id in s.targets() {
         release(id);
     }
     let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
     s.depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
     s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
     // The world's alone draws over an image of it; a case draws straight.
-    (s.world, s.world_view, s.world_depth, s.world_depth_view) = (0, 0, 0, 0);
+    (s.world, s.world_view, s.world_depth, s.world_depth_view, s.rays, s.rays_view) = (0, 0, 0, 0, 0, 0);
     if s.role == surface_role::WORLD {
         s.world = g.texture(width, height, 1, g.canvas(), 1, usage);
         s.world_view = g.view(s.world, false, 0, 1, 0, 1);
         s.world_depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
         s.world_depth_view = g.view(s.world_depth, false, 0, 1, 0, 1);
+        // Written by the cast, read by the face bits and the screen pass.
+        let rays = texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING;
+        s.rays = g.texture(width, height, RAY_WORDS, Format::r32uint, 1, rays);
+        s.rays_view = g.view(s.rays, true, 0, 1, 0, RAY_WORDS);
     }
     s.width = width;
     s.height = height;

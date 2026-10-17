@@ -1,7 +1,7 @@
 // gpu-query-shader/lib.rs
 
-//! The cast's compute entry (`cast_cs`): each camera-grid cell's ray down
-//! the pyramid by pxl-portable's descent, the one the CPU's cast runs, over
+//! The cast's compute entry (`cast_cs`): each drawn pixel's ray down the
+//! pyramid by pxl-portable's descent, the one the CPU's cast runs, over
 //! the world as the GPU holds it; and the ground a held tile is drawn from,
 //! its cells' heights off the samples it was handed (`heights_cs`) and their
 //! bound's levels (`bound_cs`), which the CPU reads back; and the decor the
@@ -24,15 +24,16 @@ use pxl_portable::ways;
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
 use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
-use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
+use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::memory::{Scope, Semantics};
-use spirv_std::spirv;
+use spirv_std::{spirv, Image};
 
 /// The eye a cast is from (pxl-kernel view/lens.rs `gpu_cast`).
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Eye {
-    /// The Q3 position, and a pad.
+    /// The Q3 position, and whether a ray reports the nodes its descent
+    /// asked (`word`), not what it met.
     pub origin: IVec4,
     /// The unit forward, and the reach.
     pub forward_far: Vec4,
@@ -40,8 +41,12 @@ pub struct Eye {
     pub right_tau: Vec4,
     /// The unit up, and a pad.
     pub up: Vec4,
-    /// The cells across and up, and the zooms a block is asked at.
-    pub across_range: UVec4,
+    /// The tangents of the screen's half-angles across and up.
+    pub tan: Vec2,
+    /// The zooms a block is asked at. [naga] A vec2 of u32s, which naga's
+    /// SPIR-V reader looks for, and never makes, where it splits the layer
+    /// off an arrayed image's coordinate (`Rays`).
+    pub range: UVec2,
     /// A preview's cut to air and its left-out leaf: X, Y, Z and the zoom,
     /// -1 for none.
     pub carve: IVec4,
@@ -442,7 +447,7 @@ impl Grounds for Growing<'_> {
     }
 }
 
-/// The lane's cell for a ray: the value it stopped on, its kind (ground or
+/// A ray's words, a layer each of `Rays`: the value it stopped on, its kind (ground or
 /// placed) and the face it entered through, then how far as f32 bits, then
 /// the block's index's low bits, for `face_cs` to find the block by and
 /// write its face bits over, then the nodes its descent asked about; where
@@ -524,25 +529,20 @@ pub fn face_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] lane: &mut [UVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] tangents: &[f32],
+    #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
 ) {
-    let across = eye.across_range;
-    if id.x >= across.x || id.y >= across.y {
+    let size: UVec3 = rays.query_size();
+    if id.x >= size.x || id.y >= size.y {
         return;
     }
-    let i = (1 + id.y * across.x + id.x) as usize;
-    if i >= lane.len() {
-        return;
-    }
-    // SAFETY: just bounded by the lane's own length.
-    let w = unsafe { *lane.get_unchecked(i) };
+    let ray_word = |k: u32| rays.read(UVec3::new(id.x, id.y, k));
+    let w = UVec4::new(ray_word(0), ray_word(1), ray_word(2), ray_word(3));
     if (w.x >> 16) & 3 == 0 {
         return;
     }
-    let (ray, _) = eye_ray(eye, at(tangents, id.x), at(tangents, across.x + id.y));
+    let (ray, _) = pixel_ray(eye, id, size);
     let mut world = World {
         window,
         ground,
@@ -553,8 +553,8 @@ pub fn face_cs(
     let (axis, zoom) = (((w.x >> 18) & 7) / 2, (w.x >> 21) & 63);
     let c = hit_block(&ray, f32::from_bits(w.y), axis, zoom, w.z);
     let filled = world.about(zoom, c);
-    // SAFETY: as above.
-    unsafe { *lane.get_unchecked_mut(i) = UVec4::new(w.x, w.y, mask::mask(filled), w.w) };
+    // SAFETY: within the rays, just bounded by their size.
+    unsafe { rays.write(UVec3::new(id.x, id.y, 2), mask::mask(filled)) };
 }
 
 /// An `At` as `start_cs` hands it to `cast_cs` (pxl-portable
@@ -581,20 +581,33 @@ fn at_of(w: &[u32], k: u32) -> At {
     }
 }
 
-/// The ray through the middle of the view, and the zooms each distance asks.
+/// The ray at the tangents `tx` across and `ty` up from the optical axis,
+/// and the zooms each distance asks.
 fn eye_ray(eye: &Eye, tx: f32, ty: f32) -> (cast::Ray, Detail) {
     let v3 = |v: Vec4| [v.x, v.y, v.z];
     let direction = cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), tx, ty);
     let ray = cast::Ray::of([eye.origin.x, eye.origin.y, eye.origin.z], direction, eye.forward_far.w);
-    let across = eye.across_range;
     (
         ray,
         Detail {
             tau: eye.right_tau.w,
-            range: [across.z, across.w],
+            range: [eye.range.x, eye.range.y],
         },
     )
 }
+
+/// The ray through the middle of drawn pixel `p` of the `size` the rays
+/// are, row 0 at the top, as the screen pass forms it from its own pixel.
+fn pixel_ray(eye: &Eye, p: UVec3, size: UVec3) -> (cast::Ray, Detail) {
+    let ndc_x = (p.x as f32 + 0.5) / size.x as f32 * 2.0 - 1.0;
+    let ndc_y = 1.0 - (p.y as f32 + 0.5) / size.y as f32 * 2.0;
+    eye_ray(eye, ndc_x * eye.tan.x, ndc_y * eye.tan.y)
+}
+
+/// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
+/// pxl-render frame/screen_cells.rs): the cast writes them, the face bits
+/// write the third over.
+type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// The nodes over where every ray from the eye starts alike, asked once a
 /// frame (pxl-portable `cast::start`) for every ray of `cast_cs` to start
@@ -635,17 +648,16 @@ pub fn cast_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] lane: &mut [UVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] tangents: &[f32],
+    #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
 ) {
-    let across = eye.across_range;
-    if id.x >= across.x || id.y >= across.y {
+    let size: UVec3 = rays.query_size();
+    if id.x >= size.x || id.y >= size.y {
         return;
     }
-    let (ray, detail) = eye_ray(eye, at(tangents, id.x), at(tangents, across.x + id.y));
+    let (ray, detail) = pixel_ray(eye, id, size);
     let mut world = World {
         window,
         ground,
@@ -669,12 +681,13 @@ pub fn cast_cs(
         k += 1;
     }
     let met = cast::first_from(&mut world, &ray, detail, Until::Fills, from);
-    let steps = at(&*lane, 0).z != 0;
-    let w = word(&ray, met, steps);
-    let i = (1 + id.y * across.x + id.x) as usize;
-    if i < lane.len() {
-        // SAFETY: just bounded by the lane's own length.
-        unsafe { *lane.get_unchecked_mut(i) = w };
+    let w = word(&ray, met, eye.origin.w != 0);
+    // SAFETY: within the rays, just bounded by their size.
+    unsafe {
+        rays.write(UVec3::new(id.x, id.y, 0), w.x);
+        rays.write(UVec3::new(id.x, id.y, 1), w.y);
+        rays.write(UVec3::new(id.x, id.y, 2), w.z);
+        rays.write(UVec3::new(id.x, id.y, 3), w.w);
     }
 }
 
@@ -789,7 +802,7 @@ pub fn decor_cs(
     // as its heights' bound has it, then each decor where it stands.
     let detail = Detail {
         tau: eye.right_tau.w,
-        range: [eye.across_range.z, eye.across_range.w],
+        range: [eye.range.x, eye.range.y],
     };
     let origin = [eye.origin.x, eye.origin.y, eye.origin.z];
     let heights = ground::bound_of(world.world.level(cell, slot, window::LEVELS, [0, 0]));

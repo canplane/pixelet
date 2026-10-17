@@ -104,28 +104,6 @@ impl AoMode {
     }
 }
 
-/// How many of the eye's rays the GPU casts for the screen's cells.
-///
-///   cells — one a cell of the camera grid.
-///   half  — one every second CSS pixel each way.
-///   full  — one a CSS pixel, whatever the device draws it at.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum RayDensity {
-    cells = 0,
-    half = 1,
-    full = 2,
-}
-
-impl RayDensity {
-    pub const ALL: [RayDensity; 3] = [RayDensity::cells, RayDensity::half, RayDensity::full];
-
-    /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<RayDensity> {
-        RayDensity::ALL.get(index as usize).copied()
-    }
-}
-
 /// How a setting is held.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKind {
@@ -194,14 +172,12 @@ pub enum SettingKey {
     world_gizmo = 13,
     person = 14,
     pet = 15,
-    /// How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each.
-    rays = 16,
     /// Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl).
-    ray_steps = 17,
+    ray_steps = 16,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 18] = [
+    pub const ALL: [SettingKey; 17] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -218,7 +194,6 @@ impl SettingKey {
         SettingKey::world_gizmo,
         SettingKey::person,
         SettingKey::pet,
-        SettingKey::rays,
         SettingKey::ray_steps,
     ];
 
@@ -245,7 +220,6 @@ impl SettingKey {
             SettingKey::world_gizmo => SettingKind::Toggle,
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
-            SettingKey::rays => SettingKind::Choice,
             SettingKey::ray_steps => SettingKind::Toggle,
         }
     }
@@ -269,7 +243,6 @@ impl SettingKey {
             SettingKey::world_gizmo => "world_gizmo",
             SettingKey::person => "person",
             SettingKey::pet => "pet",
-            SettingKey::rays => "rays",
             SettingKey::ray_steps => "ray_steps",
         }
     }
@@ -280,14 +253,13 @@ impl SettingKey {
             SettingKey::camera_mode => &["orbit", "free"],
             SettingKey::orbit_obstacle => &["through", "stop", "climb"],
             SettingKey::ao => &["off", "corner", "screen"],
-            SettingKey::rays => &["cells", "half", "full"],
             _ => &[],
         }
     }
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::surface_follow | SettingKey::rays | SettingKey::ray_steps)
+        matches!(self, SettingKey::surface_follow | SettingKey::ray_steps)
     }
 
     /// A choice's option a development build only offers.
@@ -318,7 +290,6 @@ pub struct Settings {
     pub world_gizmo: bool,
     pub person: u8,
     pub pet: u8,
-    pub rays: RayDensity,
     pub ray_steps: bool,
 }
 
@@ -341,7 +312,6 @@ impl Settings {
         world_gizmo: false,
         person: 1,
         pet: 5,
-        rays: RayDensity::half,
         ray_steps: false,
     };
 
@@ -365,7 +335,6 @@ impl Settings {
             SettingKey::world_gizmo => self.world_gizmo as u32,
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
-            SettingKey::rays => self.rays as u32,
             SettingKey::ray_steps => self.ray_steps as u32,
         }
     }
@@ -404,10 +373,6 @@ impl Settings {
             SettingKey::pet => match u8::try_from(value) {
                 Ok(n) => self.pet = n,
                 Err(_) => return false,
-            },
-            SettingKey::rays => match RayDensity::of(value) {
-                Some(o) => self.rays = o,
-                None => return false,
             },
             SettingKey::ray_steps if value <= 1 => self.ray_steps = value == 1,
             _ => return false,

@@ -53,7 +53,10 @@ pub mod stream {
 /// its shader the pipeline enters, a vertex step and format, and a binding's
 /// kind (its stages are xpute's SHADER_STAGE) — TEXTURE_UNFILTERED a texture in a
 /// format no sampler
-/// filters (RGBA32F), read by textureLoad alone.
+/// filters (RGBA32F), read by textureLoad alone; TEXTURE_UINT_ARRAY a u32
+/// texture's layers, read by textureLoad; STORAGE_TEXTURE_RW an r32uint
+/// texture's layers read and written in place, the one format family WebGPU
+/// lets a shader do both to.
 pub mod record {
     pub const HEAD: u32 = 10;
     pub const TRIANGLES: u32 = 0;
@@ -86,6 +89,8 @@ pub mod record {
     pub const SAMPLER: u32 = 6;
     pub const TEXTURE_UNFILTERED: u32 = 8;
     pub const STORAGE_RW: u32 = 9;
+    pub const TEXTURE_UINT_ARRAY: u32 = 10;
+    pub const STORAGE_TEXTURE_RW: u32 = 11;
     pub const KEYS: &[&str] = &[
         "HEAD",
         "TRIANGLES",
@@ -118,5 +123,7 @@ pub mod record {
         "SAMPLER",
         "TEXTURE_UNFILTERED",
         "STORAGE_RW",
+        "TEXTURE_UINT_ARRAY",
+        "STORAGE_TEXTURE_RW",
     ];
 }
