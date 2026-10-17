@@ -22,7 +22,6 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use super::ray::Ray;
 use super::scatter::{grown_at, grown_of, Asked};
-use super::surface::Surfaces;
 use super::world::World;
 use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Meta};
@@ -53,25 +52,20 @@ pub(super) struct Strike<'a> {
 }
 
 impl<'a> World<'a> {
-    /// Whether the ground grows `i`, a candidate of `decor` standing on
-    /// `face`, as the frame drawing its cells draws it (pxl-portable
-    /// `grows`): its box void, the ground under it one it grows on, and no
+    /// Whether the ground grows `i`, a candidate of `decor` standing at the
+    /// leaves' cells, as the frame drawing them draws it (pxl-portable
+    /// `grows`): its box void, what is under it a look it grows on, and no
     /// placed decor claiming its room.
-    pub fn grows(&self, face: &Surfaces, decor: &Decor, i: &Instance) -> bool {
-        grown_of(i).is_some_and(|g| pxl_portable::scatter::grows(&mut Asked::new(self, face), decor.row, face.cell(), &g))
+    pub fn grows(&self, decor: &Decor, i: &Instance) -> bool {
+        grown_of(i).is_some_and(|g| pxl_portable::scatter::grows(&mut Asked::new(self), decor.row, GROUND.cell(), &g))
     }
 
     /// What the ground stands on the leaf `cell`, each decor's, handed to
-    /// `each` with the face it stands on until `each` says it has what it
-    /// wants: the leaf's ground, held, read for every decor.
-    /// Nothing where the windows do not hold the leaf's cells.
-    fn grown_in(&self, cell: [i64; 2], mut each: impl FnMut(&mut Surfaces, &Decor, Instance) -> bool) -> bool {
-        let node = (GROUND.cell_zoom(LEAF_ZOOM), cell);
-        self.surfaces(node, GROUND.grid_zoom(LEAF_ZOOM), |face| {
-            DECORS.iter().any(|decor| grown_at(&mut Asked::new(self, face), decor, cell).is_some_and(|i| each(face, decor, i)))
-        })
-        .exact()
-        .unwrap_or(false)
+    /// `each` until `each` says it has what it wants: each on its column's
+    /// footing (`World::footing`). Nothing where the world does not hold
+    /// the column.
+    fn grown_in(&self, cell: [i64; 2], mut each: impl FnMut(&Decor, Instance) -> bool) -> bool {
+        DECORS.iter().any(|decor| grown_at(&mut Asked::new(self), decor, cell).is_some_and(|i| each(decor, i)))
     }
 
     /// A placed decor whose box shares room with `space`.
@@ -106,8 +100,8 @@ impl<'a> World<'a> {
     /// A decor the ground grows on the leaves whose box shares room with `space`.
     pub fn grown_claim(&self, space: &Aabb) -> Option<Instance> {
         let mut met = None;
-        self.each_grown_over(space, |face, decor, i| {
-            met = Some(i).filter(|i| self.grows(face, decor, i));
+        self.each_grown_over(space, |decor, i| {
+            met = Some(i).filter(|i| self.grows(decor, i));
             met.is_some()
         });
         met
@@ -118,7 +112,7 @@ impl<'a> World<'a> {
     /// erase took away included.
     pub fn grown_over(&self, space: &Aabb) -> Vec<Instance> {
         let mut out = Vec::new();
-        self.each_grown_over(space, |_, _, i| {
+        self.each_grown_over(space, |_, i| {
             out.push(i);
             false
         });
@@ -126,12 +120,12 @@ impl<'a> World<'a> {
     }
 
     /// Until `each` says it has what it wants.
-    fn each_grown_over(&self, space: &Aabb, mut each: impl FnMut(&mut Surfaces, &Decor, Instance) -> bool) {
+    fn each_grown_over(&self, space: &Aabb, mut each: impl FnMut(&Decor, Instance) -> bool) {
         let (r, unit) = (reach(), units(GROUND.cell()));
         let cells = |k: usize| libm::floor((space.min[k] - r) / unit) as i64..libm::ceil(space.max[k] / unit) as i64;
         for y in cells(1) {
             for x in cells(0) {
-                if self.grown_in([x, y], |face, decor, i| claim(&i).is_some_and(|c| c.shares(*space)) && each(face, decor, i)) {
+                if self.grown_in([x, y], |decor, i| claim(&i).is_some_and(|c| c.shares(*space)) && each(decor, i)) {
                     return;
                 }
             }
@@ -143,7 +137,7 @@ impl<'a> World<'a> {
     pub fn grown(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
         let [x, y, z] = index_of(GROUND.cell(), at);
         let mut met = None;
-        self.grown_in([x, y], |_, d, i| {
+        self.grown_in([x, y], |d, i| {
             met = Some(i).filter(|i| d.value() == decor.value() && i.grown_in().is_some_and(|c| c[2] == z));
             met.is_some()
         });
@@ -244,8 +238,8 @@ impl<'a> World<'a> {
     }
 
     fn grown_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i64; 2]) {
-        self.grown_in(cell, |face, decor, i| {
-            if self.grows(face, decor, &i) {
+        self.grown_in(cell, |decor, i| {
+            if self.grows(decor, &i) {
                 meet(s, ray, i);
             }
             false

@@ -391,12 +391,21 @@ pub fn pose(decor: &Decor, c: &Candidate, mut way: impl FnMut([i32; 2]) -> bool)
         Orientation::random => draws.next_u32() >> 30,
         Orientation::along_transport => {
             let flip = draws.next_u32() >> 31;
+            // Each of the cells about it asked at one place, the four at a
+            // distance in turn — before, after, under, over — as a GPU
+            // inlines a call once a place it is called from.
             let (mut horizontal, mut vertical) = (0, 0);
-            let mut d = 1;
-            while d <= ALIGN_NEIGHBOR_RADIUS {
-                horizontal += u32::from(way([-d, 0])) + u32::from(way([d, 0]));
-                vertical += u32::from(way([0, -d])) + u32::from(way([0, d]));
-                d += 1;
+            let mut k = 0;
+            while k < 4 * ALIGN_NEIGHBOR_RADIUS {
+                let (d, side) = (k / 4 + 1, k % 4);
+                let along = if side % 2 == 0 { -d } else { d };
+                let vote = u32::from(way(if side < 2 { [along, 0] } else { [0, along] }));
+                if side < 2 {
+                    horizontal += vote;
+                } else {
+                    vertical += vote;
+                }
+                k += 1;
             }
             u32::from(horizontal > vertical) + 2 * flip
         }
@@ -441,9 +450,11 @@ pub trait Grounds: Lanes {
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
     /// reads them from a buffer, never a table it copies.
     fn rows(&self) -> &[Decor];
-    /// The ground's cell `g` at `cell`, as a grid reads it: its face's look
-    /// and its top, in blocks of `cell`; false where it has no ground.
-    fn face(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool);
+    /// The footing down column `g` at `cell` (`footing`), as this side
+    /// casts it: the value of the block it is, as `block` answers one, and
+    /// the block over it; false where nothing fills there or the world
+    /// lacks it.
+    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool);
     /// The node `c` of `zoom` with what its line from the root found: where
     /// a descent starts.
     fn start(&mut self, zoom: Zoom, c: [i32; 3]) -> Self::At;
@@ -471,20 +482,45 @@ pub struct Grown {
     pub at: [i32; 3],
 }
 
-/// Where candidate `c` of `decor` stands on the ground's cells at `cell`, as
-/// those cells draw it: on its cell's top, facing as its cells' looks vote
-/// (`pose`); false where its cell has no ground. Whether its footing holds
-/// there is `grows`'.
+/// The footing down column `g` at `cell`: the first block that fills on
+/// the world's one ray straight down the column's middle, at `cell`'s
+/// blocks alone, from the top of the world (`HEIGHT_BITS`) — where a walker
+/// stands (pxl-kernel query/support.rs `highest`), whichever layer holds
+/// it. Its block as `q` answers it, and the block over it, at `cell`;
+/// false where the ray meets none.
+pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> (Q::Block, i32, bool) {
+    use crate::cast::{first, Detail, Ends, Origin, Ray, Until};
+    let s = crate::FINEST_ZOOM - cell;
+    let mid = |v: i32| v.wrapping_shl(s).wrapping_add((1 << s) >> 1);
+    let top = ((1i32 << (crate::HEIGHT_BITS - 1)) << FRAC_W) - 1;
+    let o = Origin::of([mid(g[0]), mid(g[1]), top]);
+    let ray = Ray::new([0.0, 0.0, -1.0], (1u32 << crate::HEIGHT_BITS) as f32);
+    let met = first(q, &o, &ray, Detail { tau: 1.0, range: [cell, cell] }, Until::Fills);
+    (met.stop.block, met.stop.place.node(&o)[2] + 1, met.ends == Ends::Stop)
+}
+
+/// The value a block answer holds, without whether what is placed holds it
+/// (`PLACED_BLOCK`): a look reads the same whichever layer holds it.
+fn value(v: u32) -> u32 {
+    v & (PLACED_BLOCK - 1)
+}
+
+/// Where candidate `c` of `decor` stands at `cell`: on its column's footing
+/// (`footing`), facing as the blocks beside it at the footing's level vote
+/// (`pose`), each asked of the world's one query, whichever layer holds
+/// them; false where its column has none. Whether it grows there is
+/// `grows`'.
 pub fn stand(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate) -> (Grown, bool) {
     let s = LEAF_CELL - cell;
     let at = [c.cell[0] >> s, c.cell[1] >> s];
-    let (_, top, here) = q.face(cell, at);
+    let (_, top, here) = q.footing(cell, at);
     if !here {
         return (Grown { variant: 0, turn: 0, at: [0; 3] }, false);
     }
     let (variant, turn) = pose(decor, c, |[dx, dy]| {
-        let (look, _, here) = q.face(cell, [at[0] + dx, at[1] + dy]);
-        here && Ground::transports(look)
+        let b = [at[0] + dx, at[1] + dy, top - 1];
+        let from = q.start(cell, b);
+        Ground::transports(value(q.block(&from, cell, cell, b)))
     });
     let g = Grown {
         variant,
@@ -494,9 +530,9 @@ pub fn stand(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate) -> 
     (g, true)
 }
 
-/// Whether `decor` standing as `g` grows on the ground's cells at `cell`:
-/// every block of its box void and every one under its base ground it grows
-/// on, each asked of the world's one query at `cell` down from the node
+/// Whether `decor` standing as `g` grows at `cell`: every block of its box
+/// void and every one under its base a look it grows on, whichever layer
+/// holds it, each asked of the world's one query at `cell` down from the node
 /// holding them all, descended to once; air placed in it or under it no
 /// void; and no placed decor claims its room (`claimed`).
 pub fn grows(q: &mut impl Grounds, decor: &Decor, cell: Zoom, g: &Grown) -> bool {
@@ -521,7 +557,7 @@ pub fn grows(q: &mut impl Grounds, decor: &Decor, cell: Zoom, g: &Grown) -> bool
                 let c = [bx, by, bz];
                 let (at, from) = if held { (start, cell - k) } else { (q.start(cell, c), cell) };
                 let v = q.block(&at, from, cell, c);
-                let holds = if bz == lo[2] { v & PLACED_BLOCK == 0 && decor.allows(v) } else { v == sentinel::void as u32 };
+                let holds = if bz == lo[2] { decor.allows(value(v)) } else { v == sentinel::void as u32 };
                 if !holds {
                     return false;
                 }

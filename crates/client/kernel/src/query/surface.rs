@@ -3,16 +3,13 @@
 //! The ground's surface: a cell's top and the block its face is, read off
 //! the windows by the one reading of a column the GPU reads too
 //! (pxl-portable `window::ground`), the area's edge laid on it. What a
-//! policy over the ground — where something stands, where decor grows,
-//! which way it faces — reads, knowing no tile.
+//! policy over the ground — where a walker stands over it — reads, knowing
+//! no tile.
 
 use pxl_portable::area::Shard;
-use pxl_portable::index_at;
-use pxl_portable::window::{self, Found};
+use pxl_portable::window::Found;
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec::space::hierarchy::tree::Node;
-use pxl_spec::space::layer::lattice::GROUND;
 
 use super::world::World;
 use crate::layer::terrain::window::Windowed;
@@ -23,30 +20,6 @@ use crate::layer::{Answer, Query};
 pub struct Surface {
     pub top: f64,
     pub block: GroundId,
-}
-
-/// A node's ground at its tile's own cells, its own held, a ring past it
-/// read as it is: each cell read off the windows as it is asked
-/// (`ground`), off the square the node's own were found in (`place`),
-/// found anew only past it.
-pub struct Surfaces {
-    cell: Zoom,
-    owner: (Zoom, [i32; 2]),
-    place: Found,
-}
-
-impl Surfaces {
-    /// The cell `g` at its zoom, where it has ground: its face's look and
-    /// its top, in blocks.
-    pub fn ground(&self, g: [i64; 2]) -> Option<(GroundId, i32)> {
-        let (c, _) = window::ground(&Windowed, self.owner, self.place, self.cell, g.map(|v| v as i32));
-        c.grounded().then_some((c.look as GroundId, c.top))
-    }
-
-    /// Its cells' zoom.
-    pub(super) fn cell(&self) -> Zoom {
-        self.cell
-    }
 }
 
 impl World<'_> {
@@ -68,18 +41,5 @@ impl World<'_> {
                 block: col.look as GroundId,
             })
         })
-    }
-
-    /// The ground over the node `node` of grid cells at `cell`, at the
-    /// cells of the tile those cells read as, where the windows hold them
-    /// under the node; nothing where they do not. `f` reads it, a cell at
-    /// a time, a ring past the node too.
-    pub fn surfaces<R>(&self, node: Node<2>, cell: Zoom, f: impl FnOnce(&mut Surfaces) -> R) -> Answer<R> {
-        let own = GROUND.cell_zoom(GROUND.read_zoom(cell));
-        let owner = (node.0, node.1.map(|v| v as i32));
-        let read = window::held_to(own);
-        let first = [index_at(owner.0, owner.1[0], read), index_at(owner.0, owner.1[1], read)];
-        let place = window::found_at(&Windowed, read, first).0;
-        self.terrain.cells_held(&self.terrain.cursor(node, cell), node).map(|()| f(&mut Surfaces { cell: own, owner, place }))
     }
 }

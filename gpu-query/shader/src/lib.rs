@@ -313,9 +313,10 @@ impl Grounds for Growing<'_> {
         self.rows
     }
 
-    fn face(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
-        let c = ground::Held::cell(&mut self.world, Found::NONE, cell, [g[0], g[1], 0]);
-        (c.look, c.top, c.grounded())
+    /// The world's ray down the column (pxl-portable `scatter::footing`),
+    /// the cast's own descent.
+    fn footing(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
+        scatter::footing(&mut self.world, cell, g)
     }
 
     fn start(&mut self, zoom: u32, c: [i32; 3]) -> At {

@@ -25,7 +25,7 @@ mod world;
 
 pub use ray::{asked, Detail, Hit, Ray, Struck};
 pub use support::{over, under, walks};
-pub use surface::{Surface, Surfaces};
+pub use surface::Surface;
 pub use world::World;
 
 #[cfg(test)]

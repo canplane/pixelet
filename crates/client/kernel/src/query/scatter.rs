@@ -2,10 +2,11 @@
 
 //! How the ground grows decor on its own: never stored, a pure function of
 //! each decor's seed (the catalog's, spec/spec/block/decor.json) and the
-//! ground's face as the world answers it, so a cell grows the same wherever
-//! it is read. It reads no tile: where it may stand is the world's
-//! (`World::grows`), which way it faces and how high it stands its face's
-//! (`World::surfaces`).
+//! world as its one query answers it, so a cell grows the same wherever it
+//! is read and whichever layer holds what it stands on. It reads no tile:
+//! where it stands is its column's footing, the world's ray down it
+//! (`World::footing`), and which way it faces and whether it grows the
+//! world's blocks about it (pxl-portable `scatter::stand`, `grows`).
 
 use pxl_portable::overwrite;
 use pxl_portable::scatter::{self as portable, Grounds, Grown, PLACED_BLOCK};
@@ -16,27 +17,20 @@ use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use super::surface::Surfaces;
 use super::world::World;
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::store;
 
 /// The world as decor's growth asks it on the CPU (pxl-portable
-/// `Grounds`): the ground's cells off `face`, each read as it is asked, the
-/// world's one query, and what is placed.
+/// `Grounds`): the world's one query and its ray, and what is placed.
 pub(super) struct Asked<'a, 'w> {
     world: &'a World<'w>,
-    face: &'a Surfaces,
     lanes: store::Lanes<'a>,
 }
 
 impl<'a, 'w> Asked<'a, 'w> {
-    pub(super) fn new(world: &'a World<'w>, face: &'a Surfaces) -> Asked<'a, 'w> {
-        Asked {
-            world,
-            face,
-            lanes: world.objects.lanes(),
-        }
+    pub(super) fn new(world: &'a World<'w>) -> Asked<'a, 'w> {
+        Asked { world, lanes: world.objects.lanes() }
     }
 }
 
@@ -56,11 +50,9 @@ impl Grounds for Asked<'_, '_> {
         &pxl_portable::decor::DECORS
     }
 
-    /// Off `face`, whose cells are at `cell`; none past what it read.
-    fn face(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
-        debug_assert_eq!(cell, self.face.cell());
-        match self.face.ground(g.map(i64::from)) {
-            Some((look, top)) => (u32::from(look), top, true),
+    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
+        match self.world.footing(cell, g) {
+            Some((b, top)) => (value_of(b), top, true),
             None => (0, 0, false),
         }
     }
@@ -76,11 +68,17 @@ impl Grounds for Asked<'_, '_> {
             let s = zoom - z;
             at = self.world.child(&at, (0..3).map(|i| (((c[i] >> s) & 1) as usize) << i).sum());
         }
-        match self.world.drawn(&mut at).value().flatten() {
-            Some(Block::Ground(g)) => u32::from(g),
-            Some(Block::Placed(v)) => PLACED_BLOCK | v,
-            None => u32::from(sentinel::void),
-        }
+        value_of(self.world.drawn(&mut at).value().flatten())
+    }
+}
+
+/// A block as pxl-portable's growth reads one: void for none, the ground's
+/// value, or `PLACED_BLOCK` over what is placed.
+fn value_of(b: Option<Block>) -> u32 {
+    match b {
+        Some(Block::Ground(g)) => u32::from(g),
+        Some(Block::Placed(v)) => PLACED_BLOCK | v,
+        None => u32::from(sentinel::void),
     }
 }
 

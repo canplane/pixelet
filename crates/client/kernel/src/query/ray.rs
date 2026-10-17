@@ -101,10 +101,10 @@ pub struct Hit {
 /// answered.
 struct Walker<'w, 'a> {
     world: &'w World<'a>,
-    ray: &'w Ray,
     lack: Option<Tile>,
     answered: bool,
-    strike: Option<Strike<'a>>,
+    /// The decor struck along the ray, where the walk strikes any.
+    strike: Option<(&'w Ray, Strike<'a>)>,
 }
 
 /// The CPU's walk keeps every level, so it never asks a node again: its
@@ -139,8 +139,8 @@ impl<'a> Query for Walker<'_, 'a> {
         let (zoom, c) = at.node;
         let t0 = f64::from(t0);
         if zoom == GROUND.cell() {
-            if let Some(s) = self.strike.as_mut().filter(|s| t0 < s.held) {
-                self.world.strike_near(s, self.ray, [c[0], c[1]]);
+            if let Some((ray, s)) = self.strike.as_mut().filter(|(_, s)| t0 < s.held) {
+                self.world.strike_near(s, ray, [c[0], c[1]]);
             }
         }
         let answer = match self.world.node(at, asked) {
@@ -155,7 +155,7 @@ impl<'a> Query for Walker<'_, 'a> {
             Answer::Exact(i) => i,
         };
         self.answered = true;
-        let decor = zoom < GROUND.cell() && self.strike.as_ref().is_some_and(|s| t0 < s.held && self.world.may_strike(s, at.node, at.shard));
+        let decor = zoom < GROUND.cell() && self.strike.as_ref().is_some_and(|(_, s)| t0 < s.held && self.world.may_strike(s, at.node, at.shard));
         match answer {
             In::Empty if !decor => cast::In { kind: Kind::Block, block: None },
             In::Empty | In::Split => cast::In { kind: Kind::Split, block: None },
@@ -215,10 +215,9 @@ impl<'a> World<'a> {
     pub(super) fn along(&self, ray: &Ray, detail: Detail, until: Until, strike: Option<Strike<'a>>) -> (Answer<Option<Hit>>, Option<Strike<'a>>) {
         let mut walker = Walker {
             world: self,
-            ray,
             lack: None,
             answered: false,
-            strike,
+            strike: strike.map(|s| (ray, s)),
         };
         let o = ray.origin;
         let from = cast::Ray::new(ray.direction.map(|v| v as f32), ray.reach as f32);
@@ -230,7 +229,22 @@ impl<'a> World<'a> {
             (None, Some(l), true) => Answer::Coarser(None, l),
             (None, Some(l), false) => Answer::Nothing(l),
         };
-        (answer, walker.strike)
+        (answer, walker.strike.map(|(_, s)| s))
+    }
+
+    /// The footing down column `g` at `cell` (pxl-portable
+    /// `scatter::footing`): the block met and the block over it, where the
+    /// world holds the column as its tiles say; none where nothing fills or
+    /// a tile under the ray is lacked or only a coarser one stands in.
+    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<(Option<Block>, i32)> {
+        let mut walker = Walker {
+            world: self,
+            lack: None,
+            answered: false,
+            strike: None,
+        };
+        let (block, top, met) = pxl_portable::scatter::footing(&mut walker, cell, g);
+        (met && walker.lack.is_none()).then_some((block, top))
     }
 
     /// Where the descent stopped, in units: its node's box put back on the
