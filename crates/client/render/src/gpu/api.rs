@@ -220,7 +220,6 @@ struct Arriving {
     image: u32,
     texture: Id,
     word: Box<u32>,
-    _file: Vec<u8>,
 }
 
 static STATE: Global<Option<State>> = Global::new();
@@ -738,7 +737,9 @@ impl Gpu {
     /// lands, the first ask handing it to the device; none for good for a
     /// file whose size no header gives (pxl-spec `asset::image_size`),
     /// which the kernel does not hand.
-    pub fn image(&self, image: u32, file: &[u8]) -> Option<Id> {
+    /// The file's bytes are its asker's for as long as the image is wanted
+    /// (`renderer::Image`), so the host reads them where they lie.
+    pub fn image(&self, image: u32, file: &'static [u8]) -> Option<Id> {
         let images = &mut self.s().images;
         if let Some(k) = images.iter().position(|a| a.image == image) {
             return (*images[k].word & DONE != 0).then(|| images.swap_remove(k).texture);
@@ -746,9 +747,9 @@ impl Gpu {
         let (width, height) = pxl_spec::asset::image_size(file)?;
         let usage = TEXTURE_USAGE::TEXTURE_BINDING | TEXTURE_USAGE::COPY_SRC | TEXTURE_USAGE::COPY_DST | TEXTURE_USAGE::RENDER_ATTACHMENT;
         let texture = self.texture(width, height, 1, Format::rgba8unorm_srgb, 1, usage);
-        let (file, mut word) = (file.to_vec(), Box::new(0));
-        self.copy_image(texture, &file, &mut word, image & !DONE | 1);
-        self.s().images.push(Arriving { image, texture, word, _file: file });
+        let mut word = Box::new(0);
+        self.copy_image(texture, file, &mut word, image & !DONE | 1);
+        self.s().images.push(Arriving { image, texture, word });
         None
     }
 
