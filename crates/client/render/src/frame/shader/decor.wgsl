@@ -59,7 +59,7 @@ fn placed(v: VertexIn) -> Placed {
   var p: Placed;
   p.spin = lane(3u, i);
   let scale = lane(4u, i);
-  p.world = on_globe(place_up(v.position * scale, p.spin) + at + draw_translation());
+  p.world = place_up(v.position * scale, p.spin) + at + draw_translation();
   return p;
 }
 

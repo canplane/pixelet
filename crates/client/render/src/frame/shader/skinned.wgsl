@@ -56,7 +56,7 @@ fn skin_of(v: VertexIn) -> mat4x4f {
 // One function, so the depth passes place a vertex where the lit pass does.
 fn skinned_world(v: VertexIn, m: mat4x4f) -> vec3f {
   let p = (m * vec4f(v.position, 1.0)).xyz * draw_scale();
-  return on_globe(place_up(p, draw_rotation()) + draw_translation());
+  return place_up(p, draw_rotation()) + draw_translation();
 }
 
 @vertex

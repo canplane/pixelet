@@ -110,7 +110,7 @@ fn box_corner(k: u32, b: Box, place: vec3f) -> Corner {
   c.local = FACE_CORNER[c.face * 4u + FACE_TRIANGLES[k % 6u]];
   c.size = vec3f(b.size_xy, b.z.y);
   let position = vec3f(b.min_xy, b.z.x) + c.size * 0.5 + c.local * c.size;
-  c.world = on_globe(position + place);
+  c.world = position + place;
   return c;
 }
 

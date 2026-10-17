@@ -1492,8 +1492,8 @@ impl Renderer {
         // in f64 before they are narrowed.
         let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
         let eye = [0.0; 3];
-        // The globe places by offset from its anchor and height alone, so placing in
-        // the eye's frame matches the world less the eye.
+        // Nothing is placed on the planet: what is drawn stands where the eye's
+        // rays find it. The planet is the air's, its center under the anchor.
         let center: V3 = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_world[k]);
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];

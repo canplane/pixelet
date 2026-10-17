@@ -59,7 +59,7 @@ fn vs(v: VertexIn) -> VertexOut {
   let facing = select(vec3f(0.0, -1.0, 0.0), normalize(flat), dot(flat, flat) > 1e-8);
   let side = cross(up, facing);
   let local = side * (fit.x + corner.x * fit.z) * scale + up * (fit.y + corner.y * fit.z) * scale;
-  let world = on_globe(base + local);
+  let world = base + local;
   o.clip = frame_view_proj() * vec4f(world, 1.0);
   o.uv = vec2f(0.5 + 0.5 * corner.x, 0.5 - 0.5 * corner.y);
   o.normal = facing;

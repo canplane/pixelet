@@ -27,8 +27,8 @@ const SIDES = array<f32, 6>(-1.0, 1.0, -1.0, -1.0, 1.0, 1.0);
 
 @vertex
 fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec3f, @location(1) color: vec4f, @location(2) b: vec3f) -> VertexOut {
-  let ca = frame_view_proj() * vec4f(on_globe(a + draw_translation()), 1.0);
-  let cb = frame_view_proj() * vec4f(on_globe(b + draw_translation()), 1.0);
+  let ca = frame_view_proj() * vec4f(a + draw_translation(), 1.0);
+  let cb = frame_view_proj() * vec4f(b + draw_translation(), 1.0);
   let viewport = frame_viewport();
   let along = (cb.xy / max(cb.w, 1e-6) - ca.xy / max(ca.w, 1e-6)) * viewport;
   let dir = select(vec2f(1.0, 0.0), normalize(along), dot(along, along) > 1e-12);
@@ -43,7 +43,7 @@ fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec3f, @location(1) color:
 
 @vertex
 fn vs_depth(@location(0) p: vec3f) -> @builtin(position) vec4f {
-  return frame_view_proj() * vec4f(on_globe(p + draw_translation()), 1.0);
+  return frame_view_proj() * vec4f(p + draw_translation(), 1.0);
 }
 
 @fragment

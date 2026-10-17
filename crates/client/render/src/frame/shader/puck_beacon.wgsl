@@ -10,7 +10,7 @@ struct VertexOut {
 @vertex
 fn vs(@location(0) position: vec3f, @location(1) normal: vec3f) -> VertexOut {
   var o: VertexOut;
-  o.clip = frame_view_proj() * vec4f(on_globe(spin_z(position, draw_fourth()) + draw_translation()), 1.0);
+  o.clip = frame_view_proj() * vec4f(spin_z(position, draw_fourth()) + draw_translation(), 1.0);
   o.normal = spin_z(normal, draw_fourth());
   return o;
 }

@@ -149,22 +149,10 @@ pub fn source(kind: u32) -> &'static str {
             "place",
             "skinned"
         ),
-        SHADER_PUCK_ZONE => wgsl!("frame", "globe", "encode", "finish", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!(
-            "frame",
-            "globe",
-            "encode",
-            "finish",
-            "atmos_medium",
-            "atmos_bind",
-            "atmos_lut",
-            "atmos_eye_unit",
-            "place",
-            "puck",
-            "puck_beacon"
-        ),
-        SHADER_BADGE => wgsl!("frame", "globe", "encode", "badge", "badge_sprite"),
-        SHADER_BADGE_REGION => wgsl!("frame", "globe", "encode", "badge", "badge_region"),
+        SHADER_PUCK_ZONE => wgsl!("frame", "encode", "finish", "puck", "puck_zone"),
+        SHADER_PUCK_BEACON => wgsl!("frame", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "place", "puck", "puck_beacon"),
+        SHADER_BADGE => wgsl!("frame", "encode", "badge", "badge_sprite"),
+        SHADER_BADGE_REGION => wgsl!("frame", "encode", "badge", "badge_region"),
         SHADER_SKY => wgsl!(
             "frame",
             "globe",
@@ -183,7 +171,7 @@ pub fn source(kind: u32) -> &'static str {
             "sky_words",
             "sky"
         ),
-        SHADER_DEBUG => wgsl!("frame", "globe", "encode", "debug"),
+        SHADER_DEBUG => wgsl!("frame", "encode", "debug"),
         SHADER_SCREEN_CELLS => wgsl!(
             "frame",
             "globe",

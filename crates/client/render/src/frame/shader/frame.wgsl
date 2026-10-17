@@ -56,7 +56,3 @@ fn frame_planet() -> vec4f { return frame_words[15]; }
 fn frame_globe() -> vec4f { return frame_words[16]; }
 fn frame_up() -> vec3f { return frame_words[17].xyz; }
 fn frame_cell() -> f32 { return frame_words[17].w; }
-
-fn on_globe(p: vec3f) -> vec3f {
-  return on_globe_of(p, frame_planet(), frame_globe());
-}

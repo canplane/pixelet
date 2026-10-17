@@ -191,7 +191,6 @@ fn fs(v: VertexOut) -> FragOut {
   if (kind == 0u) {
     discard;
   }
-  let world = on_globe(h.at);
   let painted = drawn(c);
   let s = Surface(
     painted.rgb,
@@ -201,15 +200,15 @@ fn fs(v: VertexOut) -> FragOut {
     vec3f(h.side),
     h.side,
     c.z,
-    world,
+    h.at,
     uv,
     ddx,
     ddy,
     pixel,
     screen_open(v.clip.xy),
-    seen_from_eye(world),
+    seen_from_eye(h.at),
   );
-  let clip = frame_view_proj() * vec4f(world, 1.0);
+  let clip = frame_view_proj() * vec4f(h.at, 1.0);
   var o: FragOut;
   o.color = vec4f(finish(paint(s), v.clip.xy), 1.0);
   o.depth = clip.z / clip.w;
