@@ -113,18 +113,18 @@ pub const LINES_ENTRIES_AT: u32 = crate::ways::HEADER_WORDS + WAYS_BINS;
 pub const LINES_SEGMENTS_AT: u32 = LINES_ENTRIES_AT + WAYS_SQUARE_SEGMENTS.div_ceil(2);
 pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::ways::SEGMENT_WORDS as u32;
 
-/// The most runs a square's columns read as (`ways::run`): the most of the
-/// format-10 set (2026-10-16), measured with every tile at every zoom (z15's
-/// 4312; z14's most 2654); a tile past it fails its bake (pxl-spec
-/// bake/tile/terrain.rs `runs_fit`).
+/// The most runs a square's columns read as (`ways::runs`): the most of the
+/// format-12 set, measured with every tile at every zoom; a tile past it
+/// fails its bake (pxl-spec bake/tile/terrain.rs `runs_fit`).
 pub const RUNS_SQUARE: u32 = 4312;
 
 /// A square's ways as the descent reads them, written at fill (`ways_cs`)
 /// off its lines: each cell's first run, a word, cells row by row and one
 /// more after the last, so a cell's runs are its first to the next's — each
 /// cell's count until the fill sums them; then from `RUNS_RUN_AT` the runs
-/// (`ways::run_word`), cells in order and a cell's lowest first. Only cells
-/// a way writes in have any.
+/// (`ways::run_word`), cells in order and a cell's lowest first, each to the
+/// next's first block and a cell's last `NOTHING` on. Only cells a way
+/// writes in have any.
 pub const RUNS_RUN_AT: u32 = SQUARE_CELLS + 1;
 pub const RUNS_WORDS: u32 = RUNS_RUN_AT + RUNS_SQUARE;
 
@@ -339,18 +339,15 @@ pub fn ran(w: &impl Ran, near: &Found, zoom: Zoom, c: [i32; 2], z: i32, top: Zoo
     }
     let i = square_of(cell_at(zoom, f.from, c)).1;
     let (zr, to) = (z >> (zoom - f.from), w.ran(f.from, f.slot, i + 1));
-    let mut r = w.ran(f.from, f.slot, i);
+    let (mut r, mut value) = (w.ran(f.from, f.slot, i), crate::ways::NOTHING);
     while r < to {
-        let (lo, len, value) = crate::ways::run_of(w.ran(f.from, f.slot, RUNS_RUN_AT + r));
+        let (lo, v) = crate::ways::run_of(w.ran(f.from, f.slot, RUNS_RUN_AT + r));
         if zr < lo {
-            return crate::ways::NOTHING;
+            break;
         }
-        if zr < lo + len as i32 {
-            return value;
-        }
-        r += 1;
+        (value, r) = (v, r + 1);
     }
-    crate::ways::NOTHING
+    value
 }
 
 /// The ways' word of bin `b` of square `sq` whose runs are written
@@ -373,12 +370,13 @@ pub fn bin_word(sq: &impl Square, run: impl Fn(u32) -> u32, b: u32) -> i32 {
             let i = cell_index([x, y]);
             if i < SQUARE_CELLS {
                 let (mut r, to) = (run(i), run(i + 1));
-                while r < to {
-                    let (z, len, value) = crate::ways::run_of(run(RUNS_RUN_AT + r));
-                    let air = value & crate::ways::AIR_OF != 0;
-                    if inside || air {
+                while r + 1 < to {
+                    let (z, value) = crate::ways::run_of(run(RUNS_RUN_AT + r));
+                    let end = crate::ways::run_of(run(RUNS_RUN_AT + r + 1)).0;
+                    let air = value != crate::ways::NOTHING && value & crate::ways::AIR_OF != 0;
+                    if value != crate::ways::NOTHING && (inside || air) {
                         let d = if air { 1 } else { 0 };
-                        (lo, hi) = (lo.min((z - d) * s), hi.max((z + len as i32 + d) * s));
+                        (lo, hi) = (lo.min((z - d) * s), hi.max((end + d) * s));
                     }
                     r += 1;
                 }

@@ -17,8 +17,8 @@
 //! for tags, nothing a GPU lacks (`hypot`).
 
 use crate::cube::{sentinel, Ground};
-use crate::ground::blocks;
-use crate::{cells_of_m, Zoom, LEAF_CELL};
+use crate::lattice::GROUND;
+use crate::{cells_of_m, Zoom, LEAF_CELL, LEAF_ZOOM};
 
 /// Points are eighths of the tile's cell.
 pub const POINT_SCALE: f32 = 8.0;
@@ -73,6 +73,25 @@ fn length(v: [f32; 2]) -> f32 {
 /// to no cell (half to even, so half a cell is none), what a fold discards.
 pub fn vanishes(width: f32) -> bool {
     libm::rintf(width) == 0.0
+}
+
+/// The coarsest zoom a line's point is held at, off its weight: its
+/// effective area on its whole line (Visvalingam–Whyatt, as TopoJSON's
+/// presimplify and mapshaper weigh a point), in leaf cells². A zoom holds
+/// the points that weigh a cell of its own or more, so what a zoom keeps is
+/// a function of each point alone, the same in every tile holding it; a
+/// line's ends weigh without bound and are held at every zoom.
+pub fn coarsest(weight: f32) -> Zoom {
+    let mut z = LEAF_ZOOM;
+    while z > GROUND.top() && weight >= (1u32 << (2 * (LEAF_ZOOM - z + 1))) as f32 {
+        z -= 1;
+    }
+    z
+}
+
+/// Whether a point held from `coarsest` on is held at `zoom`.
+pub fn held_at(coarsest: Zoom, zoom: Zoom) -> bool {
+    zoom >= coarsest
 }
 
 /// Half a way's width, in whole cells.
@@ -478,15 +497,26 @@ pub fn fills(cell: Zoom, [lo, hi]: [i32; 2], z: i32) -> bool {
     2 * (hi.min((z + 1) * s) - lo.max(z * s)) > s
 }
 
-/// Whether the leaf cells `[lo, hi)` fill any block of the grid's zoom
-/// (`fills`): the first or the last they reach, or one between them whole.
-pub fn fills_any(cell: Zoom, [lo, hi]: [i32; 2]) -> bool {
+/// The blocks of the grid's zoom the leaf cells `[lo, hi)` fill (`fills`),
+/// `[first, last]`, first past last where none: every block between the
+/// first and the last they reach is filled whole, so only those two can
+/// fail, and a block finer than a leaf fills as its leaf does.
+pub fn filled(cell: Zoom, [lo, hi]: [i32; 2]) -> [i32; 2] {
     let d = LEAF_CELL as i32 - cell as i32;
     if lo >= hi {
-        return false;
+        return [1, 0];
     }
-    let (first, last) = if d > 0 { (lo >> d, (hi - 1) >> d) } else { (lo << -d, (hi - 1) << -d) };
-    last - first >= 2 || fills(cell, [lo, hi], first) || fills(cell, [lo, hi], last)
+    if d <= 0 {
+        return [lo << -d, (hi << -d) - 1];
+    }
+    let (first, last) = (lo >> d, (hi - 1) >> d);
+    [if fills(cell, [lo, hi], first) { first } else { first + 1 }, if fills(cell, [lo, hi], last) { last } else { last - 1 }]
+}
+
+/// Whether the leaf cells `[lo, hi)` fill any block of the grid's zoom.
+pub fn fills_any(cell: Zoom, run: [i32; 2]) -> bool {
+    let [first, last] = filled(cell, run);
+    first <= last
 }
 
 /// Whether a run is empty, as a pier none stands for is.
@@ -717,44 +747,51 @@ fn near(k: u32) -> [i32; 3] {
 }
 
 /// A run along z as a square holds it, a word: its first block, an `i16`,
-/// its length in blocks, a byte, and its value, a byte (`at`'s, its air
-/// `AIR_OF` over its way's look).
-pub fn run_word(lo: i32, len: u32, value: u32) -> u32 {
-    (lo as u32 & 0xffff) | (len & 0xff) << 16 | (value & 0xff) << 24
+/// and its value (`at`'s, its air `AIR_OF` over its way's look), `NOTHING`
+/// as `0xffff`. It holds to the next run's first block.
+pub fn run_word(lo: i32, value: u32) -> u32 {
+    (lo as u32 & 0xffff) | (value & 0xffff) << 16
 }
 
-/// A run's first block, its length and its value; a value of no way is
-/// `NOTHING`.
-pub fn run_of(w: u32) -> (i32, u32, u32) {
-    ((w << 16) as i32 >> 16, (w >> 16) & 0xff, w >> 24)
+/// A run's first block and its value; a value of no way is `NOTHING`.
+pub fn run_of(w: u32) -> (i32, u32) {
+    let value = w >> 16;
+    ((w << 16) as i32 >> 16, if value == 0xffff { NOTHING } else { value })
 }
 
-/// The blocks at `cell` a column's spans lie in, `[from, to]` with a block
-/// either side; false where it has none.
-pub fn rises(spans: &Spans, cell: Zoom) -> ([i32; 2], bool) {
-    let (mut lo, mut hi) = (i32::MAX, i32::MIN);
+/// The first block past `z` where one of a column's spans' blocks
+/// (`filled`) begins or ends, `i32::MAX` where none does.
+fn edge_after(spans: &Spans, cell: Zoom, z: i32) -> i32 {
+    let mut edge = i32::MAX;
     let mut k = 0;
     while k < spans.n as usize {
-        (lo, hi) = (lo.min(spans.run[k][0]), hi.max(spans.run[k][1]));
+        let [first, last] = filled(cell, spans.run[k]);
+        if first > z {
+            edge = edge.min(first);
+        }
+        if last >= z {
+            edge = edge.min(last + 1);
+        }
         k += 1;
     }
-    ([blocks(cell, lo as f32) - 2, blocks(cell, hi as f32) + 2], spans.n > 0)
+    edge
 }
 
-/// The run along z at `cell` of a column whose spans are `spans` from block
-/// `z`, to `to` at most: what the ways write there (`at`, `NOTHING` where
-/// none) and how many blocks from it hold the same, at most 255 — so a
-/// column's runs from the first block it `rises` to, each from the block
-/// after the last, are what a square holds of it (pxl-portable window.rs
-/// `RUNS_AT`).
-pub fn run(spans: &Spans, cell: Zoom, z: i32, to: i32) -> (u32, u32) {
-    let (mut value, mut len) = (NOTHING, 0);
-    while len < 255 && z + len as i32 <= to {
-        let v = at(spans, cell, z + len as i32);
-        if len > 0 && v != value {
-            break;
+/// A column's runs at `cell` as a square holds them (pxl-portable window.rs
+/// `RUNS_AT`): each block from which what the ways write (`at`) changes, as
+/// a run (`run_word`), lowest first, the last `NOTHING` on; the `k`-th to
+/// `put`, and how many. Between two edges of its spans' blocks (`filled`)
+/// the same spans fill every block, so `at` is read once a piece, never a
+/// block at a time: of `n` spans, at most `2n` runs.
+pub fn runs(spans: &Spans, cell: Zoom, mut put: impl FnMut(u32, u32)) -> u32 {
+    let (mut z, mut held, mut n) = (edge_after(spans, cell, i32::MIN), NOTHING, 0);
+    while z != i32::MAX {
+        let v = at(spans, cell, z);
+        if v != held {
+            put(n, run_word(z, v));
+            (held, n) = (v, n + 1);
         }
-        (value, len) = (v, len + 1);
+        z = edge_after(spans, cell, z);
     }
-    (value, len)
+    n
 }

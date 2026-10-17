@@ -158,23 +158,15 @@ impl window::Square for Filling<'_> {
 }
 
 /// Column `c` of the square at `base`, its spans off its lines read along z
-/// (pxl-portable `ways::column`, `ways::rises`, `ways::run`): its runs
-/// written from the `n`-th as `room` holds them, and how many it holds.
+/// (pxl-portable `ways::column`, `ways::runs`): its runs written from the
+/// `n`-th as `room` holds them, and how many it holds.
 fn fill_column(ground: &mut [u32], (base, cell, place): (u32, u32, [u32; 2]), c: [i32; 2], n: u32, room: u32) -> u32 {
     let spans = ways::column(&Filling { ground, base, cell, place }, c).0;
-    let ([mut z, to], any) = ways::rises(&spans, cell);
-    let mut k = n;
-    while any && z <= to {
-        let (value, len) = ways::run(&spans, cell, z, to);
-        if value != ways::NOTHING {
-            if k < room {
-                put(ground, base + RUNS_AT + RUNS_RUN_AT + k, ways::run_word(z, len, value));
-            }
-            k += 1;
+    ways::runs(&spans, cell, move |k, w| {
+        if n + k < room {
+            put(ground, base + RUNS_AT + RUNS_RUN_AT + n + k, w);
         }
-        z += len as i32;
-    }
-    k - n
+    })
 }
 
 /// The world as the GPU holds it (pxl-kernel scene/cast.rs fills it): the
@@ -636,7 +628,7 @@ pub fn bound_cs(
 
 /// The ways of the squares `fresh` names, one a `z`, a thread a column
 /// (`x`, cells row by row): each column's spans off the square's lines
-/// (pxl-portable `ways::column`) read along z as runs (`ways::run`) into
+/// (pxl-portable `ways::column`) read along z as runs (`ways::runs`) into
 /// its runs lane, cells in order, each cell's first in the table before
 /// them (`window::RUNS_AT`). Four dispatches, `pass.x` 0 to 3: each
 /// column counts its runs into its table word; one thread a square sums

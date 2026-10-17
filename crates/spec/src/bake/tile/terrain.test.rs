@@ -20,7 +20,7 @@ impl Rng {
 fn lines(rng: &mut Rng) -> Separation {
     let mut separation = separation::Builder::default();
     for _ in 0..3 {
-        let points: Vec<([f64; 2], i16)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16)).collect();
+        let points: Vec<([f64; 2], i16, u8)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16, rng.next() as u8)).collect();
         separation.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, separation::Form::of((rng.next() % 3) as u8), rng.next() as u8);
     }
     separation.finish()
@@ -62,9 +62,13 @@ fn the_formats_write_and_read_what_the_record_holds() {
     let terrain = encode(&tile).unwrap();
     assert_eq!(format!("{:016x}", fnv(&terrain)), v.s("terrain.fnv"), "the tile's bytes");
     assert_eq!(decode(&terrain).unwrap(), tile, "a tile reads back as it was written");
-    // On the CPU its lines.
+    // On the CPU its lines, but for what only a fold reads.
     let resident = decode_into(&terrain, room()).unwrap();
-    assert_eq!(resident.separation, tile.separation, "its lines");
+    let held = separation::Separation {
+        coarsest: Default::default(),
+        ..tile.separation.clone()
+    };
+    assert_eq!(resident.separation, held, "its lines");
     assert_eq!(resident.occupancy, tile.occupancy);
 }
 

@@ -145,14 +145,16 @@ impl Run {
 }
 
 /// A way at grade made to stand off it, a bridge's ramp or a tunnel's
-/// approach: a grade line at `points`.
-fn graded(way: &Way, points: Vec<[f64; 3]>) -> (Line, Drawn) {
+/// approach: a grade line at `points`, which ends where the way does at
+/// either end `ends` says (`coarsest`).
+fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2]) -> (Line, Drawn) {
     (
         Line {
             subtype: way.row.subtype.clone(),
             class: way.row.class.clone(),
             width_u: way_width(&way.row),
             form: Form::Approach,
+            coarsest: super::coarsest(&points, ends),
             points,
             clear: 0,
         },
@@ -960,6 +962,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                     .enumerate()
                     .map(|(k, p)| [p[0], p[1], round(f64::from(deck_y) + f64::from(ground - deck_y) * k as f64 / denom)])
                     .collect(),
+                [true, true],
             ));
         }
 
@@ -1277,7 +1280,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &FnvHashSet<PartId>, unit
                             [cells[k][0], cells[k][1], f64::from(t - drop)]
                         })
                         .collect();
-                    lines.push(graded(w, points));
+                    lines.push(graded(w, points, [from == 0, k == cells.len()]));
                 }
             }
             k += 1;
@@ -1415,13 +1418,16 @@ fn part_of(r: &Run, ys: &[i32], [a, b]: [usize; 2], clear: u8) -> (Line, Drawn) 
     keep.sort_by(|x, y| x.0.total_cmp(&y.0));
     keep.dedup_by(|x, y| x.0 == y.0);
     let fraction = |d: f64| r.piece.way.span[0] + d / r.piece.way.segment_length;
+    let points: Vec<[f64; 3]> = keep.iter().map(|(_, p, z)| [p[0], p[1], *z]).collect();
+    let last = r.at.len() - 1;
     (
         Line {
             subtype: r.piece.way.subtype.clone(),
             class: r.piece.way.class.clone(),
             width_u: r.width_u,
             form: r.piece.form,
-            points: keep.iter().map(|(_, p, z)| [p[0], p[1], *z]).collect(),
+            coarsest: super::coarsest(&points, [!(a == 0 && r.clipped[0]), !(b == last && r.clipped[1])]),
+            points,
             clear,
         },
         Drawn {

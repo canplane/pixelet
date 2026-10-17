@@ -10,7 +10,7 @@ const NOWHERE: Frame = Frame { corner: [0.0, 0.0], cell: 1.0 };
 
 fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Separation {
     let mut b = Builder::default();
-    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t)), (width_cells * POINT_SCALE) as u8, 3, Form::Bridge, 0);
+    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t, 0)), (width_cells * POINT_SCALE) as u8, 3, Form::Bridge, 0);
     b.finish()
 }
 
@@ -48,12 +48,12 @@ fn first_child(d: &Separation) -> [Option<&Separation>; 16] {
 fn a_line_is_kept_up_the_pyramid_by_its_width_alone() {
     // Two cells wide: one cell a zoom coarser, kept at its own width.
     let wide = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 2.0);
-    let up = fold_separation(first_child(&wide));
+    let up = fold_separation(first_child(&wide), 14);
     assert_eq!(up.len(), 1);
     assert_eq!(up.line(0).width_cells(), 1.0);
     // Under a cell wide: under half the parent's, and gone, whatever it is.
     let narrow = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 0.75);
-    assert_eq!(fold_separation(first_child(&narrow)).len(), 0);
+    assert_eq!(fold_separation(first_child(&narrow), 14).len(), 0);
 }
 
 #[test]

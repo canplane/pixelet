@@ -167,28 +167,21 @@ fn square_cell(place: [u32; 2], i: u32) -> [u32; 2] {
 
 /// A square's ways as its fill writes them on a GPU (pxl-portable
 /// `ways_cs`), on the CPU: each column's spans off its lines
-/// (`ways::column`) read along z as runs (`ways::rises`, `ways::run`), into
-/// `out`, a square's runs lane (`window::RUNS_WORDS`), none past
-/// `RUNS_SQUARE`; the runs it reads as, and the most spans a column makes.
+/// (`ways::column`) read along z as runs (`ways::runs`), into `out`, a
+/// square's runs lane (`window::RUNS_WORDS`), none past `RUNS_SQUARE`; the
+/// runs it reads as, and the most spans a column makes.
 pub fn fill_runs(sq: &impl pxl_portable::window::Square, out: &mut [u32]) -> [u32; 2] {
     use pxl_portable::window::{RUNS_RUN_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS};
-    let cell = sq.cell();
     let (mut runs, mut most) = (0, 0);
     for i in 0..SQUARE_CELLS {
         out[i as usize] = runs;
         let (spans, fits) = pxl_portable::ways::column(sq, [(i % SQUARE) as i32, (i / SQUARE) as i32]);
         most = most.max(if fits { spans.n } else { u32::MAX });
-        let ([mut z, to], any) = pxl_portable::ways::rises(&spans, cell);
-        while any && z <= to {
-            let (value, len) = pxl_portable::ways::run(&spans, cell, z, to);
-            if value != pxl_portable::ways::NOTHING {
-                if runs < RUNS_SQUARE {
-                    out[(RUNS_RUN_AT + runs) as usize] = pxl_portable::ways::run_word(z, len, value);
-                }
-                runs += 1;
+        runs += pxl_portable::ways::runs(&spans, sq.cell(), |k, w| {
+            if runs + k < RUNS_SQUARE {
+                out[(RUNS_RUN_AT + runs + k) as usize] = w;
             }
-            z += len as i32;
-        }
+        });
     }
     out[SQUARE_CELLS as usize] = runs;
     [runs, most]
@@ -238,7 +231,13 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
     let mut kept = separation::Builder::default();
     for line in lines.iter() {
         let mut one = separation::Builder::default();
-        one.push((0..line.points.len()).map(|i| (line.point(i), line.tops[i])), line.width, line.kind, line.form, line.clear);
+        one.push(
+            (0..line.points.len()).map(|i| (line.point(i), line.tops[i], line.coarsest[i])),
+            line.width,
+            line.kind,
+            line.form,
+            line.clear,
+        );
         let one = one.finish();
         let [lo, hi] = line.bounds();
         let reach = line.footprint();
@@ -256,7 +255,13 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
             })
         });
         if seen {
-            kept.push((0..line.points.len()).map(|i| (line.point(i), line.tops[i])), line.width, line.kind, line.form, line.clear);
+            kept.push(
+                (0..line.points.len()).map(|i| (line.point(i), line.tops[i], line.coarsest[i])),
+                line.width,
+                line.kind,
+                line.form,
+                line.clear,
+            );
         }
     }
     TerrainTile { separation: kept.finish(), ..held }

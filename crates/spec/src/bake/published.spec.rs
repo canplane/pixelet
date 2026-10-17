@@ -13,7 +13,7 @@ pub struct Format {
 }
 
 pub const FORMAT: Format = Format {
-    terrain: 11,
+    terrain: 12,
     place: 10,
     division: 7,
     earth: 1,

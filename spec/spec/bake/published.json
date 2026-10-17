@@ -10,7 +10,7 @@
       "Bumped by a change to how the client reads a tile, or to what a",
       "tile guarantees it (a terrain tile its lines past its edge, 11)."
     ],
-    "terrain": 11,
+    "terrain": 12,
     "place": 10,
     "division": 7,
     "earth": 1

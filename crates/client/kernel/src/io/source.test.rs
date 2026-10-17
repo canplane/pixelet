@@ -8,7 +8,7 @@ fn tile(name: &str) -> Tile {
 
 const DECLARED: &str = r#"{
   "top_zoom": 4,
-  "format": { "terrain": 11, "place": 10, "division": 7, "earth": 1 },
+  "format": { "terrain": 12, "place": 10, "division": 7, "earth": 1 },
   "version": { "terrain": "v10.2026-10-09.1", "place": "v10.2026-10-09.1", "division": "v7.2026-10-09.1", "earth": "v1.2026-10-05.1" },
   "shard": { "0103300": {}, "01033210": { "version": { "place": "v10.2026-10-12.1" } } }
 }"#;
@@ -34,12 +34,12 @@ fn a_source_serves_and_names_versions_by_its_shards() {
 fn a_declaration_the_client_cannot_follow_is_refused_whole() {
     for bad in [
         r#"{ "top_zoom": 4, "format": { "terrain": 7, "place": 10, "division": 7, "earth": 1 }, "version": { "terrain": "t", "place": "p", "division": "d", "earth": "e" }, "shard": {} }"#,
-        r#"{ "top_zoom": 4, "format": { "terrain": 11, "place": 10, "division": 7 }, "version": { "terrain": "t", "place": "p", "division": "d", "earth": "e" }, "shard": {} }"#,
-        r#"{ "top_zoom": 4, "format": { "terrain": 11, "place": 10, "division": 7, "earth": 1 }, "version": { "terrain": "a/b", "place": "p", "division": "d", "earth": "e" }, "shard": {} }"#,
-        r#"{ "top_zoom": 4, "format": { "terrain": 11, "place": 10, "division": 7, "earth": 1 }, "version": { "terrain": "t", "place": "p", "division": "d" }, "shard": {} }"#,
-        r#"{ "top_zoom": 4, "format": { "terrain": 11, "place": 10, "division": 7, "earth": 1 }, "version": { "terrain": "t", "place": "p", "division": "d", "earth": "e" }, "shard": { "010330012": {} } }"#,
-        r#"{ "top_zoom": 3, "format": { "terrain": 11, "place": 10, "division": 7, "earth": 1 }, "version": { "terrain": "t", "place": "p", "division": "d", "earth": "e" }, "shard": {} }"#,
-        r#"{ "top_zoom": 4, "format": { "terrain": 11, "place": 10, "division": 7, "earth": 1 }, "version": { "terrain": "t", "place": "p", "division": "d", "earth": "e" } }"#,
+        r#"{ "top_zoom": 4, "format": { "terrain": 12, "place": 10, "division": 7 }, "version": { "terrain": "t", "place": "p", "division": "d", "earth": "e" }, "shard": {} }"#,
+        r#"{ "top_zoom": 4, "format": { "terrain": 12, "place": 10, "division": 7, "earth": 1 }, "version": { "terrain": "a/b", "place": "p", "division": "d", "earth": "e" }, "shard": {} }"#,
+        r#"{ "top_zoom": 4, "format": { "terrain": 12, "place": 10, "division": 7, "earth": 1 }, "version": { "terrain": "t", "place": "p", "division": "d" }, "shard": {} }"#,
+        r#"{ "top_zoom": 4, "format": { "terrain": 12, "place": 10, "division": 7, "earth": 1 }, "version": { "terrain": "t", "place": "p", "division": "d", "earth": "e" }, "shard": { "010330012": {} } }"#,
+        r#"{ "top_zoom": 3, "format": { "terrain": 12, "place": 10, "division": 7, "earth": 1 }, "version": { "terrain": "t", "place": "p", "division": "d", "earth": "e" }, "shard": {} }"#,
+        r#"{ "top_zoom": 4, "format": { "terrain": 12, "place": 10, "division": 7, "earth": 1 }, "version": { "terrain": "t", "place": "p", "division": "d", "earth": "e" } }"#,
     ] {
         assert_eq!(parse(bad).map(|_| ()), None, "{bad}");
     }

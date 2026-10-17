@@ -155,7 +155,7 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
     let _g = serial();
     let leaf = top().children()[0];
     let mut separation = Builder::default();
-    separation.push([([0.0, 10.5], 10), ([40.0, 10.5], 10)], 4 * POINT_SCALE as u8, ground::residential_road, Form::Bridge, 0);
+    separation.push([([0.0, 10.5], 10, 0), ([40.0, 10.5], 10, 0)], 4 * POINT_SCALE as u8, ground::residential_road, Form::Bridge, 0);
     let void = drawn(
         vec![0; CELLS],
         Ground {
