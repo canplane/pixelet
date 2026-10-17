@@ -23,7 +23,7 @@ pub fn band(o: &Observation, tau: Tau, lattice: Lattice, top: Zoom, zoom: Zoom) 
     let from = if zoom == LEAF_ZOOM { 0.0 } else { tau.split_distance(lattice.grid_zoom(zoom)) };
     let coarser = lattice.grid_zoom(zoom - 1);
     let to = if zoom == top { split_distance(coarser) } else { tau.split_distance(coarser) };
-    (from <= o.far()).then_some((from, to))
+    (from <= o.reach).then_some((from, to))
 }
 
 /// The most of a lattice's tiles a zoom's demand spans along an axis:

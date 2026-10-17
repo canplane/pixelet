@@ -289,16 +289,12 @@ impl<L: Observed> Demand<L> {
     /// at the first fix the camera waits for that ground; and `pinned`, the
     /// tiles a reader that takes no coarser answer declares (`Base::PINNED`),
     /// as the destination is. A layer with a top of its own is observed out
-    /// to its own reach, unfogged.
+    /// to its own reach.
     pub fn step(&mut self, destination: Option<Tile>, pinned: &[Tile], tau: Tau) {
         // Nothing coarser than the layer's own top is drawn, whatever the source holds.
         let Some(top) = L::TOP.or(floor::top()).map(|t| t.max(L::LATTICE.top())) else { return };
         let o = observation().map(|o| match L::TOP {
-            Some(_) => Observation {
-                reach: L::reach(),
-                fog: f64::INFINITY,
-                ..o
-            },
+            Some(_) => Observation { reach: L::reach(), ..o },
             None => o,
         });
         if o.is_none() && destination.is_none() && pinned.is_empty() {

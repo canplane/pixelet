@@ -18,6 +18,3 @@ pub const CASE_LONG_SIDE_MAX: f64 = 256.0;
 
 pub const FOV: f64 = 50.0;
 pub const NEAR: f64 = 0.1;
-
-/// The far clip against the reach: past it, so ground at the reach is whole.
-pub const FAR_CLIP: f64 = 1.5;

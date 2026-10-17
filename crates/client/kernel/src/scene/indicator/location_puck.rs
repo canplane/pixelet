@@ -18,7 +18,6 @@ use crate::kernel;
 use crate::query::World;
 use crate::scene::frame::Frame;
 use crate::sched::edge::request_world_tick;
-use crate::view::reach::view_reach;
 use xpute_guest::global::Global;
 
 // A world-space footprint (4u), whatever the ground's cell; the .707 is a
@@ -293,10 +292,10 @@ impl LocationPuck {
             shown[0] += gap[0] * a;
             shown[1] += gap[1] * a;
         }
-        // Hidden past the fog's far edge, as three's puck was.
+        // Hidden past what the view reaches.
         let [x, y, z] = frame.world_of([p.center[0] + shown[0], p.center[1] + shown[1], p.center[2] + BEACON_Z_BIAS]);
         let c = frame.camera;
-        let ([dx, dy, dz], reach) = ([x - c[0], y - c[1], z - c[2]], view_reach());
+        let ([dx, dy, dz], reach) = ([x - c[0], y - c[1], z - c[2]], crate::view::observation::observation().map_or(0.0, |o| o.reach));
         p.visible = dx * dx + dy * dy + dz * dz < reach * reach;
         p.visible
     }

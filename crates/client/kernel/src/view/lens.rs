@@ -87,7 +87,7 @@ pub fn gpu_cast(o: &Observation, tau: Tau, steps: bool, eye: &mut [u32]) -> Opti
         w(f[0]),
         w(f[1]),
         w(f[2]),
-        w(o.far()),
+        w(o.reach),
         w(r[0]),
         w(r[1]),
         w(r[2]),

@@ -18,7 +18,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use crate::layer::residency::{floor, Lines};
 use crate::query::World;
 use crate::view::frame::pose::view;
-use crate::view::reach::{eye_height, reach_at};
+use crate::view::reach::eye_height;
 use pxl_spec::space::coord::zoom::Zoom;
 
 pub fn eye() -> Option<V3> {
@@ -39,7 +39,6 @@ pub fn observation() -> Option<Observation> {
         eye,
         frustum: Some(frustum_of_view()),
         reach: demand_reach(GROUND, top),
-        fog: reach_at(eye[2]),
         ground: eye[2] - height,
     })
 }
@@ -63,13 +62,13 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
         libm::hypot(libm::hypot(gap(x as f64 * side, o.eye[0]), gap(y as f64 * side, o.eye[1])), over)
     };
     let zoom = coarsest - CHUNK_STEPS;
-    let flat = (o.far() * o.far() - over * over).max(0.0).sqrt();
+    let flat = (o.reach * o.reach - over * over).max(0.0).sqrt();
     let mut stack: Vec<(Zoom, [i64; 2])> = squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)).collect();
     // Depth first, so each square's ground line steps from its neighbour's.
     let (world, mut lines) = (World::now(), Lines::default());
     while let Some((zoom, xy)) = stack.pop() {
         let (cell, d) = (zoom + CHUNK_STEPS, near(zoom, xy));
-        if d > o.far() {
+        if d > o.reach {
             continue;
         }
         if cell < GROUND.cell() && d < tau.split_distance(cell) {

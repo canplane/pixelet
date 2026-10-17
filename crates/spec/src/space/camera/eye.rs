@@ -46,8 +46,6 @@ pub struct Observation {
     pub frustum: Option<Frustum>,
     /// How far the layers' demand reaches: never past the top's `Lattice::demand_reach`.
     pub reach: f64,
-    /// How far the air lets the ground be seen.
-    pub fog: f64,
     /// The ground under the eye as last known; not part of what is required.
     pub ground: f64,
 }
@@ -60,11 +58,6 @@ pub struct Measure {
 }
 
 impl Observation {
-    /// Where nothing is observed past.
-    pub fn far(&self) -> f64 {
-        self.reach.min(self.fog)
-    }
-
     /// Where box `b` stands from the eye, where it is drawn: what is drawn
     /// stands where it is stored. An unbounded box is always seen.
     pub fn measure(&self, b: &Aabb) -> Measure {

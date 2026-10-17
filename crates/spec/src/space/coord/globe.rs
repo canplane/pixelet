@@ -12,11 +12,10 @@ use crate::space::coord::world::ROUND;
 pub const MERCATOR_RADIUS_KM: f64 = epsg4326::EARTH_RADIUS_M / 1000.0;
 pub const MERCATOR_RADIUS_U: f64 = ROUND / core::f64::consts::TAU;
 
-/// e^(y/R) = tan(π/4 + φ/2) and the latitude's sine and cosine, taken once a frame.
+/// e^(y/R) = tan(π/4 + φ/2) and the latitude's cosine, taken once a frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Globe {
     pub e0: f64,
-    pub sin_lat: f64,
     pub cos_lat: f64,
 }
 
@@ -24,7 +23,6 @@ impl Globe {
     pub fn at(lat: f64) -> Globe {
         Globe {
             e0: libm::tan(core::f64::consts::FRAC_PI_4 + lat / 2.0),
-            sin_lat: libm::sin(lat),
             cos_lat: libm::cos(lat),
         }
     }

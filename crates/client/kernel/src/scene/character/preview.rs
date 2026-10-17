@@ -17,7 +17,7 @@ use crate::sched::tick::TickContext;
 use xpute_guest::global::Global;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
-/// Past any terrain and the fog, so the world never draws it.
+/// Under the sea below the eye, past any terrain, so the world never draws it.
 const CASE_DEPTH_U: f64 = 100_000.0;
 
 struct Case {

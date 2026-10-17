@@ -50,7 +50,7 @@ impl<L: Base> Fallback for TopRing<L> {
 /// ground; none where the eye is over the edge.
 pub fn ring(o: &Observation) -> Option<f64> {
     let over = (o.eye[2] - o.ground).max(0.0);
-    (over < o.far()).then(|| (o.far() * o.far() - over * over).sqrt())
+    (over < o.reach).then(|| (o.reach * o.reach - over * over).sqrt())
 }
 
 pub type Floor<L> = TopRing<L>;

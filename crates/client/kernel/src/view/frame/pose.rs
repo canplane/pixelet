@@ -13,7 +13,6 @@ use pxl_spec::space::coord::world::nearest;
 
 use crate::param::FALLBACK_G4326;
 use crate::param::FOV;
-use crate::view::reach::{far_clip_at, near_clip_at};
 use pxl_spec::space::coord::globe::Globe;
 use xpute_guest::global::Global;
 
@@ -31,8 +30,6 @@ pub struct View {
     pub width: f64,
     pub height: f64,
     pub fov: f64,
-    pub near: f64,
-    pub far: f64,
 
     pub view_matrix: Mat4,
     pub inv_view_matrix: Mat4,
@@ -49,9 +46,6 @@ impl View {
             width: 1.0,
             height: 1.0,
             fov: crate::param::FOV,
-            near: crate::param::NEAR,
-            // Set with the camera; reversed depth takes an endless far until then.
-            far: f64::INFINITY,
             view_matrix: mat4::new(),
             inv_view_matrix: mat4::new(),
             proj: mat4::new(),
@@ -150,10 +144,9 @@ fn compose() {
     mat4::mul(&mut v.view_matrix, &at.rotation, &to_eye);
     let vm = v.view_matrix;
     mat4::invert(&mut v.inv_view_matrix, &vm);
-    let altitude = e[2];
-    v.near = near_clip_at(altitude);
-    v.far = far_clip_at(altitude);
-    mat4::perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near);
+    // Reversed depth in floats with the far plane at infinity: one near
+    // plane holds every height's precision.
+    mat4::perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, crate::param::NEAR);
     let proj = v.proj;
     mat4::mul(&mut v.world_view_proj, &proj, &vm);
     let lvp = v.world_view_proj;
