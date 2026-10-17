@@ -1,14 +1,12 @@
 // pxl-spec/space/coord/globe.rs
 
-//! The flat map laid back on the planet about the sea under the eye. Mercator is
-//! stretched and flat far from its center, so the ground stopped meeting the
-//! horizon and slid when zooming out. Each point is set on the sphere in the
-//! center's east-north-up frame, the identity near the center (as Mapbox's
-//! globe does). Near-latitude differences use half-angle sines or expm1,
-//! never a difference of cosines, so a unit keeps its unit.
+//! The planet the air is drawn about, at the latitude of the sea under the
+//! eye: its radius as the map is stretched there, and what the sky reads the
+//! planet's map past the terrain by (pxl-render frame/shader/globe.wgsl
+//! `off_globe_of`). What is drawn is flat, where the eye's rays find it:
+//! nothing is placed on the sphere.
 
 use crate::space::coord::adapter::epsg4326;
-use crate::space::coord::v3::V3;
 use crate::space::coord::world::ROUND;
 
 pub const MERCATOR_RADIUS_KM: f64 = epsg4326::EARTH_RADIUS_M / 1000.0;
@@ -31,30 +29,9 @@ impl Globe {
         }
     }
 
-    /// Stretched as the map is there, which makes the placement the identity at it.
+    /// Stretched as the map is there, so the sphere meets the flat map under
+    /// the eye.
     pub fn radius_u(&self) -> f64 {
         MERCATOR_RADIUS_U / self.cos_lat
     }
-
-    /// `d` is east and north in map units and up from the center's ground.
-    pub fn place(&self, d: V3) -> V3 {
-        let (e0, s0, c0) = (self.e0, self.sin_lat, self.cos_lat);
-        let r = self.radius_u();
-        let dl = d[0] / MERCATOR_RADIUS_U;
-        let ey = libm::expm1(d[1] / MERCATOR_RADIUS_U);
-        let e = e0 * (1.0 + ey);
-        // The gudermannian's half-angle form: 2·atan of the exponentials' difference
-        // over one plus their product.
-        let dphi = 2.0 * libm::atan(e0 * ey / (1.0 + e * e0));
-        let c = 2.0 * e / (1.0 + e * e);
-        let h = d[2] * c / c0;
-        let rr = r + h;
-        let (shl, shp) = (libm::sin(dl / 2.0), libm::sin(dphi / 2.0));
-        let haversine = shp * shp + c * c0 * shl * shl;
-        [rr * c * libm::sin(dl), rr * (libm::sin(dphi) + 2.0 * c * s0 * shl * shl), h - 2.0 * rr * haversine]
-    }
 }
-
-#[cfg(test)]
-#[path = "globe.test.rs"]
-mod test;

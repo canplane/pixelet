@@ -17,7 +17,6 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::layer::residency::{floor, Lines};
 use crate::query::World;
-use crate::view::frame::pose::globe;
 use crate::view::frame::pose::view;
 use crate::view::reach::{eye_height, reach_at};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -41,7 +40,6 @@ pub fn observation() -> Option<Observation> {
         frustum: Some(frustum_of_view()),
         reach: demand_reach(GROUND, top),
         fog: reach_at(eye[2]),
-        planet: globe().radius_u(),
         ground: eye[2] - height,
     })
 }

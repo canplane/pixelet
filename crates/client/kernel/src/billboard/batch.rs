@@ -22,7 +22,7 @@ pub struct BillboardBatch {
     pub tiebreak: Vec<f64>,
 
     // Filled by the selector, kept here so the pass has one allocation site.
-    /// Laid on the planet, in the root frame.
+    /// Where the eye's rays find it, in the root frame.
     pub world_x: Vec<f64>,
     pub world_y: Vec<f64>,
     pub world_z: Vec<f64>,

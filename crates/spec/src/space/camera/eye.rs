@@ -48,8 +48,6 @@ pub struct Observation {
     pub reach: f64,
     /// How far the air lets the ground be seen.
     pub fog: f64,
-    /// In units: ground `d` from the eye is drawn `d² / 2R` under where it is stored.
-    pub planet: f64,
     /// The ground under the eye as last known; not part of what is required.
     pub ground: f64,
 }
@@ -67,30 +65,27 @@ impl Observation {
         self.reach.min(self.fog)
     }
 
-    /// Where box `b` stands, measured `d² / 2R` deeper to account for the
-    /// planet's curvature. An unbounded box is always seen.
+    /// Where box `b` stands from the eye, where it is drawn: what is drawn
+    /// stands where it is stored. An unbounded box is always seen.
     pub fn measure(&self, b: &Aabb) -> Measure {
         let e = self.eye;
         let b = &nearest_box(b, e[0]);
-        let gap = |b: &Aabb, k: usize| (b.min[k] - e[k]).max(e[k] - b.max[k]).max(0.0);
-        let reach = |b: &Aabb, k: usize| (e[k] - b.min[k]).abs().max((b.max[k] - e[k]).abs());
-        let (along, reach_along) = (libm::hypot(gap(b, 0), gap(b, 1)), libm::hypot(reach(b, 0), reach(b, 1)));
-        let mut drawn = *b;
-        drawn.min[2] -= reach_along * reach_along / (2.0 * self.planet);
-        let seen = !drawn.bounded() || self.frustum.is_none_or(|f| f.sees_box(drawn.min, drawn.max));
+        let gap = |k: usize| (b.min[k] - e[k]).max(e[k] - b.max[k]).max(0.0);
+        let reach = |k: usize| (e[k] - b.min[k]).abs().max((b.max[k] - e[k]).abs());
+        let seen = !b.bounded() || self.frustum.is_none_or(|f| f.sees_box(b.min, b.max));
         Measure {
             seen,
-            near: libm::hypot(along, gap(&drawn, 2)),
-            far: libm::hypot(reach_along, reach(&drawn, 2)),
+            near: libm::hypot(libm::hypot(gap(0), gap(1)), gap(2)),
+            far: libm::hypot(libm::hypot(reach(0), reach(1)), reach(2)),
         }
     }
 
-    /// The box every point drawn within `radius` of the eye is stored in, curvature included.
+    /// The box every point drawn within `radius` of the eye is stored in.
     pub fn reach(&self, radius: f64) -> Aabb {
         let e = self.eye;
         Aabb {
             min: e.map(|c| c - radius),
-            max: [e[0] + radius, e[1] + radius, e[2] + radius + radius * radius / (2.0 * self.planet)],
+            max: e.map(|c| c + radius),
         }
     }
 }

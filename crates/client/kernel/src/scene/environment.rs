@@ -127,7 +127,7 @@ impl EnvironmentDraw {
         if self.first_ms.is_none() {
             return false;
         }
-        // Observed from the anchor, which the world is laid on the planet about.
+        // Observed from the anchor: the sun and moon over the sea under the eye.
         let [lon, lat, _] = anchor();
         let sun = sun_position(self.days, lat, lon);
         let moon = moon_position(self.days, lat, lon);
@@ -149,8 +149,8 @@ impl EnvironmentDraw {
         (self.sun, self.moon) = (along(self.from[0], sun), along(self.from[1], moon));
         // The stars start dark and fade in, the first frame included.
         self.stars = (self.stars + frame.delta_s * EASE_RATE).min(1.0);
-        // Height over the planet: the world is tangent to it at the camera center
-        // and the planet falls away under a camera standing off it.
+        // Height over the planet the air is drawn about, which meets the flat
+        // map under the eye and falls away under a camera standing off it.
         let km_per_u = km_per_u();
         let r = globe().radius_u();
         let over = v3::len(&[frame.camera[0], frame.camera[1], frame.camera[2] + r]) - r;

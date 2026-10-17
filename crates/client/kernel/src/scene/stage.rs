@@ -7,7 +7,7 @@
 use crate::laid;
 use crate::scene::frame::Frame;
 use crate::sched::tick::TickContext;
-use crate::view::frame::pose::{globe, view_resize};
+use crate::view::frame::pose::view_resize;
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
@@ -204,7 +204,6 @@ pub fn visible_step(ctx: &mut TickContext) {
         frustum: v.frustum.about(anchor),
         camera: v3::sub(&e, &anchor),
         delta_s: ctx.delta,
-        globe: Some(globe()),
     };
 
     let draw = laid().is_some_and(|k| {

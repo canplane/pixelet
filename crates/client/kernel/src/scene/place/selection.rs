@@ -9,8 +9,7 @@ use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3;
 
 use crate::billboard::batch::BillboardBatch;
-use crate::view::frame::pose::globe;
-use crate::view::frame::pose::{ndc_to_px, sea_under_eye, view};
+use crate::view::frame::pose::{ndc_to_px, view};
 
 /// A fraction of the distance, since the badge holds a constant screen size.
 /// Generous: one badge too many costs a sprite.
@@ -20,15 +19,11 @@ const ANCHOR_REACH: f64 = 0.08;
 pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>) {
     let v = view();
     let eye = v.at().eye;
-    let anchor = sea_under_eye();
 
     let mut n = 0usize;
-    let globe = globe();
     for i in 0..batch.count as usize {
-        // Placed on the planet once, as badge.wgsl does, and kept in the lanes.
-        let from = [batch.local_x[i] - anchor[0], batch.local_y[i] - anchor[1], batch.local_z[i] - anchor[2]];
-        let placed = globe.place(from);
-        let pos = v3::add(&anchor, &placed);
+        // Where the rays find it: the world's own point, nothing bent.
+        let pos = [batch.local_x[i], batch.local_y[i], batch.local_z[i]];
         let to = v3::sub(&pos, &eye);
         let dist2 = v3::dot(&to, &to);
         if !v.frustum.sees(pos, dist2.sqrt() * ANCHOR_REACH) {

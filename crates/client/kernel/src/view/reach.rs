@@ -17,7 +17,9 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 const HIGHEST_GROUND: f64 = 8.849 / MERCATOR_RADIUS_KM;
 
 /// From `altitude` over the datum, in units: to the horizon, and on past it as
-/// far as the highest ground stands over it.
+/// far as the highest ground stands over it. The air's horizon, the planet's
+/// one fact the observation keeps: how far the eye sees, never where anything
+/// is placed.
 pub fn reach_at(altitude: f64) -> f64 {
     let r = globe().radius_u();
     let horizon = |h: f64| (2.0 * r * h + h * h).sqrt();
