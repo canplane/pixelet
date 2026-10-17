@@ -513,21 +513,26 @@ pub fn gone(w: &impl Windows, shard: crate::area::Shard, node: (Zoom, [i32; 2]),
 /// the leaves a leaf's, stepped from `place`, with the area's edge laid on
 /// it (`area::edge`), `shard` what is known of the area at its own shard:
 /// none in a shard known `inside` the area, whose leaf cells about it are
-/// none of them gone; and where it is held.
+/// none of them gone; and where it is held. `place` is where the cells of
+/// `owner` were found: a column beside it is read off it where its cell lies
+/// in the square holding `owner`'s, as `ran` reads the columns about one
+/// (`step`), and found anew past it.
 pub fn ground(w: &impl Windows, (shard, owner): (crate::area::Shard, (Zoom, [i32; 2])), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
     let read = held_to(zoom);
     let g = cell_at(zoom, read, b);
+    let (q, o) = (square_of(g).0, square_of(cell_at(owner.0, read, owner.1)).0);
+    // Component-wise: a GPU has no array equality.
+    let place = if q[0] == o[0] && q[1] == o[1] { place } else { Found::NONE };
     let (word, h, f) = cell(w, place, read, g);
     let (look, h, fold) = crate::ground::read_cell(word, h, f.from());
     // The leaf cells about it read by their offset, each its look alone;
     // one in its own leaf cell's square off the window its cell was read at
     // (`step`), which is the leaves' wherever a ring is asked.
-    let own = square_of(g).0;
     let gone_at = |dx: i32, dy: i32| {
         let s = zoom - LEAF_CELL;
         let l = [wrap_index(LEAF_CELL, (b[0] >> s) + dx), (b[1] >> s) + dy];
-        let q = square_of(l).0;
-        let near = if q[0] == own[0] && q[1] == own[1] { f } else { Found::NONE };
+        let r = square_of(l).0;
+        let near = if r[0] == q[0] && r[1] == q[1] { f } else { Found::NONE };
         !shard.inside() && gone(w, shard, owner, near, l)
     };
     let cell = crate::ground::Cell {
