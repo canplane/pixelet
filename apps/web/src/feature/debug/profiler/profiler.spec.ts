@@ -179,32 +179,32 @@ export const SUMMARY = {
     phases: 26 as number,
     gpu_spans: 41 as number,
     kinds: 65 as number,
-    wakes: 73 as number,
-    heap_peak_delta_bytes: 76 as number,
-    census: 77 as number,
-    last: 97 as number,
-    WORDS: 210 as number,
+    wakes: 74 as number,
+    heap_peak_delta_bytes: 77 as number,
+    census: 78 as number,
+    last: 98 as number,
+    WORDS: 211 as number,
   },
   /** The interval in progress, which no frame turn has closed yet: its turns and their time, rise to fall. A settled view's turns are here, if any run. */
   open: {
-    AT: 215 as number,
+    AT: 216 as number,
     turns: 0 as number,
     busy_ms: 1 as number,
     WORDS: 2 as number,
   },
   tasks: {
-    AT: 217 as number,
+    AT: 218 as number,
     slots: 0 as number,
     WORDS: 125 as number,
   },
   counters: {
-    AT: 342 as number,
+    AT: 343 as number,
     sheet_repacks: 0 as number,
     sheet_uploads: 1 as number,
     WORDS: 2 as number,
   },
   sheet: {
-    AT: 344 as number,
+    AT: 345 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -213,7 +213,7 @@ export const SUMMARY = {
     WORDS: 5 as number,
   },
   fetch: {
-    AT: 349 as number,
+    AT: 350 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
@@ -221,7 +221,7 @@ export const SUMMARY = {
   },
   /** The largest of each since recording began, kept past the ring's minute. */
   peak: {
-    AT: 352 as number,
+    AT: 353 as number,
     present: 0 as number,
     interval_ms: 1 as number,
     busy_ms: 2 as number,
@@ -234,13 +234,13 @@ export const SUMMARY = {
     WORDS: 9 as number,
   },
   steps: {
-    AT: 361 as number,
+    AT: 362 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   quality: {
-    AT: 522 as number,
+    AT: 523 as number,
     frames_held: 0 as number,
     admitted: 1 as number,
     evicted: 2 as number,
@@ -248,7 +248,7 @@ export const SUMMARY = {
   },
   /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at. */
   view: {
-    AT: 525 as number,
+    AT: 526 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -265,7 +265,7 @@ export const SUMMARY = {
     cell_want: 13 as number,
     WORDS: 14 as number,
   },
-  WORDS: 539 as number,
+  WORDS: 540 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

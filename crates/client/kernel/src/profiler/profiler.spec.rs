@@ -302,11 +302,11 @@ pub mod SUMMARY {
         pub const phases: u32 = 26;
         pub const gpu_spans: u32 = 41;
         pub const kinds: u32 = 65;
-        pub const wakes: u32 = 73;
-        pub const heap_peak_delta_bytes: u32 = 76;
-        pub const census: u32 = 77;
-        pub const last: u32 = 97;
-        pub const WORDS: u32 = 210;
+        pub const wakes: u32 = 74;
+        pub const heap_peak_delta_bytes: u32 = 77;
+        pub const census: u32 = 78;
+        pub const last: u32 = 98;
+        pub const WORDS: u32 = 211;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -335,27 +335,27 @@ pub mod SUMMARY {
     }
     /// The interval in progress, which no frame turn has closed yet: its turns and their time, rise to fall. A settled view's turns are here, if any run.
     pub mod open {
-        pub const AT: u32 = 215;
+        pub const AT: u32 = 216;
         pub const turns: u32 = 0;
         pub const busy_ms: u32 = 1;
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "turns", "busy_ms", "WORDS"];
     }
     pub mod tasks {
-        pub const AT: u32 = 217;
+        pub const AT: u32 = 218;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 125;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 342;
+        pub const AT: u32 = 343;
         pub const sheet_repacks: u32 = 0;
         pub const sheet_uploads: u32 = 1;
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "sheet_repacks", "sheet_uploads", "WORDS"];
     }
     pub mod sheet {
-        pub const AT: u32 = 344;
+        pub const AT: u32 = 345;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -365,7 +365,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 349;
+        pub const AT: u32 = 350;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -374,7 +374,7 @@ pub mod SUMMARY {
     }
     /// The largest of each since recording began, kept past the ring's minute.
     pub mod peak {
-        pub const AT: u32 = 352;
+        pub const AT: u32 = 353;
         pub const present: u32 = 0;
         pub const interval_ms: u32 = 1;
         pub const busy_ms: u32 = 2;
@@ -400,14 +400,14 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 361;
+        pub const AT: u32 = 362;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 522;
+        pub const AT: u32 = 523;
         pub const frames_held: u32 = 0;
         pub const admitted: u32 = 1;
         pub const evicted: u32 = 2;
@@ -416,7 +416,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at.
     pub mod view {
-        pub const AT: u32 = 525;
+        pub const AT: u32 = 526;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -451,7 +451,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 539;
+    pub const WORDS: u32 = 540;
     pub const KEYS: &[&str] = &["rec", "frames", "open", "tasks", "counters", "sheet", "fetch", "peak", "steps", "quality", "view", "WORDS"];
 }
 

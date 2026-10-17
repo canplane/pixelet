@@ -832,6 +832,11 @@ impl Read {
         self.take(bytes(lane));
     }
 
+    /// Whether anything read so far differs from the last time.
+    pub(crate) fn moved(&self) -> bool {
+        !self.same
+    }
+
     /// What this frame changed of the stage's input that has no words, as
     /// an image come or a table drawn.
     pub(crate) fn mark(&mut self, changed: bool) {
@@ -1132,8 +1137,9 @@ impl ScreenCellsPass {
     /// up: ahead of the frame, as they outlive it, so no frame the window
     /// names is cast before its cells are written, even when the frame
     /// proper is dropped.
-    fn grids(&mut self, g: &Gpu, encoder: u32) {
-        let Some(c) = self.ground.as_mut().filter(|c| c.fresh_len != 0) else { return };
+    /// Whether it recorded any.
+    fn grids(&mut self, g: &Gpu, encoder: u32) -> bool {
+        let Some(c) = self.ground.as_mut().filter(|c| c.fresh_len != 0) else { return false };
         let pass = g.compute_pass(encoder);
         g.set_pipeline(pass, c.heights_built.pipeline);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
@@ -1154,6 +1160,7 @@ impl ScreenCellsPass {
             g.dispatch(pass, side, side, c.fresh_len);
         }
         g.end(pass);
+        true
     }
 
     /// The squares the grids wrote mapped back where the CPU looks them up,
@@ -1315,6 +1322,10 @@ pub struct Renderer {
     /// the frame's, the sky's and the stars' words, the air's, the image's
     /// own textures, and what came or was drawn again without words.
     world: Read,
+    /// What the frame draws from besides the world image, as last read: the
+    /// draws and the blocks they read, the badges' sheet, the clouds' words
+    /// and the cases. With the image's, the frame's whole input.
+    frame_read: Read,
     /// What lays the world image on a frame, and its group over the views
     /// it was made for.
     blit: Built,
@@ -1360,6 +1371,7 @@ impl Renderer {
             debug: DebugPass::new(g, &mut pipelines, frame_buffer),
             screen: ScreenCellsPass::new(g, &mut pipelines, sky_buffer),
             world: Read::default(),
+            frame_read: Read::default(),
             blit: pipelines.build(g, PIPELINE_BLIT, g.canvas()),
             blit_group: 0,
             blit_views: [0; 2],
@@ -1527,6 +1539,8 @@ impl Renderer {
     fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> (FrameKind, FrameStat) {
         let mut read = core::mem::take(&mut self.world);
         read.begin();
+        let mut rest = core::mem::take(&mut self.frame_read);
+        rest.begin();
         self.decor.set_models(input.decor);
         self.impostor.set_models(input.decor);
         for &(model, image) in input.skins {
@@ -1540,8 +1554,12 @@ impl Renderer {
         self.screen.hand(g, &mut self.pipelines, input.ground);
         let tiles = input.earth_tiles;
         read.mark(self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload));
-        self.badges.sync_sheet(g, &self.mips, input.billboards, input.text);
-        let (records, uniforms) = take_lists(Some(g), input.lists);
+        rest.mark(self.badges.sync_sheet(g, &self.mips, input.billboards, input.text));
+        let (records, uniforms, blocks_moved) = take_lists(Some(g), input.lists);
+        rest.mark(blocks_moved);
+        rest.read(records);
+        rest.read(uniforms);
+        rest.read(input.cases);
 
         targets(g, world);
         self.lay_out(g, world.width, world.height, input.environment);
@@ -1586,14 +1604,31 @@ impl Renderer {
         // What outlives the frame is drawn and submitted ahead of it: from here on
         // the frame only describes itself.
         let ahead = g.encoder();
-        read.mark(self.impostor.bake(g, ahead, &mut self.decor, b));
-        self.screen.grids(g, ahead);
-        read.mark(self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR]));
-        g.submit(ahead);
+        let baked = self.impostor.bake(g, ahead, &mut self.decor, b);
+        read.mark(baked);
+        let gridded = self.screen.grids(g, ahead);
+        let (tables, exposed) = self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR], read.moved());
+        read.mark(tables);
+        if baked || gridded || exposed {
+            g.submit(ahead);
+        } else {
+            release(ahead);
+        }
         self.atmosphere.read_back(g);
         self.screen.read_back(g);
         // The image stands where it read all as last time over a lane that stood.
         let still = read.end() && self.screen.kind != FrameKind::cast;
+        rest.read(self.clouds.words());
+        // The frame stands where the image does and the rest of what it
+        // draws from read as last time: nothing is drawn, nothing submitted,
+        // and the canvases keep the frame they show.
+        if still && rest.end() && !gridded {
+            self.world = read;
+            self.frame_read = rest;
+            let stat = self.stat(draws.records, world, (0.0, [0.0; GPU_SPAN_NAMES.len()]));
+            self.order = order;
+            return (FrameKind::stood, stat);
+        }
 
         // The frame proper changes nothing that outlives it, so one too large
         // for the stream is dropped whole and the screen keeps the last.
@@ -1667,8 +1702,11 @@ impl Renderer {
                 c.read.forget();
             }
             read.forget();
+            rest.forget();
         }
         self.world = read;
+        rest.end();
+        self.frame_read = rest;
         let kind = match (skipped, still) {
             (true, _) => FrameKind::dropped,
             (false, true) => FrameKind::still,
@@ -1858,7 +1896,9 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
 }
 
 /// Blocks listed with no device wait in the table for the next one.
-fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
+/// The draws and their uniforms, and whether a block was let go, made or
+/// rewritten.
+fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32], bool) {
     let b = blocks();
     // Frees first, so the table never holds a block beside its replacement.
     for &handle in lists.frees {
@@ -1870,5 +1910,6 @@ fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
     for r in lists.rewrites.as_chunks::<REWRITE_WORDS>().0 {
         b.rewrite(g, r[0], r[1], r[2], r[3]);
     }
-    (lists.draws, lists.uniforms)
+    let moved = !(lists.frees.is_empty() && lists.uploads.is_empty() && lists.rewrites.is_empty());
+    (lists.draws, lists.uniforms, moved)
 }

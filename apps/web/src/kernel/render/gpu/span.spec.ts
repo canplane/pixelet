@@ -8,4 +8,4 @@
 
 export const GPU_SPAN_NAMES = ["air", "prepass", "ao", "world", "overlay", "badges", "debug", "cases"] as const;
 
-export const FRAME_KINDS = ["none", "unready", "held", "dropped", "plain", "standing", "cast", "still"] as const;
+export const FRAME_KINDS = ["none", "unready", "held", "dropped", "plain", "standing", "cast", "still", "stood"] as const;

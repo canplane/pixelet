@@ -306,12 +306,13 @@ impl Atmosphere {
         g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
 
-    /// Whether a table the world reads was drawn again, past the exposure
-    /// texel, which is a function of the words and the tables. A light's view
-    /// is drawn again when its height or the eye's altitude has moved
-    /// (`moved`), and only while no slopes are on their way, which it writes;
-    /// it takes its light's slope as it is drawn.
-    pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
+    /// Whether a table the world reads was drawn again, and whether it
+    /// recorded anything. A light's view is drawn again when its height or
+    /// the eye's altitude has moved (`moved`), and only while no slopes are on
+    /// their way, which it writes; it takes its light's slope as it is drawn.
+    /// The exposure texel is a function of the words it reads and the tables,
+    /// so it is drawn where `words_moved` says the words did, or a table was.
+    pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp, words_moved: bool) -> (bool, bool) {
         let mut drew = !self.baked;
         if !self.baked {
             self.table(g, encoder, TRANSMITTANCE, stamp);
@@ -340,8 +341,11 @@ impl Atmosphere {
         if self.slopes_of.contains(&true) && free {
             g.copy_buffer(encoder, (self.slopes.0, 0), (self.slopes.1, 0), 8);
         }
-        self.table(g, encoder, EXPOSURE_TEXEL, stamp);
-        drew
+        let exposed = drew || words_moved;
+        if exposed {
+            self.table(g, encoder, EXPOSURE_TEXEL, stamp);
+        }
+        (drew, exposed)
     }
 
     /// The slopes the views just drawn took, mapped back once their encoder

@@ -267,12 +267,13 @@ impl BadgePass {
     }
 
     /// An entry whose text is not drawn yet is left for a later frame.
-    pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, sheet: &mut Sheet, text: TextOf) {
+    /// Whether the sheet changed: made again, or an entry drawn on it.
+    pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, sheet: &mut Sheet, text: TextOf) -> bool {
         let flush = sheet.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;
         if flush.whole {
             if flush.size == 0 {
-                return;
+                return false;
             }
             for id in [self.sheet_group, self.sheet_view, self.sheet] {
                 release(id);
@@ -290,7 +291,7 @@ impl BadgePass {
             self.sheet_group = g.bind_group(self.built.layouts[2], &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
         }
         if self.dirty.is_empty() || self.sheet == 0 {
-            return;
+            return flush.whole;
         }
         let encoder = g.encoder();
         let mut made = Vec::new();
@@ -325,6 +326,7 @@ impl BadgePass {
         if drawn {
             mips.build(g, self.sheet, self.levels, 0, 1);
         }
+        flush.whole || drawn
     }
 
     /// The regions' depth at the world's size, and each set's uniform and

@@ -48,7 +48,7 @@ impl GpuSpanName {
     }
 }
 
-pub const FRAME_KINDS: &[&str] = &["none", "unready", "held", "dropped", "plain", "standing", "cast", "still"];
+pub const FRAME_KINDS: &[&str] = &["none", "unready", "held", "dropped", "plain", "standing", "cast", "still", "stood"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FrameKind {
@@ -60,11 +60,12 @@ pub enum FrameKind {
     standing = 5,
     cast = 6,
     still = 7,
+    stood = 8,
 }
 
 impl FrameKind {
     /// Every member, in the JSON's own order.
-    pub const ALL: [FrameKind; 8] = [
+    pub const ALL: [FrameKind; 9] = [
         FrameKind::none,
         FrameKind::unready,
         FrameKind::held,
@@ -73,6 +74,7 @@ impl FrameKind {
         FrameKind::standing,
         FrameKind::cast,
         FrameKind::still,
+        FrameKind::stood,
     ];
 
     /// The member a number names, or none for a number the set does not

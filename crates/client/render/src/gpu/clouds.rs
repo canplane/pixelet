@@ -83,6 +83,11 @@ impl CloudPass {
     }
 
     /// The sheets, over the world's pass.
+    /// The words its pass reads, as `lay_out` wrote them.
+    pub fn words(&self) -> &[f32] {
+        &self.words
+    }
+
     pub fn draw(&self, g: &Gpu, pass: u32) {
         if self.words[SHOWN] <= 0.0 {
             return;
