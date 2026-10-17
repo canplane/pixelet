@@ -469,6 +469,7 @@ fn vertex_format(code: u32) -> VertexFormat {
         record::F32X4 => VertexFormat::float32x4,
         record::U32X4 => VertexFormat::uint32x4,
         record::U32X2 => VertexFormat::uint32x2,
+        record::U32 => VertexFormat::uint32,
         _ => xpute_kit::bug!(EINVAL, code),
     }
 }

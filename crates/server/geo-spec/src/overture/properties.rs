@@ -8,4 +8,3 @@ pub const CATEGORY_SQL: &str = "properties->>'basic_category'";
 pub fn category_of(properties: &serde_json::Value) -> String {
     properties.get("basic_category").and_then(|c| c.as_str()).unwrap_or("").to_string()
 }
-

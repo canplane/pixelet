@@ -31,7 +31,7 @@ pub mod surface_role {
 /// word, then each span's begin and end ticks (gpu/api.rs lays them out and
 /// holds this number to it).
 pub mod stream {
-    pub const HEAD: u32 = 81;
+    pub const HEAD: u32 = 77;
     /// The range's size: the stream, what one turn may send the device, then at
     /// its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an
     /// empty one of. A product number, said rather than derived: a turn's uploads
@@ -75,6 +75,7 @@ pub mod record {
     pub const VS_DEPTH: u32 = 1;
     pub const PER_VERTEX: u32 = 0;
     pub const PER_INSTANCE: u32 = 1;
+    pub const U32: u32 = 5;
     pub const U32X2: u32 = 6;
     pub const F32X2: u32 = 1;
     pub const F32X3: u32 = 2;
@@ -109,6 +110,7 @@ pub mod record {
         "VS_DEPTH",
         "PER_VERTEX",
         "PER_INSTANCE",
+        "U32",
         "U32X2",
         "F32X2",
         "F32X3",

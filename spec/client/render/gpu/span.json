@@ -14,8 +14,7 @@
     "debug",
     "cases",
     "fill",
-    "cast",
-    "face"
+    "cast"
   ],
   "FRAME_KINDS": [
     "none",

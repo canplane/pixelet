@@ -27,8 +27,6 @@ fn main() {
         }
         std::fs::write(out.join(name), shipped).expect("the stripped shader");
     }
-    // A block's face bits, from their one statement (pxl-portable mask.bits.rs).
-    std::fs::write(out.join("faces.wgsl"), MASK.iter().map(|(name, v)| format!("const {name}: u32 = {v}u;\n")).collect::<String>()).expect("the mask's shader");
     // A unit's zoom, a unit's fraction bits in Q3 and the ground's cell, from
     // pxl-portable, where the cast reads them: a ray is painted by its
     // block's zoom against these, its block placed off the eye's Q3 steps.
@@ -64,15 +62,7 @@ fn main() {
     assemble(&out);
     println!("cargo:rerun-if-changed=src/frame/shader");
     println!("cargo:rerun-if-changed=src/frame/shader/words.rs");
-    println!("cargo:rerun-if-changed=../../portable/src/mask.bits.rs");
 }
-
-macro_rules! bits {
-    ($($name:ident = $v:expr),* $(,)?) => {
-        const MASK: &[(&str, u32)] = &[$((stringify!($name), $v)),*];
-    };
-}
-include!("../../portable/src/mask.bits.rs");
 
 /// WGSL has no string literals, so `//` always starts a comment. Lines are never
 /// joined, so tokens cannot run together; block comments are left alone.

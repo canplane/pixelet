@@ -12,7 +12,6 @@ pub fn compute_entry(kind: u32) -> &'static str {
     match kind {
         SHADER_CAST => "cast_cs",
         SHADER_START => "start_cs",
-        SHADER_FACE => "face_cs",
         SHADER_JOINED => "joined_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHTS => "heights_cs",
@@ -66,10 +65,9 @@ pub const PIPELINES: u32 = 33;
 // buffers (count; stride, step, attribute count, (location, offset, format)
 // each); then bind groups (count; entry count, (binding, visibility, kind) each).
 pub use crate::gpu::api_spec::record::*;
-/// A binding's stages are xpute's own bits (SHADER_STAGE), none, one or both.
+/// A binding's stages are xpute's own bits (SHADER_STAGE), none or some.
 pub use xpute_gpu::spec::SHADER_STAGE::{COMPUTE, FRAGMENT, VERTEX};
 pub const NONE: u32 = 0;
-pub const BOTH: u32 = VERTEX | FRAGMENT;
 
 /// Each generated compute entry's group 0 and its workgroup as its WGSL
 /// declares them (build.rs `compute`): `CAST_GROUP`, `CAST_WORKGROUP` and
@@ -326,7 +324,7 @@ const BOX_LANES: [Lane; 2] = [
     Lane {
         stride: BOX_WORDS * 4,
         step: PER_INSTANCE,
-        attributes: &[[1, 16, U32X2]],
+        attributes: &[[1, 16, U32]],
     },
 ];
 const PUCK_ZONE_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];

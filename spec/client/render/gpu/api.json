@@ -23,7 +23,7 @@
       "word, then each span's begin and end ticks (gpu/api.rs lays them out and",
       "holds this number to it)."
     ],
-    "HEAD": 81,
+    "HEAD": 77,
     "BYTES": {
       "$value": 4194304,
       "$doc": [
@@ -76,6 +76,7 @@
     "VS_DEPTH": 1,
     "PER_VERTEX": 0,
     "PER_INSTANCE": 1,
+    "U32": 5,
     "U32X2": 6,
     "F32X2": 1,
     "F32X3": 2,

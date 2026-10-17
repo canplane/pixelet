@@ -4,21 +4,15 @@
 //! pixel and the screen pass reads them there (pxl-render
 //! frame/shader/screen_rays.wgsl), a layer of the world surface's rays a
 //! word: what it stopped on, through which face and at which zoom
-//! (`first_word`); how far, f32 bits; the block's face bits (`mask`), which
-//! the face pass writes over the block's index bits it finds the block by;
-//! the four looks a coarse ground block folds (`ground::word`), or in the
-//! steps view the nodes its descent asked; and where the stop's column is
-//! held (`window::Found`), which the face pass reads its block's
-//! neighbourhood off. Where it met nothing, the first
-//! three are zero.
+//! (`first_word`); how far, f32 bits; and the four looks a coarse ground
+//! block folds (`ground::word`), or in the steps view the nodes its descent
+//! asked. A block is painted from these, its own, alone. Where it met
+//! nothing, the first two are zero.
 
 use crate::Zoom;
 
 /// A ray's words.
-pub const WORDS: u32 = 5;
-
-/// The fifth word: where the stop's column is held (`window::Found`'s word).
-pub const PLACE: u32 = 4;
+pub const WORDS: u32 = 3;
 
 /// The first word's fields: the value, a ground look or a placed catalog
 /// value; what it met (`KIND_*`); the face it entered through, 2·axis plus

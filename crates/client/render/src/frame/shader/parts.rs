@@ -64,16 +64,13 @@ pub const SHADER_BLIT: u32 = 34;
 /// generated with the cast from pxl-portable's `cast::start`: its one
 /// compute entry.
 pub const SHADER_START: u32 = 35;
-/// The face bits of each block the cast found, over its rays, generated
-/// with the cast from pxl-portable's `mask`: its one compute entry.
-pub const SHADER_FACE: u32 = 36;
 /// Which eye slots' decor grows again this frame, listed for
 /// `SHADER_GROWN`'s dispatch: its one compute entry.
-pub const SHADER_GROWN_MARK: u32 = 37;
+pub const SHADER_GROWN_MARK: u32 = 36;
 /// The eye's windows folded over their squares, generated with the cast
 /// from pxl-portable's `window::fold`: its one compute entry.
-pub const SHADER_JOINED: u32 = 38;
-pub const SHADERS: u32 = 39;
+pub const SHADER_JOINED: u32 = 37;
+pub const SHADERS: u32 = 38;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -92,7 +89,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "shade",
         "finish",
         "ao_map",
-        "faces",
         "paint",
         "box",
     ],
@@ -269,7 +265,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "shade",
         "finish",
         "ao_map",
-        "faces",
         "lattice",
         "ray",
         "eye",
@@ -297,8 +292,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["blit"],
     // SHADER_START
     &["start.gen"],
-    // SHADER_FACE
-    &["face.gen"],
     // SHADER_GROWN_MARK
     &["decor_mark.gen"],
     // SHADER_JOINED

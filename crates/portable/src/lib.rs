@@ -21,7 +21,6 @@ pub mod eye;
 pub mod fill;
 pub mod ground;
 pub mod lattice;
-pub mod mask;
 pub mod placed;
 pub mod ray;
 pub mod scatter;

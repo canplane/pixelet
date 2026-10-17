@@ -26,5 +26,4 @@ impl Globe {
             cos_lat: libm::cos(lat),
         }
     }
-
 }

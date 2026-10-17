@@ -24,7 +24,7 @@ use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
 use pxl_portable::scatter::{self, drawn, Grounds, PLACED_BLOCK, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
-use pxl_portable::{at, mask, ray, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
+use pxl_portable::{at, ray, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::{spirv, Image};
@@ -151,53 +151,6 @@ impl Area for World<'_> {
     }
 }
 
-impl World<'_> {
-    /// Which of the blocks about the block `c` at `zoom` fill, as pxl-portable
-    /// `mask::filled` names them: a column at a time, each read once (its
-    /// cell), its three blocks decided on values as the cast decides a block
-    /// (`Query::node`): what is placed asked of each, else the ground's
-    /// block, the caves only where one may open it (`Cell::opens`), then
-    /// what the ways write over it (`window::ways_over`), so a face is
-    /// shaded by the world it was stopped in.
-    ///
-    /// `place` is the cast's at its stop (`ray::PLACE`): where the block's
-    /// own column was held, which every column in its square is read off and
-    /// none searched for anew (`window::ground`). A column past the area is
-    /// the Earth's, as its cell reads (`area::laid`).
-    fn about(&mut self, zoom: u32, c: [i32; 3], place: Found) -> u32 {
-        let (carve, hide) = (cut(self.eye.carve), cut(self.eye.hide));
-        let own = (zoom, [c[0], c[1]]);
-        let mut filled = 0;
-        let mut k = 0;
-        while k < 9 {
-            let n = [wrap_index(zoom, c[0] + (k % 3) as i32 - 1), c[1] + (k / 3) as i32 - 1];
-            let (cell, found) = window::ground(self, own, place, zoom, n);
-            let mut dz = 0;
-            while dz < 3 {
-                let (bit, b) = (1 << (dz * 9 + k), [n[0], n[1], c[2] + dz as i32 - 1]);
-                if mask::READS & bit != 0 {
-                    let held = placed::cursor(self, PLACED, zoom, b);
-                    let over = if held.holds() || self.eye.carve.w as u32 != eye::NO_CUT {
-                        placed::over(self, held, carve, hide, zoom, b, zoom)
-                    } else {
-                        placed::Over { says: placed::UNDER, block: VOID }
-                    };
-                    let fills = if over.says == BLOCK {
-                        self.fills(&[PLACED_BLOCK | over.block, 0])
-                    } else {
-                        let g = cell.block(zoom, b[2], || Cave::of(zoom, b).hollow());
-                        window::ways_over(self, found, cell.runs, zoom, b, g).0 != VOID
-                    };
-                    filled |= (fills as u32) * bit;
-                }
-                dz += 1;
-            }
-            k += 1;
-        }
-        filled
-    }
-}
-
 /// The eye's windows, as the GPU holds them.
 impl Squares for World<'_> {
     /// The slot square `q` is held in, while it holds it present.
@@ -274,7 +227,7 @@ pub struct At {
 /// two. On flat ground from 120 and 600 units, every direction down to the
 /// horizon, no entry outlived more than 7 deeper writes; a node far wider
 /// than its distance, one gone into right by the eye, outlives more, and
-/// its entry is made again (`cast::again`).
+/// the walk goes down to it again (pxl-portable `cast::descend`'s restart).
 const LEVELS: usize = 8;
 
 const _: () = assert!(window::FOUND_BITS + pxl_portable::caves::CAVE_BITS <= 32, "a kept entry's second word holds a Found and a cave");
@@ -429,114 +382,19 @@ impl Grounds for Growing<'_> {
 
 /// A ray's words, a layer each of `Rays`: the value it stopped on, its kind (ground or
 /// placed) and the face it entered through, then how far as f32 bits, then
-/// the block's index's low bits, for `face_cs` to find the block by and
-/// write its face bits over, then the four looks a coarse ground block
-/// folds or, in the steps view, the nodes its descent asked about, then
-/// where the stop's column is held (`ray::PLACE`); where it met nothing, the first three zero.
-fn word(o: &cast::Origin, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> [u32; ray::WORDS as usize] {
+/// the four looks a coarse ground block folds or, in the steps view, the
+/// nodes its descent asked about; where it met nothing, the first two zero.
+fn word(ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> [u32; ray::WORDS as usize] {
     if met.ends != Ends::Stop {
-        return [0, 0, 0, met.visits, 0];
+        return [0, 0, met.visits];
     }
     let s = met.stop;
     let down = pxl_portable::axis(ray.direction, s.axis) > 0.0;
     let face = 2 * s.axis + down as u32;
     let [value, folds] = s.block;
     let kind = if value & PLACED_BLOCK != 0 { ray::KIND_PLACED } else { ray::KIND_GROUND };
-    let (zoom, c) = (s.place.zoom, s.place.node(o));
-    let w3 = if steps { met.visits } else { folds };
-    [ray::first_word(value, kind, face, zoom), s.t.to_bits(), low_bits(c), w3, s.at.ground.word()]
-}
-
-/// Bits of a block's index a ray keeps on each axis (`word`), enough to tell it
-/// from the block its ray's hit point rounds to, which f32 holds to within
-/// a few blocks.
-const LOW_BITS: u32 = 10;
-
-/// The greatest integer at most `v`.
-fn floor(v: f32) -> i32 {
-    let i = v as i32;
-    if (i as f32) > v {
-        i - 1
-    } else {
-        i
-    }
-}
-
-fn low_bits(c: [i32; 3]) -> u32 {
-    let m = (1 << LOW_BITS) - 1;
-    (c[0] & m) as u32 | ((c[1] & m) as u32) << LOW_BITS | ((c[2] & m) as u32) << (2 * LOW_BITS)
-}
-
-/// The block at `zoom` a ray stopped on, entering across `axis`, `t` along
-/// it, its index's low bits `low` (`low_bits`): the block its hit point
-/// rounds to, moved half a block into it across the face it entered,
-/// corrected to the one whose low bits the cast kept.
-fn hit_block(o: &cast::Origin, ray: &cast::Ray, t: f32, axis: u32, zoom: u32, low: u32) -> [i32; 3] {
-    let side = cast::Place { zoom, corner: [0; 3] }.side();
-    let half = (1 << LOW_BITS) / 2;
-    let mut c = [0; 3];
-    let mut a = 0;
-    while a < 3 {
-        let d = pxl_portable::axis(ray.direction, a as u32);
-        let into = if a as u32 == axis {
-            if d > 0.0 {
-                0.5 * side
-            } else {
-                -0.5 * side
-            }
-        } else {
-            0.0
-        };
-        let rel = o.frac[a] + d * t + into;
-        let near = if zoom <= UNIT_ZOOM {
-            (o.unit[a] + floor(rel)) >> (UNIT_ZOOM - zoom)
-        } else {
-            (o.unit[a] << (zoom - UNIT_ZOOM)) + floor(rel * (1 << (zoom - UNIT_ZOOM)) as f32)
-        };
-        let kept = ((low >> (LOW_BITS * a as u32)) & ((1 << LOW_BITS) - 1)) as i32;
-        c[a] = near + ((kept - near + half) & ((1 << LOW_BITS) - 1)) - half;
-        a += 1;
-    }
-    [wrap_index(zoom, c[0]), c[1], c[2]]
-}
-
-/// The face bits of each ray's block the cast found (`word`): the blocks
-/// about it asked at its zoom, each once (pxl-portable `mask`), as a
-/// chunk's box takes them, over the ray's index bits. A pass of its own, so
-/// the cast's kernel holds the descent alone.
-#[spirv(compute(threads(8, 8, 1)))]
-pub fn face_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
-) {
-    let window: &[IVec4] = window;
-    let size: UVec3 = rays.query_size();
-    if id.x >= size.x || id.y >= size.y {
-        return;
-    }
-    let ray_word = |k: u32| rays.read(UVec3::new(id.x, id.y, k));
-    let w = UVec4::new(ray_word(0), ray_word(1), ray_word(2), ray_word(3));
-    if ray::kind_of(w.x) == ray::KIND_NONE {
-        return;
-    }
-    let (origin, ray) = (eye_origin(eye).0, pixel_ray(eye, id, size));
-    let mut world = World {
-        window,
-        ground,
-        shards,
-        overwrites,
-        eye,
-    };
-    let (axis, zoom) = (ray::face_of(w.x) / 2, ray::zoom_of(w.x));
-    let c = hit_block(&origin, &ray, f32::from_bits(w.y), axis, zoom, w.z);
-    let filled = world.about(zoom, c, Found::of_word(ray_word(ray::PLACE)));
-    // SAFETY: within the rays, just bounded by their size.
-    unsafe { rays.write(UVec3::new(id.x, id.y, 2), mask::mask(filled)) };
+    let w2 = if steps { met.visits } else { folds };
+    [ray::first_word(value, kind, face, s.place.zoom), s.t.to_bits(), w2]
 }
 
 /// The start's stack as `start_cs` hands it (pxl-portable `cast::Over`).
@@ -675,7 +533,7 @@ pub fn cast_cs(
         corner: [at(read, cast::START_PLACE + 1) as i32, at(read, cast::START_PLACE + 2) as i32, at(read, cast::START_PLACE + 3) as i32],
     };
     let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, (place, at_of(read, cast::START_AT)), &Starts(read));
-    let w = word(&origin, &ray, met, eye.origin.w != 0);
+    let w = word(&ray, met, eye.origin.w != 0);
     let mut k = 0;
     while k < ray::WORDS {
         // SAFETY: within the rays, just bounded by their size.

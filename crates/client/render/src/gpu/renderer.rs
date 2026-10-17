@@ -18,7 +18,7 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_FACE, SHADER_HEIGHTS, SHADER_JOINED, SHADER_START, SHADER_WAYS,
+    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_JOINED, SHADER_START, SHADER_WAYS,
 };
 use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
@@ -90,7 +90,6 @@ const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
 const SPAN_CASES: usize = GpuSpanName::cases as usize;
 const SPAN_FILL: usize = GpuSpanName::fill as usize;
 const SPAN_CAST: usize = GpuSpanName::cast as usize;
-const SPAN_FACE: usize = GpuSpanName::face as usize;
 
 type Frame = [f32; FRAME_FLOATS];
 
@@ -788,10 +787,8 @@ struct GroundBuffers {
 /// What the GPU's cast reads; it writes the world surface's rays.
 struct CastBuffers {
     built: Built,
-    /// Where its rays start, asked before it (`start_cs`), and its blocks'
-    /// face bits, asked after it (`face_cs`), over its group.
+    /// Where its rays start, asked before it (`start_cs`), over its group.
     start_built: Built,
-    face_built: Built,
     starts: u32,
     /// The eye's windows folded over their squares (`joined_cs`), over its
     /// group, the window buffer's rows past their slot table
@@ -890,13 +887,13 @@ const SQUARE_BYTES: u32 = SQUARE_WORDS * 4;
 
 /// `bound_cs`'s and `ways_cs`'s one group: its level or its pass at a
 /// dynamic offset (`SLOT_STRIDE`), the fresh frames and the frames it writes
-/// the levels or the runs of. The cast's, `start_cs`'s and `face_cs`'s one
+/// the levels or the runs of. The cast's, `start_cs`'s and `joined_cs`'s one
 /// group is the cast's, which binds all theirs.
 const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
 const _: () = assert!(same(compute::BOUND_GROUP, compute::WAYS_GROUP), "the levels' and the ways' passes share a group");
 const _: () = assert!(
-    within(compute::START_GROUP, compute::CAST_GROUP) && within(compute::FACE_GROUP, compute::CAST_GROUP) && within(compute::JOINED_GROUP, compute::CAST_GROUP),
-    "the start, the face bits and the fold bind the cast's group"
+    within(compute::START_GROUP, compute::CAST_GROUP) && within(compute::JOINED_GROUP, compute::CAST_GROUP),
+    "the start and the fold bind the cast's group"
 );
 
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
@@ -1018,14 +1015,12 @@ impl RaysPass {
         if self.cast.is_none() {
             let built = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);
             let start_built = pipelines.build_compute(g, SHADER_START, &compute::CAST_GROUP);
-            let face_built = pipelines.build_compute(g, SHADER_FACE, &compute::CAST_GROUP);
             let joined_built = pipelines.build_compute(g, SHADER_JOINED, &compute::CAST_GROUP);
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             let c = CastBuffers {
                 built,
                 start_built,
-                face_built,
                 starts: buffer(word_bytes(pxl_portable::cast::START_WORDS as usize), buffer_usage::STORAGE),
                 joined_built,
                 joined_read: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::MAP_READ | buffer_usage::COPY_DST),
@@ -1270,7 +1265,7 @@ impl RaysPass {
     /// The GPU's cast into the surface's rays, a ray a drawn pixel, where it
     /// runs; then the decor the ground grows over the same world, a
     /// candidate a thread.
-    fn dispatch(&self, g: &Gpu, encoder: u32, cast: &mut Stamp, faces: &mut Stamp) {
+    fn dispatch(&self, g: &Gpu, encoder: u32, cast: &mut Stamp) {
         let Some(c) = self.cast.as_ref().filter(|_| self.kind == FrameKind::cast) else { return };
         let w = compute::CAST_WORKGROUP;
         let cells = [c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1])];
@@ -1281,12 +1276,6 @@ impl RaysPass {
         g.set_pipeline(pass, c.built.pipeline);
         g.dispatch(pass, cells[0], cells[1], 1);
         c.grown.dispatch(g, pass);
-        g.end(pass);
-        // A kernel a job: the face bits over what the cast found.
-        let pass = g.compute_pass(encoder, faces.pass());
-        g.set_bind_group(pass, 0, c.group, &[]);
-        g.set_pipeline(pass, c.face_built.pipeline);
-        g.dispatch(pass, cells[0], cells[1], 1);
         g.end(pass);
     }
 
@@ -1707,8 +1696,7 @@ impl Renderer {
         // for the stream is dropped whole and the screen keeps the last.
         frame_begin();
         let encoder = g.encoder();
-        let [cast, faces] = stamps.get_disjoint_mut([SPAN_CAST, SPAN_FACE]).or_bug(Errno::ENOTRECOVERABLE);
-        self.screen.dispatch(g, encoder, cast, faces);
+        self.screen.dispatch(g, encoder, &mut stamps[SPAN_CAST]);
         if !still {
             if self.screen_ao {
                 let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
@@ -1942,7 +1930,7 @@ fn targets(g: &Gpu, s: &mut Surface) {
         s.world_view = g.view(s.world, false, 0, 1, 0, 1);
         s.world_depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
         s.world_depth_view = g.view(s.world_depth, false, 0, 1, 0, 1);
-        // Written by the cast, read by the face bits and the screen pass.
+        // Written by the cast, read by the screen pass.
         let rays = texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING;
         s.rays = g.texture(width, height, ray::WORDS, Format::r32uint, 1, rays);
         s.rays_view = g.view(s.rays, true, 0, 1, 0, ray::WORDS);
