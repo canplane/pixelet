@@ -34,9 +34,8 @@ pub mod stream {
     pub const HEAD: u32 = 69;
     /// The range's size: the stream, what one turn may send the device, then at
     /// its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an
-    /// empty one of. A product number, said rather than derived; a chunk's mesh is
-    /// under a tenth of a megabyte and a frame's own records tens of kilobytes, so
-    /// a turn's uploads wait only when a burst of them comes at once.
+    /// empty one of. A product number, said rather than derived: a turn's uploads
+    /// wait (`room`) only when a burst of them comes at once.
     pub const BYTES: u32 = 4194304;
     /// What an upload leaves of the range. The records a turn cannot put off — a
     /// frame's passes and draws, the shaders the first frame makes — are never

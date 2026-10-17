@@ -17,10 +17,10 @@ fn main() {
         let name = path.file_name().expect("a shader's name");
         std::fs::write(out.join(name), stripped(&text)).expect("the stripped shader");
     }
-    // The chunk box's mask bits, from the one statement the mesher compiles.
+    // A block's face bits, from their one statement (pxl-portable mask.bits.rs).
     std::fs::write(out.join("faces.wgsl"), MASK.iter().map(|(name, v)| format!("const {name}: u32 = {v}u;\n")).collect::<String>()).expect("the mask's shader");
-    // A unit's zoom and the ground's cell, from where the cast and the mesher
-    // read them: a ray's cell is painted by its block's zoom against these.
+    // A unit's zoom and the ground's cell, from pxl-portable, where the cast
+    // reads them: a ray's cell is painted by its block's zoom against these.
     let lattice = format!(
         "const UNIT_ZOOM: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\n",
         pxl_portable::UNIT_ZOOM,

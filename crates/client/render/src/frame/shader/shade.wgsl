@@ -1,4 +1,4 @@
-// The shading every lit pass shares, so a chunk, decor and an actor cannot be lit differently.
+// The shading every lit pass shares, so the screen's cells, decor and an actor cannot be lit differently.
 
 // The exponent only sets the band's width; rim_intensity scales the peak.
 const RIM_POWER: f32 = 1.0;

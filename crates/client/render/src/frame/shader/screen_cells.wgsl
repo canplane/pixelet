@@ -3,8 +3,8 @@
 // The rays' cells (`frame/screen_cells.rs`), each drawn straight into its own
 // area of the screen: the lane's cells across and up, at equal steps of angle
 // over the view, each pixel the face its cell's ray entered, where the
-// pixel's own ray meets that face, painted as a chunk paints it
-// (paint.wgsl `paint`). A cell whose ray met nothing is left to the sky.
+// pixel's own ray meets that face, painted by paint.wgsl's `paint`, as the
+// ghost's boxes are. A cell whose ray met nothing is left to the sky.
 
 // The lane (`frame/screen_cells.rs`): the cells across and up and whether a
 // cell is coloured by its ray's steps, then a cell each, what its ray met
@@ -144,8 +144,7 @@ fn hit_of(c: vec4u, ray: vec3f, d: vec3f) -> Hit {
   return Hit(clamp(d * s, corner, corner + vec3f(side)), corner, side, n);
 }
 
-// The face's texture coordinate: the world's position, one repeat a unit,
-// as a chunk's mesh reads it off its own whole-unit coordinates.
+// The face's texture coordinate: the world's position, one repeat a unit.
 fn box_uv(h: Hit) -> vec2f {
   let p = bitcast<vec3f>(eye_at[1].xyz) + h.at;
   if (abs(h.normal.z) > 0.5) {

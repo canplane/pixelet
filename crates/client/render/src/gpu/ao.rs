@@ -1,7 +1,7 @@
 // pxl-render/gpu/ao.rs
 
-//! Screen-space occlusion (N8AO), switchable beside the chunk's own corner
-//! occlusion: a depth prepass, then downsample, sample, denoise twice and
+//! Screen-space occlusion (N8AO), switchable beside a face's own corner
+//! occlusion (paint.wgsl `occlusion_of`): a depth prepass, then downsample, sample, denoise twice and
 //! upsample to a one-byte map every lit pass reads at group 0 binding 7.
 //! About 11 bytes a pixel and one extra geometry pass.
 

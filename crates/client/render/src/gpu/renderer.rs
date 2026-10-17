@@ -584,7 +584,7 @@ impl Blocks {
         }
     }
 
-    /// For a draw binding it as a vertex buffer: the ghost's box goes through the chunk pipeline.
+    /// For a draw binding it as a vertex buffer: the ghost's boxes are read through it (box.wgsl).
     pub fn group(&mut self, g: &Gpu, handle: u32, layout: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
         if self.group[i] == 0 {
@@ -722,7 +722,7 @@ impl DebugPass {
 }
 
 /// The rays' cells, drawn straight to the screen where each pixel's ray
-/// meets the face its cell's ray met, painted as the chunks paint
+/// meets the face its cell's ray met, painted by paint.wgsl's `paint`
 /// (frame/screen_cells.rs). The lane is written by the GPU's cast where it
 /// runs (`Cast`), else by the CPU's, uploaded from where it lives once a
 /// cast.

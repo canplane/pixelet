@@ -1,8 +1,8 @@
 // pxl-render/frame/shader/paint.wgsl
 
-// What a block's face is painted, wherever it is drawn from: the chunks'
-// fragments and the screen's rays both fill a `Surface` and call `paint`, so
-// the two cannot paint one face differently. Its swatch or its layers' taps,
+// What a block's face is painted, wherever it is drawn from: the ghost's
+// boxes (box.wgsl) and the screen's rays (screen_cells.wgsl) both fill a
+// `Surface` and call `paint`, so the two cannot paint one face differently. Its swatch or its layers' taps,
 // the creases and corners its face bits name, lit by `shade`.
 
 @group(0) @binding(4) var layers: texture_2d_array<f32>;
@@ -110,8 +110,8 @@ fn edge_factor(local_pos: vec3f, box_scale: vec3f, pixel: vec3f, normal: vec3f, 
 // #1a1006 as a ratio: a warm contact shadow rather than gray.
 const AO_TINT: vec3f = vec3f(1.0, 0.615, 0.231);
 
-// Corner occlusion from the mesher's face bits: each concave edge darkens over
-// one of the mesh's cells, `d` in them, and no further, since a box knows only
+// Corner occlusion from a face's bits (pxl-portable mask.rs): each concave edge
+// darkens over one of its cells, `d` in them, and no further, since a box knows only
 // the cells beside it: a reach past them was cut where the next box began.
 // Squared, not smoothstep: a smoothstep sits flat against the wall and reads as
 // a dark strip with an edge rather than a gradient.

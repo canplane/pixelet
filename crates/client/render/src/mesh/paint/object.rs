@@ -1,7 +1,7 @@
 // pxl-render/mesh/paint/object.rs
 
-//! The object store's records as voxels of a chunk: the materials its values
-//! are drawn as, by the catalog.
+//! The object store's records as blocks: the materials their values are
+//! drawn as, by the catalog.
 
 use pxl_spec::block::cube;
 use pxl_spec::block::object::{cube_id, decor_ids, decor_num_id, ALL_CUBES};
