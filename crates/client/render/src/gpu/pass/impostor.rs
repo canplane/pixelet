@@ -100,25 +100,26 @@ impl ImpostorPass {
 
     /// Whether a group was baked again.
     pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &mut DecorPass, blocks: &Blocks) -> bool {
-        // The groups whose model or extent moved since baked, each once.
-        let (mut due, mut len) = ([(0, Baked::default()); GROUPS], 0);
+        // The groups whose model or extent moved since baked, each once, and
+        // whose model has landed: one still landing is due on a later frame,
+        // and this one bakes, writes and submits nothing for it.
+        let (mut due, mut len) = ([(0, Baked::default(), (0, 0, 0, 0)); GROUPS], 0);
         for k in 0..GROUPS {
             if let Some(w) = self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w)) {
-                (due[len], len) = ((k, w), len + 1);
+                if let Some(model) = decor.model_of(g, k as u32, blocks) {
+                    (due[len], len) = ((k, w, model), len + 1);
+                }
             }
         }
         let due = &due[..len];
         if due.is_empty() {
             return false;
         }
-        self.fit_uniforms.write(g, self.bake.layouts[0], due.len() as u32, due.iter(), true, |buf, &(_, w)| {
+        self.fit_uniforms.write(g, self.bake.layouts[0], due.len() as u32, due.iter(), true, |buf, &(_, w, _)| {
             buf[..FIT_BYTES as usize].copy_from_slice(bytes(&fit_of(w.2)));
         });
         let Some(slots) = self.fit_uniforms.slots() else { return false };
-        for (n, &(k, w)) in due.iter().enumerate() {
-            let Some((model, vertex_cnt, index_cnt, skin)) = decor.model_of(g, k as u32, blocks) else {
-                continue;
-            };
+        for (n, &(k, w, (model, vertex_cnt, index_cnt, skin))) in due.iter().enumerate() {
             let (fit_group, offset) = slots.at(n as u32);
             let layer = g.view(self.atlas, false, 0, 1, k as u32, 1);
             let pass = g.pass(encoder, &pass_desc(layer, Load::Clear, self.depth_view, Load::Clear, 1.0, None));
