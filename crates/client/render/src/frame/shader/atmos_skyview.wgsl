@@ -7,7 +7,10 @@
 // height that any texel of its sky with the sun's glare over it, the sun's
 // disc, or the land's lit face under the eye moves, its exposure moving with
 // it; the sun's first. A local linearization,
-// one step of the transmittance table's own sampling where the light stands.
+// one step of the transmittance table's own sampling where the light stands,
+// trusted over that one sample alone: a light moving it counts as a level at
+// least, so the step a reader takes off it (1 / slope) is never past the
+// sample, and the slope is measured again there.
 // Its bits: a positive float's order is its bits'.
 @group(0) @binding(20) var<storage, read_write> slopes: array<atomic<u32>, 2>;
 
@@ -54,7 +57,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let each = max(max(sky, disc), land);
   let most = max(max(each.r, each.g), each.b);
   if (h > 0.0) {
-    atomicMax(&slopes[select(0u, 1u, moon)], bitcast<u32>(most / h));
+    atomicMax(&slopes[select(0u, 1u, moon)], bitcast<u32>(max(most, 1.0) / h));
   }
   return vec4f(radiance, 1.0);
 }
