@@ -6,7 +6,7 @@
 //! (pxl-portable `window`). A square is filled from its tile as it lands:
 //! its own looks here, its four looks and its tile's samples handed to the
 //! GPU, which draws its cells; they come back into `.fixed.terrain`, and the
-//! square is present from then on. Nothing of a tile is kept for a square
+//! square is present from then on (`landed`). Nothing of a tile is kept for a square
 //! still to come: one that enters asks its tile again (`Residency::again`),
 //! which the browser's cache answers.
 
@@ -15,19 +15,18 @@ use pxl_portable::ground::{own, word};
 use pxl_portable::window::{self, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
 use pxl_portable::wrap_index;
 use pxl_portable::LEAF_CELL;
-use pxl_render::gpu::api::DONE;
 use pxl_render::gpu::renderer::{CellsBack, Square, TerrainWrite};
 use pxl_spec::bake::tile::terrain::{handed, square_lines, GroundId, TerrainTile, ELE_LANE, LOOK_LANE};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::{off_of, off_of_slice};
+use xpute_guest::mem::base::off_of_slice;
 use xpute_kit::collection::list::List;
 
 use crate::io::source::Declared;
 use crate::layer::kept::Offered;
-use crate::layer::terrain::fixed::{back_off, cells_off, fill_off, looks_off, CELLS_BYTES, CELLS_LANE_BYTES, LOOK_LANE_BYTES, RANGE};
+use crate::layer::terrain::fixed::{cells_off, fill_off, looks_off, CELLS_BYTES, CELLS_LANE_BYTES, LOOK_LANE_BYTES, RANGE};
 use crate::layer::Base;
 use crate::mem::fixed::lane;
 
@@ -42,8 +41,6 @@ pub enum Centre {
 /// The tiles the windows apart from the eye's want at most: a window spans
 /// two tiles a side.
 pub const PINNED_TILES: u32 = (WINDOWS - EYE_WINDOWS) * 4;
-/// The eye's windows' slot table's words: a row of four a slot.
-const TABLE_WORDS: usize = (4 * EYE_WINDOWS * SLOTS) as usize;
 const _: () = assert!(window::WINDOW <= TILE_CELLS + 1, "a window spans two tiles a side");
 
 /// Who window `w` is about, and its cells' zoom as laid out; a
@@ -67,27 +64,33 @@ fn windows_at(cell: Zoom) -> [Option<u32>; 3] {
     ]
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum State {
-    /// Wanted, its tile not yet handed it.
-    Absent,
-    /// Handed to the GPU, its cells on their way.
-    Sent,
-    Present,
-}
-
-/// What a slot holds: the square its window wants there, how far it is, and
-/// on which device (`device_generation`): one that went took the square.
+/// What a slot holds, a row of the table the GPU's cast reads
+/// (gpu-query-shader `World::present`): the square its window wants there,
+/// whether its cells are present, and the fill they are on their way from
+/// (0 where none is). Neither: wanted, its tile not yet handed it.
+#[repr(C)]
 #[derive(Clone, Copy)]
 struct Slot {
     square: [i32; 2],
-    state: State,
-    on: u32,
+    present: i32,
+    ticket: u32,
 }
+
+impl Slot {
+    const fn absent(square: [i32; 2]) -> Slot {
+        Slot { square, present: 0, ticket: 0 }
+    }
+
+    fn is_absent(&self) -> bool {
+        self.present == 0 && self.ticket == 0
+    }
+}
+
+const _: () = assert!(size_of::<Slot>() == 16, "a slot is a row of four words");
 
 /// A window: its cells' zoom, and its first square; none while its centre
 /// is not.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct Window {
     cell: Zoom,
     first: Option<[i32; 2]>,
@@ -96,9 +99,15 @@ struct Window {
 struct Windows {
     windows: [Window; WINDOWS as usize],
     slots: [Slot; SQUARES as usize],
+    /// The device the slots' squares were handed to (`device_generation`):
+    /// one that went took them all.
+    on: u32,
     ticket: u32,
-    /// The slot table the GPU's cast reads: per eye window, a row a slot.
-    table: [i32; TABLE_WORDS],
+    /// What the slots were last stepped over: the residency's revision
+    /// (`Residency::revision`), and whether a fill handed a square or let a
+    /// packet go since, which moves what is due and what is asked again.
+    read: u32,
+    filled: bool,
     /// The tiles the windows apart from the eye's want (`pinned`).
     pinned: List<Tile, { PINNED_TILES as usize }>,
     /// The squares this turn hands the fill (`due`).
@@ -118,13 +127,11 @@ fn fresh() -> Windows {
             cell: layout(w as u32).1,
             first: None,
         }),
-        slots: [Slot {
-            square: [i32::MIN; 2],
-            state: State::Absent,
-            on: 0,
-        }; SQUARES as usize],
+        slots: [Slot::absent([i32::MIN; 2]); SQUARES as usize],
+        on: 0,
         ticket: 0,
-        table: [0; TABLE_WORDS],
+        read: 0,
+        filled: true,
         pinned: List::new(),
         due: List::new(),
     }
@@ -153,12 +160,10 @@ fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
 }
 
 /// Every square's planes on the CPU, in `.fixed.terrain` (fixed.rs): its
-/// cells as they come back, its own looks, and the word they come back
-/// under; a test's own.
+/// cells as they come back and its own looks; a test's own.
 pub(crate) struct Planes {
     pub cells: &'static mut [u8],
     pub looks: &'static mut [GroundId],
-    pub back: &'static mut [u32],
 }
 
 pub(crate) static PLANES: Global<Planes> = Global::new();
@@ -171,15 +176,9 @@ fn planes() -> &'static mut Planes {
             Planes {
                 cells: lane(r, cells_off(0), (SQUARES * CELLS_LANE_BYTES) as usize),
                 looks: lane(r, looks_off(0), (SQUARES * LOOK_LANE_BYTES) as usize),
-                back: lane(r, back_off(0), SQUARES as usize),
             }
         }
     })
-}
-
-/// The word square `s`'s cells come back under.
-fn back_word(s: u32) -> &'static mut u32 {
-    &mut planes().back[s as usize]
 }
 
 fn cells(s: u32) -> &'static [u8] {
@@ -194,15 +193,20 @@ fn looks(s: u32) -> &'static mut [GroundId] {
 
 /// The turn's windows: each centre where it now stands (`at`, in units, X
 /// then Y, by `Centre`; none where it is not), a square whose window no
-/// longer holds it given up, and a square whose cells came back present;
-/// the tiles a window now wants but holds no packet for are asked again.
-/// Before the turn's arrivals and its stage. True where the tiles the
-/// windows apart from the eye's want changed.
+/// longer holds it given up; the tiles a window now wants but holds no
+/// packet for are asked again, and the squares due found (`due`). The
+/// slots are stepped only where a window moved a square or its zoom, the
+/// device went, the residency moved (`Residency::revision`) or a fill
+/// handed: of those alone are they made. Before the turn's arrivals and its
+/// stage. True where the tiles the windows apart from the eye's want
+/// changed.
 pub fn step(at: [Option<[f64; 2]>; 3]) -> bool {
     let w = windows();
     let terrain = TerrainTile::residency();
     let on = pxl_render::gpu::api::device_generation();
-    let mut centres = [None; WINDOWS as usize];
+    let lost = core::mem::replace(&mut w.on, on) != on;
+    let mut moved = [false; WINDOWS as usize];
+    let mut stale = lost || core::mem::take(&mut w.filled) || terrain.revision() != w.read;
     for win in 0..WINDOWS {
         let (centre, laid) = layout(win);
         let p = at[centre as usize];
@@ -214,45 +218,38 @@ pub fn step(at: [Option<[f64; 2]>; 3]) -> bool {
             }
             _ => laid,
         };
-        centres[win as usize] = p.map(|p| cell_at(cell, p));
-        let moved = core::mem::replace(
-            &mut w.windows[win as usize],
-            Window {
-                cell,
-                first: p.map(|p| window::origin(cell, cell_at(cell, p))),
-            },
-        )
-        .cell
-            != cell;
-        let first = w.windows[win as usize].first;
+        let now = Window {
+            cell,
+            first: p.map(|p| window::origin(cell, cell_at(cell, p))),
+        };
+        let was = core::mem::replace(&mut w.windows[win as usize], now);
+        moved[win as usize] = was.cell != cell;
+        stale |= was != now;
+    }
+    if !stale {
+        return false;
+    }
+    for win in 0..WINDOWS {
+        let Window { cell, first } = w.windows[win as usize];
         for s in 0..SLOTS {
-            let i = (win * SLOTS + s) as usize;
+            let slot = &mut w.slots[(win * SLOTS + s) as usize];
             let Some(f) = first else {
-                w.slots[i].state = State::Absent;
+                *slot = Slot::absent(slot.square);
                 continue;
             };
             let want = wanted(cell, f, s);
             let t = tile_of(cell, want).0;
-            let slot = &mut w.slots[i];
-            if moved || slot.square != want || slot.on != on {
-                *slot = Slot {
-                    square: want,
-                    state: State::Absent,
-                    on,
-                };
-                *back_word(i as u32) = 0;
+            if lost || moved[win as usize] || slot.square != want {
+                *slot = Slot::absent(want);
                 terrain.moved_at(t);
             }
-            if slot.state == State::Sent && *back_word(i as u32) & DONE != 0 {
-                slot.state = State::Present;
-                terrain.moved_at(t);
-            }
-            if slot.state == State::Absent && !crate::layer::terrain::tile::kept_for(t) {
+            if slot.is_absent() && !crate::layer::terrain::tile::kept_for(t) {
                 terrain.again(t);
             }
         }
     }
-    due(w, &centres);
+    due(w);
+    w.read = terrain.revision();
     let was = core::mem::take(&mut w.pinned);
     for win in EYE_WINDOWS..WINDOWS {
         let Window { cell, first } = w.windows[win as usize];
@@ -269,24 +266,36 @@ pub fn step(at: [Option<[f64; 2]>; 3]) -> bool {
     was[..] != w.pinned[..]
 }
 
+/// Square `s`'s cells back from its fill `ticket` (pxl-render
+/// `read_back`): present where its slot still waits on that fill, and what
+/// is read over its tile moved.
+pub fn landed(s: u32, ticket: u32) {
+    let w = windows();
+    let cell = w.windows[(s / SLOTS) as usize].cell;
+    let slot = &mut w.slots[s as usize];
+    if slot.ticket == ticket {
+        (slot.present, slot.ticket) = (1, 0);
+        TerrainTile::residency().moved_at(tile_of(cell, slot.square).0);
+    }
+}
+
 /// The squares this turn hands, nearest first, as many as a frame's fill
 /// takes: the eye's windows coarsest first, since a reader of a square
 /// absent reads the coarser window's (pxl-portable `window::find`), then the
 /// focus's and a destination's; in a window by how far its square lies from
 /// the centre. Only a square whose tile can hand it now: one waiting on its
 /// tile does not hold a place another could take.
-fn due(w: &mut Windows, centres: &[Option<[i32; 2]>; WINDOWS as usize]) {
+fn due(w: &mut Windows) {
     let terrain = TerrainTile::residency();
     let handable = |t: Tile| crate::layer::terrain::tile::kept_for(t) || terrain.get(t).is_some() && terrain.frame(t).is_none();
     w.due.clear();
     for win in 0..WINDOWS {
-        let Some(c) = centres[win as usize] else { continue };
-        let cell = w.windows[win as usize].cell;
+        let Window { cell, first: Some(first) } = w.windows[win as usize] else { continue };
         let mut near = List::<(i64, u32), { SLOTS as usize }>::new();
         for i in win * SLOTS..(win + 1) * SLOTS {
             let slot = w.slots[i as usize];
-            if slot.state == State::Absent && handable(tile_of(cell, slot.square).0) {
-                near.push((far(cell, c, slot.square), i));
+            if slot.is_absent() && handable(tile_of(cell, slot.square).0) {
+                near.push((far(cell, first, slot.square), i));
             }
         }
         near.sort_unstable();
@@ -299,14 +308,17 @@ fn due(w: &mut Windows, centres: &[Option<[i32; 2]>; WINDOWS as usize]) {
     }
 }
 
-/// How far square `q` at `cell` lies from the cell `c`, squared, in cells, X
-/// the short way round.
-fn far(cell: Zoom, c: [i32; 2], q: [i32; 2]) -> i64 {
+/// How far square `q` at `cell` lies from the centre of the window whose
+/// first square is `first`, squared, in cells, X the short way round: the
+/// centre as the window places it, the middle of the square's worth of
+/// cells its first holds it over (`window::origin`).
+fn far(cell: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
     let mid = |v: i32| i64::from(v) * i64::from(SQUARE) + i64::from(SQUARE / 2);
+    let centre = |v: i32| mid(v) + i64::from(window::RADIUS);
     let round = 1i64 << cell;
-    let dx = (mid(q[0]) - i64::from(c[0])).rem_euclid(round);
+    let dx = (mid(q[0]) - centre(first[0])).rem_euclid(round);
     let dx = dx.min(round - dx);
-    let dy = mid(q[1]) - i64::from(c[1]);
+    let dy = mid(q[1]) - centre(first[1]);
     dx * dx + dy * dy
 }
 
@@ -317,15 +329,13 @@ pub fn pinned() -> &'static [Tile] {
     &windows().pinned
 }
 
-/// The eye's windows' slot table, as the GPU's cast reads it
-/// (gpu-query-shader `World::present`): a row a slot, its square and
-/// whether present.
+/// The eye's windows' slots, as the GPU's cast reads them
+/// (gpu-query-shader `World::present`): a row a slot (`Slot`).
 pub fn table() -> &'static [i32] {
-    let w = windows();
-    for (row, slot) in w.table.as_chunks_mut::<4>().0.iter_mut().zip(&w.slots) {
-        *row = [slot.square[0], slot.square[1], i32::from(slot.state == State::Present), 0];
-    }
-    &w.table
+    let eye = &windows().slots[..(EYE_WINDOWS * SLOTS) as usize];
+    // SAFETY: a slot is four plain words in order (`Slot`), so the slots are
+    // their rows' words.
+    unsafe { core::slice::from_raw_parts(eye.as_ptr().cast::<i32>(), 4 * eye.len()) }
 }
 
 /// What a tile hands its squares: its packet and the tile as it is held, its
@@ -361,7 +371,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> Offered {
     let w = windows();
     let wants = |w: &Windows, i: u32| {
         let (slot, win) = (w.slots[i as usize], w.windows[(i / SLOTS) as usize]);
-        slot.state == State::Absent && win.cell == cell && win.first.is_some() && tile_of(cell, slot.square).0 == tile
+        slot.is_absent() && win.cell == cell && win.first.is_some() && tile_of(cell, slot.square).0 == tile
     };
     let rest = |w: &Windows| match (0..SQUARES).any(|i| wants(w, i)) {
         true => Offered::Kept,
@@ -391,7 +401,10 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> Offered {
     let (lane, ele): (&[GroundId], &[i16]) = match from {
         Handed::Packet(pkt, _) => match handed(pkt, room) {
             Ok(h) => h,
-            Err(_) => return Offered::Taken,
+            Err(_) => {
+                w.filled = true;
+                return Offered::Taken;
+            }
         },
         Handed::Void => {
             for (q, &l) in room.chunks_mut(4).zip(void.ground.cells.iter()) {
@@ -414,10 +427,9 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> Offered {
             cut[4 * y * SQUARE as usize..4 * (y + 1) * SQUARE as usize].copy_from_slice(&lane[from_row..from_row + 4 * SQUARE as usize]);
         }
         let written = square_lines(tile, &held.separation, place, scratch, lines);
-        w.ticket = (w.ticket % (DONE - 1)) + 1;
+        w.ticket = w.ticket % u32::MAX + 1;
         let back = CellsBack {
             cells: off_of_slice(cells(i)) as u32,
-            word: off_of(back_word(i)) as u32,
             ticket: w.ticket,
         };
         let taken = write(Square {
@@ -435,8 +447,8 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> Offered {
         for (l, q) in looks(i).iter_mut().zip(cut.as_chunks::<4>().0) {
             *l = own(u32::from_le_bytes(*q), cell) as GroundId;
         }
-        *back_word(i) = back.ticket;
-        w.slots[i as usize].state = State::Sent;
+        w.slots[i as usize].ticket = back.ticket;
+        w.filled = true;
     }
     rest(w)
 }
@@ -473,7 +485,7 @@ impl Squares for Windowed {
         let w = windows();
         let held = windows_at(cell).into_iter().flatten().map(|win| win * SLOTS + window::slot(q)).find(|&i| {
             let slot = w.slots[i as usize];
-            w.windows[(i / SLOTS) as usize].cell == cell && slot.state == State::Present && slot.square == q
+            w.windows[(i / SLOTS) as usize].cell == cell && slot.present != 0 && slot.square == q
         });
         (held.unwrap_or(0), held.is_some())
     }

@@ -19,7 +19,6 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     PLANES.set(Planes {
         cells: vec![0; (SQUARES * CELLS_LANE_BYTES) as usize].leak(),
         looks: vec![0; (SQUARES * LOOK_LANE_BYTES) as usize].leak(),
-        back: vec![0; SQUARES as usize].leak(),
     });
     WINDOWS_STATE.set(fresh());
     let w = windows();
@@ -65,7 +64,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             for (k, v) in lane[window::COLUMNS_AT as usize..(window::COLUMNS_AT + window::BACK_WORDS) as usize].iter().enumerate() {
                 c[4 * k..4 * k + 4].copy_from_slice(&v.to_le_bytes());
             }
-            w.slots[i as usize].state = State::Present;
+            w.slots[i as usize].present = 1;
         }
     }
 }

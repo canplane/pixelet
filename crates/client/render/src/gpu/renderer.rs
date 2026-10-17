@@ -145,11 +145,17 @@ pub struct EarthTiles<'a> {
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
 /// The ground's windows as the GPU holds them (pxl-portable `window`,
-/// `SQUARES` of them): the squares to hand it.
+/// `SQUARES` of them): the squares to hand it, and where their cells come
+/// back.
 pub struct GroundSquares<'a> {
     /// Hands each square whose cells the GPU is to draw to the writer.
     pub upload: &'a mut TerrainUpload,
+    /// Told each square whose cells came back, and the fill they are of
+    /// (`CellsBack::ticket`).
+    pub landed: &'a mut CellsLanded,
 }
+
+pub type CellsLanded = dyn FnMut(u32, u32);
 
 /// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`), a ray
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
@@ -181,13 +187,11 @@ pub struct Overwrites<'a> {
 
 /// Where a square's cells, which the GPU draws, come back to in the
 /// module's memory (`RaysPass::read_back`): its columns, levels and
-/// runs (pxl-portable `window::BACK_WORDS`),
-/// the kernel's word that takes `ticket | DONE` once this fill's are in,
-/// and the ticket.
+/// runs (pxl-portable `window::BACK_WORDS`); and the fill's ticket, never
+/// 0, which `GroundSquares::landed` is told once this fill's are in.
 #[derive(Clone, Copy, Default)]
 pub struct CellsBack {
     pub cells: u32,
-    pub word: u32,
     pub ticket: u32,
 }
 
@@ -925,7 +929,7 @@ impl RaysPass {
     /// into the turn's stream as it has room, the packets they live in let
     /// go once handed; whether or not an eye casts, as a tile's cells are
     /// no eye's.
-    fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: GroundSquares) {
+    fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, upload: &mut TerrainUpload) {
         let gb = self.ground.get_or_insert_with(|| {
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let (storage, squares) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, SQUARES);
@@ -959,7 +963,7 @@ impl RaysPass {
             }
         });
         let mut fresh = 0;
-        (ground.upload)(&mut |q| {
+        upload(&mut |q| {
             let fresh_entry = window::fresh(q.square, q.place, q.cell);
             if !room(write_buffer_bytes(q.looks) + write_buffer_bytes(q.samples) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&fresh_entry))) {
                 return false;
@@ -1159,12 +1163,11 @@ impl RaysPass {
     ///
     /// A square asked takes a free buffer of `READS`, which maps once at a
     /// time and lands whatever fill it carried. One that landed for the
-    /// square's latest fill marks it read: the kernel's word takes `ticket |
-    /// DONE`. One that landed for an earlier fill is discarded, and the
-    /// latest fill copied again: its bytes went into the square's cells while
-    /// the kernel holds the square Sent (or Absent, if it moved), which
-    /// nothing reads, and the latest fill's landing writes them again before
-    /// the word says read. A landed buffer is free again; a square with none
+    /// square's latest fill is told `landed`. One that landed for an earlier
+    /// fill is discarded, and the latest fill copied again: its bytes went
+    /// into the square's cells while the kernel holds the square on its way
+    /// (or absent, if it moved), which nothing reads, and the latest fill's
+    /// landing writes them again before it is told. A landed buffer is free again; a square with none
     /// free waits, Sent, for a later turn. A mapping still on its way is
     /// waited for, looked at only when a turn runs: nothing asks a turn for
     /// it. The turn's squares are done with here.
@@ -1177,7 +1180,7 @@ impl RaysPass {
     /// it), so none waits. Where read-backs matter on a settled
     /// view, the platform's own completion (a command buffer's handler, a
     /// timeline semaphore) is the wake.
-    fn read_back(&mut self, g: &Gpu) {
+    fn read_back(&mut self, g: &Gpu, landed: &mut CellsLanded) {
         let Some(c) = self.ground.as_mut() else { return };
         c.fresh_len = 0;
         for k in 0..READS {
@@ -1187,9 +1190,7 @@ impl RaysPass {
             }
             let back = &mut c.asked[s as usize];
             if back.ticket == ticket {
-                // SAFETY: the kernel's word for the square, which it handed
-                // with this fill (pxl-kernel layer/terrain/window.rs).
-                unsafe { *ptr_at::<u32>(back.word as usize) = ticket | DONE };
+                landed(s, ticket);
                 back.ticket = 0;
             }
             c.held[k] = (FREE, 0);
@@ -1557,7 +1558,7 @@ impl Renderer {
         read.mark(self.moon.step(g, &self.mips, input.moon));
         read.mark(self.atmosphere.earth_step(g, &self.mips, input.earth));
         let cast = input.cast;
-        self.screen.hand(g, &mut self.pipelines, input.ground);
+        self.screen.hand(g, &mut self.pipelines, input.ground.upload);
         let tiles = input.earth_tiles;
         read.mark(self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload));
         rest.mark(self.badges.sync_sheet(g, &self.mips, input.billboards, input.text));
@@ -1633,7 +1634,7 @@ impl Renderer {
             release(ahead);
         }
         self.atmosphere.read_back(g);
-        self.screen.read_back(g);
+        self.screen.read_back(g, input.ground.landed);
         // The image stands where it read all as last time over rays that stood.
         let still = read.end() && self.screen.kind != FrameKind::cast;
         if rest.read(self.clouds.words()) {

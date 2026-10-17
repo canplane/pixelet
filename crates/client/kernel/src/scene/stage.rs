@@ -118,6 +118,7 @@ pub fn stage_render() {
     let o = crate::view::observation::observation();
     let eye = o.as_ref().and_then(crate::scene::cast::eye);
     let mut terrain_upload = crate::scene::cast::upload;
+    let mut terrain_landed = crate::layer::terrain::window::landed;
     let out = render_frame(FrameInput {
         lists,
         environment: &kernel().scene.environment.out,
@@ -132,7 +133,10 @@ pub fn stage_render() {
             layers: &layers,
             upload: &mut earth_upload,
         },
-        ground: GroundSquares { upload: &mut terrain_upload },
+        ground: GroundSquares {
+            upload: &mut terrain_upload,
+            landed: &mut terrain_landed,
+        },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
             window: crate::scene::cast::window(),

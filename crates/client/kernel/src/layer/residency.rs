@@ -83,6 +83,10 @@ pub struct Residency<L: Base> {
     /// from above or no longer. A tile's content is fixed by its identity, so
     /// this is all that changes.
     moved: Vec<Tile>,
+    /// How many times what it holds moved: a tile held or let go, asked for
+    /// again or no longer, answered from above. Not what is read over a
+    /// tile (`moved_at`), which holds nothing.
+    revision: u32,
     refused: u32,
     admitted: u32,
     evicted: u32,
@@ -145,6 +149,7 @@ impl<L: Base> Default for Residency<L> {
             free: (0..Self::FRAMES).rev().collect(),
             going: Vec::with_capacity(Self::ENTRIES as usize),
             moved: Vec::new(),
+            revision: 0,
             refused: 0,
             admitted: 0,
             evicted: 0,
@@ -329,6 +334,7 @@ impl<L: Base> Residency<L> {
             let read = e.held.is_some() && was != e.ask.is_some();
             if read | (e.ask.is_none() && core::mem::take(&mut e.answered)) {
                 self.moved.push(p);
+                self.revision = self.revision.wrapping_add(1);
             }
         }
         let mut going = core::mem::take(&mut self.going);
@@ -437,7 +443,14 @@ impl<L: Base> Residency<L> {
         }
         if !core::mem::replace(&mut self.entry_mut(p).answered, true) {
             self.moved.push(p);
+            self.revision = self.revision.wrapping_add(1);
         }
+    }
+
+    /// What it holds as of now (`revision`): equal where nothing it holds
+    /// moved between.
+    pub fn revision(&self) -> u32 {
+        self.revision
     }
 
     /// The tiles whose answer moved since last taken, into `out`.
@@ -449,6 +462,7 @@ impl<L: Base> Residency<L> {
     fn put(&mut self, p: Tile, body: L, frame: Option<u32>) {
         self.entry_mut(p).held = Some(Held { body, frame, again: false });
         self.moved.push(p);
+        self.revision = self.revision.wrapping_add(1);
     }
 
     /// A framed tile held is fetched once more, read meanwhile: what a
@@ -482,6 +496,7 @@ impl<L: Base> Residency<L> {
             e.remove();
         }
         self.moved.push(p);
+        self.revision = self.revision.wrapping_add(1);
         held.frame
     }
 }
