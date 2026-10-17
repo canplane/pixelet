@@ -244,9 +244,9 @@ pub trait Squares {
 
 /// One square as its fill reads it, for the ways' one rule
 /// (`ways::Columns`): its cells' zoom, where it lies in its tile (in
-/// squares), word `k` of its lines (`LINES_AT`), cell `i`'s four looks as
-/// its lane holds them and as `heights` laid it (`LAID_WORDS`), the area's
-/// edge it is walled by, and column `c`'s height off its tile's samples, `c`
+/// squares), word `k` of its lines (`LINES_AT`), cell `i` as `heights` laid
+/// it (`LAID_WORDS`), its own look and the area's edge it is walled by, and
+/// column `c`'s height off its tile's samples, `c`
 /// counted from its first cell, the ring of columns about it included.
 /// Its columns are its cells and that ring, a ring column read off the
 /// edge bin it borders, whose lines hold every one that reaches it
@@ -255,7 +255,6 @@ pub trait Square {
     fn cell(&self) -> Zoom;
     fn place(&self) -> [u32; 2];
     fn line(&self, k: u32) -> u32;
-    fn looks(&self, i: u32) -> u32;
     /// Cell `i` as its fill laid it (`LAID_WORDS`), before its ways: what
     /// they wall it by.
     fn laid(&self, i: u32) -> u32;
@@ -347,14 +346,15 @@ impl<Q: Square> crate::ways::Columns for Q {
     fn stations(&self, _: [i32; 2]) -> crate::ways::Stations {
         header_of(self).1
     }
-    /// Its own look, before the service area's wall is laid: the wall is the
-    /// descent's to lay (`ran`'s reader).
+    /// Its own look, before the service area's wall is laid, as its fill
+    /// laid it (`LAID_WORDS`): the wall is the descent's to lay (`ran`'s
+    /// reader).
     fn look(&self, c: [i32; 2]) -> u32 {
         let i = cell_index(c);
         if i == SQUARE_CELLS {
             VOID
         } else {
-            crate::ground::own(self.looks(i), Square::cell(self))
+            self.laid(i) & 0xff
         }
     }
     fn face(&self, c: [i32; 2]) -> i32 {

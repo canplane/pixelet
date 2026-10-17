@@ -131,7 +131,8 @@ pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratc
 
 /// A window's square as its fill reads it (pxl-portable `window::Square`):
 /// its cells' zoom and place in its tile, its lines as `square_lines` lays
-/// them, cell `i`'s four looks as a word (`looks`), and column `c`'s height,
+/// them, cell `i` as laid off its four looks (`looks`, its own look, none
+/// about it gone), and column `c`'s height,
 /// counted from its first cell, its ring included (`height`).
 pub struct Laid<'a, L, H> {
     pub cell: Zoom,
@@ -150,9 +151,6 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_portable::window::Square for
     }
     fn line(&self, k: u32) -> u32 {
         self.lines[k as usize]
-    }
-    fn looks(&self, i: u32) -> u32 {
-        (self.looks)(i)
     }
     /// Inside the area, none about it past: a bake sizes the most runs a
     /// client's fill writes, and no wall cuts its ways.

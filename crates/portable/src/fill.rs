@@ -79,7 +79,7 @@ impl Squares for Fresh<'_> {
 }
 
 /// A square being filled, as the ways' rule reads it (`window::Square`):
-/// its lines, looks, laid cells and heights in its lane, and where it is
+/// its lines, laid cells and heights in its lane, and where it is
 /// as handed (`window::FRESH_WORDS`).
 struct Filling<'a> {
     ground: &'a [u32],
@@ -97,9 +97,6 @@ impl window::Square for Filling<'_> {
     }
     fn line(&self, k: u32) -> u32 {
         at(self.ground, self.base + LINES_AT + k)
-    }
-    fn looks(&self, i: u32) -> u32 {
-        at(self.ground, self.base + i)
     }
     fn laid(&self, i: u32) -> u32 {
         laid_of(self.ground, self.base, i)
@@ -127,7 +124,8 @@ pub fn heights(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], [x, y]: [
     let (base, place, cell) = (word(FRESH_SQUARE) * SQUARE_WORDS, window::place_of(word(FRESH_PLACE)), word(FRESH_CELL));
     let (first, shard) = ([word(FRESH_FIRST) as i32, word(FRESH_FIRST + 1) as i32], Shard::of_word(word(FRESH_SHARD)));
     let i = y * SQUARE + x;
-    let top = if ground::own(at(ground, base + i), cell) == ground::UNKNOWN {
+    let own = ground::own(at(ground, base + i), cell);
+    let top = if own == ground::UNKNOWN {
         crate::SEA_LEVEL
     } else {
         let lane: &[u32] = ground;
@@ -137,20 +135,17 @@ pub fn heights(ground: &mut [u32], fresh: [u32; FRESH_WORDS as usize], [x, y]: [
     if x % 2 == 1 {
         return;
     }
-    let mut laid = 0;
-    let mut k = 0;
-    while k < 2 {
+    // The leaf cells gone about each: finer than the leaves, the pair lies
+    // in one leaf cell, whose ring is both's.
+    let gone = |k: u32| {
         let b = [crate::wrap_index(cell, first[0] + (x + k) as i32), first[1] + y as i32];
-        let gone = if cell >= crate::LEAF_CELL {
-            let s = cell - crate::LEAF_CELL;
-            crate::area::gone_ring(shard, (cell, b), [b[0] >> s, b[1] >> s])
-        } else {
-            0
-        };
-        laid |= window::laid_half(ground::own(at(ground, base + i + k), cell), gone) << (16 * k);
-        k += 1;
-    }
-    put(ground, base + LAID_AT + i / 2, laid);
+        let s = cell - crate::LEAF_CELL;
+        crate::area::gone_ring(shard, (cell, b), [b[0] >> s, b[1] >> s])
+    };
+    let gone0 = if cell >= crate::LEAF_CELL { gone(0) } else { 0 };
+    let gone1 = if cell == crate::LEAF_CELL { gone(1) } else { gone0 };
+    let next = ground::own(at(ground, base + i + 1), cell);
+    put(ground, base + LAID_AT + i / 2, window::laid_half(own, gone0) | window::laid_half(next, gone1) << 16);
 }
 
 /// Pass `pass` of the ways of the square `fresh` hands (`window::fresh`),
