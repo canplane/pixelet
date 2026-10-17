@@ -26,8 +26,7 @@ pub mod STAGE_AT {
     pub const LOW_SPEC: usize = EDGE_STRENGTH + 1;
     pub const EDGE_WIDTH: usize = LOW_SPEC + 1;
     pub const RIM_INTENSITY: usize = EDGE_WIDTH + 1;
-    pub const AO_STRENGTH: usize = RIM_INTENSITY + 1;
-    pub const SCREEN_AO: usize = AO_STRENGTH + 1;
+    pub const SCREEN_AO: usize = RIM_INTENSITY + 1;
     /// How much of the clouds shows, none to all.
     pub const CLOUDS: usize = SCREEN_AO + 1;
 }

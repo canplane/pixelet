@@ -24,7 +24,7 @@ use pxl_portable::placed::{self, Cut, Held, Lanes, PLACED};
 use pxl_portable::scatter::{self, drawn, Grounds, PLACED_BLOCK, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
-use pxl_portable::{at, ray, world, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
+use pxl_portable::{at, ray, world, LEAF_CELL, SHARD_ZOOM};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::{spirv, Image};
@@ -427,7 +427,10 @@ fn pixel_ray(eye: &Eye, p: UVec3, size: UVec3) -> cast::Ray {
     let ndc_x = (p.x as f32 + 0.5) / size.x as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p.y as f32 + 0.5) / size.y as f32 * 2.0;
     let v3 = |v: Vec4| [v.x, v.y, v.z];
-    cast::Ray::new(cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), ndc_x * eye.tan.x, ndc_y * eye.tan.y), eye.forward_far.w)
+    cast::Ray::new(
+        cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), ndc_x * eye.tan.x, ndc_y * eye.tan.y),
+        eye.forward_far.w,
+    )
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
@@ -689,7 +692,7 @@ pub fn decor_cs(
 ) {
     let listed = at(grows, scatter::GROWS_AT + id.z);
     let (square, kind) = (listed & 0xffff, listed >> 16);
-    let (cell, slot) = (window::eye_cell(square / SLOTS), square % SLOTS);
+    let cell = window::eye_cell(square / SLOTS);
     if id.x >= COUNTS as u32 || id.y >= SQUARE_BLOCKS || cell > LEAF_CELL || at(shown, kind) >> (cell - FIRST_CELL) & 1 == 0 {
         return;
     }

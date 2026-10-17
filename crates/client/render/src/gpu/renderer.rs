@@ -67,10 +67,9 @@ const RIM_INTENSITY: usize = FRAME_AT[8];
 const OTHER_COLOR: usize = FRAME_AT[9];
 const VIGNETTE: usize = FRAME_AT[10];
 const VIEWPORT: usize = FRAME_AT[11];
-const AO_STRENGTH: usize = FRAME_AT[12];
-const SCREEN_AO: usize = FRAME_AT[13];
-const MAP: usize = FRAME_AT[14];
-const CELL: usize = FRAME_AT[15];
+const SCREEN_AO: usize = FRAME_AT[12];
+const MAP: usize = FRAME_AT[13];
+const CELL: usize = FRAME_AT[14];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_POLE: usize = 12;
@@ -1498,7 +1497,6 @@ impl Renderer {
         u[VIEWPORT] = width as f32;
         u[VIEWPORT + 1] = height as f32;
         u[VIGNETTE] = 1.0;
-        u[AO_STRENGTH] = s[STAGE_AT::AO_STRENGTH] as f32;
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
         if self.screen_ao {

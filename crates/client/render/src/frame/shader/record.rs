@@ -29,7 +29,7 @@ include!(concat!(env!("OUT_DIR"), "/sources.rs"));
 
 /// Frame uniform field offsets in floats, in frame.wgsl's order (its size
 /// frame/shader/words.rs's `FRAME_FLOATS`).
-pub const FRAME_AT: [usize; 16] = [0, 16, 19, 20, 23, 24, 27, 28, 31, 32, 35, 36, 38, 39, 40, 44];
+pub const FRAME_AT: [usize; 15] = [0, 16, 19, 20, 23, 24, 27, 28, 31, 32, 35, 36, 39, 40, 44];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_SKY: u32 = 10;

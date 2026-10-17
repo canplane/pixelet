@@ -15,10 +15,6 @@ pub const RIM_INTENSITY: f64 = 0.5;
 pub const EDGE_STRENGTH: f64 = 0.3;
 pub const EDGE_WIDTH: f64 = 2.0;
 
-/// Corner occlusion's darkening, written where the setting asks for it; the
-/// shader cannot see a setting.
-pub const AO_STRENGTH: f64 = 0.2;
-
 // ---- places ----
 
 /// What reading one chunk's markers and places costs, measured: 3.75 ms over

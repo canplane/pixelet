@@ -73,7 +73,6 @@ pub fn stage_write() {
     let tau = crate::view::lens::tau();
     s[STAGE_AT::LOD_CELL] = crate::view::lens::cell_angle(tau);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
-    s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
     s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
     // In the pixels the world is drawn at, which the resolution steps.

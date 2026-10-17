@@ -124,15 +124,13 @@ export const SETTINGS = {
     section: "lighting",
     cost: "low",
   },
-  /** corner, the occlusion a voxel world gets from its own geometry with no
-   * screen-space pass; screen, N8AO's screen-space pass, the costliest of
-   * the three. AO_MODES says each. */
+  /** screen, N8AO's screen-space pass, or none. AO_MODES says each. */
   ao: {
     key: 10 as number,
     kind: "choice",
-    default: "corner",
-    options: ["off", "corner", "screen"],
-    costs: ["", "low", "high"],
+    default: "off",
+    options: ["off", "screen"],
+    costs: ["", "high"],
     section: "lighting",
   },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
@@ -276,15 +274,13 @@ export const SETTINGS_SHIPPED = {
     section: "lighting",
     cost: "low",
   },
-  /** corner, the occlusion a voxel world gets from its own geometry with no
-   * screen-space pass; screen, N8AO's screen-space pass, the costliest of
-   * the three. AO_MODES says each. */
+  /** screen, N8AO's screen-space pass, or none. AO_MODES says each. */
   ao: {
     key: 10 as number,
     kind: "choice",
-    default: "corner",
-    options: ["off", "corner", "screen"],
-    costs: ["", "low", "high"],
+    default: "off",
+    options: ["off", "screen"],
+    costs: ["", "high"],
     section: "lighting",
   },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
