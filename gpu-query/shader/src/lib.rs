@@ -359,7 +359,7 @@ impl Grounds for Growing<'_> {
 /// write its face bits over, then the four looks a coarse ground block
 /// folds or, in the steps view, the nodes its descent asked about; where it
 /// met nothing, the first three zero.
-fn word(ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> UVec4 {
+fn word(o: &cast::Origin, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> UVec4 {
     if met.ends != Ends::Stop {
         return UVec4::new(0, 0, 0, met.visits);
     }
@@ -368,7 +368,7 @@ fn word(ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> UVec4 {
     let face = 2 * s.axis + down as u32;
     let [value, folds] = s.block;
     let kind = if value & PLACED_BLOCK != 0 { ray::KIND_PLACED } else { ray::KIND_GROUND };
-    let (zoom, c) = (s.place.zoom, s.place.node(ray));
+    let (zoom, c) = (s.place.zoom, s.place.node(o));
     let w3 = if steps { met.visits } else { folds };
     UVec4::new(ray::first_word(value, kind, face, zoom), s.t.to_bits(), low_bits(c), w3)
 }
@@ -397,7 +397,7 @@ fn low_bits(c: [i32; 3]) -> u32 {
 /// it, its index's low bits `low` (`low_bits`): the block its hit point
 /// rounds to, moved half a block into it across the face it entered,
 /// corrected to the one whose low bits the cast kept.
-fn hit_block(ray: &cast::Ray, t: f32, axis: u32, zoom: u32, low: u32) -> [i32; 3] {
+fn hit_block(o: &cast::Origin, ray: &cast::Ray, t: f32, axis: u32, zoom: u32, low: u32) -> [i32; 3] {
     let side = cast::Place { zoom, corner: [0; 3] }.side();
     let half = (1 << LOW_BITS) / 2;
     let mut c = [0; 3];
@@ -413,11 +413,11 @@ fn hit_block(ray: &cast::Ray, t: f32, axis: u32, zoom: u32, low: u32) -> [i32; 3
         } else {
             0.0
         };
-        let rel = ray.frac[a] + d * t + into;
+        let rel = o.frac[a] + d * t + into;
         let near = if zoom <= UNIT_ZOOM {
-            (ray.unit[a] + floor(rel)) >> (UNIT_ZOOM - zoom)
+            (o.unit[a] + floor(rel)) >> (UNIT_ZOOM - zoom)
         } else {
-            (ray.unit[a] << (zoom - UNIT_ZOOM)) + floor(rel * (1 << (zoom - UNIT_ZOOM)) as f32)
+            (o.unit[a] << (zoom - UNIT_ZOOM)) + floor(rel * (1 << (zoom - UNIT_ZOOM)) as f32)
         };
         let kept = ((low >> (LOW_BITS * a as u32)) & ((1 << LOW_BITS) - 1)) as i32;
         c[a] = near + ((kept - near + half) & ((1 << LOW_BITS) - 1)) - half;
@@ -449,7 +449,7 @@ pub fn face_cs(
     if ray::kind_of(w.x) == ray::KIND_NONE {
         return;
     }
-    let (ray, _) = pixel_ray(eye, id, size);
+    let (origin, ray) = (eye_origin(eye).0, pixel_ray(eye, id, size));
     let mut world = World {
         window,
         ground,
@@ -458,7 +458,7 @@ pub fn face_cs(
         eye,
     };
     let (axis, zoom) = (ray::face_of(w.x) / 2, ray::zoom_of(w.x));
-    let c = hit_block(&ray, f32::from_bits(w.y), axis, zoom, w.z);
+    let c = hit_block(&origin, &ray, f32::from_bits(w.y), axis, zoom, w.z);
     let filled = world.about(zoom, c);
     // SAFETY: within the rays, just bounded by their size.
     unsafe { rays.write(UVec3::new(id.x, id.y, 2), mask::mask(filled)) };
@@ -496,14 +496,10 @@ fn at_of(w: &[u32], k: u32) -> At {
     }
 }
 
-/// The ray at the tangents `tx` across and `ty` up from the optical axis,
-/// and the zooms each distance asks.
-fn eye_ray(eye: &Eye, tx: f32, ty: f32) -> (cast::Ray, Detail) {
-    let v3 = |v: Vec4| [v.x, v.y, v.z];
-    let direction = cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), tx, ty);
-    let ray = cast::Ray::of([eye.origin.x, eye.origin.y, eye.origin.z], direction, eye.forward_far.w);
+/// Where the eye's rays start, and the zooms each distance asks.
+fn eye_origin(eye: &Eye) -> (cast::Origin, Detail) {
     (
-        ray,
+        cast::Origin::of([eye.origin.x, eye.origin.y, eye.origin.z]),
         Detail {
             tau: eye.right_tau.w,
             range: [eye.range.x, eye.range.y],
@@ -512,11 +508,16 @@ fn eye_ray(eye: &Eye, tx: f32, ty: f32) -> (cast::Ray, Detail) {
 }
 
 /// The ray through the middle of drawn pixel `p` of the `size` the rays
-/// are, row 0 at the top, as the screen pass forms it from its own pixel.
-fn pixel_ray(eye: &Eye, p: UVec3, size: UVec3) -> (cast::Ray, Detail) {
+/// are, row 0 at the top, as the screen pass forms it from its own pixel:
+/// its tangents the screen's half-angles' scaled by where it lies.
+fn pixel_ray(eye: &Eye, p: UVec3, size: UVec3) -> cast::Ray {
     let ndc_x = (p.x as f32 + 0.5) / size.x as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p.y as f32 + 0.5) / size.y as f32 * 2.0;
-    eye_ray(eye, ndc_x * eye.tan.x, ndc_y * eye.tan.y)
+    let v3 = |v: Vec4| [v.x, v.y, v.z];
+    cast::Ray {
+        direction: cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), ndc_x * eye.tan.x, ndc_y * eye.tan.y),
+        reach: eye.forward_far.w,
+    }
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
@@ -536,7 +537,7 @@ pub fn start_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
 ) {
-    let (ray, detail) = eye_ray(eye, 0.0, 0.0);
+    let (origin, detail) = eye_origin(eye);
     let mut world = World {
         window,
         ground,
@@ -544,7 +545,7 @@ pub fn start_cs(
         overwrites,
         eye,
     };
-    let s = cast::start(&mut world, &ray, detail);
+    let s = cast::start(&mut world, &origin, detail);
     put(starts, cast::START_PLACE, s.place.zoom);
     put(starts, cast::START_PLACE + 1, s.place.corner[0] as u32);
     put(starts, cast::START_PLACE + 2, s.place.corner[1] as u32);
@@ -572,7 +573,7 @@ pub fn cast_cs(
     if id.x >= size.x || id.y >= size.y {
         return;
     }
-    let (ray, detail) = pixel_ray(eye, id, size);
+    let ((origin, detail), ray) = (eye_origin(eye), pixel_ray(eye, id, size));
     let mut world = World {
         window,
         ground,
@@ -595,8 +596,8 @@ pub fn cast_cs(
         from.stack[k] = at_of(read, cast::start_stack(k as u32));
         k += 1;
     }
-    let met = cast::first_from(&mut world, &ray, detail, Until::Fills, from);
-    let w = word(&ray, met, eye.origin.w != 0);
+    let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, from);
+    let w = word(&origin, &ray, met, eye.origin.w != 0);
     // SAFETY: within the rays, just bounded by their size.
     unsafe {
         rays.write(UVec3::new(id.x, id.y, 0), w.x);
