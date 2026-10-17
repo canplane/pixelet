@@ -50,6 +50,13 @@ impl Residency<TerrainTile> {
         held(line, f.from(), f.here(), cell)
     }
 
+    /// `relief` over `node`'s cells at `cell`, its line stepped from where
+    /// `lines` last walked: nodes beside each other share their lines down
+    /// to where they part, and pay a look-up a zoom only past it.
+    pub fn relief_walked(&self, lines: &mut Lines, place: &mut Found, node: Node<2>, cell: Zoom) -> Answer<[i32; 2]> {
+        self.relief(&self.seek(lines, bound_tile(node, cell)), place, node)
+    }
+
     /// `bound`, its line stepped from where `lines` last walked: a walk in
     /// key order pays one look-up a node.
     pub fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Bound>> {

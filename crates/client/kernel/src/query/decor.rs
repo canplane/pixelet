@@ -28,6 +28,7 @@ use super::world::World;
 use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Meta};
 use crate::layer::object::meta::placed;
+use crate::layer::residency::Lines;
 use crate::layer::terrain::window::Windowed;
 use crate::layer::Query;
 use crate::model::registry::Models;
@@ -219,6 +220,8 @@ impl<'a> World<'a> {
         let low = cube(zoom, c).min[2] - s.reach;
         let leaf = units(GROUND.cell());
         let node = (zoom, [c[0] as i32, c[1] as i32]);
+        // The nine's lines share the walk down to where they part.
+        let mut lines = Lines::default();
         let ground = (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
                 let xy = (z, [a[0] + dx, a[1] + dy]);
@@ -227,7 +230,7 @@ impl<'a> World<'a> {
                     return false;
                 }
                 let mut place = Found::NONE;
-                match self.terrain.relief(&self.terrain.cursor(xy, GROUND.grid_zoom(z.min(LEAF_ZOOM))), &mut place, xy).value() {
+                match self.terrain.relief_walked(&mut lines, &mut place, xy, GROUND.grid_zoom(z.min(LEAF_ZOOM))).value() {
                     Some([_, hi]) => f64::from(hi) * leaf > low,
                     None => true,
                 }
