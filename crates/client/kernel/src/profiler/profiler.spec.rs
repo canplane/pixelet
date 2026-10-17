@@ -410,28 +410,24 @@ pub mod SUMMARY {
     pub const KEYS: &[&str] = &["rec", "frames", "open", "tasks", "counters", "sheet", "fetch", "steps", "quality", "view", "WORDS"];
 }
 
-/// What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count.
+/// What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words.
 pub mod READ {
     pub const summary_at: u32 = 0;
     pub const summary_words: u32 = 1;
-    pub const frames_at: u32 = 2;
-    pub const frames_count: u32 = 3;
-    pub const tasks_at: u32 = 4;
-    pub const tasks_count: u32 = 5;
-    pub const worst_at: u32 = 6;
-    pub const worst_count: u32 = 7;
-    pub const WORDS: u32 = 8;
-    pub const KEYS: &[&str] = &[
-        "summary_at",
-        "summary_words",
-        "frames_at",
-        "frames_count",
-        "tasks_at",
-        "tasks_count",
-        "worst_at",
-        "worst_count",
-        "WORDS",
-    ];
+    pub const WORDS: u32 = 2;
+    pub const KEYS: &[&str] = &["summary_at", "summary_words", "WORDS"];
+}
+
+/// What PROFILER_RINGS answers with the address of: u32 words, each ring's address in the module's memory and its record count.
+pub mod RINGS {
+    pub const frames_at: u32 = 0;
+    pub const frames_count: u32 = 1;
+    pub const tasks_at: u32 = 2;
+    pub const tasks_count: u32 = 3;
+    pub const worst_at: u32 = 4;
+    pub const worst_count: u32 = 5;
+    pub const WORDS: u32 = 6;
+    pub const KEYS: &[&str] = &["frames_at", "frames_count", "tasks_at", "tasks_count", "worst_at", "worst_count", "WORDS"];
 }
 
 /// What PROFILER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take.

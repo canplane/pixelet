@@ -261,10 +261,18 @@ pub enum ProfilerMinor {
     LOG = 0x03,
     READ = 0x04,
     TAKE = 0x05,
+    RINGS = 0x06,
 }
 
 impl ProfilerMinor {
-    pub const ALL: [ProfilerMinor; 5] = [ProfilerMinor::START, ProfilerMinor::STOP, ProfilerMinor::LOG, ProfilerMinor::READ, ProfilerMinor::TAKE];
+    pub const ALL: [ProfilerMinor; 6] = [
+        ProfilerMinor::START,
+        ProfilerMinor::STOP,
+        ProfilerMinor::LOG,
+        ProfilerMinor::READ,
+        ProfilerMinor::TAKE,
+        ProfilerMinor::RINGS,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<ProfilerMinor> {
@@ -617,19 +625,21 @@ pub enum Command {
     PROFILER_STOP = 0x1902,
     /// The console stream on or off.
     PROFILER_LOG = 0x1903,
-    /// The profiler where it lies: the reply is the address of READ's words (profiler.json) over the
-    /// last `window_ms`, the whole recording where it is absent, good until the next turn. A number
-    /// past the door is finite, so no window is infinite.
+    /// The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)
+    /// over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
+    /// number past the door is finite, so no window is infinite.
     PROFILER_READ = 0x1904,
     /// The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn.
     PROFILER_TAKE = 0x1905,
+    /// The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn.
+    PROFILER_RINGS = 0x1906,
     /// The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
     /// block the kernel holds, valid until the next snapshot.
     WORLD_SNAPSHOT = 0x1004,
 }
 
 impl Command {
-    pub const ALL: [Command; 42] = [
+    pub const ALL: [Command; 43] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::SENSOR_POSITION,
@@ -671,6 +681,7 @@ impl Command {
         Command::PROFILER_LOG,
         Command::PROFILER_READ,
         Command::PROFILER_TAKE,
+        Command::PROFILER_RINGS,
         Command::WORLD_SNAPSHOT,
     ];
 

@@ -309,10 +309,17 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count."
+      "What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words."
     ],
     "summary_at": 1,
-    "summary_words": 1,
+    "summary_words": 1
+  },
+  "RINGS": {
+    "$type": "u32",
+    "$packed": true,
+    "$doc": [
+      "What PROFILER_RINGS answers with the address of: u32 words, each ring's address in the module's memory and its record count."
+    ],
     "frames_at": 1,
     "frames_count": 1,
     "tasks_at": 1,

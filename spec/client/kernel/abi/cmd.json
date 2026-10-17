@@ -338,6 +338,10 @@
         {
           "name": "TAKE",
           "value": 5
+        },
+        {
+          "name": "RINGS",
+          "value": 6
         }
       ]
     },
@@ -1357,9 +1361,9 @@
           "name": "PROFILER_READ",
           "value": 6404,
           "$doc": [
-            "The profiler where it lies: the reply is the address of READ's words (profiler.json) over the",
-            "last `window_ms`, the whole recording where it is absent, good until the next turn. A number",
-            "past the door is finite, so no window is infinite."
+            "The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)",
+            "over the last `window_ms`, the whole recording where it is absent, good until the next turn. A",
+            "number past the door is finite, so no window is infinite."
           ],
           "packet": [
             {
@@ -1374,6 +1378,13 @@
           "value": 6405,
           "$doc": [
             "The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn."
+          ]
+        },
+        {
+          "name": "PROFILER_RINGS",
+          "value": 6406,
+          "$doc": [
+            "The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn."
           ]
         },
         {

@@ -243,17 +243,22 @@ export const SUMMARY = {
   WORDS: 528 as number,
 } as const;
 
-/** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */
+/** What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words. */
 export const READ = {
   summary_at: 0 as number,
   summary_words: 1 as number,
-  frames_at: 2 as number,
-  frames_count: 3 as number,
-  tasks_at: 4 as number,
-  tasks_count: 5 as number,
-  worst_at: 6 as number,
-  worst_count: 7 as number,
-  WORDS: 8 as number,
+  WORDS: 2 as number,
+} as const;
+
+/** What PROFILER_RINGS answers with the address of: u32 words, each ring's address in the module's memory and its record count. */
+export const RINGS = {
+  frames_at: 0 as number,
+  frames_count: 1 as number,
+  tasks_at: 2 as number,
+  tasks_count: 3 as number,
+  worst_at: 4 as number,
+  worst_count: 5 as number,
+  WORDS: 6 as number,
 } as const;
 
 /** What PROFILER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take. */

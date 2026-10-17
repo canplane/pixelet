@@ -54,7 +54,12 @@ function frameArgs(f: Frame): Args {
       continue;
     }
     const names = LIST_NAMES[name];
-    if (name === "census") f.census.forEach(([, t], i) => (args[`census_${names[i]}_tris`] = t));
+    if (name === "census") {
+      f.census.forEach(([d, t], i) => {
+        args[`census_${names[i]}_draws`] = d;
+        args[`census_${names[i]}_tris`] = t;
+      });
+    }
     else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed_n(v, 2)));
   }
   // Vsync wait, compositor, GPU, GC, the shell's glue.
@@ -75,15 +80,14 @@ function profilerTraceJson(): string {
       catTid.set(r.stream, tid);
       events.push(threadName(tid, `task: ${r.stream}`));
     }
+    // The outcome is the event's category, and the detail is in `fail`'s text.
     const args: Args = {
-      outcome: r.outcome,
       priority: r.priority,
       queuedMs: r.start_ms === null ? null : fixed_n(r.start_ms - r.enqueue_ms, 1),
       ranMs: r.start_ms === null ? null : fixed_n(r.end_ms - r.start_ms, 1),
     };
     if (r.fail !== 0) {
       args.fail = failText(r.fail, r.detail);
-      if (r.detail !== 0) args.detail = r.detail;
       if (r.at !== null) args.at = r.at;
     }
     for (const [k, v] of r.phases) args[k] = v;
@@ -118,10 +122,10 @@ function profilerTraceJson(): string {
 
   // ---- long animation frames ----
   if (longs.length > 0) {
-    events.push(threadName(TID_LONG, "LoAF"));
+    events.push(threadName(TID_LONG, "long frames"));
     for (const l of longs) {
       const args = { blockingMs: fixed_n(l.blockingMs, 1), scriptMs: fixed_n(l.scriptMs, 1), renderMs: fixed_n(l.renderMs, 1) };
-      events.push(event(`long frame ${fixed(l.durationMs, 0)}ms`, "loaf", "X", us(l.t), us(l.durationMs), TID_LONG, args));
+      events.push(event(`${l.source} ${fixed(l.durationMs, 0)}ms`, l.source, "X", us(l.t), us(l.durationMs), TID_LONG, args));
     }
   }
 

@@ -332,6 +332,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // Memory is at most 1 GiB, so an address fits an i32.
         Command::PROFILER_READ => Ok(Some(profiler_read(abi::ProfilerRead::read(packet(pkt)?)?.window_ms) as i32)),
         Command::PROFILER_TAKE => Ok(Some(profiler_take(s) as i32)),
+        Command::PROFILER_RINGS => Ok(Some(profiler_rings() as i32)),
         Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP => Ok(None),
     }
 }
@@ -354,25 +355,35 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
 }
 
 /// The address of READ's words (profiler.json): the summary over
-/// `window_ms` and the three rings. Read in place rather than posted:
-/// `Door::post` asserts on a full completion ring, and reading allocates
-/// nothing in the heap being measured. Valid until the next turn.
+/// `window_ms`. Read in place rather than posted: `Door::post` asserts on a
+/// full completion ring, and reading allocates nothing in the heap being
+/// measured. Valid until the next turn.
 fn profiler_read(window_ms: Option<f64>) -> u32 {
-    use crate::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
     use crate::profiler::spec::READ;
     // On the heap, not a static: a native build's statics are outside the shell-readable memory.
     static WORDS: xpute_guest::global::Global<Box<[u32; READ::WORDS as usize]>> = xpute_guest::global::Global::new();
     let summary = crate::profiler::summary::profiler_summarize(window_ms);
-    let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
     w[READ::summary_at as usize] = off_of_slice(&raw const *summary) as u32;
     w[READ::summary_words as usize] = summary.len() as u32;
-    w[READ::frames_at as usize] = off_of_slice(&raw const *frames) as u32;
-    w[READ::frames_count as usize] = frames.len() as u32;
-    w[READ::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
-    w[READ::tasks_count as usize] = tasks.len() as u32;
-    w[READ::worst_at as usize] = off_of_slice(&raw const *worst) as u32;
-    w[READ::worst_count as usize] = worst.len() as u32;
+    off_of(w.as_ptr()) as u32
+}
+
+/// The address of RINGS's words: the three rings as they lie, which a
+/// reader of every record asks without the summary it would not read.
+fn profiler_rings() -> u32 {
+    use crate::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
+    use crate::profiler::spec::RINGS;
+    // On the heap, as READ's words are.
+    static WORDS: xpute_guest::global::Global<Box<[u32; RINGS::WORDS as usize]>> = xpute_guest::global::Global::new();
+    let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
+    let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));
+    w[RINGS::frames_at as usize] = off_of_slice(&raw const *frames) as u32;
+    w[RINGS::frames_count as usize] = frames.len() as u32;
+    w[RINGS::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
+    w[RINGS::tasks_count as usize] = tasks.len() as u32;
+    w[RINGS::worst_at as usize] = off_of_slice(&raw const *worst) as u32;
+    w[RINGS::worst_count as usize] = worst.len() as u32;
     off_of(w.as_ptr()) as u32
 }
 

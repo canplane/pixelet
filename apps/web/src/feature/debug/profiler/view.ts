@@ -15,7 +15,7 @@ import { OUTCOME_NAMES, STREAM_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/deman
 import { kernel_call, kernel_memory, kernel_room } from "@/kernel/shell.ts";
 
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
-import { CENSUS_TAGS, FRAME, LOG, READ, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WAKES, WORST } from "./profiler.spec.ts";
+import { CENSUS_TAGS, FRAME, LOG, READ, RINGS, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WAKES, WORST } from "./profiler.spec.ts";
 import { STEP_NAMES } from "@/kernel/turn/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
 import { type Frame, frameAt } from "./lane.ts";
@@ -192,26 +192,30 @@ function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
   return out;
 }
 
-interface Read {
-  summary: F64Array;
+/** The summary over the last `windowMs`, or the whole recording at null. */
+function read(windowMs: f64 | null): F64Array {
+  const r = u32s(kernel_call(Command.PROFILER_READ, encode_profiler_read(kernel_room, windowMs)), READ.WORDS);
+  return words(r[READ.summary_at], r[READ.summary_words]);
+}
+
+interface Rings {
   frames: [u32, u32];
   tasks: [u32, u32];
   worst: [u32, u32];
 }
 
-/** Over the last `windowMs`, or the whole recording at null. */
-function read(windowMs: f64 | null): Read {
-  const r = u32s(kernel_call(Command.PROFILER_READ, encode_profiler_read(kernel_room, windowMs)), READ.WORDS);
+/** The rings as they lie, each its address and count, with nothing reduced. */
+function rings(): Rings {
+  const r = u32s(kernel_call(Command.PROFILER_RINGS), RINGS.WORDS);
   return {
-    summary: words(r[READ.summary_at], r[READ.summary_words]),
-    frames: [r[READ.frames_at], r[READ.frames_count]],
-    tasks: [r[READ.tasks_at], r[READ.tasks_count]],
-    worst: [r[READ.worst_at], r[READ.worst_count]],
+    frames: [r[RINGS.frames_at], r[RINGS.frames_count]],
+    tasks: [r[RINGS.tasks_at], r[RINGS.tasks_count]],
+    worst: [r[RINGS.worst_at], r[RINGS.worst_count]],
   };
 }
 
 export interface Gauge {
-  /** The frames and tasks the rings hold, which READ counts. */
+  /** The frames and tasks the rings hold, as RINGS counts them. */
   rec: { recording: boolean; elapsed_ms: f64; tasks: u32; frames: u32; truncated: boolean };
   frames: FrameSummary | null;
   /** The interval in progress, which no frame turn has closed. */
@@ -234,7 +238,8 @@ function worstAt([at, count]: [u32, u32]): ProfilerReport["worst"] {
 }
 
 export function profilerGaugeRead(windowMs: f64): Gauge {
-  const { summary: s, frames, tasks } = read(windowMs);
+  const s = read(windowMs);
+  const { frames, tasks } = rings();
   const r = section(s, SUMMARY.rec);
   return {
     rec: { recording: r.recording !== 0, elapsed_ms: r.elapsed_ms, tasks: tasks[1], frames: frames[1], truncated: r.truncated !== 0 },
@@ -250,7 +255,8 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
 }
 
 export function profilerReportRead(): ProfilerReport {
-  const { summary: s, tasks, worst } = read(null);
+  const s = read(null);
+  const { tasks, worst } = rings();
   const stepsAt = SUMMARY.steps.AT;
   const steps = Array.from({ length: s[stepsAt + SUMMARY.steps.count] }, (_, i) => {
     const w = stepsAt + SUMMARY.steps.slots + i * STEP.WORDS;
@@ -284,7 +290,7 @@ export function profilerReportRead(): ProfilerReport {
 }
 
 export function profilerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; worst: ProfilerReport["worst"] } {
-  const { tasks, frames, worst } = read(0);
+  const { tasks, frames, worst } = rings();
   return { frames: framesAt(frames[0], frames[1]), tasks: tasksAt(tasks[0], tasks[1]), worst: worstAt(worst) };
 }
 
