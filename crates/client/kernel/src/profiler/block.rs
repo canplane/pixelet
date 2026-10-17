@@ -60,8 +60,11 @@ pub struct FramesBlock {
     pub tick: Spread,
     pub tasks: Spread,
     pub gpu: Spread,
-    pub phases: [Spread; PHASES.len()],
-    pub gpu_spans: [Spread; GPU_SPANS],
+    /// The p95 alone of each phase, and of each span its p95 and its max:
+    /// what is read of them.
+    pub phases_p95: [f64; PHASES.len()],
+    pub gpu_spans_p95: [f64; GPU_SPANS],
+    pub gpu_spans_max: [f64; GPU_SPANS],
     /// Frames by the renderer's FRAME_KINDS, and turns' last ask by WAKES.
     pub kinds: [f64; FRAME_KINDS.len()],
     pub wakes: [f64; WAKES.len()],
@@ -78,7 +81,7 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     long => SUMMARY::frames::long, turns => SUMMARY::frames::turns,
     interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy, off_turn => SUMMARY::frames::off_turn,
     tick => SUMMARY::frames::tick, tasks => SUMMARY::frames::tasks, gpu => SUMMARY::frames::gpu,
-    phases => SUMMARY::frames::phases, gpu_spans => SUMMARY::frames::gpu_spans,
+    phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95, gpu_spans_max => SUMMARY::frames::gpu_spans_max,
     kinds => SUMMARY::frames::kinds, wakes => SUMMARY::frames::wakes,
     heap_peak_delta_bytes => SUMMARY::frames::heap_peak_delta_bytes, census => SUMMARY::frames::census,
     last => SUMMARY::frames::last,
@@ -102,7 +105,8 @@ pub struct TaskBlock {
     pub ok: f64,
     pub aborted: f64,
     pub error: f64,
-    pub lat: Spread,
+    pub lat_p50: f64,
+    pub lat_p95: f64,
     pub reason_count: f64,
     /// (reason, status, count) each, commonest first.
     pub reasons: [[f64; 3]; REASONS],
@@ -113,7 +117,7 @@ pub struct TaskBlock {
 
 words!(TaskBlock, TASK_SUMMARY::WORDS,
     n => TASK_SUMMARY::n, ok => TASK_SUMMARY::ok, aborted => TASK_SUMMARY::aborted, error => TASK_SUMMARY::error,
-    lat => TASK_SUMMARY::lat, reason_count => TASK_SUMMARY::reason_count, reasons => TASK_SUMMARY::reasons,
+    lat_p50 => TASK_SUMMARY::lat_p50, lat_p95 => TASK_SUMMARY::lat_p95, reason_count => TASK_SUMMARY::reason_count, reasons => TASK_SUMMARY::reasons,
     phase_n => TASK_SUMMARY::phase_n, phase_mean => TASK_SUMMARY::phase_mean,
 );
 
@@ -130,6 +134,8 @@ words!(TasksBlock, SUMMARY::tasks::WORDS, slots => SUMMARY::tasks::slots);
 pub struct CountersBlock {
     pub sheet_repacks: f64,
     pub sheet_uploads: f64,
+    pub terrain_admitted: f64,
+    pub terrain_evicted: f64,
 }
 
 impl CountersBlock {
@@ -153,6 +159,8 @@ impl CountersBlock {
 words!(CountersBlock, SUMMARY::counters::WORDS,
     sheet_repacks => SUMMARY::counters::sheet_repacks,
     sheet_uploads => SUMMARY::counters::sheet_uploads,
+    terrain_admitted => SUMMARY::counters::terrain_admitted,
+    terrain_evicted => SUMMARY::counters::terrain_evicted,
 );
 
 #[repr(C)]
@@ -182,8 +190,6 @@ words!(FetchBlock, SUMMARY::fetch::WORDS, credits => SUMMARY::fetch::credits);
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct QualityBlock {
     pub frames_held: f64,
-    pub admitted: f64,
-    pub evicted: f64,
 }
 
 #[repr(C)]
@@ -213,10 +219,7 @@ words!(ViewBlock, SUMMARY::view::WORDS,
     cell_want => SUMMARY::view::cell_want,
 );
 
-words!(QualityBlock, SUMMARY::quality::WORDS,
-    frames_held => SUMMARY::quality::frames_held,
-    admitted => SUMMARY::quality::admitted, evicted => SUMMARY::quality::evicted,
-);
+words!(QualityBlock, SUMMARY::quality::WORDS, frames_held => SUMMARY::quality::frames_held);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

@@ -233,14 +233,13 @@ pub fn profiler_record_frame(s: FrameSample, interval_ms: f64, settled: bool, fr
 }
 
 /// A turn's end, frame turn or not: its time into the interval in progress,
-/// rise to fall, its door's and its tasks' parts, and what it asked as it fell.
-pub fn profiler_record_turn(turn_ms: f64, door_ms: f64, poll_ms: f64, wake: f64, wake_in_ms: f64) {
+/// rise to fall, its tasks' part, and what it asked as it fell.
+pub fn profiler_record_turn(turn_ms: f64, poll_ms: f64, wake: f64, wake_in_ms: f64) {
     let l = profiler();
     let frame_task_ms = core::mem::take(&mut l.frame_task_ms);
     let Some(f) = l.open.as_mut().filter(|_| l.recording) else { return };
     f.turns += 1.0;
     f.busy_ms += turn_ms;
-    f.door_ms += door_ms;
     // The frame task runs inside the poll, so this is never negative.
     f.tasks_ms += poll_ms - frame_task_ms;
     (f.wake, f.wake_in_ms) = (wake, wake_in_ms);

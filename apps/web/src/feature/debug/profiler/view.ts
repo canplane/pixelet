@@ -81,8 +81,9 @@ export interface FrameSummary {
   tick: Spread;
   tasks: Spread;
   gpu: Spread;
-  phases: { name: string; spread: Spread }[];
-  gpu_spans: { name: string; spread: Spread }[];
+  /** Each phase's p95, and each span's p95 and max: what is read of them. */
+  phases: { name: string; p95: f64 }[];
+  gpu_spans: { name: string; p95: f64; max: f64 }[];
   /** Frames by the renderer's kind, and the turns' last ask by wake. */
   kinds: { name: string; n: f64 }[];
   wakes: { name: string; n: f64 }[];
@@ -112,7 +113,7 @@ export interface TaskSummary {
   ok: u32;
   aborted: u32;
   error: u32;
-  lat: Spread;
+  lat: { p50: f64; p95: f64 };
   reasons: { fail: u32; detail: u32; n: u32 }[];
   phase_mean: [string, f64][] | null;
 }
@@ -149,8 +150,8 @@ function frameSummary(s: F64Array): FrameSummary | null {
     tick: spreadAt(s, a + F.tick),
     tasks: spreadAt(s, a + F.tasks),
     gpu: spreadAt(s, a + F.gpu),
-    phases: PHASES.map((name, k) => ({ name, spread: spreadAt(s, a + F.phases + k * SPREAD.WORDS) })),
-    gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.gpu_spans + k * SPREAD.WORDS) })),
+    phases: PHASES.map((name, k) => ({ name, p95: s[a + F.phases_p95 + k] })),
+    gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, p95: s[a + F.gpu_spans_p95 + k], max: s[a + F.gpu_spans_max + k] })),
     kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
     wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
     heap_peak_delta_bytes: s[a + F.heap_peak_delta_bytes],
@@ -178,7 +179,7 @@ function taskSummaries(s: F64Array): TaskSummary[] {
       ok: s[a + TASK_SUMMARY.ok],
       aborted: s[a + TASK_SUMMARY.aborted],
       error: s[a + TASK_SUMMARY.error],
-      lat: spreadAt(s, a + TASK_SUMMARY.lat),
+      lat: { p50: s[a + TASK_SUMMARY.lat_p50], p95: s[a + TASK_SUMMARY.lat_p95] },
       reasons,
       phase_mean: s[a + TASK_SUMMARY.phase_n] > 0 ? means : null,
     });

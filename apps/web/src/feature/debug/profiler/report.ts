@@ -51,7 +51,7 @@ function windowSection(r: ProfilerReport): string[] {
   const f = r.frames;
   if (f === null) return ["frames n=0"];
   const last = f.last;
-  const spans = f.gpu_spans.filter((s) => s.spread.max > 0).map((s) => `${s.name} ${n1(s.spread.p95)}`).join("  ");
+  const spans = f.gpu_spans.filter((s) => s.max > 0).map((s) => `${s.name} ${n1(s.p95)}`).join("  ");
   const steps = r.steps.length === 0 ? "none" : [...r.steps].sort((a, b) => b.ms / b.count - a.ms / a.count).map((s) => `${s.phase}/${s.name} ${n1(s.ms / s.count)}/${n1(s.max_ms)}`).join("  ");
 
   const counted = (rows: { name: string; n: f64 }[]) => rows.filter((r) => r.n > 0).map((r) => `${r.name} ${r.n}`).join("  ") || "-";
@@ -63,7 +63,7 @@ function windowSection(r: ProfilerReport): string[] {
     `  busy    ${spread(f.busy)} ms   (the interval's turns, rise to fall)`,
     `  off-turn ${spread(f.off_turn)} ms   long ${f.long} (turns past their interval)`,
     `  tick    ${spread(f.tick)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${
-      f.phases.map((p) => `${p.name} ${n1(p.spread.p95)}`).join("  ")
+      f.phases.map((p) => `${p.name} ${n1(p.p95)}`).join("  ")
     }`,
     `  tasks   ${spread(f.tasks)} ms   (the turns' tasks past the frame)`,
     `  gpu     ${spread(f.gpu)} ms${last.gpu_ms === 0 ? "   (no timestamps: no renderer yet, or the device keeps none)" : ""}`,
@@ -86,7 +86,7 @@ function lastSection(f: Frame): string[] {
 function sideSection(r: ProfilerReport): string[] {
   const lines = [];
   for (const [name, fields] of Object.entries(r.sections)) {
-    if (name === "counters" || Object.values(fields).every((v) => v === 0)) continue;
+    if (Object.values(fields).every((v) => v === 0)) continue;
     lines.push(`  ${name.padEnd(7)} ${Object.entries(fields).map(([k, v]) => fieldText(k, v)).join("  ")}`);
   }
   return lines.length === 0 ? [] : ["state", ...lines];

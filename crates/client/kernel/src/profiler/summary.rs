@@ -12,8 +12,8 @@ use crate::layer::Base as _;
 use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
 use crate::profiler::block::{FetchBlock, FramesBlock, OpenBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
-use crate::profiler::frame::FrameSample;
 use crate::profiler::frame::{long, missed, off_turn_ms, overran};
+use crate::profiler::frame::{FrameSample, GPU_SPANS};
 use crate::profiler::log::window_baseline;
 use crate::profiler::record::{fixed_lane, profiler_frames_since, profiler_open_interval, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
 use crate::profiler::spec::{LIMITS, SUMMARY};
@@ -101,6 +101,8 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
     let n = frames.len() as f64;
 
     let count = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
+    // A span the frame did not run reads 0 and is left out.
+    let spans: [Spread; GPU_SPANS] = core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0)));
     FramesBlock {
         present: 1.0,
         n,
@@ -116,9 +118,9 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         tick: spread(scratch, frames.iter().map(|f| f.tick_ms)),
         tasks: spread(scratch, frames.iter().map(|f| f.tasks_ms)),
         gpu: spread(scratch, frames.iter().map(|f| f.gpu.ms)),
-        phases: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k]))),
-        // A span the frame did not run reads 0 and is left out.
-        gpu_spans: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0))),
+        phases_p95: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k])).p95),
+        gpu_spans_p95: spans.map(|s| s.p95),
+        gpu_spans_max: spans.map(|s| s.max),
         kinds: core::array::from_fn(|k| count(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| count(&|f| f.wake == k as f64)),
         heap_peak_delta_bytes: last.heap.peak_bytes - first.heap.peak_bytes,
@@ -166,12 +168,14 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
             }
         }
 
+        let lat = spread(scratch, mine().filter(|r| r.outcome == ok).map(|r| r.end_ms - r.enqueue_ms));
         *slot = TaskBlock {
             n: n as f64,
             ok: mine().filter(|r| r.outcome == ok).count() as f64,
             aborted: mine().filter(|r| r.outcome == aborted).count() as f64,
             error: mine().filter(|r| r.outcome == error).count() as f64,
-            lat: spread(scratch, mine().filter(|r| r.outcome == ok).map(|r| r.end_ms - r.enqueue_ms)),
+            lat_p50: lat.p50,
+            lat_p95: lat.p95,
             reason_count: shown as f64,
             reasons: core::array::from_fn(|i| if i < shown { [counted[i].0, counted[i].1, counted[i].2] } else { [0.0; 3] }),
             phase_n: phase_n as f64,
@@ -199,15 +203,11 @@ fn side(out: &mut [f64]) {
 
     put(out, SUMMARY::fetch::AT, &FetchBlock { credits: credits() as f64 });
 
-    let residency = TerrainTile::residency();
-    let [admitted, evicted] = residency.churn();
     put(
         out,
         SUMMARY::quality::AT,
         &QualityBlock {
-            frames_held: residency.frames_used() as f64,
-            admitted: admitted as f64,
-            evicted: evicted as f64,
+            frames_held: TerrainTile::residency().frames_used() as f64,
         },
     );
 
@@ -265,11 +265,15 @@ fn side(out: &mut [f64]) {
     put(out, SUMMARY::steps::AT, &steps);
 }
 
-/// The counters as they stand, from the billboard sheet.
+/// The counters as they stand, from the billboard sheet and the terrain's
+/// residency, which the window counts from its baseline.
 pub fn counters() -> CountersBlock {
     let sheet = billboard_sheet().stats();
+    let [admitted, evicted] = TerrainTile::residency().churn();
     CountersBlock {
         sheet_repacks: sheet.repacks as f64,
         sheet_uploads: sheet.uploads as f64,
+        terrain_admitted: f64::from(admitted),
+        terrain_evicted: f64::from(evicted),
     }
 }

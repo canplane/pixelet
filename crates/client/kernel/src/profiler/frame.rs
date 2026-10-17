@@ -96,7 +96,6 @@ pub struct FrameSample {
     pub busy_ms: f64,
     pub budget_ms: f64,
     /// The parts of `busy_ms`: what is left of it is unmeasured.
-    pub door_ms: f64,
     pub effects_ms: f64,
     pub tick_ms: f64,
     pub phases: [f64; PHASES.len()],
@@ -130,7 +129,7 @@ pub struct WorstFrame {
 
 words!(FrameSample, FRAME::WORDS,
     t => FRAME::t, interval_ms => FRAME::interval_ms, display_ms => FRAME::display_ms, settled => FRAME::settled,
-    turns => FRAME::turns, busy_ms => FRAME::busy_ms, budget_ms => FRAME::budget_ms, door_ms => FRAME::door_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
+    turns => FRAME::turns, busy_ms => FRAME::busy_ms, budget_ms => FRAME::budget_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     worst_effect_ms => FRAME::worst_effect_ms, worst_effect_name => FRAME::worst_effect_name,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,

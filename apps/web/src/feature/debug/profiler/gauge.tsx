@@ -15,7 +15,7 @@ import { drawn, MB, n1, pct, tris, valueText, zoomName } from "./lane.ts";
 
 const bytes = (b: number) => valueText("_bytes", b);
 import { BOUND, failText } from "./report.ts";
-import type { FrameSummary, Gauge, Spread } from "./view.ts";
+import type { FrameSummary, Gauge } from "./view.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
 import { kernel_memory } from "@/kernel/shell.ts";
 import { alpha, color, textStyle } from "@/shared/ui/theme.ts";
@@ -55,7 +55,7 @@ const or = (x: number) => (Number.isNaN(x) ? "-" : n1(x));
 const geo = (lat: number, lon: number) => (Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`);
 const metres = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
-const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
+const phase = (f: FrameSummary, name: string): number => f.phases.find((p) => p.name === name)?.p95 ?? 0;
 
 /** Live: where the camera and the pointer are now, not over the window. */
 export function ProfilerView({ v }: { v: Gauge["view"] }) {
@@ -119,17 +119,19 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Row k="tick p95/max" v={`${n1(f.tick.p95)}/${n1(f.tick.max)} ms`} warn={f.overran > 0} />
           <Row
             k="phase i/v/c/s p95"
-            v={`${n1(phase(f, "interaction").p95)}/${n1(phase(f, "visible").p95)}/${n1(phase(f, "content").p95)}/${n1(phase(f, "cosmetic").p95)}`}
-            warn={phase(f, "interaction").p95 > INTERACTION_WARN_MS}
+            v={`${n1(phase(f, "interaction"))}/${n1(phase(f, "visible"))}/${n1(phase(f, "content"))}/${n1(phase(f, "cosmetic"))}`}
+            warn={phase(f, "interaction") > INTERACTION_WARN_MS}
           />
           <Row k="tasks p95" v={`${n1(f.tasks.p95)} ms`} />
           <Row k="effects/stage" v={`${n1(f.last.effects_ms)}/${n1(f.last.stage_ms)} ms`} warn={f.last.effects_ms > 4} />
           <Row k="worst effect" v={`${n1(f.last.worst_effect_ms)} ms ${EFFECT_NAMES[f.last.worst_effect_name] ?? "-"}`} warn={f.last.worst_effect_ms > 4} />
           <Row k="kinds" v={f.kinds.filter((k) => k.n > 0).map((k) => `${k.name} ${k.n}`).join(" ") || "-"} />
           <Row k="wakes" v={f.wakes.filter((w) => w.n > 0).map((w) => `${w.name} ${w.n}`).join(" ") || "-"} />
+          {/* A settled view asks no timer; one asked says how soon. */}
+          <Row k="last wake" v={`${valueText("wake_name", f.last.wake_name)}${f.last.wake_in_ms > 0 ? ` in ${n1(f.last.wake_in_ms)} ms` : ""}`} />
           <Row k="open turns/busy" v={`${g.open.turns}/${n1(g.open.busy_ms)} ms`} />
           <Row k="gpu p95" v={f.gpu.p95 > 0 ? `${n1(f.gpu.p95)} ms` : "n/a"} warn={f.gpu.p95 > f.last.display_ms} />
-          {heaviest(f.gpu_spans, (s) => s.spread.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.spread.p95)} ms`} />)}
+          {heaviest(f.gpu_spans, (s) => s.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.p95)} ms`} />)}
           {!loafSupported() && <Row k="long frames" v="unsupported" />}
           {loafSupported() && (
             <Row
@@ -187,6 +189,9 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           />
           <Row k="refused/largest free" v={`${f.last.heap_refusals}/${bytes(f.last.heap_largest_free_bytes)}`} warn={f.last.heap_refusals > 0} />
           <Row k="releases" v={`${f.last.heap_releases}`} />
+          {/* Since the window began: a settled view moves none of them. */}
+          <Row k="terrain admitted/evicted" v={`${g.counters.terrain_admitted}/${g.counters.terrain_evicted}`} />
+          <Row k="sheet repacks/uploads" v={`${g.counters.sheet_repacks}/${g.counters.sheet_uploads}`} />
           <Row
             k="tiles terrain/place"
             v={`${terrain}/${f.last.tiles_place}${terrain > 0 ? ` ${zoomName(f.last.zoom_tiles.findLastIndex((n) => n > 0))}..${zoomName(f.last.zoom_tiles.findIndex((n) => n > 0))}` : ""}`}

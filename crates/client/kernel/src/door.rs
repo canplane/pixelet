@@ -219,7 +219,7 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
         _ => Wake::timer,
     };
     let fell = now();
-    profiler_record_turn(fell - rise, drained - rise, polled - drained, f64::from(asked as u8), wake.max(0.0));
+    profiler_record_turn(fell - rise, polled - drained, f64::from(asked as u8), wake.max(0.0));
     wake
 }
 
