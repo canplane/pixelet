@@ -15,8 +15,9 @@ use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
 use crate::model::variant_spec::IDLE_CLIP;
+use crate::query::changed::within;
 use crate::query::World;
-use crate::query::{over, under};
+use crate::query::{over, under, walks};
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::sched::edge::wake_at;
@@ -25,6 +26,7 @@ use crate::setting::store::settings_store;
 use crate::view::frame::coord::{to_world, world_to_canonical};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
@@ -79,6 +81,37 @@ struct Figure {
     initial_facing_done: bool,
     follow_walk_until: f64,
     stands_z: Option<f64>,
+    /// The floor it is drawn on (`drawn_floor`), of where it stands, its
+    /// floor there and the zoom the eye draws it at.
+    drawn: Asked<([f64; 2], f64, Zoom), f64>,
+}
+
+/// What a step asked the world, kept with what it asked it of and the
+/// columns its answer read, their corners in units: asked again only where
+/// what it asks of moved, or a change to the ground touched those columns
+/// (`kept`).
+struct Asked<K, A>(Option<(K, [[f64; 2]; 2], A)>);
+
+impl<K: PartialEq, A: Copy> Asked<K, A> {
+    /// Let go where a change to the ground touched its columns: looked at
+    /// every frame turn, so it sees each change once (`changed::within`).
+    fn kept(&mut self) {
+        if self.0.as_ref().is_some_and(|&(_, columns, _)| within(columns, &[])) {
+            self.0 = None;
+        }
+    }
+
+    /// The answer to `of`, which reads `columns`: the one kept, else `ask`'s.
+    fn of(&mut self, of: K, columns: [[f64; 2]; 2], ask: impl FnOnce() -> A) -> A {
+        match &self.0 {
+            Some((k, _, a)) if *k == of => *a,
+            _ => {
+                let a = ask();
+                self.0 = Some((of, columns, a));
+                a
+            }
+        }
+    }
 }
 
 impl Figure {
@@ -96,6 +129,7 @@ impl Figure {
             initial_facing_done: false,
             follow_walk_until: 0.0,
             stands_z: None,
+            drawn: Asked(None),
         }
     }
 
@@ -240,7 +274,7 @@ impl Figure {
         let Some(held) = &self.held else { return };
         let sched = &mut kernel().scene;
         if let Some(a) = sched.actors.actor(held.actor) {
-            a.at = [at[0], at[1], drawn_floor(at, *stands, p)];
+            a.at = [at[0], at[1], drawn_floor(&mut self.drawn, at, *stands, p)];
             a.rotation_z = self.heading as f32;
             a.visible = true;
         }
@@ -257,12 +291,20 @@ impl Figure {
 struct Companion {
     person: Option<Figure>,
     pet: Option<Figure>,
+    /// The pet's floor beside the person, walked to from the person's: of
+    /// the person's place and floor, the pet's target and whether the eye
+    /// sees a walk there (`walks`).
+    beside: Asked<([f64; 2], f64, [f64; 2], bool), f64>,
 }
 
 static COMPANION: Global<Companion> = Global::new();
 
 fn companion() -> &'static mut Companion {
-    COMPANION.get(|| Companion { person: None, pet: None })
+    COMPANION.get(|| Companion {
+        person: None,
+        pet: None,
+        beside: Asked(None),
+    })
 }
 
 /// In the world's doubles.
@@ -296,6 +338,10 @@ fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, targ
 
 pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let c = companion();
+    c.beside.kept();
+    for f in [&mut c.person, &mut c.pet].into_iter().flatten() {
+        f.drawn.kept();
+    }
     let Some(p) = props else {
         for slot in [&mut c.person, &mut c.pet] {
             if let Some(mut w) = slot.take() {
@@ -325,9 +371,16 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
     let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
-    // Its own floor beside the person, walked to from the person.
+    // Its own floor beside the person, walked to from the person: over the
+    // columns between the two, a cell either side.
     let reached = |(beside, _): &([f64; 2], f64)| libm::hypot(beside[0] - pet_target[0], beside[1] - pet_target[1]) <= WALK_EPS;
-    let walked = |floor: f64| walk_to(p.center, floor, pet_target, &p).filter(reached).map_or(floor, |(_, z)| z);
+    let cell = units(GROUND.cell());
+    let columns = [0, 1].map(|end| core::array::from_fn(|k| if end == 0 { p.center[k].min(pet_target[k]) - cell } else { p.center[k].max(pet_target[k]) + cell }));
+    let from = |floor: f64| world_to_canonical(&[p.center[0], p.center[1], over(floor)]);
+    let mut walked = |floor: f64| {
+        let of = (p.center, floor, pet_target, walks(&from(floor), &p.eye));
+        c.beside.of(of, columns, || walk_to(p.center, floor, pet_target, &p).filter(reached).map_or(floor, |(_, z)| z))
+    };
     if let Some((target, z)) = p.floor.map(|z| (pet_target, walked(z))).or_else(|| hold(pet)) {
         pet.step(ctx, target, z, &p);
     }
@@ -353,14 +406,17 @@ fn walk_to(from: [f64; 2], stands: f64, to: [f64; 2], p: &CompanionProps) -> Opt
 }
 
 /// The floor `stands` as the eye's rays draw it under `at`: the world asked
-/// at the zoom the camera grid at `tau` takes there from the eye. A coarser
-/// answer is taken where that zoom is not held, as a ray draws the ground it
-/// has.
-fn drawn_floor(at: [f64; 2], stands: f64, p: &CompanionProps) -> f64 {
+/// at the zoom the camera grid at `tau` takes there from the eye, kept in
+/// `asked` while none of it moves. A coarser answer is taken where that zoom
+/// is not held, as a ray draws the ground it has.
+fn drawn_floor(asked: &mut Asked<([f64; 2], f64, Zoom), f64>, at: [f64; 2], stands: f64, p: &CompanionProps) -> f64 {
     let center = [at[0], at[1], over(stands)];
     let eye = to_world(&p.eye);
     let r = libm::sqrt((0..3).map(|k| (center[k] - eye[k]) * (center[k] - eye[k])).sum());
-    World::now().floor_under(&world_to_canonical(&center), GROUND.z_at(p.tau, r)).value().flatten().unwrap_or(stands)
+    let zoom = GROUND.z_at(p.tau, r);
+    asked.of((at, stands, zoom), [at, at], || {
+        World::now().floor_under(&world_to_canonical(&center), zoom).value().flatten().unwrap_or(stands)
+    })
 }
 
 /// Whether the companion's models have loaded: a live, unpersisted signal

@@ -44,6 +44,13 @@ fn seen_zoom(at: &Q3, eye: &Q3, tau: Tau) -> Zoom {
     GROUND.z_at(tau, libm::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2])).min(LEAF_ZOOM)
 }
 
+/// Whether a walker at `at`, seen from `eye`, walks: the camera grid at the
+/// criterion's own τ draws the ground there at its own cells. Else the world
+/// is a map to it (`step_slide`).
+pub fn walks(at: &Q3, eye: &Q3) -> bool {
+    seen_zoom(at, eye, Tau::FINEST) == LEAF_ZOOM
+}
+
 /// A point's place on the ground, in units.
 fn xy(at: &Q3) -> [f64; 2] {
     [q3::to_real(i64::from(at[0])), q3::to_real(i64::from(at[1]))]
@@ -211,7 +218,7 @@ impl<'a> World<'a> {
         let mut floor = under(sz);
         let gather = |x: f64, y: f64, floor: f64| world::at(q3::from_real(x), q3::from_real(y), q3::from_real(over(floor)));
         let [tx, ty] = [i64::from(to[0]), i64::from(to[1])].map(q3::to_real);
-        if seen_zoom(from, eye, Tau::FINEST) < LEAF_ZOOM {
+        if !walks(from, eye) {
             let at = world::at(i64::from(to[0]), i64::from(to[1]), i64::from(from[2]));
             if !self.within(&at) {
                 return Some(*from);

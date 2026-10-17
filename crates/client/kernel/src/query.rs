@@ -24,7 +24,7 @@ mod surface;
 mod world;
 
 pub use ray::{asked, Detail, Hit, Ray, Struck};
-pub use support::{over, under};
+pub use support::{over, under, walks};
 pub use surface::{Surface, Surfaces};
 pub use world::World;
 
