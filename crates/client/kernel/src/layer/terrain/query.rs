@@ -19,7 +19,6 @@ use pxl_spec::space::layer::tile::{tile_at, Tile};
 use crate::io::source;
 use crate::layer::residency::{Line, Lines, Residency};
 use crate::layer::terrain::window::Windowed;
-use pxl_portable::window::FIRST_CELL;
 
 use crate::layer::{Answer, Bound, Query};
 
@@ -34,9 +33,9 @@ impl Residency<TerrainTile> {
     /// (pxl-portable `area::Shard`). `place` is where a node over it found
     /// its cells, or `Found::NONE`, and becomes where its own are
     /// (pxl-portable `window::step`).
-    pub fn relief(&self, line: &Line, place: &mut Found, node: Node<2>) -> Answer<Option<[i32; 2]>> {
+    pub fn relief(&self, line: &Line, place: &mut Found, node: Node<2>) -> Answer<[i32; 2]> {
         let (r, from, here) = relief(line.tile, place, node);
-        held(line, from, here, Some(r))
+        held(line, from, here, r)
     }
 
     /// The column `c` at `zoom` off the windows, the area's edge laid on
@@ -68,7 +67,7 @@ impl Residency<TerrainTile> {
         let mut coarsest = cell;
         for y in lo[1]..=hi[1] {
             for x in lo[0]..=hi[0] {
-                let (from, _, _, here) = cells::find(&Windowed, cell, [x << SQUARE_SHIFT, y << SQUARE_SHIFT], FIRST_CELL);
+                let (from, _, _, here) = cells::find(&Windowed, cell, [x << SQUARE_SHIFT, y << SQUARE_SHIFT]);
                 if !here {
                     return Answer::Nothing(line.tile);
                 }
@@ -100,7 +99,7 @@ fn held<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
 /// holding them (pxl-portable `window::bounded`), stepped from `place`, and
 /// that window's zoom.
 fn relief(tile: Tile, place: &mut Found, (zoom, at): Node<2>) -> ([i32; 2], Zoom, bool) {
-    cells::bounded(&Windowed, place, GROUND.cell_zoom(tile.zoom), (zoom, at.map(|v| v as i32)), FIRST_CELL)
+    cells::bounded(&Windowed, place, GROUND.cell_zoom(tile.zoom), (zoom, at.map(|v| v as i32)))
 }
 
 /// A node's center, in units.
@@ -142,8 +141,7 @@ impl Query for Residency<TerrainTile> {
         }
         let whole = region((zoom, at));
         let mut place = Found::NONE;
-        self.relief(line, &mut place, node).map(|r| {
-            let [lo, hi] = r.unwrap_or_default();
+        self.relief(line, &mut place, node).map(|[lo, hi]| {
             let lo = (f64::from(lo) * units(GROUND.cell()) - units(cell)).max(whole.min[2]);
             let hi = (f64::from(hi) * units(GROUND.cell())).min(whole.max[2]);
             (lo <= hi).then(|| Bound {

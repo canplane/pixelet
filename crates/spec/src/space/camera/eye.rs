@@ -54,7 +54,6 @@ pub struct Observation {
 pub struct Measure {
     pub seen: bool,
     pub near: f64,
-    pub far: f64,
 }
 
 impl Observation {
@@ -64,21 +63,10 @@ impl Observation {
         let e = self.eye;
         let b = &nearest_box(b, e[0]);
         let gap = |k: usize| (b.min[k] - e[k]).max(e[k] - b.max[k]).max(0.0);
-        let reach = |k: usize| (e[k] - b.min[k]).abs().max((b.max[k] - e[k]).abs());
         let seen = !b.bounded() || self.frustum.is_none_or(|f| f.sees_box(b.min, b.max));
         Measure {
             seen,
             near: libm::hypot(libm::hypot(gap(0), gap(1)), gap(2)),
-            far: libm::hypot(libm::hypot(reach(0), reach(1)), reach(2)),
-        }
-    }
-
-    /// The box every point drawn within `radius` of the eye is stored in.
-    pub fn reach(&self, radius: f64) -> Aabb {
-        let e = self.eye;
-        Aabb {
-            min: e.map(|c| c - radius),
-            max: e.map(|c| c + radius),
         }
     }
 }

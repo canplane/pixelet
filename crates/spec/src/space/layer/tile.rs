@@ -220,11 +220,6 @@ impl Cell {
         offset_in(inner.at, inner.zoom - self.zoom).map(|v| v as u32)
     }
 
-    /// Where this cell lies in the tile `steps` zooms coarser, in its own sides.
-    pub fn in_tile_above(self, steps: Zoom) -> [i64; 2] {
-        offset_in(self.at, self.shamt() + steps)
-    }
-
     /// `offset_of`'s inverse.
     pub fn inner_at(self, lattice: Lattice, zoom: Zoom, offset: [u32; 2]) -> Cell {
         let zoom = lattice.cell_zoom(zoom);

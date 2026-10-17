@@ -40,10 +40,6 @@ pub const fn first_word(value: u32, kind: u32, face: u32, zoom: Zoom) -> u32 {
     value & ((1 << VALUE_BITS) - 1) | kind << KIND_SHIFT | face << FACE_SHIFT | zoom << ZOOM_SHIFT
 }
 
-pub const fn value_of(w: u32) -> u32 {
-    field(w, 0, VALUE_BITS)
-}
-
 pub const fn kind_of(w: u32) -> u32 {
     field(w, KIND_SHIFT, KIND_BITS)
 }

@@ -67,11 +67,6 @@ impl Lattice {
         }) as Zoom
     }
 
-    /// A node's side at `zoom` in the cells of the tile it reads.
-    pub const fn read_side(self, zoom: Zoom, cell: Zoom) -> u32 {
-        self.tile_cells() >> (zoom - self.read_zoom(cell))
-    }
-
     /// Its finest cell's zoom: its cells' on a leaf tile.
     pub const fn cell(self) -> Zoom {
         self.cell

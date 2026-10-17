@@ -56,7 +56,7 @@ pub fn past(area: &impl Area, leaf: [i32; 2]) -> bool {
 /// 1)·3 + (dx + 1)` for the shard `dx, dy` from its own; past where its own
 /// is not, `inside` where all nine are, and a leaf tile in any of them past
 /// or not without asking the area again (`past_leaf`).
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 pub struct Shard(u32);
 
 const SHARD_KNOWN: u32 = 1;

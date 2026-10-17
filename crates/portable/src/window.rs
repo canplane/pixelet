@@ -395,10 +395,10 @@ fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
     [wrap_index(from, c[0] >> s), c[1] >> s]
 }
 
-/// The window holding cell `g` at `cell`, as `find` finds it to `top`
+/// The window holding cell `g` at `cell`, as `find` finds it
 /// (`Found`), and the cell's index in its square there.
-pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found, u32) {
-    let (from, slot, i, here) = find(w, cell, g, top);
+pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2]) -> (Found, u32) {
+    let (from, slot, i, here) = find(w, cell, g);
     (Found::of(cell, from, slot, here), i)
 }
 
@@ -415,9 +415,9 @@ pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found,
 /// `found_at`. Asked finer, only the zooms finer than `above`'s are unknown:
 /// they are looked at finest first, then `above`'s answer stands, a look a
 /// zoom of the step.
-pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found, u32) {
+pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, u32) {
     if above == Found::NONE || cell < above.from() {
-        return found_at(w, cell, g, top);
+        return found_at(w, cell, g);
     }
     let mut f = Found::of(cell, above.from(), above.slot(), above.here());
     let mut c = cell;
@@ -437,14 +437,14 @@ pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2], top: Zoom) 
 /// there, off its cell, past the leaves a leaf's. A column whose cell lies
 /// in the square holding `own`'s, which `near` found, is read off it, as
 /// the columns about one mostly are (`step`); one past it finds its own.
-/// `ways::NOTHING` where no way writes, or no window to `top` holds it.
-pub fn ran(w: &impl Ran, near: Found, own: [i32; 2], zoom: Zoom, c: [i32; 2], z: i32, top: Zoom) -> u32 {
+/// `ways::NOTHING` where no way writes, or no window holds it.
+pub fn ran(w: &impl Ran, near: Found, own: [i32; 2], zoom: Zoom, c: [i32; 2], z: i32) -> u32 {
     let read = held_to(zoom);
     let g = cell_at(zoom, read, c);
     let (q, o) = (square_of(g).0, square_of(cell_at(zoom, read, own)).0);
     // Component-wise: a GPU has no array equality.
     let above = if q[0] == o[0] && q[1] == o[1] { near } else { Found::NONE };
-    let (f, i) = step(w, above, read, g, top);
+    let (f, i) = step(w, above, read, g);
     if !f.here() {
         return crate::ways::NOTHING;
     }
@@ -493,7 +493,7 @@ pub const fn held_to(cell: Zoom) -> Zoom {
 /// present, stepped from `place` (`step`): its four looks, its height and
 /// where it is held; `void` at sea level where none holds it.
 pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, i32, Found) {
-    let (f, i) = step(w, place, cell, g, FIRST_CELL);
+    let (f, i) = step(w, place, cell, g);
     if !f.here() {
         return (VOID, 0, f);
     }
@@ -547,7 +547,7 @@ struct Over<W> {
 
 impl<W: Windows> crate::ways::Airs for Over<W> {
     fn at(&self, c: [i32; 2], z: i32) -> u32 {
-        let v = ran(&self.w, self.found, self.own, self.zoom, c, z, FIRST_CELL);
+        let v = ran(&self.w, self.found, self.own, self.zoom, c, z);
         if v == crate::ways::NOTHING {
             return v;
         }
@@ -598,11 +598,11 @@ pub fn ways_over(w: &(impl Windows + Copy), shard: crate::area::Shard, found: Fo
     }
 }
 
-/// The finest window, at `cell` or coarser to `top`, holding cell `g` (at
+/// The finest window, at `cell` or coarser to the first (`FIRST_CELL`), holding cell `g` (at
 /// `cell`, X named on any lap round the world) present: that window's zoom,
 /// the slot and the cell's index in its square; false where none does, a
 /// lack.
-pub fn find(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Zoom, u32, u32, bool) {
+pub fn find(w: &impl Squares, cell: Zoom, g: [i32; 2]) -> (Zoom, u32, u32, bool) {
     let mut c = cell;
     loop {
         let (q, i) = square_of(cell_at(cell, c, g));
@@ -610,7 +610,7 @@ pub fn find(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Zoom, u32,
         if here {
             return (c, slot, i, true);
         }
-        if c <= top {
+        if c <= FIRST_CELL {
             return (c, 0, 0, false);
         }
         c -= 1;
@@ -644,7 +644,7 @@ pub const WINDOW_LEVELS: u32 = LEVELS + ACROSS.trailing_zeros();
 /// node wider than a window, or over a square not held at `cell`, which
 /// reads nothing and only splits more; false where no window holds it, a
 /// lack.
-pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i32; 2]), top: Zoom) -> ([i32; 2], Zoom, bool) {
+pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> ([i32; 2], Zoom, bool) {
     // The node's first cell at `cell`, or the cell holding it.
     let g = if zoom <= cell {
         [c[0] << (cell - zoom), c[1] << (cell - zoom)]
@@ -654,7 +654,7 @@ pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom
     if cell > zoom + LEVELS {
         return (whole(w, cell, g, cell - zoom), cell, true);
     }
-    let (f, i) = step(w, *place, cell, g, top);
+    let (f, i) = step(w, *place, cell, g);
     *place = f;
     let (from, slot) = (f.from(), f.slot());
     if !f.here() {

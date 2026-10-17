@@ -42,26 +42,6 @@ fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
     }
 }
 
-/// A cell's place in a tile zooms coarser, in its own sides, lies inside the tile cell it falls in.
-#[test]
-fn a_cells_place_in_a_tile_above_lies_in_the_tile_cell_over_it() {
-    for (x, y) in [(-1234, 5678), (0, 0), (97, -3), (400_000, -250_000)] {
-        let point = base_of(UNIT_ZOOM, [x, y, 0]);
-        for zoom in [LEAF_ZOOM, 13] {
-            let cell = GROUND.cell_of(zoom, &point);
-            let [tx, ty] = cell.in_tile();
-            assert_eq!(cell.in_tile_above(0), [tx as i64, ty as i64]);
-            for steps in [1, 4, zoom - GROUND.top()] {
-                let up = cell.up(steps);
-                let n = crate::space::coord::zoom::count(cell.zoom(), up.zoom()) as i64;
-                let [ax, ay] = up.in_tile();
-                let [x, y] = cell.in_tile_above(steps);
-                assert_eq!([x.div_euclid(n), y.div_euclid(n)], [ax as i64, ay as i64], "z{zoom}, {steps} up");
-            }
-        }
-    }
-}
-
 /// Two lattices with equal cell sizes cut the same ground.
 #[test]
 fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {

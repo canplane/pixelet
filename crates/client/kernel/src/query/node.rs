@@ -276,13 +276,13 @@ impl Area for Reading<'_, '_> {
 impl ground::Held for Reading<'_, '_> {
     /// The bound over the node of the cells at `cell`, off the windows,
     /// stepped from `place` (pxl-portable `Held::relief`); its line names the
-    /// tile a lack or a coarser window stands for; a node with no ground
-    /// under it, `EMPTY`.
+    /// tile a lack or a coarser window stands for; where it lacks, `EMPTY`
+    /// and false.
     fn relief(&mut self, place: &mut Found, cell: Zoom, _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
         let (zoom, c) = self.at.node;
         let line = self.world.line(self.at, cell);
         match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]))) {
-            Some(r) => (r.unwrap_or(ground::EMPTY), true),
+            Some(r) => (r, true),
             None => (ground::EMPTY, false),
         }
     }
@@ -290,7 +290,7 @@ impl ground::Held for Reading<'_, '_> {
     /// The block's column off the windows, the area's edge laid on it, as
     /// the GPU reads it (pxl-portable `window::ground`), stepped from where
     /// its relief found its cells.
-    fn cell(&mut self, shard: Shard, place: Found, zoom: Zoom, c: [i32; 3]) -> (Cell, bool) {
-        (window::ground(&Windowed, shard, place, zoom, [c[0], c[1]]).0, true)
+    fn cell(&mut self, shard: Shard, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell {
+        window::ground(&Windowed, shard, place, zoom, [c[0], c[1]]).0
     }
 }

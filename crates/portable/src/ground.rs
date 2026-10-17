@@ -333,12 +333,11 @@ pub trait Held: Area {
     /// `place` is where the cells at `cell` of a node over it were found,
     /// or `Found::NONE`, and becomes where its own are (`window::step`).
     fn relief(&mut self, place: &mut Found, cell: Zoom, node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
-    /// The column of the block `c` at `zoom` as the grid reads it, the
-    /// service area's edge laid on it (`Cell`), none where `shard` is known
-    /// `inside` it; its cell where `place` found it, the zoom's cells'
-    /// (`relief`'s), or found anew where `place` is `NONE`; false where it
-    /// cannot be read.
-    fn cell(&mut self, shard: Shard, place: Found, zoom: Zoom, c: [i32; 3]) -> (Cell, bool);
+    /// The column of the block `c` at `zoom` off the windows
+    /// (`window::ground`), the service area's edge laid on it (`Cell`), none
+    /// where `shard` is known `inside` it; its cell where `place` found it,
+    /// the zoom's cells' (`relief`'s), or found anew where `place` is `NONE`.
+    fn cell(&mut self, shard: Shard, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell;
 }
 
 /// What the ground answers of a node (`node`): its kind, and a block's
@@ -413,10 +412,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: &mut Shard, place: &mut Fo
         if above(zoom, c[2], relief[1]) {
             return (air, Cell::NONE, none);
         }
-        let (column, ok) = held.cell(*shard, *place, zoom, c);
-        if !ok {
-            return (lacks, Cell::NONE, none);
-        }
+        let column = held.cell(*shard, *place, zoom, c);
         let answer = In {
             kind: Kind::Block,
             block: column.block(zoom, c[2], cave.hollow()),

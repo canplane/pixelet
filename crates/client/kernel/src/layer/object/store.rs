@@ -487,10 +487,9 @@ impl Query for Store {
 }
 
 impl Store {
-    /// What is placed in the node, read where it stands: all resident, so
-    /// exact.
-    pub fn read(&self, node: Node<3>, _: Zoom) -> Answer<Cells<'_>> {
-        Answer::Exact(Cells { store: self, node })
+    /// What is placed in the node, read where it stands: all resident.
+    pub fn read(&self, node: Node<3>) -> Cells<'_> {
+        Cells { store: self, node }
     }
 }
 

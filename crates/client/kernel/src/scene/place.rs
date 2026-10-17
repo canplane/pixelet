@@ -167,7 +167,7 @@ fn markers(chunk: Chunk, found: &mut Vec<Shown>) {
     }
     let region = chunk.region();
     let objects = &crate::kernel().objects;
-    let Some(cells) = objects.read(chunk.node(), chunk.cell_zoom()).value() else { return };
+    let cells = objects.read(chunk.node());
     let from = found.len();
     cells.entries(&mut |e| {
         if !object_value_is_marker(e.state) {

@@ -145,7 +145,7 @@ impl World<'_> {
         while k < 9 {
             let n = [wrap_index(zoom, c[0] + (k % 3) as i32 - 1), c[1] + (k / 3) as i32 - 1];
             let past = zoom >= SHARD_ZOOM && area::past(self, area::tile_at(zoom, n));
-            let (cell, _) = ground::Held::cell(self, Shard::UNKNOWN, Found::NONE, zoom, [n[0], n[1], c[2]]);
+            let cell = ground::Held::cell(self, Shard::UNKNOWN, Found::NONE, zoom, [n[0], n[1], c[2]]);
             let mut dz = 0;
             while dz < 3 {
                 let (bit, b) = (1 << (dz * 9 + k), [n[0], n[1], c[2] + dz as i32 - 1]);
@@ -205,15 +205,15 @@ impl ground::Held for World<'_> {
     /// the finest holding them present (`window::bounded`), as the CPU reads
     /// it (pxl-portable `Held::relief`).
     fn relief(&mut self, place: &mut Found, cell: u32, (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
-        let (r, _, here) = window::bounded(self, place, window::held_to(cell), (zoom, [c[0], c[1]]), FIRST_CELL);
+        let (r, _, here) = window::bounded(self, place, window::held_to(cell), (zoom, [c[0], c[1]]));
         (r, here)
     }
 
     /// The block's column off the windows, the area's edge laid on it
     /// (pxl-portable `window::ground`), as the CPU reads it (pxl-kernel
     /// query/node.rs `Reading::cell`).
-    fn cell(&mut self, shard: Shard, place: Found, zoom: u32, c: [i32; 3]) -> (ground::Cell, bool) {
-        (window::ground(self, shard, place, zoom, [c[0], c[1]]).0, true)
+    fn cell(&mut self, shard: Shard, place: Found, zoom: u32, c: [i32; 3]) -> ground::Cell {
+        window::ground(self, shard, place, zoom, [c[0], c[1]]).0
     }
 }
 
@@ -324,7 +324,7 @@ impl Grounds for Growing<'_> {
     }
 
     fn face(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
-        let (c, _) = ground::Held::cell(&mut self.world, Shard::UNKNOWN, Found::NONE, cell, [g[0], g[1], 0]);
+        let c = ground::Held::cell(&mut self.world, Shard::UNKNOWN, Found::NONE, cell, [g[0], g[1], 0]);
         (c.look, c.top, c.grounded())
     }
 
