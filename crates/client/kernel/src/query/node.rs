@@ -40,11 +40,12 @@
 //! A source not holding the node answers that it lacks it, never air and
 //! never that nothing fills.
 
-use pxl_portable::area::Area;
+use pxl_portable::area::{Area, Shard};
 use pxl_portable::cast::Kind;
 use pxl_portable::cube::sentinel;
 use pxl_portable::ground::{self, Cell};
 use pxl_portable::mask::{filled, mask};
+use pxl_portable::window::Found;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::placed::{self, Cut, Held, BLOCK, SPLIT};
@@ -87,6 +88,12 @@ pub(super) struct At {
     placed: Held,
     /// The ground's line its cell was asked on.
     line: Option<Line>,
+    /// What is known of the service area at its shard (pxl-portable
+    /// `area::Shard`).
+    shard: Shard,
+    /// Where the windows hold the ground's cells of the nodes over it, which
+    /// its own read steps from (pxl-portable `window::step`).
+    ground: Found,
 }
 
 /// The patch a block reads its cell and the ring about it into, kept so a
@@ -119,6 +126,8 @@ impl World<'_> {
             cave: Cave::of(zoom, at.map(|v| v as i32)),
             placed: self.objects.cursor((zoom, at), zoom),
             line: None,
+            shard: Shard::UNKNOWN,
+            ground: Found::NONE,
         }
     }
 
@@ -150,18 +159,20 @@ impl World<'_> {
         if placed.says == BLOCK {
             return Answer::Exact(Some(Block::Placed(placed.block)));
         }
-        let cave = at.cave;
+        let (cave, mut shard, mut place) = (at.cave, at.shard, at.ground);
         let mut reading = Reading::new(self, at);
-        let (ground, _, ()) = ground::node(&mut reading, cave, (zoom, b.map(|v| v as i32)), [zoom, zoom], true);
+        let (ground, _, _) = ground::node(&mut reading, cave, &mut shard, &mut place, (zoom, b.map(|v| v as i32)), [zoom, zoom], true);
         // The ways are read with the cell, and stand within its tile's bound.
         let grid = reading.read.then(|| CELL.get(Patch::default).grid()).flatten();
-        reading.answer(ground.kind != Kind::Lacks, || match grid {
+        let answer = reading.answer(ground.kind != Kind::Lacks, || match grid {
             Some(grid) => grid.ways_over(b, ground.block),
             None => (ground.block.0 != u32::from(sentinel::void)).then(|| {
                 let g = ground.block.0 as GroundId;
                 Block::Ground(g, ground.block.1.map(|v| v as GroundId))
             }),
-        })
+        });
+        (at.shard, at.ground) = (shard, place);
+        answer
     }
 
     /// Whether the world holds nothing finer than `at`'s node, so every node
@@ -191,6 +202,8 @@ impl World<'_> {
             cave: at.cave.child(z, child.map(|v| v as i32)),
             placed: self.objects.child(&at.placed, (z, child), z),
             line: at.line,
+            shard: at.shard,
+            ground: at.ground,
         }
     }
 
@@ -208,13 +221,15 @@ impl World<'_> {
         if placed::over(&self.objects.lanes(), at.placed, Cut::NONE, Cut::NONE, zoom, c.map(|v| v as i32), false).says == SPLIT {
             return Answer::Exact(In::Split);
         }
-        let cave = at.cave;
+        let (cave, mut shard, mut place) = (at.cave, at.shard, at.ground);
         let mut reading = Reading::new(self, at);
-        let (ground, _, ()) = ground::node(&mut reading, cave, (zoom, c.map(|v| v as i32)), [far, near], false);
-        reading.answer(ground.kind != Kind::Lacks, || match ground.kind {
+        let (ground, _, _) = ground::node(&mut reading, cave, &mut shard, &mut place, (zoom, c.map(|v| v as i32)), [far, near], false);
+        let answer = reading.answer(ground.kind != Kind::Lacks, || match ground.kind {
             Kind::Split => In::Split,
             _ => In::Empty,
-        })
+        });
+        (at.shard, at.ground) = (shard, place);
+        answer
     }
 }
 
@@ -280,15 +295,13 @@ impl Area for Reading<'_, '_> {
 }
 
 impl ground::Held for Reading<'_, '_> {
-    type Place = ();
-
     /// The bound over the node of the tile `cell` reads its cells from, off
     /// its line (pxl-portable `Held::relief`); a node with no ground under
     /// it, `EMPTY`.
-    fn relief(&mut self, cell: Zoom, _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
+    fn relief(&mut self, place: &mut Found, cell: Zoom, _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
         let (zoom, c) = self.at.node;
         let line = self.world.line(self.at, cell);
-        match self.take(self.world.terrain.relief(&line, (zoom, [c[0], c[1]]))) {
+        match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]))) {
             Some(r) => (r.unwrap_or(ground::EMPTY), true),
             None => (ground::EMPTY, false),
         }
@@ -296,8 +309,8 @@ impl ground::Held for Reading<'_, '_> {
 
     /// The block's cell and the ring about it read into the patch (`CELL`)
     /// off the line the descent carries, as the ways over it are read with
-    /// it, off the patch itself: no place.
-    fn cell(&mut self, zoom: Zoom, _: [i32; 3]) -> (Cell, (), bool) {
+    /// it, off the patch itself: the patch reads its own place.
+    fn cell(&mut self, _: Shard, _: Found, zoom: Zoom, _: [i32; 3]) -> (Cell, bool) {
         let (_, b) = self.at.node;
         let line = self.world.line(self.at, zoom);
         let patch = CELL.get(Patch::default);
@@ -305,9 +318,9 @@ impl ground::Held for Reading<'_, '_> {
         match read.and(patch.grid()) {
             Some(grid) => {
                 self.read = true;
-                (grid.cell_at([b[0], b[1]]).unwrap_or(Cell::NONE), (), true)
+                (grid.cell_at([b[0], b[1]]).unwrap_or(Cell::NONE), true)
             }
-            None => (Cell::NONE, (), false),
+            None => (Cell::NONE, false),
         }
     }
 }

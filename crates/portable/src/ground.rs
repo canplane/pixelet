@@ -15,12 +15,13 @@
 //! height a CPU and a GPU compute from this one source can differ in the
 //! last bit where it rounds to a block at a half.
 
-use crate::area::{earth, past, tile_at, walled, Area};
+use crate::area::{earth, walled, Area, Shard};
 use crate::cast::{In, Kind};
 use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
 pub use crate::lattice::TILE_CELLS;
 use crate::lattice::{CELL_CENTER, GROUND};
+use crate::window::Found;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
 
 // The catalog's looks this rule names, read into a word.
@@ -351,7 +352,7 @@ pub fn lay(cell: Zoom, [lo, hi]: [i32; 2], wall: bool, [z0, z1]: [i32; 2]) -> La
 /// that height is more than half a block over the top, and the coarsest
 /// says it. One zoom's cells cannot be over the ground where another's are
 /// under it, so one of the two holds for every zoom or neither does.
-pub fn empty(area: &impl Area, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far, near]: [Zoom; 2], hollow: bool) -> bool {
+pub fn empty(area: &impl Area, shard: Shard, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far, near]: [Zoom; 2], hollow: bool) -> bool {
     let [lo, hi] = if zoom < SHARD_ZOOM { [lo.min(SEA_LEVEL), hi.max(SEA_LEVEL)] } else { [lo, hi] };
     let coarsest = if far > zoom + 1 { far } else { zoom + 1 };
     if coarsest > near {
@@ -372,7 +373,7 @@ pub fn empty(area: &impl Area, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], 
     // the top, or at the leaves or finer, a leaf cell over it.
     let under = if coarsest < LEAF_CELL { lo << e > top + half(coarsest) } else { lo << e >= top + (1 << e) };
     let rock = bedrock(hi) << e;
-    hollow && under && rock <= bottom + half(near) && !walled(area, near, (zoom, [c[0], c[1]]))
+    hollow && under && rock <= bottom + half(near) && !walled(area, shard, near, (zoom, [c[0], c[1]]))
 }
 
 /// Whether the block `z` of a cell at `cell` lies over the ground wherever
@@ -397,14 +398,15 @@ pub trait Held: Area {
     /// (`window::bounded`); a bound no tighter than the heights' whole range
     /// (`UNBOUNDED`) where no square it reads is held, which only splits
     /// more; false where no tile over it is held.
-    fn relief(&mut self, cell: Zoom, node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
-    /// Where a column is held, as the source names it: the place its read
-    /// found (a GPU's window, `window::Found`), none where it reads none.
-    type Place: Copy + Default;
+    /// `place` is where the cells at `cell` of a node over it were found,
+    /// or `Found::NONE`, and becomes where its own are (`window::step`).
+    fn relief(&mut self, place: &mut Found, cell: Zoom, node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
     /// The column of the block `c` at `zoom` as the grid reads it, the
-    /// service area's edge laid on it (`Cell`), and the place it was read
-    /// at; false where it cannot be read.
-    fn cell(&mut self, zoom: Zoom, c: [i32; 3]) -> (Cell, Self::Place, bool);
+    /// service area's edge laid on it (`Cell`), none where `shard` is known
+    /// `inside` it; its cell where `place` found it, the zoom's cells'
+    /// (`relief`'s), or found anew where `place` is `NONE`; false where it
+    /// cannot be read.
+    fn cell(&mut self, shard: Shard, place: Found, zoom: Zoom, c: [i32; 3]) -> (Cell, bool);
 }
 
 /// What the ground answers of a node (`node`): its kind, and a block's
@@ -417,11 +419,14 @@ pub type Answer = In<(u32, [u32; 4])>;
 /// each zoom's tile its cells are read from (`Held::relief`) — a block over it is air,
 /// else its cell's block (`Cell::block`), its look and its fold's four; a
 /// coarser node nothing under fills at the zooms asked (`empty`) a block of
-/// air its size, else split; where no tile over it is held, the lack. With
-/// it the cell its block was read off and the place it was read at, none
-/// (`Cell::NONE`, the place's default) where it read none.
-pub fn node<H: Held>(held: &mut H, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, H::Place) {
-    let none = H::Place::default();
+/// air its size, else split; where no tile over it is held, the lack.
+/// `shard` and `place` are what a descent established over it, of the area
+/// (`Shard`) and where the cells of a node over it were held
+/// (`Held::relief`), each `UNKNOWN`/`NONE` where none did, and become the
+/// node's. With the answer the cell its block was read off and where, none
+/// (`Cell::NONE`, `Found::NONE`) where it read none.
+pub fn node<H: Held>(held: &mut H, cave: Cave, shard: &mut Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, Found) {
+    let none = Found::NONE;
     let air = In {
         kind: Kind::Block,
         block: (VOID, [VOID; 4]),
@@ -436,7 +441,8 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far
     };
     // Past the area: a block's own Earth, or a node's where it is all over
     // sea level. No node a shard or finer straddles the area.
-    if zoom >= SHARD_ZOOM && past(held, tile_at(zoom, [c[0], c[1]])) {
+    *shard = shard.at(held, (zoom, [c[0], c[1]]));
+    if shard.past() {
         let earth = earth(c[2]);
         let answer = if block {
             In {
@@ -467,7 +473,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far
     } else {
         fit
     };
-    let (relief, ok) = held.relief(read, (zoom, c));
+    let (relief, ok) = held.relief(place, read, (zoom, c));
     if !ok {
         return (lacks, Cell::NONE, none);
     }
@@ -475,7 +481,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far
         if above(zoom, c[2], relief[1]) {
             return (air, Cell::NONE, none);
         }
-        let (column, at, ok) = held.cell(zoom, c);
+        let (column, ok) = held.cell(*shard, *place, zoom, c);
         if !ok {
             return (lacks, Cell::NONE, none);
         }
@@ -483,9 +489,9 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far
             kind: Kind::Block,
             block: column.block(zoom, c[2], cave.hollow()),
         };
-        return (answer, column, at);
+        return (answer, column, *place);
     }
-    let answer = if empty(held, (zoom, c), relief, [far, near], cave.whole(zoom) == (true, true)) {
+    let answer = if empty(held, *shard, (zoom, c), relief, [far, near], cave.whole(zoom) == (true, true)) {
         air
     } else {
         split

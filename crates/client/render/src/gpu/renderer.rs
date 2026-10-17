@@ -1053,7 +1053,7 @@ impl ScreenCellsPass {
                 built,
                 start_built,
                 face_built,
-                starts: buffer(word_bytes(START_WORDS), buffer_usage::STORAGE),
+                starts: buffer(word_bytes(pxl_portable::cast::START_WORDS as usize), buffer_usage::STORAGE),
                 group: 0,
                 bound: [0; 8],
                 eye: buffer(word_bytes(CAST_EYE_WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
@@ -1292,9 +1292,6 @@ impl ScreenCellsPass {
 
 /// The cast's workgroup, a side: `cast_cs`'s.
 const CAST_WORKGROUP: u32 = 8;
-/// `start_cs`'s words: the start's node, what was handed it, and the stack,
-/// an `At` two words (gpu-query-shader `START_WORDS`).
-const START_WORDS: usize = 4 + 2 * (1 + pxl_portable::cast::DEPTH);
 /// `heights_cs`'s and `bound_cs`'s workgroup, a side, a frame a layer.
 const BOUND_WORKGROUP: u32 = 8;
 /// `ways_cs`'s workgroup: columns in a row.

@@ -30,6 +30,7 @@ use crate::layer::instance::{Instance, Meta};
 use crate::layer::object::meta::placed;
 use crate::layer::Query;
 use crate::model::registry::Models;
+use pxl_portable::window::Found;
 
 /// How decor is struck: against its models, where the frame drawing at `tau` holds it.
 #[derive(Clone, Copy)]
@@ -216,7 +217,7 @@ impl<'a> World<'a> {
         let ground = (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
                 let xy = (z, [a[0] + dx, a[1] + dy]);
-                match self.terrain.relief(&self.terrain.cursor(xy, GROUND.grid_zoom(z.min(LEAF_ZOOM))), xy).value() {
+                match self.terrain.relief(&self.terrain.cursor(xy, GROUND.grid_zoom(z.min(LEAF_ZOOM))), &mut Found::default(), xy).value() {
                     Some(r) => r.is_some_and(|[_, hi]| f64::from(hi) * leaf > low),
                     None => true,
                 }

@@ -10,19 +10,19 @@
 
 #![cfg_attr(target_arch = "spirv", no_std)]
 
-use pxl_portable::area::{self, Area};
+use pxl_portable::area::{self, Area, Shard};
 use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
 use pxl_portable::caves::Cave;
 use pxl_portable::cube::{object, sentinel};
+use pxl_portable::decor::{Decor, COUNTS};
 use pxl_portable::fill::{self, column_of, level_of, put};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
-use pxl_portable::decor::{Decor, COUNTS};
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
 use pxl_portable::scatter::{self, drawn, Grounds, GROWN_AT, GROWN_WORDS, PLACED_BLOCK, SQUARE_BLOCKS};
-use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
-use pxl_portable::window::{Ran, FRESH_WORDS, RUNS_AT};
 use pxl_portable::ways;
+use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
+use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
 use pxl_portable::{at, mask, wrap_index, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::memory::{Scope, Semantics};
@@ -136,7 +136,7 @@ impl World<'_> {
         while k < 9 {
             let n = [wrap_index(zoom, c[0] + (k % 3) as i32 - 1), c[1] + (k / 3) as i32 - 1];
             let past = zoom >= SHARD_ZOOM && area::past(self, area::tile_at(zoom, n));
-            let (cell, _, _) = ground::Held::cell(self, zoom, [n[0], n[1], c[2]]);
+            let (cell, _) = ground::Held::cell(self, Shard::UNKNOWN, Found::NONE, zoom, [n[0], n[1], c[2]]);
             let mut dz = 0;
             while dz < 3 {
                 let (bit, b) = (1 << (dz * 9 + k), [n[0], n[1], c[2] + dz as i32 - 1]);
@@ -164,31 +164,31 @@ impl World<'_> {
     }
 
     /// The ground's cell `g` at `cell`, off the finest window holding it
-    /// present (`window::find`): its four looks, its height and the zoom it
-    /// is read at; `void` at sea level where none holds it.
-    fn cell_at(&self, cell: u32, g: [i32; 2]) -> (u32, i32, window::Found) {
-        let (f, i) = window::found_at(self, cell, g, FIRST_CELL);
-        if !f.here {
+    /// present, stepped from `place` (`window::step`): its four looks, its
+    /// height and where it is held; `void` at sea level where none holds it.
+    fn cell_at(&self, place: Found, cell: u32, g: [i32; 2]) -> (u32, i32, Found) {
+        let (f, i) = window::step(self, place, cell, g, FIRST_CELL);
+        if !f.here() {
             return (VOID, 0, f);
         }
-        (self.look(f.from, f.slot, i), self.height(f.from, f.slot, i), f)
+        (self.look(f.from(), f.slot(), i), self.height(f.from(), f.slot(), i), f)
     }
 
     /// The ground's cell `b` of `zoom` as the grid reads it, before the
     /// area's edge is laid: the cell drawing it, past the leaves a leaf's;
-    /// and where it is held.
-    fn ground_at(&self, zoom: u32, b: [i32; 2]) -> (u32, f32, [u32; 4], window::Found) {
+    /// and where it is held, stepped from `place`.
+    fn ground_at(&self, place: Found, zoom: u32, b: [i32; 2]) -> (u32, f32, [u32; 4], Found) {
         let read = held_to(zoom);
-        let (w, h, f) = self.cell_at(read, [b[0] >> (zoom - read), b[1] >> (zoom - read)]);
-        let (look, h, fold) = ground::read_cell(w, h, f.from);
+        let (w, h, f) = self.cell_at(place, read, [b[0] >> (zoom - read), b[1] >> (zoom - read)]);
+        let (look, h, fold) = ground::read_cell(w, h, f.from());
         (look, h, fold, f)
     }
 
     /// Whether the leaf cell `l` is gone: past the area, or nothing known
     /// of it, its look off the window drawing it.
     fn gone(&self, l: [i32; 2]) -> bool {
-        let (w, _, f) = self.cell_at(LEAF_CELL, l);
-        area::past(self, area::tile_at(LEAF_CELL, l)) || ground::own(w, f.from) == UNKNOWN
+        let (w, _, f) = self.cell_at(Found::NONE, LEAF_CELL, l);
+        area::past(self, area::tile_at(LEAF_CELL, l)) || ground::own(w, f.from()) == UNKNOWN
     }
 }
 
@@ -223,59 +223,64 @@ impl Ran for World<'_> {
 /// (`found`) and the columns about it read off it: none in a column past
 /// the area or walled, as the rule writes none there (pxl-portable
 /// `ways::at`) — the own column's wall its cell as read (`cell`), each
-/// other's its own.
+/// other's its own, none where the node's shard is `inside` the area.
 struct Ways<'w> {
     world: World<'w>,
     zoom: u32,
     own: [i32; 2],
     cell: ground::Cell,
-    found: window::Found,
+    found: Found,
+    shard: Shard,
 }
 
 impl ways::Airs for Ways<'_> {
     fn at(&self, c: [i32; 2], z: i32) -> u32 {
-        let v = window::ran(&self.world, &self.found, self.zoom, c, z, FIRST_CELL);
+        let v = window::ran(&self.world, self.found, self.own, self.zoom, c, z, FIRST_CELL);
         if v == ways::NOTHING {
             return v;
         }
         let walled = if c[0] == self.own[0] && c[1] == self.own[1] {
             self.cell.look == UNKNOWN
         } else {
-            self.zoom >= SHARD_ZOOM && area::past(&self.world, area::tile_at(self.zoom, c)) || self.world.column(self.zoom, c).0.look == UNKNOWN
+            let past = self.zoom >= SHARD_ZOOM && !self.shard.inside() && area::past(&self.world, area::tile_at(self.zoom, c));
+            past || self.world.column(self.shard, Found::NONE, self.zoom, c).0.look == UNKNOWN
         };
-        if walled { ways::NOTHING } else { v }
+        if walled {
+            ways::NOTHING
+        } else {
+            v
+        }
     }
 }
 
 /// The ground as the GPU holds it, for pxl-portable's one answer for a node.
 impl ground::Held for World<'_> {
-    type Place = window::Found;
-
     /// The bound over the node of the window `cell` reads its cells from,
     /// the finest holding them present (`window::bounded`), as the CPU reads
     /// it (pxl-portable `Held::relief`).
-    fn relief(&mut self, cell: u32, (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
-        let (r, _, here) = window::bounded(self, held_to(cell), (zoom, [c[0], c[1]]), FIRST_CELL);
+    fn relief(&mut self, place: &mut Found, cell: u32, (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
+        let (r, _, here) = window::bounded(self, place, held_to(cell), (zoom, [c[0], c[1]]), FIRST_CELL);
         (r, here)
     }
 
     /// The block's column off the tile drawing that zoom's cells, the area's
     /// edge laid on it (pxl-kernel query/node.rs `drawn`).
-    fn cell(&mut self, zoom: u32, c: [i32; 3]) -> (ground::Cell, window::Found, bool) {
-        let (cell, found) = self.column(zoom, [c[0], c[1]]);
-        (cell, found, true)
+    fn cell(&mut self, shard: Shard, place: Found, zoom: u32, c: [i32; 3]) -> (ground::Cell, bool) {
+        (self.column(shard, place, zoom, [c[0], c[1]]).0, true)
     }
 }
 
 impl World<'_> {
     /// Column `b` at `zoom` off the tile drawing that zoom's cells, the
-    /// area's edge laid on it, and the window it is read off.
-    fn column(&self, zoom: u32, b: [i32; 2]) -> (ground::Cell, window::Found) {
-        let (look, h, fold, found) = self.ground_at(zoom, b);
+    /// area's edge laid on it, and the window it is read off, stepped from
+    /// `place`. In a shard known `inside` the area no leaf cell about it is
+    /// gone, so none is read.
+    fn column(&self, shard: Shard, place: Found, zoom: u32, b: [i32; 2]) -> (ground::Cell, Found) {
+        let (look, h, fold, found) = self.ground_at(place, zoom, b);
         // The leaf cells about it read by their offset, each its look alone.
         let gone_at = |dx: i32, dy: i32| {
             let s = zoom - LEAF_CELL;
-            self.gone([wrap_index(LEAF_CELL, (b[0] >> s) + dx), (b[1] >> s) + dy])
+            !shard.inside() && self.gone([wrap_index(LEAF_CELL, (b[0] >> s) + dx), (b[1] >> s) + dy])
         };
         let cell = ground::Cell {
             look: area::edge(look, zoom, b, look == UNKNOWN, gone_at),
@@ -286,12 +291,16 @@ impl World<'_> {
     }
 }
 
-/// What a node is handed down on the GPU: its caves, and what is placed
-/// there.
+/// What a node is handed down on the GPU: its caves, what is placed there,
+/// what is known of the service area at its shard (`area::Shard`), and
+/// where the ground's cells of the nodes over it were held (`window::step`),
+/// which its own read steps from.
 #[derive(Clone, Copy)]
 pub struct At {
     cave: Cave,
     placed: Held,
+    shard: Shard,
+    ground: Found,
 }
 
 /// What a node is on the GPU: its value, and for the ground the four looks
@@ -306,6 +315,8 @@ impl Query for World<'_> {
         At {
             cave: Cave::of(0, node),
             placed: placed::cursor(self, PLACED, 0, node),
+            shard: Shard::UNKNOWN,
+            ground: Found::NONE,
         }
     }
 
@@ -313,6 +324,8 @@ impl Query for World<'_> {
         At {
             cave: at.cave.child(zoom, node),
             placed: placed::child(self, at.placed, zoom, node),
+            shard: at.shard,
+            ground: at.ground,
         }
     }
 
@@ -338,7 +351,7 @@ impl Query for World<'_> {
                 return In { kind: Kind::Split, block: [VOID, 0] };
             }
         }
-        let (i, cell, found) = ground::node(self, at.cave, (zoom, c), asked, block);
+        let (i, cell, found) = ground::node(self, at.cave, &mut at.shard, &mut at.ground, (zoom, c), asked, block);
         let (mut value, mut f) = i.block;
         // What the ways write over the ground's block (pxl-portable
         // `ways::block`), as the CPU lays them (pxl-spec block/sample.rs
@@ -349,8 +362,15 @@ impl Query for World<'_> {
             // which the air of a way beside it recolours; else only a way in
             // the block's own column writes in it.
             let carved = value == VOID && cell.block(zoom, c[2], false).0 != VOID;
-            if carved || window::runs_in(self, &found, zoom, [c[0], c[1]]) {
-                let ways = Ways { world: *self, zoom, own: [c[0], c[1]], cell, found };
+            if carved || window::runs_in(self, found, zoom, [c[0], c[1]]) {
+                let ways = Ways {
+                    world: *self,
+                    zoom,
+                    own: [c[0], c[1]],
+                    cell,
+                    found,
+                    shard: at.shard,
+                };
                 let way = ways::block(&ways, c, carved);
                 if way != ways::NOTHING {
                     value = if way == ways::AIR { VOID } else { way };
@@ -397,7 +417,7 @@ impl Grounds for Growing<'_> {
     }
 
     fn face(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
-        let (c, _, _) = ground::Held::cell(&mut self.world, cell, [g[0], g[1], 0]);
+        let (c, _) = ground::Held::cell(&mut self.world, Shard::UNKNOWN, Found::NONE, cell, [g[0], g[1], 0]);
         (c.look, c.top, c.grounded())
     }
 
@@ -405,6 +425,8 @@ impl Grounds for Growing<'_> {
         At {
             cave: Cave::of(zoom, c),
             placed: placed::cursor(&self.world, PLACED, zoom, c),
+            shard: Shard::UNKNOWN,
+            ground: Found::NONE,
         }
     }
 
@@ -425,7 +447,7 @@ impl Grounds for Growing<'_> {
 /// the block's index's low bits, for `face_cs` to find the block by and
 /// write its face bits over, then the nodes its descent asked about; where
 /// it met nothing, the first two zero.
-fn word(world: &mut World, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> UVec4 {
+fn word(ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> UVec4 {
     if met.ends != Ends::Stop {
         return UVec4::new(0, 0, 0, met.visits);
     }
@@ -447,7 +469,11 @@ const LOW_BITS: u32 = 10;
 /// The greatest integer at most `v`.
 fn floor(v: f32) -> i32 {
     let i = v as i32;
-    if (i as f32) > v { i - 1 } else { i }
+    if (i as f32) > v {
+        i - 1
+    } else {
+        i
+    }
 }
 
 fn low_bits(c: [i32; 3]) -> u32 {
@@ -466,7 +492,15 @@ fn hit_block(ray: &cast::Ray, t: f32, axis: u32, zoom: u32, low: u32) -> [i32; 3
     let mut a = 0;
     while a < 3 {
         let d = pxl_portable::axis(ray.direction, a as u32);
-        let into = if a as u32 == axis { if d > 0.0 { 0.5 * side } else { -0.5 * side } } else { 0.0 };
+        let into = if a as u32 == axis {
+            if d > 0.0 {
+                0.5 * side
+            } else {
+                -0.5 * side
+            }
+        } else {
+            0.0
+        };
         let rel = ray.frac[a] + d * t + into;
         let near = if zoom <= UNIT_ZOOM {
             (ray.unit[a] + floor(rel)) >> (UNIT_ZOOM - zoom)
@@ -523,19 +557,27 @@ pub fn face_cs(
     unsafe { *lane.get_unchecked_mut(i) = UVec4::new(w.x, w.y, mask::mask(filled), w.w) };
 }
 
-/// Where every ray from the eye starts alike (pxl-portable `cast::start`),
-/// as `start_cs` writes it for `cast_cs`: its node's zoom and corner, what
-/// was handed it, then the stack down to it, an `At` two words.
-const START_WORDS: u32 = 4 + 2 * (1 + cast::DEPTH as u32);
+/// An `At` as `start_cs` hands it to `cast_cs` (pxl-portable
+/// `cast::START_WORDS`).
+fn at_words(a: At) -> [u32; cast::AT_WORDS as usize] {
+    [a.cave.word(), a.placed.word(), a.shard.word(), a.ground.word()]
+}
 
-fn at_words(a: At) -> [u32; 2] {
-    [a.cave.word(), a.placed.word()]
+fn put_at(w: &mut [u32], k: u32, a: At) {
+    let words = at_words(a);
+    let mut j = 0;
+    while j < cast::AT_WORDS {
+        put(w, k + j, words[j as usize]);
+        j += 1;
+    }
 }
 
 fn at_of(w: &[u32], k: u32) -> At {
     At {
         cave: Cave::of_word(at(w, k)),
         placed: Held::of_word(at(w, k + 1)),
+        shard: Shard::of_word(at(w, k + 2)),
+        ground: Found::of_word(at(w, k + 3)),
     }
 }
 
@@ -545,7 +587,13 @@ fn eye_ray(eye: &Eye, tx: f32, ty: f32) -> (cast::Ray, Detail) {
     let direction = cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), tx, ty);
     let ray = cast::Ray::of([eye.origin.x, eye.origin.y, eye.origin.z], direction, eye.forward_far.w);
     let across = eye.across_range;
-    (ray, Detail { tau: eye.right_tau.w, range: [across.z, across.w] })
+    (
+        ray,
+        Detail {
+            tau: eye.right_tau.w,
+            range: [across.z, across.w],
+        },
+    )
 }
 
 /// The nodes over where every ray from the eye starts alike, asked once a
@@ -573,14 +621,10 @@ pub fn start_cs(
     put(starts, 1, s.place.corner[0] as u32);
     put(starts, 2, s.place.corner[1] as u32);
     put(starts, 3, s.place.corner[2] as u32);
-    let w = at_words(s.at);
-    put(starts, 4, w[0]);
-    put(starts, 5, w[1]);
+    put_at(starts, 4, s.at);
     let mut k = 0;
     while k < cast::DEPTH {
-        let w = at_words(s.stack[k]);
-        put(starts, 6 + 2 * k as u32, w[0]);
-        put(starts, 7 + 2 * k as u32, w[1]);
+        put_at(starts, 4 + cast::AT_WORDS * (1 + k as u32), s.stack[k]);
         k += 1;
     }
 }
@@ -621,12 +665,12 @@ pub fn cast_cs(
     };
     let mut k = 0;
     while k < cast::DEPTH {
-        from.stack[k] = at_of(read, 6 + 2 * k as u32);
+        from.stack[k] = at_of(read, 4 + cast::AT_WORDS * (1 + k as u32));
         k += 1;
     }
     let met = cast::first_from(&mut world, &ray, detail, Until::Fills, from);
     let steps = at(&*lane, 0).z != 0;
-    let w = word(&mut world, &ray, met, steps);
+    let w = word(&ray, met, steps);
     let i = (1 + id.y * across.x + id.x) as usize;
     if i < lane.len() {
         // SAFETY: just bounded by the lane's own length.

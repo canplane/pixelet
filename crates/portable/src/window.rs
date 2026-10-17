@@ -309,16 +309,53 @@ pub trait Ran: Squares {
     fn ran(&self, cell: Zoom, slot: u32, r: u32) -> u32;
 }
 
-/// Where a column of blocks at `zoom` has its ways read, found once: the
-/// window its ground is read off (`find`'s, its cells past the leaves a
-/// leaf's) — its zoom and slot, the square held there — and whether any is;
-/// by default none.
-#[derive(Clone, Copy, Default)]
-pub struct Found {
-    pub from: Zoom,
-    pub slot: u32,
-    pub square: [i32; 2],
-    pub here: bool,
+/// Where a node's cells at `cell`, a square's or fewer, are held, as `find`
+/// finds them: the zoom they were asked at, the window holding them present
+/// (its zoom `from`, at `cell` or coarser, and its slot), or none; one word,
+/// as a descent carries it down beside what is placed (`placed::Held`).
+/// `find` reads only the square at `cell` holding them and the squares over
+/// it, so every node whose cells lie in that square has this answer: a
+/// descent hands it from a node to the nodes under it (`step`). `NONE` was
+/// asked at no zoom.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub struct Found(u32);
+
+/// A slot as a source names it: a GPU's in the eye's window at `from`, the
+/// CPU's among every window's (`SQUARES`).
+const FOUND_SLOT_BITS: u32 = SQUARES.next_power_of_two().trailing_zeros();
+const FOUND_HERE: u32 = 1 << FOUND_SLOT_BITS;
+const FOUND_FROM_SHIFT: u32 = FOUND_SLOT_BITS + 1;
+const FOUND_CELL_SHIFT: u32 = FOUND_FROM_SHIFT + 6;
+const FOUND_ZOOM_MASK: u32 = (1 << 6) - 1;
+const _: () = assert!(crate::FINEST_ZOOM <= FOUND_ZOOM_MASK && FOUND_CELL_SHIFT + 6 <= 32);
+const _: () = assert!(FIRST_CELL >= 2, "a zoom asked is never NONE's, nor one finer");
+
+impl Found {
+    pub const NONE: Found = Found(0);
+
+    const fn of(cell: Zoom, from: Zoom, slot: u32, here: bool) -> Found {
+        Found(cell << FOUND_CELL_SHIFT | from << FOUND_FROM_SHIFT | (here as u32) << FOUND_SLOT_BITS | slot)
+    }
+    /// The zoom its cells were asked at.
+    pub const fn cell(self) -> Zoom {
+        self.0 >> FOUND_CELL_SHIFT
+    }
+    /// The window's zoom.
+    pub const fn from(self) -> Zoom {
+        (self.0 >> FOUND_FROM_SHIFT) & FOUND_ZOOM_MASK
+    }
+    pub const fn slot(self) -> u32 {
+        self.0 & (FOUND_HERE - 1)
+    }
+    pub const fn here(self) -> bool {
+        self.0 & FOUND_HERE != 0
+    }
+    pub const fn word(self) -> u32 {
+        self.0
+    }
+    pub const fn of_word(w: u32) -> Found {
+        Found(w)
+    }
 }
 
 /// The cell at `from` column `c` of blocks at `zoom` lies in.
@@ -331,38 +368,51 @@ fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// (`Found`), and the cell's index in its square there.
 pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found, u32) {
     let (from, slot, i, here) = find(w, cell, g, top);
-    let square = square_of(cell_at(cell, from, g)).0;
-    (Found { from, slot, square, here }, i)
+    (Found::of(cell, from, slot, here), i)
 }
 
-/// Column `c` of blocks at `zoom`'s window (`Found`), to `top`.
-pub fn found(w: &impl Ran, zoom: Zoom, c: [i32; 2], top: Zoom) -> Found {
-    let read = if zoom > crate::LEAF_CELL { crate::LEAF_CELL } else { zoom };
-    let s = zoom - read;
-    found_at(w, read, [c[0] >> s, c[1] >> s], top).0
+/// `found_at` for a node's cells at `cell` from its first, `g`, stepped
+/// from `above`, what a node over it found, or `NONE`: no find where it
+/// holds the answer. Asked at `cell`, the node's cells lie in the square
+/// that held `above`'s, so `find` reads what it read; asked a zoom finer,
+/// they lie in a square at `cell` whose cells fold into that one, so
+/// `find` reads that square alone and then what it read: one look. Else,
+/// `found_at`.
+pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found, u32) {
+    let f = if above.cell() == cell {
+        above
+    } else if above.cell() + 1 == cell {
+        match w.present(cell, square_of([wrap_index(cell, g[0]), g[1]]).0) {
+            (slot, true) => Found::of(cell, cell, slot, true),
+            _ => Found::of(cell, above.from(), above.slot(), above.here()),
+        }
+    } else {
+        return found_at(w, cell, g, top);
+    };
+    (f, square_of(cell_at(cell, f.from(), g)).1)
 }
 
 /// What the ways write in block `z` of the column `c` of blocks at `zoom`,
 /// as its window holds it run along z (`ways::at`'s): the block it lies in
-/// there. A column whose cell lies in `near`'s square is read off it, as
-/// the columns about one mostly are; one past it finds its own (`found`).
+/// there, off its cell, past the leaves a leaf's. A column whose cell lies
+/// in the square holding `own`'s, which `near` found, is read off it, as
+/// the columns about one mostly are (`step`); one past it finds its own.
 /// `ways::NOTHING` where no way writes, or no window to `top` holds it.
-pub fn ran(w: &impl Ran, near: &Found, zoom: Zoom, c: [i32; 2], z: i32, top: Zoom) -> u32 {
-    let (q, _) = square_of(cell_at(zoom, near.from, c));
+pub fn ran(w: &impl Ran, near: Found, own: [i32; 2], zoom: Zoom, c: [i32; 2], z: i32, top: Zoom) -> u32 {
+    let read = if zoom > crate::LEAF_CELL { crate::LEAF_CELL } else { zoom };
+    let g = cell_at(zoom, read, c);
+    let (q, o) = (square_of(g).0, square_of(cell_at(zoom, read, own)).0);
     // Component-wise: a GPU has no array equality.
-    let f = if near.here && q[0] == near.square[0] && q[1] == near.square[1] {
-        *near
-    } else {
-        found(w, zoom, c, top)
-    };
-    if !f.here {
+    let above = if q[0] == o[0] && q[1] == o[1] { near } else { Found::NONE };
+    let (f, i) = step(w, above, read, g, top);
+    if !f.here() {
         return crate::ways::NOTHING;
     }
-    let i = square_of(cell_at(zoom, f.from, c)).1;
-    let (zr, to) = (z >> (zoom - f.from), column_first(w.column(f.from, f.slot, i + 1)));
-    let (mut r, mut value) = (column_first(w.column(f.from, f.slot, i)), crate::ways::NOTHING);
+    let (from, slot) = (f.from(), f.slot());
+    let (zr, to) = (z >> (zoom - from), column_first(w.column(from, slot, i + 1)));
+    let (mut r, mut value) = (column_first(w.column(from, slot, i)), crate::ways::NOTHING);
     while r < to {
-        let (lo, v) = crate::ways::run_of(w.ran(f.from, f.slot, r));
+        let (lo, v) = crate::ways::run_of(w.ran(from, slot, r));
         if zr < lo {
             break;
         }
@@ -373,12 +423,13 @@ pub fn ran(w: &impl Ran, near: &Found, zoom: Zoom, c: [i32; 2], z: i32, top: Zoo
 
 /// Whether column `c` of blocks at `zoom`, its window `f`, holds a run: a
 /// way writes in it.
-pub fn runs_in(w: &impl Squares, f: &Found, zoom: Zoom, c: [i32; 2]) -> bool {
-    if !f.here {
+pub fn runs_in(w: &impl Squares, f: Found, zoom: Zoom, c: [i32; 2]) -> bool {
+    if !f.here() {
         return false;
     }
-    let i = square_of(cell_at(zoom, f.from, c)).1;
-    column_first(w.column(f.from, f.slot, i + 1)) > column_first(w.column(f.from, f.slot, i))
+    let (from, slot) = (f.from(), f.slot());
+    let i = square_of(cell_at(zoom, from, c)).1;
+    column_first(w.column(from, slot, i + 1)) > column_first(w.column(from, slot, i))
 }
 
 /// The finest window, at `cell` or coarser to `top`, holding cell `g` (at
@@ -427,7 +478,7 @@ pub const WINDOW_LEVELS: u32 = LEVELS + ACROSS.trailing_zeros();
 /// node wider than a window, or over a square not held at `cell`, which
 /// reads nothing and only splits more; false where no window holds it, a
 /// lack.
-pub fn bounded(w: &impl Squares, cell: Zoom, (zoom, c): (Zoom, [i32; 2]), top: Zoom) -> ([i32; 2], Zoom, bool) {
+pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i32; 2]), top: Zoom) -> ([i32; 2], Zoom, bool) {
     // The node's first cell at `cell`, or the cell holding it.
     let g = if zoom <= cell {
         [c[0] << (cell - zoom), c[1] << (cell - zoom)]
@@ -437,8 +488,10 @@ pub fn bounded(w: &impl Squares, cell: Zoom, (zoom, c): (Zoom, [i32; 2]), top: Z
     if cell > zoom + LEVELS {
         return (whole(w, cell, g, cell - zoom), cell, true);
     }
-    let (from, slot, i, here) = find(w, cell, g, top);
-    if !here {
+    let (f, i) = step(w, *place, cell, g, top);
+    *place = f;
+    let (from, slot) = (f.from(), f.slot());
+    if !f.here() {
         return ([0, 0], from, false);
     }
     // rust-gpu has no `saturating_sub`.
