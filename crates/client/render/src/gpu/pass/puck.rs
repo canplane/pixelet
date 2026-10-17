@@ -123,9 +123,12 @@ impl PuckPass {
         g.write_buffer(buffer, 0, bytes(&[u[0], u[1], u[2], u[3], c[0], c[1], c[2], night]));
     }
 
-    pub fn draw_beacon(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32]) {
+    /// Its uniform written where the lists it is made from `moved`.
+    pub fn draw_beacon(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], moved: bool) {
         for d in draws.of(PIPELINE_PUCK_BEACON) {
-            self.write_uniform(g, self.beacon_uniform, uniform_of(uniforms, d), d[1] as f32);
+            if moved {
+                self.write_uniform(g, self.beacon_uniform, uniform_of(uniforms, d), d[1] as f32);
+            }
             g.set_pipeline(pass, self.beacon.pipeline);
             g.set_bind_group(pass, 0, self.beacon_frame_group, &[]);
             g.set_bind_group(pass, 1, self.beacon_draw_group, &[]);
@@ -143,10 +146,13 @@ impl PuckPass {
         }
     }
 
-    pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &mut Blocks) {
+    /// Its uniform written where the lists it is made from `moved`.
+    pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], moved: bool, blocks: &mut Blocks) {
         for d in draws.of(PIPELINE_PUCK_ZONE).filter(|d| d[1] > 0) {
             let Some(group) = blocks.group(g, d[0], self.zone.layouts[2]) else { continue };
-            self.write_uniform(g, self.zone_uniform, uniform_of(uniforms, d), 0.0);
+            if moved {
+                self.write_uniform(g, self.zone_uniform, uniform_of(uniforms, d), 0.0);
+            }
             g.set_pipeline(pass, self.zone.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
             g.set_bind_group(pass, 1, self.zone_draw_group, &[]);

@@ -671,7 +671,8 @@ impl DebugPass {
 
     /// `depth` is the world's, which nothing reads after this.
     #[allow(clippy::too_many_arguments)]
-    fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
+    /// Each set's uniform written where the lists it is made from `moved`.
+    fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, uniforms: &[f32], moved: bool, blocks: &Blocks, stamp: &mut Stamp) {
         if draws.of(PIPELINE_DEBUG).len() == 0 {
             return;
         }
@@ -682,7 +683,7 @@ impl DebugPass {
                 (d[1] > 0).then_some((k, d, block, d[1], d[2]))
             })
         };
-        for (k, d, ..) in sets() {
+        for (k, d, ..) in sets().filter(|_| moved) {
             let u = uniform_of(uniforms, d);
             g.write_buffer(self.sets[k].0, 0, bytes(&[u[0], u[1], u[2], 0.0]));
         }
@@ -1695,15 +1696,15 @@ impl Renderer {
         self.decor.draw(g, pass, &draws, b, Stage::Lit, (over.0, &mut *over.1));
         self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, over);
         self.clouds.draw(g, pass);
-        self.puck.draw_beacon(g, pass, &draws, uniforms);
-        self.puck.draw_zone(g, pass, &draws, uniforms, b);
+        self.puck.draw_beacon(g, pass, &draws, uniforms, lists_moved);
+        self.puck.draw_zone(g, pass, &draws, uniforms, lists_moved, b);
         self.draw_boxes(g, pass, &draws, PIPELINE_GHOST_BOX, self.ghost[0].pipeline);
         self.draw_boxes(g, pass, &draws, PIPELINE_GHOST_BOX_COPLANAR, self.ghost[1].pipeline);
         let mut bound = 0;
         self.decor.draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         g.end(pass);
         self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
-        self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_DEBUG]);
+        self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, lists_moved, b, &mut stamps[SPAN_DEBUG]);
         self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, blocks_moved || tables || exposed, &mut stamps[SPAN_CASES]);
         let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
         g.submit_frame(encoder, written);
