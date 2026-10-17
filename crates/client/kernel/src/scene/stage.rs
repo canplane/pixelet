@@ -154,7 +154,8 @@ pub fn stage_render() {
         request_world_tick();
     }
     // What the renderer holds, drawn this frame or not.
-    let objects = pxl_render::gpu::api::gpu().map_or([0; OBJECT_OPS], |g| *g.objects()).map(f64::from);
+    let held = pxl_render::gpu::api::gpu().map_or([0; OBJECT_OPS], |g| *g.objects());
+    let objects: [f64; OBJECT_OPS - 1] = core::array::from_fn(|k| f64::from(held[k + 1]));
     let Some(stat) = out.stat else {
         set_host_frame(out.kind, GpuSample::default(), DeviceSample { objects, ..DeviceSample::default() });
         return;

@@ -240,10 +240,16 @@ fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<
         };
         found.ok_or_else(|| format!("`{t}` names no width above it"))
     };
+    // A product of terms, less any others: `op.DESTROY - 1` is the ops below DESTROY past the first.
+    let product = |p: &str| p.split('*').map(term).product::<Result<f64, String>>();
     match v {
         Node::Num(n) => Ok(*n),
-        Node::Str(s) => s.split('*').map(term).product(),
-        _ => Err("a width is a number or a product of names".into()),
+        Node::Str(s) => {
+            let mut parts = s.split('-');
+            let first = product(parts.next().unwrap_or_default())?;
+            parts.try_fold(first, |w, p| Ok(w - product(p)?))
+        }
+        _ => Err("a width is a number or a product of names, less others".into()),
     }
 }
 

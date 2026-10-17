@@ -11,7 +11,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
 import { STREAM_NAMES } from "@/kernel/io/demand.spec.ts";
-import { drawn, MB, n1, pct, tris, valueText, zoomName } from "./lane.ts";
+import { drawn, LIST_NAMES, MB, n1, pct, tris, valueText, zoomName } from "./lane.ts";
 
 const bytes = (b: number) => valueText("_bytes", b);
 import { BOUND, failText } from "./report.ts";
@@ -199,6 +199,12 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Row k="kernel memory" v={bytes(kernel_memory().byteLength)} />
           <Row k="buffers" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}`} />
           <Row k="depth/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_layers_mb} MB`} />
+          {/* The leak bar's figure: flat over a pan loop and across a lost device. */}
+          <Row k="gpu objects" v={`${f.last.gpu_objects.reduce((n, o) => n + o, 0)}`} />
+          <Row
+            k="  by op"
+            v={f.last.gpu_objects.map((n, k) => [LIST_NAMES.gpu_objects[k], n] as const).filter(([, n]) => n > 0).map(([name, n]) => `${name} ${n}`).join(" ") || "-"}
+          />
           {g.sheet.entries > 0 && <Row k="sheet" v={`${g.sheet.size}px ${g.sheet.entries} ${sheetPct}%`} warn={g.sheet.size > g.sheet.initial && sheetPct < ATLAS_SPARSE_PCT} />}
         </>
       )}

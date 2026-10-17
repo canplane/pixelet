@@ -38,8 +38,9 @@ pub struct DeviceSample {
     pub depth_mb: f64,
     pub layers_mb: f64,
     /// The GPU objects the renderer holds, by the op that made them, as its
-    /// encoder counts them (xpute-gpu encode `Gpu::objects`).
-    pub objects: [f64; OBJECT_OPS],
+    /// encoder counts them (xpute-gpu encode `Gpu::objects`): op k + 1 in
+    /// slot k, as no op is 0.
+    pub objects: [f64; OBJECT_OPS - 1],
 }
 
 #[repr(C)]
