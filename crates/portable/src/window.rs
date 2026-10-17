@@ -302,6 +302,15 @@ pub trait Squares {
     /// (`ground::Bounds`) as bound words (`ground::bound_word`): its
     /// columns' joined (`join`), level 0 one.
     fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
+    /// `present` and then `level` of the square it holds: square `q`'s slot
+    /// at `cell`, whether present, and its level `j` entry `at`, none where
+    /// absent. A side that names a slot by `q` alone reads the key and the
+    /// entry together, neither waiting on the other (gpu-query-shader
+    /// `World`); one that looks a slot up reads them in turn, as here.
+    fn entry(&self, cell: Zoom, q: [i32; 2], j: u32, at: [u32; 2]) -> (u32, bool, [i32; 2]) {
+        let (slot, here) = self.present(cell, q);
+        (slot, here, if here { self.level(cell, slot, j, at) } else { [0; 2] })
+    }
     /// Cell `i` as its fill laid it (`LAID_WORDS`, `laid_at`).
     fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `e` of the eye's window at `cell`'s levels over its squares
@@ -516,7 +525,7 @@ fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// The window holding cell `g` at `cell`, as `find` finds it
 /// (`Found`), and the cell's index in its square there.
 pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2]) -> (Found, u32) {
-    let (from, slot, i, here) = find(w, cell, g);
+    let (from, slot, i, here) = find(w, cell, g, cell);
     (Found::of(cell, from, slot, here), i)
 }
 
@@ -534,11 +543,25 @@ pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2]) -> (Found, u32) {
 /// they are looked at finest first, then `above`'s answer stands, a look a
 /// zoom of the step.
 pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, u32) {
+    step_from(w, above, cell, g, cell)
+}
+
+/// Whether `step` from `above` asks the window at `cell` itself, the
+/// first it asks: none above, or `above`'s window finer than `cell`, or
+/// `cell` finer than `above`'s cells.
+fn asks(above: Found, cell: Zoom) -> bool {
+    above == Found::NONE || cell < above.from() || cell > above.cell()
+}
+
+/// `step`, its windows asked from `top` coarser: `cell`'s own, or under
+/// it where `cell`'s was asked already (`bounded`).
+fn step_from(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found, u32) {
     if above == Found::NONE || cell < above.from() {
-        return found_at(w, cell, g);
+        let (from, slot, i, here) = find(w, cell, g, top);
+        return (Found::of(cell, from, slot, here), i);
     }
     let mut f = Found::of(cell, above.from(), above.slot(), above.here());
-    let mut c = cell;
+    let mut c = top;
     while c > above.cell() {
         let (slot, here) = w.present(c, square_of(cell_at(cell, c, g)).0);
         if here {
@@ -641,19 +664,17 @@ pub fn ways_over(w: &impl Ran, found: Found, runs: [u32; 2], zoom: Zoom, z: i32,
 /// `cell`, X named on any lap round the world) present: that window's zoom,
 /// the slot and the cell's index in its square; false where none does, a
 /// lack.
-pub fn find(w: &impl Squares, cell: Zoom, g: [i32; 2]) -> (Zoom, u32, u32, bool) {
-    let mut c = cell;
-    loop {
+pub fn find(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Zoom, u32, u32, bool) {
+    let mut c = top;
+    while c >= FIRST_CELL {
         let (q, i) = square_of(cell_at(cell, c, g));
         let (slot, here) = w.present(c, q);
         if here {
             return (c, slot, i, true);
         }
-        if c <= FIRST_CELL {
-            return (c, 0, 0, false);
-        }
         c -= 1;
     }
+    (FIRST_CELL, 0, 0, false)
 }
 
 /// Entry `at` of level `j` of a square, from 1, over the level under it,
@@ -783,18 +804,39 @@ pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom
     if cell > zoom + LEVELS {
         return (whole(w, cell, g, cell - zoom), cell, true);
     }
-    let (f, i) = step(w, *place, cell, g);
+    // The window at `cell` itself where the walk asks it, its key and the
+    // node's entry read together (`Squares::entry`); the coarser ones, in
+    // turn, only where it misses.
+    let mut top = cell;
+    if asks(*place, cell) {
+        let (q, i) = square_of(cell_at(cell, cell, g));
+        let (j, at) = entry_at(zoom, cell, i);
+        let (slot, here, e) = w.entry(cell, q, j, at);
+        if here {
+            *place = Found::of(cell, cell, slot, true);
+            return (crate::ground::bounds_of(e), cell, true);
+        }
+        top = cell - 1;
+    }
+    let (f, i) = step_from(w, *place, cell, g, top);
     *place = f;
     let (from, slot) = (f.from(), f.slot());
     if !f.here() {
         return ([[0, 0]; 2], from, false);
     }
+    let (j, at) = entry_at(zoom, from, i);
+    (crate::ground::bounds_of(w.level(from, slot, j, at)), from, true)
+}
+
+/// The level of a square at `from` bounding a node at `zoom`, level 0 a
+/// column's own for a node no wider than a cell, and its entry there for
+/// the node's first cell, `i` in its square.
+fn entry_at(zoom: Zoom, from: Zoom, i: u32) -> (u32, [u32; 2]) {
     // rust-gpu has no `saturating_sub`.
     #[allow(clippy::implicit_saturating_sub)]
     let j = if zoom >= from { 0 } else { from - zoom };
     let [x, y] = of_index(i);
-    let at = [x >> j, y >> j];
-    (crate::ground::bounds_of(w.level(from, slot, j, at)), from, true)
+    (j, [x >> j, y >> j])
 }
 
 /// The join of the squares at `cell` a node `j` levels over a cell covers,
