@@ -22,26 +22,26 @@ pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
 /// Box draw: (block handle, box count, first box, uniform, pipeline).
 /// Decor draw: (block handle, group, instance count, uniform, pipeline); the
 /// uniform carries the group's first lane word, stride and index-list start.
-pub const PIPELINE_DECOR: u32 = 1;
+pub const PIPELINE_DECOR: u32 = 0;
 /// Half transparent and biased toward the eye.
-pub const PIPELINE_GHOST_BOX: u32 = 2;
-pub const PIPELINE_GHOST_BOX_COPLANAR: u32 = 3;
-pub const PIPELINE_GHOST_DECOR: u32 = 4;
+pub const PIPELINE_GHOST_BOX: u32 = 1;
+pub const PIPELINE_GHOST_BOX_COPLANAR: u32 = 2;
+pub const PIPELINE_GHOST_DECOR: u32 = 3;
 /// Position 3, normal 3, UV 2, joints 4 (u32), weights 4; indices follow the vertex lanes.
 pub const MODEL_VERTEX_WORDS: u32 = 16;
 /// (model handle, joint palette handle, model id, uniform, pipeline); uniform
 /// float 4 is the turn about Z.
-pub const PIPELINE_SKINNED: u32 = 5;
+pub const PIPELINE_SKINNED: u32 = 4;
 /// Zone: (zone block handle, instance count, 0, uniform, pipeline). Beacon:
 /// (0, night, 0, uniform, pipeline), uniform float 4 its spin.
-pub const PIPELINE_PUCK_ZONE: u32 = 6;
-pub const PIPELINE_PUCK_BEACON: u32 = 7;
+pub const PIPELINE_PUCK_ZONE: u32 = 5;
+pub const PIPELINE_PUCK_BEACON: u32 = 6;
 /// (block handle, count, 0, uniform, pipeline).
-pub const PIPELINE_BADGE: u32 = 8;
+pub const PIPELINE_BADGE: u32 = 7;
 /// Line segments: handle, line vertex count, face vertex count.
-pub const PIPELINE_DEBUG: u32 = 9;
+pub const PIPELINE_DEBUG: u32 = 8;
 /// Decor drawn as sprites where a variant is too small on screen for its model.
-pub const PIPELINE_IMPOSTOR: u32 = 34;
+pub const PIPELINE_IMPOSTOR: u32 = 9;
 
 /// Every pipeline a draw record names, in the order a frame's census counts
 /// them (pxl-kernel profiler.json CENSUS_TAGS): what the list draws is these.

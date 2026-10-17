@@ -33,33 +33,33 @@ include!(concat!(env!("OUT_DIR"), "/sources.rs"));
 pub const FRAME_AT: [usize; 16] = [0, 16, 19, 20, 23, 24, 27, 28, 31, 32, 35, 36, 38, 39, 40, 44];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
-pub const PIPELINE_SKY: u32 = 13;
-pub const PIPELINE_MIPS: u32 = 14;
-pub const PIPELINE_BLIT: u32 = 15;
-pub const PIPELINE_DECOR_PREPASS: u32 = 16;
-pub const PIPELINE_SKINNED_PREPASS: u32 = 17;
-pub const PIPELINE_AO_DOWNSAMPLE: u32 = 18;
-pub const PIPELINE_AO_SAMPLE: u32 = 19;
-pub const PIPELINE_AO_BLUR: u32 = 20;
-pub const PIPELINE_AO_UPSAMPLE: u32 = 21;
-pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 22;
-pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 23;
-pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 24;
-pub const PIPELINE_ATMOS_EXPOSURE: u32 = 25;
-pub const PIPELINE_STARS: u32 = 26;
-pub const PIPELINE_CLOUDS: u32 = 27;
-pub const PIPELINE_CLOUDS_ABOVE: u32 = 28;
-pub const PIPELINE_CLOUD_FIELD: u32 = 29;
-pub const PIPELINE_SHEET: u32 = 33;
-pub const PIPELINE_IMPOSTOR_BAKE: u32 = 35;
-pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 37;
+pub const PIPELINE_SKY: u32 = 10;
+pub const PIPELINE_MIPS: u32 = 11;
+pub const PIPELINE_BLIT: u32 = 12;
+pub const PIPELINE_DECOR_PREPASS: u32 = 13;
+pub const PIPELINE_SKINNED_PREPASS: u32 = 14;
+pub const PIPELINE_AO_DOWNSAMPLE: u32 = 15;
+pub const PIPELINE_AO_SAMPLE: u32 = 16;
+pub const PIPELINE_AO_BLUR: u32 = 17;
+pub const PIPELINE_AO_UPSAMPLE: u32 = 18;
+pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 19;
+pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 20;
+pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 21;
+pub const PIPELINE_ATMOS_EXPOSURE: u32 = 22;
+pub const PIPELINE_STARS: u32 = 23;
+pub const PIPELINE_CLOUDS: u32 = 24;
+pub const PIPELINE_CLOUDS_ABOVE: u32 = 25;
+pub const PIPELINE_CLOUD_FIELD: u32 = 26;
+pub const PIPELINE_SHEET: u32 = 27;
+pub const PIPELINE_IMPOSTOR_BAKE: u32 = 28;
+pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 29;
 /// The billboards' regions, numbered, into a target of their own (pass/badges.rs).
-pub const PIPELINE_BADGE_REGION: u32 = 39;
+pub const PIPELINE_BADGE_REGION: u32 = 30;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
-pub const PIPELINE_DEBUG_FACE: u32 = 40;
+pub const PIPELINE_DEBUG_FACE: u32 = 31;
 /// The eye's rays, opaque at their depth (pxl-portable ray.rs).
-pub const PIPELINE_SCREEN_RAYS: u32 = 41;
-pub const PIPELINES: u32 = 42;
+pub const PIPELINE_SCREEN_RAYS: u32 = 32;
+pub const PIPELINES: u32 = 33;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -369,12 +369,13 @@ struct Plan {
     groups: &'static [Group],
 }
 
-const fn plan(head: Head, lanes: &'static [Lane], groups: &'static [Group]) -> Option<Plan> {
-    Some(Plan { head, lanes, groups })
+const fn plan(head: Head, lanes: &'static [Lane], groups: &'static [Group]) -> Plan {
+    Plan { head, lanes, groups }
 }
 
-/// Pipeline `id`'s plan; none for one no record lays out.
-const fn plan_of(id: u32) -> Option<Plan> {
+/// Pipeline `id`'s plan: every id below `PIPELINES` has one, which the
+/// records, worked out as the crate is built, ask of each.
+const fn plan_of(id: u32) -> Plan {
     match id {
         PIPELINE_DECOR => plan(lit(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS),
         // Slightly clear of a surface it sits on, strongly clear of one it sits in.
@@ -540,7 +541,7 @@ const fn plan_of(id: u32) -> Option<Plan> {
             &[&CLOUD_GROUP],
         ),
         PIPELINE_CLOUD_FIELD => plan(screen(SHADER_CLOUD_FIELD), &[], &[]),
-        _ => None,
+        _ => panic!("a pipeline number with no plan"),
     }
 }
 
@@ -583,10 +584,9 @@ const fn seen(group: Group, k: usize, binding: u32) -> u32 {
     let mut stages = NONE;
     let mut id = 0;
     while id < PIPELINES {
-        if let Some(p) = plan_of(id) {
-            if k < p.groups.len() && alike(p.groups[k], group) {
-                stages |= stages_of(p.head.shader, k as u32, binding);
-            }
+        let p = plan_of(id);
+        if k < p.groups.len() && alike(p.groups[k], group) {
+            stages |= stages_of(p.head.shader, k as u32, binding);
         }
         id += 1;
     }
@@ -613,20 +613,18 @@ const fn words(p: &Plan) -> usize {
 const RECORD_WORDS: usize = {
     let (mut most, mut id) = (0, 0);
     while id < PIPELINES {
-        if let Some(p) = plan_of(id) {
-            let n = words(&p);
-            most = if n > most { n } else { most };
-        }
+        let n = words(&plan_of(id));
+        most = if n > most { n } else { most };
         id += 1;
     }
     most
 };
 
 /// Pipeline `id`'s record and its length, each group entry seen from the
-/// stages that read it (`seen`); none for one no record lays out.
+/// stages that read it (`seen`).
 const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
     let mut out = [0; RECORD_WORDS];
-    let Some(p) = plan_of(id) else { return (out, 0) };
+    let p = plan_of(id);
     let h = p.head;
     let head = [
         h.shader,
@@ -690,7 +688,7 @@ const RECORDS: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = {
 static TABLE: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = RECORDS;
 
 /// Pipeline `id`'s record (see Record words above), each group entry seen
-/// from the stages that read it; empty for one no record lays out.
+/// from the stages that read it.
 pub fn pipeline(id: u32) -> &'static [u32] {
     let (words, n) = &TABLE[id as usize];
     &words[..*n]
@@ -699,10 +697,7 @@ pub fn pipeline(id: u32) -> &'static [u32] {
 /// Whether pipeline `id`'s layout binds within what every WebGPU device
 /// binds (`floor::holds`), its groups as its record lays them out.
 const fn floored(id: u32) -> bool {
-    let (words, n) = &RECORDS[id as usize];
-    if *n == 0 {
-        return true;
-    }
+    let (words, _) = &RECORDS[id as usize];
     let mut at = HEAD as usize;
     let lanes = words[at];
     at += 1;
@@ -728,8 +723,7 @@ const fn floored(id: u32) -> bool {
 }
 
 /// Every pipeline's layout within the floor, checked as the crate is built,
-/// over every id, so a plan added is checked with no list to grow: a number
-/// no pipeline holds any more has an empty record, which binds nothing.
+/// over every id, so a plan added is checked with no list to grow.
 const _: () = {
     let mut id = 0;
     while id < PIPELINES {

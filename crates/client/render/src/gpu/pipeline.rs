@@ -77,7 +77,6 @@ impl Pipelines {
             return b;
         }
         let words = record_of(id);
-        xpute_kit::ensure!(!words.is_empty(), ENOTRECOVERABLE, id);
         let module = self.module(g, words[0]);
         let mut b = Built::default();
         let mut at = HEAD as usize;
