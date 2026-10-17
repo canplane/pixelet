@@ -45,13 +45,14 @@ use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
-use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_SKY, ENV_STARS, ENV_SUN_LIGHT, LIGHT_COLOR};
+use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_STARS, ENV_SUN_LIGHT, LIGHT_COLOR};
 use crate::mesh::paint::ground::look_words;
 use pxl_portable::eye;
 use pxl_portable::ray;
 use pxl_portable::scatter::GROUPS;
 use pxl_spec::block::window::{BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_WORDS, HANDED, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
-use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
+use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
+use pxl_spec::space::coord::world;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -69,10 +70,8 @@ const VIGNETTE: usize = FRAME_AT[10];
 const VIEWPORT: usize = FRAME_AT[11];
 const AO_STRENGTH: usize = FRAME_AT[12];
 const SCREEN_AO: usize = FRAME_AT[13];
-const PLANET: usize = FRAME_AT[14];
-const MAP: usize = FRAME_AT[15];
-const UP: usize = FRAME_AT[16];
-const CELL: usize = FRAME_AT[17];
+const MAP: usize = FRAME_AT[14];
+const CELL: usize = FRAME_AT[15];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_POLE: usize = 12;
@@ -251,12 +250,6 @@ pub fn put_f32(buf: &mut [u8], at: usize, v: f32) {
 
 pub fn put_u32(buf: &mut [u8], at: usize, v: u32) {
     buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
-}
-
-/// The air's planet and the map's place under the eye, four floats each, into a frame.
-pub(crate) fn put_planet(frame: &mut [f32], planet: &[f32; 8]) {
-    frame[PLANET..PLANET + 4].copy_from_slice(&planet[..4]);
-    frame[MAP..MAP + 4].copy_from_slice(&planet[4..]);
 }
 
 pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
@@ -1469,12 +1462,6 @@ impl Renderer {
         // in f64 before they are narrowed.
         let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
         let eye = [0.0; 3];
-        // Nothing is placed on the planet: what is drawn stands where the eye's
-        // rays find it. The planet is the air's, its center under the anchor.
-        let center: V3 = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_world[k]);
-        let sphere = Globe::at(env[ENV_AIR + 2] as f64);
-        let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
-        let up = v3::norm(&v3::sub(&eye, &planet_center));
         put_ray(&mut self.sky, 0, &m, &eye);
         self.clouds
             .lay_out(&self.sky[..RAY_FLOATS], [eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS], reach * env[ENV_AIR + 1]);
@@ -1483,7 +1470,6 @@ impl Renderer {
         self.sky[SKY_MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         for i in 0..3 {
             u[CAMERA_POS + i] = eye[i] as f32;
-            u[UP + i] = up[i] as f32;
         }
         u[EDGE_STRENGTH] = s[STAGE_AT::EDGE_STRENGTH] as f32;
         u[CELL] = s[STAGE_AT::LOD_CELL] as f32;
@@ -1503,21 +1489,12 @@ impl Renderer {
         if self.screen_ao {
             self.ao.lay_out(&proj, width, height);
         }
-        // The air's centre under the sea under the eye, and the map's place
-        // there: its longitude and Mercator's ordinate, ln tan(π/4 + φ/2).
-        let planet = [
-            center[0] as f32,
-            center[1] as f32,
-            sphere.radius_u() as f32,
-            center[2] as f32,
-            env[ENV_SKY + 2],
-            libm::log(sphere.e0) as f32,
-            MERCATOR_RADIUS_U as f32,
-            0.0,
-        ];
-        put_planet(u, &planet);
+        // The eye's own place on the map, Mercator's longitude and ordinate
+        // (its units over the map's radius in them), and that radius.
+        let lon = world::nearest(eye_world[0], 0.0) / MERCATOR_RADIUS_U;
+        u[MAP..MAP + 3].copy_from_slice(&[lon as f32, (eye_world[1] / MERCATOR_RADIUS_U) as f32, MERCATOR_RADIUS_U as f32]);
 
-        self.atmosphere.lay_out(g, env, &up);
+        self.atmosphere.lay_out(g, env);
     }
 
     /// A box is one instance shared by 36 vertices; a draw's first box is its first
@@ -1811,8 +1788,6 @@ impl Renderer {
             u[VIEWPORT + 1] = s.height as f32;
             u[VIGNETTE] = 0.0;
             u[SCREEN_AO] = 0.0;
-            // No planet: the case is a room of its own.
-            u[PLANET + 2] = 0.0;
             let r = &mut case.read;
             r.begin();
             r.read(&frame);

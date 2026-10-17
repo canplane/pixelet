@@ -7,13 +7,14 @@
 
 /* where a point stands */
 
+// The air's centre, straight under the eye at the air's radius from it.
 fn planet_center() -> vec3f {
-  return vec3f(frame_planet().xy, frame_planet().w - frame_planet().z);
+  return vec3f(0.0, 0.0, -camera_r() / atmos_km_per_u());
 }
 
-// Straight up at a point; with no planet, the frame's.
+// Straight up at a point, away from the air's centre.
 fn up_at(world_pos: vec3f) -> vec3f {
-  return select(vec3f(0.0, 0.0, 1.0), normalize(world_pos - planet_center()), frame_planet().z > 0.0);
+  return normalize(world_pos - planet_center());
 }
 
 // From the eye's radius: the frame's units are exact near it.
@@ -52,15 +53,9 @@ fn moon_view(dir: vec3f) -> vec3f {
 
 /* the Earth past the terrain */
 
-// The land the eye's ground lies on, as far as it runs: the plane at that
-// height, from the eye, in units.
-fn land_z() -> f32 {
-  return frame_planet().w + atmos_land_altitude_km() / atmos_km_per_u();
-}
-
 // Where a point lies on the map, as Mercator's longitude and ordinate.
 fn map_of(p: vec3f) -> vec2f {
-  return frame_map().xy + (p.xy - frame_planet().xy) / frame_map().z;
+  return frame_map().xy + p.xy / frame_map().z;
 }
 
 // Reflectance, and in alpha its lights' square root, at the map's place
@@ -106,15 +101,14 @@ const EARTH_GAIN: f32 = 2.0;
 // the drawn edge is no seam. Its picture comes in over the octave to the
 // earth layer's reach; nearer, the ground is the voxels', or the air's alone.
 fn beyond(dir: vec3f) -> vec3f {
-  let rise = dot(dir, frame_up());
-  if (rise >= 0.0 || land_z() >= 0.0) {
+  if (!falls_to_land(dir)) {
     var sky = sky_view(dir, atmos_sun_dir()) * shown();
     if (atmos_moon_light() > 0.0) {
       sky += moon_view(dir) * moon_shown();
     }
     return sky;
   }
-  let d = land_z() / rise;
+  let d = land_below_km() / atmos_km_per_u() / -dir.z;
   let p = dir * d;
   let seen = seen_from_eye(p);
   let octaves = log2(d / atmos_earth_reach());

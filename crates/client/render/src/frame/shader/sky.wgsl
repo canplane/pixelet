@@ -33,7 +33,7 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
 fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
   let mu = dot(dir, frame_up());
   // Behind the land the eye stands over.
-  if (mu < 0.0 || dot(dir, atmos_sun_dir()) <= 0.0 || a >= 1.0 + w) {
+  if (falls_to_land(dir) || dot(dir, atmos_sun_dir()) <= 0.0 || a >= 1.0 + w) {
     return vec3f(0.0);
   }
   let inside = min(a, 1.0);
@@ -46,7 +46,7 @@ fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
 fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
   let axis = atmos_moon_dir();
   let mu = dot(dir, frame_up());
-  if (mu < 0.0 || dot(dir, axis) <= 0.0 || a >= 1.0 + w) {
+  if (falls_to_land(dir) || dot(dir, axis) <= 0.0 || a >= 1.0 + w) {
     return vec3f(0.0);
   }
   let edge = 1.0 - smoothstep(1.0 - w, 1.0 + w, a);

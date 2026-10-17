@@ -14,8 +14,7 @@ use crate::gpu::api::{buffer_entry, buffer_usage, bytes, word_bytes, Entry, Gpu}
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_mat;
-use crate::look::atmosphere::BOTTOM_RADIUS_KM;
-use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_SKY, ENV_STARS};
+use crate::look::environment::{ENV_MOON_LIGHT, ENV_SKY, ENV_STARS};
 
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-stars.bin");
 const STAR_BYTES: usize = 8;
@@ -25,7 +24,6 @@ const STAR_FLOATS: usize = 8;
 pub(crate) const SKY: usize = 16;
 pub(crate) const DENSITY: usize = 35;
 pub(crate) const INTENSITY: usize = 36;
-pub(crate) const HORIZON: usize = 37;
 pub(crate) const MOON: usize = 40;
 
 const SHOWN: f32 = 0.001;
@@ -77,11 +75,6 @@ impl StarPass {
         u[SKY + 12..SKY + 16].copy_from_slice(&[0.0, 0.0, 0.0, 1.0]);
         let css = stage_lane()[STAGE_AT::VIEWPORT];
         u[DENSITY] = if css > 0.0 { (width as f64 / css) as f32 } else { 1.0 };
-        // atmos_medium.wgsl's meets_land: the eye's sphere against the land's.
-        let eye = BOTTOM_RADIUS_KM + (env[ENV_AIR] as f64).max(0.001);
-        let land = BOTTOM_RADIUS_KM + env[ENV_AIR + 3] as f64;
-        let s = (land / eye).min(1.0);
-        u[HORIZON] = -(1.0 - s * s).sqrt() as f32;
         u[MOON..MOON + 3].copy_from_slice(&env[ENV_MOON_LIGHT..ENV_MOON_LIGHT + 3]);
     }
 

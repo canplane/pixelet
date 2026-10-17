@@ -8,7 +8,7 @@
 /// reads past it.
 pub const DRAW_FLOATS: usize = 8;
 /// The frame's (frame.wgsl, record.rs `FRAME_AT`).
-pub const FRAME_FLOATS: usize = 52;
+pub const FRAME_FLOATS: usize = 48;
 /// The sky's: the ray, the celestial pole, and whether the Moon's face has
 /// arrived (sky_words.wgsl).
 pub const SKY_FLOATS: usize = 16;

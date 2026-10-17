@@ -9,7 +9,6 @@ use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 
-use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::around;
 
 use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
@@ -109,7 +108,7 @@ pub struct Atmosphere {
     steps: [Option<f32>; 2],
     sun_mu: f32,
     moon_mu: f32,
-    /// The words and the eye's up as last laid out, and whether this frame's
+    /// The words as last laid out, and whether this frame's
     /// moved: what the uniform and the exposure texel stand on, read here
     /// alone.
     read: Read,
@@ -293,8 +292,9 @@ impl Atmosphere {
         &self.words
     }
 
-    /// `up` is straight up where the eye stands, which every light and ray height is measured from.
-    pub fn lay_out(&mut self, g: &Gpu, env: &[f32], up: &V3) {
+    /// Every light's and ray's height is measured up the world's z, straight
+    /// up where the eye stands.
+    pub fn lay_out(&mut self, g: &Gpu, env: &[f32]) {
         let (sun, moon) = (&env[ENV_SUN_LIGHT..ENV_SUN_LIGHT + 3], &env[ENV_MOON_LIGHT..ENV_MOON_LIGHT + 4]);
         let altitude_km = env[ENV_AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
@@ -303,12 +303,10 @@ impl Atmosphere {
         self.words[CAMERA_ALTITUDE] = altitude_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
         self.words[LAND_ALTITUDE] = env[ENV_AIR + 3];
-        let height = |d: &[f32]| (d[0] as f64 * up[0] + d[1] as f64 * up[1] + d[2] as f64 * up[2]) as f32;
-        (self.sun_mu, self.moon_mu) = (height(sun), height(moon));
+        (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         let r = &mut self.read;
         r.begin();
         r.read(&self.words);
-        r.read(&up[..]);
         self.moved = !r.end();
         if self.moved {
             g.write_buffer(self.uniform, 0, bytes(&self.words));
@@ -319,9 +317,9 @@ impl Atmosphere {
     /// recorded anything. A light's view is drawn again when its height or
     /// the eye's altitude has moved (`moved`), and only while no slopes are on
     /// their way, which it writes; it takes its light's slope as it is drawn.
-    /// The exposure texel is a function of the words it reads, the eye's up
-    /// and the tables, so it is drawn where `lay_out` found the words or the
-    /// up moved, or a table was drawn.
+    /// The exposure texel is a function of the words it reads and the
+    /// tables, so it is drawn where `lay_out` found the words moved, or a
+    /// table was drawn.
     pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> (bool, bool) {
         let mut drew = !self.baked;
         if !self.baked {

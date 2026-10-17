@@ -151,17 +151,22 @@ fn air_path(r: f32, mu: f32) -> f32 {
 }
 
 // For drawing only; the tables keep the radius they were baked at.
+// How far under the eye the land it stands over lies, in km: the plane at
+// its ground's height.
+fn land_below_km() -> f32 {
+  return atmos_camera_altitude() - atmos_land_altitude_km();
+}
+
+// Whether a ray from the eye along `dir` falls to that land: the world's z
+// is up.
+fn falls_to_land(dir: vec3f) -> bool {
+  return dir.z < 0.0 && land_below_km() > 0.0;
+}
+
 fn land_radius() -> f32 {
   return atmos_bottom_radius() + atmos_land_altitude_km();
 }
 
-fn meets_land(r: f32, mu: f32) -> bool {
-  return meets_sphere(r, mu, land_radius());
-}
-
-fn to_land(r: f32, mu: f32) -> f32 {
-  return to_sphere(r, mu, land_radius());
-}
 
 
 /* tables */
