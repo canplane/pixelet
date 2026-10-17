@@ -142,19 +142,10 @@ pub fn boot() {
     world_tasks();
 }
 
-/// The executor may ignore this order; nothing relies on it.
-#[repr(u8)]
-#[derive(Clone, Copy)]
-pub(crate) enum TaskPriority {
-    Frame,
-    Arrival,
-    Background,
-}
-
 /// No more than edge.rs's TASKS; a refusal means the executor holds fewer, and aborts.
 fn world_tasks() {
+    use crate::sched::edge::TaskPriority::*;
     use xpute_guest::sched::task::spawn;
-    use TaskPriority::*;
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
         && spawn(crate::decor::assets::decor_asset_task(), Background as u8)

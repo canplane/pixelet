@@ -243,7 +243,7 @@ fn arrive(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
     }
     // The pool holds a task for each kind of every load (TASKS), and each
     // has one file in flight at most, so there is always room.
-    let spawned = xpute_guest::sched::task::spawn(arrival(kind, n, fd, bytes), crate::turn::TaskPriority::Arrival as u8);
+    let spawned = xpute_guest::sched::task::spawn(arrival(kind, n, fd, bytes), crate::sched::edge::TaskPriority::Arrival as u8);
     xpute_kit::ensure!(spawned, ENOSPC, n);
 }
 

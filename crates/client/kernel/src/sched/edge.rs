@@ -12,6 +12,16 @@ use xpute_guest::global::Global;
 /// `arrival`); an executor sizes its pool by it.
 pub const TASKS: usize = 4 + crate::asset::LOAD_FILES;
 
+/// The order the kernel's tasks ask of the executor, which may ignore it;
+/// nothing relies on it.
+#[repr(u8)]
+#[derive(Clone, Copy)]
+pub(crate) enum TaskPriority {
+    Frame,
+    Arrival,
+    Background,
+}
+
 static EDGE: Global<Edge<TASKS>> = Global::new();
 
 pub fn world_edge() -> &'static mut Edge<TASKS> {
