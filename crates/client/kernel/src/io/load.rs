@@ -81,8 +81,8 @@ pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
 }
 
 /// An image's handle once its texture is there. Its landing is the word the
-/// host writes, read here where the image is read, so nothing waits on it;
-/// once read it stays, since the texture is taken from the host's record,
+/// host writes, read here where the image is read, and while it lands the
+/// reader is asked again next turn; once read it stays, since the texture is taken from the host's record,
 /// while the device it went to does: one handed to a device since gone is
 /// asked for again.
 pub fn load_image(load: Load) -> Option<u32> {
@@ -97,6 +97,10 @@ pub fn load_image(load: Load) -> Option<u32> {
     if let Some(Entry::Landing(i)) = entry {
         if pxl_render::gpu::api::image_landed(i.handle) {
             *entry = Some(Entry::Ready(*i));
+        } else {
+            // The host lands it with no word to the kernel: the asker looks
+            // again next turn, until it is there.
+            request_world_tick();
         }
     }
     match entry {

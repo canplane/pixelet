@@ -13,7 +13,6 @@ use pxl_spec::space::coord::world::nearest;
 
 use crate::param::FALLBACK_G4326;
 use crate::param::FOV;
-use pxl_spec::space::coord::globe::Globe;
 use xpute_guest::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
@@ -106,11 +105,6 @@ pub fn globe_anchor() -> Option<G4326> {
 /// stands anywhere the place it starts from.
 pub fn anchor() -> G4326 {
     globe_anchor().unwrap_or(FALLBACK_G4326)
-}
-
-/// The planet the world is laid on, tangent at the anchor.
-pub fn globe() -> Globe {
-    Globe::at(anchor()[1].to_radians())
 }
 
 /// Mercator stretches by the secant of the latitude, heights alike; at the

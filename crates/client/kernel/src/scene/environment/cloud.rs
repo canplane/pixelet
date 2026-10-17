@@ -214,13 +214,15 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
         if !frame.sees_box([corner[0] - reach, corner[1] - reach, zlo - reach], [corner[0] + BLOCK + reach, corner[1] + BLOCK + reach, zhi + reach]) {
             continue;
         }
-        // The nearest cloud the view holds, each as the box it stands in.
+        // The nearest cloud the view holds, each as the box it stands in, no
+        // nearer than the near plane, short of which nothing is drawn: from
+        // inside a box the drift is still a cell's at that distance.
         for cloud in clouds_of(key, base) {
             let at = [corner[0] + cloud.local[0], corner[1] + cloud.local[1], cloud.z];
             let half = [cloud.width / 2.0, cloud.width / 2.0, cloud.height / 2.0];
             if frame.sees_box(core::array::from_fn(|k| at[k] - half[k]), core::array::from_fn(|k| at[k] + half[k])) {
                 let gap: V3 = core::array::from_fn(|k| ((if k == 0 { nearest(at[0], eye[0]) } else { at[k] }) - eye[k]).abs() - half[k]);
-                c.seen = c.seen.min(v3::len(&gap.map(|g| g.max(0.0))));
+                c.seen = c.seen.min(v3::len(&gap.map(|g| g.max(0.0))).max(crate::param::NEAR));
             }
         }
         let block = Shown {

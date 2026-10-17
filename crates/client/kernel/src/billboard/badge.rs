@@ -133,7 +133,9 @@ fn badges() -> &'static mut FnvHashMap<Label, Badge> {
     BADGES.get(FnvHashMap::default)
 }
 
-pub fn retain(labels: &FnvHashSet<Label>) {
+/// Lets go of every label but `labels`, their slots freed; whether any
+/// slot was, so a label the sheet had no room for may have it now.
+pub fn retain(labels: &FnvHashSet<Label>) -> bool {
     let mut dropped = false;
     badges().retain(|label, b| {
         if labels.contains(label) {
@@ -150,6 +152,15 @@ pub fn retain(labels: &FnvHashSet<Label>) {
     if dropped {
         billboard_sheet().compact();
     }
+    dropped
+}
+
+/// Whether it becomes ready (`ready`) with nothing else moving: its words
+/// asked of the host, answered by a later turn, or its slot given and
+/// painted at render. One the sheet has no room for becomes ready only once
+/// a slot is let go (`retain`), so it asks no turn of its own.
+pub fn coming(label: Label) -> bool {
+    badges().get(&label).is_none_or(|b| b.slot != NO_SLOT && !billboard_sheet().painted(b.slot as u32))
 }
 
 /// Its width, height and where it stands down from its top; none until its

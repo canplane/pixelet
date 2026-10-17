@@ -377,10 +377,12 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         labeled.push((label, center));
     }
     // The line's slot is kept while it is said, wherever its speaker is.
-    badge::retain(&labeled.iter().map(|l| l.0).chain(p.pending.iter().copied()).chain(line).collect());
+    let freed = badge::retain(&labeled.iter().map(|l| l.0).chain(p.pending.iter().copied()).chain(line).collect());
     // Painted at render, or laid out by the host, neither of which asks a
-    // turn: one looks again.
-    p.waiting = !p.pending.is_empty() || unlaid || unread > 0;
+    // turn: one looks again, while a label is on its way (`badge::coming`),
+    // or once a slot let go may make room for one that had none.
+    let pending = p.pending.iter().any(|&l| badge::coming(l)) || freed && !p.pending.is_empty();
+    p.waiting = pending || unlaid || unread > 0;
     if p.waiting {
         crate::sched::edge::request_world_tick();
     }
