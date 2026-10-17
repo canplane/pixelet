@@ -152,6 +152,12 @@ impl Place {
         [self.corner[0] as f32 * s - o.frac[0], self.corner[1] as f32 * s - o.frac[1], self.corner[2] as f32 * s - o.frac[2]]
     }
 
+    /// Whether it holds the origin.
+    pub fn holds(self, o: &Origin) -> bool {
+        let (min, side) = (self.min(o), self.side());
+        min[0] <= 0.0 && 0.0 < min[0] + side && min[1] <= 0.0 && 0.0 < min[1] + side && min[2] <= 0.0 && 0.0 < min[2] + side
+    }
+
     /// A child of a node at `zoom`: its corner is the parent's times `m`,
     /// plus `h` where it is the upper half on an axis.
     const fn step(zoom: Zoom) -> (i32, i32) {
@@ -364,9 +370,10 @@ pub struct Start<A: Copy> {
     pub stack: [A; DEPTH],
 }
 
-/// What was handed each node over a descent's start, asked by its zoom, and
-/// only where a ray climbs past the start: the start's stack as found
-/// (`start`), or as a GPU holds it, read where asked.
+/// What was handed each node over a descent's start, the nodes holding its
+/// origin, asked by its zoom where a ray climbs past the start to one: the
+/// start's stack as found (`start`), or as a GPU holds it, read where
+/// asked.
 pub trait Over<A: Copy> {
     fn over(&self, zoom: Zoom) -> A;
 }
@@ -503,11 +510,7 @@ pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, un
 fn stops<Q: Query>(q: &Q, o: &Origin, until: Until, place: Place, block: &Q::Block) -> bool {
     let fills = q.fills(block);
     match until {
-        Until::Fills => {
-            let (min, side) = (place.min(o), place.side());
-            let inside = min[0] <= 0.0 && 0.0 < min[0] + side && min[1] <= 0.0 && 0.0 < min[1] + side && min[2] <= 0.0 && 0.0 < min[2] + side;
-            fills && !inside
-        }
+        Until::Fills => fills && !place.holds(o),
         Until::Air => !fills,
     }
 }
@@ -602,7 +605,10 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
                     (place, t1) = (parent, end);
                     continue;
                 }
-                let handed = if parent.zoom < top {
+                // Over the start, `over` holds what was handed the nodes
+                // holding the origin; one the ray went into past them, the
+                // stack.
+                let handed = if parent.zoom < top && parent.holds(o) {
                     over.over(parent.zoom)
                 } else {
                     Q::unkeep(stack[parent.zoom as usize], &at, parent.zoom)
