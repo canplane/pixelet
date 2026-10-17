@@ -51,6 +51,13 @@ impl Squares for Fresh<'_> {
     fn present(&self, _: u32, _: [i32; 2]) -> (u32, bool) {
         (0, true)
     }
+    /// A square on its own is no window's.
+    fn square(&self, _: u32, _: u32) -> ([i32; 2], bool) {
+        ([0; 2], false)
+    }
+    fn joined(&self, _: u32, _: u32) -> [u32; window::JOINED_WORDS as usize] {
+        [0; window::JOINED_WORDS as usize]
+    }
     fn look(&self, _: u32, _: u32, i: u32) -> u32 {
         at(self.ground, self.base + i)
     }

@@ -19,6 +19,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     PLANES.set(Planes {
         cells: vec![0; (SQUARES * CELLS_LANE_BYTES) as usize].leak(),
         looks: vec![0; (SQUARES * LOOK_LANE_BYTES) as usize].leak(),
+        joined: vec![0; window::EYE_JOINED_WORDS as usize].leak(),
     });
     WINDOWS_STATE.set(fresh());
     let w = windows();

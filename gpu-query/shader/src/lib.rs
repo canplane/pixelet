@@ -193,6 +193,14 @@ impl Squares for World<'_> {
         let h = at(self.window, (cell - FIRST_CELL) * SLOTS + s);
         (s, h.z != 0 && h.x == q[0] && h.y == q[1])
     }
+    fn square(&self, cell: u32, slot: u32) -> ([i32; 2], bool) {
+        let h = at(self.window, (cell - FIRST_CELL) * SLOTS + slot);
+        ([h.x, h.y], h.z != 0)
+    }
+    /// None yet: the fold's lane is the renderer's to bind (`joined_cs`).
+    fn joined(&self, _: u32, _: u32) -> [u32; window::JOINED_WORDS as usize] {
+        [0; window::JOINED_WORDS as usize]
+    }
     fn look(&self, cell: u32, slot: u32, i: u32) -> u32 {
         at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + i)
     }

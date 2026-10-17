@@ -26,7 +26,7 @@ use xpute_kit::collection::list::List;
 
 use crate::io::source::Declared;
 use crate::layer::kept::Offered;
-use crate::layer::terrain::fixed::{cells_off, fill_off, looks_off, CELLS_BYTES, CELLS_LANE_BYTES, LOOK_LANE_BYTES, RANGE};
+use crate::layer::terrain::fixed::{cells_off, fill_off, joined_off, looks_off, CELLS_BYTES, CELLS_LANE_BYTES, LOOK_LANE_BYTES, RANGE};
 use crate::layer::Base;
 use crate::mem::fixed::lane;
 
@@ -164,6 +164,9 @@ fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
 pub(crate) struct Planes {
     pub cells: &'static mut [u8],
     pub looks: &'static mut [GroundId],
+    /// The eye's windows' levels over their squares, as the GPU folded them
+    /// and the renderer reads them back (pxl-portable `window::fold`).
+    pub joined: &'static mut [u32],
 }
 
 pub(crate) static PLANES: Global<Planes> = Global::new();
@@ -176,9 +179,17 @@ fn planes() -> &'static mut Planes {
             Planes {
                 cells: lane(r, cells_off(0), (SQUARES * CELLS_LANE_BYTES) as usize),
                 looks: lane(r, looks_off(0), (SQUARES * LOOK_LANE_BYTES) as usize),
+                joined: lane(r, joined_off(), window::EYE_JOINED_WORDS as usize),
             }
         }
     })
+}
+
+/// Where the eye's windows' levels over their squares come back to in the
+/// module's memory (pxl-render `GroundSquares::joined`).
+pub fn joined_lane() -> u32 {
+    let joined: &[u32] = planes().joined;
+    off_of_slice(joined) as u32
 }
 
 fn cells(s: u32) -> &'static [u8] {
@@ -506,6 +517,19 @@ impl Squares for Windowed {
             w.windows[(i / SLOTS) as usize].cell == cell && slot.present != 0 && slot.square == q
         });
         (held.unwrap_or(0), held.is_some())
+    }
+
+    fn square(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool) {
+        let s = windows().slots[((cell - FIRST_CELL) * SLOTS + slot) as usize];
+        (s.square, s.present != 0)
+    }
+
+    /// As the GPU folded it, read back a frame or more later: an entry for
+    /// a block no longer held names another, and reads none (pxl-portable
+    /// `window::unfold`).
+    fn joined(&self, cell: Zoom, e: u32) -> [u32; window::JOINED_WORDS as usize] {
+        let at = (((cell - FIRST_CELL) * window::JOINED_ENTRIES + e) * window::JOINED_WORDS) as usize;
+        core::array::from_fn(|k| planes().joined[at + k])
     }
 
     /// The CPU holds a cell's own look alone: its four are it four times.

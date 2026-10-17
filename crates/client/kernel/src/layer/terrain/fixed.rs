@@ -4,9 +4,10 @@
 //! square lies in, and where a record's bytes are. A plane is one lane of
 //! every frame, or of every square, end to end; planes in order: the
 //! separation's seven, a tile's; then a square's cells and its looks; then
-//! the room a fill works in, once.
+//! the eye's windows' levels over their squares as the GPU folded them,
+//! once; then the room a fill works in, once.
 
-use pxl_portable::window::{BACK_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
+use pxl_portable::window::{BACK_WORDS, EYE_JOINED_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::LOOK_LANE;
 
@@ -57,6 +58,11 @@ pub const CELLS_LANE_BYTES: u32 = lane(CELLS_BYTES as usize, 1);
 /// One square's looks: a cell's own, a byte.
 pub const LOOK_LANE_BYTES: u32 = SQUARE_CELLS;
 
+/// The eye's windows' levels over their squares (pxl-portable
+/// `window::fold`), read back as the GPU folded them (pxl-render
+/// `GroundSquares::joined`).
+pub const JOINED_BYTES: u32 = lane(EYE_JOINED_WORDS as usize, 4);
+
 /// The room a fill works in (window.rs `fill`), a lane each in order: a
 /// tile's looks four a cell as handed, a square's cut from them, its lines,
 /// and the pairs `square_lines` lays them with.
@@ -68,7 +74,7 @@ pub const FILL_LANE_BYTES: [u32; 4] = [
 ];
 
 /// Where the fill's room starts, on a cache line.
-const FILL_AT: u32 = lane((SEPARATION_BYTES + SQUARES * (CELLS_LANE_BYTES + LOOK_LANE_BYTES)) as usize, 1);
+const FILL_AT: u32 = lane((joined_off() + JOINED_BYTES) as usize, 1);
 
 pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_LANE_BYTES);
 
@@ -90,6 +96,10 @@ pub const fn cells_off(square: u32) -> u32 {
 
 pub const fn looks_off(square: u32) -> u32 {
     SEPARATION_BYTES + SQUARES * CELLS_LANE_BYTES + square * LOOK_LANE_BYTES
+}
+
+pub const fn joined_off() -> u32 {
+    looks_off(SQUARES)
 }
 
 pub const fn fill_off(lane: usize) -> u32 {
