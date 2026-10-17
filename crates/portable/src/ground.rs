@@ -420,11 +420,8 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: &mut Shard, place: &mut Fo
         };
         return (answer, column, *place);
     }
-    let answer = if empty(held, *shard, (zoom, c), relief, [far, near], cave.whole(zoom) == (true, true)) {
-        air
-    } else {
-        split
-    };
+    let (known, hollow) = cave.whole(zoom);
+    let answer = if empty(held, *shard, (zoom, c), relief, [far, near], known && hollow) { air } else { split };
     (answer, Cell::NONE, none)
 }
 
