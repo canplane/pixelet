@@ -119,6 +119,8 @@ pub struct Demand<L: Observed> {
     moved: bool,
     /// Reused across observations so observing stops allocating once warm.
     asks: FnvHashMap<Tile, Ask>,
+    /// The residency's revision as it idled it (`idle`), none while it steps.
+    idled: Option<u32>,
 }
 
 impl<L: Observed> Default for Demand<L> {
@@ -132,6 +134,7 @@ impl<L: Observed> Default for Demand<L> {
             floor: Vec::new(),
             moved: false,
             asks: FnvHashMap::with_capacity_and_hasher(Residency::<L>::FRAMES as usize, Default::default()),
+            idled: None,
         }
     }
 }
@@ -302,6 +305,7 @@ impl<L: Observed> Demand<L> {
         if o.is_none() && destination.is_none() && pinned.is_empty() {
             return;
         }
+        self.idled = None;
         let tau = if o.is_some() { tau } else { Tau::FINEST };
         let now = Seen { o, destination, tau };
         if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
@@ -320,13 +324,20 @@ impl<L: Observed> Demand<L> {
         self.moved = true;
     }
 
-    /// A layer the view does not show keeps what it holds and asks for nothing.
+    /// A layer the view does not show keeps what it holds and asks for
+    /// nothing: its residency let go of its asks again only where what it
+    /// holds moved since it last was (`Residency::revision`), as asking
+    /// nothing of what is unchanged changes nothing.
     pub fn idle(&mut self) {
+        if self.idled.is_some_and(|r| r == L::residency().revision()) {
+            return;
+        }
         self.wants.clear();
         self.asks.clear();
         L::residency().ask(&self.asks);
         declare(L::STREAM, &[]);
         self.last = None;
+        self.idled = Some(L::residency().revision());
     }
 }
 
