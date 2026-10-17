@@ -7,7 +7,7 @@
 //! A column's ways are the runs the GPU wrote, read back with its cells.
 
 use pxl_portable::ground::{Bounds, Cell};
-use pxl_portable::window::{self as cells, Found, SQUARE_SHIFT};
+use pxl_portable::window::{self as cells, Found};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::{base_of, units, Zoom};
@@ -61,28 +61,6 @@ impl Residency<TerrainTile> {
     /// key order pays one look-up a node.
     pub fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Bound>> {
         self.bound(&self.seek(lines, bound_tile(node, cell)), node, cell)
-    }
-
-    /// Whether the windows hold the cells of `line`'s tile under `node` as
-    /// its line says them, each square of them read (`held`).
-    pub fn cells_held(&self, line: &Line, (zoom, at): Node<2>) -> Answer<()> {
-        let cell = GROUND.cell_zoom(line.tile.zoom);
-        let [lo, hi] = match cell.checked_sub(zoom) {
-            Some(d) => [at.map(|v| v << d), at.map(|v| ((v + 1) << d) - 1)],
-            None => [at.map(|v| v >> (zoom - cell)); 2],
-        }
-        .map(|c| c.map(|v| (v >> SQUARE_SHIFT) as i32));
-        let mut coarsest = cell;
-        for y in lo[1]..=hi[1] {
-            for x in lo[0]..=hi[0] {
-                let (from, _, _, here) = cells::find(&Windowed, cell, [x << SQUARE_SHIFT, y << SQUARE_SHIFT]);
-                if !here {
-                    return Answer::Nothing(line.tile);
-                }
-                coarsest = coarsest.min(from);
-            }
-        }
-        held(line, coarsest, true, ())
     }
 }
 
