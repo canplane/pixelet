@@ -727,44 +727,13 @@ const fn floored(id: u32) -> bool {
     floor::holds(stated.split_at(groups).0)
 }
 
-/// Each pipeline's layout within the floor, checked as the crate is built.
-macro_rules! floored {
-    ($($id:ident),* $(,)?) => {
-        $(const _: () = assert!(floored($id), concat!(stringify!($id), "'s layout binds past WebGPU's floor"));)*
-    };
-}
-floored!(
-    PIPELINE_DECOR,
-    PIPELINE_GHOST_BOX,
-    PIPELINE_GHOST_BOX_COPLANAR,
-    PIPELINE_GHOST_DECOR,
-    PIPELINE_SKINNED,
-    PIPELINE_PUCK_ZONE,
-    PIPELINE_PUCK_BEACON,
-    PIPELINE_BADGE,
-    PIPELINE_BADGE_REGION,
-    PIPELINE_DEBUG,
-    PIPELINE_DEBUG_FACE,
-    PIPELINE_SCREEN_RAYS,
-    PIPELINE_DECOR_PREPASS,
-    PIPELINE_SKINNED_PREPASS,
-    PIPELINE_SKY,
-    PIPELINE_MIPS,
-    PIPELINE_BLIT,
-    PIPELINE_IMPOSTOR,
-    PIPELINE_IMPOSTOR_BAKE,
-    PIPELINE_SHEET,
-    PIPELINE_AO_DOWNSAMPLE,
-    PIPELINE_AO_SAMPLE,
-    PIPELINE_AO_BLUR,
-    PIPELINE_AO_UPSAMPLE,
-    PIPELINE_ATMOS_TRANSMITTANCE,
-    PIPELINE_ATMOS_MULTISCATTER,
-    PIPELINE_ATMOS_SKY_VIEW,
-    PIPELINE_ATMOS_IRRADIANCE,
-    PIPELINE_ATMOS_EXPOSURE,
-    PIPELINE_STARS,
-    PIPELINE_CLOUDS,
-    PIPELINE_CLOUDS_ABOVE,
-    PIPELINE_CLOUD_FIELD,
-);
+/// Every pipeline's layout within the floor, checked as the crate is built,
+/// over every id, so a plan added is checked with no list to grow: a number
+/// no pipeline holds any more has an empty record, which binds nothing.
+const _: () = {
+    let mut id = 0;
+    while id < PIPELINES {
+        assert!(floored(id), "a pipeline's layout binds past WebGPU's floor (frame/shader/floor.rs)");
+        id += 1;
+    }
+};
