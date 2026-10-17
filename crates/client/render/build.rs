@@ -4,13 +4,16 @@
 
 use std::path::Path;
 
+#[path = "src/frame/shader/parts.rs"]
+#[allow(dead_code)]
+mod parts;
 #[path = "src/frame/shader/words.rs"]
 mod words;
 
 fn main() {
     let dir = Path::new("src/frame/shader");
     let out = Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("shader");
-    std::fs::create_dir_all(&out).expect("the shader directory");
+    std::fs::create_dir_all(out.join("assembled")).expect("the shader directory");
     for entry in std::fs::read_dir(dir).expect("the shaders") {
         let path = entry.expect("a shader").path();
         if path.extension().and_then(|e| e.to_str()) != Some("wgsl") {
@@ -58,6 +61,7 @@ fn main() {
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
     std::fs::write(Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"), compute(dir)).expect("the compute layouts");
+    assemble(&out);
     println!("cargo:rerun-if-changed=src/frame/shader");
     println!("cargo:rerun-if-changed=src/frame/shader/words.rs");
     println!("cargo:rerun-if-changed=../../portable/src/mask.bits.rs");
@@ -157,4 +161,65 @@ fn words() -> String {
         format!("const GROUND_LOOKS: u32 = {GROUND_LOOKS}u;\nconst EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
     ]
     .concat()
+}
+
+/// Every shader assembled from its parts (parts.rs `PARTS`), validated as
+/// WebGPU takes it, every capability off; written where record.rs `source`
+/// includes it; and which stages read each of its bindings, read off its
+/// entry points (`STAGES`, in OUT_DIR), which every pipeline's groups take their
+/// visibility from (record.rs `pipeline`).
+fn assemble(out: &Path) {
+    use naga::valid::{Capabilities, ValidationFlags, Validator};
+    let read = |name: &str| std::fs::read_to_string(out.join(format!("{name}.wgsl"))).unwrap_or_else(|e| panic!("{name}.wgsl: {e}"));
+    let constant = read("constant");
+    let (mut sources, mut stages) = (String::new(), String::new());
+    for (kind, parts) in parts::PARTS.iter().enumerate() {
+        let generated = parts.len() == 1 && parts[0].ends_with(".gen");
+        let mut text = if generated { String::new() } else { constant.clone() + "\n" };
+        for part in parts.iter() {
+            text += &read(part);
+            text += "\n";
+        }
+        let module = naga::front::wgsl::parse_str(&text).unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
+        let info = Validator::new(ValidationFlags::all(), Capabilities::empty())
+            .validate(&module)
+            .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
+        let file = format!("{kind}.wgsl");
+        std::fs::write(out.join("assembled").join(&file), &text).expect("an assembled shader");
+        sources += &format!("        {kind} => include_str!(concat!(env!(\"OUT_DIR\"), \"/shader/assembled/{file}\")),\n");
+        // Each binding and the stages whose entry points read it.
+        let mut read_by: Vec<(u32, u32, Vec<&str>)> = Vec::new();
+        for (handle, var) in module.global_variables.iter() {
+            let Some(b) = var.binding else { continue };
+            let mut by = Vec::new();
+            for (i, entry) in module.entry_points.iter().enumerate() {
+                let stage = match entry.stage {
+                    naga::ShaderStage::Vertex => "VERTEX",
+                    naga::ShaderStage::Fragment => "FRAGMENT",
+                    _ => "COMPUTE",
+                };
+                if !info.get_entry_point(i)[handle].is_empty() && !by.contains(&stage) {
+                    by.push(stage);
+                }
+            }
+            read_by.push((b.group, b.binding, by));
+        }
+        read_by.sort();
+        let entries: Vec<String> = read_by
+            .iter()
+            .map(|(g, b, by)| format!("[{g}, {b}, {}]", if by.is_empty() { "NONE".to_string() } else { by.join(" | ") }))
+            .collect();
+        stages += &format!("    &[{}],\n", entries.join(", "));
+    }
+    let root = out.parent().expect("OUT_DIR");
+    std::fs::write(
+        root.join("sources.rs"),
+        format!("/// Shader `kind` as build.rs assembled and validated it (parts.rs).\npub fn source(kind: u32) -> &'static str {{\n    match kind {{\n{sources}        _ => \"\",\n    }}\n}}\n"),
+    )
+    .expect("the shaders' sources");
+    std::fs::write(
+        root.join("stages.rs"),
+        format!("/// Each shader's bindings, [group, binding, the stages that read it], read off it by build.rs.\npub const STAGES: [&[[u32; 3]]; SHADERS as usize] = [\n{stages}];\n"),
+    )
+    .expect("the shaders' stages");
 }

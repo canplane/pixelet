@@ -2,78 +2,10 @@
 
 //! Shaders and their pipeline records (lanes, bind groups, primitive, depth and
 //! blend state) as one source the host turns into WebGPU or wgpu descriptors.
-//! `cargo test` compiles and validates every shader with naga.
+//! build.rs assembles and validates every shader (parts.rs), and reads off it
+//! the stages each pipeline's groups are seen from.
 
-pub const SHADER_BOX: u32 = 0;
-pub const SHADER_DECOR: u32 = 1;
-pub const SHADER_SKINNED: u32 = 2;
-pub const SHADER_PUCK_ZONE: u32 = 3;
-pub const SHADER_PUCK_BEACON: u32 = 4;
-pub const SHADER_BADGE: u32 = 5;
-pub const SHADER_SKY: u32 = 6;
-pub const SHADER_DEBUG: u32 = 7;
-pub const SHADER_MIPS: u32 = 8;
-pub const SHADER_AO_DOWNSAMPLE: u32 = 9;
-pub const SHADER_AO_SAMPLE: u32 = 10;
-pub const SHADER_AO_BLUR: u32 = 11;
-pub const SHADER_AO_UPSAMPLE: u32 = 12;
-pub const SHADER_ATMOS_TRANSMITTANCE: u32 = 13;
-pub const SHADER_ATMOS_MULTISCATTER: u32 = 14;
-pub const SHADER_ATMOS_SKY_VIEW: u32 = 15;
-pub const SHADER_ATMOS_EXPOSURE: u32 = 16;
-pub const SHADER_STARS: u32 = 17;
-pub const SHADER_CLOUDS: u32 = 18;
-pub const SHADER_CLOUD_FIELD: u32 = 19;
-pub const SHADER_SHEET: u32 = 20;
-pub const SHADER_IMPOSTOR: u32 = 21;
-pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
-pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
-pub const SHADER_BADGE_REGION: u32 = 24;
-/// The eye's rays drawn at their pixels (pxl-portable ray.rs).
-pub const SHADER_SCREEN_RAYS: u32 = 25;
-/// The eye's rays cast on the GPU into the world surface's rays, generated from
-/// pxl-portable's descent (script/portable-wgsl.ts): its one compute entry.
-pub const SHADER_CAST: u32 = 26;
-/// Each newly held square's levels over its columns, a level a dispatch,
-/// generated with the cast from pxl-portable's `fill::level` and
-/// `window::join`: its one compute entry.
-pub const SHADER_BOUND: u32 = 27;
-/// Each newly held square's columns' ground tops off its samples,
-/// generated with the cast from pxl-portable's `ground::height`: its one
-/// compute entry.
-pub const SHADER_HEIGHTS: u32 = 28;
-/// The decor the ground grows in the eye's windows, generated with the cast
-/// from pxl-portable's `scatter`: its one compute entry.
-pub const SHADER_GROWN: u32 = 29;
-/// What `SHADER_GROWN` and placed decor leave, sized for the screen and
-/// counted a draw region each; the regions laid out with their indirect
-/// args; each drawn into the decor block: pxl-portable `scatter::drawn`.
-pub const SHADER_GROWN_COUNT: u32 = 30;
-pub const SHADER_GROWN_ARGS: u32 = 31;
-pub const SHADER_GROWN_PLACE: u32 = 32;
-/// Each newly held terrain frame's ways, its columns' runs along z off its
-/// lines, generated with the cast from pxl-portable's `ways`: its one
-/// compute entry.
-pub const SHADER_WAYS: u32 = 33;
-/// The world image laid on a frame (blit.wgsl).
-pub const SHADER_BLIT: u32 = 34;
-/// Where every ray of the cast starts alike, asked once a frame before it,
-/// generated with the cast from pxl-portable's `cast::start`: its one
-/// compute entry.
-pub const SHADER_START: u32 = 35;
-/// The face bits of each block the cast found, over its rays, generated
-/// with the cast from pxl-portable's `mask`: its one compute entry.
-pub const SHADER_FACE: u32 = 36;
-/// Which eye slots' decor grows again this frame, listed for
-/// `SHADER_GROWN`'s dispatch: its one compute entry.
-pub const SHADER_GROWN_MARK: u32 = 37;
-pub const SHADERS: u32 = 38;
-
-/// The shader files with comments and indentation stripped by build.rs;
-/// constant.wgsl first.
-macro_rules! wgsl {
-    ($($name:literal),+) => { concat!(include_str!(concat!(env!("OUT_DIR"), "/shader/constant.wgsl")), "\n", $(include_str!(concat!(env!("OUT_DIR"), "/shader/", $name, ".wgsl")), "\n"),+) };
-}
+pub use crate::frame::shader::parts::*;
 
 /// A compute shader's one entry point, as its source names it.
 pub fn compute_entry(kind: u32) -> &'static str {
@@ -93,199 +25,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
     }
 }
 
-pub fn source(kind: u32) -> &'static str {
-    match kind {
-        SHADER_BOX => wgsl!(
-            "frame",
-            "encode",
-            "atmos_medium",
-            "atmos_bind",
-            "atmos_lut",
-            "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
-            "atmos_light",
-            "atmos_view",
-            "atmos_ground",
-            "shade",
-            "finish",
-            "ao_map",
-            "faces",
-            "paint",
-            "box"
-        ),
-        SHADER_DECOR => wgsl!(
-            "frame",
-            "encode",
-            "atmos_medium",
-            "atmos_bind",
-            "atmos_lut",
-            "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
-            "atmos_light",
-            "atmos_view",
-            "atmos_ground",
-            "shade",
-            "finish",
-            "ao_map",
-            "place",
-            "decor"
-        ),
-        SHADER_SKINNED => wgsl!(
-            "frame",
-            "encode",
-            "atmos_medium",
-            "atmos_bind",
-            "atmos_lut",
-            "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
-            "atmos_light",
-            "atmos_view",
-            "atmos_ground",
-            "shade",
-            "finish",
-            "ao_map",
-            "place",
-            "skinned"
-        ),
-        SHADER_PUCK_ZONE => wgsl!("frame", "encode", "finish", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!("frame", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "place", "puck", "puck_beacon"),
-        SHADER_BADGE => wgsl!("frame", "encode", "badge", "badge_sprite"),
-        SHADER_BADGE_REGION => wgsl!("frame", "encode", "badge", "badge_region"),
-        SHADER_SKY => wgsl!(
-            "frame",
-            "encode",
-            "finish",
-            "dither",
-            "atmos_medium",
-            "atmos_bind",
-            "atmos_lut",
-            "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
-            "atmos_light",
-            "atmos_view",
-            "atmos_ground",
-            "sky_words",
-            "sky"
-        ),
-        SHADER_DEBUG => wgsl!("frame", "encode", "debug"),
-        SHADER_SCREEN_RAYS => wgsl!(
-            "frame",
-            "encode",
-            "atmos_medium",
-            "atmos_bind",
-            "atmos_lut",
-            "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
-            "atmos_light",
-            "atmos_view",
-            "atmos_ground",
-            "shade",
-            "finish",
-            "ao_map",
-            "faces",
-            "lattice",
-            "ray",
-            "eye",
-            "paint",
-            "sky_words",
-            "screen_rays"
-        ),
-        // As generated: no constants of ours before it to clash with its names.
-        SHADER_CAST => include_str!(concat!(env!("OUT_DIR"), "/shader/cast.gen.wgsl")),
-        SHADER_START => include_str!(concat!(env!("OUT_DIR"), "/shader/start.gen.wgsl")),
-        SHADER_FACE => include_str!(concat!(env!("OUT_DIR"), "/shader/face.gen.wgsl")),
-        SHADER_BOUND => include_str!(concat!(env!("OUT_DIR"), "/shader/bound.gen.wgsl")),
-        SHADER_HEIGHTS => include_str!(concat!(env!("OUT_DIR"), "/shader/heights.gen.wgsl")),
-        SHADER_GROWN_MARK => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_mark.gen.wgsl")),
-        SHADER_GROWN => include_str!(concat!(env!("OUT_DIR"), "/shader/decor.gen.wgsl")),
-        SHADER_GROWN_COUNT => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_count.gen.wgsl")),
-        SHADER_GROWN_ARGS => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_args.gen.wgsl")),
-        SHADER_GROWN_PLACE => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_place.gen.wgsl")),
-        SHADER_WAYS => include_str!(concat!(env!("OUT_DIR"), "/shader/ways.gen.wgsl")),
-        SHADER_MIPS => wgsl!("mips"),
-        SHADER_BLIT => wgsl!("blit"),
-        SHADER_SHEET => wgsl!("sheet"),
-        SHADER_IMPOSTOR => wgsl!(
-            "frame",
-            "encode",
-            "atmos_medium",
-            "atmos_bind",
-            "atmos_lut",
-            "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
-            "atmos_light",
-            "atmos_view",
-            "atmos_ground",
-            "shade",
-            "finish",
-            "ao_map",
-            "impostor"
-        ),
-        SHADER_IMPOSTOR_BAKE => wgsl!("impostor_bake"),
-        SHADER_AO_DOWNSAMPLE => wgsl!("frame", "ao_view", "ao_downsample"),
-        SHADER_AO_SAMPLE => wgsl!("ao_view", "ao_sample"),
-        SHADER_AO_BLUR => wgsl!("ao_view", "ao_blur"),
-        SHADER_AO_UPSAMPLE => wgsl!("frame", "ao_view", "ao_upsample"),
-        SHADER_ATMOS_TRANSMITTANCE => wgsl!("atmos_medium", "atmos_pass", "atmos_transmittance"),
-        SHADER_ATMOS_MULTISCATTER => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_multiscatter"),
-        SHADER_ATMOS_SKY_VIEW => wgsl!(
-            "frame",
-            "encode",
-            "atmos_medium",
-            "atmos_bind",
-            "atmos_lut",
-            "atmos_ground",
-            "atmos_eye_unit",
-            "atmos_light",
-            "atmos_pass",
-            "atmos_march",
-            "atmos_skyview"
-        ),
-        SHADER_ATMOS_IRRADIANCE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "atmos_pass", "atmos_march", "atmos_irradiance"),
-        SHADER_ATMOS_EXPOSURE => wgsl!(
-            "frame",
-            "encode",
-            "atmos_medium",
-            "atmos_bind",
-            "atmos_lut",
-            "atmos_sky",
-            "atmos_eye_unit",
-            "atmos_march",
-            "atmos_light",
-            "atmos_view",
-            "atmos_ground",
-            "atmos_pass",
-            "atmos_exposure"
-        ),
-        SHADER_STARS => wgsl!("frame", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "stars"),
-        SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
-        SHADER_CLOUDS => wgsl!(
-            "frame",
-            "encode",
-            "finish",
-            "noise",
-            "atmos_medium",
-            "atmos_bind",
-            "atmos_lut",
-            "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
-            "atmos_light",
-            "atmos_view",
-            "atmos_ground",
-            "cloud_tile",
-            "cloud_field",
-            "clouds"
-        ),
-        _ => "",
-    }
-}
+include!(concat!(env!("OUT_DIR"), "/sources.rs"));
 
 /// Frame uniform field offsets in floats, in frame.wgsl's order (its size
 /// frame/shader/words.rs's `FRAME_FLOATS`).
@@ -477,7 +217,7 @@ const fn prepass(shader: u32, cull: u32) -> Head {
 /// A billboard set's uniform and instances, and what its pass reads at an
 /// anchor: the world's depth for the regions, the regions for the sprites.
 fn badge_group(read: u32) -> Vec<u32> {
-    group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, read]])
+    group(&[[0, UNIFORM], [1, STORAGE], [2, read]])
 }
 
 const fn screen(shader: u32) -> Head {
@@ -492,7 +232,7 @@ fn lane(stride: u32, location: u32, format: u32) -> Vec<u32> {
     vec![stride, PER_VERTEX, 1, location, 0, format]
 }
 
-fn group(entries: &[[u32; 3]]) -> Vec<u32> {
+fn group(entries: &[[u32; 2]]) -> Vec<u32> {
     let mut out = vec![entries.len() as u32];
     for e in entries {
         out.extend_from_slice(e);
@@ -538,49 +278,35 @@ const AIR_SLOTS: [[u32; 2]; 10] = [
     [12, TEXTURE],
 ];
 
-/// The air's bindings, each seen from the stage at its place in `AIR_SLOTS`.
-const fn air(stages: [u32; 10]) -> [[u32; 3]; 10] {
-    let mut out = [[0; 3]; 10];
-    let mut i = 0;
-    while i < out.len() {
-        out[i] = [AIR_SLOTS[i][0], stages[i], AIR_SLOTS[i][1]];
-        i += 1;
-    }
-    out
-}
-
-const AIR: [[u32; 3]; 10] = air([FRAGMENT; 10]);
-/// Laid out where atmos_view.wgsl declares it and nothing reads it.
-const AIR_UNREAD: [[u32; 3]; 10] = air([NONE; 10]);
-const LIT_FRAME: [[u32; 3]; 12] = {
+/// The air's bindings, as every pass that binds the air lays them out.
+const AIR: [[u32; 2]; 10] = AIR_SLOTS;
+const LIT_FRAME: [[u32; 2]; 12] = {
     // The air in the vertex stage, where each point's lights and veil are
     // worked out; a fragment reads its words and the eye's texel, whose white
     // it shows by (atmos_eye.wgsl). The sky's views and the Earth's picture
     // are the sky pass's, laid out unread.
-    let a = air([BOTH, VERTEX, NONE, VERTEX, BOTH, NONE, NONE, NONE, VERTEX, VERTEX]);
-    [[0, BOTH, UNIFORM], [7, FRAGMENT, TEXTURE], a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9]]
+    [[0, UNIFORM], [7, TEXTURE], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9]]
 };
 /// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
-const CLOUD_GROUP: [[u32; 3]; 14] = {
-    let a = air([FRAGMENT, FRAGMENT, NONE, FRAGMENT, FRAGMENT, NONE, NONE, NONE, FRAGMENT, FRAGMENT]);
+const CLOUD_GROUP: [[u32; 2]; 14] = {
     [
-        [0, FRAGMENT, UNIFORM],
-        [1, FRAGMENT, UNIFORM],
-        [2, FRAGMENT, TEXTURE],
-        [3, FRAGMENT, SAMPLER],
-        a[0],
-        a[1],
-        a[2],
-        a[3],
-        a[4],
-        a[5],
-        a[6],
-        a[7],
-        a[8],
-        a[9],
+        [0, UNIFORM],
+        [1, UNIFORM],
+        [2, TEXTURE],
+        [3, SAMPLER],
+        AIR[0],
+        AIR[1],
+        AIR[2],
+        AIR[3],
+        AIR[4],
+        AIR[5],
+        AIR[6],
+        AIR[7],
+        AIR[8],
+        AIR[9],
     ]
 };
-const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
+const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 
 /// The boxes are a per-instance vertex buffer, so a draw reaches its boxes by
 /// its first instance.
@@ -590,34 +316,33 @@ fn box_lanes() -> Vec<Vec<u32>> {
 }
 fn box_groups() -> Vec<Vec<u32>> {
     let mut g0 = LIT_FRAME.to_vec();
-    g0.extend([[3, VERTEX, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
+    g0.extend([[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
     vec![group(&g0)]
 }
 /// The lit pass's frame, occlusion, air and layers, all read where
 /// a pixel is painted; then the rays, the sky's words, the looks and the
 /// eye's Q3 steps: the most entries any group has (`GROUP_ENTRIES`).
-const SCREEN_GROUP: [[u32; 3]; 19] = {
-    let a = air([FRAGMENT, FRAGMENT, NONE, FRAGMENT, FRAGMENT, NONE, NONE, NONE, FRAGMENT, FRAGMENT]);
+const SCREEN_GROUP: [[u32; 2]; 19] = {
     [
-        [0, FRAGMENT, UNIFORM],
-        [7, FRAGMENT, TEXTURE],
-        a[0],
-        a[1],
-        a[2],
-        a[3],
-        a[4],
-        a[5],
-        a[6],
-        a[7],
-        a[8],
-        a[9],
-        [3, FRAGMENT, TEXTURE_UINT_ARRAY],
-        [4, FRAGMENT, TEXTURE_ARRAY],
-        [5, FRAGMENT, STORAGE],
-        [6, FRAGMENT, SAMPLER],
-        [19, FRAGMENT, UNIFORM],
-        [20, FRAGMENT, STORAGE],
-        [21, FRAGMENT, UNIFORM],
+        [0, UNIFORM],
+        [7, TEXTURE],
+        AIR[0],
+        AIR[1],
+        AIR[2],
+        AIR[3],
+        AIR[4],
+        AIR[5],
+        AIR[6],
+        AIR[7],
+        AIR[8],
+        AIR[9],
+        [3, TEXTURE_UINT_ARRAY],
+        [4, TEXTURE_ARRAY],
+        [5, STORAGE],
+        [6, SAMPLER],
+        [19, UNIFORM],
+        [20, STORAGE],
+        [21, UNIFORM],
     ]
 };
 
@@ -634,11 +359,13 @@ fn model_lanes(skinned: bool) -> Vec<Vec<u32>> {
     lanes
 }
 fn model_groups() -> Vec<Vec<u32>> {
-    vec![group(&LIT_FRAME), group(&[[0, BOTH, UNIFORM_DYNAMIC]]), group(&SKIN), group(&[[0, VERTEX, STORAGE]])]
+    vec![group(&LIT_FRAME), group(&[[0, UNIFORM_DYNAMIC]]), group(&SKIN), group(&[[0, STORAGE]])]
 }
 
-pub fn pipeline(id: u32) -> Vec<u32> {
-    let frame = |visibility: u32| group(&[[0, visibility, UNIFORM]]);
+/// A pipeline's record before its groups' stages: each group's entries
+/// (binding, kind), which `pipeline` sees from the stages that read them.
+fn plan(id: u32) -> Vec<u32> {
+    let frame = || group(&[[0, UNIFORM]]);
     match id {
         PIPELINE_DECOR => record(lit(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
         // Slightly clear of a surface it sits on, strongly clear of one it sits in.
@@ -651,12 +378,12 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_PUCK_ZONE => record(
             blended(SHADER_PUCK_ZONE, CULL_NONE, 4, 1.0),
             &[lane(12, 0, F32X3), lane(8, 1, F32X2)],
-            &[frame(BOTH), group(&[[0, BOTH, UNIFORM]]), group(&[[0, VERTEX, STORAGE]])],
+            &[frame(), group(&[[0, UNIFORM]]), group(&[[0, STORAGE]])],
         ),
         PIPELINE_PUCK_BEACON => record(
             lit(SHADER_PUCK_BEACON, CULL_BACK),
             &[lane(12, 0, F32X3), lane(12, 1, F32X3)],
-            &[group(&[[0, BOTH, UNIFORM], AIR[0], AIR[1], AIR[3]]), group(&[[0, BOTH, UNIFORM]])],
+            &[group(&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]]), group(&[[0, UNIFORM]])],
         ),
         PIPELINE_BADGE => record(
             Head {
@@ -665,7 +392,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_BADGE, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[frame(BOTH), badge_group(TEXTURE_UNFILTERED), group(&SKIN)],
+            &[frame(), badge_group(TEXTURE_UNFILTERED), group(&SKIN)],
         ),
         PIPELINE_BADGE_REGION => record(
             Head {
@@ -676,7 +403,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_BADGE_REGION, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[frame(BOTH), badge_group(DEPTH)],
+            &[frame(), badge_group(DEPTH)],
         ),
         // Against the gizmos' own faces, not the world's depth.
         PIPELINE_DEBUG => record(
@@ -685,7 +412,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_DEBUG, CULL_NONE, 0, 0.0)
             },
             &[vec![56, PER_INSTANCE, 3, 0, 0, F32X3, 1, 12, F32X4, 2, 28, F32X3]],
-            &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM]])],
+            &[frame(), group(&[[0, UNIFORM]])],
         ),
         // Pushed back by their slope as a rasterizer's polygon offset is, so
         // the lines that bound a face stay in front of it.
@@ -698,7 +425,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..depth_only(SHADER_DEBUG)
             },
             &[lane(12, 0, F32X3)],
-            &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM]])],
+            &[frame(), group(&[[0, UNIFORM]])],
         ),
         PIPELINE_SCREEN_RAYS => record(
             Head {
@@ -720,10 +447,10 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             },
             &[],
             &[group(&[
-                [0, FRAGMENT, UNIFORM],
-                [19, FRAGMENT, UNIFORM],
-                [2, FRAGMENT, TEXTURE_ARRAY],
-                [3, FRAGMENT, SAMPLER],
+                [0, UNIFORM],
+                [19, UNIFORM],
+                [2, TEXTURE_ARRAY],
+                [3, SAMPLER],
                 AIR[0],
                 AIR[1],
                 AIR[2],
@@ -733,7 +460,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 AIR[6],
                 AIR[7],
                 AIR[8],
-                AIR_UNREAD[9],
+                AIR[9],
             ])],
         ),
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
@@ -745,7 +472,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..screen(SHADER_BLIT)
             },
             &[],
-            &[group(&[[0, FRAGMENT, TEXTURE_UNFILTERED], [1, FRAGMENT, DEPTH]])],
+            &[group(&[[0, TEXTURE_UNFILTERED], [1, DEPTH]])],
         ),
         PIPELINE_IMPOSTOR => record(
             Head {
@@ -755,9 +482,9 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[],
             &[
                 group(&LIT_FRAME),
-                group(&[[0, BOTH, UNIFORM_DYNAMIC]]),
-                group(&[[0, FRAGMENT, TEXTURE_ARRAY], [1, FRAGMENT, SAMPLER], [2, VERTEX, UNIFORM]]),
-                group(&[[0, VERTEX, STORAGE]]),
+                group(&[[0, UNIFORM_DYNAMIC]]),
+                group(&[[0, TEXTURE_ARRAY], [1, SAMPLER], [2, UNIFORM]]),
+                group(&[[0, STORAGE]]),
             ],
         ),
         PIPELINE_IMPOSTOR_BAKE => record(
@@ -767,7 +494,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..depth_only(SHADER_IMPOSTOR_BAKE)
             },
             &model_lanes(false),
-            &[group(&[[0, VERTEX, UNIFORM_DYNAMIC]]), group(&SKIN)],
+            &[group(&[[0, UNIFORM_DYNAMIC]]), group(&SKIN)],
         ),
         PIPELINE_SHEET => record(
             Head {
@@ -776,71 +503,33 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..screen(SHADER_SHEET)
             },
             &[],
-            &[group(&[[0, VERTEX, UNIFORM], [1, BOTH, STORAGE]]), group(&[[0, FRAGMENT, TEXTURE_ARRAY], [1, FRAGMENT, SAMPLER]])],
+            &[group(&[[0, UNIFORM], [1, STORAGE]]), group(&[[0, TEXTURE_ARRAY], [1, SAMPLER]])],
         ),
-        PIPELINE_AO_DOWNSAMPLE => record(screen(SHADER_AO_DOWNSAMPLE), &[], &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, DEPTH], [6, FRAGMENT, UNIFORM]])]),
-        PIPELINE_AO_SAMPLE => record(
-            screen(SHADER_AO_SAMPLE),
-            &[],
-            &[group(&[[1, FRAGMENT, TEXTURE_UNFILTERED], [2, FRAGMENT, TEXTURE], [6, FRAGMENT, UNIFORM]])],
-        ),
+        PIPELINE_AO_DOWNSAMPLE => record(screen(SHADER_AO_DOWNSAMPLE), &[], &[group(&[[0, UNIFORM], [1, DEPTH], [6, UNIFORM]])]),
+        PIPELINE_AO_SAMPLE => record(screen(SHADER_AO_SAMPLE), &[], &[group(&[[1, TEXTURE_UNFILTERED], [2, TEXTURE], [6, UNIFORM]])]),
         PIPELINE_AO_BLUR => record(
             screen(SHADER_AO_BLUR),
             &[],
-            &[group(&[
-                [1, FRAGMENT, TEXTURE_UNFILTERED],
-                [2, FRAGMENT, TEXTURE],
-                [3, FRAGMENT, TEXTURE],
-                [4, FRAGMENT, SAMPLER],
-                [5, FRAGMENT, UNIFORM_DYNAMIC],
-                [6, FRAGMENT, UNIFORM],
-            ])],
+            &[group(&[[1, TEXTURE_UNFILTERED], [2, TEXTURE], [3, TEXTURE], [4, SAMPLER], [5, UNIFORM_DYNAMIC], [6, UNIFORM]])],
         ),
         PIPELINE_AO_UPSAMPLE => record(
             screen(SHADER_AO_UPSAMPLE),
             &[],
-            &[group(&[
-                [0, FRAGMENT, UNIFORM],
-                [1, FRAGMENT, DEPTH],
-                [2, FRAGMENT, TEXTURE_UNFILTERED],
-                [3, FRAGMENT, TEXTURE],
-                [4, FRAGMENT, SAMPLER],
-                [6, FRAGMENT, UNIFORM],
-            ])],
+            &[group(&[[0, UNIFORM], [1, DEPTH], [2, TEXTURE_UNFILTERED], [3, TEXTURE], [4, SAMPLER], [6, UNIFORM]])],
         ),
         PIPELINE_ATMOS_TRANSMITTANCE => record(screen(SHADER_ATMOS_TRANSMITTANCE), &[], &[group(&[AIR[0]])]),
         PIPELINE_ATMOS_MULTISCATTER => record(screen(SHADER_ATMOS_MULTISCATTER), &[], &[group(&[AIR[0], AIR[1], AIR[3]])]),
         PIPELINE_ATMOS_SKY_VIEW => record(
             screen(SHADER_ATMOS_SKY_VIEW),
             &[],
-            &[group(&[
-                [0, FRAGMENT, UNIFORM],
-                AIR[0],
-                AIR[1],
-                AIR[3],
-                AIR[8],
-                [12, FRAGMENT, TEXTURE],
-                [14, FRAGMENT, UNIFORM],
-                [20, FRAGMENT, STORAGE_RW],
-            ])],
+            &[group(&[[0, UNIFORM], AIR[0], AIR[1], AIR[3], AIR[8], [12, TEXTURE], [14, UNIFORM], [20, STORAGE_RW]])],
         ),
-        PIPELINE_ATMOS_IRRADIANCE => record(screen(SHADER_ATMOS_IRRADIANCE), &[], &[group(&[AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE]])]),
+        PIPELINE_ATMOS_IRRADIANCE => record(screen(SHADER_ATMOS_IRRADIANCE), &[], &[group(&[AIR[0], AIR[1], AIR[3], [12, TEXTURE]])]),
         // The light on the land under the eye: the air's words and the tables it is lit by.
         PIPELINE_ATMOS_EXPOSURE => record(
             screen(SHADER_ATMOS_EXPOSURE),
             &[],
-            &[group(&[
-                [0, FRAGMENT, UNIFORM],
-                AIR[0],
-                AIR[1],
-                AIR_UNREAD[2],
-                AIR[3],
-                AIR_UNREAD[5],
-                AIR_UNREAD[6],
-                AIR_UNREAD[7],
-                AIR[8],
-                AIR_UNREAD[9],
-            ])],
+            &[group(&[[0, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9]])],
         ),
         PIPELINE_STARS => record(
             Head {
@@ -850,10 +539,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_STARS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[
-                group(&[[0, VERTEX, UNIFORM], [8, VERTEX, UNIFORM], [9, VERTEX, TEXTURE], [11, VERTEX, SAMPLER]]),
-                group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]]),
-            ],
+            &[group(&[[0, UNIFORM], [8, UNIFORM], [9, TEXTURE], [11, SAMPLER]]), group(&[[0, UNIFORM], [1, STORAGE]])],
         ),
         // From under the sheets only where the world left the far plane; from over them everywhere.
         PIPELINE_CLOUDS => record(
@@ -877,6 +563,54 @@ pub fn pipeline(id: u32) -> Vec<u32> {
     }
 }
 
-#[cfg(test)]
-#[path = "record.test.rs"]
-mod test;
+include!(concat!(env!("OUT_DIR"), "/stages.rs"));
+
+/// The stages of shader `shader` that read binding `binding` of its group
+/// `group`, as build.rs read them off it; none where none does.
+fn stages_of(shader: u32, group: u32, binding: u32) -> u32 {
+    STAGES[shader as usize].iter().find(|e| e[0] == group && e[1] == binding).map_or(NONE, |e| e[2])
+}
+
+/// A plan's shader and its groups' entries, as `plan` lays them out.
+fn groups_of(plan: &[u32]) -> (u32, Vec<&[u32]>) {
+    let mut at = HEAD as usize;
+    let lanes = plan[at];
+    at += 1;
+    for _ in 0..lanes {
+        at += 3 + 3 * plan[at + 2] as usize;
+    }
+    let groups = plan[at];
+    at += 1;
+    let mut out = Vec::new();
+    for _ in 0..groups {
+        let n = plan[at] as usize;
+        out.push(&plan[at + 1..at + 1 + 2 * n]);
+        at += 1 + 2 * n;
+    }
+    (plan[0], out)
+}
+
+/// Pipeline `id`'s record, each group entry seen from the stages that read
+/// it: in every shader whose pipeline lays out the same group at the same
+/// place, so the one layout those pipelines share holds for each, and from
+/// no stage written by hand.
+pub fn pipeline(id: u32) -> Vec<u32> {
+    let own = plan(id);
+    if own.is_empty() {
+        return own;
+    }
+    let plans: Vec<Vec<u32>> = (0..PIPELINES).map(plan).collect();
+    let others: Vec<(u32, Vec<&[u32]>)> = plans.iter().filter(|p| !p.is_empty()).map(|p| groups_of(p)).collect();
+    let (_, groups) = groups_of(&own);
+    let head = own.len() - groups.iter().map(|g| 1 + g.len()).sum::<usize>() - 1;
+    let mut out = own[..head].to_vec();
+    out.push(groups.len() as u32);
+    for (k, g) in groups.iter().enumerate() {
+        out.push((g.len() / 2) as u32);
+        for e in g.chunks(2) {
+            let seen = others.iter().filter(|(_, gs)| gs.get(k) == Some(g)).fold(NONE, |s, (shader, _)| s | stages_of(*shader, k as u32, e[0]));
+            out.extend_from_slice(&[e[0], seen, e[1]]);
+        }
+    }
+    out
+}
