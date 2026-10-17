@@ -11,7 +11,7 @@ use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
-use crate::scene::character::variant_spec::IDLE_CLIP;
+use crate::model::variant_spec::IDLE_CLIP;
 use crate::sched::edge::request_world_tick;
 use crate::sched::tick::TickContext;
 use xpute_guest::global::Global;

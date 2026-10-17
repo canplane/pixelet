@@ -1332,7 +1332,7 @@ impl SurfaceClose {
 #[derive(Clone, Copy, Debug)]
 pub struct PreviewOpen {
     pub surface: u32,
-    pub group: crate::scene::character::variant_spec::Group,
+    pub group: crate::model::variant_spec::Group,
     pub number: u8,
 }
 
@@ -1341,7 +1341,7 @@ impl PreviewOpen {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(PreviewOpen {
             surface: integer::<u32>(f.at(0)?.get_number()?)?,
-            group: crate::scene::character::variant_spec::Group::of(integer::<u8>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
+            group: crate::model::variant_spec::Group::of(integer::<u8>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
             number: integer::<u8>(f.at(2)?.get_number()?)?,
         })
     }

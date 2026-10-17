@@ -5,3 +5,6 @@
 
 pub mod asset;
 pub mod registry;
+/// The characters a player can be, by their models (variant.json).
+#[path = "model/variant.spec.rs"]
+pub mod variant_spec;

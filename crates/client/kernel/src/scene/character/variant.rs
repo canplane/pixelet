@@ -9,8 +9,8 @@ use crate::io::load::load_gltf;
 use crate::model::asset::{register_model, ModelHandle};
 use xpute_guest::global::Global;
 
-use crate::scene::character::variant_spec::groups::{person, pet};
-pub use crate::scene::character::variant_spec::Group;
+use crate::model::variant_spec::groups::{person, pet};
+pub use crate::model::variant_spec::Group;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CharacterVariant {

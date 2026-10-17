@@ -18,7 +18,7 @@ use crate::query::World;
 use crate::query::{over, under};
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
-use crate::scene::character::variant_spec::IDLE_CLIP;
+use crate::model::variant_spec::IDLE_CLIP;
 use crate::sched::edge::wake_at;
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;

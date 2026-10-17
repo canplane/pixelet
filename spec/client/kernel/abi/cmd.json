@@ -39,7 +39,7 @@
     },
     {
       "name": "CharacterGroup",
-      "rs": "crate::scene::character::variant_spec::Group",
+      "rs": "crate::model::variant_spec::Group",
       "repr": "u8",
       "$doc": [
         "variant.json's group, by its number."
