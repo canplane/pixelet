@@ -207,16 +207,43 @@ pub struct Over {
 }
 
 /// What is placed answers for the node `at` of `zoom` holding `held`, asked
-/// as a block where `block`: the value it holds or `carve`'s air, else the
-/// layers under it; coarser, a split where anything is placed under it.
-pub fn over(lanes: &impl Lanes, held: Held, carve: Cut, hide: Cut, zoom: Zoom, at: [i32; 3], block: bool) -> Over {
-    if !block {
-        let says = if held.holds() { SPLIT } else { UNDER };
+/// down to `near`: as a block where `near` is its zoom or coarser, the value
+/// it holds or `carve`'s air, else the layers under it. Coarser, it answers from its own
+/// pyramid as the ground answers from its relief (pxl-portable
+/// `ground::node`): the layers under it where nothing placed in it is a
+/// block at any zoom asked (`blocks_by`), else a split. A preview's cut and
+/// its left-out leaf only make air, so where nothing placed fills, what is
+/// under answers and splits where it fills.
+pub fn over(lanes: &impl Lanes, held: Held, carve: Cut, hide: Cut, zoom: Zoom, at: [i32; 3], near: Zoom) -> Over {
+    if zoom < near {
+        let says = if blocks_by(lanes, held, near - zoom) { SPLIT } else { UNDER };
         return Over { says, block: VOID };
     }
     let v = if holds(carve, zoom, at) { AIR } else { value(lanes, held, hide, zoom, at) };
     let says = if v == VOID { UNDER } else { BLOCK };
     Over { says, block: v }
+}
+
+/// Whether anything placed under the node holding `held` may be a block at
+/// a zoom `d` under it or coarser (`value`'s rule, half its cube filled): a
+/// leaf of a voxel fills every cube under it, one of none fills none; a
+/// fold's share is the mean of its eight's (spec block/volume.rs
+/// `fold_cell`), so the node's filled volume is its share of its cube, and
+/// none of the 8ᵈ cubes `d` under it holds half of its own unless the share
+/// is at least `FULL / (2·8ᵈ)`, a coarser cube's half more still. A share is
+/// floored at each fold, each floor less than one of the fold's units and so
+/// an eighth of its parent's, so the share kept is short of the filled
+/// volume by less than 8/7 of a unit: two units over it hold it.
+fn blocks_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
+    if !held.holds() {
+        return false;
+    }
+    let word = lanes.data(held.slot());
+    if !held.folded() {
+        return voxel(word & 0xffff);
+    }
+    let half = if 3 * d + 1 < 16 { FULL >> (3 * d + 1) } else { 0 };
+    (word >> 16) + 2 > half
 }
 
 /// Whether nothing placed or carved is finer than the node `at` of `zoom`

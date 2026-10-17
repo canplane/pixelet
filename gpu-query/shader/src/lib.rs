@@ -178,7 +178,7 @@ impl World<'_> {
                 if mask::READS & bit != 0 {
                     let held = placed::cursor(self, PLACED, zoom, b);
                     let over = if held.holds() || self.eye.carve.w as u32 != eye::NO_CUT {
-                        placed::over(self, held, carve, hide, zoom, b, true)
+                        placed::over(self, held, carve, hide, zoom, b, zoom)
                     } else {
                         placed::Over { says: placed::UNDER, block: VOID }
                     };
@@ -324,7 +324,7 @@ impl Query for World<'_> {
         if at.placed.holds() || self.eye.carve.w as u32 != eye::NO_CUT {
             let carve = cut(self.eye.carve);
             block = zoom >= asked[1] || zoom >= LEAF_CELL && placed::whole(at.placed, carve, zoom, c);
-            let over = placed::over(self, at.placed, carve, cut(self.eye.hide), zoom, c, block);
+            let over = placed::over(self, at.placed, carve, cut(self.eye.hide), zoom, c, if block { zoom } else { asked[1] });
             if over.says == BLOCK {
                 return In {
                     kind: Kind::Block,

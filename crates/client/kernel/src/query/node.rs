@@ -143,7 +143,7 @@ impl World<'_> {
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
         let c = b.map(|v| v as i32);
         at.shard = at.shard.at(&Windowed, (zoom, [c[0], c[1]]));
-        let placed = placed::over(&self.objects.lanes(), at.placed, self.cut(self.carve), self.cut(self.hide), zoom, b.map(|v| v as i32), true);
+        let placed = placed::over(&self.objects.lanes(), at.placed, self.cut(self.carve), self.cut(self.hide), zoom, b.map(|v| v as i32), zoom);
         if placed.says == BLOCK {
             return Answer::Exact(Some(Block::Placed(placed.block)));
         }
@@ -205,7 +205,7 @@ impl World<'_> {
         if zoom >= near || self.whole(at) {
             return self.drawn(at).map(In::Block);
         }
-        if placed::over(&self.objects.lanes(), at.placed, Cut::NONE, Cut::NONE, zoom, c.map(|v| v as i32), false).says == SPLIT {
+        if placed::over(&self.objects.lanes(), at.placed, Cut::NONE, Cut::NONE, zoom, c.map(|v| v as i32), near).says == SPLIT {
             return Answer::Exact(In::Split);
         }
         let (cave, shard, mut place) = (at.cave, at.shard, at.ground);
