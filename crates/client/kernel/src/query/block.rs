@@ -88,14 +88,13 @@ impl<'a> World<'a> {
 
     /// The ground of `node`'s cells at `zoom` and `ring` about them, read off
     /// the ground its cells at `cell` are read from, into `into`; past the
-    /// service area, where no tile is held, the Earth's. The own tile's first
-    /// cell at `zoom`; nothing where its ground is not held or the heap
-    /// refused it room.
-    pub(super) fn window_ground(&self, node: (Zoom, [i64; 2]), cell: Zoom, zoom: Zoom, ring: u32, into: &mut Window) -> Answer<[i64; 2]> {
+    /// service area, where no tile is held, the Earth's. Nothing where its
+    /// ground is not held or the heap refused it room.
+    pub(super) fn window_ground(&self, node: (Zoom, [i64; 2]), cell: Zoom, zoom: Zoom, ring: u32, into: &mut Window) -> Answer<()> {
         into.cell = zoom;
         into.earth = source::past_at(node.1.map(|v| (v as f64 + 0.5) * units(node.0)));
         if into.earth {
-            return Answer::Exact([0; 2]);
+            return Answer::Exact(());
         }
         self.ground(&self.terrain.cursor(node, cell), node, cell, ring).and_then(|g| {
             let d = zoom as i32 - node.0 as i32;
@@ -103,9 +102,8 @@ impl<'a> World<'a> {
                 0.. => (node.1.map(|v| v << d), 1 << d),
                 _ => (node.1.map(|v| v >> -d), 1),
             };
-            let first = g.first_at(zoom);
-            match into.grid.read(&g.around(), zoom, g.tile.zoom, first, own.map(|v| v - i64::from(ring)), across + 2 * ring) {
-                Ok(()) => Answer::Exact(first),
+            match into.grid.read(&g.around(), zoom, g.tile.zoom, g.first_at(zoom), own.map(|v| v - i64::from(ring)), across + 2 * ring) {
+                Ok(()) => Answer::Exact(()),
                 Err(Refused) => Answer::Nothing(g.tile),
             }
         })
@@ -115,7 +113,7 @@ impl<'a> World<'a> {
     /// and its face; none where it has no ground.
     pub fn surface_of(&self, cell: Zoom, c: [i64; 2]) -> Answer<Option<Surface>> {
         let window = WINDOW.get(Window::default);
-        self.window_ground((cell, c), cell, cell, 1, window).map(|_| {
+        self.window_ground((cell, c), cell, cell, 1, window).map(|()| {
             if window.earth {
                 return Some(Surface {
                     top: f64::from(pxl_portable::SEA_LEVEL),

@@ -8,47 +8,27 @@
 //! reads, knowing no tile.
 
 use pxl_spec::bake::tile::terrain::GroundId;
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
-use super::block::{Surface, Window};
+use super::block::Window;
 use super::world::World;
 use crate::layer::Answer;
 
 /// A node's cells and the ring around them, in its tile's cells.
 pub struct Surfaces<'w> {
     window: &'w mut Window,
-    /// The tile's first cell, at its cells' zoom.
-    origin: [i64; 2],
-    /// A cell's side, in units.
-    side: f64,
 }
 
 impl<'w> Surfaces<'w> {
-    /// The surface of the tile's cell `at`; none where it has no ground or
-    /// was not read.
-    pub fn at(&self, at: [i64; 2]) -> Option<Surface> {
-        let grid = self.window.grid()?;
-        let i = grid.index([self.origin[0] + at[0], self.origin[1] + at[1]])?;
-        grid.top(i).map(|t| Surface {
-            top: f64::from(t) * self.side,
-            block: grid.face(i),
-        })
-    }
-
     /// The cell `g` at its zoom, where it has ground and was read: its
     /// face's look and its top, in blocks.
     pub fn ground(&self, g: [i64; 2]) -> Option<(GroundId, i32)> {
         let grid = self.window.grid()?;
         let i = grid.index(g)?;
         grid.top(i).map(|t| (grid.face(i), t))
-    }
-
-    /// The look of the tile's cell `at`, as `at` gives it.
-    pub fn look(&self, at: [i64; 2]) -> Option<GroundId> {
-        self.at(at).map(|s| s.block)
     }
 
     /// Its cells' zoom.
@@ -71,6 +51,6 @@ impl World<'_> {
         // The tile's own cells, which fold nothing.
         let own = GROUND.cell_zoom(GROUND.read_zoom(cell));
         let window = WINDOW.get(Window::default);
-        self.window_ground(node, cell, own, ring, window).map(|origin| f(&mut Surfaces { window, origin, side: units(own) }))
+        self.window_ground(node, cell, own, ring, window).map(|()| f(&mut Surfaces { window }))
     }
 }
