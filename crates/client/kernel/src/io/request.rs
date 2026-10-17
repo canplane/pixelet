@@ -1,7 +1,7 @@
 // pxl-kernel/io/request.rs
 
-//! The kernel's request scheduler: what is wanted (`desired`, replaced whole per
-//! stream each turn) and what is out (`attempt`). Ordering, intake and
+//! The kernel's request scheduler: what is wanted (`desired`, a run a
+//! stream, replaced whole each turn) and what is out (`attempt`). Ordering, intake and
 //! retry waits are the `Serve` policy's.
 //!
 //! An answer ends its want; a failure ends only its attempt. A failure of the
@@ -76,15 +76,24 @@ fn bounds_of(frames: impl Fn(Stream) -> u32) -> Bounds {
     })
 }
 
+/// A want, in its stream's run (`RequestScheduler::desired`).
 #[derive(Clone, Copy, Debug)]
 struct Wanted {
-    stream: Stream,
     subject: u64,
     ask: Ask,
     /// First wanted, kept across re-declarations so the profiler measures the real wait.
     enqueue_ms: f64,
     /// Infinite once its object failed.
     until_ms: f64,
+}
+
+impl Wanted {
+    const NONE: Wanted = Wanted {
+        subject: 0,
+        ask: Ask::PLAIN,
+        enqueue_ms: 0.0,
+        until_ms: 0.0,
+    };
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -118,7 +127,14 @@ impl Placed {
 pub struct RequestScheduler<S> {
     bounds: Bounds,
     serve: S,
-    desired: Box<[Option<Wanted>]>,
+    /// What is wanted: a stream's a run in a room its bound's wide, the
+    /// streams' rooms in order (`first`), each run by subject and as long as
+    /// `held` says.
+    desired: Box<[Wanted]>,
+    held: [usize; Stream::ALL.len()],
+    /// Where `declare` lays a stream's run before the run takes its place:
+    /// as wide as the widest room.
+    merged: Box<[Wanted]>,
     /// A slot's index and generation are the key the host holds; a key is valid
     /// only while its attempt is out.
     attempt: [Option<Attempt>; MAX_CREDITS as usize],
@@ -161,7 +177,9 @@ impl<S: Serve> RequestScheduler<S> {
         RequestScheduler {
             bounds,
             serve,
-            desired: vec![None; desired].into_boxed_slice(),
+            desired: vec![Wanted::NONE; desired].into_boxed_slice(),
+            held: [0; Stream::ALL.len()],
+            merged: vec![Wanted::NONE; bounds.iter().copied().max().unwrap_or(0)].into_boxed_slice(),
             attempt: [None; MAX_CREDITS as usize],
             generation: [0; MAX_CREDITS as usize],
             credits: 0,
@@ -176,8 +194,26 @@ impl<S: Serve> RequestScheduler<S> {
         }
     }
 
+    /// Where stream `stream`'s room starts in `desired`: past every room
+    /// before it.
+    fn first(&self, stream: Stream) -> usize {
+        self.bounds[..stream as usize].iter().sum()
+    }
+
+    fn run(&self, stream: Stream) -> &[Wanted] {
+        let first = self.first(stream);
+        &self.desired[first..first + self.held[stream as usize]]
+    }
+
     fn find(&self, stream: Stream, subject: u64) -> Option<usize> {
-        self.desired.iter().position(|w| w.is_some_and(|w| w.stream == stream && w.subject == subject))
+        self.run(stream).binary_search_by_key(&subject, |w| w.subject).ok().map(|k| self.first(stream) + k)
+    }
+
+    /// The want at `i` of `stream`'s run gone, the rest of the run closing up.
+    fn drop_want(&mut self, stream: Stream, i: usize) {
+        let end = self.first(stream) + self.held[stream as usize];
+        self.desired.copy_within(i + 1..end, i);
+        self.held[stream as usize] -= 1;
     }
 
     fn slot_of(&self, key: u64) -> Option<usize> {
@@ -189,36 +225,37 @@ impl<S: Serve> RequestScheduler<S> {
         self.attempt.iter().flatten().any(|a| a.stream == stream && a.subject == subject)
     }
 
-    /// Replaces one stream's wants. Re-declaring the same set changes
-    /// nothing, so producers say everything every turn. A kept subject keeps its
-    /// enqueue time and retry wait; a repeated subject is one want, the later ask.
+    /// Replaces one stream's wants with `wanted`, by subject: one walk of
+    /// it beside the run held. Re-declaring the same set changes nothing, so
+    /// producers say everything every turn. A kept subject keeps its enqueue
+    /// time and retry wait; a repeated subject is one want, the later ask.
     pub fn declare(&mut self, stream: Stream, wanted: &[(u64, Ask)], at: f64) {
-        for entry in self.desired.iter_mut() {
-            let Some(w) = entry else { continue };
-            if w.stream != stream {
+        xpute_kit::ensure!(wanted.windows(2).all(|p| p[0].0 <= p[1].0), ENOTRECOVERABLE, stream as u32);
+        let (first, bound) = (self.first(stream), self.bounds[stream as usize]);
+        let run = &self.desired[first..first + self.held[stream as usize]];
+        let (mut k, mut n) = (0, 0);
+        for (j, &(subject, ask)) in wanted.iter().enumerate() {
+            if wanted.get(j + 1).is_some_and(|w| w.0 == subject) {
                 continue;
             }
-            match wanted.iter().rev().find(|(k, _)| *k == w.subject) {
-                Some(&(_, ask)) => w.ask = ask,
-                None => *entry = None,
+            while run.get(k).is_some_and(|w| w.subject < subject) {
+                k += 1;
             }
+            let w = match run.get(k) {
+                Some(&w) if w.subject == subject => Wanted { ask, ..w },
+                _ => Wanted {
+                    subject,
+                    ask,
+                    enqueue_ms: at,
+                    until_ms: f64::NEG_INFINITY,
+                },
+            };
+            xpute_kit::ensure!(n < bound, ENOTRECOVERABLE, stream as u32);
+            self.merged[n] = w;
+            n += 1;
         }
-        let mut held = self.desired.iter().flatten().filter(|w| w.stream == stream).count();
-        for &(subject, ask) in wanted {
-            if self.find(stream, subject).is_some() {
-                continue;
-            }
-            xpute_kit::ensure!(held < self.bounds[stream as usize], ENOTRECOVERABLE, stream as u32);
-            held += 1;
-            let free = self.desired.iter().position(Option::is_none).or_bug(Errno::ENOTRECOVERABLE);
-            self.desired[free] = Some(Wanted {
-                stream,
-                subject,
-                ask,
-                enqueue_ms: at,
-                until_ms: f64::NEG_INFINITY,
-            });
-        }
+        self.desired[first..first + n].copy_from_slice(&self.merged[..n]);
+        self.held[stream as usize] = n;
     }
 
     pub fn set_credits(&mut self, credits: u32) {
@@ -234,7 +271,11 @@ impl<S: Serve> RequestScheduler<S> {
     /// report only, never for deciding what to want.
     fn counted(&self, of: impl Fn(Stream) -> bool) -> (u32, u32) {
         let out = self.attempt.iter().flatten().filter(|a| of(a.stream)).count() as u32;
-        let waiting = self.desired.iter().flatten().filter(|w| of(w.stream) && !self.attempting(w.stream, w.subject)).count() as u32;
+        let waiting = Stream::ALL
+            .into_iter()
+            .filter(|&s| of(s))
+            .map(|s| self.run(s).iter().filter(|w| !self.attempting(s, w.subject)).count() as u32)
+            .sum();
         (waiting, out)
     }
 
@@ -246,10 +287,10 @@ impl<S: Serve> RequestScheduler<S> {
         self.counted(|s| s == stream)
     }
 
-    fn placed(&self, w: &Wanted) -> Placed {
+    fn placed(&self, stream: Stream, w: &Wanted) -> Placed {
         Placed {
-            rank: self.serve.rank(w.stream, w.subject, w.ask, w.enqueue_ms),
-            stream: w.stream,
+            rank: self.serve.rank(stream, w.subject, w.ask, w.enqueue_ms),
+            stream,
             subject: w.subject,
         }
     }
@@ -273,10 +314,12 @@ impl<S: Serve> RequestScheduler<S> {
         let room = if self.failing.is_some() { 1 } else { self.credits as usize };
         let mut ready = core::mem::take(&mut self.ready);
         ready.clear();
-        for (i, w) in self.desired.iter().enumerate() {
-            let Some(w) = w else { continue };
-            if at >= w.until_ms && !self.attempting(w.stream, w.subject) {
-                ready.push((self.placed(w), i));
+        for s in Stream::ALL {
+            let first = self.first(s);
+            for (k, w) in self.run(s).iter().enumerate() {
+                if at >= w.until_ms && !self.attempting(s, w.subject) {
+                    ready.push((self.placed(s, w), first + k));
+                }
             }
         }
         ready.sort_unstable_by(|a, b| a.0.cmp(&b.0));
@@ -287,8 +330,7 @@ impl<S: Serve> RequestScheduler<S> {
                 break;
             }
             let Some(slot) = self.free_slot() else { break };
-            let w = self.desired[i].or_bug(Errno::ENOTRECOVERABLE);
-            self.start(slot, w, placed.rank, at);
+            self.start(slot, placed.stream, self.desired[i], placed.rank, at);
         }
         self.ready = ready;
     }
@@ -297,15 +339,15 @@ impl<S: Serve> RequestScheduler<S> {
         (0..self.credits as usize).find(|&k| self.attempt[k].is_none())
     }
 
-    fn start(&mut self, slot: usize, w: Wanted, rank: Rank, at: f64) {
+    fn start(&mut self, slot: usize, stream: Stream, w: Wanted, rank: Rank, at: f64) {
         self.attempt[slot] = Some(Attempt {
-            stream: w.stream,
+            stream,
             subject: w.subject,
             rank,
             enqueue_ms: w.enqueue_ms,
             start_ms: at,
         });
-        self.started.push((key_of(slot, self.generation[slot]), w.stream, w.subject));
+        self.started.push((key_of(slot, self.generation[slot]), stream, w.subject));
     }
 
     /// Ends the slot's attempt; its key is spent, so whatever the host still
@@ -348,7 +390,7 @@ impl<S: Serve> RequestScheduler<S> {
             Ended::Ok => {
                 self.answered();
                 if let Some(i) = want {
-                    self.desired[i] = None;
+                    self.drop_want(a.stream, i);
                 }
             }
             Ended::Failed(f) => self.failed(want, f, a.start_ms, at),
@@ -371,8 +413,8 @@ impl<S: Serve> RequestScheduler<S> {
             Blame::Object => {
                 // Still an answer from the server.
                 self.answered();
-                if let Some(w) = want.and_then(|i| self.desired[i].as_mut()) {
-                    w.until_ms = f64::INFINITY;
+                if let Some(i) = want {
+                    self.desired[i].until_ms = f64::INFINITY;
                 }
             }
             Blame::Network => {
@@ -401,7 +443,7 @@ impl<S: Serve> RequestScheduler<S> {
                 self.end(slot);
             }
         }
-        self.desired.fill(None);
+        self.held = [0; Stream::ALL.len()];
         self.answered();
         self.given_up = false;
         self.started.clear();

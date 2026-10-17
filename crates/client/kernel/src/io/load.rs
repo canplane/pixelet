@@ -132,18 +132,22 @@ pub fn of_subject(subject: u64) -> Option<(LoadKind, Load)> {
 pub fn load_wants() -> &'static [(u64, Ask)] {
     let l = loader();
     l.wants.clear();
-    for n in 0..LOADS {
-        let load = Load::of(n as u32).or_bug(Errno::ENOTRECOVERABLE);
-        // The Earth's is opened under the version its source declares.
-        if load == Load::Sphere && source::top().is_none() {
-            continue;
-        }
-        if matches!(l.gltf[n], Some(Entry::Pending)) {
-            l.wants.push((subject_of(LoadKind::Gltf, load), Ask::PLAIN));
-        }
-        // An image is read only where a device can take it.
-        if matches!(l.image[n], Some(Entry::Pending)) && pxl_render::gpu::api::device().is_some() {
-            l.wants.push((subject_of(LoadKind::Image, load), Ask::PLAIN));
+    // By subject, as a stream's wants are said: the models, then the images.
+    for kind in [LoadKind::Gltf, LoadKind::Image] {
+        for n in 0..LOADS {
+            let load = Load::of(n as u32).or_bug(Errno::ENOTRECOVERABLE);
+            // The Earth's is opened under the version its source declares.
+            if load == Load::Sphere && source::top().is_none() {
+                continue;
+            }
+            let pending = match kind {
+                LoadKind::Gltf => matches!(l.gltf[n], Some(Entry::Pending)),
+                // An image is read only where a device can take it.
+                LoadKind::Image => matches!(l.image[n], Some(Entry::Pending)) && pxl_render::gpu::api::device().is_some(),
+            };
+            if pending {
+                l.wants.push((subject_of(kind, load), Ask::PLAIN));
+            }
         }
     }
     &l.wants

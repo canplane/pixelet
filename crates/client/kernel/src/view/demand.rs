@@ -271,6 +271,8 @@ impl<L: Observed> Demand<L> {
         }
         self.wants.clear();
         self.wants.extend(asks.iter().filter(|(p, _)| unanswered(**p)).map(|(p, &a)| (p.subject(), a)));
+        // By subject, as a stream's wants are said (io/request.rs `declare`).
+        self.wants.sort_unstable_by_key(|w| w.0);
         self.asks = asks;
 
         self.observation = o.copied();
