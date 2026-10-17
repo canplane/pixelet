@@ -86,6 +86,17 @@ impl Residency<TerrainTile> {
     }
 }
 
+impl Residency<TerrainTile> {
+    /// `tile`'s line, stepped down from `from`'s, a tile over it or itself:
+    /// a look-up a zoom between them.
+    fn down(&self, from: &Line, tile: Tile) -> Line {
+        match tile == from.tile {
+            true => *from,
+            false => self.step(&self.down(from, tile.parent()), tile),
+        }
+    }
+}
+
 /// The tile a node's bound is read from: its cells' tile, within the
 /// pyramid's zooms.
 fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
@@ -129,12 +140,18 @@ impl Query for Residency<TerrainTile> {
         self.line(bound_tile(node, cell))
     }
 
-    /// The tile a child reads is its parent's, or one of its children.
+    /// The tile a child reads is its parent's or one under it, stepped down
+    /// from the parent's line a zoom at a time (`down`); a coarser one, whose
+    /// line no child holds, is walked from the top.
     fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell: Zoom) -> Line {
-        match bound_tile(node, cell) {
-            tile if tile == parent.tile => *parent,
-            tile if tile.zoom == parent.tile.zoom + 1 && tile.parent() == parent.tile => self.step(parent, tile),
-            tile => self.line(tile),
+        let tile = bound_tile(node, cell);
+        let mut over = tile;
+        while over.zoom > parent.tile.zoom {
+            over = over.parent();
+        }
+        match over == parent.tile {
+            true => self.down(parent, tile),
+            false => self.line(tile),
         }
     }
 
