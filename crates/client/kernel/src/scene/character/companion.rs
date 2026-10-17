@@ -295,6 +295,8 @@ struct Companion {
     /// the person's place and floor, the pet's target and whether the eye
     /// sees a walk there (`walks`).
     beside: Asked<([f64; 2], f64, [f64; 2], bool), f64>,
+    /// The floor the focus is drawn on, of the focus (`focus_floor`).
+    floor: Asked<Q3, Option<f64>>,
 }
 
 static COMPANION: Global<Companion> = Global::new();
@@ -304,6 +306,7 @@ fn companion() -> &'static mut Companion {
         person: None,
         pet: None,
         beside: Asked(None),
+        floor: Asked(None),
     })
 }
 
@@ -327,6 +330,15 @@ pub struct CompanionProps {
     pub tau: Tau,
 }
 
+/// The floor the focus `goal` is drawn on, `center` its place in units:
+/// `ask`'s, kept while the focus stands and no change touched its column
+/// (`Asked`), as the figures' own floors are.
+pub fn focus_floor(goal: Q3, center: [f64; 2], ask: impl FnOnce() -> Option<f64>) -> Option<f64> {
+    let (c, cell) = (companion(), units(GROUND.cell()));
+    c.floor.kept();
+    c.floor.of(goal, [center.map(|v| v - cell), center.map(|v| v + cell)], ask)
+}
+
 fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: [f64; 2]) -> &'a mut Figure {
     if slot.as_ref().is_some_and(|w| w.variant.number != variant.number) {
         if let Some(mut old) = slot.take() {
@@ -339,6 +351,8 @@ fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, targ
 pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let c = companion();
     c.beside.kept();
+    // Looked at each frame turn, a focus not asked of this one too.
+    c.floor.kept();
     for f in [&mut c.person, &mut c.pet].into_iter().flatten() {
         f.drawn.kept();
     }
