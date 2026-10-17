@@ -10,6 +10,13 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { Doorbell } from "../ipc/doorbell.ts";
 import { type Grant, Quantum, type QuantumPolicy } from "./quantum.ts";
 
+/**
+ * The farthest a timer waits (HTML's timer delay is a signed 32-bit count of
+ * milliseconds; past it the timer fires at once). A wake past it waits this
+ * long and asks a turn, and the guest asks again for what is left.
+ */
+const TIMER_REACH_MS = 2 ** 31 - 1;
+
 export class Strobe {
   private readonly quantum: Quantum;
   private frame = false;
@@ -56,14 +63,15 @@ export class Strobe {
     if (!this.running) return;
     if (wake_ms === 0) return this.request();
     if (wake_ms < 0) return;
-    const at = performance.now() + wake_ms;
+    const wait_ms = Math.min(wake_ms, TIMER_REACH_MS);
+    const at = performance.now() + wait_ms;
     if (at >= this.timer_at) return;
     clearTimeout(this.timer);
     this.timer_at = at;
     this.timer = setTimeout(() => {
       this.timer_at = Infinity;
       this.request();
-    }, wake_ms);
+    }, wait_ms);
   }
 
   private turn(now: f64): void {
