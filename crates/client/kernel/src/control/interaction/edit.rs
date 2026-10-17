@@ -3,7 +3,7 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the world's query and written to the store.
 
-use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
+use crate::control::interaction::collision::{is_placement_blocked, placement_reads, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::ext::Ext;
 use crate::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
@@ -196,6 +196,11 @@ pub struct Pending {
     pub digging: bool,
     /// The same check as the commit, so preview and placement cannot disagree.
     pub blocked: bool,
+    /// What `blocked` was asked of: the tool, the hovered corner, the
+    /// object's size and the store's revision. Asked again only where one
+    /// moved or a change touched the columns it reads (`placement_reads`,
+    /// `changed::within`), as a step each frame turn sees each change once.
+    asked: Option<(PlacementTool, Q3, f64, u32)>,
 }
 
 static PENDING: Global<Pending> = Global::new();
@@ -223,16 +228,20 @@ pub fn pending_step() -> RenderEdits {
         _ if digging || scattered => units(GROUND.cell()),
         _ => object_size_of(ui.object_tier),
     };
-    let blocked = match (&hovered, active_tool) {
+    let (blocked, asked) = match (&hovered, active_tool) {
         (Some(h), ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker) => {
             let tool = match active_tool {
                 ActiveTool::Object => PlacementTool::Object,
                 ActiveTool::Decor => PlacementTool::Decor(ui.decor_id),
                 _ => PlacementTool::Marker,
             };
-            is_placement_blocked(tool, h, object_size_of(ui.object_tier))
+            let object_size = object_size_of(ui.object_tier);
+            let asked = Some((tool, *h, object_size, crate::kernel().objects.raw_lanes().3));
+            let was = *PENDING.get(Pending::default);
+            let same = was.asked == asked && !crate::query::changed::within(placement_reads(tool, h, object_size), &[]);
+            (if same { was.blocked } else { is_placement_blocked(tool, h, object_size) }, asked)
         }
-        _ => false,
+        _ => (false, None),
     };
     // The real object's hide lands a tick or more after the ghost, accepted.
     let hidden = object.filter(|_| active_tool == ActiveTool::Eraser);
@@ -244,6 +253,12 @@ pub fn pending_step() -> RenderEdits {
         carve: hovered.filter(|_| digging).map(|h| carve_entry(&h, size)),
         scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).and_then(|s| s.grown_in()),
     };
-    *PENDING.get(Pending::default) = Pending { object, size, digging, blocked };
+    *PENDING.get(Pending::default) = Pending {
+        object,
+        size,
+        digging,
+        blocked,
+        asked,
+    };
     edits
 }
