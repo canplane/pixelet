@@ -51,7 +51,7 @@ pub(crate) const NIGHT_STOPS: usize = 26;
 pub(crate) const SHOWN_FALL: usize = 27;
 pub(crate) const MOON_DIR: usize = 28;
 pub(crate) const MOON_LIGHT: usize = 31;
-pub(crate) const SUN_SEEN: usize = 32;
+// 32 to 34 free.
 pub(crate) const CENTER_LON: usize = 35;
 pub(crate) const NIGHT_SKY: usize = 36;
 pub(crate) const LAND_ALTITUDE: usize = 39;
@@ -303,9 +303,6 @@ impl Atmosphere {
         self.words[CENTER_LON] = env[ENV_SKY + 2];
         let height = |d: &[f32]| (d[0] as f64 * up[0] + d[1] as f64 * up[1] + d[2] as f64 * up[2]) as f32;
         (self.sun_mu, self.moon_mu) = (height(sun), height(moon));
-        for (w, v) in self.words[SUN_SEEN..SUN_SEEN + 3].iter_mut().zip(model::light_at(altitude_km as f64, self.sun_mu as f64)) {
-            *w = v as f32;
-        }
         g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
 

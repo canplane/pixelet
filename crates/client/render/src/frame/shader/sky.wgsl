@@ -4,8 +4,6 @@
 @group(0) @binding(2) var moon_map: texture_2d_array<f32>;
 @group(0) @binding(3) var moon_sampler: sampler;
 
-// Far past white once exposed, so the air in front colors it.
-const SUN_DISC: f32 = 4.0;
 const SUN_LIMB: f32 = 0.6;
 const MOON_ALBEDO: f32 = 0.12;
 // The map's mean over the disc (printed by download_moon) scales it to MOON_ALBEDO.
@@ -40,7 +38,7 @@ fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
   let inside = min(a, 1.0);
   let limb = 1.0 - SUN_LIMB * (1.0 - sqrt(1.0 - inside * inside));
   let edge = 1.0 - smoothstep(1.0 - w, 1.0 + w, a);
-  return transmittance_to_top(r, mu) * shown() * SUN_DISC * limb * edge;
+  return disc_light(r, mu, exposure()) * limb * edge;
 }
 
 // Lommel-Seeliger, so a full Moon is as bright at its limb as at its center.

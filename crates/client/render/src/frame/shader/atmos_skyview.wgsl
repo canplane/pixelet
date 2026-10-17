@@ -4,8 +4,9 @@
 @group(0) @binding(14) var<uniform> light: vec4f;
 
 // Each light's slope as drawn: the most display levels per unit of its
-// height that any texel of its sky, or the land's lit face under the eye,
-// moves, its exposure moving with it; the sun's first. A local linearization,
+// height that any texel of its sky with the sun's glare over it, the sun's
+// disc, or the land's lit face under the eye moves, its exposure moving with
+// it; the sun's first. A local linearization,
 // one step of the transmittance table's own sampling where the light stands.
 // Its bits: a positive float's order is its bits'.
 @group(0) @binding(20) var<storage, read_write> slopes: array<atomic<u32>, 2>;
@@ -39,11 +40,19 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let now = lights_now();
   let raised = lights_raised(now, moon, h);
   let gain = atmos_white() * select(1.0, atmos_moon_light(), moon);
-  let sky = abs(levels(sky_radiance(r, dir, view_light(mu + h), SKY_VIEW_STEPS) * gain * exp2(eye_stops(raised))) - levels(radiance * gain * exp2(eye_stops(now))));
+  let e0 = exp2(eye_stops(now));
+  let e1 = exp2(eye_stops(raised));
+  // The sun's own light over its sky: the glare along this texel, and the disc.
+  let sun = select(1.0, 0.0, moon);
+  let lit0 = radiance * gain * e0 + glare_toward(dir, view_light(mu), mu, e0) * sun;
+  let lit1 = sky_radiance(r, dir, view_light(mu + h), SKY_VIEW_STEPS) * gain * e1 + glare_toward(dir, view_light(mu + h), mu + h, e1) * sun;
+  let sky = abs(levels(lit1) - levels(lit0));
+  let disc = abs(levels(disc_light(r, mu + h, e1)) - levels(disc_light(r, mu, e0))) * sun;
   let up = frame_up();
   let land_r = land_radius();
-  let land = abs(levels(surface_light_in(up, up, light_unexposed_in(land_r, up, raised), raised) * exp2(eye_stops(raised))) - levels(surface_light_in(up, up, light_unexposed_in(land_r, up, now), now) * exp2(eye_stops(now))));
-  let most = max(max(max(sky.r, sky.g), sky.b), max(max(land.r, land.g), land.b));
+  let land = abs(levels(surface_light_in(up, up, light_unexposed_in(land_r, up, raised), raised) * e1) - levels(surface_light_in(up, up, light_unexposed_in(land_r, up, now), now) * e0));
+  let each = max(max(sky, disc), land);
+  let most = max(max(each.r, each.g), each.b);
   if (h > 0.0) {
     atomicMax(&slopes[select(0u, 1u, moon)], bitcast<u32>(most / h));
   }

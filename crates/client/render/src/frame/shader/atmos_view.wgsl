@@ -195,14 +195,8 @@ fn seen_from_eye(world_pos: vec3f) -> Seen {
 
 /* glare */
 
-// Spencer et al. 1995's halo; ISO 9358 veiling glare is 1-10%, GLARE_VEIL its middle.
-const GLARE_HALO_SHARE: f32 = 0.6205;
-const GLARE_VEIL: f32 = 0.03;
-
 // Over the sky only.
 fn glare(dir: vec3f) -> vec3f {
   let s = atmos_sun_dir();
-  let theta = degrees(atan2(length(cross(dir, s)), dot(dir, s))) + 0.02;
-  let psf = 0.478 * 20.91 / (theta * theta * theta) + 0.138 * 72.37 / (theta * theta);
-  return atmos_sun_seen() * shown() * psf * (GLARE_VEIL / GLARE_HALO_SHARE);
+  return glare_toward(dir, s, dot(s, frame_up()), exposure());
 }

@@ -95,14 +95,3 @@ pub fn white() -> [f64; 3] {
     static WHITE: std::sync::LazyLock<[f64; 3]> = std::sync::LazyLock::new(|| transmittance(0.0, 1.0).map(|t| 1.0 / t));
     *WHITE
 }
-
-/// The disc sets across its width (atmos_lut.wgsl's sun_transmittance).
-pub fn light_at(altitude_km: f64, mu: f64) -> [f64; 3] {
-    let r = BOTTOM_RADIUS_KM + altitude_km.max(0.0);
-    let horizon = horizon_mu(r);
-    let above = ((mu - horizon) / (2.0 * SUN_ANGULAR_RADIUS) + 0.5).clamp(0.0, 1.0);
-    if above == 0.0 {
-        return [0.0; 3];
-    }
-    transmittance(altitude_km, mu.max(horizon + 1e-4)).map(|t| t * above)
-}
