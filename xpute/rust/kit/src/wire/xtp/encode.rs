@@ -320,16 +320,12 @@ impl<'a> PacketWriter<'a> {
 
     /// Followed by a NUL that the length leaves out.
     pub fn str(&mut self, s: Option<&str>) -> &mut Self {
-        match s {
-            Some(s) => match u32::try_from(s.len() + 1) {
-                Ok(bytes) => self.seq(SequenceType::STR, bytes - 1, u64::from(bytes), |out| out[..s.len()].copy_from_slice(s.as_bytes())),
-                _ => {
-                    self.spoil(Errno::EOVERFLOW);
-                    self.entry(None, SequenceType::STR as u8)
-                }
-            },
-            None => self.entry(None, SequenceType::STR as u8),
-        }
+        let Some(s) = s else { return self.entry(None, SequenceType::STR as u8) };
+        self.str_with(|room| {
+            let out = room.get_mut(..s.len())?;
+            out.copy_from_slice(s.as_bytes());
+            Some(s.len())
+        })
     }
 
     /// `len` + 1 offsets into the UTF-8 after them.
@@ -360,19 +356,24 @@ impl<'a> PacketWriter<'a> {
                 Ok(())
             }
         }
+        self.str_with(|buf| {
+            let mut room = Room { buf, len: 0 };
+            core::fmt::Write::write_fmt(&mut room, format_args!("{v}")).ok().map(|()| room.len)
+        })
+    }
+
+    /// A string written into the room after its length's word, `write`
+    /// answering how many bytes it wrote, or none where they did not fit:
+    /// the one way a string goes in, whether copied or written in place, so
+    /// the two lay out alike. Followed by a NUL that the length leaves out.
+    fn str_with(&mut self, write: impl FnOnce(&mut [u8]) -> Option<usize>) -> &mut Self {
         let base = align(self.lim, WORD_SZ) as usize;
         let payload = base + WORD_SZ as usize;
         if self.error.is_some() || payload > self.buf.len() {
             self.spoil(Errno::EOVERFLOW);
             return self.entry(None, SequenceType::STR as u8);
         }
-        let mut room = Room {
-            buf: &mut self.buf[payload..],
-            len: 0,
-        };
-        let written = core::fmt::Write::write_fmt(&mut room, format_args!("{v}")).map(|_| room.len);
-        let end = written
-            .ok()
+        let end = write(&mut self.buf[payload..])
             .map(|len| (len, align((payload + len + 1) as u32, WORD_SZ) as usize))
             .filter(|&(_, end)| end <= self.buf.len());
         let Some((len, end)) = end else {
