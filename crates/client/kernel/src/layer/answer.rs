@@ -54,10 +54,3 @@ impl<T> Answer<T> {
         }
     }
 }
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Relief {
-    /// Lowest and highest ground, in units; read from a coarser tile this is
-    /// wider, never narrower.
-    pub extent: (f64, f64),
-}

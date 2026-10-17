@@ -24,7 +24,7 @@ mod query;
 pub mod residency;
 pub mod terrain;
 
-pub use answer::{Answer, Relief};
+pub use answer::Answer;
 pub use query::{Bound, Query};
 
 /// What a layer asks for of the view.
