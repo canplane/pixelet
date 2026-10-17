@@ -1364,6 +1364,10 @@ pub struct Renderer {
     /// draws and the blocks they read, the badges' sheet, the clouds' words
     /// and the cases. With the image's, the frame's whole input.
     frame_read: Read,
+    /// What the occlusion was last made from: the frame's words, its own,
+    /// the surface and the decor its prepass draws. The world image is made
+    /// again for more than these, and the occlusion only where they moved.
+    ao_read: Read,
     /// What lays the world image on a frame, and its group over the views
     /// it was made for.
     blit: Built,
@@ -1406,6 +1410,7 @@ impl Renderer {
             screen: RaysPass::new(g, &mut pipelines, sky_buffer),
             world: Read::default(),
             frame_read: Read::default(),
+            ao_read: Read::default(),
             blit: pipelines.build(g, PIPELINE_BLIT, g.canvas()),
             blit_group: 0,
             blit_views: [0; 2],
@@ -1588,7 +1593,8 @@ impl Renderer {
         // How far the eye observes, as far as the clouds are drawn.
         let reach = cast.as_ref().map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));
         self.lay_out(g, world.width, world.height, input.environment, reach);
-        if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
+        let ao_remade = self.screen_ao && self.ao.ensure(g, world.width, world.height);
+        if ao_remade {
             self.rebind(g);
             read.mark(true);
         }
@@ -1676,8 +1682,15 @@ impl Renderer {
         frame_begin();
         let encoder = g.encoder();
         self.screen.dispatch(g, encoder, &mut stamps[SPAN_CAST]);
+        let a = &mut self.ao_read;
+        a.begin();
+        a.read(&self.frame);
+        a.read(self.ao.words());
+        a.read(&[world.width, world.height, u32::from(self.screen_ao), u32::from(self.screen.grown().is_some())]);
+        a.mark(ao_remade || self.screen.grows());
+        let ao_moved = !a.end();
         if !still {
-            if self.screen_ao {
+            if self.screen_ao && ao_moved {
                 let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
                 self.draw_opaque(g, pass, b, Stage::Prepass);
                 g.end(pass);
@@ -1748,6 +1761,7 @@ impl Renderer {
             }
             read.forget();
             rest.forget();
+            self.ao_read.forget();
         } else if self.screen.grows() {
             // Drawn: what its decor marked by is done with.
             if let Some(c) = self.screen.cast.as_mut() {
