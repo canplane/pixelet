@@ -16,21 +16,20 @@ pub mod STAGE_AT {
     pub const PROJ: usize = 16;
     /// Eye-relative, so the matrix holds no eye translation for a point's to cancel against (16).
     pub const EYE_VIEW_PROJ: usize = 32;
-    /// The eye and the sea under it, in the world's doubles (3 each).
+    /// The eye, in the world's doubles (3).
     pub const EYE: usize = 48;
-    pub const GLOBE_ANCHOR: usize = 51;
     /// The viewport in CSS pixels (2).
-    pub const VIEWPORT: usize = 54;
-    pub const FOV: usize = 56;
-    pub const LOD_CELL: usize = 57;
-    pub const EDGE_STRENGTH: usize = 58;
-    pub const LOW_SPEC: usize = 59;
-    pub const EDGE_WIDTH: usize = 60;
-    pub const RIM_INTENSITY: usize = 61;
-    pub const AO_STRENGTH: usize = 62;
-    pub const SCREEN_AO: usize = 63;
+    pub const VIEWPORT: usize = EYE + 3;
+    pub const FOV: usize = VIEWPORT + 2;
+    pub const LOD_CELL: usize = FOV + 1;
+    pub const EDGE_STRENGTH: usize = LOD_CELL + 1;
+    pub const LOW_SPEC: usize = EDGE_STRENGTH + 1;
+    pub const EDGE_WIDTH: usize = LOW_SPEC + 1;
+    pub const RIM_INTENSITY: usize = EDGE_WIDTH + 1;
+    pub const AO_STRENGTH: usize = RIM_INTENSITY + 1;
+    pub const SCREEN_AO: usize = AO_STRENGTH + 1;
     /// How much of the clouds shows, none to all.
-    pub const CLOUDS: usize = 64;
+    pub const CLOUDS: usize = SCREEN_AO + 1;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

@@ -6,10 +6,11 @@ use crate::space::coord::aabb::Aabb;
 use crate::space::coord::v3::{self, V3};
 use crate::space::coord::world::nearest_box;
 
-/// Six planes, normals in, `n · x + d ≥ 0` inside, in world units.
+/// Five planes, normals in, `n · x + d ≥ 0` inside, in world units: the
+/// sides and the near (`mat4::frustum_planes`), none far.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Frustum {
-    pub planes: [f64; 24],
+    pub planes: [f64; 20],
 }
 
 impl Frustum {
