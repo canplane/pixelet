@@ -182,15 +182,17 @@ impl SheetPainter {
         }
     }
 
-    /// False, and nothing recorded, while a line of its text is not drawn yet
-    /// or its pixels do not fit this turn's stream (`room`).
+    /// The rasters of a sketch's lines, as the host has drawn them; none while
+    /// one is not drawn yet, whose landing is the turn that paints it.
+    pub fn rasters(sketch: &Sketch, text: TextOf) -> Option<Vec<Raster<'static>>> {
+        sketch.lines.iter().map(|line| text(line.font, line.color, &line.text)).collect()
+    }
+
+    /// `sketch` painted with its lines' `rasters` (`rasters`); false, and
+    /// nothing recorded, where its pixels do not fit this turn's stream
+    /// (`room`).
     #[allow(clippy::too_many_arguments)]
-    pub fn paint(&self, g: &Gpu, encoder: u32, sheet: u32, rect: [u32; 4], sketch: &Sketch, text: TextOf, made: &mut Vec<u32>) -> bool {
-        let mut rasters: Vec<Raster<'static>> = Vec::with_capacity(sketch.lines.len());
-        for line in &sketch.lines {
-            let Some(r) = text(line.font, line.color, &line.text) else { return false };
-            rasters.push(r);
-        }
+    pub fn paint(&self, g: &Gpu, encoder: u32, sheet: u32, rect: [u32; 4], sketch: &Sketch, rasters: Vec<Raster<'static>>, made: &mut Vec<u32>) -> bool {
         let icons: Vec<Vec<u8>> = sketch.icons.iter().map(|i| tinted(i.symbol, i.color)).collect();
         let drawn = rasters.len() + icons.len();
         let [x, y, w, h] = rect;

@@ -292,9 +292,9 @@ impl BadgePass {
         if self.dirty.is_empty() || self.sheet == 0 {
             return flush.whole;
         }
-        let encoder = g.encoder();
-        let mut made = Vec::new();
-        let mut drawn = false;
+        // Only the slots whose text the host has drawn: one still on its way
+        // waits for its landing, with no encoder made for it.
+        let mut ready = Vec::new();
         for slot in self.dirty.iter() {
             let Some(spec) = sheet.slot_draw(slot) else { continue };
             let mut p = Sketch::default();
@@ -311,7 +311,19 @@ impl BadgePass {
                 } => point(&mut p, lines, *icon, *symbol, *fill, *text, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w } => bubble(&mut p, lines, *box_w as f32),
             }
-            if self.painter.paint(g, encoder, self.sheet, sheet.slot_rect(slot), &p, text, &mut made) {
+            match SheetPainter::rasters(&p, text) {
+                Some(r) => ready.push((slot, p, r)),
+                None => sheet.mark_dirty(slot),
+            }
+        }
+        if ready.is_empty() {
+            return flush.whole;
+        }
+        let encoder = g.encoder();
+        let mut made = Vec::new();
+        let mut drawn = false;
+        for (slot, p, rasters) in ready {
+            if self.painter.paint(g, encoder, self.sheet, sheet.slot_rect(slot), &p, rasters, &mut made) {
                 drawn = true;
             } else {
                 sheet.mark_dirty(slot);
