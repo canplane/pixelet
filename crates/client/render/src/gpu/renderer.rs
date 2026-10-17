@@ -1057,6 +1057,8 @@ impl RaysPass {
             }
         }
         r.read(meshes);
+        // And boxes decor still holds from a frame not drawn.
+        r.mark(c.grown.holds());
         // And the ground's squares, written this frame or not.
         let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
         if r.end() && fresh == 0 && c.group != 0 {
@@ -1111,8 +1113,6 @@ impl RaysPass {
         let world = [c.eye, c.window, ground, c.shards, c.overwrites, fresh_squares];
         let grows = Grows {
             window: cast.window,
-            shards: cast.shards,
-            revision: o.revision,
             cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS].try_into().or_bug(Errno::ENOTRECOVERABLE),
             filled: fresh,
             eye: &cast.eye,
@@ -1743,13 +1743,18 @@ impl Renderer {
             // image hold older ones.
             if let Some(c) = self.screen.cast.as_mut() {
                 c.read.forget();
-                c.grown.forget();
+                c.grown.dropped();
             }
             for case in self.cases.iter_mut().flatten() {
                 case.read.forget();
             }
             read.forget();
             rest.forget();
+        } else if self.screen.kind == FrameKind::cast {
+            // Drawn: what its decor marked by is done with.
+            if let Some(c) = self.screen.cast.as_mut() {
+                c.grown.drawn_frame();
+            }
         }
         self.world = read;
         rest.end();
@@ -1920,14 +1925,12 @@ fn targets(g: &Gpu, s: &mut Surface) {
     s.height = height;
 }
 
-/// A frame's cast handed and never drawn: edits its decor named are not
-/// named again, so every slot grows at the next that is.
+/// A frame's cast handed and never drawn: the edits its decor named, held
+/// for the next that is.
 fn unconsumed(cast: &Option<Cast>) {
-    let named = cast.as_ref().and_then(|c| c.decor.as_ref()).is_some_and(|d| !d.edits.is_empty());
-    if let (true, Some(r)) = (named, RENDERER.get(|| None).as_mut()) {
-        if let Some(c) = r.screen.cast.as_mut() {
-            c.grown.forget();
-        }
+    let Some(d) = cast.as_ref().and_then(|c| c.decor.as_ref()) else { return };
+    if let Some(c) = RENDERER.get(|| None).as_mut().and_then(|r| r.screen.cast.as_mut()) {
+        c.grown.unconsumed(d.edits);
     }
 }
 

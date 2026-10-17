@@ -158,13 +158,13 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i6
 }
 
 /// Where the objects were written, as the turn's change took them
-/// (query/changed.rs), for the next frame to hand: each region's columns in
-/// leaf cells, `[x0, y0, x1, y1)`, X on its own lap; past `scatter::EDITS`,
-/// the rest joined into the last, so every write is met.
+/// (query/changed.rs), held for the next frame to hand: each region's
+/// columns in leaf cells, `[x0, y0, x1, y1)`, X on its own lap; past
+/// `scatter::EDITS`, the rest joined into the last, so every write is met,
+/// however many turns pass before a frame takes them.
 pub fn edited(regions: &[Aabb]) {
     let h = handed();
     let leaf = units(LEAF_CELL);
-    h.edited = 0;
     for r in regions {
         let b = [libm::floor(r.min[0] / leaf), libm::floor(r.min[1] / leaf), libm::ceil(r.max[0] / leaf), libm::ceil(r.max[1] / leaf)].map(|v| v as i32);
         if h.edited < h.edits.len() {

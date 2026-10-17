@@ -632,7 +632,8 @@ pub fn ways_cs(
 
 /// The eye's slots whose decor grows again this frame, a thread a slot,
 /// listed with each kind for `decor_cs` (pxl-portable `scatter::GROWS_AT`),
-/// its count the dispatch's: every one where `marks` asks it, else one whose
+/// its count the dispatch's: every one where `marks` asks it, decor having
+/// been off, else one whose
 /// square its records were not grown for (`scatter::grown_for`), beside a
 /// square filled this frame (`fresh`), or met by a box (`scatter::meets`):
 /// an edit, or a preview's cut as it was or is. A listed slot's head is

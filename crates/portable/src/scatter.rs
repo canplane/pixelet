@@ -187,10 +187,12 @@ pub const fn grown_for(head: [u32; 4], q: [i32; 2]) -> bool {
 /// the rest into the last.
 pub const EDITS: u32 = 8;
 /// The boxes a frame's growth is asked over: the edits, and a preview's
-/// cut and left-out leaf as they were and as they are.
+/// cut and left-out leaf as they were and as they are; past them the
+/// renderer joins the rest into the last (pxl-render gpu/grown.rs `hold`).
 pub const BOXES: u32 = EDITS + 4;
-/// What `decor_mark_cs` reads first: whether every slot grows, the squares
-/// filled this frame, the boxes; then the boxes, four words each.
+/// What `decor_mark_cs` reads first: whether every slot grows, decor having
+/// been off; the squares filled this frame; the boxes; then the boxes, four
+/// words each.
 pub const MARKS_AT: u32 = 4;
 pub const MARKS_WORDS: u32 = MARKS_AT + 4 * BOXES;
 /// What `decor_mark_cs` writes and `decor_cs` is dispatched by: its

@@ -43,16 +43,15 @@ pub struct DecorFrame<'a> {
 }
 
 /// What decor's growth reads besides the frame's decor, none of it the
-/// eye's place: the windows' table and the service area's index, what is placed
-/// (the overwrites' revision, with the frame's `edits`) and a preview's
-/// cuts, and the squares filled this frame. A slot grows again where its
-/// square is another, one beside it was filled, or an edit or a cut as it
-/// was or is meets it; every one where the kinds shown or the shards moved,
-/// what is placed moved with no edit named, or the records were made again.
+/// eye's place: the windows' table, a preview's cuts, and the squares filled
+/// this frame. A slot grows again only where something it read changed: its
+/// square is another, it or one its boxes reach was filled
+/// (`scatter::beside`), or an edit or a cut as it was or is meets it. The
+/// overwrites' every write names its box (the frame's `edits`), and the
+/// service area's index is made once, before any square is held, so neither
+/// grows a slot by itself.
 pub struct Grows<'a> {
     pub window: &'a [i32],
-    pub shards: &'a [[i32; 4]],
-    pub revision: u32,
     pub cuts: &'a [u32; eye::CUTS],
     pub filled: u32,
     /// The eye as the cast's (pxl-portable `eye`), of which the count pass
@@ -88,15 +87,25 @@ pub struct Grown {
     /// The world its groups bind: grouped again exactly when it is another.
     bound: World,
     on: bool,
-    /// What every slot was grown from (`Grows`); the windows' table, the
-    /// overwrites' revision, the cuts and the placed decor as last handed;
-    /// and whether this frame marks slots to grow.
-    read: Read,
+    /// The kinds' zooms as last written, a constant of the table the kernel
+    /// hands once; the windows' table, the cuts and the placed decor as last
+    /// handed; and whether this frame marks slots to grow.
+    shown_read: Read,
     window: Read,
-    revision: Option<u32>,
     cuts: [u32; eye::CUTS],
     placed: Read,
     marking: bool,
+    /// The boxes the slots they meet grow again in, held until a frame
+    /// that marks by them is drawn: one dropped, or handed and never drawn,
+    /// hands them again, as growing a slot twice grows it the same.
+    /// Past `scatter::BOXES`, the rest joined into the last.
+    held: [[i32; 4]; scatter::BOXES as usize],
+    holding: usize,
+    /// How many of `held` this frame marks by.
+    marked: usize,
+    /// Whether the slots' records were not kept, decor having been off: the
+    /// next frame drawn with decor grows every slot.
+    stale: bool,
     /// What the count, args and place passes read past the records, as they
     /// last ran: the eye's place and zooms, the frame's words, the meshes,
     /// the anchor and the records' room; and whether this frame runs them,
@@ -140,14 +149,17 @@ impl Grown {
             room: 0,
             bound: [0; 6],
             on: false,
-            read: Read::default(),
+            shown_read: Read::default(),
             window: Read::default(),
-            revision: None,
             cuts: [0; eye::CUTS],
             placed: Read::default(),
             counted: Read::default(),
             counting: false,
             marking: false,
+            held: [[0; 4]; scatter::BOXES as usize],
+            holding: 0,
+            marked: 0,
+            stale: true,
         }
     }
 
@@ -159,44 +171,53 @@ impl Grown {
     pub fn prepare(&mut self, g: &Gpu, frame: Option<DecorFrame>, grows: Grows, meshes: &[u32; GROUPS as usize], world: World) {
         self.on = frame.is_some();
         let Some(f) = frame else {
-            self.read.forget();
+            // Nothing grows while decor is off, and what moved meanwhile is
+            // not marked: the slots' records were not kept, so the next frame
+            // with decor grows every one.
+            self.stale = true;
             self.counted.forget();
             return;
         };
         let need = scatter::SLOT_RECORDS + (f.placed.len() as u32).next_power_of_two().max(64);
-        let grow = need > self.room;
-        if grow {
-            release(self.records);
-            release(self.block);
-            self.room = need;
+        let grew = need > self.room;
+        if grew {
+            // The slots' records carried over: the placed tail is laid anew.
+            let (records, block) = (self.records, self.block);
             self.records = g.buffer(word_bytes(scatter::record_at(need).0 as usize), buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC);
             self.block = g.buffer(word_bytes(((drawn::LANES + 1) * need) as usize), buffer_usage::STORAGE);
+            if records != 0 {
+                let e = g.encoder();
+                g.copy_buffer(e, (records, 0), (self.records, 0), word_bytes(scatter::record_at(scatter::SLOT_RECORDS).0 as usize));
+                g.submit(e);
+            }
+            release(records);
+            release(block);
+            self.room = need;
             self.placed.forget();
         }
-        let regroup = grow || world != self.bound;
+        let regroup = grew || world != self.bound;
         if regroup {
             self.regroup(g, world);
             self.bound = world;
         }
-        // Every slot, where what every slot grows from moved.
-        let unnamed = self.revision != Some(grows.revision) && f.edits.is_empty();
-        let r = &mut self.read;
-        r.begin();
-        r.read(f.shown);
-        r.read(grows.shards);
-        r.mark(regroup || unnamed);
-        let all = !r.end();
-        self.revision = Some(grows.revision);
+        let s = &mut self.shown_read;
+        s.begin();
+        s.read(f.shown);
+        if !s.end() {
+            g.write_buffer(self.shown, 0, bytes(f.shown));
+        }
         // The boxes the slots they meet grow again in: the edits, and each
-        // cut that moved as it was and as it is.
-        let mut boxes = [[0i32; 4]; scatter::BOXES as usize];
-        boxes[..f.edits.len()].copy_from_slice(f.edits);
-        let mut n = f.edits.len();
+        // cut that moved as it was and as it is, held with any a frame not
+        // drawn handed.
+        for &b in f.edits {
+            self.hold(b);
+        }
         for k in [0, eye::CUT_WORDS] {
-            let (was, is) = (&self.cuts[k..k + eye::CUT_WORDS], &grows.cuts[k..k + eye::CUT_WORDS]);
+            let (was, is) = (self.cuts, grows.cuts);
+            let (was, is) = (&was[k..k + eye::CUT_WORDS], &is[k..k + eye::CUT_WORDS]);
             if was != is {
                 for c in [was, is].into_iter().filter(|c| c[3] != eye::NO_CUT) {
-                    (boxes[n], n) = (scatter::cut_box(c[3], [c[0] as i32, c[1] as i32, c[2] as i32]), n + 1);
+                    self.hold(scatter::cut_box(c[3], [c[0] as i32, c[1] as i32, c[2] as i32]));
                 }
             }
         }
@@ -205,13 +226,13 @@ impl Grown {
         w.begin();
         w.read(grows.window);
         let moved = !w.end();
-        self.marking = all || moved || grows.filled != 0 || n != 0;
+        self.marked = self.holding;
+        self.marking = self.stale || moved || grows.filled != 0 || self.marked != 0;
         if self.marking {
-            g.write_buffer(self.marks, 0, bytes(&[u32::from(all), grows.filled, n as u32, 0]));
-            g.write_buffer(self.marks, scatter::MARKS_AT * 4, bytes(boxes[..n].as_flattened()));
+            g.write_buffer(self.marks, 0, bytes(&[u32::from(self.stale), grows.filled, self.marked as u32, 0]));
+            g.write_buffer(self.marks, scatter::MARKS_AT * 4, bytes(self.held[..self.marked].as_flattened()));
             let w = compute::DECOR_WORKGROUP;
             g.write_buffer(self.grows, 0, bytes(&[(COUNTS as u32).div_ceil(w[0]), SQUARE_BLOCKS.div_ceil(w[1]), 0, 0]));
-            g.write_buffer(self.shown, 0, bytes(f.shown));
         }
         let p = &mut self.placed;
         p.begin();
@@ -273,18 +294,58 @@ impl Grown {
         ];
     }
 
-    /// No decor this frame: none grown, none drawn, and the next grows.
+    /// No decor this frame: none grown, none drawn, and the next grows
+    /// every slot (`stale`).
     pub fn off(&mut self) {
         self.on = false;
-        self.read.forget();
+        self.stale = true;
         self.counted.forget();
     }
 
-    /// The frame that grew was dropped, or never drawn after its decor was
-    /// handed: the next grows every slot again.
-    pub fn forget(&mut self) {
-        self.read.forget();
+    /// Box `b` held for the slots it meets to grow again (`held`), past the
+    /// room joined into the last.
+    fn hold(&mut self, b: [i32; 4]) {
+        if self.holding < self.held.len() {
+            self.held[self.holding] = b;
+            self.holding += 1;
+        } else {
+            let last = &mut self.held[self.holding - 1];
+            *last = [last[0].min(b[0]), last[1].min(b[1]), last[2].max(b[2]), last[3].max(b[3])];
+        }
+    }
+
+    /// The frame was drawn: the boxes it marked by and its every-slot
+    /// growth are done with.
+    pub fn drawn_frame(&mut self) {
+        if self.marking {
+            self.held.copy_within(self.marked..self.holding, 0);
+            self.holding -= self.marked;
+            self.stale = false;
+        }
+        self.marked = 0;
+    }
+
+    /// The frame was dropped, nothing of it recorded: what it wrote is
+    /// written again, the slots it marked marked again by the boxes still
+    /// held, the window's table and the placed decor read anew.
+    pub fn dropped(&mut self) {
+        self.marked = 0;
+        self.window.forget();
+        self.placed.forget();
+        self.shown_read.forget();
         self.counted.forget();
+    }
+
+    /// Whether it holds boxes a frame not drawn handed: the next casts.
+    pub fn holds(&self) -> bool {
+        self.holding != 0
+    }
+
+    /// A frame's decor handed and never drawn: its edits held for the next.
+    pub fn unconsumed(&mut self, edits: &[[i32; 4]]) {
+        for &b in edits {
+            self.hold(b);
+        }
     }
 
     /// Within a compute pass over the cast's world, after the cast: the
