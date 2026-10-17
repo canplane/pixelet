@@ -1266,6 +1266,10 @@ struct Case {
     frame_buffer: u32,
     frames: FrameGroups,
     skinned: SkinnedPass,
+    /// What its picture is made of as last drawn: its frame words, its
+    /// actor's draw and uniform, its skin and its surface; it stands, and
+    /// its surface keeps its picture, while they do.
+    read: Read,
 }
 
 const CASE_EYE: V3 = [0.0, -2.2, 0.9];
@@ -1280,6 +1284,7 @@ impl Case {
             frame_buffer,
             frames: FrameGroups::new(g, layout, frame_buffer, [ao.blank_entry(7); 2], air),
             skinned: SkinnedPass::new(g, pipelines, align),
+            read: Read::default(),
         }
     }
 
@@ -1689,7 +1694,7 @@ impl Renderer {
         g.end(pass);
         self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
         self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_DEBUG]);
-        self.draw_cases(g, encoder, &draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
+        self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, blocks_moved || tables || exposed, &mut stamps[SPAN_CASES]);
         let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
         g.submit_frame(encoder, written);
         release(canvas_view);
@@ -1706,6 +1711,9 @@ impl Renderer {
             if let Some(c) = self.screen.cast.as_mut() {
                 c.read.forget();
                 c.grown.forget();
+            }
+            for case in self.cases.iter_mut().flatten() {
+                case.read.forget();
             }
             read.forget();
             rest.forget();
@@ -1749,8 +1757,10 @@ impl Renderer {
         }
     }
 
-    fn draw_cases(&mut self, g: &Gpu, encoder: u32, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, u32)], stamp: &mut Stamp) {
-        for (id, _, _, own) in Self::cases(draws, cases) {
+    /// Each case whose picture's makings moved, `moved` what moved without
+    /// words: the models' blocks, the air's tables or its exposure.
+    fn draw_cases<'d>(&mut self, g: &Gpu, encoder: u32, cases: impl Iterator<Item = (u32, u32, u32, &'d [u32; DRAW_WORDS])>, uniforms: &[f32], moved: bool, stamp: &mut Stamp) {
+        for (id, model, image, own) in cases {
             let Some(s) = surface(id) else { continue };
             let Some(case) = self.cases[handle_slot(id) as usize].as_mut() else { continue };
             let u = uniform_of(uniforms, own);
@@ -1773,6 +1783,16 @@ impl Renderer {
             u[SCREEN_AO] = 0.0;
             // No planet: the case is a room of its own.
             u[PLANET + 2] = 0.0;
+            let r = &mut case.read;
+            r.begin();
+            r.read(&frame);
+            r.read(own);
+            r.read(uniform_of(uniforms, own));
+            r.read(&[model, image, s.width, s.height, s.depth]);
+            r.mark(moved);
+            if r.end() {
+                continue;
+            }
             g.write_buffer(case.frame_buffer, 0, bytes(&frame));
             let view_id = g.current(s.handle);
             let pass = g.pass(encoder, &pass_desc(view_id, Load::Clear, s.depth_view, Load::Clear, 0.0, stamp.pass()));
