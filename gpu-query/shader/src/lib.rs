@@ -20,7 +20,7 @@ use pxl_portable::eye;
 use pxl_portable::fill::{self, column_of, level_of, put};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
-use pxl_portable::placed::{self, Cut, Held, Lanes, PLACED};
+use pxl_portable::overwrite::{self, Cut, Held, Lanes, PLACED};
 use pxl_portable::scatter::{self, drawn, Grounds, PLACED_BLOCK, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, FRESH_WORDS, RUNS_AT};
@@ -69,7 +69,7 @@ const _: () = {
     assert!(offset_of!(Eye, carve) == at(eye::CARVE) && offset_of!(Eye, hide) == at(eye::HIDE));
 };
 
-/// A preview's entry as pxl-portable `placed` takes it.
+/// A preview's entry as pxl-portable `overwrite` takes it.
 fn cut(e: IVec4) -> Cut {
     Cut {
         zoom: e.w as u32,
@@ -248,7 +248,7 @@ impl Query for World<'_> {
     fn root(&mut self, node: [i32; 3]) -> At {
         At {
             cave: Cave::of(0, node),
-            placed: placed::cursor(self, PLACED, 0, node),
+            placed: overwrite::cursor(self, PLACED, 0, node),
             shard: Shard::UNKNOWN,
             ground: Found::NONE,
         }
@@ -257,7 +257,7 @@ impl Query for World<'_> {
     fn child(&mut self, at: &At, zoom: u32, node: [i32; 3]) -> At {
         At {
             cave: at.cave.child(zoom, node),
-            placed: placed::child(self, at.placed, zoom, node),
+            placed: overwrite::child(self, at.placed, zoom, node),
             shard: at.shard,
             ground: at.ground,
         }
@@ -333,7 +333,7 @@ impl Grounds for Growing<'_> {
     fn start(&mut self, zoom: u32, c: [i32; 3]) -> At {
         At {
             cave: Cave::of(zoom, c),
-            placed: placed::cursor(&self.world, PLACED, zoom, c),
+            placed: overwrite::cursor(&self.world, PLACED, zoom, c),
             shard: Shard::UNKNOWN,
             ground: Found::NONE,
         }

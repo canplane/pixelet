@@ -1,4 +1,4 @@
-// pxl-portable/placed.rs
+// pxl-portable/overwrite.rs
 
 //! gpu-portable: what is placed, as a descent asks it — the objects' one
 //! tree (pxl-kernel layer/object/store.rs), read where it lives: two lanes
@@ -29,6 +29,43 @@ pub const FULL: u32 = 1 << 15;
 
 const VOID: u32 = sentinel::void as u32;
 const AIR: u32 = object::air as u32;
+
+/// A cube's eight children folded by volume, the one rule for what a node of
+/// an overwrite's tree holds at a coarser zoom, each child as its fold word
+/// (`kind` low, its share of its cube filled high, `FULL` whole; a leaf of a
+/// voxel fills it whole, one of none fills nothing): the share of the cube
+/// filled, the mean of theirs, and the kind most of that fill is, a tie to
+/// the corner `majority`'s alternates to (pxl-portable `ground::majority`).
+/// The objects' store folds its tree by it as it is written (pxl-kernel
+/// layer/object/store.rs), and a square's fill its ways (`fill::ways`).
+pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
+    let (kind, fill) = (|c: u32| c & 0xffff, |c: u32| c >> 16);
+    let mut sum = 0;
+    let mut k = 0;
+    while k < 8 {
+        sum += fill(children[k]);
+        k += 1;
+    }
+    let (mut best, mut most) = (0, 0);
+    let mut j = 0;
+    while j < 8 {
+        // The corner order alternates with the zoom, as `majority`'s.
+        let c = children[if zoom & 1 == 0 { 7 - j } else { j }];
+        let mut w = 0;
+        let mut i = 0;
+        while i < 8 {
+            if kind(children[i]) == kind(c) {
+                w += fill(children[i]);
+            }
+            i += 1;
+        }
+        if fill(c) > 0 && w > most {
+            (best, most) = (kind(c), w);
+        }
+        j += 1;
+    }
+    best | (sum / 8) << 16
+}
 
 /// The tree's two lanes, a word a slot.
 pub trait Lanes {

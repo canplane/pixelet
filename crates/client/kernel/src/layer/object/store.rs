@@ -32,7 +32,7 @@ use crate::layer::object::ext::{Ext, Pools, NONE};
 use crate::layer::{Answer, Bound, Query};
 use crate::sched::edge::request_world_tick;
 use pxl_spec::block::ext::class_of;
-use pxl_spec::block::placed::{self, Held};
+use pxl_spec::block::overwrite::{self, Held};
 use pxl_spec::block::volume::fold;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -152,10 +152,10 @@ fn path(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
     [at[0].rem_euclid(around(zoom)), at[1], at[2]]
 }
 
-/// The tree's lanes as pxl-portable `placed` reads them, the CPU as a GPU.
+/// The tree's lanes as pxl-portable `overwrite` reads them, the CPU as a GPU.
 pub struct Lanes<'a>(&'a Tree);
 
-impl placed::Lanes for Lanes<'_> {
+impl overwrite::Lanes for Lanes<'_> {
     fn heap(&self, slot: u32) -> u32 {
         self.0.heap()[slot as usize]
     }
@@ -245,7 +245,7 @@ impl Store {
     /// cube there, and its value if it is a leaf.
     fn descend(&self, about: f64, enter: &mut Enter) {
         for k in 0..8 {
-            self.walk(self.tree.child(placed::PLACED, k), 0, root(k), about, enter);
+            self.walk(self.tree.child(overwrite::PLACED, k), 0, root(k), about, enter);
         }
     }
 
@@ -444,20 +444,20 @@ impl Cells<'_> {
 }
 
 impl Query for Store {
-    /// What a cube holds, its parent's handed down (pxl-portable `placed`);
+    /// What a cube holds, its parent's handed down (pxl-portable `overwrite`);
     /// a node over the ground's two axes is read under it.
     type Cursor = Held;
 
     fn cursor<const D: usize>(&self, (zoom, at): Node<D>, _: Zoom) -> Held {
         match D {
-            3 => placed::cursor(&self.lanes(), placed::PLACED, zoom, [at[0], at[1], at[2]].map(|v| v as i32)),
+            3 => overwrite::cursor(&self.lanes(), overwrite::PLACED, zoom, [at[0], at[1], at[2]].map(|v| v as i32)),
             _ => Held::branch(0, zoom),
         }
     }
 
     fn child<const D: usize>(&self, parent: &Held, (zoom, at): Node<D>, _: Zoom) -> Held {
         match D {
-            3 => placed::child(&self.lanes(), *parent, zoom, [at[0], at[1], at[2]].map(|v| v as i32)),
+            3 => overwrite::child(&self.lanes(), *parent, zoom, [at[0], at[1], at[2]].map(|v| v as i32)),
             _ => *parent,
         }
     }

@@ -13,7 +13,7 @@ use crate::area::Shard;
 use crate::cast::{In, Kind};
 use crate::caves::Cave;
 use crate::ground::{self, Held, VOID};
-use crate::placed::{self, Cut, Lanes, BLOCK, SPLIT};
+use crate::overwrite::{self, Cut, Lanes, BLOCK, SPLIT};
 use crate::scatter::PLACED_BLOCK;
 use crate::window::{self, Found, Windows};
 use crate::{Zoom, LEAF_CELL};
@@ -22,10 +22,10 @@ use crate::{Zoom, LEAF_CELL};
 /// caves, what is placed over it and its shard as its parent handed them,
 /// and `place` where the ground's cells of a node over it were held, which
 /// becomes its own (`ground::node`). A preview's `carve` and `hide`
-/// (`placed::Cut`) are read with what is placed.
+/// (`overwrite::Cut`) are read with what is placed.
 ///
 /// It is a block where `near` is its zoom or coarser, or past the ground's
-/// cells where nothing placed or carved is finer in it (`placed::whole`):
+/// cells where nothing placed or carved is finer in it (`overwrite::whole`):
 /// the world holds nothing finer than the node there. A block is what is
 /// placed in it, air included, else the ground's block with what the ways
 /// write over it (`window::ways_over`); `PLACED_BLOCK` over a placed value,
@@ -37,7 +37,7 @@ pub fn node<H: Held, W: Windows + Copy, L: Lanes>(
     held: &mut H,
     ways: &W,
     lanes: &L,
-    (cave, put, shard): (Cave, placed::Held, Shard),
+    (cave, put, shard): (Cave, overwrite::Held, Shard),
     place: &mut Found,
     (zoom, c): (Zoom, [i32; 3]),
     [far, near]: [Zoom; 2],
@@ -46,8 +46,8 @@ pub fn node<H: Held, W: Windows + Copy, L: Lanes>(
     let mut block = zoom >= near || zoom >= LEAF_CELL;
     // Asked of what is placed only where something is, or a preview cuts.
     if put.holds() || carve.zoom != Cut::NONE.zoom {
-        block = zoom >= near || zoom >= LEAF_CELL && placed::whole(put, carve, zoom, c);
-        let over = placed::over(lanes, put, carve, hide, zoom, c, if block { zoom } else { near });
+        block = zoom >= near || zoom >= LEAF_CELL && overwrite::whole(put, carve, zoom, c);
+        let over = overwrite::over(lanes, put, carve, hide, zoom, c, if block { zoom } else { near });
         if over.says == BLOCK {
             return (
                 In {

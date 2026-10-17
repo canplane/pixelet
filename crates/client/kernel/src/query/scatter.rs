@@ -7,7 +7,7 @@
 //! (`World::grows`), which way it faces and how high it stands its face's
 //! (`World::surfaces`).
 
-use pxl_portable::placed;
+use pxl_portable::overwrite;
 use pxl_portable::scatter::{self as portable, Grounds, Grown, PLACED_BLOCK};
 use pxl_spec::block::cube::sentinel;
 use pxl_spec::block::decor::Decor;
@@ -40,7 +40,7 @@ impl<'a, 'w> Asked<'a, 'w> {
     }
 }
 
-impl placed::Lanes for Asked<'_, '_> {
+impl overwrite::Lanes for Asked<'_, '_> {
     fn heap(&self, slot: u32) -> u32 {
         self.lanes.heap(slot)
     }

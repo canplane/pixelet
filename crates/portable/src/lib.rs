@@ -21,7 +21,7 @@ pub mod eye;
 pub mod fill;
 pub mod ground;
 pub mod lattice;
-pub mod placed;
+pub mod overwrite;
 pub mod ray;
 pub mod scatter;
 pub mod ways;

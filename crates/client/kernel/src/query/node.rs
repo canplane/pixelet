@@ -50,7 +50,7 @@ use pxl_portable::window::{self, Found};
 use pxl_portable::world;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::tile::terrain::GroundId;
-use pxl_spec::block::placed::{Cut, Held};
+use pxl_spec::block::overwrite::{Cut, Held};
 use pxl_spec::block::Block;
 use pxl_spec::procedural::Cave;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -143,7 +143,7 @@ impl World<'_> {
         })
     }
 
-    /// A preview's entry as pxl-portable `placed` takes it.
+    /// A preview's entry as pxl-portable `overwrite` takes it.
     fn cut(&self, entry: Option<EntryAt>) -> Cut {
         entry.map_or(Cut::NONE, |e| Cut {
             zoom: e.zoom(),

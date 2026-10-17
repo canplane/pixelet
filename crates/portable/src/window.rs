@@ -441,7 +441,7 @@ pub trait Ran: Squares {
 /// Where a node's cells at `cell`, a square's or fewer, are held, as `find`
 /// finds them: the zoom they were asked at, the window holding them present
 /// (its zoom `from`, at `cell` or coarser, and its slot), or none; one word,
-/// as a descent carries it down beside what is placed (`placed::Held`).
+/// as a descent carries it down beside what is placed (`overwrite::Held`).
 /// `find` reads only the square at `cell` holding them and the squares over
 /// it, so every node whose cells lie in that square has this answer: a
 /// descent hands it from a node to the nodes under it (`step`). `NONE` was

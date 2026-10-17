@@ -24,13 +24,13 @@ pub const TAN: usize = 16;
 /// The zooms a block is asked at, coarsest then finest.
 pub const RANGE: usize = 18;
 /// A preview's cut to air and its left-out leaf, each X, Y, Z and the zoom,
-/// the zoom `NO_CUT` for none (pxl-portable `placed::Cut`).
+/// the zoom `NO_CUT` for none (pxl-portable `overwrite::Cut`).
 pub const CARVE: usize = 20;
 pub const HIDE: usize = 24;
 pub const CUT_WORDS: usize = 4;
 /// Both cuts, carve then hide, as one run of words.
 pub const CUTS: usize = 2 * CUT_WORDS;
-pub const NO_CUT: u32 = crate::placed::Cut::NONE.zoom;
+pub const NO_CUT: u32 = crate::overwrite::Cut::NONE.zoom;
 /// Every word, the cuts last.
 pub const WORDS: usize = HIDE + CUT_WORDS;
 const _: () = assert!(STEPS == ORIGIN + 3 && REACH == FORWARD + 3 && TAU == RIGHT + 3 && TAN == UP + 4 && RANGE == TAN + 2 && CARVE == RANGE + 2 && HIDE == CARVE + CUT_WORDS);

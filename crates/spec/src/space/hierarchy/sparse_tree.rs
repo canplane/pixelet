@@ -10,7 +10,7 @@
 //! goes without the others' blocks changing place.
 
 use super::tree::{children, slot_of};
-use pxl_portable::placed::BRANCH;
+use pxl_portable::overwrite::BRANCH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slot<T> {

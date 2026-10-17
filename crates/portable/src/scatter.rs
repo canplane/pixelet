@@ -19,7 +19,7 @@ use crate::caves::node_seed;
 use crate::cube::{sentinel, Ground};
 use crate::decor::{Counts, Decor, Orientation, BLOCK, DECORS};
 use crate::lattice::GROUND;
-use crate::placed::{self, Lanes, PLACED};
+use crate::overwrite::{self, Lanes, PLACED};
 use crate::window::{EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
 use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, UNIT_ZOOM};
 
@@ -615,7 +615,7 @@ pub fn claimed(lanes: &impl Grounds, at: [i32; 3], cells: [i32; 3]) -> bool {
         while n[1] <= hi[1] >> s {
             n[0] = lo[0] >> s;
             while n[0] <= hi[0] >> s {
-                let node = placed::cursor(lanes, PLACED, CLAIM_ZOOM, n);
+                let node = overwrite::cursor(lanes, PLACED, CLAIM_ZOOM, n);
                 if node.holds() && claimed_in(lanes, n, node, lo, hi, at, cells) {
                     return true;
                 }
@@ -631,7 +631,7 @@ pub fn claimed(lanes: &impl Grounds, at: [i32; 3], cells: [i32; 3]) -> bool {
 /// `claimed`, over the corners in `[lo, hi]` within the node `n` at
 /// `CLAIM_ZOOM`, holding `node`, each a placed decor's leaf or not, stepped
 /// down from it.
-fn claimed_in(lanes: &impl Grounds, n: [i32; 3], node: placed::Held, lo: [i32; 3], hi: [i32; 3], at: [i32; 3], cells: [i32; 3]) -> bool {
+fn claimed_in(lanes: &impl Grounds, n: [i32; 3], node: overwrite::Held, lo: [i32; 3], hi: [i32; 3], at: [i32; 3], cells: [i32; 3]) -> bool {
     let s = UNIT_ZOOM - CLAIM_ZOOM;
     let first = [lo[0].max(n[0] << s), lo[1].max(n[1] << s), lo[2].max(n[2] << s)];
     let last = [hi[0].min((n[0] << s) + (1 << s) - 1), hi[1].min((n[1] << s) + (1 << s) - 1), hi[2].min((n[2] << s) + (1 << s) - 1)];
@@ -646,7 +646,7 @@ fn claimed_in(lanes: &impl Grounds, n: [i32; 3], node: placed::Held, lo: [i32; 3
                 while z < UNIT_ZOOM {
                     z += 1;
                     let t = UNIT_ZOOM - z;
-                    held = placed::child(lanes, held, z, [u[0] >> t, u[1] >> t, u[2] >> t]);
+                    held = overwrite::child(lanes, held, z, [u[0] >> t, u[1] >> t, u[2] >> t]);
                 }
                 if held.holds() && !held.folded() && held.zoom() == UNIT_ZOOM {
                     let (k, decor) = row_of(lanes.rows(), lanes.data(held.slot()) & 0xffff);
