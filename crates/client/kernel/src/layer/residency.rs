@@ -76,6 +76,9 @@ impl<L> Entry<L> {
 
 pub struct Residency<L: Base> {
     tiles: FnvHashMap<Tile, Entry<L>>,
+    /// The tile each frame holds, the frames' side of `Held::frame`,
+    /// written where a frame is taken or given up (`put`, `remove`).
+    in_frame: Vec<Option<Tile>>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
     going: Vec<Tile>,
@@ -145,6 +148,7 @@ impl<L: Base> Default for Residency<L> {
         let () = Self::SAFE;
         Residency {
             tiles: FnvHashMap::with_capacity_and_hasher(Self::ENTRIES as usize, Default::default()),
+            in_frame: vec![None; Self::FRAMES as usize],
             // Lowest first, as the frames are taken.
             free: (0..Self::FRAMES).rev().collect(),
             going: Vec::with_capacity(Self::ENTRIES as usize),
@@ -460,7 +464,12 @@ impl<L: Base> Residency<L> {
     }
 
     fn put(&mut self, p: Tile, body: L, frame: Option<u32>) {
-        self.entry_mut(p).held = Some(Held { body, frame, again: false });
+        if let Some(was) = self.entry_mut(p).held.replace(Held { body, frame, again: false }).and_then(|h| h.frame) {
+            self.in_frame[was as usize] = None;
+        }
+        if let Some(f) = frame {
+            self.in_frame[f as usize] = Some(p);
+        }
         self.moved.push(p);
         self.revision = self.revision.wrapping_add(1);
     }
@@ -485,7 +494,7 @@ impl<L: Base> Residency<L> {
 
     /// The tile held in frame `record`.
     pub fn in_frame(&self, record: u32) -> Option<Tile> {
-        self.tiles.iter().find(|(_, e)| e.held.as_ref().is_some_and(|h| h.frame == Some(record))).map(|(&p, _)| p)
+        self.in_frame[record as usize]
     }
 
     /// Returns the frame `p` was in, if any, for the caller to fill or free.
@@ -494,6 +503,9 @@ impl<L: Base> Residency<L> {
         let held = e.get_mut().held.take()?;
         if e.get().idle() {
             e.remove();
+        }
+        if let Some(f) = held.frame {
+            self.in_frame[f as usize] = None;
         }
         self.moved.push(p);
         self.revision = self.revision.wrapping_add(1);
