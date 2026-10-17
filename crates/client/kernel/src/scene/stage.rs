@@ -114,7 +114,9 @@ pub fn stage_render() {
         *slot = row;
         case_cnt += 1;
     }
-    let (window, layers) = earth_window(Earth::demand().floor());
+    let on = pxl_render::gpu::api::device_generation();
+    let (window, layers) = earth_window(Earth::demand().floor(), on);
+    let mut earth_upload = move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth_upload(write, on);
     let o = crate::view::observation::observation();
     let eye = o.as_ref().and_then(crate::scene::cast::eye);
     let mut terrain_upload = crate::scene::cast::upload;

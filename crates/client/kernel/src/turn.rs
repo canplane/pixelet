@@ -96,11 +96,14 @@ fn world_gizmo_tick(_: &mut TickContext) {
 fn demand_tick(_: &mut TickContext) {
     // The ground's windows where their centres now stand, before what arrives fills them.
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
-    let pinned = crate::layer::terrain::window::step([
-        crate::view::observation::observation().map(|o| [o.eye[0], o.eye[1]]),
-        crate::control::camera::controller::focus().map(at),
-        crate::control::navigation::destination::pending().map(at),
-    ]);
+    let pinned = crate::layer::terrain::window::step(
+        [
+            crate::view::observation::observation().map(|o| [o.eye[0], o.eye[1]]),
+            crate::control::camera::controller::focus().map(at),
+            crate::control::navigation::destination::pending().map(at),
+        ],
+        pxl_render::gpu::api::device_generation(),
+    );
     if pinned {
         TerrainTile::demand().moved();
     }

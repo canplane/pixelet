@@ -12,10 +12,9 @@
 
 use pxl_portable::area::{Area, Shard};
 use pxl_portable::ground::word;
-use pxl_portable::window::{self, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
+use pxl_portable::window::{self, CellsBack, FreshSquare, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
 use pxl_portable::wrap_index;
 use pxl_portable::LEAF_CELL;
-use pxl_render::gpu::renderer::{CellsBack, Square, TerrainWrite};
 use pxl_spec::bake::tile::terrain::{handed, square_lines, GroundId, TerrainTile, ELE_LANE, LOOK_LANE};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -204,10 +203,9 @@ fn cells(s: u32) -> &'static [u8] {
 /// handed: of those alone are they made. Before the turn's arrivals and its
 /// stage. True where the tiles the windows apart from the eye's want
 /// changed.
-pub fn step(at: [Option<[f64; 2]>; 3]) -> bool {
+pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     let w = windows();
     let terrain = TerrainTile::residency();
-    let on = pxl_render::gpu::api::device_generation();
     let lost = core::mem::replace(&mut w.on, on) != on;
     let mut moved = [false; WINDOWS as usize];
     let mut stale = lost || core::mem::take(&mut w.filled) || terrain.revision() != w.read;
@@ -385,7 +383,7 @@ static ZEROS: [i16; ELE_LANE] = [0; ELE_LANE];
 /// samples to the GPU. Taken where no window wants another of its squares;
 /// kept where one still does, for a later turn; full where the stream ran
 /// out first.
-pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> Offered {
+pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> bool) -> Offered {
     let cell = GROUND.cell_zoom(tile.zoom);
     let w = windows();
     let wants = |w: &Windows, i: u32| {
@@ -452,14 +450,11 @@ pub fn fill(tile: Tile, from: Handed, write: &mut TerrainWrite<'_>) -> Offered {
             ticket: w.ticket,
         };
         let key = w.slots[i as usize].square;
-        let taken = write(Square {
-            square: i,
-            place: window::place_word(place),
-            cell,
-            first: [key[0] << SQUARE_SHIFT, key[1] << SQUARE_SHIFT],
-            shard: Shard::UNKNOWN.at(&Declared, (window::squares_zoom(cell), key)),
+        let shard = Shard::UNKNOWN.at(&Declared, (window::squares_zoom(cell), key));
+        let taken = write(FreshSquare {
+            fresh: window::fresh(i, window::place_word(place), cell, [key[0] << SQUARE_SHIFT, key[1] << SQUARE_SHIFT], shard),
             looks: cut,
-            samples: pxl_render::gpu::api::bytes(ele),
+            samples: ele,
             lines: &lines[..written],
             back,
         });

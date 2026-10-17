@@ -49,7 +49,7 @@ use crate::mesh::paint::ground::look_words;
 use pxl_portable::eye;
 use pxl_portable::ray;
 use pxl_portable::scatter::GROUPS;
-use pxl_portable::window::{self, BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_WORDS, HANDED, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
+use pxl_portable::window::{self, CellsBack, FreshSquare, BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_WORDS, HANDED, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::world;
 use xpute_kit::status::bug::OrBug;
@@ -189,38 +189,8 @@ pub struct Overwrites<'a> {
     pub revision: u32,
 }
 
-/// Where a square's cells, which the GPU draws, come back to in the
-/// module's memory (`RaysPass::read_back`): its columns, levels and
-/// runs (pxl-portable `window::BACK_WORDS`); and the fill's ticket, never
-/// 0, which `GroundSquares::landed` is told once this fill's are in.
-#[derive(Clone, Copy, Default)]
-pub struct CellsBack {
-    pub cells: u32,
-    pub ticket: u32,
-}
-
-/// A square handed to the GPU: its place among the windows' squares, where
-/// it lies in its tile in squares (X low, Y high), its cells' zoom, its
-/// first cell as the world names it there and what is known of the service
-/// area at it, its four looks a cell, its tile's padded samples, its lines
-/// as far as they are written, and where its cells, joined with the ways,
-/// come back to (pxl-portable `window::FRESH_WORDS`).
-pub struct Square<'a> {
-    pub square: u32,
-    pub place: u32,
-    /// Its cells' zoom, its window's.
-    pub cell: u32,
-    pub first: [i32; 2],
-    pub shard: pxl_portable::area::Shard,
-    pub looks: &'a [u8],
-    pub samples: &'a [u8],
-    /// Its lines (pxl-portable `window::LINES_AT`), the words written.
-    pub lines: &'a [u32],
-    pub back: CellsBack,
-}
-
 /// Takes a square while the turn's stream has room for it.
-pub type TerrainWrite<'a> = dyn FnMut(Square<'_>) -> bool + 'a;
+pub type TerrainWrite<'a> = dyn FnMut(FreshSquare<'_>) -> bool + 'a;
 
 pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
@@ -981,16 +951,16 @@ impl RaysPass {
         });
         let mut fresh = 0;
         upload(&mut |q| {
-            let fresh_entry = window::fresh(q.square, q.place, q.cell, q.first, q.shard);
-            if !room(write_buffer_bytes(q.looks) + write_buffer_bytes(q.samples) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&fresh_entry))) {
+            if !room(write_buffer_bytes(q.looks) + write_buffer_bytes(bytes(q.samples)) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&q.fresh))) {
                 return false;
             }
-            let at = q.square * SQUARE_BYTES;
+            let square = q.fresh[window::FRESH_SQUARE as usize];
+            let at = square * SQUARE_BYTES;
             g.write_buffer(gb.ground, at, q.looks);
-            g.write_buffer(gb.ground, at + ELE_AT * 4, q.samples);
+            g.write_buffer(gb.ground, at + ELE_AT * 4, bytes(q.samples));
             g.write_buffer(gb.ground, at + LINES_AT * 4, bytes(q.lines));
-            g.write_buffer(gb.fresh, word_bytes((FRESH_WORDS * fresh) as usize), bytes(&fresh_entry));
-            gb.asked[q.square as usize] = q.back;
+            g.write_buffer(gb.fresh, word_bytes((FRESH_WORDS * fresh) as usize), bytes(&q.fresh));
+            gb.asked[square as usize] = q.back;
             fresh += 1;
             true
         });

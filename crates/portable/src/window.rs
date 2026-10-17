@@ -77,6 +77,28 @@ pub const fn fresh(square: u32, place: u32, cell: Zoom, first: [i32; 2], shard: 
     w
 }
 
+/// Where a square's cells, which the GPU draws, come back to in the
+/// kernel's memory: its columns, levels, runs and laid cells (`BACK_WORDS`);
+/// and the fill's ticket, never 0, which the kernel is told once this
+/// fill's are in.
+#[derive(Clone, Copy, Default)]
+pub struct CellsBack {
+    pub cells: u32,
+    pub ticket: u32,
+}
+
+/// A square handed to the GPU's fill, the record the ground's windows hand
+/// on and the renderer takes: its words (`fresh`), its four looks a cell,
+/// its tile's padded samples, its lines as far as they are written
+/// (`LINES_AT`), and where its cells come back to.
+pub struct FreshSquare<'a> {
+    pub fresh: [u32; FRESH_WORDS as usize],
+    pub looks: &'a [u8],
+    pub samples: &'a [i16],
+    pub lines: &'a [u32],
+    pub back: CellsBack,
+}
+
 /// Where a square lies in its tile, in squares, as one word: X low, Y high.
 pub const fn place_word([x, y]: [u32; 2]) -> u32 {
     x | y << 16
