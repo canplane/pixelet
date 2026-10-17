@@ -64,10 +64,11 @@ impl Stream {
         self.len = 0;
     }
 
-    /// Whether a record of `args` words and `bytes` would fit whole with
-    /// `reserve` bytes still left after it.
-    pub fn fits(&self, args: usize, bytes: Option<usize>, reserve: usize) -> bool {
-        self.left() >= record_bytes(args, bytes) + reserve
+    /// Whether records of `bytes`, as their writers measure them
+    /// (`record_bytes`, xpute-gpu encode's `call::*_bytes`), would fit whole
+    /// with `leave` bytes still left after them.
+    pub fn fits(&self, bytes: usize, leave: usize) -> bool {
+        self.left() >= bytes + leave
     }
 
     /// A bug past the range reports its caller, which names the stream and the record.

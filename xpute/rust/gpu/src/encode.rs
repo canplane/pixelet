@@ -10,7 +10,7 @@
 //! built on the heap first.
 
 use xpute_guest::abi::handle::{handle_slot, HandleTable};
-use xpute_guest::ipc::stream::Stream;
+use xpute_guest::ipc::stream::{Stream, WORD};
 use xpute_guest::mem::base::off_of_slice;
 
 use crate::enums::{
@@ -85,6 +85,14 @@ fn emit(stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> bool {
     put(&mut fill);
     xpute_kit::ensure!(fill.at == count.0, ENOTRECOVERABLE, op);
     true
+}
+
+/// The bytes a record of `op` whose words `put` gives takes of a stream, as
+/// its room is counted: measured as `emit` measures it, its op and count with.
+fn measured(put: &dyn Fn(&mut dyn Sink)) -> usize {
+    let mut count = Count(0);
+    put(&mut count);
+    (2 + count.0) * WORD
 }
 
 pub struct BufferDescriptor {
@@ -711,11 +719,19 @@ pub mod call {
         emit(stream, op, &|s| w.iter().for_each(|v| s.word(*v)))
     }
 
+    fn buffer_write(s: &mut dyn Sink, buffer: Id, offset: u32, bytes: &[u8]) {
+        [buffer, offset].into_iter().for_each(|w| s.word(w));
+        s.bytes(bytes);
+    }
+
     pub fn write_buffer(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
-        emit(stream, op::WRITE_BUFFER, &|s| {
-            [buffer, offset].into_iter().for_each(|w| s.word(w));
-            s.bytes(bytes);
-        })
+        emit(stream, op::WRITE_BUFFER, &|s| buffer_write(s, buffer, offset, bytes))
+    }
+
+    /// The bytes `write_buffer` of `bytes` takes of a stream, which
+    /// `Stream::fits` asks of its room: a caller writing several asks once.
+    pub fn write_buffer_bytes(bytes: &[u8]) -> usize {
+        measured(&|s| buffer_write(s, 0, 0, bytes))
     }
 
     /// The bytes read where they lie in the guest's memory when the host
@@ -734,6 +750,22 @@ pub mod call {
     pub fn write_texture(stream: &mut Stream, place: &TexelCopyTexture, layout: [u32; 2], size: [u32; 3], bytes: &[u8]) -> bool {
         emit(stream, op::WRITE_TEXTURE, &|s| {
             texture_write(s, place, layout, size);
+            s.bytes(bytes);
+        })
+    }
+
+    /// The bytes `write_texture` of `bytes` takes of a stream, as
+    /// `write_buffer_bytes` says a buffer's: its words are the same whatever
+    /// the place, the layout and the size.
+    pub fn write_texture_bytes(bytes: &[u8]) -> usize {
+        let place = TexelCopyTexture {
+            texture: 0,
+            mip: 0,
+            origin: [0; 3],
+            aspect: TextureAspect::all,
+        };
+        measured(&|s| {
+            texture_write(s, &place, [0; 2], [0; 3]);
             s.bytes(bytes);
         })
     }

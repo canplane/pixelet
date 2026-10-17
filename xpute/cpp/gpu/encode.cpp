@@ -16,11 +16,17 @@ static bool words(Stream &stream, std::uint32_t op, std::initializer_list<std::u
 
 static std::uint32_t off(Stream &stream, std::span<const std::uint8_t> bytes) noexcept { return stream.memory().off_of(bytes); }
 
+template <class S> static void buffer_write(S &s, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept {
+    detail::words(s, {buffer, offset});
+    s.bytes(bytes);
+}
+
 bool write_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept {
-    return emit(stream, op::WRITE_BUFFER, [&](auto &s) {
-        detail::words(s, {buffer, offset});
-        s.bytes(bytes);
-    });
+    return emit(stream, op::WRITE_BUFFER, [&](auto &s) { buffer_write(s, buffer, offset, bytes); });
+}
+
+std::uint64_t write_buffer_bytes(std::span<const std::uint8_t> bytes) noexcept {
+    return detail::measured([&](auto &s) { buffer_write(s, 0, 0, bytes); });
 }
 
 bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept {
@@ -36,6 +42,14 @@ template <class S> static void texture_write(S &s, const TexelCopyTexture &place
 bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept {
     return emit(stream, op::WRITE_TEXTURE, [&](auto &s) {
         texture_write(s, place, layout, size);
+        s.bytes(bytes);
+    });
+}
+
+std::uint64_t write_texture_bytes(std::span<const std::uint8_t> bytes) noexcept {
+    const TexelCopyTexture place{.texture = 0, .mip = 0, .origin = {0, 0, 0}, .aspect = TextureAspect::all};
+    return detail::measured([&](auto &s) {
+        texture_write(s, place, {0, 0}, {0, 0, 0});
         s.bytes(bytes);
     });
 }

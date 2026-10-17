@@ -40,7 +40,7 @@ void Sys::call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<
 }
 
 bool Sys::try_call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes, std::uint32_t reserve) noexcept {
-    if (!stream_.fits(static_cast<std::uint32_t>(args.size()), static_cast<std::uint32_t>(bytes.size()), reserve)) return false;
+    if (!stream_.fits(record_bytes(args.size(), bytes.size()), reserve)) return false;
     call(op, args, bytes);
     return true;
 }

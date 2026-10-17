@@ -41,11 +41,10 @@ class Stream {
 
     std::uint32_t left() const noexcept { return (words_ - head_ - len_) * WORD; }
 
-    // Whether a record of `args` words and `bytes` would fit whole with
-    // `reserve` bytes still left after it.
-    bool fits(std::uint32_t args, std::optional<std::uint32_t> bytes, std::uint32_t reserve) const noexcept {
-        return std::uint64_t{left()} >= record_bytes(args, bytes) + reserve;
-    }
+    // Whether records of `bytes`, as their writers measure them (`record_bytes`,
+    // gpu/encode's `call::*_bytes`), would fit whole with `leave` bytes still
+    // left after them.
+    bool fits(std::uint64_t bytes, std::uint32_t leave) const noexcept { return std::uint64_t{left()} >= bytes + leave; }
 
     // Answers where the `n` words begin. Past the range is a bug: the guest asked
     // more of a turn than it sized the range for, reported at the caller.

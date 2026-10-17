@@ -328,6 +328,14 @@ template <class F> bool emit(Stream &stream, std::uint32_t op, F &&put) noexcept
     return true;
 }
 
+// The bytes a record whose words `put` gives takes of a stream, as its room is
+// counted: measured as `emit` measures it, its op and count with.
+template <class F> std::uint64_t measured(F &&put) noexcept {
+    Count count;
+    put(count);
+    return (2 + std::uint64_t{count.n}) * WORD;
+}
+
 template <class S> void timestamps(S &s, const std::optional<TimestampWrites> &t) noexcept {
     if (t) words(s, {t->query_set, opt(t->begin), opt(t->end)});
     else words(s, {NONE, NONE, NONE});
@@ -615,11 +623,17 @@ template <std::size_t N> class Gpu {
 namespace call {
 
 bool write_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
+// The bytes `write_buffer` of `bytes` takes of a stream, which Stream::fits
+// asks of its room: a caller writing several asks once.
+std::uint64_t write_buffer_bytes(std::span<const std::uint8_t> bytes) noexcept;
 // The bytes read where they lie in the guest's memory when the host runs the
 // stream, so they must stay until it has.
 bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
 // `layout`: bytes per row, rows per image.
 bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
+// As write_buffer_bytes, for write_texture: its words are the same whatever the
+// place, the layout and the size.
+std::uint64_t write_texture_bytes(std::span<const std::uint8_t> bytes) noexcept;
 bool write_texture_at(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
 // An encoded image (PNG, JPEG, WebP) where it lies in the guest's memory,
 // decoded into `to`; `word` where `ticket | DONE` lands once it is there.

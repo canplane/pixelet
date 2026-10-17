@@ -440,7 +440,7 @@ const UPLOAD_ARGS: usize = 12;
 /// Whether a copy of `bytes` into the stream fits, leaving `stream::RESERVE`
 /// for what cannot wait.
 pub fn room(bytes: u32) -> bool {
-    STATE.get(|| None).as_ref().is_some_and(|s| s.stream.fits(UPLOAD_ARGS, Some(bytes as usize), stream::RESERVE as usize))
+    STATE.get(|| None).as_ref().is_some_and(|s| s.stream.fits(xpute_guest::ipc::stream::record_bytes(UPLOAD_ARGS, Some(bytes as usize)), stream::RESERVE as usize))
 }
 
 /// An object's handle, or 0 where the frame it was made in no longer fits
