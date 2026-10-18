@@ -114,7 +114,8 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
         true
     }
 
-    fn slot(&self, slot: usize) -> Slot<T> {
+    /// What slot `slot` holds.
+    pub fn slot(&self, slot: usize) -> Slot<T> {
         match self.heap[slot] {
             0 => Slot::Leaf(self.data[slot]),
             h => Slot::Branch(h & !BRANCH, self.data[slot]),

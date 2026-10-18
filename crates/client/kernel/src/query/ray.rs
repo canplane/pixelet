@@ -139,7 +139,7 @@ impl<'a> Query for Walker<'_, 'a> {
         }
         if zoom == GROUND.cell() {
             if let Some((ray, s)) = self.strike.as_mut().filter(|(_, s)| t0 < s.held) {
-                self.world.strike_near(s, ray, [c[0], c[1]]);
+                self.world.strike_near(s, ray, (zoom, c));
             }
         }
         let (answer, block) = match self.world.node(at, asked, &mut self.lines) {

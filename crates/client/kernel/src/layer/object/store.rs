@@ -22,7 +22,7 @@ use pxl_spec::space::coord::world::{node_near, wrap_cell};
 use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units, Zoom, CUBE_ZOOM};
 use pxl_spec::space::hierarchy::morton::{key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
-use pxl_spec::space::hierarchy::tree::{child_of, region, Node};
+use pxl_spec::space::hierarchy::tree::{child_of, region, slot_of, Node};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -166,6 +166,19 @@ fn root(k: usize) -> [i32; 3] {
     core::array::from_fn(|i| -(((k >> i) & 1) as i32))
 }
 
+/// Where the node `at` of `zoom` comes in the tree's own order, the order a
+/// walk from the roots enters nodes in (`descend`): its slot a zoom
+/// (`slot_of`) from the roots down, so of two nodes neither under the other
+/// the one entered first is the lesser.
+pub(crate) fn tree_key(zoom: Zoom, at: [i32; 3]) -> u128 {
+    let p = path(zoom, at);
+    let mut key = 0u128;
+    for l in 0..=zoom {
+        key = key << 3 | slot_of(p.map(|v| v >> (zoom - l))) as u128;
+    }
+    key << (3 * (OBJECT_FINEST - zoom))
+}
+
 /// One leaf written: `<key, id, ext>`, its node, its catalog value and what
 /// it carries. VOID erases.
 #[derive(Clone, Debug)]
@@ -284,6 +297,31 @@ impl Store {
             }
             true
         });
+    }
+
+    /// `entries_in`, from the nodes `from` names, each with what the tree holds
+    /// there (`overwrite::Held`, a descent's), none under another and
+    /// `query` within them: each walked from its slot, so what is found and
+    /// the order it is found in are the walk's from the roots, taken in the
+    /// tree's own order (`tree_key`).
+    pub fn entries_under(&self, from: &[(Node<3>, Held)], query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
+        let about = about(query);
+        for &((zoom, at), held) in from {
+            if !held.holds() {
+                continue;
+            }
+            let z = held.zoom();
+            let at = wrap_cell(z, at.map(|c| c >> (zoom - z)));
+            self.walk(self.tree.slot(held.slot() as usize), z, at, about, &mut |zoom, at, whole, leaf| {
+                if whole.meet(*query).is_none() {
+                    return false;
+                }
+                if let Some(v) = leaf {
+                    visit(&Entry::of(zoom, at, v));
+                }
+                true
+            });
+        }
     }
 
     /// Whether anything, air included, is held in `space` at the cubes of

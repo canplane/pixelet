@@ -26,6 +26,7 @@ use super::world::World;
 use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Meta};
 use crate::layer::object::meta::placed;
+use crate::layer::object::store::tree_key;
 use crate::layer::residency::{Line, Lines};
 use crate::model::registry::Models;
 use pxl_portable::area::{self, Shard};
@@ -167,6 +168,33 @@ impl Around {
         (self.columns_at[z] == a).then(|| self.columns[z].map(|c| c.and_then(|c| c.hi)))
     }
 
+    /// The nodes the objects' tree holds about `a` at `zoom` or over them,
+    /// each with what is held there, each once (a leaf over several is one)
+    /// and in the tree's order (`tree_key`), and how many: what a walk from
+    /// the roots pruned to a box within them enters first
+    /// (`Store::entries_under`). None where the walk did not go through `a`.
+    fn under(&self, (zoom, a): Node<3>) -> Option<([(Node<3>, Held); 27], usize)> {
+        let z = zoom as usize;
+        if self.at[z] != a {
+            return None;
+        }
+        let (mut out, mut n) = ([((0, [0; 3]), Held::NOTHING); 27], 0);
+        for (k, &held) in self.held[z].iter().enumerate() {
+            if !held.holds() {
+                continue;
+            }
+            let c = [a[0] + (k % 3) as i32 - 1, a[1] + (k / 3 % 3) as i32 - 1, a[2] + (k / 9) as i32 - 1];
+            let h = held.zoom();
+            let node = (h, overwrite::path(h, c.map(|v| v >> (zoom - h))));
+            if !out[..n].iter().any(|&(o, _)| o == node) {
+                out[n] = (node, held);
+                n += 1;
+            }
+        }
+        out[..n].sort_unstable_by_key(|&((h, c), _)| tree_key(h, c));
+        Some((out, n))
+    }
+
     /// Whether anything, air included, is placed in the 27 nodes about `a`
     /// at `zoom` or over them: none where the walk did not go through `a`.
     fn holds(&self, (zoom, a): Node<3>) -> Option<bool> {
@@ -290,7 +318,8 @@ impl<'a> World<'a> {
 
     /// Strikes the decor standing near the leaf cell `cell` the walk is in:
     /// those not near the cell met before it, since a walk only moves on.
-    pub(super) fn strike_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i32; 2]) {
+    pub(super) fn strike_near(&self, s: &mut Strike<'a>, ray: &Ray, (zoom, at): Node<3>) {
+        let cell = [at[0], at[1]];
         let (r, last) = (s.around, s.last.replace(cell));
         let near = |a: [i32; 2], b: [i32; 2]| (a[0] - b[0]).abs() <= r && (a[1] - b[1]).abs() <= r;
         // Placed decor stands where the ray's height over the held span, widened by the reach, can meet it.
@@ -310,13 +339,26 @@ impl<'a> World<'a> {
             min: [(cell[0] - r) as f64, (cell[1] - r) as f64, z0],
             max: [(cell[0] + r + 1) as f64, (cell[1] + r + 1) as f64, z1],
         };
-        self.objects.entries_in(&space, &mut |e| {
+        // From the nodes about it at the finest zoom wider than the box, whose
+        // 27 the walk stepped down to (`Around`): the cell lies in the middle
+        // one, and the ray's height there within the band, so the box lies
+        // strictly within the 27, touching none past them.
+        let mut wide = zoom;
+        while wide > 0 && units(wide) <= f64::from(r + 1).max(z1 - z0) {
+            wide -= 1;
+        }
+        let from = s.about.under((wide, at.map(|v| v >> (zoom - wide))));
+        let mut visit = |e: &crate::layer::object::store::Entry| {
             let c = e.cube().min;
             let own = [c[0].floor() as i32, c[1].floor() as i32];
             if let Some(i) = placed(e).filter(|_| space.holds(c) && fresh(own)) {
                 meet(s, ray, i);
             }
-        });
+        };
+        match from {
+            Some((from, n)) => self.objects.entries_under(&from[..n], &space, &mut visit),
+            None => self.objects.entries_in(&space, &mut visit),
+        }
     }
 
     /// Whether decor `s` strikes may reach into the node `(zoom, c)`, X on
