@@ -30,8 +30,8 @@ pub use xpute_gpu::enums::TextureFormat as Format;
 /// Set in a completion word once what it waits for is done.
 pub use xpute_gpu::spec::DONE;
 
+use crate::api_spec::{record, stream};
 use crate::frame::shader::record::VERTEX_ENTRY;
-use crate::gpu::api_spec::{record, stream};
 use crate::gpu::span_spec::GPU_SPAN_NAMES;
 
 pub mod buffer_usage {

@@ -64,7 +64,7 @@ pub const PIPELINES: u32 = 33;
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
 // buffers (count; stride, step, attribute count, (location, offset, format)
 // each); then bind groups (count; entry count, (binding, visibility, kind) each).
-pub use crate::gpu::api_spec::record::*;
+pub use crate::api_spec::record::*;
 /// A binding's stages are xpute's own bits (SHADER_STAGE), none or some.
 pub use xpute_gpu::spec::SHADER_STAGE::{COMPUTE, FRAGMENT, VERTEX};
 pub const NONE: u32 = 0;

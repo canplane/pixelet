@@ -4,8 +4,6 @@
 
 pub mod ao;
 pub mod api;
-#[path = "gpu/api.spec.rs"]
-pub mod api_spec;
 pub mod atmosphere;
 pub mod clouds;
 pub mod grown;

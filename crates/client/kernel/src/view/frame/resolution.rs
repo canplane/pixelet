@@ -5,7 +5,7 @@
 //! fits by its own structure.
 
 use crate::param;
-use pxl_render::gpu::api_spec::surface_role;
+use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface::surfaces;
 
 /// Device pixels per CSS pixel the world is drawn at now: its surface's.

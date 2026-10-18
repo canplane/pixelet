@@ -12,6 +12,7 @@ use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_kit::math::scalar::round;
 
+use crate::api_spec::surface_role;
 use crate::frame::draw::{
     census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
     PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
@@ -27,7 +28,6 @@ use crate::gpu::api::{
     buffer_entry, buffer_range_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, sampler_entry, texture_usage, view_entry, word_bytes,
     write_buffer_bytes, Device, Entry, Format, Gpu, Load, Stamp, DONE,
 };
-use crate::gpu::api_spec::surface_role;
 use crate::gpu::atmosphere::{Atmosphere, AIR_ENTRIES};
 use crate::gpu::clouds::CloudPass;
 use crate::gpu::grown::{DecorFrame, Drawn, Grown, Grows};
