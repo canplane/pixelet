@@ -717,7 +717,7 @@ pub fn decor_mark_cs(
 /// thread: `x` its index in its block, `y` the block among those meeting the
 /// slot's square (pxl-portable `scatter::block_of`), `z` the slot and kind
 /// listed. Each one that stands, stands on its cell and grows there
-/// (`scatter::stands`, `stand`, `grows`) is added to the slot's records
+/// (`scatter::stands`, `grown`) is added to the slot's records
 /// (`scatter::record_at`), naming the slot's window zoom, the one it is
 /// drawn at where the rays ask it (`decor_count_cs`). A kind is grown at a
 /// zoom where bit `zoom − FIRST_CELL` of its `shown` word is set; the kinds
@@ -766,8 +766,8 @@ pub fn decor_cs(
     if !here || !scatter::stands(decor, zoom, &c) {
         return;
     }
-    let (g, here) = scatter::stand(&mut world, decor, cell, &c);
-    if !here || !scatter::grows(&mut world, decor, cell, &g) {
+    let (g, here) = scatter::grown(&mut world, decor, cell, &c, true);
+    if !here {
         return;
     }
     // SAFETY: an atomic add on the slot's head, its count.

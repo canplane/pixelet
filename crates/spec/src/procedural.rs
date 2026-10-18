@@ -16,7 +16,7 @@ use pxl_portable::LEAF_CELL;
 
 // ---- scatter: portable's, for the CPU's readers of one cell ----
 
-pub use pxl_portable::scatter::{before, each_candidate, meet, pose, scatter_at, side_of, Candidate, ALIGN_NEIGHBOR_RADIUS};
+pub use pxl_portable::scatter::{before, each_candidate, meet, scatter_at, side_of, Candidate, ALIGN_NEIGHBOR_RADIUS};
 
 // ---- piers ----
 

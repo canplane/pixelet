@@ -399,40 +399,6 @@ pub fn side_of(decor: &Decor, c: &Candidate) -> i32 {
 /// it does not resolve curves.
 pub const ALIGN_NEIGHBOR_RADIUS: i32 = 3;
 
-/// A candidate's variant and its heading in quarter turns, its seed's draws
-/// in order. Along transport, a plurality vote of the cells `way` says are
-/// one, by their offset from the candidate's, along each axis: a quarter
-/// turn if horizontal wins, else none (a tie or isolated cell has no real
-/// answer), and a half more on a draw, as two-way traffic faces both ways.
-pub fn pose(decor: &Decor, c: &Candidate, mut way: impl FnMut([i32; 2]) -> bool) -> (u32, u32) {
-    let mut draws = SplitMix32::new(c.seed);
-    let variant = variant_of(decor, &mut draws);
-    let turn = match decor.orientation {
-        Orientation::random => draws.next_u32() >> 30,
-        Orientation::along_transport => {
-            let flip = draws.next_u32() >> 31;
-            // Each of the cells about it asked at one place, the four at a
-            // distance in turn — before, after, under, over — as a GPU
-            // inlines a call once a place it is called from.
-            let (mut horizontal, mut vertical) = (0, 0);
-            let mut k = 0;
-            while k < 4 * ALIGN_NEIGHBOR_RADIUS {
-                let (d, side) = (k / 4 + 1, k % 4);
-                let along = if side % 2 == 0 { -d } else { d };
-                let vote = u32::from(way(if side < 2 { [along, 0] } else { [0, along] }));
-                if side < 2 {
-                    horizontal += vote;
-                } else {
-                    vertical += vote;
-                }
-                k += 1;
-            }
-            u32::from(horizontal > vertical) + 2 * flip
-        }
-    };
-    (variant, turn)
-}
-
 /// Whether `c` stands at `zoom`: no candidate born there or coarser, before
 /// it, claims a cell of its square.
 pub fn stands(decor: &Decor, zoom: Zoom, c: &Candidate) -> bool {
@@ -527,27 +493,26 @@ fn value(v: u32) -> u32 {
 
 /// Where candidate `c` of `decor` stands at `cell`: on its column's footing
 /// (`footing`), facing as the blocks beside it at the footing's level vote
-/// (`pose`), each asked of the world's one query, whichever layer holds
-/// them; false where its column has none. Whether it grows there is
-/// `grows`'.
+/// (`asks`); false where the column has none.
 pub fn stand(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate) -> (Grown, bool) {
+    grown(q, decor, cell, c, false)
+}
+
+/// `stand`, then whether `decor` grows where it stands (`grows`), every block
+/// both ask asked at one place (`asks`): what a GPU grows a candidate by.
+pub fn grown(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate, boxed: bool) -> (Grown, bool) {
     let s = LEAF_CELL - cell;
     let at = [c.cell[0] >> s, c.cell[1] >> s];
     let (_, top, here) = q.footing(cell, at);
     if !here {
         return (Grown { variant: 0, turn: 0, at: [0; 3] }, false);
     }
-    let (variant, turn) = pose(decor, c, |[dx, dy]| {
-        let b = [at[0] + dx, at[1] + dy, top - 1];
-        let from = q.start(cell, b);
-        Ground::transports(value(q.block(&from, cell, cell, b)))
-    });
     let g = Grown {
-        variant,
-        turn,
+        variant: 0,
+        turn: 0,
         at: [c.cell[0], c.cell[1], top * (1 << s)],
     };
-    (g, true)
+    asks(q, decor, cell, (true, c.seed), g, boxed)
 }
 
 /// Whether `decor` standing as `g` grows at `cell`: every block of its box
@@ -556,38 +521,94 @@ pub fn stand(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate) -> 
 /// holding them all, descended to once; air placed in it or under it no
 /// void; and no placed decor claims its room (`claimed`).
 pub fn grows(q: &mut impl Grounds, decor: &Decor, cell: Zoom, g: &Grown) -> bool {
+    asks(q, decor, cell, (false, 0), *g, true).1
+}
+
+/// Every block growing decor asks of the world, at one place, as a GPU
+/// inlines a call once a place it is called from: where a candidate is
+/// `posed`, by its `seed`, the cells about its footing its pose votes on, then,
+/// where `boxed`, the box of `g` as that pose turned it (`grows`'s rule).
+/// The pose is the candidate's variant and its heading in quarter turns,
+/// its seed's draws in order: along transport, a plurality vote of the
+/// cells a way runs on, by their offset from the candidate's, along each
+/// axis — a quarter turn if horizontal wins, else none (a tie or isolated
+/// cell has no real answer), and a half more on a draw, as two-way traffic
+/// faces both ways — the four at a distance in turn, before, after, under,
+/// over. What stands, and whether it grows there.
+fn asks(q: &mut impl Grounds, decor: &Decor, cell: Zoom, (posed, seed): (bool, u32), mut g: Grown, boxed: bool) -> (Grown, bool) {
     let s = LEAF_CELL - cell;
-    let [w, d, h] = decor.cells(g.variant, g.turn);
-    let (w, d, h) = (w as i32, d as i32, h as i32);
-    let [x0, y0, z] = g.at;
-    let lo = [x0 >> s, y0 >> s, (z - 1) >> s];
-    let hi = [(x0 + w - 1) >> s, (y0 + d - 1) >> s, (z + h - 1) >> s];
-    let k = holding(lo, hi);
-    let held = k <= cell;
-    let start = q.start(if held { cell - k } else { cell }, if held { [lo[0] >> k, lo[1] >> k, lo[2] >> k] } else { lo });
-    // The box's columns, each from the block under its base up: one ask a
-    // block, down from the node holding the box, or from its own root where
-    // none does (`holding`).
-    let mut by = lo[1];
-    while by <= hi[1] {
-        let mut bx = lo[0];
-        while bx <= hi[0] {
-            let mut bz = lo[2];
-            while bz <= hi[2] {
-                let c = [bx, by, bz];
-                let (at, from) = if held { (start, cell - k) } else { (q.start(cell, c), cell) };
-                let v = q.block(&at, from, cell, c);
-                let holds = if bz == lo[2] { decor.allows(value(v)) } else { v == sentinel::void as u32 };
-                if !holds {
-                    return false;
-                }
-                bz += 1;
+    let (mut flip, mut voting) = (0, 0);
+    if posed {
+        let mut draws = SplitMix32::new(seed);
+        g.variant = variant_of(decor, &mut draws);
+        match decor.orientation {
+            Orientation::random => g.turn = draws.next_u32() >> 30,
+            Orientation::along_transport => {
+                flip = draws.next_u32() >> 31;
+                voting = 4 * ALIGN_NEIGHBOR_RADIUS;
             }
-            bx += 1;
         }
-        by += 1;
     }
-    !claimed(q, g.at, [w, d, h])
+    let foot = [g.at[0] >> s, g.at[1] >> s, (g.at[2] >> s) - 1];
+    let (mut horizontal, mut vertical) = (0, 0);
+    // The box, laid out once the vote is in: its blocks, from the one under
+    // its base up, a column at a time; down from the node holding it all
+    // (`holding`), or from its own root where none does.
+    let (mut lo, mut k, mut held, mut n) = ([0; 3], 0, false, [0; 3]);
+    let mut ask = 0;
+    loop {
+        let voted = ask >= voting;
+        let j = ask - voted as i32 * voting;
+        if voted && j == 0 {
+            // The vote is in: the turn it gives, then the box it turns.
+            if voting > 0 {
+                g.turn = u32::from(horizontal > vertical) + 2 * flip;
+            }
+            if !boxed {
+                break;
+            }
+            let [w, d, h] = decor.cells(g.variant, g.turn);
+            let [x0, y0, z] = g.at;
+            lo = [x0 >> s, y0 >> s, (z - 1) >> s];
+            let hi = [(x0 + w as i32 - 1) >> s, (y0 + d as i32 - 1) >> s, (z + h as i32 - 1) >> s];
+            k = holding(lo, hi);
+            held = k <= cell;
+            n = [hi[0] - lo[0] + 1, hi[1] - lo[1] + 1, hi[2] - lo[2] + 1];
+        }
+        if voted && j >= n[0] * n[1] * n[2] {
+            break;
+        }
+        let b = if voted {
+            [lo[0] + j / n[2] % n[0], lo[1] + j / (n[2] * n[0]), lo[2] + j % n[2]]
+        } else {
+            let (d, side) = (ask / 4 + 1, ask % 4);
+            let along = if side % 2 == 0 { -d } else { d };
+            if side < 2 {
+                [foot[0] + along, foot[1], foot[2]]
+            } else {
+                [foot[0], foot[1] + along, foot[2]]
+            }
+        };
+        // The node asked from: the box's holder, else the block's own.
+        let from = if voted && held { cell - k } else { cell };
+        let start = q.start(from, if voted && held { [lo[0] >> k, lo[1] >> k, lo[2] >> k] } else { b });
+        let v = q.block(&start, from, cell, b);
+        if voted {
+            let holds = if b[2] == lo[2] { decor.allows(value(v)) } else { v == sentinel::void as u32 };
+            if !holds {
+                return (g, false);
+            }
+        } else if Ground::transports(value(v)) {
+            if ask % 4 < 2 {
+                horizontal += 1;
+            } else {
+                vertical += 1;
+            }
+        }
+        ask += 1;
+    }
+    let [w, d, h] = decor.cells(g.variant, g.turn);
+    (g, !boxed || !claimed(q, g.at, [w as i32, d as i32, h as i32]))
 }
 
 /// How far decor standing at `at` (leaf cells) lies from `origin` (Q3
