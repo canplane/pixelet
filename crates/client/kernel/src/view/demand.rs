@@ -247,10 +247,21 @@ impl<L: Observed> Demand<L> {
                 }
             }
         }
+        // By subject, as a stream's wants are said (io/request.rs `declare`):
+        // the asks in key order, a subject being its key's high half, so each
+        // line read, after every absence is written, steps from its
+        // neighbour's (`seek`), not from the top. The demand's room holds
+        // them; nothing reads it between observations.
+        demand.clear();
+        demand.extend(asks.keys().copied());
+        demand.sort_unstable_by_key(|p| p.key());
+        let (r, mut lines) = (L::residency(), Lines::default());
         self.wants.clear();
-        self.wants.extend(asks.iter().filter(|(p, _)| unanswered(**p)).map(|(p, &a)| (p.subject(), a)));
-        // By subject, as a stream's wants are said (io/request.rs `declare`).
-        self.wants.sort_unstable_by_key(|w| w.0);
+        for &p in &demand {
+            if !r.resident(p) && (!r.seek(&mut lines, p).settled || r.again_held(p)) {
+                self.wants.push((p.subject(), asks[&p]));
+            }
+        }
         self.asks = asks;
 
         self.observation = o.copied();
