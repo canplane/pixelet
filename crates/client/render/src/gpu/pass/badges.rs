@@ -16,7 +16,7 @@ use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{Blocks, Draws};
 use crate::gpu::sheet::shelf::{DrawSpec, Sheet, SlotSet};
-use crate::gpu::sheet::{Align, Halo, SheetPainter, Sketch, SHEET_SCALE};
+use crate::gpu::sheet::{Halo, SheetPainter, Sketch, SHEET_SCALE};
 use crate::gpu::text::{Font, TextOf};
 
 const BADGE_FLOATS: usize = 40;
@@ -129,20 +129,20 @@ fn point(p: &mut Sketch, lines: &[String], icon: bool, symbol: Option<u16>, fill
     }
     for (k, line) in lines.iter().enumerate() {
         let ty = 2.0 * cy - POINT_PAD + POINT_GAP + POINT_LINE / 2.0 + POINT_PITCH * k as f32;
-        p.haloed_text(POINT_FONT, text, POINT_TEXT_HALO, line, cx, ty, Align::Center);
+        p.haloed_text(POINT_FONT, text, POINT_TEXT_HALO, line, cx, ty);
     }
 }
 
 fn labeled_pill(p: &mut Sketch, label: &str, logical_w: f32) {
     pill(p, logical_w);
-    p.text(BADGE_FONT, WHITE, label, logical_w / 2.0, PILL_H / 2.0 + 1.0, Align::Center);
+    p.text(BADGE_FONT, WHITE, label, logical_w / 2.0, PILL_H / 2.0 + 1.0);
     anchor_dot(p, logical_w);
 }
 
 /// A marker's pill turned over, so a count does not read as words that are a number.
 fn count_pill(p: &mut Sketch, label: &str, logical_w: f32) {
     p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, 0xffffffe6);
-    p.text(BADGE_FONT, 0x14141aff, label, logical_w / 2.0, PILL_H / 2.0 + 1.0, Align::Center);
+    p.text(BADGE_FONT, 0x14141aff, label, logical_w / 2.0, PILL_H / 2.0 + 1.0);
     anchor_dot(p, logical_w);
 }
 
@@ -189,7 +189,7 @@ fn bubble(p: &mut Sketch, lines: &[String], box_w: f32) {
         WHITE,
     );
     for (i, line) in lines.iter().enumerate() {
-        p.text(BUBBLE_FONT, BLACK, line, box_w / 2.0, PADDING_Y + LINE_H * (i as f32 + 0.5), Align::Center);
+        p.text(BUBBLE_FONT, BLACK, line, box_w / 2.0, PADDING_Y + LINE_H * (i as f32 + 0.5));
     }
 }
 

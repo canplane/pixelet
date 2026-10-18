@@ -24,18 +24,12 @@ const TRIANGLE: u32 = 2;
 const TEXT: u32 = 3;
 const HALO: u32 = 4;
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum Align {
-    Left,
-    Center,
-}
-
 struct Line {
     font: Font,
     color: u32,
     text: String,
+    /// Its middle across, and its baseline's height.
     at: [f32; 2],
-    align: Align,
     halo: Option<Halo>,
 }
 
@@ -147,21 +141,20 @@ impl Sketch {
         self.icons.push(Icon { symbol, color, at: [cx, cy] });
     }
 
-    pub fn text(&mut self, font: Font, color: u32, text: &str, x: f32, y: f32, align: Align) {
+    /// A line centered across on `x`.
+    pub fn text(&mut self, font: Font, color: u32, text: &str, x: f32, y: f32) {
         self.lines.push(Line {
             font,
             color,
             text: text.to_owned(),
             at: [x, y],
-            align,
             halo: None,
         });
     }
 
     /// Text over its own glyphs grown into `halo`, under every line's text.
-    #[allow(clippy::too_many_arguments)]
-    pub fn haloed_text(&mut self, font: Font, color: u32, halo: Halo, text: &str, x: f32, y: f32, align: Align) {
-        self.text(font, color, text, x, y, align);
+    pub fn haloed_text(&mut self, font: Font, color: u32, halo: Halo, text: &str, x: f32, y: f32) {
+        self.text(font, color, text, x, y);
         if let Some(line) = self.lines.last_mut() {
             line.halo = Some(halo);
         }
@@ -208,11 +201,7 @@ impl SheetPainter {
             .zip(&rasters)
             .enumerate()
             .map(|(layer, (line, r))| {
-                let start = match line.align {
-                    Align::Left => px(line.at[0]),
-                    Align::Center => px(line.at[0]) - r.advance / 2.0,
-                };
-                let x0 = round(start - r.origin[0]);
+                let x0 = round(px(line.at[0]) - r.advance / 2.0 - r.origin[0]);
                 let y0 = round(px(line.at[1]) - r.origin[1]);
                 let place = [x0, y0, x0 + r.width as f32, y0 + r.height as f32];
                 (place, [layer as f32, r.width as f32 / layer_w as f32, r.height as f32 / layer_h as f32, 0.0])
