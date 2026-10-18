@@ -118,10 +118,24 @@ pub fn slab_word([lo, hi]: [i32; 2]) -> u32 {
     ground::bound_word([held(lo), held(hi)]) as u32
 }
 
-/// `slab_word`'s lowest and past its highest.
+/// `slab_word`'s lowest and past its highest: a highest held to i16's
+/// (`ground::UNBOUNDED`'s) read as past the world's own top, so i16's whole
+/// is anything along z the world holds, its topmost leaf cell too. Looser
+/// only where a bound was held, which only goes into more.
 pub fn slab_of(w: u32) -> [i32; 2] {
-    ground::bound_of(w as i32)
+    let [lo, hi] = ground::bound_of(w as i32);
+    [lo, if hi == i16::MAX as i32 { WORLD_TOP } else { hi }]
 }
+
+/// Past the world's highest leaf cell: Z spans `HEIGHT_BITS` of units about
+/// sea level, half-open (pxl-spec space/coord/world.rs `REACH`), and a leaf
+/// cell is a unit.
+const WORLD_TOP: i32 = 1 << (crate::HEIGHT_BITS - 1);
+const _: () = assert!(LEAF_CELL == crate::UNIT_ZOOM, "a slab's leaf cell is the world's unit");
+const _: () = assert!(
+    i16::MIN as i32 <= -WORLD_TOP && WORLD_TOP >= i16::MAX as i32,
+    "a slab's i16 holds the world's lowest leaf cell, and its held highest read as past the world's top is no lower"
+);
 
 /// Whether a block's value as `node` answers it fills its block: neither
 /// void nor air, whichever source holds it. What is placed answers a voxel
