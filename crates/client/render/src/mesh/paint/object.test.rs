@@ -1,7 +1,7 @@
 // pxl-render/mesh/paint/object.test.rs
 
 use super::*;
-use pxl_spec::block::overwrite::voxel;
+use pxl_portable::overwrite::voxel;
 
 #[test]
 fn the_painter_s_voxels_are_the_catalog_s() {

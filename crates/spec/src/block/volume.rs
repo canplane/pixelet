@@ -4,9 +4,9 @@
 //! layer/object/store.rs), each branch its eight by the overwrites' one
 //! rule (pxl-portable `overwrite::fold`).
 
-use crate::block::overwrite::{self, voxel, FULL};
 use crate::space::coord::zoom::Zoom;
 use crate::space::hierarchy::sparse_tree::{Slot, SparseTree};
+use pxl_portable::overwrite::{self, voxel, FULL};
 
 /// A word no leaf holds: nothing there.
 const EMPTY: u32 = 0;

@@ -10,7 +10,7 @@ use crate::space::layer::tile::*;
 /// The ground tile a distance folds from, past the pyramid's ends too, as
 /// the rule reads it: squared.
 fn zoom_at(r: f64) -> i32 {
-    GROUND.tile_zoom_of_grid(cell_at(r * r))
+    GROUND.tile_zoom_of_grid(Tau::FINEST.cell_at(r * r))
 }
 
 /// The distance just short of `r` as the rule reads a distance: the f32

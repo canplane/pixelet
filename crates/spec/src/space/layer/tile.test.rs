@@ -26,22 +26,6 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
     }
 }
 
-/// A cell found by its offset in a coarser one is the cell the offset came from, across lattices and zooms.
-#[test]
-fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
-    let coarse = Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 2);
-    for (x, y) in [(-1234, 5678), (0, 0), (97, -3)] {
-        let point = base_of(UNIT_ZOOM, [x, y, 0]);
-        let fine = GROUND.cell_of(LEAF_ZOOM, &point);
-        for zoom in [LEAF_ZOOM, 12, GROUND.top()] {
-            let outer = coarse.cell_of(zoom, &point);
-            let offset = outer.offset_of(fine);
-            assert!(offset.iter().all(|&o| (o as f64) < outer.side() / fine.side()), "an offset inside the outer cell");
-            assert_eq!(outer.inner_at(GROUND, LEAF_ZOOM, offset), fine);
-        }
-    }
-}
-
 /// Two lattices with equal cell sizes cut the same ground.
 #[test]
 fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {

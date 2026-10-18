@@ -82,10 +82,6 @@ impl Tile {
         first_descendant_of(self.at, LEAF_ZOOM - self.zoom)
     }
 
-    pub fn span(self) -> f64 {
-        units(self.zoom)
-    }
-
     /// South-west corner and side, in units.
     pub fn rect(self) -> (f64, f64, f64) {
         let (zoom, [x, y]) = self.node();
@@ -215,12 +211,8 @@ impl Cell {
         }
     }
 
-    /// Where `inner`, no coarser and inside this cell, lies in it, in `inner`'s sides.
-    pub fn offset_of(self, inner: Cell) -> [u32; 2] {
-        offset_in(inner.at, inner.zoom - self.zoom).map(|v| v as u32)
-    }
-
-    /// `offset_of`'s inverse.
+    /// The cell at `zoom` of `lattice` that lies `offset` of its sides into
+    /// this one, no coarser.
     pub fn inner_at(self, lattice: Lattice, zoom: Zoom, offset: [u32; 2]) -> Cell {
         let zoom = lattice.cell_zoom(zoom);
         let [x, y] = first_descendant_of(self.at, zoom - self.zoom);
