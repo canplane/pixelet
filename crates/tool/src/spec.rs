@@ -254,8 +254,7 @@ fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<
 }
 
 pub fn read(path: &str) -> Result<Node, String> {
-    let text = std::fs::read_to_string(root().join(path)).map_err(|e| format!("{path}: {e}"))?;
-    serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))
+    read_as(path)
 }
 
 pub fn read_as<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
