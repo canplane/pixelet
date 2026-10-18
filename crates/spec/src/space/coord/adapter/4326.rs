@@ -100,7 +100,7 @@ pub fn dist(a: &G4326, b: &G4326) -> f64 {
 
 pub type BBox4326 = [G4326; 2];
 
-pub fn get_tile_bbox(zoom: Zoom, tile: [i64; 2]) -> BBox4326 {
+pub fn get_tile_bbox(zoom: Zoom, tile: [i32; 2]) -> BBox4326 {
     let [min_m, max_m] = epsg3857::get_tile_bbox(zoom, tile);
 
     let min = from_mercator(&min_m);

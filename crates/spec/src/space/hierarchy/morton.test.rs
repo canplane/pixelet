@@ -3,7 +3,7 @@
 use super::*;
 use crate::space::hierarchy::tree::{ancestor_of, slot_of};
 
-const POINTS: [[i64; 3]; 6] = [
+const POINTS: [[i32; 3]; 6] = [
     [0, 0, 0],
     [-1, -1, -1],
     [-(1 << 23), -(1 << 23), -(1 << 15)],
@@ -13,7 +13,7 @@ const POINTS: [[i64; 3]; 6] = [
 ];
 
 /// A point's node at `zoom`, a unit point's ancestor.
-fn at(p: [i64; 3], zoom: Zoom) -> [i64; 3] {
+fn at(p: [i32; 3], zoom: Zoom) -> [i32; 3] {
     ancestor_of(p, UNIT_ZOOM - zoom)
 }
 
@@ -52,7 +52,7 @@ fn a_key_reads_back_as_its_node() {
         for zoom in 0..=UNIT_ZOOM + 3 {
             let node = ancestor_of(p.map(|v| v << 3), UNIT_ZOOM + 3 - zoom);
             let (z, back) = node_of::<3>(key_of(zoom, node));
-            let lane = |v: i64, axis: usize| signed(v, digits(axis, zoom));
+            let lane = |v: i32, axis: usize| signed(v, digits(axis, zoom));
             assert_eq!((z, back), (zoom, [lane(node[0], 0), lane(node[1], 1), lane(node[2], 2)]), "{p:?} z{zoom}");
         }
     }

@@ -18,7 +18,7 @@ use pxl_spec::block::object::{cube_of, decor_id_from_num, object_value_is_decor,
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::world::{around, node_near, wrap_cell};
+use pxl_spec::space::coord::world::{node_near, wrap_cell};
 use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units, Zoom, CUBE_ZOOM};
 use pxl_spec::space::hierarchy::morton::{key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
@@ -45,7 +45,7 @@ pub enum Block {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Entry {
     pub zoom: Zoom,
-    pub at: [i64; 3],
+    pub at: [i32; 3],
     pub state: u32,
     pub ext: u16,
 }
@@ -140,7 +140,7 @@ impl Leaf {
     }
 }
 
-pub(super) fn key(zoom: Zoom, at: [i64; 3]) -> u128 {
+pub(super) fn key(zoom: Zoom, at: [i32; 3]) -> u128 {
     key_of::<3>(zoom, at)
 }
 
@@ -152,8 +152,8 @@ const fn depth(zoom: Zoom) -> u32 {
 /// The node `at` of `zoom` as the tree is cut: X counted from the round's
 /// start, so the round is the one node of zoom 0 over it and every node is
 /// its parent's index doubled, a bit more, on every axis.
-fn path(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
-    [at[0].rem_euclid(around(zoom)), at[1], at[2]]
+fn path(zoom: Zoom, at: [i32; 3]) -> [i32; 3] {
+    [at[0].rem_euclid(1 << zoom), at[1], at[2]]
 }
 
 /// The tree's lanes as pxl-portable `overwrite` reads them, the CPU as a GPU.
@@ -169,8 +169,8 @@ impl overwrite::Lanes for Lanes<'_> {
 }
 
 /// The node of zoom 0 at the root's slot `k`.
-fn root(k: usize) -> [i64; 3] {
-    core::array::from_fn(|i| -(((k >> i) & 1) as i64))
+fn root(k: usize) -> [i32; 3] {
+    core::array::from_fn(|i| -(((k >> i) & 1) as i32))
 }
 
 /// One leaf written: `<key, id, ext>`, its node, its catalog value and what
@@ -223,7 +223,7 @@ pub(super) type Tree = SparseTree<u32, 3>;
 
 /// A node met in a descent: its zoom, its index and cube in the asker's frame,
 /// its value if it is a leaf; whether to go under it.
-type Enter<'a> = dyn FnMut(Zoom, [i64; 3], &Aabb, Option<Leaf>) -> bool + 'a;
+type Enter<'a> = dyn FnMut(Zoom, [i32; 3], &Aabb, Option<Leaf>) -> bool + 'a;
 
 impl Store {
     /// The tree's lanes, read where they live.
@@ -239,7 +239,7 @@ impl Store {
 
     /// The node `at` of `zoom` in the tree, or the leaf over it: the zoom it
     /// was found at and its slot.
-    fn find(&self, zoom: Zoom, at: [i64; 3]) -> (Zoom, Slot<u32>) {
+    fn find(&self, zoom: Zoom, at: [i32; 3]) -> (Zoom, Slot<u32>) {
         let (d, slot) = self.tree.get(depth(zoom), path(zoom, at));
         (d - 1, slot)
     }
@@ -253,7 +253,7 @@ impl Store {
         }
     }
 
-    fn walk(&self, slot: Slot<u32>, zoom: Zoom, at: [i64; 3], about: f64, enter: &mut Enter) {
+    fn walk(&self, slot: Slot<u32>, zoom: Zoom, at: [i32; 3], about: f64, enter: &mut Enter) {
         let leaf = match slot {
             Slot::Leaf(v) if v == EMPTY.word() => return,
             Slot::Leaf(v) => Some(Leaf::of(v)),
@@ -309,7 +309,7 @@ impl Store {
     }
 
     /// Every leaf meeting the cube at `zoom`, X in the cube's frame.
-    fn each_in(&self, zoom: Zoom, at: [i64; 3], visit: &mut dyn FnMut(&Entry)) {
+    fn each_in(&self, zoom: Zoom, at: [i32; 3], visit: &mut dyn FnMut(&Entry)) {
         let about = about(&cube(zoom, at));
         match self.find(zoom, at) {
             (_, Slot::Leaf(v)) if v == EMPTY.word() => {}
@@ -324,7 +324,7 @@ impl Store {
     }
 
     /// The value placed at exactly this node, if one is.
-    pub(crate) fn placed(&self, zoom: Zoom, at: [i64; 3]) -> Option<Entry> {
+    pub(crate) fn placed(&self, zoom: Zoom, at: [i32; 3]) -> Option<Entry> {
         match self.find(zoom, at) {
             (z, Slot::Leaf(v)) if z == zoom && v != EMPTY.word() => Some(Entry::of(zoom, at, Leaf::of(v))),
             _ => None,
@@ -372,7 +372,7 @@ impl Store {
 
     /// Frees the records of the leaves the node at `zoom` replaces: a leaf
     /// at it or under it. One over it with a record is never split.
-    fn release(&mut self, zoom: Zoom, at: [i64; 3]) {
+    fn release(&mut self, zoom: Zoom, at: [i32; 3]) {
         let mut freed = Vec::new();
         if let (z, Slot::Leaf(v)) = self.find(zoom, at) {
             xpute_kit::ensure!(z == zoom || Leaf::of(v).ext == NONE, ENOTRECOVERABLE, z);
@@ -401,7 +401,7 @@ impl Store {
 }
 
 impl Entry {
-    fn of(zoom: Zoom, at: [i64; 3], leaf: Leaf) -> Entry {
+    fn of(zoom: Zoom, at: [i32; 3], leaf: Leaf) -> Entry {
         Entry {
             zoom,
             at,
@@ -444,14 +444,14 @@ impl Query for Store {
 
     fn cursor<const D: usize>(&self, (zoom, at): Node<D>, _: Zoom) -> Held {
         match D {
-            3 => overwrite::cursor(&self.lanes(), overwrite::PLACED, zoom, [at[0], at[1], at[2]].map(|v| v as i32)),
+            3 => overwrite::cursor(&self.lanes(), overwrite::PLACED, zoom, [at[0], at[1], at[2]]),
             _ => Held::branch(0, zoom),
         }
     }
 
     fn child<const D: usize>(&self, parent: &Held, (zoom, at): Node<D>, _: Zoom) -> Held {
         match D {
-            3 => overwrite::child(&self.lanes(), *parent, zoom, [at[0], at[1], at[2]].map(|v| v as i32)),
+            3 => overwrite::child(&self.lanes(), *parent, zoom, [at[0], at[1], at[2]]),
             _ => *parent,
         }
     }

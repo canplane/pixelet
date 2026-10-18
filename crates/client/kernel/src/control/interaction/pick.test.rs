@@ -33,7 +33,7 @@ fn cases() -> [(&'static str, Hit); 3] {
     ]
 }
 
-fn lattice(p: &Q3) -> (i64, i64, i64) {
+fn lattice(p: &Q3) -> (i32, i32, i32) {
     let [x, y, z] = index_of(UNIT_ZOOM, p);
     (x, y, z)
 }

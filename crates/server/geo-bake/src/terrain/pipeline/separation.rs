@@ -20,13 +20,13 @@ use crate::terrain::pipeline::overture::policy::segment_type;
 /// where it is encoded rather than cut, since a missing line is a gap in a
 /// road. Each line holds a point where it crosses a tile's edge
 /// (`crossings`).
-pub fn bake_separation(lines: &[Line], tile: [i64; 2]) -> Separation {
+pub fn bake_separation(lines: &[Line], tile: [i32; 2]) -> Separation {
     let mut separation = Builder::default();
     // The world's corner, where its grid of leaf cells starts; a point in that
     // grid, in 1/POINT_SCALE of a cell, the tile's own whole cells taken off.
     let corner = get_tile_bbox(0, [0, 0])[0];
     let grid = |m: f64, k: usize| round(u_from_mer(m - corner[k]) / CELL_U * POINT_SCALE);
-    let origin = [0, 1].map(|k| (tile[k] * i64::from(TILE_CELLS)) as f64 * POINT_SCALE);
+    let origin = [0, 1].map(|k| f64::from(tile[k]) * f64::from(TILE_CELLS) * POINT_SCALE);
     debug_assert!({
         let min = get_tile_bbox(LEAF_ZOOM, tile)[0];
         [0, 1].iter().all(|&k| grid(min[k], k) == origin[k])

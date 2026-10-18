@@ -18,7 +18,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 const COVERAGE: &str = include_str!("../../../../infra/geo/coverage.json");
 
 /// A shard, by its index at `SHARD_ZOOM`.
-pub type Shard = [i64; 2];
+pub type Shard = [i32; 2];
 
 /// What an edge may be off by, in units: a ground cell, the finest thing a
 /// bake tells apart, and more than the meter a shard's edges and a feature's
@@ -43,12 +43,12 @@ pub const SHARD_APRON: f64 = BAKE_REACH + EPS;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Node {
     pub zoom: Zoom,
-    pub at: [i64; 2],
+    pub at: [i32; 2],
 }
 
 impl Node {
     /// The node's corner nearest the lanes' least, in units.
-    pub fn base(self) -> [i64; 2] {
+    pub fn base(self) -> [i32; 2] {
         first_descendant_of(self.at, shamt(self.zoom) as u32)
     }
 
@@ -63,9 +63,9 @@ impl Node {
     }
 
     /// Its tiles at `zoom`, at or under it.
-    pub fn tiles(self, zoom: Zoom) -> Vec<[i64; 2]> {
+    pub fn tiles(self, zoom: Zoom) -> Vec<[i32; 2]> {
         let shift = zoom - self.zoom;
-        let (n, [x0, y0]) = (1i64 << shift, first_descendant_of(self.at, shift));
+        let (n, [x0, y0]) = (1 << shift, first_descendant_of(self.at, shift));
         (y0..y0 + n).flat_map(|y| (x0..x0 + n).map(move |x| [x, y])).collect()
     }
 
@@ -115,16 +115,16 @@ impl Coverage {
         }
     }
 
-    fn shard_of(zoom: Zoom, tile: [i64; 2]) -> Shard {
+    fn shard_of(zoom: Zoom, tile: [i32; 2]) -> Shard {
         ancestor_of(tile, zoom - SHARD_ZOOM)
     }
 
-    pub fn contains(&self, leaf: [i64; 2]) -> bool {
+    pub fn contains(&self, leaf: [i32; 2]) -> bool {
         self.shards.contains(&Self::shard_of(LEAF_ZOOM, leaf))
     }
 
     /// Whether the tile at `zoom` and `tile` covers any leaf held.
-    pub fn meets(&self, zoom: Zoom, tile: [i64; 2]) -> bool {
+    pub fn meets(&self, zoom: Zoom, tile: [i32; 2]) -> bool {
         if zoom >= SHARD_ZOOM {
             return self.shards.contains(&Self::shard_of(zoom, tile));
         }
@@ -132,7 +132,7 @@ impl Coverage {
     }
 
     /// Whether every leaf under the tile at `zoom` and `tile` is held.
-    pub fn holds(&self, zoom: Zoom, tile: [i64; 2]) -> bool {
+    pub fn holds(&self, zoom: Zoom, tile: [i32; 2]) -> bool {
         if zoom >= SHARD_ZOOM {
             return self.meets(zoom, tile);
         }
@@ -141,7 +141,7 @@ impl Coverage {
     }
 
     /// Every leaf held.
-    pub fn tiles(&self) -> Vec<[i64; 2]> {
+    pub fn tiles(&self) -> Vec<[i32; 2]> {
         self.shards().flat_map(|s| s.tiles(LEAF_ZOOM)).collect()
     }
 
@@ -150,7 +150,7 @@ impl Coverage {
     }
 
     /// The shard a tile's bake reads: its own, which holds its apron.
-    pub fn around(&self, zoom: Zoom, tile: [i64; 2]) -> BTreeSet<Node> {
+    pub fn around(&self, zoom: Zoom, tile: [i32; 2]) -> BTreeSet<Node> {
         let at = Self::shard_of(zoom, tile);
         self.shards.contains(&at).then_some(Node { zoom: SHARD_ZOOM, at }).into_iter().collect()
     }

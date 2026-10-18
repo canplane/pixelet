@@ -73,7 +73,7 @@ impl Numbered {
 }
 
 /// None where no cell is in a division.
-pub fn leaf(client: &mut Client, tile: [i64; 2]) -> Result<Option<DivisionTile>, String> {
+pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>, String> {
     let db = |e: postgres::Error| e.to_string();
     let [min, max] = get_tile_bbox(DIVISION_LEAF, tile);
     let side = max[0] - min[0];

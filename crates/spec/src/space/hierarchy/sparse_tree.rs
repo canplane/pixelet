@@ -26,7 +26,7 @@ pub struct SparseTree<T: Copy + PartialEq, const D: usize> {
 }
 
 /// The child on the way to `at`, `steps` levels over it.
-fn toward<const D: usize>(at: [i64; D], steps: u32) -> usize {
+fn toward<const D: usize>(at: [i32; D], steps: u32) -> usize {
     slot_of(at.map(|v| v >> steps))
 }
 
@@ -64,7 +64,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
 
     /// The node `depth` levels under the root holding `at`, its index at that
     /// depth: its slot and how deep it is, or the leaf above it and its depth.
-    pub fn get(&self, depth: u32, at: [i64; D]) -> (u32, Slot<T>) {
+    pub fn get(&self, depth: u32, at: [i32; D]) -> (u32, Slot<T>) {
         xpute_kit::ensure!(depth >= 1, EINVAL, depth);
         let mut base = 0;
         for d in 1..=depth {
@@ -79,7 +79,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     /// Makes the node `depth` levels under the root holding `at` one leaf of
     /// `value`, each branch over it its block `fold` folds, given its depth;
     /// whether anything changed.
-    pub fn set(&mut self, depth: u32, at: [i64; D], value: T, fold: impl Fn(&Self, u32, u32) -> T) -> bool {
+    pub fn set(&mut self, depth: u32, at: [i32; D], value: T, fold: impl Fn(&Self, u32, u32) -> T) -> bool {
         xpute_kit::ensure!((1..=32).contains(&depth), EINVAL, depth);
         let mut path = [0usize; 32];
         let mut base = 0;

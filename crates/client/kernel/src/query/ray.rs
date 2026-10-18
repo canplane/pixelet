@@ -109,7 +109,7 @@ impl<'a> Query for Walker<'_, 'a> {
     const AIR: u32 = pxl_portable::ground::VOID;
 
     fn root(&mut self, node: [i32; 3]) -> At {
-        self.world.start((0, node.map(i64::from)))
+        self.world.start((0, node))
     }
 
     /// The child is the one its index's low bits name.

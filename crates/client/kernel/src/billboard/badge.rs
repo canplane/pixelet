@@ -51,7 +51,7 @@ pub enum Label {
     /// and its words by their hash.
     Marker { at: EntryAt, words: u64 },
     /// The `n` markers in one marker's cell (`marker_cell`), by the cell.
-    Count { cell: (Zoom, [i64; 3]), n: u32 },
+    Count { cell: (Zoom, [i32; 3]), n: u32 },
     /// The chat's line said at `said`, the host clock's milliseconds' bits.
     Chat { said: u64 },
 }

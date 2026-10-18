@@ -57,7 +57,7 @@ impl Grounds for Asked<'_, '_> {
     }
 
     fn start(&mut self, zoom: Zoom, c: [i32; 3]) -> Self::At {
-        self.world.start((zoom, c.map(i64::from)))
+        self.world.start((zoom, c))
     }
 
     /// Void where the world holds nothing there.
@@ -74,8 +74,8 @@ impl Grounds for Asked<'_, '_> {
 /// What the ground stands of `decor` in the leaf `cell` on `face`, the
 /// leaf's ground read about it (`World::grown_in`): the leaf scatter, cell
 /// by cell, which a region grows the same (pxl-spec procedural.test.rs).
-pub(super) fn grown_at(asked: &mut Asked, decor: &Decor, cell: [i64; 2]) -> Option<Instance> {
-    let candidate = scatter_at(decor.row, cell.map(|v| v as i32))?;
+pub(super) fn grown_at(asked: &mut Asked, decor: &Decor, cell: [i32; 2]) -> Option<Instance> {
+    let candidate = scatter_at(decor.row, cell)?;
     let (g, here) = portable::stand(asked, decor.row, GROUND.cell(), &candidate);
     here.then(|| instance(decor, &g))
 }
@@ -88,7 +88,7 @@ pub fn instance(decor: &Decor, g: &Grown) -> Instance {
     Instance {
         id: decor.value(),
         at,
-        source: Source::Ground([x, y, z].map(i64::from)),
+        source: Source::Ground([x, y, z]),
         meta: Meta::Decor(meta),
     }
 }
@@ -99,6 +99,6 @@ pub fn grown_of(i: &Instance) -> Option<Grown> {
     Some(Grown {
         variant: m.variant,
         turn: m.turn,
-        at: [x, y, z].map(|v| v as i32),
+        at: [x, y, z],
     })
 }

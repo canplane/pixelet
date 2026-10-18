@@ -41,7 +41,7 @@ fn run() -> Result<(), String> {
         let (xs, ys) = (inner.iter().map(|&p| p[0]), inner.iter().map(|&p| p[1]));
         let (x0, x1) = (xs.clone().min().unwrap_or(0), xs.max().unwrap_or(0));
         let (y0, y1) = (ys.clone().min().unwrap_or(0), ys.max().unwrap_or(0));
-        let ring = ring as i64;
+        let ring = ring as i32;
         for y in (y0 - ring..=y1 + ring).filter(|y| tile_rows(BLOCK_ZOOM).contains(y)) {
             for x in x0 - ring..=x1 + ring {
                 let tile = tile_at(BLOCK_ZOOM, [x, y]);

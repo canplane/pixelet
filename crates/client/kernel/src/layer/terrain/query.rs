@@ -37,7 +37,7 @@ impl Residency<TerrainTile> {
     /// GPU reads them (pxl-portable `window::bound_over`); `line` names the
     /// tile and says whether the window read is its ground's own.
     pub fn relief(&self, line: &Line, place: &mut Found, node: Node<2>, zooms: [Zoom; 2]) -> Answer<Bounds> {
-        let (r, from, here) = cells::bound_over(&Windowed, place, zooms, (node.0, node.1.map(|v| v as i32)));
+        let (r, from, here) = cells::bound_over(&Windowed, place, zooms, node);
         held(line, from, here, r)
     }
 
@@ -48,7 +48,6 @@ impl Residency<TerrainTile> {
     /// coarser, naming its tile (`held`); where no window holds it, the
     /// lack.
     pub fn column(&self, line: &Line, place: Found, (zoom, c): Node<2>) -> Answer<Cell> {
-        let c = c.map(|v| v as i32);
         let (cell, f) = cells::ground(&Windowed, (zoom, c), place, zoom, c);
         held(line, f.from(), f.here(), cell)
     }

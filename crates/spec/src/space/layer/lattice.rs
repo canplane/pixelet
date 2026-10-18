@@ -23,7 +23,7 @@ pub const fn demand_reach(lattice: Lattice, zoom: Zoom) -> f64 {
 /// A lattice placed in the world: the tiles and cells a node, a point or an
 /// index names.
 pub trait Cells {
-    fn read_tile(self, node: (Zoom, [i64; 2]), cell: Zoom) -> Tile;
+    fn read_tile(self, node: (Zoom, [i32; 2]), cell: Zoom) -> Tile;
     fn z_at(self, tau: Tau, r2: f64) -> Zoom;
     fn cell_of(self, zoom: Zoom, at: &Q3) -> Cell;
     fn cell_at(self, tile: Tile, index: u32) -> Cell;
@@ -32,7 +32,7 @@ pub trait Cells {
 }
 
 impl Cells for Lattice {
-    fn read_tile(self, (zoom, column): (Zoom, [i64; 2]), cell: Zoom) -> Tile {
+    fn read_tile(self, (zoom, column): (Zoom, [i32; 2]), cell: Zoom) -> Tile {
         let z = self.read_zoom(cell);
         tile_at(z, ancestor_of(column, zoom - z))
     }
@@ -58,15 +58,15 @@ impl Cells for Lattice {
         Cell {
             lattice: self,
             zoom: self.cell_zoom(zoom),
-            at: [x0 + i64::from(tx), y0 + i64::from(ty)],
+            at: [x0 + tx as i32, y0 + ty as i32],
         }
     }
 
     // A tile's four children form one square of 2n × 2n cells a zoom finer, slot q at (q & 1, q >> 1).
 
     fn parent_cell(self, q: usize, index: u32) -> u32 {
-        let n = self.tile_cells() as i64;
-        let (tile, [tx, ty]) = (child_of([0, 0], q), self.in_tile(index).map(i64::from));
+        let n = self.tile_cells() as i32;
+        let (tile, [tx, ty]) = (child_of([0, 0], q), self.in_tile(index).map(|v| v as i32));
         let [x, y] = parent_of([tile[0] * n + tx, tile[1] * n + ty]);
         self.cell_index(x as u32, y as u32)
     }
@@ -74,8 +74,8 @@ impl Cells for Lattice {
     /// The child slot and the 2×2 cells, in `slot_of`'s order, a parent cell
     /// folds from: `parent_cell`'s inverse.
     fn child_cells(self, index: u32) -> (usize, [u32; 4]) {
-        let n = self.tile_cells() as i64;
-        let [x, y] = child_of(self.in_tile(index).map(i64::from), 0);
+        let n = self.tile_cells() as i32;
+        let [x, y] = child_of(self.in_tile(index).map(|v| v as i32), 0);
         let [x0, y0] = [(x % n) as u32, (y % n) as u32];
         let cells = std::array::from_fn(|q| self.cell_index(x0 + (q & 1) as u32, y0 + (q >> 1) as u32));
         (slot_of([x / n, y / n]), cells)

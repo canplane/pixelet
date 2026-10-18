@@ -26,8 +26,8 @@ impl World<'_> {
     /// The surface of the cell `c` of `cell`: its ground's top, in units,
     /// and its face; past the service area the Earth's, at sea level; none
     /// where it has no ground.
-    pub fn surface_of(&self, cell: Zoom, c: [i64; 2]) -> Answer<Option<Surface>> {
-        let shard = Shard::UNKNOWN.at(&Windowed, (cell, c.map(|v| v as i32)));
+    pub fn surface_of(&self, cell: Zoom, c: [i32; 2]) -> Answer<Option<Surface>> {
+        let shard = Shard::UNKNOWN.at(&Windowed, (cell, c));
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(pxl_portable::SEA_LEVEL),

@@ -103,7 +103,7 @@ impl World<'_> {
     pub(super) fn start(&self, (zoom, at): Node<3>) -> At {
         At {
             node: (zoom, at),
-            cave: Cave::of(zoom, at.map(|v| v as i32)),
+            cave: Cave::of(zoom, at),
             placed: self.objects.cursor((zoom, at), zoom),
             line: None,
             shard: Shard::UNKNOWN,
@@ -135,10 +135,7 @@ impl World<'_> {
 
     /// A preview's entry as pxl-portable `overwrite` takes it.
     fn cut(&self, entry: Option<EntryAt>) -> Cut {
-        entry.map_or(Cut::NONE, |e| Cut {
-            zoom: e.zoom(),
-            at: e.at().map(|v| v as i32),
-        })
+        entry.map_or(Cut::NONE, |e| Cut { zoom: e.zoom(), at: e.at() })
     }
 
     /// Its child `k`, in `child_of`'s order, with what it found handed down.
@@ -147,7 +144,7 @@ impl World<'_> {
         let (z, child) = (zoom + 1, child_of(c, k));
         At {
             node: (z, child),
-            cave: at.cave.child(z, child.map(|v| v as i32)),
+            cave: at.cave.child(z, child),
             placed: self.objects.child(&at.placed, (z, child), z),
             line: at.line,
             shard: at.shard,
@@ -166,7 +163,6 @@ impl World<'_> {
     /// is a block (`world::node`'s).
     pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2]) -> Answer<(In<u32>, bool)> {
         let (zoom, c) = at.node;
-        let c = c.map(|v| v as i32);
         at.shard = at.shard.at(&Windowed, (zoom, [c[0], c[1]]));
         let (handed, mut place) = ((at.cave, at.placed, at.shard), at.ground);
         let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);

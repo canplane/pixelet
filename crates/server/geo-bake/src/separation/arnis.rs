@@ -99,9 +99,9 @@ impl Units {
 /// What the search has read: the ring's tiles it reached, their ground, every
 /// way on them, their water, and their structures' pieces.
 struct Source {
-    ring: BTreeSet<[i64; 2]>,
-    loaded: BTreeSet<[i64; 2]>,
-    ground: FnvHashMap<[i64; 2], Vec<i16>>,
+    ring: BTreeSet<[i32; 2]>,
+    loaded: BTreeSet<[i32; 2]>,
+    ground: FnvHashMap<[i32; 2], Vec<i16>>,
     ways: BTreeMap<PartId, Way>,
     water: Vec<(Option<String>, String, Vec<[f64; 2]>)>,
     water_seen: FnvHashSet<Vec<u8>>,
@@ -164,7 +164,7 @@ fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2]) -> (Line, Drawn) {
     )
 }
 
-pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i64; 2]) -> Result<Solved, String> {
+pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, String> {
     let tiles = ring(tile);
     let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
     for &p in &tiles {
@@ -278,7 +278,7 @@ impl Source {
     }
 
     /// Reads a tile of the ring once; a tile past it is never read.
-    fn load(&mut self, r: &mut Reader<impl Store>, p: [i64; 2]) -> Result<(), String> {
+    fn load(&mut self, r: &mut Reader<impl Store>, p: [i32; 2]) -> Result<(), String> {
         if !self.ring.contains(&p) || self.loaded.contains(&p) {
             return Ok(());
         }
@@ -331,7 +331,7 @@ impl Source {
             .map(|k| (k, line.at((k as f64 * step).min(length))))
             .filter(|(_, p)| self.ring.contains(&tile_of(*p)))
             .collect();
-        let mut wanted: BTreeSet<[i64; 2]> = BTreeSet::new();
+        let mut wanted: BTreeSet<[i32; 2]> = BTreeSet::new();
         for (_, p) in &at {
             for d in [[0.0, 0.0], [reach, 0.0], [-reach, 0.0], [0.0, reach], [0.0, -reach]] {
                 wanted.insert(tile_of([p[0] + d[0], p[1] + d[1]]));

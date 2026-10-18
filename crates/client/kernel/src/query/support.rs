@@ -118,7 +118,7 @@ impl<'w, 'a> Upright<'w, 'a> {
     fn surface(&mut self) -> Option<f64> {
         let cell = GROUND.cell_zoom(self.zoom);
         let side = units(cell);
-        let answer = self.world.surface_of(cell, self.at.map(|v| libm::floor(v / side) as i64));
+        let answer = self.world.surface_of(cell, self.at.map(|v| libm::floor(v / side) as i32));
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
@@ -147,7 +147,7 @@ impl<'a> World<'a> {
     pub fn block_of(&self, at: &Q3) -> Answer<u32> {
         let side = units(GROUND.cell());
         let p = [i64::from(at[0]), i64::from(at[1]), i64::from(at[2])].map(q3::to_real);
-        self.block((GROUND.cell(), p.map(|v| (v / side).floor() as i64)))
+        self.block((GROUND.cell(), p.map(|v| (v / side).floor() as i32)))
     }
 
     /// Where a walker stands from the drawn surface, ignoring `at`'s height

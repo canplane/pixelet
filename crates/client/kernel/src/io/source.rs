@@ -73,7 +73,7 @@ pub fn serves(layer: BaseLayer, p: Tile) -> bool {
 /// where the area ends, for what is drawn, walked, edited and said alike.
 pub fn past_at([x, y]: [f64; 2]) -> bool {
     let leaf = GROUND.cell_of(LEAF_ZOOM, &world::point(x, y, 0.0)).tile().at;
-    area::past(&Declared, leaf.map(|v| v as i32))
+    area::past(&Declared, leaf)
 }
 
 /// The service area as pxl-portable's rules read it: the declared source's
@@ -163,7 +163,7 @@ fn parse(text: &str) -> Option<Source> {
     let mut served = Vec::new();
     for k in &shard {
         let d = SHARD_ZOOM - k.tile.zoom;
-        let [x, y] = k.tile.at.map(|v| (v << d) as i32);
+        let [x, y] = k.tile.at.map(|v| v << d);
         for j in 0..1 << d {
             for i in 0..1 << d {
                 served.push((area::shard_key([x + i, y + j]), [x + i, y + j]));

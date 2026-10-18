@@ -109,7 +109,7 @@ pub(crate) fn clear_hover_coord() {
 enum Struck {
     Object(Entry),
     /// Grown by the ground, in its leaf cell.
-    Grown([i64; 3], Instance),
+    Grown([i32; 3], Instance),
 }
 
 /// What the pick struck, as a tool reads it: a placed object, or a decor the ground grew.

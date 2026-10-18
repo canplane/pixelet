@@ -47,11 +47,11 @@ pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item
 }
 
 /// `tiles_within` before X wraps.
-pub fn squares_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = [i64; 2]> {
+pub fn squares_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = [i32; 2]> {
     let span = units(zoom);
-    let rows = |c: f64| ((c - radius) / span).floor() as i64..=((c + radius) / span).floor() as i64;
+    let rows = |c: f64| ((c - radius) / span).floor() as i32..=((c + radius) / span).floor() as i32;
     let (xs, ys) = (rows(at[0]), rows(at[1]));
-    let gap = move |c: f64, i: i64| (i as f64 * span - c).max(c - (i + 1) as f64 * span).max(0.0);
+    let gap = move |c: f64, i: i32| (f64::from(i) * span - c).max(c - f64::from(i + 1) * span).max(0.0);
     ys.flat_map(move |y| xs.clone().map(move |x| [x, y]))
         .filter(move |&[x, y]| libm::hypot(gap(at[0], x), gap(at[1], y)) <= radius)
 }

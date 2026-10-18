@@ -43,11 +43,11 @@ pub(super) struct Strike<'a> {
     models: &'a Models,
     /// How far any decor reaches from where it stands, and in leaf cells.
     pub(super) reach: f64,
-    around: i64,
+    around: i32,
     /// How far along the ray decor is drawn as held.
     pub(super) held: f64,
     /// The cell met last, whose neighbors are struck already.
-    last: Option<[i64; 2]>,
+    last: Option<[i32; 2]>,
     pub(super) best: Option<(f64, Instance)>,
 }
 
@@ -64,7 +64,7 @@ impl<'a> World<'a> {
     /// `each` until `each` says it has what it wants: each on its column's
     /// footing (`World::footing`). Nothing where the world does not hold
     /// the column.
-    fn grown_in(&self, cell: [i64; 2], mut each: impl FnMut(&Decor, Instance) -> bool) -> bool {
+    fn grown_in(&self, cell: [i32; 2], mut each: impl FnMut(&Decor, Instance) -> bool) -> bool {
         DECORS.iter().any(|decor| grown_at(&mut Asked::new(self), decor, cell).is_some_and(|i| each(decor, i)))
     }
 
@@ -122,7 +122,7 @@ impl<'a> World<'a> {
     /// Until `each` says it has what it wants.
     fn each_grown_over(&self, space: &Aabb, mut each: impl FnMut(&Decor, Instance) -> bool) {
         let (r, unit) = (reach(), units(GROUND.cell()));
-        let cells = |k: usize| libm::floor((space.min[k] - r) / unit) as i64..libm::ceil(space.max[k] / unit) as i64;
+        let cells = |k: usize| libm::floor((space.min[k] - r) / unit) as i32..libm::ceil(space.max[k] / unit) as i32;
         for y in cells(1) {
             for x in cells(0) {
                 if self.grown_in([x, y], |decor, i| claim(&i).is_some_and(|c| c.shares(*space)) && each(decor, i)) {
@@ -156,7 +156,7 @@ impl<'a> World<'a> {
         Some(Strike {
             models,
             reach,
-            around: reach.ceil() as i64,
+            around: reach.ceil() as i32,
             held,
             last: None,
             best: None,
@@ -165,13 +165,13 @@ impl<'a> World<'a> {
 
     /// Strikes the decor standing near the leaf cell `cell` the walk is in:
     /// those not near the cell met before it, since a walk only moves on.
-    pub(super) fn strike_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i64; 2]) {
+    pub(super) fn strike_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i32; 2]) {
         let (r, last) = (s.around, s.last.replace(cell));
-        let near = |a: [i64; 2], b: [i64; 2]| (a[0] - b[0]).abs() <= r && (a[1] - b[1]).abs() <= r;
+        let near = |a: [i32; 2], b: [i32; 2]| (a[0] - b[0]).abs() <= r && (a[1] - b[1]).abs() <= r;
         // Placed decor stands where the ray's height over the held span, widened by the reach, can meet it.
         let (za, zb) = (ray.at(0.0)[2], ray.at(s.held)[2]);
         let (z0, z1) = (za.min(zb) - s.reach, za.max(zb) + s.reach);
-        let fresh = |xy: [i64; 2]| !last.is_some_and(|l| near(xy, l));
+        let fresh = |xy: [i32; 2]| !last.is_some_and(|l| near(xy, l));
         for y in cell[1] - r..=cell[1] + r {
             for x in cell[0] - r..=cell[0] + r {
                 if fresh([x, y]) {
@@ -187,7 +187,7 @@ impl<'a> World<'a> {
         };
         self.objects.entries_in(&space, &mut |e| {
             let c = e.cube().min;
-            let own = [c[0].floor() as i64, c[1].floor() as i64];
+            let own = [c[0].floor() as i32, c[1].floor() as i32];
             if let Some(i) = placed(e).filter(|_| space.holds(c) && fresh(own)) {
                 meet(s, ray, i);
             }
@@ -211,14 +211,14 @@ impl<'a> World<'a> {
         let a = c.map(|v| v >> (zoom - z));
         let low = cube(zoom, c).min[2] - s.reach;
         let leaf = units(GROUND.cell());
-        let node = (zoom, [c[0] as i32, c[1] as i32]);
+        let node = (zoom, [c[0], c[1]]);
         // The nine's lines share the walk down to where they part.
         let mut lines = Lines::default();
         let ground = (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
                 let xy = (z, [a[0] + dx, a[1] + dy]);
                 // Past the area no ground stands.
-                if z >= SHARD_ZOOM && shard.past_leaf(node, area::tile_at(z, [xy.1[0] as i32, xy.1[1] as i32])) {
+                if z >= SHARD_ZOOM && shard.past_leaf(node, area::tile_at(z, xy.1)) {
                     return false;
                 }
                 let mut place = Found::NONE;
@@ -237,7 +237,7 @@ impl<'a> World<'a> {
         ground || self.objects.holds_in(&about, z)
     }
 
-    fn grown_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i64; 2]) {
+    fn grown_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i32; 2]) {
         self.grown_in(cell, |decor, i| {
             if self.grows(decor, &i) {
                 meet(s, ray, i);

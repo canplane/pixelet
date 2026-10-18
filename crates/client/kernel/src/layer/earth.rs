@@ -5,8 +5,8 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
+use pxl_portable::wrap_index;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
-use pxl_spec::space::coord::world::{around, wrap_index};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
 
 use pxl_spec::bake::tile::Occupancy;
@@ -89,8 +89,8 @@ pub fn earth_window(floor: impl Iterator<Item = Tile> + Clone, on: u32) -> ([i32
     let at = |p: Tile| p.at;
     let Some([first, _]) = floor.clone().next().map(at) else { return ([0; 2], layers) };
     // X wraps: the window's west tile is the one fewest tiles east of the first.
-    let around = around(EARTH_ZOOM);
-    let east = |x: i64| wrap_index(EARTH_ZOOM, x - first);
+    let around = 1 << EARTH_ZOOM;
+    let east = |x: i32| wrap_index(EARTH_ZOOM, x - first);
     let x0 = first + floor.clone().map(|p| east(at(p)[0])).min().unwrap_or(0);
     let y0 = floor.clone().map(|p| at(p)[1]).min().unwrap_or(0);
     for p in floor {
@@ -101,7 +101,7 @@ pub fn earth_window(floor: impl Iterator<Item = Tile> + Clone, on: u32) -> ([i32
             layers[(dy * REACH_ACROSS + dx) as usize] = record + 1;
         }
     }
-    ([x0 as i32, y0 as i32], layers)
+    ([x0, y0], layers)
 }
 
 /// The frames the GPU keeps a layer for.

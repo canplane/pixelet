@@ -22,7 +22,7 @@ pub struct RenderEdits {
     /// An AIR entry over bare terrain, which has no leaf to hide.
     pub carve: Option<EntryAt>,
     /// The scattered decor hidden, by the cell it stands in.
-    pub scattered: Option<[i64; 3]>,
+    pub scattered: Option<[i32; 3]>,
 }
 
 /// The pointer's preview, the one copy of it.

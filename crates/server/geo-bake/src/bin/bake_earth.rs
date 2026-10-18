@@ -20,7 +20,6 @@
 //!
 //!   deno task bake earth
 
-use pxl_spec::space::coord::world::around;
 use pxl_spec::space::layer::lattice::Cells;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -161,7 +160,7 @@ fn lng_lat(x: f64, y: f64) -> [f64; 2] {
     [lng, lat]
 }
 
-fn tile_texels(px: i64, py: i64, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
+fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
     let tile = tile_at(EARTH_ZOOM, [px, py]);
     let mut rgba = vec![0u8; earth::EARTH_BYTES];
     for ty in 0..TILE_CELLS {
@@ -281,8 +280,8 @@ fn run() -> Result<(), String> {
         set.remove(p)?;
     }
     // Every tile of the zoom: the Mercator square, one world across and as high.
-    let half = around(EARTH_ZOOM) / 2;
-    let tiles: Vec<[i64; 2]> = (-half..half).flat_map(|y| (-half..half).map(move |x| [x, y])).collect();
+    let half = (1 << EARTH_ZOOM) / 2;
+    let tiles: Vec<[i32; 2]> = (-half..half).flat_map(|y| (-half..half).map(move |x| [x, y])).collect();
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
     let written = std::sync::atomic::AtomicU32::new(0);
     let failed = std::sync::Mutex::new(None);

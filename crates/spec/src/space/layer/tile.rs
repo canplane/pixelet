@@ -8,10 +8,11 @@
 use super::lattice::{Lattice, GROUND};
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::q3::{self, FRAC_W, Q3};
-use crate::space::coord::world::{self, around, wrap_index};
+use crate::space::coord::world;
 use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
 use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, region, slot_of, Node};
+use pxl_portable::wrap_index;
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
 /// world 2^15 round.
@@ -23,16 +24,16 @@ pub struct Tile {
     /// Its size's.
     pub zoom: Zoom,
     /// Its index at its zoom.
-    pub at: [i64; 2],
+    pub at: [i32; 2],
 }
 
 impl Tile {
-    pub fn new(zoom: Zoom, at: [i64; 2]) -> Tile {
+    pub fn new(zoom: Zoom, at: [i32; 2]) -> Tile {
         Tile { zoom, at }
     }
 
     /// The tile at `z` the leaf `leaf` lies under.
-    pub fn over(zoom: Zoom, leaf: [i64; 2]) -> Tile {
+    pub fn over(zoom: Zoom, leaf: [i32; 2]) -> Tile {
         Tile::new(zoom, ancestor_of(leaf, LEAF_ZOOM - zoom))
     }
 
@@ -78,7 +79,7 @@ impl Tile {
     }
 
     /// Its first leaf.
-    pub fn first_leaf(self) -> [i64; 2] {
+    pub fn first_leaf(self) -> [i32; 2] {
         first_descendant_of(self.at, LEAF_ZOOM - self.zoom)
     }
 
@@ -117,25 +118,25 @@ pub fn top_over(leaf: Zoom, top: Zoom) -> Zoom {
 pub fn neighborhood(p: Tile) -> [Tile; 16] {
     let [x, y] = child_of(p.at, 0);
     std::array::from_fn(|k| {
-        let (qx, qy) = ((k % 4) as i64 - 1, (k / 4) as i64 - 1);
+        let (qx, qy) = ((k % 4) as i32 - 1, (k / 4) as i32 - 1);
         tile_at(p.zoom + 1, [x + qx, y + qy])
     })
 }
 
 /// Where the tile (qx, qy) from a parent's first child, each −1 to 2, lies in
 /// its `neighborhood`.
-pub const fn neighbor_index(qx: i64, qy: i64) -> usize {
+pub const fn neighbor_index(qx: i32, qy: i32) -> usize {
     ((qx + 1) + 4 * (qy + 1)) as usize
 }
 
 /// The rows of tiles at `z`, south to north; past them is no tile.
-pub fn tile_rows(zoom: Zoom) -> std::ops::Range<i64> {
-    let n = around(zoom);
+pub fn tile_rows(zoom: Zoom) -> std::ops::Range<i32> {
+    let n = 1 << zoom;
     -n / 2..n / 2
 }
 
 /// The tile at `z` at (x, y), X wrapped around the world.
-pub fn tile_at(zoom: Zoom, [x, y]: [i64; 2]) -> Tile {
+pub fn tile_at(zoom: Zoom, [x, y]: [i32; 2]) -> Tile {
     Tile::new(zoom, [wrap_index(zoom, x), y])
 }
 
@@ -149,7 +150,7 @@ pub const CHILDREN: [usize; 4] = [5, 6, 9, 10];
 pub struct Cell {
     pub(super) lattice: Lattice,
     pub(super) zoom: Zoom,
-    pub(super) at: [i64; 2],
+    pub(super) at: [i32; 2],
 }
 
 impl Cell {
@@ -219,7 +220,7 @@ impl Cell {
         Cell {
             lattice,
             zoom,
-            at: [x + i64::from(offset[0]), y + i64::from(offset[1])],
+            at: [x + offset[0] as i32, y + offset[1] as i32],
         }
     }
 

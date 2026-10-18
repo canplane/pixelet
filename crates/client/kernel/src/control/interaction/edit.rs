@@ -167,7 +167,7 @@ pub fn place_air(at: &Q3, size: f64) {
 /// given back too.
 pub fn remove(at: EntryAt) {
     let world = World::now();
-    let erased: Vec<[i64; 3]> = world
+    let erased: Vec<[i32; 3]> = world
         .grown_over(&cube(at.zoom(), at.at()))
         .into_iter()
         .filter_map(|i| i.grown_in())

@@ -24,11 +24,11 @@ pub const OBJECT_FINEST: Zoom = OBJECT_COARSEST + OBJECT_TIERS as Zoom - 1;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct EntryAt {
     zoom: Zoom,
-    at: [i64; 3],
+    at: [i32; 3],
 }
 
 impl EntryAt {
-    pub fn new(zoom: Zoom, at: [i64; 3]) -> EntryAt {
+    pub fn new(zoom: Zoom, at: [i32; 3]) -> EntryAt {
         EntryAt { zoom, at: wrap_cell(zoom, at) }
     }
 
@@ -36,7 +36,7 @@ impl EntryAt {
         self.zoom
     }
 
-    pub fn at(self) -> [i64; 3] {
+    pub fn at(self) -> [i32; 3] {
         self.at
     }
 }

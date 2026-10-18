@@ -110,7 +110,7 @@ struct Seen {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Thing {
     Marker(EntryAt),
-    Count((Zoom, [i64; 3])),
+    Count((Zoom, [i32; 3])),
     Chat,
 }
 
@@ -136,7 +136,7 @@ struct Shown {
 }
 
 impl Shown {
-    fn cell(&self) -> Option<(Zoom, [i64; 3])> {
+    fn cell(&self) -> Option<(Zoom, [i32; 3])> {
         self.crowd.map(|c| c.cell)
     }
 }
@@ -145,7 +145,7 @@ impl Shown {
 /// their count stands.
 #[derive(Clone, Copy)]
 struct Crowd {
-    cell: (Zoom, [i64; 3]),
+    cell: (Zoom, [i32; 3]),
     count_at: Option<Q3>,
 }
 
@@ -203,7 +203,7 @@ fn markers(chunk: Chunk, found: &mut Vec<Shown>) {
 
 /// Where the count of a cell's markers stands: at its middle, half a marker
 /// at `marker` over what is drawn there first within it, or over its floor.
-fn crowd_at(zoom: Zoom, at: [i64; 3], marker: Zoom, detail: Zoom) -> Q3 {
+fn crowd_at(zoom: Zoom, at: [i32; 3], marker: Zoom, detail: Zoom) -> Q3 {
     let c = cube(zoom, at);
     let [x, y, _] = c.center();
     let top = surface(&point(x, y, c.min[2]), (c.max[2], c.min[2]), detail).unwrap_or(c.min[2]);
@@ -480,7 +480,7 @@ fn places_in(chunk: Chunk, found: &mut Vec<Shown>) {
     let ([x0, y0], n) = if t <= z {
         (ancestor_of(column, z - t), 1)
     } else {
-        (first_descendant_of(column, t - z), 1i64 << (t - z))
+        (first_descendant_of(column, t - z), 1 << (t - z))
     };
     let tiles = (y0..y0 + n).filter(|y| tile_rows(t).contains(y)).flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y])));
     let (h0, h1) = chunk.z_range();

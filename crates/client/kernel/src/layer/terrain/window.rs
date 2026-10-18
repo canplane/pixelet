@@ -144,7 +144,7 @@ fn fresh() -> Windows {
 /// The cell at `cell` a point `p`, in units, lies in, X wrapped.
 fn cell_at(cell: Zoom, p: [f64; 2]) -> [i32; 2] {
     let side = units(cell);
-    [wrap_index(cell, (p[0] / side).floor() as i64 as i32), (p[1] / side).floor() as i32]
+    [wrap_index(cell, (p[0] / side).floor() as i32), (p[1] / side).floor() as i32]
 }
 
 /// The square window `first` holds in slot `s`.
@@ -159,7 +159,7 @@ fn wanted(cell: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
 fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
     let per = (GROUND.tile_cells() >> SQUARE_SHIFT) as i32;
     let zoom = cell - GROUND.tile_cell_shamt();
-    let t = tile_at(zoom, [i64::from(q[0].div_euclid(per)), i64::from(q[1].div_euclid(per))]);
+    let t = tile_at(zoom, [q[0].div_euclid(per), q[1].div_euclid(per)]);
     (t, [q[0].rem_euclid(per) as u32, q[1].rem_euclid(per) as u32])
 }
 
@@ -221,7 +221,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         let cell = match (centre, p) {
             // Where its line says the ground: open sea's leaf is the tile over it.
             (Centre::Destination, Some(p)) => {
-                let leaf = tile_at(LEAF_ZOOM, cell_at(LEAF_ZOOM, p).map(i64::from));
+                let leaf = tile_at(LEAF_ZOOM, cell_at(LEAF_ZOOM, p));
                 terrain.source(leaf).map_or(laid, |t| GROUND.cell_zoom(t.zoom))
             }
             _ => laid,

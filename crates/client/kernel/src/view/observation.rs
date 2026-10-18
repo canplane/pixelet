@@ -87,7 +87,7 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
     let Some(top) = crate::io::source::top() else { return };
     let over = (o.eye[2] - o.ground).max(0.0);
     let coarsest = GROUND.grid_zoom(top.max(GROUND.top())).max(CHUNK_STEPS);
-    let near = |zoom: Zoom, [x, y]: [i64; 2]| {
+    let near = |zoom: Zoom, [x, y]: [i32; 2]| {
         let side = units(zoom);
         let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);
         libm::hypot(libm::hypot(gap(x as f64 * side, o.eye[0]), gap(y as f64 * side, o.eye[1])), over)
@@ -95,7 +95,7 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
     let zoom = coarsest - CHUNK_STEPS;
     let flat = (o.reach * o.reach - over * over).max(0.0).sqrt();
     // Its room kept from one walk to the next.
-    static STACK: Global<Vec<(Zoom, [i64; 2])>> = Global::new();
+    static STACK: Global<Vec<(Zoom, [i32; 2])>> = Global::new();
     let mut stack = core::mem::take(STACK.get(Vec::new));
     stack.clear();
     stack.extend(squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)));
@@ -112,7 +112,7 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
         }
         let Some(b) = world.bounds(&mut lines, (zoom, xy), cell).value().flatten() else { continue };
         let side = units(zoom);
-        for z in (b.min[2] / side).floor() as i64..=(b.max[2] / side).floor() as i64 {
+        for z in (b.min[2] / side).floor() as i32..=(b.max[2] / side).floor() as i32 {
             each((zoom, [xy[0], xy[1], z]));
         }
     }
