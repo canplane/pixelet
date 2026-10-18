@@ -67,12 +67,6 @@ pub fn share<const D: usize>((a_zoom, a): Node<D>, (b_zoom, b): Node<D>) -> bool
     }
 }
 
-/// A node's position in a depth-first walk in slot order, coarsest step
-/// first; the leaves of one coarser node form one run.
-pub fn walk_order<const D: usize>(at: [u32; D], steps: u32) -> u64 {
-    (0..steps).rev().fold(0, |order, l| (order << D) | slot_of(at.map(|v| i64::from(v >> l))) as u64)
-}
-
 #[cfg(test)]
 #[path = "tree.test.rs"]
 mod test;

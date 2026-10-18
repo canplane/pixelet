@@ -524,14 +524,7 @@ fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
     [wrap_index(from, c[0] >> s), c[1] >> s]
 }
 
-/// The window holding cell `g` at `cell`, as `find` finds it
-/// (`Found`), and where the cell lies in its square there.
-pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2]) -> (Found, [u32; 2]) {
-    let (from, slot, i, here) = find(w, cell, g, cell);
-    (Found::of(cell, from, slot, here), i)
-}
-
-/// `found_at` for a node's cells at `cell` from its first, `g`, stepped
+/// The window holding a node's cells at `cell` from its first, `g`, stepped
 /// from `above`, what a node over it found, or `NONE`, reading only what
 /// `above` leaves unknown. Only a node a square wide or less sets a place
 /// (`bounded`), so every node a descent asks under it, a sibling from its
@@ -541,7 +534,7 @@ pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2]) -> (Found, [u32; 2]) 
 /// `above` says what each of them answers: none present over `above`'s
 /// window, it present. Asked at `above`'s cell or coarser down to its
 /// window, the answer is that window, read nowhere; coarser than the window,
-/// `found_at`. Asked finer, only the zooms finer than `above`'s are unknown:
+/// as `find` finds it. Asked finer, only the zooms finer than `above`'s are unknown:
 /// they are looked at finest first, then `above`'s answer stands, a look a
 /// zoom of the step.
 pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, [u32; 2]) {

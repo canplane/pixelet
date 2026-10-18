@@ -48,16 +48,3 @@ fn nodes_share_ground_only_where_one_lies_under_the_other() {
         assert!(share((20 - steps, ancestor_of(at.1, steps)), at));
     }
 }
-
-/// Walk order keeps a coarser node's leaves in one run.
-#[test]
-fn a_walk_order_keeps_a_node_s_leaves_in_one_run() {
-    for at in [[0u32, 0, 0], [5, 3, 7], [63, 0, 31], [12, 40, 9]] {
-        let node = walk_order(at.map(|v| v >> 2), 4);
-        assert_eq!(walk_order(at, 6) >> (3 * 2), node, "{at:?} lies in its node's run");
-    }
-    let mut order: Vec<u64> = (0..16u32).flat_map(|y| (0..16u32).map(move |x| walk_order([x, y], 4))).collect();
-    order.sort_unstable();
-    order.dedup();
-    assert_eq!(order, (0..256).collect::<Vec<_>>(), "a walk visits every node once");
-}

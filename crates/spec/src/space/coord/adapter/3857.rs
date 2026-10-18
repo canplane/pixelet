@@ -17,13 +17,8 @@ use super::epsg4326::EARTH_RADIUS_M;
 /// x and y in mer, z in ground meters.
 pub type G3857 = [f64; 3];
 
-/// A cell at `cell_zoom` as a web map's zoom, whose 256-pixel tiles are 2^8
+/// The cell zoom a web map's `zoom` names, whose 256-pixel tiles are 2^8
 /// of its cells across.
-pub const fn web_zoom_of(cell_zoom: Zoom) -> i32 {
-    cell_zoom as i32 - 8
-}
-
-/// The cell zoom a web map's `zoom` names: `web_zoom_of`'s inverse.
 pub const fn cell_zoom_of(web_zoom: i32) -> Zoom {
     (web_zoom + 8) as Zoom
 }

@@ -26,19 +26,6 @@ pub const FACE_SHIFT: u32 = VALUE_BITS;
 pub const ZOOM_SHIFT: u32 = FACE_SHIFT + FACE_BITS;
 const _: () = assert!(ZOOM_SHIFT + ZOOM_BITS <= 32);
 
-/// The `bits` low bits of `w` past `shift`.
-const fn field(w: u32, shift: u32, bits: u32) -> u32 {
-    (w >> shift) & ((1 << bits) - 1)
-}
-
 pub const fn first_word(value: u32, face: u32, zoom: Zoom) -> u32 {
     value & ((1 << VALUE_BITS) - 1) | face << FACE_SHIFT | zoom << ZOOM_SHIFT
-}
-
-pub const fn face_of(w: u32) -> u32 {
-    field(w, FACE_SHIFT, FACE_BITS)
-}
-
-pub const fn zoom_of(w: u32) -> Zoom {
-    field(w, ZOOM_SHIFT, ZOOM_BITS)
 }

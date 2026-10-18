@@ -95,7 +95,7 @@ because X's extent and that world are the same thing.
 
 That identity holds by two constants agreeing — X's round is one world, a
 ground cell is one unit — and a web map's zoom is the adapter's to name
-([`coord/adapter/3857.rs`](./coord/adapter/3857.rs) `web_zoom_of`), for comparing with
+([`coord/adapter/3857.rs`](./coord/adapter/3857.rs) `cell_zoom_of`), for comparing with
 one; nothing in the pyramid counts in it.
 
 ## The pyramid
