@@ -500,11 +500,8 @@ impl Area for Windowed {
     fn ends(&self) -> bool {
         Declared.ends()
     }
-    fn entries(&self) -> u32 {
-        Declared.entries()
-    }
-    fn entry(&self, i: u32) -> u32 {
-        Declared.entry(i)
+    fn nine(&self, key: u32) -> u32 {
+        Declared.nine(key)
     }
 }
 

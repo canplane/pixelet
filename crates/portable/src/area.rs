@@ -13,21 +13,21 @@ use crate::{index_at, wrap_index as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL,
 
 use crate::ground::{UNKNOWN, VOID};
 
-/// The shards a source serves, as one index both sides search (`found`):
-/// every cell at `SHARD_ZOOM` a served shard covers, a coarser shard's
-/// each, and every cell beside one, an entry a cell (`index_entry`: its
-/// key, `shard_key`, over which of the nine about it are served), by key in
-/// ascending order. A cell with none is beside no served one, none of its
-/// nine served. On the CPU its declaration's, on a GPU a buffer of it.
+/// The shards a source serves, as the pyramid's own level at `SHARD_ZOOM`
+/// both sides read (`found`): every cell there, addressed by its key
+/// (`shard_key`, `SHARD_CELLS` of them), holding which of the nine about it
+/// are served (`nine`), none where it is beside no served one. On the CPU
+/// its declaration's, on a GPU a buffer of it.
 pub trait Area {
     /// Whether the area ends at all: before a source is declared, nothing
     /// is past it.
     fn ends(&self) -> bool;
-    /// How many entries the index holds; past its served cells' it may
-    /// hold `NO_KEY`s, which sort last and name none.
-    fn entries(&self) -> u32;
-    fn entry(&self, i: u32) -> u32;
+    /// The nine of the cell whose key is `key`, never `NO_KEY`.
+    fn nine(&self, key: u32) -> u32;
 }
+
+/// The cells at `SHARD_ZOOM`, a key each (`shard_key`).
+pub const SHARD_CELLS: u32 = 1 << (2 * SHARD_ZOOM);
 
 /// A cell at `SHARD_ZOOM`'s key: its quadkey, its X's and Y's bits
 /// interleaved from the top, as a tile pyramid orders its tiles, so the
@@ -45,23 +45,14 @@ pub const fn shard_key(c: [i32; 2]) -> u32 {
     k
 }
 
-/// No cell's key: past every one, so it sorts last.
+/// No cell's key: a row off the world.
 pub const NO_KEY: u32 = u32::MAX;
-
-/// An entry of the index (`Area`): a cell's key (`shard_key`) over which
-/// of the nine about it are served (`nine`), bit `(dy + 1)·3 + (dx + 1)` as
-/// `Shard::served` holds them, its own among them. The nine are a fact of
-/// the area a cell at a time, laid in its entry once where the index is
-/// made (pxl-kernel io/source.rs), so a node's shard is one search
-/// (`Shard::at`); `NO_KEY` names none, past every key.
-pub const fn index_entry(key: u32, nine: u32) -> u32 {
-    key << SHARD_SERVED_BITS | nine
-}
-const _: () = assert!(2 * SHARD_ZOOM + SHARD_SERVED_BITS < 32, "an entry's key and nine in a word, under NO_KEY's");
 
 /// Which of the nine cells at `SHARD_ZOOM` about `own` are served, as
 /// `served` says of each, bit `(dy + 1)·3 + (dx + 1)` for the cell `dx, dy`
-/// from it: an entry's nine (`index_entry`).
+/// from it, its own among them, as `Shard::served` holds them: a cell's
+/// word in the area (`Area::nine`), laid once where the area is made
+/// (pxl-kernel io/source.rs), so a node's shard is one read (`Shard::at`).
 pub fn nine(served: impl Fn([i32; 2]) -> bool, own: [i32; 2]) -> u32 {
     let mut bits = 0u32;
     let mut k = 0u32;
@@ -73,25 +64,14 @@ pub fn nine(served: impl Fn([i32; 2]) -> bool, own: [i32; 2]) -> u32 {
     bits
 }
 
-/// The cell `c` at `SHARD_ZOOM`'s nine (`index_entry`): its entry found in
-/// the index by halving it, a look a step; none served where it has none.
+/// The cell `c` at `SHARD_ZOOM`'s nine, read where its key addresses it;
+/// none for a row off the world.
 pub fn found(area: &impl Area, c: [i32; 2]) -> u32 {
     let k = shard_key(c);
-    let n = area.entries();
-    let (mut lo, mut hi) = (0, n);
-    while lo < hi {
-        let mid = lo + (hi - lo) / 2;
-        if area.entry(mid) >> SHARD_SERVED_BITS < k {
-            lo = mid + 1;
-        } else {
-            hi = mid;
-        }
-    }
-    let e = if lo < n { area.entry(lo) } else { NO_KEY };
-    if k != NO_KEY && e >> SHARD_SERVED_BITS == k {
-        e & SHARD_ALL
-    } else {
+    if k == NO_KEY {
         0
+    } else {
+        area.nine(k)
     }
 }
 

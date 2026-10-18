@@ -27,17 +27,17 @@ use pxl_spec::bake::constant::EntryAt;
 /// made then and not again.
 static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 
-/// The area's index (pxl-portable `area::Area`), its entries four a row,
-/// the last row's tail `NO_KEY`, which sorts last; a row of them where none
-/// is declared, since a binding holds at least one.
+/// The area (pxl-portable `area::Area`): every cell's nine by its key
+/// (`area::shard_key`), four a row; a row of none where none is declared,
+/// since a binding holds at least one, and a read past it is none.
 pub fn shards() -> &'static [[i32; 4]] {
     let declared = crate::io::source::top().is_some();
     let (made, s) = SHARDS.get(|| (false, Vec::new()));
     if s.is_empty() || *made != declared {
         s.clear();
-        let entries = crate::io::source::entries();
-        let entry = |i: usize| entries.get(i).copied().unwrap_or(pxl_portable::area::NO_KEY) as i32;
-        s.extend((0..entries.len().div_ceil(4).max(1)).map(|r| core::array::from_fn(|k| entry(4 * r + k))));
+        let nines = crate::io::source::nines();
+        let nine = |i: usize| nines.get(i).copied().map_or(0, i32::from);
+        s.extend((0..nines.len().div_ceil(4).max(1)).map(|r| core::array::from_fn(|k| nine(4 * r + k))));
         *made = declared;
     }
     s

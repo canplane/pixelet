@@ -154,13 +154,11 @@ impl<L: Looks> Area for World<'_, L> {
     fn ends(&self) -> bool {
         true
     }
-    /// Its entries four a row (pxl-kernel scene/cast.rs `shards`).
-    fn entries(&self) -> u32 {
-        4 * self.shards.len() as u32
-    }
-    fn entry(&self, i: u32) -> u32 {
-        let r = at(self.shards, i / 4);
-        (match i % 4 {
+    /// Its cells' nines four a row, by key (pxl-kernel scene/cast.rs
+    /// `shards`); none past them.
+    fn nine(&self, key: u32) -> u32 {
+        let r = at(self.shards, key / 4);
+        (match key % 4 {
             0 => r.x,
             1 => r.y,
             2 => r.z,

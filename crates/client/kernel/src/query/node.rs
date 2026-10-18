@@ -216,11 +216,8 @@ impl Area for Reading<'_, '_> {
     fn ends(&self) -> bool {
         source::Declared.ends()
     }
-    fn entries(&self) -> u32 {
-        source::Declared.entries()
-    }
-    fn entry(&self, i: u32) -> u32 {
-        source::Declared.entry(i)
+    fn nine(&self, key: u32) -> u32 {
+        source::Declared.nine(key)
     }
 }
 
