@@ -117,9 +117,15 @@ impl window::Square for Filling<'_> {
     fn laid(&self, i: u32) -> u32 {
         laid_of(self.ground, self.base, i)
     }
-    /// Off its tile's samples as `heights` draws a cell (`ground::height`),
-    /// the ring about the square too.
+    /// A column of the square's own as `heights` wrote it (`column_top`),
+    /// read and not drawn again; the ring about it, which no column word
+    /// holds, off its tile's samples as `heights` draws a cell
+    /// (`ground::height`).
     fn height(&self, c: [i32; 2]) -> i32 {
+        let side = SQUARE as i32;
+        if c[0] >= 0 && c[1] >= 0 && c[0] < side && c[1] < side {
+            return column_top(column_of(self.ground, self.base, window::index_of([c[0] as u32, c[1] as u32])));
+        }
         let first = [(self.place[0] * SQUARE) as i32, (self.place[1] * SQUARE) as i32];
         ground::height(samples(self.fresh, self.rec), [first[0] + c[0], first[1] + c[1]])
     }
