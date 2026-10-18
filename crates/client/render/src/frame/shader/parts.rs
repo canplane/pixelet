@@ -73,10 +73,7 @@ pub const SHADER_JOINED: u32 = 37;
 /// The air's volume, a froxel a thread (atmos_froxel.wgsl): its one
 /// compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 38;
-/// Each tile's beam, where its rays start, generated with the cast from
-/// pxl-portable's `cast::Beam`: its one compute entry.
-pub const SHADER_BEAM: u32 = 39;
-pub const SHADERS: u32 = 40;
+pub const SHADERS: u32 = 39;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -321,6 +318,4 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sky_words",
         "atmos_froxel",
     ],
-    // SHADER_BEAM
-    &["beam.gen"],
 ];

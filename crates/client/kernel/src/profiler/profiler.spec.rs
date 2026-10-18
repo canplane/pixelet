@@ -81,29 +81,29 @@ pub mod FRAME {
     pub const wake_in_ms: u32 = 20;
     pub const gpu_read: u32 = 21;
     pub const gpu_spans: u32 = 22;
-    pub const census: u32 = 35;
-    pub const world_px: u32 = 55;
-    pub const blocks: u32 = 56;
-    pub const blocks_mb: u32 = 57;
-    pub const tex_depth_mb: u32 = 58;
-    pub const tex_layers_mb: u32 = 59;
-    pub const gpu_objects: u32 = 60;
-    pub const zoom_tiles: u32 = 71;
-    pub const tiles_place: u32 = 95;
-    pub const heap_used_bytes: u32 = 96;
-    pub const heap_live_bytes: u32 = 97;
-    pub const heap_run_bytes: u32 = 98;
-    pub const heap_slot_bytes: u32 = 99;
-    pub const heap_range_bytes: u32 = 100;
-    pub const heap_largest_free_bytes: u32 = 101;
-    pub const heap_refusals: u32 = 102;
-    pub const heap_releases: u32 = 103;
-    pub const ring_cq_peak: u32 = 104;
-    pub const ring_held_peak: u32 = 105;
-    pub const waiting: u32 = 106;
-    pub const out: u32 = 111;
-    pub const cap_terrain_refused: u32 = 116;
-    pub const WORDS: u32 = 117;
+    pub const census: u32 = 34;
+    pub const world_px: u32 = 54;
+    pub const blocks: u32 = 55;
+    pub const blocks_mb: u32 = 56;
+    pub const tex_depth_mb: u32 = 57;
+    pub const tex_layers_mb: u32 = 58;
+    pub const gpu_objects: u32 = 59;
+    pub const zoom_tiles: u32 = 70;
+    pub const tiles_place: u32 = 94;
+    pub const heap_used_bytes: u32 = 95;
+    pub const heap_live_bytes: u32 = 96;
+    pub const heap_run_bytes: u32 = 97;
+    pub const heap_slot_bytes: u32 = 98;
+    pub const heap_range_bytes: u32 = 99;
+    pub const heap_largest_free_bytes: u32 = 100;
+    pub const heap_refusals: u32 = 101;
+    pub const heap_releases: u32 = 102;
+    pub const ring_cq_peak: u32 = 103;
+    pub const ring_held_peak: u32 = 104;
+    pub const waiting: u32 = 105;
+    pub const out: u32 = 110;
+    pub const cap_terrain_refused: u32 = 115;
+    pub const WORDS: u32 = 116;
     pub const KEYS: &[&str] = &[
         "t",
         "interval_ms",
@@ -215,9 +215,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 117;
-    pub const prev: u32 = 118;
-    pub const WORDS: u32 = 235;
+    pub const has_prev: u32 = 116;
+    pub const prev: u32 = 117;
+    pub const WORDS: u32 = 233;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -285,13 +285,13 @@ pub mod SUMMARY {
         pub const gpu: u32 = 24;
         pub const phases_p95: u32 = 27;
         pub const gpu_spans_p95: u32 = 32;
-        pub const gpu_spans_max: u32 = 45;
-        pub const kinds: u32 = 58;
-        pub const wakes: u32 = 67;
-        pub const heap_used_delta_bytes: u32 = 70;
-        pub const census: u32 = 71;
-        pub const last: u32 = 91;
-        pub const WORDS: u32 = 208;
+        pub const gpu_spans_max: u32 = 44;
+        pub const kinds: u32 = 56;
+        pub const wakes: u32 = 65;
+        pub const heap_used_delta_bytes: u32 = 68;
+        pub const census: u32 = 69;
+        pub const last: u32 = 89;
+        pub const WORDS: u32 = 205;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -322,21 +322,21 @@ pub mod SUMMARY {
     }
     /// The interval in progress, which no frame turn has closed yet: its turns and their time, rise to fall. A settled view's turns are here, if any run.
     pub mod open {
-        pub const AT: u32 = 211;
+        pub const AT: u32 = 208;
         pub const turns: u32 = 0;
         pub const busy_ms: u32 = 1;
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "turns", "busy_ms", "WORDS"];
     }
     pub mod tasks {
-        pub const AT: u32 = 213;
+        pub const AT: u32 = 210;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     /// Counts since the window began, its baseline taken off: a settled view moves none of them.
     pub mod counters {
-        pub const AT: u32 = 333;
+        pub const AT: u32 = 330;
         pub const sheet_repacks: u32 = 0;
         pub const sheet_uploads: u32 = 1;
         pub const terrain_admitted: u32 = 2;
@@ -345,7 +345,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "sheet_repacks", "sheet_uploads", "terrain_admitted", "terrain_evicted", "WORDS"];
     }
     pub mod sheet {
-        pub const AT: u32 = 337;
+        pub const AT: u32 = 334;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -355,27 +355,27 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 342;
+        pub const AT: u32 = 339;
         pub const credits: u32 = 0;
         pub const WORDS: u32 = 1;
         pub const KEYS: &[&str] = &["AT", "credits", "WORDS"];
     }
     pub mod steps {
-        pub const AT: u32 = 343;
+        pub const AT: u32 = 340;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 504;
+        pub const AT: u32 = 501;
         pub const frames_held: u32 = 0;
         pub const WORDS: u32 = 1;
         pub const KEYS: &[&str] = &["AT", "frames_held", "WORDS"];
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at.
     pub mod view {
-        pub const AT: u32 = 505;
+        pub const AT: u32 = 502;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -410,7 +410,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 519;
+    pub const WORDS: u32 = 516;
     pub const KEYS: &[&str] = &["rec", "frames", "open", "tasks", "counters", "sheet", "fetch", "steps", "quality", "view", "WORDS"];
 }
 

@@ -14,7 +14,6 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_START => "start_cs",
         SHADER_JOINED => "joined_cs",
         SHADER_ATMOS_FROXEL => "froxel_cs",
-        SHADER_BEAM => "beam_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHTS => "heights_cs",
         SHADER_GROWN_MARK => "decor_mark_cs",

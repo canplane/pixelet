@@ -33,7 +33,6 @@ const ENTRIES = [
   ["cast_cs", "cast.gen.wgsl"],
   ["joined_cs", "joined.gen.wgsl"],
   ["start_cs", "start.gen.wgsl"],
-  ["beam_cs", "beam.gen.wgsl"],
   ["heights_cs", "heights.gen.wgsl"],
   ["bound_cs", "bound.gen.wgsl"],
   ["decor_mark_cs", "decor_mark.gen.wgsl"],

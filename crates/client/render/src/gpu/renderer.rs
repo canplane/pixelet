@@ -19,7 +19,7 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_JOINED, SHADER_START, SHADER_WAYS,
+    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_JOINED, SHADER_START, SHADER_WAYS,
 };
 use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
@@ -89,7 +89,6 @@ const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
 const SPAN_CASES: usize = GpuSpanName::cases as usize;
 const SPAN_FILL: usize = GpuSpanName::fill as usize;
 const SPAN_START: usize = GpuSpanName::start as usize;
-const SPAN_BEAM: usize = GpuSpanName::beam as usize;
 const SPAN_CAST: usize = GpuSpanName::cast as usize;
 const SPAN_GROW: usize = GpuSpanName::grow as usize;
 
@@ -768,12 +767,6 @@ struct CastBuffers {
     /// Where its rays start, asked before it (`start_cs`), over its group.
     start_built: Built,
     starts: u32,
-    /// Each tile's beam, between the start and the cast (`beam_cs`), over
-    /// its group: the t its rays start at, a word a tile, `beam_room` of
-    /// them (pxl-portable `cast::BEAM_TILE`).
-    beam_built: Built,
-    beams: u32,
-    beam_room: u32,
     /// The eye's windows folded over their squares (`joined_cs`), over its
     /// group, the window buffer's rows past their slot table
     /// (`window::JOINED_AT`), written where the windows' slots moved
@@ -789,7 +782,7 @@ struct CastBuffers {
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
     group: u32,
-    bound: [u32; 8],
+    bound: [u32; 7],
     eye: u32,
     window: u32,
     shards: u32,
@@ -1005,7 +998,6 @@ impl RaysPass {
         if self.cast.is_none() {
             let built = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);
             let start_built = pipelines.build_compute(g, SHADER_START, &compute::CAST_GROUP);
-            let beam_built = pipelines.build_compute(g, SHADER_BEAM, &compute::CAST_GROUP);
             let joined_built = pipelines.build_compute(g, SHADER_JOINED, &compute::CAST_GROUP);
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
@@ -1013,16 +1005,13 @@ impl RaysPass {
                 built,
                 start_built,
                 starts: buffer(word_bytes(pxl_portable::cast::START_WORDS as usize), buffer_usage::STORAGE),
-                beam_built,
-                beams: 0,
-                beam_room: 0,
                 joined_built,
                 joined_read: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::MAP_READ | buffer_usage::COPY_DST),
                 joined_mapping: Box::new(DONE),
                 refold: false,
                 joined_back: false,
                 group: 0,
-                bound: [0; 8],
+                bound: [0; 7],
                 eye: buffer(word_bytes(eye::WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
                 window: buffer(word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize), storage | buffer_usage::COPY_SRC),
                 shards: 0,
@@ -1069,14 +1058,6 @@ impl RaysPass {
             g.write_buffer(c.eye, 0, bytes(&cast.eye));
         }
         c.size = rays.1;
-        let tiles = beam_tiles(c.size);
-        if tiles[0] * tiles[1] > c.beam_room {
-            if c.beams != 0 {
-                release(c.beams);
-            }
-            c.beam_room = tiles[0] * tiles[1];
-            c.beams = g.buffer(word_bytes(c.beam_room as usize), buffer_usage::STORAGE);
-        }
         let shards_grow = cast.shards.len() > c.shard_room;
         if shards_grow {
             if c.shards != 0 {
@@ -1104,7 +1085,7 @@ impl RaysPass {
             g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
             c.overwrite_revision = Some(o.revision);
         }
-        let bound = [c.eye, c.window, ground, rays.0, c.beams, c.shards, c.overwrites, c.starts];
+        let bound = [c.eye, c.window, ground, rays.0, c.shards, c.overwrites, c.starts];
         if bound != c.bound {
             release(c.group);
             c.group = cast_group(g, &c.built, bound);
@@ -1245,10 +1226,7 @@ impl RaysPass {
         true
     }
 
-    /// The GPU's cast into the surface's rays, a ray a drawn pixel, where it
-    /// runs; then the decor the ground grows over the same world, a
-    /// candidate a thread.
-    /// The start, the beams and the cast where the frame casts, then the
+    /// The start and the cast where the frame casts, then the
     /// decor grown over the world where it moves: each a pass of its own
     /// over the cast's group, timed in its own span, so what each costs is
     /// read apart.
@@ -1262,10 +1240,8 @@ impl RaysPass {
                 g.dispatch(pass, x, y, 1);
                 g.end(pass);
             };
-            let (b, tiles) = (compute::BEAM_WORKGROUP, beam_tiles(c.size));
             let w = compute::CAST_WORKGROUP;
             run(&mut stamps[SPAN_START], &c.start_built, [1, 1]);
-            run(&mut stamps[SPAN_BEAM], &c.beam_built, [tiles[0].div_ceil(b[0]), tiles[1].div_ceil(b[1])]);
             run(&mut stamps[SPAN_CAST], &c.built, [c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1])]);
         }
         if self.grows() {
@@ -1301,21 +1277,13 @@ impl RaysPass {
 /// (`joined_cs` writes it, the cast reads it), the tiles' frames, the
 /// surface's rays, the service area's index, the overwrites and where its
 /// rays start (`start_cs` writes it, `cast_cs` reads it).
-/// The beams' tiles across and up, over drawn pixels `size` (pxl-portable
-/// `cast::BEAM_TILE`).
-fn beam_tiles(size: [u32; 2]) -> [u32; 2] {
-    let n = pxl_portable::cast::BEAM_TILE;
-    [size[0].div_ceil(n), size[1].div_ceil(n)]
-}
-
-fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
-    let [eye, window, ground, rays, beams, shards, overwrites, starts] = bound;
+fn cast_group(g: &Gpu, built: &Built, bound: [u32; 7]) -> u32 {
+    let [eye, window, ground, rays, shards, overwrites, starts] = bound;
     let entries = [
         buffer_entry(0, eye),
         buffer_entry(1, window),
         buffer_entry(2, ground),
         view_entry(3, rays),
-        buffer_entry(4, beams),
         buffer_entry(5, shards),
         buffer_entry(6, overwrites),
         buffer_entry(7, starts),

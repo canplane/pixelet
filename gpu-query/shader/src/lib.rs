@@ -428,24 +428,13 @@ fn eye_origin(eye: &Eye) -> (cast::Origin, Detail) {
 /// are, row 0 at the top, as the screen pass forms it from its own pixel:
 /// its tangents the screen's half-angles' scaled by where it lies.
 fn pixel_ray(eye: &Eye, p: UVec3, size: UVec3) -> cast::Ray {
-    ray_at(eye, [p.x as f32 + 0.5, p.y as f32 + 0.5], size)
-}
-
-/// The ray through the point `[x, y]` of the drawn pixels, in pixels from
-/// their top left corner (`pixel_ray`).
-fn ray_at(eye: &Eye, [x, y]: [f32; 2], size: UVec3) -> cast::Ray {
-    let ndc_x = x / size.x as f32 * 2.0 - 1.0;
-    let ndc_y = 1.0 - y / size.y as f32 * 2.0;
+    let ndc_x = (p.x as f32 + 0.5) / size.x as f32 * 2.0 - 1.0;
+    let ndc_y = 1.0 - (p.y as f32 + 0.5) / size.y as f32 * 2.0;
     let v3 = |v: Vec4| [v.x, v.y, v.z];
     cast::Ray::new(
         cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), ndc_x * eye.tan.x, ndc_y * eye.tan.y),
         eye.forward_far.w,
     )
-}
-
-/// The beams' tiles a row, of the `size` the rays are (`cast::BEAM_TILE`).
-fn tiles_across(size: UVec3) -> u32 {
-    size.x.div_ceil(cast::BEAM_TILE)
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
@@ -487,73 +476,12 @@ pub fn start_cs(
     }
 }
 
-/// Each tile's beam (pxl-portable `cast::Beam`): the cone about the ray
-/// through the tile's middle, as wide as the rays through its corner
-/// pixels' middles are from it, walked from the world's roots
-/// (`cast::beam`) to the t no ray in it meets anything before, which its
-/// rays start at (`cast_cs`), a word a tile (`beams`).
 #[spirv(compute(threads(8, 8, 1)))]
-#[allow(clippy::too_many_arguments)]
-pub fn beam_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] beams: &mut [f32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
-) {
-    let window: &[IVec4] = window;
-    let size: UVec3 = rays.query_size();
-    let across = tiles_across(size);
-    if id.x >= across || id.y >= size.y.div_ceil(cast::BEAM_TILE) {
-        return;
-    }
-    let (n, at) = (cast::BEAM_TILE as f32, [id.x as f32, id.y as f32]);
-    let first = [at[0] * n, at[1] * n];
-    let axis = ray_at(eye, [first[0] + n / 2.0, first[1] + n / 2.0], size);
-    // As wide as its corner pixels' rays are from its own, a hair over.
-    let off = |x: f32, y: f32| {
-        let d = ray_at(eye, [x, y], size).direction;
-        let e = [d[0] - axis.direction[0], d[1] - axis.direction[1], d[2] - axis.direction[2]];
-        e[0] * e[0] + e[1] * e[1] + e[2] * e[2]
-    };
-    let (a, b) = (first[0] + 0.5, first[0] + n - 0.5);
-    let (c, d) = (first[1] + 0.5, first[1] + n - 0.5);
-    let widest = off(a, c).max(off(b, c)).max(off(a, d)).max(off(b, d));
-    let slope = spirv_std::num_traits::Float::sqrt(widest) * 1.001;
-    let mut world = World {
-        window,
-        ground,
-        shards,
-        overwrites,
-        eye,
-    };
-    let (origin, detail) = eye_origin(eye);
-    let t = cast::beam::<_, LEVELS>(&mut world, &origin, &axis, detail, slope);
-    let k = (id.y * across + id.x) as usize;
-    if k < beams.len() {
-        beams[k] = t;
-    }
-}
-
-/// Where every ray starts, as `start_cs` wrote it.
-fn start_place(read: &[u32]) -> cast::Place {
-    cast::Place {
-        zoom: at(read, cast::START_PLACE),
-        corner: [at(read, cast::START_PLACE + 1) as i32, at(read, cast::START_PLACE + 2) as i32, at(read, cast::START_PLACE + 3) as i32],
-    }
-}
-
-#[spirv(compute(threads(8, 8, 1)))]
-#[allow(clippy::too_many_arguments)]
 pub fn cast_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] beams: &mut [f32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
@@ -575,10 +503,11 @@ pub fn cast_cs(
     // Started where every ray from the eye starts alike (`start_cs`), what
     // was handed the nodes over it read only where a ray climbs past it.
     let read: &[u32] = starts;
-    // From where its tile's beam stopped (`beam_cs`): nothing before it.
-    let beams: &[f32] = beams;
-    let from_t = at(beams, id.y / cast::BEAM_TILE * tiles_across(size) + id.x / cast::BEAM_TILE);
-    let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, (start_place(read), at_of(read, cast::START_AT)), &Starts(read), cast::Thin, from_t);
+    let place = cast::Place {
+        zoom: at(read, cast::START_PLACE),
+        corner: [at(read, cast::START_PLACE + 1) as i32, at(read, cast::START_PLACE + 2) as i32, at(read, cast::START_PLACE + 3) as i32],
+    };
+    let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, (place, at_of(read, cast::START_AT)), &Starts(read));
     let w = word(&ray, met);
     // The nodes asked only where the steps view reads them.
     let words = if eye.origin.w != 0 { ray::WORDS } else { ray::WORDS - 1 };

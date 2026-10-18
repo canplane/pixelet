@@ -469,10 +469,6 @@ pub struct Met<A, B> {
 /// place by the slab test, so no entry holds them.
 pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 
-/// A beam's tile, in drawn pixels a side: one beam a tile, its rays started
-/// where it stops (`Beam`).
-pub const BEAM_TILE: u32 = 8;
-
 /// A descent's start as a GPU hands it from the kernel that finds it to the
 /// kernels that cast from it (gpu-query-shader `start_cs`), in words: the
 /// node's zoom then its corner (`START_PLACE`), what was handed it
@@ -588,74 +584,7 @@ pub fn start<Q: Query>(q: &mut Q, o: &Origin, detail: Detail) -> Start<Q::At> {
 pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until) -> Met<Q::At, Q::Block> {
     let root = root_of(o);
     let at = q.root(root.node(o));
-    first_from(q, o, ray, detail, until, (root, at), &Rooted(at), Thin, 0.0)
-}
-
-/// Where the beam about `ray` stops, its radius `slope` a unit of t
-/// (`Beam`), its levels kept `N` deep: the t no ray within it meets
-/// anything before. Walked from the world's roots, as `first` is, so every
-/// ancestor its cone may poke into is one it went into itself; from a start
-/// nearer (`start`), whose node is air, it would poke out of that node at
-/// once into ancestors it never went into, and stop where it is.
-pub fn beam<Q: Query, const N: usize>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, slope: f32) -> f32 {
-    let root = root_of(o);
-    let at = q.root(root.node(o));
-    first_from(q, o, ray, detail, Until::Fills, (root, at), &Rooted(at), Beam::<N> { slope }, 0.0).stop.t
-}
-
-/// What walks a descent: a ray, or a cone about it whose radius grows
-/// `slope` a unit of t (a beam, Laine & Karras 2010 §6), which stops no
-/// later than any ray within it may first meet what fills.
-pub trait Cone: Copy {
-    /// Whether it has a radius: none for a ray, whose walk compiles as a
-    /// ray's, nothing widened and nothing kept.
-    const WIDE: bool;
-    /// The slab of each level the walk went into (`Query::slab`), kept
-    /// beside the stack's entries (`Levels`), as deep: none for a ray.
-    type Slabs: Levels<[i32; 2]>;
-    fn slope(&self) -> f32;
-}
-
-/// A ray: no radius, nothing kept.
-#[derive(Clone, Copy)]
-pub struct Thin;
-
-/// No level kept.
-#[derive(Clone, Copy)]
-pub struct Unkept;
-
-impl Levels<[i32; 2]> for Unkept {
-    const LEVELS: Zoom = 0;
-    fn filled(_: [i32; 2]) -> Unkept {
-        Unkept
-    }
-    fn at(&self, _: Zoom) -> [i32; 2] {
-        [0; 2]
-    }
-    fn put(&mut self, _: Zoom, _: [i32; 2]) {}
-}
-
-impl Cone for Thin {
-    const WIDE: bool = false;
-    type Slabs = Unkept;
-    fn slope(&self) -> f32 {
-        0.0
-    }
-}
-
-/// A beam: its radius `slope` a unit of t, its levels' slabs kept `N`
-/// deep, the walk's stack's own depth.
-#[derive(Clone, Copy)]
-pub struct Beam<const N: usize> {
-    pub slope: f32,
-}
-
-impl<const N: usize> Cone for Beam<N> {
-    const WIDE: bool = true;
-    type Slabs = [[i32; 2]; N];
-    fn slope(&self) -> f32 {
-        self.slope
-    }
+    first_from(q, o, ray, detail, until, (root, at), &Rooted(at))
 }
 
 /// `first`, the ray's descent started at `from`, a node holding its origin
@@ -673,18 +602,9 @@ impl<const N: usize> Cone for Beam<N> {
 /// the corner steps on the axis the ray leaves by (Amanatides & Woo 1987)
 /// and the walk is at the child of the nearest ancestor holding the next
 /// node, by the highest bit the step changed (POP), or past a root, in the
-/// next root, from its top. One loop. It starts where the ray is at
-/// `from_t`, the nodes before passed by; walked by `cone` (`Cone`): a
-/// beam's stop is where no ray within it has met anything before (`Thin`'s
-/// the ray's own).
+/// next root, from its top. One loop.
 #[allow(clippy::too_many_arguments)]
-pub fn first_from<Q: Query, C: Cone>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>, cone: C, from_t: f32) -> Met<Q::At, Q::Block> {
-    const {
-        assert!(
-            !C::WIDE || <C::Slabs as Levels<[i32; 2]>>::LEVELS == <Q::Stack as Levels<Q::Kept>>::LEVELS,
-            "a beam keeps its slabs as deep as its stack"
-        )
-    };
+pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Met<Q::At, Q::Block> {
     let (og, r0) = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, the levels it went into
@@ -698,8 +618,7 @@ pub fn first_from<Q: Query, C: Cone>(q: &mut Q, o: &Origin, ray: &Ray, detail: D
         zoom: from.0.zoom,
         roots: [0; 3],
     };
-    let (mut at, mut t, mut visits) = (from.1, from_t, 0);
-    let mut slabs = C::Slabs::filled([0; 2]);
+    let (mut at, mut t, mut visits) = (from.1, 0.0f32, 0);
     // The world's node the walk's node is, worked out where the node is
     // made, its At handed it, and read where it is asked.
     let mut node = index_of(&n, r0);
@@ -730,23 +649,12 @@ pub fn first_from<Q: Query, C: Cone>(q: &mut Q, o: &Origin, ray: &Ray, detail: D
         let (t0, t1) = (t.max(x.0).max(y.0).max(z.0), ray.reach.min(x.1).min(y.1).min(z.1));
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
-        // A beam's radius where it leaves the node: every test widened by it.
-        let r = if C::WIDE { cone.slope() * t1 } else { 0.0 };
         if t1 > t0 {
-            let near = if C::WIDE {
-                [(lo[0] - r).max(0.0).min(hi[0] + r), (lo[1] - r).max(0.0).min(hi[1] + r), (lo[2] - r).max(0.0).min(hi[2] + r)]
-            } else {
-                [lo[0].max(0.0).min(hi[0]), lo[1].max(0.0).min(hi[1]), lo[2].max(0.0).min(hi[2])]
-            };
+            let near = [lo[0].max(0.0).min(hi[0]), lo[1].max(0.0).min(hi[1]), lo[2].max(0.0).min(hi[2])];
             let asking = [detail.at(t1 * t1 * squared(ray.direction)), detail.at(squared(near))];
             let i = q.node(&mut at, n.zoom, node, asking, t0);
             visits += 1;
             let inside = lo[0] <= 0.0 && 0.0 < hi[0] && lo[1] <= 0.0 && 0.0 < hi[1] && lo[2] <= 0.0 && 0.0 < hi[2];
-            // A z in leaf cells as a plane, a face's own (`units`).
-            let level = |v: i32| {
-                let root = v >> UNIT_ZOOM;
-                units(((v - (root << UNIT_ZOOM)) as u32) << FRAC_W, og[2], root - r0[2])
-            };
             let ends = match i.kind {
                 Kind::Lacks => Ends::Lacks,
                 Kind::Block if if until == Until::Fills { q.fills(&i.block) && !inside } else { !q.fills(&i.block) } => Ends::Stop,
@@ -759,89 +667,15 @@ pub fn first_from<Q: Query, C: Cone>(q: &mut Q, o: &Origin, ray: &Ray, detail: D
                 // stop is where that span begins.
                 Kind::Split => {
                     let [lo, hi] = q.slab(&i.block);
-                    let (bottom, top) = if C::WIDE {
-                        planes(ray.direction[2], ray.inverse[2], level(lo) - r, level(hi) + r, (t0, t1))
-                    } else {
-                        planes(ray.direction[2], ray.inverse[2], level(lo), level(hi), (t0, t1))
+                    let level = |v: i32| {
+                        let root = v >> UNIT_ZOOM;
+                        units(((v - (root << UNIT_ZOOM)) as u32) << FRAC_W, og[2], root - r0[2])
                     };
+                    let (bottom, top) = planes(ray.direction[2], ray.inverse[2], level(lo), level(hi), (t0, t1));
                     into = until == Until::Air || t0.max(bottom) < t1.min(top);
-                    if C::WIDE && into {
-                        slabs.put(n.zoom, [lo, hi]);
-                    }
                     Ends::On
                 }
             };
-            // A beam that passes the node: where its cone pokes out of it
-            // over the span, the smallest ancestor holding the cone's box
-            // there must hold nothing the cone meets before; the first t the
-            // cone is out of the node while its z meets that ancestor's slab
-            // is its stop, and where no ancestor whose slab the walk kept
-            // holds it, where it is.
-            if C::WIDE && ends == Ends::On && !into {
-                let p0 = [ray.direction[0] * t0, ray.direction[1] * t0, ray.direction[2] * t0];
-                let p1 = [ray.direction[0] * t1, ray.direction[1] * t1, ray.direction[2] * t1];
-                let within = |a: [f32; 3], b: [f32; 3]| {
-                    p0[0] - r >= a[0]
-                        && p0[0] + r <= b[0]
-                        && p1[0] - r >= a[0]
-                        && p1[0] + r <= b[0]
-                        && p0[1] - r >= a[1]
-                        && p0[1] + r <= b[1]
-                        && p1[1] - r >= a[1]
-                        && p1[1] + r <= b[1]
-                        && p0[2] - r >= a[2]
-                        && p0[2] + r <= b[2]
-                        && p1[2] - r >= a[2]
-                        && p1[2] + r <= b[2]
-                };
-                if !within(lo, hi) {
-                    // Ancestors whose slab the walk kept: those it went into
-                    // itself, the ring's deep, under the start's own.
-                    let kept = floor.max(top);
-                    let (mut z, mut stop, mut passes) = (n.zoom, t0, false);
-                    while z > kept {
-                        z -= 1;
-                        let (keep, ua) = (!under(z), under(z));
-                        let c = [n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep];
-                        let far = |c: u32, og: u32, roots: i32| {
-                            let last = c.wrapping_add(ua);
-                            units(last.wrapping_add(1), og, roots + (last == u32::MAX) as i32)
-                        };
-                        let la = [units(c[0], og[0], n.roots[0]), units(c[1], og[1], n.roots[1]), units(c[2], og[2], n.roots[2])];
-                        let ha = [far(c[0], og[0], n.roots[0]), far(c[1], og[1], n.roots[1]), far(c[2], og[2], n.roots[2])];
-                        if within(la, ha) {
-                            // Out of the node: the span less where the cone
-                            // lies within it, against where the axis's z lies
-                            // within the radius of the ancestor's slab.
-                            let [slo, shi] = slabs.at(z);
-                            let span = |k: usize| planes(ray.direction[k], ray.inverse[k], lo[k] + r, hi[k] - r, (t0, t1));
-                            let (sx, sy, sz) = (span(0), span(1), span(2));
-                            let (a, b) = (t0.max(sx.0).max(sy.0).max(sz.0), t1.min(sx.1).min(sy.1).min(sz.1));
-                            let (a, b) = if a < b { (a, b) } else { (t1, t1) };
-                            let (c, d) = planes(ray.direction[2], ray.inverse[2], level(slo) - r, level(shi) + r, (t0, t1));
-                            let (c, d) = (c.max(t0), d.min(t1));
-                            let (l1, u1) = (t0.max(c), a.min(d));
-                            let (l2, u2) = (b.max(c), t1.min(d));
-                            passes = !(l1 < u1 || l2 < u2);
-                            stop = if l1 < u1 { l1 } else { l2 };
-                            break;
-                        }
-                    }
-                    if !passes {
-                        return Met {
-                            ends: Ends::Stop,
-                            stop: Stop {
-                                t: stop,
-                                axis: 0,
-                                place: place_of(&n, og),
-                                at,
-                                block: Q::AIR,
-                            },
-                            visits,
-                        };
-                    }
-                }
-            }
             if ends != Ends::On {
                 // Where the walk ends, its stop, made there and nowhere else:
                 // the axis entered across the last of the near planes the
