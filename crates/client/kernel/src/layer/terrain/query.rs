@@ -78,9 +78,10 @@ impl Residency<TerrainTile> {
 }
 
 /// The tile a node's bound is read from: its cells' tile, within the
-/// pyramid's zooms.
+/// pyramid's zooms, or where the node is wider than one, its own, the
+/// finest one tile holding it.
 fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
-    let read = GROUND.read_zoom(cell);
+    let read = GROUND.read_zoom(cell).min(zoom);
     tile_at(read, ancestor_of([at[0], at[1]], zoom - read))
 }
 

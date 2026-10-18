@@ -707,21 +707,39 @@ fn near(k: u32) -> [i32; 3] {
     d
 }
 
-/// Whether nothing the ways write fills a block of the node at `zoom` whose
-/// z is `z`, at the zooms a reader asks within it to `near`, where what
-/// they fill under it lies in the leaf cells `[lo, hi)` (`ground::Bounds`,
-/// a bore's air none): a block is filled where more than half of it is
-/// (`fills`), so none of the node's is where at most half the finest
-/// asked's block of its bottom or its top is reached, and a coarser zoom's
-/// block, more than twice its, holds less still. Past the leaves a leaf
-/// cell is cut 2^e a side, so every height is a whole count, and a block
-/// fills as its leaf does.
-pub fn misses([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32), near: Zoom) -> bool {
-    let e = near.max(LEAF_CELL) - LEAF_CELL;
-    let s = LEAF_CELL + e - zoom;
-    let (bottom, top) = (z << s, (z + 1) << s);
-    let half = if near < LEAF_CELL { 1 << (LEAF_CELL - near - 1) } else { 0 };
-    hi << e <= bottom + half || lo << e >= top - half
+/// Where the ways may fill a node along z, at the zooms from `coarsest` to
+/// `near` a reader asks within it, where what they fill under it lies in
+/// the leaf cells `[lo, hi)` (`ground::Bounds`, a bore's air none): from
+/// its lowest to past its highest, in leaf cells. A block fills where more
+/// than half of it is (`fills`): at a zoom whose block is `s` leaf cells,
+/// from the first block more than half over `lo` to past the last more than
+/// half under `hi`; at the leaves or finer, `[lo, hi)` itself, a block
+/// filling as its leaf does. Nothing (`ground::EMPTY`) where they fill
+/// nothing.
+///
+/// The node's bottom and top are whole blocks of every zoom finer than it,
+/// so none of its blocks fills exactly where it does not meet the finest
+/// zoom's slab (`ground::meets`), and a coarser zoom's block, more than
+/// twice its, fills less still within it.
+pub fn slab([lo, hi]: [i32; 2], [coarsest, near]: [Zoom; 2]) -> [i32; 2] {
+    if lo >= hi {
+        return crate::ground::EMPTY;
+    }
+    let [mut under, mut over] = crate::ground::EMPTY;
+    let mut z = coarsest;
+    while z <= near {
+        let (a, b) = if z < LEAF_CELL {
+            let k = LEAF_CELL - z;
+            let half = 1 << (k - 1);
+            ((lo + half) >> k << k, -((half - hi) >> k << k))
+        } else {
+            (lo, hi)
+        };
+        under = if a < under { a } else { under };
+        over = if b > over { b } else { over };
+        z += 1;
+    }
+    [under, over]
 }
 
 /// A run along z as a square holds it, a word: its first block, an `i16`,

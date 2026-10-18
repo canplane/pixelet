@@ -285,6 +285,42 @@ pub fn over(lanes: &impl Lanes, held: Held, carve: Cut, hide: Cut, zoom: Zoom, a
     Over { says, block: v }
 }
 
+/// Where what is placed under the node `at` of `zoom` holding `held` may lie
+/// along z, in leaf cells, from its lowest to past its highest: as its tree
+/// holds it, the halves of the node's z any of its eight children holds
+/// anything in, or all of it where they are one (not folded); a node a leaf
+/// cell tall or finer, all of its leaf cell. Nothing (`ground::EMPTY`)
+/// where nothing is placed. A preview's cut only makes air, so what is
+/// placed under it lies here still.
+pub fn slab(lanes: &impl Lanes, held: Held, zoom: Zoom, at: [i32; 3]) -> [i32; 2] {
+    if !held.holds() {
+        return crate::ground::EMPTY;
+    }
+    if zoom >= crate::LEAF_CELL {
+        let b = at[2] >> (zoom - crate::LEAF_CELL);
+        return [b, b + 1];
+    }
+    let side = 1 << (crate::LEAF_CELL - zoom);
+    let bottom = at[2] * side;
+    if !held.folded() || side == 1 {
+        return [bottom, bottom + side];
+    }
+    let base = lanes.heap(held.slot()) & !BRANCH;
+    let (mut under, mut over) = (false, false);
+    let mut k = 0;
+    while k < 8 {
+        if of(lanes, base + k, zoom + 1).holds() {
+            if k & 4 == 0 {
+                under = true;
+            } else {
+                over = true;
+            }
+        }
+        k += 1;
+    }
+    [if under { bottom } else { bottom + side / 2 }, if over { bottom + side } else { bottom + side / 2 }]
+}
+
 /// Whether anything placed under the node holding `held` may be a block at
 /// a zoom `d` under it or coarser (`value`'s rule, half its cube filled): a
 /// leaf of a voxel fills every cube under it, one of none fills none; a

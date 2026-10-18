@@ -25,12 +25,12 @@
 //! the node's parent found, handed down, as surely or more cautiously, which
 //! only splits more, never from detail finer than asked:
 //!
-//! - the ground: by its one rule (pxl-portable `ground::empty`, as a cell's
+//! - the ground: by its one rule (pxl-portable `ground::slab`, as a cell's
 //!   block asks `Cell::opens` of one block) over the lowest and highest the windows
 //!   hold under the node (`Residency::relief`, off the finest window holding
 //!   its cells), every cell under it at each zoom asked over the ground, or
 //!   ground a cave may take with a cave through all of it;
-//! - the ways: by their own rule (pxl-portable `ways::misses`) over their
+//! - the ways: by their own rule (pxl-portable `ways::slab`) over their
 //!   own bound in the same levels, the leaf cells each column's runs fill
 //!   joined apart from the ground's (pxl-portable fill.rs `level`); a way a
 //!   coarser tile drops as narrower than half its cell is dropped there, as
@@ -160,10 +160,10 @@ impl World<'_> {
     /// the ground read as the GPU reads it, off what it drew and read back
     /// (`Windowed`), down the node's line through the residency
     /// (`Reading`), after its shard, known before any layer answers it. Its
-    /// answer as the descent takes one (pxl-portable `cast::In`): a split; a
-    /// block, the zoom asked's, none for air or void; or, coarser than asked
-    /// and nothing under it filling, air its size; with whether it is a
-    /// block (`world::node`'s).
+    /// answer as the descent takes one (pxl-portable `cast::In`): a split and
+    /// its slab; a block, the zoom asked's, none for air or void; or, coarser
+    /// than asked and nothing under it filling, air its size; with whether it
+    /// is a block (`world::node`'s).
     pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2]) -> Answer<(In<u32>, bool)> {
         let (zoom, c) = at.node;
         let c = c.map(|v| v as i32);
@@ -173,7 +173,8 @@ impl World<'_> {
         let mut reading = Reading::new(self, at);
         let (i, block) = world::node(&mut reading, &Windowed, &lanes, handed, &mut place, (zoom, c), asked, cuts);
         let answer = reading.answer(i.kind != Kind::Lacks, || {
-            let b = if block && i.kind == Kind::Block { i.block } else { VOID };
+            // A block's value, a split's slab (`world::slab_word`); air and void none.
+            let b = if block && i.kind == Kind::Block || i.kind == Kind::Split { i.block } else { VOID };
             (In { kind: i.kind, block: b }, block)
         });
         at.ground = place;

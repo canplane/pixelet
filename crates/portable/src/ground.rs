@@ -21,7 +21,7 @@ use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::TILE_CELLS;
 use crate::lattice::{CELL_CENTER, GROUND};
-use crate::window::Found;
+use crate::window::{held_to, Found};
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
 
 // The catalog's looks this rule names, read into a word.
@@ -290,44 +290,56 @@ pub fn by_depth(cell: Zoom, look: u32, top: i32, z: i32) -> u32 {
     }
 }
 
-/// Whether nothing under the node `(zoom, c)` fills at the zooms from `far`
-/// to `near` a reader asks within it, by the ground's one rule (`blocks`, `Cell::opens`),
-/// where the faces under it lie between `lo` and `hi` leaf cells: every
-/// cell under it over the ground at each of those zooms, or ground a cave
-/// may take with a cave through all of it (`hollow`). Coarser than a shard,
-/// the Earth past the service area may be in it too, its face at sea level.
+/// Where the ground may fill the node `(zoom, c)` along z, at the zooms
+/// from `far` to `near` a reader asks within it, where the faces under it
+/// at those zooms lie between `lo` and `hi` leaf cells (`node`'s relief,
+/// every one of those zooms' joined): from its lowest to past its highest,
+/// in leaf cells, by the ground's one rule (`blocks`, `Cell::opens`).
+/// Coarser than a shard, the Earth past the service area may be in it too,
+/// its face at sea level.
 ///
-/// That rule at each zoom, in one test. The node's bottom and top are whole
-/// blocks of every zoom finer than it, an even count of each, and `blocks`
-/// rounds a height to the nearest block, a tie to the even one: so a height
-/// rounds to at most the bottom at a zoom exactly when it is at most half
-/// that zoom's block over it, and the finest zoom asked says it for all of
-/// them; while the top is a face block under a rounded height exactly when
-/// that height is more than half a block over the top, and the coarsest
-/// says it. One zoom's cells cannot be over the ground where another's are
-/// under it, so one of the two holds for every zoom or neither does.
-pub fn empty(shard: Shard, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far, near]: [Zoom; 2], hollow: bool) -> bool {
+/// Over it, past the highest top any of those zooms rounds `hi` to: a
+/// coarser zoom's block may round past a finer's. Under it, the lowest
+/// face's top block at those zooms, the ground a cave leaves there, where a
+/// cave takes all of the node (`hollow`), no bedrock is in it and no wall
+/// is about it; else from the world's bottom. Nothing (`EMPTY`) where no
+/// zoom is asked within it.
+///
+/// What fills the node is what of it lies in the slab (`meets`): its bottom
+/// and top are whole blocks of every zoom finer than it, an even count of
+/// each, and `blocks` rounds a height to the nearest block, a tie to the
+/// even one, so a zoom's top is at most the bottom exactly when the face
+/// is at most half that zoom's block over it, the finest zoom's saying it
+/// for all of them; and a zoom's lowest top block is at least the top
+/// exactly when the face is more than half that zoom's block over it, the
+/// coarsest's saying it.
+pub fn slab(shard: Shard, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far, near]: [Zoom; 2], hollow: bool) -> [i32; 2] {
     let [lo, hi] = if zoom < SHARD_ZOOM { [lo.min(SEA_LEVEL), hi.max(SEA_LEVEL)] } else { [lo, hi] };
-    let coarsest = if far > zoom + 1 { far } else { zoom + 1 };
-    if coarsest > near {
-        return true;
+    // No bedrock in it: the bedrock's top, rounded at `near` as a face is,
+    // at most its bottom.
+    let rock = face_height(near, blocks(near, bedrock(hi) as f32));
+    let caved = hollow && !meets([UNBOUNDED[0], rock], (zoom, c[2]), near) && !walled(shard, near, (zoom, [c[0], c[1]]));
+    let [mut under, mut over] = if caved { EMPTY } else { [UNBOUNDED[0], EMPTY[1]] };
+    let mut z = if far > zoom + 1 { far } else { zoom + 1 };
+    while z <= near {
+        let top = face_height(z, blocks(z, hi as f32));
+        over = if top > over { top } else { over };
+        if caved {
+            let floor = face_height(z, blocks(z, lo as f32) - leaf_blocks(z));
+            under = if floor < under { floor } else { under };
+        }
+        z += 1;
     }
-    // Leaf cells cut 2^e a side, the finest asked's blocks where finer than
-    // the leaves, so every height here is a whole count.
+    [under, over]
+}
+
+/// Whether the leaf cells `[lo, hi)` along z meet the node `(zoom, z)`, read
+/// to `near`: past the leaves a leaf cell is cut 2^e a side, so every
+/// height is a whole count.
+pub fn meets([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32), near: Zoom) -> bool {
     let e = near.max(LEAF_CELL) - LEAF_CELL;
     let s = LEAF_CELL + e - zoom;
-    let (bottom, top) = (c[2] << s, (c[2] + 1) << s);
-    // Half a block of a zoom, in those units; none at the leaves or finer,
-    // where a height is whole blocks.
-    let half = |z: Zoom| if z < LEAF_CELL { 1 << (LEAF_CELL - z - 1 + e) } else { 0 };
-    if hi << e <= bottom + half(near) {
-        return true;
-    }
-    // Under a face block at every zoom: past half the coarsest's block over
-    // the top, or at the leaves or finer, a leaf cell over it.
-    let under = if coarsest < LEAF_CELL { lo << e > top + half(coarsest) } else { lo << e >= top + (1 << e) };
-    let rock = bedrock(hi) << e;
-    hollow && under && rock <= bottom + half(near) && !walled(shard, near, (zoom, [c[0], c[1]]))
+    z << s < hi << e && (z + 1) << s > lo << e
 }
 
 /// Whether the block `z` of a cell at `cell` lies over the ground wherever
@@ -336,6 +348,12 @@ pub fn empty(shard: Shard, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far
 /// most `hi`'s.
 pub fn above(cell: Zoom, z: i32, hi: i32) -> bool {
     z >= blocks(cell, hi as f32)
+}
+
+/// What two bounds hold together: the lower of their lowest, the higher of
+/// their highest (`EMPTY` joins as nothing).
+pub fn join(a: [i32; 2], b: [i32; 2]) -> [i32; 2] {
+    [if a[0] < b[0] { a[0] } else { b[0] }, if a[1] > b[1] { a[1] } else { b[1] }]
 }
 
 /// A bound over every height a cell holds, i16's whole range.
@@ -373,7 +391,7 @@ pub type Answer = In<u32>;
 /// past the service area, the Earth's; else the node's own bound first, of
 /// each zoom's tile its cells are read from (`Held::relief`) — a block over it is air,
 /// else its cell's block (`Cell::block`), its look; a
-/// coarser node nothing under fills at the zooms asked (`empty`) a block of
+/// coarser node no part of which lies where the ground may fill at the zooms asked (`slab`, `meets`) a block of
 /// air its size, else split; where no tile over it is held, a block is the
 /// lack and a coarser node split, not known empty.
 /// `shard` is what is known of the area at the node, known a shard or
@@ -383,12 +401,16 @@ pub type Answer = In<u32>;
 /// the answer the cell its block was read off and where it was read, what
 /// the ways write over it read off (`window::ways_over`); none
 /// (`Cell::NONE`, `Found::NONE`) where it read none, as over the ground
-/// where the ways miss the block (`ways::misses`); and the ways' bound read
+/// where the ways miss the block (`ways::slab`); and the ways' bound read
 /// with its own (`Held::relief`), `EMPTY` where none was.
 pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, Found, [i32; 2]) {
     let none = Found::NONE;
     let air = In { kind: Kind::Block, block: VOID };
-    let split = In { kind: Kind::Split, block: VOID };
+    // A split no bound tells the slab of holds anything anywhere along z.
+    let split = In {
+        kind: Kind::Split,
+        block: crate::world::slab_word(UNBOUNDED),
+    };
     let lacks = In { kind: Kind::Lacks, block: VOID };
     // Past the area: a block's own Earth, or a node's where it is all over
     // sea level. No node a shard or finer straddles the area.
@@ -407,28 +429,39 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
     if zoom < GROUND.top() {
         return (split, Cell::NONE, none, EMPTY);
     }
-    // A block's cells are its zoom's. A coarser node's are read at the
-    // finest zoom asked within it, no finer than a tile at the node's own
-    // zoom holds: heights fold by their mean, so the finest's bound holds
-    // every coarser one's over the node, and what a tile at the node's zoom
-    // flattened is not the world there.
-    let fit = GROUND.grid_zoom(zoom);
-    let read = if block {
-        zoom
-    } else if near < fit {
-        near
-    } else {
-        fit
-    };
-    let ([relief, ways], ok) = held.relief(place, read, (zoom, c));
-    // Not held: a block is the lack; a coarser node is not known empty,
-    // so it is split, and a ray stops only at a block it meets not held.
+    // A block's cells are its zoom's. A coarser node's are every zoom's
+    // asked within it, from the coarsest to `near`: each zoom's cells are
+    // its own tile's, whose face, its own samples' bicubic, no other zoom's
+    // bounds, above or below, so the bound is every one's joined (`join`).
+    // One read a zoom the windows hold (`held_to`), `near`'s last, whose
+    // place becomes the node's; where the ground's is already unbounded, no
+    // finer one tells more.
+    let read = held_to(if block { zoom } else { near });
+    let first = held_to(if far > zoom + 1 { far } else { zoom + 1 });
+    let mut z = if block || first > read { read } else { first };
+    let ([mut relief, mut ways], mut ok) = ([EMPTY; 2], true);
+    loop {
+        let mut at = *place;
+        let ([r, w], held_z) = held.relief(&mut at, z, (zoom, c));
+        (relief, ways, ok) = (join(relief, r), join(ways, w), ok && held_z);
+        let open = relief[0] <= UNBOUNDED[0] && relief[1] >= UNBOUNDED[1];
+        if z >= read {
+            *place = at;
+        }
+        if z >= read || !ok || open {
+            break;
+        }
+        z += 1;
+    }
+    // Not held at a zoom asked: a block is the lack; a coarser node is not
+    // known empty, so it is split, and a ray stops only at a block it meets
+    // not held.
     if !ok {
         return (if block { lacks } else { split }, Cell::NONE, none, EMPTY);
     }
     if block {
         // Its column read where the ground or the ways may fill it.
-        if above(zoom, c[2], relief[1]) && crate::ways::misses(ways, (zoom, c[2]), zoom) {
+        if above(zoom, c[2], relief[1]) && !meets(crate::ways::slab(ways, [zoom, zoom]), (zoom, c[2]), zoom) {
             return (air, Cell::NONE, none, ways);
         }
         let column = held.cell(*place, zoom, c);
@@ -436,8 +469,18 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
         let answer = In { kind: Kind::Block, block };
         return (answer, column, *place, ways);
     }
+    // Air where none of it lies where the ground may fill, else a split
+    // and where along z.
     let (known, hollow) = cave.whole(zoom);
-    let answer = if empty(shard, (zoom, c), relief, [far, near], known && hollow) { air } else { split };
+    let s = slab(shard, (zoom, c), relief, [far, near], known && hollow);
+    let answer = if meets(s, (zoom, c[2]), near) {
+        In {
+            kind: Kind::Split,
+            block: crate::world::slab_word(s),
+        }
+    } else {
+        air
+    };
     (answer, Cell::NONE, none, ways)
 }
 

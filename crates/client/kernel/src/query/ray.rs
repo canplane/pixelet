@@ -150,7 +150,7 @@ impl<'a> Query for Walker<'_, 'a> {
             // Air coarser than asked, gone into where decor may stand in it.
             Kind::Block if !block && decor => cast::In {
                 kind: Kind::Split,
-                block: pxl_portable::ground::VOID,
+                block: world::slab_word(pxl_portable::ground::UNBOUNDED),
             },
             _ => answer,
         }

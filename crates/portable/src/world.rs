@@ -33,8 +33,11 @@ use crate::{Zoom, LEAF_CELL};
 /// space"); `PLACED_BLOCK` over a placed value, the source control tells an
 /// edit by, which nothing drawn reads. Coarser, a split where
 /// any layer may fill under it at a zoom asked, each by its own bound —
-/// the ground's (`ground::empty`), the ways' (`ways::misses`) — else air;
-/// where the ground is not held, the lack. With it, whether it is a block.
+/// what is placed (`overwrite::over`), the ground's (`ground::slab`), the
+/// ways' (`ways::slab`), each meeting the node (`ground::meets`) — its
+/// block word where along z (`slab_word`);
+/// else air; where the ground is not held, the lack. With it, whether it is
+/// a block.
 #[allow(clippy::too_many_arguments)]
 pub fn node<H: Held, W: Ran + Area, L: Lanes>(
     held: &mut H,
@@ -47,6 +50,8 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
     [carve, hide]: [Cut; 2],
 ) -> (In<u32>, bool) {
     let mut block = zoom >= near || zoom >= LEAF_CELL;
+    // Where what is placed splits the node, where along z it may fill.
+    let (mut placed, mut splits) = (ground::EMPTY, false);
     // Asked of what is placed only where something is, or a preview cuts.
     if put.holds() || carve.zoom != Cut::NONE.zoom {
         block = zoom >= near || zoom >= LEAF_CELL && overwrite::whole(put, carve, zoom, c);
@@ -61,7 +66,7 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
             );
         }
         if over.says == SPLIT {
-            return (In { kind: Kind::Split, block: VOID }, block);
+            (placed, splits) = (overwrite::slab(lanes, put, zoom, c), true);
         }
     }
     let (i, cell, found, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
@@ -70,13 +75,52 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
     } else {
         i.block
     };
-    // Coarser, the ways split what the ground leaves air where they may fill.
-    let kind = if !block && i.kind == Kind::Block && !crate::ways::misses(bound, (zoom, c[2]), near) {
-        Kind::Split
-    } else {
-        i.kind
+    if block {
+        return (In { kind: i.kind, block: value }, block);
+    }
+    // Coarser, what is placed splits it where it may fill, and the ways
+    // what the ground leaves air where they may; a split's slab is every
+    // source's own joined: what is placed (`overwrite::slab`), the ground's
+    // (`ground::slab`, unbounded where it lacks) and the ways' (`ways::slab`).
+    let coarsest = if far > zoom + 1 { far } else { zoom + 1 };
+    let ways = crate::ways::slab(bound, [coarsest, near]);
+    let fill = ground::meets(ways, (zoom, c[2]), near);
+    let kind = if splits || i.kind == Kind::Block && fill { Kind::Split } else { i.kind };
+    if kind != Kind::Split {
+        return (In { kind, block: value }, block);
+    }
+    let own = match i.kind {
+        Kind::Split => slab_of(i.block),
+        Kind::Lacks => ground::UNBOUNDED,
+        _ => ground::EMPTY,
     };
-    (In { kind, block: value }, block)
+    let joined = ground::join(ground::join(own, ways), placed);
+    (In { kind, block: slab_word(joined) }, block)
+}
+
+/// A split's block word (`node`): where anything may fill the node along z,
+/// in leaf cells, its lowest in the low half and past its highest in the
+/// high, each an i16 held to i16's range — so i16's whole (`ground::UNBOUNDED`)
+/// where no bound tells. A ray through the node outside it meets nothing
+/// there (pxl-portable cast). Each source's own bound joined: the ground's
+/// (`ground::slab`), the ways' (`ways::slab`), and what is placed
+/// (`overwrite::slab`), each off what it holds, as each source answers.
+pub fn slab_word([lo, hi]: [i32; 2]) -> u32 {
+    let held = |v: i32| {
+        if v < i16::MIN as i32 {
+            i16::MIN as i32
+        } else if v > i16::MAX as i32 {
+            i16::MAX as i32
+        } else {
+            v
+        }
+    };
+    ground::bound_word([held(lo), held(hi)]) as u32
+}
+
+/// `slab_word`'s lowest and past its highest.
+pub fn slab_of(w: u32) -> [i32; 2] {
+    ground::bound_of(w as i32)
 }
 
 /// Whether a block's value as `node` answers it fills its block: neither
