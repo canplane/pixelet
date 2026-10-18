@@ -507,7 +507,7 @@ pub fn cast_cs(
         zoom: at(read, cast::START_PLACE),
         corner: [at(read, cast::START_PLACE + 1) as i32, at(read, cast::START_PLACE + 2) as i32, at(read, cast::START_PLACE + 3) as i32],
     };
-    let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, (place, at_of(read, cast::START_AT)), &Starts(read));
+    let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, (place, at_of(read, cast::START_AT)), &Starts(read), cast::Thin, 0.0);
     let w = word(&ray, met);
     // The nodes asked only where the steps view reads them.
     let words = if eye.origin.w != 0 { ray::WORDS } else { ray::WORDS - 1 };
