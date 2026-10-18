@@ -15,8 +15,8 @@ use crate::layer::object::store::EntryAt;
 use crate::layer::Answer;
 pub(super) use pxl_portable::cast::Until;
 use pxl_portable::cast::{self, Detail, Ends, Kind, Query};
+use pxl_portable::world;
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::block::Block;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
@@ -81,9 +81,6 @@ pub struct Hit {
     /// The box struck.
     pub cube: Aabb,
     pub struck: Struck,
-    /// What the block met is, as the world answers it at its zoom; none for
-    /// decor, which is no block, and for what is climbed out of into air.
-    pub block: Option<Block>,
 }
 
 /// The world as the descent asks it, with what only the CPU carries along
@@ -104,12 +101,12 @@ const _: () = assert!(<<Walker<'static, 'static> as Query>::Stack as cast::Level
 
 impl<'a> Query for Walker<'_, 'a> {
     type At = At;
-    type Block = Option<Block>;
+    type Block = u32;
     /// Kept whole, every level: the CPU's walk holds its stack where it is
     /// cheap, and never makes an entry again.
     type Kept = At;
     type Stack = [At; cast::DEPTH];
-    const AIR: Option<Block> = None;
+    const AIR: u32 = pxl_portable::ground::VOID;
 
     fn root(&mut self, node: [i32; 3]) -> At {
         self.world.start((0, node.map(i64::from)))
@@ -125,7 +122,7 @@ impl<'a> Query for Walker<'_, 'a> {
     /// the ray passes within where decor is drawn as held strikes what
     /// stands near it, and a node no block under fills is still gone into
     /// where decor may stand in it, down to the leaf cells.
-    fn node(&mut self, at: &mut At, _: Zoom, _: [i32; 3], asked: [Zoom; 2], t0: f32) -> cast::In<Option<Block>> {
+    fn node(&mut self, at: &mut At, _: Zoom, _: [i32; 3], asked: [Zoom; 2], t0: f32) -> cast::In<u32> {
         let (zoom, c) = at.node;
         let t0 = f64::from(t0);
         if zoom == GROUND.cell() {
@@ -136,7 +133,10 @@ impl<'a> Query for Walker<'_, 'a> {
         let (answer, block) = match self.world.node(at, asked) {
             Answer::Nothing(l) => {
                 self.lack.get_or_insert(l);
-                return cast::In { kind: Kind::Lacks, block: None };
+                return cast::In {
+                    kind: Kind::Lacks,
+                    block: pxl_portable::ground::VOID,
+                };
             }
             Answer::Coarser(i, l) => {
                 self.lack.get_or_insert(l);
@@ -148,13 +148,16 @@ impl<'a> Query for Walker<'_, 'a> {
         let decor = zoom < GROUND.cell() && self.strike.as_ref().is_some_and(|(_, s)| t0 < s.held && self.world.may_strike(s, at.node, at.shard));
         match answer.kind {
             // Air coarser than asked, gone into where decor may stand in it.
-            Kind::Block if !block && decor => cast::In { kind: Kind::Split, block: None },
+            Kind::Block if !block && decor => cast::In {
+                kind: Kind::Split,
+                block: pxl_portable::ground::VOID,
+            },
             _ => answer,
         }
     }
 
-    fn fills(&self, block: &Option<Block>) -> bool {
-        block.is_some_and(|b| b.fills())
+    fn fills(&self, block: &u32) -> bool {
+        world::fills(*block)
     }
 
     fn keep(at: &At) -> At {
@@ -178,7 +181,6 @@ fn decor_hit(ray: &Ray, t: f64, i: Instance) -> Hit {
         normal: ray.direction.map(|v| -v),
         cube: base,
         struck: Struck::Decor(i),
-        block: None,
     }
 }
 
@@ -226,7 +228,7 @@ impl<'a> World<'a> {
     /// `scatter::footing`): the block met and the block over it, where the
     /// world holds the column as its tiles say; none where nothing fills or
     /// a tile under the ray is lacked or only a coarser one stands in.
-    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<(Option<Block>, i32)> {
+    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<(u32, i32)> {
         let mut walker = Walker {
             world: self,
             lack: None,
@@ -239,7 +241,7 @@ impl<'a> World<'a> {
 
     /// Where the descent stopped, in units: its node's box put back on the
     /// unit cell holding the origin, so it lies on the origin's lap.
-    fn hit(&self, ray: &Ray, s: cast::Stop<At, Option<Block>>) -> Hit {
+    fn hit(&self, ray: &Ray, s: cast::Stop<At, u32>) -> Hit {
         let (zoom, c) = s.at.node;
         let side = units(zoom);
         let unit = ray.origin.map(libm::floor);
@@ -249,9 +251,9 @@ impl<'a> World<'a> {
         let axis = s.axis as usize;
         let mut normal = [0.0; 3];
         normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };
-        let struck = match s.block {
-            Some(Block::Placed(_)) => self.objects.placed(zoom, wrap_cell(zoom, c)).map_or(Struck::Objects, |e| Struck::Object(e.id())),
-            _ => Struck::Ground,
+        let struck = match world::placed(s.block) {
+            true => self.objects.placed(zoom, wrap_cell(zoom, c)).map_or(Struck::Objects, |e| Struck::Object(e.id())),
+            false => Struck::Ground,
         };
         let t = f64::from(s.t);
         Hit {
@@ -260,7 +262,6 @@ impl<'a> World<'a> {
             normal,
             cube: Aabb { min, max: min.map(|v| v + side) },
             struck,
-            block: s.block,
         }
     }
 }

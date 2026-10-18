@@ -6,7 +6,6 @@
 //! (`Upright`), the ray every reader casts (`World::along`): the first block
 //! that fills, or out of what fills the first that does not.
 
-use pxl_spec::block::Block;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
@@ -143,9 +142,9 @@ impl<'a> World<'a> {
         self.surface_of(cell, c)
     }
 
-    /// What is in the leaf block at `at`, as the cast draws it; none where
-    /// it is void.
-    pub fn block_of(&self, at: &Q3) -> Answer<Option<Block>> {
+    /// What is in the leaf block at `at`, as the cast draws it: its value
+    /// (pxl-portable `world::node`'s), void where none.
+    pub fn block_of(&self, at: &Q3) -> Answer<u32> {
         let side = units(GROUND.cell());
         let p = [i64::from(at[0]), i64::from(at[1]), i64::from(at[2])].map(q3::to_real);
         self.block((GROUND.cell(), p.map(|v| (v / side).floor() as i64)))

@@ -269,8 +269,7 @@ impl Query for World<'_> {
     /// A value of the one value space, whichever source holds it: neither
     /// void nor air.
     fn fills(&self, block: &u32) -> bool {
-        let v = block & !PLACED_BLOCK;
-        v != VOID && v != object::air as u32
+        world::fills(*block)
     }
 
     /// The caves' draws and what is placed are a hash's state and a slot,

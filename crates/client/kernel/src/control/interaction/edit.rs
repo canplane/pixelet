@@ -9,6 +9,7 @@ use crate::layer::object::ext::Ext;
 use crate::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
 use crate::layer::object::size::{object_size_of, MARKER_SIZE};
 use crate::layer::object::store::Block;
+use pxl_portable::scatter::PLACED_BLOCK;
 use pxl_spec::block::ext::MARKER_TEXT_CHARS;
 use pxl_spec::block::object::{cube_id, decor_num_id, Cube};
 use pxl_spec::block::object::{object_value_is_marker, MARKER};
@@ -30,7 +31,7 @@ use pxl_spec::block::decor::Decor;
 /// Whether air is written where `at` is: a carve of the ground, or what was
 /// placed there taken back.
 fn carved(at: &Q3) -> bool {
-    matches!(World::now().block_of(at).value(), Some(Some(pxl_spec::block::Block::Placed(AIR))))
+    World::now().block_of(at).value() == Some(PLACED_BLOCK | AIR)
 }
 
 /// The never-written AIR entry the eraser's preview injects into the drawn
@@ -71,7 +72,7 @@ fn place_value_is_redundant(at: &Q3, size: f64, cube: Cube) -> bool {
     let entry = EntryAt::new(zoom, index_of(zoom, at));
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
     let ground = World::now().previewing(Some(entry), None).block_of(&middle(entry)).exact();
-    matches!(ground, Some(Some(pxl_spec::block::Block::Ground(g))) if g == look as u8)
+    ground == Some(look as u32)
 }
 
 /// The middle of the cube `at` names.
@@ -174,7 +175,8 @@ pub fn remove(at: EntryAt) {
     // Only the resident finest leaf can say what fills the cube without it, as
     // `place_value_is_redundant` asks; elsewhere it is emptied as asked.
     let id = match world.previewing(Some(at), None).block_of(&middle(at)).exact() {
-        Some(Some(pxl_spec::block::Block::Ground(..))) | None => AIR,
+        Some(v) if v != VOID && !pxl_portable::world::placed(v) => AIR,
+        None => AIR,
         Some(_) => VOID,
     };
     submit(Write {

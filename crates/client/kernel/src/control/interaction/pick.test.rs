@@ -21,7 +21,6 @@ fn struck(normal: V3, point: V3) -> Hit {
             min: [3.0, 5.0, 2.0],
             max: [4.0, 6.0, 3.0],
         },
-        block: None,
         struck: Struck::Ground,
     }
 }

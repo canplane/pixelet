@@ -24,29 +24,8 @@ pub mod volume;
 
 pub use decor::DecorId;
 
-use crate::bake::tile::terrain::GroundId;
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::zoom::units;
-
-/// What is in a block: the ground's look, a way's or a pier's, or what is
-/// placed, air included (pxl-kernel query/node.rs `drawn` answers which).
-/// Where there is none, it is void.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Block {
-    Ground(GroundId),
-    Placed(u32),
-}
-
-impl Block {
-    /// Whether it fills its block: ground does, and of what is placed a cube
-    /// that is not air; decor stands in a block it leaves empty.
-    pub fn fills(self) -> bool {
-        match self {
-            Block::Ground(..) => true,
-            Block::Placed(state) => !object::object_value_is_air(state) && object::cube_of(state).is_some(),
-        }
-    }
-}
 
 /// A catalog color, packed `0xRRGGBB` by the generator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

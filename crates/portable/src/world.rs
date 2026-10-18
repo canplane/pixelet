@@ -78,3 +78,17 @@ pub fn node<H: Held, W: Windows, L: Lanes>(
     };
     (In { kind, block: value }, block)
 }
+
+/// Whether a block's value as `node` answers it fills its block: neither
+/// void nor air, whichever source holds it. What is placed answers a voxel
+/// alone (`overwrite::value`), so no decor or marker is among them.
+pub fn fills(value: u32) -> bool {
+    let v = value & !PLACED_BLOCK;
+    v != VOID && v != crate::overwrite::AIR
+}
+
+/// Whether what is placed holds a block's value (`PLACED_BLOCK`): the
+/// source control tells an edit and a strike by, which nothing drawn reads.
+pub fn placed(value: u32) -> bool {
+    value & PLACED_BLOCK != 0
+}

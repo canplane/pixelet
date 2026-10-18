@@ -28,7 +28,7 @@ pub const PLACED: u32 = 0;
 pub const FULL: u32 = 1 << 15;
 
 const VOID: u32 = sentinel::void as u32;
-const AIR: u32 = object::air as u32;
+pub const AIR: u32 = object::air as u32;
 
 /// A slot's data word, the one layout every reader of the tree reads it by:
 /// a leaf's value low and its record's handle high (`leaf_word`), a

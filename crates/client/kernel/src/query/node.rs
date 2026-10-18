@@ -44,15 +44,12 @@
 
 use pxl_portable::area::{Area, Shard};
 use pxl_portable::cast::{In, Kind};
-use pxl_portable::cube::sentinel;
+use pxl_portable::ground::VOID;
 use pxl_portable::ground::{self, Cell};
-use pxl_portable::scatter::PLACED_BLOCK;
 use pxl_portable::window::{self, Found};
 use pxl_portable::world;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::overwrite::{Cut, Held};
-use pxl_spec::block::Block;
 use pxl_spec::procedural::Cave;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::{child_of, Node};
@@ -91,7 +88,7 @@ impl World<'_> {
     /// What is in the block `node`, X on the asker's lap, at its own
     /// zoom, `coarsest` or finer, for an asker with nothing handed down
     /// (`drawn`).
-    pub fn block(&self, node: Node<3>) -> Answer<Option<Block>> {
+    pub fn block(&self, node: Node<3>) -> Answer<u32> {
         self.drawn(&mut self.start(node))
     }
 
@@ -124,10 +121,10 @@ impl World<'_> {
     /// What is in `at`'s block, at its own zoom, `coarsest` or finer: none
     /// where it is air or void, else what fills it (`node`, asked at its
     /// own zoom).
-    pub(super) fn drawn(&self, at: &mut At) -> Answer<Option<Block>> {
+    pub(super) fn drawn(&self, at: &mut At) -> Answer<u32> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        self.node(at, [zoom, zoom]).map(|(i, block)| if block && i.kind == Kind::Block { i.block } else { None })
+        self.node(at, [zoom, zoom]).map(|(i, block)| if block && i.kind == Kind::Block { i.block } else { VOID })
     }
 
     /// A preview's entry as pxl-portable `overwrite` takes it.
@@ -161,7 +158,7 @@ impl World<'_> {
     /// block, the zoom asked's, none for air or void; or, coarser than asked
     /// and nothing under it filling, air its size; with whether it is a
     /// block (`world::node`'s).
-    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2]) -> Answer<(In<Option<Block>>, bool)> {
+    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2]) -> Answer<(In<u32>, bool)> {
         let (zoom, c) = at.node;
         let c = c.map(|v| v as i32);
         at.shard = at.shard.at(&Windowed, (zoom, [c[0], c[1]]));
@@ -170,23 +167,11 @@ impl World<'_> {
         let mut reading = Reading::new(self, at);
         let (i, block) = world::node(&mut reading, &Windowed, &lanes, handed, &mut place, (zoom, c), asked, cuts);
         let answer = reading.answer(i.kind != Kind::Lacks, || {
-            let b = if block && i.kind == Kind::Block { block_of(i.block) } else { None };
+            let b = if block && i.kind == Kind::Block { i.block } else { VOID };
             (In { kind: i.kind, block: b }, block)
         });
         at.ground = place;
         answer
-    }
-}
-
-/// The block a composed value names (pxl-portable `world::node`): none
-/// for air or void, what is placed over `PLACED_BLOCK`, else the ground's.
-fn block_of(v: u32) -> Option<Block> {
-    if v == u32::from(sentinel::void) {
-        None
-    } else if v & PLACED_BLOCK != 0 {
-        Some(Block::Placed(v & !PLACED_BLOCK))
-    } else {
-        Some(Block::Ground(v as GroundId))
     }
 }
 

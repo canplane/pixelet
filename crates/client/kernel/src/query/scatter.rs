@@ -9,10 +9,9 @@
 //! world's blocks about it (pxl-portable `scatter::stand`, `grows`).
 
 use pxl_portable::overwrite;
-use pxl_portable::scatter::{self as portable, Grounds, Grown, PLACED_BLOCK};
+use pxl_portable::scatter::{self as portable, Grounds, Grown};
 use pxl_spec::block::cube::sentinel;
 use pxl_spec::block::decor::Decor;
-use pxl_spec::block::Block;
 use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -52,7 +51,7 @@ impl Grounds for Asked<'_, '_> {
 
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
         match self.world.footing(cell, g) {
-            Some((b, top)) => (value_of(b), top, true),
+            Some((b, top)) => (b, top, true),
             None => (0, 0, false),
         }
     }
@@ -68,17 +67,7 @@ impl Grounds for Asked<'_, '_> {
             let s = zoom - z;
             at = self.world.child(&at, (0..3).map(|i| (((c[i] >> s) & 1) as usize) << i).sum());
         }
-        value_of(self.world.drawn(&mut at).value().flatten())
-    }
-}
-
-/// A block as pxl-portable's growth reads one: void for none, the ground's
-/// value, or `PLACED_BLOCK` over what is placed.
-fn value_of(b: Option<Block>) -> u32 {
-    match b {
-        Some(Block::Ground(g)) => u32::from(g),
-        Some(Block::Placed(v)) => PLACED_BLOCK | v,
-        None => u32::from(sentinel::void),
+        self.world.drawn(&mut at).value().unwrap_or(u32::from(sentinel::void))
     }
 }
 
