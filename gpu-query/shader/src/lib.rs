@@ -274,6 +274,10 @@ impl Query for World<'_> {
         world::fills(*block)
     }
 
+    fn slab(&self, block: &u32) -> [i32; 2] {
+        world::slab_of(*block)
+    }
+
     /// The caves' draws and what is placed are a hash's state and a slot,
     /// had again only from the top, so they are kept; and where the node's
     /// cells are held, which `window::step` steps a sibling's from, as a

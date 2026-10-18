@@ -392,6 +392,10 @@ pub trait Query {
     /// there it does nothing but answer and leave `at`.
     fn node(&mut self, at: &mut Self::At, zoom: Zoom, node: [i32; 3], asked: [Zoom; 2], t0: f32) -> In<Self::Block>;
     fn fills(&self, block: &Self::Block) -> bool;
+    /// A split's slab along z, from the lowest leaf cell anything in it may
+    /// fill to past the highest (pxl-portable `world::slab_of`): where a ray
+    /// through the node is wholly out of it, it meets nothing there.
+    fn slab(&self, block: &Self::Block) -> [i32; 2];
     /// What the stack keeps of `at`, handed a node the descent goes into.
     fn keep(at: &Self::At) -> Self::Kept;
     /// What was handed the node at `zoom` the stack kept `kept` of, `live`
@@ -650,8 +654,20 @@ pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, un
                 Kind::Lacks => Ends::Lacks,
                 Kind::Block if if until == Until::Fills { q.fills(&i.block) && !inside } else { !q.fills(&i.block) } => Ends::Stop,
                 Kind::Block => Ends::On,
+                // ESVO's contour (Laine & Karras 2010): the ray's span in the
+                // node clipped to the slab along z its content lies in, its
+                // planes a face's own (`level`); a span wholly out of it, or
+                // touching it alone, meets nothing that fills, and a walk to
+                // what fills passes the node whole. A walk to air goes in: its
+                // stop is where that span begins.
                 Kind::Split => {
-                    into = true;
+                    let [lo, hi] = q.slab(&i.block);
+                    let level = |v: i32| {
+                        let root = v >> UNIT_ZOOM;
+                        units(((v - (root << UNIT_ZOOM)) as u32) << FRAC_W, og[2], root - r0[2])
+                    };
+                    let (bottom, top) = planes(ray.direction[2], ray.inverse[2], level(lo), level(hi), (t0, t1));
+                    into = until == Until::Air || t0.max(bottom) < t1.min(top);
                     Ends::On
                 }
             };

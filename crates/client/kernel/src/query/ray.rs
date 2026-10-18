@@ -160,6 +160,10 @@ impl<'a> Query for Walker<'_, 'a> {
         world::fills(*block)
     }
 
+    fn slab(&self, block: &u32) -> [i32; 2] {
+        world::slab_of(*block)
+    }
+
     fn keep(at: &At) -> At {
         *at
     }
