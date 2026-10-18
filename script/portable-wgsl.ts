@@ -12,6 +12,12 @@
 //   deno run -A script/portable-wgsl.ts            write them
 //   deno run -A script/portable-wgsl.ts --check    fail if one is not current
 //
+// Either way each module is compiled first by Tint, the WGSL compiler a
+// browser's WebGPU runs (Dawn's, npm:webgpu), and its compute pipeline made
+// on the platform's floor, and nothing is written where one is refused:
+// naga, which reads the SPIR-V into WGSL, takes modules Tint refuses (a
+// literal past f32's range, at e84ddd56e).
+//
 // The check judges only that each checked-in file is what the source makes
 // now; it never compares two implementations, since there is one. Each file
 // carries the digest of the sources that made it (`inputsDigest`), which
@@ -129,10 +135,48 @@ function generate(digest: string): Map<string, string> {
   return new Map(ENTRIES.map(([entry, file]) => [join(shaders, file), HEADER(digest) + Deno.readTextFileSync(join(root, BUILT, `${entry}.wgsl`))]));
 }
 
+/** What Tint refuses of `made`, each entry's module by the file it is
+ * written as: its compile's errors and its compute pipeline's, made with the
+ * layout its module declares on a device of the default limits, the floor
+ * every WebGPU device binds (frame/shader/floor.rs). */
+export async function refused(made: Map<string, string>): Promise<string[]> {
+  // Here, not at the top, so what imports this module for its digest
+  // (check:rules) loads no device.
+  const { create, globals } = await import("webgpu");
+  Object.assign(globalThis, globals);
+  // Held to the end (`void gpu` below): an instance collected while its
+  // device works ends the process.
+  const gpu = create([]);
+  const adapter = await gpu.requestAdapter();
+  if (!adapter) return ["no WebGPU adapter to compile on"];
+  const device = await adapter.requestDevice();
+  const out: string[] = [];
+  for (const [entry, file] of ENTRIES) {
+    const code = made.get(join(shaders, file));
+    if (code === undefined) continue;
+    device.pushErrorScope("validation");
+    const module = device.createShaderModule({ code });
+    const errors = (await module.getCompilationInfo()).messages.filter((m) => m.type === "error");
+    out.push(...errors.map((m) => `${file}:${m.lineNum}:${m.linePos}: ${m.message}`));
+    // Its errors, as the module's past its compile, the scope's.
+    device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: entry } });
+    // A module that does not compile fails its pipeline too: said once.
+    const scoped = await device.popErrorScope();
+    if (scoped && errors.length === 0) out.push(`${file}: ${scoped.message.split("\n")[0]}`);
+  }
+  device.destroy();
+  void gpu;
+  return out;
+}
+
 if (import.meta.main) {
   const check = Deno.args.includes("--check");
+  const modules = generate(await inputsDigest(root));
+  const refusals = await refused(modules);
+  for (const r of refusals) console.error(`refused by Tint: ${r}`);
+  if (refusals.length > 0) Deno.exit(1);
   let stale = false;
-  for (const [target, made] of generate(await inputsDigest(root))) {
+  for (const [target, made] of modules) {
     if (check) {
       let held = "";
       try {

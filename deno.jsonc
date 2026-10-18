@@ -117,7 +117,10 @@
     "vite": "npm:vite@^8.3.0",
     "@deno/vite-plugin": "npm:@deno/vite-plugin@^2.0.3",
 
-    "i18next": "npm:i18next@^26.4.2"
+    "i18next": "npm:i18next@^26.4.2",
+
+    // Dawn, the WebGPU Chrome runs, for the generated kernels' compile (script/portable-wgsl.ts).
+    "webgpu": "npm:webgpu@0.6.2"
   },
 
   "fmt": {
