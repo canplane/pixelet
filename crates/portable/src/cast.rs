@@ -510,6 +510,17 @@ impl<A: Copy> Over<A> for [A; DEPTH] {
     }
 }
 
+/// Over a walk from the roots, nothing: no node over a root, so it is never
+/// asked (`top` 0), and answers the root's own.
+#[derive(Clone, Copy)]
+pub struct Rooted<A>(pub A);
+
+impl<A: Copy> Over<A> for Rooted<A> {
+    fn over(&self, _: Zoom) -> A {
+        self.0
+    }
+}
+
 /// The world's root holding `o`: its corner the origin's unit cell's offset
 /// into it, negated.
 fn root_of(o: &Origin) -> Place {
@@ -583,7 +594,7 @@ pub fn start<Q: Query>(q: &mut Q, o: &Origin, detail: Detail) -> Start<Q::At> {
 pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until) -> Met<Q::At, Q::Block> {
     let root = root_of(o);
     let at = q.root(root.node(o));
-    first_from(q, o, ray, detail, until, (root, at), &[at; DEPTH], Thin, 0.0)
+    first_from(q, o, ray, detail, until, (root, at), &Rooted(at), Thin, 0.0)
 }
 
 /// What walks a descent: a ray, or a cone about it whose radius grows
