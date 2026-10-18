@@ -715,7 +715,6 @@ struct RaysPass {
     /// The lit pass's entries it paints by (`Renderer::lit_entries`); none
     /// until the renderer hands them.
     lit: Vec<Entry>,
-    sky_buffer: u32,
     looks: u32,
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
@@ -886,7 +885,7 @@ const _: () = assert!(
 const SLOT_STRIDE: u32 = UNIFORM_ALIGN_MAX;
 
 impl RaysPass {
-    fn new(g: &Gpu, pipelines: &mut Pipelines, sky_buffer: u32) -> RaysPass {
+    fn new(g: &Gpu, pipelines: &mut Pipelines) -> RaysPass {
         let built = pipelines.build(g, PIPELINE_SCREEN_RAYS, g.canvas());
         let words = look_words();
         let looks = g.buffer(word_bytes(2 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
@@ -896,7 +895,6 @@ impl RaysPass {
             group: 0,
             bound: [0; 2],
             lit: Vec::new(),
-            sky_buffer,
             looks,
             ground: None,
             cast: None,
@@ -920,7 +918,6 @@ impl RaysPass {
         release(self.group);
         let mut e = self.lit.clone();
         e.push(view_entry(3, bound[0]));
-        e.push(buffer_entry(19, self.sky_buffer));
         e.push(buffer_entry(20, self.looks));
         e.push(buffer_entry(21, bound[1]));
         self.group = g.bind_group(self.built.layouts[0], &e);
@@ -1407,7 +1404,7 @@ impl Renderer {
             puck: PuckPass::new(g, &mut pipelines, frame_buffer, air),
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer),
-            screen: RaysPass::new(g, &mut pipelines, sky_buffer),
+            screen: RaysPass::new(g, &mut pipelines),
             world: Read::default(),
             frame_read: Read::default(),
             ao_read: Read::default(),

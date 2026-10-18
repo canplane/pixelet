@@ -269,7 +269,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "ray",
         "eye",
         "paint",
-        "sky_words",
         "screen_rays",
     ],
     // SHADER_CAST

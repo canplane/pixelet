@@ -268,9 +268,9 @@ const CLOUD_GROUP: [[u32; 2]; 14] = {
 const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 
 /// The lit pass's frame, occlusion, air and layers, all read where
-/// a pixel is painted; then the rays, the sky's words, the looks and the
-/// eye's Q3 steps: the most entries any group has (`GROUP_ENTRIES`).
-const SCREEN_GROUP: [[u32; 2]; 19] = {
+/// a pixel is painted; then the rays, the looks and the eye's words: the
+/// most entries any group has (`GROUP_ENTRIES`).
+const SCREEN_GROUP: [[u32; 2]; 18] = {
     [
         [0, UNIFORM],
         [7, TEXTURE],
@@ -288,7 +288,6 @@ const SCREEN_GROUP: [[u32; 2]; 19] = {
         [4, TEXTURE_ARRAY],
         [5, STORAGE],
         [6, SAMPLER],
-        [19, UNIFORM],
         [20, STORAGE],
         [21, UNIFORM],
     ]

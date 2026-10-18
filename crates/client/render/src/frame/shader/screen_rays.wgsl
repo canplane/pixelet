@@ -11,14 +11,29 @@
 // Each value's swatch and layer, then the colour it reads as from afar
 // (`mesh/paint/ground.rs` `look_words`), by value whichever source holds it.
 @group(0) @binding(20) var<storage, read> looks: array<vec2u>;
-// The eye the rays left (pxl-portable `eye`), its first vec4: its Q3 steps
-// (`EYE_ORIGIN`), FRAC_W bits a unit and wrapping, a block's place on the
-// lattice read off their low bits, and whether a ray reports its steps
-// (`EYE_STEPS`).
+// The eye the rays left (pxl-portable `eye`): its Q3 steps (`EYE_ORIGIN`),
+// FRAC_W bits a unit and wrapping, a block's place on the lattice read off
+// their low bits; whether a ray reports its steps (`EYE_STEPS`); its reach;
+// and the axes and tangents each ray's direction is formed of.
 @group(0) @binding(21) var<uniform> eye: array<vec4u, EYE_READ_VEC4S>;
 
 fn eye_word(k: u32) -> u32 {
   return eye[k / 4u][k % 4u];
+}
+
+fn eye_vec3(k: u32) -> vec3f {
+  return vec3f(bitcast<f32>(eye_word(k)), bitcast<f32>(eye_word(k + 1u)), bitcast<f32>(eye_word(k + 2u)));
+}
+
+// The ray through the pixel at `frag`, its middle, as the cast formed it
+// (gpu-query-shader `pixel_ray`): pxl-portable cast.rs `through`'s mirror,
+// off the eye's own words, so the t a ray left is laid along the very
+// direction it was cast in.
+fn through(frag: vec2f, size: vec2f) -> vec3f {
+  let ndc = vec2f(frag.x / size.x * 2.0 - 1.0, 1.0 - frag.y / size.y * 2.0);
+  let tan = vec2f(bitcast<f32>(eye_word(EYE_TAN)), bitcast<f32>(eye_word(EYE_TAN + 1u)));
+  let d = eye_vec3(EYE_FORWARD) + ndc.x * tan.x * eye_vec3(EYE_RIGHT) + ndc.y * tan.y * eye_vec3(EYE_UP);
+  return d / sqrt(dot(d, d));
 }
 
 // The steps a ray's colour runs up to, on a log scale, the same on every
@@ -27,7 +42,6 @@ const STEPS_MOST: f32 = 1024.0;
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
-  @location(0) ndc: vec2f,
 };
 
 struct FragOut {
@@ -40,7 +54,6 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
   let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u)) * 2.0 - 1.0;
   var o: VertexOut;
   o.clip = vec4f(p, 0.0, 1.0);
-  o.ndc = p;
   return o;
 }
 
@@ -134,7 +147,7 @@ fn box_uv(h: Hit) -> vec2f {
 @fragment
 fn fs(v: VertexOut) -> FragOut {
   // This pixel's ray, through its middle, as the cast formed it.
-  let d = normalize(sky_ray() * vec3f(v.ndc, 1.0));
+  let d = through(v.clip.xy, vec2f(textureDimensions(rays)));
   let at = vec2i(v.clip.xy);
   let c = vec2u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x);
   // A ray that met nothing leaves its first word zero: no stop is void.

@@ -45,10 +45,10 @@ fn main() {
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
     // The eye's words the screen pass reads (pxl-portable eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.
-    use pxl_portable::eye::{ORIGIN, REACH, STEPS};
-    let last = (ORIGIN + 2).max(STEPS).max(REACH);
+    use pxl_portable::eye::{FORWARD, ORIGIN, REACH, RIGHT, STEPS, TAN, UP};
+    let last = (ORIGIN + 2).max(STEPS).max(REACH).max(FORWARD + 2).max(RIGHT + 2).max(UP + 2).max(TAN + 1);
     let eye = format!(
-        "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_STEPS: u32 = {STEPS}u;\nconst EYE_REACH: u32 = {REACH}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
+        "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_STEPS: u32 = {STEPS}u;\nconst EYE_REACH: u32 = {REACH}u;\nconst EYE_FORWARD: u32 = {FORWARD}u;\nconst EYE_RIGHT: u32 = {RIGHT}u;\nconst EYE_UP: u32 = {UP}u;\nconst EYE_TAN: u32 = {TAN}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
         last / 4 + 1
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
