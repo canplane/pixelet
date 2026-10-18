@@ -49,6 +49,14 @@ pub struct Billboards {
     sets: Slots<Set, { SETS_MAX + 1 }>,
 }
 
+/// The sets, the billboards' own: a leaf holds what it lays out, as the
+/// terrain holds its tiles, and is handed the draw list it writes into.
+static BILLBOARDS: xpute_guest::global::Global<Billboards> = xpute_guest::global::Global::new();
+
+pub fn billboards() -> &'static mut Billboards {
+    BILLBOARDS.get(Billboards::default)
+}
+
 impl Billboards {
     pub fn new_set(&mut self) -> u32 {
         self.sets.insert(Set {

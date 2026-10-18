@@ -252,7 +252,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let p = PLACEMENT.get(Placement::default);
     if crate::view::observation::eye().is_none() {
         if let Some(set) = p.set.take() {
-            remove_billboard_set(set);
+            remove_billboard_set(&mut crate::kernel().draw, set);
             ctx.invalidate();
         }
         // Nothing is drawn now: what comes back is laid out afresh.
@@ -433,7 +433,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     if instances != p.instances {
         let set = *p.set.get_or_insert_with(new_billboard_set);
         place_billboard_set(set, about);
-        write_billboard_set(set, &instances);
+        if let Some(k) = crate::laid() {
+            write_billboard_set(&mut k.draw, set, &instances);
+        }
         ctx.invalidate();
     }
     let drawn_instances = core::mem::replace(&mut p.instances, instances);

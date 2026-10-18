@@ -224,8 +224,7 @@ pub fn visible_step(ctx: &mut TickContext) {
         crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
     }
     crate::scene::place::step(ctx, &frame);
-    let k = kernel();
-    k.billboards.draw(&mut k.draw, frame.eye);
+    crate::billboard::field::billboards().draw(&mut kernel().draw, frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();

@@ -26,7 +26,6 @@ pub mod shell;
 pub mod turn;
 pub mod view;
 
-use crate::billboard::field::Billboards;
 use crate::model::registry::Models;
 use pxl_render::frame::draw::DrawList;
 
@@ -42,7 +41,6 @@ pub struct Kernel {
     /// What the renderer is handed: every layer lists into it.
     pub draw: DrawList,
     pub models: Models,
-    pub billboards: Billboards,
 }
 
 impl Kernel {
@@ -53,7 +51,6 @@ impl Kernel {
             scene: Scene::default(),
             draw: DrawList::default(),
             models: Models::default(),
-            billboards: Billboards::default(),
         }
     }
 }
