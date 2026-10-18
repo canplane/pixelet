@@ -103,6 +103,9 @@ pub struct Demand<L: Observed> {
     last: Option<Seen>,
     /// The floor's tiles as last observed.
     floor: Vec<Tile>,
+    /// The asks found absent in an observation, written once all are found
+    /// (`observe`); reused across observations.
+    gone: Vec<Tile>,
     /// What it reads moved since it last observed.
     moved: bool,
     /// Reused across observations so observing stops allocating once warm.
@@ -120,6 +123,7 @@ impl<L: Observed> Default for Demand<L> {
             wants: Vec::new(),
             last: None,
             floor: Vec::new(),
+            gone: Vec::new(),
             moved: false,
             asks: FnvHashMap::with_capacity_and_hasher(Residency::<L>::FRAMES as usize, Default::default()),
             idled: None,
@@ -235,30 +239,36 @@ impl<L: Observed> Demand<L> {
         );
 
         L::residency().ask(&asks);
-        // A tile no served shard is over or under is answered as its absence is, and never asked for.
-        let unanswered = |p: Tile| {
-            let r = L::residency();
-            !r.resident(p) && (!r.settled(p) || r.again_held(p))
-        };
-        if let Some(layer) = L::STREAM.bake() {
-            for &p in asks.keys() {
-                if unanswered(p) && !source::serves(layer, p) {
-                    self.absent(p);
-                }
-            }
-        }
-        // By subject, as a stream's wants are said (io/request.rs `declare`):
-        // the asks in key order, a subject being its key's high half, so each
-        // line read, after every absence is written, steps from its
-        // neighbour's (`seek`), not from the top. The demand's room holds
-        // them; nothing reads it between observations.
+        // The asks in key order, in the demand's room (nothing reads it
+        // between observations): each line read steps from its neighbour's
+        // (`seek`), not from the top.
         demand.clear();
         demand.extend(asks.keys().copied());
         demand.sort_unstable_by_key(|p| p.key());
-        let (r, mut lines) = (L::residency(), Lines::default());
+        let unanswered = |p: Tile, lines: &mut Lines| {
+            let r = L::residency();
+            !r.resident(p) && (!r.seek(lines, p).settled || r.again_held(p))
+        };
+        // A tile no served shard is over or under is answered as its absence
+        // is, and never asked for: every ask judged against the residency as
+        // the asks left it, before any absence is written, so which are
+        // absent depends on no order they are taken in.
+        if let Some(layer) = L::STREAM.bake() {
+            let (mut gone, mut lines) = (core::mem::take(&mut self.gone), Lines::default());
+            gone.clear();
+            gone.extend(demand.iter().copied().filter(|&p| unanswered(p, &mut lines) && !source::serves(layer, p)));
+            for &p in &gone {
+                self.absent(p);
+            }
+            self.gone = gone;
+        }
+        // By subject, as a stream's wants are said (io/request.rs `declare`):
+        // key order, a subject being its key's high half, after every absence
+        // is written.
+        let mut lines = Lines::default();
         self.wants.clear();
         for &p in &demand {
-            if !r.resident(p) && (!r.seek(&mut lines, p).settled || r.again_held(p)) {
+            if unanswered(p, &mut lines) {
                 self.wants.push((p.subject(), asks[&p]));
             }
         }
