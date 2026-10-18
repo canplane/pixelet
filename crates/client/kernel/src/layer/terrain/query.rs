@@ -52,17 +52,24 @@ impl Residency<TerrainTile> {
         held(line, f.from(), f.here(), cell)
     }
 
-    /// `relief` over `node`'s cells at `cell`, its line stepped from where
-    /// `lines` last walked: nodes beside each other share their lines down
-    /// to where they part, and pay a look-up a zoom only past it.
-    pub fn relief_walked(&self, lines: &mut Lines, place: &mut Found, node: Node<2>, cell: Zoom) -> Answer<Bounds> {
-        self.relief(&self.seek(lines, bound_tile(node, cell)), place, node, [cell, cell])
+    /// The line `node`'s cells at `cell` are read on, stepped from where
+    /// `lines` last walked: a tile under one it holds from that one's line, a
+    /// coarser one its own as an ancestor read it, so nodes beside or under
+    /// each other share their lines down to where they part, and pay a
+    /// look-up a zoom only past it.
+    pub fn line_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line {
+        self.seek(lines, bound_tile(node, cell))
     }
 
-    /// `bound`, its line stepped from where `lines` last walked: a walk in
-    /// key order pays one look-up a node.
+    /// `relief` over `node`'s cells at `cell`, its line walked (`line_walked`).
+    pub fn relief_walked(&self, lines: &mut Lines, place: &mut Found, node: Node<2>, cell: Zoom) -> Answer<Bounds> {
+        self.relief(&self.line_walked(lines, node, cell), place, node, [cell, cell])
+    }
+
+    /// `bound`, its line walked (`line_walked`): a walk in key order pays one
+    /// look-up a node.
     pub fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
-        self.bound(&self.seek(lines, bound_tile(node, cell)), node, cell)
+        self.bound(&self.line_walked(lines, node, cell), node, cell)
     }
 }
 

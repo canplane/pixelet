@@ -58,7 +58,7 @@ use pxl_spec::space::layer::tile::Tile;
 
 use super::world::World;
 use crate::io::source;
-use crate::layer::residency::Line;
+use crate::layer::residency::Lines;
 use crate::layer::terrain::window::Windowed;
 use crate::layer::{Answer, Query};
 
@@ -74,8 +74,6 @@ pub(super) struct At {
     pub(super) node: Node<3>,
     cave: Cave,
     placed: Held,
-    /// The ground's line its cell was asked on.
-    line: Option<Line>,
     /// What is known of the service area at its shard (pxl-portable
     /// `area::Shard`).
     pub(super) shard: Shard,
@@ -105,23 +103,9 @@ impl World<'_> {
             node: (zoom, at),
             cave: Cave::of(zoom, at),
             placed: self.objects.cursor((zoom, at), zoom),
-            line: None,
             shard: Shard::UNKNOWN,
             ground: Found::NONE,
         }
-    }
-
-    /// The ground's line `at`'s cells at `cell` are read on, stepped from
-    /// its parent's, and handed on.
-    fn line(&self, at: &mut At, cell: Zoom) -> Line {
-        let (zoom, c) = at.node;
-        let xy = (zoom, [c[0], c[1]]);
-        let line = match at.line {
-            Some(l) => self.terrain.child(&l, xy, cell),
-            None => self.terrain.cursor(xy, cell),
-        };
-        at.line = Some(line);
-        line
     }
 
     /// What is in `at`'s block, at its own zoom, `coarsest` or finer: none
@@ -130,7 +114,8 @@ impl World<'_> {
     pub(super) fn drawn(&self, at: &mut At) -> Answer<u32> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        self.node(at, [zoom, zoom]).map(|(i, block)| if block && i.kind == Kind::Block { i.block } else { VOID })
+        self.node(at, [zoom, zoom], &mut Lines::default())
+            .map(|(i, block)| if block && i.kind == Kind::Block { i.block } else { VOID })
     }
 
     /// A preview's entry as pxl-portable `overwrite` takes it.
@@ -146,7 +131,6 @@ impl World<'_> {
             node: (z, child),
             cave: at.cave.child(z, child),
             placed: self.objects.child(&at.placed, (z, child), z),
-            line: at.line,
             shard: at.shard,
             ground: at.ground,
         }
@@ -160,13 +144,14 @@ impl World<'_> {
     /// answer as the descent takes one (pxl-portable `cast::In`): a split and
     /// its slab; a block, the zoom asked's, none for air or void; or, coarser
     /// than asked and nothing under it filling, air its size; with whether it
-    /// is a block (`world::node`'s).
-    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2]) -> Answer<(In<u32>, bool)> {
+    /// is a block (`world::node`'s). `lines` are the ground's lines the
+    /// walk asking it read, which its own steps from (`line_walked`).
+    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2], lines: &mut Lines) -> Answer<(In<u32>, bool)> {
         let (zoom, c) = at.node;
         at.shard = at.shard.at(&Windowed, (zoom, [c[0], c[1]]));
         let (handed, mut place) = ((at.cave, at.placed, at.shard), at.ground);
         let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);
-        let mut reading = Reading::new(self, at);
+        let mut reading = Reading::new(self, at, lines);
         let (i, block) = world::node(&mut reading, &Windowed, &lanes, handed, &mut place, (zoom, c), asked, cuts);
         let answer = reading.answer(i.kind != Kind::Lacks, || {
             // A block's value, a split's slab (`world::slab_word`); air and void none.
@@ -179,20 +164,22 @@ impl World<'_> {
 }
 
 /// The ground as a node's reading holds it (pxl-portable `ground::Held`):
-/// the world's residency down the node's line, and the first tile it found
-/// lacked or only a coarser one standing in for.
+/// the world's residency down the node's line, the lines its walk read,
+/// and the first tile it found lacked or only a coarser one standing in for.
 struct Reading<'r, 'a> {
     world: &'r World<'a>,
     at: &'r mut At,
+    lines: &'r mut Lines,
     lacked: Option<Tile>,
     coarser: Option<Tile>,
 }
 
 impl<'r, 'a> Reading<'r, 'a> {
-    fn new(world: &'r World<'a>, at: &'r mut At) -> Reading<'r, 'a> {
+    fn new(world: &'r World<'a>, at: &'r mut At, lines: &'r mut Lines) -> Reading<'r, 'a> {
         Reading {
             world,
             at,
+            lines,
             lacked: None,
             coarser: None,
         }
@@ -243,7 +230,7 @@ impl ground::Held for Reading<'_, '_> {
     /// and false.
     fn relief(&mut self, place: &mut Found, cells: [Zoom; 2], _: (Zoom, [i32; 3])) -> (ground::Bounds, bool) {
         let (zoom, c) = self.at.node;
-        let line = self.world.line(self.at, cells[1]);
+        let line = self.world.terrain.line_walked(self.lines, (zoom, [c[0], c[1]]), cells[1]);
         match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]), cells)) {
             Some(r) => (r, true),
             None => ([ground::EMPTY; 2], false),

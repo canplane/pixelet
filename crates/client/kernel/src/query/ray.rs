@@ -11,6 +11,7 @@ use super::decor::Strike;
 use super::node::{coarsest, At};
 use super::world::World;
 use crate::layer::instance::{Instance, Source};
+use crate::layer::residency::Lines;
 use crate::layer::Answer;
 pub(super) use pxl_portable::cast::Until;
 use pxl_portable::cast::{self, Detail, Ends, Kind, Query};
@@ -92,6 +93,9 @@ struct Walker<'w, 'a> {
     answered: bool,
     /// The decor struck along the ray, where the walk strikes any.
     strike: Option<(&'w Ray, Strike<'a>)>,
+    /// The ground's lines the walk read, each node's stepped from them
+    /// (`World::node`).
+    lines: Lines,
 }
 
 /// The CPU's walk keeps every level, so it never asks a node again: its
@@ -130,7 +134,7 @@ impl<'a> Query for Walker<'_, 'a> {
                 self.world.strike_near(s, ray, [c[0], c[1]]);
             }
         }
-        let (answer, block) = match self.world.node(at, asked) {
+        let (answer, block) = match self.world.node(at, asked, &mut self.lines) {
             Answer::Nothing(l) => {
                 self.lack.get_or_insert(l);
                 return cast::In {
@@ -214,6 +218,7 @@ impl<'a> World<'a> {
             lack: None,
             answered: false,
             strike: strike.map(|s| (ray, s)),
+            lines: Lines::default(),
         };
         let o = ray.origin;
         let from = cast::Ray::new(ray.direction.map(|v| v as f32), ray.reach as f32);
@@ -238,6 +243,7 @@ impl<'a> World<'a> {
             lack: None,
             answered: false,
             strike: None,
+            lines: Lines::default(),
         };
         let (block, top, met) = pxl_portable::scatter::footing(&mut walker, cell, g);
         (met && walker.lack.is_none()).then_some((block, top))
