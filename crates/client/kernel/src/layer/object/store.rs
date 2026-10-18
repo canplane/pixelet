@@ -243,13 +243,6 @@ impl Store {
         (self.tree.heap(), self.tree.data(), self.tree.room(), self.revision)
     }
 
-    /// The node `at` of `zoom` in the tree, or the leaf over it: the zoom it
-    /// was found at and its slot.
-    fn find(&self, zoom: Zoom, at: [i32; 3]) -> (Zoom, Slot<u32>) {
-        let (d, slot) = self.tree.get(depth(zoom), path(zoom, at));
-        (d - 1, slot)
-    }
-
     /// Every node anything is under, from the roots down, in `about`'s
     /// frame, a node entered where `enter` says so: its zoom, its index and
     /// cube there, and its value if it is a leaf.
@@ -339,27 +332,32 @@ impl Store {
         any
     }
 
-    /// Every leaf meeting the cube at `zoom`, X in the cube's frame.
-    fn each_in(&self, zoom: Zoom, at: [i32; 3], visit: &mut dyn FnMut(&Entry)) {
-        let about = about(&cube(zoom, at));
-        match self.find(zoom, at) {
-            (_, Slot::Leaf(v)) if v == EMPTY.word() => {}
-            (z, Slot::Leaf(v)) => visit(&Entry::of(z, node_near(z, at.map(|c| c >> (zoom - z)), about), Leaf::of(v))),
-            (_, branch) => self.walk(branch, zoom, at, about, &mut |zoom, at, _, leaf| {
+    /// Every leaf meeting the cube at `zoom` that holds `held`, X in the
+    /// cube's frame: walked from the slot the cursor names, the node's own or
+    /// the leaf over it.
+    fn each_in(&self, zoom: Zoom, at: [i32; 3], held: Held, visit: &mut dyn FnMut(&Entry)) {
+        if !held.holds() {
+            return;
+        }
+        let z = held.zoom();
+        self.walk(
+            self.tree.slot(held.slot() as usize),
+            z,
+            at.map(|c| c >> (zoom - z)),
+            about(&cube(zoom, at)),
+            &mut |zoom, at, _, leaf| {
                 if let Some(v) = leaf {
                     visit(&Entry::of(zoom, at, v));
                 }
                 true
-            }),
-        }
+            },
+        );
     }
 
-    /// The value placed at exactly this node, if one is.
-    pub(crate) fn placed(&self, zoom: Zoom, at: [i32; 3]) -> Option<Entry> {
-        match self.find(zoom, at) {
-            (z, Slot::Leaf(v)) if z == zoom && v != EMPTY.word() => Some(Entry::of(zoom, at, Leaf::of(v))),
-            _ => None,
-        }
+    /// The value placed at exactly the node `at` of `zoom`, if one is, read
+    /// off the cursor a descent holds there (`Query::cursor`, `Query::child`).
+    pub(crate) fn placed(&self, zoom: Zoom, at: [i32; 3], held: Held) -> Option<Entry> {
+        (held.holds() && !held.folded() && held.zoom() == zoom).then(|| Entry::of(zoom, at, Leaf::of(self.tree.data()[held.slot() as usize])))
     }
 
     /// What a leaf carries beyond its id, if anything.
@@ -405,10 +403,12 @@ impl Store {
     /// at it or under it. One over it with a record is never split.
     fn release(&mut self, zoom: Zoom, at: [i32; 3]) {
         let mut freed = Vec::new();
-        if let (z, Slot::Leaf(v)) = self.find(zoom, at) {
-            xpute_kit::ensure!(z == zoom || Leaf::of(v).ext == NONE, ENOTRECOVERABLE, z);
+        let held = self.cursor((zoom, at), zoom);
+        if held.holds() && !held.folded() {
+            let z = held.zoom();
+            xpute_kit::ensure!(z == zoom || Leaf::of(self.tree.data()[held.slot() as usize]).ext == NONE, ENOTRECOVERABLE, z);
         }
-        self.each_in(zoom, at, &mut |e| {
+        self.each_in(zoom, at, held, &mut |e| {
             if e.ext != NONE {
                 freed.push((e.state, e.ext));
             }
@@ -459,12 +459,13 @@ impl Cells<'_> {
     /// Every leaf inside the node, or the one over it.
     pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
         let (zoom, at) = self.node;
-        self.store.each_in(zoom, at, visit)
+        self.store.each_in(zoom, at, self.store.cursor(self.node, zoom), visit)
     }
 
     /// The leaf placed at exactly the node, if one is.
     pub fn placed(&self) -> Option<Entry> {
-        self.store.placed(self.node.0, self.node.1)
+        let (zoom, at) = self.node;
+        self.store.placed(zoom, at, self.store.cursor(self.node, zoom))
     }
 }
 

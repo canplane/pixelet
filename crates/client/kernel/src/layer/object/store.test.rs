@@ -41,7 +41,7 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
             "a cell leaf covers its steps"
         );
         let mut met = Vec::new();
-        store.each_in(OBJECT_COARSEST, at, &mut |e| met.push(*e));
+        store.read((OBJECT_COARSEST, at)).entries(&mut |e| met.push(*e));
         assert_eq!(
             met,
             vec![Entry {
@@ -197,21 +197,21 @@ fn a_leaf_keeps_its_words_and_an_erase_frees_them() {
         id: MARKER,
         ext: words("cafe"),
     }]);
-    let e = store.placed(zoom, at).expect("placed");
+    let e = store.read((zoom, at)).placed().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
     store.write([Write {
         key: key(zoom, at),
         id: VOID,
         ext: None,
     }]);
-    assert!(store.placed(zoom, at).is_none());
+    assert!(store.read((zoom, at)).placed().is_none());
     // The freed slot is the next one kept: nothing outlived its leaf.
     store.write([Write {
         key: key(zoom, at),
         id: MARKER,
         ext: words("bar"),
     }]);
-    let e = store.placed(zoom, at).expect("placed again");
+    let e = store.read((zoom, at)).placed().expect("placed again");
     assert_eq!(e.ext, 1);
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
 }

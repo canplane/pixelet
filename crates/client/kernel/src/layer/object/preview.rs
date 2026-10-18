@@ -57,7 +57,7 @@ pub fn words_at(at: EntryAt) -> Option<&'static str> {
         return Some(&d.words);
     }
     let objects = crate::layer::object::store::objects();
-    objects.words(&objects.placed(at.zoom(), at.at())?)
+    objects.words(&objects.read((at.zoom(), at.at())).placed()?)
 }
 
 /// The one waiting, which the badges draw.

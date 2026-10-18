@@ -270,7 +270,7 @@ impl<'a> World<'a> {
         let mut normal = [0.0; 3];
         normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };
         let struck = match world::placed(s.block) {
-            true => self.objects.placed(zoom, wrap_cell(zoom, c)).map_or(Struck::Objects, |e| Struck::Object(e.id())),
+            true => self.objects.placed(zoom, wrap_cell(zoom, c), s.at.placed).map_or(Struck::Objects, |e| Struck::Object(e.id())),
             false => Struck::Ground,
         };
         let t = f64::from(s.t);

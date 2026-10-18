@@ -73,7 +73,7 @@ pub(super) fn coarsest() -> Zoom {
 pub(super) struct At {
     pub(super) node: Node<3>,
     cave: Cave,
-    placed: Held,
+    pub(super) placed: Held,
     /// What is known of the service area at its shard (pxl-portable
     /// `area::Shard`).
     pub(super) shard: Shard,
