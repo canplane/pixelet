@@ -356,7 +356,9 @@ pub fn join(a: [i32; 2], b: [i32; 2]) -> [i32; 2] {
     [if a[0] < b[0] { a[0] } else { b[0] }, if a[1] > b[1] { a[1] } else { b[1] }]
 }
 
-/// A bound over every height a cell holds, i16's whole range.
+/// A bound over every height a cell holds, i16's whole range: a relief, the
+/// lowest and highest face heights, both held. Not a slab of what may fill
+/// along z, half-open (`world::ANY`), which is another fact in another unit.
 pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 
 /// The bound of no ground, lowest over highest: what joins as nothing.
@@ -409,7 +411,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
     // A split no bound tells the slab of holds anything anywhere along z.
     let split = In {
         kind: Kind::Split,
-        block: crate::world::slab_word(UNBOUNDED),
+        block: crate::world::slab_word(crate::world::ANY),
     };
     let lacks = In { kind: Kind::Lacks, block: VOID };
     // Past the area: a block's own Earth, or a node's where it is all over

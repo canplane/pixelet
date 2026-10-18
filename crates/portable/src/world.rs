@@ -91,7 +91,7 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
     }
     let own = match i.kind {
         Kind::Split => slab_of(i.block),
-        Kind::Lacks => ground::UNBOUNDED,
+        Kind::Lacks => ANY,
         _ => ground::EMPTY,
     };
     let joined = ground::join(ground::join(own, ways), placed);
@@ -99,12 +99,14 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
 }
 
 /// A split's block word (`node`): where anything may fill the node along z,
-/// in leaf cells, its lowest in the low half and past its highest in the
-/// high, each an i16 held to i16's range — so i16's whole (`ground::UNBOUNDED`)
-/// where no bound tells. A ray through the node outside it meets nothing
-/// there (pxl-portable cast). Each source's own bound joined: the ground's
-/// (`ground::slab`), the ways' (`ways::slab`), and what is placed
-/// (`overwrite::slab`), each off what it holds, as each source answers.
+/// in leaf cells, `[lo, hi)` held as its lowest in the low half and its
+/// highest, `hi − 1`, in the high, each an i16 held to i16's range — the
+/// world's whole z, so i16's whole is anything along it (`ANY`), and
+/// lowest over highest is nothing (`ground::EMPTY`), as a join keeps it. A
+/// ray through the node outside it meets nothing there (pxl-portable cast).
+/// Each source's own bound joined: the ground's (`ground::slab`), the
+/// ways' (`ways::slab`), and what is placed (`overwrite::slab`), each off
+/// what it holds, as each source answers.
 pub fn slab_word([lo, hi]: [i32; 2]) -> u32 {
     let held = |v: i32| {
         if v < i16::MIN as i32 {
@@ -115,26 +117,24 @@ pub fn slab_word([lo, hi]: [i32; 2]) -> u32 {
             v
         }
     };
-    ground::bound_word([held(lo), held(hi)]) as u32
+    ground::bound_word([held(lo), held(hi - 1)]) as u32
 }
 
-/// `slab_word`'s lowest and past its highest: a highest held to i16's
-/// (`ground::UNBOUNDED`'s) read as past the world's own top, so i16's whole
-/// is anything along z the world holds, its topmost leaf cell too. Looser
-/// only where a bound was held, which only goes into more.
+/// `slab_word`'s lowest and past its highest.
 pub fn slab_of(w: u32) -> [i32; 2] {
-    let [lo, hi] = ground::bound_of(w as i32);
-    [lo, if hi == i16::MAX as i32 { WORLD_TOP } else { hi }]
+    let [lo, last] = ground::bound_of(w as i32);
+    [lo, last + 1]
 }
 
-/// Past the world's highest leaf cell: Z spans `HEIGHT_BITS` of units about
-/// sea level, half-open (pxl-spec space/coord/world.rs `REACH`), and a leaf
-/// cell is a unit.
-const WORLD_TOP: i32 = 1 << (crate::HEIGHT_BITS - 1);
+/// Anything along z the world holds, as a slab: from its lowest leaf cell to
+/// past its highest, half-open, i16's whole as `slab_word` holds it. Not a
+/// relief of face heights, both held (`ground::UNBOUNDED`), which is another
+/// fact in another unit.
+pub const ANY: [i32; 2] = [i16::MIN as i32, i16::MAX as i32 + 1];
 const _: () = assert!(LEAF_CELL == crate::UNIT_ZOOM, "a slab's leaf cell is the world's unit");
 const _: () = assert!(
-    i16::MIN as i32 <= -WORLD_TOP && WORLD_TOP >= i16::MAX as i32,
-    "a slab's i16 holds the world's lowest leaf cell, and its held highest read as past the world's top is no lower"
+    -(1i32 << (crate::HEIGHT_BITS - 1)) == i16::MIN as i32 && (1i32 << (crate::HEIGHT_BITS - 1)) - 1 == i16::MAX as i32,
+    "the world's z, in leaf cells, is i16's range"
 );
 
 /// Whether a block's value as `node` answers it fills its block: neither
