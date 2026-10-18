@@ -427,8 +427,8 @@ fn pixel_ray(eye: &Eye, p: UVec3, size: UVec3) -> cast::Ray {
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
-/// pxl-portable `ray`): the cast writes them, the face bits
-/// write the third over.
+/// pxl-portable `ray`): the cast writes them, the third in the steps view
+/// alone.
 type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// The nodes over where every ray from the eye starts alike, asked once a
