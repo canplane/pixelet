@@ -72,13 +72,19 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
         }
     }
     let (i, cell, found, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
-    let value = if block && i.kind == Kind::Block {
+    let (value, wrote) = if block && i.kind == Kind::Block {
         window::ways_over(ways, found, cell.runs, zoom, c[2], i.block)
     } else {
-        i.block
+        (i.block, false)
     };
     if block {
-        let four = if i.kind == Kind::Block { ground::word(cell.four(zoom, value)) } else { 0 };
+        // The ground's block's four, or a way's look four times where one
+        // wrote it, whatever its value.
+        let four = match (i.kind, wrote) {
+            (Kind::Block, false) => ground::word(cell.four(zoom, i.block)),
+            (Kind::Block, true) => ground::word([value; 4]),
+            _ => 0,
+        };
         return (In { kind: i.kind, block: [value, four] }, block);
     }
     // Coarser, what is placed splits it where it may fill, and the ways

@@ -637,21 +637,22 @@ pub fn ground(w: &(impl Ran + crate::area::Area), owner: (Zoom, [i32; 2]), place
 }
 
 /// Block `z` at `zoom` of a column with what the ways write over the
-/// ground's block there, `block` its look, `found`
+/// ground's block there, `block` its look, and whether a way wrote it,
+/// `found`
 /// where its column was read and `runs` its runs, as the visit read them
 /// (`ground::Cell::runs`): a bore's air, or a way's look, its own
 /// column's alone, the lining of a bore's air beside it written there by
 /// its fill (`ways::lined`). A column read off a coarser window standing in
 /// for its own holds that window's runs, laid at its coarser cells: the
 /// coarser zoom's world.
-pub fn ways_over(w: &impl Ran, found: Found, runs: [u32; 2], zoom: Zoom, z: i32, block: u32) -> u32 {
+pub fn ways_over(w: &impl Ran, found: Found, runs: [u32; 2], zoom: Zoom, z: i32, block: u32) -> (u32, bool) {
     if runs[1] <= runs[0] {
-        return block;
+        return (block, false);
     }
     match ran(w, found, runs, zoom, z) {
-        crate::ways::NOTHING => block,
+        crate::ways::NOTHING => (block, false),
         // A bore's air is the ground's void, `ways::AIR`.
-        way => way,
+        way => (way, true),
     }
 }
 

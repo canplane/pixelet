@@ -514,8 +514,8 @@ impl Cell {
     /// is the cell's own look at a cell coarser than the leaves', the four
     /// its fold took, whose mean it is drawn as, "the 2 × 2 … by design"
     /// (doc/minutes/20260928-what-is-drawn-is-what-the-screen-covers.md);
-    /// else, a stratum under it, a way over it or a leaf's cell, `g` four
-    /// times.
+    /// else, a stratum under it or a leaf's cell, `g` four times. A way
+    /// written over it is its own look four times (`world::node`).
     pub fn four(&self, cell: Zoom, g: u32) -> [u32; 4] {
         if cell >= LEAF_CELL || g != self.look {
             [g; 4]
