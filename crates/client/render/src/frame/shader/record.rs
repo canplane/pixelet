@@ -129,7 +129,6 @@ use crate::frame::draw::{
     PIPELINE_SKINNED,
 };
 use crate::frame::shader::floor;
-use crate::mesh::ghost::BOX_WORDS;
 
 const fn f(v: f32) -> u32 {
     v.to_bits()
@@ -312,6 +311,9 @@ const fn vertex(stride: u32, attributes: &'static [[u32; 3]]) -> Lane {
 
 const MODEL_LANES: [Lane; 3] = [vertex(12, &[[0, 0, F32X3]]), vertex(12, &[[1, 0, F32X3]]), vertex(8, &[[2, 0, F32X2]])];
 const SKINNED_LANES: [Lane; 5] = [MODEL_LANES[0], MODEL_LANES[1], MODEL_LANES[2], vertex(16, &[[3, 0, U32X4]]), vertex(16, &[[4, 0, F32X4]])];
+/// A box's words, as the box shader (box.wgsl) takes one and the hover
+/// ghost writes it (mesh/ghost.rs `write_lone_box`): a vec4, then its layer.
+pub const BOX_WORDS: u32 = 5;
 /// The boxes are a per-instance vertex buffer, so a draw reaches its boxes by
 /// its first instance.
 const BOX_LANES: [Lane; 2] = [

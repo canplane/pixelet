@@ -5,4 +5,3 @@
 
 pub mod ghost;
 pub mod paint;
-pub mod word;

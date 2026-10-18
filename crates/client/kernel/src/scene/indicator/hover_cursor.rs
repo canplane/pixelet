@@ -5,9 +5,10 @@
 //! shows is the tool's (`control/interaction/ghost.rs`); this draws it.
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
-use pxl_render::mesh::ghost::{on_whole_units, write_lone_box, BOX_WORDS};
+use pxl_render::frame::shader::record::BOX_WORDS;
+use pxl_render::frame::shader::words::NO_LAYER;
+use pxl_render::mesh::ghost::{on_whole_units, write_lone_box};
 use pxl_render::mesh::paint::object::PAINTER;
-use pxl_render::mesh::word::NO_LAYER;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};

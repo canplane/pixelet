@@ -29,7 +29,7 @@ pub const EARTH_TILE_BITS: u32 = 4;
 /// disc's radius is half of it.
 pub const MOON_TEXELS: u32 = 512;
 
-/// A tap past the last layer: the face's swatch alone.
+/// A layer past the last: the face's swatch alone.
 pub const NO_LAYER: u32 = 255;
 
 /// A face's top, side and bottom images, a slot of the pack each, in

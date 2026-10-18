@@ -7,7 +7,7 @@
 use pxl_spec::space::coord::v3::V3;
 use xpute_kit::math::scalar::round;
 
-pub const BOX_WORDS: u32 = 5;
+use crate::frame::shader::record::BOX_WORDS;
 
 /// A cell is 256 steps; a box's z is held in its mesh's own steps from the
 /// mesh's floor, since a block's z is the world's.
