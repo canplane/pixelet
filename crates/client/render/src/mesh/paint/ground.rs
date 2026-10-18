@@ -7,9 +7,9 @@
 use pxl_spec::block::color;
 use pxl_spec::block::cube::sentinel;
 
+use crate::frame::shader::words::NO_LAYER;
 use crate::mesh::paint::object::PAINTER;
 use crate::mesh::paint::palette::{layer_mean, rgb255};
-use crate::mesh::word::NO_LAYER;
 
 /// The ground's bytes, which every value under them is one of.
 const BYTES: usize = u8::MAX as usize + 1;
@@ -28,5 +28,5 @@ pub fn look_words() -> Vec<[u32; 2]> {
         let far = layer_mean(u32::from(layer), rgb);
         [u32::from_le_bytes([rgb[0], rgb[1], rgb[2], layer]), u32::from_le_bytes([far[0], far[1], far[2], 0])]
     };
-    (0..PAINTER.swatches().len().max(BYTES)).map(|v| PAINTER.look_of(v as u32).unwrap_or(unknown)).map(words).collect()
+    (0..PAINTER.states().max(BYTES)).map(|v| PAINTER.look_of(v as u32).unwrap_or(unknown)).map(words).collect()
 }
