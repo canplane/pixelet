@@ -15,7 +15,7 @@ use pxl_spec::block::DecorId;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{cube, index_of, units, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{cube, index_of, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -26,7 +26,7 @@ use super::world::World;
 use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Meta};
 use crate::layer::object::meta::placed;
-use crate::layer::residency::Lines;
+use crate::layer::residency::{Line, Lines};
 use crate::model::registry::Models;
 use pxl_portable::area::{self, Shard};
 use pxl_portable::cast;
@@ -55,6 +55,18 @@ pub(super) struct Strike<'a> {
     pub(super) about: Around,
 }
 
+impl Strike<'_> {
+    /// The zoom a node at `zoom` is looked about at: its own, or the finest
+    /// whose nodes are as wide as the reach.
+    pub(super) fn about_zoom(&self, zoom: Zoom) -> Zoom {
+        let mut z = zoom;
+        while z > 0 && units(z) < self.reach {
+            z -= 1;
+        }
+        z
+    }
+}
+
 /// What is placed in the 27 nodes about the node a striking walk is at, at
 /// each zoom it went through: the objects' tree's cursors there
 /// (pxl-portable `overwrite::Held`), each zoom's the children of the zoom
@@ -65,6 +77,20 @@ pub(super) struct Strike<'a> {
 pub(super) struct Around {
     at: [[i32; 3]; cast::DEPTH],
     held: [[Held; 27]; cast::DEPTH],
+    /// The 3 × 3 columns about it, a zoom each, as the ground's relief reads
+    /// them (`columns`).
+    columns_at: [[i32; 2]; cast::DEPTH],
+    columns: [[Option<Column>; 9]; cast::DEPTH],
+}
+
+/// A column about a striking walk's node, at its zoom, as its relief read
+/// it: the ground's line its cells are read on, where they were found, and
+/// the highest its relief reaches, none where it lacks.
+#[derive(Clone, Copy)]
+struct Column {
+    line: Line,
+    found: Found,
+    hi: Option<i32>,
 }
 
 impl Around {
@@ -72,6 +98,8 @@ impl Around {
         Around {
             at: [[i32::MIN; 3]; cast::DEPTH],
             held: [[Held::NOTHING; 27]; cast::DEPTH],
+            columns_at: [[i32::MIN; 2]; cast::DEPTH],
+            columns: [[None; 9]; cast::DEPTH],
         }
     }
 
@@ -100,6 +128,43 @@ impl Around {
             };
         }
         self.at[z] = c;
+    }
+
+    /// The 3 × 3 columns about `(zoom, c)` read at its tile's cells: each
+    /// column's line off its parent column's (`line_under`), its cells found
+    /// from where its parent column's were (pxl-portable `window::step`),
+    /// and its relief's highest, read once for every node under it. A walk
+    /// enters a node through its parent, so each zoom's is stepped from the
+    /// one over's, never walked from the top.
+    pub(super) fn read_columns(&mut self, world: &World, (zoom, c): (Zoom, [i32; 2])) {
+        let z = zoom as usize;
+        if self.columns_at[z] == c {
+            return;
+        }
+        let p = [c[0] >> 1, c[1] >> 1];
+        let stepped = zoom > 0 && self.columns_at[z - 1] == p;
+        let cell = GROUND.grid_zoom(zoom.min(LEAF_ZOOM));
+        for k in 0..9 {
+            let n = [c[0] + (k % 3) as i32 - 1, c[1] + (k / 3) as i32 - 1];
+            let over = if stepped {
+                self.columns[z - 1][((n[0] >> 1) - p[0] + 1 + 3 * ((n[1] >> 1) - p[1] + 1)) as usize]
+            } else {
+                None
+            };
+            let line = world.terrain.line_under(over.as_ref().map(|o| &o.line), (zoom, n), cell);
+            let mut found = over.map_or(Found::NONE, |o| o.found);
+            let hi = world.terrain.relief(&line, &mut found, (zoom, n), [cell, cell]).value().map(|[[_, hi], _]| hi);
+            self.columns[z][k] = Some(Column { line, found, hi });
+        }
+        self.columns_at[z] = c;
+    }
+
+    /// The highest the relief reaches in each of the 3 × 3 columns about
+    /// `(zoom, a)`, none where it lacks: none at all where the walk did not
+    /// read them.
+    fn reliefs(&self, (zoom, a): (Zoom, [i32; 2])) -> Option<[Option<i32>; 9]> {
+        let z = zoom as usize;
+        (self.columns_at[z] == a).then(|| self.columns[z].map(|c| c.and_then(|c| c.hi)))
     }
 
     /// Whether anything, air included, is placed in the 27 nodes about `a`
@@ -263,16 +328,14 @@ impl<'a> World<'a> {
     /// `shard`, what the descent established at the node, says. What is not
     /// held may.
     pub(super) fn may_strike(&self, s: &Strike<'a>, (zoom, c): Node<3>, shard: Shard) -> bool {
-        // The nodes about it as wide as the reach, at the finest zoom that is.
-        let mut z = zoom;
-        while z > 0 && units(z) < s.reach {
-            z -= 1;
-        }
+        let z = s.about_zoom(zoom);
         let a = c.map(|v| v >> (zoom - z));
         let low = cube(zoom, c).min[2] - s.reach;
         let leaf = units(GROUND.cell());
         let node = (zoom, [c[0], c[1]]);
-        // The nine's lines share the walk down to where they part.
+        // The nine's reliefs as the walk read them about `a` (`Around`); else
+        // their lines share the walk down to where they part.
+        let read = s.about.reliefs((z, [a[0], a[1]]));
         let mut lines = Lines::default();
         let ground = (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
@@ -281,11 +344,17 @@ impl<'a> World<'a> {
                 if z >= SHARD_ZOOM && shard.past_leaf(node, area::tile_at(z, xy.1)) {
                     return false;
                 }
-                let mut place = Found::NONE;
-                match self.terrain.relief_walked(&mut lines, &mut place, xy, GROUND.grid_zoom(z.min(LEAF_ZOOM))).value() {
-                    Some([[_, hi], _]) => f64::from(hi) * leaf > low,
-                    None => true,
-                }
+                let hi = match read {
+                    Some(r) => r[(dx + 1 + 3 * (dy + 1)) as usize],
+                    None => {
+                        let mut place = Found::NONE;
+                        self.terrain
+                            .relief_walked(&mut lines, &mut place, xy, GROUND.grid_zoom(z.min(LEAF_ZOOM)))
+                            .value()
+                            .map(|[[_, hi], _]| hi)
+                    }
+                };
+                hi.is_none_or(|hi| f64::from(hi) * leaf > low)
             })
         });
         // The 27 nodes about it at once, the objects' tree walked once.

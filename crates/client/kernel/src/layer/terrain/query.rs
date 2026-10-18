@@ -61,6 +61,19 @@ impl Residency<TerrainTile> {
         self.seek(lines, bound_tile(node, cell))
     }
 
+    /// The line `node`'s cells at `cell` are read on, off `over`, the line its
+    /// parent column's were: that line where it is the same tile's, stepped
+    /// from it where it is the tile's parent's (`step`), else walked from the
+    /// top, as `seek` steps.
+    pub fn line_under(&self, over: Option<&Line>, node: Node<2>, cell: Zoom) -> Line {
+        let tile = bound_tile(node, cell);
+        match over {
+            Some(o) if o.tile == tile => *o,
+            Some(o) if tile.zoom > GROUND.top() && o.tile == tile.parent() => self.step(o, tile),
+            _ => self.line(tile),
+        }
+    }
+
     /// `relief` over `node`'s cells at `cell`, its line walked (`line_walked`).
     pub fn relief_walked(&self, lines: &mut Lines, place: &mut Found, node: Node<2>, cell: Zoom) -> Answer<Bounds> {
         self.relief(&self.line_walked(lines, node, cell), place, node, [cell, cell])
