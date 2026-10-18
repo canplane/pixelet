@@ -7,7 +7,8 @@ use pxl_spec::block::object::object_value_is_air;
 use pxl_spec::space::coord::aabb::Aabb;
 
 use super::world::World;
-use crate::layer::object::store::{Entry, EntryAt};
+use crate::layer::object::store::Entry;
+use pxl_spec::bake::constant::EntryAt;
 
 impl<'a> World<'a> {
     /// What is placed at exactly `at`, air left out.

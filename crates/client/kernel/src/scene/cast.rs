@@ -15,12 +15,12 @@ use xpute_guest::global::Global;
 use crate::kernel;
 use crate::layer::kept::Offered;
 use crate::layer::object::preview;
-use crate::layer::object::store::EntryAt;
 use crate::layer::terrain::tile::kept;
 use crate::layer::terrain::window::{self, Handed};
 use crate::layer::Base as _;
 use crate::setting::store::settings_store;
 use crate::view::lens;
+use pxl_spec::bake::constant::EntryAt;
 
 /// The service area's index as the GPU reads it, and whether a declared
 /// source made it: one is declared once (io/source.rs `declare`), so it is

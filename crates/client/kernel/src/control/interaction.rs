@@ -23,9 +23,10 @@ use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adja
 use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;
 use crate::layer::object::size::{object_size_of, MARKER_SIZE};
-use crate::layer::object::store::{Entry, EntryAt};
+use crate::layer::object::store::Entry;
 use crate::query::{Hit, World};
 use crate::view::frame::pose::view_ray;
+use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units};
 use xpute_guest::global::Global;
 

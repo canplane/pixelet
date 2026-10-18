@@ -24,8 +24,9 @@ use xpute_kit::status::errno::Errno;
 
 use crate::layer::instance::Instance;
 use crate::layer::object::repository;
-use crate::layer::object::store::{apply, Entry, EntryAt, Write, AIR, VOID};
+use crate::layer::object::store::{apply, Entry, Write, AIR, VOID};
 use crate::query::World;
+use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::block::decor::Decor;
 
 /// Whether air is written where `at` is: a carve of the ground, or what was

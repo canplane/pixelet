@@ -7,7 +7,7 @@
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 
-use crate::layer::object::store::EntryAt;
+use pxl_spec::bake::constant::EntryAt;
 
 use super::decor::Grown;
 use crate::kernel;

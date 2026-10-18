@@ -19,10 +19,11 @@ use pxl_spec::space::coord::zoom::{index_of, units, Zoom, UNIT_ZOOM};
 use xpute_guest::global::Global;
 
 use crate::layer::object::meta::user_decor_pick;
-use crate::layer::object::store::{EntryAt, Store};
+use crate::layer::object::store::Store;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::units_per_px_at;
 use pxl_portable::window::FIRST_CELL;
+use pxl_spec::bake::constant::EntryAt;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
 /// down to `DECOR_SPRITE_CELLS` of a camera cell. No fade: the edge is per

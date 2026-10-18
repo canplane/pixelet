@@ -7,7 +7,7 @@
 use pxl_spec::block::decor::DecorMeta;
 use pxl_spec::space::coord::v3::V3;
 
-use crate::layer::object::store::EntryAt;
+use pxl_spec::bake::constant::EntryAt;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Instance {

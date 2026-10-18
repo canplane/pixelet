@@ -13,8 +13,7 @@
 
 use xpute_guest::global::Global;
 
-pub use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::bake::constant::OBJECT_FINEST;
+use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
 use pxl_spec::block::object::{cube_of, decor_id_from_num, object_value_is_decor, object_value_is_marker, Cube};
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
