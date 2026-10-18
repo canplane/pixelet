@@ -11,7 +11,7 @@
 use std::collections::BTreeMap;
 
 use fnv::FnvHashMap;
-use pxl_portable::ways::tree::POOL_BLOCKS;
+use pxl_portable::ways::tree::{POOL_BLOCKS, SQUARE_BLOCKS};
 use pxl_portable::window::{ACROSS, HANDED_WORDS, SQUARE, SQUARE_WORDS, WAYS_SQUARE_SEGMENTS};
 use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -74,7 +74,8 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<(), String> {
 fn held(set: &Staged<'_>, tiles: &[Tile]) -> Result<Held, String> {
     let mut scratch = vec![(0, 0); WAYS_SQUARE_SEGMENTS as usize];
     let (mut handed, mut lane) = (vec![0; HANDED_WORDS as usize], vec![0; SQUARE_WORDS as usize]);
-    let mut pool = vec![0; 16 * POOL_BLOCKS as usize];
+    // A square's room: the most a build takes, past the block none holds.
+    let mut pool = vec![0; 16 * (SQUARE_BLOCKS as usize + 1)];
     let mut out = Held::default();
     for &p in tiles {
         let Some(tile) = set.read::<TerrainTile>(p)? else { continue };
@@ -82,7 +83,7 @@ fn held(set: &Staged<'_>, tiles: &[Tile]) -> Result<Held, String> {
         let cell = GROUND.cell_zoom(p.zoom);
         for (k, [taken, held]) in blocks.into_iter().enumerate() {
             if taken == u32::MAX {
-                return Err(format!("{}: its square {k} takes more than the pool's {POOL_BLOCKS} blocks", p.name()));
+                return Err(format!("{}: its square {k} takes more than SQUARE_BLOCKS ({SQUARE_BLOCKS}) of its ways' tree's blocks", p.name()));
             }
             let at = [p.at[0] * SIDE as i32 + (k as u32 % SIDE) as i32, p.at[1] * SIDE as i32 + (k as u32 / SIDE) as i32];
             out.squares.entry(cell).or_default().insert(at, u64::from(held));

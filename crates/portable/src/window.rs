@@ -270,7 +270,7 @@ pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const RUNS_AT: u32 = LEVELS_AT + LEVEL_WORDS;
 pub const LAID_AT: u32 = RUNS_AT + RUNS_SQUARE;
 /// Its ways' tree's root: the first slot of its zoom-0 block in the pool
-/// (`ways::tree`).
+/// (`ways::tree`); 0, the block never handed out, where it has none.
 pub const ROOT_AT: u32 = LAID_AT + LAID_WORDS;
 pub const SQUARE_WORDS: u32 = ROOT_AT + 1;
 /// What comes back of a square: all of it, so the CPU reads a column as the

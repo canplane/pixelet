@@ -374,24 +374,25 @@ pub fn square(fresh: &mut [u32], lane: &mut [u32], place: [u32; 2], cell: Zoom, 
 /// level at a time as a GPU's workgroup builds it (gpu-query-shader
 /// `ways_tree_cs`, `ways::tree`), its blocks taken in order: the blocks it
 /// took, and those it holds once folded; `u32::MAX` both where `pool` has
-/// too few.
+/// too few or it takes more than `ways::tree::SQUARE_BLOCKS`.
 pub fn tree(lane: &[u32], fresh: &[u32], pool: &mut [u32]) -> [u32; 2] {
     use ways::tree::{self as t, Lane};
     let (of, square) = (of(fresh, 0), Fresh { ground: lane, base: 0 });
     let room = pool.len() as u32 / 16;
     let mut p = Lane(pool);
-    t::root(&mut p, of, 0);
+    // Block 0 is none's: the root's is the first handed out.
+    t::root(&mut p, of, 8);
     // Each level's candidates, the blocks the level over it took.
     let mut levels = [[0u32; 2]; crate::LEAF_CELL as usize + 1];
-    let (mut b, mut n, mut taken) = (0, 8, 1);
+    let (mut b, mut n, mut taken) = (8, 8, 1);
     let mut zoom = 0;
     while zoom < of.cell {
         levels[zoom as usize] = [b, n];
         let flagged = (b..b + n).filter(|&s| t::flag(&p, &square, 0, of, zoom, s)).count() as u32;
-        if !t::fits(room - taken, flagged) {
+        if !t::fits(room - 1 - taken, taken, flagged) {
             return [u32::MAX; 2];
         }
-        let next = 8 * taken;
+        let next = 8 * (1 + taken);
         let mut k = 0;
         for s in b..b + n {
             if t::flag(&p, &square, 0, of, zoom, s) {

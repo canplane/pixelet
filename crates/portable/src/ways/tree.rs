@@ -90,8 +90,17 @@ impl Of {
 /// The pool's blocks, eight slots each, every square's tree's: a bake's set
 /// fits it wherever the eye is (pxl-spec bake/tile/terrain.rs
 /// `pool_needs`), so the free stack runs out of none, and a build past it
-/// fails loudly (`fits`).
+/// fails loudly (`fits`). Block 0 is never handed out: its words stay
+/// zero, nothing (`overwrite::Lanes`), so a root word 0 is a square with
+/// no tree, read as nothing without a word of its own (`window::ROOT_AT`).
 pub const POOL_BLOCKS: u32 = 1 << 20;
+
+/// The most blocks one square's build takes before its fold gives any
+/// back: the most of the format-12 set (2026-10-18, its windows' squares
+/// lined as before the face block, which only lines more); a tile past it
+/// fails its bake (pxl-geo-bake terrain/pool.rs), and what a build keeps a
+/// square, its records and the blocks its fold gives back, is held to it.
+pub const SQUARE_BLOCKS: u32 = 24_067;
 
 /// No slot: a fold that gives no block back.
 pub const NONE: u32 = u32::MAX;
@@ -169,12 +178,13 @@ pub fn flag(pool: &impl Pool, w: &impl Squares, s: u32, of: Of, zoom: Zoom, slot
     lo < (at[2] + 1) << d && hi > at[2] << d
 }
 
-/// Whether the pool has `flagged` blocks left of `left`: a level's blocks,
-/// a flagged candidate's each, taken together. None is taken past it: the
-/// tree fails loudly, as the bake bounds a tile's (pxl-spec
-/// bake/tile/terrain.rs `ways_fit`).
-pub fn fits(left: u32, flagged: u32) -> bool {
-    flagged <= left
+/// Whether a level's blocks, a flagged candidate's each, may be taken
+/// together: the pool has `flagged` left of `left`, and the square, having
+/// taken `taken`, stays within `SQUARE_BLOCKS`. None is taken past either:
+/// the tree fails loudly, as the bake bounds a set's and a square's
+/// (pxl-geo-bake terrain/pool.rs).
+pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
+    flagged <= left && flagged <= SQUARE_BLOCKS - taken
 }
 
 /// The flagged candidate at `slot`, a node of `zoom`, a branch whose
@@ -277,6 +287,20 @@ pub fn under(pool: &impl Pool, slot: u32) -> u32 {
     } else {
         h & !BRANCH
     }
+}
+
+/// The block at `first` as a read-back carries it: its eight heap words,
+/// then its eight data words, which the CPU lays at the same slots of its
+/// mirror of the pool, so a cursor reads one tree on both sides.
+pub fn record(pool: &impl Pool, first: u32) -> [u32; 16] {
+    let mut r = [0; 16];
+    let mut k = 0;
+    while k < 8 {
+        r[k as usize] = pool.heap(first + k);
+        r[8 + k as usize] = pool.data(first + k);
+        k += 1;
+    }
+    r
 }
 
 /// How a reader reads a leaf's value: the ground's void for a bore's air,
