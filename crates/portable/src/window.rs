@@ -132,10 +132,12 @@ pub fn slot(q: [i32; 2]) -> u32 {
     ((q[1] & m) as u32) * ACROSS + (q[0] & m) as u32
 }
 
-/// The square holding cell `g`, and the cell's index in it.
-pub fn square_of(g: [i32; 2]) -> ([i32; 2], u32) {
+/// The square holding cell `g`, and where the cell lies in it, X then Y:
+/// a reader spreads it to an index (`index_of`) only where it reads a
+/// column, and shifts it to a level's entry as it is.
+pub fn square_of(g: [i32; 2]) -> ([i32; 2], [u32; 2]) {
     let m = (SQUARE - 1) as i32;
-    ([g[0] >> SQUARE_SHIFT, g[1] >> SQUARE_SHIFT], index_of([(g[0] & m) as u32, (g[1] & m) as u32]))
+    ([g[0] >> SQUARE_SHIFT, g[1] >> SQUARE_SHIFT], [(g[0] & m) as u32, (g[1] & m) as u32])
 }
 
 /// Where a square's levels begin among them, in entries: level `j`, from 0,
@@ -523,8 +525,8 @@ fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
 }
 
 /// The window holding cell `g` at `cell`, as `find` finds it
-/// (`Found`), and the cell's index in its square there.
-pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2]) -> (Found, u32) {
+/// (`Found`), and where the cell lies in its square there.
+pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2]) -> (Found, [u32; 2]) {
     let (from, slot, i, here) = find(w, cell, g, cell);
     (Found::of(cell, from, slot, here), i)
 }
@@ -542,7 +544,7 @@ pub fn found_at(w: &impl Squares, cell: Zoom, g: [i32; 2]) -> (Found, u32) {
 /// `found_at`. Asked finer, only the zooms finer than `above`'s are unknown:
 /// they are looked at finest first, then `above`'s answer stands, a look a
 /// zoom of the step.
-pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, u32) {
+pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, [u32; 2]) {
     step_from(w, above, cell, g, cell)
 }
 
@@ -555,7 +557,7 @@ fn asks(above: Found, cell: Zoom) -> bool {
 
 /// `step`, its windows asked from `top` coarser: `cell`'s own, or under
 /// it where `cell`'s was asked already (`bounded`).
-fn step_from(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found, u32) {
+fn step_from(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found, [u32; 2]) {
     if above == Found::NONE || cell < above.from() {
         let (from, slot, i, here) = find(w, cell, g, top);
         return (Found::of(cell, from, slot, here), i);
@@ -612,11 +614,11 @@ pub const fn held_to(cell: Zoom) -> Zoom {
 /// next's (its height, its runs), it as laid, and where it is held; `void`
 /// at sea level where none holds it.
 pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> ([u32; 2], u32, Found) {
-    let (f, i) = step(w, place, cell, g);
+    let (f, at) = step(w, place, cell, g);
     if !f.here() {
         return ([0; 2], laid_half(VOID, 0), f);
     }
-    let (from, slot) = (f.from(), f.slot());
+    let (from, slot, i) = (f.from(), f.slot(), index_of(at));
     ([w.column(from, slot, i), w.column(from, slot, i + 1)], w.laid(from, slot, i), f)
 }
 
@@ -662,19 +664,19 @@ pub fn ways_over(w: &impl Ran, found: Found, runs: [u32; 2], zoom: Zoom, z: i32,
 
 /// The finest window, at `cell` or coarser to the first (`FIRST_CELL`), holding cell `g` (at
 /// `cell`, X named on any lap round the world) present: that window's zoom,
-/// the slot and the cell's index in its square; false where none does, a
-/// lack.
-pub fn find(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Zoom, u32, u32, bool) {
+/// the slot and where the cell lies in its square; false where none does,
+/// a lack.
+pub fn find(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Zoom, u32, [u32; 2], bool) {
     let mut c = top;
     while c >= FIRST_CELL {
-        let (q, i) = square_of(cell_at(cell, c, g));
+        let (q, at) = square_of(cell_at(cell, c, g));
         let (slot, here) = w.present(c, q);
         if here {
-            return (c, slot, i, true);
+            return (c, slot, at, true);
         }
         c -= 1;
     }
-    (FIRST_CELL, 0, 0, false)
+    (FIRST_CELL, 0, [0; 2], false)
 }
 
 /// Entry `at` of level `j` of a square, from 1, over the level under it,
@@ -809,8 +811,8 @@ pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom
     // turn, only where it misses.
     let mut top = cell;
     if asks(*place, cell) {
-        let (q, i) = square_of(cell_at(cell, cell, g));
-        let (j, at) = entry_at(zoom, cell, i);
+        let (q, p) = square_of(cell_at(cell, cell, g));
+        let (j, at) = entry_at(zoom, cell, p);
         let (slot, here, e) = w.entry(cell, q, j, at);
         if here {
             *place = Found::of(cell, cell, slot, true);
@@ -818,24 +820,23 @@ pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom
         }
         top = cell - 1;
     }
-    let (f, i) = step_from(w, *place, cell, g, top);
+    let (f, p) = step_from(w, *place, cell, g, top);
     *place = f;
     let (from, slot) = (f.from(), f.slot());
     if !f.here() {
         return ([[0, 0]; 2], from, false);
     }
-    let (j, at) = entry_at(zoom, from, i);
+    let (j, at) = entry_at(zoom, from, p);
     (crate::ground::bounds_of(w.level(from, slot, j, at)), from, true)
 }
 
 /// The level of a square at `from` bounding a node at `zoom`, level 0 a
 /// column's own for a node no wider than a cell, and its entry there for
-/// the node's first cell, `i` in its square.
-fn entry_at(zoom: Zoom, from: Zoom, i: u32) -> (u32, [u32; 2]) {
+/// the node's first cell, at `[x, y]` in its square.
+fn entry_at(zoom: Zoom, from: Zoom, [x, y]: [u32; 2]) -> (u32, [u32; 2]) {
     // rust-gpu has no `saturating_sub`.
     #[allow(clippy::implicit_saturating_sub)]
     let j = if zoom >= from { 0 } else { from - zoom };
-    let [x, y] = of_index(i);
     (j, [x >> j, y >> j])
 }
 
