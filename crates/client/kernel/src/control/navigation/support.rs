@@ -10,7 +10,7 @@ use crate::query::changed::Asked;
 use crate::query::{over, under};
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world::{self, EXTENT};
+use pxl_spec::space::coord::world::{self, REACH};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
@@ -21,8 +21,9 @@ use crate::setting::store::settings_store;
 use crate::view::frame::coord::{to_world, world_to_canonical};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-/// The world's floor, under any ground.
-const UNKNOWN_Z: i64 = -(1 << (EXTENT[2] - 1)) << FRAC_W;
+/// The world's floor (`world::REACH`), under any ground, in steps: what a
+/// point whose height is not known holds.
+const UNKNOWN_Z: i64 = (REACH.min[2] as i64) << FRAC_W;
 
 fn with_z(at: &Q3, z: i64) -> Q3 {
     world::at(i64::from(at[0]), i64::from(at[1]), z)

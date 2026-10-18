@@ -63,7 +63,7 @@ impl World<'_> {
                 self.terrain
                     .relief(&line, &mut place, node)
                     .exact()
-                    .is_some_and(|[[lo, hi], _]| f64::from(bedrock(hi)) * unit <= space.min[2] && space.max[2] <= ceiling(f64::from(lo) * unit))
+                    .is_some_and(|[[lo, hi], _]| f64::from(bedrock(hi)) * unit <= space.min[2] && space.max[2] <= f64::from(ceiling(lo)) * unit)
             })
         })
     }

@@ -3,7 +3,8 @@
 //! Where the world ends, one place for every limit an edit and a column
 //! meet: the world is open from `BEDROCK_DEPTH` under the ground or sea
 //! level, whichever is lower, to `HEADROOM` over the ground or sea level,
-//! whichever is higher, in units — Minecraft's −64 to 320 on its own blocks,
+//! whichever is higher, in leaf cells (pxl-portable ground.rs `bedrock`,
+//! `ceiling`) — Minecraft's −64 to 320 on its own blocks,
 //! held from sea level here so a shore below it is not buried. Under the floor
 //! is bedrock, the unknown the world holds no more of
 //! (`spec/spec/block/cube.json` `unknown`), and the service area is walled by
@@ -12,14 +13,7 @@
 //! outer face stands on the area's edge at every zoom (pxl-portable
 //! area.rs `laid`).
 
-pub use pxl_portable::ground::{bedrock, BEDROCK_DEPTH};
-use pxl_portable::SEA_LEVEL;
-pub const HEADROOM: f64 = 128.0;
-
-/// The highest a block may reach over ground whose face is at `ele`, in units.
-pub fn ceiling(ele: f64) -> f64 {
-    ele.max(f64::from(SEA_LEVEL)) + HEADROOM
-}
+pub use pxl_portable::ground::{bedrock, ceiling, BEDROCK_DEPTH, HEADROOM};
 
 /// Whether a leaf column is the area's edge or past it: it or one of the eight
 /// about it is past, `past` asked of each by its offset in leaf columns. The

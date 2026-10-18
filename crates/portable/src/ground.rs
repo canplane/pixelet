@@ -64,6 +64,17 @@ pub fn bedrock(face: i32) -> i32 {
     face.min(SEA_LEVEL) - BEDROCK_DEPTH
 }
 
+/// Leaf cells over the ground or sea level, whichever is higher, a block
+/// may reach: Minecraft's 320 over its −64, held from sea level so a shore
+/// is not buried.
+pub const HEADROOM: i32 = 128;
+
+/// The highest a block may reach over a face at `face` leaf cells, in leaf
+/// cells: every edit's ceiling, as `bedrock` is its floor.
+pub fn ceiling(face: i32) -> i32 {
+    face.max(SEA_LEVEL) + HEADROOM
+}
+
 /// The height the surface draws at the center of a tile's cell `(x, y)`,
 /// in leaf cells, off its padded elevation samples `ele` (`ele_index`): the
 /// one producer of a cell's height, which a GPU runs once a cell of a held
