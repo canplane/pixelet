@@ -183,7 +183,6 @@ fn fs(v: VertexOut) -> FragOut {
     uv,
     ddx,
     ddy,
-    screen_open(v.clip.xy),
     seen_from_eye(h.at),
   );
   let clip = frame_view_proj() * vec4f(h.at, 1.0);

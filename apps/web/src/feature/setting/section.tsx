@@ -67,7 +67,7 @@ function SettingControl(props: { name: SettingName }) {
                 description={t(`${base}.${option}.description`)}
                 selected={value === i}
                 onSelect={() => kernel_setting(key, i)}
-                cost={("costs" in setting ? setting.costs[i] : "") || cost}
+                cost={cost}
                 dev={devOnly}
               />
             );

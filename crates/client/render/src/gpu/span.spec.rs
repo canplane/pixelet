@@ -14,28 +14,24 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
-pub const GPU_SPAN_NAMES: &[&str] = &["air", "prepass", "ao", "world", "overlay", "badges", "debug", "cases", "fill", "cast"];
+pub const GPU_SPAN_NAMES: &[&str] = &["air", "world", "overlay", "badges", "debug", "cases", "fill", "cast"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
     air = 0,
-    prepass = 1,
-    ao = 2,
-    world = 3,
-    overlay = 4,
-    badges = 5,
-    debug = 6,
-    cases = 7,
-    fill = 8,
-    cast = 9,
+    world = 1,
+    overlay = 2,
+    badges = 3,
+    debug = 4,
+    cases = 5,
+    fill = 6,
+    cast = 7,
 }
 
 impl GpuSpanName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [GpuSpanName; 10] = [
+    pub const ALL: [GpuSpanName; 8] = [
         GpuSpanName::air,
-        GpuSpanName::prepass,
-        GpuSpanName::ao,
         GpuSpanName::world,
         GpuSpanName::overlay,
         GpuSpanName::badges,

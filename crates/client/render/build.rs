@@ -140,7 +140,6 @@ fn words() -> String {
         vec4s("ATMOS", ATMOS_FLOATS),
         vec4s("CLOUDS", CLOUDS_FLOATS),
         vec4s("STARS", STARS_FLOATS),
-        vec4s("AO", AO_FLOATS),
         format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\n"),
         format!("const SLOT_BITS: u32 = {SLOT_BITS}u;\nconst NO_SLOT: u32 = {NO_SLOT}u;\n"),
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),

@@ -6,8 +6,6 @@
   ],
   "GPU_SPAN_NAMES": [
     "air",
-    "prepass",
-    "ao",
     "world",
     "overlay",
     "badges",

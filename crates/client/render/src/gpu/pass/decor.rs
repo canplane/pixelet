@@ -6,14 +6,13 @@
 
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
-use crate::frame::shader::record::PIPELINE_DECOR_PREPASS;
 use crate::gpu::renderer::Image;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_entry, buffer_range_entry, release, Gpu};
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::impostor::Extent;
-use crate::gpu::pass::model::{bind_mesh, draw_models, put_instances, DrawUniforms, ModelDraw, Stage};
+use crate::gpu::pass::model::{bind_mesh, draw_models, put_instances, DrawUniforms, ModelDraw};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{skin_group, Blocks, Draws};
 
@@ -46,7 +45,6 @@ struct Skin {
 pub struct DecorPass {
     lit: Built,
     ghost: Built,
-    prepass: Built,
     sampler: u32,
     uniforms: DrawUniforms,
     groups: [Group; GROUPS],
@@ -63,7 +61,6 @@ impl DecorPass {
         DecorPass {
             lit: pipelines.build(g, PIPELINE_DECOR, g.canvas()),
             ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, g.canvas()),
-            prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, g.canvas()),
             sampler,
             uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
             groups: [Group::default(); GROUPS],
@@ -133,12 +130,8 @@ impl DecorPass {
         }
     }
 
-    pub fn draw(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {
-        let pipeline = match stage {
-            Stage::Lit => self.lit.pipeline,
-            Stage::Prepass => self.prepass.pipeline,
-        };
-        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, pipeline, frame);
+    pub fn draw(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, frame: (u32, &mut u32)) {
+        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.lit.pipeline, frame);
     }
 
     pub fn draw_ghosts(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, frame: (u32, &mut u32)) {
@@ -171,13 +164,9 @@ impl DecorPass {
 
     /// The models the GPU grew, an indirect draw a group whose model is held
     /// (pxl-portable `scatter::drawn`, a group's models its region `2·group`).
-    pub fn draw_grown(&mut self, g: &Gpu, pass: u32, grown: Option<Drawn>, blocks: &Blocks, stage: Stage, (frame, bound): (u32, &mut u32)) {
+    pub fn draw_grown(&mut self, g: &Gpu, pass: u32, grown: Option<Drawn>, blocks: &Blocks, (frame, bound): (u32, &mut u32)) {
         let Some(d) = grown.filter(|_| self.grown_block.1 != 0) else { return };
-        let pipeline = match stage {
-            Stage::Lit => self.lit.pipeline,
-            Stage::Prepass => self.prepass.pipeline,
-        };
-        g.set_pipeline(pass, pipeline);
+        g.set_pipeline(pass, self.lit.pipeline);
         if *bound != frame {
             g.set_bind_group(pass, 0, frame, &[]);
             *bound = frame;

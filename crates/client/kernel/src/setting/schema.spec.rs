@@ -6,9 +6,7 @@
 // where the settings sheet shows it. The store reads the defaults from here
 // and the sheet renders rows from here, so adding a setting is one entry in
 // SETTINGS plus its two strings in the locale catalog under
-// `settings.<section>.<key>`. A choice may carry `costs` beside its
-// `options`, one per option in the same order, for when what an option costs
-// differs from its neighbors'; an empty string is no badge. A `dev` setting
+// `settings.<section>.<key>`. A `dev` setting
 // is in the kernel's table in every build and offered only under a
 // development one; the shell's production bundle carries SETTINGS_SHIPPED,
 // the table without them, in SETTINGS' place.
@@ -74,30 +72,6 @@ impl OrbitObstacleMode {
     }
 }
 
-/// Where the ambient occlusion comes from.
-///
-///   off    — none.
-///   screen — N8AO
-///            (crates/client/render/src/gpu/ao.rs): the world's depth drawn
-///            once more, the occlusion sampled from it at half resolution,
-///            denoised, and applied to every lit surface as a warm dark
-///            tint. Five passes and 11 bytes a pixel.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum AoMode {
-    off = 0,
-    screen = 1,
-}
-
-impl AoMode {
-    pub const ALL: [AoMode; 2] = [AoMode::off, AoMode::screen];
-
-    /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<AoMode> {
-        AoMode::ALL.get(index as usize).copied()
-    }
-}
-
 /// How a setting is held.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKind {
@@ -154,22 +128,20 @@ pub enum SettingKey {
     edge_shade = 8,
     /// A uniform on an already-compiled shader term; not a pass.
     rim_light = 9,
-    /// screen, N8AO's screen-space pass, or none. AO_MODES says each.
-    ao = 10,
     /// Where the camera and the pointer are, read live (profiler/summary.rs, its view section).
-    view_overlay = 11,
+    view_overlay = 10,
     /// The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
-    performance_overlay = 12,
+    performance_overlay = 11,
     /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs).
-    world_gizmo = 13,
-    person = 14,
-    pet = 15,
+    world_gizmo = 12,
+    person = 13,
+    pet = 14,
     /// Each ray's pixel coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_rays.wgsl).
-    ray_steps = 16,
+    ray_steps = 15,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 17] = [
+    pub const ALL: [SettingKey; 16] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -180,7 +152,6 @@ impl SettingKey {
         SettingKey::orbit_obstacle,
         SettingKey::edge_shade,
         SettingKey::rim_light,
-        SettingKey::ao,
         SettingKey::view_overlay,
         SettingKey::performance_overlay,
         SettingKey::world_gizmo,
@@ -206,7 +177,6 @@ impl SettingKey {
             SettingKey::orbit_obstacle => SettingKind::Choice,
             SettingKey::edge_shade => SettingKind::Toggle,
             SettingKey::rim_light => SettingKind::Toggle,
-            SettingKey::ao => SettingKind::Choice,
             SettingKey::view_overlay => SettingKind::Toggle,
             SettingKey::performance_overlay => SettingKind::Toggle,
             SettingKey::world_gizmo => SettingKind::Toggle,
@@ -229,7 +199,6 @@ impl SettingKey {
             SettingKey::orbit_obstacle => "orbit_obstacle",
             SettingKey::edge_shade => "edge_shade",
             SettingKey::rim_light => "rim_light",
-            SettingKey::ao => "ao",
             SettingKey::view_overlay => "view_overlay",
             SettingKey::performance_overlay => "performance_overlay",
             SettingKey::world_gizmo => "world_gizmo",
@@ -244,7 +213,6 @@ impl SettingKey {
         match self {
             SettingKey::camera_mode => &["orbit", "free"],
             SettingKey::orbit_obstacle => &["through", "stop", "climb"],
-            SettingKey::ao => &["off", "screen"],
             _ => &[],
         }
     }
@@ -276,7 +244,6 @@ pub struct Settings {
     pub orbit_obstacle: OrbitObstacleMode,
     pub edge_shade: bool,
     pub rim_light: bool,
-    pub ao: AoMode,
     pub view_overlay: bool,
     pub performance_overlay: bool,
     pub world_gizmo: bool,
@@ -298,7 +265,6 @@ impl Settings {
         orbit_obstacle: OrbitObstacleMode::climb,
         edge_shade: true,
         rim_light: true,
-        ao: AoMode::off,
         view_overlay: false,
         performance_overlay: false,
         world_gizmo: false,
@@ -321,7 +287,6 @@ impl Settings {
             SettingKey::orbit_obstacle => self.orbit_obstacle as u32,
             SettingKey::edge_shade => self.edge_shade as u32,
             SettingKey::rim_light => self.rim_light as u32,
-            SettingKey::ao => self.ao as u32,
             SettingKey::view_overlay => self.view_overlay as u32,
             SettingKey::performance_overlay => self.performance_overlay as u32,
             SettingKey::world_gizmo => self.world_gizmo as u32,
@@ -351,10 +316,6 @@ impl Settings {
             },
             SettingKey::edge_shade if value <= 1 => self.edge_shade = value == 1,
             SettingKey::rim_light if value <= 1 => self.rim_light = value == 1,
-            SettingKey::ao => match AoMode::of(value) {
-                Some(o) => self.ao = o,
-                None => return false,
-            },
             SettingKey::view_overlay if value <= 1 => self.view_overlay = value == 1,
             SettingKey::performance_overlay if value <= 1 => self.performance_overlay = value == 1,
             SettingKey::world_gizmo if value <= 1 => self.world_gizmo = value == 1,

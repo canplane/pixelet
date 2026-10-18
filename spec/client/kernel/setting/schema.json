@@ -4,9 +4,7 @@
     "where the settings sheet shows it. The store reads the defaults from here",
     "and the sheet renders rows from here, so adding a setting is one entry in",
     "SETTINGS plus its two strings in the locale catalog under",
-    "`settings.<section>.<key>`. A choice may carry `costs` beside its",
-    "`options`, one per option in the same order, for when what an option costs",
-    "differs from its neighbors'; an empty string is no badge. A `dev` setting",
+    "`settings.<section>.<key>`. A `dev` setting",
     "is in the kernel's table in every build and offered only under a",
     "development one; the shell's production bundle carries SETTINGS_SHIPPED,",
     "the table without them, in SETTINGS' place.",
@@ -51,19 +49,6 @@
       "  climb   — dist is always granted and the *view* pitches up instead,",
       "            as far as straight down, so every zoom stays",
       "            reachable at the cost of an angle nobody asked for."
-    ]
-  },
-  "AO_MODES": {
-    "$value": ["off", "screen"],
-    "$doc": [
-      "Where the ambient occlusion comes from.",
-      "",
-      "  off    — none.",
-      "  screen — N8AO",
-      "           (crates/client/render/src/gpu/ao.rs): the world's depth drawn",
-      "           once more, the occlusion sampled from it at half resolution,",
-      "           denoised, and applied to every lit surface as a warm dark",
-      "           tint. Five passes and 11 bytes a pixel."
     ]
   },
   "SETTINGS": {
@@ -174,16 +159,6 @@
       "default": true,
       "section": "lighting",
       "cost": "low"
-    },
-    "ao": {
-      "$doc": [
-        "screen, N8AO's screen-space pass, or none. AO_MODES says each."
-      ],
-      "kind": "choice",
-      "default": "off",
-      "options": "AO_MODES",
-      "costs": ["", "high"],
-      "section": "lighting"
     },
     "view_overlay": {
       "$doc": ["Where the camera and the pointer are, read live (profiler/summary.rs, its view section)."],

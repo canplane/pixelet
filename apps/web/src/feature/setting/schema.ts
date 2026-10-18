@@ -19,10 +19,8 @@ export type Setting = Spec[SettingName];
 
 export type SettingSection = Setting["section"];
 
-/** What a setting costs, whole or by option: every `cost` and every option's `costs`, "" a free one. */
-export type SettingCost =
-  | Extract<Setting, { cost: unknown }>["cost"]
-  | Exclude<Extract<Setting, { costs: unknown }>["costs"][number], "">;
+/** What a setting costs: every `cost`. */
+export type SettingCost = Extract<Setting, { cost: unknown }>["cost"];
 
 const SETTING_NAMES = Object.keys(SETTINGS) as SettingName[];
 
