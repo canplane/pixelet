@@ -95,8 +95,11 @@ fn handed() -> &'static mut Handed {
     })
 }
 
-/// Leaf cells round the world, as the GPU's X wraps.
-const ROUND: i64 = 1 << LEAF_CELL;
+/// A leaf cell's X as the world names it (pxl-portable `wrap_index`), the
+/// GPU's grown records' among them, as a word.
+fn wrapped(x: i64) -> u32 {
+    pxl_portable::wrap_index(LEAF_CELL, x as i32) as u32
+}
 
 /// This frame's hand-over for an eye at `eye`: placed decor out to where the
 /// largest is a sprite's worth, less the placed decor `hide` names, and the
@@ -127,12 +130,12 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i6
     p[drawn::MODEL_PX as usize] = (decor_gone_px() as f32).to_bits();
     p[drawn::SPRITE_PX as usize] = (decor_sprite_px() as f32).to_bits();
     let at = drawn::ANCHOR as usize;
-    p[at] = (anchor[0] as i64).rem_euclid(ROUND) as u32;
+    p[at] = wrapped(anchor[0] as i64);
     p[at + 1] = anchor[1] as i64 as u32;
     p[at + 2] = anchor[2] as i64 as u32;
     if let Some([x, y, z]) = scattered {
         let at = drawn::HIDE as usize;
-        p[at..at + 4].copy_from_slice(&[x.rem_euclid(ROUND) as u32, y as u32, z as u32, 1]);
+        p[at..at + 4].copy_from_slice(&[wrapped(x), y as u32, z as u32, 1]);
     }
     let extents = DECORS.iter().flat_map(|d| d.variants.iter().map(|v| v.extent() as f32));
     for (k, e) in extents.enumerate() {
@@ -153,7 +156,7 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i6
         }
         let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
         let [x, y, z] = index_of(UNIT_ZOOM, &e.corner());
-        placed.push([scatter::record_word(k, variant, turn, scatter::PLACED_AT), x.rem_euclid(ROUND) as u32, y as u32, z as u32]);
+        placed.push([scatter::record_word(k, variant, turn, scatter::PLACED_AT), wrapped(x), y as u32, z as u32]);
     });
 }
 
