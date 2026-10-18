@@ -29,7 +29,6 @@ use fnv::FnvHashMap;
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::io::demand::Order;
@@ -38,7 +37,7 @@ use crate::io::failure::Failure;
 use crate::io::request::declare;
 use crate::io::source;
 use crate::layer::residency::floor;
-use crate::layer::residency::{Candidate, Lines, Residency, Victim};
+use crate::layer::residency::{Lines, Residency};
 use crate::view::observation::{observation, ByEye};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::morton::key_of;
@@ -96,17 +95,6 @@ struct Seen {
     tau: Tau,
 }
 
-/// Evicts the tile last in view order.
-struct Farthest<'a>(Option<&'a Observation>, Lattice);
-
-impl Victim for Farthest<'_> {
-    fn victim(&self, candidates: &[Candidate]) -> Option<usize> {
-        let mut lines = Lines::default();
-        let mut order = |c: &Candidate| self.0.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, self.1, c.tile, &mut lines));
-        (0..candidates.len()).max_by_key(|&i| order(&candidates[i]))
-    }
-}
-
 pub struct Demand<L: Observed> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
@@ -160,7 +148,14 @@ impl<L: Observed> Demand<L> {
     }
 
     pub fn admit(&mut self, p: Tile, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
-        L::residency().admit(p, &Farthest(self.observation.as_ref(), L::LATTICE), receive)
+        // The tile last in view order goes.
+        let o = self.observation.as_ref();
+        let farthest = |tiles: &[Tile]| {
+            let mut lines = Lines::default();
+            let mut order = |t: Tile| o.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, L::LATTICE, t, &mut lines));
+            (0..tiles.len()).max_by_key(|&i| order(tiles[i]))
+        };
+        L::residency().admit(p, farthest, receive)
     }
 
     /// Builds the asks for `o`: the estimator's demand, the floor and the

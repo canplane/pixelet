@@ -22,20 +22,10 @@ use crate::layer::residency::Residency;
 use pxl_spec::space::coord::zoom::{index_of, units, Zoom};
 
 use crate::layer::object::store::Write;
-use crate::layer::residency::{Candidate, Victim};
 use crate::serial;
 
 const CELLS: usize = GROUND_LANE;
 const SPAN: usize = TILE_CELLS as usize;
-
-/// The fixture holds fewer tiles than there are frames.
-struct Keep;
-
-impl Victim for Keep {
-    fn victim(&self, _: &[Candidate]) -> Option<usize> {
-        None
-    }
-}
 
 fn top() -> Tile {
     Tile::new(LEAF_ZOOM - 1, [40, -20])
@@ -75,7 +65,7 @@ fn resident(centre: [f64; 2], held: &[(Tile, Leaf)]) -> Residency<TerrainTile> {
                     ..tile.clone()
                 },
             };
-            residency.admit(q, &Keep, |_| Ok::<_, ()>(picture)).unwrap();
+            residency.admit(q, |_| None, |_| Ok::<_, ()>(picture)).unwrap();
         }
     }
     // Asked for, as the floor asks for what it holds: a tile held but not

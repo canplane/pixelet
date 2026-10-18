@@ -34,17 +34,6 @@ enum Hold {
     Cache,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Candidate {
-    pub tile: Tile,
-}
-
-/// Which frame goes when one must, chosen only among those that may, so a
-/// policy changes what is held next and never what is correct.
-pub trait Victim {
-    fn victim(&self, candidates: &[Candidate]) -> Option<usize>;
-}
-
 /// No frame for an empty tile, whose body is its own. One asked for again
 /// (`again`) is read meanwhile and fetched once more.
 struct Held<L> {
@@ -378,7 +367,7 @@ impl<L: Base> Residency<L> {
     /// A frame for arriving `p`: its own, a free one, or a victim among frames
     /// held only as cache. None only for a tile no longer asked for, counted;
     /// for one asked for, none means the capacity bound is broken.
-    fn frame_for(&mut self, p: Tile, victim: &impl Victim) -> Option<u32> {
+    fn frame_for(&mut self, p: Tile, victim: impl FnOnce(&[Tile]) -> Option<usize>) -> Option<u32> {
         if self.framed(p) {
             return self.remove(p);
         }
@@ -386,21 +375,16 @@ impl<L: Base> Residency<L> {
             return Some(free);
         }
         let unasked = self.hold(p) == Hold::Cache;
-        let mut candidates: Vec<Candidate> = self
-            .tiles
-            .iter()
-            .filter(|&(&q, _)| self.framed(q) && self.hold(q) == Hold::Cache)
-            .map(|(&q, _)| Candidate { tile: q })
-            .collect();
+        let mut candidates: Vec<Tile> = self.tiles.iter().filter(|&(&q, _)| self.framed(q) && self.hold(q) == Hold::Cache).map(|(&q, _)| q).collect();
         // Sorted, so the policy sees the same list for the same state.
-        candidates.sort_unstable_by_key(|c| c.tile);
-        let Some(at) = victim.victim(&candidates) else {
+        candidates.sort_unstable();
+        let Some(at) = victim(&candidates) else {
             xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
             self.refused += 1;
             return None;
         };
         self.evicted = self.evicted.wrapping_add(1);
-        self.remove(candidates[at].tile)
+        self.remove(candidates[at])
     }
 
     pub fn churn(&self) -> [u32; 2] {
@@ -413,7 +397,10 @@ impl<L: Base> Residency<L> {
 
     /// The frame is emptied first, so a body that fails to decode leaves it free
     /// rather than another tile reading half-overwritten bytes.
-    pub fn admit<E>(&mut self, p: Tile, victim: &impl Victim, receive: impl FnOnce(u32) -> Result<L, E>) -> Result<(), E> {
+    /// `victim` picks which frame goes when one must, among the frames held
+    /// only as cache, so a policy changes what is held next and never what
+    /// is correct; none where none may.
+    pub fn admit<E>(&mut self, p: Tile, victim: impl FnOnce(&[Tile]) -> Option<usize>, receive: impl FnOnce(u32) -> Result<L, E>) -> Result<(), E> {
         let Some(record) = self.frame_for(p, victim) else { return Ok(()) };
         match receive(record) {
             Ok(tile) => {
