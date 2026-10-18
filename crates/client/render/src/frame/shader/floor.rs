@@ -8,7 +8,8 @@
 //! what each group's layout makes visible to it.
 
 use crate::frame::shader::record::{
-    COMPUTE, DEPTH, FRAGMENT, SAMPLER, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW, TEXTURE, TEXTURE_ARRAY, TEXTURE_UINT_ARRAY, TEXTURE_UNFILTERED, UNIFORM, UNIFORM_DYNAMIC, VERTEX,
+    COMPUTE, DEPTH, FRAGMENT, SAMPLER, STORAGE, STORAGE_RW, STORAGE_TEXTURE_3D, STORAGE_TEXTURE_RW, TEXTURE, TEXTURE_3D, TEXTURE_ARRAY, TEXTURE_UINT_ARRAY, TEXTURE_UNFILTERED, UNIFORM,
+    UNIFORM_DYNAMIC, VERTEX,
 };
 
 pub const BIND_GROUPS: usize = 4;
@@ -61,8 +62,8 @@ pub const fn holds(groups: &[&[u32]]) -> bool {
                 let class = match kind {
                     STORAGE | STORAGE_RW => 0,
                     UNIFORM | UNIFORM_DYNAMIC => 1,
-                    STORAGE_TEXTURE_RW => 2,
-                    TEXTURE | TEXTURE_ARRAY | DEPTH | TEXTURE_UNFILTERED | TEXTURE_UINT_ARRAY => 3,
+                    STORAGE_TEXTURE_RW | STORAGE_TEXTURE_3D => 2,
+                    TEXTURE | TEXTURE_ARRAY | DEPTH | TEXTURE_UNFILTERED | TEXTURE_UINT_ARRAY | TEXTURE_3D => 3,
                     SAMPLER => 4,
                     _ => return false,
                 };

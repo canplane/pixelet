@@ -13,6 +13,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_CAST => "cast_cs",
         SHADER_START => "start_cs",
         SHADER_JOINED => "joined_cs",
+        SHADER_ATMOS_FROXEL => "froxel_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHTS => "heights_cs",
         SHADER_GROWN_MARK => "decor_mark_cs",
@@ -223,7 +224,7 @@ const fn screen(shader: u32) -> Head {
 }
 
 /// The air's bindings, numbered alike in every pass that reads it.
-const AIR_SLOTS: [[u32; 2]; 10] = [
+const AIR_SLOTS: [[u32; 2]; 11] = [
     [8, UNIFORM],
     [9, TEXTURE],
     [10, TEXTURE],
@@ -234,19 +235,21 @@ const AIR_SLOTS: [[u32; 2]; 10] = [
     [17, TEXTURE_ARRAY],
     [18, TEXTURE],
     [12, TEXTURE],
+    // The air before each point, made of the rest (gpu/atmosphere.rs `froxel`).
+    [22, TEXTURE_3D],
 ];
 
 /// The air's bindings, as every pass that binds the air lays them out.
-const AIR: [[u32; 2]; 10] = AIR_SLOTS;
-const LIT_FRAME: [[u32; 2]; 12] = {
+const AIR: [[u32; 2]; 11] = AIR_SLOTS;
+const LIT_FRAME: [[u32; 2]; 13] = {
     // The air in the vertex stage, where each point's lights and veil are
     // worked out; a fragment reads its words and the eye's texel, whose white
     // it shows by (atmos_eye.wgsl). The sky's views and the Earth's picture
     // are the sky pass's, laid out unread.
-    [[0, UNIFORM], [7, TEXTURE], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9]]
+    [[0, UNIFORM], [7, TEXTURE], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9], AIR[10]]
 };
 /// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
-const CLOUD_GROUP: [[u32; 2]; 14] = {
+const CLOUD_GROUP: [[u32; 2]; 15] = {
     [
         [0, UNIFORM],
         [1, UNIFORM],
@@ -262,6 +265,7 @@ const CLOUD_GROUP: [[u32; 2]; 14] = {
         AIR[7],
         AIR[8],
         AIR[9],
+        AIR[10],
     ]
 };
 const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
@@ -269,7 +273,7 @@ const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 /// The lit pass's frame, occlusion, air and layers, all read where
 /// a pixel is painted; then the rays, the looks and the eye's words: the
 /// most entries any group has (`GROUP_ENTRIES`).
-const SCREEN_GROUP: [[u32; 2]; 18] = {
+const SCREEN_GROUP: [[u32; 2]; 19] = {
     [
         [0, UNIFORM],
         [7, TEXTURE],
@@ -283,6 +287,7 @@ const SCREEN_GROUP: [[u32; 2]; 18] = {
         AIR[7],
         AIR[8],
         AIR[9],
+        AIR[10],
         [3, TEXTURE_UINT_ARRAY],
         [4, TEXTURE_ARRAY],
         [5, STORAGE],
@@ -350,13 +355,13 @@ const fn and<const N: usize, const M: usize, const R: usize>(a: [[u32; 2]; N], b
 
 type Group = &'static [[u32; 2]];
 const FRAME: Group = &[[0, UNIFORM]];
-const BOX_GROUP: [[u32; 2]; 16] = and(LIT_FRAME, [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
+const BOX_GROUP: [[u32; 2]; 17] = and(LIT_FRAME, [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
 const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &[[0, UNIFORM_DYNAMIC]], &SKIN, &[[0, STORAGE]]];
 /// A billboard set's uniform and instances, and what its pass reads at an
 /// anchor: the world's depth for the regions, the regions for the sprites.
 const BADGE_SPRITES: Group = &[[0, UNIFORM], [1, STORAGE], [2, TEXTURE_UNFILTERED]];
 const BADGE_REGIONS: Group = &[[0, UNIFORM], [1, STORAGE], [2, DEPTH]];
-const SKY_GROUP: [[u32; 2]; 14] = and([[0, UNIFORM], [19, UNIFORM], [2, TEXTURE_ARRAY], [3, SAMPLER]], AIR);
+const SKY_GROUP: [[u32; 2]; 15] = and([[0, UNIFORM], [19, UNIFORM], [2, TEXTURE_ARRAY], [3, SAMPLER]], AIR);
 
 /// A pipeline's record before its groups' stages: its head, its lanes and
 /// each group's entries (binding, kind), which `record` sees from the

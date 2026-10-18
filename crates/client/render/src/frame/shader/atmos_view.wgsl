@@ -1,8 +1,7 @@
-// The air as the frame shows it: sky, the land past the terrain, and aerial perspective.
+// The air before a point as the eye sees it, marched (`seen_at`): what the
+// air's volume is made of (atmos_froxel.wgsl), which every painter reads
+// (atmos_air.wgsl `seen_from_eye`); and the lights at a point.
 
-@group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
-@group(0) @binding(16) var earth_map: texture_2d_array<f32>;
-@group(0) @binding(17) var earth_tiles: texture_2d_array<f32>;
 
 
 /* where a point stands */
@@ -44,81 +43,6 @@ fn light_of(world_pos: vec3f) -> Light {
   return light_at(radius_of(world_pos), up_at(world_pos));
 }
 
-/* sky */
-
-fn moon_view(dir: vec3f) -> vec3f {
-  return table_view(moon_view_lut, dir, atmos_moon_dir());
-}
-
-
-/* the Earth past the terrain */
-
-// Where a point lies on the map, as Mercator's longitude and ordinate.
-fn map_of(p: vec3f) -> vec2f {
-  return frame_map().xy + p.xy / frame_map().z;
-}
-
-// Reflectance, and in alpha its lights' square root, at the map's place
-// `mercator`: the global picture at its latitude and longitude, a held tile
-// over it.
-fn earth_face(mercator: vec2f, octaves: f32) -> vec4f {
-  let lat = 2.0 * atan(exp(mercator.y)) - 0.5 * PI;
-  let uv = vec2f(fract(mercator.x / TAU + 0.5), 0.5 - lat / PI);
-  let global = textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0);
-  // A tile, a ground cell a texel, takes over from the global picture, eight
-  // times coarser, over the octave a pixel goes from two cells, at the tiles'
-  // reach, to one.
-  let share = clamp(-octaves, 0.0, 1.0);
-  if (share <= 0.0) {
-    return global;
-  }
-  let w = atmos_earth_window();
-  let at = mercator / TAU * f32(w.w);
-  let tile = vec2i(floor(at));
-  let d = vec2i(((tile.x - w.x) % w.w + w.w) % w.w, tile.y - w.y);
-  if (all(d >= vec2i(0)) && all(d < vec2i(w.z))) {
-    let k = u32(d.y * w.z + d.x);
-    let per_word = 32u / EARTH_TILE_BITS;
-    let layer = (atmos_earth_tiles()[k / per_word] >> (EARTH_TILE_BITS * (k % per_word))) & ((1u << EARTH_TILE_BITS) - 1u);
-    if (layer > 0u) {
-      return mix(global, textureSampleLevel(earth_tiles, atmos_sampler, fract(at), i32(layer - 1u), 0.0), share);
-    }
-  }
-  return global;
-}
-
-// On where night falls on them, as the sky's night falls (look/environment.rs).
-fn city_shown(lights: f32, up: vec3f) -> vec3f {
-  return atmos_city_light() * atmos_white() * lights * lights * exposure() * (1.0 - smoothstep(-0.1, 0.0, dot(up, atmos_sun_dir())));
-}
-
-// Doubled, picked by eye beside the original; the cities are not its to scale.
-const EARTH_GAIN: f32 = 2.0;
-
-// What the eye sees along `dir` where nothing was drawn: the sky where it
-// rises; where it falls, the land it meets, the plane under the eye at its
-// ground's height, seen through the air to it and lit as the terrain is, so
-// the drawn edge is no seam. Its picture comes in over the octave to the
-// earth layer's reach; nearer, the ground is the voxels', or the air's alone.
-fn beyond(dir: vec3f) -> vec3f {
-  if (!falls_to_land(dir)) {
-    var sky = sky_view(dir, atmos_sun_dir()) * shown();
-    if (atmos_moon_light() > 0.0) {
-      sky += moon_view(dir) * moon_shown();
-    }
-    return sky;
-  }
-  let d = land_below_km() / atmos_km_per_u() / -dir.z;
-  let p = dir * d;
-  let seen = seen_from_eye(p);
-  let octaves = log2(d / atmos_earth_reach());
-  let n = frame_up();
-  let face = earth_face(map_of(p), octaves);
-  let lit = EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);
-  return seen.scattered + seen.through * clamp(octaves + 1.0, 0.0, 1.0) * lit;
-}
-
-
 /* the air before a point */
 
 // The light per unit of depth bends sharply only in the ozone: under it three
@@ -147,14 +71,26 @@ fn air_to(world_pos: vec3f) -> Veil {
   return Veil(v.through, v.scattered * exposure());
 }
 
-// Per vertex: every term varies slowly across a face.
+// The air before a point: what it lets through, what it scatters toward
+// the eye, and the lights there. Every term varies slowly across the view,
+// which is what lets the air's volume hold it (atmos_air.wgsl).
 struct Seen {
   through: f32,
   scattered: vec3f,
   light: Light,
 };
 
-fn seen_from_eye(world_pos: vec3f) -> Seen {
+// How far the air's volume reaches, in units: a ray out of the eye through the
+// air to where it leaves it, the longest the air reaches past the horizon.
+fn air_far() -> f32 {
+  let b = atmos_bottom_radius();
+  let r = camera_r();
+  let t = atmos_top_radius();
+  return (sqrt(max(r * r - b * b, 0.0)) + sqrt(t * t - b * b)) / atmos_km_per_u();
+}
+
+// The march to a point, the volume's one maker (atmos_froxel.wgsl).
+fn seen_at(world_pos: vec3f) -> Seen {
   let v = air_to(world_pos);
   var s: Seen;
   // An authored color is dimmed alike at every wavelength: by wavelength, a

@@ -29,6 +29,11 @@ pub const EARTH_TILE_BITS: u32 = 4;
 /// disc's radius is half of it.
 pub const MOON_TEXELS: u32 = 512;
 
+/// The air's froxels a side and deep (gpu/atmosphere.rs `froxel`):
+/// Hillaire 2020's aerial-perspective volume, 32³, as Unreal's
+/// SkyAtmosphere sizes it.
+pub const AIR_FROXELS: u32 = 32;
+
 /// A layer past the last: the face's swatch alone.
 pub const NO_LAYER: u32 = 255;
 

@@ -1380,7 +1380,7 @@ impl Renderer {
         let frame_buffer = g.buffer(word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let sky_buffer = g.buffer(word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buffer);
-        let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer);
+        let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer, sky_buffer);
         let air = atmosphere.entries();
         let stars = StarPass::new(g, &mut pipelines, frame_buffer, air);
         let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
@@ -1651,7 +1651,9 @@ impl Renderer {
         let folded = self.screen.fold(g, ahead, &mut stamps[SPAN_FILL]);
         let (tables, exposed) = self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR]);
         read.mark(tables);
-        if baked || gridded || folded || exposed {
+        let aired = self.atmosphere.froxel(g, ahead, [&self.frame, &self.sky], exposed, &mut stamps[SPAN_AIR]);
+        read.mark(aired);
+        if baked || gridded || folded || exposed || aired {
             g.submit(ahead);
         } else {
             release(ahead);

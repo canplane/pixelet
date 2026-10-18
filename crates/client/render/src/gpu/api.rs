@@ -462,6 +462,12 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
             format: TextureFormat::r32uint,
             dimension: TextureViewDimension::_2d_array,
         },
+        record::TEXTURE_3D => texture(TextureSampleType::float, TextureViewDimension::_3d),
+        record::STORAGE_TEXTURE_3D => L::StorageTexture {
+            access: StorageTextureAccess::write_only,
+            format: TextureFormat::rgba16float,
+            dimension: TextureViewDimension::_3d,
+        },
         _ => L::Sampler(SamplerBindingType::filtering),
     }
 }
@@ -521,6 +527,40 @@ impl Gpu {
                 format,
                 usage,
                 view_formats: &[],
+            },
+        ))
+    }
+
+    /// A volume `size` texels on a side each way: no mips, no layers.
+    pub fn volume(&self, size: [u32; 3], format: Format, usage: u32) -> Id {
+        let s = self.s();
+        made(s.encoder.texture(
+            &mut s.stream,
+            &encode::TextureDescriptor {
+                size,
+                mip_levels: 1,
+                samples: 1,
+                dimension: TextureDimension::_3d,
+                format,
+                usage,
+                view_formats: &[],
+            },
+        ))
+    }
+
+    /// A volume's view, whole (`volume`).
+    pub fn volume_view(&self, texture: Id) -> Id {
+        let s = self.s();
+        made(s.encoder.view(
+            &mut s.stream,
+            texture,
+            &encode::ViewDescriptor {
+                dimension: Some(TextureViewDimension::_3d),
+                base_mip: 0,
+                mips: Some(1),
+                base_layer: 0,
+                layers: Some(1),
+                ..Default::default()
             },
         ))
     }

@@ -57,7 +57,9 @@
       "filters (RGBA32F), read by textureLoad alone; TEXTURE_UINT_ARRAY a u32",
       "texture's layers, read by textureLoad; STORAGE_TEXTURE_RW an r32uint",
       "texture's layers read and written in place, the one format family WebGPU",
-      "lets a shader do both to."
+      "lets a shader do both to; TEXTURE_3D a filtered volume (the air's,",
+      "gpu/atmosphere.rs); STORAGE_TEXTURE_3D an rgba16float volume a compute",
+      "pass writes."
     ],
     "HEAD": 10,
     "TRIANGLES": 0,
@@ -92,6 +94,8 @@
     "TEXTURE_UNFILTERED": 8,
     "STORAGE_RW": 9,
     "TEXTURE_UINT_ARRAY": 10,
-    "STORAGE_TEXTURE_RW": 11
+    "STORAGE_TEXTURE_RW": 11,
+    "TEXTURE_3D": 12,
+    "STORAGE_TEXTURE_3D": 13
   }
 }

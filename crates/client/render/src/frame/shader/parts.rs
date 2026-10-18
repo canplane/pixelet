@@ -70,7 +70,10 @@ pub const SHADER_GROWN_MARK: u32 = 36;
 /// The eye's windows folded over their squares, generated with the cast
 /// from pxl-portable's `window::fold`: its one compute entry.
 pub const SHADER_JOINED: u32 = 37;
-pub const SHADERS: u32 = 38;
+/// The air's volume, a froxel a thread (atmos_froxel.wgsl): its one
+/// compute entry.
+pub const SHADER_ATMOS_FROXEL: u32 = 38;
+pub const SHADERS: u32 = 39;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -85,6 +88,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_march",
         "atmos_light",
         "atmos_view",
+        "atmos_air",
         "atmos_ground",
         "shade",
         "finish",
@@ -104,6 +108,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_march",
         "atmos_light",
         "atmos_view",
+        "atmos_air",
         "atmos_ground",
         "shade",
         "finish",
@@ -123,6 +128,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_march",
         "atmos_light",
         "atmos_view",
+        "atmos_air",
         "atmos_ground",
         "shade",
         "finish",
@@ -150,6 +156,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_march",
         "atmos_light",
         "atmos_view",
+        "atmos_air",
         "atmos_ground",
         "sky_words",
         "sky",
@@ -237,6 +244,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_march",
         "atmos_light",
         "atmos_view",
+        "atmos_air",
         "atmos_ground",
         "shade",
         "finish",
@@ -261,6 +269,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_march",
         "atmos_light",
         "atmos_view",
+        "atmos_air",
         "atmos_ground",
         "shade",
         "finish",
@@ -295,4 +304,18 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["decor_mark.gen"],
     // SHADER_JOINED
     &["joined.gen"],
+    // SHADER_ATMOS_FROXEL
+    &[
+        "frame",
+        "atmos_medium",
+        "atmos_bind",
+        "atmos_lut",
+        "atmos_eye",
+        "atmos_march",
+        "atmos_light",
+        "atmos_ground",
+        "atmos_view",
+        "sky_words",
+        "atmos_froxel",
+    ],
 ];

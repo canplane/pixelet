@@ -56,7 +56,9 @@ pub mod stream {
 /// filters (RGBA32F), read by textureLoad alone; TEXTURE_UINT_ARRAY a u32
 /// texture's layers, read by textureLoad; STORAGE_TEXTURE_RW an r32uint
 /// texture's layers read and written in place, the one format family WebGPU
-/// lets a shader do both to.
+/// lets a shader do both to; TEXTURE_3D a filtered volume (the air's,
+/// gpu/atmosphere.rs); STORAGE_TEXTURE_3D an rgba16float volume a compute
+/// pass writes.
 pub mod record {
     pub const HEAD: u32 = 10;
     pub const TRIANGLES: u32 = 0;
@@ -92,6 +94,8 @@ pub mod record {
     pub const STORAGE_RW: u32 = 9;
     pub const TEXTURE_UINT_ARRAY: u32 = 10;
     pub const STORAGE_TEXTURE_RW: u32 = 11;
+    pub const TEXTURE_3D: u32 = 12;
+    pub const STORAGE_TEXTURE_3D: u32 = 13;
     pub const KEYS: &[&str] = &[
         "HEAD",
         "TRIANGLES",
@@ -127,5 +131,7 @@ pub mod record {
         "STORAGE_RW",
         "TEXTURE_UINT_ARRAY",
         "STORAGE_TEXTURE_RW",
+        "TEXTURE_3D",
+        "STORAGE_TEXTURE_3D",
     ];
 }

@@ -11,12 +11,15 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 
 use pxl_spec::space::coord::world::around;
 
-use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
+use crate::frame::shader::record::{
+    COMPUTE, PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER, SHADER_ATMOS_FROXEL, STORAGE_TEXTURE_3D,
+    TEXTURE, UNIFORM,
+};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use xpute_guest::mem::base::off_of;
 
-use crate::frame::shader::words::{ATMOS_FLOATS, EARTH_TILE_BITS};
+use crate::frame::shader::words::{AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -57,8 +60,46 @@ pub(crate) const EARTH_REACH: usize = 43;
 pub(crate) const EARTH_WINDOW: usize = 44;
 pub(crate) const EARTH_TILES: usize = 48;
 
-/// Bindings 8 through 18, ten entries.
-pub const AIR_ENTRIES: usize = 10;
+/// Bindings 8 through 18, and the air's volume at 22: eleven entries.
+pub const AIR_ENTRIES: usize = 11;
+
+/// The air's volume's terms, a depth of froxels each (atmos_froxel.wgsl):
+/// what the air scatters and lets through, then the sun's, the other
+/// light's and the sky's light.
+const AIR_TERMS: u32 = 4;
+/// The volume's maker's workgroup, a side each way (atmos_froxel.wgsl).
+const FROXEL_WORKGROUP: u32 = 4;
+/// What the volume's maker binds: the frame, the volume it writes, the
+/// air's words and the tables it marches through, and the sky's ray.
+const FROXEL_GROUP: [u32; 27] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    1,
+    COMPUTE,
+    STORAGE_TEXTURE_3D,
+    8,
+    COMPUTE,
+    UNIFORM,
+    9,
+    COMPUTE,
+    TEXTURE,
+    11,
+    COMPUTE,
+    SAMPLER,
+    12,
+    COMPUTE,
+    TEXTURE,
+    13,
+    COMPUTE,
+    TEXTURE,
+    18,
+    COMPUTE,
+    TEXTURE,
+    19,
+    COMPUTE,
+    UNIFORM,
+];
 
 /// A layer for each tile the earth layer's floor holds at once: its residency's frames.
 pub const EARTH_LAYERS: u32 = REACH_TILES;
@@ -116,10 +157,17 @@ pub struct Atmosphere {
     /// come (`ImageMap::step`).
     pub earth: ImageMap,
     earth_tiles: (u32, u32),
+    /// The air before each point of the view (atmos_froxel.wgsl), its maker
+    /// and its maker's group; and what it was last made of: the frame's and
+    /// the sky's words, the air's, and the eye's texel as it was drawn.
+    volume: u32,
+    froxel: Built,
+    froxel_group: u32,
+    air: Read,
 }
 
 impl Atmosphere {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> Atmosphere {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> Atmosphere {
         let uniform = g.buffer(word_bytes(ATMOS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let mut words = [0.0f32; ATMOS_FLOATS];
         for (at, rgb) in [
@@ -171,6 +219,8 @@ impl Atmosphere {
             PIPELINE_ATMOS_IRRADIANCE,
         ]
         .map(|id| pipelines.build(g, id, Format::rgba16float));
+        let n = AIR_FROXELS;
+        let volume = g.volume_view(g.volume([n, n, AIR_TERMS * n], Format::rgba16float, texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING));
 
         let mut atmosphere = Atmosphere {
             uniform,
@@ -206,6 +256,10 @@ impl Atmosphere {
                 let view = g.view(texture, true, 0, 1, 0, EARTH_LAYERS);
                 (texture, view)
             },
+            volume,
+            froxel: pipelines.build_compute(g, SHADER_ATMOS_FROXEL, &FROXEL_GROUP),
+            froxel_group: 0,
+            air: Read::default(),
         };
         // Every table's group is the air's entries it reads and its own.
         let air = atmosphere.entries();
@@ -221,8 +275,8 @@ impl Atmosphere {
             g.write_buffer(light, 0, bytes(&[which, 0.0, 0.0, 0.0]));
             buffer_entry(14, light)
         };
-        // The exposure reads the air but what it writes.
-        let unexposed: Vec<u32> = air.iter().map(|e| e.binding).filter(|&b| b != 13).collect();
+        // The exposure reads the air but what it writes, and the volume made of it.
+        let unexposed: Vec<u32> = air.iter().map(|e| e.binding).filter(|&b| b != 13 && b != 22).collect();
         let reads: [(usize, Vec<Entry>); TABLES] = [
             (TRANSMITTANCE, of(&[8], &[])),
             (MULTISCATTER, of(&medium, &[])),
@@ -236,6 +290,8 @@ impl Atmosphere {
         for (k, entries) in reads {
             atmosphere.groups[k] = g.bind_group(atmosphere.passes[pass_of(k)].layouts[0], &entries);
         }
+        let froxel = of(&[8, 9, 11, 12, 13, 18], &[frame, view_entry(1, volume), buffer_entry(19, sky_buffer)]);
+        atmosphere.froxel_group = g.bind_group(atmosphere.froxel.layouts[0], &froxel);
         atmosphere
     }
 
@@ -251,7 +307,30 @@ impl Atmosphere {
             view_entry(17, self.earth_tiles.1),
             view_entry(18, self.views[IRRADIANCE]),
             view_entry(12, self.views[MULTISCATTER]),
+            view_entry(22, self.volume),
         ]
+    }
+
+    /// The air before each point of the view made again where what it is
+    /// made of moved (`air`): the frame's words, the sky's, the air's, or the
+    /// eye's texel drawn this frame (`exposed`); whether it was.
+    pub fn froxel(&mut self, g: &Gpu, encoder: u32, [frame, sky]: [&[f32]; 2], exposed: bool, stamp: &mut Stamp) -> bool {
+        let r = &mut self.air;
+        r.begin();
+        r.read(frame);
+        r.read(sky);
+        r.read(&self.words);
+        r.mark(exposed);
+        if r.end() {
+            return false;
+        }
+        let pass = g.compute_pass(encoder, stamp.pass());
+        g.set_pipeline(pass, self.froxel.pipeline);
+        g.set_bind_group(pass, 0, self.froxel_group, &[]);
+        let groups = AIR_FROXELS.div_ceil(FROXEL_WORKGROUP);
+        g.dispatch(pass, groups, groups, groups);
+        g.end(pass);
+        true
     }
 
     /// The earth layer's tiles: what has come goes into its layer as the
