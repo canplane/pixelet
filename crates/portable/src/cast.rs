@@ -615,6 +615,9 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
         roots: [0; 3],
     };
     let (mut at, mut t, mut visits) = (from.1, 0.0f32, 0);
+    // The world's node the walk's node is, worked out where the node is
+    // made, its At handed it, and read where it is asked.
+    let mut node = index_of(&n, r0);
     loop {
         // The node's planes, in units from the origin, and the ray's span in it.
         let u = under(n.zoom);
@@ -634,7 +637,7 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
         if t1 > t0 {
             let near = [lo[0].max(0.0).min(hi[0]), lo[1].max(0.0).min(hi[1]), lo[2].max(0.0).min(hi[2])];
             let asking = [detail.at(t1 * t1 * squared(ray.direction)), detail.at(squared(near))];
-            let i = q.node(&mut at, n.zoom, index_of(&n, r0), asking, t0);
+            let i = q.node(&mut at, n.zoom, node, asking, t0);
             visits += 1;
             let inside = lo[0] <= 0.0 && 0.0 < hi[0] && lo[1] <= 0.0 && 0.0 < hi[1] && lo[2] <= 0.0 && 0.0 < hi[2];
             let ends = match i.kind {
@@ -693,7 +696,8 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
                 ..n
             };
             t = t0;
-            at = q.child(&at, n.zoom, index_of(&n, r0));
+            node = index_of(&n, r0);
+            at = q.child(&at, n.zoom, node);
             continue;
         }
         if t1 >= ray.reach {
@@ -751,7 +755,8 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
             let by = if up { 1 } else { -1 };
             n.roots = [n.roots[0] + (e == 0) as i32 * by, n.roots[1] + (e == 1) as i32 * by, n.roots[2] + (e == 2) as i32 * by];
             (n.corner, n.zoom, top, floor) = ([0; 3], 0, 0, 0);
-            at = q.root(index_of(&n, r0));
+            node = index_of(&n, r0);
+            at = q.root(node);
             continue;
         }
         // POP: the child, at `l`, of the nearest ancestor holding the next
@@ -776,18 +781,22 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
         let shared = apart.leading_zeros();
         if home && l - 1 < top && shared >= l - 1 {
             n.zoom = l;
-            at = q.child(&over.over(l - 1), l, index_of(&n, r0));
+            node = index_of(&n, r0);
+            at = q.child(&over.over(l - 1), l, node);
         } else if l > floor {
             n.zoom = l;
-            at = q.child(&Q::unkeep(stack.at(l - 1), &at, l - 1), l, index_of(&n, r0));
+            node = index_of(&n, r0);
+            at = q.child(&Q::unkeep(stack.at(l - 1), &at, l - 1), l, node);
         } else if home && top > 0 {
             let b = shared.min(top - 1) + 1;
             let keep = !under(b);
             (n.corner, n.zoom, floor) = ([n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep], b, b);
-            at = q.child(&over.over(b - 1), b, index_of(&n, r0));
+            node = index_of(&n, r0);
+            at = q.child(&over.over(b - 1), b, node);
         } else {
             (n.corner, n.zoom, floor) = ([0; 3], 0, 0);
-            at = q.root(index_of(&n, r0));
+            node = index_of(&n, r0);
+            at = q.root(node);
         }
     }
 }
