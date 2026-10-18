@@ -1573,7 +1573,7 @@ impl Renderer {
         read.read(input.skins);
         read.mark(self.layers.step(g, &self.mips, input.pack));
         read.mark(self.moon.step(g, &self.mips, input.moon));
-        read.mark(self.atmosphere.earth_step(g, &self.mips, input.earth));
+        read.mark(self.atmosphere.earth.step(g, &self.mips, input.earth));
         let cast = input.cast;
         self.screen.hand(g, &mut self.pipelines, input.ground.upload);
         let tiles = input.earth_tiles;

@@ -33,10 +33,7 @@ pub mod STAGE_AT {
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();
 
-pub fn stage_lane_mut() -> &'static mut [f64; STAGE_WORDS] {
+/// The lane: the kernel writes it a turn, the renderer reads it a frame.
+pub fn stage_lane() -> &'static mut [f64; STAGE_WORDS] {
     STAGE.get(|| [0.0; STAGE_WORDS])
-}
-
-pub fn stage_lane() -> &'static [f64; STAGE_WORDS] {
-    stage_lane_mut()
 }

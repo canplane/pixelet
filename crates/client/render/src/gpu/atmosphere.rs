@@ -19,7 +19,6 @@ use xpute_guest::mem::base::off_of;
 use crate::frame::shader::words::{ATMOS_FLOATS, EARTH_TILE_BITS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE};
 use crate::gpu::image_map::ImageMap;
-use crate::gpu::layers::Mips;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Read;
 use crate::gpu::renderer::Upload;
@@ -113,7 +112,9 @@ pub struct Atmosphere {
     /// alone.
     read: Read,
     moved: bool,
-    earth: ImageMap,
+    /// This month's Earth: the kernel draws nothing before its image has
+    /// come (`ImageMap::step`).
+    pub earth: ImageMap,
     earth_tiles: (u32, u32),
 }
 
@@ -279,12 +280,6 @@ impl Atmosphere {
             *w = f32::from_bits(p);
         }
         came
-    }
-
-    /// This month's Earth: the kernel draws nothing before its image has
-    /// come; whether it came this frame.
-    pub fn earth_step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<crate::gpu::renderer::Image>) -> bool {
-        self.earth.step(g, mips, image)
     }
 
     /// The words the sky and the world read, as `lay_out` wrote them.

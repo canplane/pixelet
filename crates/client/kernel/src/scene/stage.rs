@@ -8,7 +8,7 @@ use crate::laid;
 use crate::scene::frame::Frame;
 use crate::sched::tick::TickContext;
 use crate::view::frame::pose::view_resize;
-use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
+use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
@@ -58,7 +58,7 @@ const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame 
 pub fn stage_write() {
     let v = view();
     let settings = settings_store();
-    let s = stage_lane_mut();
+    let s = stage_lane();
     // The GPU gets the eye's frame, where the draws' points are.
     let (view_proj, camera) = v.eye_frame();
     s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&camera);
