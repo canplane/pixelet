@@ -84,7 +84,10 @@ const SPAN_BADGES: usize = GpuSpanName::badges as usize;
 const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
 const SPAN_CASES: usize = GpuSpanName::cases as usize;
 const SPAN_FILL: usize = GpuSpanName::fill as usize;
+const SPAN_START: usize = GpuSpanName::start as usize;
+const SPAN_BEAM: usize = GpuSpanName::beam as usize;
 const SPAN_CAST: usize = GpuSpanName::cast as usize;
+const SPAN_GROW: usize = GpuSpanName::grow as usize;
 
 type Frame = [f32; FRAME_FLOATS];
 
@@ -1235,27 +1238,31 @@ impl RaysPass {
     /// The GPU's cast into the surface's rays, a ray a drawn pixel, where it
     /// runs; then the decor the ground grows over the same world, a
     /// candidate a thread.
-    fn dispatch(&self, g: &Gpu, encoder: u32, cast: &mut Stamp) {
+    /// The start, the beams and the cast where the frame casts, then the
+    /// decor grown over the world where it moves: each a pass of its own
+    /// over the cast's group, timed in its own span, so what each costs is
+    /// read apart.
+    fn dispatch(&self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
         let Some(c) = self.cast.as_ref() else { return };
-        let casts = self.kind == FrameKind::cast;
-        if !casts && !self.grows() {
-            return;
-        }
-        let pass = g.compute_pass(encoder, cast.pass());
-        if casts {
-            let w = compute::CAST_WORKGROUP;
-            let cells = [c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1])];
-            g.set_bind_group(pass, 0, c.group, &[]);
-            g.set_pipeline(pass, c.start_built.pipeline);
-            g.dispatch(pass, 1, 1, 1);
+        if self.kind == FrameKind::cast {
+            let run = |stamp: &mut Stamp, built: &Built, [x, y]: [u32; 2]| {
+                let pass = g.compute_pass(encoder, stamp.pass());
+                g.set_bind_group(pass, 0, c.group, &[]);
+                g.set_pipeline(pass, built.pipeline);
+                g.dispatch(pass, x, y, 1);
+                g.end(pass);
+            };
             let (b, tiles) = (compute::BEAM_WORKGROUP, beam_tiles(c.size));
-            g.set_pipeline(pass, c.beam_built.pipeline);
-            g.dispatch(pass, tiles[0].div_ceil(b[0]), tiles[1].div_ceil(b[1]), 1);
-            g.set_pipeline(pass, c.built.pipeline);
-            g.dispatch(pass, cells[0], cells[1], 1);
+            let w = compute::CAST_WORKGROUP;
+            run(&mut stamps[SPAN_START], &c.start_built, [1, 1]);
+            run(&mut stamps[SPAN_BEAM], &c.beam_built, [tiles[0].div_ceil(b[0]), tiles[1].div_ceil(b[1])]);
+            run(&mut stamps[SPAN_CAST], &c.built, [c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1])]);
         }
-        c.grown.dispatch(g, pass);
-        g.end(pass);
+        if self.grows() {
+            let pass = g.compute_pass(encoder, stamps[SPAN_GROW].pass());
+            c.grown.dispatch(g, pass);
+            g.end(pass);
+        }
     }
 
     /// Whether the decor grown over the cast's world moves this frame.
@@ -1660,7 +1667,7 @@ impl Renderer {
         // for the stream is dropped whole and the screen keeps the last.
         frame_begin();
         let encoder = g.encoder();
-        self.screen.dispatch(g, encoder, &mut stamps[SPAN_CAST]);
+        self.screen.dispatch(g, encoder, &mut stamps);
         if !still {
             let pass = g.pass(encoder, &pass_desc(world.world_view, Load::Clear, world.world_depth_view, Load::Clear, 0.0, stamps[SPAN_WORLD].pass()));
             // The world image's opaque models, the decor grown over the world.

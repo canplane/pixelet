@@ -12,7 +12,10 @@
     "debug",
     "cases",
     "fill",
-    "cast"
+    "start",
+    "beam",
+    "cast",
+    "grow"
   ],
   "FRAME_KINDS": [
     "none",
