@@ -8,7 +8,7 @@
 //! rides on that answer.
 
 use super::decor::Strike;
-use super::node::{coarsest, At, In};
+use super::node::{coarsest, At};
 use super::world::World;
 use crate::layer::instance::{Instance, Source};
 use crate::layer::object::store::EntryAt;
@@ -143,7 +143,7 @@ impl<'a> Query for Walker<'_, 'a> {
                 self.world.strike_near(s, ray, [c[0], c[1]]);
             }
         }
-        let answer = match self.world.node(at, asked) {
+        let (answer, block) = match self.world.node(at, asked) {
             Answer::Nothing(l) => {
                 self.lack.get_or_insert(l);
                 return cast::In { kind: Kind::Lacks, block: None };
@@ -156,10 +156,10 @@ impl<'a> Query for Walker<'_, 'a> {
         };
         self.answered = true;
         let decor = zoom < GROUND.cell() && self.strike.as_ref().is_some_and(|(_, s)| t0 < s.held && self.world.may_strike(s, at.node, at.shard));
-        match answer {
-            In::Empty if !decor => cast::In { kind: Kind::Block, block: None },
-            In::Empty | In::Split => cast::In { kind: Kind::Split, block: None },
-            In::Block(b) => cast::In { kind: Kind::Block, block: b },
+        match answer.kind {
+            // Air coarser than asked, gone into where decor may stand in it.
+            Kind::Block if !block && decor => cast::In { kind: Kind::Split, block: None },
+            _ => answer,
         }
     }
 

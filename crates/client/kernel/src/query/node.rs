@@ -43,7 +43,7 @@
 //! never that nothing fills.
 
 use pxl_portable::area::{Area, Shard};
-use pxl_portable::cast::Kind;
+use pxl_portable::cast::{In, Kind};
 use pxl_portable::cube::sentinel;
 use pxl_portable::ground::{self, Cell};
 use pxl_portable::scatter::PLACED_BLOCK;
@@ -68,17 +68,6 @@ use crate::layer::{Answer, Query};
 /// The coarsest zoom a block is asked at: the coarsest cells a tile draws.
 pub(super) fn coarsest() -> Zoom {
     GROUND.grid_zoom(GROUND.top())
-}
-
-/// What is in a node, at the zoom asked or over it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) enum In {
-    /// Coarser than asked: nothing under it fills at the zooms asked.
-    Empty,
-    /// Coarser than asked: something under it may fill.
-    Split,
-    /// At the zoom asked: the block, none for air or void.
-    Block(Option<Block>),
 }
 
 /// A node as a descent reaches it, X on the asker's lap, and what its
@@ -138,10 +127,7 @@ impl World<'_> {
     pub(super) fn drawn(&self, at: &mut At) -> Answer<Option<Block>> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        self.node(at, [zoom, zoom]).map(|i| match i {
-            In::Block(b) => b,
-            _ => None,
-        })
+        self.node(at, [zoom, zoom]).map(|(i, block)| if block && i.kind == Kind::Block { i.block } else { None })
     }
 
     /// A preview's entry as pxl-portable `overwrite` takes it.
@@ -170,8 +156,12 @@ impl World<'_> {
     /// asks within it: the world's one query (pxl-portable `world::node`),
     /// the ground read as the GPU reads it, off what it drew and read back
     /// (`Windowed`), down the node's line through the residency
-    /// (`Reading`), after its shard, known before any layer answers it.
-    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2]) -> Answer<In> {
+    /// (`Reading`), after its shard, known before any layer answers it. Its
+    /// answer as the descent takes one (pxl-portable `cast::In`): a split; a
+    /// block, the zoom asked's, none for air or void; or, coarser than asked
+    /// and nothing under it filling, air its size; with whether it is a
+    /// block (`world::node`'s).
+    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2]) -> Answer<(In<Option<Block>>, bool)> {
         let (zoom, c) = at.node;
         let c = c.map(|v| v as i32);
         at.shard = at.shard.at(&Windowed, (zoom, [c[0], c[1]]));
@@ -179,10 +169,9 @@ impl World<'_> {
         let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);
         let mut reading = Reading::new(self, at);
         let (i, block) = world::node(&mut reading, &Windowed, &lanes, handed, &mut place, (zoom, c), asked, cuts);
-        let answer = reading.answer(i.kind != Kind::Lacks, || match (i.kind, block) {
-            (Kind::Split, _) => In::Split,
-            (_, true) => In::Block(block_of(i.block)),
-            _ => In::Empty,
+        let answer = reading.answer(i.kind != Kind::Lacks, || {
+            let b = if block && i.kind == Kind::Block { block_of(i.block) } else { None };
+            (In { kind: i.kind, block: b }, block)
         });
         at.ground = place;
         answer
