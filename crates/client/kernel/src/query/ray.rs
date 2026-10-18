@@ -14,7 +14,7 @@ use crate::layer::instance::{Instance, Source};
 use crate::layer::object::store::EntryAt;
 use crate::layer::Answer;
 pub(super) use pxl_portable::cast::Until;
-use pxl_portable::cast::{self, Ends, Kind, Query};
+use pxl_portable::cast::{self, Detail, Ends, Kind, Query};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::block::Block;
 use pxl_spec::space::camera::grid::Tau;
@@ -25,38 +25,28 @@ use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Detail {
-    /// The cells of tiles at this zoom, wherever they are.
-    Zoom(Zoom),
-    /// The camera grid's cells at each distance from the origin, the rule
-    /// that sizes every drawn cell.
-    Distance(Tau),
-}
-
 /// The zooms a block is asked at: no coarser than a tile draws and no finer
 /// than what is placed is held.
 pub fn asked() -> [Zoom; 2] {
     [coarsest(), OBJECT_FINEST]
 }
 
-impl Detail {
-    /// The rule as the descent reads it: a stated tile zoom's cells, or the
-    /// camera grid's at each distance (`Tau::cell_at`), whose block, drawn
-    /// whole, spans at least one cell of the grid from any direction.
-    /// A stated zoom is a range of that zoom alone.
-    fn portable(self) -> cast::Detail {
-        let [lo, hi] = asked();
-        match self {
-            Detail::Zoom(z) => {
-                let z = GROUND.cell_zoom(z).clamp(lo, hi);
-                cast::Detail { tau: 1.0, range: [z, z] }
-            }
-            Detail::Distance(tau) => cast::Detail {
-                tau: tau.scale() as f32,
-                range: [lo, hi],
-            },
-        }
+/// The cells of tiles at the zoom `tile` wherever they are, as the descent
+/// reads a level of detail (pxl-portable `cast::Detail`): a range of that
+/// zoom's cells alone, held to the zooms a block is asked at (`asked`).
+pub fn at_zoom(tile: Zoom) -> Detail {
+    let [lo, hi] = asked();
+    let z = GROUND.cell_zoom(tile).clamp(lo, hi);
+    Detail { tau: 1.0, range: [z, z] }
+}
+
+/// The camera grid's cells at each distance from the origin at `tau`
+/// (`Tau::cell_at`), whose block, drawn whole, spans at least one cell of
+/// the grid from any direction: the rule that sizes every drawn cell.
+pub fn by_distance(tau: Tau) -> Detail {
+    Detail {
+        tau: tau.scale() as f32,
+        range: asked(),
     }
 }
 
@@ -221,7 +211,7 @@ impl<'a> World<'a> {
         };
         let o = ray.origin;
         let from = cast::Ray::new(ray.direction.map(|v| v as f32), ray.reach as f32);
-        let met = cast::first(&mut walker, &cast::Origin::of(point(o[0], o[1], o[2])), &from, detail.portable(), until);
+        let met = cast::first(&mut walker, &cast::Origin::of(point(o[0], o[1], o[2])), &from, detail, until);
         let met = (met.ends == Ends::Stop).then(|| self.hit(ray, met.stop));
         let answer = match (met, walker.lack, walker.answered) {
             (h, None, _) => Answer::Exact(h),

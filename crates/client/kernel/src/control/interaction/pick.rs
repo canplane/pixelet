@@ -13,7 +13,7 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::layer::object::store::Entry;
-use crate::query::{Detail, Hit, Ray, Struck, World};
+use crate::query::{at_zoom, Hit, Ray, Struck, World};
 use crate::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::aabb::Aabb;
 
@@ -100,7 +100,7 @@ pub fn ray_pick(origin: V3, direction: V3, drawn: Tau) -> Option<PickResult> {
         reach: PICK_REACH_U,
     };
     // A coarser tile's answer is a summary, not what is held.
-    let hit = World::now().striking_decor(drawn).first_hit(&ray, Detail::Zoom(LEAF_ZOOM)).exact().flatten()?;
+    let hit = World::now().striking_decor(drawn).first_hit(&ray, at_zoom(LEAF_ZOOM)).exact().flatten()?;
     Some(PickResult { hit })
 }
 

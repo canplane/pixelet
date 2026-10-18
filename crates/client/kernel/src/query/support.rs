@@ -19,7 +19,7 @@ use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::ray::{Detail, Ray, Until};
+use super::ray::{at_zoom, Ray, Until};
 use super::surface::Surface;
 use super::world::World;
 use crate::layer::*;
@@ -85,7 +85,7 @@ impl<'w, 'a> Upright<'w, 'a> {
             direction: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             reach: (to - z).abs(),
         };
-        let (answer, _) = self.world.along(&ray, Detail::Zoom(self.zoom), until, None);
+        let (answer, _) = self.world.along(&ray, at_zoom(self.zoom), until, None);
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }

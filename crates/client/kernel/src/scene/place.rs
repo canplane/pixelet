@@ -21,7 +21,7 @@ use crate::chunk::Chunk;
 use crate::layer::object::preview::draft;
 use crate::layer::place::carto_zoom;
 use crate::layer::Base;
-use crate::query::{Detail, Ray, World};
+use crate::query::{at_zoom, Ray, World};
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
 use crate::view::demand::Observed as _;
@@ -231,7 +231,7 @@ fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
         direction: [0.0, 0.0, -1.0],
         reach: high - low,
     };
-    let hit = World::now().first_hit(&ray, Detail::Zoom(zoom)).value().flatten()?;
+    let hit = World::now().first_hit(&ray, at_zoom(zoom)).value().flatten()?;
     Some(high - hit.t)
 }
 

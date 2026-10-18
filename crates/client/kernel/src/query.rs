@@ -23,7 +23,8 @@ mod support;
 mod surface;
 mod world;
 
-pub use ray::{asked, Detail, Hit, Ray, Struck};
+pub use pxl_portable::cast::Detail;
+pub use ray::{asked, at_zoom, by_distance, Hit, Ray, Struck};
 pub use support::{over, under, walks};
 pub use surface::Surface;
 pub use world::World;
