@@ -827,7 +827,8 @@ fn held_of(w: &impl Squares, cell: Zoom, g: [i32; 2], l: u32) -> (crate::ground:
 /// What the windows hold of the node `(zoom, c)` at the cells from
 /// `coarsest` to `finest`, each held to the windows' zooms (`held_to`):
 /// the window at each read once, finest first, `finest`'s stepped from
-/// `place`, which becomes where its cells are held; and on under
+/// `place`, which becomes where its cells are held, a read off a coarser
+/// window standing for every zoom down to it; and on under
 /// `coarsest`, while no window read there holds all of the node, a cell's
 /// own order (`find`), each zoom's cells being its own tile's, which no
 /// other's bound holds. The lowest and highest joined, and the finest's
@@ -848,11 +849,13 @@ pub fn bound_over(w: &impl Squares, place: &mut Found, [coarsest, finest]: [Zoom
             return ([[0, 0]; 2], first, false);
         }
         b = crate::ground::joined(b, got);
+        // A read off a coarser window than asked is every zoom's down to it:
+        // none between holds the node's square, so each would read it again.
         let open = b[0][0] <= crate::ground::UNBOUNDED[0] && b[0][1] >= crate::ground::UNBOUNDED[1];
-        if open || z <= bottom && all || z == FIRST_CELL {
-            return (if z <= bottom && all || open { b } else { [crate::ground::UNBOUNDED; 2] }, first, true);
+        if open || from <= bottom && all || from == FIRST_CELL {
+            return (if from <= bottom && all || open { b } else { [crate::ground::UNBOUNDED; 2] }, first, true);
         }
-        z -= 1;
+        z = from - 1;
     }
 }
 
