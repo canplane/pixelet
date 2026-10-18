@@ -29,6 +29,8 @@ use crate::layer::object::meta::placed;
 use crate::layer::residency::Lines;
 use crate::model::registry::Models;
 use pxl_portable::area::{self, Shard};
+use pxl_portable::cast;
+use pxl_portable::overwrite::{self, Held};
 use pxl_portable::window::Found;
 
 /// How decor is struck: against its models, where the frame drawing at `tau` holds it.
@@ -49,6 +51,63 @@ pub(super) struct Strike<'a> {
     /// The cell met last, whose neighbors are struck already.
     last: Option<[i32; 2]>,
     pub(super) best: Option<(f64, Instance)>,
+    /// What is placed about the nodes the walk went through (`Around`).
+    pub(super) about: Around,
+}
+
+/// What is placed in the 27 nodes about the node a striking walk is at, at
+/// each zoom it went through: the objects' tree's cursors there
+/// (pxl-portable `overwrite::Held`), each zoom's the children of the zoom
+/// over's, as a node's neighbours are its parent's neighbours' children
+/// (Samet 1989, neighbour finding). A walk enters a node through its
+/// parent, so each zoom's is stepped from the one over in 27 `child` reads,
+/// never walked from the roots.
+pub(super) struct Around {
+    at: [[i32; 3]; cast::DEPTH],
+    held: [[Held; 27]; cast::DEPTH],
+}
+
+impl Around {
+    pub(super) fn new() -> Around {
+        Around {
+            at: [[i32::MIN; 3]; cast::DEPTH],
+            held: [[Held::NOTHING; 27]; cast::DEPTH],
+        }
+    }
+
+    /// The node `(zoom, c)` entered: its 27, off its parent's where they are
+    /// the ones held, else each down from the roots.
+    pub(super) fn visit(&mut self, lanes: &impl overwrite::Lanes, (zoom, c): Node<3>) {
+        let z = zoom as usize;
+        if self.at[z] == c {
+            return;
+        }
+        let p = c.map(|v| v >> 1);
+        let stepped = zoom > 0 && self.at[z - 1] == p;
+        for k in 0..27 {
+            let n = [c[0] + (k % 3) as i32 - 1, c[1] + (k / 3 % 3) as i32 - 1, c[2] + (k / 9) as i32 - 1];
+            self.held[z][k] = if stepped {
+                let q = [(n[0] >> 1) - p[0] + 1, (n[1] >> 1) - p[1] + 1, (n[2] >> 1) - p[2] + 1];
+                overwrite::child(lanes, self.held[z - 1][(q[0] + 3 * q[1] + 9 * q[2]) as usize], zoom, n)
+            } else {
+                // Y and Z run over the two roots of zoom 0 alone; X round them.
+                let inside = (-1..=0).contains(&(n[1] >> zoom)) && (-1..=0).contains(&(n[2] >> zoom));
+                if inside {
+                    overwrite::cursor(lanes, overwrite::PLACED, zoom, n)
+                } else {
+                    Held::NOTHING
+                }
+            };
+        }
+        self.at[z] = c;
+    }
+
+    /// Whether anything, air included, is placed in the 27 nodes about `a`
+    /// at `zoom` or over them: none where the walk did not go through `a`.
+    fn holds(&self, (zoom, a): Node<3>) -> Option<bool> {
+        let z = zoom as usize;
+        (self.at[z] == a).then(|| self.held[z].iter().any(|h| h.holds()))
+    }
 }
 
 impl<'a> World<'a> {
@@ -160,6 +219,7 @@ impl<'a> World<'a> {
             held,
             last: None,
             best: None,
+            about: Around::new(),
         })
     }
 
@@ -234,7 +294,7 @@ impl<'a> World<'a> {
             min: [(a[0] - 1) as f64 * side, (a[1] - 1) as f64 * side, (a[2] - 1) as f64 * side],
             max: [(a[0] + 2) as f64 * side, (a[1] + 2) as f64 * side, (a[2] + 2) as f64 * side],
         };
-        ground || self.objects.holds_in(&about, z)
+        ground || s.about.holds((z, a)).unwrap_or_else(|| self.objects.holds_in(&about, z))
     }
 
     fn grown_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i32; 2]) {

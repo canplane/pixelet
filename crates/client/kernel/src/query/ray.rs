@@ -129,6 +129,10 @@ impl<'a> Query for Walker<'_, 'a> {
     fn node(&mut self, at: &mut At, _: Zoom, _: [i32; 3], asked: [Zoom; 2], t0: f32) -> cast::In<u32> {
         let (zoom, c) = at.node;
         let t0 = f64::from(t0);
+        // What is placed about it, off what was about its parent.
+        if let Some((_, s)) = self.strike.as_mut() {
+            s.about.visit(&self.world.objects.lanes(), at.node);
+        }
         if zoom == GROUND.cell() {
             if let Some((ray, s)) = self.strike.as_mut().filter(|(_, s)| t0 < s.held) {
                 self.world.strike_near(s, ray, [c[0], c[1]]);
