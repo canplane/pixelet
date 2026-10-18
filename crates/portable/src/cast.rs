@@ -597,6 +597,18 @@ pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: 
     first_from(q, o, ray, detail, until, (root, at), &Rooted(at), Thin, 0.0)
 }
 
+/// Where the beam about `ray` stops, its radius `slope` a unit of t
+/// (`Beam`), its levels kept `N` deep: the t no ray within it meets
+/// anything before. Walked from the world's roots, as `first` is, so every
+/// ancestor its cone may poke into is one it went into itself; from a start
+/// nearer (`start`), whose node is air, it would poke out of that node at
+/// once into ancestors it never went into, and stop where it is.
+pub fn beam<Q: Query, const N: usize>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, slope: f32) -> f32 {
+    let root = root_of(o);
+    let at = q.root(root.node(o));
+    first_from(q, o, ray, detail, Until::Fills, (root, at), &Rooted(at), Beam::<N> { slope }, 0.0).stop.t
+}
+
 /// What walks a descent: a ray, or a cone about it whose radius grows
 /// `slope` a unit of t (a beam, Laine & Karras 2010 §6), which stops no
 /// later than any ray within it may first meet what fills.

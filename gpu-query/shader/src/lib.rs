@@ -489,9 +489,9 @@ pub fn start_cs(
 
 /// Each tile's beam (pxl-portable `cast::Beam`): the cone about the ray
 /// through the tile's middle, as wide as the rays through its corner
-/// pixels' middles are from it, walked from where every ray starts
-/// (`start_cs`) to the t no ray in it meets anything before, which its rays
-/// start at (`cast_cs`), a word a tile (`beams`).
+/// pixels' middles are from it, walked from the world's roots
+/// (`cast::beam`) to the t no ray in it meets anything before, which its
+/// rays start at (`cast_cs`), a word a tile (`beams`).
 #[spirv(compute(threads(8, 8, 1)))]
 #[allow(clippy::too_many_arguments)]
 pub fn beam_cs(
@@ -502,7 +502,6 @@ pub fn beam_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] beams: &mut [f32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
 ) {
     let window: &[IVec4] = window;
@@ -531,22 +530,11 @@ pub fn beam_cs(
         overwrites,
         eye,
     };
-    let origin_detail = eye_origin(eye);
-    let read: &[u32] = starts;
-    let met = cast::first_from(
-        &mut world,
-        &origin_detail.0,
-        &axis,
-        origin_detail.1,
-        Until::Fills,
-        (start_place(read), at_of(read, cast::START_AT)),
-        &Starts(read),
-        cast::Beam::<LEVELS> { slope },
-        0.0,
-    );
+    let (origin, detail) = eye_origin(eye);
+    let t = cast::beam::<_, LEVELS>(&mut world, &origin, &axis, detail, slope);
     let k = (id.y * across + id.x) as usize;
     if k < beams.len() {
-        beams[k] = met.stop.t;
+        beams[k] = t;
     }
 }
 
