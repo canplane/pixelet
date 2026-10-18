@@ -7,7 +7,7 @@ use crate::io::demand::Order;
 use pxl_spec::space::layer::lattice::demand_reach;
 use xpute_guest::global::Global;
 
-use pxl_spec::space::camera::eye::{Frustum, Observation};
+use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{Tau, CHUNK_STEPS};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
@@ -26,14 +26,10 @@ pub fn eye() -> Option<V3> {
     Some(view().pose?.eye)
 }
 
-pub fn frustum_of_view() -> Frustum {
-    view().frustum
-}
-
 /// How far the eye observes: as far as the source's top is demanded. None
 /// before the source declares its top.
 pub fn eye_reach() -> Option<f64> {
-    floor::top().map(|top| demand_reach(GROUND, top))
+    crate::io::source::top().map(|top| demand_reach(GROUND, top))
 }
 
 /// The turn's observation, made by its first reader after the view is
@@ -71,7 +67,7 @@ pub fn observation() -> Option<Observation> {
         let height = eye_height();
         Some(Observation {
             eye,
-            frustum: Some(frustum_of_view()),
+            frustum: Some(view().frustum),
             reach,
             ground: eye[2] - height,
         })
@@ -88,7 +84,7 @@ pub fn observation() -> Option<Observation> {
 /// met; a column it knows nothing of yet names none, as nothing there is to
 /// stand in.
 pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
-    let Some(top) = floor::top() else { return };
+    let Some(top) = crate::io::source::top() else { return };
     let over = (o.eye[2] - o.ground).max(0.0);
     let coarsest = GROUND.grid_zoom(top.max(GROUND.top())).max(CHUNK_STEPS);
     let near = |zoom: Zoom, [x, y]: [i64; 2]| {
@@ -127,7 +123,7 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
 /// distance (`Tau::cell_at`), no coarser than a tile draws and no finer than
 /// the ground's cells.
 pub fn cell_at(o: &Observation, tau: Tau, at: V3) -> Option<Zoom> {
-    let top = floor::top()?;
+    let top = crate::io::source::top()?;
     let v = pxl_spec::space::coord::v3::sub(&at, &o.eye);
     Some(tau.cell_at(pxl_spec::space::coord::v3::dot(&v, &v)).clamp(GROUND.grid_zoom(top.max(GROUND.top())), GROUND.cell()))
 }

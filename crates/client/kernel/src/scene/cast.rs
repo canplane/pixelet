@@ -57,12 +57,6 @@ pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     Some(words)
 }
 
-/// The eye's windows as the GPU's cast reads them (layer/terrain/window.rs
-/// `table`).
-pub fn window() -> &'static [i32] {
-    window::table()
-}
-
 /// What is placed, for the GPU: the objects' tree's lanes as they live, the
 /// room either has, and the store's revision, so the GPU takes them again
 /// only when they changed.

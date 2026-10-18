@@ -110,7 +110,6 @@ pub fn take_written(out: &mut Vec<Aabb>) {
 
 pub const VOID: u32 = cube::sentinel::void as u32;
 pub const AIR: u32 = cube::object::air as u32;
-pub const UNKNOWN: u32 = cube::sentinel::unknown as u32;
 const _: () = assert!(VOID == 0);
 
 /// What a tree's leaf holds: the catalog value, and its record's handle.
@@ -319,11 +318,6 @@ impl Store {
         }
     }
 
-    /// Whether anything, air included, is held in the cube at `zoom`.
-    fn holds(&self, zoom: Zoom, at: [i64; 3]) -> bool {
-        self.find(zoom, at).1 != Slot::Leaf(EMPTY.word())
-    }
-
     /// The value placed at exactly this node, if one is.
     pub(crate) fn placed(&self, zoom: Zoom, at: [i64; 3]) -> Option<Entry> {
         match self.find(zoom, at) {
@@ -430,11 +424,6 @@ impl Cells<'_> {
     pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
         let (zoom, at) = self.node;
         self.store.each_in(zoom, at, visit)
-    }
-
-    /// Whether anything, air included, is held at the node.
-    pub fn holds(&self) -> bool {
-        self.store.holds(self.node.0, self.node.1)
     }
 
     /// The leaf placed at exactly the node, if one is.

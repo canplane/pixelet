@@ -21,8 +21,6 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::demand::reach_tiles;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use floor::{Fallback, Floor};
-
 use crate::io::demand::{Ask, Why};
 use crate::layer::{Asks, Base};
 
@@ -124,16 +122,16 @@ impl<L: Base> Residency<L> {
     /// Held hard apart from the view: the floor, a destination's line, and
     /// what a reader that cannot take a coarser answer declares (`Base::PINNED`).
     const PINNED_TILES: u32 = match L::ASKS {
-        Asks::Floor => Floor::<L>::TILES,
+        Asks::Floor => floor::tiles(L::LATTICE),
         Asks::Line => Self::DESTINATION_TILES + L::PINNED,
-        Asks::View => Floor::<L>::TILES + Self::DESTINATION_TILES + L::PINNED,
+        Asks::View => floor::tiles(L::LATTICE) + Self::DESTINATION_TILES + L::PINNED,
     };
 
     /// What is held hard at most.
     const HARD_TILES: u32 = Self::PINNED_TILES + Self::ANCESTOR_TILES;
 
     /// A frame for a tile nothing holds hard to land in. The floor alone holds
-    /// every tile it asks for hard, and asks for at most `Floor::TILES`, so a
+    /// every tile it asks for hard, and asks for at most `floor::tiles`, so a
     /// tile it asks for finds a frame free or held only as cache.
     const WORKSPACE: u32 = matches!(L::ASKS, Asks::View) as u32;
 

@@ -252,5 +252,4 @@ fn a_shard_read_whole_meets_its_leaves() {
     store.read((SHARD_ZOOM, shard)).entries(&mut |_| met += 1);
     assert_eq!(met, 1);
     assert!(store.bounds::<3>((SHARD_ZOOM, shard), SHARD_ZOOM).value().flatten().is_some());
-    assert!(store.holds(SHARD_ZOOM, shard));
 }

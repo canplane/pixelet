@@ -6,7 +6,7 @@
 // its budget mid-turn.
 
 use core::panic::Location;
-pub use xpute_guest::mem::heap::HeapStat;
+use xpute_guest::mem::heap::HeapStat;
 
 use xpute_guest::ipc::stream::WORD;
 use xpute_guest::ipc::sys::{descriptor_turn_bytes, Sys};

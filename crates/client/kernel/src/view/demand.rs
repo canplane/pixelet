@@ -37,7 +37,7 @@ use crate::io::demand::{Ask, Phases, Why};
 use crate::io::failure::Failure;
 use crate::io::request::declare;
 use crate::io::source;
-use crate::layer::residency::floor::{self, Fallback, Floor};
+use crate::layer::residency::floor;
 use crate::layer::residency::{Candidate, Lines, Residency, Victim};
 use crate::view::observation::{observation, ByEye};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -152,7 +152,7 @@ impl<L: Observed> Demand<L> {
 
     /// No object for `p`: the tile over it says its ground; at the source's top, `Base::empty`.
     pub fn absent(&mut self, p: Tile) {
-        let top = L::TOP.or(floor::top()).unwrap_or(L::LATTICE.top());
+        let top = L::TOP.or(source::top()).unwrap_or(L::LATTICE.top());
         match L::empty() {
             Some(empty) if p.zoom <= top => L::residency().set(p, empty),
             _ => L::residency().answer_above(p),
@@ -211,11 +211,11 @@ impl<L: Observed> Demand<L> {
             xpute_kit::ensure!(read.iter().all(|&n| n <= Residency::<L>::ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
             if !matches!(L::ASKS, Asks::Line) {
                 self.floor.clear();
-                Floor::<L>::floor(o, top, |p| {
+                floor::floor(o, top, |p| {
                     self.floor.push(p);
                     ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
                 });
-                xpute_kit::ensure!(self.floor.len() <= Floor::<L>::TILES as usize, ENOTRECOVERABLE, self.floor.len());
+                xpute_kit::ensure!(self.floor.len() <= floor::tiles(L::LATTICE) as usize, ENOTRECOVERABLE, self.floor.len());
             }
         }
         // The whole line, not only the finest tile: which one says the ground is
@@ -273,7 +273,7 @@ impl<L: Observed> Demand<L> {
     /// to its own reach.
     pub fn step(&mut self, destination: Option<Tile>, pinned: &[Tile], tau: Tau) {
         // Nothing coarser than the layer's own top is drawn, whatever the source holds.
-        let Some(top) = L::TOP.or(floor::top()).map(|t| t.max(L::LATTICE.top())) else { return };
+        let Some(top) = L::TOP.or(source::top()).map(|t| t.max(L::LATTICE.top())) else { return };
         let o = observation().map(|o| match L::TOP {
             Some(_) => Observation { reach: L::reach(), ..o },
             None => o,

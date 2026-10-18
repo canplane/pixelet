@@ -142,7 +142,7 @@ pub fn stage_render() {
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
-            window: crate::scene::cast::window(),
+            window: crate::layer::terrain::window::table(),
             shards: crate::scene::cast::shards(),
             overwrites: crate::scene::cast::overwrites(),
             decor: crate::scene::decor::drawn::frame(),

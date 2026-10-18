@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use crate::param::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_CELLS_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
 
-pub use crate::abi::cmd::PointerType;
+use crate::abi::cmd::PointerType;
 use crate::control::camera::controller::{active, Active};
 use crate::control::camera::gesture::{linear, Anchor};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
