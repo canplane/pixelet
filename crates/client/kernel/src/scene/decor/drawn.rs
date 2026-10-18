@@ -63,22 +63,33 @@ struct Handed {
     edits: [[i32; 4]; scatter::EDITS as usize],
     edited: usize,
     translation: [f32; 3],
-    /// What it was last made of, by value.
+    /// What the params were last made of, by value.
     seen: Option<Seen>,
+    /// The cell the placed decor was last walked about, and what it left out.
+    walked: Option<Walked>,
 }
 
-/// Everything the hand-over is made of: the unit the eye stands in (its
-/// anchor), a pixel's size there, what the eraser leaves out, and the placed
-/// objects as the store's revision counts them. A new input goes here or the
-/// hand-over never sees it change. The eye within its unit moves only the
-/// translation.
+/// What the params are made of: the unit the eye stands in (its anchor), a
+/// pixel's size there, and the ground's decor the eraser leaves out. A new
+/// input goes here or the params never see it change. The eye within its
+/// unit moves only the translation.
 #[derive(Clone, Copy, PartialEq)]
 struct Seen {
     anchor: V3,
     upp: f64,
-    hide: Option<EntryAt>,
     scattered: Option<[i32; 3]>,
-    objects: u32,
+}
+
+/// What the placed decor was walked over: the eye's cell at the reach's
+/// zoom, the coarsest cell no wider than the reach is short of, and the
+/// placed decor the eraser leaves out. Walked again where this moves, or
+/// where a write meets its box (`edited`): a traversal kept while the eye
+/// stays in its cell.
+#[derive(Clone, Copy, PartialEq)]
+struct Walked {
+    zoom: Zoom,
+    cell: [i32; 3],
+    hide: Option<EntryAt>,
 }
 
 static HANDED: Global<Handed> = Global::new();
@@ -93,6 +104,7 @@ fn handed() -> &'static mut Handed {
         edited: 0,
         translation: [0.0; 3],
         seen: None,
+        walked: None,
     })
 }
 
@@ -109,7 +121,7 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i3
     let h = handed();
     h.on = settings_store().decor;
     if !h.on {
-        h.seen = None;
+        (h.seen, h.walked) = (None, None);
         return;
     }
     let anchor = eye.map(libm::floor);
@@ -117,37 +129,34 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i3
     let seen = Seen {
         anchor,
         upp: units_per_px_at(1.0),
-        hide,
         scattered,
-        objects: store.raw_lanes().3,
     };
-    if h.seen == Some(seen) {
+    if h.seen != Some(seen) {
+        h.seen = Some(seen);
+        params(&mut h.params, seen);
+    }
+    // Out to the reach from anywhere in the anchor's unit: every unit of the
+    // eye's cell at the reach's zoom reaches no farther than the cell and
+    // one beside it, whose side the reach is short of. What is past an
+    // eye's own reach `decor_count_cs` leaves out by its size, as it does
+    // what is past the box.
+    let reach = DECORS.iter().map(|d| d.extent()).fold(0.0, f64::max) / (decor_sprite_px() * seen.upp);
+    let mut zoom = UNIT_ZOOM;
+    while zoom > 0 && units(zoom) < reach {
+        zoom -= 1;
+    }
+    let side = units(zoom);
+    let cell = anchor.map(|v| libm::floor(v / side) as i32);
+    let around = Aabb {
+        min: [0, 1, 2].map(|k| (cell[k] - 1) as f64 * side),
+        max: [0, 1, 2].map(|k| (cell[k] + 2) as f64 * side),
+    };
+    let walked = Walked { zoom, cell, hide };
+    let met = h.edits[..h.edited].iter().any(|e| meets(e, &around));
+    if h.walked == Some(walked) && !met {
         return;
     }
-    h.seen = Some(seen);
-    let p = &mut h.params;
-    p.fill(0);
-    p[drawn::UPP as usize] = (seen.upp as f32).to_bits();
-    p[drawn::MODEL_PX as usize] = (decor_gone_px() as f32).to_bits();
-    p[drawn::SPRITE_PX as usize] = (decor_sprite_px() as f32).to_bits();
-    let at = drawn::ANCHOR as usize;
-    p[at] = wrapped(anchor[0] as i32);
-    p[at + 1] = anchor[1] as i32 as u32;
-    p[at + 2] = anchor[2] as i32 as u32;
-    if let Some([x, y, z]) = scattered {
-        let at = drawn::HIDE as usize;
-        p[at..at + 4].copy_from_slice(&[wrapped(x), y as u32, z as u32, 1]);
-    }
-    let extents = DECORS.iter().flat_map(|d| d.variants.iter().map(|v| v.extent() as f32));
-    for (k, e) in extents.enumerate() {
-        p[drawn::EXTENTS as usize + k] = e.to_bits();
-    }
-    // Out to the reach from anywhere in the anchor's unit.
-    let reach = DECORS.iter().map(|d| d.extent()).fold(0.0, f64::max) / (decor_sprite_px() * seen.upp);
-    let around = Aabb {
-        min: anchor.map(|v| v - reach),
-        max: anchor.map(|v| v + 1.0 + reach),
-    };
+    h.walked = Some(walked);
     h.placed.clear();
     let placed = &mut h.placed;
     store.entries_in(&around, &mut |e| {
@@ -159,6 +168,39 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i3
         let [x, y, z] = index_of(UNIT_ZOOM, &e.corner());
         placed.push([scatter::record_word(k, variant, turn, scatter::PLACED_AT), wrapped(x), y as u32, z as u32]);
     });
+}
+
+/// Whether an edit's columns, `[x0, y0, x1, y1)` in leaf cells, X on its own
+/// lap, meet `around`'s on any lap.
+fn meets(e: &[i32; 4], around: &Aabb) -> bool {
+    let leaf = units(LEAF_CELL);
+    let lap = 1i64 << LEAF_CELL;
+    let (lo, hi) = (|v: f64| libm::floor(v / leaf) as i64, |v: f64| libm::ceil(v / leaf) as i64);
+    let b = [lo(around.min[0]), lo(around.min[1]), hi(around.max[0]), hi(around.max[1])];
+    let shift = (b[0] - i64::from(e[0])).div_euclid(lap) * lap;
+    let ys = i64::from(e[1]) < b[3] && b[1] < i64::from(e[3]);
+    ys && [shift, shift + lap].iter().any(|s| i64::from(e[0]) + s < b[2] && b[0] < i64::from(e[2]) + s)
+}
+
+/// The params of a hand-over `seen` makes.
+fn params(p: &mut [u32; drawn::PARAM_WORDS as usize], seen: Seen) {
+    let anchor = seen.anchor;
+    p.fill(0);
+    p[drawn::UPP as usize] = (seen.upp as f32).to_bits();
+    p[drawn::MODEL_PX as usize] = (decor_gone_px() as f32).to_bits();
+    p[drawn::SPRITE_PX as usize] = (decor_sprite_px() as f32).to_bits();
+    let at = drawn::ANCHOR as usize;
+    p[at] = wrapped(anchor[0] as i32);
+    p[at + 1] = anchor[1] as i32 as u32;
+    p[at + 2] = anchor[2] as i32 as u32;
+    if let Some([x, y, z]) = seen.scattered {
+        let at = drawn::HIDE as usize;
+        p[at..at + 4].copy_from_slice(&[wrapped(x), y as u32, z as u32, 1]);
+    }
+    let extents = DECORS.iter().flat_map(|d| d.variants.iter().map(|v| v.extent() as f32));
+    for (k, e) in extents.enumerate() {
+        p[drawn::EXTENTS as usize + k] = e.to_bits();
+    }
 }
 
 /// Where the objects were written, as the turn's change took them
