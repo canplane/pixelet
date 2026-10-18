@@ -584,13 +584,13 @@ impl Writes {
 
 /// What the visit from the `k`-th segment over column `c` writes, and where
 /// the next visit starts: a visit of a look that grounds, as what it
-/// occupies over the column's face, its pier where one stands.
-fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> (Writes, u32) {
+/// occupies over the column's face `face`, `per_m` leaf cells a metre, its
+/// pier where one stands.
+fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Writes, u32) {
     let (x, next) = visit(cols, c, k);
     if !x.is() || !Ground::grounds(x.kind) {
         return (Writes::NONE, next);
     }
-    let (face, per_m) = (cols.face(c), cols.per_m());
     let o = occupies(&x, face, per_m);
     let w = match o.what {
         Occupy::Under => Writes {
@@ -653,12 +653,14 @@ impl Spans {
 /// ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     let (mut spans, mut fits) = (Spans::NONE, true);
-    if cols.look(c) == crate::ground::UNKNOWN || cols.walled(c) {
+    if cols.count(c) == 0 || cols.look(c) == crate::ground::UNKNOWN || cols.walled(c) {
         return (spans, fits);
     }
+    // The column's face and the tile's scale, read once for all its visits.
+    let ground = (cols.face(c), cols.per_m());
     let mut k = 0;
     while k < cols.count(c) {
-        let (w, next) = writes(cols, c, k);
+        let (w, next) = writes(cols, c, k, ground);
         k = next;
         let cell = cols.cell();
         if w.value != NOTHING && fills_any(cell, w.run) {
