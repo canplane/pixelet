@@ -21,9 +21,9 @@ pub fn fold(tree: &SparseTree<u32, 3>, block: u32, zoom: Zoom) -> u32 {
 fn share(slot: Slot<u32>) -> u32 {
     match slot {
         Slot::Leaf(word) => {
-            let id = word & 0xffff;
+            let id = overwrite::low(word);
             if word != EMPTY && voxel(id) {
-                id | FULL << 16
+                overwrite::fold_word(id, FULL)
             } else {
                 0
             }

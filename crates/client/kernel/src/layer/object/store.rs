@@ -125,14 +125,14 @@ pub(super) const EMPTY: Leaf = Leaf { id: VOID as u16, ext: NONE };
 impl Leaf {
     pub(super) fn of(word: u32) -> Leaf {
         Leaf {
-            id: word as u16,
-            ext: (word >> 16) as u16,
+            id: overwrite::low(word) as u16,
+            ext: overwrite::high(word) as u16,
         }
     }
 
-    /// Its word in the tree: the value low, the handle high.
+    /// Its word in the tree (pxl-portable `overwrite::leaf_word`).
     pub(super) const fn word(self) -> u32 {
-        self.id as u32 | (self.ext as u32) << 16
+        overwrite::leaf_word(self.id as u32, self.ext as u32)
     }
 }
 

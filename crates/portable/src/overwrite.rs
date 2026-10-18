@@ -30,6 +30,30 @@ pub const FULL: u32 = 1 << 15;
 const VOID: u32 = sentinel::void as u32;
 const AIR: u32 = object::air as u32;
 
+/// A slot's data word, the one layout every reader of the tree reads it by:
+/// a leaf's value low and its record's handle high (`leaf_word`), a
+/// branch's fold the kind most of its fill is low and its share of its cube
+/// filled high (`fold_word`). Low, the value or the kind either way
+/// (`low`); high, the handle or the share (`high`).
+pub const fn leaf_word(value: u32, ext: u32) -> u32 {
+    value & 0xffff | ext << 16
+}
+
+/// A fold's word: its kind and its share (`leaf_word`).
+pub const fn fold_word(kind: u32, share: u32) -> u32 {
+    kind & 0xffff | share << 16
+}
+
+/// A data word's low half: a leaf's value, a fold's kind.
+pub const fn low(word: u32) -> u32 {
+    word & 0xffff
+}
+
+/// A data word's high half: a leaf's handle, a fold's share.
+pub const fn high(word: u32) -> u32 {
+    word >> 16
+}
+
 /// A cube's eight children folded by volume, the one rule for what a node of
 /// an overwrite's tree holds at a coarser zoom, each child as its fold word
 /// (`kind` low, its share of its cube filled high, `FULL` whole; a leaf of a
@@ -39,7 +63,7 @@ const AIR: u32 = object::air as u32;
 /// The objects' store folds its tree by it as it is written (pxl-kernel
 /// layer/object/store.rs).
 pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
-    let (kind, fill) = (|c: u32| c & 0xffff, |c: u32| c >> 16);
+    let (kind, fill) = (low, high);
     let mut sum = 0;
     let mut k = 0;
     while k < 8 {
@@ -64,7 +88,7 @@ pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
         }
         j += 1;
     }
-    best | (sum / 8) << 16
+    fold_word(best, sum / 8)
 }
 
 /// The tree's two lanes, a word a slot.
@@ -215,10 +239,10 @@ pub fn value(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]
         if hide.zoom == held.zoom() && holds(hide, zoom, at) {
             VOID
         } else {
-            word & 0xffff
+            low(word)
         }
-    } else if word >> 16 >= FULL / 2 {
-        word & 0xffff
+    } else if high(word) >= FULL / 2 {
+        low(word)
     } else {
         VOID
     };
@@ -277,10 +301,10 @@ fn blocks_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
     }
     let word = lanes.data(held.slot());
     if !held.folded() {
-        return voxel(word & 0xffff);
+        return voxel(low(word));
     }
     let half = if 3 * d + 1 < 16 { FULL >> (3 * d + 1) } else { 0 };
-    (word >> 16) + 2 > half
+    high(word) + 2 > half
 }
 
 /// Whether nothing placed or carved is finer than the node `at` of `zoom`
