@@ -469,6 +469,10 @@ pub struct Met<A, B> {
 /// place by the slab test, so no entry holds them.
 pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 
+/// A beam's tile, in drawn pixels a side: one beam a tile, its rays started
+/// where it stops (`Beam`).
+pub const BEAM_TILE: u32 = 8;
+
 /// A descent's start as a GPU hands it from the kernel that finds it to the
 /// kernels that cast from it (gpu-query-shader `start_cs`), in words: the
 /// node's zoom then its corner (`START_PLACE`), what was handed it
