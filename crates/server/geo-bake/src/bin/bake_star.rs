@@ -1,8 +1,9 @@
-// pxl-tool/bin/bake_star.rs
+// pxl-geo-bake/bin/bake_star.rs
 
-//! The night sky's stars from the Yale Bright Star Catalog (V/50, CDS), kept
-//! in `asset/raw/sky/star/`, into the 8-byte records pxl-render's
-//! gpu/stars.rs reads, brightest first.
+//! The night sky's stars from the Yale Bright Star Catalog (V/50, CDS), as
+//! `deno task download star` keeps it in `asset/raw/sky/star/`, into the
+//! records pxl-render's gpu/stars.rs reads (pxl-spec asset/star.rs),
+//! brightest first.
 //!
 //!   deno task bake star
 
@@ -11,21 +12,15 @@ use std::process::ExitCode;
 
 use flate2::read::GzDecoder;
 
-use pxl_tool::root;
+use pxl_spec::asset::star::{record, Star, RECORD_BYTES};
 
-const SOURCE: &str = "https://cdsarc.cds.unistra.fr/ftp/V/50/catalog.gz";
+/// The catalog as pxl-tool bin/download_star.rs keeps it.
+const SOURCE: &str = "asset/raw/sky/star/catalog.gz";
 const OUT: &str = "crates/client/render/src/frame/shader/bright-stars.bin";
 const SOLAR_BV: f64 = 0.65;
 
-struct Star {
-    ra: f64,
-    dec: f64,
-    vmag: f64,
-    bv: f64,
-}
-
 fn catalog() -> Result<String, String> {
-    let packed = pxl_tool::fetch::kept(SOURCE, &root().join("asset/raw/sky/star"))?;
+    let packed = std::fs::read(SOURCE).map_err(|e| format!("{SOURCE}: {e} — run `deno task download star`"))?;
     let mut text = String::new();
     GzDecoder::new(packed.as_slice()).read_to_string(&mut text).map_err(|e| format!("catalog: {e}"))?;
     Ok(text)
@@ -47,11 +42,6 @@ fn star(line: &str) -> Result<Option<Star>, String> {
     Ok(Some(Star { ra, dec, vmag: num(vmag)?, bv }))
 }
 
-/// Half to even, as everything rounds; the tool links no xpute.
-fn round(x: f64) -> f64 {
-    x.round_ties_even()
-}
-
 fn run() -> Result<(), String> {
     let text = catalog()?;
     let mut stars = Vec::new();
@@ -59,18 +49,13 @@ fn run() -> Result<(), String> {
         stars.extend(star(line)?);
     }
     stars.sort_by(|a, b| a.vmag.total_cmp(&b.vmag));
-
-    let mut out = Vec::with_capacity(stars.len() * 8);
+    let mut out = Vec::with_capacity(stars.len() * RECORD_BYTES);
     for s in &stars {
-        out.extend_from_slice(&((round(s.ra / 360.0 * 65536.0) as u32 % 65536) as u16).to_le_bytes());
-        out.extend_from_slice(&(round(s.dec / 90.0 * 32767.0) as i16).to_le_bytes());
-        out.extend_from_slice(&(round(s.vmag * 1000.0) as i16).to_le_bytes());
-        out.extend_from_slice(&(round(s.bv * 1000.0) as i16).to_le_bytes());
+        out.extend_from_slice(&record(s));
     }
-    let path = root().join(OUT);
-    std::fs::write(&path, &out).map_err(|e| format!("{}: {e}", path.display()))?;
+    std::fs::write(OUT, &out).map_err(|e| format!("{OUT}: {e}"))?;
     let (first, last) = (stars.first().ok_or("no stars")?, stars.last().ok_or("no stars")?);
-    println!("[bake-stars] {} stars, magnitude {} to {} -> {}", stars.len(), first.vmag, last.vmag, path.display());
+    println!("[bake-stars] {} stars, magnitude {} to {} -> {OUT}", stars.len(), first.vmag, last.vmag);
     Ok(())
 }
 

@@ -4,7 +4,7 @@
 // addresses from ./.env. The arguments after the name go to the binary.
 //
 //   ./script/tool.ts bake <terrain|place|division|earth|star|geoid> [args…]
-//   ./script/tool.ts download <pack|moon|earth>
+//   ./script/tool.ts download <pack|moon|earth|star>
 
 interface Tool {
   crate: string;
@@ -21,13 +21,14 @@ const TOOLS: Record<string, Record<string, Tool>> = {
     place: { crate: "pxl-geo-bake", bin: "bake_place", profile: "server", env: true },
     division: { crate: "pxl-geo-bake", bin: "bake_division", profile: "server", env: true },
     earth: { crate: "pxl-geo-bake", bin: "bake_earth", profile: "server" },
-    star: { crate: "pxl-tool", bin: "bake_star" },
+    star: { crate: "pxl-geo-bake", bin: "bake_star" },
     geoid: { crate: "pxl-tool", bin: "bake_geoid", profile: "release" },
   },
   download: {
     pack: { crate: "pxl-tool", bin: "download_texture_pack" },
     moon: { crate: "pxl-tool", bin: "download_moon" },
     earth: { crate: "pxl-tool", bin: "download_earth" },
+    star: { crate: "pxl-tool", bin: "download_star" },
   },
 };
 
