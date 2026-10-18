@@ -699,7 +699,10 @@ pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, un
                 return Met { ends, stop, visits };
             }
         }
-        if into {
+        // Every way on makes the next node: what is handed it is decided here,
+        // its parent's At or, at a root, its own (`fresh`), and the node is
+        // made once, after (`q.child`, `q.root`).
+        let (parent, fresh) = if into {
             // PUSH: the child holding where the ray is at `t0`, past each mid
             // plane it has crossed by then; its planes the parent's on the
             // side it lies, and the mid.
@@ -736,107 +739,103 @@ pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, un
             ];
             carried = true;
             t = t0;
-            node = index_of(&n, r0);
-            at = q.child(&at, n.zoom, node);
-            continue;
-        }
-        if t1 >= ray.reach {
-            // Gone on to its reach: no stop, which no asker reads.
-            return Met {
-                ends: Ends::On,
-                stop: Stop {
-                    t: t1,
-                    axis: 0,
-                    place: from.0,
-                    at,
-                    block: Q::AIR,
-                },
-                visits,
-            };
-        }
-        // ADVANCE: the corner stepped on the axis the ray leaves by, the
-        // first far plane it reaches.
-        let moves = |d: f32| d != 0.0;
-        let (mut e, mut best) = if moves(ray.direction[0]) {
-            (0, x.1)
-        } else if moves(ray.direction[1]) {
-            (1, y.1)
+            (at, false)
         } else {
-            (2, z.1)
-        };
-        if e < 1 && moves(ray.direction[1]) && y.1 < best {
-            (e, best) = (1, y.1);
-        }
-        if e < 2 && moves(ray.direction[2]) && z.1 < best {
-            e = 2;
-        }
-        let pick = |a: [u32; 3]| {
-            if e == 0 {
-                a[0]
-            } else if e == 1 {
-                a[1]
+            if t1 >= ray.reach {
+                // Gone on to its reach: no stop, which no asker reads.
+                return Met {
+                    ends: Ends::On,
+                    stop: Stop {
+                        t: t1,
+                        axis: 0,
+                        place: from.0,
+                        at,
+                        block: Q::AIR,
+                    },
+                    visits,
+                };
+            }
+            // ADVANCE: the corner stepped on the axis the ray leaves by, the
+            // first far plane it reaches.
+            let moves = |d: f32| d != 0.0;
+            let (mut e, mut best) = if moves(ray.direction[0]) {
+                (0, x.1)
+            } else if moves(ray.direction[1]) {
+                (1, y.1)
             } else {
-                a[2]
+                (2, z.1)
+            };
+            if e < 1 && moves(ray.direction[1]) && y.1 < best {
+                (e, best) = (1, y.1);
+            }
+            if e < 2 && moves(ray.direction[2]) && z.1 < best {
+                e = 2;
+            }
+            let pick = |a: [u32; 3]| {
+                if e == 0 {
+                    a[0]
+                } else if e == 1 {
+                    a[1]
+                } else {
+                    a[2]
+                }
+            };
+            let up = if e == 0 {
+                ray.direction[0] > 0.0
+            } else if e == 1 {
+                ray.direction[1] > 0.0
+            } else {
+                ray.direction[2] > 0.0
+            };
+            let old = pick(n.corner);
+            let new = if up { old.wrapping_add(u).wrapping_add(1) } else { old.wrapping_sub(u).wrapping_sub(1) };
+            t = t1;
+            if (up && old.wrapping_add(u) == u32::MAX) || (!up && old == 0) {
+                // Past a root: into the next, from its top, over which nothing
+                // is asked or held.
+                let by = if up { 1 } else { -1 };
+                n.roots = [n.roots[0] + (e == 0) as i32 * by, n.roots[1] + (e == 1) as i32 * by, n.roots[2] + (e == 2) as i32 * by];
+                (n.corner, n.zoom, top, floor) = ([0; 3], 0, 0, 0);
+                (at, true)
+            } else {
+                // POP: the child, at `l`, of the nearest ancestor holding the next
+                // node, by the highest bit the step changed; each axis's corner
+                // that ancestor's child's.
+                n.corner = [if e == 0 { new } else { n.corner[0] }, if e == 1 { new } else { n.corner[1] }, if e == 2 { new } else { n.corner[2] }];
+                let h = 31 - (old ^ new).leading_zeros();
+                let keep = !((1u32 << h) - 1);
+                n.corner = [n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep];
+                let l = FINEST_ZOOM - h;
+                // What was handed the parent: on the origin's line over the start,
+                // `over`'s, which a node shares with the origin down to the bits they
+                // part at; the stack's while its entry is its own; else the walk goes
+                // down again, as kd-restart does (Foley & Sugerman 2005), from the
+                // first node under the deepest it shares with the origin's line,
+                // handed `over`'s, or from the root, its At its own, each node on the
+                // way asked as it was (its span its own box, its At of what was
+                // handed it alone, `Query::node`) and into the child where the ray
+                // now is, every level under where it went in written before it is read.
+                let home = n.roots[0] == 0 && n.roots[1] == 0 && n.roots[2] == 0;
+                let apart = (og[0] ^ n.corner[0]) | (og[1] ^ n.corner[1]) | (og[2] ^ n.corner[2]);
+                let shared = apart.leading_zeros();
+                if home && l - 1 < top && shared >= l - 1 {
+                    n.zoom = l;
+                    (over.over(l - 1), false)
+                } else if l > floor {
+                    n.zoom = l;
+                    (Q::unkeep(stack.at(l - 1), &at, l - 1), false)
+                } else if home && top > 0 {
+                    let b = shared.min(top - 1) + 1;
+                    let keep = !under(b);
+                    (n.corner, n.zoom, floor) = ([n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep], b, b);
+                    (over.over(b - 1), false)
+                } else {
+                    (n.corner, n.zoom, floor) = ([0; 3], 0, 0);
+                    (at, true)
+                }
             }
         };
-        let up = if e == 0 {
-            ray.direction[0] > 0.0
-        } else if e == 1 {
-            ray.direction[1] > 0.0
-        } else {
-            ray.direction[2] > 0.0
-        };
-        let old = pick(n.corner);
-        let new = if up { old.wrapping_add(u).wrapping_add(1) } else { old.wrapping_sub(u).wrapping_sub(1) };
-        t = t1;
-        if (up && old.wrapping_add(u) == u32::MAX) || (!up && old == 0) {
-            // Past a root: into the next, from its top, over which nothing
-            // is asked or held.
-            let by = if up { 1 } else { -1 };
-            n.roots = [n.roots[0] + (e == 0) as i32 * by, n.roots[1] + (e == 1) as i32 * by, n.roots[2] + (e == 2) as i32 * by];
-            (n.corner, n.zoom, top, floor) = ([0; 3], 0, 0, 0);
-            node = index_of(&n, r0);
-            at = q.root(node);
-            continue;
-        }
-        // POP: the child, at `l`, of the nearest ancestor holding the next
-        // node, by the highest bit the step changed; each axis's corner
-        // that ancestor's child's.
-        n.corner = [if e == 0 { new } else { n.corner[0] }, if e == 1 { new } else { n.corner[1] }, if e == 2 { new } else { n.corner[2] }];
-        let h = 31 - (old ^ new).leading_zeros();
-        let keep = !((1u32 << h) - 1);
-        n.corner = [n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep];
-        let l = FINEST_ZOOM - h;
-        // What was handed the parent: on the origin's line over the start,
-        // `over`'s, which a node shares with the origin down to the bits they
-        // part at; the stack's while its entry is its own; else the walk goes
-        // down again, as kd-restart does (Foley & Sugerman 2005), from the
-        // first node under the deepest it shares with the origin's line,
-        // handed `over`'s, or from the root, its At its own, each node on the
-        // way asked as it was (its span its own box, its At of what was
-        // handed it alone, `Query::node`) and into the child where the ray
-        // now is, every level under where it went in written before it is read.
-        let home = n.roots[0] == 0 && n.roots[1] == 0 && n.roots[2] == 0;
-        let apart = (og[0] ^ n.corner[0]) | (og[1] ^ n.corner[1]) | (og[2] ^ n.corner[2]);
-        let shared = apart.leading_zeros();
-        if home && l - 1 < top && shared >= l - 1 {
-            n.zoom = l;
-            node = index_of(&n, r0);
-            at = q.child(&over.over(l - 1), l, node);
-        } else if l > floor {
-            n.zoom = l;
-            node = index_of(&n, r0);
-            at = q.child(&Q::unkeep(stack.at(l - 1), &at, l - 1), l, node);
-        } else if home && top > 0 {
-            let b = shared.min(top - 1) + 1;
-            let keep = !under(b);
-            (n.corner, n.zoom, floor) = ([n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep], b, b);
-            node = index_of(&n, r0);
-            at = q.child(&over.over(b - 1), b, node);
-        } else {
-            (n.corner, n.zoom, floor) = ([0; 3], 0, 0);
-            node = index_of(&n, r0);
-            at = q.root(node);
-        }
+        node = index_of(&n, r0);
+        at = if fresh { q.root(node) } else { q.child(&parent, n.zoom, node) };
     }
 }
