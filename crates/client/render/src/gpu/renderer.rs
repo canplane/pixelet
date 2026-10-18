@@ -888,7 +888,7 @@ impl RaysPass {
     fn new(g: &Gpu, pipelines: &mut Pipelines) -> RaysPass {
         let built = pipelines.build(g, PIPELINE_SCREEN_RAYS, g.canvas());
         let words = look_words();
-        let looks = g.buffer(word_bytes(2 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let looks = g.buffer(word_bytes(4 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(looks, 0, bytes(&words));
         RaysPass {
             built,

@@ -8,9 +8,10 @@
 // went (f32 bits), and the nodes its descent asked, which the steps view
 // reads. A block is painted from these, its own, alone.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
-// Each value's swatch and layer, then the colour it reads as from afar
-// (`mesh/paint/ground.rs` `look_words`), by value whichever source holds it.
-@group(0) @binding(20) var<storage, read> looks: array<vec2u>;
+// Each value's swatch and layer, then the colour it reads as from afar, in
+// linear light (`mesh/paint/ground.rs` `look_words`), by value whichever
+// source holds it.
+@group(0) @binding(20) var<storage, read> looks: array<vec4u>;
 // The eye the rays left (pxl-portable `eye`): its Q3 steps (`EYE_ORIGIN`),
 // FRAC_W bits a unit and wrapping, a block's place on the lattice read off
 // their low bits; whether a ray reports its steps (`EYE_STEPS`); its reach;
@@ -69,21 +70,21 @@ fn turbo(x: f32) -> vec3f {
 }
 
 // A look's words; past the table, black and no layer.
-fn look(slot: u32) -> vec2u {
+fn look(slot: u32) -> vec4u {
   if (slot < arrayLength(&looks)) {
     return looks[slot];
   }
-  return vec2u(u32(NO_LAYER) << 24u, 0u);
+  return vec4u(0u, u32(NO_LAYER) << 16u, 0u, 0u);
 }
 
-fn linear_of(word: u32) -> vec3f {
-  return srgb_to_linear(unpack4x8unorm(word).rgb);
+fn swatch(l: vec4u) -> vec3f {
+  return vec3f(unpack2x16unorm(l.x), unpack2x16unorm(l.y).x);
 }
 
 // What a look reads as on a block coarser than the ground's cell: its
 // layer's mean where the pack is drawn, else its swatch.
-fn far(l: vec2u) -> vec3f {
-  return linear_of(select(l.x, l.y, frame_low_spec() < 0.5));
+fn far(l: vec4u) -> vec3f {
+  return select(swatch(l), vec3f(unpack2x16unorm(l.z), unpack2x16unorm(l.w).x), frame_low_spec() < 0.5);
 }
 
 struct Drawn {
@@ -98,7 +99,7 @@ struct Drawn {
 fn drawn(w: u32) -> Drawn {
   let l = look(ray_value(w));
   if (ray_zoom(w) >= GROUND_CELL) {
-    return Drawn(linear_of(l.x), f32(l.x >> 24u));
+    return Drawn(swatch(l), f32(l.y >> 16u));
   }
   return Drawn(far(l), f32(NO_LAYER));
 }
