@@ -832,11 +832,13 @@ fn count_one(eye: &Eye, params: &[u32], rows: &[Decor], grown: &mut [u32], regio
         tau: eye.right_tau.w,
         range: [eye.range.x, eye.range.y],
     };
-    let here = cell == scatter::PLACED_AT || scatter::drawn_at(detail, origin, corner, cell);
+    // Its distance once, for the zoom it is drawn at and its size.
+    let d2 = scatter::distance2(origin, corner);
+    let here = cell == scatter::PLACED_AT || scatter::drawn_at(detail, d2, cell);
     let group = scatter::first_group(rows, kind) + variant;
     let hide = drawn::HIDE as usize;
     let hidden = params[hide + 3] != 0 && corner[0] == params[hide] as i32 && corner[1] == params[hide + 1] as i32 && corner[2] == params[hide + 2] as i32;
-    let d = scatter::distance(origin, corner);
+    let d = spirv_std::num_traits::Float::sqrt(d2);
     let d = if d > 1e-3 { d } else { 1e-3 };
     let px = f32::from_bits(params[(drawn::EXTENTS + group) as usize]) / (d * f32::from_bits(params[drawn::UPP as usize]));
     let region = if hidden || !here {

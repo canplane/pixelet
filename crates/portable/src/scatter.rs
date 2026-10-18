@@ -580,17 +580,12 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
     dx * dx + dy * dy + dz * dz
 }
 
-/// How far decor standing at `at` lies from `origin`, in units
-/// (`distance2`'s root).
-pub fn distance(origin: [i32; 3], at: [i32; 3]) -> f32 {
-    libm::sqrtf(distance2(origin, at))
-}
-
-/// Whether decor standing at `at` is drawn at `cell` for an eye at
-/// `origin`: the zoom the rays ask at its distance (`Detail::at`), so each
-/// decor is drawn at one zoom, where the rays draw the ground about it.
-pub fn drawn_at(detail: Detail, origin: [i32; 3], at: [i32; 3], cell: Zoom) -> bool {
-    detail.at(distance2(origin, at)) == cell
+/// Whether decor `d2` from the eye, its distance squared (`distance2`), is
+/// drawn at `cell`: the zoom the rays ask at its distance (`Detail::at`),
+/// so each decor is drawn at one zoom, where the rays draw the ground
+/// about it.
+pub fn drawn_at(detail: Detail, d2: f32, cell: Zoom) -> bool {
+    detail.at(d2) == cell
 }
 
 /// Placed decor's tag (`node_seed`).
