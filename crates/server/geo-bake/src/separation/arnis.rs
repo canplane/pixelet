@@ -35,7 +35,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::terrain::CELL_U;
 use pxl_portable::ways;
 use pxl_spec::bake::separation::{footprint as line_reach, Form, STACKED_DECK_HEADROOM_M};
-use pxl_spec::bake::way::half_cells;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer};
 use xpute_kit::math::scalar::round;
 
@@ -387,7 +386,7 @@ fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run>
                 ends,
                 clipped,
                 nodes,
-                half: half_cells((s.piece.width() / CELL_U) as f32),
+                half: ways::half_cells((s.piece.width() / CELL_U) as f32),
                 width_u: s.piece.width(),
             });
         }

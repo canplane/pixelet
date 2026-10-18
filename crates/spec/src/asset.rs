@@ -5,9 +5,9 @@
 
 #[path = "asset/ingested.spec.rs"]
 pub mod ingested;
+pub mod star;
 #[path = "asset/symbol.spec.rs"]
 pub mod symbol;
-pub mod star;
 
 use crate::block::object::Cube;
 use ingested::{CubeFace, PACK};

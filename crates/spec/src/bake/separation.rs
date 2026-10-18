@@ -13,7 +13,7 @@ use xpute_kit::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 use pxl_portable::lattice::CELL_CENTER;
 use pxl_portable::ways::{self, Segment, Stations};
 
-use super::{malformed, way};
+use super::malformed;
 use crate::procedural::Frame;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::TILE_CELLS;
@@ -244,7 +244,7 @@ impl Line<'_> {
     }
 
     pub fn reach(&self) -> f64 {
-        f64::from(way::reach(self.width_cells() as f32))
+        f64::from(ways::reach(self.width_cells() as f32))
     }
 
     pub fn footprint(&self) -> f64 {

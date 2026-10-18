@@ -1,9 +1,7 @@
 // pxl-spec/bake/way.rs
 
-//! How far a way covers the cells along its line, on the ground and on a deck
-//! alike. A way covers a cell whose center is within half its width, and that
-//! half is at least half a cell's diagonal so a diagonal way stays side-connected.
-//! An approach's look is laid into a leaf's cells (`lay`), so every zoom
+//! A way covers the cells along its line by pxl-portable ways.rs's rule
+//! (`covers`, `reach`), on the ground and on a deck alike. An approach's look is laid into a leaf's cells (`lay`), so every zoom
 //! folds it as the ground's; its embankment or cutting stays a line.
 
 use fnv::FnvHashMap;
@@ -13,10 +11,6 @@ use super::tile::terrain::GroundId;
 use crate::block::cube::{sentinel, Ground};
 use crate::procedural::Frame;
 use crate::space::layer::lattice::TILE_CELLS;
-
-/// A way's half width in whole cells, and how far from its line it covers a
-/// cell's center (pxl-portable ways.rs).
-pub use pxl_portable::ways::{covers, half_cells, reach};
 
 /// The looks of a leaf at `frame` an approach's line crosses, laid: each
 /// such cell the way's kind, the highest's where two cross one. Bedrock and
