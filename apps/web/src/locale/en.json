@@ -58,6 +58,17 @@
         "label": "Cube Outlines",
         "description": "Darkens only edges exposed to open air, keeping flat ground seamless while outlining changes in height."
       },
+      "ao": {
+        "label": "Shading",
+        "off": {
+          "label": "Off",
+          "description": "Applies uniform ambient lighting to all surfaces."
+        },
+        "screen": {
+          "label": "Detailed (SSAO)",
+          "description": "Adds detailed contact shadows to corners and crevices for greater depth. This is the most demanding option because it processes the entire screen."
+        }
+      },
       "rim_light": {
         "label": "Rim Light",
         "description": "Adds a subtle highlight around the edges of cubes, decor and characters to make them stand out from the background."

@@ -30,8 +30,8 @@ fn srgb_to_linear(c: vec3f) -> vec3f {
 
 // A face as it is painted: its swatch and its layer, its normal, how
 // much its own edges darken it there (0 to 1), where it is in the world, its
-// texture coordinate with that coordinate's screen gradients, and the air
-// between it and the eye.
+// texture coordinate with that coordinate's screen gradients, the screen's
+// ambient occlusion there, and the air between it and the eye.
 struct Surface {
   rgb: vec3f,
   layer: f32,
@@ -41,6 +41,7 @@ struct Surface {
   box_uv: vec2f,
   ddx: vec2f,
   ddy: vec2f,
+  screen_open: f32,
   seen: Seen,
 };
 
@@ -77,5 +78,5 @@ fn paint(s: Surface) -> vec3f {
     albedo = sample_tap(s.layer, face_image(s.normal), s.box_uv, s.ddx, s.ddy, s.rgb);
   }
   let base = albedo * mix(1.0, 1.0 - frame_edge_strength(), s.edge);
-  return shade(base, normalize(s.normal), s.world_pos, s.seen);
+  return shade(base, normalize(s.normal), s.world_pos, vec3f(s.screen_open), s.seen);
 }

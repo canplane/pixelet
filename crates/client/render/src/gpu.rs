@@ -2,6 +2,7 @@
 
 //! Everything that lives on the device. The one layer that talks to WebGPU; it decides nothing.
 
+pub mod ao;
 pub mod api;
 pub mod atmosphere;
 pub mod clouds;

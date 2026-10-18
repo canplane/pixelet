@@ -18,6 +18,8 @@ pub const ATMOS_FLOATS: usize = 52;
 pub const CLOUDS_FLOATS: usize = 20;
 /// The stars' (stars.wgsl, gpu/stars.rs).
 pub const STARS_FLOATS: usize = 44;
+/// The screen's occlusion's (ao_view.wgsl, gpu/ao.rs).
+pub const AO_FLOATS: usize = 36;
 
 /// The bits a held earth tile's layer takes in the air's window words
 /// (gpu/atmosphere.rs `EARTH_WINDOW`).

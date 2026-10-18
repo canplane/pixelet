@@ -5,12 +5,13 @@
 
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
+use crate::frame::shader::record::PIPELINE_SKINNED_PREPASS;
 use crate::gpu::renderer::Image;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{bytes, release, Gpu};
 
-use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw};
+use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, Stage};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{skin_group, Blocks};
 
@@ -28,6 +29,7 @@ struct Skin {
 
 pub struct SkinnedPass {
     lit: Built,
+    prepass: Built,
     sampler: u32,
     uniforms: DrawUniforms,
     skins: [Skin; SKINS],
@@ -39,6 +41,7 @@ impl SkinnedPass {
         let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::repeat, None, 1);
         SkinnedPass {
             lit: pipelines.build(g, PIPELINE_SKINNED, g.canvas()),
+            prepass: pipelines.build(g, PIPELINE_SKINNED_PREPASS, g.canvas()),
             sampler,
             uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
             skins: [Skin::default(); SKINS],
@@ -87,9 +90,12 @@ impl SkinnedPass {
         }
     }
 
-    pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, frame: (u32, &mut u32)) {
+    pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {
         let Some(slots) = self.uniforms.slots() else { return };
-        let pipeline = self.lit.pipeline;
+        let pipeline = match stage {
+            Stage::Lit => self.lit.pipeline,
+            Stage::Prepass => self.prepass.pipeline,
+        };
         let palette_layout = self.lit.layouts[3];
         draw_models(g, pass, &self.lit, pipeline, frame, slots, 0, draws, |d| {
             let (mesh, vertex_cnt, index_cnt) = blocks.get(d[0])?;

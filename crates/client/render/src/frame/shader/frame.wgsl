@@ -17,6 +17,7 @@ fn frame_rim_intensity() -> f32 { return frame_words[7].w; }
 fn frame_other_color() -> vec3f { return frame_words[8].xyz; }
 fn frame_vignette() -> f32 { return frame_words[8].w; }
 fn frame_viewport() -> vec2f { return frame_words[9].xy; }
+fn frame_screen_ao() -> f32 { return frame_words[9].w; }
 fn frame_map() -> vec4f { return frame_words[10]; }
 fn frame_cell() -> f32 { return frame_words[11].x; }
 // Up at the eye, the world's z: the air's centre lies straight under it.

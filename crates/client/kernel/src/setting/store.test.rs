@@ -7,8 +7,9 @@ use super::*;
 fn what_is_kept_reads_back_and_a_default_is_not_kept() {
     let mut s = Settings::DEFAULT;
     let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
+    let ao = (Settings::DEFAULT.get(SettingKey::ao) + 1) % SettingKey::ao.options().len() as u32;
     let person = Settings::DEFAULT.get(SettingKey::person) + 2;
-    assert!(s.set(SettingKey::tilt_lock, tilt) && s.set(SettingKey::orbit_obstacle, OrbitObstacleMode::stop as u32) && s.set(SettingKey::person, person));
+    assert!(s.set(SettingKey::tilt_lock, tilt) && s.set(SettingKey::ao, ao) && s.set(SettingKey::person, person));
     let kept = s.kept();
     let back = read_kept(&kept);
     for key in SettingKey::ALL {
@@ -19,7 +20,7 @@ fn what_is_kept_reads_back_and_a_default_is_not_kept() {
 
 #[test]
 fn what_the_schema_does_not_hold_is_left_at_the_default() {
-    for kept in [r#"{"orbit_obstacle":"nonesuch"}"#, r#"{"nonesuch":true}"#, "not json"] {
+    for kept in [r#"{"ao":"nonesuch"}"#, r#"{"nonesuch":true}"#, "not json"] {
         let back = read_kept(kept);
         for key in SettingKey::ALL {
             assert_eq!(back.get(key), Settings::DEFAULT.get(key), "{kept}");

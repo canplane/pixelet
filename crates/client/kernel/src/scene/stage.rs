@@ -34,7 +34,7 @@ use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
 use crate::scene::environment::cloud::cloud_groups;
 use crate::sched::edge::request_world_tick;
-use crate::setting::store::settings_store;
+use crate::setting::store::{settings_store, AoMode};
 use crate::view::demand::Observed as _;
 
 /// The device the last frame went to the screen on (`device_generation`).
@@ -73,6 +73,7 @@ pub fn stage_write() {
     let tau = crate::view::lens::tau();
     s[STAGE_AT::LOD_CELL] = crate::view::lens::cell_angle(tau);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
+    s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
     s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
     // In the pixels the world is drawn at, which the resolution steps.
     s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH * crate::view::frame::resolution::world_ratio();

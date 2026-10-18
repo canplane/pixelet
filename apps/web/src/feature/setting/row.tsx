@@ -18,6 +18,7 @@ const GROUP_BORDER = 1;
 const COST_COLOR: Record<SettingCost, string> = {
   low: color.costLow,
   med: color.costMedium,
+  high: color.costHigh,
 };
 
 function Badge({ text, tint }: { text: string; tint: string }) {

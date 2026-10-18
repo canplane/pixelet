@@ -16,63 +16,67 @@ pub const SHADER_BADGE: u32 = 5;
 pub const SHADER_SKY: u32 = 6;
 pub const SHADER_DEBUG: u32 = 7;
 pub const SHADER_MIPS: u32 = 8;
-pub const SHADER_ATMOS_TRANSMITTANCE: u32 = 9;
-pub const SHADER_ATMOS_MULTISCATTER: u32 = 10;
-pub const SHADER_ATMOS_SKY_VIEW: u32 = 11;
-pub const SHADER_ATMOS_EXPOSURE: u32 = 12;
-pub const SHADER_STARS: u32 = 13;
-pub const SHADER_CLOUDS: u32 = 14;
-pub const SHADER_CLOUD_FIELD: u32 = 15;
-pub const SHADER_SHEET: u32 = 16;
-pub const SHADER_IMPOSTOR: u32 = 17;
-pub const SHADER_IMPOSTOR_BAKE: u32 = 18;
-pub const SHADER_ATMOS_IRRADIANCE: u32 = 19;
-pub const SHADER_BADGE_REGION: u32 = 20;
+pub const SHADER_AO_DOWNSAMPLE: u32 = 9;
+pub const SHADER_AO_SAMPLE: u32 = 10;
+pub const SHADER_AO_BLUR: u32 = 11;
+pub const SHADER_AO_UPSAMPLE: u32 = 12;
+pub const SHADER_ATMOS_TRANSMITTANCE: u32 = 13;
+pub const SHADER_ATMOS_MULTISCATTER: u32 = 14;
+pub const SHADER_ATMOS_SKY_VIEW: u32 = 15;
+pub const SHADER_ATMOS_EXPOSURE: u32 = 16;
+pub const SHADER_STARS: u32 = 17;
+pub const SHADER_CLOUDS: u32 = 18;
+pub const SHADER_CLOUD_FIELD: u32 = 19;
+pub const SHADER_SHEET: u32 = 20;
+pub const SHADER_IMPOSTOR: u32 = 21;
+pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
+pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
+pub const SHADER_BADGE_REGION: u32 = 24;
 /// The eye's rays drawn at their pixels (pxl-portable ray.rs).
-pub const SHADER_SCREEN_RAYS: u32 = 21;
+pub const SHADER_SCREEN_RAYS: u32 = 25;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
 /// pxl-portable's descent (script/portable-wgsl.ts): its one compute entry.
-pub const SHADER_CAST: u32 = 22;
+pub const SHADER_CAST: u32 = 26;
 /// Each newly held square's levels over its columns, a level a dispatch,
 /// generated with the cast from pxl-portable's `fill::level` and
 /// `window::join`: its one compute entry.
-pub const SHADER_BOUND: u32 = 23;
+pub const SHADER_BOUND: u32 = 27;
 /// Each newly held square's columns' ground tops off its samples,
 /// generated with the cast from pxl-portable's `ground::height`: its one
 /// compute entry.
-pub const SHADER_HEIGHTS: u32 = 24;
+pub const SHADER_HEIGHTS: u32 = 28;
 /// The decor the ground grows in the eye's windows, generated with the cast
 /// from pxl-portable's `scatter`: its one compute entry.
-pub const SHADER_GROWN: u32 = 25;
+pub const SHADER_GROWN: u32 = 29;
 /// What `SHADER_GROWN` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
 /// args; each drawn into the decor block: pxl-portable `scatter::drawn`.
-pub const SHADER_GROWN_COUNT: u32 = 26;
-pub const SHADER_GROWN_ARGS: u32 = 27;
-pub const SHADER_GROWN_PLACE: u32 = 28;
+pub const SHADER_GROWN_COUNT: u32 = 30;
+pub const SHADER_GROWN_ARGS: u32 = 31;
+pub const SHADER_GROWN_PLACE: u32 = 32;
 /// Each newly held terrain frame's ways, its columns' runs along z off its
 /// lines, generated with the cast from pxl-portable's `ways`: its one
 /// compute entry.
-pub const SHADER_WAYS: u32 = 29;
+pub const SHADER_WAYS: u32 = 33;
 /// The world image laid on a frame (blit.wgsl).
-pub const SHADER_BLIT: u32 = 30;
+pub const SHADER_BLIT: u32 = 34;
 /// Where every ray of the cast starts alike, asked once a frame before it,
 /// generated with the cast from pxl-portable's `cast::start`: its one
 /// compute entry.
-pub const SHADER_START: u32 = 31;
+pub const SHADER_START: u32 = 35;
 /// Which eye slots' decor grows again this frame, listed for
 /// `SHADER_GROWN`'s dispatch: its one compute entry.
-pub const SHADER_GROWN_MARK: u32 = 32;
+pub const SHADER_GROWN_MARK: u32 = 36;
 /// The eye's windows folded over their squares, generated with the cast
 /// from pxl-portable's `window::fold`: its one compute entry.
-pub const SHADER_JOINED: u32 = 33;
+pub const SHADER_JOINED: u32 = 37;
 /// The air's volume, a froxel a thread (atmos_froxel.wgsl): its one
 /// compute entry.
-pub const SHADER_ATMOS_FROXEL: u32 = 34;
+pub const SHADER_ATMOS_FROXEL: u32 = 38;
 /// Each tile's beam, where its rays start, generated with the cast from
 /// pxl-portable's `cast::Beam`: its one compute entry.
-pub const SHADER_BEAM: u32 = 35;
-pub const SHADERS: u32 = 36;
+pub const SHADER_BEAM: u32 = 39;
+pub const SHADERS: u32 = 40;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -91,6 +95,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_ground",
         "shade",
         "finish",
+        "ao_map",
         "paint",
         "box",
     ],
@@ -110,6 +115,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_ground",
         "shade",
         "finish",
+        "ao_map",
         "place",
         "decor",
     ],
@@ -129,6 +135,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_ground",
         "shade",
         "finish",
+        "ao_map",
         "place",
         "skinned",
     ],
@@ -161,6 +168,14 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["frame", "encode", "debug"],
     // SHADER_MIPS
     &["mips"],
+    // SHADER_AO_DOWNSAMPLE
+    &["frame", "ao_view", "ao_downsample"],
+    // SHADER_AO_SAMPLE
+    &["ao_view", "ao_sample"],
+    // SHADER_AO_BLUR
+    &["ao_view", "ao_blur"],
+    // SHADER_AO_UPSAMPLE
+    &["frame", "ao_view", "ao_upsample"],
     // SHADER_ATMOS_TRANSMITTANCE
     &["atmos_medium", "atmos_pass", "atmos_transmittance"],
     // SHADER_ATMOS_MULTISCATTER
@@ -236,6 +251,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_ground",
         "shade",
         "finish",
+        "ao_map",
         "impostor",
     ],
     // SHADER_IMPOSTOR_BAKE
@@ -260,6 +276,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_ground",
         "shade",
         "finish",
+        "ao_map",
         "lattice",
         "ray",
         "eye",

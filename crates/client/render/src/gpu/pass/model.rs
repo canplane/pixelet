@@ -4,18 +4,51 @@
 //! uniform slots written once before the pass, and the draw loop.
 
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
-use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, release, Entry, Gpu};
+use crate::gpu::api::{buffer_range_entry, buffer_usage, release, Entry, Gpu};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{put_f32, put_u32, Scratch};
+use crate::gpu::renderer::{frame_group, put_f32, put_u32, Scratch};
 
-/// Group 0 as every model pipeline reads it, the frame and the air: a layout
-/// is shared by its words, so one group serves them all.
-pub fn frame_group(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [Entry; AIR_ENTRIES]) -> u32 {
-    let layout = pipelines.build(g, PIPELINE_SKINNED, g.canvas()).layouts[0];
-    let mut e = vec![buffer_entry(0, frame_buffer)];
-    e.extend(air);
-    g.bind_group(layout, &e)
+#[derive(Clone, Copy)]
+pub enum Stage {
+    Lit,
+    Prepass,
+}
+
+/// A layout is shared by its words, so one group 0 serves every model pipeline.
+pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
+    pipelines.build(g, PIPELINE_SKINNED, g.canvas()).layouts[0]
+}
+
+/// Group 0 as the world image's models read it, the occlusion its map, and
+/// as what is drawn over the image reads it (`over`): open, as the map is of
+/// the image beneath, which the occlusion was found over without it.
+pub struct FrameGroups {
+    pub frame: u32,
+    pub over: u32,
+    layout: u32,
+    air: [Entry; AIR_ENTRIES],
+}
+
+impl FrameGroups {
+    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, [ao, open]: [Entry; 2], air: [Entry; AIR_ENTRIES]) -> FrameGroups {
+        FrameGroups {
+            frame: frame_group(g, layout, frame_buffer, ao, air),
+            over: frame_group(g, layout, frame_buffer, open, air),
+            layout,
+            air,
+        }
+    }
+
+    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, ao: [Entry; 2]) {
+        self.release();
+        *self = FrameGroups::new(g, self.layout, frame_buffer, ao, self.air);
+    }
+
+    pub fn release(&self) {
+        release(self.frame);
+        release(self.over);
+    }
 }
 
 pub struct DrawUniforms {

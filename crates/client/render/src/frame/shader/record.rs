@@ -31,30 +31,36 @@ include!(concat!(env!("OUT_DIR"), "/sources.rs"));
 
 /// Frame uniform field offsets in floats, in frame.wgsl's order (its size
 /// frame/shader/words.rs's `FRAME_FLOATS`).
-pub const FRAME_AT: [usize; 14] = [0, 16, 19, 20, 23, 24, 27, 28, 31, 32, 35, 36, 40, 44];
+pub const FRAME_AT: [usize; 15] = [0, 16, 19, 20, 23, 24, 27, 28, 31, 32, 35, 36, 39, 40, 44];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_SKY: u32 = 10;
 pub const PIPELINE_MIPS: u32 = 11;
 pub const PIPELINE_BLIT: u32 = 12;
-pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 13;
-pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 14;
-pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 15;
-pub const PIPELINE_ATMOS_EXPOSURE: u32 = 16;
-pub const PIPELINE_STARS: u32 = 17;
-pub const PIPELINE_CLOUDS: u32 = 18;
-pub const PIPELINE_CLOUDS_ABOVE: u32 = 19;
-pub const PIPELINE_CLOUD_FIELD: u32 = 20;
-pub const PIPELINE_SHEET: u32 = 21;
-pub const PIPELINE_IMPOSTOR_BAKE: u32 = 22;
-pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 23;
+pub const PIPELINE_DECOR_PREPASS: u32 = 13;
+pub const PIPELINE_SKINNED_PREPASS: u32 = 14;
+pub const PIPELINE_AO_DOWNSAMPLE: u32 = 15;
+pub const PIPELINE_AO_SAMPLE: u32 = 16;
+pub const PIPELINE_AO_BLUR: u32 = 17;
+pub const PIPELINE_AO_UPSAMPLE: u32 = 18;
+pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 19;
+pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 20;
+pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 21;
+pub const PIPELINE_ATMOS_EXPOSURE: u32 = 22;
+pub const PIPELINE_STARS: u32 = 23;
+pub const PIPELINE_CLOUDS: u32 = 24;
+pub const PIPELINE_CLOUDS_ABOVE: u32 = 25;
+pub const PIPELINE_CLOUD_FIELD: u32 = 26;
+pub const PIPELINE_SHEET: u32 = 27;
+pub const PIPELINE_IMPOSTOR_BAKE: u32 = 28;
+pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 29;
 /// The billboards' regions, numbered, into a target of their own (pass/badges.rs).
-pub const PIPELINE_BADGE_REGION: u32 = 24;
+pub const PIPELINE_BADGE_REGION: u32 = 30;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
-pub const PIPELINE_DEBUG_FACE: u32 = 25;
+pub const PIPELINE_DEBUG_FACE: u32 = 31;
 /// The eye's rays, opaque at their depth (pxl-portable ray.rs).
-pub const PIPELINE_SCREEN_RAYS: u32 = 26;
-pub const PIPELINES: u32 = 27;
+pub const PIPELINE_SCREEN_RAYS: u32 = 32;
+pub const PIPELINES: u32 = 33;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -200,6 +206,16 @@ const fn depth_only(shader: u32) -> Head {
     }
 }
 
+/// Depth from the eye for the screen-space occlusion, culled as the lit pass is.
+const fn prepass(shader: u32, cull: u32) -> Head {
+    Head {
+        cull,
+        depth_compare: GREATER,
+        depth_bias_slope: 0,
+        ..depth_only(shader)
+    }
+}
+
 const fn screen(shader: u32) -> Head {
     Head {
         depth_compare: NO_DEPTH,
@@ -226,12 +242,12 @@ const AIR_SLOTS: [[u32; 2]; 11] = [
 
 /// The air's bindings, as every pass that binds the air lays them out.
 const AIR: [[u32; 2]; 11] = AIR_SLOTS;
-const LIT_FRAME: [[u32; 2]; 12] = {
+const LIT_FRAME: [[u32; 2]; 13] = {
     // The air in the vertex stage, where each point's lights and veil are
     // worked out; a fragment reads its words and the eye's texel, whose white
     // it shows by (atmos_eye.wgsl). The sky's views and the Earth's picture
     // are the sky pass's, laid out unread.
-    [[0, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9], AIR[10]]
+    [[0, UNIFORM], [7, TEXTURE], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9], AIR[10]]
 };
 /// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
 const CLOUD_GROUP: [[u32; 2]; 15] = {
@@ -255,12 +271,13 @@ const CLOUD_GROUP: [[u32; 2]; 15] = {
 };
 const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 
-/// The lit pass's frame, air and layers, all read where
+/// The lit pass's frame, occlusion, air and layers, all read where
 /// a pixel is painted; then the rays, the looks and the eye's words: the
 /// most entries any group has (`GROUP_ENTRIES`).
-const SCREEN_GROUP: [[u32; 2]; 18] = {
+const SCREEN_GROUP: [[u32; 2]; 19] = {
     [
         [0, UNIFORM],
+        [7, TEXTURE],
         AIR[0],
         AIR[1],
         AIR[2],
@@ -339,7 +356,7 @@ const fn and<const N: usize, const M: usize, const R: usize>(a: [[u32; 2]; N], b
 
 type Group = &'static [[u32; 2]];
 const FRAME: Group = &[[0, UNIFORM]];
-const BOX_GROUP: [[u32; 2]; 16] = and(LIT_FRAME, [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
+const BOX_GROUP: [[u32; 2]; 17] = and(LIT_FRAME, [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
 const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &[[0, UNIFORM_DYNAMIC]], &SKIN, &[[0, STORAGE]]];
 /// A billboard set's uniform and instances, and what its pass reads at an
 /// anchor: the world's depth for the regions, the regions for the sprites.
@@ -426,6 +443,8 @@ const fn plan_of(id: u32) -> Plan {
             &[],
             &[&SCREEN_GROUP],
         ),
+        PIPELINE_DECOR_PREPASS => plan(prepass(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS),
+        PIPELINE_SKINNED_PREPASS => plan(prepass(SHADER_SKINNED, CULL_BACK), &SKINNED_LANES, &MODEL_GROUPS),
         // Only where the opaque world left the far plane, so covered pixels never run it.
         PIPELINE_SKY => plan(
             Head {
@@ -472,6 +491,18 @@ const fn plan_of(id: u32) -> Plan {
             },
             &[],
             &[&[[0, UNIFORM], [1, STORAGE]], &[[0, TEXTURE_ARRAY], [1, SAMPLER]]],
+        ),
+        PIPELINE_AO_DOWNSAMPLE => plan(screen(SHADER_AO_DOWNSAMPLE), &[], &[&[[0, UNIFORM], [1, DEPTH], [6, UNIFORM]]]),
+        PIPELINE_AO_SAMPLE => plan(screen(SHADER_AO_SAMPLE), &[], &[&[[1, TEXTURE_UNFILTERED], [2, TEXTURE], [6, UNIFORM]]]),
+        PIPELINE_AO_BLUR => plan(
+            screen(SHADER_AO_BLUR),
+            &[],
+            &[&[[1, TEXTURE_UNFILTERED], [2, TEXTURE], [3, TEXTURE], [4, SAMPLER], [5, UNIFORM_DYNAMIC], [6, UNIFORM]]],
+        ),
+        PIPELINE_AO_UPSAMPLE => plan(
+            screen(SHADER_AO_UPSAMPLE),
+            &[],
+            &[&[[0, UNIFORM], [1, DEPTH], [2, TEXTURE_UNFILTERED], [3, TEXTURE], [4, SAMPLER], [6, UNIFORM]]],
         ),
         PIPELINE_ATMOS_TRANSMITTANCE => plan(screen(SHADER_ATMOS_TRANSMITTANCE), &[], &[&[AIR[0]]]),
         PIPELINE_ATMOS_MULTISCATTER => plan(screen(SHADER_ATMOS_MULTISCATTER), &[], &[&[AIR[0], AIR[1], AIR[3]]]),

@@ -78,6 +78,7 @@ export const color = {
 
   costLow: SYSTEM.green,
   costMedium: SYSTEM.orange,
+  costHigh: SYSTEM.red,
   dev: SYSTEM.purple,
   profilerGo: SYSTEM.green,
   profilerHalt: SYSTEM.yellow,
