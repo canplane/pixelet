@@ -29,7 +29,7 @@ use xpute_kit::status::errno::Errno;
 use crate::layer::object::ext::{Ext, Pools, NONE};
 use crate::layer::{Answer, Query};
 use crate::sched::edge::request_world_tick;
-use pxl_portable::overwrite::{self, Held};
+use pxl_portable::overwrite::{self, path, Held};
 use pxl_spec::block::ext::class_of;
 use pxl_spec::block::volume::fold;
 
@@ -147,13 +147,6 @@ pub(super) fn key(zoom: Zoom, at: [i32; 3]) -> u128 {
 /// Levels under the tree's root of a node at `zoom`.
 const fn depth(zoom: Zoom) -> u32 {
     zoom + 1
-}
-
-/// The node `at` of `zoom` as the tree is cut: X counted from the round's
-/// start, so the round is the one node of zoom 0 over it and every node is
-/// its parent's index doubled, a bit more, on every axis.
-fn path(zoom: Zoom, at: [i32; 3]) -> [i32; 3] {
-    [at[0].rem_euclid(1 << zoom), at[1], at[2]]
 }
 
 /// The tree's lanes as pxl-portable `overwrite` reads them, the CPU as a GPU.

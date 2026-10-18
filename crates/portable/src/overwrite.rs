@@ -184,20 +184,19 @@ fn of(lanes: &impl Lanes, slot: u32, zoom: Zoom) -> Held {
 }
 
 /// What the node `at` of `zoom` holds with nothing over it known: down from
-/// the root whose block is `root` to its own slot, or to the leaf over it. A
-/// descent asks this once, at its root.
+/// the root whose block is `root` to its own slot, or to the leaf over it, a
+/// `child` a zoom, the one step every descent of the tree takes. A descent
+/// asks this once, at its root.
 pub fn cursor(lanes: &impl Lanes, root: u32, zoom: Zoom, at: [i32; 3]) -> Held {
     let p = path(zoom, at);
-    let (mut block, mut z) = (root, 0);
-    loop {
-        let s = zoom - z;
-        let held = of(lanes, block + slot_of([p[0] >> s, p[1] >> s, p[2] >> s]), z);
-        if !held.folded() || z == zoom {
-            return held;
-        }
-        block = lanes.heap(held.slot()) & !BRANCH;
+    let mut held = of(lanes, root + slot_of([p[0] >> zoom, p[1] >> zoom, p[2] >> zoom]), 0);
+    let mut z = 0;
+    while z < zoom && held.folded() {
         z += 1;
+        let s = zoom - z;
+        held = child(lanes, held, z, [p[0] >> s, p[1] >> s, p[2] >> s]);
     }
+    held
 }
 
 /// What the child `at` of `zoom` of a node holding `parent` holds: a leaf
