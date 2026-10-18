@@ -727,6 +727,15 @@ struct RaysPass {
 }
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
+impl GroundBuffers {
+    /// Square `s` asked, last in the waiting ring.
+    fn wait(&mut self, s: u32) {
+        let (ring, first, len) = &mut self.waiting;
+        ring[((*first + *len) % SQUARES) as usize] = s;
+        *len += 1;
+    }
+}
+
 struct GroundBuffers {
     /// Per square of the windows, its columns, levels, runs and cells as
     /// laid, which `heights_cs`, `ways_cs` and `bound_cs` write in the turn
@@ -741,6 +750,11 @@ struct GroundBuffers {
     /// Per square place (`window::SQUARES`), its cells' way back: the fill
     /// the next landing must be of (its ticket 0 where none is asked).
     asked: [CellsBack; SQUARES as usize],
+    /// The squares asked and not yet copied back, in the order asked: a
+    /// ring of `waiting.1` from `waiting.0`. A square is in it once: put
+    /// where it is asked with none asked before, or where a landing finds
+    /// it asked again since (`read_back`).
+    waiting: ([u32; SQUARES as usize], u32, u32),
     /// The buffers cells are copied into and mapped back through, as many as
     /// a frame hands squares a mapping still out a frame more (`READS`);
     /// each one's square and the fill it carries (`FREE` where none), and
@@ -952,6 +966,7 @@ impl RaysPass {
                 fresh,
                 fresh_len: 0,
                 asked: [CellsBack::default(); SQUARES as usize],
+                waiting: ([0; SQUARES as usize], 0, 0),
                 reads: core::array::from_fn(|_| buffer(BACK_WORDS * 4, buffer_usage::MAP_READ | buffer_usage::COPY_DST)),
                 held: [(FREE, 0); READS],
                 mapping: Box::new([0; READS]),
@@ -973,6 +988,11 @@ impl RaysPass {
             g.write_buffer(gb.fresh, at + LOOKS_AT * 4, q.looks);
             g.write_buffer(gb.fresh, at + ELE_AT * 4, bytes(q.samples));
             g.write_buffer(gb.fresh, at + LINES_AT * 4, bytes(q.lines));
+            // One asked before waits already, or is on its way and waits
+            // again when it lands (`read_back`).
+            if gb.asked[square as usize].ticket == 0 {
+                gb.wait(square);
+            }
             gb.asked[square as usize] = q.back;
             fresh += 1;
             true
@@ -1182,22 +1202,24 @@ impl RaysPass {
             if back.ticket == ticket {
                 landed(s, ticket);
                 back.ticket = 0;
+            } else {
+                c.wait(s);
             }
             c.held[k] = (FREE, 0);
         }
         let mut copy = None;
         let mut taken = [false; READS];
-        let mut free = 0;
-        for s in 0..SQUARES {
-            let ticket = c.asked[s as usize].ticket;
-            if ticket == 0 || c.held.iter().any(|h| h.0 == s) {
+        for (k, took) in taken.iter_mut().enumerate() {
+            if c.held[k].0 != FREE || c.waiting.2 == 0 {
                 continue;
             }
-            let Some(k) = (free..READS).find(|&k| c.held[k].0 == FREE) else { break };
-            free = k + 1;
+            let (ring, first, len) = &mut c.waiting;
+            let s = ring[*first as usize];
+            (*first, *len) = ((*first + 1) % SQUARES, *len - 1);
+            let ticket = c.asked[s as usize].ticket;
             let e = *copy.get_or_insert_with(|| g.encoder());
             g.copy_buffer(e, (c.ground, s * SQUARE_BYTES + COLUMNS_AT * 4), (c.reads[k], 0), BACK_WORDS * 4);
-            (c.held[k], taken[k]) = ((s, ticket), true);
+            (c.held[k], *took) = ((s, ticket), true);
         }
         let Some(e) = copy else { return };
         g.submit(e);
