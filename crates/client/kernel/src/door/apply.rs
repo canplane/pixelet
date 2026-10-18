@@ -45,7 +45,7 @@ fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
 /// Applies one submission. None (replied as ENOSYS) for an unknown command
 /// or a signal submitted as one.
 pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
-    use crate::control::camera::input::{camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel, Rect};
+    use crate::control::camera::input::{camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel};
     use crate::control::interaction::{hold, holding};
     use crate::control::sensor::{device_orientation, geolocation};
     use crate::profiler::log::{profiler_follow, profiler_set_logging, profiler_window_start, profiler_window_stop};
@@ -104,12 +104,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::INPUT_RECT => {
             let p = abi::InputRect::read(packet(pkt)?)?;
             refuse_unless(p.width >= 0.0 && p.height >= 0.0, Errno::EINVAL)?;
-            camera_input_rect(Rect {
-                left: p.left,
-                top: p.top,
-                width: p.width,
-                height: p.height,
-            });
+            camera_input_rect(p);
             Ok(Some(0))
         }
         Command::INPUT_POINTER => {

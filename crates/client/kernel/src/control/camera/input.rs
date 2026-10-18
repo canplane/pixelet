@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use crate::param::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_CELLS_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
 
-use crate::abi::cmd::PointerType;
+use crate::abi::cmd::{InputRect, PointerType};
 use crate::control::camera::controller::{active, Active};
 use crate::control::camera::gesture::{linear, Anchor};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
@@ -41,14 +41,6 @@ enum RotateAxisLock {
     Rotate,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Rect {
-    pub left: f64,
-    pub top: f64,
-    pub width: f64,
-    pub height: f64,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct PointerPos {
     x: f64,
@@ -60,7 +52,7 @@ struct Input {
     did_drag: bool,
     pointer_x: f64,
     pointer_y: f64,
-    rect: Option<Rect>,
+    rect: Option<InputRect>,
     last_x: f64,
     last_y: f64,
     // Total displacement from pointerdown, not per-event deltas, decides tap vs drag.
@@ -142,7 +134,7 @@ fn tilt_gain() -> f64 {
     -core::f64::consts::PI / (TILT_SWEEP_FRACTION * view().height)
 }
 
-pub fn camera_input_rect(rect: Rect) {
+pub fn camera_input_rect(rect: InputRect) {
     input().rect = Some(rect);
 }
 

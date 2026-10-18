@@ -11,7 +11,7 @@ use crate::io::request::credits;
 use crate::layer::Base as _;
 use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
-use crate::profiler::block::{FetchBlock, FramesBlock, OpenBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::profiler::block::{FetchBlock, FramesBlock, OpenBlock, QualityBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::profiler::frame::{long, missed, off_turn_ms, overran};
 use crate::profiler::frame::{FrameSample, GPU_SPANS};
 use crate::profiler::log::window_baseline;
@@ -72,16 +72,7 @@ pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
     out.fill(0.0);
     let since = window_ms.map_or(f64::NEG_INFINITY, |w| now() - w);
 
-    let rec = profiler_recording_state();
-    put(
-        out,
-        SUMMARY::rec::AT,
-        &RecBlock {
-            recording: rec.recording as u8 as f64,
-            elapsed_ms: rec.elapsed_ms,
-            truncated: rec.truncated as u8 as f64,
-        },
-    );
+    put(out, SUMMARY::rec::AT, &profiler_recording_state());
 
     put(out, SUMMARY::frames::AT, &frames(scratch, profiler_frames_since(since)));
     let open = profiler_open_interval().map_or(OpenBlock::default(), |f| OpenBlock { turns: f.turns, busy_ms: f.busy_ms });

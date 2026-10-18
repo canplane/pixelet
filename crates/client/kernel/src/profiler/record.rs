@@ -12,6 +12,7 @@ use xpute_guest::global::Global;
 use xpute_guest::mem::section::span_of;
 
 use crate::mem::fixed::{lane, Held};
+use crate::profiler::block::RecBlock;
 use crate::profiler::frame::{FrameSample, RingSample, WorstFrame};
 use crate::profiler::log::PENDING;
 use crate::profiler::task::TaskRow;
@@ -95,13 +96,6 @@ pub struct ProfilerSink {
     pub frame: Option<fn(&FrameSample)>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct RecordingState {
-    pub recording: bool,
-    pub elapsed_ms: f64,
-    pub truncated: bool,
-}
-
 struct Profiler {
     task_ring: &'static mut [TaskRow],
     task_len: usize,
@@ -158,12 +152,13 @@ pub fn profiler_recording() -> bool {
     profiler().recording
 }
 
-pub fn profiler_recording_state() -> RecordingState {
+/// The recording as the summary's block holds it, each flag 0 or 1.
+pub fn profiler_recording_state() -> RecBlock {
     let l = profiler();
-    RecordingState {
-        recording: l.recording,
+    RecBlock {
+        recording: l.recording as u8 as f64,
         elapsed_ms: l.stopped_at.unwrap_or_else(now) - l.started_at,
-        truncated: l.truncated,
+        truncated: l.truncated as u8 as f64,
     }
 }
 

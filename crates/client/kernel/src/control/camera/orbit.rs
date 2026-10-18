@@ -22,7 +22,7 @@ use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::param::{MAX_DIST, MIN_DIST};
 use crate::setting::store::{settings_store, OrbitObstacleMode};
 use crate::view::frame::pose::view_compose;
-use terrain_gate::{allowed_view, climb_polar, ViewTriple};
+use terrain_gate::{allowed_view, climb_polar};
 use xpute_guest::global::Global;
 
 pub struct OrbitState {
@@ -67,22 +67,8 @@ pub fn ask(partial: IntentPatch) -> Intent {
     if partial.polar.is_some() && settings_store().orbit_obstacle == OrbitObstacleMode::climb {
         asked.polar = climb_polar(asked.dist, asked.polar, asked.azimuth);
     }
-    c.commit_intent(gate(c.intent, asked));
+    c.commit_intent(allowed_view(asked, c.intent));
     c.intent
-}
-
-fn gate(from: Intent, to: Intent) -> Intent {
-    let triple = |i: Intent| ViewTriple {
-        dist: i.dist,
-        polar: i.polar,
-        azimuth: i.azimuth,
-    };
-    let r = allowed_view(triple(to), triple(from));
-    Intent {
-        dist: r.dist,
-        azimuth: r.azimuth,
-        polar: r.polar,
-    }
 }
 
 pub fn zoom_settling() -> bool {
