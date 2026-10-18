@@ -259,14 +259,17 @@ pub fn value(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]
 /// quarter shows its upper child where that fills by `value`'s rule (a
 /// leaf's voxel, a fold's kind half filled or more; air does not), else its
 /// lower one through it, else the node's own value. A leaf over the node
-/// is its value four times, as a ground leaf's cell is.
-pub fn looks(lanes: &impl Lanes, held: Held, zoom: Zoom, v: u32) -> [u32; 4] {
+/// is its value four times, as a ground leaf's cell is. Each child is read
+/// at its own index under `hide`, as `v` was, so a leaf a preview leaves
+/// out shows in no quarter.
+pub fn looks(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3], v: u32) -> [u32; 4] {
     if !held.folded() {
         return [v; 4];
     }
     let base = lanes.heap(held.slot()) & !BRANCH;
     let shows = |k: u32| {
-        let c = value(lanes, of(lanes, base + k, zoom + 1), Cut::NONE, zoom + 1, [0; 3]);
+        let child = [2 * at[0] + (k & 1) as i32, 2 * at[1] + (k >> 1 & 1) as i32, 2 * at[2] + (k >> 2) as i32];
+        let c = value(lanes, of(lanes, base + k, zoom + 1), hide, zoom + 1, child);
         (c, c != VOID && c != AIR)
     };
     let mut four = [v; 4];

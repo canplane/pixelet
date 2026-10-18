@@ -62,7 +62,7 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
             // The four looks a filling block is drawn by, a byte each
             // (`ground::word`): only the ground's looks, a placed cube of a
             // look, fit; one past a byte, an object's, is drawn by its value.
-            let four = if fills(over.block) { overwrite::looks(lanes, put, zoom, over.block) } else { [0; 4] };
+            let four = if fills(over.block) { overwrite::looks(lanes, put, hide, zoom, c, over.block) } else { [0; 4] };
             let bytes = four[0] < 256 && four[1] < 256 && four[2] < 256 && four[3] < 256;
             return (
                 In {
