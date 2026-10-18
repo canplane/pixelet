@@ -6,10 +6,7 @@
 
 use crate::space::coord::zoom::Zoom;
 use crate::space::hierarchy::sparse_tree::{Slot, SparseTree};
-use pxl_portable::overwrite::{self, voxel, FULL};
-
-/// A word no leaf holds: nothing there.
-const EMPTY: u32 = 0;
+use pxl_portable::overwrite;
 
 /// A branch of `tree` at `zoom`, its block's eight folded, as its word.
 pub fn fold(tree: &SparseTree<u32, 3>, block: u32, zoom: Zoom) -> u32 {
@@ -17,17 +14,10 @@ pub fn fold(tree: &SparseTree<u32, 3>, block: u32, zoom: Zoom) -> u32 {
 }
 
 /// A child's fold word in its parent's fold (pxl-portable
-/// `overwrite::fold`): a leaf whose value is a voxel fills it whole.
+/// `overwrite::fold`): a leaf's share (`overwrite::share`), a branch's fold.
 fn share(slot: Slot<u32>) -> u32 {
     match slot {
-        Slot::Leaf(word) => {
-            let id = overwrite::low(word);
-            if word != EMPTY && voxel(id) {
-                overwrite::fold_word(id, FULL)
-            } else {
-                0
-            }
-        }
+        Slot::Leaf(word) => overwrite::share(word),
         Slot::Branch(_, f) => f,
     }
 }

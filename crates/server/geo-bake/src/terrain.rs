@@ -4,6 +4,7 @@ pub mod absent;
 pub mod bake;
 pub mod leaf;
 pub mod pipeline;
+pub mod pool;
 pub mod repository;
 pub mod source;
 
@@ -54,5 +55,11 @@ impl crate::pyramid::Base for TerrainTile {
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy
+    }
+
+    /// Refused where the set's ways' trees would not fit the client's pool
+    /// wherever the eye is (`pool::fits`).
+    fn fits_set(set: &crate::pyramid::Staged<'_>, workers: usize) -> Result<(), String> {
+        pool::fits(set, workers)
     }
 }

@@ -251,6 +251,14 @@ pub fn face_height(cell: Zoom, top: i32) -> i32 {
     }
 }
 
+/// The face block of a cell whose face is `face` leaf cells, its first
+/// block in blocks of `cell`: under it, the ground under its face, which a
+/// cave may take (`Cell::opens`) and a way's bore is lined in
+/// (pxl-portable `ways::lined`).
+pub fn face_block(cell: Zoom, face: i32) -> i32 {
+    blocks(cell, face as f32) - leaf_blocks(cell)
+}
+
 /// The bedrock's top under a face at `face` leaf cells, in blocks of `cell`.
 pub fn rock(cell: Zoom, face: i32) -> i32 {
     blocks(cell, bedrock(face) as f32)
@@ -507,7 +515,7 @@ impl Cell {
     /// blocks as the column rounds them.
     fn opens(&self, cell: Zoom, z: i32) -> bool {
         let face = face_height(cell, self.top);
-        self.look != UNKNOWN && z < blocks(cell, face as f32) - leaf_blocks(cell) && z >= rock(cell, face)
+        self.look != UNKNOWN && z < face_block(cell, face) && z >= rock(cell, face)
     }
 
     /// The four looks block `g` of the cell at `cell` is drawn by: where it

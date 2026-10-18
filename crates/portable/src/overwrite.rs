@@ -91,6 +91,19 @@ pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
     fold_word(best, sum / 8)
 }
 
+/// A leaf's word in its parent's fold (`fold`): a leaf whose value is a
+/// voxel fills it whole; the empty word, and any other, none. The one rule
+/// whichever side builds a tree, the objects' store (pxl-spec
+/// block/volume.rs) or a square's ways (`ways::tree`).
+pub fn share(word: u32) -> u32 {
+    let id = low(word);
+    if word != 0 && voxel(id) {
+        fold_word(id, FULL)
+    } else {
+        0
+    }
+}
+
 /// The tree's two lanes, a word a slot.
 pub trait Lanes {
     fn heap(&self, slot: u32) -> u32;

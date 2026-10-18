@@ -99,6 +99,26 @@ impl Squares for Fresh<'_> {
     }
 }
 
+impl ways::tree::Runs for Fresh<'_> {
+    fn column(&self, i: u32) -> [u32; 2] {
+        [column_first(column_of(self.ground, self.base, i)), column_first(column_of(self.ground, self.base, i + 1))]
+    }
+    fn run(&self, r: u32) -> u32 {
+        at(self.ground, self.base + RUNS_AT + r)
+    }
+}
+
+/// The square handed `k`-th in `fresh` as its ways' tree is of: its cells'
+/// zoom and its index, its first cell's over its side (`ways::tree::Of`).
+pub fn of(fresh: &[u32], k: u32) -> ways::tree::Of {
+    let rec = handed_at(k);
+    let first = [at(fresh, rec + FRESH_FIRST) as i32, at(fresh, rec + FRESH_FIRST + 1) as i32];
+    ways::tree::Of {
+        cell: at(fresh, rec + FRESH_CELL),
+        at: [first[0] >> window::SQUARE_SHIFT, first[1] >> window::SQUARE_SHIFT],
+    }
+}
+
 /// A square being filled, as the ways' rule reads it (`window::Square`):
 /// its laid cells in its lane, its lines and samples in its record, and
 /// where it is as handed (`window::FRESH_WORDS`).
@@ -282,8 +302,11 @@ fn put_runs(ground: &mut [u32], base: u32, around: &ways::Around, cell: u32, fir
 
 /// Entry `[x, y]` of level `j` of the square at `base`, its cells at `cell`:
 /// level 0 column `[x, y]`'s own — its ground's top, and the leaf cells
-/// what its runs write fills, a bore's air none (`ground::Bounds`); a higher
-/// one over the level under it, written before (`window::join`).
+/// its runs write (`ground::Bounds`); a higher one over the level under it,
+/// written before (`window::join`). A bore's air counts, as the ways write
+/// it: the blocks of the square's ways tree lie in the bound
+/// (`ways::tree`), and a node it splits more holds only air or void there,
+/// a bore lying under its column's face.
 pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
     let w = if j == 0 {
         let i = window::index_of(at);
@@ -292,7 +315,7 @@ pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
         let ([mut lo, mut hi], mut r) = (ground::EMPTY, column_first(w));
         while r + 1 < to {
             let (z, value) = ways::run_of(crate::at(ground, base + RUNS_AT + r));
-            if value != ways::NOTHING && value != ways::AIR {
+            if value != ways::NOTHING {
                 let end = ways::run_of(crate::at(ground, base + RUNS_AT + r + 1)).0;
                 (lo, hi) = (lo.min(z * s), hi.max(end * s));
             }
@@ -311,12 +334,13 @@ pub fn level(ground: &mut [u32], base: u32, cell: Zoom, j: u32, at: [u32; 2]) {
 /// A square filled whole, its passes in a GPU's order (pxl-render
 /// gpu/renderer.rs `grids`): `fresh` its record (`window::HANDED_WORDS`),
 /// its looks, samples and lines as handed, its words laid here; `lane` its
-/// words; its cells at `cell`, lying at `place` in its tile; its columns,
-/// the levels no bake reads; inside the area, so no wall cuts its ways and
-/// the runs are the most a client's fill writes. The runs its ways read as,
-/// and the most spans a column makes (`u32::MAX` past `ways::SPANS`).
-pub fn square(fresh: &mut [u32], lane: &mut [u32], place: [u32; 2], cell: Zoom) -> [u32; 2] {
-    fresh[..FRESH_WORDS as usize].copy_from_slice(&window::fresh(0, window::place_word(place), cell, [0; 2], Shard::INSIDE));
+/// words; its cells at `cell`, lying at `place` in its tile, its first cell
+/// `first`; its columns and levels; inside the area, so no wall cuts its
+/// ways and the runs are the most a client's fill writes. The runs its ways
+/// read as, and the most spans a column makes (`u32::MAX` past
+/// `ways::SPANS`); its ways' tree is built off them after (`tree`).
+pub fn square(fresh: &mut [u32], lane: &mut [u32], place: [u32; 2], cell: Zoom, first: [i32; 2]) -> [u32; 2] {
+    fresh[..FRESH_WORDS as usize].copy_from_slice(&window::fresh(0, window::place_word(place), cell, first, Shard::INSIDE));
     let fresh: &[u32] = fresh;
     for y in 0..SQUARE {
         for x in 0..SQUARE {
@@ -336,5 +360,61 @@ pub fn square(fresh: &mut [u32], lane: &mut [u32], place: [u32; 2], cell: Zoom) 
     for i in 0..SQUARE_CELLS {
         ways(lane, fresh, 0, true, i);
     }
+    for j in 0..=window::LEVELS {
+        let side = SQUARE >> j;
+        for k in 0..side * side {
+            level(lane, 0, cell, j, [k % side, k / side]);
+        }
+    }
     [column_first(column_of(lane, 0, SQUARE_CELLS)), most]
+}
+
+/// The square handed first in `fresh`, filled into `lane` (`square`), its
+/// ways' tree built into `pool`, its heap words then its data words, a
+/// level at a time as a GPU's workgroup builds it (gpu-query-shader
+/// `ways_tree_cs`, `ways::tree`), its blocks taken in order: the blocks it
+/// took, and those it holds once folded; `u32::MAX` both where `pool` has
+/// too few.
+pub fn tree(lane: &[u32], fresh: &[u32], pool: &mut [u32]) -> [u32; 2] {
+    use ways::tree::{self as t, Lane};
+    let (of, square) = (of(fresh, 0), Fresh { ground: lane, base: 0 });
+    let room = pool.len() as u32 / 16;
+    let mut p = Lane(pool);
+    t::root(&mut p, of, 0);
+    // Each level's candidates, the blocks the level over it took.
+    let mut levels = [[0u32; 2]; crate::LEAF_CELL as usize + 1];
+    let (mut b, mut n, mut taken) = (0, 8, 1);
+    let mut zoom = 0;
+    while zoom < of.cell {
+        levels[zoom as usize] = [b, n];
+        let flagged = (b..b + n).filter(|&s| t::flag(&p, &square, 0, of, zoom, s)).count() as u32;
+        if !t::fits(room - taken, flagged) {
+            return [u32::MAX; 2];
+        }
+        let next = 8 * taken;
+        let mut k = 0;
+        for s in b..b + n {
+            if t::flag(&p, &square, 0, of, zoom, s) {
+                t::branch(&mut p, of, zoom, s, next + 8 * k);
+                k += 1;
+            } else {
+                t::empty(&mut p, s);
+            }
+        }
+        (b, n, taken, zoom) = (next, 8 * flagged, taken + flagged, zoom + 1);
+    }
+    for s in b..b + n {
+        t::leaf(&mut p, &square, of, s);
+    }
+    let mut freed = 0;
+    while zoom > 0 {
+        zoom -= 1;
+        let [b, n] = levels[zoom as usize];
+        for s in b..b + n {
+            if t::under(&p, s) != t::NONE && t::fold(&mut p, zoom, s) != t::NONE {
+                freed += 1;
+            }
+        }
+    }
+    [taken, taken - freed]
 }

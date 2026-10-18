@@ -269,7 +269,10 @@ pub const COLUMNS_AT: u32 = 0;
 pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const RUNS_AT: u32 = LEVELS_AT + LEVEL_WORDS;
 pub const LAID_AT: u32 = RUNS_AT + RUNS_SQUARE;
-pub const SQUARE_WORDS: u32 = LAID_AT + LAID_WORDS;
+/// Its ways' tree's root: the first slot of its zoom-0 block in the pool
+/// (`ways::tree`).
+pub const ROOT_AT: u32 = LAID_AT + LAID_WORDS;
+pub const SQUARE_WORDS: u32 = ROOT_AT + 1;
 /// What comes back of a square: all of it, so the CPU reads a column as the
 /// GPU does, never working it out again.
 pub const BACK_WORDS: u32 = SQUARE_WORDS;
@@ -445,12 +448,6 @@ impl<Q: Square> crate::ways::Columns for Q {
         }
         let cell = Square::cell(self);
         crate::ground::face_height(cell, crate::ground::blocks(cell, self.height(c) as f32))
-    }
-    fn top(&self, c: [i32; 2]) -> i32 {
-        if !held(c) {
-            return i32::MIN;
-        }
-        crate::ground::blocks(Square::cell(self), self.height(c) as f32)
     }
     /// The entry is the one after the one before it, and its segment
     /// continues the one stored before it.

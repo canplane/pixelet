@@ -41,6 +41,13 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
 
     /// Which of its children are tiles, as the tile says.
     fn occupancy(&self) -> Occupancy;
+
+    /// Refused where the set as it will be (`set`) holds what no reader
+    /// can: a fact of the whole set, not of a tile, asked before a commit
+    /// moves anything; `workers` tiles read at once. None for most kinds.
+    fn fits_set(_set: &Staged<'_>, _workers: usize) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// What a tile the set holds no object for is. The pyramid is correct only
@@ -161,9 +168,22 @@ impl Staged<'_> {
         self.base.content(p)
     }
 
-    fn read<L: Base>(&self, p: Tile) -> Result<Option<L>, String> {
+    pub fn read<L: Base>(&self, p: Tile) -> Result<Option<L>, String> {
         let Some(raw) = self.content(p)? else { return Ok(None) };
         L::decode(&raw).map(Some).map_err(|e| format!("{}: {e}", p.name()))
+    }
+
+    /// Every tile it may hold, the set's and the stage's, each zoom's
+    /// sorted; one gone or not taken up reads none (`content`).
+    pub fn tiles(&self) -> Result<BTreeMap<Zoom, Vec<Tile>>, String> {
+        let mut all = self.base.by_zoom()?;
+        for (zoom, tiles) in self.stage.by_zoom()? {
+            let at = all.entry(zoom).or_default();
+            at.extend(tiles);
+            at.sort_unstable();
+            at.dedup();
+        }
+        Ok(all)
     }
 }
 

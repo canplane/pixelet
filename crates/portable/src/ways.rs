@@ -18,6 +18,8 @@
 //! cells wide. Index loops, no `Option` (a crossing none is is `Crossing::NONE`), words
 //! for tags, nothing a GPU lacks (`hypot`).
 
+pub mod tree;
+
 use crate::cube::{sentinel, Ground};
 use crate::lattice::GROUND;
 use crate::{cells_of_m, Zoom, LEAF_CELL, LEAF_ZOOM};
@@ -446,9 +448,6 @@ pub trait Columns {
     /// does past it.
     fn walled(&self, c: [i32; 2]) -> bool;
     fn face(&self, c: [i32; 2]) -> i32;
-    /// The first block of the cells' zoom over the column's ground
-    /// (`ground::blocks` of its height): under it, ground the grid fills.
-    fn top(&self, c: [i32; 2]) -> i32;
     /// Whether the `k`-th segment over column `c` is the next of its line
     /// after the one before it there, so the two are one visit.
     fn joins(&self, c: [i32; 2], k: u32) -> bool;
@@ -775,12 +774,12 @@ fn edge_after(spans: &Spans, cell: Zoom, z: i32) -> i32 {
 
 /// A column's spans, the four columns' beside it in `near`'s order (the
 /// row under it, the cell before it, the cell after it, the row over it)
-/// and its ground's top block (`Columns::top`), none where the area's edge
-/// walls it: what its blocks are read off (`lined`).
+/// and its ground's face block (`ground::face_block`), none where the
+/// area's edge walls it: what its blocks are read off (`lined`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Around {
     pub spans: [Spans; 5],
-    pub top: i32,
+    pub face: i32,
 }
 
 /// Column `c` and the columns beside it (`Around`), the ring's off their
@@ -788,12 +787,12 @@ pub struct Around {
 pub fn around<C: Columns>(cols: &C, c: [i32; 2]) -> (Around, bool) {
     let mut a = Around {
         spans: [Spans::NONE; 5],
-        top: i32::MIN,
+        face: i32::MIN,
     };
     if cols.look(c) == crate::ground::UNKNOWN || cols.walled(c) {
         return (a, true);
     }
-    a.top = cols.top(c);
+    a.face = crate::ground::face_block(cols.cell(), cols.face(c));
     let mut fits = true;
     let mut k = 0;
     while k < 7 {
@@ -822,7 +821,8 @@ fn beside(k: u32) -> usize {
 
 /// What the ways write in block `z` of a column at `cell` (`at` of its
 /// own spans): a deck's slab or its pier, else a bore's air (`AIR`); else,
-/// under the ground's top, the way's look where a bore's air is beside it —
+/// under the ground's face block, where a cave may take it
+/// (`ground::face_block`), the way's look where a bore's air is beside it —
 /// under or over it, or across one of its four faces, the first in `near`'s
 /// order — so a cave never opens into a way, whatever carves the ground
 /// (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md,
@@ -833,7 +833,7 @@ pub fn lined(a: &Around, cell: Zoom, z: i32) -> u32 {
         return if v & AIR_OF != 0 { AIR } else { v };
     }
     let mut k = 1;
-    while z < a.top && k < 7 {
+    while z < a.face && k < 7 {
         let v = at(&a.spans[beside(k)], cell, z + near(k)[2]);
         if v != NOTHING && v & AIR_OF != 0 {
             return v & !AIR_OF;
@@ -845,9 +845,9 @@ pub fn lined(a: &Around, cell: Zoom, z: i32) -> u32 {
 
 /// The first block past `z` where what `lined` reads may change: an edge of
 /// a span's blocks (`edge_after`) of a column beside, of its own one block
-/// either side too, or its ground's top; `i32::MAX` where none is.
+/// either side too, or its face block; `i32::MAX` where none is.
 fn edge_around(a: &Around, cell: Zoom, z: i32) -> i32 {
-    let mut edge = if a.top > z { a.top } else { i32::MAX };
+    let mut edge = if a.face > z { a.face } else { i32::MAX };
     let mut k = 0;
     while k < 7 {
         // Own spans read at `z + s` change past `z` where an edge `e` of them

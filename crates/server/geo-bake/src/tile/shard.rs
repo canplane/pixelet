@@ -150,10 +150,7 @@ impl Stage {
             .into_iter()
             .filter(|&p| tiles.contains(&ancestor(p, SHARD_ZOOM)))
             .collect();
-        let mut leaves_gone = FnvHashSet::default();
-        for shard in &whole {
-            leaves_gone.extend(self.read_done(&shard.name())?);
-        }
+        let leaves_gone = self.leaves_gone(&whole)?;
         changed.extend(leaves_gone.iter().copied());
         let mut staged = Staged {
             base: &self.set,
@@ -166,14 +163,36 @@ impl Stage {
         self.write_done(FOLD, staged.gone.into_iter().filter(|p| !leaves_gone.contains(p)))
     }
 
+    /// The leaves the whole shards' stages take away.
+    fn leaves_gone(&self, whole: &[Node]) -> Result<FnvHashSet<Tile>, String> {
+        let mut gone = FnvHashSet::default();
+        for shard in whole {
+            gone.extend(self.read_done(&shard.name())?);
+        }
+        Ok(gone)
+    }
+
     /// Moves what is staged into the set and takes away what each `.done`
     /// lists, each `.done` last; only once folded, else the set would hold
     /// leaves under parents not folded from them.
-    pub fn commit<L: Base>(&self) -> Result<(), String> {
+    pub fn commit<L: Base>(&self, workers: usize) -> Result<(), String> {
         if !self.done(COMMIT).exists() {
             if !self.done(FOLD).exists() {
                 return Err(format!("{}: nothing folded; run --stage fold first", self.stage.root.display()));
             }
+            // The set as it will be, refused before anything moves.
+            let whole = self.whole()?;
+            let tiles: FnvHashSet<Tile> = whole.iter().copied().map(shard_tile).collect();
+            let mut gone = self.leaves_gone(&whole)?;
+            gone.extend(self.read_done(FOLD)?);
+            let view = Staged {
+                base: &self.set,
+                stage: &self.stage,
+                leaf: L::LEAF,
+                whole: &tiles,
+                gone,
+            };
+            L::fits_set(&view, workers)?;
             // Before anything moves: a commit begun is finished, never undone, so
             // the set will hold these, and a commit cut short leaves them said.
             if let Some(held) = self.will_hold()? {
@@ -304,7 +323,7 @@ impl Run {
             self.stage.fold::<L>(&absent(self)?, self.concurrency)?;
         }
         if self.commit {
-            self.stage.commit::<L>()?;
+            self.stage.commit::<L>(self.concurrency)?;
             let mut fields = serde_json::json!({ "source": source_of(reads)?, "format": FORMAT.of(L::LAYER) });
             // The commit wrote them before it moved anything.
             if let Some(held) = source::manifest(&self.stage.set.root)?.as_ref().map(source::held).transpose()?.flatten() {

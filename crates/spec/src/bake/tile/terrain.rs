@@ -214,8 +214,44 @@ fn record(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, 
 /// it (pxl-portable `fill::square`): the runs its ways read as, and the
 /// most spans a column makes.
 pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, u32)], [handed, lane]: [&mut [u32]; 2]) -> [u32; 2] {
+    use pxl_portable::window::SQUARE;
     record(tile, held, place, scratch, handed);
-    pxl_portable::fill::square(handed, lane, place, crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom))
+    let cell = crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom);
+    let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * SQUARE) as i32);
+    let first = [pxl_portable::wrap_index(cell, first[0]), first[1]];
+    pxl_portable::fill::square(handed, lane, place, cell, first)
+}
+
+/// Each square of `tile`'s windows' ways' tree as a GPU builds it, row by
+/// row of its squares (pxl-portable `fill::tree`): the blocks it takes,
+/// and those it holds once folded; none for a tile without ways, whose
+/// squares hold their root's block alone. `pool` a square's room to build
+/// in, its heap words then its data words.
+pub fn square_blocks(tile: Tile, held: &TerrainTile, scratch: &mut [(u32, u32)], [handed, lane, pool]: [&mut [u32]; 3]) -> Vec<[u32; 2]> {
+    use pxl_portable::window::SQUARE;
+    if held.separation.is_empty() {
+        return Vec::new();
+    }
+    let side = TILE_CELLS / SQUARE;
+    (0..side * side)
+        .map(|k| {
+            square_runs(tile, held, [k % side, k / side], scratch, [handed, lane]);
+            pxl_portable::fill::tree(lane, handed, pool)
+        })
+        .collect()
+}
+
+/// The blocks the windows' trees take wherever the eye is, of the pool
+/// (pxl-portable `ways::tree::POOL_BLOCKS`): each eye's window's most at
+/// its cells (`worst`, the most any placement of it holds), the others'
+/// each the most of any, the squares handed a frame each the most a square
+/// takes before its fold gives blocks back (`taken`), and a root's block a
+/// square besides.
+pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
+    use pxl_portable::window::{EYE_WINDOWS, FIRST_CELL, HANDED, SQUARES, WINDOWS};
+    let cells = FIRST_CELL..FIRST_CELL + EYE_WINDOWS;
+    let most = cells.clone().map(&worst).max().unwrap_or(0);
+    cells.map(worst).sum::<u64>() + u64::from(WINDOWS - EYE_WINDOWS) * most + u64::from(HANDED) * taken + u64::from(SQUARES)
 }
 
 /// `held` with only the lines it draws at `tile`'s zoom: each read alone,
