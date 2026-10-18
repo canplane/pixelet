@@ -10,18 +10,20 @@
 //! module of its own.
 
 #![cfg_attr(target_arch = "spirv", no_std)]
+// The workspace's clippy never builds this crate: its own build refuses a
+// warning, as `-D warnings` does every other.
+#![deny(warnings)]
 
 use pxl_portable::area::{Area, Shard};
 use pxl_portable::cast::{self, Detail, Ends, In, Met, Query, Until};
 use pxl_portable::caves::Cave;
-use pxl_portable::cube::object;
 use pxl_portable::decor::{Decor, COUNTS};
 use pxl_portable::eye;
 use pxl_portable::fill::{self, column_of, level_of, put};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
 use pxl_portable::overwrite::{self, Cut, Held, Lanes, PLACED};
-use pxl_portable::scatter::{self, drawn, Grounds, PLACED_BLOCK, SQUARE_BLOCKS, SQUARE_GROWN};
+use pxl_portable::scatter::{self, drawn, Grounds, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, RUNS_AT};
 use pxl_portable::{at, ray, world, LEAF_CELL, SHARD_ZOOM};
