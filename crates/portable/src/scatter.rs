@@ -551,9 +551,19 @@ fn asks(q: &mut impl Grounds, decor: &Decor, cell: Zoom, (posed, seed): (bool, u
     }
     let foot = [g.at[0] >> s, g.at[1] >> s, (g.at[2] >> s) - 1];
     let (mut horizontal, mut vertical) = (0, 0);
+    // The vote's cells, about the footing: down from the node holding them
+    // all (`holding`), its line from the root walked once for all of them.
+    let r = ALIGN_NEIGHBOR_RADIUS;
+    let (vlo, vhi) = ([foot[0] - r, foot[1] - r, foot[2]], [foot[0] + r, foot[1] + r, foot[2]]);
+    let vk = holding(vlo, vhi);
+    let vheld = vk <= cell;
+    let vfrom = if vheld { cell - vk } else { cell };
+    // The node the blocks are asked down from, started where its holder
+    // changes and nowhere else.
+    let (mut from, mut start) = (vfrom, q.start(vfrom, if vheld { [vlo[0] >> vk, vlo[1] >> vk, vlo[2] >> vk] } else { foot }));
     // The box, laid out once the vote is in: its blocks, from the one under
     // its base up, a column at a time; down from the node holding it all
-    // (`holding`), or from its own root where none does.
+    // (`holding`), its line walked once, or from its own root where none does.
     let (mut lo, mut k, mut held, mut n) = ([0; 3], 0, false, [0; 3]);
     let mut ask = 0;
     loop {
@@ -589,9 +599,13 @@ fn asks(q: &mut impl Grounds, decor: &Decor, cell: Zoom, (posed, seed): (bool, u
                 [foot[0], foot[1] + along, foot[2]]
             }
         };
-        // The node asked from: the box's holder, else the block's own.
-        let from = if voted && held { cell - k } else { cell };
-        let start = q.start(from, if voted && held { [lo[0] >> k, lo[1] >> k, lo[2] >> k] } else { b });
+        // The node asked from: the holder of the box or of the vote's cells,
+        // started once, the box's where the vote ends; else the block's own.
+        let fresh = if voted { !held || j == 0 } else { !vheld };
+        if fresh {
+            from = if voted && held { cell - k } else { cell };
+            start = q.start(from, if voted && held { [lo[0] >> k, lo[1] >> k, lo[2] >> k] } else { b });
+        }
         let v = q.block(&start, from, cell, b);
         if voted {
             let holds = if b[2] == lo[2] { decor.allows(value(v)) } else { v == sentinel::void as u32 };
@@ -702,43 +716,47 @@ pub fn claimed(lanes: &impl Grounds, at: [i32; 3], cells: [i32; 3]) -> bool {
     false
 }
 
+/// Zooms from a claim's first node down to the unit cells a corner names.
+const CLAIM_LEVELS: usize = (UNIT_ZOOM - CLAIM_ZOOM) as usize;
+
 /// `claimed`, over the corners in `[lo, hi]` within the node `n` at
-/// `CLAIM_ZOOM`, holding `node`, each a placed decor's leaf or not, stepped
-/// down from it.
+/// `CLAIM_ZOOM`, holding `node`: one descent of its branches, each child
+/// stepped once where it is folded and meets `[lo, hi]`, a placed decor's
+/// leaf at a unit cell asked of its box.
 fn claimed_in(lanes: &impl Grounds, n: [i32; 3], node: overwrite::Held, lo: [i32; 3], hi: [i32; 3], at: [i32; 3], cells: [i32; 3]) -> bool {
-    let s = UNIT_ZOOM - CLAIM_ZOOM;
-    let first = [lo[0].max(n[0] << s), lo[1].max(n[1] << s), lo[2].max(n[2] << s)];
-    let last = [hi[0].min((n[0] << s) + (1 << s) - 1), hi[1].min((n[1] << s) + (1 << s) - 1), hi[2].min((n[2] << s) + (1 << s) - 1)];
-    let mut u = first;
-    while u[2] <= last[2] {
-        u[1] = first[1];
-        while u[1] <= last[1] {
-            u[0] = first[0];
-            while u[0] <= last[0] {
-                let mut held = node;
-                let mut z = CLAIM_ZOOM;
-                while z < UNIT_ZOOM {
-                    z += 1;
-                    let t = UNIT_ZOOM - z;
-                    held = overwrite::child(lanes, held, z, [u[0] >> t, u[1] >> t, u[2] >> t]);
-                }
-                if held.holds() && !held.folded() && held.zoom() == UNIT_ZOOM {
-                    let (k, decor) = row_of(lanes.rows(), lanes.data(held.slot()) & 0xffff);
-                    if decor {
-                        let d = &lanes.rows()[k as usize];
-                        let (variant, turn) = placed_pose(d, u);
-                        let [w, e, h] = d.cells(variant, turn);
-                        let (w, e, h) = (w as i32, e as i32, h as i32);
-                        if u[0] < at[0] + cells[0] && at[0] < u[0] + w && u[1] < at[1] + cells[1] && at[1] < u[1] + e && u[2] < at[2] + cells[2] && at[2] < u[2] + h {
-                            return true;
-                        }
-                    }
-                }
-                u[0] += 1;
-            }
-            u[1] += 1;
+    // The nodes gone into, a level each, and the child each is at.
+    let (mut held, mut index, mut next) = ([node; CLAIM_LEVELS + 1], [n; CLAIM_LEVELS + 1], [0u32; CLAIM_LEVELS + 1]);
+    let mut d = 1;
+    while d > 0 {
+        if next[d] == 8 {
+            d -= 1;
+            next[d] += 1;
+            continue;
         }
-        u[2] += 1;
+        let (o, p) = (next[d], index[d - 1]);
+        let c = [2 * p[0] + (o & 1) as i32, 2 * p[1] + (o >> 1 & 1) as i32, 2 * p[2] + (o >> 2 & 1) as i32];
+        let z = CLAIM_ZOOM + d as Zoom;
+        let t = UNIT_ZOOM - z;
+        let meets = c[0] << t <= hi[0] && (c[0] + 1) << t > lo[0] && c[1] << t <= hi[1] && (c[1] + 1) << t > lo[1] && c[2] << t <= hi[2] && (c[2] + 1) << t > lo[2];
+        let h = if meets { overwrite::child(lanes, held[d - 1], z, c) } else { overwrite::Held::NOTHING };
+        if h.holds() && h.folded() && d < CLAIM_LEVELS {
+            (held[d], index[d], next[d + 1]) = (h, c, 0);
+            d += 1;
+            continue;
+        }
+        if d == CLAIM_LEVELS && h.holds() && !h.folded() && h.zoom() == UNIT_ZOOM {
+            let (k, decor) = row_of(lanes.rows(), lanes.data(h.slot()) & 0xffff);
+            if decor {
+                let row = &lanes.rows()[k as usize];
+                let (variant, turn) = placed_pose(row, c);
+                let [w, e, v] = row.cells(variant, turn);
+                let (w, e, v) = (w as i32, e as i32, v as i32);
+                if c[0] < at[0] + cells[0] && at[0] < c[0] + w && c[1] < at[1] + cells[1] && at[1] < c[1] + e && c[2] < at[2] + cells[2] && at[2] < c[2] + v {
+                    return true;
+                }
+            }
+        }
+        next[d] += 1;
     }
     false
 }
