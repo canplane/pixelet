@@ -200,7 +200,8 @@ pub fn empty(pool: &mut impl Pool, slot: u32) {
 
 /// The candidate at `slot`, a cell of the square: a leaf of what the ways
 /// write there, its column's run holding its Z (`ways::lined`'s, as the
-/// fill wrote them), nothing where none does. A bore's air is placed air in
+/// fill wrote them, lowest first), found by halving, nothing where none
+/// does. A bore's air is placed air in
 /// the tree, filling what it holds (`overwrite::voxel`), and the ground's
 /// void where a reader reads it, as the ways write it (`ways::AIR`).
 pub fn leaf(pool: &mut impl Pool, runs: &impl Runs, of: Of, slot: u32) {
@@ -209,13 +210,19 @@ pub fn leaf(pool: &mut impl Pool, runs: &impl Runs, of: Of, slot: u32) {
     if under {
         let s = SQUARE_SHIFT;
         let i = crate::window::index_of([(at[0] - (of.at[0] << s)) as u32, (at[1] - (of.at[1] << s)) as u32]);
-        let [mut r, to] = runs.column(i);
-        while r < to {
-            let (lo, v) = super::run_of(runs.run(r));
-            if at[2] < lo {
-                break;
+        // The first run past Z: the one before it holds Z.
+        let [first, to] = runs.column(i);
+        let (mut lo, mut hi) = (first, to);
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2;
+            if super::run_of(runs.run(mid)).0 <= at[2] {
+                lo = mid + 1;
+            } else {
+                hi = mid;
             }
-            (value, r) = (v, r + 1);
+        }
+        if lo > first {
+            value = super::run_of(runs.run(lo - 1)).1;
         }
     }
     let word = if value == super::NOTHING {
