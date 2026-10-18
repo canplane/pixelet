@@ -29,7 +29,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             continue;
         }
         let first = window::origin(cell, cell_at(cell, centre));
-        w.windows[win as usize].first = Some(first);
+        w.slots[(SQUARES + win) as usize] = Slot { square: first, present: 1, ticket: 0 };
         for s in 0..SLOTS {
             let i = win * SLOTS + s;
             let square = wanted(cell, first, s);

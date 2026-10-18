@@ -21,7 +21,7 @@ use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::TILE_CELLS;
 use crate::lattice::{CELL_CENTER, GROUND};
-use crate::window::{held_to, Found};
+use crate::window::Found;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
 
 // The catalog's looks this rule names, read into a word.
@@ -366,17 +366,19 @@ pub const EMPTY: [i32; 2] = [i16::MAX as i32, i16::MIN as i32];
 
 /// How the ground is held where a node reads it: the windows, as the CPU
 /// read them back or a GPU filled them, read the one way (`window::ground`,
-/// `window::bounded`).
+/// `window::bound_over`).
 pub trait Held: Area {
     /// The lowest and highest the ground's cells at `cell` reach over the
     /// node `(zoom, c)`, and the ways' over them, apart (`Bounds`), off the
-    /// finest held tile they are read from (`window::bounded`); bounds no
+    /// finest held tile they are read from (`window::bound_over`); bounds no
     /// tighter than the heights' whole range (`UNBOUNDED`) where no square
     /// it reads is held, which only splits more; false where no tile over
     /// it is held.
-    /// `place` is where the cells at `cell` of a node over it were found,
-    /// or `Found::NONE`, and becomes where its own are (`window::step`).
-    fn relief(&mut self, place: &mut Found, cell: Zoom, node: (Zoom, [i32; 3])) -> (Bounds, bool);
+    /// `place` is where the cells at `cells`' finest of a node over it were
+    /// found, or `Found::NONE`, and becomes where its own are
+    /// (`window::step`). Read over every zoom from `cells`' coarsest to its
+    /// finest (`window::bound_over`).
+    fn relief(&mut self, place: &mut Found, cells: [Zoom; 2], node: (Zoom, [i32; 3])) -> (Bounds, bool);
     /// The column of the block `c` at `zoom` off the windows
     /// (`window::ground`), the service area's edge laid on it as its fill
     /// laid it (`Cell`); its cell where `place` found it, the zoom's cells'
@@ -434,27 +436,11 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
     // A block's cells are its zoom's. A coarser node's are every zoom's
     // asked within it, from the coarsest to `near`: each zoom's cells are
     // its own tile's, whose face, its own samples' bicubic, no other zoom's
-    // bounds, above or below, so the bound is every one's joined (`join`).
-    // One read a zoom the windows hold (`held_to`), `near`'s last, whose
-    // place becomes the node's; where the ground's is already unbounded, no
-    // finer one tells more.
-    let read = held_to(if block { zoom } else { near });
-    let first = held_to(if far > zoom + 1 { far } else { zoom + 1 });
-    let mut z = if block || first > read { read } else { first };
-    let ([mut relief, mut ways], mut ok) = ([EMPTY; 2], true);
-    loop {
-        let mut at = *place;
-        let ([r, w], held_z) = held.relief(&mut at, z, (zoom, c));
-        (relief, ways, ok) = (join(relief, r), join(ways, w), ok && held_z);
-        let open = relief[0] <= UNBOUNDED[0] && relief[1] >= UNBOUNDED[1];
-        if z >= read {
-            *place = at;
-        }
-        if z >= read || !ok || open {
-            break;
-        }
-        z += 1;
-    }
+    // bounds, above or below, so the bound is every one's joined, read once
+    // a window (`Held::relief`).
+    let first = if far > zoom + 1 { far } else { zoom + 1 };
+    let cells = if block { [zoom, zoom] } else { [if first > near { near } else { first }, near] };
+    let ([relief, ways], ok) = held.relief(place, cells, (zoom, c));
     // Not held at a zoom asked: a block is the lack; a coarser node is not
     // known empty, so it is split, and a ray stops only at a block it meets
     // not held.

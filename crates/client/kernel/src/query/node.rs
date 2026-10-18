@@ -245,10 +245,10 @@ impl ground::Held for Reading<'_, '_> {
     /// stepped from `place` (pxl-portable `Held::relief`); its line names the
     /// tile a lack or a coarser window stands for; where it lacks, `EMPTY`
     /// and false.
-    fn relief(&mut self, place: &mut Found, cell: Zoom, _: (Zoom, [i32; 3])) -> (ground::Bounds, bool) {
+    fn relief(&mut self, place: &mut Found, cells: [Zoom; 2], _: (Zoom, [i32; 3])) -> (ground::Bounds, bool) {
         let (zoom, c) = self.at.node;
-        let line = self.world.line(self.at, cell);
-        match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]), cell)) {
+        let line = self.world.line(self.at, cells[1]);
+        match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]), cells)) {
             Some(r) => (r, true),
             None => ([ground::EMPTY; 2], false),
         }

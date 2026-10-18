@@ -159,6 +159,11 @@ impl Squares for World<'_> {
         let r = at(self.window, window::JOINED_AT + (cell - FIRST_CELL) * window::JOINED_ENTRIES + e);
         [r.x as u32, r.y as u32, r.z as u32, r.w as u32]
     }
+    /// The window's row past every window's slots (`window::ORIGIN_AT`).
+    fn origin(&self, cell: u32) -> ([i32; 2], bool) {
+        let r = at(self.window, window::ORIGIN_AT + (cell - FIRST_CELL));
+        ([r.x, r.y], r.z != 0)
+    }
     fn column(&self, cell: u32, slot: u32, i: u32) -> u32 {
         column_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
     }
@@ -188,10 +193,10 @@ impl Ran for World<'_> {
 /// The ground as the GPU holds it, for pxl-portable's one answer for a node.
 impl ground::Held for World<'_> {
     /// The bound over the node of the window `cell` reads its cells from,
-    /// the finest holding them present (`window::bounded`), as the CPU reads
+    /// the finest holding them present (`window::bound_over`), as the CPU reads
     /// it (pxl-portable `Held::relief`).
-    fn relief(&mut self, place: &mut Found, cell: u32, (zoom, c): (u32, [i32; 3])) -> (ground::Bounds, bool) {
-        let (r, _, here) = window::bounded(self, place, cell, (zoom, [c[0], c[1]]));
+    fn relief(&mut self, place: &mut Found, cells: [u32; 2], (zoom, c): (u32, [i32; 3])) -> (ground::Bounds, bool) {
+        let (r, _, here) = window::bound_over(self, place, cells, (zoom, [c[0], c[1]]));
         (r, here)
     }
 
@@ -518,7 +523,7 @@ pub fn cast_cs(
 /// (pxl-portable `window::fold`), each a row of the windows' buffer past
 /// their slot table (`window::JOINED_AT`): each window's levels over a
 /// square, the join of its aligned blocks of squares, which a node wider
-/// than a square reads as one entry (`window::bounded`), a level a dispatch
+/// than a square reads as one entry (`window::bound_over`), a level a dispatch
 /// off the one under it. Run where the windows' slots moved; a present
 /// square's levels stand while it does.
 #[spirv(compute(threads(64, 1, 1)))]
