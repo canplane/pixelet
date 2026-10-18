@@ -17,7 +17,7 @@
 const AIR_TERMS: f32 = 4.0;
 
 // Term `k` of the volume at `uv` across and `z` deep, its depth's share
-// squared of `air_far`, filtered within the term's own froxels.
+// cubed of `air_far` (`air_depth`), filtered within the term's own froxels.
 fn air_term(uv: vec2f, z: f32, k: f32) -> vec4f {
   let n = f32(AIR_FROXELS);
   let deep = clamp(z * n, 0.5, n - 0.5);
@@ -27,15 +27,24 @@ fn air_term(uv: vec2f, z: f32, k: f32) -> vec4f {
 // The air before a point as the volume holds it at the point's place on the
 // screen and its distance: what the eye's view projects it to, so a point
 // off the screen or behind the eye reads the volume's nearest edge.
+// Nearer than the first froxels' middle, the air there is faded to none at
+// the eye by the point's share of that distance (Hillaire 2020's own
+// handling short of the volume's first slice): what the air scatters and
+// dims grows with the length of air before a point, which that near is
+// all but straight. The lights at a point are not the air's length, and
+// are read as they are.
 fn seen_from_eye(world_pos: vec3f) -> Seen {
   let clip = frame_view_proj() * vec4f(world_pos, 1.0);
   let w = max(clip.w, 1e-6);
   let uv = vec2f(clip.x / w * 0.5 + 0.5, 0.5 - clip.y / w * 0.5);
-  let z = sqrt(clamp(length(world_pos - frame_camera_pos()) / air_far(), 0.0, 1.0));
+  let share = clamp(length(world_pos - frame_camera_pos()) / air_far(), 0.0, 1.0);
+  // `air_depth` the other way.
+  let z = pow(max(share, 1e-30), 1.0 / 3.0);
+  let near = min(share / air_depth(0.5 / f32(AIR_FROXELS)), 1.0);
   let air = air_term(uv, z, 0.0);
   var s: Seen;
-  s.scattered = air.rgb;
-  s.through = air.a;
+  s.scattered = air.rgb * near;
+  s.through = 1.0 - near * (1.0 - air.a);
   s.light = Light(air_term(uv, z, 1.0).rgb, air_term(uv, z, 2.0).rgb, air_term(uv, z, 3.0).rgb);
   return s;
 }

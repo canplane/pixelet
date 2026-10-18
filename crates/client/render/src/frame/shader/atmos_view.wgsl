@@ -89,6 +89,15 @@ fn air_far() -> f32 {
   return (sqrt(max(r * r - b * b, 0.0)) + sqrt(t * t - b * b)) / atmos_km_per_u();
 }
 
+// The share of `air_far` a froxel `z` deep reaches, its depth cubed: a
+// slice's reach grows with its depth, so the near view, where most of what
+// is drawn lies, takes most of the slices — the first ~4 m from the ground,
+// the second ~116 m, the ninth ~21 km — and one volume reaches as far as
+// the air (atmos_froxel.wgsl, atmos_air.wgsl).
+fn air_depth(z: f32) -> f32 {
+  return z * z * z;
+}
+
 // The march to a point, the volume's one maker (atmos_froxel.wgsl).
 fn seen_at(world_pos: vec3f) -> Seen {
   let v = air_to(world_pos);
