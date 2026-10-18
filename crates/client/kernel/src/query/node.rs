@@ -85,6 +85,12 @@ pub(super) struct At {
 }
 
 impl World<'_> {
+    /// What is placed as of now: the objects' store's revision, which every
+    /// write moves (layer/object/store.rs).
+    pub fn revision(&self) -> u32 {
+        self.objects.raw_lanes().3
+    }
+
     /// What is in the block `node`, X on the asker's lap, at its own
     /// zoom, `coarsest` or finer, for an asker with nothing handed down
     /// (`drawn`).

@@ -238,7 +238,7 @@ pub fn pending_step() -> RenderEdits {
                 _ => PlacementTool::Marker,
             };
             let object_size = object_size_of(ui.object_tier);
-            let asked = Some((tool, *h, object_size, crate::kernel().objects.raw_lanes().3));
+            let asked = Some((tool, *h, object_size, world.revision()));
             let was = *PENDING.get(Pending::default);
             let same = was.asked == asked && !crate::query::changed::within(placement_reads(tool, h, object_size), &[]);
             (if same { was.blocked } else { is_placement_blocked(tool, h, object_size) }, asked)
