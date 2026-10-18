@@ -12,9 +12,9 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
 use xpute_guest::global::Global;
 
-use crate::kernel;
 use crate::layer::kept::Offered;
 use crate::layer::object::preview;
+use crate::layer::object::store::objects;
 use crate::layer::terrain::tile::kept;
 use crate::layer::terrain::window::{self, Handed};
 use crate::layer::Base as _;
@@ -61,7 +61,7 @@ pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
 /// room either has, and the store's revision, so the GPU takes them again
 /// only when they changed.
 pub fn overwrites() -> Overwrites<'static> {
-    let (heap, data, room, revision) = kernel().objects.raw_lanes();
+    let (heap, data, room, revision) = objects().raw_lanes();
     Overwrites { heap, data, room, revision }
 }
 

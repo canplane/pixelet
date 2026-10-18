@@ -56,7 +56,7 @@ pub fn words_at(at: EntryAt) -> Option<&'static str> {
     if let Some(d) = draft().filter(|d| d.at == at) {
         return Some(&d.words);
     }
-    let objects = &crate::kernel().objects;
+    let objects = crate::layer::object::store::objects();
     objects.words(&objects.placed(at.zoom(), at.at())?)
 }
 

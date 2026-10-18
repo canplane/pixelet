@@ -170,7 +170,7 @@ fn markers(chunk: Chunk, found: &mut Vec<Shown>) {
         return;
     }
     let region = chunk.region();
-    let objects = &crate::kernel().objects;
+    let objects = crate::layer::object::store::objects();
     let cells = objects.read(chunk.node());
     let from = found.len();
     cells.entries(&mut |e| {

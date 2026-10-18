@@ -26,7 +26,6 @@ use pxl_spec::space::hierarchy::tree::{child_of, region, Node};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::kernel;
 use crate::layer::object::ext::{Ext, Pools, NONE};
 use crate::layer::{Answer, Bound, Query};
 use crate::sched::edge::request_world_tick;
@@ -85,8 +84,15 @@ impl Entry {
     }
 }
 
+/// The placed objects, one store, the layer's own.
+static OBJECTS: Global<Store> = Global::new();
+
+pub fn objects() -> &'static mut Store {
+    OBJECTS.get(Store::default)
+}
+
 pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) {
-    let regions = kernel().objects.write(writes);
+    let regions = objects().write(writes);
     if !regions.is_empty() {
         written(&regions);
     }

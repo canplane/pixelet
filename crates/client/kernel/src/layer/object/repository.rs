@@ -14,8 +14,8 @@ use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
+use super::store::objects;
 use crate::io::file::{self, Kept, KeptFile};
-use crate::kernel;
 use crate::layer::object::ext::Ext;
 use crate::layer::object::store::{apply, written, Write};
 use crate::sched::edge::wake_at;
@@ -42,7 +42,7 @@ fn store_state() -> &'static mut State {
 fn encode() -> Result<String, MarshalError> {
     let (mut hi, mut lo, mut id) = (Vec::new(), Vec::new(), Vec::new());
     let (mut text_rows, mut texts) = (Vec::new(), Vec::new());
-    let objects = &kernel().objects;
+    let objects = objects();
     objects.each(&mut |e| {
         let key = key_of(e.zoom, e.at);
         match objects.ext(e) {
@@ -123,7 +123,7 @@ fn loaded() {
     };
     if core::str::from_utf8(&blob).map_or(true, |raw| decode(raw).is_err()) {
         // What decoded before the failure was already read; the blob stays unsaved over.
-        let regions = kernel().objects.clear();
+        let regions = objects().clear();
         if !regions.is_empty() {
             written(&regions);
         }

@@ -91,7 +91,7 @@ pub fn preview_step(ctx: &mut TickContext) {
         if case.actor.is_none() {
             if let (Some(model), Some(_)) = (&case.model, load_image(Load::Asset(case.variant.skin))) {
                 let id = model.model;
-                case.actor = laid().and_then(|k| k.scene.actors.new_actor(&mut k.draw, &k.models, id));
+                case.actor = laid().and_then(|k| k.scene.actors.new_actor(&mut k.draw, crate::model::models(), id));
                 if let (Some(actor), true) = (case.actor, IDLE_CLIP < model.clip_count) {
                     kernel().scene.actors.play(actor, IDLE_CLIP, 0.0);
                 }

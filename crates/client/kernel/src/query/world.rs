@@ -10,7 +10,6 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::bake::constant::EntryAt;
 
 use super::decor::Grown;
-use crate::kernel;
 use crate::layer::object::store::Store;
 use crate::layer::residency::{Lines, Residency};
 use crate::layer::Answer;
@@ -36,14 +35,14 @@ impl World<'static> {
     /// The world as stored: what every mechanic asks, the pick, a walk, the
     /// camera's clearance, an edit's reads and decor's footing.
     pub fn now() -> World<'static> {
-        let objects: &'static Store = &kernel().objects;
+        let objects: &'static Store = crate::layer::object::store::objects();
         World::new(TerrainTile::residency(), objects)
     }
 
     /// As `now`, and decor is struck too, where the frame drawing at `tau`
     /// holds it: the pointer's pick, which alone asks what a decor thing is.
     pub fn striking_decor(self, tau: Tau) -> World<'static> {
-        let decor = Grown { models: &kernel().models, tau };
+        let decor = Grown { models: crate::model::models(), tau };
         World { decor: Some(decor), ..self }
     }
 }

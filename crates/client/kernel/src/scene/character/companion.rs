@@ -123,7 +123,7 @@ impl Figure {
         let (Some(model), Some(_)) = (model_of(variant.model, variant.height_u), load_image(Load::Asset(variant.skin))) else {
             return;
         };
-        let Some(Some(actor)) = laid().map(|k| k.scene.actors.new_actor(&mut k.draw, &k.models, model.model)) else {
+        let Some(Some(actor)) = laid().map(|k| k.scene.actors.new_actor(&mut k.draw, crate::model::models(), model.model)) else {
             return;
         };
         self.held = Some(Held { actor, model });

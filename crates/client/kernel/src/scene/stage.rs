@@ -86,7 +86,7 @@ pub fn stage_render() {
         return;
     }
     let lists = kernel().draw.take();
-    let models = &kernel().models;
+    let models = crate::model::models();
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
     let variants = decor_assets().iter().flat_map(|entry| {
         (0..entry.models.len()).map(move |v| {
@@ -212,14 +212,15 @@ pub fn visible_step(ctx: &mut TickContext) {
     };
 
     let draw = laid().is_some_and(|k| {
-        let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
-        k.scene.begin(&mut k.draw, &k.models, frame.eye);
+        let models = crate::model::models();
+        let animating = k.scene.tick(&mut k.draw, models, &frame);
+        k.scene.begin(&mut k.draw, models, frame.eye);
         animating
     });
     {
         let k = kernel();
         let edits = crate::layer::object::preview::current();
-        crate::scene::decor::drawn::step(&k.objects, frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
+        crate::scene::decor::drawn::step(crate::layer::object::store::objects(), frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
         crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
     }
     crate::scene::place::step(ctx, &frame);
