@@ -264,7 +264,13 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         return;
     }
     let _tiles = PlaceTile::demand();
-    let Some(o) = crate::view::observation::observation() else { return };
+    // No observation yet, the source's reach not declared: laid out afresh
+    // once there is one, so the tiles that moved meanwhile are not kept.
+    let Some(o) = crate::view::observation::observation() else {
+        (p.last, p.found_for) = (None, None);
+        p.moved_places.clear();
+        return;
+    };
     let tau = crate::view::lens::tau();
     let draft = draft();
     // A waiting marker is shown wherever it is.
