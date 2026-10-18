@@ -23,10 +23,6 @@ use xpute_kit::math::scalar::round;
 /// the tile's edge (pxl-portable ways.rs).
 pub const POINT_SCALE: f64 = ways::POINT_SCALE as f64;
 
-/// The farthest past half its width the client draws a line, in its tile's
-/// cells; the bake sizes a line's tile and extent by it.
-pub const LINE_PAST: f64 = ways::LINE_PAST as f64;
-
 /// A line's width byte for `width` of its tile's cells, in eighths rounded
 /// half to even, an eighth at least: the widest a way is drawn is what the
 /// byte holds. The ground draws a way no wider, so it is one width on and off
@@ -313,7 +309,7 @@ pub fn runs_within(points: &[[f64; 2]], reach: f64) -> Vec<[usize; 2]> {
 /// segments rejoin where a copy held one after another and the second starts
 /// where the first ends, surface and all, so a line runs on through its
 /// copies' cuts; then of each line only the points held at `zoom`
-/// (`ways::held_at`) stay, each by its own lane, so what a parent holds is a
+/// (from its `ways::coarsest` on) stay, each by its own lane, so what a parent holds is a
 /// function of the world's lines alone, not of which tiles held them. A line
 /// holds a point where it crosses each edge of the tiles of the zoom under
 /// one it is held at (geo-bake terrain/pipeline/separation.rs), so a
@@ -432,7 +428,7 @@ impl Folded {
                     _ => break,
                 }
             }
-            chain.retain(|p| ways::held_at(Zoom::from(p.2), zoom));
+            chain.retain(|p| Zoom::from(p.2) <= zoom);
             chain.dedup_by(|p, q| p.0 == q.0);
             let f = self.segments[head];
             let at: Vec<[f64; 2]> = chain.iter().map(|p| p.0.map(|v| f64::from(v) / POINT_SCALE)).collect();

@@ -483,7 +483,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
 /// The windows as the CPU holds them, for pxl-portable's one reading of a
 /// cell (`window::find`, `window::bounded`, `window::ran`): each square's
 /// columns, levels and runs as the GPU drew and folded them, read back; and
-/// the service area they end at (`window::Windows`).
+/// the service area they end at (pxl-portable `area::Area`).
 #[derive(Clone, Copy)]
 pub struct Windowed;
 

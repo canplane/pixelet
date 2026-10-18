@@ -91,11 +91,6 @@ pub fn coarsest(weight: f32) -> Zoom {
     z
 }
 
-/// Whether a point held from `coarsest` on is held at `zoom`.
-pub fn held_at(coarsest: Zoom, zoom: Zoom) -> bool {
-    zoom >= coarsest
-}
-
 /// Half a way's width, in whole cells.
 pub fn half_cells(width: f32) -> i32 {
     libm::rintf(width / 2.0) as i32
@@ -442,10 +437,9 @@ pub trait Columns {
     /// How many segments may be over column `c`, and the `k`-th of them.
     fn count(&self, c: [i32; 2]) -> u32;
     fn segment(&self, c: [i32; 2], k: u32) -> Segment;
-    /// The column's center and side in its tile's cells.
+    /// The column's center in its tile's cells, a cell a side.
     fn center(&self, c: [i32; 2]) -> [f32; 2];
-    fn side(&self, c: [i32; 2]) -> f32;
-    fn stations(&self, c: [i32; 2]) -> Stations;
+    fn stations(&self) -> Stations;
     fn look(&self, c: [i32; 2]) -> u32;
     /// Whether the area's edge walls the column: ground beside cells past
     /// the area (pxl-portable `area::laid`), where no way writes, as none
@@ -462,7 +456,7 @@ pub trait Columns {
 
 /// The `k`-th segment's crossing of column `c`.
 fn crossing_at<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> Crossing {
-    crossing(&cols.segment(c, k), cols.center(c), cols.side(c), &cols.stations(c))
+    crossing(&cols.segment(c, k), cols.center(c), 1.0, &cols.stations())
 }
 
 /// The visit of a line over column `c` from its `k`-th segment there: the

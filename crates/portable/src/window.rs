@@ -419,10 +419,7 @@ impl<Q: Square> crate::ways::Columns for Q {
         let i = cell_index(c);
         i != SQUARE_CELLS && crate::area::laid(self.laid(i), Square::cell(self), c) == UNKNOWN
     }
-    fn side(&self, _: [i32; 2]) -> f32 {
-        1.0
-    }
-    fn stations(&self, _: [i32; 2]) -> crate::ways::Stations {
+    fn stations(&self) -> crate::ways::Stations {
         header_of(self).1
     }
     /// Its own look, before the service area's wall is laid, as its fill
@@ -585,14 +582,6 @@ pub fn ran(w: &impl Ran, f: Found, [mut r, to]: [u32; 2], zoom: Zoom, z: i32) ->
     value
 }
 
-/// The ground as a side's windows hold it, one reading for the GPU's
-/// query (gpu-query-shader `World`) and the CPU's (pxl-kernel
-/// layer/terrain/window.rs `Windowed`): the cells, the area's edge laid on
-/// them, and the ways their runs write.
-pub trait Windows: Ran + crate::area::Area {}
-
-impl<W: Ran + crate::area::Area> Windows for W {}
-
 /// The zoom a cell at `cell` is read at, the eye's windows' (`FIRST_CELL`
 /// to `LEAF_CELL`): past the leaves a leaf's, coarser than the coarsest
 /// window that window's.
@@ -625,7 +614,7 @@ pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> ([u32; 2
 /// held. `place` is where the cells of `owner` were found: a column beside it is read off it where its cell lies
 /// in the square holding `owner`'s, as `ran` reads the columns about one
 /// (`step`), and found anew past it.
-pub fn ground(w: &impl Windows, owner: (Zoom, [i32; 2]), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
+pub fn ground(w: &(impl Ran + crate::area::Area), owner: (Zoom, [i32; 2]), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
     let read = held_to(zoom);
     let g = cell_at(zoom, read, b);
     let (q, o) = (square_of(g).0, square_of(cell_at(owner.0, read, owner.1)).0);

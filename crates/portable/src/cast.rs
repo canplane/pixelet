@@ -388,7 +388,7 @@ pub trait Query {
     /// What is in the node `node` at `zoom`, `at` what its ancestors handed
     /// it, asked from `far` to `near`, the ray in it from `t0`. Where the
     /// stack holds fewer levels than a descent goes down (`Levels`), the
-    /// walk may ask a node again as it first did (`descend`'s restart), so
+    /// walk may ask a node again as it first did (`first_from`'s restart), so
     /// there it does nothing but answer and leave `at`.
     fn node(&mut self, at: &mut Self::At, zoom: Zoom, node: [i32; 3], asked: [Zoom; 2], t0: f32) -> In<Self::Block>;
     fn fills(&self, block: &Self::Block) -> bool;
@@ -405,7 +405,7 @@ pub trait Query {
 /// child, once every level it went down under it since is written; with
 /// fewer levels than that, a deeper level has taken the entry's place, and
 /// the walk goes down to the node again from the nearest node over it it
-/// holds without a stack (`descend`'s restart). The CPU's walk keeps every
+/// holds without a stack (`first_from`'s restart). The CPU's walk keeps every
 /// level, so it never does.
 pub trait Levels<K: Copy>: Copy {
     const LEVELS: Zoom;
@@ -580,12 +580,7 @@ pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: 
 
 /// `first`, the ray's descent started at `from`, a node holding its origin
 /// and what was handed it, `over` what was handed the nodes over it
-/// (`start`).
-pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Met<Q::At, Q::Block> {
-    descend(q, o, ray, detail, until, from, over)
-}
-
-/// The first block the walk stops at, from `from`, through the roots the
+/// (`start`). The first block the walk stops at, through the roots the
 /// ray crosses: its node, each axis an integer in its root (`Node`), and
 /// where the ray is, `t`; the planes, the span and the axis entered across
 /// worked out from those where asked. A node is entered once: asked
@@ -600,7 +595,7 @@ pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, un
 /// node, by the highest bit the step changed (POP), or past a root, in the
 /// next root, from its top. One loop.
 #[allow(clippy::too_many_arguments)]
-fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Met<Q::At, Q::Block> {
+pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Met<Q::At, Q::Block> {
     let (og, r0) = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, the levels it went into

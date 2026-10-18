@@ -9,13 +9,13 @@
 //! "The query between them"): each source answers from its own level of
 //! detail, and what it holds stays behind it.
 
-use crate::area::Shard;
+use crate::area::{Area, Shard};
 use crate::cast::{In, Kind};
 use crate::caves::Cave;
 use crate::ground::{self, Held, VOID};
 use crate::overwrite::{self, Cut, Lanes, BLOCK, SPLIT};
 use crate::scatter::PLACED_BLOCK;
-use crate::window::{self, Found, Windows};
+use crate::window::{self, Found, Ran};
 use crate::{Zoom, LEAF_CELL};
 
 /// What is in the node `c` at `zoom`, asked from `far` to `near`, its
@@ -36,7 +36,7 @@ use crate::{Zoom, LEAF_CELL};
 /// the ground's (`ground::empty`), the ways' (`ways::misses`) — else air;
 /// where the ground is not held, the lack. With it, whether it is a block.
 #[allow(clippy::too_many_arguments)]
-pub fn node<H: Held, W: Windows, L: Lanes>(
+pub fn node<H: Held, W: Ran + Area, L: Lanes>(
     held: &mut H,
     ways: &W,
     lanes: &L,

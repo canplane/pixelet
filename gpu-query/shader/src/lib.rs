@@ -221,7 +221,7 @@ pub struct At {
 /// two. On flat ground from 120 and 600 units, every direction down to the
 /// horizon, no entry outlived more than 7 deeper writes; a node far wider
 /// than its distance, one gone into right by the eye, outlives more, and
-/// the walk goes down to it again (pxl-portable `cast::descend`'s restart).
+/// the walk goes down to it again (pxl-portable `cast::first_from`'s restart).
 const LEVELS: usize = 8;
 
 const _: () = assert!(window::FOUND_BITS + pxl_portable::caves::CAVE_BITS <= 32, "a kept entry's second word holds a Found and a cave");
