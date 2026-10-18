@@ -498,16 +498,10 @@ pub struct Start<A: Copy> {
 
 /// What was handed each node over a descent's start, the nodes holding its
 /// origin, asked by its zoom where a ray climbs past the start to one: the
-/// start's stack as found (`start`), or as a GPU holds it, read where
-/// asked.
+/// start's stack (`start`) as a GPU holds it, read where asked, or nothing
+/// over the roots (`Rooted`).
 pub trait Over<A: Copy> {
     fn over(&self, zoom: Zoom) -> A;
-}
-
-impl<A: Copy> Over<A> for [A; DEPTH] {
-    fn over(&self, zoom: Zoom) -> A {
-        self[zoom as usize]
-    }
 }
 
 /// Over a walk from the roots, nothing: no node over a root, so it is never
