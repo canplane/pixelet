@@ -252,6 +252,40 @@ pub fn value(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]
     }
 }
 
+/// The four looks the node `at` of `zoom` holding `held`, a block of value
+/// `v` (`value`), is drawn by, `dx + 2·dy`, as the ground's cell is by the
+/// four its fold took (pxl-portable `ground::Cell::four`): its 2×2 seen
+/// from above one zoom finer, the same for every face as the ground's. A
+/// quarter shows its upper child where that fills by `value`'s rule (a
+/// leaf's voxel, a fold's kind half filled or more; air does not), else its
+/// lower one through it, else the node's own value. A leaf over the node
+/// is its value four times, as a ground leaf's cell is.
+pub fn looks(lanes: &impl Lanes, held: Held, zoom: Zoom, v: u32) -> [u32; 4] {
+    if !held.folded() {
+        return [v; 4];
+    }
+    let base = lanes.heap(held.slot()) & !BRANCH;
+    let shows = |k: u32| {
+        let c = value(lanes, of(lanes, base + k, zoom + 1), Cut::NONE, zoom + 1, [0; 3]);
+        (c, c != VOID && c != AIR)
+    };
+    let mut four = [v; 4];
+    let mut j = 0;
+    while j < 4 {
+        let (upper, up) = shows(j + 4);
+        let (lower, low) = shows(j);
+        four[j as usize] = if up {
+            upper
+        } else if low {
+            lower
+        } else {
+            v
+        };
+        j += 1;
+    }
+    four
+}
+
 /// The node is for the layers under what is placed to answer.
 pub const UNDER: u32 = 0;
 /// Something placed under the node may fill it: split it.
