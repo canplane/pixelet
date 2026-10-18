@@ -618,14 +618,25 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
     // The world's node the walk's node is, worked out where the node is
     // made, its At handed it, and read where it is asked.
     let mut node = index_of(&n, r0);
+    // The node's planes, in units from the origin, each a corner's
+    // (`units`): a PUSH hands its child the parent's and the mid's it
+    // crossed by (`carried`), and the walk works them out of the corner
+    // only where it stepped or went up, which hands it no plane.
+    let (mut lo, mut hi, mut carried) = ([0.0f32; 3], [0.0f32; 3], false);
     loop {
-        // The node's planes, in units from the origin, and the ray's span in it.
         let u = under(n.zoom);
-        let side = |c: u32, og: u32, roots: i32| (units(c, og, roots), units(c.wrapping_add(u), og, roots) + 1.0 / (1 << FRAC_W) as f32);
-        let (lo, hi) = (
-            [side(n.corner[0], og[0], n.roots[0]).0, side(n.corner[1], og[1], n.roots[1]).0, side(n.corner[2], og[2], n.roots[2]).0],
-            [side(n.corner[0], og[0], n.roots[0]).1, side(n.corner[1], og[1], n.roots[1]).1, side(n.corner[2], og[2], n.roots[2]).1],
-        );
+        if !carried {
+            // The far plane is the next node's corner, in the next root
+            // where the corner goes past its own.
+            let far = |c: u32, og: u32, roots: i32| {
+                let last = c.wrapping_add(u);
+                units(last.wrapping_add(1), og, roots + (last == u32::MAX) as i32)
+            };
+            lo = [units(n.corner[0], og[0], n.roots[0]), units(n.corner[1], og[1], n.roots[1]), units(n.corner[2], og[2], n.roots[2])];
+            hi = [far(n.corner[0], og[0], n.roots[0]), far(n.corner[1], og[1], n.roots[1]), far(n.corner[2], og[2], n.roots[2])];
+        }
+        carried = false;
+        // The ray's span in it.
         let (x, y, z) = (
             planes(ray.direction[0], ray.inverse[0], lo[0], hi[0], (t, ray.reach)),
             planes(ray.direction[1], ray.inverse[1], lo[1], hi[1], (t, ray.reach)),
@@ -679,22 +690,40 @@ fn descend<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Un
         }
         if into {
             // PUSH: the child holding where the ray is at `t0`, past each mid
-            // plane it has crossed by then.
+            // plane it has crossed by then; its planes the parent's on the
+            // side it lies, and the mid.
             let half = (u >> 1) + 1;
-            let child = |c: u32, og: u32, roots: i32, d: f32, inv: f32| if past(d, inv, units(c.wrapping_add(half), og, roots), t0) { c | half } else { c };
+            let mid = [
+                units(n.corner[0].wrapping_add(half), og[0], n.roots[0]),
+                units(n.corner[1].wrapping_add(half), og[1], n.roots[1]),
+                units(n.corner[2].wrapping_add(half), og[2], n.roots[2]),
+            ];
+            let crossed = [
+                past(ray.direction[0], ray.inverse[0], mid[0], t0),
+                past(ray.direction[1], ray.inverse[1], mid[1], t0),
+                past(ray.direction[2], ray.inverse[2], mid[2], t0),
+            ];
             stack.put(n.zoom, Q::keep(&at));
             if n.zoom + 1 > Q::Stack::LEVELS {
                 floor = floor.max(n.zoom + 1 - Q::Stack::LEVELS);
             }
+            let side = |k: bool, c: u32| if k { c | half } else { c };
             n = Node {
-                corner: [
-                    child(n.corner[0], og[0], n.roots[0], ray.direction[0], ray.inverse[0]),
-                    child(n.corner[1], og[1], n.roots[1], ray.direction[1], ray.inverse[1]),
-                    child(n.corner[2], og[2], n.roots[2], ray.direction[2], ray.inverse[2]),
-                ],
+                corner: [side(crossed[0], n.corner[0]), side(crossed[1], n.corner[1]), side(crossed[2], n.corner[2])],
                 zoom: n.zoom + 1,
                 ..n
             };
+            lo = [
+                if crossed[0] { mid[0] } else { lo[0] },
+                if crossed[1] { mid[1] } else { lo[1] },
+                if crossed[2] { mid[2] } else { lo[2] },
+            ];
+            hi = [
+                if crossed[0] { hi[0] } else { mid[0] },
+                if crossed[1] { hi[1] } else { mid[1] },
+                if crossed[2] { hi[2] } else { mid[2] },
+            ];
+            carried = true;
             t = t0;
             node = index_of(&n, r0);
             at = q.child(&at, n.zoom, node);
