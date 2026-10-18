@@ -1,13 +1,11 @@
 // pxl-render/mesh/ghost.rs
 
-//! The hover ghost's box, in the six words the box shader (box.wgsl) unfolds
+//! The hover ghost's box, in the five words the box shader (box.wgsl) unfolds
 //! into a cube: corner and width in u16 steps of its cell, floor and height
-//! in u16 steps of its mesh, sRGB color, four layer taps.
+//! in u16 steps of its mesh, sRGB color, its layer.
 
 use pxl_spec::space::coord::v3::V3;
 use xpute_kit::math::scalar::round;
-
-use crate::mesh::word::taps_of;
 
 pub const BOX_WORDS: u32 = 5;
 
@@ -37,7 +35,7 @@ pub fn write_lone_box(m: &mut [u32], offset: V3, size: f64, rgb: [u8; 3], layer:
     m[1] = steps(size, xy) | (steps(size, xy) << 16);
     m[2] = z0 | ((z1 - z0) << 16);
     m[3] = u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 0]);
-    m[4] = taps_of(layer);
+    m[4] = u32::from(layer);
     z_step
 }
 

@@ -75,19 +75,19 @@ fn far(l: vec2u) -> vec3f {
 
 struct Drawn {
   rgb: vec3f,
-  taps: vec4f,
+  layer: f32,
 };
 
 // What the block a pixel's ray met is drawn as, by its value alone,
 // whichever source holds it: at the ground's cell or finer, its swatch and
-// its layer in all four taps; coarser, its fold's majority as it reads from
+// its layer; coarser, its fold's majority as it reads from
 // afar (doc/minutes/20261005-the-ground-is-a-carto-palette.md).
 fn drawn(w: u32) -> Drawn {
   let l = look(ray_value(w));
   if (ray_zoom(w) >= GROUND_CELL) {
-    return Drawn(linear_of(l.x), vec4f(f32(l.x >> 24u)));
+    return Drawn(linear_of(l.x), f32(l.x >> 24u));
   }
-  return Drawn(far(l), vec4f(NO_LAYER));
+  return Drawn(far(l), f32(NO_LAYER));
 }
 
 // Along `axis`, how far the eye is past the start of the block of side
@@ -162,7 +162,7 @@ fn fs(v: VertexOut) -> FragOut {
   let painted = drawn(c.x);
   let s = Surface(
     painted.rgb,
-    painted.taps,
+    painted.layer,
     h.normal,
     0.0,
     h.at,

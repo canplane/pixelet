@@ -12,7 +12,7 @@ struct Draw {
 @group(0) @binding(3) var<storage, read> draws: array<Draw>;
 struct BoxWords {
   @location(0) first: vec4<u32>,
-  @location(1) taps: u32,
+  @location(1) layer: u32,
 };
 
 // x/y in steps of its own cell, floor and height in steps of the mesh's.
@@ -21,7 +21,7 @@ struct Box {
   size_xy: vec2f,
   z: vec2f,
   rgb: u32,
-  taps: u32,
+  layer: u32,
 };
 
 const XY_STEPS: f32 = 256.0;
@@ -37,7 +37,7 @@ fn box_of(words: BoxWords, d: Draw) -> Box {
   b.min_xy = box_pair(words.first[0], step);
   b.size_xy = box_pair(words.first[1], step);
   b.rgb = words.first[3];
-  b.taps = words.taps;
+  b.layer = words.layer;
   return b;
 }
 
@@ -56,7 +56,7 @@ const BOX_VERTICES: u32 = 36u;
 struct VertexOut {
   @builtin(position) clip: vec4f,
   @location(0) @interpolate(flat) rgb: vec3f,
-  @location(1) @interpolate(flat) layer_taps: vec4f,
+  @location(1) @interpolate(flat) layer: f32,
   @location(2) box_uv: vec2f,
   @location(3) local_pos: vec3f,
   @location(4) @interpolate(flat) box_scale: vec3f,
@@ -105,7 +105,7 @@ fn box_vertex(v: u32, words: BoxWords) -> VertexOut {
   let size = c.size;
   let normal = FACE_NORMAL[c.face];
   o.rgb = srgb_to_linear(unpack4x8unorm(b.rgb).xyz);
-  o.layer_taps = unpack4x8unorm(b.taps) * 255.0;
+  o.layer = f32(b.layer);
   o.local_pos = local;
   o.box_scale = size;
   o.normal = normal;
@@ -161,7 +161,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let pixel = sqrt(dpdx(at) * dpdx(at) + dpdy(at) * dpdy(at));
   let s = Surface(
     i.rgb,
-    i.layer_taps,
+    i.layer,
     i.normal,
     outline(i.local_pos, i.box_scale, pixel, i.normal),
     i.world_pos,
