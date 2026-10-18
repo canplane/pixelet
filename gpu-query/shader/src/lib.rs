@@ -843,15 +843,8 @@ fn count_one(eye: &Eye, params: &[u32], rows: &[Decor], grown: &mut [u32], regio
     let d = spirv_std::num_traits::Float::sqrt(d2);
     let d = if d > 1e-3 { d } else { 1e-3 };
     let px = f32::from_bits(params[(drawn::EXTENTS + group) as usize]) / (d * f32::from_bits(params[drawn::UPP as usize]));
-    let region = if hidden || !here {
-        drawn::NONE
-    } else if px >= f32::from_bits(params[drawn::MODEL_PX as usize]) {
-        2 * group
-    } else if px >= f32::from_bits(params[drawn::SPRITE_PX as usize]) {
-        2 * group + 1
-    } else {
-        drawn::NONE
-    };
+    let tier = drawn::tier(px, f32::from_bits(params[drawn::MODEL_PX as usize]), f32::from_bits(params[drawn::SPRITE_PX as usize]));
+    let region = if hidden || !here || tier == drawn::GONE { drawn::NONE } else { 2 * group + tier };
     grown[i] = w & ((1 << drawn::REGION_SHIFT) - 1) | region << drawn::REGION_SHIFT;
     if region != drawn::NONE {
         // SAFETY: an atomic add on the region's count, a word of the buffer.

@@ -9,6 +9,7 @@
 
 use fnv::FnvHashMap;
 
+use pxl_portable::scatter::drawn;
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::look::cloud::{drift, lattice_hash, shown, CUMULUS_KM, WIND};
@@ -27,7 +28,7 @@ use crate::io::load::{load_failed, load_gltf, load_image};
 use crate::kernel;
 use crate::model::asset::register_model;
 use crate::scene::decor::cell::{present_block, Shown};
-use crate::scene::decor::drawn::{decor_sprite_px, sprite_reach};
+use crate::scene::decor::drawn::{decor_gone_px, decor_sprite_px, sprite_reach};
 use crate::scene::decor::instance::{decor_groups, GroupLanes};
 use crate::scene::frame::Frame;
 use crate::setting::store::settings_store;
@@ -178,7 +179,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     for y in span(1) {
         for x in span(0) {
             let d = near([x, y]).max(1e-3);
-            if d <= reach && largest / units_per_px_at(d) >= decor_sprite_px() {
+            if d <= reach && drawn::tier((largest / units_per_px_at(d)) as f32, decor_gone_px() as f32, decor_sprite_px() as f32) != drawn::GONE {
                 c.wanted.push([x, y]);
             }
         }

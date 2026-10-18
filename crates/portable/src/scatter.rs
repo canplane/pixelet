@@ -310,6 +310,26 @@ pub mod drawn {
     pub const HIDE: u32 = 8;
     pub const EXTENTS: u32 = 12;
     pub const PARAM_WORDS: u32 = EXTENTS + GROUPS;
+
+    /// What a thing spanning `px` pixels is drawn as: a model at
+    /// `model_px` or more, else a sprite at `sprite_px` or more, else
+    /// nothing. A group's region is `2·group` past its tier where drawn.
+    pub const MODEL: u32 = 0;
+    pub const SPRITE: u32 = 1;
+    pub const GONE: u32 = 2;
+
+    /// The tier of what spans `px` pixels, against the model's and the
+    /// sprite's floors: the one rule decor's count and the CPU's clouds
+    /// both size by.
+    pub fn tier(px: f32, model_px: f32, sprite_px: f32) -> u32 {
+        if px >= model_px {
+            MODEL
+        } else if px >= sprite_px {
+            SPRITE
+        } else {
+            GONE
+        }
+    }
 }
 
 /// Candidate `i` of the `n`-th block meeting `region` (`block_of`); false
