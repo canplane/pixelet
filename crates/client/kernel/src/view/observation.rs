@@ -112,7 +112,7 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
         }
         let Some(b) = world.bounds(&mut lines, (zoom, xy), cell).value().flatten() else { continue };
         let side = units(zoom);
-        for z in (b.aabb.min[2] / side).floor() as i64..=(b.aabb.max[2] / side).floor() as i64 {
+        for z in (b.min[2] / side).floor() as i64..=(b.max[2] / side).floor() as i64 {
             each((zoom, [xy[0], xy[1], z]));
         }
     }
@@ -166,5 +166,5 @@ impl ByEye {
 /// `lines` last walked: all of it where nothing is known or nothing stands.
 pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, lines: &mut Lines) -> Order {
     let stands = World::now().bounds(lines, p.node(), lattice.grid_zoom(p.zoom));
-    Order::of(o, &stands.value().flatten().map_or(p.region(), |b| b.aabb))
+    Order::of(o, &stands.value().flatten().unwrap_or(p.region()))
 }

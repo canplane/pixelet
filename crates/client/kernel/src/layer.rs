@@ -25,7 +25,7 @@ pub mod residency;
 pub mod terrain;
 
 pub use answer::Answer;
-pub use query::{Bound, Query};
+pub use query::Query;
 
 /// What a layer asks for of the view.
 #[derive(Clone, Copy)]

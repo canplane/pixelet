@@ -27,7 +27,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::layer::object::ext::{Ext, Pools, NONE};
-use crate::layer::{Answer, Bound, Query};
+use crate::layer::{Answer, Query};
 use crate::sched::edge::request_world_tick;
 use pxl_portable::overwrite::{self, Held};
 use pxl_spec::block::ext::class_of;
@@ -462,23 +462,17 @@ impl Query for Store {
     /// tree is walked down to the node's zoom only, along the paths that
     /// hold. Its readers tell apart no finer than the node (pxl-kernel
     /// view/observation.rs `cubes`, `order_of_tile`).
-    fn bound<const D: usize>(&self, held: &Held, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+    fn bound<const D: usize>(&self, held: &Held, node: Node<D>, _: Zoom) -> Answer<Option<Aabb>> {
         if !held.holds() {
             return Answer::Exact(None);
         }
-        // A cube at the node's zoom held by a branch has what is finer than
-        // it, at most one past the cells asked.
         let (mut out, whole) = (None, region(node));
         self.descend(about(&whole), &mut |z, _, c, leaf| {
             let Some(aabb) = c.meet(whole) else { return false };
-            let finest = if leaf.is_some() {
-                z.min(cell + 1)
-            } else if z >= node.0 {
-                cell + 1
-            } else {
+            if leaf.is_none() && z < node.0 {
                 return true;
-            };
-            out = Bound::join(out, Some(Bound { aabb, finest }));
+            }
+            out = Some(out.map_or(aabb, |o: Aabb| o.join(aabb)));
             false
         });
         Answer::Exact(out)

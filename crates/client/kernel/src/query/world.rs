@@ -14,9 +14,10 @@ use crate::layer::object::store::Store;
 use crate::layer::residency::{Lines, Residency};
 use crate::layer::Answer;
 use crate::layer::Base as _;
-use crate::layer::{Bound, Query};
+use crate::layer::Query;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::coord::aabb::Aabb;
 
 /// The world's query: the resident ground and the placed objects, read
 /// as one.
@@ -70,8 +71,8 @@ impl World<'_> {
     /// Where the ground and what is placed stand in the node, as its cells
     /// at `cell` are read; the ground's line stepped from where `lines` last
     /// walked.
-    pub fn bounds(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Bound>> {
+    pub fn bounds(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
         let objects = self.objects.bounds(node, cell).value().flatten();
-        self.terrain.bound_walked(lines, node, cell).map(|ground| Bound::join(ground, objects))
+        self.terrain.bound_walked(lines, node, cell).map(|ground| ground.into_iter().chain(objects).reduce(Aabb::join))
     }
 }

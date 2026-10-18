@@ -19,7 +19,8 @@ use crate::io::source;
 use crate::layer::residency::{Line, Lines, Residency};
 use crate::layer::terrain::window::Windowed;
 
-use crate::layer::{Answer, Bound, Query};
+use crate::layer::{Answer, Query};
+use pxl_spec::space::coord::aabb::Aabb;
 
 impl Residency<TerrainTile> {
     /// The lowest and highest the ground holds over the column `node`'s own
@@ -61,7 +62,7 @@ impl Residency<TerrainTile> {
 
     /// `bound`, its line stepped from where `lines` last walked: a walk in
     /// key order pays one look-up a node.
-    pub fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Bound>> {
+    pub fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
         self.bound(&self.seek(lines, bound_tile(node, cell)), node, cell)
     }
 }
@@ -133,7 +134,7 @@ impl Query for Residency<TerrainTile> {
     /// ground's and the ways' joined, down to a cell at `cell` under its
     /// lowest, within the node. A node past the service area, no look in
     /// it, holds nothing.
-    fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+    fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Aabb>> {
         let node = (zoom, [at[0], at[1]]);
         // Known before any of its ground arrives.
         if past(node) {
@@ -145,12 +146,9 @@ impl Query for Residency<TerrainTile> {
             let [lo, hi] = [ground[0].min(ways[0]), ground[1].max(ways[1])];
             let lo = (f64::from(lo) * units(GROUND.cell()) - units(cell)).max(whole.min[2]);
             let hi = (f64::from(hi) * units(GROUND.cell())).min(whole.max[2]);
-            (lo <= hi).then(|| Bound {
-                aabb: pxl_spec::space::coord::aabb::Aabb {
-                    min: [whole.min[0], whole.min[1], lo],
-                    max: [whole.max[0], whole.max[1], hi],
-                },
-                finest: GROUND.cell(),
+            (lo <= hi).then(|| Aabb {
+                min: [whole.min[0], whole.min[1], lo],
+                max: [whole.max[0], whole.max[1], hi],
             })
         })
     }

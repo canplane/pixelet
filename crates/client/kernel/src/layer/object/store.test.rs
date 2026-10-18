@@ -174,7 +174,7 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         cube_at(&mut stores[1], turn(at), state);
         cube_at(&mut stores[2], turn(turn(at)), state);
     }
-    let bound = |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).value().flatten().map(|b| b.aabb);
+    let bound = |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).value().flatten();
     for _ in 0..500 {
         let (zoom, at) = some_node(&mut rng, 200.0);
         let given = bound(&stores[0], (zoom, at));
