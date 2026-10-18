@@ -768,28 +768,42 @@ pub fn decor_cs(
     }
 }
 
-/// Record `n` of `grown` (pxl-portable `scatter::record_at`): its first
-/// word, and whether its head holds it, of a slot whose square the windows
-/// still hold there (`scatter::grown_for`) or of placed decor.
-fn record(grown: &[u32], window: &[IVec4], n: u32) -> (usize, bool) {
-    let (w, h, i) = scatter::record_at(n);
-    let count = at(grown, h);
-    let stands = n >= scatter::SLOT_RECORDS || {
-        let q = at(window, h / scatter::HEAD_WORDS);
-        q.z != 0 && scatter::grown_for([count, at(grown, h + 1), at(grown, h + 2), at(grown, h + 3)], [q.x, q.y])
-    };
-    (w as usize, i < count && stands && w + 3 < grown.len() as u32)
+/// Lanes a decor pass's workgroup has (`decor_count_cs`, `decor_place_cs`).
+const RECORD_LANES: u32 = 64;
+
+/// The records workgroup `g` of a decor pass reads, as record numbers
+/// (pxl-portable `scatter::record_at`): the first and how many. A workgroup
+/// a slot, its records to its head's count where the windows still hold the
+/// square they were grown for (`scatter::grown_for`), asked once for them
+/// all, none where they do not; past the slots, a workgroup a
+/// `RECORD_LANES` of placed decor's. Its lanes take them `RECORD_LANES`
+/// apart, so a pass reads the records the heads hold, not the room.
+fn records(grown: &[u32], window: &[IVec4], g: u32) -> (u32, u32) {
+    if g < scatter::EYE_SLOTS {
+        let (h, q) = (scatter::head_at(g), at(window, g));
+        let head = [at(grown, h), at(grown, h + 1), at(grown, h + 2), at(grown, h + 3)];
+        let held = q.z != 0 && scatter::grown_for(head, [q.x, q.y]);
+        let count = if head[0] < SQUARE_GROWN { head[0] } else { SQUARE_GROWN };
+        (g * SQUARE_GROWN, if held { count } else { 0 })
+    } else {
+        let first = (g - scatter::EYE_SLOTS) * RECORD_LANES;
+        let count = at(grown, scatter::PLACED_HEAD);
+        let left = if count > first { count - first } else { 0 };
+        (scatter::SLOT_RECORDS + first, if left < RECORD_LANES { left } else { RECORD_LANES })
+    }
 }
 
-/// Each record for the eye this frame, its region written into its first
-/// word and counted: nothing where the rays ask another zoom at its
+/// Each record for the eye this frame, a workgroup a slot's or a run of
+/// placed decor's (`records`), its region written into its first word and
+/// counted: nothing where the rays ask another zoom at its
 /// distance than the one it was grown at (`scatter::drawn_at`), or where it
 /// is the decor left out; else sized for the screen (pxl-portable
 /// `scatter::drawn`), a model where its group's extent spans `MODEL_PX` at
 /// its distance, a sprite down to `SPRITE_PX`, else nothing.
 #[spirv(compute(threads(64, 1, 1)))]
 pub fn decor_count_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(workgroup_id)] group: UVec3,
+    #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] params: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] rows: &[Decor],
@@ -797,8 +811,17 @@ pub fn decor_count_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] regions: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] window: &[IVec4],
 ) {
-    let (i, held) = record(grown, window, id.x);
-    if !held {
+    let (first, count) = records(grown, window, group.x);
+    let mut k = lane.x;
+    while k < count {
+        count_one(eye, params, rows, grown, regions, scatter::record_at(first + k).0 as usize);
+        k += RECORD_LANES;
+    }
+}
+
+/// `decor_count_cs` for the record at word `i`.
+fn count_one(eye: &Eye, params: &[u32], rows: &[Decor], grown: &mut [u32], regions: &mut [u32], i: usize) {
+    if i + 3 >= grown.len() {
         return;
     }
     let w = grown[i];
@@ -868,12 +891,14 @@ pub fn decor_args_cs(
     }
 }
 
-/// Each record its region drew a slot of: its box's base middle about the
+/// Each record its region drew a slot of, read as `decor_count_cs` reads
+/// them (`records`): its box's base middle about the
 /// anchor, its heading and scale, in the lanes the decor and impostor
 /// shaders read, and the slot its own in the index list.
 #[spirv(compute(threads(64, 1, 1)))]
 pub fn decor_place_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(workgroup_id)] group: UVec3,
+    #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] params: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] grown: &[u32],
@@ -881,8 +906,17 @@ pub fn decor_place_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] block: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] window: &[IVec4],
 ) {
-    let (i, held) = record(grown, window, id.x);
-    if !held {
+    let (first, count) = records(grown, window, group.x);
+    let mut k = lane.x;
+    while k < count {
+        place_one(params, rows, grown, regions, block, scatter::record_at(first + k).0 as usize);
+        k += RECORD_LANES;
+    }
+}
+
+/// `decor_place_cs` for the record at word `i`.
+fn place_one(params: &[u32], rows: &[Decor], grown: &[u32], regions: &mut [u32], block: &mut [u32], i: usize) {
+    if i + 3 >= grown.len() {
         return;
     }
     let w = grown[i];

@@ -84,6 +84,8 @@ pub struct Grown {
     records: u32,
     block: u32,
     room: u32,
+    /// The placed decor's records, as last handed.
+    placed_count: u32,
     /// The world its groups bind: grouped again exactly when it is another.
     bound: World,
     on: bool,
@@ -147,6 +149,7 @@ impl Grown {
             records: 0,
             block: 0,
             room: 0,
+            placed_count: 0,
             bound: [0; 6],
             on: false,
             shown_read: Read::default(),
@@ -238,6 +241,7 @@ impl Grown {
         p.begin();
         p.read(f.placed);
         let placed_moved = !p.end();
+        self.placed_count = f.placed.len() as u32;
         if placed_moved {
             g.write_buffer(self.records, scatter::PLACED_HEAD * 4, bytes(&[f.placed.len() as u32, 0, 0, 0]));
             if !f.placed.is_empty() {
@@ -367,7 +371,10 @@ impl Grown {
         if !self.counting {
             return;
         }
-        let records = |w: [u32; 3]| self.room.div_ceil(w[0]);
+        // A workgroup a slot, reading the records its head holds, then the
+        // placed decor's a workgroup's lanes each (gpu-query-shader
+        // `records`): the records held, not the room.
+        let records = |w: [u32; 3]| scatter::EYE_SLOTS + self.placed_count.div_ceil(w[0]);
         let passes = [
             (&self.count, records(compute::DECOR_COUNT_WORKGROUP)),
             (&self.args_built, 1),
