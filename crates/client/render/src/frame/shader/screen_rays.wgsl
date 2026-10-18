@@ -108,7 +108,7 @@ struct Hit {
   normal: vec3f,
 };
 
-fn hit_of(c: vec3u, d: vec3f) -> Hit {
+fn hit_of(c: vec2u, d: vec3f) -> Hit {
   let face = min(ray_face(c.x), 5u);
   let axis = face / 2u;
   let n = FACE_NORMAL[face];
@@ -136,7 +136,7 @@ fn fs(v: VertexOut) -> FragOut {
   // This pixel's ray, through its middle, as the cast formed it.
   let d = normalize(sky_ray() * vec3f(v.ndc, 1.0));
   let at = vec2i(v.clip.xy);
-  let c = vec3u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x, textureLoad(rays, at, 2, 0).x);
+  let c = vec2u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x);
   // A ray that met nothing leaves its first word zero: no stop is void.
   let met = c.x != 0u;
   let h = hit_of(c, d);
@@ -150,7 +150,9 @@ fn fs(v: VertexOut) -> FragOut {
     let t = select(bitcast<f32>(eye_word(EYE_REACH)), bitcast<f32>(c.y), met);
     let clip = frame_view_proj() * vec4f(d * t, 1.0);
     var o: FragOut;
-    o.color = vec4f(turbo(log2(1.0 + f32(c.z)) / log2(1.0 + STEPS_MOST)), 1.0);
+    // The nodes asked, written and read only in this view.
+    let steps = textureLoad(rays, at, 2, 0).x;
+    o.color = vec4f(turbo(log2(1.0 + f32(steps)) / log2(1.0 + STEPS_MOST)), 1.0);
     o.depth = clip.z / clip.w;
     return o;
   }

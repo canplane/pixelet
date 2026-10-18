@@ -498,8 +498,10 @@ pub fn cast_cs(
     };
     let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, (place, at_of(read, cast::START_AT)), &Starts(read));
     let w = word(&ray, met);
+    // The nodes asked only where the steps view reads them.
+    let words = if eye.origin.w != 0 { ray::WORDS } else { ray::WORDS - 1 };
     let mut k = 0;
-    while k < ray::WORDS {
+    while k < words {
         // SAFETY: within the rays, just bounded by their size.
         unsafe { rays.write(UVec3::new(id.x, id.y, k), w[k as usize]) };
         k += 1;
