@@ -6,8 +6,6 @@
 
 use crate::sched::edge::request_world_tick;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::zoom::cube;
 use xpute_guest::global::Global;
 
 /// What the eraser's preview changes in what is drawn only: every mechanic
@@ -25,13 +23,6 @@ pub struct RenderEdits {
     pub carve: Option<EntryAt>,
     /// The scattered decor hidden, by the cell it stands in.
     pub scattered: Option<[i64; 3]>,
-}
-
-impl RenderEdits {
-    /// The cubes it changes, where the world as drawn moves when it does.
-    pub fn cubes(&self) -> impl Iterator<Item = Aabb> {
-        [self.hide, self.carve].into_iter().flatten().map(|e| cube(e.zoom(), e.at()))
-    }
 }
 
 /// The pointer's preview, the one copy of it.

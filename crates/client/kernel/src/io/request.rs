@@ -266,25 +266,12 @@ impl<S: Serve> RequestScheduler<S> {
         self.credits
     }
 
-    /// Requests waiting for a credit and out on one, of the streams `of`
-    /// takes: the one rule every count a report shows is made by. For a
+    /// `stream`'s requests waiting for a credit and out on one. For a
     /// report only, never for deciding what to want.
-    fn counted(&self, of: impl Fn(Stream) -> bool) -> (u32, u32) {
-        let out = self.attempt.iter().flatten().filter(|a| of(a.stream)).count() as u32;
-        let waiting = Stream::ALL
-            .into_iter()
-            .filter(|&s| of(s))
-            .map(|s| self.run(s).iter().filter(|w| !self.attempting(s, w.subject)).count() as u32)
-            .sum();
-        (waiting, out)
-    }
-
-    pub fn counts(&self) -> (u32, u32) {
-        self.counted(|_| true)
-    }
-
     pub fn stream_counts(&self, stream: Stream) -> (u32, u32) {
-        self.counted(|s| s == stream)
+        let out = self.attempt.iter().flatten().filter(|a| a.stream == stream).count() as u32;
+        let waiting = self.run(stream).iter().filter(|w| !self.attempting(stream, w.subject)).count() as u32;
+        (waiting, out)
     }
 
     fn placed(&self, stream: Stream, w: &Wanted) -> Placed {

@@ -140,29 +140,9 @@ impl<L: Observed> Default for Demand<L> {
 }
 
 impl<L: Observed> Demand<L> {
-    pub fn set(&mut self, p: Tile, tile: L) {
-        L::residency().set(p, tile);
-    }
-
-    pub fn answer_above(&mut self, p: Tile) {
-        L::residency().answer_above(p);
-    }
-
-    pub fn take_refusals(&mut self) -> u32 {
-        L::residency().take_refusals()
-    }
-
-    pub fn observation(&self) -> Option<&Observation> {
-        self.observation.as_ref()
-    }
-
     /// The floor's tiles as last observed.
     pub fn floor(&self) -> impl Iterator<Item = Tile> + Clone + '_ {
         self.floor.iter().copied()
-    }
-
-    pub fn demand(&self) -> &[Tile] {
-        &self.demand
     }
 
     /// Whether every tile the view needs has its answer.
@@ -280,10 +260,6 @@ impl<L: Observed> Demand<L> {
 
         self.observation = o.copied();
         self.demand = demand;
-    }
-
-    pub fn wants(&self) -> &[(u64, Ask)] {
-        &self.wants
     }
 
     /// The layer's turn, from the live eye: the eye that is coming, which

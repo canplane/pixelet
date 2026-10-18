@@ -131,7 +131,7 @@ fn a_failure_waits_rather_than_asking_straight_back() {
         l.pump(t as f64);
         assert!(started(&mut l).is_empty(), "held back, not re-asked every turn");
     }
-    assert_eq!(l.counts(), (1, 0), "wanted, nothing out");
+    assert_eq!(l.stream_counts(Stream::terrain), (1, 0), "wanted, nothing out");
     l.pump(2_000.0);
     assert_eq!(started(&mut l).len(), 1, "and tried again once the wait is over");
 }
@@ -203,14 +203,14 @@ fn a_current_demand_is_said_whatever_old_work_is_draining() {
     let out = started(&mut l);
     assert_eq!(out.len(), 2);
     l.declare(Stream::terrain, &[(3, ask(Why::Demand, 0.0))], 0.0);
-    assert_eq!(l.counts().0, 1, "the new want is representable with both credits spent");
+    assert_eq!(l.stream_counts(Stream::terrain).0, 1, "the new want is representable with both credits spent");
     l.pump(0.0);
     // What the camera left is stopped the turn it leaves, and its credits
     // start what is wanted now in the same turn.
     assert_eq!(stopped(&mut l).len(), 2, "every obsolete attempt is told to stop");
     assert_eq!(started(&mut l).len(), 1, "and the current want starts at once");
     ok(&mut l, out[0], 0.0);
-    assert_eq!(l.counts(), (0, 1), "the late report neither frees nor ends anything");
+    assert_eq!(l.stream_counts(Stream::terrain), (0, 1), "the late report neither frees nor ends anything");
 }
 
 #[test]
@@ -288,7 +288,5 @@ fn an_asset_shares_the_credits_and_is_never_withdrawn() {
     l.declare(Stream::asset, &[(7, Ask::PLAIN)], 0.0);
     l.pump(0.0);
     assert_eq!(started(&mut l).len(), 1, "one credit, one read — an asset does not go beside the tiles");
-    let (waiting, out) = l.stream_counts(Stream::asset);
-    assert_eq!(waiting + out, 1);
-    assert_eq!(l.counts().0, 1, "and it is what is waiting");
+    assert_eq!(l.stream_counts(Stream::asset), (1, 0), "and it is what is waiting");
 }
