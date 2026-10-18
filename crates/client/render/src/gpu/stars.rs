@@ -5,6 +5,7 @@
 //! once here rather than per corner per frame. Nothing is drawn in daylight.
 //! The catalog's stars are the whole night sky: no Milky Way and no planets.
 
+use pxl_spec::asset::star::{self, RECORD_BYTES};
 use pxl_spec::space::coord::mat4::Mat4;
 
 use crate::frame::shader::record::PIPELINE_STARS;
@@ -17,7 +18,6 @@ use crate::gpu::renderer::put_mat;
 use crate::look::environment::{ENV_MOON_LIGHT, ENV_SKY, ENV_STARS};
 
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-stars.bin");
-const STAR_BYTES: usize = 8;
 /// Direction and flux, then color and padding.
 const STAR_FLOATS: usize = 8;
 
@@ -42,7 +42,7 @@ impl StarPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [Entry; AIR_ENTRIES]) -> StarPass {
         let built = pipelines.build(g, PIPELINE_STARS, g.canvas());
         let uniform = g.buffer(word_bytes(STARS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let stars: Vec<f32> = CATALOG.as_chunks::<STAR_BYTES>().0.iter().flat_map(star).collect();
+        let stars: Vec<f32> = CATALOG.as_chunks::<RECORD_BYTES>().0.iter().flat_map(star_floats).collect();
         let catalog = g.buffer(word_bytes(stars.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(catalog, 0, bytes(&stars));
         let mut frame = vec![buffer_entry(0, frame_buffer)];
@@ -90,20 +90,17 @@ impl StarPass {
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         g.set_bind_group(pass, 1, self.group, &[]);
-        g.draw(pass, 4, (CATALOG.len() / STAR_BYTES) as u32, 0, 0);
+        g.draw(pass, 4, (CATALOG.len() / RECORD_BYTES) as u32, 0, 0);
     }
 }
 
-/// RA as a u16 of a turn, declination as an i16 of a quarter turn, magnitude
-/// and B−V as i16 thousandths.
-fn star(packed: &[u8; STAR_BYTES]) -> [f32; STAR_FLOATS] {
-    let word = |k: usize| [packed[2 * k], packed[2 * k + 1]];
-    let ra = u16::from_le_bytes(word(0)) as f64 / 65536.0 * core::f64::consts::TAU;
-    let dec = i16::from_le_bytes(word(1)) as f64 / 32767.0 * core::f64::consts::FRAC_PI_2;
-    let vmag = i16::from_le_bytes(word(2)) as f64 / 1000.0;
-    let bv = i16::from_le_bytes(word(3)) as f64 / 1000.0;
-    let flux = libm::pow(10f64, -0.4 * vmag);
-    let [r, g, b] = star_color(bv);
+/// A record's star (pxl-spec asset/star.rs `star`, the bake's one layout)
+/// as the sky draws it: its direction, its flux, its colour.
+fn star_floats(packed: &[u8; RECORD_BYTES]) -> [f32; STAR_FLOATS] {
+    let s = star::star(packed);
+    let (ra, dec) = (s.ra.to_radians(), s.dec.to_radians());
+    let flux = libm::pow(10f64, -0.4 * s.vmag);
+    let [r, g, b] = star_color(s.bv);
     [
         (libm::cos(dec) * libm::cos(ra)) as f32,
         (libm::cos(dec) * libm::sin(ra)) as f32,
@@ -130,7 +127,3 @@ fn star_color(bv: f64) -> [f64; 3] {
     let peak = c[0].max(c[1]).max(c[2]);
     c.map(|v| 0.5 + 0.5 * v / peak)
 }
-
-#[cfg(test)]
-#[path = "stars.test.rs"]
-mod test;
