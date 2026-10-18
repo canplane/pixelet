@@ -4,10 +4,11 @@
 //! pixel and the screen pass reads them there (pxl-render
 //! frame/shader/screen_rays.wgsl), a layer of the world surface's rays a
 //! word: what it stopped on, through which face and at which zoom
-//! (`first_word`); how far, f32 bits; and in the steps view the nodes its
-//! descent asked. A block is painted from these, its own, alone, by its
-//! value whichever source holds it. Where it met nothing, the first two are
-//! zero: a stop's value is never void.
+//! (`first_word`); how far, f32 bits; and the four looks the ground's
+//! block is drawn by (`ground::word`, none for any other), or in the steps
+//! view the nodes its descent asked. A block is painted from these, its
+//! own, alone, by its value whichever source holds it. Where it met
+//! nothing, the first two are zero: a stop's value is never void.
 
 use crate::Zoom;
 

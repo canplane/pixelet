@@ -5,8 +5,9 @@
 // boxes are. A pixel whose ray met nothing is left to the sky.
 
 // The rays, a layer a word: what a ray met (value, face, zoom), how far it
-// went (f32 bits), and the nodes its descent asked, which the steps view
-// reads. A block is painted from these, its own, alone.
+// went (f32 bits), and the four looks the ground's block is drawn by or, in
+// the steps view, the nodes its descent asked. A block is painted from
+// these, its own, alone.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
 // Each value's swatch and layer, then the colour it reads as from afar, in
 // linear light (`mesh/paint/ground.rs` `look_words`), by value whichever
@@ -89,19 +90,27 @@ fn far(l: vec4u) -> vec3f {
 
 struct Drawn {
   rgb: vec3f,
-  layer: f32,
+  taps: vec4f,
 };
 
-// What the block a pixel's ray met is drawn as, by its value alone,
-// whichever source holds it: at the ground's cell or finer, its swatch and
-// its layer; coarser, its fold's majority as it reads from
-// afar (doc/minutes/20261005-the-ground-is-a-carto-palette.md).
-fn drawn(w: u32) -> Drawn {
-  let l = look(ray_value(w));
-  if (ray_zoom(w) >= GROUND_CELL) {
-    return Drawn(swatch(l), f32(l.y >> 16u));
+// What the block a pixel's ray met is drawn as, by its value, whichever
+// source holds it: at the ground's cell or finer, its swatch and its layer
+// in all four taps; coarser, one colour as it reads from afar, the ground's
+// the mean of the four looks its cell folds where its face's own is among
+// them (doc/minutes/20260928-what-is-drawn-is-what-the-screen-covers.md,
+// "the 2 × 2 is by design").
+fn drawn(c: vec3u) -> Drawn {
+  let value = ray_value(c.x);
+  let l = look(value);
+  if (ray_zoom(c.x) >= GROUND_CELL) {
+    return Drawn(swatch(l), vec4f(f32(l.y >> 16u)));
   }
-  return Drawn(far(l), f32(NO_LAYER));
+  let fold = vec4u(c.z & 0xffu, (c.z >> 8u) & 0xffu, (c.z >> 16u) & 0xffu, c.z >> 24u);
+  if (any(fold == vec4u(value))) {
+    let sum = far(look(fold.x)) + far(look(fold.y)) + far(look(fold.z)) + far(look(fold.w));
+    return Drawn(sum * 0.25, vec4f(NO_LAYER));
+  }
+  return Drawn(far(l), vec4f(NO_LAYER));
 }
 
 // Along `axis`, how far the eye is past the start of the block of side
@@ -150,10 +159,10 @@ fn fs(v: VertexOut) -> FragOut {
   // This pixel's ray, through its middle, as the cast formed it.
   let d = through(v.clip.xy, vec2f(textureDimensions(rays)));
   let at = vec2i(v.clip.xy);
-  let c = vec2u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x);
+  let c = vec3u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x, textureLoad(rays, at, 2, 0).x);
   // A ray that met nothing leaves its first word zero: no stop is void.
   let met = c.x != 0u;
-  let h = hit_of(c, d);
+  let h = hit_of(c.xy, d);
   // Taken before any branch: a derivative needs the quad whole.
   let uv = box_uv(h);
   let ddx = dpdx(uv);
@@ -164,19 +173,18 @@ fn fs(v: VertexOut) -> FragOut {
     let t = select(bitcast<f32>(eye_word(EYE_REACH)), bitcast<f32>(c.y), met);
     let clip = frame_view_proj() * vec4f(d * t, 1.0);
     var o: FragOut;
-    // The nodes asked, written and read only in this view.
-    let steps = textureLoad(rays, at, 2, 0).x;
-    o.color = vec4f(turbo(log2(1.0 + f32(steps)) / log2(1.0 + STEPS_MOST)), 1.0);
+    // The nodes asked, the third word in this view.
+    o.color = vec4f(turbo(log2(1.0 + f32(c.z)) / log2(1.0 + STEPS_MOST)), 1.0);
     o.depth = clip.z / clip.w;
     return o;
   }
   if (!met) {
     discard;
   }
-  let painted = drawn(c.x);
+  let painted = drawn(c);
   let s = Surface(
     painted.rgb,
-    painted.layer,
+    painted.taps,
     h.normal,
     0.0,
     h.at,

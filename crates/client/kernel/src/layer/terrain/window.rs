@@ -11,6 +11,7 @@
 //! which the browser's cache answers.
 
 use pxl_portable::area::{Area, Shard};
+use pxl_portable::ground::word;
 use pxl_portable::window::{self, CellsBack, FreshSquare, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
 use pxl_portable::wrap_index;
 use pxl_portable::LEAF_CELL;
@@ -528,6 +529,12 @@ impl Squares for Windowed {
     fn square(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool) {
         let s = windows().slots[((cell - FIRST_CELL) * SLOTS + slot) as usize];
         (s.square, s.present != 0)
+    }
+
+    /// The CPU reads a cell's own look alone, as laid: its four are it four
+    /// times.
+    fn look(&self, cell: Zoom, s: u32, i: u32) -> u32 {
+        word([self.laid(cell, s, i) & 0xff; 4])
     }
 
     /// As the GPU folded it, read back a frame or more later: an entry for

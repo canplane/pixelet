@@ -297,6 +297,8 @@ pub trait Squares {
     /// The square the eye's window at `cell` holds in `slot`, and whether
     /// present: `present` the other way.
     fn square(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool);
+    /// The four looks of cell `i` of the square in `slot` (`ground::looks`).
+    fn look(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Column word `i` of the square in `slot` (`COLUMN_WORDS`), `i` to
     /// `SQUARE_CELLS`.
     fn column(&self, cell: Zoom, slot: u32, i: u32) -> u32;
@@ -600,16 +602,16 @@ pub const fn held_to(cell: Zoom) -> Zoom {
 }
 
 /// The ground's cell `g` at `cell`, off the finest window holding it
-/// present, stepped from `place` (`step`): its column's word and the
-/// next's (its height, its runs), it as laid, and where it is held; `void`
-/// at sea level where none holds it.
-pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> ([u32; 2], u32, Found) {
+/// present, stepped from `place` (`step`): its four looks, its column's
+/// word and the next's (its height, its runs), it as laid, and where it is
+/// held; `void` at sea level where none holds it.
+pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, [u32; 2], u32, Found) {
     let (f, at) = step(w, place, cell, g);
     if !f.here() {
-        return ([0; 2], laid_half(VOID, 0), f);
+        return (VOID, [0; 2], laid_half(VOID, 0), f);
     }
     let (from, slot, i) = (f.from(), f.slot(), index_of(at));
-    ([w.column(from, slot, i), w.column(from, slot, i + 1)], w.laid(from, slot, i), f)
+    (w.look(from, slot, i), [w.column(from, slot, i), w.column(from, slot, i + 1)], w.laid(from, slot, i), f)
 }
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
@@ -624,10 +626,11 @@ pub fn ground(w: &(impl Ran + crate::area::Area), owner: (Zoom, [i32; 2]), place
     let (q, o) = (square_of(g).0, square_of(cell_at(owner.0, read, owner.1)).0);
     // Component-wise: a GPU has no array equality.
     let place = if q[0] == o[0] && q[1] == o[1] { place } else { Found::NONE };
-    let ([column, next], laid, f) = cell(w, place, read, g);
+    let (word, [column, next], laid, f) = cell(w, place, read, g);
     let cell = crate::ground::Cell {
         look: crate::area::laid(laid, zoom, b),
         top: crate::ground::blocks(zoom, column_top(column) as f32),
+        fold: crate::ground::looks(word),
         runs: [column_first(column), column_first(next)],
     };
     (cell, f)

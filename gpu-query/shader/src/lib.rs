@@ -24,7 +24,7 @@ use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
 use pxl_portable::overwrite::{self, Cut, Held, Lanes, PLACED};
 use pxl_portable::scatter::{self, drawn, Grounds, SQUARE_BLOCKS, SQUARE_GROWN};
-use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_SHIFT, SQUARE_WORDS};
+use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, RUNS_AT};
 use pxl_portable::{at, ray, world, LEAF_CELL, SHARD_ZOOM};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
@@ -92,17 +92,19 @@ fn square_at(square: u32) -> u32 {
 /// squares the eye's windows hold, their columns, levels and runs, the
 /// service area, and what is placed with a preview's cuts; the caves are a
 /// hash, held nowhere. Decor is not here (pxl-portable `cast::Query`).
+/// The squares' cells' four looks are `L`'s: their own buffer where the
+/// cast draws by them, none where a pass draws nothing (`Unlooked`).
 #[derive(Clone, Copy)]
-pub struct World<'a> {
+pub struct World<'a, L> {
     /// Per window of the eye's, from the top's, a row a slot: the square it
     /// holds, and whether it is present (pxl-portable `window`).
     window: &'a [IVec4],
-    /// Per square of every window, its looks as handed, its columns
-    /// (`heights_cs`, `ways_cs`), their levels (`bound_cs`), their runs
-    /// (`ways_cs`), its cells as laid (`heights_cs`), and its tile's samples
-    /// and lines as handed
-    /// (`window::SQUARE_WORDS`); the eye's windows first.
+    /// Per square of every window, its columns (`heights_cs`, `ways_cs`),
+    /// their levels (`bound_cs`), their runs (`ways_cs`) and its cells as
+    /// laid (`heights_cs`) (`window::SQUARE_WORDS`); the eye's windows first.
     ground: &'a [u32],
+    /// Per square, in the same order, its cells' four looks (`Looks`).
+    looks: L,
     /// The service area's index (pxl-portable `area::Area`), its keys four a
     /// row.
     shards: &'a [IVec4],
@@ -114,7 +116,32 @@ pub struct World<'a> {
     eye: &'a Eye,
 }
 
-impl Lanes for World<'_> {
+/// Where the squares' cells' four looks are read: a word a cell
+/// (`ground::looks`), `window::SQUARE_CELLS` a square in the squares' order,
+/// as the fill wrote them off the handed record (`heights_cs`).
+pub trait Looks: Copy {
+    fn look(&self, i: u32) -> u32;
+}
+
+impl Looks for &[u32] {
+    fn look(&self, i: u32) -> u32 {
+        at(self, i)
+    }
+}
+
+/// No looks bound: a pass that draws nothing reads none, every cell's four
+/// the word it holds, none (`ground::word`'s zero). A word, not nothing:
+/// rust-gpu offsets no pointer to a field of no size.
+#[derive(Clone, Copy)]
+pub struct Unlooked(u32);
+
+impl Looks for Unlooked {
+    fn look(&self, _: u32) -> u32 {
+        self.0
+    }
+}
+
+impl<L: Looks> Lanes for World<'_, L> {
     fn heap(&self, slot: u32) -> u32 {
         at(self.overwrites, slot)
     }
@@ -123,7 +150,7 @@ impl Lanes for World<'_> {
     }
 }
 
-impl Area for World<'_> {
+impl<L: Looks> Area for World<'_, L> {
     fn ends(&self) -> bool {
         true
     }
@@ -143,7 +170,7 @@ impl Area for World<'_> {
 }
 
 /// The eye's windows, as the GPU holds them.
-impl Squares for World<'_> {
+impl<L: Looks> Squares for World<'_, L> {
     /// The slot square `q` is held in, while it holds it present.
     fn present(&self, cell: u32, q: [i32; 2]) -> (u32, bool) {
         let s = window::slot(q);
@@ -163,6 +190,9 @@ impl Squares for World<'_> {
     fn origin(&self, cell: u32) -> ([i32; 2], bool) {
         let r = at(self.window, window::ORIGIN_AT + (cell - FIRST_CELL));
         ([r.x, r.y], r.z != 0)
+    }
+    fn look(&self, cell: u32, slot: u32, i: u32) -> u32 {
+        self.looks.look(((cell - FIRST_CELL) * SLOTS + slot) * SQUARE_CELLS + i)
     }
     fn column(&self, cell: u32, slot: u32, i: u32) -> u32 {
         column_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
@@ -184,14 +214,14 @@ impl Squares for World<'_> {
 }
 
 /// The ways' runs `ways_cs` wrote in the eye's windows.
-impl Ran for World<'_> {
+impl<L: Looks> Ran for World<'_, L> {
     fn ran(&self, cell: u32, slot: u32, r: u32) -> u32 {
         at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + RUNS_AT + r)
     }
 }
 
 /// The ground as the GPU holds it, for pxl-portable's one answer for a node.
-impl ground::Held for World<'_> {
+impl<L: Looks> ground::Held for World<'_, L> {
     /// The bound over the node of the window `cell` reads its cells from,
     /// the finest holding them present (`window::bound_over`), as the CPU reads
     /// it (pxl-portable `Held::relief`).
@@ -234,16 +264,17 @@ const LEVELS: usize = 8;
 const _: () = assert!(window::FOUND_BITS + pxl_portable::caves::CAVE_BITS <= 32, "a kept entry's second word holds a Found and a cave");
 
 /// What a node is on the GPU: its value, one of the catalog's whichever
-/// source holds it, what the screen paints a hit with.
-impl Query for World<'_> {
+/// source holds it, and the four looks the ground's block is drawn by
+/// (`world::node`'s second word), what the screen paints a hit with.
+impl<L: Looks> Query for World<'_, L> {
     type At = At;
     /// What was handed the node, but its shard: its placed cursor, then
     /// where its cells are held (`Found`, `window::FOUND_BITS`) with its
     /// caves' word (`caves::CAVE_BITS`) over it.
     type Kept = [u32; 2];
     type Stack = [[u32; 2]; LEVELS];
-    type Block = u32;
-    const AIR: u32 = VOID;
+    type Block = [u32; 2];
+    const AIR: [u32; 2] = [VOID, 0];
 
     fn root(&mut self, node: [i32; 3]) -> At {
         At {
@@ -267,7 +298,7 @@ impl Query for World<'_> {
     /// (pxl-portable `world::node`), after its shard, known before any
     /// layer answers it, so a stop's shard is its own whichever layer stops
     /// it.
-    fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<u32> {
+    fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<[u32; 2]> {
         at.shard = at.shard.at(self, (zoom, [c[0], c[1]]));
         let (w, cuts) = (*self, [cut(self.eye.carve), cut(self.eye.hide)]);
         world::node(self, &w, &w, (at.cave, at.placed, at.shard), &mut at.ground, (zoom, c), asked, cuts).0
@@ -275,12 +306,12 @@ impl Query for World<'_> {
 
     /// A value of the one value space, whichever source holds it: neither
     /// void nor air.
-    fn fills(&self, block: &u32) -> bool {
-        world::fills(*block)
+    fn fills(&self, block: &[u32; 2]) -> bool {
+        world::fills(block[0])
     }
 
-    fn slab(&self, block: &u32) -> [i32; 2] {
-        world::slab_of(*block)
+    fn slab(&self, block: &[u32; 2]) -> [i32; 2] {
+        world::slab_of(block[0])
     }
 
     /// The caves' draws and what is placed are a hash's state and a slot,
@@ -307,7 +338,7 @@ impl Query for World<'_> {
 /// The world as decor's growth asks it on the GPU (pxl-portable `scatter`):
 /// the cast's, and the catalog's rows as handed.
 struct Growing<'a> {
-    world: World<'a>,
+    world: World<'a, Unlooked>,
     rows: &'a [Decor],
 }
 
@@ -334,7 +365,8 @@ impl Grounds for Growing<'_> {
     /// The world's ray down the column (pxl-portable `scatter::footing`),
     /// the cast's own descent.
     fn footing(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
-        scatter::footing(&mut self.world, cell, g)
+        let (block, z, met) = scatter::footing(&mut self.world, cell, g);
+        (block[0], z, met)
     }
 
     fn start(&mut self, zoom: u32, c: [i32; 3]) -> At {
@@ -354,22 +386,24 @@ impl Grounds for Growing<'_> {
             let s = zoom - z;
             at = self.world.child(&at, z, [c[0] >> s, c[1] >> s, c[2] >> s]);
         }
-        self.world.node(&mut at, zoom, c, [zoom, zoom], 0.0).block
+        self.world.node(&mut at, zoom, c, [zoom, zoom], 0.0).block[0]
     }
 }
 
 /// A ray's words, a layer each of `Rays`: the value it stopped on and the
-/// face it entered through, then how far as f32 bits, then the nodes its
-/// descent asked about, which the steps view reads; where it met nothing,
-/// the first two zero.
-fn word(ray: &cast::Ray, met: Met<At, u32>) -> [u32; ray::WORDS as usize] {
+/// face it entered through, then how far as f32 bits, then the four looks
+/// the ground's block is drawn by, a byte each (`ground::word`), or in the
+/// steps view the nodes its descent asked about; where it met nothing, the
+/// first two zero.
+fn word(ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> [u32; ray::WORDS as usize] {
     if met.ends != Ends::Stop {
         return [0, 0, met.visits];
     }
     let s = met.stop;
     let down = pxl_portable::axis(ray.direction, s.axis) > 0.0;
     let face = 2 * s.axis + down as u32;
-    [ray::first_word(s.block, face, s.place.zoom), s.t.to_bits(), met.visits]
+    let [value, four] = s.block;
+    [ray::first_word(value, face, s.place.zoom), s.t.to_bits(), if steps { met.visits } else { four }]
 }
 
 /// The start's stack as `start_cs` hands it (pxl-portable `cast::Over`).
@@ -438,8 +472,7 @@ fn pixel_ray(eye: &Eye, p: UVec3, size: UVec3) -> cast::Ray {
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
-/// pxl-portable `ray`): the cast writes them, the third in the steps view
-/// alone.
+/// pxl-portable `ray`): the cast writes them.
 type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// The nodes over where every ray from the eye starts alike, asked once a
@@ -459,6 +492,7 @@ pub fn start_cs(
     let mut world = World {
         window,
         ground,
+        looks: Unlooked(0),
         shards,
         overwrites,
         eye,
@@ -482,6 +516,7 @@ pub fn cast_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
@@ -496,6 +531,7 @@ pub fn cast_cs(
     let mut world = World {
         window,
         ground,
+        looks,
         shards,
         overwrites,
         eye,
@@ -508,11 +544,9 @@ pub fn cast_cs(
         corner: [at(read, cast::START_PLACE + 1) as i32, at(read, cast::START_PLACE + 2) as i32, at(read, cast::START_PLACE + 3) as i32],
     };
     let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, (place, at_of(read, cast::START_AT)), &Starts(read));
-    let w = word(&ray, met);
-    // The nodes asked only where the steps view reads them.
-    let words = if eye.origin.w != 0 { ray::WORDS } else { ray::WORDS - 1 };
+    let w = word(&ray, met, eye.origin.w != 0);
     let mut k = 0;
-    while k < words {
+    while k < ray::WORDS {
         // SAFETY: within the rays, just bounded by their size.
         unsafe { rays.write(UVec3::new(id.x, id.y, k), w[k as usize]) };
         k += 1;
@@ -549,6 +583,7 @@ pub fn joined_cs(
         let world = World {
             window: read,
             ground,
+            looks: Unlooked(0),
             shards,
             overwrites,
             eye,
@@ -565,17 +600,20 @@ pub fn joined_cs(
 /// handed their tiles' samples this turn, one a `z`, each a record as
 /// handed (`window::HANDED_WORDS`); a thread a column (`ground::height`)
 /// off the samples in it, an even column's laying its cell and the next
-/// (`fill::heights`).
+/// (`fill::heights`); and its cell's four looks into their own buffer
+/// (`fill::look`), which the cast draws by.
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn heights_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] ground: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] looks: &mut [u32],
 ) {
     if id.x >= SQUARE || id.y >= SQUARE {
         return;
     }
     fill::heights(ground, fresh, id.z, [id.x, id.y]);
+    fill::look(looks, fresh, id.z, [id.x, id.y]);
 }
 
 /// Level `level.x` of the squares `fresh` names, one a `z`: level 0 each
@@ -754,6 +792,7 @@ pub fn decor_cs(
         world: World {
             window,
             ground,
+            looks: Unlooked(0),
             shards,
             overwrites,
             eye,

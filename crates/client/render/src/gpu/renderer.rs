@@ -741,6 +741,8 @@ struct GroundBuffers {
     /// laid, which `heights_cs`, `ways_cs` and `bound_cs` write in the turn
     /// it is handed (pxl-portable `window::SQUARE_WORDS`).
     ground: u32,
+    /// Per square, its cells' four looks (`LOOKS_BYTES`).
+    looks: u32,
     /// The squares the turn handed, `window::HANDED` at most, a record each
     /// (`window::HANDED_WORDS`): its words, then its looks, its tile's
     /// samples and its lines, which only its fill reads; `heights_cs`'s,
@@ -796,7 +798,7 @@ struct CastBuffers {
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
     group: u32,
-    bound: [u32; 7],
+    bound: [u32; 8],
     eye: u32,
     window: u32,
     shards: u32,
@@ -884,6 +886,16 @@ const _: () = assert!(
     "GROUND_BYTES: the windows' squares bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
+/// The windows' squares' cells' four looks, a word a cell in the squares'
+/// order: written by the fill off each handed square (`heights_cs`), read
+/// by the cast at a hit (gpu-query-shader `World`'s `Looks`). Their own
+/// buffer, as the squares' binding has no room for them.
+const LOOKS_BYTES: u64 = SQUARES as u64 * SQUARE_CELLS as u64 * 4;
+const _: () = assert!(
+    crate::frame::shader::floor::fits(LOOKS_BYTES, true),
+    "LOOKS_BYTES: the squares' looks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
+);
+
 /// `bound_cs`'s and `ways_cs`'s one group: its level or its pass at a
 /// dynamic offset (`SLOT_STRIDE`), the fresh frames and the frames it writes
 /// the levels or the runs of. The cast's, `start_cs`'s and `joined_cs`'s one
@@ -950,8 +962,9 @@ impl RaysPass {
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             let frames_buffer = buffer(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
             let fresh = buffer(word_bytes((HANDED_WORDS * HANDED) as usize), storage);
+            let looks = buffer(LOOKS_BYTES as u32, storage);
             let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &compute::HEIGHTS_GROUP);
-            let heights_group = g.bind_group(heights_built.layouts[0], &[buffer_entry(0, fresh), buffer_entry(1, frames_buffer)]);
+            let heights_group = g.bind_group(heights_built.layouts[0], &[buffer_entry(0, fresh), buffer_entry(1, frames_buffer), buffer_entry(2, looks)]);
             // Each slot's number in it, written once: `bound_cs`'s level,
             // `ways_cs`'s pass.
             let slots = buffer((LEVELS + 1) * SLOT_STRIDE, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
@@ -963,6 +976,7 @@ impl RaysPass {
             let (bound_group, ways_group) = (g.bind_group(bound_built.layouts[0], &entries), g.bind_group(ways_built.layouts[0], &entries));
             GroundBuffers {
                 ground: frames_buffer,
+                looks,
                 fresh,
                 fresh_len: 0,
                 asked: [CellsBack::default(); SQUARES as usize],
@@ -1007,7 +1021,7 @@ impl RaysPass {
         // No cast, no world: no ray cast, none drawn and no decor grown.
         // What the cast reads stands for the next: the ground it binds is
         // made once.
-        let (Some(cast), Some(ground)) = (cast, self.ground.as_ref().map(|gb| gb.ground)) else {
+        let (Some(cast), Some((ground, looks))) = (cast, self.ground.as_ref().map(|gb| (gb.ground, gb.looks))) else {
             self.kind = FrameKind::plain;
             if let Some(c) = self.cast.as_mut() {
                 c.grown.off();
@@ -1031,7 +1045,7 @@ impl RaysPass {
                 refold: false,
                 joined_back: false,
                 group: 0,
-                bound: [0; 7],
+                bound: [0; 8],
                 eye: buffer(word_bytes(eye::WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
                 window: buffer(word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize), storage | buffer_usage::COPY_SRC),
                 shards: 0,
@@ -1105,7 +1119,7 @@ impl RaysPass {
             g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
             c.overwrite_revision = Some(o.revision);
         }
-        let bound = [c.eye, c.window, ground, rays.0, c.shards, c.overwrites, c.starts];
+        let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, c.starts];
         if bound != c.bound {
             release(c.group);
             c.group = cast_group(g, &c.built, bound);
@@ -1297,15 +1311,16 @@ impl RaysPass {
 
 /// The cast's group 0 over `bound`: the eye, the window and its fold
 /// (`joined_cs` writes it, the cast reads it), the tiles' frames, the
-/// surface's rays, the service area's index, the overwrites and where its
+/// surface's rays, the squares' looks, the service area's index, the overwrites and where its
 /// rays start (`start_cs` writes it, `cast_cs` reads it).
-fn cast_group(g: &Gpu, built: &Built, bound: [u32; 7]) -> u32 {
-    let [eye, window, ground, rays, shards, overwrites, starts] = bound;
+fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
+    let [eye, window, ground, rays, looks, shards, overwrites, starts] = bound;
     let entries = [
         buffer_entry(0, eye),
         buffer_entry(1, window),
         buffer_entry(2, ground),
         view_entry(3, rays),
+        buffer_entry(4, looks),
         buffer_entry(5, shards),
         buffer_entry(6, overwrites),
         buffer_entry(7, starts),

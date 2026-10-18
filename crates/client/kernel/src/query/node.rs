@@ -154,8 +154,9 @@ impl World<'_> {
         let mut reading = Reading::new(self, at, lines);
         let (i, block) = world::node(&mut reading, &Windowed, &lanes, handed, &mut place, (zoom, c), asked, cuts);
         let answer = reading.answer(i.kind != Kind::Lacks, || {
-            // A block's value, a split's slab (`world::slab_word`); air and void none.
-            let b = if block && i.kind == Kind::Block || i.kind == Kind::Split { i.block } else { VOID };
+            // A block's value, a split's slab (`world::slab_word`); air and void
+            // none. The four looks it is drawn by are the GPU's to draw.
+            let b = if block && i.kind == Kind::Block || i.kind == Kind::Split { i.block[0] } else { VOID };
             (In { kind: i.kind, block: b }, block)
         });
         at.ground = place;

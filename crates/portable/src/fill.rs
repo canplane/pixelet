@@ -84,6 +84,10 @@ impl Squares for Fresh<'_> {
     fn origin(&self, _: u32) -> ([i32; 2], bool) {
         ([0; 2], false)
     }
+    /// Its own look four times: what `level` folds reads no look.
+    fn look(&self, _: u32, _: u32, i: u32) -> u32 {
+        ground::word([laid_of(self.ground, self.base, i) & 0xff; 4])
+    }
     fn column(&self, _: u32, _: u32, i: u32) -> u32 {
         column_of(self.ground, self.base, i)
     }
@@ -172,6 +176,16 @@ pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
     let gone1 = if cell == crate::LEAF_CELL { gone(1) } else { gone0 };
     let next = ground::own(at(fresh, rec + LOOKS_AT + i + 1), cell);
     put(ground, base + LAID_AT + i / 2, window::laid_half(own, gone0) | window::laid_half(next, gone1) << 16);
+}
+
+/// Cell `[x, y]`'s four looks of the square a frame hands `k`-th in
+/// `fresh`, as handed (`LOOKS_AT`), into `looks`, a word a cell,
+/// `SQUARE_CELLS` a square in the squares' order: what a ray's hit is
+/// drawn by (`ground::Cell::four`), the one read of them past the fill.
+pub fn look(looks: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
+    let rec = window::handed_at(k);
+    let i = window::index_of([x, y]);
+    put(looks, at(fresh, rec + FRESH_SQUARE) * SQUARE_CELLS + i, at(fresh, rec + LOOKS_AT + i));
 }
 
 /// The ways of the square a frame hands `k`-th in `fresh`, for column `i`:

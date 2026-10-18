@@ -31,7 +31,9 @@ use crate::{Zoom, LEAF_CELL};
 /// write over it (`window::ways_over`), one value whichever source holds it
 /// (doc/minutes/20261005-the-ground-is-a-carto-palette.md, "One value
 /// space"); `PLACED_BLOCK` over a placed value, the source control tells an
-/// edit by, which nothing drawn reads. Coarser, a split where
+/// edit by, which nothing drawn reads. Its second word is the four looks
+/// the ground's block is drawn by (`ground::Cell::four`, `ground::word`),
+/// none for any other. Coarser, a split where
 /// any layer may fill under it at a zoom asked, each by its own bound —
 /// what is placed (`overwrite::over`), the ground's (`ground::slab`), the
 /// ways' (`ways::slab`), each meeting the node (`ground::meets`) — its
@@ -48,7 +50,7 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
     (zoom, c): (Zoom, [i32; 3]),
     [far, near]: [Zoom; 2],
     [carve, hide]: [Cut; 2],
-) -> (In<u32>, bool) {
+) -> (In<[u32; 2]>, bool) {
     let mut block = zoom >= near || zoom >= LEAF_CELL;
     // Where what is placed splits the node, where along z it may fill.
     let (mut placed, mut splits) = (ground::EMPTY, false);
@@ -60,7 +62,7 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
             return (
                 In {
                     kind: Kind::Block,
-                    block: PLACED_BLOCK | over.block,
+                    block: [PLACED_BLOCK | over.block, 0],
                 },
                 block,
             );
@@ -76,7 +78,8 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
         i.block
     };
     if block {
-        return (In { kind: i.kind, block: value }, block);
+        let four = if i.kind == Kind::Block { ground::word(cell.four(zoom, value)) } else { 0 };
+        return (In { kind: i.kind, block: [value, four] }, block);
     }
     // Coarser, what is placed splits it where it may fill, and the ways
     // what the ground leaves air where they may; a split's slab is every
@@ -87,7 +90,7 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
     let fill = ground::meets(ways, (zoom, c[2]), near);
     let kind = if splits || i.kind == Kind::Block && fill { Kind::Split } else { i.kind };
     if kind != Kind::Split {
-        return (In { kind, block: value }, block);
+        return (In { kind, block: [value, 0] }, block);
     }
     let own = match i.kind {
         Kind::Split => slab_of(i.block),
@@ -95,7 +98,7 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
         _ => ground::EMPTY,
     };
     let joined = ground::join(ground::join(own, ways), placed);
-    (In { kind, block: slab_word(joined) }, block)
+    (In { kind, block: [slab_word(joined), 0] }, block)
 }
 
 /// A split's block word (`node`): where anything may fill the node along z,

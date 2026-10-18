@@ -473,8 +473,9 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
 }
 
 /// A cell's ground, as a column reads it: its look (`unknown` for the
-/// service area's wall), its top in blocks of its zoom, and its runs among
-/// its square's, first to past its last
+/// service area's wall), its top in blocks of its zoom, the four looks its
+/// fold took (`looks`, `dx + 2·dy`), and its runs among its square's, first
+/// to past its last
 /// (`window::column_first` of its column's word and the next's), which the
 /// visit that read it reads what the ways write in it off
 /// (`window::ways_over`).
@@ -482,12 +483,18 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
 pub struct Cell {
     pub look: u32,
     pub top: i32,
+    pub fold: [u32; 4],
     pub runs: [u32; 2],
 }
 
 impl Cell {
     /// No ground: void at sea level, as a column no tile is read for.
-    pub const NONE: Cell = Cell { look: VOID, top: 0, runs: [0; 2] };
+    pub const NONE: Cell = Cell {
+        look: VOID,
+        top: 0,
+        fold: [VOID; 4],
+        runs: [0; 2],
+    };
 
     /// Whether it has ground at all: a look the catalog grounds, or the wall.
     pub fn grounded(&self) -> bool {
@@ -501,6 +508,20 @@ impl Cell {
     fn opens(&self, cell: Zoom, z: i32) -> bool {
         let face = face_height(cell, self.top);
         self.look != UNKNOWN && z < blocks(cell, face as f32) - leaf_blocks(cell) && z >= rock(cell, face)
+    }
+
+    /// The four looks block `g` of the cell at `cell` is drawn by: where it
+    /// is the cell's own look at a cell coarser than the leaves', the four
+    /// its fold took, whose mean it is drawn as, "the 2 × 2 … by design"
+    /// (doc/minutes/20260928-what-is-drawn-is-what-the-screen-covers.md);
+    /// else, a stratum under it, a way over it or a leaf's cell, `g` four
+    /// times.
+    pub fn four(&self, cell: Zoom, g: u32) -> [u32; 4] {
+        if cell >= LEAF_CELL || g != self.look {
+            [g; 4]
+        } else {
+            self.fold
+        }
     }
 
     /// Block `z` of the cell at `cell`, a cave's air where a cave may take
