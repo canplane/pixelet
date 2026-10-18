@@ -61,7 +61,7 @@ impl World<'_> {
                 let (line, mut place) = (self.terrain.cursor(node, cell), Found::NONE);
                 // The ground's faces, in leaf cells.
                 self.terrain
-                    .relief(&line, &mut place, node)
+                    .relief(&line, &mut place, node, cell)
                     .exact()
                     .is_some_and(|[[lo, hi], _]| f64::from(bedrock(hi)) * unit <= space.min[2] && space.max[2] <= f64::from(ceiling(lo)) * unit)
             })

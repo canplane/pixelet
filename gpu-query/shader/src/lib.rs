@@ -189,7 +189,7 @@ impl ground::Held for World<'_> {
     /// the finest holding them present (`window::bounded`), as the CPU reads
     /// it (pxl-portable `Held::relief`).
     fn relief(&mut self, place: &mut Found, cell: u32, (zoom, c): (u32, [i32; 3])) -> (ground::Bounds, bool) {
-        let (r, _, here) = window::bounded(self, place, window::held_to(cell), (zoom, [c[0], c[1]]));
+        let (r, _, here) = window::bounded(self, place, cell, (zoom, [c[0], c[1]]));
         (r, here)
     }
 

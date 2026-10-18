@@ -600,10 +600,14 @@ pub trait Windows: Ran + crate::area::Area {}
 
 impl<W: Ran + crate::area::Area> Windows for W {}
 
-/// The zoom a cell at `cell` is read at: past the leaves, a leaf's.
+/// The zoom a cell at `cell` is read at, the eye's windows' (`FIRST_CELL`
+/// to `LEAF_CELL`): past the leaves a leaf's, coarser than the coarsest
+/// window that window's.
 pub const fn held_to(cell: Zoom) -> Zoom {
     if cell > LEAF_CELL {
         LEAF_CELL
+    } else if cell < FIRST_CELL {
+        FIRST_CELL
     } else {
         cell
     }
@@ -791,7 +795,8 @@ pub fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> crate::ground::Bo
     }
 }
 
-/// The lowest and highest the cells at `cell` reach under the node
+/// The lowest and highest the cells at `cell`, held to the windows'
+/// zooms (`held_to`), reach under the node
 /// `(zoom, c)`: off the finest window holding them present, stepped from
 /// `place`, which becomes where they are held (`step`), one
 /// entry of its square's levels, level 0 the column holding a node no wider
@@ -801,6 +806,7 @@ pub fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> crate::ground::Bo
 /// not held at `cell`, which reads nothing and only splits more; false where
 /// no window holds it, a lack.
 pub fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> (crate::ground::Bounds, Zoom, bool) {
+    let cell = held_to(cell);
     // The node's first cell at `cell`, or the cell holding it.
     let g = [crate::index_at(zoom, c[0], cell), crate::index_at(zoom, c[1], cell)];
     if cell > zoom + LEVELS {

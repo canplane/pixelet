@@ -32,9 +32,11 @@ impl Residency<TerrainTile> {
     /// anything: a reader asks that first, the descent of its shard
     /// (pxl-portable `area::Shard`). `place` is where a node over it found
     /// its cells, or `Found::NONE`, and becomes where its own are
-    /// (pxl-portable `window::step`).
-    pub fn relief(&self, line: &Line, place: &mut Found, node: Node<2>) -> Answer<Bounds> {
-        let (r, from, here) = relief(line.tile, place, node);
+    /// (pxl-portable `window::step`). Its cells are read at `cell` as the
+    /// GPU reads them (pxl-portable `window::bounded`); `line` names the
+    /// tile and says whether the window read is its ground's own.
+    pub fn relief(&self, line: &Line, place: &mut Found, node: Node<2>, cell: Zoom) -> Answer<Bounds> {
+        let (r, from, here) = cells::bounded(&Windowed, place, cell, (node.0, node.1.map(|v| v as i32)));
         held(line, from, here, r)
     }
 
@@ -54,7 +56,7 @@ impl Residency<TerrainTile> {
     /// `lines` last walked: nodes beside each other share their lines down
     /// to where they part, and pay a look-up a zoom only past it.
     pub fn relief_walked(&self, lines: &mut Lines, place: &mut Found, node: Node<2>, cell: Zoom) -> Answer<Bounds> {
-        self.relief(&self.seek(lines, bound_tile(node, cell)), place, node)
+        self.relief(&self.seek(lines, bound_tile(node, cell)), place, node, cell)
     }
 
     /// `bound`, its line stepped from where `lines` last walked: a walk in
@@ -90,13 +92,6 @@ fn held<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
         true if line.source.is_some_and(|s| from >= GROUND.cell_zoom(s.zoom)) => Answer::Exact(v),
         true => Answer::Coarser(v, line.tile),
     }
-}
-
-/// The bounds under a node over the cells of `tile`, off the finest window
-/// holding them (pxl-portable `window::bounded`), stepped from `place`, and
-/// that window's zoom.
-fn relief(tile: Tile, place: &mut Found, (zoom, at): Node<2>) -> (Bounds, Zoom, bool) {
-    cells::bounded(&Windowed, place, GROUND.cell_zoom(tile.zoom), (zoom, at.map(|v| v as i32)))
 }
 
 /// A node's center, in units.
@@ -145,7 +140,7 @@ impl Query for Residency<TerrainTile> {
         }
         let whole = region((zoom, at));
         let mut place = Found::NONE;
-        self.relief(line, &mut place, node).map(|[ground, ways]| {
+        self.relief(line, &mut place, node, cell).map(|[ground, ways]| {
             let [lo, hi] = [ground[0].min(ways[0]), ground[1].max(ways[1])];
             let lo = (f64::from(lo) * units(GROUND.cell()) - units(cell)).max(whole.min[2]);
             let hi = (f64::from(hi) * units(GROUND.cell())).min(whole.max[2]);

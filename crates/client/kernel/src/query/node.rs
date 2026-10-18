@@ -247,7 +247,7 @@ impl ground::Held for Reading<'_, '_> {
     fn relief(&mut self, place: &mut Found, cell: Zoom, _: (Zoom, [i32; 3])) -> (ground::Bounds, bool) {
         let (zoom, c) = self.at.node;
         let line = self.world.line(self.at, cell);
-        match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]))) {
+        match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]), cell)) {
             Some(r) => (r, true),
             None => ([ground::EMPTY; 2], false),
         }
