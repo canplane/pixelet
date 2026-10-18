@@ -188,7 +188,11 @@ pub fn world_turn() -> f64 {
     effect!(worst, bootstrap, map_bootstrap_step());
     effect!(worst, orientation, orientation_watchdog_step(platform.orientation));
     effect!(worst, follow, follow_mode_step());
-    effect!(worst, destination, crate::control::navigation::destination::destination_step());
+    effect!(worst, destination, {
+        // What the walker found under an unknown Z, let go where it moved.
+        crate::control::navigation::support::support_step();
+        crate::control::navigation::destination::destination_step()
+    });
     // After every writer of the focus, before anything observes the view.
     effect!(worst, view, crate::view::frame::pose::view_compose(crate::control::camera::controller::pose()));
     effect!(worst, decor, decor_assets_wanted());

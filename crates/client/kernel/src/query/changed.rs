@@ -56,3 +56,33 @@ pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {
     let mut regions = c.ground.iter().chain(layer).map(|t| t.region()).chain(c.written.iter().copied());
     regions.any(|r| nearest_box(&r, about).shares(columns))
 }
+
+/// What a step asked the world, kept with what it asked it of and the
+/// columns its answer read, their corners in units: asked again only where
+/// what it asks of moved, or a change to the ground or the objects touched
+/// those columns (`kept`).
+pub struct Asked<K, A>(Option<(K, [[f64; 2]; 2], A)>);
+
+impl<K: PartialEq, A: Copy> Asked<K, A> {
+    pub const NONE: Asked<K, A> = Asked(None);
+
+    /// Let go where a change touched its columns: looked at every frame
+    /// turn, so it sees each change once (`within`).
+    pub fn kept(&mut self) {
+        if self.0.as_ref().is_some_and(|&(_, columns, _)| within(columns, &[])) {
+            self.0 = None;
+        }
+    }
+
+    /// The answer to `of`, which reads `columns`: the one kept, else `ask`'s.
+    pub fn of(&mut self, of: K, columns: [[f64; 2]; 2], ask: impl FnOnce() -> A) -> A {
+        match &self.0 {
+            Some((k, _, a)) if *k == of => *a,
+            _ => {
+                let a = ask();
+                self.0 = Some((of, columns, a));
+                a
+            }
+        }
+    }
+}

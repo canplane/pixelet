@@ -15,7 +15,7 @@ use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
 use crate::model::variant_spec::IDLE_CLIP;
-use crate::query::changed::within;
+use crate::query::changed::Asked;
 use crate::query::World;
 use crate::query::{over, under, walks};
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
@@ -86,34 +86,6 @@ struct Figure {
     drawn: Asked<([f64; 2], f64, Zoom), f64>,
 }
 
-/// What a step asked the world, kept with what it asked it of and the
-/// columns its answer read, their corners in units: asked again only where
-/// what it asks of moved, or a change to the ground touched those columns
-/// (`kept`).
-struct Asked<K, A>(Option<(K, [[f64; 2]; 2], A)>);
-
-impl<K: PartialEq, A: Copy> Asked<K, A> {
-    /// Let go where a change to the ground touched its columns: looked at
-    /// every frame turn, so it sees each change once (`changed::within`).
-    fn kept(&mut self) {
-        if self.0.as_ref().is_some_and(|&(_, columns, _)| within(columns, &[])) {
-            self.0 = None;
-        }
-    }
-
-    /// The answer to `of`, which reads `columns`: the one kept, else `ask`'s.
-    fn of(&mut self, of: K, columns: [[f64; 2]; 2], ask: impl FnOnce() -> A) -> A {
-        match &self.0 {
-            Some((k, _, a)) if *k == of => *a,
-            _ => {
-                let a = ask();
-                self.0 = Some((of, columns, a));
-                a
-            }
-        }
-    }
-}
-
 impl Figure {
     fn new(variant: &CharacterVariant, target: [f64; 2]) -> Figure {
         Figure {
@@ -129,7 +101,7 @@ impl Figure {
             initial_facing_done: false,
             follow_walk_until: 0.0,
             stands_z: None,
-            drawn: Asked(None),
+            drawn: Asked::NONE,
         }
     }
 
@@ -305,8 +277,8 @@ fn companion() -> &'static mut Companion {
     COMPANION.get(|| Companion {
         person: None,
         pet: None,
-        beside: Asked(None),
-        floor: Asked(None),
+        beside: Asked::NONE,
+        floor: Asked::NONE,
     })
 }
 
