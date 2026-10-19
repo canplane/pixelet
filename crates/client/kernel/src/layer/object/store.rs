@@ -215,6 +215,24 @@ pub struct Store {
     /// Bumped by every write that changes the tree, so a reader holding a
     /// copy of its lanes, the GPU's, knows to take them again.
     revision: u32,
+    /// The blocks the tree wrote between the revision the lanes were last
+    /// handed at (`since`) and that hand (`gpu_lanes`), each once.
+    handed: Vec<u32>,
+    since: u32,
+}
+
+/// The tree's lanes as the GPU takes them (`Store::gpu_lanes`): both as
+/// they live, the room either has before it grows, the store's revision,
+/// and the blocks written since the lanes were last handed, at `since`, by
+/// their first slots: a copy of them at `since` with those blocks taken
+/// again is the lanes at `revision`.
+pub struct GpuLanes<'a> {
+    pub heap: &'a [u32],
+    pub data: &'a [u32],
+    pub room: usize,
+    pub revision: u32,
+    pub since: u32,
+    pub written: &'a [u32],
 }
 
 impl Default for Store {
@@ -223,6 +241,8 @@ impl Default for Store {
             tree: Tree::new(EMPTY.word()),
             ext: Pools::default(),
             revision: 0,
+            handed: Vec::new(),
+            since: 0,
         }
     }
 }
@@ -239,10 +259,26 @@ impl Store {
         Lanes(&self.tree)
     }
 
-    /// The tree's heap and data lanes as they live, the room either has
-    /// before it grows, and the store's revision.
-    pub fn raw_lanes(&self) -> (&[u32], &[u32], usize, u32) {
-        (self.tree.heap(), self.tree.data(), self.tree.room(), self.revision)
+    /// What is placed as of now, which every write moves.
+    pub fn revision(&self) -> u32 {
+        self.revision
+    }
+
+    /// The tree's lanes as the GPU takes them (`GpuLanes`): the blocks
+    /// written since the last hand, each once, and the revision it was at.
+    pub fn gpu_lanes(&mut self) -> GpuLanes<'_> {
+        self.tree.take_written(&mut self.handed);
+        self.handed.sort_unstable();
+        self.handed.dedup();
+        let since = core::mem::replace(&mut self.since, self.revision);
+        GpuLanes {
+            heap: self.tree.heap(),
+            data: self.tree.data(),
+            room: self.tree.room(),
+            revision: self.revision,
+            since,
+            written: &self.handed,
+        }
     }
 
     /// Every node anything is under, from the roots down, in `about`'s

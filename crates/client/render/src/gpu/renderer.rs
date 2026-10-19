@@ -191,12 +191,16 @@ pub struct Cast<'a> {
 
 /// The overwrites' tree (pxl-kernel layer/object/store.rs) as it lives: its
 /// heap and data lanes, unwritten until the page replays the turn, the room
-/// either has before it grows, and the revision they are at.
+/// either has before it grows, the revision they are at, and the blocks
+/// written since `since`, the revision they were last handed at, by their
+/// first slots (`GpuLanes`).
 pub struct Overwrites<'a> {
     pub heap: &'a [u32],
     pub data: &'a [u32],
     pub room: usize,
     pub revision: u32,
+    pub since: u32,
+    pub written: &'a [u32],
 }
 
 /// Takes a square while the turn's stream has room for it.
@@ -1133,7 +1137,15 @@ impl RaysPass {
             eye,
             window,
             shards,
-            overwrites: Overwrites { heap: _, data: _, room, revision },
+            overwrites:
+                Overwrites {
+                    heap: _,
+                    data: _,
+                    room,
+                    revision,
+                    since: _,
+                    written: _,
+                },
             decor: _,
         } = &cast;
         let r = &mut c.read;
@@ -1180,8 +1192,17 @@ impl RaysPass {
             c.overwrite_revision = None;
         }
         if c.overwrite_revision != Some(o.revision) {
-            g.upload_buffer(c.overwrites, 0, bytes(o.heap));
-            g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
+            if c.overwrite_revision == Some(o.since) {
+                // Held at `since`: the blocks written after it alone.
+                for &first in o.written {
+                    let (at, to) = (first as usize, first as usize + 8);
+                    g.upload_buffer(c.overwrites, word_bytes(at), bytes(&o.heap[at..to]));
+                    g.upload_buffer(c.overwrites, word_bytes(o.room + at), bytes(&o.data[at..to]));
+                }
+            } else {
+                g.upload_buffer(c.overwrites, 0, bytes(o.heap));
+                g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
+            }
             c.overwrite_revision = Some(o.revision);
         }
         let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, c.starts, pool];

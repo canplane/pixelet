@@ -58,11 +58,19 @@ pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
 }
 
 /// What is placed, for the GPU: the objects' tree's lanes as they live, the
-/// room either has, and the store's revision, so the GPU takes them again
-/// only when they changed.
+/// room either has, the store's revision, and the blocks written since the
+/// revision the lanes were last handed at, so the GPU takes only those
+/// again where it holds that one (layer/object/store.rs `gpu_lanes`).
 pub fn overwrites() -> Overwrites<'static> {
-    let (heap, data, room, revision) = objects().raw_lanes();
-    Overwrites { heap, data, room, revision }
+    let l = objects().gpu_lanes();
+    Overwrites {
+        heap: l.heap,
+        data: l.data,
+        room: l.room,
+        revision: l.revision,
+        since: l.since,
+        written: l.written,
+    }
 }
 
 /// Each square the windows want to `write`, while it takes them: off the
