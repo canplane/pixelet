@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: 92a92549bc5e22411bcb38a9b226e4ea13eec2a23d44bda6ecf79b3e732241ea
+// Inputs: ab2673123805dcb1c6b8fd356286d4e4e35e7f143a6ad44eec7b3cfe34ff0c4a
 struct type_4 {
     member: array<u32>,
 }
@@ -20,11 +20,11 @@ var<storage> global_2: type_4;
 var<storage, read_write> global_3: type_10;
 
 fn function_() {
-    var phi_54_: u32;
-    var phi_57_: u32;
-    var phi_83_: u32;
-    var phi_91_: u32;
-    var phi_58_: u32;
+    var phi_59_: u32;
+    var phi_62_: u32;
+    var phi_88_: u32;
+    var phi_96_: u32;
+    var phi_63_: u32;
 
     let _e12 = global;
     let _e13 = global_1;
@@ -34,43 +34,43 @@ fn function_() {
     let _e20 = (_e19 + 19417u);
     if (_e20 < _e15) {
         let _e24 = global_2.member[_e20];
-        phi_54_ = _e24;
+        phi_59_ = _e24;
     } else {
-        phi_54_ = 0u;
+        phi_59_ = 0u;
     }
-    let _e26 = phi_54_;
-    phi_57_ = _e13.x;
+    let _e26 = phi_59_;
+    phi_62_ = _e13.x;
     loop {
-        let _e29 = phi_57_;
+        let _e29 = phi_62_;
         let _e30 = (_e29 < _e26);
         if _e30 {
             let _e32 = ((_e19 + 19418u) + _e29);
             if (_e32 < _e15) {
                 let _e36 = global_2.member[_e32];
-                phi_83_ = _e36;
+                phi_88_ = _e36;
             } else {
-                phi_83_ = 0u;
+                phi_88_ = 0u;
             }
-            let _e38 = phi_83_;
+            let _e38 = phi_88_;
             if (0u < _e17) {
                 let _e42 = atomicAdd((&global_3.member[0u]), 1u);
-                phi_91_ = _e42;
+                phi_96_ = _e42;
             } else {
-                phi_91_ = 0u;
+                phi_96_ = 0u;
             }
-            let _e44 = phi_91_;
+            let _e44 = phi_96_;
             let _e45 = (1u + _e44);
             if (_e45 < _e17) {
                 atomicStore((&global_3.member[_e45]), _e38);
             }
-            phi_58_ = (_e29 + 64u);
+            phi_63_ = (_e29 + 64u);
         } else {
-            phi_58_ = u32();
+            phi_63_ = u32();
         }
-        let _e51 = phi_58_;
+        let _e51 = phi_63_;
         continue;
         continuing {
-            phi_57_ = _e51;
+            phi_62_ = _e51;
             break if !(_e30);
         }
     }

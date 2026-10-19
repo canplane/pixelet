@@ -830,7 +830,7 @@ fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
     (if ok { 1 + top - n } else { 0 }, ok)
 }
 
-use tree::{FREED_AT, RECORDS_AT, RECORD_WORDS, SCRATCH_WORDS};
+use tree::{FREED_AT, RECORDS_AT, RECORD_WORDS};
 
 /// Block `first / 8`'s record, its id and its sixteen words, the next of
 /// the scratch at `at`.
@@ -926,7 +926,7 @@ pub fn ways_tree_cs(
     let (k, t, lanes) = (group.z, lane.x, fill::SCAN_THREADS);
     let of = fill::of(fresh, k);
     let base = square_at(at(fresh, window::handed_at(k) + window::FRESH_SQUARE));
-    let mine = k * SCRATCH_WORDS;
+    let mine = fill::scratch_at(k);
     let mut pool = tree::Lane(pool);
     // A level's candidate `c`: slot `c % 8` of the block whose id is the
     // level's `c / 8`-th off the stack, from where its ids begin.
@@ -1060,7 +1060,7 @@ pub fn ways_freed_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] scratch: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] stack: &mut [u32],
 ) {
-    let mine = group.z * SCRATCH_WORDS;
+    let mine = fill::scratch_at(group.z);
     let n = at(scratch, mine + FREED_AT);
     let mut r = lane.x;
     while r < n {
