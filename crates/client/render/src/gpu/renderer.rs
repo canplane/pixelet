@@ -181,7 +181,8 @@ pub struct Cast<'a> {
     /// holds, X and Y, and whether it is present, and a spare.
     pub window: &'a [i32],
     /// The service area's index (pxl-portable `area::Area`), its keys four a
-    /// row (pxl-kernel scene/cast.rs `shards`).
+    /// row (pxl-kernel scene/cast.rs `shards`); read where it lies,
+    /// unwritten until the page replays the turn.
     pub shards: &'a [[i32; 4]],
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU grows and draws over the same world, none where
@@ -1186,7 +1187,8 @@ impl RaysPass {
             c.shards = g.buffer(word_bytes(4 * c.shard_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         }
         if shards_moved || shards_grow {
-            g.write_buffer(c.shards, 0, bytes(cast.shards));
+            // Read where the kernel holds it, one record however large.
+            g.upload_buffer(c.shards, 0, bytes(cast.shards));
         }
         // Sized by the lanes' own room, so it is made again only when they grow.
         let o = &cast.overwrites;
@@ -1200,12 +1202,17 @@ impl RaysPass {
             c.overwrite_revision = None;
         }
         if c.overwrite_revision != Some(o.revision) {
-            if c.overwrite_revision == Some(o.since) {
-                // Held at `since`: the blocks written after it alone.
+            // Held at `since`: the blocks written after it alone, a record
+            // each, where the stream has room for them all; else both lanes
+            // whole, read where they live, two records however large.
+            fn block(lane: &[u32], first: u32) -> &[u32] {
+                &lane[first as usize..first as usize + 8]
+            }
+            let listed = |lane: &[u32]| o.written.iter().map(|&f| write_buffer_bytes(bytes(block(lane, f)))).sum::<usize>();
+            if c.overwrite_revision == Some(o.since) && crate::gpu::api::room(listed(o.heap) + listed(o.data)) {
                 for &first in o.written {
-                    let (at, to) = (first as usize, first as usize + 8);
-                    g.upload_buffer(c.overwrites, word_bytes(at), bytes(&o.heap[at..to]));
-                    g.upload_buffer(c.overwrites, word_bytes(o.room + at), bytes(&o.data[at..to]));
+                    g.write_buffer(c.overwrites, word_bytes(first as usize), bytes(block(o.heap, first)));
+                    g.write_buffer(c.overwrites, word_bytes(o.room + first as usize), bytes(block(o.data, first)));
                 }
             } else {
                 g.upload_buffer(c.overwrites, 0, bytes(o.heap));

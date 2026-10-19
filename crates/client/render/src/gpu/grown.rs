@@ -31,7 +31,8 @@ pub struct DecorFrame<'a> {
     /// pxl-portable `scatter::drawn`'s frame words, `PARAM_WORDS` of them.
     pub params: &'a [u32],
     /// Placed decor, a record each as `decor_cs` writes one: its kind,
-    /// variant and turn, then its box's min corner in leaf cells.
+    /// variant and turn, then its box's min corner in leaf cells; read where
+    /// it lies, unwritten until the page replays the turn.
     pub placed: &'a [[u32; 4]],
     /// The anchor the lanes are about, less the frame's eye: where the decor
     /// block is drawn.
@@ -248,7 +249,8 @@ impl Grown {
         if placed_moved {
             g.write_buffer(self.records, scatter::PLACED_HEAD * 4, bytes(&[f.placed.len() as u32, 0, 0, 0]));
             if !f.placed.is_empty() {
-                g.write_buffer(self.records, scatter::record_at(scatter::SLOT_RECORDS).0 * 4, bytes(f.placed.as_flattened()));
+                // Read where the kernel holds them, one record however many.
+                g.upload_buffer(self.records, scatter::record_at(scatter::SLOT_RECORDS).0 * 4, bytes(f.placed.as_flattened()));
             }
         }
         let c = &mut self.counted;
