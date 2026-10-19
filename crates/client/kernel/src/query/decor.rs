@@ -27,7 +27,7 @@ use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Meta};
 use crate::layer::object::meta::placed;
 use crate::layer::object::store::tree_key;
-use crate::layer::residency::{Line, Lines};
+use crate::layer::residency::Line;
 use crate::model::registry::Models;
 use pxl_portable::area::{self, Shard};
 use pxl_portable::cast;
@@ -178,11 +178,12 @@ impl Around {
     }
 
     /// The highest the relief reaches in each of the 3 × 3 columns about
-    /// `(zoom, a)`, none where it lacks: none at all where the walk did not
-    /// read them.
-    fn reliefs(&self, (zoom, a): (Zoom, [i32; 2])) -> Option<[Option<i32>; 9]> {
+    /// `(zoom, a)`, none where it lacks: the walk read them entering `a`
+    /// (`read_columns`), the last it entered at `zoom`.
+    fn reliefs(&self, (zoom, a): (Zoom, [i32; 2])) -> [Option<i32>; 9] {
         let z = zoom as usize;
-        (self.columns_at[z] == a).then(|| self.columns[z].map(|c| c.and_then(|c| c.hi)))
+        debug_assert!(self.columns_at[z] == a, "the walk entered the node it reads about");
+        self.columns[z].map(|c| c.and_then(|c| c.hi))
     }
 
     /// The nodes the objects' tree holds about `a` at `zoom` or over them,
@@ -213,10 +214,12 @@ impl Around {
     }
 
     /// Whether anything, air included, is placed in the 27 nodes about `a`
-    /// at `zoom` or over them: none where the walk did not go through `a`.
-    fn holds(&self, (zoom, a): Node<3>) -> Option<bool> {
+    /// at `zoom` or over them: the walk went through `a` (`visit`), the last
+    /// it entered at `zoom`.
+    fn holds(&self, (zoom, a): Node<3>) -> bool {
         let z = zoom as usize;
-        (self.at[z] == a).then(|| self.held[z].iter().any(|h| h.holds()))
+        debug_assert!(self.at[z] == a, "the walk entered the node it reads about");
+        self.held[z].iter().any(|h| h.holds())
     }
 }
 
@@ -388,43 +391,30 @@ impl<'a> World<'a> {
     /// reach and the objects' pyramid no record, past the area none, as
     /// `shard`, what the descent established at the node, says. What is not
     /// held may.
+    ///
+    /// Read off what the walk holds about the node's ancestor at the zoom it
+    /// is looked about at (`Strike::about_zoom`, `Around`), its last entered
+    /// there: the walk enters every node through its parent, an ancestor
+    /// before its children and no later along the ray, so under the held
+    /// span as they are; and it entered no other node at that zoom since,
+    /// a node it comes back to being as fine or finer.
     pub(super) fn may_strike(&self, s: &Strike<'a>, (zoom, c): Node<3>, shard: Shard) -> bool {
         let z = s.about_zoom(zoom);
         let a = c.map(|v| v >> (zoom - z));
         let low = cube(zoom, c).min[2] - s.reach;
         let leaf = units(GROUND.cell());
         let node = (zoom, [c[0], c[1]]);
-        // The nine's reliefs as the walk read them about `a` (`Around`); else
-        // their lines share the walk down to where they part.
         let read = s.about.reliefs((z, [a[0], a[1]]));
-        let mut lines = Lines::default();
         let ground = (-1..=1).any(|dy| {
             (-1..=1).any(|dx| {
-                let xy = (z, [a[0] + dx, a[1] + dy]);
                 // Past the area no ground stands.
-                if z >= SHARD_ZOOM && shard.past_leaf(node, area::tile_at(z, xy.1)) {
+                if z >= SHARD_ZOOM && shard.past_leaf(node, area::tile_at(z, [a[0] + dx, a[1] + dy])) {
                     return false;
                 }
-                let hi = match read {
-                    Some(r) => r[(dx + 1 + 3 * (dy + 1)) as usize],
-                    None => {
-                        let mut place = Found::NONE;
-                        self.terrain
-                            .relief_walked(&mut lines, &mut place, xy, GROUND.grid_zoom(z.min(LEAF_ZOOM)))
-                            .value()
-                            .map(|[[_, hi], _]| hi)
-                    }
-                };
-                hi.is_none_or(|hi| f64::from(hi) * leaf > low)
+                read[(dx + 1 + 3 * (dy + 1)) as usize].is_none_or(|hi| f64::from(hi) * leaf > low)
             })
         });
-        // The 27 nodes about it at once, the objects' tree walked once.
-        let side = units(z);
-        let about = Aabb {
-            min: [(a[0] - 1) as f64 * side, (a[1] - 1) as f64 * side, (a[2] - 1) as f64 * side],
-            max: [(a[0] + 2) as f64 * side, (a[1] + 2) as f64 * side, (a[2] + 2) as f64 * side],
-        };
-        ground || s.about.holds((z, a)).unwrap_or_else(|| self.objects.holds_in(&about, z))
+        ground || s.about.holds((z, a))
     }
 
     fn grown_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i32; 2]) {

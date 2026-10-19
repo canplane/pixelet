@@ -319,21 +319,6 @@ impl Store {
         }
     }
 
-    /// Whether anything, air included, is held in `space` at the cubes of
-    /// `zoom`: one walk of the tree, pruned to `space`, ended at the first
-    /// cube of `zoom` or coarser that holds something there.
-    pub fn holds_in(&self, space: &Aabb, zoom: Zoom) -> bool {
-        let mut any = false;
-        self.descend(about(space), &mut |z, _, c, leaf| {
-            if any || c.meet(*space).is_none() {
-                return false;
-            }
-            any = leaf.is_some() || z >= zoom;
-            !any
-        });
-        any
-    }
-
     /// Every leaf meeting the cube at `zoom` that holds `held`, X in the
     /// cube's frame: walked from the slot the cursor names, the node's own or
     /// the leaf over it.
