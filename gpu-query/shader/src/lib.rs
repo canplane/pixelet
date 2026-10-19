@@ -804,10 +804,29 @@ fn settle() {
     >();
 }
 
-/// The ways' pool's free stack (pxl-portable `ways::tree::POOL_BLOCKS`):
-/// how many are free, then their ids, block 0 never among them, a square's
-/// root word 0 naming no tree as a heap word 0 names no children.
-const FREE_TOP: u32 = 0;
+/// The ways' pool's free stack (pxl-portable `ways::tree::POOL_BLOCKS`
+/// words), which starts as WebGPU makes a buffer, zeroed: word `TAKEN`
+/// how many blocks are taken, the `free` after it the free blocks' ids,
+/// block 0 never among them, a square's root word 0 naming no tree as a
+/// heap word 0 names no children. A slot's id is read and written by `id`
+/// and `put_id` alone, a slot's word its id XOR its index, so a slot never
+/// written holds its own index: every block free, with no start to write.
+const TAKEN: u32 = 0;
+
+/// The blocks free when `taken` are, block 0 never one.
+fn free(taken: u32) -> u32 {
+    tree::POOL_BLOCKS - 1 - taken
+}
+
+/// The id stack slot `i` holds.
+fn id(stack: &[u32], i: u32) -> u32 {
+    at(stack, i) ^ i
+}
+
+/// Block `block` into stack slot `i`.
+fn put_id(stack: &mut [u32], i: u32, block: u32) {
+    put(stack, i, block ^ i);
+}
 
 /// An atomic add of `v` on word `i` of `s`, its old value; none past `s`.
 /// Bounded here, not by an index that panics: a panic's path is an early
@@ -824,8 +843,9 @@ fn add(s: &mut [u32], i: u32, v: u32) -> u32 {
 
 /// Block `block` back on the stack.
 fn push(stack: &mut [u32], block: u32) {
-    let k = add(stack, FREE_TOP, 1);
-    put(stack, 1 + k, block);
+    // One fewer taken: an add of -1, as the count's word is unsigned.
+    let k = free(add(stack, TAKEN, 1u32.wrapping_neg()));
+    put_id(stack, 1 + k, block);
 }
 
 /// `n` blocks off the stack together for a square that has taken `taken`:
@@ -833,26 +853,26 @@ fn push(stack: &mut [u32], block: u32) {
 /// square would take more than its most (`ways::tree::fits`), none taken.
 /// One exit, for the reason `add` gives.
 fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
-    // SAFETY: the stack's count, its first word; the buffer is never empty
+    // SAFETY: word `TAKEN`, the stack's first; the buffer is never empty
     // (pxl-render gpu/renderer.rs makes it `POOL_BLOCKS` words).
-    let count = unsafe { stack.get_unchecked_mut(FREE_TOP as usize) };
-    let mut top = unsafe { spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(count) };
+    let count = unsafe { stack.get_unchecked_mut(TAKEN as usize) };
+    let mut gone = unsafe { spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(count) };
     let (mut done, mut ok) = (false, false);
     while !done {
-        if !tree::fits(top, taken, n) {
+        if !tree::fits(free(gone), taken, n) {
             done = true;
         } else {
             // SAFETY: as above.
             let was = unsafe {
-                spirv_std::arch::atomic_compare_exchange::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }, { Semantics::NONE.bits() }>(count, top - n, top)
+                spirv_std::arch::atomic_compare_exchange::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }, { Semantics::NONE.bits() }>(count, gone + n, gone)
             };
-            (done, ok) = (was == top, was == top);
+            (done, ok) = (was == gone, was == gone);
             if !done {
-                top = was;
+                gone = was;
             }
         }
     }
-    (if ok { 1 + top - n } else { 0 }, ok)
+    (if ok { 1 + free(gone) - n } else { 0 }, ok)
 }
 
 use tree::{FREED_AT, RECORDS_AT, RECORD_WORDS};
@@ -955,7 +975,7 @@ pub fn ways_tree_cs(
     let mut pool = tree::Lane(pool);
     // A level's candidate `c`: slot `c % 8` of the block whose id is the
     // level's `c / 8`-th off the stack, from where its ids begin.
-    let slot = |stack: &[u32], from: u32, c: u32| 8 * at(stack, from + c / 8) + c % 8;
+    let slot = |stack: &[u32], from: u32, c: u32| 8 * id(stack, from + c / 8) + c % 8;
     // levels[2j], levels[2j + 1]: level j's first id on the stack and its
     // candidates; the last three words, the blocks the square has taken, its
     // cells' zoom and whether the pool held every level so far.
@@ -966,7 +986,7 @@ pub fn ways_tree_cs(
         let (from, ok) = pop(stack, 0, 1);
         set_shared(levels, t, taken, 1);
         if ok {
-            tree::root(&mut pool, of, 8 * at(stack, from));
+            tree::root(&mut pool, of, 8 * id(stack, from));
         }
         set_shared(levels, t, 0, from);
         set_shared(levels, t, 1, if ok { 8 } else { 0 });
@@ -1009,7 +1029,7 @@ pub fn ways_tree_cs(
             let flag = tree::flag(&pool, &square, 0, of, zoom, s) & (i < n);
             let rank = before + scan(sums, t, flag as u32) - flag as u32;
             if flag {
-                tree::branch(&mut pool, of, zoom, s, 8 * at(stack, next + rank));
+                tree::branch(&mut pool, of, zoom, s, 8 * id(stack, next + rank));
             } else if i < n {
                 tree::empty(&mut pool, s);
             }
@@ -1025,7 +1045,7 @@ pub fn ways_tree_cs(
             let (from, n) = (lane_word(levels, 2 * level), lane_word(levels, 2 * level + 1));
             let mut b = 0;
             while b < n / 8 {
-                freed(scratch, mine, at(stack, from + b));
+                freed(scratch, mine, id(stack, from + b));
                 b += 1;
             }
             level += 1;
@@ -1067,7 +1087,7 @@ pub fn ways_tree_cs(
     }
     settle();
     if t == 0 {
-        let root = if ok { 8 * at(stack, first) } else { 0 };
+        let root = if ok { 8 * id(stack, first) } else { 0 };
         if ok {
             record(scratch, mine, &pool, root);
         }

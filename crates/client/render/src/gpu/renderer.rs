@@ -790,8 +790,8 @@ struct GroundBuffers {
     /// A re-filled square's old ways' tree given back, its new one built,
     /// the blocks the build gave back pushed (pxl-portable `ways::tree`):
     /// each pass and its group, over the ways' pool, heap words then data
-    /// words (`POOL_BYTES`), its free stack, the count then the ids, block 0
-    /// never among them (`STACK_WORDS`), and each handed square's scratch
+    /// words (`POOL_BYTES`), its free stack, the count taken then the ids,
+    /// block 0 never among them (`STACK_WORDS`), and each handed square's scratch
     /// past its build (`ways::tree::SCRATCH_WORDS`).
     free_built: Built,
     free_group: u32,
@@ -807,14 +807,10 @@ const _: () = assert!(
     crate::frame::shader::floor::fits(POOL_BYTES, true),
     "POOL_BYTES: the ways' pool binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
-/// Its free stack: the count, then every block's id but block 0's.
+/// Its free stack: the count taken, then every block's id but block 0's,
+/// every block free but block 0 as WebGPU makes it, zeroed (gpu-query
+/// shader `TAKEN`, `id`), so nothing is written to start it.
 const STACK_WORDS: u32 = ways::tree::POOL_BLOCKS;
-/// The stack as it starts: every block free but block 0, which names none.
-fn stack_start() -> Vec<u32> {
-    let mut w: Vec<u32> = (0..STACK_WORDS).collect();
-    w[0] = STACK_WORDS - 1;
-    w
-}
 
 /// What the GPU's cast reads; it writes the world surface's rays.
 struct CastBuffers {
@@ -1016,8 +1012,7 @@ impl RaysPass {
             let (bound_built, ways_built) = (pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP), pipelines.build_compute(g, SHADER_WAYS, &BOUND_GROUP));
             let (bound_group, ways_group) = (g.bind_group(bound_built.layouts[0], &entries), g.bind_group(ways_built.layouts[0], &entries));
             let pool = buffer(POOL_BYTES as u32, buffer_usage::STORAGE);
-            let stack = buffer(word_bytes(STACK_WORDS as usize), storage);
-            g.write_buffer(stack, 0, bytes(&stack_start()));
+            let stack = buffer(word_bytes(STACK_WORDS as usize), buffer_usage::STORAGE);
             let free_built = pipelines.build_compute(g, SHADER_WAYS_FREE, &compute::WAYS_FREE_GROUP);
             let free_group = g.bind_group(
                 free_built.layouts[0],

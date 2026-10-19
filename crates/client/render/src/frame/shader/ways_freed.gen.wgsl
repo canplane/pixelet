@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: 6421d17e3b3016362c43a382d38f8139dcd17a162bd231435632594f9d757e53
+// Inputs: 4eee5f7091d9b88f99af09975c60bf65892b27acef50817b10f63341322a8409
 struct type_4 {
     member: array<u32>,
 }
@@ -20,58 +20,58 @@ var<storage> global_2: type_4;
 var<storage, read_write> global_3: type_10;
 
 fn function_() {
-    var phi_59_: u32;
-    var phi_62_: u32;
-    var phi_88_: u32;
-    var phi_96_: u32;
-    var phi_63_: u32;
+    var phi_65_: u32;
+    var phi_68_: u32;
+    var phi_94_: u32;
+    var phi_103_: u32;
+    var phi_69_: u32;
 
-    let _e12 = global;
-    let _e13 = global_1;
-    let _e15 = arrayLength((&global_2.member));
-    let _e17 = arrayLength((&global_3.member));
-    let _e19 = (_e12.z * 452625u);
-    let _e20 = (_e19 + 19417u);
-    if (_e20 < _e15) {
-        let _e24 = global_2.member[_e20];
-        phi_59_ = _e24;
+    let _e13 = global;
+    let _e14 = global_1;
+    let _e16 = arrayLength((&global_2.member));
+    let _e18 = arrayLength((&global_3.member));
+    let _e20 = (_e13.z * 452625u);
+    let _e21 = (_e20 + 19417u);
+    if (_e21 < _e16) {
+        let _e25 = global_2.member[_e21];
+        phi_65_ = _e25;
     } else {
-        phi_59_ = 0u;
+        phi_65_ = 0u;
     }
-    let _e26 = phi_59_;
-    phi_62_ = _e13.x;
+    let _e27 = phi_65_;
+    phi_68_ = _e14.x;
     loop {
-        let _e29 = phi_62_;
-        let _e30 = (_e29 < _e26);
-        if _e30 {
-            let _e32 = ((_e19 + 19418u) + _e29);
-            if (_e32 < _e15) {
-                let _e36 = global_2.member[_e32];
-                phi_88_ = _e36;
+        let _e30 = phi_68_;
+        let _e31 = (_e30 < _e27);
+        if _e31 {
+            let _e33 = ((_e20 + 19418u) + _e30);
+            if (_e33 < _e16) {
+                let _e37 = global_2.member[_e33];
+                phi_94_ = _e37;
             } else {
-                phi_88_ = 0u;
+                phi_94_ = 0u;
             }
-            let _e38 = phi_88_;
-            if (0u < _e17) {
-                let _e42 = atomicAdd((&global_3.member[0u]), 1u);
-                phi_96_ = _e42;
+            let _e39 = phi_94_;
+            if (0u < _e18) {
+                let _e43 = atomicAdd((&global_3.member[0u]), 4294967295u);
+                phi_103_ = _e43;
             } else {
-                phi_96_ = 0u;
+                phi_103_ = 0u;
             }
-            let _e44 = phi_96_;
-            let _e45 = (1u + _e44);
-            if (_e45 < _e17) {
-                atomicStore((&global_3.member[_e45]), _e38);
+            let _e45 = phi_103_;
+            let _e46 = (1048576u - _e45);
+            if (_e46 < _e18) {
+                atomicStore((&global_3.member[_e46]), (_e39 ^ _e46));
             }
-            phi_63_ = (_e29 + 64u);
+            phi_69_ = (_e30 + 64u);
         } else {
-            phi_63_ = u32();
+            phi_69_ = u32();
         }
-        let _e51 = phi_63_;
+        let _e53 = phi_69_;
         continue;
         continuing {
-            phi_62_ = _e51;
-            break if !(_e30);
+            phi_68_ = _e53;
+            break if !(_e31);
         }
     }
     return;
