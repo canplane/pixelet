@@ -54,18 +54,35 @@ pub(super) struct Strike<'a> {
     pub(super) best: Option<(f64, Instance)>,
     /// What is placed about the nodes the walk went through (`Around`).
     pub(super) about: Around,
+    /// The finest zoom whose nodes are as wide as the reach: a node finer
+    /// is looked about at it (`about_zoom`).
+    reach_zoom: Zoom,
+    /// Where placed decor may stand along z for the ray: its height over
+    /// the held span, widened by the reach; and the finest zoom whose nodes
+    /// are wider than a leaf cell's box about it, the band's or the
+    /// reach's, which the cell's box lies strictly within the 27 of
+    /// (`strike_near`). Each the strike's own, the same at every cell.
+    band: [f64; 2],
+    box_zoom: Zoom,
 }
 
 impl Strike<'_> {
     /// The zoom a node at `zoom` is looked about at: its own, or the finest
     /// whose nodes are as wide as the reach.
     pub(super) fn about_zoom(&self, zoom: Zoom) -> Zoom {
-        let mut z = zoom;
-        while z > 0 && units(z) < self.reach {
-            z -= 1;
-        }
-        z
+        zoom.min(self.reach_zoom)
     }
+}
+
+/// The finest zoom, no finer than the walk goes, whose nodes' side `fits`;
+/// 0 where none does. Sides grow as zooms coarsen, so a node at a zoom
+/// finer than it is looked at it, and one at it or coarser at its own.
+fn finest(fits: impl Fn(f64) -> bool) -> Zoom {
+    let mut z = cast::DEPTH as Zoom - 1;
+    while z > 0 && !fits(units(z)) {
+        z -= 1;
+    }
+    z
 }
 
 /// What is placed in the 27 nodes about the node a striking walk is at, at
@@ -305,14 +322,20 @@ impl<'a> World<'a> {
             _ => return None,
         };
         let reach = reach();
+        let around = reach.ceil() as i32;
+        let (za, zb) = (ray.at(0.0)[2], ray.at(held)[2]);
+        let band = [za.min(zb) - reach, za.max(zb) + reach];
         Some(Strike {
             models,
             reach,
-            around: reach.ceil() as i32,
+            around,
             held,
             last: None,
             best: None,
             about: Around::new(),
+            reach_zoom: finest(|side| side >= reach),
+            band,
+            box_zoom: finest(|side| side > f64::from(around + 1).max(band[1] - band[0])),
         })
     }
 
@@ -323,8 +346,7 @@ impl<'a> World<'a> {
         let (r, last) = (s.around, s.last.replace(cell));
         let near = |a: [i32; 2], b: [i32; 2]| (a[0] - b[0]).abs() <= r && (a[1] - b[1]).abs() <= r;
         // Placed decor stands where the ray's height over the held span, widened by the reach, can meet it.
-        let (za, zb) = (ray.at(0.0)[2], ray.at(s.held)[2]);
-        let (z0, z1) = (za.min(zb) - s.reach, za.max(zb) + s.reach);
+        let [z0, z1] = s.band;
         let fresh = |xy: [i32; 2]| !last.is_some_and(|l| near(xy, l));
         for y in cell[1] - r..=cell[1] + r {
             for x in cell[0] - r..=cell[0] + r {
@@ -343,10 +365,7 @@ impl<'a> World<'a> {
         // 27 the walk stepped down to (`Around`): the cell lies in the middle
         // one, and the ray's height there within the band, so the box lies
         // strictly within the 27, touching none past them.
-        let mut wide = zoom;
-        while wide > 0 && units(wide) <= f64::from(r + 1).max(z1 - z0) {
-            wide -= 1;
-        }
+        let wide = zoom.min(s.box_zoom);
         let from = s.about.under((wide, at.map(|v| v >> (zoom - wide))));
         let mut visit = |e: &crate::layer::object::store::Entry| {
             let c = e.cube().min;
