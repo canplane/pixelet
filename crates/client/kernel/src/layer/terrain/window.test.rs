@@ -20,7 +20,12 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     PLANES.set(Planes {
         cells: vec![0; (SQUARES * CELLS_LANE_BYTES) as usize].leak(),
         joined: vec![0; window::EYE_JOINED_WORDS as usize].leak(),
+        records: vec![0; (window::READS * pxl_portable::ways::tree::RECORDS_BYTES / 4) as usize].leak(),
+        pool: vec![0; 16 * pxl_portable::ways::tree::POOL_BLOCKS as usize].leak(),
     });
+    // The pool's blocks, each square's tree taken after the one before's, as
+    // the GPU's stack hands them, block 0 none's.
+    let mut next = 1;
     WINDOWS_STATE.set(fresh());
     let w = windows();
     for win in 0..WINDOWS {
@@ -65,6 +70,15 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
                     }
                 }
             }
+            // Its ways' tree into the pool's mirror, its root word naming it.
+            let of = pxl_portable::ways::tree::Of {
+                cell,
+                at: [wrap_index(cell - SQUARE_SHIFT, square[0]), square[1]],
+            };
+            let [taken, _] = pxl_portable::fill::tree(&lane, of, planes().pool, next);
+            assert_ne!(taken, u32::MAX, "a square's tree past the pool");
+            lane[window::ROOT_AT as usize] = 8 * next;
+            next += taken;
             let c = &mut planes().cells[(i * CELLS_LANE_BYTES) as usize..];
             for (k, v) in lane[window::COLUMNS_AT as usize..(window::COLUMNS_AT + window::BACK_WORDS) as usize].iter().enumerate() {
                 c[4 * k..4 * k + 4].copy_from_slice(&v.to_le_bytes());

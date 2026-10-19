@@ -10,9 +10,10 @@
 //! handed down (`At`; `World::block` for an asker with none):
 //!
 //! - the ground: its column off the windows, as the GPU drew it and the CPU
-//!   read it back, and the area's edge laid on it; the ways off the runs the
-//!   GPU wrote in its column, read as the GPU reads them (pxl-portable
-//!   `window::ground`, `window::ways_over`);
+//!   read it back, and the area's edge laid on it; the ways off the tree the
+//!   GPU built of its square, its blocks read back into the pool's mirror,
+//!   read as the GPU reads them (pxl-portable `window::ground`,
+//!   `ways::tree`);
 //! - the caves: the hash pyramid's node at that zoom, its value
 //!   (`procedural.rs` `Cave`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
@@ -31,7 +32,7 @@
 //!   its cells), every cell under it at each zoom asked over the ground, or
 //!   ground a cave may take with a cave through all of it;
 //! - the ways: by their own rule (pxl-portable `ways::slab`) over their
-//!   own bound in the same levels, the leaf cells each column's runs fill
+//!   own bound in the same levels, the leaf cells each column's runs write
 //!   joined apart from the ground's (pxl-portable fill.rs `level`); a way a
 //!   coarser tile drops as narrower than half its cell is dropped there, as
 //!   its level of detail does;
@@ -46,7 +47,7 @@ use pxl_portable::area::{Area, Shard};
 use pxl_portable::cast::{In, Kind};
 use pxl_portable::ground::VOID;
 use pxl_portable::ground::{self, Cell};
-use pxl_portable::overwrite::{Cut, Held};
+use pxl_portable::overwrite::{self, Cut, Held};
 use pxl_portable::window::{self, Found};
 use pxl_portable::world;
 use pxl_spec::bake::constant::EntryAt;
@@ -59,7 +60,7 @@ use pxl_spec::space::layer::tile::Tile;
 use super::world::World;
 use crate::io::source;
 use crate::layer::residency::Lines;
-use crate::layer::terrain::window::Windowed;
+use crate::layer::terrain::window::{pool, Windowed};
 use crate::layer::{Answer, Query};
 
 /// The coarsest zoom a block is asked at: the coarsest cells a tile draws.
@@ -80,6 +81,9 @@ pub(super) struct At {
     /// Where the windows hold the ground's cells of the nodes over it, which
     /// its own read steps from (pxl-portable `window::step`).
     ground: Found,
+    /// The ways' cursor in the tree of the square `ground` names, stepped
+    /// down as `placed` is (pxl-portable `world::node`).
+    ways: Held,
 }
 
 impl World<'_> {
@@ -105,6 +109,7 @@ impl World<'_> {
             placed: self.objects.cursor((zoom, at), zoom),
             shard: Shard::UNKNOWN,
             ground: Found::NONE,
+            ways: Held::NOTHING,
         }
     }
 
@@ -133,6 +138,7 @@ impl World<'_> {
             placed: self.objects.child(&at.placed, (z, child), z),
             shard: at.shard,
             ground: at.ground,
+            ways: overwrite::child(&pool(), at.ways, z, child),
         }
     }
 
@@ -149,17 +155,17 @@ impl World<'_> {
     pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2], lines: &mut Lines) -> Answer<(In<u32>, bool)> {
         let (zoom, c) = at.node;
         at.shard = at.shard.at(&Windowed, (zoom, [c[0], c[1]]));
-        let (handed, mut place) = ((at.cave, at.placed, at.shard), at.ground);
+        let (handed, mut place, mut trail) = ((at.cave, at.placed, at.shard), at.ground, at.ways);
         let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);
         let mut reading = Reading::new(self, at, lines);
-        let (i, block) = world::node(&mut reading, &Windowed, &lanes, handed, &mut place, (zoom, c), asked, cuts);
+        let (i, block) = world::node(&mut reading, &Windowed, &lanes, &pool(), handed, (&mut place, &mut trail), (zoom, c), asked, cuts);
         let answer = reading.answer(i.kind != Kind::Lacks, || {
             // A block's value, a split's slab (`world::slab_word`); air and void
             // none. The four looks it is drawn by are the GPU's to draw.
             let b = if block && i.kind == Kind::Block || i.kind == Kind::Split { i.block[0] } else { VOID };
             (In { kind: i.kind, block: b }, block)
         });
-        at.ground = place;
+        (at.ground, at.ways) = (place, trail);
         answer
     }
 }

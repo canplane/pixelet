@@ -54,6 +54,11 @@ pub const FILL_SHARE_MS: f32 = 4.0;
 /// layer/terrain/window.rs `due`): its share less its passes, over a square.
 pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_SQUARE_MS) as u32;
 
+/// The read-backs a square's cells and its ways' records come back in
+/// (pxl-render gpu/renderer.rs `read_back`): two frames' fills, so one
+/// frame's mappings are still landing while the next is copied.
+pub const READS: u32 = 2 * HANDED;
+
 /// A square handed to the GPU's fill, in words: its index, where it lies in
 /// its tile (`place_word`, in squares), its cells' zoom, its window's as the
 /// window holds it (pxl-kernel layer/terrain/window.rs `Window::cell`; a
@@ -328,6 +333,8 @@ pub trait Squares {
     /// squares are counted from (`fold`), and whether it is laid out
     /// (`ORIGIN_AT`).
     fn origin(&self, cell: Zoom) -> ([i32; 2], bool);
+    /// The root of the square in `slot`'s ways' tree (`ROOT_AT`), 0 for none.
+    fn root(&self, cell: Zoom, slot: u32) -> u32;
 }
 
 /// One square as its fill reads it, for the ways' one rule

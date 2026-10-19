@@ -12,6 +12,7 @@
 
 use pxl_portable::area::{Area, Shard};
 use pxl_portable::ground::word;
+use pxl_portable::ways;
 use pxl_portable::window::{self, CellsBack, FreshSquare, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
 use pxl_portable::wrap_index;
 use pxl_portable::LEAF_CELL;
@@ -25,7 +26,7 @@ use xpute_kit::collection::list::List;
 
 use crate::io::source::Declared;
 use crate::layer::kept::Offered;
-use crate::layer::terrain::fixed::{cells_off, fill_off, joined_off, CELLS_BYTES, CELLS_LANE_BYTES, RANGE};
+use crate::layer::terrain::fixed::{cells_off, fill_off, joined_off, pool_off, records_off, CELLS_BYTES, CELLS_LANE_BYTES, POOL_BYTES, RANGE, RECORDS_ROOM_BYTES};
 use crate::layer::Base;
 use crate::mem::fixed::lane;
 
@@ -171,6 +172,12 @@ pub(crate) struct Planes {
     /// The eye's windows' levels over their squares, as the GPU folded them
     /// and the renderer reads them back (pxl-portable `window::fold`).
     pub joined: &'static mut [u32],
+    /// A landing square's ways' records, a room a read-back
+    /// (pxl-portable `ways::tree::RECORDS_BYTES` apart).
+    pub records: &'static mut [u32],
+    /// The GPU's ways' pool as the CPU mirrors it, each landing square's
+    /// blocks laid at their slots (pxl-portable `ways::tree::lay`).
+    pub pool: &'static mut [u32],
 }
 
 pub(crate) static PLANES: Global<Planes> = Global::new();
@@ -183,6 +190,8 @@ fn planes() -> &'static mut Planes {
             Planes {
                 cells: lane(r, cells_off(0), (SQUARES * CELLS_LANE_BYTES) as usize),
                 joined: lane(r, joined_off(), window::EYE_JOINED_WORDS as usize),
+                records: lane(r, records_off(), (RECORDS_ROOM_BYTES / 4) as usize),
+                pool: lane(r, pool_off(), (POOL_BYTES / 4) as usize),
             }
         }
     })
@@ -193,6 +202,21 @@ fn planes() -> &'static mut Planes {
 pub fn joined_lane() -> u32 {
     let joined: &[u32] = planes().joined;
     off_of_slice(joined) as u32
+}
+
+/// Where a landing square's ways' records come back to in the module's
+/// memory, read-back `k`'s `ways::tree::RECORDS_BYTES` after the first's
+/// (pxl-render `GroundSquares::records`).
+pub fn records_lane() -> u32 {
+    let records: &[u32] = planes().records;
+    off_of_slice(records) as u32
+}
+
+/// The GPU's ways' pool as the CPU mirrors it, the landed squares' blocks
+/// at the GPU's slots, which a cursor reads as the cast reads the GPU's
+/// (pxl-portable `ways::tree`).
+pub fn pool() -> ways::tree::Read<'static> {
+    ways::tree::Read(planes().pool)
 }
 
 fn cells(s: u32) -> &'static [u8] {
@@ -288,13 +312,18 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
 }
 
 /// Square `s`'s cells back from its fill `ticket` (pxl-render
-/// `read_back`): present where its slot still waits on that fill, and what
-/// is read over its tile moved.
-pub fn landed(s: u32, ticket: u32) {
+/// `read_back`), its ways' records in read-back `k`'s room: present where
+/// its slot still waits on that fill, its tree's blocks laid into the
+/// pool's mirror at their slots, and what is read over its tile moved. A
+/// fill no slot waits on lays nothing: its blocks may be another's by now.
+pub fn landed(s: u32, ticket: u32, k: u32) {
     let w = windows();
     let cell = w.windows[(s / SLOTS) as usize].cell;
     let slot = &mut w.slots[s as usize];
     if slot.ticket == ticket {
+        let at = (k * ways::tree::RECORDS_BYTES / 4) as usize;
+        let p = planes();
+        ways::tree::lay(&mut ways::tree::Lane(p.pool), &p.records[at..at + ways::tree::RECORDS_WORDS as usize]);
         (slot.present, slot.ticket) = (1, 0);
         TerrainTile::residency().moved_at(tile_of(cell, slot.square).0);
     }
@@ -558,6 +587,10 @@ impl Squares for Windowed {
     fn level(&self, _: Zoom, s: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         let e = (window::LEVELS_AT - window::COLUMNS_AT + window::LEVEL_ENTRY_WORDS * window::level_index(j, at)) as usize;
         [back_at(s, e) as i32, back_at(s, e + 1) as i32]
+    }
+
+    fn root(&self, _: Zoom, s: u32) -> u32 {
+        back_at(s, (window::ROOT_AT - window::COLUMNS_AT) as usize)
     }
 }
 

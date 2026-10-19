@@ -236,7 +236,7 @@ pub fn square_blocks(tile: Tile, held: &TerrainTile, scratch: &mut [(u32, u32)],
     (0..side * side)
         .map(|k| {
             square_runs(tile, held, [k % side, k / side], scratch, [handed, lane]);
-            pxl_portable::fill::tree(lane, handed, pool)
+            pxl_portable::fill::tree(lane, pxl_portable::fill::of(handed, 0), pool, 1)
         })
         .collect()
 }

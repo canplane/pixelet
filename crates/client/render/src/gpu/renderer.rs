@@ -130,7 +130,7 @@ pub struct FrameInput<'a> {
 
 /// The buffers squares' cells come back through: what a frame hands, a
 /// mapping still out a frame more (pxl-portable `window::HANDED`).
-const READS: usize = 2 * HANDED as usize;
+const READS: usize = window::READS as usize;
 /// A buffer of them carrying no square.
 const FREE: u32 = u32::MAX;
 
@@ -159,9 +159,16 @@ pub struct GroundSquares<'a> {
     /// the module's memory (`joined_cs`; pxl-portable
     /// `window::EYE_JOINED_WORDS`).
     pub joined: u32,
+    /// Where each read's records come back to in the module's memory, read
+    /// `k`'s at `records + k · ways::tree::RECORDS_BYTES`: the blocks its
+    /// square's ways' tree holds (gpu-query-shader `ways_tree_cs`).
+    pub records: u32,
 }
 
-pub type CellsLanded = dyn FnMut(u32, u32);
+/// A square whose cells came back, the fill they are of
+/// (`CellsBack::ticket`), and the read they came through, whose records'
+/// room holds its ways' blocks (`GroundSquares::records`).
+pub type CellsLanded = dyn FnMut(u32, u32, u32);
 
 /// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`), a ray
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
@@ -729,15 +736,6 @@ struct RaysPass {
 }
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
-impl GroundBuffers {
-    /// Square `s` asked, last in the waiting ring.
-    fn wait(&mut self, s: u32) {
-        let (ring, first, len) = &mut self.waiting;
-        ring[((*first + *len) % SQUARES) as usize] = s;
-        *len += 1;
-    }
-}
-
 struct GroundBuffers {
     /// Per square of the windows, its columns, levels, runs and cells as
     /// laid, which `heights_cs`, `ways_cs` and `bound_cs` write in the turn
@@ -754,11 +752,10 @@ struct GroundBuffers {
     /// Per square place (`window::SQUARES`), its cells' way back: the fill
     /// the next landing must be of (its ticket 0 where none is asked).
     asked: [CellsBack; SQUARES as usize],
-    /// The squares asked and not yet copied back, in the order asked: a
-    /// ring of `waiting.1` from `waiting.0`. A square is in it once: put
-    /// where it is asked with none asked before, or where a landing finds
-    /// it asked again since (`read_back`).
-    waiting: ([u32; SQUARES as usize], u32, u32),
+    /// The squares the frame handed, in the order handed, each with a read
+    /// of its own (`hand` hands none past the reads free): a fill's records
+    /// live in its frame's scratch, so its read is taken in its frame.
+    handed: [u32; HANDED as usize],
     /// The buffers cells are copied into and mapped back through, as many as
     /// a frame hands squares a mapping still out a frame more (`READS`);
     /// each one's square and the fill it carries (`FREE` where none), and
@@ -769,6 +766,14 @@ struct GroundBuffers {
     reads: [u32; READS],
     held: [(u32, u32); READS],
     mapping: Box<[u32; READS]>,
+    /// Each read's records (`ways::tree::RECORDS_BYTES`), mapped beside
+    /// its square's words, and its mapping's word: a read lands with both.
+    record_reads: [u32; READS],
+    record_mapping: Box<[u32; READS]>,
+    /// The ways' pool, which the cast reads, and the handed squares'
+    /// scratch, whose records each read copies (`ways::tree::SCRATCH_WORDS`).
+    pool: u32,
+    scratch: u32,
     heights_built: Built,
     heights_group: u32,
     bound_built: Built,
@@ -827,7 +832,7 @@ struct CastBuffers {
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
     group: u32,
-    bound: [u32; 8],
+    bound: [u32; 9],
     eye: u32,
     window: u32,
     shards: u32,
@@ -1031,10 +1036,14 @@ impl RaysPass {
                 fresh,
                 fresh_len: 0,
                 asked: [CellsBack::default(); SQUARES as usize],
-                waiting: ([0; SQUARES as usize], 0, 0),
+                handed: [0; HANDED as usize],
                 reads: core::array::from_fn(|_| buffer(BACK_WORDS * 4, buffer_usage::MAP_READ | buffer_usage::COPY_DST)),
                 held: [(FREE, 0); READS],
                 mapping: Box::new([0; READS]),
+                record_reads: core::array::from_fn(|_| buffer(ways::tree::RECORDS_BYTES, buffer_usage::MAP_READ | buffer_usage::COPY_DST)),
+                record_mapping: Box::new([0; READS]),
+                pool,
+                scratch,
                 heights_built,
                 heights_group,
                 bound_built,
@@ -1049,9 +1058,11 @@ impl RaysPass {
                 freed_group,
             }
         });
+        // A square handed takes a read its frame: none past those free.
+        let free = gb.held.iter().filter(|h| h.0 == FREE).count().min(HANDED as usize) as u32;
         let mut fresh = 0;
         upload(&mut |q| {
-            if fresh == HANDED || !room(write_buffer_bytes(q.looks) + write_buffer_bytes(bytes(q.samples)) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&q.fresh))) {
+            if fresh == free || !room(write_buffer_bytes(q.looks) + write_buffer_bytes(bytes(q.samples)) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&q.fresh))) {
                 return false;
             }
             let (square, at) = (q.fresh[window::FRESH_SQUARE as usize], window::handed_at(fresh) * 4);
@@ -1059,12 +1070,8 @@ impl RaysPass {
             g.write_buffer(gb.fresh, at + LOOKS_AT * 4, q.looks);
             g.write_buffer(gb.fresh, at + ELE_AT * 4, bytes(q.samples));
             g.write_buffer(gb.fresh, at + LINES_AT * 4, bytes(q.lines));
-            // One asked before waits already, or is on its way and waits
-            // again when it lands (`read_back`).
-            if gb.asked[square as usize].ticket == 0 {
-                gb.wait(square);
-            }
             gb.asked[square as usize] = q.back;
+            gb.handed[fresh as usize] = square;
             fresh += 1;
             true
         });
@@ -1078,7 +1085,7 @@ impl RaysPass {
         // No cast, no world: no ray cast, none drawn and no decor grown.
         // What the cast reads stands for the next: the ground it binds is
         // made once.
-        let (Some(cast), Some((ground, looks))) = (cast, self.ground.as_ref().map(|gb| (gb.ground, gb.looks))) else {
+        let (Some(cast), Some((ground, looks, pool))) = (cast, self.ground.as_ref().map(|gb| (gb.ground, gb.looks, gb.pool))) else {
             self.kind = FrameKind::plain;
             if let Some(c) = self.cast.as_mut() {
                 c.grown.off();
@@ -1102,7 +1109,7 @@ impl RaysPass {
                 refold: false,
                 joined_back: false,
                 group: 0,
-                bound: [0; 8],
+                bound: [0; 9],
                 eye: buffer(word_bytes(eye::WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
                 window: buffer(word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize), storage | buffer_usage::COPY_SRC),
                 shards: 0,
@@ -1176,7 +1183,7 @@ impl RaysPass {
             g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
             c.overwrite_revision = Some(o.revision);
         }
-        let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, c.starts];
+        let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, c.starts, pool];
         if bound != c.bound {
             release(c.group);
             c.group = cast_group(g, &c.built, bound);
@@ -1267,7 +1274,7 @@ impl RaysPass {
     /// it), so none waits. Where read-backs matter on a settled
     /// view, the platform's own completion (a command buffer's handler, a
     /// timeline semaphore) is the wake.
-    fn read_back(&mut self, g: &Gpu, landed: &mut CellsLanded, joined: u32) {
+    fn read_back(&mut self, g: &Gpu, landed: &mut CellsLanded, joined: u32, records: u32) {
         // The fold, once its mapping is free: a frame-old copy reads safely,
         // as an entry answers only for the block whose key it holds.
         if let Some(c) = self.cast.as_mut().filter(|c| c.joined_back && *c.joined_mapping & DONE != 0) {
@@ -1278,40 +1285,55 @@ impl RaysPass {
             c.joined_back = false;
         }
         let Some(c) = self.ground.as_mut() else { return };
-        c.fresh_len = 0;
+        // A read lands with its square's words and its records both: told
+        // where it is of the square's latest fill, discarded where a later
+        // fill asked again, whose own read brings it.
         for k in 0..READS {
             let (s, ticket) = c.held[k];
-            if s == FREE || c.mapping[k] & DONE == 0 {
+            if s == FREE || c.mapping[k] & DONE == 0 || c.record_mapping[k] & DONE == 0 {
                 continue;
             }
             let back = &mut c.asked[s as usize];
             if back.ticket == ticket {
-                landed(s, ticket);
+                landed(s, ticket, k as u32);
                 back.ticket = 0;
-            } else {
-                c.wait(s);
             }
             c.held[k] = (FREE, 0);
         }
-        let mut copy = None;
-        let mut taken = [false; READS];
-        for (k, took) in taken.iter_mut().enumerate() {
-            if c.held[k].0 != FREE || c.waiting.2 == 0 {
-                continue;
-            }
-            let (ring, first, len) = &mut c.waiting;
-            let s = ring[*first as usize];
-            (*first, *len) = ((*first + 1) % SQUARES, *len - 1);
-            let ticket = c.asked[s as usize].ticket;
-            let e = *copy.get_or_insert_with(|| g.encoder());
-            g.copy_buffer(e, (c.ground, s * SQUARE_BYTES + COLUMNS_AT * 4), (c.reads[k], 0), BACK_WORDS * 4);
-            (c.held[k], *took) = ((s, ticket), true);
+        // Each square the frame handed, its words and its build's records
+        // copied in its frame, into a read `hand` kept free for it.
+        let fresh = core::mem::take(&mut c.fresh_len);
+        if fresh == 0 {
+            return;
         }
-        let Some(e) = copy else { return };
+        let e = g.encoder();
+        let mut taken = [false; READS];
+        let mut free = 0;
+        for h in 0..fresh {
+            let s = c.handed[h as usize];
+            let Some(k) = (free..READS).find(|&k| c.held[k].0 == FREE) else { break };
+            free = k + 1;
+            g.copy_buffer(e, (c.ground, s * SQUARE_BYTES + COLUMNS_AT * 4), (c.reads[k], 0), BACK_WORDS * 4);
+            g.copy_buffer(
+                e,
+                (c.scratch, word_bytes((h * ways::tree::SCRATCH_WORDS + ways::tree::RECORDS_AT) as usize)),
+                (c.record_reads[k], 0),
+                ways::tree::RECORDS_BYTES,
+            );
+            (c.held[k], taken[k]) = ((s, c.asked[s as usize].ticket), true);
+        }
         g.submit(e);
         for k in (0..READS).filter(|&k| taken[k]) {
             let (s, ticket) = c.held[k];
             g.map_read(c.reads[k], 0, BACK_WORDS * 4, c.asked[s as usize].cells, &mut c.mapping[k], ticket);
+            g.map_read(
+                c.record_reads[k],
+                0,
+                ways::tree::RECORDS_BYTES,
+                records + k as u32 * ways::tree::RECORDS_BYTES,
+                &mut c.record_mapping[k],
+                ticket,
+            );
         }
     }
 
@@ -1383,10 +1405,10 @@ impl RaysPass {
 
 /// The cast's group 0 over `bound`: the eye, the window and its fold
 /// (`joined_cs` writes it, the cast reads it), the tiles' frames, the
-/// surface's rays, the squares' looks, the service area's index, the overwrites and where its
+/// surface's rays, the squares' looks, the ways' pool, the service area's index, the overwrites and where its
 /// rays start (`start_cs` writes it, `cast_cs` reads it).
-fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
-    let [eye, window, ground, rays, looks, shards, overwrites, starts] = bound;
+fn cast_group(g: &Gpu, built: &Built, bound: [u32; 9]) -> u32 {
+    let [eye, window, ground, rays, looks, shards, overwrites, starts, pool] = bound;
     let entries = [
         buffer_entry(0, eye),
         buffer_entry(1, window),
@@ -1396,6 +1418,7 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
         buffer_entry(5, shards),
         buffer_entry(6, overwrites),
         buffer_entry(7, starts),
+        buffer_entry(8, pool),
     ];
     g.bind_group(built.layouts[0], &entries)
 }
@@ -1772,7 +1795,7 @@ impl Renderer {
             release(ahead);
         }
         self.atmosphere.read_back(g);
-        self.screen.read_back(g, input.ground.landed, input.ground.joined);
+        self.screen.read_back(g, input.ground.landed, input.ground.joined, input.ground.records);
         // The image stands where it read all as last time over rays that stood.
         let still = read.end() && self.screen.kind != FrameKind::cast && !self.screen.grows();
         if rest.read(self.clouds.words()) {

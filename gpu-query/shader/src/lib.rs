@@ -24,6 +24,7 @@ use pxl_portable::ways::tree::{self, Pool};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
 use pxl_portable::overwrite::{self, Cut, Held, Lanes, PLACED};
+use pxl_portable::ways;
 use pxl_portable::scatter::{self, drawn, Grounds, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::{Found, Ran, RUNS_AT};
@@ -94,9 +95,11 @@ fn square_at(square: u32) -> u32 {
 /// service area, and what is placed with a preview's cuts; the caves are a
 /// hash, held nowhere. Decor is not here (pxl-portable `cast::Query`).
 /// The squares' cells' four looks are `L`'s: their own buffer where the
-/// cast draws by them, none where a pass draws nothing (`Unlooked`).
+/// cast draws by them, none where a pass draws nothing (`Unlooked`); the
+/// ways' trees are `P`'s, their pool where the cast asks the world's query,
+/// none where a pass never does (`Unpooled`).
 #[derive(Clone, Copy)]
-pub struct World<'a, L> {
+pub struct World<'a, L, P> {
     /// Per window of the eye's, from the top's, a row a slot: the square it
     /// holds, and whether it is present (pxl-portable `window`).
     window: &'a [IVec4],
@@ -115,6 +118,23 @@ pub struct World<'a, L> {
     /// The eye, whose preview cuts are read where something placed or cut
     /// is asked about, not held through the descent.
     eye: &'a Eye,
+    /// The ways' pool (pxl-portable `ways::tree`), every square's tree.
+    pool: P,
+}
+
+/// No ways' pool bound: a pass that never asks the world's query reads
+/// none, every slot nothing (`overwrite::Lanes`'s zero). A word, as
+/// `Unlooked` is.
+#[derive(Clone, Copy)]
+pub struct Unpooled(u32);
+
+impl Lanes for Unpooled {
+    fn heap(&self, _: u32) -> u32 {
+        self.0
+    }
+    fn data(&self, _: u32) -> u32 {
+        self.0
+    }
 }
 
 /// Where the squares' cells' four looks are read: a word a cell
@@ -142,7 +162,7 @@ impl Looks for Unlooked {
     }
 }
 
-impl<L: Looks> Lanes for World<'_, L> {
+impl<L: Looks, P: Lanes> Lanes for World<'_, L, P> {
     fn heap(&self, slot: u32) -> u32 {
         at(self.overwrites, slot)
     }
@@ -151,7 +171,7 @@ impl<L: Looks> Lanes for World<'_, L> {
     }
 }
 
-impl<L: Looks> Area for World<'_, L> {
+impl<L: Looks, P: Lanes> Area for World<'_, L, P> {
     fn ends(&self) -> bool {
         true
     }
@@ -169,7 +189,7 @@ impl<L: Looks> Area for World<'_, L> {
 }
 
 /// The eye's windows, as the GPU holds them.
-impl<L: Looks> Squares for World<'_, L> {
+impl<L: Looks, P: Lanes> Squares for World<'_, L, P> {
     /// The slot square `q` is held in, while it holds it present.
     fn present(&self, cell: u32, q: [i32; 2]) -> (u32, bool) {
         let s = window::slot(q);
@@ -210,17 +230,20 @@ impl<L: Looks> Squares for World<'_, L> {
     fn laid(&self, cell: u32, slot: u32, i: u32) -> u32 {
         fill::laid_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
     }
+    fn root(&self, cell: u32, slot: u32) -> u32 {
+        at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + window::ROOT_AT)
+    }
 }
 
 /// The ways' runs `ways_cs` wrote in the eye's windows.
-impl<L: Looks> Ran for World<'_, L> {
+impl<L: Looks, P: Lanes> Ran for World<'_, L, P> {
     fn ran(&self, cell: u32, slot: u32, r: u32) -> u32 {
         at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + RUNS_AT + r)
     }
 }
 
 /// The ground as the GPU holds it, for pxl-portable's one answer for a node.
-impl<L: Looks> ground::Held for World<'_, L> {
+impl<L: Looks, P: Lanes> ground::Held for World<'_, L, P> {
     /// The bound over the node of the window `cell` reads its cells from,
     /// the finest holding them present (`window::bound_over`), as the CPU reads
     /// it (pxl-portable `Held::relief`).
@@ -247,6 +270,9 @@ pub struct At {
     placed: Held,
     shard: Shard,
     ground: Found,
+    /// The ways' cursor in the tree of the square `ground` names
+    /// (pxl-portable `world::node`).
+    ways: Held,
 }
 
 /// The levels a ray's stack keeps (pxl-portable `cast::Levels`), its
@@ -265,13 +291,13 @@ const _: () = assert!(window::FOUND_BITS + pxl_portable::caves::CAVE_BITS <= 32,
 /// What a node is on the GPU: its value, one of the catalog's whichever
 /// source holds it, and the four looks the ground's block is drawn by
 /// (`world::node`'s second word), what the screen paints a hit with.
-impl<L: Looks> Query for World<'_, L> {
+impl<L: Looks, P: Lanes + Copy> Query for World<'_, L, P> {
     type At = At;
     /// What was handed the node, but its shard: its placed cursor, then
     /// where its cells are held (`Found`, `window::FOUND_BITS`) with its
-    /// caves' word (`caves::CAVE_BITS`) over it.
-    type Kept = [u32; 2];
-    type Stack = [[u32; 2]; LEVELS];
+    /// caves' word (`caves::CAVE_BITS`) over it, then its ways' cursor.
+    type Kept = [u32; 3];
+    type Stack = [[u32; 3]; LEVELS];
     type Block = [u32; 2];
     const AIR: [u32; 2] = [VOID, 0];
 
@@ -281,6 +307,7 @@ impl<L: Looks> Query for World<'_, L> {
             placed: overwrite::cursor(self, PLACED, 0, node),
             shard: Shard::UNKNOWN,
             ground: Found::NONE,
+            ways: Held::NOTHING,
         }
     }
 
@@ -290,6 +317,7 @@ impl<L: Looks> Query for World<'_, L> {
             placed: overwrite::child(self, at.placed, zoom, node),
             shard: at.shard,
             ground: at.ground,
+            ways: overwrite::child(&self.pool, at.ways, zoom, node),
         }
     }
 
@@ -300,7 +328,7 @@ impl<L: Looks> Query for World<'_, L> {
     fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<[u32; 2]> {
         at.shard = at.shard.at(self, (zoom, [c[0], c[1]]));
         let (w, cuts) = (*self, [cut(self.eye.carve), cut(self.eye.hide)]);
-        world::node(self, &w, &w, (at.cave, at.placed, at.shard), &mut at.ground, (zoom, c), asked, cuts).0
+        world::node(self, &w, &w, &w.pool, (at.cave, at.placed, at.shard), (&mut at.ground, &mut at.ways), (zoom, c), asked, cuts).0
     }
 
     /// A value of the one value space, whichever source holds it: neither
@@ -317,19 +345,20 @@ impl<L: Looks> Query for World<'_, L> {
     /// had again only from the top, so they are kept; and where the node's
     /// cells are held, which `window::step` steps a sibling's from, as a
     /// node over it holds them and a sibling's own child does not.
-    fn keep(at: &At) -> [u32; 2] {
-        [at.placed.word(), at.ground.word() | at.cave.word() << window::FOUND_BITS]
+    fn keep(at: &At) -> [u32; 3] {
+        [at.placed.word(), at.ground.word() | at.cave.word() << window::FOUND_BITS, at.ways.word()]
     }
 
     /// The shard is not kept: a node at a shard's zoom or finer lies in one
     /// shard, the one the node come back from lies in, under it; a coarser
     /// one's is unknown, as its own was.
-    fn unkeep(kept: [u32; 2], live: &At, zoom: u32) -> At {
+    fn unkeep(kept: [u32; 3], live: &At, zoom: u32) -> At {
         At {
             cave: Cave::of_word(kept[1] >> window::FOUND_BITS),
             placed: Held::of_word(kept[0]),
             shard: if zoom >= SHARD_ZOOM { live.shard } else { Shard::UNKNOWN },
             ground: Found::of_word(kept[1] & ((1 << window::FOUND_BITS) - 1)),
+            ways: Held::of_word(kept[2]),
         }
     }
 }
@@ -337,7 +366,7 @@ impl<L: Looks> Query for World<'_, L> {
 /// The world as decor's growth asks it on the GPU (pxl-portable `scatter`):
 /// the cast's, and the catalog's rows as handed.
 struct Growing<'a> {
-    world: World<'a, Unlooked>,
+    world: World<'a, Unlooked, Unpooled>,
     rows: &'a [Decor],
 }
 
@@ -374,6 +403,7 @@ impl Grounds for Growing<'_> {
             placed: overwrite::cursor(&self.world, PLACED, zoom, c),
             shard: Shard::UNKNOWN,
             ground: Found::NONE,
+            ways: Held::NOTHING,
         }
     }
 
@@ -420,11 +450,12 @@ const AT_CAVE: usize = 0;
 const AT_PLACED: usize = 1;
 const AT_SHARD: usize = 2;
 const AT_GROUND: usize = 3;
-const _: () = assert!(AT_GROUND + 1 == cast::AT_WORDS as usize);
+const AT_WAYS: usize = 4;
+const _: () = assert!(AT_WAYS + 1 == cast::AT_WORDS as usize);
 
 fn at_words(a: At) -> [u32; cast::AT_WORDS as usize] {
     let mut w = [0; cast::AT_WORDS as usize];
-    (w[AT_CAVE], w[AT_PLACED], w[AT_SHARD], w[AT_GROUND]) = (a.cave.word(), a.placed.word(), a.shard.word(), a.ground.word());
+    (w[AT_CAVE], w[AT_PLACED], w[AT_SHARD], w[AT_GROUND], w[AT_WAYS]) = (a.cave.word(), a.placed.word(), a.shard.word(), a.ground.word(), a.ways.word());
     w
 }
 
@@ -443,6 +474,7 @@ fn at_of(w: &[u32], k: u32) -> At {
         placed: Held::of_word(at(w, k + AT_PLACED as u32)),
         shard: Shard::of_word(at(w, k + AT_SHARD as u32)),
         ground: Found::of_word(at(w, k + AT_GROUND as u32)),
+        ways: Held::of_word(at(w, k + AT_WAYS as u32)),
     }
 }
 
@@ -484,6 +516,7 @@ pub fn start_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
 ) {
     let window: &[IVec4] = window;
@@ -495,6 +528,7 @@ pub fn start_cs(
         shards,
         overwrites,
         eye,
+        pool: ways::tree::Read(pool),
     };
     let s = cast::start(&mut world, &origin, detail);
     put(starts, cast::START_PLACE, s.place.zoom);
@@ -519,6 +553,7 @@ pub fn cast_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
 ) {
     let window: &[IVec4] = window;
@@ -534,6 +569,7 @@ pub fn cast_cs(
         shards,
         overwrites,
         eye,
+        pool: ways::tree::Read(pool),
     };
     // Started where every ray from the eye starts alike (`start_cs`), what
     // was handed the nodes over it read only where a ray climbs past it.
@@ -586,6 +622,7 @@ pub fn joined_cs(
             shards,
             overwrites,
             eye,
+            pool: Unpooled(0),
         };
         window::fold(&world, cell, l, b)
     };
@@ -799,7 +836,7 @@ fn record(scratch: &mut [u32], at: u32, pool: &impl Pool, first: u32) {
     let r = add(scratch, at + RECORDS_AT, 1);
     let w = at + RECORDS_AT + 1 + r * RECORD_WORDS;
     put(scratch, w, first / 8);
-    // Off the pool word by word, as `tree::record` lays them, no array
+    // Off the pool word by word, as `tree::lay` reads them, no array
     // between: a runtime index into one is a bounds check, whose panic's
     // path no loop about it may carry (`add`).
     let mut k = 0;
@@ -1137,6 +1174,7 @@ pub fn decor_cs(
             shards,
             overwrites,
             eye,
+            pool: Unpooled(0),
         },
         rows,
     };

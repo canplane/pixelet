@@ -64,6 +64,20 @@ impl Pool for Lane<'_> {
     }
 }
 
+/// A pool in one lane as a reader holds it, its heap words, then its data
+/// words: the cast's binding, and the CPU's mirror of the GPU's.
+#[derive(Clone, Copy)]
+pub struct Read<'a>(pub &'a [u32]);
+
+impl Lanes for Read<'_> {
+    fn heap(&self, slot: u32) -> u32 {
+        crate::at(self.0, slot)
+    }
+    fn data(&self, slot: u32) -> u32 {
+        crate::at(self.0, self.0.len() as u32 / 2 + slot)
+    }
+}
+
 /// A square's runs as its fill wrote them (`ways::runs`): column `i`'s
 /// first run and the next column's, and run `r`.
 pub trait Runs {
@@ -299,18 +313,33 @@ pub fn under(pool: &impl Pool, slot: u32) -> u32 {
     }
 }
 
-/// The block at `first` as a read-back carries it: its eight heap words,
-/// then its eight data words, which the CPU lays at the same slots of its
-/// mirror of the pool, so a cursor reads one tree on both sides.
-pub fn record(pool: &impl Pool, first: u32) -> [u32; 16] {
-    let mut r = [0; 16];
-    let mut k = 0;
-    while k < 8 {
-        r[k as usize] = pool.heap(first + k);
-        r[8 + k as usize] = pool.data(first + k);
-        k += 1;
+/// A square's records as the read-back carries them: its scratch from
+/// `RECORDS_AT` on, their count, then a block its tree holds each.
+pub const RECORDS_WORDS: u32 = SCRATCH_WORDS - RECORDS_AT;
+
+/// A square's records in bytes: what a read-back copies off its scratch,
+/// and how far a read-back's room lies after the one before
+/// (`window::READS` of them).
+pub const RECORDS_BYTES: u32 = RECORDS_WORDS * 4;
+
+/// A square's records (`RECORDS_WORDS`) laid into `pool` at the slots they
+/// came from, each its block's id and its eight heap and eight data words:
+/// the CPU's mirror of the GPU's pool, where they land, so a cursor reads
+/// one tree on both sides.
+pub fn lay(pool: &mut impl Pool, records: &[u32]) {
+    let n = crate::at(records, 0);
+    let mut r = 0;
+    while r < n && r < SQUARE_BLOCKS {
+        let at = 1 + r * RECORD_WORDS;
+        let first = 8 * crate::at(records, at);
+        let mut k = 0;
+        while k < 8 {
+            pool.set_heap(first + k, crate::at(records, at + 1 + k));
+            pool.set_data(first + k, crate::at(records, at + 9 + k));
+            k += 1;
+        }
+        r += 1;
     }
-    r
 }
 
 /// How a reader reads a leaf's value: the ground's void for a bore's air,

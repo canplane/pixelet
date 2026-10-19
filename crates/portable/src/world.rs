@@ -15,20 +15,25 @@ use crate::caves::Cave;
 use crate::ground::{self, Held, VOID};
 use crate::overwrite::{self, Cut, Lanes, BLOCK, SPLIT};
 use crate::scatter::PLACED_BLOCK;
-use crate::window::{self, Found, Ran};
+use crate::window::{Found, Squares};
 use crate::{Zoom, LEAF_CELL};
 
 /// What is in the node `c` at `zoom`, asked from `far` to `near`, its
 /// caves, what is placed over it and its shard as its parent handed them,
 /// and `place` where the ground's cells of a node over it were held, which
-/// becomes its own (`ground::node`). A preview's `carve` and `hide`
-/// (`overwrite::Cut`) are read with what is placed.
+/// becomes its own (`ground::node`), with `trail` the ways' cursor in the
+/// tree of the square `place` names (`ways::tree`, off `pool`): stepped
+/// from its parent's where `place` names the same square, found from that
+/// square's root where it names another, as `place` itself is found again
+/// (`window::step`). A preview's `carve` and `hide` (`overwrite::Cut`) are
+/// read with what is placed.
 ///
 /// It is a block where `near` is its zoom or coarser, or past the ground's
 /// cells where nothing placed or carved is finer in it (`overwrite::whole`):
 /// the world holds nothing finer than the node there. A block is what is
 /// placed in it, air included, else the ground's block with what the ways
-/// write over it (`window::ways_over`), one value whichever source holds it
+/// write over it (their tree's leaf there, `overwrite::value`, a bore's air
+/// the ground's void, `ways::tree::read`), one value whichever source holds it
 /// (doc/minutes/20261005-the-ground-is-a-carto-palette.md, "One value
 /// space"); `PLACED_BLOCK` over a placed value, the source control tells an
 /// edit by, which nothing drawn reads. Its second word is the four looks
@@ -41,12 +46,13 @@ use crate::{Zoom, LEAF_CELL};
 /// else air; where the ground is not held, the lack. With it, whether it is
 /// a block.
 #[allow(clippy::too_many_arguments)]
-pub fn node<H: Held, W: Ran + Area, L: Lanes>(
+pub fn node<H: Held, W: Squares + Area, L: Lanes, P: Lanes>(
     held: &mut H,
-    ways: &W,
+    squares: &W,
     lanes: &L,
+    pool: &P,
     (cave, put, shard): (Cave, overwrite::Held, Shard),
-    place: &mut Found,
+    (place, trail): (&mut Found, &mut overwrite::Held),
     (zoom, c): (Zoom, [i32; 3]),
     [far, near]: [Zoom; 2],
     [carve, hide]: [Cut; 2],
@@ -76,12 +82,22 @@ pub fn node<H: Held, W: Ran + Area, L: Lanes>(
             (placed, splits) = (overwrite::slab(lanes, put, zoom, c), true);
         }
     }
+    let before = *place;
     let (i, cell, found, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
-    let (value, wrote) = if block && i.kind == Kind::Block {
-        window::ways_over(ways, found, cell.runs, zoom, c[2], i.block)
+    if place.from() != before.from() || place.slot() != before.slot() || place.here() != before.here() {
+        *trail = if place.here() {
+            overwrite::cursor(pool, squares.root(place.from(), place.slot()), zoom, c)
+        } else {
+            overwrite::Held::NOTHING
+        };
+    }
+    // The ways where the block's column was read: their leaf over it.
+    let way = if block && i.kind == Kind::Block && found.here() {
+        overwrite::value(pool, *trail, Cut::NONE, zoom, c)
     } else {
-        (i.block, false)
+        VOID
     };
+    let (value, wrote) = if way == VOID { (i.block, false) } else { (crate::ways::tree::read(way), true) };
     if block {
         // The ground's block's four, or a way's look four times where one
         // wrote it, whatever its value.

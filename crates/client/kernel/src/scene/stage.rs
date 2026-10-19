@@ -139,6 +139,7 @@ pub fn stage_render() {
             upload: &mut terrain_upload,
             landed: &mut terrain_landed,
             joined: crate::layer::terrain::window::joined_lane(),
+            records: crate::layer::terrain::window::records_lane(),
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,

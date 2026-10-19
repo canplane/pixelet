@@ -474,7 +474,7 @@ pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 /// node's zoom then its corner (`START_PLACE`), what was handed it
 /// (`START_AT`), and the stack (`start_stack`), each `Query::At` `AT_WORDS`
 /// (gpu-query-shader `at_words`).
-pub const AT_WORDS: u32 = 4;
+pub const AT_WORDS: u32 = 5;
 pub const START_PLACE: u32 = 0;
 pub const START_AT: u32 = START_PLACE + 4;
 /// The stack's entry `k`.
