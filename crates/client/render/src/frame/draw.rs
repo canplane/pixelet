@@ -120,6 +120,8 @@ pub struct Lists<'a> {
     pub rewrites: &'a [u32],
     pub frees: &'a [u32],
     pub draws: &'a [u32],
+    /// Read where they lie, unwritten until the page replays the turn: the
+    /// list begins again only in the next turn's `begin_frame`.
     pub uniforms: &'a [f32],
 }
 

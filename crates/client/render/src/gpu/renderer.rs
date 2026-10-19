@@ -1778,7 +1778,8 @@ impl Renderer {
             self.box_groups(g);
         }
         if !uniforms.is_empty() && (grew || uniforms_moved) {
-            g.write_buffer(self.draws_buffer, 0, bytes(uniforms));
+            // Read where the draw list holds them, one record however many.
+            g.upload_buffer(self.draws_buffer, 0, bytes(uniforms));
         }
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
