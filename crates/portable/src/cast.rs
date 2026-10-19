@@ -553,12 +553,14 @@ fn squared(v: [f32; 3]) -> f32 {
 /// (`first_from`) meets what it meets from the root, and the nodes over
 /// here, which every ray from the origin would ask, are asked once. Where
 /// the origin lies on a node's mid plane the child holding it is the ray's
-/// direction's to say, so the start stops there.
-pub fn start<Q: Query>(q: &mut Q, o: &Origin, detail: Detail) -> Start<Q::At> {
+/// direction's to say, so the start stops there. No finer than `most`:
+/// rays from every origin in the node there start alike, as a square's
+/// decor's footings do (`scatter::square_start`).
+pub fn start<Q: Query>(q: &mut Q, o: &Origin, detail: Detail, most: Zoom) -> Start<Q::At> {
     let mut place = root_of(o);
     let mut at = q.root(place.node(o));
     let mut stack = [at; DEPTH];
-    while (place.zoom as usize) + 1 < DEPTH {
+    while (place.zoom as usize) + 1 < DEPTH && place.zoom < most {
         let mut asking = at;
         if q.node(&mut asking, place.zoom, place.node(o), widest(o, detail, place), 0.0).kind != Kind::Split {
             break;

@@ -80,7 +80,11 @@ pub const SHADER_ATMOS_FROXEL: u32 = 38;
 pub const SHADER_WAYS_FREE: u32 = 39;
 pub const SHADER_WAYS_TREE: u32 = 40;
 pub const SHADER_WAYS_FREED: u32 = 41;
-pub const SHADERS: u32 = 42;
+/// Where every footing of each slot listed to grow starts alike, for
+/// `SHADER_GROWN`'s candidates, generated with the cast from pxl-portable's
+/// `scatter::square_start`: its one compute entry.
+pub const SHADER_GROWN_START: u32 = 42;
+pub const SHADERS: u32 = 43;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -331,4 +335,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["ways_tree.gen"],
     // SHADER_WAYS_FREED
     &["ways_freed.gen"],
+    // SHADER_GROWN_START
+    &["decor_start.gen"],
 ];
