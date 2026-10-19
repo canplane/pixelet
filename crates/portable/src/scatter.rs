@@ -492,10 +492,15 @@ pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> (Q:
 
 /// `footing`, its ray started where every footing of its square starts
 /// alike (`square_start`), the nodes over there handed by `over`: the one
-/// walk, from where its square already is.
+/// walk, from where its square already is. The start's place is its
+/// square's first column's, from that column's origin (`Place`), so it is
+/// put on this column's own.
 pub fn footing_from<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2], from: (crate::cast::Place, Q::At), over: &impl crate::cast::Over<Q::At>) -> (Q::Block, i32, bool) {
     let (o, ray, detail) = footing_ray(cell, g);
-    footed(crate::cast::first_from(q, &o, &ray, detail, crate::cast::Until::Fills, from, over), &o)
+    let shift = crate::window::SQUARE_SHIFT;
+    let (first, _, _) = footing_ray(cell, [g[0] >> shift << shift, g[1] >> shift << shift]);
+    let place = from.0.from_origin(&first, &o);
+    footed(crate::cast::first_from(q, &o, &ray, detail, crate::cast::Until::Fills, (place, from.1), over), &o)
 }
 
 /// Where every footing down a column of square `square` at `cell` starts

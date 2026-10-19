@@ -179,6 +179,18 @@ impl Place {
         }
     }
 
+    /// The same node's place from origin `to`, `self` its place from
+    /// `from`: the corner moved by the units between their unit cells,
+    /// counted at its grid.
+    pub fn from_origin(self, from: &Origin, to: &Origin) -> Place {
+        let scale = 1i32 << (Place::grid(self.zoom) - UNIT_ZOOM);
+        let at = |a: usize| self.corner[a].wrapping_add(from.unit[a].wrapping_sub(to.unit[a]).wrapping_mul(scale));
+        Place {
+            zoom: self.zoom,
+            corner: [at(0), at(1), at(2)],
+        }
+    }
+
     /// Its min corner, from the origin, in units.
     pub fn min(self, o: &Origin) -> [f32; 3] {
         let s = self.scale();
