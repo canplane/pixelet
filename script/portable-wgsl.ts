@@ -44,6 +44,9 @@ const ENTRIES = [
   ],
   ["decor_place_cs", "decor_place.gen.wgsl"],
   ["ways_cs", "ways.gen.wgsl"],
+  ["ways_free_cs", "ways_free.gen.wgsl"],
+  ["ways_tree_cs", "ways_tree.gen.wgsl"],
+  ["ways_freed_cs", "ways_freed.gen.wgsl"],
 ];
 // rust-gpu's own pin (rustc_codegen_spirv 0.10.0-alpha.1 build.rs), as gpu-query/rust-toolchain.toml holds it.
 const NIGHTLY = "nightly-2026-04-11";

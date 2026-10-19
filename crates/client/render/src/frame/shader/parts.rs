@@ -73,7 +73,14 @@ pub const SHADER_JOINED: u32 = 37;
 /// The air's volume, a froxel a thread (atmos_froxel.wgsl): its one
 /// compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 38;
-pub const SHADERS: u32 = 39;
+/// Each handed square's ways as blocks in one pool (pxl-portable
+/// `ways::tree`), generated with the cast: a re-filled square's old blocks
+/// given back, its tree built off the pool's stack, the blocks its build
+/// gave back pushed after: a compute entry each.
+pub const SHADER_WAYS_FREE: u32 = 39;
+pub const SHADER_WAYS_TREE: u32 = 40;
+pub const SHADER_WAYS_FREED: u32 = 41;
+pub const SHADERS: u32 = 42;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -318,4 +325,10 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sky_words",
         "atmos_froxel",
     ],
+    // SHADER_WAYS_FREE
+    &["ways_free.gen"],
+    // SHADER_WAYS_TREE
+    &["ways_tree.gen"],
+    // SHADER_WAYS_FREED
+    &["ways_freed.gen"],
 ];

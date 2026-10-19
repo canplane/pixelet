@@ -65,9 +65,9 @@ fn handed(fresh: &[u32], k: u32) -> (u32, u32, [u32; 2], Zoom) {
 }
 
 /// A square being filled, on its own: what `level` folds.
-struct Fresh<'a> {
-    ground: &'a [u32],
-    base: u32,
+pub struct Fresh<'a> {
+    pub ground: &'a [u32],
+    pub base: u32,
 }
 
 impl Squares for Fresh<'_> {

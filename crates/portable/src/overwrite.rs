@@ -64,22 +64,36 @@ pub const fn high(word: u32) -> u32 {
 /// layer/object/store.rs).
 pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
     let (kind, fill) = (low, high);
+    // Child `k`, each read at a constant index: a runtime one is a bounds
+    // check, whose panic's path a GPU's loop about it carries out as a flag
+    // its own lane's (gpu-query-shader `add`), so no barrier after it is in
+    // uniform control flow.
+    let child = |k: u32| match k {
+        0 => children[0],
+        1 => children[1],
+        2 => children[2],
+        3 => children[3],
+        4 => children[4],
+        5 => children[5],
+        6 => children[6],
+        _ => children[7],
+    };
     let mut sum = 0;
     let mut k = 0;
     while k < 8 {
-        sum += fill(children[k]);
+        sum += fill(child(k));
         k += 1;
     }
     let (mut best, mut most) = (0, 0);
     let mut j = 0;
     while j < 8 {
         // The corner order alternates with the zoom, as `majority`'s.
-        let c = children[if zoom & 1 == 0 { 7 - j } else { j }];
+        let c = child(if zoom & 1 == 0 { 7 - j } else { j });
         let mut w = 0;
         let mut i = 0;
         while i < 8 {
-            if kind(children[i]) == kind(c) {
-                w += fill(children[i]);
+            if kind(child(i)) == kind(c) {
+                w += fill(child(i));
             }
             i += 1;
         }

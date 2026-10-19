@@ -22,6 +22,9 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_GROWN_ARGS => "decor_args_cs",
         SHADER_GROWN_PLACE => "decor_place_cs",
         SHADER_WAYS => "ways_cs",
+        SHADER_WAYS_FREE => "ways_free_cs",
+        SHADER_WAYS_TREE => "ways_tree_cs",
+        SHADER_WAYS_FREED => "ways_freed_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }

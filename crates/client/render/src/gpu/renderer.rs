@@ -19,7 +19,8 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_JOINED, SHADER_START, SHADER_WAYS,
+    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_JOINED, SHADER_START, SHADER_WAYS, SHADER_WAYS_FREE,
+    SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
 use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
@@ -49,6 +50,7 @@ use crate::mesh::paint::ground::look_words;
 use pxl_portable::eye;
 use pxl_portable::ray;
 use pxl_portable::scatter::GROUPS;
+use pxl_portable::ways;
 use pxl_portable::window::{self, CellsBack, FreshSquare, BACK_WORDS, COLUMNS_AT, ELE_AT, HANDED, HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::world;
@@ -775,6 +777,33 @@ struct GroundBuffers {
     /// `ways_cs`'s, and its group, its pass at a dynamic offset.
     ways_built: Built,
     ways_group: u32,
+    /// A re-filled square's old ways' tree given back, its new one built,
+    /// the blocks the build gave back pushed (pxl-portable `ways::tree`):
+    /// each pass and its group, over the ways' pool, heap words then data
+    /// words (`POOL_BYTES`), its free stack, the count then the ids, block 0
+    /// never among them (`STACK_WORDS`), and each handed square's scratch
+    /// past its build (`ways::tree::SCRATCH_WORDS`).
+    free_built: Built,
+    free_group: u32,
+    tree_built: Built,
+    tree_group: u32,
+    freed_built: Built,
+    freed_group: u32,
+}
+
+/// The ways' pool on the GPU, in bytes: a slot two words, eight a block.
+const POOL_BYTES: u64 = ways::tree::POOL_BLOCKS as u64 * 8 * 2 * 4;
+const _: () = assert!(
+    crate::frame::shader::floor::fits(POOL_BYTES, true),
+    "POOL_BYTES: the ways' pool binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
+);
+/// Its free stack: the count, then every block's id but block 0's.
+const STACK_WORDS: u32 = ways::tree::POOL_BLOCKS;
+/// The stack as it starts: every block free but block 0, which names none.
+fn stack_start() -> Vec<u32> {
+    let mut w: Vec<u32> = (0..STACK_WORDS).collect();
+    w[0] = STACK_WORDS - 1;
+    w
 }
 
 /// What the GPU's cast reads; it writes the world surface's rays.
@@ -974,6 +1003,28 @@ impl RaysPass {
             let entries = [buffer_range_entry(0, slots, 0, 16), buffer_entry(1, fresh), buffer_entry(2, frames_buffer)];
             let (bound_built, ways_built) = (pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP), pipelines.build_compute(g, SHADER_WAYS, &BOUND_GROUP));
             let (bound_group, ways_group) = (g.bind_group(bound_built.layouts[0], &entries), g.bind_group(ways_built.layouts[0], &entries));
+            let pool = buffer(POOL_BYTES as u32, buffer_usage::STORAGE);
+            let stack = buffer(word_bytes(STACK_WORDS as usize), storage);
+            g.write_buffer(stack, 0, bytes(&stack_start()));
+            let scratch = buffer(word_bytes((HANDED * ways::tree::SCRATCH_WORDS) as usize), buffer_usage::STORAGE | buffer_usage::COPY_SRC);
+            let free_built = pipelines.build_compute(g, SHADER_WAYS_FREE, &compute::WAYS_FREE_GROUP);
+            let free_group = g.bind_group(
+                free_built.layouts[0],
+                &[buffer_entry(0, fresh), buffer_entry(1, frames_buffer), buffer_entry(2, pool), buffer_entry(3, stack)],
+            );
+            let tree_built = pipelines.build_compute(g, SHADER_WAYS_TREE, &compute::WAYS_TREE_GROUP);
+            let tree_group = g.bind_group(
+                tree_built.layouts[0],
+                &[
+                    buffer_entry(0, fresh),
+                    buffer_entry(1, frames_buffer),
+                    buffer_entry(2, pool),
+                    buffer_entry(3, stack),
+                    buffer_entry(4, scratch),
+                ],
+            );
+            let freed_built = pipelines.build_compute(g, SHADER_WAYS_FREED, &compute::WAYS_FREED_GROUP);
+            let freed_group = g.bind_group(freed_built.layouts[0], &[buffer_entry(0, scratch), buffer_entry(1, stack)]);
             GroundBuffers {
                 ground: frames_buffer,
                 looks,
@@ -990,6 +1041,12 @@ impl RaysPass {
                 bound_group,
                 ways_built,
                 ways_group,
+                free_built,
+                free_group,
+                tree_built,
+                tree_group,
+                freed_built,
+                freed_group,
             }
         });
         let mut fresh = 0;
@@ -1148,6 +1205,11 @@ impl RaysPass {
     fn grids(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
         let Some(c) = self.ground.as_mut().filter(|c| c.fresh_len != 0) else { return false };
         let pass = g.compute_pass(encoder, stamp.pass());
+        // A re-filled square's old ways' blocks given back, off its root word
+        // before its build writes another (pxl-portable `ways::tree`).
+        g.set_pipeline(pass, c.free_built.pipeline);
+        g.set_bind_group(pass, 0, c.free_group, &[]);
+        g.dispatch(pass, 1, 1, c.fresh_len);
         g.set_pipeline(pass, c.heights_built.pipeline);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
         let w = compute::HEIGHTS_WORKGROUP;
@@ -1167,6 +1229,16 @@ impl RaysPass {
             let side = (SQUARE >> j).div_ceil(compute::BOUND_WORKGROUP[0]);
             g.dispatch(pass, side, side, c.fresh_len);
         }
+        // Each square's ways as blocks, a workgroup a square, over its runs
+        // and the levels just folded; then what its build gave back pushed,
+        // a dispatch after, so no push lands under another square's ids
+        // while it reads them.
+        g.set_pipeline(pass, c.tree_built.pipeline);
+        g.set_bind_group(pass, 0, c.tree_group, &[]);
+        g.dispatch(pass, 1, 1, c.fresh_len);
+        g.set_pipeline(pass, c.freed_built.pipeline);
+        g.set_bind_group(pass, 0, c.freed_group, &[]);
+        g.dispatch(pass, 1, 1, c.fresh_len);
         g.end(pass);
         true
     }
