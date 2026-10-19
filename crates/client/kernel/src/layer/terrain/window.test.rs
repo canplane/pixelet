@@ -57,8 +57,8 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
                 looks: |k: u32| word([u32::from(looks_of[at(k)]); 4]),
                 height: |c: [i32; 2]| i32::from(heights[at(window::index_of([c[0].clamp(0, SQUARE as i32 - 1) as u32, c[1].clamp(0, SQUARE as i32 - 1) as u32]))]),
             };
-            let mut lane = vec![0u32; window::SQUARE_WORDS as usize];
-            fill_columns(&laid, |k| i32::from(heights[at(k)]), &mut lane);
+            let (mut lane, mut scratch) = (vec![0u32; window::SQUARE_WORDS as usize], vec![0u32; pxl_portable::ways::tree::SCRATCH_WORDS as usize]);
+            fill_columns(&laid, |k| i32::from(heights[at(k)]), &mut lane, &mut scratch);
             for k in 0..window::LAID_WORDS {
                 let half = |j: u32| window::laid_half(u32::from(looks_of[at(2 * k + j)]), 0);
                 lane[(window::LAID_AT + k) as usize] = half(0) | half(1) << 16;
@@ -66,7 +66,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
             for j in 0..=LEVELS {
                 for y in 0..SQUARE >> j {
                     for x in 0..SQUARE >> j {
-                        pxl_portable::fill::level(&mut lane, 0, cell, j, [x, y]);
+                        pxl_portable::fill::level(&mut lane, 0, &pxl_portable::fill::Scratch { words: &scratch, at: 0 }, cell, j, [x, y]);
                     }
                 }
             }
@@ -75,7 +75,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
                 cell,
                 at: [wrap_index(cell - SQUARE_SHIFT, square[0]), square[1]],
             };
-            let [taken, _] = pxl_portable::fill::tree(&lane, of, planes().pool, next);
+            let [taken, _] = pxl_portable::fill::tree(&lane, &scratch, of, planes().pool, next);
             assert_ne!(taken, u32::MAX, "a square's tree past the pool");
             lane[window::ROOT_AT as usize] = 8 * next;
             next += taken;
@@ -90,22 +90,23 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
 
 /// A square's columns as a GPU's fill writes them (pxl-portable
 /// `fill::heights`, `fill::ways`), over cells whose tops are given
-/// (`top`) rather than drawn off samples: each column's word, its top and
-/// its first run, and its spans and those beside it off its lines
-/// (`ways::around`) read along z as runs (`ways::runs`), into `lane`, none
-/// past `RUNS_SQUARE`.
-fn fill_columns(sq: &impl window::Square, top: impl Fn(u32) -> i32, lane: &mut [u32]) {
-    use pxl_portable::window::{COLUMNS_AT, RUNS_AT, RUNS_SQUARE};
+/// (`top`) rather than drawn off samples: each column's word, its top, into
+/// `lane`; and its spans and those beside it off its lines (`ways::around`)
+/// read along z as runs (`ways::runs`), into its `scratch` from its first,
+/// none past `RUNS_SQUARE`.
+fn fill_columns(sq: &impl window::Square, top: impl Fn(u32) -> i32, lane: &mut [u32], scratch: &mut [u32]) {
+    use pxl_portable::window::{COLUMNS_AT, FIRSTS_AT, RUNS_AT, RUNS_SQUARE};
     let mut runs = 0;
     for i in 0..SQUARE_CELLS {
-        lane[(COLUMNS_AT + i) as usize] = top(i) as u32 & 0xffff | runs << 16;
+        lane[(COLUMNS_AT + i) as usize] = top(i) as u32 & 0xffff;
+        scratch[(FIRSTS_AT + i) as usize] = runs;
         let [x, y] = window::of_index(i);
         let around = pxl_portable::ways::around(sq, [x as i32, y as i32]).0;
         runs += pxl_portable::ways::runs(&around, sq.cell(), |k, w| {
             if runs + k < RUNS_SQUARE {
-                lane[(RUNS_AT + runs + k) as usize] = w;
+                scratch[(RUNS_AT + runs + k) as usize] = w;
             }
         });
     }
-    lane[(COLUMNS_AT + SQUARE_CELLS) as usize] = runs << 16;
+    scratch[(FIRSTS_AT + SQUARE_CELLS) as usize] = runs;
 }

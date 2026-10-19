@@ -53,8 +53,8 @@ const fn sum(lanes: &[u32]) -> u32 {
 pub const SEPARATION_BYTES: u32 = FRAMES * sum(&SEPARATION_LANE_BYTES);
 
 /// One square's cells as the GPU drew them, read back whole: its columns,
-/// a word a cell (its ground's top and its first run), then its levels and
-/// its runs (pxl-portable `window::BACK_WORDS`).
+/// a word a cell (its ground's top), then its levels, its cells as laid and
+/// its ways' tree's root (pxl-portable `window::BACK_WORDS`).
 pub const CELLS_BYTES: u32 = BACK_WORDS * 4;
 pub const CELLS_LANE_BYTES: u32 = lane(CELLS_BYTES as usize, 1);
 

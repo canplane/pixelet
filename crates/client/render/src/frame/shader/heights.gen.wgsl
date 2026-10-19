@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: 42042a58cf2a833a08f3b5c6f27e0eecbf723ff23a27fdb7b85dcf5eadb7a23e
+// Inputs: 92a92549bc5e22411bcb38a9b226e4ea13eec2a23d44bda6ecf79b3e732241ea
 struct type_4 {
     member: array<u32>,
 }
@@ -173,7 +173,7 @@ fn function_() {
                         phi_165_ = 0u;
                     }
                     let _e88 = phi_165_;
-                    let _e89 = (_e88 * 32388u);
+                    let _e89 = (_e88 * 17067u);
                     let _e90 = (_e82 + 1u);
                     if (_e90 < _e72) {
                         let _e94 = global_1.member[_e90];
@@ -866,7 +866,7 @@ fn function_() {
                         }
                         let _e803 = phi_1109_;
                         let _e804 = select(select(_e783, false, _e787), false, _e790);
-                        let _e811 = ((_e89 + 30339u) + (_e164 / 2u));
+                        let _e811 = ((_e89 + 15018u) + (_e164 / 2u));
                         if (_e811 < _e74) {
                             global_2.member[_e811] = (((_e295 & 255u) | (_e592 << bitcast<u32>(8i))) | (((select(_e803, select(_e789, _e704, _e804), select(select(_e787, false, _e790), true, _e804)) & 255u) | (_e685 << bitcast<u32>(8i))) << bitcast<u32>(16i)));
                         }

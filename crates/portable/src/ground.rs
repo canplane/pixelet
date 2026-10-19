@@ -410,8 +410,8 @@ pub type Answer = In<u32>;
 /// finer: its asker's, which asks it once at its entry (`Shard::at`).
 /// `place` is where the cells of a node over it were held
 /// (`Held::relief`), `NONE` where none were, and becomes the node's. With
-/// the answer the cell its block was read off and where it was read, what
-/// the ways write over it read off (`window::ways_over`); none
+/// the answer the cell its block was read off and where it was read, where
+/// the ways write over it are read (pxl-portable `world::node`); none
 /// (`Cell::NONE`, `Found::NONE`) where it read none, as over the ground
 /// where the ways miss the block (`ways::slab`); and the ways' bound read
 /// with its own (`Held::relief`), `EMPTY` where none was.
@@ -481,28 +481,18 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
 }
 
 /// A cell's ground, as a column reads it: its look (`unknown` for the
-/// service area's wall), its top in blocks of its zoom, the four looks its
-/// fold took (`looks`, `dx + 2·dy`), and its runs among its square's, first
-/// to past its last
-/// (`window::column_first` of its column's word and the next's), which the
-/// visit that read it reads what the ways write in it off
-/// (`window::ways_over`).
+/// service area's wall), its top in blocks of its zoom, and the four looks
+/// its fold took (`looks`, `dx + 2·dy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub look: u32,
     pub top: i32,
     pub fold: [u32; 4],
-    pub runs: [u32; 2],
 }
 
 impl Cell {
     /// No ground: void at sea level, as a column no tile is read for.
-    pub const NONE: Cell = Cell {
-        look: VOID,
-        top: 0,
-        fold: [VOID; 4],
-        runs: [0; 2],
-    };
+    pub const NONE: Cell = Cell { look: VOID, top: 0, fold: [VOID; 4] };
 
     /// Whether it has ground at all: a look the catalog grounds, or the wall.
     pub fn grounded(&self) -> bool {

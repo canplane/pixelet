@@ -519,8 +519,9 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
 }
 
 /// The windows as the CPU holds them, for pxl-portable's one reading of a
-/// cell (`window::find`, `window::bound_over`, `window::ran`): each square's
-/// columns, levels and runs as the GPU drew and folded them, read back; and
+/// cell (`window::find`, `window::bound_over`): each square's columns,
+/// levels and ways' tree's root as the GPU drew and folded them, read back
+/// (its tree's blocks in the pool's mirror, `pool`); and
 /// the service area they end at (pxl-portable `area::Area`).
 #[derive(Clone, Copy)]
 pub struct Windowed;
@@ -535,7 +536,8 @@ impl Area for Windowed {
 }
 
 /// Word `k` of square `s`'s cells as they came back: its columns, its
-/// levels, then its runs (`window::BACK_WORDS`).
+/// levels, its cells as laid and its ways' tree's root
+/// (`window::BACK_WORDS`).
 fn back_at(s: u32, k: usize) -> u32 {
     let c = cells(s);
     u32::from_le_bytes([c[4 * k], c[4 * k + 1], c[4 * k + 2], c[4 * k + 3]])
@@ -591,12 +593,6 @@ impl Squares for Windowed {
 
     fn root(&self, _: Zoom, s: u32) -> u32 {
         back_at(s, (window::ROOT_AT - window::COLUMNS_AT) as usize)
-    }
-}
-
-impl window::Ran for Windowed {
-    fn ran(&self, _: Zoom, s: u32, r: u32) -> u32 {
-        back_at(s, (window::RUNS_AT - window::COLUMNS_AT + r) as usize)
     }
 }
 

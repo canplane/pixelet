@@ -119,12 +119,12 @@ pub const SQUARE_BLOCKS: u32 = 24_067;
 /// No slot: a fold that gives no block back.
 pub const NONE: u32 = u32::MAX;
 
-/// A handed square's scratch past its build, a frame's: the blocks its
+/// A handed square's scratch past its runs (`window::TREE_AT`), a frame's: the blocks its
 /// build gave back, their count first, for the pushes after it
 /// (gpu-query-shader `ways_freed_cs`); then the blocks its tree holds,
 /// their count first, a record each, its block's id and its eight heap and
 /// eight data words, which the read-back carries to the CPU's mirror.
-pub const FREED_AT: u32 = 0;
+pub const FREED_AT: u32 = crate::window::TREE_AT;
 pub const RECORDS_AT: u32 = FREED_AT + 1 + SQUARE_BLOCKS;
 pub const RECORD_WORDS: u32 = 17;
 pub const SCRATCH_WORDS: u32 = RECORDS_AT + 1 + SQUARE_BLOCKS * RECORD_WORDS;

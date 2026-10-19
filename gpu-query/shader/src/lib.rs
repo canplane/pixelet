@@ -27,7 +27,7 @@ use pxl_portable::overwrite::{self, Cut, Held, Lanes, PLACED};
 use pxl_portable::ways;
 use pxl_portable::scatter::{self, drawn, Grounds, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT, SQUARE_WORDS};
-use pxl_portable::window::{Found, Ran, RUNS_AT};
+use pxl_portable::window::Found;
 use pxl_portable::{at, ray, world, LEAF_CELL, SHARD_ZOOM};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::arch::IndexUnchecked;
@@ -232,13 +232,6 @@ impl<L: Looks, P: Lanes> Squares for World<'_, L, P> {
     }
     fn root(&self, cell: u32, slot: u32) -> u32 {
         at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + window::ROOT_AT)
-    }
-}
-
-/// The ways' runs `ways_cs` wrote in the eye's windows.
-impl<L: Looks, P: Lanes> Ran for World<'_, L, P> {
-    fn ran(&self, cell: u32, slot: u32, r: u32) -> u32 {
-        at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + RUNS_AT + r)
     }
 }
 
@@ -653,15 +646,17 @@ pub fn heights_cs(
 }
 
 /// Level `level.x` of the squares `fresh` names, one a `z`: level 0 each
-/// column's own, its top and its runs (`fill::level`), a higher one over the
-/// level under it, written before (`window::join`): a dispatch a level, from
-/// 0 up.
+/// column's own, its top and its runs in its scratch (`fill::level`), a
+/// higher one over the level under it, written before (`window::join`): a
+/// dispatch a level, from 0 up.
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn bound_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] level: &UVec4,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
+    // Read and written, as `ways_cs` binds it: the two share one group.
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] scratch: &mut [u32],
 ) {
     let j = level.x;
     let side = SQUARE >> j;
@@ -670,15 +665,20 @@ pub fn bound_cs(
     }
     let rec = window::handed_at(id.z);
     let base = square_at(at(fresh, rec + window::FRESH_SQUARE));
-    fill::level(ground, base, at(fresh, rec + window::FRESH_CELL), j, [id.x, id.y]);
+    let runs = fill::Scratch {
+        words: &*scratch,
+        at: fill::scratch_at(id.z),
+    };
+    fill::level(ground, base, &runs, at(fresh, rec + window::FRESH_CELL), j, [id.x, id.y]);
 }
 
 /// The ways of the squares `fresh` names, one a `z`, a thread a column
 /// (`x`, cells row by row): each column's spans and those beside it off the
 /// square's lines (pxl-portable `ways::around`) read along z as runs
-/// (`ways::runs`), from its column word's first (`window::COLUMN_WORDS`).
-/// Three dispatches, `pass.x` 0 to 2: each column counts its runs into its
-/// word; a workgroup a square sums them into each column's first, each
+/// (`ways::runs`), into the square's scratch from its column's first
+/// (`window::FIRSTS_AT`). Three dispatches, `pass.x` 0 to 2: each column
+/// counts its runs into its first; a workgroup a square sums them into each
+/// column's first, each
 /// thread a stretch (`fill::stretch_runs`), the stretches' sums scanned in
 /// the workgroup's memory (Hillis and Steele 1986; GPU Gems 3, ch. 39) and
 /// each stretch's firsts written off it (`fill::scanned`); each column
@@ -692,11 +692,13 @@ pub fn ways_cs(
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] pass: &UVec4,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] fresh: &[u32],
+    // Read and written, as `bound_cs` binds it: the two share one group.
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] scratch: &mut [u32],
     #[spirv(workgroup)] sums: &mut [u32; fill::SCAN_THREADS as usize],
 ) {
     if pass.x != 1 {
-        fill::ways(ground, fresh, id.z, pass.x == 2, id.x);
+        fill::ways(ground, fresh, scratch, id.z, pass.x == 2, id.x);
         return;
     }
     // An inclusive scan, a step a doubling: each sum adds the one `d` before
@@ -707,8 +709,8 @@ pub fn ways_cs(
     // lane's own, so they are no one load every lane shares
     // (gpu-query-builder's `workgroupUniformLoad`).
     let t = lane.x;
-    let own = fill::stretch_runs(ground, fresh, id.z, t);
-    fill::scanned(ground, fresh, id.z, t, scan(sums, t, own) - own);
+    let own = fill::stretch_runs(scratch, id.z, t);
+    fill::scanned(scratch, id.z, t, scan(sums, t, own) - own);
 }
 
 /// The workgroup's words, a lane's own: a scan's sums, a level's numbers.
@@ -1011,9 +1013,9 @@ pub fn ways_tree_cs(
     // flow, which WebGPU takes only there.
     let mut c = 0;
     while ok && c < n {
-        let square = fill::Fresh { ground, base };
+        let runs = fill::Scratch { words: scratch, at: mine };
         if c + t < n {
-            tree::leaf(&mut pool, &square, of, slot(stack, from, c + t));
+            tree::leaf(&mut pool, &runs, of, slot(stack, from, c + t));
         }
         c += lanes;
     }

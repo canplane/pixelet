@@ -11,7 +11,7 @@
 use std::collections::BTreeMap;
 
 use fnv::FnvHashMap;
-use pxl_portable::ways::tree::{POOL_BLOCKS, SQUARE_BLOCKS};
+use pxl_portable::ways::tree::{POOL_BLOCKS, SCRATCH_WORDS, SQUARE_BLOCKS};
 use pxl_portable::window::{ACROSS, HANDED_WORDS, SQUARE, SQUARE_WORDS, WAYS_SQUARE_SEGMENTS};
 use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -73,13 +73,13 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<(), String> {
 /// The squares of `tiles` the set holds, each its tree's blocks.
 fn held(set: &Staged<'_>, tiles: &[Tile]) -> Result<Held, String> {
     let mut scratch = vec![(0, 0); WAYS_SQUARE_SEGMENTS as usize];
-    let (mut handed, mut lane) = (vec![0; HANDED_WORDS as usize], vec![0; SQUARE_WORDS as usize]);
+    let (mut handed, mut lane, mut runs) = (vec![0; HANDED_WORDS as usize], vec![0; SQUARE_WORDS as usize], vec![0; SCRATCH_WORDS as usize]);
     // A square's room: the most a build takes, past the block none holds.
     let mut pool = vec![0; 16 * (SQUARE_BLOCKS as usize + 1)];
     let mut out = Held::default();
     for &p in tiles {
         let Some(tile) = set.read::<TerrainTile>(p)? else { continue };
-        let blocks = terrain::square_blocks(p, &tile, &mut scratch, [&mut handed, &mut lane, &mut pool]);
+        let blocks = terrain::square_blocks(p, &tile, &mut scratch, [&mut handed, &mut lane, &mut runs, &mut pool]);
         let cell = GROUND.cell_zoom(p.zoom);
         for (k, [taken, held]) in blocks.into_iter().enumerate() {
             if taken == u32::MAX {

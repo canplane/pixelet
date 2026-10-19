@@ -931,8 +931,9 @@ const _: () = assert!(
 );
 
 /// `bound_cs`'s and `ways_cs`'s one group: its level or its pass at a
-/// dynamic offset (`SLOT_STRIDE`), the fresh frames and the frames it writes
-/// the levels or the runs of. The cast's, `start_cs`'s and `joined_cs`'s one
+/// dynamic offset (`SLOT_STRIDE`), the fresh frames, the frames it writes
+/// the levels of, and the handed squares' scratch it writes or reads the
+/// runs in. The cast's, `start_cs`'s and `joined_cs`'s one
 /// group is the cast's, which binds all theirs.
 const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
 const _: () = assert!(same(compute::BOUND_GROUP, compute::WAYS_GROUP), "the levels' and the ways' passes share a group");
@@ -1005,13 +1006,13 @@ impl RaysPass {
             for k in 0..=LEVELS {
                 g.write_buffer(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
             }
-            let entries = [buffer_range_entry(0, slots, 0, 16), buffer_entry(1, fresh), buffer_entry(2, frames_buffer)];
+            let scratch = buffer(word_bytes((HANDED * ways::tree::SCRATCH_WORDS) as usize), buffer_usage::STORAGE | buffer_usage::COPY_SRC);
+            let entries = [buffer_range_entry(0, slots, 0, 16), buffer_entry(1, fresh), buffer_entry(2, frames_buffer), buffer_entry(3, scratch)];
             let (bound_built, ways_built) = (pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP), pipelines.build_compute(g, SHADER_WAYS, &BOUND_GROUP));
             let (bound_group, ways_group) = (g.bind_group(bound_built.layouts[0], &entries), g.bind_group(ways_built.layouts[0], &entries));
             let pool = buffer(POOL_BYTES as u32, buffer_usage::STORAGE);
             let stack = buffer(word_bytes(STACK_WORDS as usize), storage);
             g.write_buffer(stack, 0, bytes(&stack_start()));
-            let scratch = buffer(word_bytes((HANDED * ways::tree::SCRATCH_WORDS) as usize), buffer_usage::STORAGE | buffer_usage::COPY_SRC);
             let free_built = pipelines.build_compute(g, SHADER_WAYS_FREE, &compute::WAYS_FREE_GROUP);
             let free_group = g.bind_group(
                 free_built.layouts[0],

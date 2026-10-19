@@ -228,24 +228,26 @@ pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::w
 /// `runs_fit`).
 pub const RUNS_SQUARE: u32 = 15320;
 
-/// A square's columns, a word a cell, row by row, and one more after the
-/// last: a cell's ground's top in leaf cells, an `i16`, low (`column_top`),
-/// and its first run among the square's runs, high (`column_first`), so a
-/// cell's runs are its first to the next cell's; the last word's first is
-/// how many there are. A column is its ground's top and the runs the ways
-/// write over it along z (`ways::run_word`), lowest first, each to the next's
-/// first block and a column's last `NOTHING` on; a column no way writes in
-/// has none.
-pub const COLUMN_WORDS: u32 = SQUARE_CELLS + 1;
+/// A handed square's scratch, the GPU's own for the frame it is filled
+/// (`HANDED` of them, `ways::tree::SCRATCH_WORDS` each): its columns'
+/// runs, what its ways write along z (`ways::run_word`), lowest first, each
+/// to the next's first block and a column's last `NOTHING` on, a column no
+/// way writes in none (`RUNS_AT`), each column's first among them, row by
+/// row, and the square's count past the last (`FIRSTS_AT`); then its tree's
+/// (`ways::tree::FREED_AT`). Its levels' ways' bound and its ways' tree
+/// are made off the runs (pxl-portable fill.rs `level`, `ways::tree::leaf`),
+/// and they go with the frame.
+pub const FIRSTS_AT: u32 = 0;
+pub const RUNS_AT: u32 = FIRSTS_AT + SQUARE_CELLS + 1;
+pub const TREE_AT: u32 = RUNS_AT + RUNS_SQUARE;
+
+/// A square's columns, a word a cell, row by row: a cell's ground's top in
+/// leaf cells, an `i16`, low (`column_top`).
+pub const COLUMN_WORDS: u32 = SQUARE_CELLS;
 
 /// A column word's ground top.
 pub const fn column_top(w: u32) -> i32 {
     (w << 16) as i32 >> 16
-}
-
-/// A column word's first run.
-pub const fn column_first(w: u32) -> u32 {
-    w >> 16
 }
 
 /// A square's cells as its fill lays them, two a word, cell `i` in the
@@ -267,13 +269,12 @@ pub const fn laid_half(look: u32, gone: u32) -> u32 {
 }
 
 /// A square's words on a GPU, what outlives its fill, its lanes in order:
-/// its columns, its levels, its columns' runs and its cells as laid. The
+/// its columns, its levels, its cells as laid and its ways' tree's root. The
 /// windows' squares are one storage buffer bound whole, under WebGPU's
 /// floor (pxl-render gpu/renderer.rs `GROUND_BYTES`).
 pub const COLUMNS_AT: u32 = 0;
 pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
-pub const RUNS_AT: u32 = LEVELS_AT + LEVEL_WORDS;
-pub const LAID_AT: u32 = RUNS_AT + RUNS_SQUARE;
+pub const LAID_AT: u32 = LEVELS_AT + LEVEL_WORDS;
 /// Its ways' tree's root: the first slot of its zoom-0 block in the pool
 /// (`ways::tree`); 0, the block never handed out, where it has none.
 pub const ROOT_AT: u32 = LAID_AT + LAID_WORDS;
@@ -439,7 +440,7 @@ impl<Q: Square> crate::ways::Columns for Q {
         header_of(self).1
     }
     /// Its own look, before the service area's wall is laid, as its fill
-    /// laid it (`LAID_WORDS`): the wall is the descent's to lay (`ran`'s
+    /// laid it (`LAID_WORDS`): the wall is the descent's to lay (`ground`'s
     /// reader).
     fn look(&self, c: [i32; 2]) -> u32 {
         let i = cell_index(c);
@@ -466,12 +467,6 @@ impl<Q: Square> crate::ways::Columns for Q {
         let e = entry_of(self, first + k);
         e == entry_of(self, first + k - 1) + 1 && segment_at(self, e).continues == 1
     }
-}
-
-/// What the ways' runs read of a side's windows beyond their columns: run
-/// `r` of the square in `slot` at `cell` (`RUNS_AT`).
-pub trait Ran: Squares {
-    fn ran(&self, cell: Zoom, slot: u32, r: u32) -> u32;
 }
 
 /// Where a node's cells at `cell`, a square's or fewer, are held, as `find`
@@ -575,23 +570,6 @@ fn step_from(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2], top: Zoom)
     (f, square_of(cell_at(cell, f.from(), g)).1)
 }
 
-/// What the ways write in block `z` at `zoom` of a column whose runs are
-/// `runs`, held where `f` found its cell (`ground`), run along z
-/// (`ways::lined`'s): the block it lies in at the window's zoom, past the
-/// leaves a leaf's. `ways::NOTHING` where no way writes.
-pub fn ran(w: &impl Ran, f: Found, [mut r, to]: [u32; 2], zoom: Zoom, z: i32) -> u32 {
-    let (from, slot) = (f.from(), f.slot());
-    let (zr, mut value) = (z >> (zoom - from), crate::ways::NOTHING);
-    while r < to {
-        let (lo, v) = crate::ways::run_of(w.ran(from, slot, r));
-        if zr < lo {
-            break;
-        }
-        (value, r) = (v, r + 1);
-    }
-    value
-}
-
 /// The zoom a cell at `cell` is read at, the eye's windows' (`FIRST_CELL`
 /// to `LEAF_CELL`): past the leaves a leaf's, coarser than the coarsest
 /// window that window's.
@@ -607,57 +585,36 @@ pub const fn held_to(cell: Zoom) -> Zoom {
 
 /// The ground's cell `g` at `cell`, off the finest window holding it
 /// present, stepped from `place` (`step`): its four looks, its column's
-/// word and the next's (its height, its runs), it as laid, and where it is
-/// held; `void` at sea level where none holds it.
-pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, [u32; 2], u32, Found) {
+/// word (its height), it as laid, and where it is held; `void` at sea level
+/// where none holds it.
+pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u32, u32, Found) {
     let (f, at) = step(w, place, cell, g);
     if !f.here() {
-        return (VOID, [0; 2], laid_half(VOID, 0), f);
+        return (VOID, 0, laid_half(VOID, 0), f);
     }
     let (from, slot, i) = (f.from(), f.slot(), index_of(at));
-    (w.look(from, slot, i), [w.column(from, slot, i), w.column(from, slot, i + 1)], w.laid(from, slot, i), f)
+    (w.look(from, slot, i), w.column(from, slot, i), w.laid(from, slot, i), f)
 }
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
 /// the leaves a leaf's, stepped from `place`, with the area's edge laid on
 /// it off the cell as its fill laid it (`area::laid`); and where it is
-/// held. `place` is where the cells of `owner` were found: a column beside it is read off it where its cell lies
-/// in the square holding `owner`'s, as `ran` reads the columns about one
+/// held. `place` is where the cells of `owner` were found: a column beside
+/// it is read off it where its cell lies in the square holding `owner`'s
 /// (`step`), and found anew past it.
-pub fn ground(w: &(impl Ran + crate::area::Area), owner: (Zoom, [i32; 2]), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
+pub fn ground(w: &(impl Squares + crate::area::Area), owner: (Zoom, [i32; 2]), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
     let read = held_to(zoom);
     let g = cell_at(zoom, read, b);
     let (q, o) = (square_of(g).0, square_of(cell_at(owner.0, read, owner.1)).0);
     // Component-wise: a GPU has no array equality.
     let place = if q[0] == o[0] && q[1] == o[1] { place } else { Found::NONE };
-    let (word, [column, next], laid, f) = cell(w, place, read, g);
+    let (word, column, laid, f) = cell(w, place, read, g);
     let cell = crate::ground::Cell {
         look: crate::area::laid(laid, zoom, b),
         top: crate::ground::blocks(zoom, column_top(column) as f32),
         fold: crate::ground::looks(word),
-        runs: [column_first(column), column_first(next)],
     };
     (cell, f)
-}
-
-/// Block `z` at `zoom` of a column with what the ways write over the
-/// ground's block there, `block` its look, and whether a way wrote it,
-/// `found`
-/// where its column was read and `runs` its runs, as the visit read them
-/// (`ground::Cell::runs`): a bore's air, or a way's look, its own
-/// column's alone, the lining of a bore's air beside it written there by
-/// its fill (`ways::lined`). A column read off a coarser window standing in
-/// for its own holds that window's runs, laid at its coarser cells: the
-/// coarser zoom's world.
-pub fn ways_over(w: &impl Ran, found: Found, runs: [u32; 2], zoom: Zoom, z: i32, block: u32) -> (u32, bool) {
-    if runs[1] <= runs[0] {
-        return (block, false);
-    }
-    match ran(w, found, runs, zoom, z) {
-        crate::ways::NOTHING => (block, false),
-        // A bore's air is the ground's void, `ways::AIR`.
-        way => (way, true),
-    }
 }
 
 /// The finest window, at `cell` or coarser to the first (`FIRST_CELL`), holding cell `g` (at
