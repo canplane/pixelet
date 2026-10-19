@@ -596,9 +596,16 @@ pub fn start<Q: Query>(q: &mut Q, o: &Origin, detail: Detail, most: Zoom) -> Sta
 /// is not met when it stops where a block fills, so an eye under the ground
 /// is not stopped where it stands.
 pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until) -> Met<Q::At, Q::Block> {
+    let (from, over) = rooted(q, o);
+    first_from(q, o, ray, detail, until, from, &over)
+}
+
+/// Where a walk from the world's roots starts: the root holding `o` and
+/// what it holds, nothing over it.
+pub fn rooted<Q: Query>(q: &mut Q, o: &Origin) -> ((Place, Q::At), Rooted<Q::At>) {
     let root = root_of(o);
     let at = q.root(root.node(o));
-    first_from(q, o, ray, detail, until, (root, at), &Rooted(at))
+    ((root, at), Rooted(at))
 }
 
 /// `first`, the ray's descent started at `from`, a node holding its origin
@@ -619,6 +626,99 @@ pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: 
 /// next root, from its top. One loop.
 #[allow(clippy::too_many_arguments)]
 pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Met<Q::At, Q::Block> {
+    walk(q, o, ray, detail, until, from, over).0
+}
+
+/// What a walk holds of the line down to where it ended (`walk`): what its
+/// stack keeps from `floor`, the zoom over which the origin's line is
+/// `over`'s (`top`), the node it ended at, its corner and roots from the
+/// origin's, and what was handed it (`live`), and where the origin is in
+/// its root.
+#[derive(Clone, Copy)]
+pub struct Line<S, A> {
+    stack: S,
+    floor: Zoom,
+    top: Zoom,
+    zoom: Zoom,
+    corner: [u32; 3],
+    roots: [i32; 3],
+    og: [u32; 3],
+    live: A,
+}
+
+impl<S: Copy, A: Copy> Line<S, A> {
+    /// No walk's: it holds nothing over any node but its root, where a GPU
+    /// holds no `Option` (`stack` and `live` never read).
+    pub const fn bare(stack: S, live: A) -> Line<S, A> {
+        Line {
+            stack,
+            floor: DEPTH as Zoom,
+            top: 0,
+            zoom: DEPTH as Zoom,
+            corner: [0; 3],
+            roots: [0; 3],
+            og: [0; 3],
+            live,
+        }
+    }
+
+    /// What the walk holds over the node `c` of `zoom` in the root it
+    /// ended in, at zoom `up` or the nearest over it: the node the walk ended
+    /// at where it holds `c`'s; else the stack's or the origin's line's as
+    /// its POP reads them (`handed`), on its line from the bits `c` parts
+    /// from it at; the zoom of the node it is and what was handed it; none
+    /// where only its root is held. `over` hands what is over the start, as
+    /// it did the walk.
+    pub fn held<Q: Query<Stack = S, At = A>>(&self, up: Zoom, (zoom, c): (Zoom, [i32; 3]), over: &impl Over<A>) -> (Zoom, A, bool) {
+        let at = |v: i32| if zoom == 0 { 0 } else { (v as u32) << (FINEST_ZOOM - zoom) };
+        let corner = [at(c[0]), at(c[1]), at(c[2])];
+        let apart = (self.corner[0] ^ corner[0]) | (self.corner[1] ^ corner[1]) | (self.corner[2] ^ corner[2]);
+        let on = up.min(apart.leading_zeros());
+        if on >= self.zoom {
+            (self.zoom, self.live, true)
+        } else {
+            handed::<Q>(&self.stack, (self.floor, self.top), (corner, self.roots, self.og), (up, on), &self.live, over)
+        }
+    }
+}
+
+/// What a walk holds of the node at `zoom` over one at `corner` in `roots`,
+/// `on` the zoom to which that node's line is the walk's, `live` what was
+/// handed the node it is at: on the origin's line over the start, `over`'s,
+/// which a node shares with the origin down to the bits they part at; the
+/// stack's while its entry is its own (`floor`); else the nearest node over
+/// it on the origin's line, `over`'s; else none, only the root. The zoom of
+/// the node it is, what was handed it, and whether it is one.
+fn handed<Q: Query>(
+    stack: &Q::Stack,
+    (floor, top): (Zoom, Zoom),
+    (corner, roots, og): ([u32; 3], [i32; 3], [u32; 3]),
+    (zoom, on): (Zoom, Zoom),
+    live: &Q::At,
+    over: &impl Over<Q::At>,
+) -> (Zoom, Q::At, bool) {
+    let home = roots[0] == 0 && roots[1] == 0 && roots[2] == 0;
+    let apart = (og[0] ^ corner[0]) | (og[1] ^ corner[1]) | (og[2] ^ corner[2]);
+    let lined = if home && top > 0 { zoom.min(apart.leading_zeros()).min(top - 1) } else { 0 };
+    if home && top > 0 && lined == zoom {
+        (zoom, over.over(zoom), true)
+    } else if on >= floor && (on > lined || !(home && top > 0)) {
+        (on, Q::unkeep(stack.at(on), live, on), true)
+    } else if home && top > 0 {
+        (lined, over.over(lined), true)
+    } else {
+        (0, *live, false)
+    }
+}
+
+/// How a walk of `Q` ended, and what it holds of its line there (`walk`).
+pub type Walked<Q> = (Met<<Q as Query>::At, <Q as Query>::Block>, Line<<Q as Query>::Stack, <Q as Query>::At>);
+
+/// `first_from`, and what the walk holds of the line down to where it
+/// ended (`Line`): a walk's whole state there, for what asks the nodes over
+/// its stop after it.
+#[allow(clippy::too_many_arguments)]
+pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Walked<Q> {
     let (og, r0) = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, the levels it went into
@@ -715,7 +815,17 @@ pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, un
                     at,
                     block: i.block,
                 };
-                return Met { ends, stop, visits };
+                let line = Line {
+                    stack,
+                    floor,
+                    top,
+                    zoom: n.zoom,
+                    corner: n.corner,
+                    roots: n.roots,
+                    og,
+                    live: at,
+                };
+                return (Met { ends, stop, visits }, line);
             }
         }
         // Every way on makes the next node: what is handed it is decided here,
@@ -762,17 +872,24 @@ pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, un
         } else {
             if t1 >= ray.reach {
                 // Gone on to its reach: no stop, which no asker reads.
-                return Met {
-                    ends: Ends::On,
-                    stop: Stop {
-                        t: t1,
-                        axis: 0,
-                        place: from.0,
-                        at,
-                        block: Q::AIR,
-                    },
-                    visits,
+                let line = Line {
+                    stack,
+                    floor,
+                    top,
+                    zoom: n.zoom,
+                    corner: n.corner,
+                    roots: n.roots,
+                    og,
+                    live: at,
                 };
+                let stop = Stop {
+                    t: t1,
+                    axis: 0,
+                    place: from.0,
+                    at,
+                    block: Q::AIR,
+                };
+                return (Met { ends: Ends::On, stop, visits }, line);
             }
             // ADVANCE: the corner stepped on the axis the ray leaves by, the
             // first far plane it reaches.
@@ -827,32 +944,26 @@ pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, un
                 let keep = !((1u32 << h) - 1);
                 n.corner = [n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep];
                 let l = FINEST_ZOOM - h;
-                // What was handed the parent: on the origin's line over the start,
-                // `over`'s, which a node shares with the origin down to the bits they
-                // part at; the stack's while its entry is its own; else the walk goes
-                // down again, as kd-restart does (Foley & Sugerman 2005), from the
-                // first node under the deepest it shares with the origin's line,
-                // handed `over`'s, or from the root, its At its own, each node on the
-                // way asked as it was (its span its own box, its At of what was
-                // handed it alone, `Query::node`) and into the child where the ray
-                // now is, every level under where it went in written before it is read.
-                let home = n.roots[0] == 0 && n.roots[1] == 0 && n.roots[2] == 0;
-                let apart = (og[0] ^ n.corner[0]) | (og[1] ^ n.corner[1]) | (og[2] ^ n.corner[2]);
-                let shared = apart.leading_zeros();
-                if home && l - 1 < top && shared >= l - 1 {
-                    n.zoom = l;
-                    (over.over(l - 1), false)
-                } else if l > floor {
-                    n.zoom = l;
-                    (Q::unkeep(stack.at(l - 1), &at, l - 1), false)
-                } else if home && top > 0 {
-                    let b = shared.min(top - 1) + 1;
-                    let keep = !under(b);
-                    (n.corner, n.zoom, floor) = ([n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep], b, b);
-                    (over.over(b - 1), false)
-                } else {
+                // What was handed the parent, as the walk holds it (`handed`);
+                // where that is a node further over, the walk goes down again,
+                // as kd-restart does (Foley & Sugerman 2005), from the first
+                // node under it, or from the root, its At its own, each node on
+                // the way asked as it was (its span its own box, its At of what
+                // was handed it alone, `Query::node`) and into the child where
+                // the ray now is, every level under where it went in written
+                // before it is read.
+                let (z, parent, held) = handed::<Q>(&stack, (floor, top), (n.corner, n.roots, og), (l - 1, l - 1), &at, over);
+                if !held {
                     (n.corner, n.zoom, floor) = ([0; 3], 0, 0);
                     (at, true)
+                } else {
+                    let b = z + 1;
+                    if b < l {
+                        let keep = !under(b);
+                        (n.corner, floor) = ([n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep], b);
+                    }
+                    n.zoom = b;
+                    (parent, false)
                 }
             }
         };

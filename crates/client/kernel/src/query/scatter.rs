@@ -16,20 +16,44 @@ use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 
+use super::node::At;
+use super::ray::Walking;
 use super::world::World;
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::store;
+use crate::layer::residency::Lines;
+use pxl_portable::cast;
 
 /// The world as decor's growth asks it on the CPU (pxl-portable
 /// `Grounds`): the world's one query and its ray, and what is placed.
 pub(super) struct Asked<'a, 'w> {
     world: &'a World<'w>,
     lanes: store::Lanes<'a>,
+    /// What the footing's walk holds of its line, none before one.
+    line: Option<cast::Line<[At; cast::DEPTH], At>>,
+    /// The ground's lines the footing's walk read, each block's stepped
+    /// from them.
+    lines: Lines,
 }
 
 impl<'a, 'w> Asked<'a, 'w> {
     pub(super) fn new(world: &'a World<'w>) -> Asked<'a, 'w> {
-        Asked { world, lanes: world.objects.lanes() }
+        Asked {
+            world,
+            lanes: world.objects.lanes(),
+            line: None,
+            lines: Lines::default(),
+        }
+    }
+}
+
+/// What is over a footing's walk, from the world's roots: nothing, so it is
+/// never asked (pxl-portable `cast::Rooted`, its `top` 0).
+struct Unasked;
+
+impl cast::Over<At> for Unasked {
+    fn over(&self, zoom: Zoom) -> At {
+        xpute_kit::bug!(EINVAL, zoom)
     }
 }
 
@@ -51,13 +75,23 @@ impl Grounds for Asked<'_, '_> {
 
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
         match self.world.footing(cell, g) {
-            Some((b, top)) => (b, top, true),
+            Some(f) => {
+                (self.line, self.lines) = (Some(f.line), f.lines);
+                (f.block, f.top, true)
+            }
             None => (0, 0, false),
         }
     }
 
-    fn start(&mut self, zoom: Zoom, c: [i32; 3]) -> Self::At {
-        self.world.start((zoom, c))
+    fn held(&mut self, up: Zoom, node: (Zoom, [i32; 3])) -> (Zoom, Self::At) {
+        match self.line.map(|l| l.held::<Walking>(up, node, &Unasked)) {
+            Some((zoom, at, true)) => (zoom, at),
+            _ => (0, self.root(node)),
+        }
+    }
+
+    fn root(&mut self, (zoom, c): (Zoom, [i32; 3])) -> Self::At {
+        self.world.start((0, c.map(|v| v >> zoom)))
     }
 
     /// Void where the world holds nothing there.
@@ -67,7 +101,7 @@ impl Grounds for Asked<'_, '_> {
             let s = zoom - z;
             at = self.world.child(&at, (0..3).map(|i| (((c[i] >> s) & 1) as usize) << i).sum());
         }
-        self.world.drawn(&mut at).value().unwrap_or(u32::from(sentinel::void))
+        self.world.drawn(&mut at, &mut self.lines).value().unwrap_or(u32::from(sentinel::void))
     }
 }
 

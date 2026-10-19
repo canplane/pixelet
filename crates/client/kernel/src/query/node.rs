@@ -97,7 +97,7 @@ impl World<'_> {
     /// zoom, `coarsest` or finer, for an asker with nothing handed down
     /// (`drawn`).
     pub fn block(&self, node: Node<3>) -> Answer<u32> {
-        self.drawn(&mut self.start(node))
+        self.drawn(&mut self.start(node), &mut Lines::default())
     }
 
     /// A node with nothing handed down, a descent's root among them: each
@@ -115,12 +115,12 @@ impl World<'_> {
 
     /// What is in `at`'s block, at its own zoom, `coarsest` or finer: none
     /// where it is air or void, else what fills it (`node`, asked at its
-    /// own zoom).
-    pub(super) fn drawn(&self, at: &mut At) -> Answer<u32> {
+    /// own zoom). `lines` are the ground's lines the asker read, which its
+    /// own steps from (`node`).
+    pub(super) fn drawn(&self, at: &mut At, lines: &mut Lines) -> Answer<u32> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        self.node(at, [zoom, zoom], &mut Lines::default())
-            .map(|(i, block)| if block && i.kind == Kind::Block { i.block } else { VOID })
+        self.node(at, [zoom, zoom], lines).map(|(i, block)| if block && i.kind == Kind::Block { i.block } else { VOID })
     }
 
     /// A preview's entry as pxl-portable `overwrite` takes it.

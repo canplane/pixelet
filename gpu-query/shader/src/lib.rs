@@ -364,6 +364,9 @@ struct Growing<'a> {
     /// Where every footing of the slot's square starts alike
     /// (`decor_start_cs`).
     start: Starts<'a>,
+    /// What the last footing's walk holds of its line (pxl-portable
+    /// `cast::Line`), none before one.
+    line: cast::Line<[[u32; 3]; LEVELS], At>,
 }
 
 impl Lanes for Growing<'_> {
@@ -376,9 +379,7 @@ impl Lanes for Growing<'_> {
 }
 
 /// A cell off the window drawing it, and a block asked by the cast's
-/// descent, from a node started as the CPU's world starts one (pxl-kernel
-/// query/node.rs `World::start`): its caves and what is placed found down
-/// its line from the top.
+/// descent, down from a node the footing's walk holds or from a root.
 impl Grounds for Growing<'_> {
     type At = At;
 
@@ -390,18 +391,22 @@ impl Grounds for Growing<'_> {
     /// every footing of the slot's square starts alike (pxl-portable
     /// `scatter::footing_from`).
     fn footing(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
-        let (block, z, met) = scatter::footing_from(&mut self.world, cell, g, self.start.from(), &self.start);
+        let ((block, z, met), line) = scatter::footing_from(&mut self.world, cell, g, self.start.from(), &self.start);
+        self.line = line;
         (block[0], z, met)
     }
 
-    fn start(&mut self, zoom: u32, c: [i32; 3]) -> At {
-        At {
-            cave: Cave::of(zoom, c),
-            placed: overwrite::cursor(&self.world, PLACED, zoom, c),
-            shard: Shard::UNKNOWN,
-            ground: Found::NONE,
-            ways: Held::NOTHING,
+    fn held(&mut self, up: u32, node: (u32, [i32; 3])) -> (u32, At) {
+        let (zoom, at, held) = self.line.held::<World<'_, Unlooked, Unpooled>>(up, node, &self.start);
+        if held {
+            (zoom, at)
+        } else {
+            (0, self.root(node))
         }
+    }
+
+    fn root(&mut self, (zoom, c): (u32, [i32; 3])) -> At {
+        Query::root(&mut self.world, [c[0] >> zoom, c[1] >> zoom, c[2] >> zoom])
     }
 
     fn block(&mut self, at: &At, from: u32, zoom: u32, c: [i32; 3]) -> u32 {
@@ -1238,6 +1243,16 @@ pub fn decor_cs(
         },
         rows,
         start: Starts(grows, scatter::start_at(square)),
+        line: cast::Line::bare(
+            [[0; 3]; LEVELS],
+            At {
+                cave: Cave::of_word(0),
+                placed: Held::NOTHING,
+                shard: Shard::UNKNOWN,
+                ground: Found::NONE,
+                ways: Held::NOTHING,
+            },
+        ),
     };
     let decor = &rows[kind as usize];
     let zoom = GROUND.read_zoom(cell);
