@@ -21,7 +21,7 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_cell};
 use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units, Zoom, CUBE_ZOOM};
 use pxl_spec::space::hierarchy::morton::{key_of, node_of};
-use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
+use pxl_spec::space::hierarchy::sparse_tree::SparseTree;
 use pxl_spec::space::hierarchy::tree::{child_of, region, slot_of, Node};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -161,9 +161,11 @@ impl overwrite::Lanes for Lanes<'_> {
     }
 }
 
-/// The node of zoom 0 at the root's slot `k`.
-fn root(k: usize) -> [i32; 3] {
-    core::array::from_fn(|i| -(((k >> i) & 1) as i32))
+/// The root `k` of four, a node of zoom 0: X is counted from the round's
+/// start (`overwrite::path`), so a root's X is 0, and Y and Z either side
+/// of 0.
+fn root(k: u32) -> [i32; 3] {
+    [0, -((k & 1) as i32), -((k >> 1) as i32)]
 }
 
 /// Where the node `at` of `zoom` comes in the tree's own order, the order a
@@ -247,25 +249,25 @@ impl Store {
     /// frame, a node entered where `enter` says so: its zoom, its index and
     /// cube there, and its value if it is a leaf.
     fn descend(&self, about: f64, enter: &mut Enter) {
-        for k in 0..8 {
-            self.walk(self.tree.child(overwrite::PLACED, k), 0, root(k), about, enter);
+        for k in 0..4 {
+            self.walk(self.cursor((0, root(k)), 0), 0, root(k), about, enter);
         }
     }
 
-    fn walk(&self, slot: Slot<u32>, zoom: Zoom, at: [i32; 3], about: f64, enter: &mut Enter) {
-        let leaf = match slot {
-            Slot::Leaf(v) if v == EMPTY.word() => return,
-            Slot::Leaf(v) => Some(Leaf::of(v)),
-            Slot::Branch(..) => None,
-        };
-        let here = node_near(zoom, at, about);
-        if !enter(zoom, here, &cube(zoom, here), leaf) {
+    /// `descend` under the node `at` of `zoom` that holds `held`, by the step
+    /// every descent of the tree takes (`overwrite::child`).
+    fn walk(&self, held: Held, zoom: Zoom, at: [i32; 3], about: f64, enter: &mut Enter) {
+        if !held.holds() {
             return;
         }
-        if let Slot::Branch(block, _) = slot {
-            for k in 0..8 {
-                self.walk(self.tree.child(block, k), zoom + 1, wrap_cell(zoom + 1, child_of(at, k)), about, enter);
-            }
+        let leaf = (!held.folded()).then(|| Leaf::of(self.tree.data()[held.slot() as usize]));
+        let here = node_near(zoom, at, about);
+        if !enter(zoom, here, &cube(zoom, here), leaf) || !held.folded() {
+            return;
+        }
+        for k in 0..8 {
+            let child = wrap_cell(zoom + 1, child_of(at, k));
+            self.walk(self.child(&held, (zoom + 1, child), zoom + 1), zoom + 1, child, about, enter);
         }
     }
 
@@ -305,7 +307,7 @@ impl Store {
             }
             let z = held.zoom();
             let at = wrap_cell(z, at.map(|c| c >> (zoom - z)));
-            self.walk(self.tree.slot(held.slot() as usize), z, at, about, &mut |zoom, at, whole, leaf| {
+            self.walk(held, z, at, about, &mut |zoom, at, whole, leaf| {
                 if whole.meet(*query).is_none() {
                     return false;
                 }
@@ -340,18 +342,12 @@ impl Store {
             return;
         }
         let z = held.zoom();
-        self.walk(
-            self.tree.slot(held.slot() as usize),
-            z,
-            at.map(|c| c >> (zoom - z)),
-            about(&cube(zoom, at)),
-            &mut |zoom, at, _, leaf| {
-                if let Some(v) = leaf {
-                    visit(&Entry::of(zoom, at, v));
-                }
-                true
-            },
-        );
+        self.walk(held, z, at.map(|c| c >> (zoom - z)), about(&cube(zoom, at)), &mut |zoom, at, _, leaf| {
+            if let Some(v) = leaf {
+                visit(&Entry::of(zoom, at, v));
+            }
+            true
+        });
     }
 
     /// The value placed at exactly the node `at` of `zoom`, if one is, read
