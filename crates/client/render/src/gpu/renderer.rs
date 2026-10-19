@@ -1083,10 +1083,48 @@ impl RaysPass {
         gb.fresh_len = fresh;
     }
 
+    /// The cast pass's pipelines and buffers, made once, where the frame
+    /// first casts: before any of its uploads (`hand`), which take the
+    /// stream only while `stream::RESERVE` is left after them, so the
+    /// shaders made here are never left without room.
+    fn make(&mut self, g: &Gpu, pipelines: &mut Pipelines) {
+        if self.cast.is_some() {
+            return;
+        }
+        let built = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);
+        let start_built = pipelines.build_compute(g, SHADER_START, &compute::CAST_GROUP);
+        let joined_built = pipelines.build_compute(g, SHADER_JOINED, &compute::CAST_GROUP);
+        let buffer = |size: u32, usage: u32| g.buffer(size, usage);
+        let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
+        let c = CastBuffers {
+            built,
+            start_built,
+            starts: buffer(word_bytes(pxl_portable::cast::START_WORDS as usize), buffer_usage::STORAGE),
+            joined_built,
+            joined_read: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::MAP_READ | buffer_usage::COPY_DST),
+            joined_mapping: Box::new(DONE),
+            refold: false,
+            joined_back: false,
+            group: 0,
+            bound: [0; 9],
+            eye: buffer(word_bytes(eye::WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
+            window: buffer(word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize), storage | buffer_usage::COPY_SRC),
+            shards: 0,
+            shard_room: 0,
+            size: [0; 2],
+            overwrites: 0,
+            overwrite_room: 0,
+            overwrite_revision: None,
+            grown: Grown::new(g, pipelines),
+            read: Read::default(),
+        };
+        self.cast = Some(c);
+    }
+
     /// The rays for this frame into the world surface's (`rays`, its view,
     /// and its drawn pixels): the GPU's cast where an eye casts, its eye
     /// handed over first.
-    fn prepare(&mut self, g: &Gpu, pipelines: &mut Pipelines, cast: Option<Cast>, meshes: &[u32; GROUPS as usize], rays: (u32, [u32; 2])) {
+    fn prepare(&mut self, g: &Gpu, cast: Option<Cast>, meshes: &[u32; GROUPS as usize], rays: (u32, [u32; 2])) {
         // No cast, no world: no ray cast, none drawn and no decor grown.
         // What the cast reads stands for the next: the ground it binds is
         // made once.
@@ -1098,36 +1136,6 @@ impl RaysPass {
             }
             return;
         };
-        if self.cast.is_none() {
-            let built = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);
-            let start_built = pipelines.build_compute(g, SHADER_START, &compute::CAST_GROUP);
-            let joined_built = pipelines.build_compute(g, SHADER_JOINED, &compute::CAST_GROUP);
-            let buffer = |size: u32, usage: u32| g.buffer(size, usage);
-            let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-            let c = CastBuffers {
-                built,
-                start_built,
-                starts: buffer(word_bytes(pxl_portable::cast::START_WORDS as usize), buffer_usage::STORAGE),
-                joined_built,
-                joined_read: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::MAP_READ | buffer_usage::COPY_DST),
-                joined_mapping: Box::new(DONE),
-                refold: false,
-                joined_back: false,
-                group: 0,
-                bound: [0; 9],
-                eye: buffer(word_bytes(eye::WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
-                window: buffer(word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize), storage | buffer_usage::COPY_SRC),
-                shards: 0,
-                shard_room: 0,
-                size: [0; 2],
-                overwrites: 0,
-                overwrite_room: 0,
-                overwrite_revision: None,
-                grown: Grown::new(g, pipelines),
-                read: Read::default(),
-            };
-            self.cast = Some(c);
-        }
         let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
         // The cast reads exactly this, all of it here: a field the frame hands
         // the cast fails to destructure until it is read. The overwrites'
@@ -1733,6 +1741,12 @@ impl Renderer {
         read.mark(self.moon.step(g, &self.mips, input.moon));
         read.mark(self.atmosphere.earth.step(g, &self.mips, input.earth));
         let cast = input.cast;
+        // What the frame cannot put off is recorded before what can wait:
+        // the cast pass made first, then the squares' uploads, which take
+        // only the room left.
+        if cast.is_some() {
+            self.screen.make(g, &mut self.pipelines);
+        }
         self.screen.hand(g, &mut self.pipelines, input.ground.upload);
         let tiles = input.earth_tiles;
         read.mark(self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload));
@@ -1789,7 +1803,7 @@ impl Renderer {
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
         let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
-        self.screen.prepare(g, &mut self.pipelines, cast, &meshes, (world.rays_view, [world.width, world.height]));
+        self.screen.prepare(g, cast, &meshes, (world.rays_view, [world.width, world.height]));
         // The image draws the decor grown, so it reads whether that is on:
         // decor turned off grows nothing and casts no ray again, yet the
         // image stands without it.
