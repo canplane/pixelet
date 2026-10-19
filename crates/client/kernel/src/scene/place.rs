@@ -20,6 +20,7 @@ use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_bil
 use crate::chunk::Chunk;
 use crate::layer::object::preview::draft;
 use crate::layer::place::carto_zoom;
+use crate::layer::residency::Lines;
 use crate::layer::Base;
 use crate::query::{at_zoom, Ray, World};
 use crate::sched::tick::TickContext;
@@ -486,8 +487,10 @@ fn places_in(chunk: Chunk, found: &mut Vec<Shown>) {
     let (h0, h1) = chunk.z_range();
     let detail = GROUND.read_zoom(chunk.cell_zoom());
     let held = PlaceTile::residency();
+    // The chunk's tiles are siblings: their lines step from one another's.
+    let mut lines = Lines::default();
     for tile in tiles {
-        let Some(src) = held.source(tile) else { continue };
+        let Some(src) = held.seek(&mut lines, tile).source else { continue };
         let Some(places) = held.get(src) else { continue };
         for (place, h) in places.iter() {
             if h.from as i32 > zoom {
