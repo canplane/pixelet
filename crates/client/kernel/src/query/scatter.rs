@@ -30,7 +30,7 @@ pub(super) struct Asked<'a, 'w> {
     world: &'a World<'w>,
     lanes: store::Lanes<'a>,
     /// What the footing's walk holds of its line, none before one.
-    line: Option<cast::Line<[At; cast::DEPTH], At>>,
+    line: Option<cast::Line<At, At>>,
     /// The ground's lines the footing's walk read, each block's stepped
     /// from them.
     lines: Lines,
@@ -44,16 +44,6 @@ impl<'a, 'w> Asked<'a, 'w> {
             line: None,
             lines: Lines::default(),
         }
-    }
-}
-
-/// What is over a footing's walk, from the world's roots: nothing, so it is
-/// never asked (pxl-portable `cast::Rooted`, its `top` 0).
-struct Unasked;
-
-impl cast::Over<At> for Unasked {
-    fn over(&self, zoom: Zoom) -> At {
-        xpute_kit::bug!(EINVAL, zoom)
     }
 }
 
@@ -84,7 +74,7 @@ impl Grounds for Asked<'_, '_> {
     }
 
     fn held(&mut self, up: Zoom, node: (Zoom, [i32; 3])) -> (Zoom, Self::At) {
-        match self.line.map(|l| l.held::<Walking>(up, node, &Unasked)) {
+        match self.line.map(|l| l.held::<Walking>(up, node)) {
             Some((zoom, at, true)) => (zoom, at),
             _ => (0, self.root(node)),
         }

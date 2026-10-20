@@ -96,7 +96,7 @@ pub(super) struct Footing {
     pub block: u32,
     pub top: i32,
     /// What its walk holds of its line (pxl-portable `cast::Line`).
-    pub line: cast::Line<[At; cast::DEPTH], At>,
+    pub line: cast::Line<At, At>,
     pub lines: Lines,
 }
 
@@ -111,18 +111,11 @@ pub(super) struct Walker<'w, 'a> {
     lines: Lines,
 }
 
-/// The CPU's walk keeps every level, so it never asks a node again: its
-/// `node` strikes decor and keeps the first lack (pxl-portable
-/// `cast::Levels`).
-const _: () = assert!(<<Walker<'static, 'static> as Query>::Stack as cast::Levels<At>>::LEVELS as usize == cast::DEPTH);
-
 impl<'a> Query for Walker<'_, 'a> {
     type At = At;
     type Block = u32;
-    /// Kept whole, every level: the CPU's walk holds its stack where it is
-    /// cheap, and never makes an entry again.
+    /// Kept whole: the CPU's walk holds its stack where it is cheap.
     type Kept = At;
-    type Stack = [At; cast::DEPTH];
     const AIR: u32 = pxl_portable::ground::VOID;
 
     fn root(&mut self, node: [i32; 3]) -> At {

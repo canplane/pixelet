@@ -502,7 +502,7 @@ pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Foo
 /// (`Grounds::held`).
 pub type Footed<Q> = (
     (<Q as crate::cast::Query>::Block, i32, bool),
-    crate::cast::Line<<Q as crate::cast::Query>::Stack, <Q as crate::cast::Query>::At>,
+    crate::cast::Line<<Q as crate::cast::Query>::Kept, <Q as crate::cast::Query>::At>,
 );
 
 /// `footing`, its ray started where every footing of its square starts
