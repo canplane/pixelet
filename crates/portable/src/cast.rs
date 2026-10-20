@@ -500,21 +500,24 @@ fn root_of(o: &Origin) -> Place {
     }
 }
 
-/// The zooms a node is asked at by the rays from `o` in it reaching at most
-/// `far` from it, `far2` that squared: from there to the node's point
-/// nearest `o` (`Detail::at`), no root taken.
-fn asked(o: &Origin, detail: Detail, place: Place, far2: f32) -> [Zoom; 2] {
-    let (min, side) = (place.min(o), place.side());
-    let near = [min[0].max(0.0).min(min[0] + side), min[1].max(0.0).min(min[1] + side), min[2].max(0.0).min(min[2] + side)];
-    [detail.at(far2), detail.at(squared(near))]
+/// The zooms a node is asked at by every ray from the origin in it, its
+/// planes `lo` and `hi` units from the origin on each axis: from its corner
+/// farthest from the origin to its point nearest it (`Detail::at`). A
+/// function of the node and the eye alone, so a node's answer is one for
+/// every ray through it; a ray asks within it no coarser than the farthest
+/// corner, so this only adds coarser zooms than its own, which splits more
+/// and stops on the same block (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md,
+/// "more cautiously").
+fn asked(detail: Detail, lo: [f32; 3], hi: [f32; 3]) -> [Zoom; 2] {
+    let near = [lo[0].max(0.0).min(hi[0]), lo[1].max(0.0).min(hi[1]), lo[2].max(0.0).min(hi[2])];
+    let far = [(-lo[0]).max(hi[0]), (-lo[1]).max(hi[1]), (-lo[2]).max(hi[2])];
+    [detail.at(squared(far)), detail.at(squared(near))]
 }
 
-/// The zooms a node is asked at by every ray from `o` in it: `asked` out
-/// to its corner farthest from the origin.
+/// `asked` of `place`, from `o`.
 fn widest(o: &Origin, detail: Detail, place: Place) -> [Zoom; 2] {
     let (min, side) = (place.min(o), place.side());
-    let far2 = squared([(-min[0]).max(min[0] + side), (-min[1]).max(min[1] + side), (-min[2]).max(min[2] + side)]);
-    asked(o, detail, place, far2)
+    asked(detail, min, [min[0] + side, min[1] + side, min[2] + side])
 }
 
 /// A vector's length squared.
@@ -581,8 +584,8 @@ pub fn rooted<Q: Query>(q: &mut Q, o: &Origin) -> ((Place, Q::At), Rooted<Q::At>
 /// ray crosses: its node, each axis an integer in its root (`Node`), and
 /// where the ray is, `t`; the planes, the span and the axis entered across
 /// worked out from those where asked. A node is entered once: asked
-/// whether anything under it fills at the zooms the ray asks within it, at
-/// its point nearest the origin and where the ray leaves it; a block — the
+/// whether anything under it fills at the zooms every ray from the origin
+/// asks within it (`asked`); a block — the
 /// block at that zoom, or air where nothing under it fills — the walk
 /// stops at (for an eye, where it fills, but not in the block it starts
 /// in; for what is climbed out of, where it does not) or goes on past;
@@ -687,9 +690,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: U
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
         if t1 > t0 {
-            let near = [lo[0].max(0.0).min(hi[0]), lo[1].max(0.0).min(hi[1]), lo[2].max(0.0).min(hi[2])];
-            let asking = [detail.at(t1 * t1 * squared(ray.direction)), detail.at(squared(near))];
-            let i = q.node(&mut at, n.zoom, index_of(&n, r0), asking, t0);
+            let i = q.node(&mut at, n.zoom, index_of(&n, r0), asked(detail, lo, hi), t0);
             visits += 1;
             let inside = lo[0] <= 0.0 && 0.0 < hi[0] && lo[1] <= 0.0 && 0.0 < hi[1] && lo[2] <= 0.0 && 0.0 < hi[2];
             let ends = match i.kind {
