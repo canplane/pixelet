@@ -337,9 +337,6 @@ impl<L: Looks, P: Lanes + Copy> Query for World<'_, L, P> {
 struct Growing<'a> {
     world: World<'a, Unlooked, Unpooled>,
     rows: &'a [Decor],
-    /// Where every footing of the slot's square starts alike
-    /// (`decor_start_cs`).
-    start: Starts<'a>,
     /// What the last footing's walk holds of its line (pxl-portable
     /// `cast::Line`), none before one.
     line: cast::Line<[u32; 3], At>,
@@ -363,11 +360,10 @@ impl Grounds for Growing<'_> {
         self.rows
     }
 
-    /// The world's ray down the column, the cast's own descent, from where
-    /// every footing of the slot's square starts alike (pxl-portable
-    /// `scatter::footing_from`).
+    /// The world's ray down the column, the cast's own descent
+    /// (pxl-portable `scatter::footing`).
     fn footing(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
-        let (footed, line) = scatter::footing_from(&mut self.world, cell, g, self.start.from(), &self.start);
+        let (footed, line) = scatter::footing(&mut self.world, cell, g);
         self.line = line;
         footed
     }
@@ -413,78 +409,6 @@ fn word(ray: &cast::Ray, met: Met<At>, steps: bool) -> [u32; ray::WORDS as usize
     [ray::first_word(value, face, s.place.zoom), s.t.to_bits(), if steps { met.visits } else { four }]
 }
 
-/// A start as it was written (pxl-portable `cast::START_WORDS`): the words,
-/// and where it begins among them, the eye's in `start_cs`'s, a slot's
-/// square's in `decor_start_cs`'s (`scatter::start_at`).
-#[derive(Clone, Copy)]
-struct Starts<'a>(&'a [u32], u32);
-
-impl Starts<'_> {
-    /// Where its walk begins, and what was handed the node there.
-    fn from(self) -> (cast::Place, At) {
-        let (w, k) = (self.0, self.1 + cast::START_PLACE);
-        let place = cast::Place {
-            zoom: at(w, k),
-            corner: [at(w, k + 1) as i32, at(w, k + 2) as i32, at(w, k + 3) as i32],
-        };
-        (place, at_of(w, self.1 + cast::START_AT))
-    }
-}
-
-impl cast::Over<At> for Starts<'_> {
-    fn over(&self, zoom: u32) -> At {
-        at_of(self.0, self.1 + cast::start_stack(zoom))
-    }
-}
-
-/// Start `s` into `w` from `k` (pxl-portable `cast::START_WORDS`).
-fn put_start(w: &mut [u32], k: u32, s: &cast::Start<At>) {
-    put(w, k + cast::START_PLACE, s.place.zoom);
-    put(w, k + cast::START_PLACE + 1, s.place.corner[0] as u32);
-    put(w, k + cast::START_PLACE + 2, s.place.corner[1] as u32);
-    put(w, k + cast::START_PLACE + 3, s.place.corner[2] as u32);
-    put_at(w, k + cast::START_AT, s.at);
-    let mut j = 0;
-    while j < cast::DEPTH {
-        put_at(w, k + cast::start_stack(j as u32), s.stack[j]);
-        j += 1;
-    }
-}
-
-/// An `At`'s words as `start_cs` hands it to `cast_cs` (pxl-portable
-/// `cast::START_WORDS`), each its place among them.
-const AT_CAVE: usize = 0;
-const AT_PLACED: usize = 1;
-const AT_SHARD: usize = 2;
-const AT_GROUND: usize = 3;
-const AT_WAYS: usize = 4;
-const _: () = assert!(AT_WAYS + 1 == cast::AT_WORDS as usize);
-
-fn at_words(a: At) -> [u32; cast::AT_WORDS as usize] {
-    let mut w = [0; cast::AT_WORDS as usize];
-    (w[AT_CAVE], w[AT_PLACED], w[AT_SHARD], w[AT_GROUND], w[AT_WAYS]) = (a.cave.word(), a.placed.word(), a.shard.word(), a.ground.word(), a.ways.word());
-    w
-}
-
-fn put_at(w: &mut [u32], k: u32, a: At) {
-    let words = at_words(a);
-    let mut j = 0;
-    while j < cast::AT_WORDS {
-        put(w, k + j, words[j as usize]);
-        j += 1;
-    }
-}
-
-fn at_of(w: &[u32], k: u32) -> At {
-    At {
-        cave: Cave::of_word(at(w, k + AT_CAVE as u32)),
-        placed: Held::of_word(at(w, k + AT_PLACED as u32)),
-        shard: Shard::of_word(at(w, k + AT_SHARD as u32)),
-        ground: Found::of_word(at(w, k + AT_GROUND as u32)),
-        ways: Held::of_word(at(w, k + AT_WAYS as u32)),
-    }
-}
-
 /// Where the eye's rays start, and the zooms each distance asks.
 fn eye_origin(eye: &Eye) -> (cast::Origin, Detail) {
     (
@@ -513,34 +437,6 @@ fn pixel_ray(eye: &Eye, p: UVec3, size: UVec3) -> cast::Ray {
 /// pxl-portable `ray`): the cast writes them.
 type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
-/// The nodes over where every ray from the eye starts alike, asked once a
-/// frame (pxl-portable `cast::start`) for every ray of `cast_cs` to start
-/// from, one thread.
-#[spirv(compute(threads(1, 1, 1)))]
-pub fn start_cs(
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] pool: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
-) {
-    let window: &[IVec4] = window;
-    let (origin, detail) = eye_origin(eye);
-    let mut world = World {
-        window,
-        ground,
-        looks: Unlooked(0),
-        shards,
-        overwrites,
-        eye,
-        pool: ways::tree::Read(pool),
-    };
-    let s = cast::start(&mut world, &origin, detail, pxl_portable::FINEST_ZOOM);
-    put_start(starts, 0, &s);
-}
-
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn cast_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -550,8 +446,7 @@ pub fn cast_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] starts: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] pool: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
 ) {
     let window: &[IVec4] = window;
@@ -569,10 +464,7 @@ pub fn cast_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    // Started where every ray from the eye starts alike (`start_cs`), what
-    // was handed the nodes over it read only where a ray climbs past it.
-    let start = Starts(starts, 0);
-    let met = cast::first_from(&mut world, &origin, &ray, detail, Until::Fills, start.from(), &start);
+    let met = cast::first(&mut world, &origin, &ray, detail, Until::Fills);
     let w = word(&ray, met, eye.origin.w != 0);
     let mut k = 0;
     while k < ray::WORDS {
@@ -1152,44 +1044,6 @@ pub fn decor_mark_cs(
     }
 }
 
-/// Where every footing of a slot `decor_mark_cs` listed starts alike, a
-/// thread a slot (its kinds' first entry): down from the world's root to
-/// its square by the walk's own steps (pxl-portable `scatter::square_start`),
-/// once, for every candidate `decor_cs` grows there to start from.
-#[spirv(compute(threads(64, 1, 1)))]
-pub fn decor_start_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] rows: &[Decor],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] grows: &mut [u32],
-) {
-    let n = id.x * rows.len() as u32;
-    if n >= at(grows, 2) {
-        return;
-    }
-    let square = at(grows, scatter::GROWS_AT + n) & 0xffff;
-    let cell = window::eye_cell(square / SLOTS);
-    let held = at(window, square);
-    if cell > LEAF_CELL || held.z == 0 {
-        return;
-    }
-    let mut world = World {
-        window,
-        ground,
-        looks: Unlooked(0),
-        shards,
-        overwrites,
-        eye,
-        pool: Unpooled(0),
-    };
-    let s = scatter::square_start(&mut world, cell, [held.x, held.y]);
-    put_start(grows, scatter::start_at(square), &s);
-}
-
 /// Decor the ground grows in a slot `decor_mark_cs` listed, one candidate a
 /// thread: `x` its index in its block, `y` the block among those meeting the
 /// slot's square (pxl-portable `scatter::block_of`), `z` the slot and kind
@@ -1238,7 +1092,6 @@ pub fn decor_cs(
             pool: Unpooled(0),
         },
         rows,
-        start: Starts(grows, scatter::start_at(square)),
         line: cast::Line::bare(
             [0; 3],
             At {

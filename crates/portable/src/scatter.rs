@@ -199,18 +199,11 @@ pub const MARKS_WORDS: u32 = MARKS_AT + 4 * BOXES;
 /// What `decor_mark_cs` writes and `decor_cs` is dispatched by: its
 /// workgroups across, up and the slot-kinds listed, a pad, then the list,
 /// a slot and its kind (`<< 16`) each, a slot's kinds together and
-/// kind 0 first; past the list's room, each slot's start (`start_at`).
+/// kind 0 first.
 pub const GROWS_AT: u32 = 4;
 
-/// Where slot `s`'s square's start is (`square_start`, pxl-portable
-/// `cast::START_WORDS`), which `decor_start_cs` writes for each slot listed
-/// and every footing `decor_cs` asks there starts from.
-pub const fn start_at(s: u32) -> u32 {
-    GROWS_AT + EYE_SLOTS * DECORS.len() as u32 + s * crate::cast::START_WORDS
-}
-
-/// The words of what `decor_mark_cs` lists, the slots' starts with it.
-pub const GROWS_WORDS: u32 = start_at(EYE_SLOTS);
+/// The words of what `decor_mark_cs` lists.
+pub const GROWS_WORDS: u32 = GROWS_AT + EYE_SLOTS * DECORS.len() as u32;
 
 /// The leaf cells a preview's entry at `zoom` and `at` covers, as a box.
 pub const fn cut_box(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
@@ -488,8 +481,7 @@ pub struct Grown {
 /// false where the ray meets none.
 pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footed<Q> {
     let (o, ray, detail) = footing_ray(cell, g);
-    let (from, over) = crate::cast::rooted(q, &o);
-    footed(crate::cast::walk(q, &o, &ray, detail, crate::cast::Until::Fills, from, &over), &o)
+    footed(crate::cast::walk(q, &o, &ray, detail, crate::cast::Until::Fills), &o)
 }
 
 /// A footing as `footing` answers it: the block met, the block over it, and
@@ -497,28 +489,6 @@ pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Foo
 /// (`cast::Line`), which the blocks asked about it are asked down from
 /// (`Grounds::held`).
 pub type Footed<Q> = ((u32, i32, bool), crate::cast::Line<<Q as crate::cast::Query>::Kept, <Q as crate::cast::Query>::At>);
-
-/// `footing`, its ray started where every footing of its square starts
-/// alike (`square_start`), the nodes over there handed by `over`: the one
-/// walk, from where its square already is. The start's place is its
-/// square's first column's, from that column's origin (`Place`), so it is
-/// put on this column's own.
-pub fn footing_from<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2], from: (crate::cast::Place, Q::At), over: &impl crate::cast::Over<Q::At>) -> Footed<Q> {
-    let (o, ray, detail) = footing_ray(cell, g);
-    let shift = crate::window::SQUARE_SHIFT;
-    let (first, _, _) = footing_ray(cell, [g[0] >> shift << shift, g[1] >> shift << shift]);
-    let place = from.0.from_origin(&first, &o);
-    footed(crate::cast::walk(q, &o, &ray, detail, crate::cast::Until::Fills, (place, from.1), over), &o)
-}
-
-/// Where every footing down a column of square `square` at `cell` starts
-/// alike (`cast::start`): down from the world's root no finer than the
-/// square, whose node holds every column's top, by the walk's own steps.
-pub fn square_start<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, square: [i32; 2]) -> crate::cast::Start<Q::At> {
-    let shift = crate::window::SQUARE_SHIFT;
-    let (o, _, detail) = footing_ray(cell, [square[0] << shift, square[1] << shift]);
-    crate::cast::start(q, &o, detail, cell - shift)
-}
 
 /// The footing's ray down column `g` at `cell`: from the top of the world
 /// over the column's middle, straight down, at `cell`'s blocks alone.

@@ -17,7 +17,7 @@ use pxl_portable::eye;
 use pxl_portable::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
 
 use crate::frame::shader::record::compute;
-use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE, SHADER_GROWN_START};
+use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE};
 use crate::frame::shader::words::DRAW_FLOATS;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, release, word_bytes, Gpu};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -62,15 +62,13 @@ pub struct Grows<'a> {
 
 pub struct Grown {
     mark: Built,
-    start: Built,
     grow: Built,
     count: Built,
     args_built: Built,
     place: Built,
-    groups: [u32; 6],
+    groups: [u32; 5],
     /// `decor_mark_cs`'s words (`scatter::MARKS_AT`), and what it lists for
-    /// `decor_cs`'s dispatch (`scatter::GROWS_AT`), each listed slot's start
-    /// with it (`scatter::start_at`).
+    /// `decor_cs`'s dispatch (`scatter::GROWS_AT`).
     marks: u32,
     grows: u32,
     shown: u32,
@@ -135,12 +133,11 @@ impl Grown {
         g.write_buffer(rows, 0, bytes(words));
         Grown {
             mark: pipelines.build_compute(g, SHADER_GROWN_MARK, &compute::DECOR_MARK_GROUP),
-            start: pipelines.build_compute(g, SHADER_GROWN_START, &compute::DECOR_START_GROUP),
             grow: pipelines.build_compute(g, SHADER_GROWN, &compute::DECOR_GROUP),
             count: pipelines.build_compute(g, SHADER_GROWN_COUNT, &compute::DECOR_COUNT_GROUP),
             args_built: pipelines.build_compute(g, SHADER_GROWN_ARGS, &compute::DECOR_ARGS_GROUP),
             place: pipelines.build_compute(g, SHADER_GROWN_PLACE, &compute::DECOR_PLACE_GROUP),
-            groups: [0; 6],
+            groups: [0; 5],
             marks: buffer(word_bytes(scatter::MARKS_WORDS as usize), storage),
             grows: buffer(word_bytes(scatter::GROWS_WORDS as usize), storage | buffer_usage::INDIRECT),
             shown: buffer(word_bytes(DECORS.len()), storage),
@@ -296,7 +293,6 @@ impl Grown {
         let [eye, window, ground, shards, overwrites, fresh] = world;
         self.groups = [
             group(&self.mark, &[self.marks, window, fresh, self.records, self.grows, self.rows]),
-            group(&self.start, &[eye, window, ground, shards, overwrites, self.rows, self.grows]),
             group(&self.grow, &[eye, window, ground, shards, overwrites, self.shown, self.records, self.rows, self.grows]),
             group(&self.count, &[eye, self.params, self.rows, self.records, self.regions, window]),
             group(&self.args_built, &[self.meshes, self.regions, self.args, self.uniforms]),
@@ -370,11 +366,8 @@ impl Grown {
             g.set_pipeline(pass, self.mark.pipeline);
             g.set_bind_group(pass, 0, self.groups[0], &[]);
             g.dispatch(pass, scatter::EYE_SLOTS.div_ceil(compute::DECOR_MARK_WORKGROUP[0]), 1, 1);
-            g.set_pipeline(pass, self.start.pipeline);
-            g.set_bind_group(pass, 0, self.groups[1], &[]);
-            g.dispatch(pass, scatter::EYE_SLOTS.div_ceil(compute::DECOR_START_WORKGROUP[0]), 1, 1);
             g.set_pipeline(pass, self.grow.pipeline);
-            g.set_bind_group(pass, 0, self.groups[2], &[]);
+            g.set_bind_group(pass, 0, self.groups[1], &[]);
             g.dispatch_indirect(pass, self.grows, 0);
         }
         if !self.counting {
@@ -391,7 +384,7 @@ impl Grown {
         ];
         for (k, (built, x)) in passes.into_iter().enumerate() {
             g.set_pipeline(pass, built.pipeline);
-            g.set_bind_group(pass, 0, self.groups[3 + k], &[]);
+            g.set_bind_group(pass, 0, self.groups[2 + k], &[]);
             g.dispatch(pass, x, 1, 1);
         }
     }

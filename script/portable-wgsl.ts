@@ -32,11 +32,9 @@ const shaders = join(root, "crates/client/render/src/frame/shader");
 const ENTRIES = [
   ["cast_cs", "cast.gen.wgsl"],
   ["joined_cs", "joined.gen.wgsl"],
-  ["start_cs", "start.gen.wgsl"],
   ["heights_cs", "heights.gen.wgsl"],
   ["bound_cs", "bound.gen.wgsl"],
   ["decor_mark_cs", "decor_mark.gen.wgsl"],
-  ["decor_start_cs", "decor_start.gen.wgsl"],
   ["decor_cs", "decor.gen.wgsl"],
   ["decor_count_cs", "decor_count.gen.wgsl"],
   [

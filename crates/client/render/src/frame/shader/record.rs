@@ -11,13 +11,11 @@ pub use crate::frame::shader::parts::*;
 pub fn compute_entry(kind: u32) -> &'static str {
     match kind {
         SHADER_CAST => "cast_cs",
-        SHADER_START => "start_cs",
         SHADER_JOINED => "joined_cs",
         SHADER_ATMOS_FROXEL => "froxel_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHTS => "heights_cs",
         SHADER_GROWN_MARK => "decor_mark_cs",
-        SHADER_GROWN_START => "decor_start_cs",
         SHADER_GROWN => "decor_cs",
         SHADER_GROWN_COUNT => "decor_count_cs",
         SHADER_GROWN_ARGS => "decor_args_cs",

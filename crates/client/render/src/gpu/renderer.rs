@@ -19,7 +19,7 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_JOINED, SHADER_START, SHADER_WAYS, SHADER_WAYS_FREE,
+    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_JOINED, SHADER_WAYS, SHADER_WAYS_FREE,
     SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
 use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
@@ -90,7 +90,6 @@ const SPAN_BADGES: usize = GpuSpanName::badges as usize;
 const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
 const SPAN_CASES: usize = GpuSpanName::cases as usize;
 const SPAN_FILL: usize = GpuSpanName::fill as usize;
-const SPAN_START: usize = GpuSpanName::start as usize;
 const SPAN_CAST: usize = GpuSpanName::cast as usize;
 const SPAN_GROW: usize = GpuSpanName::grow as usize;
 
@@ -815,9 +814,6 @@ const STACK_WORDS: u32 = ways::tree::POOL_BLOCKS;
 /// What the GPU's cast reads; it writes the world surface's rays.
 struct CastBuffers {
     built: Built,
-    /// Where its rays start, asked before it (`start_cs`), over its group.
-    start_built: Built,
-    starts: u32,
     /// The eye's windows folded over their squares (`joined_cs`), over its
     /// group, the window buffer's rows past their slot table
     /// (`window::JOINED_AT`), written where the windows' slots moved
@@ -833,7 +829,7 @@ struct CastBuffers {
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
     group: u32,
-    bound: [u32; 9],
+    bound: [u32; 8],
     eye: u32,
     window: u32,
     shards: u32,
@@ -934,15 +930,12 @@ const _: () = assert!(
 /// `bound_cs`'s and `ways_cs`'s one group: its level or its pass at a
 /// dynamic offset (`SLOT_STRIDE`), the fresh frames, the frames it writes
 /// the levels of, and the handed squares' scratch it writes or reads the
-/// runs in. The cast's, `start_cs`'s and `joined_cs`'s one
-/// group is the cast's, which binds all theirs.
+/// runs in. The cast's and `joined_cs`'s one group is the cast's, which
+/// binds all of theirs.
 const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
 const _: () = assert!(same(compute::BOUND_GROUP, compute::WAYS_GROUP), "the levels' and the ways' passes share a group");
 const _: () = assert!(compute::WAYS_WORKGROUP[0] == pxl_portable::fill::SCAN_THREADS, "a square's columns are summed by one workgroup");
-const _: () = assert!(
-    within(compute::START_GROUP, compute::CAST_GROUP) && within(compute::JOINED_GROUP, compute::CAST_GROUP),
-    "the start and the fold bind the cast's group"
-);
+const _: () = assert!(within(compute::JOINED_GROUP, compute::CAST_GROUP), "the fold binds the cast's group");
 
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
 /// device's dynamic offset alignment.
@@ -1088,21 +1081,18 @@ impl RaysPass {
             return;
         }
         let built = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);
-        let start_built = pipelines.build_compute(g, SHADER_START, &compute::CAST_GROUP);
         let joined_built = pipelines.build_compute(g, SHADER_JOINED, &compute::CAST_GROUP);
         let buffer = |size: u32, usage: u32| g.buffer(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let c = CastBuffers {
             built,
-            start_built,
-            starts: buffer(word_bytes(pxl_portable::cast::START_WORDS as usize), buffer_usage::STORAGE),
             joined_built,
             joined_read: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::MAP_READ | buffer_usage::COPY_DST),
             joined_mapping: Box::new(DONE),
             refold: false,
             joined_back: false,
             group: 0,
-            bound: [0; 9],
+            bound: [0; 8],
             eye: buffer(word_bytes(eye::WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
             window: buffer(word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize), storage | buffer_usage::COPY_SRC),
             shards: 0,
@@ -1215,7 +1205,7 @@ impl RaysPass {
             }
             c.overwrite_revision = Some(o.revision);
         }
-        let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, c.starts, pool];
+        let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, pool];
         if bound != c.bound {
             release(c.group);
             c.group = cast_group(g, &c.built, bound);
@@ -1388,8 +1378,8 @@ impl RaysPass {
         true
     }
 
-    /// The start and the cast where the frame casts, then the
-    /// decor grown over the world where it moves: each a pass of its own
+    /// The cast where the frame casts, then the decor grown over the
+    /// world where it moves: each a pass of its own
     /// over the cast's group, timed in its own span, so what each costs is
     /// read apart.
     fn dispatch(&self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
@@ -1403,7 +1393,6 @@ impl RaysPass {
                 g.end(pass);
             };
             let w = compute::CAST_WORKGROUP;
-            run(&mut stamps[SPAN_START], &c.start_built, [1, 1]);
             run(&mut stamps[SPAN_CAST], &c.built, [c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1])]);
         }
         if self.grows() {
@@ -1437,10 +1426,10 @@ impl RaysPass {
 
 /// The cast's group 0 over `bound`: the eye, the window and its fold
 /// (`joined_cs` writes it, the cast reads it), the tiles' frames, the
-/// surface's rays, the squares' looks, the ways' pool, the service area's index, the overwrites and where its
-/// rays start (`start_cs` writes it, `cast_cs` reads it).
-fn cast_group(g: &Gpu, built: &Built, bound: [u32; 9]) -> u32 {
-    let [eye, window, ground, rays, looks, shards, overwrites, starts, pool] = bound;
+/// surface's rays, the squares' looks, the service area's index, the
+/// overwrites and the ways' pool.
+fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
+    let [eye, window, ground, rays, looks, shards, overwrites, pool] = bound;
     let entries = [
         buffer_entry(0, eye),
         buffer_entry(1, window),
@@ -1449,8 +1438,7 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 9]) -> u32 {
         buffer_entry(4, looks),
         buffer_entry(5, shards),
         buffer_entry(6, overwrites),
-        buffer_entry(7, starts),
-        buffer_entry(8, pool),
+        buffer_entry(7, pool),
     ];
     g.bind_group(built.layouts[0], &entries)
 }

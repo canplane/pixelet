@@ -60,31 +60,23 @@ pub const SHADER_GROWN_PLACE: u32 = 32;
 pub const SHADER_WAYS: u32 = 33;
 /// The world image laid on a frame (blit.wgsl).
 pub const SHADER_BLIT: u32 = 34;
-/// Where every ray of the cast starts alike, asked once a frame before it,
-/// generated with the cast from pxl-portable's `cast::start`: its one
-/// compute entry.
-pub const SHADER_START: u32 = 35;
 /// Which eye slots' decor grows again this frame, listed for
 /// `SHADER_GROWN`'s dispatch: its one compute entry.
-pub const SHADER_GROWN_MARK: u32 = 36;
+pub const SHADER_GROWN_MARK: u32 = 35;
 /// The eye's windows folded over their squares, generated with the cast
 /// from pxl-portable's `window::fold`: its one compute entry.
-pub const SHADER_JOINED: u32 = 37;
+pub const SHADER_JOINED: u32 = 36;
 /// The air's volume, a froxel a thread (atmos_froxel.wgsl): its one
 /// compute entry.
-pub const SHADER_ATMOS_FROXEL: u32 = 38;
+pub const SHADER_ATMOS_FROXEL: u32 = 37;
 /// Each handed square's ways as blocks in one pool (pxl-portable
 /// `ways::tree`), generated with the cast: a re-filled square's old blocks
 /// given back, its tree built off the pool's stack, the blocks its build
 /// gave back pushed after: a compute entry each.
-pub const SHADER_WAYS_FREE: u32 = 39;
-pub const SHADER_WAYS_TREE: u32 = 40;
-pub const SHADER_WAYS_FREED: u32 = 41;
-/// Where every footing of each slot listed to grow starts alike, for
-/// `SHADER_GROWN`'s candidates, generated with the cast from pxl-portable's
-/// `scatter::square_start`: its one compute entry.
-pub const SHADER_GROWN_START: u32 = 42;
-pub const SHADERS: u32 = 43;
+pub const SHADER_WAYS_FREE: u32 = 38;
+pub const SHADER_WAYS_TREE: u32 = 39;
+pub const SHADER_WAYS_FREED: u32 = 40;
+pub const SHADERS: u32 = 41;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -309,8 +301,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["ways.gen"],
     // SHADER_BLIT
     &["blit"],
-    // SHADER_START
-    &["start.gen"],
     // SHADER_GROWN_MARK
     &["decor_mark.gen"],
     // SHADER_JOINED
@@ -335,6 +325,4 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["ways_tree.gen"],
     // SHADER_WAYS_FREED
     &["ways_freed.gen"],
-    // SHADER_GROWN_START
-    &["decor_start.gen"],
 ];

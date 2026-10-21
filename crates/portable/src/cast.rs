@@ -392,57 +392,6 @@ pub struct Met<A> {
 /// entry holds them.
 pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 
-/// A descent's start as a GPU hands it from the kernel that finds it to the
-/// kernels that cast from it (gpu-query-shader `start_cs`), in words: the
-/// node's zoom then its corner (`START_PLACE`), what was handed it
-/// (`START_AT`), and the stack (`start_stack`), each `Query::At` `AT_WORDS`
-/// (gpu-query-shader `at_words`).
-pub const AT_WORDS: u32 = 5;
-pub const START_PLACE: u32 = 0;
-pub const START_AT: u32 = START_PLACE + 4;
-/// The stack's entry `k`.
-pub const fn start_stack(k: u32) -> u32 {
-    START_AT + AT_WORDS * (1 + k)
-}
-pub const START_WORDS: u32 = start_stack(DEPTH as u32);
-
-/// A descent's start: the node entered first, what was handed it, and the
-/// stack down to it.
-#[derive(Clone, Copy)]
-pub struct Start<A: Copy> {
-    pub place: Place,
-    pub at: A,
-    pub stack: [A; DEPTH],
-}
-
-/// What was handed each node over a descent's start, the nodes holding its
-/// origin, by its zoom: the start's stack (`start`) as a GPU holds it, read
-/// into the walk's as it starts, or nothing over the roots (`Rooted`).
-pub trait Over<A: Copy> {
-    fn over(&self, zoom: Zoom) -> A;
-}
-
-/// Over a walk from the roots, nothing: no node over a root, so it is never
-/// asked, and answers the root's own.
-#[derive(Clone, Copy)]
-pub struct Rooted<A>(pub A);
-
-impl<A: Copy> Over<A> for Rooted<A> {
-    fn over(&self, _: Zoom) -> A {
-        self.0
-    }
-}
-
-/// The world's root holding `o`: its corner the origin's unit cell's offset
-/// into it, negated.
-fn root_of(o: &Origin) -> Place {
-    let side = Place { zoom: 0, corner: [0; 3] }.side() as i32;
-    Place {
-        zoom: 0,
-        corner: [-(o.unit[0] & (side - 1)), -(o.unit[1] & (side - 1)), -(o.unit[2] & (side - 1))],
-    }
-}
-
 /// The zooms a node is asked at by every ray from the origin in it, its
 /// planes `lo` and `hi` units from the origin on each axis: from its corner
 /// farthest from the origin to its point nearest it (`Detail::at`). A
@@ -457,89 +406,15 @@ fn asked(detail: Detail, lo: [f32; 3], hi: [f32; 3]) -> [Zoom; 2] {
     [detail.at(squared(far)), detail.at(squared(near))]
 }
 
-/// `asked` of `place`, from `o`.
-fn widest(o: &Origin, detail: Detail, place: Place) -> [Zoom; 2] {
-    let (min, side) = (place.min(o), place.side());
-    asked(detail, min, [min[0] + side, min[1] + side, min[2] + side])
-}
-
 /// A vector's length squared.
 fn squared(v: [f32; 3]) -> f32 {
     v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
 }
 
-/// Where every ray from `o` starts alike: down from the
-/// world's root, each node holding the origin asked at the zooms some ray
-/// asks in it — from the origin, inside it, to its corner farthest from the
-/// origin (`Detail::at`) — and entered while it splits, to the first that
-/// does not. A ray asks a node it enters at those zooms or narrower ones,
-/// and where a node splits at these and is air at a ray's own, every node
-/// under it is air at that ray's, narrower still: so a ray started here
-/// (`first_from`) meets what it meets from the root, and the nodes over
-/// here, which every ray from the origin would ask, are asked once. Where
-/// the origin lies on a node's mid plane the child holding it is the ray's
-/// direction's to say, so the start stops there. No finer than `most`:
-/// rays from every origin in the node there start alike, as a square's
-/// decor's footings do (`scatter::square_start`).
-pub fn start<Q: Query>(q: &mut Q, o: &Origin, detail: Detail, most: Zoom) -> Start<Q::At> {
-    let mut place = root_of(o);
-    let mut at = q.root(place.node(o));
-    let mut stack = [at; DEPTH];
-    while (place.zoom as usize) + 1 < DEPTH && place.zoom < most {
-        let mut asking = at;
-        if q.node(&mut asking, place.zoom, place.node(o), widest(o, detail, place), 0.0).kind != Kind::Split {
-            break;
-        }
-        let half = place.child(7).min(o);
-        if half[0] == 0.0 || half[1] == 0.0 || half[2] == 0.0 {
-            break;
-        }
-        let k = (half[0] < 0.0) as u32 | ((half[1] < 0.0) as u32) << 1 | ((half[2] < 0.0) as u32) << 2;
-        stack[place.zoom as usize] = asking;
-        let kid = place.child(k);
-        at = q.child(&asking, kid.zoom, kid.node(o));
-        place = kid;
-    }
-    Start { place, at, stack }
-}
-
 /// The first block `ray` meets within its reach that `until` stops at, at
-/// the zoom `detail` asks where it meets it: down the pyramid from the
-/// world's roots, the cubes of zoom 0 it crosses. What the ray starts inside
-/// is not met when it stops where a block fills, so an eye under the ground
-/// is not stopped where it stands.
+/// the zoom `detail` asks where it meets it (`walk`).
 pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until) -> Met<Q::At> {
-    let (from, over) = rooted(q, o);
-    first_from(q, o, ray, detail, until, from, &over)
-}
-
-/// Where a walk from the world's roots starts: the root holding `o` and
-/// what it holds, nothing over it.
-pub fn rooted<Q: Query>(q: &mut Q, o: &Origin) -> ((Place, Q::At), Rooted<Q::At>) {
-    let root = root_of(o);
-    let at = q.root(root.node(o));
-    ((root, at), Rooted(at))
-}
-
-/// `first`, the ray's descent started at `from`, a node holding its origin
-/// and what was handed it, `over` what was handed the nodes over it
-/// (`start`). The first block the walk stops at, through the roots the
-/// ray crosses: its node, each axis an integer in its root (`Node`), and
-/// where the ray is, `t`; the planes, the span and the axis entered across
-/// worked out from those where asked. A node is entered once: asked
-/// whether anything under it fills at the zooms every ray from the origin
-/// asks within it (`asked`); a block — the
-/// block at that zoom, or air where nothing under it fills — the walk
-/// stops at (for an eye, where it fills, but not in the block it starts
-/// in; for what is climbed out of, where it does not) or goes on past;
-/// else its child the ray is in (PUSH, Laine & Karras 2010 §3). Past a node
-/// the corner steps on the axis the ray leaves by (Amanatides & Woo 1987)
-/// and the walk is at the child of the nearest ancestor holding the next
-/// node, by the highest bit the step changed (POP), or past a root, in the
-/// next root, from its top. One loop.
-#[allow(clippy::too_many_arguments)]
-pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Met<Q::At> {
-    walk(q, o, ray, detail, until, from, over).0
+    walk(q, o, ray, detail, until).0
 }
 
 /// What a walk holds of the line down to where it ended (`walk`): its
@@ -587,31 +462,42 @@ impl<K: Copy, A: Copy> Line<K, A> {
 /// How a walk of `Q` ended, and what it holds of its line there (`walk`).
 pub type Walked<Q> = (Met<<Q as Query>::At>, Line<<Q as Query>::Kept, <Q as Query>::At>);
 
-/// `first_from`, and what the walk holds of the line down to where it
-/// ended (`Line`): a walk's whole state there, for what asks the nodes over
-/// its stop after it.
-#[allow(clippy::too_many_arguments)]
-pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Walked<Q> {
+/// The first block `ray` meets within its reach that `until` stops at, at
+/// the zoom `detail` asks where it meets it, and what the walk holds of the
+/// line down to where it ended (`Line`), for what asks the nodes over its
+/// stop after it: down the pyramid from the world's root holding the
+/// origin, through the roots the ray crosses. What the ray starts inside is
+/// not met when it stops where a block fills, so an eye under the ground is
+/// not stopped where it stands.
+///
+/// The walk holds its node, each axis an integer in its root (`Node`), and
+/// where the ray is, `t`; the planes, the span and the axis entered across
+/// are worked out from those where asked. A node is entered once: asked
+/// whether anything under it fills at the zooms every ray from the origin
+/// asks within it (`asked`); a block — the block at that zoom, or air where
+/// nothing under it fills — the walk stops at (for an eye, where it fills,
+/// but not in the block it starts in; for what is climbed out of, where it
+/// does not) or goes on past; else its child the ray is in (PUSH, Laine &
+/// Karras 2010 §3). Past a node the corner steps on the axis the ray leaves
+/// by (Amanatides & Woo 1987) and the walk is at the child of the nearest
+/// ancestor holding the next node, by the highest bit the step changed
+/// (POP), or past a root, in the next root, from its top. One loop.
+pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until) -> Walked<Q> {
     let (og, r0) = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
-    // over it (`stack`, the start's own line over the start), and its
-    // visits. The node's planes and the world's node it is follow from its
-    // corner, and are worked out where they are read.
-    let mut stack = [Q::keep(&from.1); DEPTH];
-    let mut k = 0;
-    while k < from.0.zoom {
-        stack[k as usize] = Q::keep(&over.over(k));
-        k += 1;
-    }
-    let g = Place::grid(from.0.zoom);
-    let start = |c: i32, og: u32| (og >> FRAC_W << FRAC_W).wrapping_add((c as u32) << (FINEST_ZOOM - g));
+    // over it (`stack`), and its visits. The node's planes and the world's
+    // node it is follow from its corner, and are worked out where they are
+    // read. It starts at the root holding the origin, its corner the root's
+    // own, 0.
     let mut n = Node {
-        corner: [start(from.0.corner[0], og[0]), start(from.0.corner[1], og[1]), start(from.0.corner[2], og[2])],
-        zoom: from.0.zoom,
+        corner: [0; 3],
+        zoom: 0,
         roots: [0; 3],
     };
-    let (mut at, mut t, mut visits) = (from.1, 0.0f32, 0);
+    let mut at = q.root(index_of(&n, r0));
+    let mut stack = [Q::keep(&at); DEPTH];
+    let (mut t, mut visits) = (0.0f32, 0);
     loop {
         let u = under(n.zoom);
         // The node's planes, in units from the origin, each a corner's
@@ -729,7 +615,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: U
                 let stop = Stop {
                     t: t1,
                     axis: 0,
-                    place: from.0,
+                    place: place_of(&n, og),
                     at,
                     block: AIR,
                 };
