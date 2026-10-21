@@ -17,7 +17,6 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use super::node::At;
-use super::ray::Walking;
 use super::world::World;
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::store;
@@ -30,7 +29,7 @@ pub(super) struct Asked<'a, 'w> {
     world: &'a World<'w>,
     lanes: store::Lanes<'a>,
     /// What the footing's walk holds of its line, none before one.
-    line: Option<cast::Line<At, At>>,
+    line: Option<cast::Line<At>>,
     /// The ground's lines the footing's walk read, each block's stepped
     /// from them.
     lines: Lines,
@@ -74,7 +73,7 @@ impl Grounds for Asked<'_, '_> {
     }
 
     fn held(&mut self, up: Zoom, node: (Zoom, [i32; 3])) -> (Zoom, Self::At) {
-        match self.line.map(|l| l.held::<Walking>(up, node)) {
+        match self.line.map(|l| l.held(up, node)) {
             Some((zoom, at, true)) => (zoom, at),
             _ => (0, self.root(node)),
         }

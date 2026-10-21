@@ -29,7 +29,7 @@ use pxl_portable::ways;
 use pxl_portable::scatter::{self, drawn, Grounds, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::Found;
-use pxl_portable::{at, ray, world, LEAF_CELL, SHARD_ZOOM};
+use pxl_portable::{at, ray, world, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::arch::IndexUnchecked;
 use spirv_std::memory::{Scope, Semantics};
@@ -268,17 +268,11 @@ pub struct At {
     ways: Held,
 }
 
-const _: () = assert!(window::FOUND_BITS + pxl_portable::caves::CAVE_BITS <= 32, "a kept entry's second word holds a Found and a cave");
-
 /// What a node is on the GPU: its value, one of the catalog's whichever
 /// source holds it, and the four looks the ground's block is drawn by
 /// (`world::node`'s second word), what the screen paints a hit with.
 impl<L: Looks, P: Lanes + Copy> Query for World<'_, L, P> {
     type At = At;
-    /// What was handed the node, but its shard: its placed cursor, then
-    /// where its cells are held (`Found`, `window::FOUND_BITS`) with its
-    /// caves' word (`caves::CAVE_BITS`) over it, then its ways' cursor.
-    type Kept = [u32; 3];
 
     fn root(&mut self, node: [i32; 3]) -> At {
         At {
@@ -309,27 +303,6 @@ impl<L: Looks, P: Lanes + Copy> Query for World<'_, L, P> {
         let (w, cuts) = (*self, [cut(self.eye.carve), cut(self.eye.hide)]);
         world::node(self, &w, &w, &w.pool, (at.cave, at.placed, at.shard), (&mut at.ground, &mut at.ways), (zoom, c), asked, cuts).0
     }
-
-    /// The caves' draws and what is placed are a hash's state and a slot,
-    /// had again only from the top, so they are kept; and where the node's
-    /// cells are held, which `window::step` steps a sibling's from, as a
-    /// node over it holds them and a sibling's own child does not.
-    fn keep(at: &At) -> [u32; 3] {
-        [at.placed.word(), at.ground.word() | at.cave.word() << window::FOUND_BITS, at.ways.word()]
-    }
-
-    /// The shard is not kept: a node at a shard's zoom or finer lies in one
-    /// shard, the one the node come back from lies in, under it; a coarser
-    /// one's is unknown, as its own was.
-    fn unkeep(kept: [u32; 3], live: &At, zoom: u32) -> At {
-        At {
-            cave: Cave::of_word(kept[1] >> window::FOUND_BITS),
-            placed: Held::of_word(kept[0]),
-            shard: if zoom >= SHARD_ZOOM { live.shard } else { Shard::UNKNOWN },
-            ground: Found::of_word(kept[1] & ((1 << window::FOUND_BITS) - 1)),
-            ways: Held::of_word(kept[2]),
-        }
-    }
 }
 
 /// The world as decor's growth asks it on the GPU (pxl-portable `scatter`):
@@ -339,7 +312,7 @@ struct Growing<'a> {
     rows: &'a [Decor],
     /// What the last footing's walk holds of its line (pxl-portable
     /// `cast::Line`), none before one.
-    line: cast::Line<[u32; 3], At>,
+    line: cast::Line<At>,
 }
 
 impl Lanes for Growing<'_> {
@@ -369,7 +342,7 @@ impl Grounds for Growing<'_> {
     }
 
     fn held(&mut self, up: u32, node: (u32, [i32; 3])) -> (u32, At) {
-        let (zoom, at, held) = self.line.held::<World<'_, Unlooked, Unpooled>>(up, node);
+        let (zoom, at, held) = self.line.held(up, node);
         if held {
             (zoom, at)
         } else {
@@ -1092,16 +1065,13 @@ pub fn decor_cs(
             pool: Unpooled(0),
         },
         rows,
-        line: cast::Line::bare(
-            [0; 3],
-            At {
-                cave: Cave::of_word(0),
-                placed: Held::NOTHING,
-                shard: Shard::UNKNOWN,
-                ground: Found::NONE,
-                ways: Held::NOTHING,
-            },
-        ),
+        line: cast::Line::bare(At {
+            cave: Cave::ROOT,
+            placed: Held::NOTHING,
+            shard: Shard::UNKNOWN,
+            ground: Found::NONE,
+            ways: Held::NOTHING,
+        }),
     };
     let decor = &rows[kind as usize];
     let zoom = GROUND.read_zoom(cell);

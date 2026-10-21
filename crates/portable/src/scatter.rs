@@ -488,7 +488,7 @@ pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Foo
 /// whether it met one; and what its walk holds of its line down to it
 /// (`cast::Line`), which the blocks asked about it are asked down from
 /// (`Grounds::held`).
-pub type Footed<Q> = ((u32, i32, bool), crate::cast::Line<<Q as crate::cast::Query>::Kept, <Q as crate::cast::Query>::At>);
+pub type Footed<Q> = ((u32, i32, bool), crate::cast::Line<<Q as crate::cast::Query>::At>);
 
 /// The footing's ray down column `g` at `cell`: from the top of the world
 /// over the column's middle, straight down, at `cell`'s blocks alone.
@@ -502,7 +502,7 @@ fn footing_ray(cell: Zoom, g: [i32; 2]) -> (crate::cast::Origin, crate::cast::Ra
 }
 
 /// A footing's walk as `footing` answers it (`Footed`).
-fn footed<A: Copy, S>((met, line): (crate::cast::Met<A>, crate::cast::Line<S, A>), o: &crate::cast::Origin) -> ((u32, i32, bool), crate::cast::Line<S, A>) {
+fn footed<A: Copy>((met, line): (crate::cast::Met<A>, crate::cast::Line<A>), o: &crate::cast::Origin) -> ((u32, i32, bool), crate::cast::Line<A>) {
     ((met.stop.block[0], met.stop.place.node(o)[2] + 1, met.ends == crate::cast::Ends::Stop), line)
 }
 

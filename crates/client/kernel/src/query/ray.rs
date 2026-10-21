@@ -87,16 +87,12 @@ pub struct Hit {
 /// The world as the descent asks it, with what only the CPU carries along
 /// a ray: the decor struck, the first tile lacked, and whether any node was
 /// answered.
-/// The walk's query as a type, for what reads its line after it
-/// (pxl-portable `cast::Line::held`).
-pub(super) type Walking = Walker<'static, 'static>;
-
 /// A footing as `World::footing` answers it.
 pub(super) struct Footing {
     pub block: u32,
     pub top: i32,
     /// What its walk holds of its line (pxl-portable `cast::Line`).
-    pub line: cast::Line<At, At>,
+    pub line: cast::Line<At>,
     pub lines: Lines,
 }
 
@@ -113,8 +109,6 @@ pub(super) struct Walker<'w, 'a> {
 
 impl<'a> Query for Walker<'_, 'a> {
     type At = At;
-    /// Kept whole: the CPU's walk holds its stack where it is cheap.
-    type Kept = At;
 
     fn root(&mut self, node: [i32; 3]) -> At {
         self.world.start((0, node))
@@ -170,14 +164,6 @@ impl<'a> Query for Walker<'_, 'a> {
             },
             _ => answer,
         }
-    }
-
-    fn keep(at: &At) -> At {
-        *at
-    }
-
-    fn unkeep(kept: At, _: &At, _: Zoom) -> At {
-        kept
     }
 }
 

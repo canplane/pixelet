@@ -61,9 +61,6 @@ fn slot(c: [i32; 3]) -> u32 {
     (c[0] & 1 | (c[1] & 1) << 1 | (c[2] & 1) << 2) as u32
 }
 
-/// The bits a cave's word holds (`Cave::word`).
-pub const CAVE_BITS: u32 = 2;
-
 /// The caves at a cube as its parent hands them down, so a descent asks
 /// each cube's draws once rather than again from the caves' first zoom:
 /// its value, and whether anything under it differs (`live`).
@@ -77,16 +74,6 @@ impl Cave {
     /// Any cube coarser than the caves' first: solid, and every cube of the
     /// caves' first zoom under it draws.
     pub const ROOT: Cave = Cave { hollow: false, live: true };
-
-    /// As a word a GPU's storage holds, `bool` being none of its: hollow,
-    /// then live, `CAVE_BITS` of it.
-    pub const fn word(self) -> u32 {
-        self.hollow as u32 | (self.live as u32) << 1
-    }
-
-    pub const fn of_word(w: u32) -> Cave {
-        Cave { hollow: w & 1 != 0, live: w & 2 != 0 }
-    }
 
     /// The child `c` at `zoom` of a cube whose caves are `self`, by its
     /// place among the eight (`slot`): its parent's draws, one hash, turn one
