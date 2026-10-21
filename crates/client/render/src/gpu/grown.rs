@@ -118,9 +118,9 @@ pub struct Grown {
 }
 
 /// The world `decor_cs` asks: the cast's eye, window, the tiles' frames, the
-/// service area's index and the overwrites, and the squares filled this
-/// frame, which `decor_mark_cs` reads.
-pub type World = [u32; 6];
+/// service area's index, the overwrites and the ways' pool, as the cast
+/// asks it, and the squares filled this frame, which `decor_mark_cs` reads.
+pub type World = [u32; 7];
 
 impl Grown {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Grown {
@@ -151,7 +151,7 @@ impl Grown {
             block: 0,
             room: 0,
             placed_count: 0,
-            bound: [0; 6],
+            bound: [0; 7],
             on: false,
             shown_read: Read::default(),
             window: Read::default(),
@@ -290,10 +290,10 @@ impl Grown {
         for id in self.groups {
             release(id);
         }
-        let [eye, window, ground, shards, overwrites, fresh] = world;
+        let [eye, window, ground, shards, overwrites, pool, fresh] = world;
         self.groups = [
-            group(&self.mark, &[self.marks, window, fresh, self.records, self.grows, self.rows]),
-            group(&self.grow, &[eye, window, ground, shards, overwrites, self.shown, self.records, self.rows, self.grows]),
+            group(&self.mark, &[self.marks, window, fresh, self.records, self.grows, self.rows, self.shown]),
+            group(&self.grow, &[eye, window, ground, shards, overwrites, self.records, self.rows, self.grows, pool]),
             group(&self.count, &[eye, self.params, self.rows, self.records, self.regions, window]),
             group(&self.args_built, &[self.meshes, self.regions, self.args, self.uniforms]),
             group(&self.place, &[self.params, self.rows, self.records, self.regions, self.block, window]),

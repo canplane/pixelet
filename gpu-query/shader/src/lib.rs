@@ -96,11 +96,9 @@ fn square_at(square: u32) -> u32 {
 /// service area, and what is placed with a preview's cuts; the caves are a
 /// hash, held nowhere. Decor is not here (pxl-portable `cast::Query`).
 /// The squares' cells' four looks are `L`'s: their own buffer where the
-/// cast draws by them, none where a pass draws nothing (`Unlooked`); the
-/// ways' trees are `P`'s, their pool where the cast asks the world's query,
-/// none where a pass never does (`Unpooled`).
+/// cast draws by them, none where a pass draws nothing (`Unlooked`).
 #[derive(Clone, Copy)]
-pub struct World<'a, L, P> {
+pub struct World<'a, L> {
     /// Per window of the eye's, from the top's, a row a slot: the square it
     /// holds, and whether it is present (pxl-portable `window`).
     window: &'a [IVec4],
@@ -119,23 +117,9 @@ pub struct World<'a, L, P> {
     /// The eye, whose preview cuts are read where something placed or cut
     /// is asked about, not held through the descent.
     eye: &'a Eye,
-    /// The ways' pool (pxl-portable `ways::tree`), every square's tree.
-    pool: P,
-}
-
-/// No ways' pool bound: a pass that never asks the world's query reads
-/// none, every slot nothing (`overwrite::Lanes`'s zero). A word, as
-/// `Unlooked` is.
-#[derive(Clone, Copy)]
-pub struct Unpooled(u32);
-
-impl Lanes for Unpooled {
-    fn heap(&self, _: u32) -> u32 {
-        self.0
-    }
-    fn data(&self, _: u32) -> u32 {
-        self.0
-    }
+    /// The ways' pool (pxl-portable `ways::tree`), every square's tree,
+    /// which every pass that asks the world's query reads.
+    pool: ways::tree::Read<'a>,
 }
 
 /// Where the squares' cells' four looks are read: a word a cell
@@ -163,7 +147,7 @@ impl Looks for Unlooked {
     }
 }
 
-impl<L: Looks, P: Lanes> Lanes for World<'_, L, P> {
+impl<L: Looks> Lanes for World<'_, L> {
     fn heap(&self, slot: u32) -> u32 {
         at(self.overwrites, slot)
     }
@@ -172,7 +156,7 @@ impl<L: Looks, P: Lanes> Lanes for World<'_, L, P> {
     }
 }
 
-impl<L: Looks, P: Lanes> Area for World<'_, L, P> {
+impl<L: Looks> Area for World<'_, L> {
     fn ends(&self) -> bool {
         true
     }
@@ -190,7 +174,7 @@ impl<L: Looks, P: Lanes> Area for World<'_, L, P> {
 }
 
 /// The eye's windows, as the GPU holds them.
-impl<L: Looks, P: Lanes> Squares for World<'_, L, P> {
+impl<L: Looks> Squares for World<'_, L> {
     /// The slot square `q` is held in, while it holds it present.
     fn present(&self, cell: u32, q: [i32; 2]) -> (u32, bool) {
         let s = window::slot(q);
@@ -229,7 +213,7 @@ impl<L: Looks, P: Lanes> Squares for World<'_, L, P> {
 }
 
 /// The ground as the GPU holds it, for pxl-portable's one answer for a node.
-impl<L: Looks, P: Lanes> ground::Held for World<'_, L, P> {
+impl<L: Looks> ground::Held for World<'_, L> {
     /// The bound over the node of the window `cell` reads its cells from,
     /// the finest holding them present (`window::bound_over`), as the CPU reads
     /// it (pxl-portable `Held::relief`).
@@ -249,7 +233,7 @@ impl<L: Looks, P: Lanes> ground::Held for World<'_, L, P> {
 /// What a node is on the GPU: its value, one of the catalog's whichever
 /// source holds it, and the four looks the ground's block is drawn by
 /// (`world::node`'s second word), what the screen paints a hit with.
-impl<L: Looks, P: Lanes + Copy> Query for World<'_, L, P> {
+impl<L: Looks> Query for World<'_, L> {
     type At = At;
 
     fn root(&mut self, node: [i32; 3]) -> At {
@@ -271,7 +255,7 @@ impl<L: Looks, P: Lanes + Copy> Query for World<'_, L, P> {
 /// The world as decor's growth asks it on the GPU (pxl-portable `scatter`):
 /// the cast's, and the catalog's rows as handed.
 struct Growing<'a> {
-    world: World<'a, Unlooked, Unpooled>,
+    world: World<'a, Unlooked>,
     rows: &'a [Decor],
     /// What the last footing's walk holds of its line (pxl-portable
     /// `cast::Line`), none before one.
@@ -427,6 +411,7 @@ pub fn joined_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
 ) {
     // The level this dispatch folds is its depth in workgroups, its last
     // slice the one that runs: the levels under it were folded before.
@@ -444,7 +429,7 @@ pub fn joined_cs(
             shards,
             overwrites,
             eye,
-            pool: Unpooled(0),
+            pool: ways::tree::Read(pool),
         };
         window::fold(&world, cell, l, b)
     };
@@ -919,13 +904,21 @@ pub fn ways_freed_cs(
 }
 
 /// The eye's slots whose decor grows again this frame, a thread a slot,
-/// listed with each kind for `decor_cs` (pxl-portable `scatter::GROWS_AT`),
+/// listed with each kind shown at the slot's window zoom for `decor_cs`
+/// (pxl-portable `scatter::GROWS_AT`): bit `zoom − FIRST_CELL` of its
+/// `shown` word set, the kinds the catalog's rows as handed (`rows`);
 /// its count the dispatch's: every one where `marks` asks it, decor having
 /// been off, else one whose
 /// square its records were not grown for (`scatter::grown_for`), beside a
 /// square filled this frame (`fresh`), or met by a box (`scatter::meets`):
 /// an edit, or a preview's cut as it was or is. A listed slot's head is
 /// laid anew, its count none.
+/// Whether kind `j` is shown at the window zoom `cell`: bit `cell −
+/// FIRST_CELL` of its `shown` word, at a leaf's cells or coarser.
+fn shown_at(shown: &[u32], j: u32, cell: u32) -> bool {
+    cell <= LEAF_CELL && at(shown, j) >> (cell - FIRST_CELL) & 1 != 0
+}
+
 #[spirv(compute(threads(64, 1, 1)))]
 pub fn decor_mark_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -935,6 +928,7 @@ pub fn decor_mark_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] records: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] grows: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] rows: &[Decor],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] shown: &[u32],
 ) {
     let s = id.x;
     if s >= scatter::EYE_SLOTS {
@@ -971,11 +965,13 @@ pub fn decor_mark_cs(
     put(records, h + 2, q[1] as u32);
     put(records, h + 3, 1);
     let kinds = rows.len() as u32;
-    // SAFETY: an atomic add on the list's count, the dispatch's z.
-    let n = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut grows[2], kinds) };
     let mut j = 0;
     while j < kinds {
-        put(grows, scatter::GROWS_AT + n + j, s | j << 16);
+        if shown_at(shown, j, cell) {
+            // SAFETY: an atomic add on the list's count, the dispatch's z.
+            let n = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut grows[2], 1) };
+            put(grows, scatter::GROWS_AT + n, s | j << 16);
+        }
         j += 1;
     }
 }
@@ -986,10 +982,9 @@ pub fn decor_mark_cs(
 /// listed. Each one that stands, stands on its cell and grows there
 /// (`scatter::stands`, `grown`) is added to the slot's records
 /// (`scatter::record_at`), naming the slot's window zoom, the one it is
-/// drawn at where the rays ask it (`decor_count_cs`). A kind is grown at a
-/// zoom where bit `zoom − FIRST_CELL` of its `shown` word is set; the kinds
-/// are the catalog's rows as handed (`rows`). What it grows is the windows'
-/// squares' and what is placed alone, never the eye's.
+/// drawn at where the rays ask it (`decor_count_cs`); only a kind shown at
+/// that zoom is listed (`decor_mark_cs`). What it grows is the windows'
+/// squares', the ways over them and what is placed alone, never the eye's.
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn decor_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -998,15 +993,15 @@ pub fn decor_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shown: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] out: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] rows: &[Decor],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] grows: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] out: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] rows: &[Decor],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] grows: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] pool: &[u32],
 ) {
     let listed = at(grows, scatter::GROWS_AT + id.z);
     let (square, kind) = (listed & 0xffff, listed >> 16);
     let cell = window::eye_cell(square / SLOTS);
-    if id.x >= COUNTS as u32 || id.y >= SQUARE_BLOCKS || cell > LEAF_CELL || at(shown, kind) >> (cell - FIRST_CELL) & 1 == 0 {
+    if id.x >= COUNTS as u32 || id.y >= SQUARE_BLOCKS {
         return;
     }
     let held = at(window, square);
@@ -1025,7 +1020,7 @@ pub fn decor_cs(
             shards,
             overwrites,
             eye,
-            pool: Unpooled(0),
+            pool: ways::tree::Read(pool),
         },
         rows,
         line: cast::Line::bare(At {

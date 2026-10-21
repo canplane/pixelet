@@ -1212,7 +1212,7 @@ impl RaysPass {
             c.bound = bound;
         }
         let fresh_squares = self.ground.as_ref().map_or(0, |gb| gb.fresh);
-        let world = [c.eye, c.window, ground, c.shards, c.overwrites, fresh_squares];
+        let world = [c.eye, c.window, ground, c.shards, c.overwrites, pool, fresh_squares];
         let grows = Grows {
             window: cast.window,
             cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS].try_into().or_bug(Errno::ENOTRECOVERABLE),

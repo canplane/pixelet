@@ -198,8 +198,7 @@ pub const MARKS_AT: u32 = 4;
 pub const MARKS_WORDS: u32 = MARKS_AT + 4 * BOXES;
 /// What `decor_mark_cs` writes and `decor_cs` is dispatched by: its
 /// workgroups across, up and the slot-kinds listed, a pad, then the list,
-/// a slot and its kind (`<< 16`) each, a slot's kinds together and
-/// kind 0 first.
+/// a slot and its kind (`<< 16`) each, in no order.
 pub const GROWS_AT: u32 = 4;
 
 /// The words of what `decor_mark_cs` lists.
