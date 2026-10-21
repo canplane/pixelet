@@ -9,12 +9,11 @@
 //! "The query between them"): each source answers from its own level of
 //! detail, and what it holds stays behind it.
 
+use crate::answer::{fills, slab_of, slab_word, In, Kind, ANY, PLACED_BLOCK};
 use crate::area::{Area, Shard};
-use crate::cast::{In, Kind};
 use crate::caves::Cave;
 use crate::ground::{self, Held, VOID};
 use crate::overwrite::{self, Cut, Lanes, BLOCK, SPLIT};
-use crate::scatter::PLACED_BLOCK;
 use crate::window::{Found, Squares};
 use crate::{Zoom, LEAF_CELL};
 
@@ -126,57 +125,4 @@ pub fn node<H: Held, W: Squares + Area, L: Lanes, P: Lanes>(
     };
     let joined = ground::join(ground::join(own, ways), placed);
     (In { kind, block: [slab_word(joined), 0] }, block)
-}
-
-/// A split's block word (`node`): where anything may fill the node along z,
-/// in leaf cells, `[lo, hi)` held as its lowest in the low half and its
-/// highest, `hi − 1`, in the high, each an i16 held to i16's range — the
-/// world's whole z, so i16's whole is anything along it (`ANY`), and
-/// lowest over highest is nothing (`ground::EMPTY`), as a join keeps it. A
-/// ray through the node outside it meets nothing there (pxl-portable cast).
-/// Each source's own bound joined: the ground's (`ground::slab`), the
-/// ways' (`ways::slab`), and what is placed (`overwrite::slab`), each off
-/// what it holds, as each source answers.
-pub fn slab_word([lo, hi]: [i32; 2]) -> u32 {
-    let held = |v: i32| {
-        if v < i16::MIN as i32 {
-            i16::MIN as i32
-        } else if v > i16::MAX as i32 {
-            i16::MAX as i32
-        } else {
-            v
-        }
-    };
-    ground::bound_word([held(lo), held(hi - 1)]) as u32
-}
-
-/// `slab_word`'s lowest and past its highest.
-pub fn slab_of(w: u32) -> [i32; 2] {
-    let [lo, last] = ground::bound_of(w as i32);
-    [lo, last + 1]
-}
-
-/// Anything along z the world holds, as a slab: from its lowest leaf cell to
-/// past its highest, half-open, i16's whole as `slab_word` holds it. Not a
-/// relief of face heights, both held (`ground::UNBOUNDED`), which is another
-/// fact in another unit.
-pub const ANY: [i32; 2] = [i16::MIN as i32, i16::MAX as i32 + 1];
-const _: () = assert!(LEAF_CELL == crate::UNIT_ZOOM, "a slab's leaf cell is the world's unit");
-const _: () = assert!(
-    -(1i32 << (crate::HEIGHT_BITS - 1)) == i16::MIN as i32 && (1i32 << (crate::HEIGHT_BITS - 1)) - 1 == i16::MAX as i32,
-    "the world's z, in leaf cells, is i16's range"
-);
-
-/// Whether a block's value as `node` answers it fills its block: neither
-/// void nor air, whichever source holds it. What is placed answers a voxel
-/// alone (`overwrite::value`), so no decor or marker is among them.
-pub fn fills(value: u32) -> bool {
-    let v = value & !PLACED_BLOCK;
-    v != VOID && v != crate::overwrite::AIR
-}
-
-/// Whether what is placed holds a block's value (`PLACED_BLOCK`): the
-/// source control tells an edit and a strike by, which nothing drawn reads.
-pub fn placed(value: u32) -> bool {
-    value & PLACED_BLOCK != 0
 }

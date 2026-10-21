@@ -14,6 +14,7 @@
 
 use xpute_kit::math::rng::{derive_seed_u32, SplitMix32};
 
+use crate::answer::PLACED_BLOCK;
 use crate::cast::Detail;
 use crate::caves::node_seed;
 use crate::cube::{sentinel, Ground};
@@ -433,11 +434,6 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
     best.filter(|b| stands(decor, LEAF_ZOOM, b))
 }
 
-/// A block's word where what is placed answered it, over its value, as the
-/// world's one query reads on the GPU (gpu-query shader `World`) and
-/// `Grounds::block` hands it.
-pub const PLACED_BLOCK: u32 = 1 << 16;
-
 /// What growing decor asks of the world, as either side holds it: the
 /// ground's cells, the world's one query by a descent, what is placed
 /// (`Lanes`), and the catalog's rows where it reads them.
@@ -500,10 +496,7 @@ pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Foo
 /// whether it met one; and what its walk holds of its line down to it
 /// (`cast::Line`), which the blocks asked about it are asked down from
 /// (`Grounds::held`).
-pub type Footed<Q> = (
-    (<Q as crate::cast::Query>::Block, i32, bool),
-    crate::cast::Line<<Q as crate::cast::Query>::Kept, <Q as crate::cast::Query>::At>,
-);
+pub type Footed<Q> = ((u32, i32, bool), crate::cast::Line<<Q as crate::cast::Query>::Kept, <Q as crate::cast::Query>::At>);
 
 /// `footing`, its ray started where every footing of its square starts
 /// alike (`square_start`), the nodes over there handed by `over`: the one
@@ -539,8 +532,8 @@ fn footing_ray(cell: Zoom, g: [i32; 2]) -> (crate::cast::Origin, crate::cast::Ra
 }
 
 /// A footing's walk as `footing` answers it (`Footed`).
-fn footed<A: Copy, B: Copy, S>((met, line): (crate::cast::Met<A, B>, crate::cast::Line<S, A>), o: &crate::cast::Origin) -> ((B, i32, bool), crate::cast::Line<S, A>) {
-    ((met.stop.block, met.stop.place.node(o)[2] + 1, met.ends == crate::cast::Ends::Stop), line)
+fn footed<A: Copy, S>((met, line): (crate::cast::Met<A>, crate::cast::Line<S, A>), o: &crate::cast::Origin) -> ((u32, i32, bool), crate::cast::Line<S, A>) {
+    ((met.stop.block[0], met.stop.place.node(o)[2] + 1, met.ends == crate::cast::Ends::Stop), line)
 }
 
 /// The value a block answer holds, without whether what is placed holds it

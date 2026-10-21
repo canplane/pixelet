@@ -22,39 +22,9 @@
 //! a node can have, and from a child it steps to the next across the face
 //! it leaves by, so no frame holds its siblings.
 
+use crate::answer::{fills, slab_of, In, Kind, AIR};
+use crate::grid::cell_at;
 use crate::{wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
-
-/// Drawn pixels per CSS pixel at most: the finest ratio a surface is drawn at,
-/// and where more pixels stop being seen. The CSS reference pixel subtends
-/// 0.0213° (CSS Values and Units: 96 dpi at 28 inches), 46.9 a degree, and
-/// the fovea resolves 94 a degree at most (Ashraf, Chapiro & Mantiuk,
-/// "Resolution limit of the eye: how many pixels can we see?", Nature
-/// Communications, 2025, doi:10.1038/s41467-025-64679-2): 94 / 46.9 is 2.
-pub const RATIO_MAX: f32 = 2.0;
-
-/// The camera grid, the one knob of resolution: a cell is an angle of
-/// 1/`SPLIT` radians about the eye (pxl-spec space/camera/grid.rs), stated
-/// at `RATIO_MAX`: 96 a radian a CSS pixel asks, in drawn pixels. A lower
-/// ratio's cells are wider by `RATIO_MAX` over it, its τ, so whatever is
-/// sized by `SPLIT` holds at every ratio.
-pub const SPLIT: f32 = 96.0 * RATIO_MAX;
-
-/// The camera grid's cell zoom at `r2`, a distance from the eye squared,
-/// in units: the widest cell whose split distance (`SPLIT` of its sides,
-/// halved) is within the distance, held to what a zoom can name. The power
-/// of two is the float's own exponent, halved, so neither a logarithm nor a
-/// square root rounds it: a distance over the half split, `m·2^e` with `m`
-/// in [1, 2), squares to `m²·2^2e` with `m²` in [1, 4), whose exponent is
-/// `2e` or `2e + 1`, so halving it, rounding down, is `e`; and rounding the
-/// square never reaches 4, since the widest `m` short of 2, `2 − 2⁻²³`,
-/// squares to `4 − 2⁻²¹` and a bit, which rounds down to it. Every asker
-/// passes a square (pxl-spec space/camera/grid.rs, `scatter::drawn_at`), so
-/// a distance on a power of two falls the same side everywhere.
-pub fn cell_at(r2: f32) -> Zoom {
-    let x2 = r2 / (SPLIT * SPLIT / 4.0);
-    let e = (((x2.to_bits() >> 23) & 0xff) as i32 - 127) >> 1;
-    (UNIT_ZOOM as i32 - e).clamp(0, FINEST_ZOOM as i32) as Zoom
-}
 
 /// The direction at the tangents `tx` across and `ty` up from the optical
 /// axis: a drawn pixel's middle, its tangents the screen's half-angles'
@@ -356,53 +326,26 @@ fn place_of(n: &Node, og: [u32; 3]) -> Place {
     }
 }
 
-/// What a node is to a descent.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum Kind {
-    /// Coarser than asked: something under it may fill.
-    Split,
-    /// A block: at the zoom asked, what it is; coarser, `Query::AIR` where
-    /// nothing under it fills at the zooms asked, as a block of air its size.
-    Block,
-    /// Not held: past it the ray tells nothing.
-    Lacks,
-}
-
-/// What is in a node: its kind, and the block where it is one.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct In<B> {
-    pub kind: Kind,
-    pub block: B,
-}
-
 /// The world as a descent asks it, each node handed what its parent found
 /// (the `At`). The CPU and a GPU answer it from the same reading of the
 /// ground's windows, the caves, the ways' runs and what is placed; only the
 /// CPU's answer strikes decor.
 pub trait Query {
     type At: Copy;
-    type Block: Copy;
     /// What a descent's stack keeps of what was handed a node it went
     /// into (`keep`), in the fewest words: only what it cannot get again
     /// from what it holds when it comes back for the node's next child
     /// (`unkeep`).
     type Kept: Copy;
-    /// What no block fills: air, or void.
-    const AIR: Self::Block;
     /// A root of zoom 0, `node` the world's.
     fn root(&mut self, node: [i32; 3]) -> Self::At;
     /// The child `node` at `zoom` of the node `at` was handed for, with what
     /// that one found handed down.
     fn child(&mut self, at: &Self::At, zoom: Zoom, node: [i32; 3]) -> Self::At;
     /// What is in the node `node` at `zoom`, `at` what its ancestors handed
-    /// it, asked from `far` to `near`, the ray in it from `t0`.
-    fn node(&mut self, at: &mut Self::At, zoom: Zoom, node: [i32; 3], asked: [Zoom; 2], t0: f32) -> In<Self::Block>;
-    fn fills(&self, block: &Self::Block) -> bool;
-    /// A split's slab along z, from the lowest leaf cell anything in it may
-    /// fill to past the highest (pxl-portable `world::slab_of`): where a ray
-    /// through the node is wholly out of it, it meets nothing there.
-    fn slab(&self, block: &Self::Block) -> [i32; 2];
+    /// it, asked from `far` to `near`, the ray in it from `t0`: the world's
+    /// answer (pxl-portable `answer`), whichever side reads it.
+    fn node(&mut self, at: &mut Self::At, zoom: Zoom, node: [i32; 3], asked: [Zoom; 2], t0: f32) -> In<[u32; 2]>;
     /// What the stack keeps of `at`, handed a node the descent goes into.
     fn keep(at: &Self::At) -> Self::Kept;
     /// What was handed the node at `zoom` the stack kept `kept` of, `live`
@@ -413,12 +356,12 @@ pub trait Query {
 /// Where a ray stopped: how far, the axis it entered across, the node and
 /// what it is there.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Stop<A, B> {
+pub struct Stop<A> {
     pub t: f32,
     pub axis: u32,
     pub place: Place,
     pub at: A,
-    pub block: B,
+    pub block: [u32; 2],
 }
 
 /// How a walk ended: where it stopped, gone on to its reach, or at a node
@@ -435,9 +378,9 @@ pub enum Ends {
 /// many nodes it asked the world about (`Query::node`), the one count of a
 /// ray's steps the CPU and a GPU both report.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Met<A, B> {
+pub struct Met<A> {
     pub ends: Ends,
-    pub stop: Stop<A, B>,
+    pub stop: Stop<A>,
     pub visits: u32,
 }
 
@@ -565,7 +508,7 @@ pub fn start<Q: Query>(q: &mut Q, o: &Origin, detail: Detail, most: Zoom) -> Sta
 /// world's roots, the cubes of zoom 0 it crosses. What the ray starts inside
 /// is not met when it stops where a block fills, so an eye under the ground
 /// is not stopped where it stands.
-pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until) -> Met<Q::At, Q::Block> {
+pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until) -> Met<Q::At> {
     let (from, over) = rooted(q, o);
     first_from(q, o, ray, detail, until, from, &over)
 }
@@ -595,7 +538,7 @@ pub fn rooted<Q: Query>(q: &mut Q, o: &Origin) -> ((Place, Q::At), Rooted<Q::At>
 /// node, by the highest bit the step changed (POP), or past a root, in the
 /// next root, from its top. One loop.
 #[allow(clippy::too_many_arguments)]
-pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Met<Q::At, Q::Block> {
+pub fn first_from<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until, from: (Place, Q::At), over: &impl Over<Q::At>) -> Met<Q::At> {
     walk(q, o, ray, detail, until, from, over).0
 }
 
@@ -642,7 +585,7 @@ impl<K: Copy, A: Copy> Line<K, A> {
 }
 
 /// How a walk of `Q` ended, and what it holds of its line there (`walk`).
-pub type Walked<Q> = (Met<<Q as Query>::At, <Q as Query>::Block>, Line<<Q as Query>::Kept, <Q as Query>::At>);
+pub type Walked<Q> = (Met<<Q as Query>::At>, Line<<Q as Query>::Kept, <Q as Query>::At>);
 
 /// `first_from`, and what the walk holds of the line down to where it
 /// ended (`Line`): a walk's whole state there, for what asks the nodes over
@@ -695,7 +638,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: U
             let inside = lo[0] <= 0.0 && 0.0 < hi[0] && lo[1] <= 0.0 && 0.0 < hi[1] && lo[2] <= 0.0 && 0.0 < hi[2];
             let ends = match i.kind {
                 Kind::Lacks => Ends::Lacks,
-                Kind::Block if if until == Until::Fills { q.fills(&i.block) && !inside } else { !q.fills(&i.block) } => Ends::Stop,
+                Kind::Block if if until == Until::Fills { fills(i.block[0]) && !inside } else { !fills(i.block[0]) } => Ends::Stop,
                 Kind::Block => Ends::On,
                 // ESVO's contour (Laine & Karras 2010): the ray's span in the
                 // node clipped to the slab along z its content lies in, its
@@ -704,7 +647,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: U
                 // what fills passes the node whole. A walk to air goes in: its
                 // stop is where that span begins.
                 Kind::Split => {
-                    let [lo, hi] = q.slab(&i.block);
+                    let [lo, hi] = slab_of(i.block[0]);
                     let level = |v: i32| {
                         let root = v >> UNIT_ZOOM;
                         units(((v - (root << UNIT_ZOOM)) as u32) << FRAC_W, og[2], root - r0[2])
@@ -788,7 +731,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: U
                     axis: 0,
                     place: from.0,
                     at,
-                    block: Q::AIR,
+                    block: AIR,
                 };
                 return (Met { ends: Ends::On, stop, visits }, line);
             }

@@ -141,6 +141,7 @@ code and data, never estimated.
 ## What the checks found
 
 **1 and 4. Filling at arrival is ruled out, by the ground alone.**
+
 - Under its face the ground is solid down to its bedrock, at least
   `BEDROCK_DEPTH` (64) leaf cells under `min(face, SEA_LEVEL)`
   (`ground::bedrock`), by depth (`ground::by_depth`).
@@ -148,19 +149,19 @@ code and data, never estimated.
   each one differs from its parent and is an entry. A child mask does not
   remove them: they are not empty.
 - Count only the shells where each zoom is asked: zoom c from 96 to 192 of
-  its cells from the eye (`cast::SPLIT`, `window::RADIUS`). Take flat ground
+  its cells from the eye (`grid::SPLIT`, `window::RADIUS`). Take flat ground
   at sea level and the E120 eye, 120 units from its focus at a polar of
   0.9, so 74.6 units up. That is still 11,765,311 blocks under the face:
 
   | Zoom | Blocks under the face |
-  |---|---|
-  | 24 | 6.29 M |
-  | 23 | 2.78 M |
-  | 22 | 1.39 M |
-  | 21 | 0.69 M |
-  | 20 | 0.35 M |
-  | 19 | 0.17 M |
-  | 18 | 0.09 M |
+  | ---- | --------------------- |
+  | 24   | 6.29 M                |
+  | 23   | 2.78 M                |
+  | 22   | 1.39 M                |
+  | 21   | 0.69 M                |
+  | 20   | 0.35 M                |
+  | 19   | 0.17 M                |
+  | 18   | 0.09 M                |
 
 - A ray from above stops at the face. Only a cave's opening or a cut face
   shows one of these blocks, and a frame has 8,129,352 rays in all.
@@ -170,6 +171,7 @@ code and data, never estimated.
   ground's count already decides it.
 
 **2. One record holds every answer.**
+
 - `world::node` answers an `In<[u32; 2]>`: a `Kind` (`Split`, `Block` or
   `Lacks`) and two words.
   - For a block, the words are its value and its four looks.
@@ -186,6 +188,7 @@ code and data, never estimated.
   the kind and two words holds it.
 
 **3. The zooms asked, as the walk forms them.**
+
 - `asking` is `[detail.at(t1²·|d|²), detail.at(|near|²)]` (`cast::walk`):
   - `near` is the asked zoom at the node's nearest point to the eye, a
     function of the node and the eye.
@@ -249,4 +252,3 @@ The log is `out/b-cost-log`, and the probe is kept aside in `cache/`
 
 What stays: one ray a pixel, log n descent, the image as a function of the
 world and the eye, and one function for the rule.
-

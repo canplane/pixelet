@@ -43,8 +43,8 @@
 //! A source not holding the node answers that it lacks it, never air and
 //! never that nothing fills.
 
+use pxl_portable::answer::{In, Kind};
 use pxl_portable::area::{Area, Shard};
-use pxl_portable::cast::{In, Kind};
 use pxl_portable::ground::VOID;
 use pxl_portable::ground::{self, Cell};
 use pxl_portable::overwrite::{self, Cut, Held};
@@ -120,7 +120,7 @@ impl World<'_> {
     pub(super) fn drawn(&self, at: &mut At, lines: &mut Lines) -> Answer<u32> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        self.node(at, [zoom, zoom], lines).map(|(i, block)| if block && i.kind == Kind::Block { i.block } else { VOID })
+        self.node(at, [zoom, zoom], lines).map(|(i, block)| if block && i.kind == Kind::Block { i.block[0] } else { VOID })
     }
 
     /// A preview's entry as pxl-portable `overwrite` takes it.
@@ -147,24 +147,19 @@ impl World<'_> {
     /// the ground read as the GPU reads it, off what it drew and read back
     /// (`Windowed`), down the node's line through the residency
     /// (`Reading`), after its shard, known before any layer answers it. Its
-    /// answer as the descent takes one (pxl-portable `cast::In`): a split and
-    /// its slab; a block, the zoom asked's, none for air or void; or, coarser
-    /// than asked and nothing under it filling, air its size; with whether it
-    /// is a block (`world::node`'s). `lines` are the ground's lines the
+    /// answer (pxl-portable `answer`): a split and its slab; a block, the
+    /// zoom asked's, void for air; or, coarser than asked and nothing under it
+    /// filling, air its size; with whether it is a block (`world::node`'s).
+    /// The four looks a block is drawn by are the GPU's to draw. `lines` are the ground's lines the
     /// walk asking it read, which its own steps from (`line_walked`).
-    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2], lines: &mut Lines) -> Answer<(In<u32>, bool)> {
+    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2], lines: &mut Lines) -> Answer<(In<[u32; 2]>, bool)> {
         let (zoom, c) = at.node;
         at.shard = at.shard.at(&Windowed, (zoom, [c[0], c[1]]));
         let (handed, mut place, mut trail) = ((at.cave, at.placed, at.shard), at.ground, at.ways);
         let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);
         let mut reading = Reading::new(self, at, lines);
         let (i, block) = world::node(&mut reading, &Windowed, &lanes, &pool(), handed, (&mut place, &mut trail), (zoom, c), asked, cuts);
-        let answer = reading.answer(i.kind != Kind::Lacks, || {
-            // A block's value, a split's slab (`world::slab_word`); air and void
-            // none. The four looks it is drawn by are the GPU's to draw.
-            let b = if block && i.kind == Kind::Block || i.kind == Kind::Split { i.block[0] } else { VOID };
-            (In { kind: i.kind, block: b }, block)
-        });
+        let answer = reading.answer(i.kind != Kind::Lacks, || (i, block));
         (at.ground, at.ways) = (place, trail);
         answer
     }

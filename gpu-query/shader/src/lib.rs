@@ -15,7 +15,8 @@
 #![deny(warnings)]
 
 use pxl_portable::area::{Area, Shard};
-use pxl_portable::cast::{self, Detail, Ends, In, Met, Query, Until};
+use pxl_portable::answer::In;
+use pxl_portable::cast::{self, Detail, Ends, Met, Query, Until};
 use pxl_portable::caves::Cave;
 use pxl_portable::decor::{Decor, COUNTS};
 use pxl_portable::eye;
@@ -82,7 +83,6 @@ fn cut(e: IVec4) -> Cut {
     }
 }
 
-use pxl_portable::ground::VOID;
 
 /// Square `square`'s first word in the ground's buffer (pxl-portable
 /// `window::SQUARE_WORDS`).
@@ -279,8 +279,6 @@ impl<L: Looks, P: Lanes + Copy> Query for World<'_, L, P> {
     /// where its cells are held (`Found`, `window::FOUND_BITS`) with its
     /// caves' word (`caves::CAVE_BITS`) over it, then its ways' cursor.
     type Kept = [u32; 3];
-    type Block = [u32; 2];
-    const AIR: [u32; 2] = [VOID, 0];
 
     fn root(&mut self, node: [i32; 3]) -> At {
         At {
@@ -310,16 +308,6 @@ impl<L: Looks, P: Lanes + Copy> Query for World<'_, L, P> {
         at.shard = at.shard.at(self, (zoom, [c[0], c[1]]));
         let (w, cuts) = (*self, [cut(self.eye.carve), cut(self.eye.hide)]);
         world::node(self, &w, &w, &w.pool, (at.cave, at.placed, at.shard), (&mut at.ground, &mut at.ways), (zoom, c), asked, cuts).0
-    }
-
-    /// A value of the one value space, whichever source holds it: neither
-    /// void nor air.
-    fn fills(&self, block: &[u32; 2]) -> bool {
-        world::fills(block[0])
-    }
-
-    fn slab(&self, block: &[u32; 2]) -> [i32; 2] {
-        world::slab_of(block[0])
     }
 
     /// The caves' draws and what is placed are a hash's state and a slot,
@@ -379,9 +367,9 @@ impl Grounds for Growing<'_> {
     /// every footing of the slot's square starts alike (pxl-portable
     /// `scatter::footing_from`).
     fn footing(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
-        let ((block, z, met), line) = scatter::footing_from(&mut self.world, cell, g, self.start.from(), &self.start);
+        let (footed, line) = scatter::footing_from(&mut self.world, cell, g, self.start.from(), &self.start);
         self.line = line;
-        (block[0], z, met)
+        footed
     }
 
     fn held(&mut self, up: u32, node: (u32, [i32; 3])) -> (u32, At) {
@@ -414,7 +402,7 @@ impl Grounds for Growing<'_> {
 /// the ground's block is drawn by, a byte each (`ground::word`), or in the
 /// steps view the nodes its descent asked about; where it met nothing, the
 /// first two zero.
-fn word(ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> [u32; ray::WORDS as usize] {
+fn word(ray: &cast::Ray, met: Met<At>, steps: bool) -> [u32; ray::WORDS as usize] {
     if met.ends != Ends::Stop {
         return [0, 0, met.visits];
     }

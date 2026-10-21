@@ -13,9 +13,9 @@ use super::world::World;
 use crate::layer::instance::{Instance, Source};
 use crate::layer::residency::Lines;
 use crate::layer::Answer;
+use pxl_portable::answer::{self, In, Kind};
 pub(super) use pxl_portable::cast::Until;
-use pxl_portable::cast::{self, Detail, Ends, Kind, Query};
-use pxl_portable::world;
+use pxl_portable::cast::{self, Detail, Ends, Query};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::camera::grid::Tau;
@@ -113,10 +113,8 @@ pub(super) struct Walker<'w, 'a> {
 
 impl<'a> Query for Walker<'_, 'a> {
     type At = At;
-    type Block = u32;
     /// Kept whole: the CPU's walk holds its stack where it is cheap.
     type Kept = At;
-    const AIR: u32 = pxl_portable::ground::VOID;
 
     fn root(&mut self, node: [i32; 3]) -> At {
         self.world.start((0, node))
@@ -132,7 +130,7 @@ impl<'a> Query for Walker<'_, 'a> {
     /// the ray passes within where decor is drawn as held strikes what
     /// stands near it, and a node no block under fills is still gone into
     /// where decor may stand in it, down to the leaf cells.
-    fn node(&mut self, at: &mut At, _: Zoom, _: [i32; 3], asked: [Zoom; 2], t0: f32) -> cast::In<u32> {
+    fn node(&mut self, at: &mut At, _: Zoom, _: [i32; 3], asked: [Zoom; 2], t0: f32) -> In<[u32; 2]> {
         let (zoom, c) = at.node;
         let t0 = f64::from(t0);
         // What is placed and where the ground stands about it, off what was
@@ -151,9 +149,9 @@ impl<'a> Query for Walker<'_, 'a> {
         let (answer, block) = match self.world.node(at, asked, &mut self.lines) {
             Answer::Nothing(l) => {
                 self.lack.get_or_insert(l);
-                return cast::In {
+                return In {
                     kind: Kind::Lacks,
-                    block: pxl_portable::ground::VOID,
+                    block: answer::AIR,
                 };
             }
             Answer::Coarser(i, l) => {
@@ -166,20 +164,12 @@ impl<'a> Query for Walker<'_, 'a> {
         let decor = zoom < GROUND.cell() && self.strike.as_ref().is_some_and(|(_, s)| t0 < s.held && self.world.may_strike(s, at.node, at.shard));
         match answer.kind {
             // Air coarser than asked, gone into where decor may stand in it.
-            Kind::Block if !block && decor => cast::In {
+            Kind::Block if !block && decor => In {
                 kind: Kind::Split,
-                block: world::slab_word(world::ANY),
+                block: [answer::slab_word(answer::ANY), 0],
             },
             _ => answer,
         }
-    }
-
-    fn fills(&self, block: &u32) -> bool {
-        world::fills(*block)
-    }
-
-    fn slab(&self, block: &u32) -> [i32; 2] {
-        world::slab_of(*block)
     }
 
     fn keep(at: &At) -> At {
@@ -272,7 +262,7 @@ impl<'a> World<'a> {
 
     /// Where the descent stopped, in units: its node's box put back on the
     /// unit cell holding the origin, so it lies on the origin's lap.
-    fn hit(&self, ray: &Ray, s: cast::Stop<At, u32>) -> Hit {
+    fn hit(&self, ray: &Ray, s: cast::Stop<At>) -> Hit {
         let (zoom, c) = s.at.node;
         let side = units(zoom);
         let unit = ray.origin.map(libm::floor);
@@ -282,7 +272,7 @@ impl<'a> World<'a> {
         let axis = s.axis as usize;
         let mut normal = [0.0; 3];
         normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };
-        let struck = match world::placed(s.block) {
+        let struck = match answer::placed(s.block[0]) {
             true => self.objects.placed(zoom, wrap_cell(zoom, c), s.at.placed).map_or(Struck::Objects, |e| Struck::Object(e.id())),
             false => Struck::Ground,
         };

@@ -10,6 +10,7 @@
 
 #![no_std]
 
+pub mod answer;
 pub mod area;
 pub mod cast;
 pub mod caves;
@@ -19,6 +20,7 @@ pub mod cube;
 pub mod decor;
 pub mod eye;
 pub mod fill;
+pub mod grid;
 pub mod ground;
 pub mod lattice;
 pub mod overwrite;

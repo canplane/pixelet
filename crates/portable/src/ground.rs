@@ -15,8 +15,8 @@
 //! height a CPU and a GPU compute from this one source can differ in the
 //! last bit where it rounds to a block at a half.
 
+use crate::answer::{bound_of, bound_word, slab_word, In, Kind, ANY};
 use crate::area::{earth, walled, Area, Shard};
-use crate::cast::{In, Kind};
 use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::TILE_CELLS;
@@ -85,17 +85,6 @@ pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
 
 /// A tile's padded samples as a GPU holds them, 2 a word.
 pub const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
-
-/// An entry of a bound as a word, its lowest in the low half and its
-/// highest in the high: each a cell's height, an i16.
-pub fn bound_word([lo, hi]: [i32; 2]) -> i32 {
-    lo & 0xffff | hi << 16
-}
-
-/// `bound_word`'s lowest and highest.
-pub fn bound_of(w: i32) -> [i32; 2] {
-    [w << 16 >> 16, w >> 16]
-}
 
 /// What the windows bound under a node, each source its own: the ground's
 /// faces, the lowest and highest, and the leaf cells the ways fill, the
@@ -366,7 +355,7 @@ pub fn join(a: [i32; 2], b: [i32; 2]) -> [i32; 2] {
 
 /// A bound over every height a cell holds, i16's whole range: a relief, the
 /// lowest and highest face heights, both held. Not a slab of what may fill
-/// along z, half-open (`world::ANY`), which is another fact in another unit.
+/// along z, half-open (`answer::ANY`), which is another fact in another unit.
 pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 
 /// The bound of no ground, lowest over highest: what joins as nothing.
@@ -421,7 +410,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
     // A split no bound tells the slab of holds anything anywhere along z.
     let split = In {
         kind: Kind::Split,
-        block: crate::world::slab_word(crate::world::ANY),
+        block: slab_word(ANY),
     };
     let lacks = In { kind: Kind::Lacks, block: VOID };
     // Past the area: a block's own Earth, or a node's where it is all over
@@ -472,7 +461,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
     let answer = if meets(s, (zoom, c[2]), near) {
         In {
             kind: Kind::Split,
-            block: crate::world::slab_word(s),
+            block: slab_word(s),
         }
     } else {
         air

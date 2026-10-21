@@ -115,8 +115,8 @@ pub const fn place_of(w: u32) -> [u32; 2] {
 }
 
 /// How far from its centre a window holds every cell, in its own cells: a
-/// zoom's band ends `SPLIT` of its cells from the eye (`cast::SPLIT`).
-pub const RADIUS: u32 = crate::cast::SPLIT as u32;
+/// zoom's band ends `SPLIT` of its cells from the eye (`grid::SPLIT`).
+pub const RADIUS: u32 = crate::grid::SPLIT as u32;
 
 /// The first square of the window at `cell` about the cell `c`:
 /// ⌊(c − RADIUS) / SQUARE⌋ a side, X wrapped round the world. Its squares
@@ -312,7 +312,7 @@ pub trait Squares {
     /// `SQUARE_CELLS`.
     fn column(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `at` of level `j` of the square in `slot`, its bounds
-    /// (`ground::Bounds`) as bound words (`ground::bound_word`): its
+    /// (`ground::Bounds`) as bound words (`answer::bound_word`): its
     /// columns' joined (`join`), level 0 one.
     fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
     /// `present` and then `level` of the square it holds: square `q`'s slot
