@@ -20,6 +20,7 @@ use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::{point, wrap_cell};
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
@@ -212,8 +213,9 @@ impl<'a> World<'a> {
         };
         let o = ray.origin;
         let from = cast::Ray::new(ray.direction.map(|v| v as f32), ray.reach as f32);
-        let met = cast::first(&mut walker, &cast::Origin::of(point(o[0], o[1], o[2])), &from, detail, until);
-        let met = (met.ends == Ends::Stop).then(|| self.hit(ray, met.stop));
+        let q = point(o[0], o[1], o[2]);
+        let met = cast::first(&mut walker, q, &from, detail, until);
+        let met = (met.ends == Ends::Stop).then(|| self.hit(ray, q, met.stop));
         let answer = match (met, walker.lack, walker.answered) {
             (h, None, _) => Answer::Exact(h),
             (Some(h), Some(l), _) => Answer::Coarser(Some(h), l),
@@ -246,15 +248,18 @@ impl<'a> World<'a> {
         })
     }
 
-    /// Where the descent stopped, in units: its node's box put back on the
-    /// unit cell holding the origin, so it lies on the origin's lap.
-    fn hit(&self, ray: &Ray, s: cast::Stop<At>) -> Hit {
+    /// Where the descent from `q`, the ray's origin as a position names it,
+    /// stopped, in units: its node's box put back on the unit cell holding
+    /// the origin, so it lies on the origin's lap.
+    fn hit(&self, ray: &Ray, q: Q3, s: cast::Stop<At>) -> Hit {
         let (zoom, c) = s.at.node;
         let side = units(zoom);
         let unit = ray.origin.map(libm::floor);
-        // A corner counts units, or its own cells where they are finer.
-        let per = if zoom > pxl_portable::UNIT_ZOOM { side } else { 1.0 };
-        let min: V3 = std::array::from_fn(|k| unit[k] + f64::from(s.place.corner[k]) * per);
+        // The corner's Q3 steps from the origin's unit cell, exact: the roots
+        // apart, its place in its root, less the origin's unit cell's there.
+        let n = s.node;
+        let steps = |k: usize| (i64::from(n.roots[k]) << 32) + i64::from(n.corner[k]) - i64::from(q[k] as u32 & !0xff);
+        let min: V3 = std::array::from_fn(|k| unit[k] + q3::to_real(steps(k)));
         let axis = s.axis as usize;
         let mut normal = [0.0; 3];
         normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };

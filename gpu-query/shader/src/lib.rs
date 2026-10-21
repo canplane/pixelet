@@ -379,13 +379,13 @@ fn word(ray: &cast::Ray, met: Met<At>, steps: bool) -> [u32; ray::WORDS as usize
     let down = pxl_portable::axis(ray.direction, s.axis) > 0.0;
     let face = 2 * s.axis + down as u32;
     let [value, four] = s.block;
-    [ray::first_word(value, face, s.place.zoom), s.t.to_bits(), if steps { met.visits } else { four }]
+    [ray::first_word(value, face, s.node.zoom), s.t.to_bits(), if steps { met.visits } else { four }]
 }
 
 /// Where the eye's rays start, and the zooms each distance asks.
-fn eye_origin(eye: &Eye) -> (cast::Origin, Detail) {
+fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
     (
-        cast::Origin::of([eye.origin.x, eye.origin.y, eye.origin.z]),
+        [eye.origin.x, eye.origin.y, eye.origin.z],
         Detail {
             tau: eye.right_tau.w,
             range: [eye.range.x, eye.range.y],
@@ -437,7 +437,7 @@ pub fn cast_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let met = cast::first(&mut world, &origin, &ray, detail, Until::Fills);
+    let met = cast::first(&mut world, origin, &ray, detail, Until::Fills);
     let w = word(&ray, met, eye.origin.w != 0);
     let mut k = 0;
     while k < ray::WORDS {

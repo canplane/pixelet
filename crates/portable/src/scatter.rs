@@ -481,7 +481,7 @@ pub struct Grown {
 /// false where the ray meets none.
 pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footed<Q> {
     let (o, ray, detail) = footing_ray(cell, g);
-    footed(crate::cast::walk(q, &o, &ray, detail, crate::cast::Until::Fills), &o)
+    footed(crate::cast::walk(q, o, &ray, detail, crate::cast::Until::Fills), o)
 }
 
 /// A footing as `footing` answers it: the block met, the block over it, and
@@ -492,18 +492,18 @@ pub type Footed<Q> = ((u32, i32, bool), crate::cast::Line<<Q as crate::cast::Que
 
 /// The footing's ray down column `g` at `cell`: from the top of the world
 /// over the column's middle, straight down, at `cell`'s blocks alone.
-fn footing_ray(cell: Zoom, g: [i32; 2]) -> (crate::cast::Origin, crate::cast::Ray, crate::cast::Detail) {
+fn footing_ray(cell: Zoom, g: [i32; 2]) -> ([i32; 3], crate::cast::Ray, crate::cast::Detail) {
     let s = crate::FINEST_ZOOM - cell;
     let mid = |v: i32| v.wrapping_shl(s).wrapping_add((1 << s) >> 1);
     let top = ((1i32 << (crate::HEIGHT_BITS - 1)) << FRAC_W) - 1;
-    let o = crate::cast::Origin::of([mid(g[0]), mid(g[1]), top]);
+    let o = [mid(g[0]), mid(g[1]), top];
     let ray = crate::cast::Ray::new([0.0, 0.0, -1.0], (1u32 << crate::HEIGHT_BITS) as f32);
     (o, ray, crate::cast::Detail { tau: 1.0, range: [cell, cell] })
 }
 
 /// A footing's walk as `footing` answers it (`Footed`).
-fn footed<A: Copy>((met, line): (crate::cast::Met<A>, crate::cast::Line<A>), o: &crate::cast::Origin) -> ((u32, i32, bool), crate::cast::Line<A>) {
-    ((met.stop.block[0], met.stop.place.node(o)[2] + 1, met.ends == crate::cast::Ends::Stop), line)
+fn footed<A: Copy>((met, line): (crate::cast::Met<A>, crate::cast::Line<A>), o: [i32; 3]) -> ((u32, i32, bool), crate::cast::Line<A>) {
+    ((met.stop.block[0], met.stop.node.index(o)[2] + 1, met.ends == crate::cast::Ends::Stop), line)
 }
 
 /// The value a block answer holds, without whether what is placed holds it

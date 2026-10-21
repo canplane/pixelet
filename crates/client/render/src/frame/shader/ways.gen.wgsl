@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: 6fc487993af555ebc398ea405961e926495d3b0853f51e45bbdea0d374bf9a65
+// Inputs: b03c35ad1e33e743507a60134b22d22ded69d6b5c5b500fd24840f14a621c0ef
 struct type_4 {
     member: array<u32>,
 }
@@ -13,7 +13,7 @@ struct type_16 {
     member_1: u32,
 }
 
-struct type_27 {
+struct type_26 {
     member: vec4<u32>,
 }
 
@@ -83,7 +83,7 @@ var<private> global: vec3<u32>;
 var<private> global_1: vec3<u32>;
 var<workgroup> global_2: array<u32, 64>;
 @group(0) @binding(0)
-var<uniform> global_3: type_27;
+var<uniform> global_3: type_26;
 @group(0) @binding(1)
 var<storage> global_4: type_4;
 @group(0) @binding(2)

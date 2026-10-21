@@ -8,12 +8,12 @@
 //! whole; else its children the ray meets, nearest first. A node at that
 //! zoom is asked its block, and the ray stops there or goes on.
 //!
-//! Positions are the ray's origin's: a node's corner is an exact integer
-//! offset from the unit cell holding the origin, at the node's zoom or the
-//! unit's, whichever is finer, and only that offset less the origin's
-//! fraction is a float. So the nodes near the origin are as exact as f32
-//! is near zero wherever the origin stands, and X goes round the world as
-//! the integers do. WGSL's f32 is not strictly IEEE (a division's last
+//! Positions are integers: the ray's origin is a Q3, and a node's corner is
+//! the Q3 steps of its root's finest grid (`Node`), the origin's own grid,
+//! so only a plane's offset from the origin, summed as integers first, is
+//! a float (`units`). So the nodes near the origin are as exact as f32 is
+//! near zero wherever the origin stands, and X goes round the world as the
+//! integers do. WGSL's f32 is not strictly IEEE (a division's last
 //! place, a contraction into a fused multiply-add), so where a ray passes
 //! within the last bit of a face, the CPU and a GPU may stop on either side
 //! of it; that is the one rule computed twice, not a second rule.
@@ -66,26 +66,7 @@ pub enum Until {
     Air,
 }
 
-/// Where rays start, from a Q3 position: the unit cell holding it, X going
-/// round as an i32 does, and where in it it is, `0..1` each. What follows
-/// from it alone is the same for every ray from it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Origin {
-    pub unit: [i32; 3],
-    pub frac: [f32; 3],
-}
-
-impl Origin {
-    pub fn of(q: [i32; 3]) -> Origin {
-        let step = |v: i32| (v & ((1 << FRAC_W) - 1)) as f32 / (1 << FRAC_W) as f32;
-        Origin {
-            unit: [q[0] >> FRAC_W, q[1] >> FRAC_W, q[2] >> FRAC_W],
-            frac: [step(q[0]), step(q[1]), step(q[2])],
-        }
-    }
-}
-
-/// A ray from an origin: its direction, how far it reaches, in units, and
+/// A ray from an origin, a Q3 position: its direction, how far it reaches, in units, and
 /// its direction's reciprocal on each axis, 0 where it does not move along
 /// one: a plane's crossing is a product, not a division made again at every
 /// node (Laine and Karras, _Efficient Sparse Voxel Octrees_, 2010, the
@@ -108,141 +89,43 @@ impl Ray {
     }
 }
 
-/// A node's place from an origin: its zoom and its corner's offset from the
-/// origin's unit cell, counted in its own cells where they are finer than a
-/// unit, else in units.
-#[derive(Clone, Copy, Debug, Eq)]
-pub struct Place {
-    pub zoom: Zoom,
-    pub corner: [i32; 3],
-}
-
-/// Field by field: an array's own `==` is an intrinsic rust-gpu has no
-/// word for.
-impl PartialEq for Place {
-    fn eq(&self, other: &Place) -> bool {
-        self.zoom == other.zoom && self.corner[0] == other.corner[0] && self.corner[1] == other.corner[1] && self.corner[2] == other.corner[2]
-    }
-}
-
-impl Place {
-    /// The zoom its corner is counted at.
-    const fn grid(zoom: Zoom) -> Zoom {
-        if zoom > UNIT_ZOOM {
-            zoom
-        } else {
-            UNIT_ZOOM
-        }
-    }
-
-    /// A count at its grid, in units.
-    fn scale(self) -> f32 {
-        1.0 / (1u32 << (Place::grid(self.zoom) - UNIT_ZOOM)) as f32
-    }
-
-    /// Its side, in units.
-    pub fn side(self) -> f32 {
-        if self.zoom > UNIT_ZOOM {
-            1.0 / (1u32 << (self.zoom - UNIT_ZOOM)) as f32
-        } else {
-            (1u32 << (UNIT_ZOOM - self.zoom)) as f32
-        }
-    }
-
-    /// The same node's place from origin `to`, `self` its place from
-    /// `from`: the corner moved by the units between their unit cells,
-    /// counted at its grid.
-    pub fn from_origin(self, from: &Origin, to: &Origin) -> Place {
-        let scale = 1i32 << (Place::grid(self.zoom) - UNIT_ZOOM);
-        let at = |a: usize| self.corner[a].wrapping_add(from.unit[a].wrapping_sub(to.unit[a]).wrapping_mul(scale));
-        Place {
-            zoom: self.zoom,
-            corner: [at(0), at(1), at(2)],
-        }
-    }
-
-    /// Its min corner, from the origin, in units.
-    pub fn min(self, o: &Origin) -> [f32; 3] {
-        let s = self.scale();
-        [self.corner[0] as f32 * s - o.frac[0], self.corner[1] as f32 * s - o.frac[1], self.corner[2] as f32 * s - o.frac[2]]
-    }
-
-    /// Whether it holds the origin.
-    pub fn holds(self, o: &Origin) -> bool {
-        let (min, side) = (self.min(o), self.side());
-        min[0] <= 0.0 && 0.0 < min[0] + side && min[1] <= 0.0 && 0.0 < min[1] + side && min[2] <= 0.0 && 0.0 < min[2] + side
-    }
-
-    /// A child of a node at `zoom`: its corner is the parent's times `m`,
-    /// plus `h` where it is the upper half on an axis.
-    const fn step(zoom: Zoom) -> (i32, i32) {
-        if zoom < UNIT_ZOOM {
-            (1, 1 << (UNIT_ZOOM - zoom - 1))
-        } else {
-            (2, 1)
-        }
-    }
-
-    /// Its child `k`, `dx + 2·dy + 4·dz`.
-    pub fn child(self, k: u32) -> Place {
-        let (m, h) = Place::step(self.zoom);
-        let at = |a: usize| self.corner[a] * m + ((k >> a) & 1) as i32 * h;
-        Place {
-            zoom: self.zoom + 1,
-            corner: [at(0), at(1), at(2)],
-        }
-    }
-
-    /// Which child of its parent it is, `dx + 2·dy + 4·dz`: its index's low
-    /// bits, the origin's unit cell put back on its corner.
-    pub fn slot(self, o: &Origin) -> u32 {
-        let g = Place::grid(self.zoom);
-        let bit = |a: usize| ((self.corner[a].wrapping_add(o.unit[a].wrapping_shl(g - UNIT_ZOOM)) >> (g - self.zoom)) & 1) as u32;
-        bit(0) | bit(1) << 1 | bit(2) << 2
-    }
-
-    /// Its parent: `child`'s inverse.
-    pub fn parent(self, o: &Origin) -> Place {
-        let k = self.slot(o);
-        let (m, h) = Place::step(self.zoom - 1);
-        // Exact: a child's corner is its parent's times `m`, 1 or 2, plus `h`.
-        let at = |a: usize| (self.corner[a] - ((k >> a) & 1) as i32 * h) >> (m >> 1);
-        Place {
-            zoom: self.zoom - 1,
-            corner: [at(0), at(1), at(2)],
-        }
-    }
-
-    /// The world's node it is, X named as the world names it (pxl-spec
-    /// space/coord/world.rs `wrap_index`): its offset put back on the
-    /// origin's unit cell.
-    pub fn node(self, o: &Origin) -> [i32; 3] {
-        let g = Place::grid(self.zoom);
-        let at = |a: usize| (self.corner[a].wrapping_add(o.unit[a].wrapping_shl(g - UNIT_ZOOM))) >> (g - self.zoom);
-        [wrap_index(self.zoom, at(0)), at(1), at(2)]
-    }
-}
-
 /// A node as the walk holds it, each axis an integer: its corner in its
 /// root at the finest grid a position names (`FINEST_ZOOM`, 2^32 a root, so
 /// a u32: the Q3 itself modulo the root's side), its zoom, and which root
 /// it is in, counted from the origin's. Its corner's bits under its own
-/// side are 0, so two corners part at the highest bit they differ in.
-#[derive(Clone, Copy)]
-struct Node {
-    corner: [u32; 3],
-    zoom: Zoom,
-    roots: [i32; 3],
+/// side are 0, so two corners part at the highest bit they differ in. The
+/// one form of a node from an origin, the walk's and where it stops alike.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Node {
+    pub corner: [u32; 3],
+    pub zoom: Zoom,
+    pub roots: [i32; 3],
 }
 
-/// The origin on the finest grid within its root, and its root.
-fn grid_of(o: &Origin) -> ([u32; 3], [i32; 3]) {
-    let at = |unit: i32, frac: f32| ((unit as u32) & ((1 << UNIT_ZOOM) - 1)) << FRAC_W | (frac * (1 << FRAC_W) as f32) as u32;
+impl Node {
+    /// The world's node it is from the origin `o`, X named as the world
+    /// names it (pxl-spec space/coord/world.rs `wrap_index`).
+    pub fn index(&self, o: [i32; 3]) -> [i32; 3] {
+        let r0 = roots_of(o);
+        [
+            wrap_index(self.zoom, index_on(r0[0] + self.roots[0], self.corner[0], self.zoom)),
+            index_on(r0[1] + self.roots[1], self.corner[1], self.zoom),
+            index_on(r0[2] + self.roots[2], self.corner[2], self.zoom),
+        ]
+    }
+}
+
+/// The origin `o` on the finest grid within its root: the Q3 itself
+/// modulo the root's side, 2^32.
+fn grid_of(o: [i32; 3]) -> [u32; 3] {
     // [naga] each axis by itself, not a loop (caves.rs `node_seed`).
-    (
-        [at(o.unit[0], o.frac[0]), at(o.unit[1], o.frac[1]), at(o.unit[2], o.frac[2])],
-        [o.unit[0] >> UNIT_ZOOM, o.unit[1] >> UNIT_ZOOM, o.unit[2] >> UNIT_ZOOM],
-    )
+    [o[0] as u32, o[1] as u32, o[2] as u32]
+}
+
+/// The root holding the origin `o` on each axis: its Q3 over the root's
+/// side, 2^32, floored, so 0 or −1.
+fn roots_of(o: [i32; 3]) -> [i32; 3] {
+    [o[0] >> 31, o[1] >> 31, o[2] >> 31]
 }
 
 /// Units from the origin, at `og` in its root, to `p` in the root `roots`
@@ -263,21 +146,12 @@ fn under(z: Zoom) -> u32 {
 }
 
 /// The world's node on axis `a` of the node at zoom `z` whose corner is `c`
-/// in the root `root`: `Place::node`'s value, `root · 2^z` and the corner's
-/// high bits, no shift reaching the word's width.
+/// in the root `root`: `root · 2^z` and the corner's high bits, no shift
+/// reaching the word's width.
 fn index_on(root: i32, c: u32, z: Zoom) -> i32 {
     let high = if z >= FINEST_ZOOM { 0 } else { (root << z) as u32 };
     let low = if z == 0 { 0 } else { c >> (FINEST_ZOOM - z) };
     high.wrapping_add(low) as i32
-}
-
-/// The world's node the walk's node is, X named as the world names it.
-fn index_of(n: &Node, r0: [i32; 3]) -> [i32; 3] {
-    [
-        wrap_index(n.zoom, index_on(r0[0] + n.roots[0], n.corner[0], n.zoom)),
-        index_on(r0[1] + n.roots[1], n.corner[1], n.zoom),
-        index_on(r0[2] + n.roots[2], n.corner[2], n.zoom),
-    ]
 }
 
 /// The ray's t at the near and far planes on one axis, `lo` and `hi` units
@@ -308,24 +182,6 @@ fn past(d: f32, inv: f32, mid: f32, t: f32) -> bool {
     }
 }
 
-/// The node as a `Place`, a corner counted from the origin's unit cell at
-/// its grid (`Place::grid`), for a stop's asker.
-fn place_of(n: &Node, og: [u32; 3]) -> Place {
-    let g = Place::grid(n.zoom);
-    let on = |c: u32, og: u32, roots: i32| {
-        let unit = og >> FRAC_W << FRAC_W;
-        if g == UNIT_ZOOM {
-            (c >> FRAC_W) as i32 - (unit >> FRAC_W) as i32 + (roots << UNIT_ZOOM)
-        } else {
-            (c.wrapping_sub(unit) as i32) >> (FINEST_ZOOM - g)
-        }
-    };
-    Place {
-        zoom: n.zoom,
-        corner: [on(n.corner[0], og[0], n.roots[0]), on(n.corner[1], og[1], n.roots[1]), on(n.corner[2], og[2], n.roots[2])],
-    }
-}
-
 /// The world as a descent asks it, each node handed what its parent found
 /// (the `At`). The CPU and a GPU answer it from the same reading of the
 /// ground's windows, the caves, the ways' runs and what is placed; only the
@@ -343,13 +199,13 @@ pub trait Query {
     fn node(&mut self, at: &mut Self::At, zoom: Zoom, node: [i32; 3], asked: [Zoom; 2], t0: f32) -> In<[u32; 2]>;
 }
 
-/// Where a ray stopped: how far, the axis it entered across, the node and
-/// what it is there.
+/// Where a ray stopped: how far, the axis it entered across, the node
+/// (`Node`, from the ray's origin) and what it is there.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Stop<A> {
     pub t: f32,
     pub axis: u32,
-    pub place: Place,
+    pub node: Node,
     pub at: A,
     pub block: [u32; 2],
 }
@@ -402,7 +258,7 @@ fn squared(v: [f32; 3]) -> f32 {
 
 /// The first block `ray` meets within its reach that `until` stops at, at
 /// the zoom `detail` asks where it meets it (`walk`).
-pub fn first<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until) -> Met<Q::At> {
+pub fn first<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until) -> Met<Q::At> {
     walk(q, o, ray, detail, until).0
 }
 
@@ -471,8 +327,8 @@ pub type Walked<Q> = (Met<<Q as Query>::At>, Line<<Q as Query>::At>);
 /// by (Amanatides & Woo 1987) and the walk is at the child of the nearest
 /// ancestor holding the next node, by the highest bit the step changed
 /// (POP), or past a root, in the next root, from its top. One loop.
-pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: Until) -> Walked<Q> {
-    let (og, r0) = grid_of(o);
+pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until) -> Walked<Q> {
+    let (og, r0) = (grid_of(o), roots_of(o));
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
     // over it (`stack`), and its visits. The node's planes and the world's
@@ -484,7 +340,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: U
         zoom: 0,
         roots: [0; 3],
     };
-    let mut at = q.root(index_of(&n, r0));
+    let mut at = q.root(n.index(o));
     let mut stack = [at; DEPTH];
     let (mut t, mut visits) = (0.0f32, 0);
     loop {
@@ -508,7 +364,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: U
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
         if t1 > t0 {
-            let i = q.node(&mut at, n.zoom, index_of(&n, r0), asked(detail, lo, hi), t0);
+            let i = q.node(&mut at, n.zoom, n.index(o), asked(detail, lo, hi), t0);
             visits += 1;
             let inside = lo[0] <= 0.0 && 0.0 < hi[0] && lo[1] <= 0.0 && 0.0 < hi[1] && lo[2] <= 0.0 && 0.0 < hi[2];
             let ends = match i.kind {
@@ -553,7 +409,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: U
                 let stop = Stop {
                     t: t0,
                     axis,
-                    place: place_of(&n, og),
+                    node: n,
                     at,
                     block: i.block,
                 };
@@ -604,7 +460,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: U
                 let stop = Stop {
                     t: t1,
                     axis: 0,
-                    place: place_of(&n, og),
+                    node: n,
                     at,
                     block: AIR,
                 };
@@ -668,7 +524,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: &Origin, ray: &Ray, detail: Detail, until: U
                 (stack[(l - 1) as usize], false)
             }
         };
-        let node = index_of(&n, r0);
+        let node = n.index(o);
         at = if fresh { q.root(node) } else { q.child(&parent, n.zoom, node) };
     }
 }
