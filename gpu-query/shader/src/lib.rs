@@ -220,14 +220,6 @@ impl<L: Looks, P: Lanes> Squares for World<'_, L, P> {
     fn level(&self, cell: u32, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
         level_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), j, at)
     }
-    /// The slot is `q`'s alone (`window::slot`), so the key and the entry
-    /// are read together, the entry kept only where the key is `q`.
-    fn entry(&self, cell: u32, q: [i32; 2], j: u32, at: [u32; 2]) -> (u32, bool, [i32; 2]) {
-        let (s, row) = (window::slot(q), (cell - FIRST_CELL) * SLOTS);
-        let (h, e) = (self::at(self.window, row + s), level_of(self.ground, square_at(row + s), j, at));
-        let here = h.z != 0 && h.x == q[0] && h.y == q[1];
-        (s, here, if here { e } else { [0; 2] })
-    }
     fn laid(&self, cell: u32, slot: u32, i: u32) -> u32 {
         fill::laid_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
     }

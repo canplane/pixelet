@@ -8,7 +8,7 @@
 //! held in the slot its place names modulo `ACROSS`, so the window follows
 //! its centre a square at a time and no held cell moves. A square is
 //! present once its cells are drawn; a reader of one absent reads the
-//! coarser window's (`find`).
+//! coarser window's (`step`).
 
 use crate::ground::{ELE_WORDS, UNKNOWN, VOID};
 use crate::lattice::{GROUND, TILE_CELLS};
@@ -315,15 +315,6 @@ pub trait Squares {
     /// (`ground::Bounds`) as bound words (`answer::bound_word`): its
     /// columns' joined (`join`), level 0 one.
     fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
-    /// `present` and then `level` of the square it holds: square `q`'s slot
-    /// at `cell`, whether present, and its level `j` entry `at`, none where
-    /// absent. A side that names a slot by `q` alone reads the key and the
-    /// entry together, neither waiting on the other (gpu-query-shader
-    /// `World`); one that looks a slot up reads them in turn, as here.
-    fn entry(&self, cell: Zoom, q: [i32; 2], j: u32, at: [u32; 2]) -> (u32, bool, [i32; 2]) {
-        let (slot, here) = self.present(cell, q);
-        (slot, here, if here { self.level(cell, slot, j, at) } else { [0; 2] })
-    }
     /// Cell `i` as its fill laid it (`LAID_WORDS`, `laid_at`).
     fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `e` of the eye's window at `cell`'s levels over its squares
@@ -469,11 +460,11 @@ impl<Q: Square> crate::ways::Columns for Q {
     }
 }
 
-/// Where a node's cells at `cell`, a square's or fewer, are held, as `find`
+/// Where a node's cells at `cell`, a square's or fewer, are held, as `step`
 /// finds them: the zoom they were asked at, the window holding them present
 /// (its zoom `from`, at `cell` or coarser, and its slot), or none; one word,
 /// as a descent carries it down beside what is placed (`overwrite::Held`).
-/// `find` reads only the square at `cell` holding them and the squares over
+/// `step` reads only the square at `cell` holding them and the squares over
 /// it, so every node whose cells lie in that square has this answer: a
 /// descent hands it from a node to the nodes under it (`step`). `NONE` was
 /// asked at no zoom.
@@ -525,35 +516,27 @@ fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// `above` leaves unknown. Only a node a square wide or less sets a place
 /// (`bounded`), so every node a descent asks under it, a sibling from its
 /// parent's stack entry too, lies in that node, and at each zoom to
-/// `above`'s cell in the square that held `above`'s cells there. `find`
-/// asks those zooms finest first and stops at the first holding them, so
-/// `above` says what each of them answers: none present over `above`'s
-/// window, it present. Asked at `above`'s cell or coarser down to its
-/// window, the answer is that window, read nowhere; coarser than the window,
-/// as `find` finds it. Asked finer, only the zooms finer than `above`'s are unknown:
-/// they are looked at finest first, then `above`'s answer stands, a look a
-/// zoom of the step.
+/// `above`'s cell in the square that held `above`'s cells there. The
+/// windows are asked finest first, each a zoom's, and the first holding the
+/// cell present answers, so `above` says what each of them answers: none
+/// present over `above`'s window, it present. Asked at `above`'s cell or
+/// coarser down to its window, the answer is that window, read nowhere.
+/// Asked finer, only the zooms finer than `above`'s are unknown: they are
+/// looked at finest first, then `above`'s answer stands, a look a zoom of
+/// the step. With nothing above, or coarser than `above`'s window, every
+/// window from `cell`'s to the first (`FIRST_CELL`) is looked at, and none
+/// holding it is a lack.
 pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, [u32; 2]) {
-    step_from(w, above, cell, g, cell)
-}
-
-/// Whether `step` from `above` asks the window at `cell` itself, the
-/// first it asks: none above, or `above`'s window finer than `cell`, or
-/// `cell` finer than `above`'s cells.
-fn asks(above: Found, cell: Zoom) -> bool {
-    above == Found::NONE || cell < above.from() || cell > above.cell()
-}
-
-/// `step`, its windows asked from `top` coarser: `cell`'s own, or under
-/// it where `cell`'s was asked already (`bounded`).
-fn step_from(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2], top: Zoom) -> (Found, [u32; 2]) {
-    if above == Found::NONE || cell < above.from() {
-        let (from, slot, i, here) = find(w, cell, g, top);
-        return (Found::of(cell, from, slot, here), i);
-    }
-    let mut f = Found::of(cell, above.from(), above.slot(), above.here());
-    let mut c = top;
-    while c > above.cell() {
+    // The zooms `above` leaves unknown, finest first, down to the one it
+    // answers, or to the first window where it answers none.
+    let known = above != Found::NONE && cell >= above.from();
+    let (floor, mut f) = if known {
+        (above.cell(), Found::of(cell, above.from(), above.slot(), above.here()))
+    } else {
+        (FIRST_CELL - 1, Found::of(cell, FIRST_CELL, 0, false))
+    };
+    let mut c = cell;
+    while c > floor {
         let (slot, here) = w.present(c, square_of(cell_at(cell, c, g)).0);
         if here {
             f = Found::of(cell, c, slot, true);
@@ -609,23 +592,6 @@ pub fn ground(w: &(impl Squares + crate::area::Area), owner: (Zoom, [i32; 2]), p
         fold: crate::ground::looks(word),
     };
     (cell, f)
-}
-
-/// The finest window, at `cell` or coarser to the first (`FIRST_CELL`), holding cell `g` (at
-/// `cell`, X named on any lap round the world) present: that window's zoom,
-/// the slot and where the cell lies in its square; false where none does,
-/// a lack.
-pub fn find(w: &impl Squares, cell: Zoom, g: [i32; 2], top: Zoom) -> (Zoom, u32, [u32; 2], bool) {
-    let mut c = top;
-    while c >= FIRST_CELL {
-        let (q, at) = square_of(cell_at(cell, c, g));
-        let (slot, here) = w.present(c, q);
-        if here {
-            return (c, slot, at, true);
-        }
-        c -= 1;
-    }
-    (FIRST_CELL, 0, [0; 2], false)
 }
 
 /// Entry `at` of level `j` of a square, from 1, over the level under it,
@@ -757,7 +723,7 @@ fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> crate::ground::Bounds
 /// no other window need be read: the node lies in the window, or the entry
 /// is none (`ground::UNBOUNDED`), its block not held whole, so nothing
 /// bounds the node, which only splits more. What the window does not reach
-/// of the node a coarser window holds, as a cell's (`find`). The one
+/// of the node a coarser window holds, as a cell's (`step`). The one
 /// reader of every entry.
 fn held_of(w: &impl Squares, cell: Zoom, g: [i32; 2], l: u32) -> (crate::ground::Bounds, bool) {
     let (first, laid) = w.origin(cell);
@@ -789,7 +755,7 @@ fn held_of(w: &impl Squares, cell: Zoom, g: [i32; 2], l: u32) -> (crate::ground:
 /// `place`, which becomes where its cells are held, a read off a coarser
 /// window standing for every zoom down to it; and on under
 /// `coarsest`, while no window read there holds all of the node, a cell's
-/// own order (`find`), each zoom's cells being its own tile's, which no
+/// own order (`step`), each zoom's cells being its own tile's, which no
 /// other's bound holds. The lowest and highest joined, and the finest's
 /// window's zoom; none (`ground::UNBOUNDED`) where nothing bounds it, which
 /// only splits more; false where a window it needs holds none of it, a
@@ -833,21 +799,7 @@ fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i
         let (b, all) = held_of(w, cell, g, cell - zoom - LEVELS);
         return (b, cell, true, all);
     }
-    // The window at `cell` itself where the walk asks it, its key and the
-    // node's entry read together (`Squares::entry`); the coarser ones, in
-    // turn, only where it misses.
-    let mut top = cell;
-    if asks(*place, cell) {
-        let (q, p) = square_of(cell_at(cell, cell, g));
-        let (j, at) = entry_at(zoom, cell, p);
-        let (slot, here, e) = w.entry(cell, q, j, at);
-        if here {
-            *place = Found::of(cell, cell, slot, true);
-            return (crate::ground::bounds_of(e), cell, true, true);
-        }
-        top = cell - 1;
-    }
-    let (f, p) = step_from(w, *place, cell, g, top);
+    let (f, p) = step(w, *place, cell, g);
     *place = f;
     let (from, slot) = (f.from(), f.slot());
     if !f.here() {

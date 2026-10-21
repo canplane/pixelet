@@ -331,7 +331,7 @@ pub fn landed(s: u32, ticket: u32, k: u32) {
 
 /// The squares this turn hands, nearest first, as many as a frame's fill
 /// takes: the eye's windows coarsest first, since a reader of a square
-/// absent reads the coarser window's (pxl-portable `window::find`), then the
+/// absent reads the coarser window's (pxl-portable `window::step`), then the
 /// focus's and a destination's; in a window by how far its square lies from
 /// the centre. Only a square whose tile can hand it now: one waiting on its
 /// tile does not hold a place another could take.
@@ -519,7 +519,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
 }
 
 /// The windows as the CPU holds them, for pxl-portable's one reading of a
-/// cell (`window::find`, `window::bound_over`): each square's columns,
+/// cell (`window::step`, `window::bound_over`): each square's columns,
 /// levels and ways' tree's root as the GPU drew and folded them, read back
 /// (its tree's blocks in the pool's mirror, `pool`); and
 /// the service area they end at (pxl-portable `area::Area`).
