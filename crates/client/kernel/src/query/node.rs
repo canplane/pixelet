@@ -44,14 +44,13 @@
 //! never that nothing fills.
 
 use pxl_portable::answer::{In, Kind};
-use pxl_portable::area::{Area, Shard};
+use pxl_portable::area::Area;
 use pxl_portable::ground::VOID;
 use pxl_portable::ground::{self, Cell};
-use pxl_portable::overwrite::{self, Cut, Held};
+use pxl_portable::overwrite::Cut;
 use pxl_portable::window::{self, Found};
 use pxl_portable::world;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::procedural::Cave;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::{child_of, Node};
 use pxl_spec::space::layer::lattice::GROUND;
@@ -61,7 +60,7 @@ use super::world::World;
 use crate::io::source;
 use crate::layer::residency::Lines;
 use crate::layer::terrain::window::{pool, Windowed};
-use crate::layer::{Answer, Query};
+use crate::layer::Answer;
 
 /// The coarsest zoom a block is asked at: the coarsest cells a tile draws.
 pub(super) fn coarsest() -> Zoom {
@@ -69,21 +68,11 @@ pub(super) fn coarsest() -> Zoom {
 }
 
 /// A node as a descent reaches it, X on the asker's lap, and what its
-/// ancestors found, handed to its children.
+/// ancestors found, handed to its children (pxl-portable `world::At`).
 #[derive(Clone, Copy)]
 pub(super) struct At {
     pub(super) node: Node<3>,
-    cave: Cave,
-    pub(super) placed: Held,
-    /// What is known of the service area at its shard (pxl-portable
-    /// `area::Shard`).
-    pub(super) shard: Shard,
-    /// Where the windows hold the ground's cells of the nodes over it, which
-    /// its own read steps from (pxl-portable `window::step`).
-    ground: Found,
-    /// The ways' cursor in the tree of the square `ground` names, stepped
-    /// down as `placed` is (pxl-portable `world::node`).
-    ways: Held,
+    pub(super) handed: world::At,
 }
 
 impl World<'_> {
@@ -102,14 +91,10 @@ impl World<'_> {
 
     /// A node with nothing handed down, a descent's root among them: each
     /// source found down its line from the top.
-    pub(super) fn start(&self, (zoom, at): Node<3>) -> At {
+    pub(super) fn start(&self, node: Node<3>) -> At {
         At {
-            node: (zoom, at),
-            cave: Cave::of(zoom, at),
-            placed: self.objects.cursor((zoom, at), zoom),
-            shard: Shard::UNKNOWN,
-            ground: Found::NONE,
-            ways: Held::NOTHING,
+            node,
+            handed: world::At::of(&self.objects.lanes(), node),
         }
     }
 
@@ -131,14 +116,10 @@ impl World<'_> {
     /// Its child `k`, in `child_of`'s order, with what it found handed down.
     pub(super) fn child(&self, at: &At, k: usize) -> At {
         let (zoom, c) = at.node;
-        let (z, child) = (zoom + 1, child_of(c, k));
+        let node = (zoom + 1, child_of(c, k));
         At {
-            node: (z, child),
-            cave: at.cave.child(z, child),
-            placed: self.objects.child(&at.placed, (z, child), z),
-            shard: at.shard,
-            ground: at.ground,
-            ways: overwrite::child(&pool(), at.ways, z, child),
+            node,
+            handed: at.handed.child(&self.objects.lanes(), &pool(), node),
         }
     }
 
@@ -153,15 +134,10 @@ impl World<'_> {
     /// The four looks a block is drawn by are the GPU's to draw. `lines` are the ground's lines the
     /// walk asking it read, which its own steps from (`line_walked`).
     pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2], lines: &mut Lines) -> Answer<(In<[u32; 2]>, bool)> {
-        let (zoom, c) = at.node;
-        at.shard = at.shard.at(&Windowed, (zoom, [c[0], c[1]]));
-        let (handed, mut place, mut trail) = ((at.cave, at.placed, at.shard), at.ground, at.ways);
         let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);
-        let mut reading = Reading::new(self, at, lines);
-        let (i, block) = world::node(&mut reading, &Windowed, &lanes, &pool(), handed, (&mut place, &mut trail), (zoom, c), asked, cuts);
-        let answer = reading.answer(i.kind != Kind::Lacks, || (i, block));
-        (at.ground, at.ways) = (place, trail);
-        answer
+        let mut reading = Reading::new(self, at.node, lines);
+        let (i, block) = world::node(&mut reading, &Windowed, &lanes, &pool(), &mut at.handed, at.node, asked, cuts);
+        reading.answer(i.kind != Kind::Lacks, || (i, block))
     }
 }
 
@@ -170,17 +146,17 @@ impl World<'_> {
 /// and the first tile it found lacked or only a coarser one standing in for.
 struct Reading<'r, 'a> {
     world: &'r World<'a>,
-    at: &'r mut At,
+    node: Node<3>,
     lines: &'r mut Lines,
     lacked: Option<Tile>,
     coarser: Option<Tile>,
 }
 
 impl<'r, 'a> Reading<'r, 'a> {
-    fn new(world: &'r World<'a>, at: &'r mut At, lines: &'r mut Lines) -> Reading<'r, 'a> {
+    fn new(world: &'r World<'a>, node: Node<3>, lines: &'r mut Lines) -> Reading<'r, 'a> {
         Reading {
             world,
-            at,
+            node,
             lines,
             lacked: None,
             coarser: None,
@@ -228,7 +204,7 @@ impl ground::Held for Reading<'_, '_> {
     /// tile a lack or a coarser window stands for; where it lacks, `EMPTY`
     /// and false.
     fn relief(&mut self, place: &mut Found, cells: [Zoom; 2], _: (Zoom, [i32; 3])) -> (ground::Bounds, bool) {
-        let (zoom, c) = self.at.node;
+        let (zoom, c) = self.node;
         let line = self.world.terrain.line_walked(self.lines, (zoom, [c[0], c[1]]), cells[1]);
         match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]), cells)) {
             Some(r) => (r, true),

@@ -24,11 +24,12 @@ use pxl_portable::fill::{self, column_of, level_of, put};
 use pxl_portable::ways::tree::{self, Pool};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
-use pxl_portable::overwrite::{self, Cut, Held, Lanes, PLACED};
+use pxl_portable::overwrite::{self, Cut, Held, Lanes};
 use pxl_portable::ways;
 use pxl_portable::scatter::{self, drawn, Grounds, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::Found;
+use pxl_portable::world::At;
 use pxl_portable::{at, ray, world, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::arch::IndexUnchecked;
@@ -253,21 +254,6 @@ impl<L: Looks, P: Lanes> ground::Held for World<'_, L, P> {
     }
 }
 
-/// What a node is handed down on the GPU: its caves, what is placed there,
-/// what is known of the service area at its shard (`area::Shard`), and
-/// where the ground's cells of the nodes over it were held (`window::step`),
-/// which its own read steps from.
-#[derive(Clone, Copy)]
-pub struct At {
-    cave: Cave,
-    placed: Held,
-    shard: Shard,
-    ground: Found,
-    /// The ways' cursor in the tree of the square `ground` names
-    /// (pxl-portable `world::node`).
-    ways: Held,
-}
-
 /// What a node is on the GPU: its value, one of the catalog's whichever
 /// source holds it, and the four looks the ground's block is drawn by
 /// (`world::node`'s second word), what the screen paints a hit with.
@@ -275,33 +261,18 @@ impl<L: Looks, P: Lanes + Copy> Query for World<'_, L, P> {
     type At = At;
 
     fn root(&mut self, node: [i32; 3]) -> At {
-        At {
-            cave: Cave::of(0, node),
-            placed: overwrite::cursor(self, PLACED, 0, node),
-            shard: Shard::UNKNOWN,
-            ground: Found::NONE,
-            ways: Held::NOTHING,
-        }
+        At::of(self, (0, node))
     }
 
     fn child(&mut self, at: &At, zoom: u32, node: [i32; 3]) -> At {
-        At {
-            cave: at.cave.child(zoom, node),
-            placed: overwrite::child(self, at.placed, zoom, node),
-            shard: at.shard,
-            ground: at.ground,
-            ways: overwrite::child(&self.pool, at.ways, zoom, node),
-        }
+        at.child(self, &self.pool, (zoom, node))
     }
 
     /// What is in the node `c` at `zoom`: the world's one query
-    /// (pxl-portable `world::node`), after its shard, known before any
-    /// layer answers it, so a stop's shard is its own whichever layer stops
-    /// it.
+    /// (pxl-portable `world::node`).
     fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<[u32; 2]> {
-        at.shard = at.shard.at(self, (zoom, [c[0], c[1]]));
         let (w, cuts) = (*self, [cut(self.eye.carve), cut(self.eye.hide)]);
-        world::node(self, &w, &w, &w.pool, (at.cave, at.placed, at.shard), (&mut at.ground, &mut at.ways), (zoom, c), asked, cuts).0
+        world::node(self, &w, &w, &w.pool, at, (zoom, c), asked, cuts).0
     }
 }
 

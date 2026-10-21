@@ -156,7 +156,7 @@ impl<'a> Query for Walker<'_, 'a> {
             Answer::Exact(i) => i,
         };
         self.answered = true;
-        let decor = zoom < GROUND.cell() && self.strike.as_ref().is_some_and(|(_, s)| t0 < s.held && self.world.may_strike(s, at.node, at.shard));
+        let decor = zoom < GROUND.cell() && self.strike.as_ref().is_some_and(|(_, s)| t0 < s.held && self.world.may_strike(s, at.node, at.handed.shard));
         match answer.kind {
             // Air coarser than asked, gone into where decor may stand in it.
             Kind::Block if !block && decor => In {
@@ -264,7 +264,7 @@ impl<'a> World<'a> {
         let mut normal = [0.0; 3];
         normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };
         let struck = match answer::placed(s.block[0]) {
-            true => self.objects.placed(zoom, wrap_cell(zoom, c), s.at.placed).map_or(Struck::Objects, |e| Struck::Object(e.id())),
+            true => self.objects.placed(zoom, wrap_cell(zoom, c), s.at.handed.placed).map_or(Struck::Objects, |e| Struck::Object(e.id())),
             false => Struck::Ground,
         };
         let t = f64::from(s.t);
