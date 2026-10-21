@@ -86,8 +86,10 @@ impl At {
 /// what is placed (`overwrite::over`), the ground's (`ground::slab`), the
 /// ways' (`ways::slab`), each meeting the node (`ground::meets`) — its
 /// block word where along z (`slab_word`);
-/// else air; where the ground is not held, the lack. With it, whether it is
-/// a block.
+/// else air, a block of air its size, its value void; where the ground is
+/// not held, the lack. Whether a block is the zoom asked's or coarser air is
+/// the asker's: its zoom against the finest asked (`near`), past the
+/// ground's cells, where nothing finer is, a block either way.
 #[allow(clippy::too_many_arguments)]
 pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     held: &mut H,
@@ -98,7 +100,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     (zoom, c): (Zoom, [i32; 3]),
     [far, near]: [Zoom; 2],
     [carve, hide]: [Cut; 2],
-) -> (In<[u32; 2]>, bool) {
+) -> In<[u32; 2]> {
     at.shard = at.shard.at(held, (zoom, [c[0], c[1]]));
     let (cave, put, shard) = (at.cave, at.placed, at.shard);
     let (place, trail) = (&mut at.ground, &mut at.ways);
@@ -115,13 +117,10 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
             // look, fit; one past a byte, an object's, is drawn by its value.
             let four = if fills(over.block) { overwrite::looks(lanes, put, hide, zoom, c, over.block) } else { [0; 4] };
             let bytes = four[0] < 256 && four[1] < 256 && four[2] < 256 && four[3] < 256;
-            return (
-                In {
-                    kind: Kind::Block,
-                    block: [PLACED_BLOCK | over.block, if bytes { ground::word(four) } else { 0 }],
-                },
-                block,
-            );
+            return In {
+                kind: Kind::Block,
+                block: [PLACED_BLOCK | over.block, if bytes { ground::word(four) } else { 0 }],
+            };
         }
         if over.says == SPLIT {
             (placed, splits) = (overwrite::slab(lanes, put, zoom, c), true);
@@ -151,7 +150,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
             (Kind::Block, true) => ground::word([value; 4]),
             _ => 0,
         };
-        return (In { kind: i.kind, block: [value, four] }, block);
+        return In { kind: i.kind, block: [value, four] };
     }
     // Coarser, what is placed splits it where it may fill, and the ways
     // what the ground leaves air where they may; a split's slab is every
@@ -162,7 +161,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     let fill = ground::meets(ways, (zoom, c[2]), near);
     let kind = if splits || i.kind == Kind::Block && fill { Kind::Split } else { i.kind };
     if kind != Kind::Split {
-        return (In { kind, block: [value, 0] }, block);
+        return In { kind, block: [value, 0] };
     }
     let own = match i.kind {
         Kind::Split => slab_of(i.block),
@@ -170,5 +169,5 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         _ => ground::EMPTY,
     };
     let joined = ground::join(ground::join(own, ways), placed);
-    (In { kind, block: [slab_word(joined), 0] }, block)
+    In { kind, block: [slab_word(joined), 0] }
 }

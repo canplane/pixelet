@@ -141,7 +141,7 @@ impl<'a> Query for Walker<'_, 'a> {
                 self.world.strike_near(s, ray, (zoom, c));
             }
         }
-        let (answer, block) = match self.world.node(at, asked, &mut self.lines) {
+        let answer = match self.world.node(at, asked, &mut self.lines) {
             Answer::Nothing(l) => {
                 self.lack.get_or_insert(l);
                 return In {
@@ -159,7 +159,7 @@ impl<'a> Query for Walker<'_, 'a> {
         let decor = zoom < GROUND.cell() && self.strike.as_ref().is_some_and(|(_, s)| t0 < s.held && self.world.may_strike(s, at.node, at.handed.shard));
         match answer.kind {
             // Air coarser than asked, gone into where decor may stand in it.
-            Kind::Block if !block && decor => In {
+            Kind::Block if zoom < asked[1] && decor => In {
                 kind: Kind::Split,
                 block: [answer::slab_word(answer::ANY), 0],
             },

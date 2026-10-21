@@ -105,7 +105,7 @@ impl World<'_> {
     pub(super) fn drawn(&self, at: &mut At, lines: &mut Lines) -> Answer<u32> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        self.node(at, [zoom, zoom], lines).map(|(i, block)| if block && i.kind == Kind::Block { i.block[0] } else { VOID })
+        self.node(at, [zoom, zoom], lines).map(|i| if i.kind == Kind::Block { i.block[0] } else { VOID })
     }
 
     /// A preview's entry as pxl-portable `overwrite` takes it.
@@ -127,17 +127,17 @@ impl World<'_> {
     /// asks within it: the world's one query (pxl-portable `world::node`),
     /// the ground read as the GPU reads it, off what it drew and read back
     /// (`Windowed`), down the node's line through the residency
-    /// (`Reading`), after its shard, known before any layer answers it. Its
-    /// answer (pxl-portable `answer`): a split and its slab; a block, the
-    /// zoom asked's, void for air; or, coarser than asked and nothing under it
-    /// filling, air its size; with whether it is a block (`world::node`'s).
-    /// The four looks a block is drawn by are the GPU's to draw. `lines` are the ground's lines the
-    /// walk asking it read, which its own steps from (`line_walked`).
-    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2], lines: &mut Lines) -> Answer<(In<[u32; 2]>, bool)> {
+    /// (`Reading`). Its answer (pxl-portable `answer`): a split and its
+    /// slab; a block, the zoom asked's, void for air; or, coarser than asked
+    /// and nothing under it filling, air its size, which its zoom against
+    /// `asked` tells. The four looks a block is drawn by are the GPU's to
+    /// draw. `lines` are the ground's lines the walk asking it read, which
+    /// its own steps from (`line_walked`).
+    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2], lines: &mut Lines) -> Answer<In<[u32; 2]>> {
         let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);
         let mut reading = Reading::new(self, at.node, lines);
-        let (i, block) = world::node(&mut reading, &Windowed, &lanes, &pool(), &mut at.handed, at.node, asked, cuts);
-        reading.answer(i.kind != Kind::Lacks, || (i, block))
+        let i = world::node(&mut reading, &Windowed, &lanes, &pool(), &mut at.handed, at.node, asked, cuts);
+        reading.answer(i.kind != Kind::Lacks, || i)
     }
 }
 

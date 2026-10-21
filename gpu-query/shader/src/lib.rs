@@ -272,7 +272,7 @@ impl<L: Looks, P: Lanes + Copy> Query for World<'_, L, P> {
     /// (pxl-portable `world::node`).
     fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<[u32; 2]> {
         let (w, cuts) = (*self, [cut(self.eye.carve), cut(self.eye.hide)]);
-        world::node(self, &w, &w, &w.pool, at, (zoom, c), asked, cuts).0
+        world::node(self, &w, &w, &w.pool, at, (zoom, c), asked, cuts)
     }
 }
 
