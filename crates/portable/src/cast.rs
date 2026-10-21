@@ -24,7 +24,7 @@
 
 use crate::answer::{fills, slab_of, In, Kind, AIR};
 use crate::grid::cell_at;
-use crate::{wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
+use crate::{axis, wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical
 /// axis: a drawn pixel's middle, its tangents the screen's half-angles'
@@ -179,6 +179,39 @@ fn past(d: f32, inv: f32, mid: f32, t: f32) -> bool {
         mid * inv > t
     } else {
         mid <= 0.0
+    }
+}
+
+/// The axis the ray crosses at the last of its planes `t` (`last`), as it
+/// enters a node, or at the first, as it leaves one: among the axes it moves
+/// along, the lowest at a tie, the third where it moves along none.
+fn crossing(d: [f32; 3], t: [f32; 3], last: bool) -> u32 {
+    let moves = |a: u32| axis(d, a) != 0.0;
+    let beats = |a: f32, b: f32| if last { a > b } else { a < b };
+    let mut e = if moves(0) {
+        0
+    } else if moves(1) {
+        1
+    } else {
+        2
+    };
+    // [naga] each axis by itself, not a loop (caves.rs `node_seed`).
+    if e < 1 && moves(1) && beats(t[1], axis(t, e)) {
+        e = 1;
+    }
+    if e < 2 && moves(2) && beats(t[2], axis(t, e)) {
+        e = 2;
+    }
+    e
+}
+
+/// What a walk holds of its line where it ends at `n`, handed `live`.
+fn line_at<A: Copy>(stack: [A; DEPTH], n: &Node, live: A) -> Line<A> {
+    Line {
+        stack,
+        zoom: n.zoom,
+        corner: n.corner,
+        live,
     }
 }
 
@@ -392,34 +425,14 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                 // Where the walk ends, its stop, made there and nowhere else:
                 // the axis entered across the last of the near planes the
                 // ray reaches.
-                let moves = |d: f32| d != 0.0;
-                let (mut axis, mut best) = if moves(ray.direction[0]) {
-                    (0, x.0)
-                } else if moves(ray.direction[1]) {
-                    (1, y.0)
-                } else {
-                    (2, z.0)
-                };
-                if axis < 1 && moves(ray.direction[1]) && y.0 > best {
-                    (axis, best) = (1, y.0);
-                }
-                if axis < 2 && moves(ray.direction[2]) && z.0 > best {
-                    axis = 2;
-                }
                 let stop = Stop {
                     t: t0,
-                    axis,
+                    axis: crossing(ray.direction, [x.0, y.0, z.0], true),
                     node: n,
                     at,
                     block: i.block,
                 };
-                let line = Line {
-                    stack,
-                    zoom: n.zoom,
-                    corner: n.corner,
-                    live: at,
-                };
-                return (Met { ends, stop, visits }, line);
+                return (Met { ends, stop, visits }, line_at(stack, &n, at));
             }
         }
         // Every way on makes the next node: what is handed it is decided here,
@@ -451,12 +464,6 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
         } else {
             if t1 >= ray.reach {
                 // Gone on to its reach: no stop, which no asker reads.
-                let line = Line {
-                    stack,
-                    zoom: n.zoom,
-                    corner: n.corner,
-                    live: at,
-                };
                 let stop = Stop {
                     t: t1,
                     axis: 0,
@@ -464,41 +471,13 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                     at,
                     block: AIR,
                 };
-                return (Met { ends: Ends::On, stop, visits }, line);
+                return (Met { ends: Ends::On, stop, visits }, line_at(stack, &n, at));
             }
             // ADVANCE: the corner stepped on the axis the ray leaves by, the
             // first far plane it reaches.
-            let moves = |d: f32| d != 0.0;
-            let (mut e, mut best) = if moves(ray.direction[0]) {
-                (0, x.1)
-            } else if moves(ray.direction[1]) {
-                (1, y.1)
-            } else {
-                (2, z.1)
-            };
-            if e < 1 && moves(ray.direction[1]) && y.1 < best {
-                (e, best) = (1, y.1);
-            }
-            if e < 2 && moves(ray.direction[2]) && z.1 < best {
-                e = 2;
-            }
-            let pick = |a: [u32; 3]| {
-                if e == 0 {
-                    a[0]
-                } else if e == 1 {
-                    a[1]
-                } else {
-                    a[2]
-                }
-            };
-            let up = if e == 0 {
-                ray.direction[0] > 0.0
-            } else if e == 1 {
-                ray.direction[1] > 0.0
-            } else {
-                ray.direction[2] > 0.0
-            };
-            let old = pick(n.corner);
+            let e = crossing(ray.direction, [x.1, y.1, z.1], false);
+            let up = axis(ray.direction, e) > 0.0;
+            let old = axis(n.corner, e);
             let new = if up { old.wrapping_add(u).wrapping_add(1) } else { old.wrapping_sub(u).wrapping_sub(1) };
             // Never back: a walk started past its node's far plane (a beam's
             // t) keeps where it is.

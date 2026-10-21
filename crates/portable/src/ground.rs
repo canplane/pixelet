@@ -317,7 +317,7 @@ pub fn slab(shard: Shard, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far,
     let rock = face_height(near, blocks(near, bedrock(hi) as f32));
     let caved = hollow && !meets([UNBOUNDED[0], rock], (zoom, c[2]), near) && !walled(shard, near, (zoom, [c[0], c[1]]));
     let [mut under, mut over] = if caved { EMPTY } else { [UNBOUNDED[0], EMPTY[1]] };
-    let mut z = if far > zoom + 1 { far } else { zoom + 1 };
+    let mut z = coarsest(zoom, far);
     while z <= near {
         let top = face_height(z, blocks(z, hi as f32));
         over = if top > over { top } else { over };
@@ -328,6 +328,18 @@ pub fn slab(shard: Shard, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far,
         z += 1;
     }
     [under, over]
+}
+
+/// The coarsest zoom asked under a node at `zoom` coarser than asked, `far`
+/// the coarsest any ray asks within it: never its own, since it is coarser,
+/// so no coarser than its children's. Every source's bound over a node is
+/// read from here to the finest asked.
+pub fn coarsest(zoom: Zoom, far: Zoom) -> Zoom {
+    if far > zoom + 1 {
+        far
+    } else {
+        zoom + 1
+    }
 }
 
 /// Whether the leaf cells `[lo, hi)` along z meet the node `(zoom, z)`, read
@@ -435,7 +447,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
     // its own tile's, whose face, its own samples' bicubic, no other zoom's
     // bounds, above or below, so the bound is every one's joined, read once
     // a window (`Held::relief`).
-    let first = if far > zoom + 1 { far } else { zoom + 1 };
+    let first = coarsest(zoom, far);
     let cells = if block { [zoom, zoom] } else { [if first > near { near } else { first }, near] };
     let ([relief, ways], ok) = held.relief(place, cells, (zoom, c));
     // Not held at a zoom asked: a block is the lack; a coarser node is not

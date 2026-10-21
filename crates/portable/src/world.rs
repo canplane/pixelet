@@ -156,8 +156,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     // what the ground leaves air where they may; a split's slab is every
     // source's own joined: what is placed (`overwrite::slab`), the ground's
     // (`ground::slab`, unbounded where it lacks) and the ways' (`ways::slab`).
-    let coarsest = if far > zoom + 1 { far } else { zoom + 1 };
-    let ways = crate::ways::slab(bound, [coarsest, near]);
+    let ways = crate::ways::slab(bound, [ground::coarsest(zoom, far), near]);
     let fill = ground::meets(ways, (zoom, c[2]), near);
     let kind = if splits || i.kind == Kind::Block && fill { Kind::Split } else { i.kind };
     if kind != Kind::Split {
