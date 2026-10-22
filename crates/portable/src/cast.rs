@@ -479,8 +479,9 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
             let up = axis(ray.direction, e) > 0.0;
             let old = axis(n.corner, e);
             let new = if up { old.wrapping_add(u).wrapping_add(1) } else { old.wrapping_sub(u).wrapping_sub(1) };
-            // Never back: a walk started past its node's far plane (a beam's
-            // t) keeps where it is.
+            // Never back: the next node holds where the ray is on the integers,
+            // but near an edge another axis's plane, a float product, may
+            // fall a last bit before it.
             t = t.max(t1);
             if (up && old.wrapping_add(u) == u32::MAX) || (!up && old == 0) {
                 // Past a root: into the next, from its top, over which nothing

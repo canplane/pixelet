@@ -135,7 +135,7 @@ impl World<'_> {
     /// its own steps from (`line_walked`).
     pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2], lines: &mut Lines) -> Answer<In<[u32; 2]>> {
         let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);
-        let mut reading = Reading::new(self, at.node, lines);
+        let mut reading = Reading::new(self, lines);
         let i = world::node(&mut reading, &Windowed, &lanes, &pool(), &mut at.handed, at.node, asked, cuts);
         reading.answer(i.kind != Kind::Lacks, || i)
     }
@@ -146,17 +146,15 @@ impl World<'_> {
 /// and the first tile it found lacked or only a coarser one standing in for.
 struct Reading<'r, 'a> {
     world: &'r World<'a>,
-    node: Node<3>,
     lines: &'r mut Lines,
     lacked: Option<Tile>,
     coarser: Option<Tile>,
 }
 
 impl<'r, 'a> Reading<'r, 'a> {
-    fn new(world: &'r World<'a>, node: Node<3>, lines: &'r mut Lines) -> Reading<'r, 'a> {
+    fn new(world: &'r World<'a>, lines: &'r mut Lines) -> Reading<'r, 'a> {
         Reading {
             world,
-            node,
             lines,
             lacked: None,
             coarser: None,
@@ -203,8 +201,7 @@ impl ground::Held for Reading<'_, '_> {
     /// stepped from `place` (pxl-portable `Held::relief`); its line names the
     /// tile a lack or a coarser window stands for; where it lacks, `EMPTY`
     /// and false.
-    fn relief(&mut self, place: &mut Found, cells: [Zoom; 2], _: (Zoom, [i32; 3])) -> (ground::Bounds, bool) {
-        let (zoom, c) = self.node;
+    fn relief(&mut self, place: &mut Found, cells: [Zoom; 2], (zoom, c): (Zoom, [i32; 3])) -> (ground::Bounds, bool) {
         let line = self.world.terrain.line_walked(self.lines, (zoom, [c[0], c[1]]), cells[1]);
         match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]), cells)) {
             Some(r) => (r, true),
@@ -216,6 +213,6 @@ impl ground::Held for Reading<'_, '_> {
     /// the GPU reads it (pxl-portable `window::ground`), stepped from where
     /// its relief found its cells.
     fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell {
-        window::ground(&Windowed, (zoom, [c[0], c[1]]), place, zoom, [c[0], c[1]]).0
+        window::ground(&Windowed, place, zoom, [c[0], c[1]]).0
     }
 }

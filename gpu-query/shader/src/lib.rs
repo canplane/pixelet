@@ -226,7 +226,7 @@ impl<L: Looks> ground::Held for World<'_, L> {
     /// (pxl-portable `window::ground`), as the CPU reads it (pxl-kernel
     /// query/node.rs `Reading::cell`).
     fn cell(&mut self, place: Found, zoom: u32, c: [i32; 3]) -> ground::Cell {
-        window::ground(self, (zoom, [c[0], c[1]]), place, zoom, [c[0], c[1]]).0
+        window::ground(self, place, zoom, [c[0], c[1]]).0
     }
 }
 

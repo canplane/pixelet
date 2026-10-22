@@ -574,18 +574,12 @@ pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u3
 }
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
-/// the leaves a leaf's, stepped from `place`, with the area's edge laid on
-/// it off the cell as its fill laid it (`area::laid`); and where it is
-/// held. `place` is where the cells of `owner` were found: a column beside
-/// it is read off it where its cell lies in the square holding `owner`'s
-/// (`step`), and found anew past it.
-pub fn ground(w: &(impl Squares + crate::area::Area), owner: (Zoom, [i32; 2]), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
+/// the leaves a leaf's, stepped from `place`, where the column's own cells
+/// were found (`step`), with the area's edge laid on it off the cell as its
+/// fill laid it (`area::laid`); and where it is held.
+pub fn ground(w: &(impl Squares + crate::area::Area), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
     let read = held_to(zoom);
-    let g = cell_at(zoom, read, b);
-    let (q, o) = (square_of(g).0, square_of(cell_at(owner.0, read, owner.1)).0);
-    // Component-wise: a GPU has no array equality.
-    let place = if q[0] == o[0] && q[1] == o[1] { place } else { Found::NONE };
-    let (word, column, laid, f) = cell(w, place, read, g);
+    let (word, column, laid, f) = cell(w, place, read, cell_at(zoom, read, b));
     let cell = crate::ground::Cell {
         look: crate::area::laid(laid, zoom, b),
         top: crate::ground::blocks(zoom, column_top(column) as f32),
