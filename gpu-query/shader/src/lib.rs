@@ -29,7 +29,7 @@ use pxl_portable::scatter::{self, drawn, Grounds, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::Found;
 use pxl_portable::world::At;
-use pxl_portable::{at, ray, world, LEAF_CELL};
+use pxl_portable::{at, beam, ray, world, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::arch::IndexUnchecked;
 use spirv_std::memory::{Scope, Semantics};
@@ -315,17 +315,146 @@ fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
     )
 }
 
-/// The ray through the middle of drawn pixel `p` of the `size` the rays
-/// are, row 0 at the top, as the screen pass forms it from its own pixel:
-/// its tangents the screen's half-angles' scaled by where it lies.
-fn pixel_ray(eye: &Eye, p: UVec3, size: UVec3) -> cast::Ray {
+/// The tangents across and up of the middle of drawn pixel `p` of the
+/// `size` the rays are, row 0 at the top, as the screen pass forms its own
+/// pixel's: the screen's half-angles' scaled by where it lies.
+fn pixel_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
     let ndc_x = (p.x as f32 + 0.5) / size.x as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p.y as f32 + 0.5) / size.y as f32 * 2.0;
+    [ndc_x * eye.tan.x, ndc_y * eye.tan.y]
+}
+
+/// The eye's ray at the tangents `[tx, ty]`, reaching as far as the eye.
+fn eye_ray(eye: &Eye, [tx, ty]: [f32; 2]) -> cast::Ray {
     let v3 = |v: Vec4| [v.x, v.y, v.z];
-    cast::Ray::new(
-        cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), ndc_x * eye.tan.x, ndc_y * eye.tan.y),
-        eye.forward_far.w,
-    )
+    cast::Ray::new(cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), tx, ty), eye.forward_far.w)
+}
+
+/// The screen's half-angles' tangents, across and up.
+fn eye_tan(eye: &Eye) -> [f32; 2] {
+    [eye.tan.x, eye.tan.y]
+}
+
+/// The beam rays' lines (pxl-portable `beam::LINE_WORDS` a corner) as a
+/// walk resumes from one: what was handed each node of corner `base`'s line
+/// (`world::At::words`), its own at its zoom.
+#[derive(Clone, Copy)]
+struct Beamed<'a>(&'a [u32], u32);
+
+impl Beamed<'_> {
+    /// The node the corner's beam ray stopped at.
+    fn node(self) -> cast::Node {
+        let (w, k) = (self.0, self.1);
+        cast::Node {
+            corner: [at(w, k + beam::LINE_CORNER), at(w, k + beam::LINE_CORNER + 1), at(w, k + beam::LINE_CORNER + 2)],
+            zoom: at(w, k + beam::LINE_ZOOM),
+            roots: [at(w, k + beam::LINE_ROOTS) as i32, at(w, k + beam::LINE_ROOTS + 1) as i32, at(w, k + beam::LINE_ROOTS + 2) as i32],
+        }
+    }
+}
+
+impl cast::Over<At> for Beamed<'_> {
+    fn over(&self, zoom: u32) -> At {
+        let k = self.1 + beam::LINE_AT + world::AT_WORDS * zoom;
+        let w = self.0;
+        At::of_words([at(w, k), at(w, k + 1), at(w, k + 2), at(w, k + 3), at(w, k + 4)])
+    }
+}
+
+/// Each beam ray of the camera grid, a thread a corner (pxl-portable
+/// `beam::corners`): its walk from the world's root to the first block that
+/// fills or lacks, or the first split too narrow to share
+/// (`cast::Until::Beam`), and its line there, for the pixels about it.
+#[spirv(compute(threads(8, 8, 1)))]
+#[allow(clippy::too_many_arguments)]
+pub fn beam_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut [u32],
+) {
+    let window: &[IVec4] = window;
+    let (origin, detail) = eye_origin(eye);
+    let (tan, s) = (eye_tan(eye), beam::spacing(detail));
+    let corners = beam::corners(tan, s);
+    if id.x >= corners[0] || id.y >= corners[1] {
+        return;
+    }
+    let ray = eye_ray(eye, beam::corner(tan, s, [id.x, id.y]));
+    let mut world = World {
+        window,
+        ground,
+        looks: Unlooked(0),
+        shards,
+        overwrites,
+        eye,
+        pool: ways::tree::Read(pool),
+    };
+    let (met, line) = cast::rooted(&mut world, origin, &ray, detail, Until::Beam);
+    let base = (id.y * corners[0] + id.x) * beam::LINE_WORDS;
+    let n = line.node();
+    put(beams, base + beam::LINE_T, beam::handed(met.stop.t, s).to_bits());
+    put(beams, base + beam::LINE_ZOOM, n.zoom);
+    put(beams, base + beam::LINE_CORNER, n.corner[0]);
+    put(beams, base + beam::LINE_CORNER + 1, n.corner[1]);
+    put(beams, base + beam::LINE_CORNER + 2, n.corner[2]);
+    put(beams, base + beam::LINE_ROOTS, n.roots[0] as u32);
+    put(beams, base + beam::LINE_ROOTS + 1, n.roots[1] as u32);
+    put(beams, base + beam::LINE_ROOTS + 2, n.roots[2] as u32);
+    let mut z = 0;
+    while z <= n.zoom {
+        let w = cast::Over::over(&line, z).words();
+        let k = base + beam::LINE_AT + world::AT_WORDS * z;
+        put(beams, k, w[0]);
+        put(beams, k + 1, w[1]);
+        put(beams, k + 2, w[2]);
+        put(beams, k + 3, w[3]);
+        put(beams, k + 4, w[4]);
+        z += 1;
+    }
+}
+
+/// Where each cell's pixels start (pxl-portable `beam::CELL_WORDS`), a
+/// thread a cell, by its first corner: the least of the beam rays within
+/// `beam::window` cells of its corners, and that corner, whose line they
+/// resume from.
+#[spirv(compute(threads(8, 8, 1)))]
+pub fn cells_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] cells: &mut [u32],
+) {
+    let (_, detail) = eye_origin(eye);
+    let (tan, s) = (eye_tan(eye), beam::spacing(detail));
+    let (corners, k) = (beam::corners(tan, s), beam::window(tan, s) as i32);
+    if id.x + 1 >= corners[0] || id.y + 1 >= corners[1] {
+        return;
+    }
+    let held = |v: i32, n: u32| if v < 0 { 0 } else if v >= n as i32 { n - 1 } else { v as u32 };
+    let t_of = |c: u32| f32::from_bits(at(beams, c * beam::LINE_WORDS + beam::LINE_T));
+    let first = held(id.y as i32 - k, corners[1]) * corners[0] + held(id.x as i32 - k, corners[0]);
+    let (mut least, mut from) = (t_of(first), first);
+    let mut j = id.y as i32 - k;
+    while j <= id.y as i32 + 1 + k {
+        let mut i = id.x as i32 - k;
+        while i <= id.x as i32 + 1 + k {
+            let c = held(j, corners[1]) * corners[0] + held(i, corners[0]);
+            let t = t_of(c);
+            if t < least {
+                (least, from) = (t, c);
+            }
+            i += 1;
+        }
+        j += 1;
+    }
+    let cell = (id.y * corners[0] + id.x) * beam::CELL_WORDS;
+    put(cells, cell + beam::CELL_T, least.to_bits());
+    put(cells, cell + beam::CELL_CORNER, from);
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
@@ -343,13 +472,22 @@ pub fn cast_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] cells: &mut [u32],
 ) {
     let window: &[IVec4] = window;
     let size: UVec3 = rays.query_size();
     if id.x >= size.x || id.y >= size.y {
         return;
     }
-    let ((origin, detail), ray) = (eye_origin(eye), pixel_ray(eye, id, size));
+    let ((origin, detail), tan) = (eye_origin(eye), pixel_tan(eye, id, size));
+    let ray = eye_ray(eye, tan);
+    let (screen, s) = (eye_tan(eye), beam::spacing(detail));
+    let corners = beam::corners(screen, s);
+    let c = beam::cell(screen, s, tan);
+    let cell = (c[1] * corners[0] + c[0]) * beam::CELL_WORDS;
+    let t = f32::from_bits(at(cells, cell + beam::CELL_T));
+    let line = Beamed(beams, at(cells, cell + beam::CELL_CORNER) * beam::LINE_WORDS);
     let mut world = World {
         window,
         ground,
@@ -359,7 +497,12 @@ pub fn cast_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let met = cast::first(&mut world, origin, &ray, detail, Until::Fills);
+    // Resumed from the deepest node of its cell's line holding where it
+    // starts, or, where that lies in another root, from the root at it.
+    let (h, held) = line.node().over(cast::point_at(origin, &ray, t));
+    let h = cast::holding(origin, &ray, h, t);
+    let from = if held { (h, cast::Over::over(&line, h.zoom), t) } else { (cast::Node::ROOT, Query::root(&mut world, cast::Node::ROOT.index(origin)), t) };
+    let (met, _) = cast::walk(&mut world, origin, &ray, detail, Until::Fills, from, &line);
     let w = word(&ray, met, eye.origin.w != 0);
     let mut k = 0;
     while k < ray::WORDS {

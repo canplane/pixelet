@@ -7,7 +7,8 @@ The cast walks the pyramid once per camera-grid cell, and each drawn pixel
 finishes only the last few nodes of its own ray from where its cell's walk
 left off. The descent, which is the log n part of a ray, is paid per cell;
 what a pixel pays does not grow with the depth of the world. The image is
-the one a ray per pixel walked from the root would draw, pixel for pixel.
+the one a ray per pixel walked from the root would draw: ray for ray on the
+CPU, and on a GPU up to its f32's last bit (As built).
 
 ## The problem it answers
 
@@ -146,3 +147,42 @@ the screen pass that paints it.
   against the root walk's.
 - **Then the cost**, at more than one window size: whether a frame's cast
   still follows the pixels.
+
+## As built
+
+- **The stop's distance is the entry plane.** A walk's stop used to take
+  its distance from the walk's own running `t`, which the way the walk came
+  to the block decides; it is now the near plane the ray entered across, the
+  block's and the ray's alone, so a walk resumed at a start and one from the
+  root report one distance (`cast::walk`).
+- **A resumed walk starts in the node the ray is in.** The point a pixel
+  starts at is floored to a Q3 step, which can lie a step outside the node
+  the ray is in; the start climbs from the deepest node of the line holding
+  that point to the first whose planes hold the ray there
+  (`cast::holding`).
+
+Counted on the CPU over the r12 tiles at E120, the canvas 2528 × 2226 and
+τ 1 (`cache/beam-probe.scratch.rs`, kept aside), every ray of the frame
+walked both ways:
+
+|                                                |             |
+| ---------------------------------------------- | ----------- |
+| rays                                           | 5,627,328   |
+| rays whose end, distance, node or block differ | 0           |
+| beam rays (corners, the window 5 cells)        | 41,065      |
+| visits a beam ray                              | 41.38       |
+| visits a pixel, from the root                  | 33.16       |
+| visits a pixel, resumed                        | 10.24       |
+| visits in all, from the root                   | 186,599,875 |
+| visits in all, beams and resumed               | 59,317,697  |
+
+On the page (Chrome, dpr 2, the canvas 2528 × 2226, pinned `&at=`), this
+cast against the same tree casting every pixel from the root: 51 pixels of
+5,627,328 differ at E120, 56 at W120, 20 at E600, each alone, and where
+looked at, a tree's trunk standing where the ground meets it. The CPU's
+walks agree on every ray, so these are the GPU's f32, which is not strictly
+IEEE (pxl-portable `cast`, its module note): two ways to one block can part
+in the last bit where a ray grazes an edge. A comparison, not a proof.
+
+Not yet known: what a frame's cast costs, and how that follows the window,
+which is not resized (2026-10-17).

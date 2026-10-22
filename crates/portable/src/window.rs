@@ -503,6 +503,12 @@ impl Found {
     pub const fn here(self) -> bool {
         self.0 & FOUND_HERE != 0
     }
+    pub const fn word(self) -> u32 {
+        self.0
+    }
+    pub const fn of_word(w: u32) -> Found {
+        Found(w)
+    }
 }
 
 /// The cell at `from` column `c` of blocks at `zoom` lies in.

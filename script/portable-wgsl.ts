@@ -30,6 +30,8 @@ const root = dirname(dirname(fromFileUrl(import.meta.url)));
 const shaders = join(root, "crates/client/render/src/frame/shader");
 // Each entry and the file it is checked in as.
 const ENTRIES = [
+  ["beam_cs", "beam.gen.wgsl"],
+  ["cells_cs", "cells.gen.wgsl"],
   ["cast_cs", "cast.gen.wgsl"],
   ["joined_cs", "joined.gen.wgsl"],
   ["heights_cs", "heights.gen.wgsl"],

@@ -19,8 +19,8 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS, SHADER_JOINED, SHADER_WAYS, SHADER_WAYS_FREE,
-    SHADER_WAYS_FREED, SHADER_WAYS_TREE,
+    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_HEIGHTS, SHADER_JOINED, SHADER_WAYS,
+    SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
 use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
@@ -47,6 +47,7 @@ use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURN
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_STARS, ENV_SUN_LIGHT, LIGHT_COLOR};
 use crate::mesh::paint::ground::look_words;
+use pxl_portable::beam;
 use pxl_portable::eye;
 use pxl_portable::ray;
 use pxl_portable::scatter::GROUPS;
@@ -814,6 +815,16 @@ const STACK_WORDS: u32 = ways::tree::POOL_BLOCKS;
 /// What the GPU's cast reads; it writes the world surface's rays.
 struct CastBuffers {
     built: Built,
+    /// The camera grid's beam rays (`beam_cs`), where each cell's pixels
+    /// start off them (`cells_cs`), and their buffers, over the cast's
+    /// group (pxl-portable `beam`): a line a corner and a start a cell, for
+    /// `corners` of them, room for `beam_room` (doc/minutes/20261022-a-cell-casts-a-beam.md).
+    beam_built: Built,
+    cells_built: Built,
+    beams: u32,
+    cells: u32,
+    corners: [u32; 2],
+    beam_room: u32,
     /// The eye's windows folded over their squares (`joined_cs`), over its
     /// group, the window buffer's rows past their slot table
     /// (`window::JOINED_AT`), written where the windows' slots moved
@@ -829,7 +840,7 @@ struct CastBuffers {
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
     group: u32,
-    bound: [u32; 8],
+    bound: [u32; 10],
     eye: u32,
     window: u32,
     shards: u32,
@@ -935,7 +946,10 @@ const _: () = assert!(
 const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
 const _: () = assert!(same(compute::BOUND_GROUP, compute::WAYS_GROUP), "the levels' and the ways' passes share a group");
 const _: () = assert!(compute::WAYS_WORKGROUP[0] == pxl_portable::fill::SCAN_THREADS, "a square's columns are summed by one workgroup");
-const _: () = assert!(within(compute::JOINED_GROUP, compute::CAST_GROUP), "the fold binds the cast's group");
+const _: () = assert!(
+    within(compute::JOINED_GROUP, compute::CAST_GROUP) && within(compute::BEAM_GROUP, compute::CAST_GROUP) && within(compute::CELLS_GROUP, compute::CAST_GROUP),
+    "the fold and the beam bind the cast's group"
+);
 
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
 /// device's dynamic offset alignment.
@@ -1081,18 +1095,26 @@ impl RaysPass {
             return;
         }
         let built = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);
+        let beam_built = pipelines.build_compute(g, SHADER_BEAM, &compute::CAST_GROUP);
+        let cells_built = pipelines.build_compute(g, SHADER_CELLS, &compute::CAST_GROUP);
         let joined_built = pipelines.build_compute(g, SHADER_JOINED, &compute::CAST_GROUP);
         let buffer = |size: u32, usage: u32| g.buffer(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let c = CastBuffers {
             built,
+            beam_built,
+            cells_built,
+            beams: 0,
+            cells: 0,
+            corners: [0; 2],
+            beam_room: 0,
             joined_built,
             joined_read: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::MAP_READ | buffer_usage::COPY_DST),
             joined_mapping: Box::new(DONE),
             refold: false,
             joined_back: false,
             group: 0,
-            bound: [0; 8],
+            bound: [0; 10],
             eye: buffer(word_bytes(eye::WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
             window: buffer(word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize), storage | buffer_usage::COPY_SRC),
             shards: 0,
@@ -1163,6 +1185,23 @@ impl RaysPass {
             g.write_buffer(c.eye, 0, bytes(&cast.eye));
         }
         c.size = rays.1;
+        // The grid's corners as the eye lays them, and room for their lines
+        // and their cells' starts, made again only where they grow.
+        let word = |k: usize| f32::from_bits(cast.eye[k]);
+        let tan = [word(eye::TAN), word(eye::TAN + 1)];
+        let s = beam::spacing(pxl_portable::cast::Detail { tau: word(eye::TAU), range: [0; 2] });
+        c.corners = beam::corners(tan, s);
+        let held = c.corners[0] * c.corners[1];
+        if held > c.beam_room {
+            for b in [c.beams, c.cells] {
+                if b != 0 {
+                    release(b);
+                }
+            }
+            let bytes = |words: u32| word_bytes((held * words) as usize);
+            xpute_kit::ensure!(crate::frame::shader::floor::fits(bytes(beam::LINE_WORDS) as u64, true), ENOTRECOVERABLE, held);
+            (c.beams, c.cells, c.beam_room) = (g.buffer(bytes(beam::LINE_WORDS), buffer_usage::STORAGE), g.buffer(bytes(beam::CELL_WORDS), buffer_usage::STORAGE), held);
+        }
         let shards_grow = cast.shards.len() > c.shard_room;
         if shards_grow {
             if c.shards != 0 {
@@ -1205,7 +1244,7 @@ impl RaysPass {
             }
             c.overwrite_revision = Some(o.revision);
         }
-        let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, pool];
+        let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, pool, c.beams, c.cells];
         if bound != c.bound {
             release(c.group);
             c.group = cast_group(g, &c.built, bound);
@@ -1385,15 +1424,20 @@ impl RaysPass {
     fn dispatch(&self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
         let Some(c) = self.cast.as_ref() else { return };
         if self.kind == FrameKind::cast {
-            let run = |stamp: &mut Stamp, built: &Built, [x, y]: [u32; 2]| {
-                let pass = g.compute_pass(encoder, stamp.pass());
-                g.set_bind_group(pass, 0, c.group, &[]);
+            // The beam rays, a corner each; each cell's start off them; then
+            // the pixels, each from its cell's: one pass, a dispatch each,
+            // each reading what the one before wrote.
+            let pass = g.compute_pass(encoder, stamps[SPAN_CAST].pass());
+            g.set_bind_group(pass, 0, c.group, &[]);
+            for (built, [x, y], w) in [
+                (&c.beam_built, c.corners, compute::BEAM_WORKGROUP),
+                (&c.cells_built, c.corners, compute::CELLS_WORKGROUP),
+                (&c.built, c.size, compute::CAST_WORKGROUP),
+            ] {
                 g.set_pipeline(pass, built.pipeline);
-                g.dispatch(pass, x, y, 1);
-                g.end(pass);
-            };
-            let w = compute::CAST_WORKGROUP;
-            run(&mut stamps[SPAN_CAST], &c.built, [c.size[0].div_ceil(w[0]), c.size[1].div_ceil(w[1])]);
+                g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+            }
+            g.end(pass);
         }
         if self.grows() {
             let pass = g.compute_pass(encoder, stamps[SPAN_GROW].pass());
@@ -1427,9 +1471,9 @@ impl RaysPass {
 /// The cast's group 0 over `bound`: the eye, the window and its fold
 /// (`joined_cs` writes it, the cast reads it), the tiles' frames, the
 /// surface's rays, the squares' looks, the service area's index, the
-/// overwrites and the ways' pool.
-fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
-    let [eye, window, ground, rays, looks, shards, overwrites, pool] = bound;
+/// overwrites, the ways' pool, the beam rays' lines and the cells' starts.
+fn cast_group(g: &Gpu, built: &Built, bound: [u32; 10]) -> u32 {
+    let [eye, window, ground, rays, looks, shards, overwrites, pool, beams, cells] = bound;
     let entries = [
         buffer_entry(0, eye),
         buffer_entry(1, window),
@@ -1439,6 +1483,8 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
         buffer_entry(5, shards),
         buffer_entry(6, overwrites),
         buffer_entry(7, pool),
+        buffer_entry(8, beams),
+        buffer_entry(9, cells),
     ];
     g.bind_group(built.layouts[0], &entries)
 }

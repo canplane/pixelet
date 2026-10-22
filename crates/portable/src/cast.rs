@@ -58,12 +58,16 @@ impl Detail {
 }
 
 /// Which block a ray stops at: the first that fills, as an eye sees; or the
-/// first that does not, as what is climbed out of ends.
+/// first that does not, as what is climbed out of ends; or, for a beam ray of
+/// the camera grid, the first that fills or the first split too narrow to
+/// hold one of the grid's rays for certain (`beam::narrow`), every split
+/// entered whatever its slab (doc/minutes/20261022-a-cell-casts-a-beam.md).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Until {
     Fills,
     Air,
+    Beam,
 }
 
 /// A ray from an origin, a Q3 position: its direction, how far it reaches, in units, and
@@ -103,6 +107,28 @@ pub struct Node {
 }
 
 impl Node {
+    /// A root, the one holding the origin, whose corner is its own, 0.
+    pub const ROOT: Node = Node {
+        corner: [0; 3],
+        zoom: 0,
+        roots: [0; 3],
+    };
+
+    /// The deepest node over itself, or itself, that holds the point `p` on
+    /// the finest grid in the root `roots` from the origin's, and whether
+    /// there is one: none in another root.
+    pub fn over(&self, (p, roots): ([u32; 3], [i32; 3])) -> (Node, bool) {
+        let apart = (self.corner[0] ^ p[0]) | (self.corner[1] ^ p[1]) | (self.corner[2] ^ p[2]);
+        let zoom = self.zoom.min(apart.leading_zeros());
+        let keep = !under(zoom);
+        let node = Node {
+            corner: [self.corner[0] & keep, self.corner[1] & keep, self.corner[2] & keep],
+            zoom,
+            roots: self.roots,
+        };
+        (node, self.roots[0] == roots[0] && self.roots[1] == roots[1] && self.roots[2] == roots[2])
+    }
+
     /// The world's node it is from the origin `o`, X named as the world
     /// names it (pxl-spec space/coord/world.rs `wrap_index`).
     pub fn index(&self, o: [i32; 3]) -> [i32; 3] {
@@ -126,6 +152,29 @@ fn grid_of(o: [i32; 3]) -> [u32; 3] {
 /// side, 2^32, floored, so 0 or −1.
 fn roots_of(o: [i32; 3]) -> [i32; 3] {
     [o[0] >> 31, o[1] >> 31, o[2] >> 31]
+}
+
+/// Where `ray` from the origin `o` is at `t`: on the finest grid in its
+/// root, and that root from the origin's, floored to a Q3 step.
+pub fn point_at(o: [i32; 3], ray: &Ray, t: f32) -> ([u32; 3], [i32; 3]) {
+    let og = grid_of(o);
+    let on = |a: usize| {
+        let d = libm::floorf(crate::axis(ray.direction, a as u32) * t * (1 << FRAC_W) as f32) as i32;
+        let p = og[a].wrapping_add(d as u32);
+        (
+            p,
+            if d >= 0 && p < og[a] {
+                1
+            } else if d < 0 && p > og[a] {
+                -1
+            } else {
+                0
+            },
+        )
+    };
+    // [naga] each axis by itself, not a loop (caves.rs `node_seed`).
+    let (x, y, z) = (on(0), on(1), on(2));
+    ([x.0, y.0, z.0], [x.1, y.1, z.1])
 }
 
 /// Units from the origin, at `og` in its root, to `p` in the root `roots`
@@ -170,6 +219,51 @@ fn planes(d: f32, inv: f32, lo: f32, hi: f32, (t, reach): (f32, f32)) -> (f32, f
     }
 }
 
+/// A node's planes, in units from the origin at `og` on the finest grid, each
+/// a corner's (`units`): the far plane is the next node's corner, in the next
+/// root where the corner goes past its own.
+fn bounds(n: &Node, og: [u32; 3]) -> ([f32; 3], [f32; 3]) {
+    let u = under(n.zoom);
+    let far = |c: u32, og: u32, roots: i32| {
+        let last = c.wrapping_add(u);
+        units(last.wrapping_add(1), og, roots + (last == u32::MAX) as i32)
+    };
+    let lo = [units(n.corner[0], og[0], n.roots[0]), units(n.corner[1], og[1], n.roots[1]), units(n.corner[2], og[2], n.roots[2])];
+    let hi = [far(n.corner[0], og[0], n.roots[0]), far(n.corner[1], og[1], n.roots[1]), far(n.corner[2], og[2], n.roots[2])];
+    (lo, hi)
+}
+
+/// The ray's t at each axis's near and far planes of a node (`planes`),
+/// from `t`.
+fn spans(ray: &Ray, (lo, hi): ([f32; 3], [f32; 3]), t: f32) -> ((f32, f32), (f32, f32), (f32, f32)) {
+    (
+        planes(ray.direction[0], ray.inverse[0], lo[0], hi[0], (t, ray.reach)),
+        planes(ray.direction[1], ray.inverse[1], lo[1], hi[1], (t, ray.reach)),
+        planes(ray.direction[2], ray.inverse[2], lo[2], hi[2], (t, ray.reach)),
+    )
+}
+
+/// The node over `n`, or `n`, that holds where `ray` from `o` is at `t`, as
+/// the walk's own planes say (`bounds`, `spans`): what a walk resumed at `t`
+/// starts in, `n` found off a point the float put on the ray, which may lie
+/// a step outside the node the ray is in. The root where none over it does.
+pub fn holding(o: [i32; 3], ray: &Ray, mut n: Node, t: f32) -> Node {
+    let og = grid_of(o);
+    loop {
+        let (x, y, z) = spans(ray, bounds(&n, og), t);
+        let (t0, t1) = (t.max(x.0).max(y.0).max(z.0), ray.reach.min(x.1).min(y.1).min(z.1));
+        if (t0 <= t && t < t1) || n.zoom == 0 {
+            return n;
+        }
+        let keep = !under(n.zoom - 1);
+        n = Node {
+            corner: [n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep],
+            zoom: n.zoom - 1,
+            ..n
+        };
+    }
+}
+
 /// Whether the ray, at `t`, has crossed the mid plane `mid` units from the
 /// origin on an axis: the child it is in lies past that plane.
 fn past(d: f32, inv: f32, mid: f32, t: f32) -> bool {
@@ -203,6 +297,11 @@ fn crossing(d: [f32; 3], t: [f32; 3], last: bool) -> u32 {
         e = 2;
     }
     e
+}
+
+/// What a walk holds of its line where it ends at `n`, handed `live`.
+fn line_at<A: Copy>(stack: [A; DEPTH], n: &Node, live: A) -> Line<A> {
+    Line { stack, node: *n, live }
 }
 
 /// The world as a descent asks it, each node handed what its parent found
@@ -260,18 +359,24 @@ pub struct Met<A> {
 /// entry holds them.
 pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 
-/// The zooms a node is asked at by every ray from the origin in it, its
-/// planes `lo` and `hi` units from the origin on each axis: from its corner
-/// farthest from the origin to its point nearest it (`Detail::at`). A
+/// A node's farthest and nearest distances from the origin, squared, its
+/// planes `lo` and `hi` units from the origin on each axis: its corner
+/// farthest from the origin and its point nearest it.
+fn reach(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
+    let near = [lo[0].max(0.0).min(hi[0]), lo[1].max(0.0).min(hi[1]), lo[2].max(0.0).min(hi[2])];
+    let far = [(-lo[0]).max(hi[0]), (-lo[1]).max(hi[1]), (-lo[2]).max(hi[2])];
+    [squared(far), squared(near)]
+}
+
+/// The zooms a node is asked at by every ray from the origin in it, from
+/// its farthest corner to its nearest point (`reach`, `Detail::at`). A
 /// function of the node and the eye alone, so a node's answer is one for
 /// every ray through it; a ray asks within it no coarser than the farthest
 /// corner, so this only adds coarser zooms than its own, which splits more
 /// and stops on the same block (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md,
 /// "more cautiously").
-fn asked(detail: Detail, lo: [f32; 3], hi: [f32; 3]) -> [Zoom; 2] {
-    let near = [lo[0].max(0.0).min(hi[0]), lo[1].max(0.0).min(hi[1]), lo[2].max(0.0).min(hi[2])];
-    let far = [(-lo[0]).max(hi[0]), (-lo[1]).max(hi[1]), (-lo[2]).max(hi[2])];
-    [detail.at(squared(far)), detail.at(squared(near))]
+fn asked(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
+    [detail.at(far), detail.at(near)]
 }
 
 /// A vector's length squared.
@@ -280,10 +385,79 @@ fn squared(v: [f32; 3]) -> f32 {
 }
 
 /// The first block `ray` meets within its reach that `until` stops at, at
-/// the zoom `detail` asks where it meets it: down the pyramid from the
-/// world's root holding the origin, through the roots the ray crosses. What the ray starts inside is
-/// not met when it stops where a block fills, so an eye under the ground is
-/// not stopped where it stands.
+/// the zoom `detail` asks where it meets it, from the world's root holding
+/// the origin (`walk`).
+pub fn first<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until) -> Met<Q::At> {
+    rooted(q, o, ray, detail, until).0
+}
+
+/// `walk` from the world's root holding the origin, at 0.
+pub fn rooted<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until) -> Walked<Q> {
+    let at = q.root(Node::ROOT.index(o));
+    walk(q, o, ray, detail, until, (Node::ROOT, at, 0.0), &Rooted(at))
+}
+
+/// What was handed each node over where a walk starts, by its zoom: the
+/// line it resumes from (`Line`, or a GPU's copy of one), read only where
+/// the walk climbs over its start.
+pub trait Over<A: Copy> {
+    fn over(&self, zoom: Zoom) -> A;
+}
+
+/// Over a walk from the roots, nothing: no node is over a root, so it is
+/// never read.
+#[derive(Clone, Copy)]
+pub struct Rooted<A>(pub A);
+
+impl<A: Copy> Over<A> for Rooted<A> {
+    fn over(&self, _: Zoom) -> A {
+        self.0
+    }
+}
+
+/// What a walk holds of the line down to where it ended (`walk`): its
+/// stack, every zoom over the node it ended at, that node, and what was
+/// handed it (`live`).
+#[derive(Clone, Copy)]
+pub struct Line<A> {
+    stack: [A; DEPTH],
+    node: Node,
+    live: A,
+}
+
+impl<A: Copy> Over<A> for Line<A> {
+    /// What was handed the line's node at `zoom`: its own at its zoom, its
+    /// stack's over it.
+    fn over(&self, zoom: Zoom) -> A {
+        if zoom >= self.node.zoom {
+            self.live
+        } else {
+            self.stack[zoom as usize]
+        }
+    }
+}
+
+impl<A: Copy> Line<A> {
+    /// The node the walk ended at.
+    pub fn node(&self) -> Node {
+        self.node
+    }
+}
+
+/// How a walk of `Q` ended, and what it holds of its line there (`walk`).
+pub type Walked<Q> = (Met<<Q as Query>::At>, Line<<Q as Query>::At>);
+
+/// The first block `ray` meets within its reach that `until` stops at, at
+/// the zoom `detail` asks where it meets it, and what the walk holds of the
+/// line down to where it ended (`Line`), for what asks the nodes over its
+/// stop after it: down the pyramid from `from`, a node holding where the ray
+/// is at its `t`, what was handed it, and that `t` — the world's root holding
+/// the origin at 0 (`first`), or a node of the line a beam ray handed on
+/// (doc/minutes/20261022-a-cell-casts-a-beam.md) — what was handed each node
+/// over it read off `over` where the walk climbs past it, and through the
+/// roots the ray crosses. What the ray starts inside is not met when it
+/// stops where a block fills, so an eye under the ground is not stopped
+/// where it stands.
 ///
 /// The walk holds its node, each axis an integer in its root (`Node`), and
 /// where the ray is, `t`; the planes, the span and the axis entered across
@@ -297,50 +471,57 @@ fn squared(v: [f32; 3]) -> f32 {
 /// by (Amanatides & Woo 1987) and the walk is at the child of the nearest
 /// ancestor holding the next node, by the highest bit the step changed
 /// (POP), or past a root, in the next root, from its top. One loop.
-pub fn first<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until) -> Met<Q::At> {
+#[allow(clippy::too_many_arguments)]
+pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until, from: (Node, Q::At, f32), over: &impl Over<Q::At>) -> Walked<Q> {
     let (og, r0) = (grid_of(o), roots_of(o));
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
-    // over it (`stack`), and its visits. The node's planes and the world's
-    // node it is follow from its corner, and are worked out where they are
-    // read. It starts at the root holding the origin, its corner the root's
-    // own, 0.
-    let mut n = Node {
-        corner: [0; 3],
-        zoom: 0,
-        roots: [0; 3],
-    };
-    let mut at = q.root(n.index(o));
+    // over it (`stack`, its own from `low` down, `over`'s above), and its
+    // visits. The node's planes and the world's node it is follow from its
+    // corner, and are worked out where they are read.
+    let (mut n, mut at, mut t) = from;
     let mut stack = [at; DEPTH];
-    let (mut t, mut visits) = (0.0f32, 0);
+    let (mut low, mut visits) = (n.zoom, 0);
+    // The cell's angle a beam ray's narrow splits are measured by.
+    let s = crate::beam::spacing(detail);
     loop {
         let u = under(n.zoom);
-        // The node's planes, in units from the origin, each a corner's
-        // (`units`): the far plane is the next node's corner, in the next
-        // root where the corner goes past its own.
-        let far = |c: u32, og: u32, roots: i32| {
-            let last = c.wrapping_add(u);
-            units(last.wrapping_add(1), og, roots + (last == u32::MAX) as i32)
-        };
-        let lo = [units(n.corner[0], og[0], n.roots[0]), units(n.corner[1], og[1], n.roots[1]), units(n.corner[2], og[2], n.roots[2])];
-        let hi = [far(n.corner[0], og[0], n.roots[0]), far(n.corner[1], og[1], n.roots[1]), far(n.corner[2], og[2], n.roots[2])];
+        let (lo, hi) = bounds(&n, og);
         // The ray's span in it.
-        let (x, y, z) = (
-            planes(ray.direction[0], ray.inverse[0], lo[0], hi[0], (t, ray.reach)),
-            planes(ray.direction[1], ray.inverse[1], lo[1], hi[1], (t, ray.reach)),
-            planes(ray.direction[2], ray.inverse[2], lo[2], hi[2], (t, ray.reach)),
-        );
+        let (x, y, z) = spans(ray, (lo, hi), t);
         let (t0, t1) = (t.max(x.0).max(y.0).max(z.0), ray.reach.min(x.1).min(y.1).min(z.1));
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
         if t1 > t0 {
-            let i = q.node(&mut at, n.zoom, n.index(o), asked(detail, lo, hi), t0);
+            let reach = reach(lo, hi);
+            let i = q.node(&mut at, n.zoom, n.index(o), asked(detail, reach), t0);
             visits += 1;
             let inside = lo[0] <= 0.0 && 0.0 < hi[0] && lo[1] <= 0.0 && 0.0 < hi[1] && lo[2] <= 0.0 && 0.0 < hi[2];
+            let side = hi[0] - lo[0];
             let ends = match i.kind {
                 Kind::Lacks => Ends::Lacks,
-                Kind::Block if if until == Until::Fills { fills(i.block[0]) && !inside } else { !fills(i.block[0]) } => Ends::Stop,
+                Kind::Block
+                    if match until {
+                        Until::Fills => fills(i.block[0]) && !inside,
+                        Until::Air => !fills(i.block[0]),
+                        Until::Beam => fills(i.block[0]),
+                    } =>
+                {
+                    Ends::Stop
+                }
                 Kind::Block => Ends::On,
+                // A beam ray stops at a split it may not share with the
+                // grid's rays about it, and enters every other whatever its
+                // slab, as Laine and Karras's coarse pass turns contours off.
+                Kind::Split if until == Until::Beam => {
+                    let narrow = crate::beam::narrow(side * side, reach[0], s);
+                    into = !narrow;
+                    if narrow {
+                        Ends::Stop
+                    } else {
+                        Ends::On
+                    }
+                }
                 // ESVO's contour (Laine & Karras 2010): the ray's span in the
                 // node clipped to the slab along z its content lies in, its
                 // planes a face's own (`level`); a span wholly out of it, or
@@ -361,15 +542,18 @@ pub fn first<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until:
             if ends != Ends::On {
                 // Where the walk ends, its stop, made there and nowhere else:
                 // the axis entered across the last of the near planes the
-                // ray reaches.
+                // ray reaches, and that plane, the node's and the ray's alone
+                // whatever way the walk came to it, no nearer than the origin.
+                let near = [x.0, y.0, z.0];
+                let entered = crossing(ray.direction, near, true);
                 let stop = Stop {
-                    t: t0,
-                    axis: crossing(ray.direction, [x.0, y.0, z.0], true),
+                    t: axis(near, entered).max(0.0),
+                    axis: entered,
                     node: n,
                     at,
                     block: i.block,
                 };
-                return Met { ends, stop, visits };
+                return (Met { ends, stop, visits }, line_at(stack, &n, at));
             }
         }
         // Every way on makes the next node: what is handed it is decided here,
@@ -408,7 +592,7 @@ pub fn first<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until:
                     at,
                     block: AIR,
                 };
-                return Met { ends: Ends::On, stop, visits };
+                return (Met { ends: Ends::On, stop, visits }, line_at(stack, &n, at));
             }
             // ADVANCE: the corner stepped on the axis the ray leaves by, the
             // first far plane it reaches.
@@ -425,7 +609,7 @@ pub fn first<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until:
                 // is asked or held.
                 let by = if up { 1 } else { -1 };
                 n.roots = [n.roots[0] + (e == 0) as i32 * by, n.roots[1] + (e == 1) as i32 * by, n.roots[2] + (e == 2) as i32 * by];
-                (n.corner, n.zoom) = ([0; 3], 0);
+                (n.corner, n.zoom, low) = ([0; 3], 0, 0);
                 (at, true)
             } else {
                 // POP: the child, at `l`, of the nearest ancestor holding the next
@@ -436,9 +620,12 @@ pub fn first<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until:
                 let keep = !((1u32 << h) - 1);
                 n.corner = [n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep];
                 let l = FINEST_ZOOM - h;
-                // What was handed the parent, its stack entry.
+                // What was handed the parent: its stack entry, the walk's
+                // own from where it started down or `over`'s over it.
                 n.zoom = l;
-                (stack[(l - 1) as usize], false)
+                let parent = if l > low { stack[(l - 1) as usize] } else { over.over(l - 1) };
+                low = low.min(l);
+                (parent, false)
             }
         };
         let node = n.index(o);

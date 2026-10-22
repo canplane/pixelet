@@ -77,6 +77,16 @@ impl Cave {
     /// caves' first zoom under it draws.
     pub const ROOT: Cave = Cave { hollow: false, live: true };
 
+    /// As a word a GPU's storage holds, `bool` being none of its: hollow,
+    /// then live.
+    pub const fn word(self) -> u32 {
+        self.hollow as u32 | (self.live as u32) << 1
+    }
+
+    pub const fn of_word(w: u32) -> Cave {
+        Cave { hollow: w & 1 != 0, live: w & 2 != 0 }
+    }
+
     /// The child `c` at `zoom` of a cube whose caves are `self`, by its
     /// place among the eight (`slot`): its parent's draws, one hash, turn one
     /// of them or none, and say which draw again. Past the leaves a cube is

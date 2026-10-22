@@ -34,7 +34,27 @@ pub struct At {
     pub ways: overwrite::Held,
 }
 
+/// An `At`'s words, as a GPU holds one in storage (`At::words`).
+pub const AT_WORDS: u32 = 5;
+
 impl At {
+    /// Its words: its caves, what is placed, its shard, where its ground's
+    /// cells were held, its ways' cursor.
+    pub const fn words(&self) -> [u32; AT_WORDS as usize] {
+        [self.cave.word(), self.placed.word(), self.shard.word(), self.ground.word(), self.ways.word()]
+    }
+
+    /// `words`'s `At`.
+    pub const fn of_words(w: [u32; AT_WORDS as usize]) -> At {
+        At {
+            cave: Cave::of_word(w[0]),
+            placed: overwrite::Held::of_word(w[1]),
+            shard: Shard::of_word(w[2]),
+            ground: Found::of_word(w[3]),
+            ways: overwrite::Held::of_word(w[4]),
+        }
+    }
+
     /// The node `c` at `zoom` with nothing handed down, a descent's root
     /// among them: each source found down its line from the top, what is
     /// placed off `lanes`.

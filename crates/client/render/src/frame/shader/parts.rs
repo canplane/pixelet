@@ -76,7 +76,13 @@ pub const SHADER_ATMOS_FROXEL: u32 = 37;
 pub const SHADER_WAYS_FREE: u32 = 38;
 pub const SHADER_WAYS_TREE: u32 = 39;
 pub const SHADER_WAYS_FREED: u32 = 40;
-pub const SHADERS: u32 = 41;
+/// The camera grid's beam rays, a thread a corner, and where each cell's
+/// pixels start off them, generated with the cast from pxl-portable's
+/// `beam` (doc/minutes/20261022-a-cell-casts-a-beam.md): a compute entry
+/// each.
+pub const SHADER_BEAM: u32 = 41;
+pub const SHADER_CELLS: u32 = 42;
+pub const SHADERS: u32 = 43;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -325,4 +331,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["ways_tree.gen"],
     // SHADER_WAYS_FREED
     &["ways_freed.gen"],
+    // SHADER_BEAM
+    &["beam.gen"],
+    // SHADER_CELLS
+    &["cells.gen"],
 ];

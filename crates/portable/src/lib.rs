@@ -12,6 +12,7 @@
 
 pub mod answer;
 pub mod area;
+pub mod beam;
 pub mod cast;
 pub mod caves;
 #[path = "cube.spec.rs"]
