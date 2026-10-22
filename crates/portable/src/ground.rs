@@ -351,14 +351,6 @@ pub fn meets([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32), near: Zoom) -> bool {
     z << s < hi << e && (z + 1) << s > lo << e
 }
 
-/// Whether the block `z` of a cell at `cell` lies over the ground wherever
-/// in the column the faces under it reach at most `hi` leaf cells: `blocks`
-/// is monotone in a height, so a top rounded as the grid rounds it is at
-/// most `hi`'s.
-pub fn above(cell: Zoom, z: i32, hi: i32) -> bool {
-    z >= blocks(cell, hi as f32)
-}
-
 /// What two bounds hold together: the lower of their lowest, the higher of
 /// their highest (`EMPTY` joins as nothing).
 pub fn join(a: [i32; 2], b: [i32; 2]) -> [i32; 2] {
@@ -410,14 +402,13 @@ pub type Answer = In<u32>;
 /// `shard` is what is known of the area at the node, known a shard or
 /// finer: its asker's, which asks it once at its entry (`Shard::at`).
 /// `place` is where the cells of a node over it were held
-/// (`Held::relief`), `NONE` where none were, and becomes the node's. With
-/// the answer the cell its block was read off and where it was read, where
-/// the ways write over it are read (pxl-portable `world::node`); none
-/// (`Cell::NONE`, `Found::NONE`) where it read none, as over the ground
-/// where the ways miss the block (`ways::slab`); and the ways' bound read
-/// with its own (`Held::relief`), `EMPTY` where none was.
-pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, Found, [i32; 2]) {
-    let none = Found::NONE;
+/// (`Held::relief`), `NONE` where none were, and becomes the node's: where
+/// a block's column was read, which the ways write over it are read at
+/// (pxl-portable `world::node`), and `NONE` past the area, where nothing
+/// is read. With the answer the cell its block was read off, none
+/// (`Cell::NONE`) for a coarser node; and the ways' bound read with its own
+/// (`Held::relief`), `EMPTY` where none was.
+pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> (Answer, Cell, [i32; 2]) {
     let air = In { kind: Kind::Block, block: VOID };
     // A split no bound tells the slab of holds anything anywhere along z.
     let split = In {
@@ -436,11 +427,12 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
         } else {
             split
         };
-        return (answer, Cell::NONE, none, EMPTY);
+        *place = Found::NONE;
+        return (answer, Cell::NONE, EMPTY);
     }
     // Coarser than any tile, no one index holds it.
     if zoom < GROUND.top() {
-        return (split, Cell::NONE, none, EMPTY);
+        return (split, Cell::NONE, EMPTY);
     }
     // A block's cells are its zoom's. A coarser node's are every zoom's
     // asked within it, from the coarsest to `near`: each zoom's cells are
@@ -454,17 +446,12 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
     // known empty, so it is split, and a ray stops only at a block it meets
     // not held.
     if !ok {
-        return (if block { lacks } else { split }, Cell::NONE, none, EMPTY);
+        return (if block { lacks } else { split }, Cell::NONE, EMPTY);
     }
     if block {
-        // Its column read where the ground or the ways may fill it.
-        if above(zoom, c[2], relief[1]) && !meets(crate::ways::slab(ways, [zoom, zoom]), (zoom, c[2]), zoom) {
-            return (air, Cell::NONE, none, ways);
-        }
         let column = held.cell(*place, zoom, c);
         let block = column.block(zoom, c[2], || cave.hollow());
-        let answer = In { kind: Kind::Block, block };
-        return (answer, column, *place, ways);
+        return (In { kind: Kind::Block, block }, column, ways);
     }
     // Air where none of it lies where the ground may fill, else a split
     // and where along z.
@@ -478,7 +465,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
     } else {
         air
     };
-    (answer, Cell::NONE, none, ways)
+    (answer, Cell::NONE, ways)
 }
 
 /// A cell's ground, as a column reads it: its look (`unknown` for the

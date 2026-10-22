@@ -124,7 +124,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         (ground::EMPTY, false)
     };
     let before = *place;
-    let (i, cell, found, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
+    let (i, cell, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
     if place.from() != before.from() || place.slot() != before.slot() || place.here() != before.here() {
         *trail = if place.here() {
             overwrite::cursor(pool, squares.root(place.from(), place.slot()), zoom, c)
@@ -133,7 +133,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         };
     }
     // The ways where the block's column was read: their leaf over it.
-    let way = if block && i.kind == Kind::Block && found.here() {
+    let way = if block && i.kind == Kind::Block && place.here() {
         overwrite::value(pool, *trail, Cut::NONE, zoom, c)
     } else {
         VOID
