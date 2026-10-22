@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: 5c7902d9adc2b93d1a5e27e21a2bf719769c37d86afd626873fdf2d5d41a0aa0
+// Inputs: e735443cde9200ff8c095ba7935202f6e9c6593d32fb24dca15bcff5359dfeb6
 struct type_2 {
     member: array<u32>,
 }

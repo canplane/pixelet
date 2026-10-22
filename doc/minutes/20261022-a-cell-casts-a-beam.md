@@ -64,7 +64,7 @@ walks as an eye's ray does (`cast::walk`), with two differences:
 
 It hands on two things: how far it got, shortened by a margin (below), and
 its line, the stack of what was handed each node down to where it stopped
-(`cast::Line`).
+(`cast::Keep`).
 
 ## Why a pixel may start there
 
@@ -107,7 +107,7 @@ the axis it entered across are the root walk's.
 Starting a pixel from the root at its distance would still pay the
 descent. Instead it takes the line of the beam ray its start came from: the
 deepest node on that line that holds the pixel's starting point, what was
-handed it, and the stack over it (`cast::Line::held`). Each node's answer
+handed it, and the stack over it (`cast::Node::over`, `cast::Over`). Each node's answer
 is the node's and the eye's alone, and what is handed a node is its own
 whatever walk reached it, so the walk from there is the root walk's from its
 start on. It descends the few zooms between that node and the blocks, and

@@ -394,27 +394,38 @@ pub fn beam_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let (met, line) = cast::rooted(&mut world, origin, &ray, detail, Until::Beam);
     let base = (id.y * corners[0] + id.x) * beam::LINE_WORDS;
-    let n = line.node();
+    let met = cast::rooted(&mut world, origin, &ray, detail, Until::Beam, &mut Leaving(beams, base));
     put(beams, base + beam::LINE_T, beam::handed(met.stop.t, s).to_bits());
-    put(beams, base + beam::LINE_ZOOM, n.zoom);
-    put(beams, base + beam::LINE_CORNER, n.corner[0]);
-    put(beams, base + beam::LINE_CORNER + 1, n.corner[1]);
-    put(beams, base + beam::LINE_CORNER + 2, n.corner[2]);
-    put(beams, base + beam::LINE_ROOTS, n.roots[0] as u32);
-    put(beams, base + beam::LINE_ROOTS + 1, n.roots[1] as u32);
-    put(beams, base + beam::LINE_ROOTS + 2, n.roots[2] as u32);
-    let mut z = 0;
-    while z <= n.zoom {
-        let w = cast::Over::over(&line, z).words();
-        let k = base + beam::LINE_AT + world::AT_WORDS * z;
-        put(beams, k, w[0]);
-        put(beams, k + 1, w[1]);
-        put(beams, k + 2, w[2]);
-        put(beams, k + 3, w[3]);
-        put(beams, k + 4, w[4]);
-        z += 1;
+}
+
+/// A beam ray's line as it leaves it (pxl-portable `cast::Keep`), into the
+/// beam rays' words at `base` (`beam::LINE_WORDS` a corner), as `Beamed`
+/// reads it.
+struct Leaving<'a>(&'a mut [u32], u32);
+
+impl cast::Keep<At> for Leaving<'_> {
+    fn keep(&mut self, n: &cast::Node, live: At, stack: &[At; cast::DEPTH]) {
+        let base = self.1;
+        let beams = &mut *self.0;
+        put(beams, base + beam::LINE_ZOOM, n.zoom);
+        put(beams, base + beam::LINE_CORNER, n.corner[0]);
+        put(beams, base + beam::LINE_CORNER + 1, n.corner[1]);
+        put(beams, base + beam::LINE_CORNER + 2, n.corner[2]);
+        put(beams, base + beam::LINE_ROOTS, n.roots[0] as u32);
+        put(beams, base + beam::LINE_ROOTS + 1, n.roots[1] as u32);
+        put(beams, base + beam::LINE_ROOTS + 2, n.roots[2] as u32);
+        let mut z = 0;
+        while z <= n.zoom {
+            let w = if z == n.zoom { live } else { stack[z as usize] }.words();
+            let k = base + beam::LINE_AT + world::AT_WORDS * z;
+            put(beams, k, w[0]);
+            put(beams, k + 1, w[1]);
+            put(beams, k + 2, w[2]);
+            put(beams, k + 3, w[3]);
+            put(beams, k + 4, w[4]);
+            z += 1;
+        }
     }
 }
 
@@ -502,7 +513,7 @@ pub fn cast_cs(
     let (h, held) = line.node().over(cast::point_at(origin, &ray, t));
     let h = cast::holding(origin, &ray, h, t);
     let from = if held { (h, cast::Over::over(&line, h.zoom), t) } else { (cast::Node::ROOT, Query::root(&mut world, cast::Node::ROOT.index(origin)), t) };
-    let (met, _) = cast::walk(&mut world, origin, &ray, detail, Until::Fills, from, &line);
+    let met = cast::walk(&mut world, origin, &ray, detail, Until::Fills, from, &line, &mut ());
     let w = word(&ray, met, eye.origin.w != 0);
     let mut k = 0;
     while k < ray::WORDS {

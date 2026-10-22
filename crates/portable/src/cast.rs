@@ -299,11 +299,6 @@ fn crossing(d: [f32; 3], t: [f32; 3], last: bool) -> u32 {
     e
 }
 
-/// What a walk holds of its line where it ends at `n`, handed `live`.
-fn line_at<A: Copy>(stack: [A; DEPTH], n: &Node, live: A) -> Line<A> {
-    Line { stack, node: *n, live }
-}
-
 /// The world as a descent asks it, each node handed what its parent found
 /// (the `At`). The CPU and a GPU answer it from the same reading of the
 /// ground's windows, the caves, the ways' runs and what is placed; only the
@@ -388,17 +383,18 @@ fn squared(v: [f32; 3]) -> f32 {
 /// the zoom `detail` asks where it meets it, from the world's root holding
 /// the origin (`walk`).
 pub fn first<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until) -> Met<Q::At> {
-    rooted(q, o, ray, detail, until).0
+    rooted(q, o, ray, detail, until, &mut ())
 }
 
-/// `walk` from the world's root holding the origin, at 0.
-pub fn rooted<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until) -> Walked<Q> {
+/// `walk` from the world's root holding the origin, at 0, leaving its line
+/// to `keep`.
+pub fn rooted<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until, keep: &mut impl Keep<Q::At>) -> Met<Q::At> {
     let at = q.root(Node::ROOT.index(o));
-    walk(q, o, ray, detail, until, (Node::ROOT, at, 0.0), &Rooted(at))
+    walk(q, o, ray, detail, until, (Node::ROOT, at, 0.0), &Rooted(at), keep)
 }
 
 /// What was handed each node over where a walk starts, by its zoom: the
-/// line it resumes from (`Line`, or a GPU's copy of one), read only where
+/// line it resumes from, as a beam ray left it (`Keep`), read only where
 /// the walk climbs over its start.
 pub trait Over<A: Copy> {
     fn over(&self, zoom: Zoom) -> A;
@@ -415,42 +411,21 @@ impl<A: Copy> Over<A> for Rooted<A> {
     }
 }
 
-/// What a walk holds of the line down to where it ended (`walk`): its
-/// stack, every zoom over the node it ended at, that node, and what was
-/// handed it (`live`).
-#[derive(Clone, Copy)]
-pub struct Line<A> {
-    stack: [A; DEPTH],
-    node: Node,
-    live: A,
+/// What a walk leaves of its line where it ends (`walk`), for the walks
+/// that resume from it: the node it ended at, what was handed it (`live`),
+/// and what was handed every node over it, its stack by zoom. A walk none
+/// resumes from leaves nothing (`()`), and holds no copy of its stack.
+pub trait Keep<A: Copy> {
+    fn keep(&mut self, node: &Node, live: A, stack: &[A; DEPTH]);
 }
 
-impl<A: Copy> Over<A> for Line<A> {
-    /// What was handed the line's node at `zoom`: its own at its zoom, its
-    /// stack's over it.
-    fn over(&self, zoom: Zoom) -> A {
-        if zoom >= self.node.zoom {
-            self.live
-        } else {
-            self.stack[zoom as usize]
-        }
-    }
+impl<A: Copy> Keep<A> for () {
+    fn keep(&mut self, _: &Node, _: A, _: &[A; DEPTH]) {}
 }
-
-impl<A: Copy> Line<A> {
-    /// The node the walk ended at.
-    pub fn node(&self) -> Node {
-        self.node
-    }
-}
-
-/// How a walk of `Q` ended, and what it holds of its line there (`walk`).
-pub type Walked<Q> = (Met<<Q as Query>::At>, Line<<Q as Query>::At>);
 
 /// The first block `ray` meets within its reach that `until` stops at, at
-/// the zoom `detail` asks where it meets it, and what the walk holds of the
-/// line down to where it ended (`Line`), for what asks the nodes over its
-/// stop after it: down the pyramid from `from`, a node holding where the ray
+/// the zoom `detail` asks where it meets it, its line left where it ended
+/// to `keep`: down the pyramid from `from`, a node holding where the ray
 /// is at its `t`, what was handed it, and that `t` — the world's root holding
 /// the origin at 0 (`first`), or a node of the line a beam ray handed on
 /// (doc/minutes/20261022-a-cell-casts-a-beam.md) — what was handed each node
@@ -472,7 +447,7 @@ pub type Walked<Q> = (Met<<Q as Query>::At>, Line<<Q as Query>::At>);
 /// ancestor holding the next node, by the highest bit the step changed
 /// (POP), or past a root, in the next root, from its top. One loop.
 #[allow(clippy::too_many_arguments)]
-pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until, from: (Node, Q::At, f32), over: &impl Over<Q::At>) -> Walked<Q> {
+pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until, from: (Node, Q::At, f32), over: &impl Over<Q::At>, keep: &mut impl Keep<Q::At>) -> Met<Q::At> {
     let (og, r0) = (grid_of(o), roots_of(o));
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
@@ -553,7 +528,8 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                     at,
                     block: i.block,
                 };
-                return (Met { ends, stop, visits }, line_at(stack, &n, at));
+                keep.keep(&n, at, &stack);
+                return Met { ends, stop, visits };
             }
         }
         // Every way on makes the next node: what is handed it is decided here,
@@ -592,7 +568,8 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                     at,
                     block: AIR,
                 };
-                return (Met { ends: Ends::On, stop, visits }, line_at(stack, &n, at));
+                keep.keep(&n, at, &stack);
+                return Met { ends: Ends::On, stop, visits };
             }
             // ADVANCE: the corner stepped on the axis the ray leaves by, the
             // first far plane it reaches.
