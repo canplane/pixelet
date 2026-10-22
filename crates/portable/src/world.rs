@@ -104,28 +104,25 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     at.shard = at.shard.at(held, (zoom, [c[0], c[1]]));
     let (cave, put, shard) = (at.cave, at.placed, at.shard);
     let (place, trail) = (&mut at.ground, &mut at.ways);
-    let mut block = zoom >= near || zoom >= LEAF_CELL;
-    // Where what is placed splits the node, where along z it may fill.
-    let (mut placed, mut splits) = (ground::EMPTY, false);
-    // Asked of what is placed only where something is, or a preview cuts.
-    if put.holds() || carve.zoom != Cut::NONE.zoom {
-        block = zoom >= near || zoom >= LEAF_CELL && overwrite::whole(put, carve, zoom, c);
-        let over = overwrite::over(lanes, put, carve, hide, zoom, c, if block { zoom } else { near });
-        if over.says == BLOCK {
-            // The four looks a filling block is drawn by, a byte each
-            // (`ground::word`): only the ground's looks, a placed cube of a
-            // look, fit; one past a byte, an object's, is drawn by its value.
-            let four = if fills(over.block) { overwrite::looks(lanes, put, hide, zoom, c, over.block) } else { [0; 4] };
-            let bytes = four[0] < 256 && four[1] < 256 && four[2] < 256 && four[3] < 256;
-            return In {
-                kind: Kind::Block,
-                block: [PLACED_BLOCK | over.block, if bytes { ground::word(four) } else { 0 }],
-            };
-        }
-        if over.says == SPLIT {
-            (placed, splits) = (overwrite::slab(lanes, put, zoom, c), true);
-        }
+    let block = zoom >= near || zoom >= LEAF_CELL && overwrite::whole(put, carve, zoom, c);
+    let over = overwrite::over(lanes, put, carve, hide, zoom, c, if block { zoom } else { near });
+    if over.says == BLOCK {
+        // The four looks a filling block is drawn by, a byte each
+        // (`ground::word`): only the ground's looks, a placed cube of a
+        // look, fit; one past a byte, an object's, is drawn by its value.
+        let four = if fills(over.block) { overwrite::looks(lanes, put, hide, zoom, c, over.block) } else { [0; 4] };
+        let bytes = four[0] < 256 && four[1] < 256 && four[2] < 256 && four[3] < 256;
+        return In {
+            kind: Kind::Block,
+            block: [PLACED_BLOCK | over.block, if bytes { ground::word(four) } else { 0 }],
+        };
     }
+    // Where what is placed splits the node, where along z it may fill.
+    let (placed, splits) = if over.says == SPLIT {
+        (overwrite::slab(lanes, put, zoom, c), true)
+    } else {
+        (ground::EMPTY, false)
+    };
     let before = *place;
     let (i, cell, found, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
     if place.from() != before.from() || place.slot() != before.slot() || place.here() != before.here() {
