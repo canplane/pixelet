@@ -205,16 +205,6 @@ fn crossing(d: [f32; 3], t: [f32; 3], last: bool) -> u32 {
     e
 }
 
-/// What a walk holds of its line where it ends at `n`, handed `live`.
-fn line_at<A: Copy>(stack: [A; DEPTH], n: &Node, live: A) -> Line<A> {
-    Line {
-        stack,
-        zoom: n.zoom,
-        corner: n.corner,
-        live,
-    }
-}
-
 /// The world as a descent asks it, each node handed what its parent found
 /// (the `At`). The CPU and a GPU answer it from the same reading of the
 /// ground's windows, the caves, the ways' runs and what is placed; only the
@@ -290,61 +280,8 @@ fn squared(v: [f32; 3]) -> f32 {
 }
 
 /// The first block `ray` meets within its reach that `until` stops at, at
-/// the zoom `detail` asks where it meets it (`walk`).
-pub fn first<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until) -> Met<Q::At> {
-    walk(q, o, ray, detail, until).0
-}
-
-/// What a walk holds of the line down to where it ended (`walk`): its
-/// stack, every zoom over the node it ended at, that node's zoom and its
-/// corner, and what was handed it (`live`).
-#[derive(Clone, Copy)]
-pub struct Line<A> {
-    stack: [A; DEPTH],
-    zoom: Zoom,
-    corner: [u32; 3],
-    live: A,
-}
-
-impl<A: Copy> Line<A> {
-    /// No walk's: it holds no node, where a GPU holds no `Option` (`live`
-    /// never read).
-    pub const fn bare(live: A) -> Line<A> {
-        Line {
-            stack: [live; DEPTH],
-            zoom: DEPTH as Zoom,
-            corner: [0; 3],
-            live,
-        }
-    }
-
-    /// What the walk holds over the node `c` of `zoom` in the root it
-    /// ended in, at zoom `up` or the nearest over it: the node the walk ended
-    /// at where it holds `c`'s, else its stack's entry where `c` parts from
-    /// it; the zoom of the node it is and what was handed it; none where it
-    /// walked nothing (`bare`).
-    pub fn held(&self, up: Zoom, (zoom, c): (Zoom, [i32; 3])) -> (Zoom, A, bool) {
-        let at = |v: i32| if zoom == 0 { 0 } else { (v as u32) << (FINEST_ZOOM - zoom) };
-        let apart = (self.corner[0] ^ at(c[0])) | (self.corner[1] ^ at(c[1])) | (self.corner[2] ^ at(c[2]));
-        let on = up.min(apart.leading_zeros());
-        if self.zoom as usize == DEPTH {
-            (0, self.live, false)
-        } else if on >= self.zoom {
-            (self.zoom, self.live, true)
-        } else {
-            (on, self.stack[on as usize], true)
-        }
-    }
-}
-
-/// How a walk of `Q` ended, and what it holds of its line there (`walk`).
-pub type Walked<Q> = (Met<<Q as Query>::At>, Line<<Q as Query>::At>);
-
-/// The first block `ray` meets within its reach that `until` stops at, at
-/// the zoom `detail` asks where it meets it, and what the walk holds of the
-/// line down to where it ended (`Line`), for what asks the nodes over its
-/// stop after it: down the pyramid from the world's root holding the
-/// origin, through the roots the ray crosses. What the ray starts inside is
+/// the zoom `detail` asks where it meets it: down the pyramid from the
+/// world's root holding the origin, through the roots the ray crosses. What the ray starts inside is
 /// not met when it stops where a block fills, so an eye under the ground is
 /// not stopped where it stands.
 ///
@@ -360,7 +297,7 @@ pub type Walked<Q> = (Met<<Q as Query>::At>, Line<<Q as Query>::At>);
 /// by (Amanatides & Woo 1987) and the walk is at the child of the nearest
 /// ancestor holding the next node, by the highest bit the step changed
 /// (POP), or past a root, in the next root, from its top. One loop.
-pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until) -> Walked<Q> {
+pub fn first<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until) -> Met<Q::At> {
     let (og, r0) = (grid_of(o), roots_of(o));
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
@@ -432,7 +369,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                     at,
                     block: i.block,
                 };
-                return (Met { ends, stop, visits }, line_at(stack, &n, at));
+                return Met { ends, stop, visits };
             }
         }
         // Every way on makes the next node: what is handed it is decided here,
@@ -471,7 +408,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                     at,
                     block: AIR,
                 };
-                return (Met { ends: Ends::On, stop, visits }, line_at(stack, &n, at));
+                return Met { ends: Ends::On, stop, visits };
             }
             // ADVANCE: the corner stepped on the axis the ray leaves by, the
             // first far plane it reaches.

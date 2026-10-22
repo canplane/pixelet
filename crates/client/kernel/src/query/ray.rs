@@ -88,15 +88,6 @@ pub struct Hit {
 /// The world as the descent asks it, with what only the CPU carries along
 /// a ray: the decor struck, the first tile lacked, and whether any node was
 /// answered.
-/// A footing as `World::footing` answers it.
-pub(super) struct Footing {
-    pub block: u32,
-    pub top: i32,
-    /// What its walk holds of its line (pxl-portable `cast::Line`).
-    pub line: cast::Line<At>,
-    pub lines: Lines,
-}
-
 pub(super) struct Walker<'w, 'a> {
     world: &'w World<'a>,
     lack: Option<Tile>,
@@ -228,10 +219,8 @@ impl<'a> World<'a> {
     /// The footing down column `g` at `cell` (pxl-portable
     /// `scatter::footing`): the block met and the block over it, where the
     /// world holds the column as its tiles say; none where nothing fills or
-    /// a tile under the ray is lacked or only a coarser one stands in. With
-    /// what its walk holds of its line down to it, and the ground's lines it
-    /// read, which what is asked about it steps from (`Footing`).
-    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<Footing> {
+    /// a tile under the ray is lacked or only a coarser one stands in.
+    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<(u32, i32)> {
         let mut walker = Walker {
             world: self,
             lack: None,
@@ -239,13 +228,8 @@ impl<'a> World<'a> {
             strike: None,
             lines: Lines::default(),
         };
-        let ((block, top, met), line) = pxl_portable::scatter::footing(&mut walker, cell, g);
-        (met && walker.lack.is_none()).then_some(Footing {
-            block,
-            top,
-            line,
-            lines: walker.lines,
-        })
+        let (block, top, met) = pxl_portable::scatter::footing(&mut walker, cell, g);
+        (met && walker.lack.is_none()).then_some((block, top))
     }
 
     /// Where the descent from `q`, the ray's origin as a position names it,

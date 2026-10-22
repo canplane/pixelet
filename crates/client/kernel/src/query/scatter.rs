@@ -16,33 +16,20 @@ use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use super::node::At;
 use super::world::World;
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::store;
-use crate::layer::residency::Lines;
-use pxl_portable::cast;
 
 /// The world as decor's growth asks it on the CPU (pxl-portable
 /// `Grounds`): the world's one query and its ray, and what is placed.
 pub(super) struct Asked<'a, 'w> {
     world: &'a World<'w>,
     lanes: store::Lanes<'a>,
-    /// What the footing's walk holds of its line, none before one.
-    line: Option<cast::Line<At>>,
-    /// The ground's lines the footing's walk read, each block's stepped
-    /// from them.
-    lines: Lines,
 }
 
 impl<'a, 'w> Asked<'a, 'w> {
     pub(super) fn new(world: &'a World<'w>) -> Asked<'a, 'w> {
-        Asked {
-            world,
-            lanes: world.objects.lanes(),
-            line: None,
-            lines: Lines::default(),
-        }
+        Asked { world, lanes: world.objects.lanes() }
     }
 }
 
@@ -56,41 +43,17 @@ impl overwrite::Lanes for Asked<'_, '_> {
 }
 
 impl Grounds for Asked<'_, '_> {
-    type At = super::node::At;
-
     fn rows(&self) -> &[pxl_portable::decor::Decor] {
         &pxl_portable::decor::DECORS
     }
 
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
-        match self.world.footing(cell, g) {
-            Some(f) => {
-                (self.line, self.lines) = (Some(f.line), f.lines);
-                (f.block, f.top, true)
-            }
-            None => (0, 0, false),
-        }
+        self.world.footing(cell, g).map_or((0, 0, false), |(block, top)| (block, top, true))
     }
 
-    fn held(&mut self, up: Zoom, node: (Zoom, [i32; 3])) -> (Zoom, Self::At) {
-        match self.line.map(|l| l.held(up, node)) {
-            Some((zoom, at, true)) => (zoom, at),
-            _ => (0, self.root(node)),
-        }
-    }
-
-    fn root(&mut self, (zoom, c): (Zoom, [i32; 3])) -> Self::At {
-        self.world.start((0, c.map(|v| v >> zoom)))
-    }
-
-    /// Void where the world holds nothing there.
-    fn block(&mut self, at: &Self::At, from: Zoom, zoom: Zoom, c: [i32; 3]) -> u32 {
-        let mut at = *at;
-        for z in from + 1..=zoom {
-            let s = zoom - z;
-            at = self.world.child(&at, (0..3).map(|i| (((c[i] >> s) & 1) as usize) << i).sum());
-        }
-        self.world.drawn(&mut at, &mut self.lines).value().unwrap_or(u32::from(sentinel::void))
+    /// Void where the world holds nothing there (`World::block`).
+    fn block(&mut self, zoom: Zoom, c: [i32; 3]) -> u32 {
+        self.world.block((zoom, c)).value().unwrap_or(u32::from(sentinel::void))
     }
 }
 

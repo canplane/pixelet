@@ -14,17 +14,16 @@
 // warning, as `-D warnings` does every other.
 #![deny(warnings)]
 
-use pxl_portable::area::{Area, Shard};
+use pxl_portable::area::Area;
 use pxl_portable::answer::In;
 use pxl_portable::cast::{self, Detail, Ends, Met, Query, Until};
-use pxl_portable::caves::Cave;
 use pxl_portable::decor::{Decor, COUNTS};
 use pxl_portable::eye;
 use pxl_portable::fill::{self, column_of, level_of, put};
 use pxl_portable::ways::tree::{self, Pool};
 use pxl_portable::ground;
 use pxl_portable::lattice::GROUND;
-use pxl_portable::overwrite::{self, Cut, Held, Lanes};
+use pxl_portable::overwrite::{self, Cut, Lanes};
 use pxl_portable::ways;
 use pxl_portable::scatter::{self, drawn, Grounds, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT, SQUARE_WORDS};
@@ -257,9 +256,6 @@ impl<L: Looks> Query for World<'_, L> {
 struct Growing<'a> {
     world: World<'a, Unlooked>,
     rows: &'a [Decor],
-    /// What the last footing's walk holds of its line (pxl-portable
-    /// `cast::Line`), none before one.
-    line: cast::Line<At>,
 }
 
 impl Lanes for Growing<'_> {
@@ -271,11 +267,9 @@ impl Lanes for Growing<'_> {
     }
 }
 
-/// A cell off the window drawing it, and a block asked by the cast's
-/// descent, down from a node the footing's walk holds or from a root.
+/// The world's ray down a column and a block, each the cast's world's one
+/// query.
 impl Grounds for Growing<'_> {
-    type At = At;
-
     fn rows(&self) -> &[Decor] {
         self.rows
     }
@@ -283,32 +277,13 @@ impl Grounds for Growing<'_> {
     /// The world's ray down the column, the cast's own descent
     /// (pxl-portable `scatter::footing`).
     fn footing(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
-        let (footed, line) = scatter::footing(&mut self.world, cell, g);
-        self.line = line;
-        footed
+        scatter::footing(&mut self.world, cell, g)
     }
 
-    fn held(&mut self, up: u32, node: (u32, [i32; 3])) -> (u32, At) {
-        let (zoom, at, held) = self.line.held(up, node);
-        if held {
-            (zoom, at)
-        } else {
-            (0, self.root(node))
-        }
-    }
-
-    fn root(&mut self, (zoom, c): (u32, [i32; 3])) -> At {
-        Query::root(&mut self.world, [c[0] >> zoom, c[1] >> zoom, c[2] >> zoom])
-    }
-
-    fn block(&mut self, at: &At, from: u32, zoom: u32, c: [i32; 3]) -> u32 {
-        let mut at = *at;
-        let mut z = from;
-        while z < zoom {
-            z += 1;
-            let s = zoom - z;
-            at = self.world.child(&at, z, [c[0] >> s, c[1] >> s, c[2] >> s]);
-        }
+    /// Asked of the block with nothing handed down (pxl-portable
+    /// `world::At::of`).
+    fn block(&mut self, zoom: u32, c: [i32; 3]) -> u32 {
+        let mut at = At::of(&self.world, (zoom, c));
         self.world.node(&mut at, zoom, c, [zoom, zoom], 0.0).block[0]
     }
 }
@@ -1023,13 +998,6 @@ pub fn decor_cs(
             pool: ways::tree::Read(pool),
         },
         rows,
-        line: cast::Line::bare(At {
-            cave: Cave::ROOT,
-            placed: Held::NOTHING,
-            shard: Shard::UNKNOWN,
-            ground: Found::NONE,
-            ways: Held::NOTHING,
-        }),
     };
     let decor = &rows[kind as usize];
     let zoom = GROUND.read_zoom(cell);

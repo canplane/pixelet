@@ -427,40 +427,21 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
 }
 
 /// What growing decor asks of the world, as either side holds it: the
-/// ground's cells, the world's one query by a descent, what is placed
-/// (`Lanes`), and the catalog's rows where it reads them.
+/// world's one query, of the ray down a column and of a block, what is
+/// placed (`Lanes`), and the catalog's rows where it reads them.
 pub trait Grounds: Lanes {
-    /// What a descent hands a node: what its ancestors found.
-    type At: Copy;
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
     /// reads them from a buffer, never a table it copies.
     fn rows(&self) -> &[Decor];
     /// The footing down column `g` at `cell` (`footing`), as this side
     /// casts it: the value of the block it is, as `block` answers one, and
     /// the block over it; false where nothing fills there or the world
-    /// lacks it. What its walk holds of its line it keeps, for `held`.
+    /// lacks it.
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool);
-    /// The node over `node` at zoom `up`, or the nearest over it, that the
-    /// footing's walk holds (`cast::Line::held`), else the root holding
-    /// it: its zoom and what was handed it, where a descent to `node`
-    /// starts.
-    fn held(&mut self, up: Zoom, node: (Zoom, [i32; 3])) -> (Zoom, Self::At);
-    /// The root holding `node`, with what it holds handed: where a descent
-    /// to a node no walk went through starts.
-    fn root(&mut self, node: (Zoom, [i32; 3])) -> Self::At;
-    /// What is in the block `c` of `zoom` under the node of `from` that `at`
-    /// was handed for, a child a zoom down from it, the world's one query's
-    /// answer: `void`, the ground's value, or `PLACED_BLOCK` over what is
-    /// placed.
-    fn block(&mut self, at: &Self::At, from: Zoom, zoom: Zoom, c: [i32; 3]) -> u32;
-}
-
-/// Zooms over the blocks `[lo, hi]` of `zoom` to the node holding them
-/// all: the bits the corners differ in, on the axis they differ most; more
-/// than `zoom` where no node does, the world having a root a node of zoom 0.
-fn holding(lo: [i32; 3], hi: [i32; 3]) -> u32 {
-    let d = (lo[0] ^ hi[0]) | (lo[1] ^ hi[1]) | (lo[2] ^ hi[2]);
-    32 - (d as u32).leading_zeros()
+    /// What is in the block `c` of `zoom`, the world's one query's answer
+    /// asked of it with nothing handed down: `void`, the ground's value, or
+    /// `PLACED_BLOCK` over what is placed.
+    fn block(&mut self, zoom: Zoom, c: [i32; 3]) -> u32;
 }
 
 /// Decor the ground grows, where it stands: its variant, its heading in
@@ -478,16 +459,11 @@ pub struct Grown {
 /// stands (pxl-kernel query/support.rs `highest`), whichever layer holds
 /// it. Its block as `q` answers it, and the block over it, at `cell`;
 /// false where the ray meets none.
-pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footed<Q> {
+pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
     let (o, ray, detail) = footing_ray(cell, g);
-    footed(crate::cast::walk(q, o, &ray, detail, crate::cast::Until::Fills), o)
+    let met = crate::cast::first(q, o, &ray, detail, crate::cast::Until::Fills);
+    (met.stop.block[0], met.stop.node.index(o)[2] + 1, met.ends == crate::cast::Ends::Stop)
 }
-
-/// A footing as `footing` answers it: the block met, the block over it, and
-/// whether it met one; and what its walk holds of its line down to it
-/// (`cast::Line`), which the blocks asked about it are asked down from
-/// (`Grounds::held`).
-pub type Footed<Q> = ((u32, i32, bool), crate::cast::Line<<Q as crate::cast::Query>::At>);
 
 /// The footing's ray down column `g` at `cell`: from the top of the world
 /// over the column's middle, straight down, at `cell`'s blocks alone.
@@ -498,11 +474,6 @@ fn footing_ray(cell: Zoom, g: [i32; 2]) -> ([i32; 3], crate::cast::Ray, crate::c
     let o = [mid(g[0]), mid(g[1]), top];
     let ray = crate::cast::Ray::new([0.0, 0.0, -1.0], (1u32 << crate::HEIGHT_BITS) as f32);
     (o, ray, crate::cast::Detail { tau: 1.0, range: [cell, cell] })
-}
-
-/// A footing's walk as `footing` answers it (`Footed`).
-fn footed<A: Copy>((met, line): (crate::cast::Met<A>, crate::cast::Line<A>), o: [i32; 3]) -> ((u32, i32, bool), crate::cast::Line<A>) {
-    ((met.stop.block[0], met.stop.node.index(o)[2] + 1, met.ends == crate::cast::Ends::Stop), line)
 }
 
 /// The value a block answer holds, without whether what is placed holds it
@@ -537,9 +508,8 @@ pub fn grown(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate, box
 
 /// Whether `decor` standing as `g` grows at `cell`: every block of its box
 /// void and every one under its base a look it grows on, whichever layer
-/// holds it, each asked of the world's one query at `cell` down from the node
-/// holding them all, descended to once; air placed in it or under it no
-/// void; and no placed decor claims its room (`claimed`).
+/// holds it, each asked of the world's one query at `cell`; air placed in it
+/// or under it no void; and no placed decor claims its room (`claimed`).
 pub fn grows(q: &mut impl Grounds, decor: &Decor, cell: Zoom, g: &Grown) -> bool {
     asks(q, decor, cell, (false, 0), *g, true).1
 }
@@ -571,21 +541,9 @@ fn asks(q: &mut impl Grounds, decor: &Decor, cell: Zoom, (posed, seed): (bool, u
     }
     let foot = [g.at[0] >> s, g.at[1] >> s, (g.at[2] >> s) - 1];
     let (mut horizontal, mut vertical) = (0, 0);
-    // The vote's cells, about the footing: down from the node holding them
-    // all (`holding`), an ancestor of the footing's, as the footing's walk
-    // holds it (`Grounds::held`), for all of them.
-    let r = ALIGN_NEIGHBOR_RADIUS;
-    let (vlo, vhi) = ([foot[0] - r, foot[1] - r, foot[2]], [foot[0] + r, foot[1] + r, foot[2]]);
-    let vk = holding(vlo, vhi);
-    let vheld = vk <= cell;
-    // The node the blocks are asked down from, started where its holder
-    // changes and nowhere else.
-    let (mut from, mut start) = if vheld { q.held(cell - vk, (cell, foot)) } else { (0, q.root((cell, foot))) };
     // The box, laid out once the vote is in: its blocks, from the one under
-    // its base up, a column at a time; down from the node holding it all
-    // (`holding`), the footing's ancestor too, its base's least corner being
-    // the footing, or from its own root where none does.
-    let (mut lo, mut k, mut held, mut n) = ([0; 3], 0, false, [0; 3]);
+    // its base up, a column at a time.
+    let (mut lo, mut n) = ([0; 3], [0; 3]);
     let mut ask = 0;
     loop {
         let voted = ask >= voting;
@@ -602,8 +560,6 @@ fn asks(q: &mut impl Grounds, decor: &Decor, cell: Zoom, (posed, seed): (bool, u
             let [x0, y0, z] = g.at;
             lo = [x0 >> s, y0 >> s, (z - 1) >> s];
             let hi = [(x0 + w as i32 - 1) >> s, (y0 + d as i32 - 1) >> s, (z + h as i32 - 1) >> s];
-            k = holding(lo, hi);
-            held = k <= cell;
             n = [hi[0] - lo[0] + 1, hi[1] - lo[1] + 1, hi[2] - lo[2] + 1];
         }
         if voted && j >= n[0] * n[1] * n[2] {
@@ -620,13 +576,7 @@ fn asks(q: &mut impl Grounds, decor: &Decor, cell: Zoom, (posed, seed): (bool, u
                 [foot[0], foot[1] + along, foot[2]]
             }
         };
-        // The node asked from: the holder of the box or of the vote's cells,
-        // started once, the box's where the vote ends; else the block's own.
-        let fresh = if voted { !held || j == 0 } else { !vheld };
-        if fresh {
-            (from, start) = if voted && held { q.held(cell - k, (cell, lo)) } else { (0, q.root((cell, b))) };
-        }
-        let v = q.block(&start, from, cell, b);
+        let v = q.block(cell, b);
         if voted {
             let holds = if b[2] == lo[2] { decor.allows(value(v)) } else { v == sentinel::void as u32 };
             if !holds {
