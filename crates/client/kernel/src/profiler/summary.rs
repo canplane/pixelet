@@ -7,13 +7,12 @@
 use crate::billboard::sheet::billboard_sheet;
 use crate::control::camera::controller;
 use crate::io::failure::Outcome;
-use crate::io::request::credits;
 use crate::layer::Base as _;
 use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
-use crate::profiler::block::{FetchBlock, FramesBlock, OpenBlock, QualityBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::profiler::block::{FramesBlock, OpenBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::profiler::frame::FrameSample;
 use crate::profiler::frame::{long, missed, off_turn_ms, overran};
-use crate::profiler::frame::{FrameSample, GPU_SPANS};
 use crate::profiler::log::window_baseline;
 use crate::profiler::record::{fixed_lane, profiler_frames_since, profiler_open_interval, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
 use crate::profiler::spec::{LIMITS, SUMMARY};
@@ -95,7 +94,6 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
     // A span the frame did not run reads 0 and is left out.
     // The GPU's figures over the frames a read landed with, each read once.
     let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
-    let spans: [Spread; GPU_SPANS] = core::array::from_fn(|k| spread(scratch, read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0)));
     FramesBlock {
         present: 1.0,
         n,
@@ -113,8 +111,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         gpu_read: count(&|f| f.gpu.read != 0.0),
         gpu: spread(scratch, read().map(|f| pxl_render::gpu::renderer::gpu_ms(&f.gpu.spans))),
         phases_p95: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k])).p95),
-        gpu_spans_p95: spans.map(|s| s.p95),
-        gpu_spans_max: spans.map(|s| s.max),
+        gpu_spans_p95: core::array::from_fn(|k| spread(scratch, read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0)).p95),
         kinds: core::array::from_fn(|k| count(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| count(&|f| f.wake == k as f64)),
         heap_used_delta_bytes: last.heap.used_bytes - first.heap.used_bytes,
@@ -189,19 +186,8 @@ fn side(out: &mut [f64]) {
         &SheetBlock {
             size: sheet.size as f64,
             entries: sheet.entries as f64,
-            shelves: sheet.shelves as f64,
             used_px: sheet.used_px as f64,
             initial: pxl_render::gpu::sheet::shelf::INITIAL_SIZE as f64,
-        },
-    );
-
-    put(out, SUMMARY::fetch::AT, &FetchBlock { credits: credits() as f64 });
-
-    put(
-        out,
-        SUMMARY::quality::AT,
-        &QualityBlock {
-            frames_held: TerrainTile::residency().frames_used() as f64,
         },
     );
 

@@ -53,7 +53,7 @@ function windowSection(r: ProfilerReport): string[] {
   const f = r.frames;
   if (f === null) return ["frames n=0"];
   const last = f.last;
-  const spans = f.gpu_spans.filter((s) => s.max > 0).map((s) => `${s.name} ${n1(s.p95)}`).join("  ");
+  const spans = f.gpu_spans.filter((s) => s.p95 > 0).map((s) => `${s.name} ${n1(s.p95)}`).join("  ");
   const steps = r.steps.length === 0 ? "none" : [...r.steps].sort((a, b) => b.ms / b.count - a.ms / a.count).map((s) => `${s.phase}/${s.name} ${n1(s.ms / s.count)}/${n1(s.max_ms)}`).join("  ");
 
   const counted = (rows: { name: string; n: f64 }[]) => rows.filter((r) => r.n > 0).map((r) => `${r.name} ${r.n}`).join("  ") || "-";

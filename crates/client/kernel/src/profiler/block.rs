@@ -62,11 +62,9 @@ pub struct FramesBlock {
     pub tick: Spread,
     pub tasks: Spread,
     pub gpu: Spread,
-    /// The p95 alone of each phase, and of each span its p95 and its max:
-    /// what is read of them.
+    /// The p95 alone of each phase and each span: what is read of them.
     pub phases_p95: [f64; PHASES.len()],
     pub gpu_spans_p95: [f64; GPU_SPANS],
-    pub gpu_spans_max: [f64; GPU_SPANS],
     /// Frames by the renderer's FRAME_KINDS, and turns' last ask by WAKES.
     pub kinds: [f64; FRAME_KINDS.len()],
     pub wakes: [f64; WAKES.len()],
@@ -83,7 +81,7 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     long => SUMMARY::frames::long, turns => SUMMARY::frames::turns, gpu_read => SUMMARY::frames::gpu_read,
     interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy, off_turn => SUMMARY::frames::off_turn,
     tick => SUMMARY::frames::tick, tasks => SUMMARY::frames::tasks, gpu => SUMMARY::frames::gpu,
-    phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95, gpu_spans_max => SUMMARY::frames::gpu_spans_max,
+    phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95,
     kinds => SUMMARY::frames::kinds, wakes => SUMMARY::frames::wakes,
     heap_used_delta_bytes => SUMMARY::frames::heap_used_delta_bytes, census => SUMMARY::frames::census,
     last => SUMMARY::frames::last,
@@ -170,29 +168,13 @@ words!(CountersBlock, SUMMARY::counters::WORDS,
 pub struct SheetBlock {
     pub size: f64,
     pub entries: f64,
-    pub shelves: f64,
     pub used_px: f64,
     pub initial: f64,
 }
 
 words!(SheetBlock, SUMMARY::sheet::WORDS,
-    size => SUMMARY::sheet::size, entries => SUMMARY::sheet::entries,
-    shelves => SUMMARY::sheet::shelves, used_px => SUMMARY::sheet::used_px, initial => SUMMARY::sheet::initial,
+    size => SUMMARY::sheet::size, entries => SUMMARY::sheet::entries, used_px => SUMMARY::sheet::used_px, initial => SUMMARY::sheet::initial,
 );
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct FetchBlock {
-    pub credits: f64,
-}
-
-words!(FetchBlock, SUMMARY::fetch::WORDS, credits => SUMMARY::fetch::credits);
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct QualityBlock {
-    pub frames_held: f64,
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -220,8 +202,6 @@ words!(ViewBlock, SUMMARY::view::WORDS,
     hover_lon => SUMMARY::view::hover_lon, hover_lat => SUMMARY::view::hover_lat, hover_alt => SUMMARY::view::hover_alt,
     cell_want => SUMMARY::view::cell_want,
 );
-
-words!(QualityBlock, SUMMARY::quality::WORDS, frames_held => SUMMARY::quality::frames_held);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

@@ -77,7 +77,6 @@
     "heap_range_bytes": 1,
     "heap_largest_free_bytes": 1,
     "heap_refusals": 1,
-    "heap_releases": 1,
     "ring_cq_peak": 1,
     "ring_held_peak": 1,
     "waiting": "STREAM_NAMES",
@@ -143,8 +142,7 @@
       "heap_slot_bytes",
       "heap_range_bytes",
       "heap_largest_free_bytes",
-      "heap_refusals",
-      "heap_releases"
+      "heap_refusals"
     ],
     "ring": [
       "ring_cq_peak",
@@ -248,7 +246,6 @@
       "gpu": "SPREAD",
       "phases_p95": "PHASES",
       "gpu_spans_p95": "GPU_SPAN_NAMES",
-      "gpu_spans_max": "GPU_SPAN_NAMES",
       "kinds": "FRAME_KINDS",
       "wakes": "WAKES",
       "heap_used_delta_bytes": 1,
@@ -277,19 +274,12 @@
     "sheet": {
       "size": 1,
       "entries": 1,
-      "shelves": 1,
       "used_px": 1,
       "initial": 1
-    },
-    "fetch": {
-      "credits": 1
     },
     "steps": {
       "count": 1,
       "slots": "LIMITS.STEP_SLOTS * STEP"
-    },
-    "quality": {
-      "frames_held": 1
     },
     "view": {
       "$doc": [

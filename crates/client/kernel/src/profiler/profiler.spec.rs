@@ -98,13 +98,12 @@ pub mod FRAME {
     pub const heap_range_bytes: u32 = 98;
     pub const heap_largest_free_bytes: u32 = 99;
     pub const heap_refusals: u32 = 100;
-    pub const heap_releases: u32 = 101;
-    pub const ring_cq_peak: u32 = 102;
-    pub const ring_held_peak: u32 = 103;
-    pub const waiting: u32 = 104;
-    pub const out: u32 = 109;
-    pub const cap_terrain_refused: u32 = 114;
-    pub const WORDS: u32 = 115;
+    pub const ring_cq_peak: u32 = 101;
+    pub const ring_held_peak: u32 = 102;
+    pub const waiting: u32 = 103;
+    pub const out: u32 = 108;
+    pub const cap_terrain_refused: u32 = 113;
+    pub const WORDS: u32 = 114;
     pub const KEYS: &[&str] = &[
         "t",
         "interval_ms",
@@ -142,7 +141,6 @@ pub mod FRAME {
         "heap_range_bytes",
         "heap_largest_free_bytes",
         "heap_refusals",
-        "heap_releases",
         "ring_cq_peak",
         "ring_held_peak",
         "waiting",
@@ -170,7 +168,6 @@ pub mod FRAME_GROUPS {
         "heap_range_bytes",
         "heap_largest_free_bytes",
         "heap_refusals",
-        "heap_releases",
     ];
     pub const ring: &[&str] = &["ring_cq_peak", "ring_held_peak"];
     pub const KEYS: &[&str] = &["time", "turn", "frame", "gpu", "cap", "requests", "tiles", "device", "heap", "ring"];
@@ -217,9 +214,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 115;
-    pub const prev: u32 = 116;
-    pub const WORDS: u32 = 231;
+    pub const has_prev: u32 = 114;
+    pub const prev: u32 = 115;
+    pub const WORDS: u32 = 229;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -287,13 +284,12 @@ pub mod SUMMARY {
         pub const gpu: u32 = 24;
         pub const phases_p95: u32 = 27;
         pub const gpu_spans_p95: u32 = 32;
-        pub const gpu_spans_max: u32 = 42;
-        pub const kinds: u32 = 52;
-        pub const wakes: u32 = 60;
-        pub const heap_used_delta_bytes: u32 = 63;
-        pub const census: u32 = 64;
-        pub const last: u32 = 84;
-        pub const WORDS: u32 = 199;
+        pub const kinds: u32 = 42;
+        pub const wakes: u32 = 50;
+        pub const heap_used_delta_bytes: u32 = 53;
+        pub const census: u32 = 54;
+        pub const last: u32 = 74;
+        pub const WORDS: u32 = 188;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -313,7 +309,6 @@ pub mod SUMMARY {
             "gpu",
             "phases_p95",
             "gpu_spans_p95",
-            "gpu_spans_max",
             "kinds",
             "wakes",
             "heap_used_delta_bytes",
@@ -324,21 +319,21 @@ pub mod SUMMARY {
     }
     /// The interval in progress, which no frame turn has closed yet: its turns and their time, rise to fall. A settled view's turns are here, if any run.
     pub mod open {
-        pub const AT: u32 = 202;
+        pub const AT: u32 = 191;
         pub const turns: u32 = 0;
         pub const busy_ms: u32 = 1;
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "turns", "busy_ms", "WORDS"];
     }
     pub mod tasks {
-        pub const AT: u32 = 204;
+        pub const AT: u32 = 193;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     /// Counts since the window began, its baseline taken off: a settled view moves none of them.
     pub mod counters {
-        pub const AT: u32 = 324;
+        pub const AT: u32 = 313;
         pub const sheet_repacks: u32 = 0;
         pub const sheet_uploads: u32 = 1;
         pub const terrain_admitted: u32 = 2;
@@ -347,37 +342,24 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "sheet_repacks", "sheet_uploads", "terrain_admitted", "terrain_evicted", "WORDS"];
     }
     pub mod sheet {
-        pub const AT: u32 = 328;
+        pub const AT: u32 = 317;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
-        pub const shelves: u32 = 2;
-        pub const used_px: u32 = 3;
-        pub const initial: u32 = 4;
-        pub const WORDS: u32 = 5;
-        pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
-    }
-    pub mod fetch {
-        pub const AT: u32 = 333;
-        pub const credits: u32 = 0;
-        pub const WORDS: u32 = 1;
-        pub const KEYS: &[&str] = &["AT", "credits", "WORDS"];
+        pub const used_px: u32 = 2;
+        pub const initial: u32 = 3;
+        pub const WORDS: u32 = 4;
+        pub const KEYS: &[&str] = &["AT", "size", "entries", "used_px", "initial", "WORDS"];
     }
     pub mod steps {
-        pub const AT: u32 = 334;
+        pub const AT: u32 = 321;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
-    pub mod quality {
-        pub const AT: u32 = 495;
-        pub const frames_held: u32 = 0;
-        pub const WORDS: u32 = 1;
-        pub const KEYS: &[&str] = &["AT", "frames_held", "WORDS"];
-    }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at.
     pub mod view {
-        pub const AT: u32 = 496;
+        pub const AT: u32 = 482;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -412,8 +394,8 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 510;
-    pub const KEYS: &[&str] = &["rec", "frames", "open", "tasks", "counters", "sheet", "fetch", "steps", "quality", "view", "WORDS"];
+    pub const WORDS: u32 = 496;
+    pub const KEYS: &[&str] = &["rec", "frames", "open", "tasks", "counters", "sheet", "steps", "view", "WORDS"];
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words.

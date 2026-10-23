@@ -83,9 +83,9 @@ export interface FrameSummary {
   tick: Spread;
   tasks: Spread;
   gpu: Spread;
-  /** Each phase's p95, and each span's p95 and max: what is read of them. */
+  /** Each phase's and each span's p95: what is read of them. */
   phases: { name: string; p95: f64 }[];
-  gpu_spans: { name: string; p95: f64; max: f64 }[];
+  gpu_spans: { name: string; p95: f64 }[];
   /** Frames by the renderer's kind, and the turns' last ask by wake. */
   kinds: { name: string; n: f64 }[];
   wakes: { name: string; n: f64 }[];
@@ -124,7 +124,7 @@ export interface ProfilerReport {
   t: f64;
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
-  sections: Record<"open" | "counters" | "sheet" | "fetch" | "quality" | "view", Record<string, f64>>;
+  sections: Record<"open" | "counters" | "sheet" | "view", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   tasks: TaskSummary[];
   recent: TaskRecord[];
@@ -154,7 +154,7 @@ function frameSummary(s: F64Array): FrameSummary | null {
     tasks: spreadAt(s, a + F.tasks),
     gpu: spreadAt(s, a + F.gpu),
     phases: PHASES.map((name, k) => ({ name, p95: s[a + F.phases_p95 + k] })),
-    gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, p95: s[a + F.gpu_spans_p95 + k], max: s[a + F.gpu_spans_max + k] })),
+    gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, p95: s[a + F.gpu_spans_p95 + k] })),
     kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
     wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
     heap_used_delta_bytes: s[a + F.heap_used_delta_bytes],
@@ -226,8 +226,7 @@ export interface Gauge {
   open: { turns: f64; busy_ms: f64 };
   tasks: TaskSummary[];
   counters: Record<string, f64>;
-  sheet: { size: u32; entries: u32; shelves: u32; used_px: u32; initial: u32 };
-  quality: Record<string, f64>;
+  sheet: { size: u32; entries: u32; used_px: u32; initial: u32 };
   view: Record<string, f64>;
   longs: LongFrame[];
 }
@@ -252,7 +251,6 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
     tasks: taskSummaries(s),
     counters: section(s, SUMMARY.counters),
     sheet: section(s, SUMMARY.sheet) as Gauge["sheet"],
-    quality: section(s, SUMMARY.quality),
     view: section(s, SUMMARY.view),
     longs: longFramesSince(performance.now() - windowMs),
   };
@@ -281,8 +279,6 @@ export function profilerReportRead(): ProfilerReport {
       open: section(s, SUMMARY.open),
       counters: section(s, SUMMARY.counters),
       sheet: section(s, SUMMARY.sheet),
-      fetch: section(s, SUMMARY.fetch),
-      quality: section(s, SUMMARY.quality),
       view: section(s, SUMMARY.view),
     },
     steps,
