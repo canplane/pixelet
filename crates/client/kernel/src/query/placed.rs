@@ -16,6 +16,21 @@ impl<'a> World<'a> {
         self.objects.read((at.zoom(), at.at())).placed().filter(|e| !object_value_is_air(e.state))
     }
 
+    /// Everything placed whose cube meets `space`, air left out, X in
+    /// `space`'s frame.
+    pub fn placed_in(&self, space: &Aabb, visit: &mut dyn FnMut(&Entry)) {
+        self.objects.entries_in(space, &mut |e| {
+            if !object_value_is_air(e.state) {
+                visit(e);
+            }
+        });
+    }
+
+    /// A marker's words, as put up; none for anything else.
+    pub fn words(&self, e: &Entry) -> Option<&'a str> {
+        self.objects.words(e)
+    }
+
     /// What is placed sharing room with `space`, air left out, that `which` takes.
     pub fn placed_sharing(&self, space: &Aabb, which: impl Fn(&Entry) -> bool) -> Option<Entry> {
         let mut met = None;

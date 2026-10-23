@@ -20,8 +20,6 @@ use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_bil
 use crate::chunk::Chunk;
 use crate::layer::object::preview::draft;
 use crate::layer::place::carto_zoom;
-use crate::layer::residency::Lines;
-use crate::layer::Base;
 use crate::query::{at_zoom, Ray, World};
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
@@ -171,14 +169,13 @@ fn markers(chunk: Chunk, found: &mut Vec<Shown>) {
         return;
     }
     let region = chunk.region();
-    let objects = crate::layer::object::store::objects();
-    let cells = objects.read(chunk.node());
+    let world = World::now();
     let from = found.len();
-    cells.entries(&mut |e| {
+    world.placed_in(&region, &mut |e| {
         if !object_value_is_marker(e.state) {
             return;
         }
-        let (label, stands, at) = marker_at(e.id(), objects.words(e).unwrap_or_default());
+        let (label, stands, at) = marker_at(e.id(), world.words(e).unwrap_or_default());
         if (0..3).all(|k| (region.min[k]..region.max[k]).contains(&at[k])) {
             let cell = marker_cell_of(cell_zoom, e.id());
             found.push(Shown {
@@ -486,38 +483,31 @@ fn places_in(chunk: Chunk, found: &mut Vec<Shown>) {
     let tiles = (y0..y0 + n).filter(|y| tile_rows(t).contains(y)).flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y])));
     let (h0, h1) = chunk.z_range();
     let detail = GROUND.read_zoom(chunk.cell_zoom());
-    let held = PlaceTile::residency();
-    // The chunk's tiles are siblings: their lines step from one another's.
-    let mut lines = Lines::default();
-    for tile in tiles {
-        let Some(src) = held.seek(&mut lines, tile).source else { continue };
-        let Some(places) = held.get(src) else { continue };
-        for (place, h) in places.iter() {
-            if h.from as i32 > zoom {
-                continue;
-            }
-            let ground = stands(src, h.at);
-            if Chunk::holding(chunk.zoom(), &ground.mid()).column() != chunk.named().column() {
-                continue;
-            }
-            // Counted only by the chunk the top of what stands there is in, so a
-            // column's several chunks do not repeat it.
-            let Some(top) = surface(&ground.mid(), (REACH.max[2], REACH.min[2]), detail) else { continue };
-            if top - 1.0 < h0 || top - 1.0 >= h1 {
-                continue;
-            }
-            found.push(Shown {
-                chunk,
-                label: Label::Place {
-                    tile: src,
-                    place,
-                    look: Look::default(),
-                    wrap: 0,
-                },
-                stands: ground.center(top),
-                cell_zoom: chunk.cell_zoom(),
-                crowd: None,
-            });
+    World::now().places_in(tiles, &mut |src, place, h| {
+        if h.from as i32 > zoom {
+            return;
         }
-    }
+        let ground = stands(src, h.at);
+        if Chunk::holding(chunk.zoom(), &ground.mid()).column() != chunk.named().column() {
+            return;
+        }
+        // Counted only by the chunk the top of what stands there is in, so a
+        // column's several chunks do not repeat it.
+        let Some(top) = surface(&ground.mid(), (REACH.max[2], REACH.min[2]), detail) else { return };
+        if top - 1.0 < h0 || top - 1.0 >= h1 {
+            return;
+        }
+        found.push(Shown {
+            chunk,
+            label: Label::Place {
+                tile: src,
+                place,
+                look: Look::default(),
+                wrap: 0,
+            },
+            stands: ground.center(top),
+            cell_zoom: chunk.cell_zoom(),
+            crowd: None,
+        });
+    });
 }

@@ -226,7 +226,7 @@ pub fn visible_step(ctx: &mut TickContext) {
     {
         let k = kernel();
         let edits = crate::layer::object::preview::current();
-        crate::scene::decor::drawn::step(crate::layer::object::store::objects(), frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
+        crate::scene::decor::drawn::step(frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
         crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
     }
     crate::scene::place::step(ctx, &frame);

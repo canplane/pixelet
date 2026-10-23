@@ -16,6 +16,7 @@ pub mod changed;
 mod decor;
 mod limit;
 mod node;
+mod place;
 mod placed;
 mod ray;
 mod scatter;

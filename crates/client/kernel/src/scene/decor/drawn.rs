@@ -19,7 +19,7 @@ use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
 use crate::layer::object::meta::user_decor_pick;
-use crate::layer::object::store::Store;
+use crate::query::World;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::units_per_px_at;
 use pxl_spec::bake::constant::EntryAt;
@@ -117,7 +117,7 @@ fn wrapped(x: i32) -> u32 {
 /// This frame's hand-over for an eye at `eye`: placed decor out to where the
 /// largest is a sprite's worth, less the placed decor `hide` names, and the
 /// ground's decor at `scattered` left out.
-pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
+pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     let h = handed();
     h.on = settings_store().decor;
     if !h.on {
@@ -159,7 +159,7 @@ pub fn step(store: &Store, eye: V3, hide: Option<EntryAt>, scattered: Option<[i3
     h.walked = Some(walked);
     h.placed.clear();
     let placed = &mut h.placed;
-    store.entries_in(&around, &mut |e| {
+    World::now().placed_in(&around, &mut |e| {
         let (k, decor) = row_of(&pxl_spec_core::decor::DECORS, e.state);
         if !decor || hide == Some(e.id()) {
             return;
