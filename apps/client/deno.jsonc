@@ -1,10 +1,10 @@
 {
-  // @pxl/client: the shell and the kernel's host, the same files on a page
-  // and on a device. apps/web and apps/native each bundle them over its own
-  // `@platform/`.
+  // @pxl/client: the shell and its end of the kernel, the same files on a
+  // page and on a device. Each app is a bracket: it bundles this and hands
+  // in what its place gives (src/bracket.tsx).
 
   // no-window/no-window-prefix assume runtime-portable code; the shell reads
-  // `window` where it is the page's, behind `@platform/` or a guard.
+  // `window` only where a file is the page's own or behind a guard.
   "lint": {
     "rules": { "exclude": ["no-window", "no-window-prefix"] }
   },
@@ -33,9 +33,7 @@
 
   "imports": {
     "@/": "./src/",
-    // A type-check reads one platform, and it is the page's: each app
-    // bundles its own (apps/web/vite.config.ts, apps/native/metro.config.ts),
-    // and apps/native/src/platform/conform.ts holds the device's to its names.
-    "@platform/": "../web/src/platform/web/"
+
+    "@std/assert": "jsr:@std/assert@^1"
   }
 }

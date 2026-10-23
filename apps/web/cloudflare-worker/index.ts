@@ -63,7 +63,7 @@ export type Env = {
 };
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_OBJECT, TILE_PREFIX, TILE_SPHERE } from "./route.spec.ts";
-import { BASE_LAYERS } from "../../client/src/config/published.spec.ts";
+import { BASE_LAYERS } from "@pxl/client/config/published.spec.ts";
 
 /**
  * Object keys this Worker is willing to ask R2 for, by shape alone, so what

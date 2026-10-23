@@ -1,8 +1,7 @@
 {
   // What the device's own files are type-checked against (root deno.jsonc's
-  // check:native): the shell they sit beside, and `@platform/` as this app's
-  // own. Metro resolves the tree through these same maps (metro.config.ts,
-  // apps/client/script/import-map.ts); its npm packages are package.json's.
+  // check:native): its own `@/`, and the client as `@pxl/client/`. Metro bundles the app and reads none of this (metro.config.ts); its
+  // npm packages are package.json's.
   "compilerOptions": {
     "lib": ["esnext", "dom", "dom.iterable", "deno.ns"],
     "jsx": "react-jsx",
@@ -11,7 +10,7 @@
   },
 
   "imports": {
-    "@/": "../client/src/",
-    "@platform/": "./src/platform/"
+    "@/": "./src/",
+    "@pxl/client/": "../client/src/"
   }
 }

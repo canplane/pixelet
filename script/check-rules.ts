@@ -77,6 +77,13 @@ for (const f of files) {
   for (let i = 0; i < parts.length; i++) suffixes.add(parts.slice(i).join("/"));
 }
 
+/** Where `@/` points from a file: its own package's source, or, cited from
+ * outside the apps, any of theirs. */
+function ownSources(from: string): string[] {
+  const app = from.match(/^apps\/([\w-]+)\//);
+  return app ? [`apps/${app[1]}/src/`] : ["apps/client/src/", "apps/web/src/", "apps/native/src/"];
+}
+
 function exists(path: string, from: string): boolean {
   if (path.startsWith("../")) return suffixes.has(normalize(join(dirname(from), path)));
   if (path.startsWith("./")) return suffixes.has(normalize(join(dirname(from), path))) || suffixes.has(path.slice(2));
@@ -87,7 +94,7 @@ function exists(path: string, from: string): boolean {
     const [app, ...within] = rest;
     return suffixes.has(`apps/${app}/src/${within.join("/")}`) || suffixes.has(`apps/${app}/${within.join("/")}`);
   }
-  if (head === "@") return suffixes.has(`apps/client/src/${tail}`);
+  if (head === "@") return ownSources(from).some((src) => suffixes.has(`${src}${tail}`));
   if (head === "@xpute") return suffixes.has(`xpute/ts/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir && (suffixes.has(`${dir}src/${tail}`) || suffixes.has(`${dir}${tail}`))) return true;
@@ -112,7 +119,7 @@ function resolve(path: string, from: string): string[] {
     const [app, ...within] = rest;
     tails.add(`apps/${app}/src/${within.join("/")}`).add(`apps/${app}/${within.join("/")}`);
   }
-  if (head === "@") tails.add(`apps/client/src/${tail}`);
+  if (head === "@") for (const src of ownSources(from)) tails.add(`${src}${tail}`);
   if (head === "@xpute") tails.add(`xpute/ts/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir) tails.add(`${dir}src/${tail}`).add(`${dir}${tail}`);
@@ -167,7 +174,7 @@ for (const f of files) {
   });
 }
 
-const SWIFTUI_OWNERS = ["apps/native/src/platform/panel.tsx"];
+const SWIFTUI_OWNERS = ["apps/client/src/shell/ui/panel.ios.tsx"];
 
 for (const f of files) {
   if (!/\.tsx?$/.test(f) || !f.startsWith("apps/") || SWIFTUI_OWNERS.includes(f)) continue;
@@ -195,7 +202,7 @@ const NOT_EVEN = [
   /\blibm::roundf?\(/,
   /\bMath\.round\(/,
   /\bstd::round\b/,
-  // A number's text rounds its last place half up: `fixed` (apps/client shared/fixed.ts) rounds it half to even.
+  // A number's text rounds its last place half up: `fixed` (apps/client shell/fixed.ts) rounds it half to even.
   /\.toFixed\(/,
   /\.toPrecision\(/,
   // A half added inside a floor's own parentheses, or before `.floor()`.

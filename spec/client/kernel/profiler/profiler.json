@@ -1,7 +1,7 @@
 {
   "$doc": [
     "The profiler's records and blocks as the kernel lays them out and the shell reads",
-    "them in place (profiler/record.rs, apps/client/src/feature/debug/profiler/view.ts):",
+    "them in place (profiler/record.rs, apps/client/src/shell/debug/profiler/view.ts):",
     "word offsets, eight bytes a word. The names the numbers index are their owners':",
     "a task's io's (spec/client/kernel/io/demand.json), a step's and an effect's the",
     "turn's (spec/client/kernel/turn/step.json), a GPU span's the renderer's",

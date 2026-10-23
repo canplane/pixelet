@@ -1,10 +1,10 @@
 // @pxl/native/metro.config.ts
 
 /**
- * The shell is apps/client/src, the same files Vite bundles for the web; what
- * differs on a device is behind `@platform/`, which is this app's
- * src/platform/ here. Every other prefix is the one the Deno import maps give
- * the importing file (apps/client/script/import-map.ts), so the shell is read
+ * The client is apps/client/src, the same files Vite bundles for the web,
+ * with a device's own beside a default by React Native's suffixes (pill.ios.tsx
+ * beside pill.tsx). Every prefix is the one the Deno import maps give the
+ * importing file (apps/client/script/import-map.ts), so the client is read
  * exactly as the type-check reads it.
  */
 
@@ -31,7 +31,7 @@ const FROM_APP = path.join(here, "index.ts");
  * module `virtual:pxl-build` (config/deploy.ts reads it). The source is git's
  * short hash, `-dirty` where the tree had changes; the number is the one CI
  * handed the build, or else `#<last>-<id>` from the last one this checkout saw
- * published (apps/web/.build_number), since a build CI did not number is not
+ * published (apps/client/.build_number), since a build CI did not number is not
  * that build. Written once, when Metro starts: a dev server's stamp is the
  * one it started under.
  */
@@ -45,7 +45,7 @@ function buildStamp(): string {
   if (process.env.PXL_BUILD_NUMBER) number = `#${process.env.PXL_BUILD_NUMBER}`;
   else {
     try {
-      const last = fs.readFileSync(path.join(ROOT, "apps/web/.build_number"), "utf8").trim();
+      const last = fs.readFileSync(path.join(ROOT, "apps/client/.build_number"), "utf8").trim();
       if (/^\d+$/.test(last)) number = `#${last}-${id}`;
     } catch { /* none seen yet */ }
   }
@@ -61,15 +61,22 @@ function buildStamp(): string {
 }
 const BUILD_STAMP = buildStamp();
 
-/** A platform module as the system being built has it: `x.android.tsx` beside
- * `x.tsx` is Android's, and `x.tsx` every other's. The shell names a module
- * with its extension, which Metro's own `.android` lookup does not take, so it
- * is looked for here. */
-function ownPlatform(file: string, platform: string | null): string {
+/** A file as the system being built has it: `pill.ios.tsx`, else
+ * `motion.native.tsx`, beside the default it names, and the default where
+ * neither is. Every import
+ * names the default with its extension, which Metro's own platform lookup
+ * does not take, so it is looked for here. A variant's own import of its
+ * default is the default, which it extends. */
+function ownPlatform(file: string, platform: string | null, from: string): string {
   if (!platform) return file;
   const ext = path.extname(file);
-  const own = `${file.slice(0, -ext.length)}.${platform}${ext}`;
-  return fs.existsSync(own) ? own : file;
+  const stem = file.slice(0, -ext.length);
+  if (from.startsWith(`${stem}.`)) return file;
+  for (const which of [platform, "native"]) {
+    const own = `${stem}.${which}${ext}`;
+    if (fs.existsSync(own)) return own;
+  }
+  return file;
 }
 
 const config = getDefaultConfig(here);
@@ -84,10 +91,12 @@ config.resolver.resolveRequest = (context, name, platform) => {
     return context.resolveRequest({ ...context, originModulePath: FROM_APP }, name, platform);
   }
   if (name === "virtual:pxl-build") return { type: "sourceFile", filePath: BUILD_STAMP };
-  // `@platform/` is the app's being built, whoever imports it; every other
-  // prefix the importing file's own.
-  const hit = mapped(name.startsWith("@platform/") ? FROM_APP : context.originModulePath, name);
-  if (hit) return context.resolveRequest(context, hit.prefix === "@platform/" ? ownPlatform(hit.path, platform) : hit.path, platform);
+  // A prefix is the importing file's own; a file it names, mapped or
+  // relative, is taken as this platform has it.
+  const from = context.originModulePath;
+  const hit = mapped(from, name);
+  const file = hit ? hit.path : name.startsWith(".") && path.extname(name) !== "" ? path.resolve(path.dirname(from), name) : null;
+  if (file) return context.resolveRequest(context, ownPlatform(file, platform, from), platform);
   return context.resolveRequest(context, name, platform);
 };
 

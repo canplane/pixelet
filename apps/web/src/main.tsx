@@ -8,17 +8,21 @@
 import { StrictMode } from "react";
 import { AppRegistry, type RootTag } from "react-native";
 
-import { AppRouter } from "@/app/router.tsx";
-import { bootstrapApp } from "@/app/bootstrap.ts";
-import { bootstrapI18n } from "@/locale/i18n.ts";
-import { Halt } from "@/app/halt.tsx";
-import { whatIsMissing } from "@platform/webgpu.ts";
-import "@/app/style/index.css";
+import { setBracket } from "@pxl/client/bracket.tsx";
+import { AppRouter } from "@pxl/client/shell/router.tsx";
+import { bootstrapApp } from "@pxl/client/shell/bootstrap.ts";
+import { bootstrapI18n } from "@pxl/client/shell/locale/i18n.ts";
+import { Halt } from "@pxl/client/shell/halt.tsx";
+import { PAGE } from "@/bracket.ts";
+import { whatIsMissing } from "@/webgpu.ts";
+import "@pxl/client/shell/style/index.css";
 
 if (import.meta.env.DEV) {
-  const { installRemoteConsole } = await import("@platform/remote-console.ts");
+  const { installRemoteConsole } = await import("@/remote-console.ts");
   installRemoteConsole();
 }
+
+setBracket(PAGE);
 
 try {
   const missing = await whatIsMissing();

@@ -11,7 +11,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 
 const BUCKET = "pixelet-tiles";
 const KEY = "_meta/build-log.jsonl";
-const CACHE = new URL("../apps/web/.build_number", import.meta.url);
+const CACHE = new URL("../apps/client/.build_number", import.meta.url);
 
 type Smoke = "pass" | "fail";
 

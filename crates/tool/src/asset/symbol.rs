@@ -112,7 +112,7 @@ pub fn render_rs(symbols: &[Symbol]) -> String {
 /// The shell's module: each symbol's box and shapes, by its Carto path.
 pub fn render_ts(symbols: &[Symbol]) -> String {
     let mut ts = String::from(
-        "// @pxl/client/feature/search/place-symbol.ts\n//\n// Written by `deno task ingest:asset` from asset/raw/place/symbol/ — do not edit.\n//\n// Carto's place symbols (openstreetmap-carto `symbols/`, CC0) as outlines,\n// by the path Carto gives each: its box, and each shape's path data and\n// whether it fills even-odd.\n\nexport interface PlaceSymbol {\n  box: readonly [number, number];\n  shapes: readonly (readonly [string, boolean])[];\n}\n\nexport const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {\n",
+        "// @pxl/client/shell/search/place-symbol.ts\n//\n// Written by `deno task ingest:asset` from asset/raw/place/symbol/ — do not edit.\n//\n// Carto's place symbols (openstreetmap-carto `symbols/`, CC0) as outlines,\n// by the path Carto gives each: its box, and each shape's path data and\n// whether it fills even-odd.\n\nexport interface PlaceSymbol {\n  box: readonly [number, number];\n  shapes: readonly (readonly [string, boolean])[];\n}\n\nexport const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {\n",
     );
     for s in symbols {
         let shapes: Vec<String> = s.shapes.iter().map(|(d, even)| format!("[{d:?}, {even}]")).collect();

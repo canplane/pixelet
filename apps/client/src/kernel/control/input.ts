@@ -15,7 +15,7 @@ import {
   type PointerPhase,
   type PointerType,
 } from "@/kernel/abi/cmd.spec.ts";
-import { permissionFollow } from "@platform/sensor.ts";
+import { permissionFollow } from "@/bracket.tsx";
 import { GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame, ring_now, send_input, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
 

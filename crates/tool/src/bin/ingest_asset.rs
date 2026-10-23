@@ -151,7 +151,7 @@ fn run() -> Result<(), String> {
     let masks: Vec<u8> = symbols.iter().flat_map(|s| s.mask.iter().copied()).collect();
     std::fs::write(root.join("crates/spec/src/asset/symbol.mask"), &masks).map_err(|e| e.to_string())?;
     write_formatted(&root.join("crates/spec/src/asset/symbol.spec.rs"), &symbol::render_rs(&symbols))?;
-    write_formatted(&root.join("apps/client/src/feature/search/place-symbol.ts"), &symbol::render_ts(&symbols))?;
+    write_formatted(&root.join("apps/client/src/shell/search/place-symbol.ts"), &symbol::render_ts(&symbols))?;
 
     write_formatted(&root.join("apps/client/src/catalog/asset/ingested.spec.ts"), &table::render_ts(&rows, &laid))?;
     write_formatted(&root.join("crates/spec/src/asset/ingested.spec.rs"), &table::render_rs(&rows, &laid))?;

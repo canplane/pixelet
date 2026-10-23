@@ -187,8 +187,8 @@ vite.config.ts.timestamp-*
 apps/web/src/kernel/guest.wasm
 apps/web/src/kernel/guest.paths.json
 
-# The last build number this checkout published (apps/web/script/deploy.ts)
-apps/web/.build_number
+# The last build number this checkout saw (script/build-log.ts), which a dev build of either app is labeled from
+apps/client/.build_number
 
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk

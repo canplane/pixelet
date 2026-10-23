@@ -27,7 +27,7 @@ you mean before trusting what a Debug build shows.
 A build CI did not number labels itself `#<n>-<commit>`: the last number
 this checkout saw published, then what it was built from
 (`apps/native/metro.config.ts`), fixed in the bundle when Metro makes it. The
-`<n>` is a cache, `apps/web/.build_number`, which a deploy through CI never
+`<n>` is a cache, `apps/client/.build_number`, which a deploy through CI never
 writes, so bring it up to date before a Release:
 
 ```bash
@@ -255,5 +255,5 @@ position is only what `geo fix` gives. There it has named the place.
   Fabric never made a view it later reaches, its trace in logcat a
   `MissingViewState` soft exception at the first mount. It was a plain view
   whose flattening changed as a toast's touch came and went (`collapsable`
-  in `web/src/platform/web/pill.tsx`); the mount state logged before the
+  in `apps/client/src/shell/ui/pill.tsx`); the mount state logged before the
   crash shows what the missing tag holds.

@@ -13,7 +13,7 @@ import { FileError } from "@xpute/host/ipc/sys.ts";
 import { INGESTED, PACK } from "@/catalog/asset/ingested.spec.ts";
 import { BASE_LAYERS } from "@/config/published.spec.ts";
 import { assetUrl, tileUrl } from "@/config/route.ts";
-import { originGet } from "@platform/origin.ts";
+import { originGet } from "@/bracket.tsx";
 import { online } from "@/kernel/online.ts";
 
 async function get(url: string, name: string, signal: AbortSignal): Promise<U8Array> {
@@ -41,7 +41,7 @@ async function get(url: string, name: string, signal: AbortSignal): Promise<U8Ar
  * A body still packed means the transport did not decode the stored
  * encoding: a browser that cannot, which the Worker cannot refuse, since
  * Cloudflare rewrites `accept-encoding` before the Worker sees it; or a
- * device whose own decode (platform/origin.ts) was skipped.
+ * device whose own decode (apps/native/src/origin.ts) was skipped.
  */
 function packed(body: U8Array): boolean {
   return (body[0] === 0x28 && body[1] === 0xb5) || (body[0] === 0x1f && body[1] === 0x8b);

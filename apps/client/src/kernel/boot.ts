@@ -18,7 +18,7 @@ import {
   orientationRemove,
   orientationSilenceIsLoss,
   orientationSupported,
-} from "@platform/sensor.ts";
+} from "@/bracket.tsx";
 import { declare_source } from "@/kernel/io/source.ts";
 import { read_asset, read_object } from "@/kernel/io/read.ts";
 import { bind_root, read_storage } from "@/kernel/host.ts";
@@ -26,8 +26,8 @@ import { BASE_LAYERS } from "@/config/published.spec.ts";
 import { GUEST, GUEST_DOORBELL, load_guest } from "@/kernel/mem.ts";
 import { root, SETTINGS_PATH } from "@/kernel/abi/host.spec.ts";
 import { bytes_at } from "@/kernel/module.ts";
-import { gpuBoot } from "@platform/gpu.ts";
-import { onlineWatch } from "@platform/online.ts";
+import { gpuBoot } from "@/bracket.tsx";
+import { onlineWatch } from "@/bracket.tsx";
 import { start_sched, strobe } from "@/kernel/sched.ts";
 import { set_snapshot } from "@/kernel/snapshot.ts";
 
@@ -51,7 +51,7 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
 }
 
-/** Called once from app/bootstrap.ts, so boot order is explicit, not import order. */
+/** Called once from shell/bootstrap.ts, so boot order is explicit, not import order. */
 export async function boot_kernel(): Promise<void> {
   await load_guest();
   BASE_LAYERS.forEach((_, bake) => {

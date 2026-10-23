@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run -A
 // Builds the guest's module (crates/client-bracket/wasm) to where
-// src/platform/web/guest.ts loads it.
+// src/guest.ts loads it.
 //
 //   deno run -A script/build-wasm.ts [--published]
 

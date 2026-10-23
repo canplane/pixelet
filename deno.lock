@@ -4955,31 +4955,35 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@std/assert@1",
       "jsr:@std/jsonc@1",
       "jsr:@std/path@1",
-      "npm:@deno/vite-plugin@^2.0.3",
-      "npm:i18next@^26.4.2",
-      "npm:phosphor-react-native@^3.0.6",
-      "npm:react-dom@19.2.3",
-      "npm:react-i18next@^17.0.14",
-      "npm:react-native-svg@15.15.4",
-      "npm:react-native-web@~0.21.2",
-      "npm:react-native@0.86.3",
-      "npm:react-router-dom@^7.18.4",
-      "npm:react@19.2.3",
-      "npm:vite@^8.3.0",
-      "npm:webgpu@0.6.2",
-      "npm:zustand@^5.0.15"
+      "npm:webgpu@0.6.2"
     ],
     "members": {
       "apps/client": {
         "dependencies": [
+          "jsr:@std/assert@1",
           "npm:@types/react-dom@19",
           "npm:@types/react@19",
           "npm:@webgpu/types@~0.1.69",
           "npm:vite@*"
-        ]
+        ],
+        "packageJson": {
+          "dependencies": [
+            "npm:@expo/ui@~57.0.20",
+            "npm:expo-glass-effect@~57.0.4",
+            "npm:expo-symbols@~57.0.3",
+            "npm:expo@57.0.25",
+            "npm:i18next@^26.4.2",
+            "npm:phosphor-react-native@^3.0.6",
+            "npm:react-i18next@^17.0.14",
+            "npm:react-native-svg@15.15.4",
+            "npm:react-native@0.86.3",
+            "npm:react-router-dom@^7.18.4",
+            "npm:react@19.2.3",
+            "npm:zustand@^5.0.15"
+          ]
+        }
       },
       "apps/native": {
         "dependencies": [
@@ -5008,11 +5012,18 @@
       },
       "apps/web": {
         "dependencies": [
+          "npm:@deno/vite-plugin@^2.0.3",
           "npm:@types/react-dom@19",
           "npm:@types/react@19",
           "npm:@vitejs/plugin-react@^6.1.1",
           "npm:@webgpu/types@~0.1.69",
-          "npm:vite@*"
+          "npm:react-dom@19.2.3",
+          "npm:react-native-web@~0.21.2",
+          "npm:react-native@0.86.3",
+          "npm:react@19.2.3",
+          "npm:vite@*",
+          "npm:vite@^8.3.0",
+          "npm:zustand@^5.0.15"
         ]
       }
     }

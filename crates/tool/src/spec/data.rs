@@ -80,7 +80,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/spec/division.json",
         uses: &[],
-        ts: Some("apps/client/src/feature/world/division/division.spec.ts"),
+        ts: Some("apps/client/src/shell/world/division/division.spec.ts"),
         rs: Some("crates/spec/src/division.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
@@ -208,7 +208,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/spec/bake/place_theme.json",
         uses: &[],
-        ts: Some("apps/client/src/feature/search/place_theme.spec.ts"),
+        ts: Some("apps/client/src/shell/search/place_theme.spec.ts"),
         rs: None,
         module: None,
         enums: Enums::None,
@@ -218,7 +218,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/model/variant.json",
         uses: &[],
-        ts: Some("apps/client/src/feature/character/variant.spec.ts"),
+        ts: Some("apps/client/src/shell/character/variant.spec.ts"),
         rs: Some("crates/client/kernel/src/model/variant.spec.rs"),
         module: Some("variant_spec"),
         enums: Enums::All,
@@ -228,7 +228,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/scene/indicator/gizmo.json",
         uses: &[],
-        ts: Some("apps/client/src/feature/debug/gizmo.spec.ts"),
+        ts: Some("apps/client/src/shell/debug/gizmo.spec.ts"),
         rs: Some("crates/client/kernel/src/scene/indicator/gizmo.spec.rs"),
         module: Some("gizmo_spec"),
         enums: Enums::None,
@@ -294,7 +294,7 @@ const DATA_SPECS: [DataSpec; 25] = [
             "spec/client/render/gpu/span.json",
             "xpute/spec/gpu/api.json",
         ],
-        ts: Some("apps/client/src/feature/debug/profiler/profiler.spec.ts"),
+        ts: Some("apps/client/src/shell/debug/profiler/profiler.spec.ts"),
         rs: Some("crates/client/kernel/src/profiler/profiler.spec.rs"),
         module: Some("spec"),
         enums: Enums::Named(&["WAKES"]),

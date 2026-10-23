@@ -7,7 +7,7 @@ import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { GUEST, GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { ring_now, send_input } from "@/kernel/sched.ts";
-import { orientationPermit } from "@platform/sensor.ts";
+import { orientationPermit } from "@/bracket.tsx";
 
 export { kernel_snapshot, useKernel } from "@/kernel/snapshot.ts";
 export { kernel_hold, kernel_keys } from "@/kernel/control/input.ts";

@@ -154,19 +154,17 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 ```
 .
 ├── apps/
-│   ├── web/                  # The shell, and the Cloudflare Worker that serves it (cloudflare-worker/)
+│   ├── client/               # The shell and its end of the kernel, which both apps bundle
 │   │   └── src/
-│   │       ├── kernel/       #   the kernel's host: abi, control, io, mem, render, turn; the shell's end
-│   │       ├── platform/web/ #   what differs on a page, behind @platform/
-│   │       ├── app/ page/    #   the frame, the router, the pages
-│   │       ├── feature/      #   a screen's own pieces
+│   │       ├── bracket.tsx   #   what the client asks of the place it runs in
+│   │       ├── kernel/       #   the shell's end of the kernel: abi, boot, control, io, mem, render, turn
+│   │       ├── shell/        #   the UI: frame, world, settings, search, debug, ui kit (pill.ios.tsx beside pill.tsx), locale
 │   │       ├── catalog/      #   the data screens show (cells, assets)
-│   │       ├── locale/       #   i18n catalogs, dev-only ones apart
-│   │       ├── config/       #   deployment config and routes
-│   │       └── shared/       #   shared UI kit and browser helpers
-│   └── native/               # The same shell on a device, through Expo and Metro
-│       ├── src/platform/     #   what differs on a device, behind @platform/
-│       └── modules/platform/ #   its native half: one module, the view, the linked kernel
+│   │       └── config/       #   deployment config and routes
+│   ├── web/                  # The page's bracket: the browser's APIs, the guest module, the Cloudflare Worker
+│   └── native/               # The device's bracket, through Expo and Metro
+│       ├── src/              #   what the app gives the client, through its native module
+│       └── modules/platform/ #   its native half: one module, the views, the linked kernel
 ├── crates/                   # The Rust workspace, grouped by where a crate runs
 │   ├── spec/                 #   pxl-spec: the model every crate shares
 │   ├── client/               #   what the client runs
@@ -201,9 +199,9 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                            |
 | `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                       |
 | `pxl-native`    | The guest on a device: a static library that runs every call on a thread of its own and exports `pxl_interrupt` through the C ABI.               |
-| `apps/client`   | The kernel's host and its shell, which both apps bundle over their own `@platform/`.                                                             |
-| `apps/web`      | The page: its platform, the guest module it instantiates, and the Cloudflare Worker that serves it all.                                          |
-| `apps/native`   | The device app: the same host and shell run by Metro, what only a device does, and the native module that links the kernel.                      |
+| `apps/client`   | The shell and its end of the kernel, which both apps bundle and hand what their place gives (`src/bracket.tsx`).                                 |
+| `apps/web`      | The page's bracket: what a browser tab gives the client, the guest module it instantiates, and the Cloudflare Worker that serves it all.         |
+| `apps/native`   | The device's bracket: what the app gives the client through its native module, which links the kernel.                                           |
 | `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                                      |
 | `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                         |
 | `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                                       |

@@ -22,7 +22,7 @@
     "$doc": [
       "The sheet's sections, in the order they are shown. `character` is not a",
       "section of the sheet at all — its two settings are picked from the",
-      "drawer's Character tab (feature/character/picker.tsx), and `world`'s from the",
+      "drawer's Character tab (shell/character/picker.tsx), and `world`'s from the",
       "buttons floating over the world (feature/world/ui/control/)."
     ]
   },

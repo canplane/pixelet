@@ -37,6 +37,8 @@
       "dependencies": ["build:wasm:published"]
     },
 
+    // A catalog entry is a number, an id and a name in every locale; the first
+    // two are written from the JSON under spec/, the last is people's.
     // Guards the artifact, not the source: a dev surface can be gated
     // correctly and still leave its strings in the bundle. Runs between build
     // and publish so a leak stops the deploy rather than being noticed on the
@@ -46,8 +48,6 @@
     // npx, since it wants a newer Node than a system may have.
     "deploy": "deno run -A script/deploy.ts",
 
-    // A catalog entry is a number, an id and a name in every locale; the first
-    // two are written from the JSON under spec/, the last is people's.
     "check": "deno check src/main.tsx cloudflare-worker/index.ts"
   },
 
@@ -67,13 +67,21 @@
   },
 
   "imports": {
-    // The shell and its host, which the device app runs too.
-    "@/": "../client/src/",
-    // What differs by platform, behind one name: the web's here, and a
-    // native build maps the same prefix to its own directory.
-    "@platform/": "./src/platform/web/",
+    "@/": "./src/",
+    "@pxl/client/": "../client/src/",
 
     // build tools
-    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^6.1.1"
+    "vite": "npm:vite@^8.3.0",
+    "@deno/vite-plugin": "npm:@deno/vite-plugin@^2.0.3",
+    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^6.1.1",
+
+    "react": "npm:react@19.2.3",
+    "react-dom": "npm:react-dom@19.2.3",
+    // The shell is written, and type-checked, against React Native's own
+    // API; on the web vite.config.ts bundles react-native-web in its place,
+    // which renders the same primitives as the DOM.
+    "react-native": "npm:react-native@0.86.3",
+    "react-native-web": "npm:react-native-web@^0.21.2",
+    "zustand": "npm:zustand@^5.0.15"
   }
 }

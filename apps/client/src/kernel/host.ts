@@ -17,8 +17,8 @@ import { FileError, Sys } from "@xpute/host/ipc/sys.ts";
 import { OBJECTS_PATH, op, root, SETTINGS_PATH } from "@/kernel/abi/host.spec.ts";
 import { GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { send_next } from "@/kernel/sched.ts";
-import { storageGet, storageSet } from "@platform/storage.ts";
-import { textRaster, textWidth } from "@platform/text.ts";
+import { storageGet, storageSet } from "@/bracket.tsx";
+import { textRaster, textWidth } from "@/bracket.tsx";
 import { BUILD_NUMBER } from "@/config/deploy.ts";
 
 const word = new DataView(new ArrayBuffer(4));

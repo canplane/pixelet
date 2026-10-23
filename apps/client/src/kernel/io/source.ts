@@ -9,7 +9,7 @@
 
 import { Command, encode_world_source } from "@/kernel/abi/cmd.spec.ts";
 import { TILE_SOURCE_ROUTE } from "@/config/route.ts";
-import { originGet } from "@platform/origin.ts";
+import { originGet } from "@/bracket.tsx";
 import { GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { send_next } from "@/kernel/sched.ts";
 import { online, whenOnline } from "@/kernel/online.ts";

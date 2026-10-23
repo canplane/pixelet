@@ -9,7 +9,7 @@ import android.graphics.Typeface
 import expo.modules.kotlin.typedarray.Uint8Array
 
 // Text in the platform's own family, as the kernel asks for it
-// (apps/native/src/platform/text.ts): how wide a line runs, and a line drawn.
+// (apps/native/src/text.ts): how wide a line runs, and a line drawn.
 // The system font, which falls back through every script and draws color
 // emoji as the app's own text does — Text.swift's, on Android's engine.
 

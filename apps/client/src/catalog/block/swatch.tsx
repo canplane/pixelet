@@ -6,8 +6,8 @@ import type { u8 } from "@xpute/kit/abi/word.ts";
 import type { DecorId } from "@/catalog/block/decor.spec.ts";
 import { type Cube, cubeHex, cubeId, decorName } from "@/catalog/block/mod.ts";
 import { shippedTopTextureKey } from "@/catalog/asset/texture.ts";
-import type { GlyphName } from "@platform/icon.tsx";
-import { ORIGIN } from "@platform/origin.ts";
+import type { GlyphName } from "@/shell/ui/icon.tsx";
+import { ORIGIN } from "@/bracket.tsx";
 import { assetUrl } from "@/config/route.ts";
 
 function cubeTextureUrl(cube: Cube): string | null {

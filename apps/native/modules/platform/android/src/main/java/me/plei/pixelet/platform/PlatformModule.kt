@@ -16,7 +16,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.typedarray.Uint8Array
 
 /**
- * The device's half of the app's platform (apps/native/src/platform/) on
+ * The device's half of the app's platform (apps/native/src/) on
  * Android, the module an iPhone's PlatformModule.swift is: the kernel as the
  * shell reaches it, the view it draws into, and what the shell asks of the
  * system, under the same names.

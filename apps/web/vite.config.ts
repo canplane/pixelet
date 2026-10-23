@@ -47,14 +47,14 @@ function buildId(): string {
  * that build whatever it was built from, so the source says so itself rather
  * than a sign meaning "after"; before any number is cached, the id alone.
  * The count lives in the bucket and is taken by the gate job
- * (script/build-counter.ts); .build_number is only this checkout's cache of
+ * (script/build-counter.ts); apps/client/.build_number is only this checkout's cache of
  * it, written by any read of `./script/build-log.ts`.
  */
 function buildNumber(id: string): string {
   const official = process.env.PXL_BUILD_NUMBER;
   if (official) return `#${official}`;
   try {
-    const last = readFileSync(path.join(__dirname, ".build_number"), "utf8").trim();
+    const last = readFileSync(path.join(__dirname, "..", "client", ".build_number"), "utf8").trim();
     return /^\d+$/.test(last) ? `#${last}-${id}` : id;
   } catch {
     return id;
@@ -75,9 +75,9 @@ function buildNumber(id: string): string {
  * does mean the bundle hash changes on every build even when no source
  * did; that is the cost of it being accurate, chosen over the commit date.
  * UTC: it is formatted for the reader's own timezone where it is shown
- * (feature/setting/section/about.tsx).
+ * (shell/setting/section/about.tsx).
  */
-/** The other half of `platform/web/remote-console.ts`: what a device posts to
+/** The other half of `src/remote-console.ts`: what a device posts to
  * `/__console` is printed where this server's own output goes, so a phone or a
  * tablet on a tunnel can be read without attaching a debugger to it. Dev only
  * — a plugin's `configureServer` never runs for a build. */
@@ -363,17 +363,17 @@ function fullReloadOnCoreChange() {
 // missed.
 /**
  * The tree's own prefixes, as the importing file's import map gives them
- * (apps/client/script/import-map.ts), the reader Metro resolves through too;
- * `@platform/` is this page's, whoever imports it.
+ * (apps/client/script/import-map.ts), the reader Metro resolves through too.
+ * A file's platform variants (pill.ios.tsx beside pill.tsx) are a device's;
+ * the page takes the default every import names.
  */
 function importMaps(): Plugin {
-  const page = path.join(__dirname, "index.html");
   return {
     name: "pxl-import-maps",
     enforce: "pre",
     resolveId(id, importer) {
       if (!importer || importer.startsWith("\0")) return null;
-      const hit = mapped(id.startsWith("@platform/") ? page : importer, id);
+      const hit = mapped(importer, id);
       return hit ? this.resolve(hit.path, importer, { skipSelf: true }) : null;
     },
   };

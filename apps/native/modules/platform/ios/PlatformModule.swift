@@ -6,7 +6,7 @@ import ExpoUI
 import PxlNative
 import UIKit
 
-/// The device's half of the app's platform (apps/native/src/platform/), as
+/// The device's half of the app's platform (apps/native/src/), as
 /// one module: the kernel as the shell reaches it, the view it draws into,
 /// and what the shell asks of the system.
 ///

@@ -3,7 +3,7 @@
 import ExpoModulesCore
 import UIKit
 
-/// A view that stands on the keyboard (apps/native/src/platform/above-keyboard.tsx).
+/// A view that stands on the keyboard (apps/client/src/shell/ui/above-keyboard.native.tsx).
 /// Its layout is the shell's, where it rests with no keyboard up, `rest` off
 /// the bottom edge (shared/ui/bottom-rest.ts). While a keyboard is up, the
 /// view is lifted to stand `clearance` above it, in the animation the
