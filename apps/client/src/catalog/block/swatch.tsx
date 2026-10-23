@@ -9,6 +9,8 @@ import { shippedTopTextureKey } from "@/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { ORIGIN } from "@/bracket.tsx";
 import { assetUrl } from "@/config/route.ts";
+import { useKernel } from "@/kernel/shell.ts";
+import { SETTINGS } from "@/shell/setting/schema.ts";
 
 function cubeTextureUrl(cube: Cube): string | null {
   const key = shippedTopTextureKey(cubeId(cube));
@@ -22,9 +24,11 @@ interface CubeSwatchProps {
   style?: StyleProp<ViewStyle>;
 }
 
+/** The cube as the world draws it: its texture while the pack is on, else its color. */
 export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
   const box = { width: size, height: size, borderRadius: radius, overflow: "hidden" as const };
-  const textureUrl = cubeTextureUrl(cube);
+  const textured = useKernel((s) => s.settings[SETTINGS.textures.key] === 1);
+  const textureUrl = textured ? cubeTextureUrl(cube) : null;
   if (textureUrl) {
     return (
       <View style={[box, style]}>
