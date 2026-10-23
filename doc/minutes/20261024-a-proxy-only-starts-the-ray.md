@@ -122,3 +122,43 @@ What is proposed, not yet ordered:
 - **For 2,** a few steps of scale, each held a while once taken.
 - **Then the proxy is measured** against that exact cast, whose start is
   the only thing a proxy changes.
+
+## Measured: a pixel's own walk
+
+The steps view (setting `ray_steps`) walks every pixel's own ray from its
+cell's start (8f8c6152d), the cast "For 1" proposes. On the page (Chrome,
+dpr 2, render scale 1.00, the dev build with the profiler on, one standing
+view over 30 s, 97 cast frames each):
+
+| The cast                        | Cast span, p95 |
+| ------------------------------- | -------------- |
+| The samples' answer, as built   | 62.5 ms        |
+| Every pixel walking its own ray | 281.6 ms       |
+
+About 4.5 times. "About ten visits a pixel" reads small beside the samples
+because a cell has sixteen samples and a hundred-odd pixels, so walking
+every pixel walks several times the rays. A pixel that walks also misses
+the observed pyramid more often and walks again in `miss_cs`; that is in
+the number. A comparison, not a profile: one load each, its first casts
+among the frames.
+
+## Recommended: the samples go with the proxy, not before it
+
+Recommended by the reduce session, not ordered.
+
+- **The samples' answer is not removed on its own.** The cast already
+  stands about four times over the gate of
+  [20261020](./20261020-a-visit-reads-one-entry.md) (p95 ≤ 16.7 ms), and a
+  pixel's own walk from its cell's start multiplies it again.
+- **Cause 1 and the walk's cost have one answer: a shorter walk.** That is
+  the hybrid this record allows: rasterized boxes start the ray, and the
+  ray still decides the pixel. A pixel starts at its box's front face, near
+  the block it stops on, not at its cell's start. So "For 1" is measured
+  together with the proxy, as one cast: the boxes drawn, every pixel
+  walking from its box, no samples' answer. If that cast is under the one
+  as built, both are taken; if not, the samples stay and the shimmer is
+  answered another way.
+- **Until then the steps view shows a path the frame does not run.** It
+  should show the frame's own: a pixel that took a sample's block reports
+  that sample's visits, recorded beside the sample's block. That waits for
+  the beam layout in flight (`beam::Grid`) to be committed.
