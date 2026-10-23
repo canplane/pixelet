@@ -305,7 +305,7 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::surface_follow | SettingKey::camera_gizmo | SettingKey::ray_steps)
+        matches!(self, SettingKey::surface_follow | SettingKey::ray_steps)
     }
 
     /// A choice's option a development build only offers.
