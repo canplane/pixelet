@@ -51,8 +51,9 @@ impl View {
             width: 1.0,
             height: 1.0,
             fov: crate::param::FOV,
-            ratio: crate::param::RESOLUTION_MIN,
-            tau: crate::view::lens::tau_of(1.0, crate::param::FOV, crate::param::RESOLUTION_MIN),
+            // A pixel a CSS pixel until a surface says.
+            ratio: 1.0,
+            tau: crate::view::lens::tau_of(1.0, crate::param::FOV, 1.0),
             view_matrix: mat4::new(),
             inv_view_matrix: mat4::new(),
             proj: mat4::new(),

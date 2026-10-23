@@ -319,7 +319,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let after_tick = now();
     pump();
     crate::scene::stage::stage_write();
-    crate::scene::stage::stage_render();
+    crate::scene::stage::stage_render(frame_ms);
     let done = now();
     profiler_frame(FrameTurn {
         tick: report,

@@ -21,7 +21,9 @@ pub struct Surface {
     pub px_w: u32,
     pub px_h: u32,
     pub dpr: f64,
-    /// The device pixels per CSS pixel the kernel has it drawn at.
+    /// The device pixels per CSS pixel the kernel has it drawn at (pxl-kernel
+    /// view/frame/resolution.rs): the display's, or under load a share of
+    /// them, the page scaling the buffer up.
     pub ratio: f64,
     pub configured: bool,
     pub width: u32,

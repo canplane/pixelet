@@ -916,12 +916,14 @@ impl Gpu {
     /// where it wrote any and no mapping is still on its way, submitted. One
     /// mapping at most is on its way, so its ticket need not tell them apart.
     /// A mapping that landed is taken in first: asking for the next writes its
-    /// ticket over the word that says so.
-    pub fn submit_frame(&self, encoder: Id, written: u32) {
+    /// ticket over the word that says so. Whether this frame's spans are on
+    /// their way back.
+    pub fn submit_frame(&self, encoder: Id, written: u32) -> bool {
         let s = self.s();
         s.gpu_landed = take_stamps(s);
         let stamps_free = *head(STAMPS_WORD_AT) == 0;
-        if let (Some((set, resolve, mapped)), true) = (s.stamps, stamps_free && written != 0) {
+        let asked = stamps_free && written != 0;
+        if let (Some((set, resolve, mapped)), true) = (s.stamps, asked) {
             let bytes = 2 * SPANS as u32 * 8;
             call::resolve_query_set(&mut s.stream, encoder, set, 0, 2 * SPANS as u32, resolve, 0);
             call::copy_buffer_to_buffer(&mut s.stream, encoder, (resolve, 0), (mapped, 0), bytes);
@@ -936,8 +938,10 @@ impl Gpu {
                 )
             };
             call::map_async(&mut s.stream, mapped, 0, ticks, word, 1);
+            true
         } else {
             s.encoder.submit(&mut s.stream, &[encoder]);
+            false
         }
     }
 

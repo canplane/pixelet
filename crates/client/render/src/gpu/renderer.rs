@@ -120,9 +120,6 @@ pub struct FrameInput<'a> {
     /// Whether the surfaces take a frame now without blocking; one admitted
     /// is drawn. Asked only once nothing else stops the frame.
     pub admit: fn() -> bool,
-    /// Whether its GPU spans are timed and read back (GPU_SPAN_NAMES): only
-    /// for a reader of them, as their read's landing wakes a turn.
-    pub timed: bool,
     /// Whether its draws are counted (`FrameStat::census`): the profiler's
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
@@ -223,6 +220,9 @@ pub struct FrameStat {
     /// Whether a GPU read landed with this frame: its spans are then that
     /// read's, and else an earlier frame's, not this one's.
     pub gpu_read: bool,
+    /// The world's pixels the frame the read timed drew: what its spans
+    /// were measured over.
+    pub gpu_px: f64,
     /// The block table's blocks and their bytes.
     pub blocks: f64,
     pub block_bytes: f64,
@@ -1643,7 +1643,12 @@ impl Case {
 
 pub struct Renderer {
     align: u32,
+    /// The spans' queries (`Gpu::spans`); 0 where the device keeps no
+    /// timestamps, and no frame is timed.
     query_set: u32,
+    /// The world's pixels of the frame whose spans' read is on its way: one
+    /// read at most is (`Gpu::submit_frame`).
+    read_px: f64,
     pipelines: Pipelines,
     frame_buffer: u32,
     frame: Frame,
@@ -1708,6 +1713,7 @@ impl Renderer {
         let mut r = Renderer {
             align: device.align,
             query_set,
+            read_px: 0.0,
             ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, g.canvas()), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, g.canvas())],
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
@@ -1952,7 +1958,7 @@ impl Renderer {
         self.decor.prepare_grown(g, self.screen.grown());
         self.impostor.prepare_grown(g, self.screen.grown());
         self.prepare_cases(g, &draws, uniforms, input.cases, lists_moved);
-        let q = if input.timed { self.query_set } else { 0 };
+        let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [Stamp; GPU_SPAN_NAMES.len()] = core::array::from_fn(|span| Stamp::of(q, span));
         // What outlives the frame is drawn and submitted ahead of it: from here on
@@ -2035,12 +2041,18 @@ impl Renderer {
         self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, lists_moved, b, &mut stamps[SPAN_DEBUG]);
         self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, blocks_moved || tables || exposed, &mut stamps[SPAN_CASES]);
         let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
-        g.submit_frame(encoder, written);
+        let asked = g.submit_frame(encoder, written);
         release(canvas_view);
         let mut gpu_spans = [0.0; GPU_SPAN_NAMES.len()];
         let gpu_read = q != 0 && g.gpu_landed();
         if q != 0 {
             gpu_spans = core::array::from_fn(|k| g.gpu_ms(k as u32));
+        }
+        // The read that landed is the one that was on its way; this frame's
+        // takes its place where one was asked.
+        let gpu_px = self.read_px;
+        if asked {
+            self.read_px = f64::from(world.width) * f64::from(world.height);
         }
         let skipped = !frame_commit();
         if skipped {
@@ -2067,6 +2079,7 @@ impl Renderer {
         let kind = if skipped { FrameKind::dropped } else { self.screen.kind };
         let mut stat = self.stat(draws.records, world, input.counted, gpu_spans);
         stat.gpu_read = gpu_read;
+        stat.gpu_px = gpu_px;
         self.order = order;
         (kind, stat)
     }
@@ -2165,6 +2178,7 @@ impl Renderer {
         let px = world.width as f64 * world.height as f64;
         FrameStat {
             gpu_read: false,
+            gpu_px: 0.0,
             blocks: b.count as f64,
             block_bytes: b.bytes as f64,
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the badges' regions'.

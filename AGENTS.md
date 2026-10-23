@@ -11,12 +11,15 @@ the tree, is that picture at the size of one loader.
   block, drawn whole, spans at least a cell of the camera grid at its
   distance, and the grid's rays walk the descent a cell's pixels share
   (doc/minutes/20261022-a-cell-casts-a-beam.md). What is seen is decided a
-  ray a pixel of the render resolution: the display's pixels up to a fixed
-  budget of rays, about 4K's, past which the frame is upscaled within itself,
-  as render resolution is apart from display resolution wherever a screen
-  outgrows its GPU (Unreal's screen percentage, DLSS's 8K from 1440p); never
-  from the frames before. The first block a ray meets is what its pixel
-  shows, by the same rule wherever the eye is.
+  ray a pixel of the render resolution: the display's pixels times a scale
+  the load sets — once a frame, the measured cast against the paced frame's
+  budget moves the scale by the square root of their ratio, between half
+  and whole, held while the cast is within a tenth of the budget — and the
+  frame is upscaled within itself, as render resolution is apart from
+  display resolution wherever a screen outgrows its GPU (Unreal's screen
+  percentage, DLSS's 8K from 1440p); never from the frames before. The
+  first block a ray meets is what its pixel shows, by the same rule wherever
+  the eye is.
 - **The query is the only seam.** Every reader of the world — a ray, a
   walk, an edit, a placement — asks the same query directly for what is in a
   node at its zoom. Each source answers from its own level of detail; its

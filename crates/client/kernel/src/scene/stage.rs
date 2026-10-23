@@ -12,6 +12,7 @@ use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
+use pxl_render::gpu::span_spec::GpuSpanName;
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use xpute_guest::global::Global;
@@ -81,7 +82,9 @@ pub fn stage_write() {
     s[STAGE_AT::CLOUDS] = crate::scene::environment::cloud::clouds_shown();
 }
 
-pub fn stage_render() {
+/// `frame_ms` is the frame's budget, the interval the host paces turns at,
+/// which the world's drawn resolution is judged against.
+pub fn stage_render(frame_ms: f64) {
     // Nothing is drawn before the floor: its arrival asks for the next turn.
     if load_image(EARTH).is_none() {
         return;
@@ -151,8 +154,7 @@ pub fn stage_render() {
         text: text_raster,
         billboards: billboard_sheet(),
         admit: crate::io::host::admit_frame,
-        // The spans and the draws are the profiler's, which records only while its setting is on.
-        timed: settings_store().performance_overlay,
+        // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().performance_overlay,
     });
     if out.redraw {
@@ -166,6 +168,9 @@ pub fn stage_render() {
         return;
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
+    if stat.gpu_read {
+        crate::view::frame::resolution::load(stat.gpu_spans[GpuSpanName::cast as usize], stat.gpu_px, frame_ms);
+    }
     set_host_frame(
         out.kind,
         GpuSample {
