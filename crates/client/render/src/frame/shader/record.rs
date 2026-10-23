@@ -347,9 +347,13 @@ const FRAME: Group = &[[0, UNIFORM]];
 const BOX_GROUP: [[u32; 2]; 17] = and(LIT_FRAME, [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
 /// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`),
 /// and its block: one layout each wherever a draw binds them, so a group
-/// one owner makes binds in every pipeline that names them (gpu/grown.rs).
+/// one owner makes binds in every pipeline that names them (gpu/grown.rs,
+/// gpu/blocks.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
 const BLOCK: [[u32; 2]; 1] = [[0, STORAGE]];
+/// A block's group as every pipeline binding one lays it out, which the
+/// draw list's blocks are grouped in (gpu/blocks.rs `Blocks::group`).
+pub const BLOCK_LAYOUT: [u32; 3] = [BLOCK[0][0], seen(&BLOCK, BLOCK[0][0]), BLOCK[0][1]];
 
 const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &BLOCK];
 /// A billboard set's instances, and what its pass reads at an anchor: the
@@ -565,17 +569,21 @@ const fn alike(a: Group, b: Group) -> bool {
     true
 }
 
-/// The stages binding `binding` of group `k` is seen from: those that read
-/// it in every shader whose pipeline lays out the same group at the same
-/// place, so the one layout those pipelines share holds for each, and from
-/// no stage written by hand.
-const fn seen(group: Group, k: usize, binding: u32) -> u32 {
+/// The stages binding `binding` of `group` is seen from: those that read
+/// it in every shader whose pipeline lays out the same group, wherever, so
+/// the one layout those pipelines share holds for each, and from no stage
+/// written by hand.
+const fn seen(group: Group, binding: u32) -> u32 {
     let mut stages = NONE;
     let mut id = 0;
     while id < PIPELINES {
         let p = plan_of(id);
-        if k < p.groups.len() && alike(p.groups[k], group) {
-            stages |= stages_of(p.head.shader, k as u32, binding);
+        let mut k = 0;
+        while k < p.groups.len() {
+            if alike(p.groups[k], group) {
+                stages |= stages_of(p.head.shader, k as u32, binding);
+            }
+            k += 1;
         }
         id += 1;
     }
@@ -655,7 +663,7 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
         n += 1;
         let mut e = 0;
         while e < g.len() {
-            (out[n], out[n + 1], out[n + 2]) = (g[e][0], seen(g, k, g[e][0]), g[e][1]);
+            (out[n], out[n + 1], out[n + 2]) = (g[e][0], seen(g, g[e][0]), g[e][1]);
             (n, e) = (n + 3, e + 1);
         }
         k += 1;

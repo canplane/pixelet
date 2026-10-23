@@ -136,18 +136,17 @@ impl ImpostorPass {
             put_instances(buf, uniform_of(uniforms, d), d[1]);
         });
         for d in draws {
-            blocks.group(g, d[0], self.draw.layouts[3]);
+            blocks.group(g, d[0]);
         }
     }
 
     /// A group whose layer is not drawn yet is not drawn.
     pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, frame: (u32, &mut u32)) {
         let Some(slots) = self.uniforms.slots() else { return };
-        let block_layout = self.draw.layouts[3];
         draw_models(g, pass, &self.draw, self.draw.pipeline, frame, slots, 0, draws, |d| {
             self.baked.get(d[1] as usize).copied().flatten()?;
             Some(ModelDraw {
-                groups: [self.group, blocks.group(g, d[0], block_layout)?],
+                groups: [self.group, blocks.group(g, d[0])?],
                 mesh: None,
                 instances: d[2],
             })

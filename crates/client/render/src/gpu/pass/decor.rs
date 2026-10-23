@@ -76,7 +76,7 @@ impl DecorPass {
         });
         for d in opaque.chain(ghost) {
             self.model_of(g, d[1], blocks);
-            blocks.group(g, d[0], self.lit.layouts[3]);
+            blocks.group(g, d[0]);
         }
     }
 
@@ -93,10 +93,10 @@ impl DecorPass {
     fn draw_pipeline(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, which: u32, pipeline: u32, frame: (u32, &mut u32)) {
         let Some(slots) = self.uniforms.slots() else { return };
         let first = if which == PIPELINE_GHOST_DECOR { draws.of(PIPELINE_DECOR).len() as u32 } else { 0 };
-        let (lit, block_layout) = (self.lit, self.lit.layouts[3]);
+        let lit = self.lit;
         draw_models(g, pass, &lit, pipeline, frame, slots, first, draws.of(which), |d| {
             let (model, vertex_cnt, index_cnt, skin) = self.model_drawn(d[1], blocks)?;
-            let block = blocks.group(g, d[0], block_layout)?;
+            let block = blocks.group(g, d[0])?;
             Some(ModelDraw {
                 groups: [skin, block],
                 mesh: Some((model, vertex_cnt, index_cnt)),

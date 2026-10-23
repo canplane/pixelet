@@ -134,7 +134,7 @@ impl PuckPass {
         self.zone_uniforms
             .write(g, self.zone.layouts[1], zones.clone().count() as u32, zones.clone().map(|d| (d, 0.0)), moved, put);
         for d in zones {
-            blocks.group(g, d[0], self.zone.layouts[2]);
+            blocks.group(g, d[0]);
         }
     }
 
@@ -155,7 +155,7 @@ impl PuckPass {
     pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks) {
         let Some(slots) = self.zone_uniforms.slots() else { return };
         for (k, d) in zones(draws).enumerate() {
-            let Some(block) = blocks.group(g, d[0], self.zone.layouts[2]) else { continue };
+            let Some(block) = blocks.group(g, d[0]) else { continue };
             let (group, offset) = slots.at(k as u32);
             g.set_pipeline(pass, self.zone.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);

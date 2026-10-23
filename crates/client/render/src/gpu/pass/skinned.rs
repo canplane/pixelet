@@ -49,7 +49,7 @@ impl SkinnedPass {
             buf[24..DRAW_BYTES as usize].fill(0);
         });
         for d in draws {
-            blocks.group(g, d[1], self.lit.layouts[3]);
+            blocks.group(g, d[1]);
             if let Some(image) = self.image_of(d[2]) {
                 skin_group(g, self.lit.layouts[2], image);
             }
@@ -58,12 +58,11 @@ impl SkinnedPass {
 
     pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, frame: (u32, &mut u32)) {
         let Some(slots) = self.uniforms.slots() else { return };
-        let palette_layout = self.lit.layouts[3];
         draw_models(g, pass, &self.lit, self.lit.pipeline, frame, slots, 0, draws, |d| {
             let (mesh, vertex_cnt, index_cnt) = blocks.get(d[0])?;
             let skin = skin_made(self.image_of(d[2])?.0)?;
             Some(ModelDraw {
-                groups: [skin, blocks.group(g, d[1], palette_layout)?],
+                groups: [skin, blocks.group(g, d[1])?],
                 mesh: Some((mesh, vertex_cnt, index_cnt)),
                 instances: 1,
             })

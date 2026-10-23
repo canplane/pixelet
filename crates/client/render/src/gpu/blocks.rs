@@ -7,7 +7,7 @@ use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 
 use crate::frame::draw::DRAW_WORDS;
-use crate::frame::shader::record::PIPELINES;
+use crate::frame::shader::record::{BLOCK_LAYOUT, PIPELINES};
 use crate::gpu::api::{buffer_entry, buffer_usage, release, room, write_buffer_bytes, Gpu};
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
@@ -71,6 +71,9 @@ pub struct Blocks {
     pub(crate) count: u32,
     pub(crate) bytes: u64,
     missing: u32,
+    /// The layout every block's group is in (record.rs `BLOCK_LAYOUT`),
+    /// made on the device as the first is grouped.
+    layout: u32,
 }
 
 pub(crate) fn buffer_size(len: u32) -> u32 {
@@ -109,6 +112,7 @@ pub unsafe fn set_blocks(at: u32, slots: usize) {
         count: 0,
         bytes: 0,
         missing: 0,
+        layout: 0,
     });
     // SAFETY: the range's rest past the table, the lists' alone.
     unsafe { crate::frame::draw::set_lanes(at + (BLOCK_LANES * slots * 4) as u32, slots / 2) };
@@ -123,6 +127,7 @@ impl Blocks {
         self.buffer.fill(0);
         self.group.fill(0);
         self.missing = self.count;
+        self.layout = 0;
     }
 
     /// As far as the turn's stream has room.
@@ -246,10 +251,13 @@ impl Blocks {
     }
 
     /// For a draw binding it as a vertex buffer: the ghost's boxes are read through it (box.wgsl).
-    pub fn group(&mut self, g: &Gpu, handle: u32, layout: u32) -> Option<u32> {
+    pub fn group(&mut self, g: &Gpu, handle: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
         if self.group[i] == 0 {
-            let id = g.bind_group(layout, &[buffer_entry(0, self.buffer[i])]);
+            if self.layout == 0 {
+                self.layout = g.layout(&BLOCK_LAYOUT);
+            }
+            let id = g.bind_group(self.layout, &[buffer_entry(0, self.buffer[i])]);
             self.group[i] = id;
         }
         Some(self.group[i])
