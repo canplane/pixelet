@@ -8,10 +8,10 @@
 import { GeolocationErrorCode, PermissionAnswer, Sensor } from "@pxl/client/kernel/abi/cmd.spec.ts";
 import { kernel_orientation, kernel_permission, kernel_position, kernel_position_error } from "@pxl/client/kernel/control/sensor.ts";
 
-interface IOSOrientationEvent extends DeviceOrientationEvent {
+interface IosOrientationEvent extends DeviceOrientationEvent {
   webkitCompassHeading?: number;
 }
-type IOSOrientationEventCtor = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<"granted" | "denied"> };
+type IosOrientationEventCtor = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<"granted" | "denied"> };
 
 export function geolocationSupported(): boolean {
   return "geolocation" in navigator;
@@ -22,7 +22,7 @@ export function orientationSupported(): boolean {
 }
 
 export function orientationNeedsPermission(): boolean {
-  return orientationSupported() && typeof (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission === "function";
+  return orientationSupported() && typeof (DeviceOrientationEvent as IosOrientationEventCtor).requestPermission === "function";
 }
 
 /** No event says the listener stopped hearing, so silence is how a loss shows. */
@@ -67,7 +67,7 @@ export function geolocationStart(): void {
 let orientationEvent: string | null = null;
 
 function onOrientation(e: Event): void {
-  const o = e as IOSOrientationEvent;
+  const o = e as IosOrientationEvent;
   kernel_orientation(o.webkitCompassHeading ?? null, o.alpha, o.beta, o.gamma);
 }
 
@@ -100,7 +100,7 @@ export function permissionFollow(): () => void {
 /** The prompt is called before any await, so it stays inside the gesture. */
 export function orientationPermit(): Promise<boolean> {
   if (!orientationNeedsPermission() || orientationEvent !== null) return Promise.resolve(true);
-  const prompt = (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!();
+  const prompt = (DeviceOrientationEvent as IosOrientationEventCtor).requestPermission!();
   kernel_permission(Sensor.Orientation, PermissionAnswer.Asking);
   return prompt.then(
     (permission) => {
