@@ -169,8 +169,15 @@ impl DrawList {
         self.rewrite_part(handle, at, 0, bytes);
     }
 
+    /// One rewrite a part of a block, however often it is asked before the
+    /// list is taken: its bytes are read then, at the latest place asked,
+    /// as many as the most asked.
     pub fn rewrite_part(&mut self, handle: u32, at: u32, from: u32, bytes: u32) {
-        if handle == 0 || self.rewrites.as_chunks::<REWRITE_WORDS>().0.iter().any(|r| r[0] == handle && r[2] == from) {
+        if handle == 0 {
+            return;
+        }
+        if let Some(r) = self.rewrites.as_chunks_mut::<REWRITE_WORDS>().0.iter_mut().find(|r| r[0] == handle && r[2] == from) {
+            (r[1], r[3]) = (at, r[3].max(bytes));
             return;
         }
         self.rewrites.extend_from_slice(&[handle, at, from, bytes]);

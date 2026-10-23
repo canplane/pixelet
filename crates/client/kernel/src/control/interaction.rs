@@ -23,7 +23,7 @@ use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;
 use crate::layer::object::store::Entry;
 use crate::query::{Hit, World};
-use crate::view::frame::pose::view_ray;
+use crate::view::frame::pose::ray_of;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units};
 use xpute_guest::global::Global;
@@ -123,13 +123,17 @@ fn resolve_struck(hit: &Hit) -> Option<Struck> {
 
 /// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.
 pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
-    let mut origin = [0.0; 3];
-    let mut direction = [0.0; 3];
-    view_ray(ndc_x, ndc_y, &mut origin, &mut direction);
-
     let ui = interaction().holding;
     interaction().pointed = Some([ndc_x, ndc_y]);
-    let Some(hit) = ray_pick(origin, direction, drawn) else {
+    // The pose as the camera holds it now, which a door event or a
+    // controller may have moved since the turn composed the view.
+    let mut origin = [0.0; 3];
+    let mut direction = [0.0; 3];
+    let pose = crate::control::camera::controller::pose();
+    if let Some(pose) = pose {
+        ray_of(pose, ndc_x, ndc_y, &mut origin, &mut direction);
+    }
+    let Some(hit) = pose.and_then(|_| ray_pick(origin, direction, drawn)) else {
         interaction().hover = Hover::default();
         return;
     };

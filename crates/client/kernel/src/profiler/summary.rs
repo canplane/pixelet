@@ -170,7 +170,8 @@ fn side(out: &mut [f64]) {
     // What the pointer meets as drawn, whether or not it could strike it there.
     let met = crate::control::interaction::pointed().map(|at| (at, crate::view::lens::tau())).and_then(|([x, y], tau)| {
         let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
-        crate::view::frame::pose::view_ray(x, y, &mut origin, &mut direction);
+        let pose = crate::view::frame::pose::view();
+        crate::view::frame::pose::ray_of(pose.at(), x, y, &mut origin, &mut direction);
         let ray = crate::query::Ray {
             origin,
             direction,

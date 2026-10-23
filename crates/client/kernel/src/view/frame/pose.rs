@@ -136,10 +136,11 @@ pub fn view_resize(width: f64, height: f64, ratio: f64) {
 }
 
 /// Takes the pose the controllers hold and composes the matrices from it,
-/// where it moved. A turn's observation is the eye's as it stands at the
-/// turn's start (`observation::observation`), which is what it was where
-/// neither the pose nor the ground under the eye moved
-/// (`observation::turn`), and is made again where either did.
+/// where it moved. A turn's observation is the eye's as it stands where the
+/// turn composes the view, after the camera's last writer
+/// (`observation::observation`), which is what it was where neither the
+/// pose nor the ground under the eye moved (`observation::turn`), and is
+/// made again where either did.
 pub fn view_compose(pose: Option<ObserverPose>) {
     let moved = view().pose != pose;
     crate::view::observation::turn(moved);
@@ -169,14 +170,19 @@ fn compose() {
     mat4::frustum_planes(&mut v.frustum.planes, &lvp);
 }
 
-/// `ndc_x`/`ndc_y` in [−1, 1], x right and y up; `direction` is unit.
-pub fn view_ray(ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
+/// The ray through `ndc_x`/`ndc_y` in [−1, 1], x right and y up, from
+/// `pose`, framed as the view frames its pose (`compose`); `direction` is
+/// unit. A pick asks the pose its controller holds, which may have moved
+/// since the turn composed the view.
+pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
     let v = view();
-    *origin = v.at().eye;
-    // Depth 1 is the near plane: a point on the ray.
-    let mut near = [0.0; 3];
-    mat4::transform_point(&mut near, &v.inv_world_view_proj, ndc_x, ndc_y, 1.0);
-    mat4::transform_direction(direction, &mat4::new(), near[0] - origin[0], near[1] - origin[1], near[2] - origin[2]);
+    let tan = libm::tan(FOV.to_radians() / 2.0);
+    // The rotation turns the world's axes to the camera's; a rotation's
+    // transpose turns them back.
+    let mut back = mat4::new();
+    mat4::transpose(&mut back, &pose.rotation);
+    *origin = pose.eye;
+    mat4::transform_direction(direction, &back, ndc_x * tan * v.width / v.height, ndc_y * tan, -1.0);
 }
 
 /// `ndc` in [−1, 1], y up, as logical pixels from the view's top left.
@@ -184,3 +190,7 @@ pub fn ndc_to_px([x, y]: [f64; 2]) -> [f64; 2] {
     let v = view();
     [(x * 0.5 + 0.5) * v.width, (-y * 0.5 + 0.5) * v.height]
 }
+
+#[cfg(test)]
+#[path = "pose.test.rs"]
+mod test;
