@@ -77,3 +77,48 @@ start is the only thing it changes.
   again at that depth.
 - How loose the boxes are on steep ground, where a square's highest point
   stands well above most of it and the start gains little.
+
+## Deferred: the image shimmers
+
+Pixels and outlines shimmer as the eye moves. Read from the code, not yet
+measured on the page (the build was broken by work in flight). Three causes,
+the first the largest:
+
+1. **A sample decides what a pixel shows.** Since 2026-10-23 a pixel does not
+   walk: of the blocks the 4 × 4 samples about it stopped at, it takes the
+   nearest its ray enters (pxl-shader `cast_cs`). Samples lie a quarter cell
+   apart, about three drawn pixels. A face drawn thinner than that, a riser
+   seen at a slant or a far tree, is met by a sample or not depending on
+   where the screen's grid falls, and where none meets it the pixel shows a
+   block behind it, with no walk of its own, since a candidate was entered.
+   The grid moves with the eye, so the face comes and goes frame to frame,
+   and its outline with it. The beam of
+   [20261022](./20261022-a-cell-casts-a-beam.md) had none of this: its proof
+   held every ray to the root walk's. The samples gave that up for speed.
+   The references agree: ESVO's coarse rays, Reshetov's beams and DIST's
+   split rays give each pixel a start, never its first hit, and Lumen
+   interpolates sparse probes only for low-frequency light.
+2. **The render resolution moves continuously.** Out of a tenth of its
+   budget, the scale moves by the square root of the ratio, between half and
+   whole, in no steps (pxl-kernel view/frame/resolution.rs), and each move
+   lays every pixel anew. Engines that scale by load hold small changes back
+   and wait frames between changes, and upscale over time to hide them.
+3. **Lines and silhouettes are point-sampled**, one sample at a pixel's
+   middle, so a line a pixel wide crawls as it crosses pixels. TAA would
+   answer it with a history buffer, a state to weigh only if 1 and 2 leave
+   it visible.
+
+What is proposed, not yet ordered:
+
+- **For 1, remove the samples' answer.** A pixel walks from its cell's
+  beam, the path 20261022 proved (`resumed`), and the candidate pick, its
+  axis test and the samples' block and lack words go. Making the samples a
+  second beam level was weighed and set aside: a proxy that is taken
+  removes the beam's levels, so it would be built to be thrown away, while
+  the pixel's own walk from a start is what a proxy feeds as well. It costs
+  more than now: about ten visits a pixel (20261022, As built), and face
+  bits a pixel's own unless a sample stopped on the same block. Whether
+  the sample pass stays only to share face bits is decided by measuring.
+- **For 2,** a few steps of scale, each held a while once taken.
+- **Then the proxy is measured** against that exact cast, whose start is
+  the only thing a proxy changes.
