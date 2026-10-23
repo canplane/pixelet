@@ -262,10 +262,6 @@ impl<S: Serve> RequestScheduler<S> {
         self.credits = credits.min(MAX_CREDITS);
     }
 
-    pub fn credits(&self) -> u32 {
-        self.credits
-    }
-
     /// `stream`'s requests waiting for a credit and out on one. For a
     /// report only, never for deciding what to want.
     pub fn stream_counts(&self, stream: Stream) -> (u32, u32) {
@@ -497,10 +493,6 @@ pub fn declare(stream: Stream, wanted: &[(u64, Ask)]) {
 
 pub fn set_credits(credits: u32) {
     sched().set_credits(credits);
-}
-
-pub fn credits() -> u32 {
-    sched().credits()
 }
 
 pub fn stream_counts(stream: Stream) -> (u32, u32) {

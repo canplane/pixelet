@@ -37,7 +37,6 @@ pub struct SheetStats {
     /// Device pixels; the sheet is square.
     pub size: u32,
     pub entries: u32,
-    pub shelves: u32,
     pub used_px: u32,
     pub repacks: u32,
     pub uploads: u32,
@@ -294,7 +293,6 @@ impl Sheet {
         SheetStats {
             size: self.size,
             entries: self.live,
-            shelves: self.shelves.h.len() as u32,
             used_px: self.used_px,
             repacks: self.repacks,
             uploads: self.uploads,

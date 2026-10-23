@@ -214,7 +214,6 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           warn={f.last.heap_run_bytes > MB && f.last.heap_slot_bytes < f.last.heap_run_bytes / 2}
         />
         <Row k="refused/largest free" v={`${f.last.heap_refusals}/${bytes(f.last.heap_largest_free_bytes)}`} warn={f.last.heap_refusals > 0} />
-        <Row k="releases" v={`${f.last.heap_releases}`} />
         <Row k="kernel memory" v={bytes(kernel_memory().byteLength)} />
       </>
     ),

@@ -252,10 +252,6 @@ impl<L: Base> Residency<L> {
         self.tiles.iter().filter(|(_, e)| e.ask.is_some()).filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
     }
 
-    pub fn frames_used(&self) -> u32 {
-        Self::FRAMES - self.free.len() as u32
-    }
-
     /// What `p`'s line says of it, stepped down from the top a tile at a time.
     pub fn line(&self, p: Tile) -> Line {
         self.seek(&mut Lines::default(), p)
