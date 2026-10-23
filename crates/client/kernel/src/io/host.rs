@@ -174,7 +174,7 @@ pub fn heap_stat() -> HeapStat {
 /// A request the heap refused, as the heap's release count then: it waits
 /// until the heap gives some room back, never on a clock, since only a
 /// release can change the answer.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Refused(u32);
 
 impl Refused {

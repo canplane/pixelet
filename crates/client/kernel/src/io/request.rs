@@ -61,8 +61,6 @@ pub trait Serve {
 pub enum Blame {
     /// The object's own: asking again brings the same.
     Object,
-    /// The heap's: no room for the body now, which only a release changes.
-    Heap,
     /// No way to the server: waited on, never given up.
     Network,
     /// The server's: counted toward giving up.
@@ -402,6 +400,13 @@ impl<S: Serve> RequestScheduler<S> {
                 }
             }
             Ended::Failed(f) => self.failed(want, f, a.start_ms, at),
+            // Still an answer from the server.
+            Ended::Refused(refused) => {
+                self.answered();
+                if let Some(i) = want {
+                    self.desired[i].wait = Wait::Heap(refused);
+                }
+            }
             Ended::Aborted => {}
         }
         record(&a, at, ended, phases);
@@ -419,7 +424,6 @@ impl<S: Serve> RequestScheduler<S> {
         let seed = derive_seed_u64(self.strikes as u64, at.to_bits());
         let wait = match self.serve.blame(failure) {
             Blame::Object => Wait::Object,
-            Blame::Heap => Wait::Heap(Refused::now()),
             Blame::Network => {
                 self.failing = Some(failure.errno);
                 self.held_until = at + self.serve.backoff(1, seed).unwrap_or(0.0);
@@ -473,13 +477,17 @@ fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
             outcome: ended.outcome() as u32 as f64,
             ..TaskRow::default()
         };
-        if let Ended::Failed(fail) = ended {
-            row.fail = f64::from(fail.errno as i32);
-            row.detail = fail.detail as f64;
+        match ended {
+            Ended::Failed(fail) => {
+                row.fail = f64::from(fail.errno as i32);
+                row.detail = fail.detail as f64;
+            }
+            Ended::Refused(_) => row.fail = f64::from(Errno::ENOMEM as i32),
+            Ended::Ok | Ended::Aborted => {}
         }
         if let Some(at) = match ended {
             Ended::Failed(fail) => fail.at,
-            Ended::Ok | Ended::Aborted => None,
+            Ended::Ok | Ended::Aborted | Ended::Refused(_) => None,
         } {
             row.at_file = off_of_slice(file_in_memory(at.file()).as_bytes()) as f64;
             row.at_file_bytes = at.file().len() as f64;

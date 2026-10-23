@@ -8,6 +8,8 @@ use core::panic::Location;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
+use crate::io::host::Refused;
+
 pub use crate::io::spec::OutcomeName as Outcome;
 
 /// Why a task failed, as numbers the summary can count by. A kernel-made
@@ -57,6 +59,10 @@ pub enum Ended {
     Ok,
     Aborted,
     Failed(Failure),
+    /// The heap refused its body room, as its release count was then: no
+    /// failure of the object's or the server's, and over once the heap gives
+    /// some back (`Refused::over`).
+    Refused(Refused),
 }
 
 impl Ended {
@@ -64,7 +70,7 @@ impl Ended {
         match self {
             Ended::Ok => Outcome::ok,
             Ended::Aborted => Outcome::aborted,
-            Ended::Failed(_) => Outcome::error,
+            Ended::Failed(_) | Ended::Refused(_) => Outcome::error,
         }
     }
 }

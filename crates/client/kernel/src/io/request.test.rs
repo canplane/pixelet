@@ -30,7 +30,6 @@ impl Serve for ByWhy {
         match failure.errno {
             Errno::ENETUNREACH => Blame::Network,
             Errno::EACCES => Blame::Server,
-            Errno::ENOMEM => Blame::Heap,
             _ => Blame::Object,
         }
     }
@@ -172,7 +171,7 @@ fn a_body_the_heap_refused_waits_for_a_release_not_a_clock() {
     l.declare(Stream::terrain, &want, 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
-    failed_with(&mut l, key, Errno::ENOMEM, 0.0);
+    l.settle(key, Ended::Refused(Refused::now()), None, 0.0);
     for t in 0..5 {
         l.declare(Stream::terrain, &want, t as f64 * 10_000.0);
         l.pump(t as f64 * 10_000.0);
@@ -186,6 +185,32 @@ fn a_body_the_heap_refused_waits_for_a_release_not_a_clock() {
     l.declare(Stream::terrain, &both, 50_000.0);
     l.pump(50_000.0);
     assert_eq!(started(&mut l).len(), 1, "asked again once the heap gives some back");
+    set_heap_stat(HeapStat::default);
+}
+
+#[test]
+fn a_release_between_the_refusal_and_its_settling_is_not_waited_for_again() {
+    use crate::io::host::set_heap_stat;
+    use core::sync::atomic::{AtomicU32, Ordering};
+    use xpute_guest::mem::heap::HeapStat;
+    static RELEASES: AtomicU32 = AtomicU32::new(0);
+    let _g = crate::serial();
+    set_heap_stat(|| HeapStat {
+        releases: RELEASES.load(Ordering::Relaxed),
+        ..HeapStat::default()
+    });
+    let mut l = scheduler();
+    let want = [(1u64, ask(Why::Demand, 0.0))];
+    l.declare(Stream::terrain, &want, 0.0);
+    l.pump(0.0);
+    let key = started(&mut l)[0];
+    // Refused, then room given back before the refusal is settled.
+    let refused = Refused::now();
+    RELEASES.fetch_add(1, Ordering::Relaxed);
+    l.settle(key, Ended::Refused(refused), None, 0.0);
+    l.declare(Stream::terrain, &want, 0.0);
+    l.pump(0.0);
+    assert_eq!(started(&mut l).len(), 1, "the release after the refusal already ends its wait");
     set_heap_stat(HeapStat::default);
 }
 
