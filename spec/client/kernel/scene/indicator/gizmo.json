@@ -1,6 +1,6 @@
 {
   "$doc": [
-    "What each line of the world gizmo is drawn in, so the lines and the",
+    "What each line of the gizmo is drawn in, so the lines and the",
     "shell's legend of them read one look: the frame's marks about the focus",
     "(scene/indicator/frame_gizmo.rs). Each #rrggbb in sRGB, with its opacity,",
     "and dashed where a dashed line draws it: a ring of the frame."

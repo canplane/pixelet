@@ -192,19 +192,19 @@
       "costs": ["", "low", "high"],
       "section": "lighting"
     },
-    "view_overlay": {
+    "view": {
       "$doc": ["Where the camera and the pointer are, read live (profiler/summary.rs, its view section)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"
     },
-    "performance_overlay": {
+    "profiler": {
       "$doc": ["The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"
     },
-    "world_gizmo": {
+    "gizmo": {
       "$doc": [
         "Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs)."
       ],

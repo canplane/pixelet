@@ -8,13 +8,13 @@ import type { ComponentType } from "react";
 import { useKernel } from "@/kernel/shell.ts";
 import { type SettingName, SETTINGS, settingsIn } from "@/feature/setting/schema.ts";
 import { GizmoLegend } from "./gizmo-legend.tsx";
-import { PerformanceOverlay } from "./performance.tsx";
-import { ViewOverlay } from "./view.tsx";
+import { ProfilerPanel } from "./profiler.tsx";
+import { ViewPanel } from "./view.tsx";
 
 const PANEL: Partial<Record<SettingName, ComponentType>> = {
-  view_overlay: ViewOverlay,
-  performance_overlay: PerformanceOverlay,
-  world_gizmo: GizmoLegend,
+  view: ViewPanel,
+  profiler: ProfilerPanel,
+  gizmo: GizmoLegend,
 };
 
 /** Whether any panel is up, so the corner is the window's. */

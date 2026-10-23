@@ -81,16 +81,16 @@
     "debug": {
       "section_title": "Debug",
       "section_caption": "Diagnostics for the view and the scheduler",
-      "view_overlay": {
-        "label": "View Overlay",
+      "view": {
+        "label": "View",
         "description": "Shows where the camera and the pointer are: distance, angles, τ, coordinates and the cell zoom under the pointer."
       },
-      "performance_overlay": {
-        "label": "Performance Overlay",
+      "profiler": {
+        "label": "Profiler",
         "description": "Shows frame timing, GPU, drawing, requests and memory, and records them while on."
       },
-      "world_gizmo": {
-        "label": "World Gizmo",
+      "gizmo": {
+        "label": "Gizmo",
         "description": "Draws the view center, its cell and the axis rings, and the drawn pieces, their tiles and shards, in the world with a legend, for debugging."
       }
     },

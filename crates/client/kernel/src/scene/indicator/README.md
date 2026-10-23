@@ -18,7 +18,7 @@ this tier specifically (`ACTION`, `ERASE`), not a general color constant
 file.
 
 `frame_gizmo.rs` lives here too but is a debug visualization behind the
-`world_gizmo` setting (the focus's cell and the frames' rings), as debug
+`gizmo` setting (the focus's cell and the frames' rings), as debug
 lines, which the gizmo's own faces hide and nothing of the world does — not
 a real one-off indicator in the same sense, adjacent by folder convenience,
 not by tier.

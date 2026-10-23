@@ -1,6 +1,6 @@
 // @pxl/client/feature/debug/view.tsx
 
-/** The view overlay: where the camera and the pointer are, read live. Shown by the `view_overlay` setting. */
+/** The view panel: where the camera and the pointer are, read live. Shown by the `view` setting. */
 
 import { useEffect, useState } from "react";
 
@@ -12,8 +12,8 @@ import { type Gauge, profilerGaugeRead } from "./profiler/view.ts";
 
 const POLL_MS = 500;
 
-export function ViewOverlay() {
-  const show = useKernel((s) => s.settings[SETTINGS.view_overlay.key] === 1);
+export function ViewPanel() {
+  const show = useKernel((s) => s.settings[SETTINGS.view.key] === 1);
   const open = useOpenFold((s) => s.open === "view");
   const [g, setG] = useState<Pick<Gauge, "view"> | null>(null);
 

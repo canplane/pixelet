@@ -136,21 +136,21 @@ export const SETTINGS = {
     section: "lighting",
   },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
-  view_overlay: {
+  view: {
     key: 11 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`). */
-  performance_overlay: {
+  profiler: {
     key: 12 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
-  world_gizmo: {
+  gizmo: {
     key: 13 as number,
     kind: "toggle",
     default: false,
@@ -288,21 +288,21 @@ export const SETTINGS_SHIPPED = {
     section: "lighting",
   },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
-  view_overlay: {
+  view: {
     key: 11 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`). */
-  performance_overlay: {
+  profiler: {
     key: 12 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
-  world_gizmo: {
+  gizmo: {
     key: 13 as number,
     kind: "toggle",
     default: false,

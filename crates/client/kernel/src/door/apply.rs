@@ -92,7 +92,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 },
             });
             settings_load(p.settings);
-            profiler_follow(settings_store().performance_overlay);
+            profiler_follow(settings_store().profiler);
             crate::layer::object::repository::open();
             // The shell holds the kernel's state from its first render on.
             applied(s)
@@ -284,7 +284,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let p = abi::SettingSet::read(packet(pkt)?)?;
             let changed = settings_store().set_setting(p.key, p.value);
             refuse_unless(changed.is_some(), Errno::EINVAL)?;
-            if changed == Some(true) && p.key == SettingKey::performance_overlay {
+            if changed == Some(true) && p.key == SettingKey::profiler {
                 profiler_follow(p.value == 1);
             }
             applied(s)
@@ -306,7 +306,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // Records only while the profiler setting is on: a window opened with the
         // panel off would record with nothing to show or stop it.
         Command::PROFILER_START => {
-            refuse_unless(settings_store().performance_overlay, Errno::EPERM)?;
+            refuse_unless(settings_store().profiler, Errno::EPERM)?;
             profiler_window_start();
             applied(s)
         }

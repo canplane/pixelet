@@ -85,9 +85,9 @@ fn companion_tick(ctx: &mut TickContext) {
     companion_step(ctx, companion_props());
 }
 
-fn world_gizmo_tick(_: &mut TickContext) {
+fn gizmo_tick(_: &mut TickContext) {
     let focus = crate::control::camera::controller::focus();
-    let show = settings_store().world_gizmo && focus.is_some();
+    let show = settings_store().gizmo && focus.is_some();
     let third_person = crate::control::camera::controller::dist() != 0.0;
     frame_gizmo_step(show, focus, third_person.then(crate::control::camera::controller::azimuth));
 }
@@ -140,7 +140,7 @@ pub fn boot() {
     on_tick(Phase::interaction, crate::scene::character::preview::preview_step, StepName::preview as u32);
     on_tick(Phase::visible, demand_tick, StepName::demand as u32);
     on_tick(Phase::visible, visible_step, StepName::scene as u32);
-    on_tick(Phase::cosmetic, world_gizmo_tick, StepName::world_gizmo as u32);
+    on_tick(Phase::cosmetic, gizmo_tick, StepName::gizmo as u32);
     world_tasks();
 }
 

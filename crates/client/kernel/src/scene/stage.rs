@@ -152,7 +152,7 @@ pub fn stage_render(paced_ms: f64) {
         billboards: billboard_sheet(),
         admit: crate::io::host::admit_frame,
         // The draws are the profiler's, which records only while its setting is on.
-        counted: settings_store().performance_overlay,
+        counted: settings_store().profiler,
     });
     if out.redraw {
         request_world_tick();

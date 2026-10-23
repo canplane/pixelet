@@ -1,8 +1,8 @@
-// @pxl/client/feature/debug/performance.tsx
+// @pxl/client/feature/debug/profiler.tsx
 
 /**
- * The performance overlay: the profiler's recording controls, exports and
- * gauge. Shown by the `performance_overlay` setting in any build; the kernel
+ * The profiler panel: the profiler's recording controls, exports and
+ * gauge. Shown by the `profiler` setting in any build; the kernel
  * records from boot while it is on. A development page reads the same from
  * the console (feature/debug/console.ts).
  */
@@ -96,8 +96,8 @@ function restartWindow(): void {
   longFramesClear();
 }
 
-export function PerformanceOverlay() {
-  const show = useKernel((s) => s.settings[SETTINGS.performance_overlay.key] === 1);
+export function ProfilerPanel() {
+  const show = useKernel((s) => s.settings[SETTINGS.profiler.key] === 1);
   const [hint, setHint] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [g, setG] = useState<Gauge | null>(null);
@@ -129,10 +129,10 @@ export function PerformanceOverlay() {
   const recording = g?.rec.recording === true;
   const f = g?.frames ?? null;
   const rate = f === null ? null : fps(f);
-  const title = rate === null ? "Performance" : `Performance · ${n1(rate)} fps`;
+  const title = rate === null ? "Profiler" : `Profiler · ${n1(rate)} fps`;
 
   return (
-    <Fold name="performance" title={title} end={<Text style={[gauge.text, gauge.key]}>Last {LIVE_WINDOW_MS / 1000} s</Text>}>
+    <Fold name="profiler" title={title} end={<Text style={[gauge.text, gauge.key]}>Last {LIVE_WINDOW_MS / 1000} s</Text>}>
       <View style={styles.buttons}>
         {/* Both, not a toggle: a window opened at boot would read "Stop" until first stopped. */}
         <PanelButton

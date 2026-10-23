@@ -13,7 +13,7 @@
     "preview",
     "demand",
     "scene",
-    "world_gizmo"
+    "gizmo"
   ],
   "EFFECT_NAMES": [
     "navigation",

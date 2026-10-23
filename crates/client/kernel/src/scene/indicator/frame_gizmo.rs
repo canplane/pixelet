@@ -1,6 +1,6 @@
 // pxl-kernel/scene/indicator/frame_gizmo.rs
 
-//! The frame gizmo (the `world_gizmo` setting), as debug lines: the focus and
+//! The frame gizmo (the `gizmo` setting), as debug lines: the focus and
 //! its cell, and about it a level ring, an upright ring facing the screen and
 //! one through north. The view's forward, its up and north are told apart by
 //! the spec's colors (`gizmo_spec::frame`), which the shell's legend reads.

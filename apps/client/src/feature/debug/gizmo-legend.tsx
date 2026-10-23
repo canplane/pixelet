@@ -1,7 +1,7 @@
 // @pxl/client/feature/debug/gizmo-legend.tsx
 
 /**
- * What each line of the world gizmo means, shown while the `world_gizmo`
+ * What each line of the gizmo means, shown while the `gizmo`
  * setting is on. Colors and dashes are the spec's (`gizmo.spec.ts`), which
  * the kernel draws the lines in.
  */
@@ -44,10 +44,10 @@ function Rows<K extends string>({ looks, labels, reversed }: { looks: Record<K, 
 }
 
 export function GizmoLegend() {
-  const show = useKernel((s) => s.settings[SETTINGS.world_gizmo.key] === 1);
+  const show = useKernel((s) => s.settings[SETTINGS.gizmo.key] === 1);
   if (!show) return null;
   return (
-    <Fold name="world_gizmo" title="World Gizmo">
+    <Fold name="gizmo" title="Gizmo">
       <Head>Frame</Head>
       <Rows looks={frame} labels={FRAME} />
     </Fold>
