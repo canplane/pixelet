@@ -79,6 +79,12 @@ impl<'w, 'a> Upright<'w, 'a> {
     /// The box of the first block the ray from the height `z` to the height
     /// `to`, up or down, stops at (`until`).
     fn ray(&mut self, z: f64, to: f64, until: Until) -> Option<Aabb> {
+        self.met(z, to, until).value().flatten()
+    }
+
+    /// As `ray`, with what the world held of the way: a ray that meets
+    /// nothing before a lack tells nothing past it.
+    fn met(&mut self, z: f64, to: f64, until: Until) -> Answer<Option<Aabb>> {
         let ray = Ray {
             origin: [self.at[0], self.at[1], z],
             direction: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
@@ -88,13 +94,19 @@ impl<'w, 'a> Upright<'w, 'a> {
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
-        answer.value().flatten().map(|h| h.cube)
+        answer.map(|h| h.map(|h| h.cube))
     }
 
     /// The top of what fills at the height `z`: the bottom of the first block
-    /// that does not fill from `z` up, `z` where its own does not.
+    /// that does not fill from `z` up, `z` where its own does not. Filled to
+    /// the reach's top only where the world holds it so: a way into tiles not
+    /// held fills nothing, as what a zoom does not hold is absent there.
     fn lift(&mut self, z: f64) -> f64 {
-        self.ray(z, REACH.max[2], Until::Air).map_or(REACH.max[2], |b| b.min[2].max(z))
+        match self.met(z, REACH.max[2], Until::Air) {
+            Answer::Exact(None) => REACH.max[2],
+            Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) => b.min[2].max(z),
+            Answer::Coarser(None, _) | Answer::Nothing(_) => z,
+        }
     }
 
     /// The top of the highest solid under `z`, over the reach's floor: the
