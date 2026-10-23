@@ -64,15 +64,12 @@ pub(crate) const EARTH_TILES: usize = 48;
 /// Bindings 8 through 18, and the air's volume at 22: eleven entries.
 pub const AIR_ENTRIES: usize = 11;
 
-/// The air's volume's terms, a depth of froxels each (atmos_froxel.wgsl):
-/// what the air scatters and lets through, then the sun's, the other
-/// light's and the sky's light.
-const AIR_TERMS: u32 = 4;
-/// The volume's maker's workgroup, a side each way (atmos_froxel.wgsl).
-const FROXEL_WORKGROUP: u32 = 4;
+/// The volume's maker's workgroup, a side across the screen, a column of
+/// froxels a thread (atmos_froxel.wgsl).
+const FROXEL_WORKGROUP: u32 = 8;
 /// What the volume's maker binds: the frame, the volume it writes, the
 /// air's words and the tables it marches through, and the sky's ray.
-const FROXEL_GROUP: [u32; 27] = [
+const FROXEL_GROUP: [u32; 24] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -92,9 +89,6 @@ const FROXEL_GROUP: [u32; 27] = [
     COMPUTE,
     TEXTURE,
     13,
-    COMPUTE,
-    TEXTURE,
-    18,
     COMPUTE,
     TEXTURE,
     19,
@@ -221,7 +215,7 @@ impl Atmosphere {
         ]
         .map(|id| pipelines.build(g, id, Format::rgba16float));
         let n = AIR_FROXELS;
-        let volume = g.volume_view(g.volume([n, n, AIR_TERMS * n], Format::rgba16float, texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING));
+        let volume = g.volume_view(g.volume([n, n, n], Format::rgba16float, texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING));
 
         let mut atmosphere = Atmosphere {
             uniform,
@@ -291,7 +285,7 @@ impl Atmosphere {
         for (k, entries) in reads {
             atmosphere.groups[k] = g.bind_group(atmosphere.passes[pass_of(k)].layouts[0], &entries);
         }
-        let froxel = of(&[8, 9, 11, 12, 13, 18], &[frame, view_entry(1, volume), buffer_entry(19, sky_buffer)]);
+        let froxel = of(&[8, 9, 11, 12, 13], &[frame, view_entry(1, volume), buffer_entry(19, sky_buffer)]);
         atmosphere.froxel_group = g.bind_group(atmosphere.froxel.layouts[0], &froxel);
         atmosphere
     }
@@ -329,7 +323,7 @@ impl Atmosphere {
         g.set_pipeline(pass, self.froxel.pipeline);
         g.set_bind_group(pass, 0, self.froxel_group, &[]);
         let groups = AIR_FROXELS.div_ceil(FROXEL_WORKGROUP);
-        g.dispatch(pass, groups, groups, groups);
+        g.dispatch(pass, groups, groups, 1);
         g.end(pass);
         true
     }

@@ -163,6 +163,12 @@ fn falls_to_land(dir: vec3f) -> bool {
   return dir.z < 0.0 && land_below_km() > 0.0;
 }
 
+// How far from the eye a ray along `dir` that falls to the land meets it, in
+// units (`falls_to_land`).
+fn to_land(dir: vec3f) -> f32 {
+  return land_below_km() / atmos_km_per_u() / -dir.z;
+}
+
 fn land_radius() -> f32 {
   return atmos_bottom_radius() + atmos_land_altitude_km();
 }

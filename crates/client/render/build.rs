@@ -146,6 +146,8 @@ fn words() -> String {
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
+        // Q3's Z, the world's height about sea level (pxl-portable).
+        format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_portable::HEIGHT_BITS),
     ]
     .concat()
 }

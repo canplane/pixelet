@@ -1,6 +1,6 @@
 // The air as the frame shows it: before each point, read off the air's
 // volume (gpu/atmosphere.rs `froxel`), which the march to its froxels made
-// (atmos_froxel.wgsl, atmos_view.wgsl `seen_at`); and the sky, and the land
+// (atmos_froxel.wgsl, atmos_view.wgsl `air_held`); and the sky, and the land
 // past the terrain, seen through it.
 
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
@@ -11,17 +11,13 @@
 
 /* the air before a point */
 
-// The froxels a side and deep: Hillaire 2020's aerial-perspective volume, 32
-// a side and 32 deep, as Unreal's SkyAtmosphere lays it out (frame/shader/words.rs
-// `AIR_FROXELS`); the volume holds four of these deep, one a term.
-const AIR_TERMS: f32 = 4.0;
-
-// Term `k` of the volume at `uv` across and `z` deep, its depth's share
-// cubed of `air_far` (`air_depth`), filtered within the term's own froxels.
-fn air_term(uv: vec2f, z: f32, k: f32) -> vec4f {
+// The volume at `uv` across and `z` deep (`air_reach`): Hillaire 2020's
+// aerial-perspective volume, 32 a side and 32 deep, as Unreal's
+// SkyAtmosphere lays it out (frame/shader/words.rs `AIR_FROXELS`).
+fn air_before(uv: vec2f, z: f32) -> vec4f {
   let n = f32(AIR_FROXELS);
   let deep = clamp(z * n, 0.5, n - 0.5);
-  return textureSampleLevel(air_volume, atmos_sampler, vec3f(uv, (k * n + deep) / (AIR_TERMS * n)), 0.0);
+  return textureSampleLevel(air_volume, atmos_sampler, vec3f(uv, deep / n), 0.0);
 }
 
 // The air before a point as the volume holds it at the point's place on the
@@ -31,21 +27,23 @@ fn air_term(uv: vec2f, z: f32, k: f32) -> vec4f {
 // the eye by the point's share of that distance (Hillaire 2020's own
 // handling short of the volume's first slice): what the air scatters and
 // dims grows with the length of air before a point, which that near is
-// all but straight. The lights at a point are not the air's length, and
-// are read as they are.
+// all but straight. The lights at a point are the point's own, read where it
+// stands (atmos_view.wgsl `light_of`): they turn with its height, and a
+// froxel's middle stands higher or lower than what is drawn in it.
 fn seen_from_eye(world_pos: vec3f) -> Seen {
   let clip = frame_view_proj() * vec4f(world_pos, 1.0);
   let w = max(clip.w, 1e-6);
   let uv = vec2f(clip.x / w * 0.5 + 0.5, 0.5 - clip.y / w * 0.5);
-  let share = clamp(length(world_pos - frame_camera_pos()) / air_far(), 0.0, 1.0);
-  // `air_depth` the other way.
-  let z = pow(max(share, 1e-30), 1.0 / 3.0);
-  let near = min(share / air_depth(0.5 / f32(AIR_FROXELS)), 1.0);
-  let air = air_term(uv, z, 0.0);
+  let to = world_pos - frame_camera_pos();
+  let d = length(to);
+  // Past where the air ends along it, the air to there (`air_ground`).
+  let z = air_z(min(d, air_ground(to / max(d, 1e-6))));
+  let near = min(d / air_reach(0.5 / f32(AIR_FROXELS)), 1.0);
+  let air = air_before(uv, z);
   var s: Seen;
   s.scattered = air.rgb * near;
   s.through = 1.0 - near * (1.0 - air.a);
-  s.light = Light(air_term(uv, z, 1.0).rgb, air_term(uv, z, 2.0).rgb, air_term(uv, z, 3.0).rgb);
+  s.light = light_of(world_pos);
   return s;
 }
 
@@ -113,13 +111,13 @@ fn beyond(dir: vec3f) -> vec3f {
     }
     return sky;
   }
-  let d = land_below_km() / atmos_km_per_u() / -dir.z;
+  let d = to_land(dir);
   let p = dir * d;
   let seen = seen_from_eye(p);
   let octaves = log2(d / atmos_earth_reach());
   let n = frame_up();
   let face = earth_face(map_of(p), octaves);
-  let lit = EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);
+  let lit = EARTH_GAIN * face.rgb * surface_light(n, n, 1.0, seen.light) + city_shown(face.a, n);
   return seen.scattered + seen.through * clamp(octaves + 1.0, 0.0, 1.0) * lit;
 }
 

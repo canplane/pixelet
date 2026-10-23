@@ -1,4 +1,4 @@
-// The air before a point as the eye sees it, marched (`seen_at`): what the
+// The air before a point as the eye sees it, marched (`air_held`): what the
 // air's volume is made of (atmos_froxel.wgsl), which every painter reads
 // (atmos_air.wgsl `seen_from_eye`); and the lights at a point.
 
@@ -72,8 +72,9 @@ fn air_to(world_pos: vec3f) -> Veil {
 }
 
 // The air before a point: what it lets through, what it scatters toward
-// the eye, and the lights there. Every term varies slowly across the view,
-// which is what lets the air's volume hold it (atmos_air.wgsl).
+// the eye, and the lights there. The air's two vary slowly across the view,
+// which is what lets the air's volume hold them (atmos_air.wgsl); the lights
+// turn with a point's height, and are read where it stands (`light_of`).
 struct Seen {
   through: f32,
   scattered: vec3f,
@@ -89,25 +90,51 @@ fn air_far() -> f32 {
   return (sqrt(max(r * r - b * b, 0.0)) + sqrt(t * t - b * b)) / atmos_km_per_u();
 }
 
-// The share of `air_far` a froxel `z` deep reaches, its depth cubed: a
-// slice's reach grows with its depth, so the near view, where most of what
-// is drawn lies, takes most of the slices — the first ~4 m from the ground,
-// the second ~116 m, the ninth ~21 km — and one volume reaches as far as
-// the air (atmos_froxel.wgsl, atmos_air.wgsl).
-fn air_depth(z: f32) -> f32 {
-  return z * z * z;
+// The nearest anything drawn may lie, in units: how far the eye stands over
+// the world's top, where a position's Z ends (`HEIGHT_BITS` about sea level),
+// none while it stands within the world. The air's volume starts there, so an
+// eye high over the world spends no slice on the empty air under it.
+fn air_near() -> f32 {
+  let top = f32(1u << (HEIGHT_BITS - 1u));
+  return max(atmos_camera_altitude() / atmos_km_per_u() - top, 0.0);
 }
 
-// The march to a point, the volume's one maker (atmos_froxel.wgsl).
-fn seen_at(world_pos: vec3f) -> Seen {
+// How far from the eye a froxel `z` deep reaches, in units: from `air_near`,
+// its depth cubed of the rest of `air_far`. A slice's reach grows with its
+// depth, so the near view, where most of what is drawn lies, takes most of
+// the slices — from the ground, the first ~4 m, the second ~116 m, the ninth
+// ~21 km — and one volume reaches as far as the air (atmos_froxel.wgsl,
+// atmos_air.wgsl).
+fn air_reach(z: f32) -> f32 {
+  let n = air_near();
+  return n + (air_far() - n) * z * z * z;
+}
+
+// How far from the eye the air along `dir` ends, in units: where the march
+// stops, at the air's ground (`to_ground`, the sea's radius), past which a
+// point's air is the air to there; else the volume's whole reach. Every point
+// a position can name, under the sea to the world's floor too, reads the
+// air the march gives it: the volume holds it exactly at this depth
+// (atmos_froxel.wgsl), and a reader past it reads it there (atmos_air.wgsl).
+fn air_ground(dir: vec3f) -> f32 {
+  let r = camera_r();
+  let mu = dot(frame_up(), dir);
+  return select(air_far(), to_ground(r, mu) / atmos_km_per_u(), meets_ground(r, mu));
+}
+
+// `air_reach` the other way: how deep a point `d` units from the eye lies.
+fn air_z(d: f32) -> f32 {
+  let n = air_near();
+  return pow(clamp((d - n) / (air_far() - n), 1e-30, 1.0), 1.0 / 3.0);
+}
+
+// The march to a point, the volume's one maker (atmos_froxel.wgsl): what
+// the air scatters toward the eye, and in alpha what it lets through. An
+// authored color is dimmed alike at every wavelength: by wavelength, a light
+// sea's blue went and its green stayed.
+fn air_held(world_pos: vec3f) -> vec4f {
   let v = air_to(world_pos);
-  var s: Seen;
-  // An authored color is dimmed alike at every wavelength: by wavelength, a
-  // light sea's blue went and its green stayed.
-  s.through = dot(v.through, LUMA);
-  s.scattered = v.scattered;
-  s.light = light_of(world_pos);
-  return s;
+  return vec4f(v.scattered, dot(v.through, LUMA));
 }
 
 
