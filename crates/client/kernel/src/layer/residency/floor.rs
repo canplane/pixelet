@@ -5,8 +5,9 @@
 //! asked for with every observation, not only when one finds nothing, or
 //! every turn toward new ground would leave a hole for a round trip.
 //!
-//! Its zoom is the source's declared top (io/source.rs), never guessed from
-//! what fails. Until declared, nothing is observed.
+//! Its zoom is the layer's top (`Base::top`), from the source's declaration
+//! (io/source.rs), never guessed from what fails. Until declared, nothing is
+//! observed.
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::zoom::Zoom;

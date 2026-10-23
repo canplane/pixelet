@@ -142,11 +142,10 @@ impl<L: Observed> Demand<L> {
         self.asks.keys().all(|&p| L::residency().has_answer(p))
     }
 
-    /// No object for `p`: the tile over it says its ground; at the source's top, `Base::empty`.
+    /// No object for `p`: the tile over it says its ground; at the layer's top (`Base::top`), `Base::empty`.
     pub fn absent(&mut self, p: Tile) {
-        let top = L::TOP.or(source::top()).unwrap_or(L::LATTICE.top());
         match L::empty() {
-            Some(empty) if p.zoom <= top => L::residency().set(p, empty),
+            Some(empty) if L::top().is_some_and(|top| p.zoom <= top) => L::residency().set(p, empty),
             _ => L::residency().answer_above(p),
         }
     }
@@ -288,8 +287,7 @@ impl<L: Observed> Demand<L> {
     /// as the destination is. A layer with a top of its own is observed out
     /// to its own reach.
     pub fn step(&mut self, destination: Option<Tile>, pinned: &[Tile], tau: Tau) {
-        // Nothing coarser than the layer's own top is drawn, whatever the source holds.
-        let Some(top) = L::TOP.or(source::top()).map(|t| t.max(L::LATTICE.top())) else { return };
+        let Some(top) = L::top() else { return };
         let o = observation().map(|o| match L::TOP {
             Some(_) => Observation { reach: L::reach(), ..o },
             None => o,

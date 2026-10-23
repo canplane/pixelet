@@ -17,9 +17,11 @@ use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::layer::residency::{floor, Lines};
+use crate::layer::Base as _;
 use crate::query::World;
 use crate::view::frame::pose::view;
 use crate::view::reach::eye_height;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::Zoom;
 
 pub fn eye() -> Option<V3> {
@@ -84,9 +86,9 @@ pub fn observation() -> Option<Observation> {
 /// met; a column it knows nothing of yet names none, as nothing there is to
 /// stand in.
 pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
-    let Some(top) = crate::io::source::top() else { return };
+    let Some(top) = TerrainTile::top() else { return };
     let over = (o.eye[2] - o.ground).max(0.0);
-    let coarsest = GROUND.grid_zoom(top.max(GROUND.top())).max(CHUNK_STEPS);
+    let coarsest = GROUND.grid_zoom(top).max(CHUNK_STEPS);
     let near = |zoom: Zoom, [x, y]: [i32; 2]| {
         let side = units(zoom);
         let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);
@@ -123,9 +125,9 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
 /// distance (`Tau::cell_at`), no coarser than a tile draws and no finer than
 /// the ground's cells.
 pub fn cell_at(eye: V3, tau: Tau, at: V3) -> Option<Zoom> {
-    let top = crate::io::source::top()?;
+    let top = TerrainTile::top()?;
     let v = pxl_spec::space::coord::v3::sub(&at, &eye);
-    Some(tau.cell_at(pxl_spec::space::coord::v3::dot(&v, &v)).clamp(GROUND.grid_zoom(top.max(GROUND.top())), GROUND.cell()))
+    Some(tau.cell_at(pxl_spec::space::coord::v3::dot(&v, &v)).clamp(GROUND.grid_zoom(top), GROUND.cell()))
 }
 
 /// How far from the eye a layer's tiles at `zoom` are asked for: at the
