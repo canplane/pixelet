@@ -11,7 +11,7 @@ use crate::gpu::api::{bytes, Gpu};
 
 use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{skin_group, Blocks};
+use crate::gpu::renderer::{skin_group, skin_made, Blocks};
 
 pub struct SkinnedPass {
     lit: Built,
@@ -34,14 +34,13 @@ impl SkinnedPass {
         self.skins.extend_from_slice(skins);
     }
 
-    /// None while its image lands, and the actor is drawn on a later frame.
-    fn skin_of(&self, g: &Gpu, model: u32) -> Option<u32> {
-        let &(_, image) = self.skins.iter().find(|&&(m, _)| m == model)?;
-        skin_group(g, self.lit.layouts[2], image)
+    fn image_of(&self, model: u32) -> Option<Image> {
+        self.skins.iter().find(|&&(m, _)| m == model).map(|&(_, image)| image)
     }
 
-    /// Every palette group the draws will bind is made here, so drawing makes
-    /// nothing that outlives its frame.
+    /// Every palette and skin group the draws will bind is made here, so
+    /// drawing makes nothing that outlives its frame; a skin whose image
+    /// lands later is drawn on a later frame.
     /// `moved` whether the lists the draws are made from moved.
     pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone, uniforms: &[f32], moved: bool, blocks: &mut Blocks) {
         self.uniforms.write(g, self.lit.layouts[1], draws.len() as u32, draws.clone(), moved, |buf, d| {
@@ -52,6 +51,9 @@ impl SkinnedPass {
         });
         for d in draws {
             blocks.group(g, d[1], self.lit.layouts[3]);
+            if let Some(image) = self.image_of(d[2]) {
+                skin_group(g, self.lit.layouts[2], image);
+            }
         }
     }
 
@@ -60,7 +62,7 @@ impl SkinnedPass {
         let palette_layout = self.lit.layouts[3];
         draw_models(g, pass, &self.lit, self.lit.pipeline, frame, slots, 0, draws, |d| {
             let (mesh, vertex_cnt, index_cnt) = blocks.get(d[0])?;
-            let skin = self.skin_of(g, d[2])?;
+            let skin = skin_made(self.image_of(d[2])?.0)?;
             Some(ModelDraw {
                 groups: [skin, blocks.group(g, d[1], palette_layout)?],
                 mesh: Some((mesh, vertex_cnt, index_cnt)),

@@ -295,34 +295,42 @@ pub fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: Entry, air: [Entry; AIR
 /// (`Gpu::image`).
 pub type Image = (u32, &'static [u8]);
 
-/// Each skin image's bind group, made the first time a draw binds it, over
-/// one sampler: an image's texture is taken once (`Gpu::image`), so a skin
-/// one pass binds again, or another binds, is the group here. As many as the
-/// skins the asset table names, in the one layout a skin takes (record.rs
-/// `SKIN`), kept for the device's life.
+/// Each skin image's bind group, made the first time a frame prepares a draw
+/// of it, over one sampler: an image's texture is taken once (`Gpu::image`),
+/// so a skin one pass binds again, or another binds, is the group here. As
+/// many as the skins the asset table names, in the one layout a skin takes
+/// (record.rs `SKIN`), kept for the device's life.
 static SKINS: Global<Skins> = Global::new();
 
 #[derive(Default)]
 struct Skins {
     sampler: u32,
-    /// An image, the layout and its group.
-    groups: Vec<(u32, u32, u32)>,
+    /// An image and its group.
+    groups: Vec<(u32, u32)>,
 }
 
-/// A skin's bind group in `layout`; none while its image lands.
+/// A skin's bind group, made in `layout` where none is; none while its image
+/// lands. Only as a frame prepares, before its transaction (`frame_begin`): a
+/// group made in a frame that is dropped would be gone and still named here.
 pub fn skin_group(g: &Gpu, layout: u32, (image, file): Image) -> Option<u32> {
-    let skins = SKINS.get(Skins::default);
-    if let Some(&(_, _, group)) = skins.groups.iter().find(|&&(i, l, _)| i == image && l == layout) {
+    if let Some(group) = skin_made(image) {
         return Some(group);
     }
+    let skins = SKINS.get(Skins::default);
     let texture = g.image(image, file)?;
     if skins.sampler == 0 {
         skins.sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::repeat, None, 1);
     }
     let view = g.view(texture, false, 0, 1, 0, 1);
     let group = g.bind_group(layout, &[view_entry(0, view), sampler_entry(1, skins.sampler)]);
-    skins.groups.push((image, layout, group));
+    skins.groups.push((image, group));
     Some(group)
+}
+
+/// A skin's bind group as a frame's draws bind it: the one a prepare made
+/// (`skin_group`), or none.
+pub fn skin_made(image: u32) -> Option<u32> {
+    SKINS.get(Skins::default).groups.iter().find(|&&(i, _)| i == image).map(|&(_, group)| group)
 }
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
@@ -1961,7 +1969,7 @@ impl Renderer {
         self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
         self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
         self.puck.prepare(g, &draws, uniforms, lists_moved, b);
-        self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
+        self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, uniforms, b);
         self.debug.prepare(g, &draws, uniforms, lists_moved);
         let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
         self.screen.prepare(g, cast, &meshes, (world.rays_view, [world.width, world.height]));
@@ -2049,7 +2057,7 @@ impl Renderer {
         let mut bound = 0;
         self.decor.draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         g.end(pass);
-        self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
+        self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_BADGES]);
         self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_DEBUG]);
         self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, blocks_moved || tables || exposed, &mut stamps[SPAN_CASES]);
         let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);

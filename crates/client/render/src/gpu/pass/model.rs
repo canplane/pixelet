@@ -53,8 +53,8 @@ impl FrameGroups {
 }
 
 pub struct DrawUniforms {
-    /// Rounded up to the device's offset alignment.
     bytes: u32,
+    /// `bytes` rounded up to the device's offset alignment.
     stride: u32,
     buffer: u32,
     capacity: u32,
@@ -78,7 +78,7 @@ impl DrawUniforms {
     pub fn new(bytes: u32, align: u32) -> DrawUniforms {
         DrawUniforms {
             bytes,
-            stride: bytes.max(align),
+            stride: bytes.next_multiple_of(align),
             buffer: 0,
             capacity: 0,
             group: 0,

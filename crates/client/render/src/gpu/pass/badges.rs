@@ -341,9 +341,9 @@ impl BadgePass {
         flush.whole || drawn
     }
 
-    /// The regions' depth at the world's size, and each set's groups, made
-    /// here so drawing makes nothing that outlives its frame.
-    pub fn prepare(&mut self, g: &Gpu, depth: u32, size: (u32, u32), draws: &Draws, blocks: &Blocks) {
+    /// The regions' depth at the world's size, and each set's groups and
+    /// uniform, made here so drawing makes nothing that outlives its frame.
+    pub fn prepare(&mut self, g: &Gpu, depth: u32, size: (u32, u32), draws: &Draws, uniforms: &[f32], blocks: &Blocks) {
         if self.sheet_group == 0 {
             return;
         }
@@ -368,19 +368,9 @@ impl BadgePass {
                 (set.block, set.depth, set.numbers) = (block, depth, self.numbers_view);
             }
         }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn draw(&mut self, g: &Gpu, encoder: u32, color: u32, depth: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
-        if self.sheet_group == 0 {
-            return;
-        }
-        let placed = || draws.of(PIPELINE_BADGE).filter(|d| d[1] > 0).filter(|d| blocks.get(d[0]).is_some());
-        if placed().next().is_none() {
-            return;
-        }
         // A set's uniform a slot, written each frame, as the eye moves them
         // all; numbered on from the sets before, so no two billboards share one.
+        let placed = || draws.of(PIPELINE_BADGE).filter(|d| d[1] > 0).filter(|d| blocks.get(d[0]).is_some());
         let (view, proj, px_k) = (self.view, self.proj, self.px_k);
         let count = placed().take(SETS).count() as u32;
         let mut before = 0;
@@ -394,6 +384,17 @@ impl BadgePass {
             buf[..word_bytes(BADGE_FLOATS) as usize].copy_from_slice(bytes(&s));
             before += d[1];
         });
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw(&self, g: &Gpu, encoder: u32, color: u32, depth: u32, draws: &Draws, blocks: &Blocks, stamp: &mut Stamp) {
+        if self.sheet_group == 0 {
+            return;
+        }
+        let placed = || draws.of(PIPELINE_BADGE).filter(|d| d[1] > 0).filter(|d| blocks.get(d[0]).is_some());
+        if placed().next().is_none() {
+            return;
+        }
         let Some(slots) = self.uniforms.slots() else { return };
         // Cleared to no number, and reversed depth to the far plane.
         let pass = g.pass(encoder, &pass_desc(self.numbers_view, Load::Clear, self.regions_view, Load::Clear, 0.0, stamp.pass()));

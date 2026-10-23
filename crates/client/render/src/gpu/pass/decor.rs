@@ -14,7 +14,7 @@ use crate::gpu::grown::Drawn;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::model::{bind_mesh, draw_models, put_instances, DrawUniforms, ModelDraw, Stage, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{skin_group, Blocks, Draws};
+use crate::gpu::renderer::{skin_group, skin_made, Blocks, Draws};
 
 pub const GROUPS: usize = 64;
 
@@ -44,11 +44,21 @@ impl DecorPass {
         }
     }
 
-    /// None while its mesh or its skin's image lands.
+    /// None while its mesh or its skin's image lands; its skin's group made
+    /// here, as a frame prepares (gpu/renderer.rs `skin_group`).
     pub(crate) fn model_of(&self, g: &Gpu, group: u32, blocks: &Blocks) -> Option<(u32, u32, u32, u32)> {
+        self.model(group, blocks, |image| skin_group(g, self.lit.layouts[2], image))
+    }
+
+    /// As a frame's draws bind it: a skin its prepare made, or none.
+    fn model_drawn(&self, group: u32, blocks: &Blocks) -> Option<(u32, u32, u32, u32)> {
+        self.model(group, blocks, |image| skin_made(image.0))
+    }
+
+    fn model(&self, group: u32, blocks: &Blocks, skin: impl FnOnce(Image) -> Option<u32>) -> Option<(u32, u32, u32, u32)> {
         let (mesh, image) = *self.groups.get(group as usize)?;
         let (buffer, vertex_cnt, index_cnt) = blocks.get(mesh)?;
-        Some((buffer, vertex_cnt, index_cnt, skin_group(g, self.lit.layouts[2], image?)?))
+        Some((buffer, vertex_cnt, index_cnt, skin(image?)?))
     }
 
     /// 0 while it loads.
@@ -86,7 +96,7 @@ impl DecorPass {
         let first = if which == PIPELINE_GHOST_DECOR { draws.of(PIPELINE_DECOR).len() as u32 } else { 0 };
         let (lit, block_layout) = (self.lit, self.lit.layouts[3]);
         draw_models(g, pass, &lit, pipeline, frame, slots, first, draws.of(which), |d| {
-            let (model, vertex_cnt, index_cnt, skin) = self.model_of(g, d[1], blocks)?;
+            let (model, vertex_cnt, index_cnt, skin) = self.model_drawn(d[1], blocks)?;
             let block = blocks.group(g, d[0], block_layout)?;
             Some(ModelDraw {
                 groups: [skin, block],
@@ -112,7 +122,7 @@ impl DecorPass {
         g.set_bind_group(pass, 3, d.block_group, &[]);
         let mut mesh_bound = 0;
         for group in 0..pxl_spec_core::scatter::GROUPS {
-            let Some((model, vertex_cnt, index_cnt, skin)) = self.model_of(g, group, blocks) else { continue };
+            let Some((model, vertex_cnt, index_cnt, skin)) = self.model_drawn(group, blocks) else { continue };
             g.set_bind_group(pass, 1, d.uniform_group, &[d.uniform_at(2 * group)]);
             g.set_bind_group(pass, 2, skin, &[]);
             bind_mesh(g, pass, &self.lit, &mut mesh_bound, model, vertex_cnt, index_cnt);
