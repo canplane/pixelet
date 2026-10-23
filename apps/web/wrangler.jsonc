@@ -21,7 +21,7 @@
   //
   // plei.me rather than one of the xpute domains, deliberately: @xpute/kit
   // is a runtime kit that carries no pixelet knowledge and is meant to stay
-  // portable (see AGENTS.md), so putting this app on xpute.* would spend that
+  // portable, so putting this app on xpute.* would spend that
   // name on one of the things built with it.
   "routes": [
     { "pattern": "plei.me", "custom_domain": true }

@@ -20,7 +20,8 @@
   absent at that zoom.
 - **A kind of thing is drawn wholly on the CPU or wholly on the GPU.**
 - **Dependencies point one way:** turn, door and shell wire everything from
-  the top, and nothing below names them; scene → view → query → layer, a
+  the top, and nothing below names them; control, which the door's events
+  enter, moves the eye and asks the query, naming no scene; scene → view → query → layer, a
   DAG whose edges never point up; io and the turn's edge and phases below
   everyone; leaves (settings, models, billboards) below what reads them. The
   profiler reads anything, and production reaches it only where it records.
