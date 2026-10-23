@@ -19,6 +19,11 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use xpute_guest::mem::base::off_of;
 
+use crate::frame::shader::words::atmos::{
+    BOTTOM_RADIUS, CAMERA_ALTITUDE, CITY_LIGHT, EARTH_REACH, EARTH_TILES, EARTH_WINDOW, EXPOSURE, GROUND_ALBEDO, KM_PER_U, LAND_ALTITUDE_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT, MIE_SCATTERING,
+    MOON_COLOR, MOON_DIR, MOON_LIGHT, NIGHT_SKY, NIGHT_STOPS, OZONE_ABSORPTION, OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING, SHOWN_FALL, SUN_ANGULAR_RADIUS, SUN_DIR,
+    TOP_RADIUS,
+};
 use crate::frame::shader::words::{AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE};
 use crate::gpu::image_map::ImageMap;
@@ -29,39 +34,6 @@ use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_MOON_COLOR, ENV_SUN};
 
 /// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
-
-/// One past the last field: the device rounds the struct up to a 16-byte row.
-/// Offsets in floats into the struct.
-pub(crate) const RAYLEIGH_SCATTERING: usize = 0;
-pub(crate) const BOTTOM_RADIUS: usize = 3;
-pub(crate) const OZONE_ABSORPTION: usize = 4;
-pub(crate) const TOP_RADIUS: usize = 7;
-// 8 to 10 free.
-pub(crate) const RAYLEIGH_SCALE_HEIGHT: usize = 11;
-pub(crate) const SUN_DIR: usize = 12;
-pub(crate) const MIE_SCATTERING: usize = 15;
-pub(crate) const CAMERA_ALTITUDE: usize = 16;
-pub(crate) const KM_PER_U: usize = 17;
-pub(crate) const MIE_EXTINCTION: usize = 18;
-pub(crate) const MIE_SCALE_HEIGHT: usize = 19;
-pub(crate) const MIE_G: usize = 20;
-pub(crate) const OZONE_CENTER: usize = 21;
-pub(crate) const OZONE_HALF_WIDTH: usize = 22;
-pub(crate) const GROUND_ALBEDO: usize = 23;
-pub(crate) const SUN_ANGULAR_RADIUS: usize = 24;
-pub(crate) const EXPOSURE: usize = 25;
-pub(crate) const NIGHT_STOPS: usize = 26;
-pub(crate) const SHOWN_FALL: usize = 27;
-pub(crate) const MOON_DIR: usize = 28;
-pub(crate) const MOON_LIGHT: usize = 31;
-pub(crate) const MOON_COLOR: usize = 32;
-// 35 free.
-pub(crate) const NIGHT_SKY: usize = 36;
-pub(crate) const LAND_ALTITUDE: usize = 39;
-pub(crate) const CITY_LIGHT: usize = 40;
-pub(crate) const EARTH_REACH: usize = 43;
-pub(crate) const EARTH_WINDOW: usize = 44;
-pub(crate) const EARTH_TILES: usize = 48;
 
 /// Bindings 8 through 18, and the air's volume at 22: eleven entries.
 pub const AIR_ENTRIES: usize = 11;
@@ -371,7 +343,7 @@ impl Atmosphere {
         self.words[MOON_COLOR..MOON_COLOR + 3].copy_from_slice(&env[ENV_MOON_COLOR..ENV_MOON_COLOR + 3]);
         self.words[CAMERA_ALTITUDE] = altitude_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
-        self.words[LAND_ALTITUDE] = env[ENV_AIR + 3];
+        self.words[LAND_ALTITUDE_KM] = env[ENV_AIR + 3];
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         let r = &mut self.read;
         r.begin();

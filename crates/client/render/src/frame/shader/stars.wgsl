@@ -1,24 +1,10 @@
 // Yale Bright Star Catalog stars as quads at infinity, dimmed by the air. Added
 // after the encode, which a point this small cannot tell apart.
 
-struct Stars {
-  view_proj: mat4x4f,
-  sky: mat4x4f,
-  // Sized in CSS pixels so a dense screen does not shrink them.
-  density: f32,
-  intensity: f32,
-  free: vec2f,
-};
-
-// Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process. The viewport and the up are the frame's,
-// the Moon the air's.
+// Its words' fields and accessors are frame/shader/words.rs `stars`'s, which
+// build.rs writes here. The viewport and the up are the frame's, the Moon
+// the air's.
 @group(1) @binding(0) var<uniform> stars_words: array<vec4f, STARS_VEC4S>;
-
-fn stars_view_proj() -> mat4x4f { return mat4x4f(stars_words[0], stars_words[1], stars_words[2], stars_words[3]); }
-fn stars_sky() -> mat4x4f { return mat4x4f(stars_words[4], stars_words[5], stars_words[6], stars_words[7]); }
-fn stars_density() -> f32 { return stars_words[8].x; }
-fn stars_intensity() -> f32 { return stars_words[8].y; }
 
 @group(1) @binding(1) var<storage, read> catalog: array<vec4f>;
 

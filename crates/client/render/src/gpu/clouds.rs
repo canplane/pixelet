@@ -7,22 +7,14 @@
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::frame::shader::words::CLOUDS_FLOATS;
+use crate::frame::shader::words::clouds::{BASE, COUNT, DRIFT, FRAC, REACH, SHOWN};
+use crate::frame::shader::words::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::look::cloud::{drift, CUMULUS_KM, LATTICE_COUNT, LATTICE_SHAMT, TILE_TEXELS};
+use crate::look::cloud::{drift, CUMULUS_KM, LATTICE_COUNT, LATTICE_SHAMT};
 use crate::look::environment::{ENV_AIR, ENV_SKY};
-
-/// How much of the clouds shows and how far they are drawn, then the field
-/// the eye is over (frame/shader/clouds.wgsl `Clouds`); the ray is the sky's.
-const SHOWN: usize = 0;
-const REACH: usize = 1;
-const COUNT: usize = 2;
-const DRIFT: usize = 4;
-const BASE: usize = 6;
-const FRAC: usize = 8;
 
 pub struct CloudPass {
     below: Built,
@@ -39,14 +31,14 @@ impl CloudPass {
         let below = pipelines.build(g, PIPELINE_CLOUDS, g.canvas());
         let above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, g.canvas());
         let tile = g.texture(
-            TILE_TEXELS,
-            TILE_TEXELS,
+            CLOUD_TILE_TEXELS,
+            CLOUD_TILE_TEXELS,
             1,
             Format::r8unorm,
-            mip_levels(TILE_TEXELS, TILE_TEXELS),
+            mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
             texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT,
         );
-        let tile_view = g.view(tile, false, 0, mip_levels(TILE_TEXELS, TILE_TEXELS), 0, 1);
+        let tile_view = g.view(tile, false, 0, mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS), 0, 1);
         // Repeated, since the tile meets itself.
         let tile_sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::linear, AddressMode::repeat, None, 1);
         let uniform = g.buffer(word_bytes(CLOUDS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
@@ -59,7 +51,7 @@ impl CloudPass {
         ];
         e.extend(air);
         let group = g.bind_group(below.layouts[0], &e);
-        bake(g, pipelines, tile, mip_levels(TILE_TEXELS, TILE_TEXELS));
+        bake(g, pipelines, tile, mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS));
         CloudPass {
             below,
             above,

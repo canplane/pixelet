@@ -4,36 +4,11 @@
 // from below they fill only the sky, from above they cover everything, so a
 // peak above a sheet is wrong either way.
 
-// A ray is the sky's (sky_words.wgsl `sky_ray`).
-struct Clouds {
-  // Faded over the upper half of the climb to where the clouds are gone
-  // (look/cloud.rs `shown`).
-  shown: f32,
-  // How far the eye observes, in km: past it no sheet is drawn.
-  reach: f32,
-  // The lattice's units around; the cells the wind has moved it under the
-  // map; the field's lattice unit the eye is over and its share of one
-  // (gpu/clouds.rs `field`).
-  count: u32,
-  free: f32,
-  drift: vec2f,
-  base: vec2u,
-  frac: vec2f,
-  free2: vec2f,
-};
-
-// Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process.
+// Its words' fields and accessors are frame/shader/words.rs `clouds`'s,
+// which build.rs writes here; a ray is the sky's (`sky_ray`).
 @group(0) @binding(1) var<uniform> clouds_words: array<vec4f, CLOUDS_VEC4S>;
 @group(0) @binding(2) var cloud_tile: texture_2d<f32>;
 @group(0) @binding(3) var cloud_tile_sampler: sampler;
-
-fn clouds_shown() -> f32 { return clouds_words[0].x; }
-fn clouds_reach() -> f32 { return clouds_words[0].y; }
-fn clouds_count() -> u32 { return bitcast<u32>(clouds_words[0].z); }
-fn clouds_drift() -> vec2f { return clouds_words[1].xy; }
-fn clouds_base() -> vec2u { return bitcast<vec2u>(clouds_words[1].zw); }
-fn clouds_frac() -> vec2f { return clouds_words[2].xy; }
 
 // The lattice's footprint where `dir` is `t` km on, before any branch takes a derivative.
 fn footprint_at(dir: vec3f, t: f32) -> f32 {

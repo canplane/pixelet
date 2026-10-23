@@ -8,17 +8,14 @@
 
 use pxl_spec::space::coord::world::EXTENT;
 
+use crate::frame::shader::words::CLOUD_TILE_UNITS;
+
 /// A lattice unit is 2^12 cells, about 8 km at mid latitudes; a power of two
 /// so the clouds wrap with the map.
 pub const LATTICE_SHAMT: u32 = 12;
 pub const LATTICE_COUNT: u32 = 1 << (EXTENT[0] - LATTICE_SHAMT);
 const _: () = assert!(EXTENT[0] == EXTENT[1], "one lattice count for both axes");
-const _: () = assert!(LATTICE_COUNT.is_multiple_of(TILE_UNITS), "the world is whole tiles");
-
-/// The sheets' tile, one fetch a pixel and a mip chain in place of eight
-/// octaves of hashes: 32 lattice units is about 250 km.
-pub const TILE_UNITS: u32 = 32;
-pub const TILE_TEXELS: u32 = 1024;
+const _: () = assert!(LATTICE_COUNT.is_multiple_of(CLOUD_TILE_UNITS), "the world is whole tiles");
 
 /// In cells a second, about 50 m/s at mid latitudes, a jet stream's: at a
 /// breeze's 8 a cloud a kilometer wide takes minutes to cross its width and

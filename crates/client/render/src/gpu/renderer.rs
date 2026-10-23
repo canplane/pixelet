@@ -16,10 +16,11 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_ARGS, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS, SHADER_JOINED, SHADER_MISS,
+    PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_ARGS, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS, SHADER_JOINED, SHADER_MISS,
     SHADER_SAMPLE, SHADER_WAYS, SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
-use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
+use crate::frame::shader::words::frame::{CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN_AO, VIEWPORT, VIEW_PROJ, VIGNETTE};
+use crate::frame::shader::words::{sky, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{
@@ -59,22 +60,6 @@ use pxl_spec_core::window::{self, CellsBack, FreshSquare, BACK_WORDS, COLUMNS_AT
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-pub(crate) const VIEW_PROJ: usize = FRAME_AT[0];
-const CAMERA_POS: usize = FRAME_AT[1];
-const EDGE_STRENGTH: usize = FRAME_AT[2];
-const VIEWPORT: usize = FRAME_AT[3];
-const SCREEN_AO: usize = FRAME_AT[4];
-const VIGNETTE: usize = FRAME_AT[5];
-const MAP: usize = FRAME_AT[6];
-const CELL: usize = FRAME_AT[7];
-const LOW_SPEC: usize = FRAME_AT[8];
-const EDGE_WIDTH: usize = FRAME_AT[9];
-const RIM_INTENSITY: usize = FRAME_AT[10];
-const CORNER_AO: usize = FRAME_AT[11];
-
-/// The ray, the celestial pole, and whether the Moon's face has arrived.
-pub(crate) const SKY_POLE: usize = 12;
-pub(crate) const SKY_MAPPED: usize = 15;
 const BOX_VERTICES: u32 = 36;
 const DRAWS_INITIAL: u32 = 256 * DRAW_FLOATS as u32;
 
@@ -1409,11 +1394,11 @@ impl Renderer {
         // in f64 before they are narrowed.
         let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
         let eye = [0.0; 3];
-        put_ray(&mut self.sky, 0, &m, &eye);
+        put_ray(&mut self.sky, sky::RAY, &m, &eye);
         self.clouds.lay_out([eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS], reach * env[ENV_AIR + 1]);
         self.stars.lay_out(&m, env, width);
-        self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
-        self.sky[SKY_MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
+        self.sky[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
+        self.sky[sky::MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         for i in 0..3 {
             u[CAMERA_POS + i] = eye[i] as f32;
         }

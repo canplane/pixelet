@@ -8,6 +8,7 @@ use std::path::Path;
 #[allow(dead_code)]
 mod parts;
 #[path = "src/frame/shader/words.rs"]
+#[allow(dead_code)]
 mod words;
 
 fn main() {
@@ -25,6 +26,7 @@ fn main() {
         if name == "constant.wgsl" {
             shipped += &words();
         }
+        shipped += &accessors(&text);
         std::fs::write(out.join(name), shipped).expect("the stripped shader");
     }
     // A unit's zoom, a unit's fraction bits in Q3 and the ground's cell, from
@@ -146,10 +148,53 @@ fn words() -> String {
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
+        format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-spec-core).
         format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_spec_core::HEIGHT_BITS),
     ]
     .concat()
+}
+
+/// Each field's accessor of the uniform whose words `text` binds
+/// (`<uniform>_words`, frame/shader/words.rs `UNIFORMS`): the field read off
+/// its vec4s where the host wrote it, never as a struct, which lost Safari's
+/// WebGPU its GPU process. Each field is checked to lie within its vec4s and
+/// apart from the others.
+fn accessors(text: &str) -> String {
+    use words::{floats, Kind, UNIFORMS};
+    let mut out = String::new();
+    for (uniform, fields) in UNIFORMS {
+        let words = format!("{uniform}_words");
+        if !text.contains(&format!("var<uniform> {words}:")) {
+            continue;
+        }
+        let mut taken = vec![false; floats(fields)];
+        for f in fields {
+            let (row, col, n) = (f.at / 4, f.at % 4, f.kind.floats());
+            for t in &mut taken[f.at..f.at + n] {
+                assert!(!*t, "{uniform}'s {} lies over another field", f.name);
+                *t = true;
+            }
+            let lanes = &"xyzw"[col..(col + n).min(4)];
+            let column = |k: usize| format!("{words}[{}].xyz", row + k);
+            let vec4 = |k: usize| format!("{words}[{}]", row + k);
+            let (ty, read) = match f.kind {
+                Kind::F32 => ("f32", format!("{words}[{row}].{lanes}")),
+                Kind::U32 => ("u32", format!("bitcast<u32>({words}[{row}].{lanes})")),
+                Kind::Vec2 => ("vec2f", format!("{words}[{row}].{lanes}")),
+                Kind::Vec2u => ("vec2u", format!("bitcast<vec2u>({words}[{row}].{lanes})")),
+                Kind::Vec3 => ("vec3f", format!("{words}[{row}].{lanes}")),
+                Kind::Vec4i => ("vec4i", format!("bitcast<vec4i>({})", vec4(0))),
+                Kind::Vec4u => ("vec4u", format!("bitcast<vec4u>({})", vec4(0))),
+                Kind::Mat3 => ("mat3x3f", format!("mat3x3f({}, {}, {})", column(0), column(1), column(2))),
+                Kind::Mat4 => ("mat4x4f", format!("mat4x4f({}, {}, {}, {})", vec4(0), vec4(1), vec4(2), vec4(3))),
+            };
+            let whole = matches!(f.kind, Kind::Vec4i | Kind::Vec4u | Kind::Mat3 | Kind::Mat4);
+            assert!(if whole { col == 0 } else { col + n <= 4 }, "{uniform}'s {} crosses a vec4", f.name);
+            out += &format!("fn {uniform}_{}() -> {ty} {{ return {read}; }}\n", f.name.to_lowercase());
+        }
+    }
+    out
 }
 
 /// Every shader assembled from its parts (parts.rs `PARTS`), validated as
