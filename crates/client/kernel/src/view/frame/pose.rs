@@ -29,11 +29,10 @@ pub struct View {
 
     pub width: f64,
     pub height: f64,
-    pub fov: f64,
     /// The world surface's drawn pixels a CSS pixel (`resolution::world_ratio`).
     pub ratio: f64,
-    /// The quality the eye's rays are cast at (`lens::tau`), of the three
-    /// above.
+    /// The quality the eye's rays are cast at (`lens::tau`), of its height
+    /// and ratio.
     pub tau: Tau,
 
     pub view_matrix: Mat4,
@@ -50,10 +49,9 @@ impl View {
             pose: None,
             width: 1.0,
             height: 1.0,
-            fov: crate::param::FOV,
             // A pixel a CSS pixel until a surface says.
             ratio: 1.0,
-            tau: crate::view::lens::tau_of(1.0, crate::param::FOV, 1.0),
+            tau: crate::view::lens::tau_of(1.0, 1.0),
             view_matrix: mat4::new(),
             inv_view_matrix: mat4::new(),
             proj: mat4::new(),
@@ -132,7 +130,7 @@ pub fn view_resize(width: f64, height: f64, ratio: f64) {
         return;
     }
     (v.width, v.height, v.ratio) = (width, height, ratio);
-    v.tau = crate::view::lens::tau_of(height, v.fov, ratio);
+    v.tau = crate::view::lens::tau_of(height, ratio);
     crate::view::observation::forget();
     compose();
 }
@@ -163,7 +161,7 @@ fn compose() {
     mat4::invert(&mut v.inv_view_matrix, &vm);
     // Reversed depth in floats with the far plane at infinity: one near
     // plane holds every height's precision.
-    mat4::perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, crate::param::NEAR);
+    mat4::perspective(&mut v.proj, FOV.to_radians(), v.width / v.height, crate::param::NEAR);
     let proj = v.proj;
     mat4::mul(&mut v.world_view_proj, &proj, &vm);
     let lvp = v.world_view_proj;

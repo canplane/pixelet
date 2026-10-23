@@ -245,7 +245,7 @@ fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
 fn spacing_px() -> f64 {
     let v = crate::view::frame::pose::view();
     let drawn = v.height * crate::view::frame::resolution::display_ratio();
-    let cell = crate::view::lens::cell_angle(crate::view::lens::tau()) * px_per_unit(drawn, v.fov);
+    let cell = crate::view::lens::cell_angle(crate::view::lens::tau()) * px_per_unit(drawn, crate::param::FOV);
     libm::rint(f64::from(SPACING_CELLS) * cell)
 }
 

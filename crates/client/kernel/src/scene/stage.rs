@@ -64,7 +64,7 @@ pub fn stage_write() {
     s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.at().eye);
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
-    s[STAGE_AT::FOV] = v.fov;
+    s[STAGE_AT::FOV] = crate::param::FOV;
     // The camera grid's cell angle: the footprint a drawn block covers per
     // unit of distance, square on.
     let tau = crate::view::lens::tau();
