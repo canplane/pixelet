@@ -1,28 +1,10 @@
 // Decor instances too small on screen for their model, drawn as quads turned
-// to the eye about the world's up.
-
-struct Draw {
-  translation: vec3f,
-  offset: u32,
-  stride: u32,
-  opacity: f32,
-  layer: u32,
-  index: u32,
-};
-
-@group(1) @binding(0) var<uniform> draw_words: array<vec4f, DRAW_VEC4S>;
-
-fn draw_translation() -> vec3f { return draw_words[0].xyz; }
-fn draw_offset() -> u32 { return bitcast<u32>(draw_words[0].w); }
-fn draw_stride() -> u32 { return bitcast<u32>(draw_words[1].x); }
-fn draw_opacity() -> f32 { return draw_words[1].y; }
-fn draw_layer() -> u32 { return bitcast<u32>(draw_words[1].z); }
-fn draw_index() -> u32 { return bitcast<u32>(draw_words[1].w); }
+// to the eye about the world's up, each instance read from the decor block
+// (instances.wgsl).
 
 @group(2) @binding(0) var sprites: texture_2d_array<f32>;
 @group(2) @binding(1) var sprite_sampler: sampler;
 @group(2) @binding(2) var<uniform> fits: array<vec4f, 64>;
-@group(3) @binding(0) var<storage, read> block: array<u32>;
 
 struct VertexIn {
   @builtin(instance_index) i: u32,
@@ -40,10 +22,6 @@ struct VertexOut {
   @location(6) @interpolate(flat) sun: vec3f,
   @location(7) @interpolate(flat) other: vec3f,
 };
-
-fn lane(k: u32, i: u32) -> f32 {
-  return bitcast<f32>(block[draw_offset() + k * draw_stride() + i]);
-}
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {

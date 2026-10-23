@@ -4,7 +4,8 @@
 //! uniform slots written once before the pass, and the draw loop.
 
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
-use crate::gpu::api::{buffer_range_entry, buffer_usage, release, Entry, Gpu};
+use crate::frame::shader::words::DRAW_FLOATS;
+use crate::gpu::api::{buffer_range_entry, buffer_usage, release, word_bytes, Entry, Gpu};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{frame_group, put_f32, put_u32, Scratch};
@@ -126,7 +127,14 @@ impl DrawUniforms {
     }
 }
 
-/// `third` is decor's padding or the impostor's sprite layer.
+/// A draw's uniform, a slot of `DrawUniforms` each: what every model pass
+/// writes and its shader reads (frame/shader/words.rs `DRAW_FLOATS`).
+pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
+
+/// A decor draw's uniform as instances.wgsl's `Draw` reads it, for the
+/// model tier and the impostors both: translation, first lane word,
+/// stride, opacity, `third`, index list's first word. `third` is decor's
+/// padding or the impostor's sprite layer.
 pub fn put_instances(buf: &mut [u8], u: &[f32], third: u32) {
     put_f32(buf, 0, u[0]);
     put_f32(buf, 4, u[1]);

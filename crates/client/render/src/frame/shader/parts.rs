@@ -131,6 +131,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "finish",
         "ao_map",
         "place",
+        "instances",
         "decor",
     ],
     // SHADER_SKINNED
@@ -267,6 +268,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "shade",
         "finish",
         "ao_map",
+        "instances",
         "impostor",
     ],
     // SHADER_IMPOSTOR_BAKE

@@ -12,15 +12,13 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use crate::gpu::api::{buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, Format, Gpu, Load};
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::decor::{block_group, uniform_group, DecorPass, GROUPS};
-use crate::gpu::pass::model::{draw_model, draw_models, put_instances, DrawUniforms, ModelDraw};
+use crate::gpu::pass::model::{draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Blocks;
 
 /// Impostors cover fewer pixels than the model tier's floor (twelve at the
 /// reference viewport), so this is several times any one's drawn size.
 const SPRITE: u32 = 128;
-/// Translation, first lane word, stride, opacity, layer, index list's first word.
-const DRAW_UNIFORM_BYTES: u32 = 32;
 const FIT_BYTES: u32 = 16;
 
 /// glTF's across, up and deep.
@@ -78,7 +76,7 @@ impl ImpostorPass {
         ImpostorPass {
             draw,
             bake,
-            uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
+            uniforms: DrawUniforms::new(DRAW_BYTES, align),
             fit_uniforms: DrawUniforms::new(FIT_BYTES, align),
             atlas,
             depth_view,

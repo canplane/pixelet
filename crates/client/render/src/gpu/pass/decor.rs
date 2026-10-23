@@ -13,12 +13,10 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use crate::gpu::api::{buffer_entry, buffer_range_entry, release, Gpu};
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::impostor::Extent;
-use crate::gpu::pass::model::{bind_mesh, draw_models, put_instances, DrawUniforms, ModelDraw, Stage};
+use crate::gpu::pass::model::{bind_mesh, draw_models, put_instances, DrawUniforms, ModelDraw, Stage, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{skin_group, Blocks, Draws};
 
-/// Translation, first lane word, stride, opacity, padding, index list's first word.
-const DRAW_UNIFORM_BYTES: u32 = 32;
 pub const GROUPS: usize = 64;
 
 const NO_SKIN: usize = usize::MAX;
@@ -65,7 +63,7 @@ impl DecorPass {
             ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, g.canvas()),
             prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, g.canvas()),
             sampler,
-            uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
+            uniforms: DrawUniforms::new(DRAW_BYTES, align),
             groups: [Group::default(); GROUPS],
             skins: [Skin::default(); GROUPS],
             grown_uniforms: (0, 0),
@@ -212,6 +210,6 @@ pub(crate) fn uniform_group(g: &Gpu, held: (u32, u32), uniforms: u32, layout: u3
         return held;
     }
     release(held.1);
-    let id = g.bind_group(layout, &[buffer_range_entry(0, uniforms, 0, DRAW_UNIFORM_BYTES)]);
+    let id = g.bind_group(layout, &[buffer_range_entry(0, uniforms, 0, DRAW_BYTES)]);
     (uniforms, id)
 }

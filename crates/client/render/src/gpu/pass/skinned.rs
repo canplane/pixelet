@@ -11,12 +11,10 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{bytes, release, Gpu};
 
-use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, Stage};
+use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, Stage, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{skin_group, Blocks};
 
-/// Translation, turn about Z, opacity, scale, padding.
-const DRAW_UNIFORM_BYTES: u32 = 32;
 const SKINS: usize = 16;
 
 #[derive(Clone, Copy, Default)]
@@ -43,7 +41,7 @@ impl SkinnedPass {
             lit: pipelines.build(g, PIPELINE_SKINNED, g.canvas()),
             prepass: pipelines.build(g, PIPELINE_SKINNED_PREPASS, g.canvas()),
             sampler,
-            uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
+            uniforms: DrawUniforms::new(DRAW_BYTES, align),
             skins: [Skin::default(); SKINS],
             seq: 0,
         }
@@ -82,8 +80,9 @@ impl SkinnedPass {
     pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone, uniforms: &[f32], moved: bool, blocks: &mut Blocks) {
         self.uniforms.write(g, self.lit.layouts[1], draws.len() as u32, draws.clone(), moved, |buf, d| {
             let u = uniform_of(uniforms, d);
+            // Translation, turn about Z, opacity, scale, padding (skinned.wgsl `Draw`).
             buf[..24].copy_from_slice(bytes(&u[..6]));
-            buf[24..32].fill(0);
+            buf[24..DRAW_BYTES as usize].fill(0);
         });
         for d in draws {
             blocks.group(g, d[1], self.lit.layouts[3]);

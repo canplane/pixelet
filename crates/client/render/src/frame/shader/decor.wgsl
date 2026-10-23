@@ -1,28 +1,8 @@
-// Decor: instanced variant models, reading the decor block as the instance
-// buffer; the n-th instance drawn is the one the index list's n-th word names.
-
-struct Draw {
-  translation: vec3f,
-  offset: u32,
-  stride: u32,
-  opacity: f32,
-  _p0: u32,
-  index: u32,
-};
-
-// Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process.
-@group(1) @binding(0) var<uniform> draw_words: array<vec4f, DRAW_VEC4S>;
-
-fn draw_translation() -> vec3f { return draw_words[0].xyz; }
-fn draw_offset() -> u32 { return bitcast<u32>(draw_words[0].w); }
-fn draw_stride() -> u32 { return bitcast<u32>(draw_words[1].x); }
-fn draw_opacity() -> f32 { return draw_words[1].y; }
-fn draw_index() -> u32 { return bitcast<u32>(draw_words[1].w); }
+// Decor: instanced variant models, each instance read from the decor block
+// (instances.wgsl).
 
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;
-@group(3) @binding(0) var<storage, read> block: array<u32>;
 
 struct VertexIn {
   @builtin(instance_index) i: u32,
@@ -42,10 +22,6 @@ struct VertexOut {
   @location(6) @interpolate(flat) sun: vec3f,
   @location(7) @interpolate(flat) other: vec3f,
 };
-
-fn lane(k: u32, i: u32) -> f32 {
-  return bitcast<f32>(block[draw_offset() + k * draw_stride() + i]);
-}
 
 // One function, so the depth passes place a vertex where the lit pass does.
 struct Placed {
