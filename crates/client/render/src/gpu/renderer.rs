@@ -10,7 +10,6 @@ use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
-use xpute_kit::math::scalar::round;
 
 use crate::api_spec::surface_role;
 use crate::frame::draw::{
@@ -80,7 +79,6 @@ pub(crate) const SKY_POLE: usize = 12;
 pub(crate) const SKY_MAPPED: usize = 15;
 const BOX_VERTICES: u32 = 36;
 const DRAWS_INITIAL: u32 = 256 * DRAW_FLOATS as u32;
-const MB: f64 = 1_048_576.0;
 
 const _: () = assert!(GPU_SPAN_NAMES.len() <= 32, "a span a bit of the mask the host is told");
 const SPAN_AIR: usize = GpuSpanName::air as usize;
@@ -223,11 +221,12 @@ pub struct FrameStat {
     /// measured with this frame.
     pub gpu_read: bool,
     pub gpu_px: f64,
-    /// The block table's blocks and their bytes.
+    /// The block table's blocks and their bytes, the depth targets' bytes
+    /// and the texture layers': each as counted, in bytes.
     pub blocks: f64,
     pub block_bytes: f64,
-    pub depth_mb: f64,
-    pub layers_mb: f64,
+    pub depth_bytes: f64,
+    pub layers_bytes: f64,
     /// Every draw's, counted only while `counted`: its sums are the frame's
     /// draws and triangles.
     pub census: DrawCensus,
@@ -2188,8 +2187,8 @@ impl Renderer {
             blocks: b.count as f64,
             block_bytes: b.bytes as f64,
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the badges' regions'.
-            depth_mb: round((px * 4.0 + self.ao.depth_bytes() + self.badges.depth_bytes()) / MB),
-            layers_mb: round(self.layers.bytes as f64 / MB),
+            depth_bytes: px * 4.0 + self.ao.depth_bytes() + self.badges.depth_bytes(),
+            layers_bytes: self.layers.bytes as f64,
             census,
             gpu_spans,
         }

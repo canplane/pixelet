@@ -17,11 +17,9 @@ use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use xpute_guest::global::Global;
 
-use crate::mem::MB;
 use crate::profiler::frame::{DeviceSample, GpuSample};
 use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_spec::asset::ingested::Asset;
-use xpute_kit::math::scalar::round;
 
 use crate::asset::Load;
 use crate::billboard::sheet::billboard_sheet;
@@ -181,9 +179,9 @@ pub fn stage_render(paced_ms: f64) {
         },
         DeviceSample {
             blocks: stat.blocks,
-            blocks_mb: round(stat.block_bytes / MB),
-            depth_mb: stat.depth_mb,
-            layers_mb: stat.layers_mb,
+            blocks_bytes: stat.block_bytes,
+            depth_bytes: stat.depth_bytes,
+            layers_bytes: stat.layers_bytes,
             objects,
         },
     );

@@ -37,11 +37,13 @@ pub struct GpuSample {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DeviceSample {
-    /// The renderer's block table: its blocks and their bytes in MB.
+    /// The renderer's block table, its blocks and their bytes, and its depth
+    /// targets' and texture layers' bytes: each as counted (pxl-render
+    /// gpu/renderer.rs `FrameStat`).
     pub blocks: f64,
-    pub blocks_mb: f64,
-    pub depth_mb: f64,
-    pub layers_mb: f64,
+    pub blocks_bytes: f64,
+    pub depth_bytes: f64,
+    pub layers_bytes: f64,
     /// The GPU objects the renderer holds, by the op that made them, as its
     /// encoder counts them (xpute-gpu encode `Gpu::objects`): op k + 1 in
     /// slot k, as no op is 0.
@@ -146,8 +148,8 @@ words!(FrameSample, FRAME::WORDS,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
     gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.px => FRAME::gpu_px,
     gpu.census => FRAME::census,
-    device.blocks => FRAME::blocks, device.blocks_mb => FRAME::blocks_mb,
-    device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb, device.objects => FRAME::gpu_objects,
+    device.blocks => FRAME::blocks, device.blocks_bytes => FRAME::blocks_bytes,
+    device.depth_bytes => FRAME::depth_bytes, device.layers_bytes => FRAME::layers_bytes, device.objects => FRAME::gpu_objects,
     tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
     heap.used_bytes => FRAME::heap_used_bytes, heap.live_bytes => FRAME::heap_live_bytes, heap.run_bytes => FRAME::heap_run_bytes,
     heap.slot_bytes => FRAME::heap_slot_bytes, heap.range_bytes => FRAME::heap_range_bytes,

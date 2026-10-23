@@ -187,8 +187,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
     ),
     device: f !== null && (
       <>
-        <Row k="blocks" v={`${f.last.blocks} ${valueText("_mb", f.last.blocks_mb)}`} />
-        <Row k="depth/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_layers_mb} MB`} />
+        <Row k="blocks" v={`${f.last.blocks} ${bytes(f.last.blocks_bytes)}`} />
+        <Row k="depth/layers" v={`${bytes(f.last.depth_bytes)}/${bytes(f.last.layers_bytes)}`} />
         {/* The leak bar's figure: flat over a pan loop and across a lost device. */}
         <Row k="gpu objects" v={`${f.last.gpu_objects.reduce((n, o) => n + o, 0)}`} />
         <Row
