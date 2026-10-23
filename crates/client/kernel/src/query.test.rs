@@ -3,7 +3,7 @@
 // The query's laws over a leaf tile's four children folded into their
 // parent as the bake folds them, and objects written into a store.
 
-use pxl_spec::bake::constant::OBJECT_COARSEST;
+use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::Ground;
 use pxl_spec::block::cube::{self, ground, sentinel};
 use pxl_spec::block::object::{cube_id, Cube};
@@ -231,9 +231,11 @@ fn a_ray_from_over_the_world_meets_the_ground_where_its_line_does() {
     assert_eq!([hit.point[2], hit.t], [top, high - top], "{hit:?}");
 }
 
-/// A dig is met as the cells asked fold it, nothing finer: at the leaves' cells
-/// a cell dug less than half is whole, its top met by a ray and stood on by a
-/// walker, and a cell dug half or more is air, the ground under it met.
+/// A dig is met as the cells asked fold it, nothing finer: at the leaves'
+/// cells a cell dug less than half is whole, its top met by a ray, and a
+/// cell dug half or more is air, the ground under it met. A walker reads the
+/// cell as its four columns one zoom finer, and stands on what is left in
+/// any of them: on the half cubes over a dug lower half.
 #[test]
 fn a_dig_is_met_as_the_cells_asked_fold_it() {
     use crate::layer::object::store::AIR;
@@ -248,13 +250,13 @@ fn a_dig_is_met_as_the_cells_asked_fold_it() {
         }
         store
     };
-    for (n, top) in [(1, 5.0), (3, 5.0), (4, 4.0), (8, 4.0)] {
+    for (n, top, stands) in [(1, 5.0, 5.0), (3, 5.0, 5.0), (4, 4.0, 5.0), (8, 4.0, 4.0)] {
         let store = dug(n);
         let access = World::new(&residency, &store);
         let at = [x + half / 2.0, y + half / 2.0];
         let hit = access.first_hit(&down(at), at_zoom(LEAF_ZOOM)).exact().flatten().unwrap();
         assert_eq!(hit.point[2], top, "{n} of 8 dug: {hit:?}");
-        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(top)), "{n} of 8 dug");
+        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(stands)), "{n} of 8 dug");
     }
 }
 
@@ -274,6 +276,25 @@ fn a_half_cube_is_met_as_it_is_placed() {
     let hit = access.first_hit(&down(at), held()).exact().flatten().unwrap();
     assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
     assert_eq!([hit.point[2], hit.cube.extent()[0]], [5.0 + half, half], "{hit:?}");
+}
+
+/// A walker stands on what is placed as it is held, wherever in its cell it
+/// lies and however small: its cell is read as columns at the finest zoom
+/// placed in it.
+#[test]
+fn a_walker_stands_on_a_cube_of_any_tier_anywhere_in_its_cell() {
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
+        let (cell, side) = (units(GROUND.cell()), units(zoom));
+        let mut store = Store::default();
+        // In the cell's far corner, off its middle.
+        write(&mut store, [x + cell - side, y + cell - side, 5.0], zoom, red);
+        let access = World::new(&residency, &store);
+        let at = point(x + 0.1, y + 0.1);
+        assert_eq!(access.surface_support(&at), Answer::Exact(Some(5.0 + side)), "a cube of z{zoom}");
+    }
 }
 
 /// In a stack with a cell left out, what stands in the gap stands on the

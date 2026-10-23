@@ -5,6 +5,7 @@
 
 use pxl_spec::block::object::object_value_is_air;
 use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::zoom::Zoom;
 
 use super::world::World;
 use crate::layer::object::store::Entry;
@@ -24,6 +25,14 @@ impl<'a> World<'a> {
                 visit(e);
             }
         });
+    }
+
+    /// The finest zoom anything is placed at in `space`, air included: what
+    /// a dig cut finer is held as finely as a cube.
+    pub(super) fn finest_in(&self, space: &Aabb) -> Option<Zoom> {
+        let mut finest = None;
+        self.objects.entries_in(space, &mut |e| finest = finest.max(Some(e.zoom)));
+        finest
     }
 
     /// A marker's words, as put up; none for anything else.
