@@ -1,7 +1,7 @@
 # A cell of the camera grid casts a beam, and a pixel finishes it
 
-**2026-10-22** — decided in the conversation ("오케이. 그렇게 하라."),
-after the references below were weighed.
+**2026-10-22** — decided in the conversation, after the references below
+were weighed.
 
 **Status (2026-10-23): changed in two ways.** The window is each cell's own,
 the slope at that cell's corner farthest from the axis, not the screen's
@@ -9,9 +9,8 @@ edge's for every cell (`beam::cell_window`). And a pixel no longer walks
 from its cell's start: samples four a cell a side do (`sample_cs`), and a
 pixel takes the nearest of the blocks the 4 × 4 samples about it stopped at
 that its own ray enters, walking only where none is. The image is no longer
-held to the root walk's; the user ordered the cut ("결과가 꼭 같아야 해?"),
-so "Sparser samples lose coverage" below is answered by the fallback walk,
-not avoided.
+held to the root walk's; the user ordered the cut, so "Sparser samples lose
+coverage" below is answered by the fallback walk, not avoided.
 
 The cast walks the pyramid once per camera-grid cell, and each drawn pixel
 finishes only the last few nodes of its own ray from where its cell's walk
