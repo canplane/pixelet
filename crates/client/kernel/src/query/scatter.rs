@@ -47,8 +47,8 @@ impl Grounds for Asked<'_, '_> {
         &pxl_spec_core::decor::DECORS
     }
 
-    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, (i32, f32), bool) {
-        self.world.footing(cell, g).map_or((0, (0, 0.0), false), |(block, top)| (block, top, true))
+    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> ((i32, f32), bool) {
+        self.world.footing(cell, g).map_or(((0, 0.0), false), |top| (top, true))
     }
 
     /// Void where the world holds nothing there (`World::block`).

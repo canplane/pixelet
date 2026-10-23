@@ -38,11 +38,11 @@ async fn a_query_outside_the_length_bounds_is_refused_before_the_database() {
 
 #[tokio::test]
 async fn the_length_bound_counts_characters_rather_than_bytes() {
-    // 100 syllables is 300 bytes; a byte cap would refuse it.
-    let korean = "가".repeat(MAX_QUERY_LEN);
-    assert_ne!(get(&format!("/geo/search?q={korean}")).await, StatusCode::BAD_REQUEST);
+    // 100 three-byte characters are 300 bytes; a byte cap would refuse them.
+    let wide = "€".repeat(MAX_QUERY_LEN);
+    assert_ne!(get(&format!("/geo/search?q={wide}")).await, StatusCode::BAD_REQUEST);
 
-    let over = "가".repeat(MAX_QUERY_LEN + 1);
+    let over = "€".repeat(MAX_QUERY_LEN + 1);
     assert_eq!(get(&format!("/geo/search?q={over}")).await, StatusCode::BAD_REQUEST);
 }
 

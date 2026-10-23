@@ -82,7 +82,7 @@ a populated scene, procedural trees render with visibly per-face lit
 shading (each tree tier reads a distinct shade instead of one flat unlit
 tone) and no shader-compile errors in the console (only the pre-existing,
 unrelated `THREE.GLTFLoader: Couldn't load texture Textures/colormap.png`
-noise); toggled the settings modal's "림 라이트" (rim light) switch off and
+noise); toggled the settings modal's rim light switch off and
 back on and confirmed `show_rim_light` flips in the settings store as
 expected. Did not re-verify the placement→hover→erase ghost round-trip live
 this pass (the decor placement tool wasn't quickly reachable in this

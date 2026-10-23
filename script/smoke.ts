@@ -47,7 +47,7 @@ function edgeChecks(version: Record<string, string>): Check[] {
   return [
     { path: "/", want: 200, why: "the app itself, from the Worker's static assets" },
     { path: `${TILE_ROOT}/source`, want: 200, why: "the source's declaration, out of the bucket" },
-    { path: `${SEARCH_URL}?q=${encodeURIComponent("강남")}`, want: 200, why: "pxl-geo, the one geo query with no page to bake" },
+    { path: `${SEARCH_URL}?q=${encodeURIComponent("station")}`, want: 200, why: "pxl-geo, the one geo query with no page to bake" },
     { path: terrain, want: 200, why: "a terrain page, out of the bucket" },
     { path: `${TILE_ROOT}/division/${tileObject(version.division, DIVISION_TOP)}`, want: 200, why: "the divisions' top page over PAGE" },
     { path: `/${ASSET_KEY}`, want: 200, why: "a content-addressed asset, its own root" },
@@ -65,7 +65,7 @@ function commonChecks(): Check[] {
 
 function originChecks(): Check[] {
   return [
-    { path: `${SEARCH_URL}?q=${encodeURIComponent("강남")}`, want: 200, why: "pxl-geo, reached through Caddy without the edge" },
+    { path: `${SEARCH_URL}?q=${encodeURIComponent("station")}`, want: 200, why: "pxl-geo, reached through Caddy without the edge" },
     ...commonChecks(),
     { path: `${GEO_ROOT}/nothing-is-here`, want: 404, why: "pxl-geo answers its root and not this" },
   ];

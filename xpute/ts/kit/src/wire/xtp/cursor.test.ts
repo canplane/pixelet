@@ -76,5 +76,5 @@ Deno.test("the cursor reads what the typescript reads", async () => {
     }
   };
   [24, 32, 40, 48].forEach((cap, j) => assertEquals(at_cap("abcdefgh", cap), v.s(`caps.${j}`), `caps.${j} at ${cap}`));
-  [24, 32, 40].forEach((cap, j) => assertEquals(at_cap("한글한", cap), v.s(`caps_utf8.${j}`), `caps_utf8.${j} at ${cap}`));
+  [24, 32, 40].forEach((cap, j) => assertEquals(at_cap("€€€", cap), v.s(`caps_utf8.${j}`), `caps_utf8.${j} at ${cap}`));
 });

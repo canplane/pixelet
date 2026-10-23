@@ -160,8 +160,14 @@ fn scale(device: f64) -> f64 {
 pub fn drawn_scale() -> f64 {
     world().filter(|s| s.width > 0 && s.px_w > 0).map_or(1.0, |s| {
         let dpr = if s.dpr > 0.0 { s.dpr } else { 1.0 };
-        f64::from(s.width) / (f64::from(s.px_w) * s.dpr.min(param::RESOLUTION_MAX) / dpr)
+        f64::from(s.width) / (f64::from(s.px_w) * device(s.dpr) / dpr)
     })
+}
+
+/// Device pixels per CSS pixel a display of `dpr` is drawn at whole: its
+/// own, no finer than `RESOLUTION_MAX`.
+fn device(dpr: f64) -> f64 {
+    dpr.min(param::RESOLUTION_MAX)
 }
 
 fn world() -> Option<&'static mut Surface> {
@@ -173,14 +179,14 @@ fn world() -> Option<&'static mut Surface> {
 /// block's zoom, demand and a pointer's reach follow the screen, not the
 /// load; a pixel a CSS pixel before the world has a surface.
 pub fn display_ratio() -> f64 {
-    world().map_or(1.0, |s| s.dpr.min(param::RESOLUTION_MAX))
+    world().map_or(1.0, |s| device(s.dpr))
 }
 
 /// The ratio a surface is drawn at: the display's, no finer than
 /// `RESOLUTION_MAX`; the world's scaled as the setting says; a case's within
 /// its thumbnail.
 pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
-    let device = dpr.min(param::RESOLUTION_MAX);
+    let device = device(dpr);
     match role {
         surface_role::WORLD => device * scale(device),
         surface_role::CASE => device.min(param::CASE_LONG_SIDE_MAX * dpr / f64::from(px[0].max(px[1]).max(1))),

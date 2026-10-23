@@ -31,7 +31,7 @@ use crate::scene::environment::environment_step;
 use crate::scene::indicator::location_puck::location_puck_step;
 use crate::scene::stage::{take_draw, visible_step};
 use crate::sched::edge::{request_world_tick, world_edge};
-use crate::sched::tick::{on_tick, run_tick, TickContext, TickState};
+use crate::sched::tick::{on_tick, run_tick, TickContext};
 use crate::view::demand::Observed as _;
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::clock::now;
@@ -111,6 +111,13 @@ fn demand_tick(_: &mut TickContext) {
     DivisionTile::demand().step(crate::layer::division::line(crate::control::camera::controller::focus()), &[], tau);
 }
 
+/// The scene's turn, handed the camera's focus and, third person, its
+/// heading, which the world gizmo is drawn about.
+fn scene_tick(ctx: &mut TickContext) {
+    let third_person = crate::control::camera::controller::dist() != 0.0;
+    visible_step(ctx, crate::control::camera::controller::focus(), third_person.then(crate::control::camera::controller::azimuth));
+}
+
 fn camera_input_tick(_: &mut TickContext) {
     camera_input_step(crate::view::lens::tau());
 }
@@ -138,7 +145,7 @@ pub fn boot() {
     on_tick(Phase::interaction, companion_tick, StepName::companion as u32);
     on_tick(Phase::interaction, crate::scene::character::preview::preview_step, StepName::preview as u32);
     on_tick(Phase::visible, demand_tick, StepName::demand as u32);
-    on_tick(Phase::visible, visible_step, StepName::scene as u32);
+    on_tick(Phase::visible, scene_tick, StepName::scene as u32);
     world_tasks();
 }
 
@@ -211,13 +218,6 @@ pub fn world_turn() -> f64 {
     now() - at
 }
 
-static TICK_STATE: Global<TickState> = Global::new();
-
-/// Whether the last turn was interactive. Read by steps that run before the
-/// tick sets it, so it lags a turn, which is fine for deciding whether to wait.
-pub fn interactive() -> bool {
-    TICK_STATE.get(TickState::default).interactive
-}
 static PLATFORM: Global<Option<Platform>> = Global::new();
 
 pub fn set_world_platform(platform: Platform) {
@@ -242,7 +242,6 @@ const MAX_STEP_S: f64 = 0.1;
 pub struct HostFrame {
     pub width: f64,
     pub height: f64,
-    pub dpr: f64,
     pub delta: f64,
     /// The display's refresh, and the interval the host paces turns at, a
     /// whole number of refreshes: the frame's budget (xpute host
@@ -293,7 +292,6 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let HostFrame {
         width,
         height,
-        dpr,
         delta,
         refresh_ms,
         paced_ms,
@@ -304,18 +302,12 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     set_credits(credits);
     text_rise();
     let effects_ms = world_turn();
-    let state = TICK_STATE.get(TickState::default);
     // Before the tick, so every step and the draw see the screen it is drawn on.
     crate::view::frame::pose::view_resize(width, height, crate::view::frame::resolution::display_ratio());
-    state.dpr = dpr;
     // Step by at most MAX_STEP_S, or a pause makes a character cross a wall or
-    // a damped camera overshoot. The raw gap is still recorded, or every bad
-    // frame would read as exactly the clamp.
+    // a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);
-    state.gap_s = delta;
-    state.elapsed_s += step;
-    state.interactive = interactive;
-    let report = run_tick(state, step, quota_ms, edge_at);
+    let report = run_tick(step, quota_ms, edge_at);
     let after_tick = now();
     pump();
     crate::scene::stage::stage_write();

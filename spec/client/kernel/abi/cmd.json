@@ -844,10 +844,6 @@
               "type": "f64"
             },
             {
-              "name": "dpr",
-              "type": "f64"
-            },
-            {
               "name": "refresh_ms",
               "type": "f64",
               "$doc": [

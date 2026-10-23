@@ -15,8 +15,8 @@ use pxl_server::db::DbError;
 
 const DIVISION_LIMIT: i64 = 5;
 
-/// ILIKE is the filter the trigram index accelerates; `%` alone rejects short
-/// Korean queries like "강남", so `similarity()` only ranks.
+/// ILIKE is the filter the trigram index accelerates; `%` alone rejects a
+/// query of two or three characters, so `similarity()` only ranks.
 macro_rules! places_matching {
     () => {
         "SELECT gers_id, name, properties,
@@ -177,8 +177,9 @@ pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -
         });
     }
 
-    // Context comes from the point, not `addresses[0]`: a 강남역 row addressed
-    // "Seoul" sits in 용인, and the field's format varies by contributor.
+    // Context comes from the point, not `addresses[0]`: a row can be addressed
+    // to the city it is named for while it sits in the next, and the field's
+    // format varies by contributor.
     let xs: Vec<f64> = place_rows.iter().map(|r| r.x3857).collect();
     let ys: Vec<f64> = place_rows.iter().map(|r| r.y3857).collect();
     let place_context = division::name_points(pool, &xs, &ys).await?;

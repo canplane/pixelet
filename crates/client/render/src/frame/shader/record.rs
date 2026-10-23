@@ -234,7 +234,7 @@ const fn screen(shader: u32) -> Head {
 }
 
 /// The air's bindings, numbered alike in every pass that reads it.
-const AIR_SLOTS: [[u32; 2]; 11] = [
+const AIR: [[u32; 2]; 11] = [
     [8, UNIFORM],
     [9, TEXTURE],
     [10, TEXTURE],
@@ -249,8 +249,6 @@ const AIR_SLOTS: [[u32; 2]; 11] = [
     [22, TEXTURE_3D],
 ];
 
-/// The air's bindings, as every pass that binds the air lays them out.
-const AIR: [[u32; 2]; 11] = AIR_SLOTS;
 /// The sun's shadow map and its comparing sampler (shadow.wgsl), read where
 /// a lit fragment is shaded.
 const SHADOW: [[u32; 2]; 2] = [[1, DEPTH], [2, SAMPLER_COMPARISON]];
@@ -268,31 +266,7 @@ const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 /// The lit pass's frame, shadow, occlusion, air and layers, all read where
 /// a pixel is painted; then the rays, the looks and the eye's words: the
 /// most entries any group has (`GROUP_ENTRIES`).
-const SCREEN_GROUP: [[u32; 2]; 21] = {
-    [
-        [0, UNIFORM],
-        SHADOW[0],
-        SHADOW[1],
-        [7, TEXTURE],
-        AIR[0],
-        AIR[1],
-        AIR[2],
-        AIR[3],
-        AIR[4],
-        AIR[5],
-        AIR[6],
-        AIR[7],
-        AIR[8],
-        AIR[9],
-        AIR[10],
-        [3, TEXTURE_UINT_ARRAY],
-        [4, TEXTURE_ARRAY],
-        [5, STORAGE],
-        [6, SAMPLER],
-        [20, STORAGE],
-        [21, UNIFORM],
-    ]
-};
+const SCREEN_GROUP: [[u32; 2]; 21] = and(LIT_FRAME, [[3, TEXTURE_UINT_ARRAY], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER], [20, STORAGE], [21, UNIFORM]]);
 
 /// The most entries a group has, a layout's and a bind group's alike: the
 /// screen's (and renderer.rs's lit entries, which it extends); a group past

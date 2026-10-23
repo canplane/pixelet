@@ -11,7 +11,6 @@ pub mod layout;
 
 use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
 use crate::io::demand::Stream;
-use crate::kernel;
 use crate::layer::earth::Earth;
 use crate::layer::residency::Residency;
 use crate::mem::section;
@@ -159,7 +158,6 @@ fn lay_out(b: &Bracket) -> u32 {
     // Each range to its owner.
     crate::layer::terrain::fixed::RANGE.set(layout::range(layout::Fixed::Terrain));
     crate::profiler::record::RANGE.set(layout::range(layout::Fixed::Profiler));
-    kernel().laid_out = true;
     // A layer asks for no more tiles than its residency frames.
     crate::io::request::open(|c| match c {
         Stream::terrain => Residency::<TerrainTile>::FRAMES,

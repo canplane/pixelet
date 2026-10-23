@@ -25,7 +25,7 @@ pub const FACES: u32 = 3;
 /// stopped on, six bits; the eighths of its cube the block keeps, 0 for all
 /// eight (`answer::kept`), so the screen pass draws the box it is
 /// (`answer::side`).
-pub const VALUE_BITS: u32 = 16;
+pub use crate::answer::VALUE_BITS;
 pub const FACE_BITS: u32 = 3;
 pub use crate::answer::KEPT_BITS;
 pub use crate::ZOOM_BITS;
@@ -49,5 +49,5 @@ const _: () = assert!(MISS >> (KEPT_SHIFT + KEPT_BITS) != 0);
 /// value and the share it keeps, the face and the zoom.
 pub const fn first_word(block: u32, face: u32, zoom: Zoom) -> u32 {
     let kept = block >> crate::answer::KEPT_SHIFT & ((1 << KEPT_BITS) - 1);
-    block & ((1 << VALUE_BITS) - 1) | face << FACE_SHIFT | zoom << ZOOM_SHIFT | kept << KEPT_SHIFT
+    crate::answer::value(block) | face << FACE_SHIFT | zoom << ZOOM_SHIFT | kept << KEPT_SHIFT
 }

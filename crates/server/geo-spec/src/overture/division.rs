@@ -41,8 +41,8 @@ pub fn reach_at(y: f64) -> f64 {
 /// metres and `$3` [`reach_at`] them, `idx` counts the points from 1. It is
 /// the deepest division an area of contains the point, or, nearer, a child
 /// of it with no area, the nearest within reach; where no area contains the
-/// point, the nearest division within reach. Most Korean 동 have a point and
-/// no area. `approx` marks a division found by nearness.
+/// point, the nearest division within reach. Many localities have a point
+/// and no area. `approx` marks a division found by nearness.
 pub const FINEST_SQL: &str = "
 SELECT p.idx, COALESCE(c.id, a.id, n.id) AS division_id, a.id IS NULL OR c.id IS NOT NULL AS approx
 FROM unnest($1::float8[], $2::float8[], $3::float8[]) WITH ORDINALITY AS p(x, y, reach, idx)

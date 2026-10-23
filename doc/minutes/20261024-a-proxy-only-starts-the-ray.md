@@ -1,9 +1,9 @@
 # A rasterized proxy may start a ray, and nothing else
 
-**2026-10-24** — decided in the conversation ("혼합형으로 가도는 되는데"),
-on one condition the user set: none of the machinery the chunk meshes needed
-comes back. Not built. What is built first is the clean-up below, which
-holds whichever way the start of a ray goes.
+**2026-10-24** — decided in the conversation, on one condition the user
+set: none of the machinery the chunk meshes needed comes back. Not built.
+What is built first is the clean-up below, which holds whichever way the
+start of a ray goes.
 
 A ray costs what it does because every pixel walks the world's tree on its
 own, though thousands of pixels looking at one face end on the same block. A

@@ -61,7 +61,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     match cmd {
         Command::WORLD_FRAME => {
             let p = abi::WorldFrame::read(packet(pkt)?)?;
-            refuse_unless(p.dpr > 0.0 && p.refresh_ms >= 0.0 && p.paced_ms >= 0.0 && p.unix_ms.is_finite(), Errno::EINVAL)?;
+            refuse_unless(p.refresh_ms >= 0.0 && p.paced_ms >= 0.0 && p.unix_ms.is_finite(), Errno::EINVAL)?;
             // The step is the one clock's change since the last frame: none on
             // the first, and none where the clock was set back.
             let last = crate::io::host::wall_now();
@@ -69,7 +69,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             crate::turn::world_frame_asked(crate::turn::HostFrame {
                 width: p.width,
                 height: p.height,
-                dpr: p.dpr,
                 delta,
                 refresh_ms: p.refresh_ms,
                 paced_ms: p.paced_ms,

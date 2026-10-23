@@ -9,18 +9,9 @@ use xpute_guest::sched::tick::{Phase, StepStats, Tick, TickPolicy, TickReport};
 use crate::param;
 use xpute_guest::global::Global;
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct TickState {
-    pub dpr: f64,
-    /// Behind the wall clock by what pauses cost (MAX_STEP_S).
-    pub elapsed_s: f64,
-    pub interactive: bool,
-    /// The raw gap, which past MAX_STEP_S exceeds the step. Only the profiler reads it.
-    pub gap_s: f64,
-}
-
-pub type TickContext<'a> = xpute_guest::sched::tick::TickContext<'a, TickState>;
-pub type TickStep = xpute_guest::sched::tick::TickStep<TickState>;
+/// The tick's steps keep their own state; xpute's shared state is none.
+pub type TickContext<'a> = xpute_guest::sched::tick::TickContext<'a, ()>;
+pub type TickStep = xpute_guest::sched::tick::TickStep<()>;
 
 pub const QUANTUM: QuantumPolicy = QuantumPolicy {
     margin_share: param::QUANTUM_MARGIN_SHARE,
@@ -38,9 +29,9 @@ pub const HARD_SLACK_MS: f64 = POLICY.hard_slack_ms;
 /// With room to spare.
 const STEPS: usize = 32;
 
-static TICK: Global<Tick<TickState, STEPS>> = Global::new();
+static TICK: Global<Tick<(), STEPS>> = Global::new();
 
-fn tick() -> &'static mut Tick<TickState, STEPS> {
+fn tick() -> &'static mut Tick<(), STEPS> {
     TICK.get(|| Tick::new(POLICY))
 }
 
@@ -66,6 +57,6 @@ pub fn off_tick(id: u32) {
     tick().off_tick(id);
 }
 
-pub fn run_tick(state: &mut TickState, delta: f64, quota_ms: f64, edge_at: f64) -> TickReport {
-    tick().run(state, delta, quota_ms, edge_at)
+pub fn run_tick(delta: f64, quota_ms: f64, edge_at: f64) -> TickReport {
+    tick().run(&mut (), delta, quota_ms, edge_at)
 }
