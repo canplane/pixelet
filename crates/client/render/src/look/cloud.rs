@@ -39,6 +39,8 @@ pub fn shown(altitude_km: f64) -> f64 {
     1.0 - t * t * (3.0 - 2.0 * t)
 }
 
+/// Cell `[x, y]`'s hash under `salt`, in [0, 1): noise.wgsl's `lattice_hash`,
+/// held equal by look/cloud.test.rs.
 pub fn lattice_hash([x, y]: [u32; 2], salt: u32) -> f64 {
     let mut h = x.wrapping_mul(0x8da6_b343) ^ y.wrapping_mul(0xd816_3841) ^ salt.wrapping_mul(0xcb1a_b31f);
     h ^= h >> 16;
@@ -53,3 +55,7 @@ pub fn lattice_hash([x, y]: [u32; 2], salt: u32) -> f64 {
 pub fn drift(time: f64) -> [f64; 2] {
     WIND.map(|w| w * time)
 }
+
+#[cfg(test)]
+#[path = "cloud.test.rs"]
+mod test;
