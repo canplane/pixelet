@@ -138,32 +138,43 @@ impl PuckPass {
         }
     }
 
+    /// The pipeline, the frame's group and the octahedron bound once; a
+    /// draw binds its uniform's slot alone.
     pub fn draw_beacon(&self, g: &Gpu, pass: u32, draws: &Draws) {
         let Some(slots) = self.beacon_uniforms.slots() else { return };
-        for k in 0..draws.of(PIPELINE_PUCK_BEACON).len() as u32 {
+        let count = draws.of(PIPELINE_PUCK_BEACON).len() as u32;
+        if count == 0 {
+            return;
+        }
+        g.set_pipeline(pass, self.beacon.pipeline);
+        g.set_bind_group(pass, 0, self.beacon_frame_group, &[]);
+        g.set_vertex_buffer(pass, 0, self.oct_position, 0, 0);
+        g.set_vertex_buffer(pass, 1, self.oct_normal, 0, 0);
+        for k in 0..count {
             let (group, offset) = slots.at(k);
-            g.set_pipeline(pass, self.beacon.pipeline);
-            g.set_bind_group(pass, 0, self.beacon_frame_group, &[]);
             g.set_bind_group(pass, 1, group, &[offset]);
-            g.set_vertex_buffer(pass, 0, self.oct_position, 0, 0);
-            g.set_vertex_buffer(pass, 1, self.oct_normal, 0, 0);
             g.draw(pass, 24, 1, 0, 0);
         }
     }
 
-    /// A zone whose block is not on the device yet is passed over.
+    /// The pipeline, the frame's group and the box bound once; a draw binds
+    /// its uniform's slot and its block alone. A zone whose block is not on
+    /// the device yet is passed over.
     pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks) {
         let Some(slots) = self.zone_uniforms.slots() else { return };
+        if zones(draws).next().is_none() {
+            return;
+        }
+        g.set_pipeline(pass, self.zone.pipeline);
+        g.set_bind_group(pass, 0, self.frame_group, &[]);
+        g.set_vertex_buffer(pass, 0, self.box_position, 0, 0);
+        g.set_vertex_buffer(pass, 1, self.box_uv, 0, 0);
+        g.set_index_buffer(pass, self.box_index, 0, 0);
         for (k, d) in zones(draws).enumerate() {
             let Some(block) = blocks.group(g, d[0]) else { continue };
             let (group, offset) = slots.at(k as u32);
-            g.set_pipeline(pass, self.zone.pipeline);
-            g.set_bind_group(pass, 0, self.frame_group, &[]);
             g.set_bind_group(pass, 1, group, &[offset]);
             g.set_bind_group(pass, 2, block, &[]);
-            g.set_vertex_buffer(pass, 0, self.box_position, 0, 0);
-            g.set_vertex_buffer(pass, 1, self.box_uv, 0, 0);
-            g.set_index_buffer(pass, self.box_index, 0, 0);
             g.draw_indexed(pass, 36, d[1], 0, 0);
         }
     }
