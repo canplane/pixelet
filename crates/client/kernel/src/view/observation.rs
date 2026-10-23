@@ -78,15 +78,16 @@ pub fn observation() -> Option<Observation> {
 
 /// The cubes `CHUNK_STEPS` zooms over the cells a reader draws, the ground
 /// about the eye cut into one partition: from the coarsest squares within the
-/// far edge, a square splits into its four while its nearest point is nearer
-/// than its cell zoom's split distance (`Tau::split_distance`), the rule a
-/// ray's descent asks by, taken about the eye's height; each square left is
+/// floor's ring (residency/floor.rs `ring`), the far edge cut by the ground,
+/// a square splits into its four while its nearest point is nearer than its
+/// cell zoom's split distance (`Tau::split_distance`), the rule a ray's
+/// descent asks by, taken about the eye's height; each square left is
 /// at the zoom its nearest point asks, and in each, the cubes the world stands
 /// in there. A function of the eye and the world alone, never of what a ray
 /// met; a column it knows nothing of yet names none, as nothing there is to
 /// stand in.
 pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
-    let Some(top) = TerrainTile::top() else { return };
+    let (Some(top), Some(flat)) = (TerrainTile::top(), floor::ring(o)) else { return };
     let over = (o.eye[2] - o.ground).max(0.0);
     let coarsest = GROUND.grid_zoom(top).max(CHUNK_STEPS);
     let near = |zoom: Zoom, [x, y]: [i32; 2]| {
@@ -95,7 +96,6 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
         libm::hypot(libm::hypot(gap(x as f64 * side, o.eye[0]), gap(y as f64 * side, o.eye[1])), over)
     };
     let zoom = coarsest - CHUNK_STEPS;
-    let flat = (o.reach * o.reach - over * over).max(0.0).sqrt();
     // Its room kept from one walk to the next.
     static STACK: Global<Vec<(Zoom, [i32; 2])>> = Global::new();
     let mut stack = core::mem::take(STACK.get(Vec::new));
