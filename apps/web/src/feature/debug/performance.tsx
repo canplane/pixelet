@@ -11,7 +11,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { alpha, color, disabledContent } from "@/shared/ui/theme.ts";
 import { gauge, ProfilerGauge, ProfilerRec } from "./profiler/gauge.tsx";
-import { Fold, HINT_INK, useOpenFold } from "./fold.tsx";
+import { Fold, HINT_INK } from "./fold.tsx";
+import { n1 } from "./profiler/lane.ts";
 import { profilerLog } from "./profiler/log.ts";
 import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
 import { type Gauge, profilerGaugeRead, profilerReportRead } from "./profiler/view.ts";
@@ -104,18 +105,18 @@ function restartWindow(): void {
 
 export function PerformanceOverlay() {
   const show = useKernel((s) => s.settings[SETTINGS.performance_overlay.key] === 1);
-  const open = useOpenFold((s) => s.open === "performance");
   const [hint, setHint] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [g, setG] = useState<Gauge | null>(null);
 
+  // Read while shown, folded or not: the title carries the fps.
   useEffect(() => {
-    if (!show || !open) return;
+    if (!show) return;
     const read = () => setG(profilerGaugeRead(LIVE_WINDOW_MS));
     read();
     const id = setInterval(read, POLL_MS);
     return () => clearInterval(id);
-  }, [show, open]);
+  }, [show]);
 
   useEffect(() => {
     if (said === null) return;
@@ -145,9 +146,11 @@ export function PerformanceOverlay() {
 
   if (!show) return null;
   const recording = g?.rec.recording === true;
+  const f = g?.frames ?? null;
+  const fps = f !== null && f.seconds > 0 ? ` · ${n1(f.n / f.seconds)} fps` : "";
 
   return (
-    <Fold name="performance" title="Performance" end={<Text style={[gauge.text, gauge.key]}>Last {LIVE_WINDOW_MS / 1000} s</Text>}>
+    <Fold name="performance" title={`Performance${fps}`} end={<Text style={[gauge.text, gauge.key]}>Last {LIVE_WINDOW_MS / 1000} s</Text>}>
       <View style={styles.buttons}>
         {/* Both, not a toggle: a window opened at boot would read "Stop" until first stopped. */}
         <PanelButton
