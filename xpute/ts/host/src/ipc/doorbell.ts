@@ -7,7 +7,7 @@
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
 import { type BranchCursor, encoder, type NodeValue, type NodeView, type PacketRoom, PacketWriter, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 import { NO_WAKE } from "../sched/quantum.ts";
 import * as frame from "./frame.ts";
@@ -125,7 +125,7 @@ export class Doorbell implements PacketRoom {
           if (waiting !== undefined) {
             waiting(cq.result(at), f);
           } else if (cq.result(at) < 0) {
-            console.warn(`[xpute/doorbell] command 0x${cmd.toString(16)} failed: errno ${cq.result(at)}`);
+            console.warn(`[xpute/doorbell] command 0x${cmd.toString(16)} failed: ${strerror(cq.result(at))}`);
           }
         } else if (this.signal !== null) {
           this.signal(tag, cmd, f);

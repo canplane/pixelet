@@ -2,7 +2,6 @@
 
 //! What a task's run came to, and why it failed.
 
-use core::fmt;
 use core::panic::Location;
 
 use xpute_kit::status::errno::Errno;
@@ -39,15 +38,6 @@ impl From<MarshalError> for Failure {
             errno: err.errno,
             detail: 0,
             at: Some(err.at),
-        }
-    }
-}
-
-impl fmt::Display for Failure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.detail {
-            0 => write!(f, "errno {}", self.errno as i32),
-            detail => write!(f, "errno {} {detail}", self.errno as i32),
         }
     }
 }
