@@ -51,8 +51,8 @@ pub struct Bracket {
 }
 
 struct State {
-    /// Hash of the last posted UI snapshot; one is posted only when it changed.
-    snapshot: u64,
+    /// The UI snapshot last posted; one is posted only where it moved.
+    sent: crate::shell::Sent,
 }
 
 static DOOR: Global<Door> = Global::new();
@@ -80,7 +80,7 @@ fn ring_address(ring: &Ring) -> u32 {
 static STATE: Global<State> = Global::new();
 
 fn state() -> &'static mut State {
-    STATE.get(|| State { snapshot: 0 })
+    STATE.get(|| State { sent: Default::default() })
 }
 
 /// xpute's three (two rings and the quantum) count as five entries, plus the
@@ -108,7 +108,7 @@ fn host_attached(s: &mut State) {
     }
     crate::shell::sensors_close();
     crate::io::text::text_forget();
-    s.snapshot = 0;
+    s.sent = Default::default();
 }
 
 /// First turn: lays out memory and writes the directory at DIRECTORY_AT.
@@ -240,19 +240,15 @@ fn post_shell(s: &mut State) {
             OrientationCommand::Remove => sensor(Command::SENSOR_STOP, Sensor::Orientation),
         }
     }
-    let buf = SNAPSHOT.get(Vec::new);
-    let len = loop {
-        if let Some(len) = crate::shell::ui_snapshot(buf) {
-            break len;
-        }
-        let room = (buf.len() * 2).max(xpute_guest::mem::section::PAGE_BYTES as usize);
-        buf.resize(room, 0);
-    };
-    let mut h = fnv::FnvHasher::default();
-    std::hash::Hasher::write(&mut h, &buf[..len as usize]);
-    let hash = std::hash::Hasher::finish(&h);
-    if hash != s.snapshot {
-        s.snapshot = hash;
+    if let Some(shown) = s.sent.moved() {
+        let buf = SNAPSHOT.get(Vec::new);
+        let len = loop {
+            if let Some(len) = crate::shell::ui_snapshot(&shown, buf) {
+                break len;
+            }
+            let room = (buf.len() * 2).max(xpute_guest::mem::section::PAGE_BYTES as usize);
+            buf.resize(room, 0);
+        };
         let signal = WorldSnapshotSignal {
             at: off_of_slice(&raw const buf[..]) as u32,
             len,
