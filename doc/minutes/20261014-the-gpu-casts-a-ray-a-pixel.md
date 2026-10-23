@@ -2,10 +2,12 @@
 
 **2026-10-14** — decided in the conversation.
 
-**Status (2026-10-23): holds, and is no longer an experiment.** Every drawn
-pixel casts its ray, at the device's pixels; its start is its cell's beam
-([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)). The `rays`
-setting below is gone, and half the screen's pixels is no longer a target.
+**Status (2026-10-23): holds, and is no longer an experiment.** A ray a
+pixel of the render resolution, its start its cell's beam
+([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)). The render
+resolution is the display's up to a fixed budget of rays, about 4K's; past it
+the frame is upscaled within itself, never from the frames before (the
+determinism clause below). The `rays` setting below is gone.
 
 What is drawn is what the eye's rays reach
 ([the ground is a grid](./20261012-the-ground-is-a-grid-then-overwrites.md)),
