@@ -127,6 +127,6 @@ fn the_cursor_reads_what_the_typescript_reads() {
         assert_eq!(at_cap("abcdefgh", cap), v.s(&format!("caps.{j}")), "caps.{j} at {cap}");
     }
     for (j, cap) in [24, 32, 40].into_iter().enumerate() {
-        assert_eq!(at_cap("한글한", cap), v.s(&format!("caps_utf8.{j}")), "caps_utf8.{j} at {cap}");
+        assert_eq!(at_cap("€€€", cap), v.s(&format!("caps_utf8.{j}")), "caps_utf8.{j} at {cap}");
     }
 }

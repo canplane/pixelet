@@ -174,7 +174,7 @@ XPUTE_TEST(xtp_the_cursor_reads_what_the_other_languages_read) {
     };
     const std::size_t caps[] = {24, 32, 40, 48};
     for (std::size_t j = 0; j < 4; j++) XPUTE_CHECK_EQ(at_cap("abcdefgh", caps[j]), v.s("caps." + std::to_string(j)), "caps");
-    for (std::size_t j = 0; j < 3; j++) XPUTE_CHECK_EQ(at_cap("한글한", caps[j]), v.s("caps_utf8." + std::to_string(j)), "caps_utf8");
+    for (std::size_t j = 0; j < 3; j++) XPUTE_CHECK_EQ(at_cap("€€€", caps[j]), v.s("caps_utf8." + std::to_string(j)), "caps_utf8");
 }
 
 XPUTE_TEST(xtp_a_packet_reads_back_what_was_written) {
