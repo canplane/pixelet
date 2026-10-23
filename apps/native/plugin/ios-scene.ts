@@ -1,4 +1,4 @@
-// @pxl/native/plugin/ios-scene.js
+// @pxl/native/plugin/ios-scene.ts
 
 /**
  * The scene life cycle, which iOS 27 asserts at launch: an app that leaves its
@@ -7,7 +7,7 @@
  * delegate only hands it the factory. Expo 57's template does not do this yet.
  */
 
-const { withAppDelegate, withInfoPlist } = require("expo/config-plugins");
+import { withAppDelegate, withInfoPlist } from "expo/config-plugins";
 
 const SCENE_DELEGATE = "EXExpoAppSceneDelegate";
 
@@ -21,7 +21,7 @@ const STARTED = `#if os(iOS) || os(tvOS)
 #endif
 `;
 
-module.exports = (config) => {
+export default (config) => {
   config = withInfoPlist(config, (config) => {
     config.modResults.UIApplicationSceneManifest = {
       UIApplicationSupportsMultipleScenes: false,

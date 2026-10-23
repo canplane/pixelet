@@ -4,7 +4,7 @@ export {};
 
 declare global {
   // Global constants injected at build time: Vite's `define` on a page
-  // (vite.config.ts), the device app's babel.config.js on a device.
+  // (vite.config.ts), the device app's babel.config.ts on a device.
   // The __SCREAMING__ names are read directly at their call sites on purpose:
   // they mark a compile-time constant whose branches vanish from the bundle.
   // Deployment *values* are read through config/deploy.ts instead — see
@@ -24,7 +24,7 @@ declare global {
 }
 
 /** What a build is, from vite.config.ts#buildStamp on a page and the device
- * app's metro.config.js#buildStamp on a device: read through
+ * app's metro.config.ts#buildStamp on a device: read through
  * config/deploy.ts, which names each. */
 declare module "virtual:pxl-build" {
   /** ISO-8601 UTC. */

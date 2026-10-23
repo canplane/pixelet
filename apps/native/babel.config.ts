@@ -1,4 +1,4 @@
-// @pxl/native/babel.config.js
+// @pxl/native/babel.config.ts
 
 /**
  * Expo's preset, and the build's constants written into the code as values
@@ -8,13 +8,15 @@
  * `__IS_DEV__ ? EVERY : SHIPPED` read at run time carries both.
  */
 
-const path = require("node:path");
-
-const root = path.resolve(__dirname, "../..");
+import * as path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { enumAt, readEnums, stale as staleIn } from "../client/script/const-enum.ts";
+import { ROOT } from "../client/script/import-map.ts";
 
 /**
  * The const enums of the shell, the xpute packages and this app, read by the
- * table both bundlers share (apps/web/script/const-enum.cjs): a const enum is
+ * table both bundlers share (apps/client/script/const-enum.ts): a const enum is
  * a compile-time name for a number, and a bundle holds the number alone. A
  * transpiler that sees one file at a time cannot inline a name declared in
  * another, and Babel's TypeScript transform emits the enum as an object
@@ -22,15 +24,14 @@ const root = path.resolve(__dirname, "../..");
  * and all. The table refuses an enum it cannot inline; `inlineEnums` below
  * does the rest.
  */
-const { readEnums, enumAt, stale: staleIn } = require(path.join(root, "apps/web/script/const-enum.cjs"));
-const TABLE = readEnums([path.join(root, "apps/client/src"), path.join(root, "apps/web/src"), path.join(root, "xpute/ts"), path.join(root, "apps/native/src")]);
+const TABLE = readEnums([path.join(ROOT, "apps/client/src"), path.join(ROOT, "apps/web/src"), path.join(ROOT, "xpute/ts"), path.join(ROOT, "apps/native/src")]);
 const { exported: EXPORTED, local: LOCAL } = TABLE;
 
 /** The table is read once, when Metro loads this file, so an enum or a member
  * added since — a spec regenerated under a running Metro — is not in it. Left
  * alone, it bundles as a name nothing binds and throws on the device; said
  * here, it stops the build with what to do. */
-const stale = (what) => staleIn(what, "restart Metro with --clear");
+const stale = (what: string) => staleIn(what, "restart Metro with --clear");
 
 /** Replaces each `Enum.Member` with its value and strikes the declarations,
  * so the import that named the enum is left with no use and goes with the
@@ -89,7 +90,7 @@ const inlineEnums = ({ types: t }) => ({
         state.imports = new Map();
         p.traverse({
           ImportSpecifier(s) {
-            const members = enumAt(TABLE, root, state.filename, s.parentPath.node.source.value, s.node.imported.name ?? s.node.imported.value);
+            const members = enumAt(TABLE, state.filename, s.parentPath.node.source.value, s.node.imported.name ?? s.node.imported.value);
             if (members) state.imports.set(s.node.local.name, members);
           },
         });
@@ -110,7 +111,7 @@ const inlineEnums = ({ types: t }) => ({
   },
 });
 
-module.exports = (api) => {
+export default (api) => {
   const production = process.env.NODE_ENV === "production";
   api.cache.using(() => process.env.NODE_ENV);
 
@@ -132,9 +133,9 @@ module.exports = (api) => {
     },
   });
 
-  // Expo's own copy of the preset, found from Expo, which is what the app
+  // Expo's own copy of the preset, beside Expo, which is what the app
   // depends on.
-  const preset = require.resolve("babel-preset-expo", { paths: [require.resolve("expo/package.json")] });
+  const preset = fileURLToPath(new URL("../babel-preset-expo", import.meta.resolve("expo/package.json")));
   // The defines and the enums are this tree's: a package's own sources are
   // left as they are, where a name of theirs could be one of ours — @expo/ui
   // has a `Slot` of its own, which the enum pass took for the mode bar's.

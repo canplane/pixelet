@@ -1,4 +1,4 @@
-// @pxl/native/plugin/prebuilt-flavor.js
+// @pxl/native/plugin/prebuilt-flavor.ts
 
 /**
  * Makes a `pod install` leave React Native's prebuilt parts marked as of no
@@ -19,19 +19,19 @@
  * is what puts the step into the Podfile it writes.
  */
 
-const { withPodfile } = require("expo/config-plugins");
+import { withPodfile } from "expo/config-plugins";
 
 const MARK = "# pxl: React Native's prebuilt parts, of no configuration";
 
 const STEP = `
-    ${MARK} (plugin/prebuilt-flavor.js)
+    ${MARK} (plugin/prebuilt-flavor.ts)
     pods = installer.sandbox.root.to_s
     { 'React-Core-prebuilt' => 'React-Core-prebuilt', 'ReactNativeDependencies' => 'ReactNativeDependencies', 'hermes-engine' => '.' }.each do |pod, marked|
       File.write(File.join(pods, marked, '.last_build_configuration'), 'None') if File.directory?(File.join(pods, pod))
     end
 `;
 
-module.exports = (config) =>
+export default (config) =>
   withPodfile(config, (config) => {
     const podfile = config.modResults.contents;
     if (!podfile.includes(MARK)) {

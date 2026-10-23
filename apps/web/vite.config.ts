@@ -4,7 +4,6 @@ import { defineConfig, type HmrContext, loadEnv, type Plugin, type ProxyOptions,
 import deno from "@deno/vite-plugin";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import process from "node:process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,8 +11,8 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 
 import { DEV_PROXY_ROUTES } from "../client/src/config/route.ts";
-
-const { DECL, readEnums, enumAt, literal, stale } = createRequire(import.meta.url)("./script/const-enum.cjs");
+import { DECL, enumAt, literal, type Members, readEnums, stale } from "../client/script/const-enum.ts";
+import { mapped } from "../client/script/import-map.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -152,7 +151,7 @@ function buildStamp(): Plugin {
  * as the type syntax it is, which leaves every importer bound to an export
  * that no longer exists.
  *
- * The table is script/const-enum.cjs's, shared with the device's Babel pass,
+ * The table is apps/client/script/const-enum.ts's, shared with the device's Babel pass,
  * and it refuses an enum it cannot inline rather than leave one. Here each
  * use is replaced by its value — a file's own enums in that file only — and
  * the declarations struck. An access left behind after a declaration went
@@ -167,9 +166,8 @@ function buildStamp(): Plugin {
  * inside the root is. A file that declares enums and reaches the transform
  * without its declarations is a build error.
  */
-function constEnum(roots: string[], root: string): Plugin {
-  type Members = Map<string, number | string>;
-  const table = readEnums(roots) as { exported: Map<string, Map<string, Members>>; local: Map<string, Map<string, Members>> };
+function constEnum(roots: string[]): Plugin {
+  const table = readEnums(roots);
   const restart = "restart the dev server";
 
   // An id can carry a query or a hash — `?worker`, and the `#deno` the Deno
@@ -223,7 +221,7 @@ function constEnum(roots: string[], root: string): Plugin {
       const imported = new Set<string>();
       for (const [, clause, from] of code.matchAll(IMPORT)) {
         for (const { orig, local } of items(clause)) {
-          const members = enumAt(table, root, at, from.slice(1, -1), orig) as Members | null;
+          const members = enumAt(table, at, from.slice(1, -1), orig);
           if (members) {
             bound.set(local, members);
             imported.add(local);
@@ -238,7 +236,7 @@ function constEnum(roots: string[], root: string): Plugin {
         // read before SENSOR_ENABLE became SENSOR_ENABLE_LOCATION — would
         // otherwise leave `7444_LOCATION` for the parser instead of a name
         // the stale check below can say.
-        out = out.replace(new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"), (whole, key: string) => (members.has(key) ? literal(members.get(key)) : whole));
+        out = out.replace(new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"), (whole, key: string) => (members.has(key) ? literal(members.get(key)!) : whole));
         struck.push(name);
       }
       if (!struck.length) return null;
@@ -363,6 +361,24 @@ function fullReloadOnCoreChange() {
 // build-wasm writes nothing when it is not one of them. One build at a time; a
 // change during one asks for one more after it, which covers every change it
 // missed.
+/**
+ * The tree's own prefixes, as the importing file's import map gives them
+ * (apps/client/script/import-map.ts), the reader Metro resolves through too;
+ * `@platform/` is this page's, whoever imports it.
+ */
+function importMaps(): Plugin {
+  const page = path.join(__dirname, "index.html");
+  return {
+    name: "pxl-import-maps",
+    enforce: "pre",
+    resolveId(id, importer) {
+      if (!importer || importer.startsWith("\0")) return null;
+      const hit = mapped(id.startsWith("@platform/") ? page : importer, id);
+      return hit ? this.resolve(hit.path, importer, { skipSelf: true }) : null;
+    },
+  };
+}
+
 function rebuildKernelOnRustChange(): Plugin {
   return {
     name: "rebuild-kernel",
@@ -465,7 +481,8 @@ export default defineConfig(({ mode }) => {
     plugins: [
       buildStamp(),
       remoteConsole(),
-      constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "client", "src"), path.resolve(__dirname, "..", "..", "xpute", "ts")], path.resolve(__dirname, "..", "..")),
+      constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "client", "src"), path.resolve(__dirname, "..", "..", "xpute", "ts")]),
+      importMaps(),
       deno(),
       react(),
 
@@ -477,10 +494,6 @@ export default defineConfig(({ mode }) => {
 
     resolve: {
       alias: [
-        // The shell is apps/client's; what it asks of a platform is this
-        // page's, as Metro names the device's.
-        { find: "@platform", replacement: path.resolve(__dirname, "src/platform/web") },
-        { find: "@", replacement: path.resolve(__dirname, "..", "client", "src") },
         // The shell imports React Native's API, which deno.jsonc resolves to
         // React Native itself for the type-check; a web bundle takes the
         // same names from react-native-web. Exact, so a package under

@@ -1,4 +1,4 @@
-// @pxl/native/plugin/ios-build.js
+// @pxl/native/plugin/ios-build.ts
 
 /**
  * The iOS a build targets, written into what `expo prebuild` generates
@@ -6,11 +6,11 @@
  * of what it links. Liquid Glass is asked for at run time.
  */
 
-const { withPodfileProperties, withXcodeProject } = require("expo/config-plugins");
+import { withPodfileProperties, withXcodeProject } from "expo/config-plugins";
 
 const DEPLOYMENT_TARGET = "16.4";
 
-module.exports = (config) => {
+export default (config) => {
   config = withPodfileProperties(config, (config) => {
     config.modResults["ios.deploymentTarget"] = DEPLOYMENT_TARGET;
     return config;

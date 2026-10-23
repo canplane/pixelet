@@ -1,22 +1,30 @@
-// @pxl/web/script/const-enum.cjs
+// @pxl/client/script/const-enum.ts
 
 /**
  * The tree's const enums, read once for both bundlers (Vite and Metro's
  * Babel): a one-file-at-a-time transpiler emits an enum as an object with
  * member names as strings. A non-const enum or a non-literal member is an
  * error here. A use is resolved through its import, so two files exporting
- * one name are two enums. CommonJS, because Metro requires the Babel config.
+ * one name are two enums, and an import resolves through the import maps as
+ * the type-check reads them (import-map.ts).
  */
 
-const fs = require("node:fs");
-const path = require("node:path");
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { mapped } from "./import-map.ts";
 
-const DECL = /(export\s+)?const\s+enum\s+(\w+)\s*\{([^}]*)\}/g;
+/** A const enum's members, each its value. */
+export type Members = Map<string, number | string>;
+/** Each file's enums, by name. */
+export type Enums = Map<string, Map<string, Members>>;
+export type Table = { exported: Enums; local: Enums };
+
+export const DECL = /(export\s+)?const\s+enum\s+(\w+)\s*\{([^}]*)\}/g;
 const PLAIN = /(?:^|[\n;])\s*(?:export\s+)?(?:declare\s+)?enum\s+(\w+)\s*\{/g;
 const VALUE = /^(?:0x[0-9a-fA-F]+|\d+|"[^"\\]*"|'[^'\\]*'|[-+*/|&^~()<>\s])+$/;
 
-function membersOf(body, where) {
-  const members = new Map();
+function membersOf(body: string, where: string): Members {
+  const members: Members = new Map();
   // Split on commas outside strings too, so a one-line enum reads the same.
   const lines = body.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").map((line) => line.replace(/\/\/.*/, ""));
   for (let line of lines.flatMap((line) => line.split(/,(?=(?:[^"']*["'][^"']*["'])*[^"']*$)/))) {
@@ -34,10 +42,10 @@ function membersOf(body, where) {
 }
 
 /** Tests are not bundled and are not read. */
-function readEnums(roots) {
-  const exported = new Map();
-  const local = new Map();
-  const walk = (dir) => {
+export function readEnums(roots: string[]): Table {
+  const exported: Enums = new Map();
+  const local: Enums = new Map();
+  const walk = (dir: string) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, e.name);
       if (e.isDirectory()) {
@@ -52,7 +60,7 @@ function readEnums(roots) {
       for (const [, isExported, name, body] of src.matchAll(DECL)) {
         const by = isExported ? exported : local;
         if (!by.has(full)) by.set(full, new Map());
-        by.get(full).set(name, membersOf(body, `${full}: ${name}`));
+        by.get(full)!.set(name, membersOf(body, `${full}: ${name}`));
       }
     }
   };
@@ -60,20 +68,15 @@ function readEnums(roots) {
   return { exported, local };
 }
 
-function aliases(root) {
-  return [
-    ["@/", path.join(root, "apps/client/src/")],
-    ["@xpute/kit/", path.join(root, "xpute/ts/kit/src/")],
-    ["@xpute/host/", path.join(root, "xpute/ts/host/src/")],
-    ["@xpute/conformance/", path.join(root, "xpute/ts/conformance/src/")],
-  ];
-}
-
-function fileOf(from, spec, root) {
-  let base = null;
+/** Where `spec`, imported from `from`, is: relative, or through the import
+ * maps as `from`'s own package reads them (import-map.ts). `@platform/` is
+ * the bundling app's, and holds no enum the shell imports. */
+function fileOf(from: string, spec: string): string | null {
+  let base: string | null = null;
   if (spec.startsWith(".")) base = path.resolve(path.dirname(from), spec);
-  for (const [prefix, dir] of aliases(root)) {
-    if (spec.startsWith(prefix)) base = dir + spec.slice(prefix.length);
+  else {
+    const hit = mapped(from, spec);
+    if (hit && hit.prefix !== "@platform/") base = hit.path;
   }
   if (base === null) return null;
   for (const at of [base, base + ".ts", base + ".tsx", path.join(base, "index.ts")]) {
@@ -83,8 +86,8 @@ function fileOf(from, spec, root) {
 }
 
 /** Follows `export { … } from` and `export * from` to the declaring file. */
-function enumAt(table, root, from, spec, name, depth = 0) {
-  const file = fileOf(from, spec, root);
+export function enumAt(table: Table, from: string, spec: string, name: string, depth = 0): Members | null {
+  const file = fileOf(from, spec);
   if (file === null || depth > 8) return null;
   const own = table.exported.get(file)?.get(name);
   if (own) return own;
@@ -92,22 +95,20 @@ function enumAt(table, root, from, spec, name, depth = 0) {
   for (const [, clause, next] of src.matchAll(/export\s*\{([^}]*)\}\s*from\s*["']([^"']+)["']/g)) {
     for (const item of clause.split(",").map((s) => s.trim()).filter(Boolean)) {
       const [orig, as] = item.replace(/^type\s+/, "").split(/\s+as\s+/);
-      if ((as ?? orig) === name) return enumAt(table, root, file, next, orig, depth + 1);
+      if ((as ?? orig) === name) return enumAt(table, file, next, orig, depth + 1);
     }
   }
   for (const [, next] of src.matchAll(/export\s*\*\s*from\s*["']([^"']+)["']/g)) {
-    const found = enumAt(table, root, file, next, name, depth + 1);
+    const found = enumAt(table, file, next, name, depth + 1);
     if (found) return found;
   }
   return null;
 }
 
-function literal(value) {
+export function literal(value: number | string): string {
   return typeof value === "string" ? JSON.stringify(value) : String(value);
 }
 
-function stale(what, restart) {
+export function stale(what: string, restart: string): string {
   return `const-enum: ${what} is not in the enum table read when the bundler started; the enums changed since, so ${restart}`;
 }
-
-module.exports = { DECL, readEnums, enumAt, literal, stale };

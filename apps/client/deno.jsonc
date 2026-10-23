@@ -34,7 +34,7 @@
   "imports": {
     "@/": "./src/",
     // A type-check reads one platform, and it is the page's: each app
-    // bundles its own (apps/web/vite.config.ts, apps/native/metro.config.js),
+    // bundles its own (apps/web/vite.config.ts, apps/native/metro.config.ts),
     // and apps/native/src/platform/conform.ts holds the device's to its names.
     "@platform/": "../web/src/platform/web/"
   }

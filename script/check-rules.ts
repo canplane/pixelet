@@ -2,8 +2,8 @@
 // Holds the tree to the rules a machine can decide: the header
 // path, cited paths and names existing, the lattice's arithmetic only in
 // `space/`, no raw pointer casts in offset crates, `@expo/ui` only in the
-// sheet, each rounding half to even, each generated shader made from the
-// sources the tree holds now.
+// sheet, each rounding half to even, no CommonJS, each generated shader made
+// from the sources the tree holds now.
 // `doc/minutes/` and `doc/experiment/` are exempt from cited paths: each
 // names the files of its day.
 //   deno run -A script/check-rules.ts
@@ -211,6 +211,28 @@ for (const f of files) {
   });
 }
 
+// The tree's scripts are ES modules, TypeScript where a loader takes it, the
+// bundlers' configs among them: Node runs only the native toolchain's own
+// scripts (CocoaPods, Xcode's and Gradle's phases), and what of the tree it
+// loads there it loads as an ES module.
+const COMMONJS = [
+  /(?<![\w$.])require(?:\s*\.\s*resolve)?\s*\(/,
+  /(?<![\w$.])module\s*(?:\.\s*exports\b|\[)/,
+  /(?<![\w$.])exports\s*(?:\.\s*[\w$]+\s*=|\[)/,
+  /\bdefineProperty\(\s*exports\b/,
+  /\bcreateRequire\b/,
+];
+for (const f of files) {
+  if (/\.c[jt]s$/.test(f)) problems.push(`${f}: CommonJS; the tree's scripts are ES modules`);
+  // This file names the patterns it refuses.
+  if (!/\.[mc]?[jt]sx?$/.test(f) || f === "script/check-rules.ts") continue;
+  read(f)?.split("\n").forEach((line, n) => {
+    // Code alone: a comment's text and a string's are not CommonJS.
+    const code = line.replace(/\/\*.*?\*\/|\/\/.*$|^\s*\*.*$|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, "");
+    if (COMMONJS.some((r) => r.test(code))) problems.push(`${f}:${n + 1}: CommonJS where the tree's scripts are ES modules: ${line.trim()}`);
+  });
+}
+
 // A generated shader names the digest of the sources it was made from
 // (shader-wgsl.ts `inputsDigest`); one the tree has moved past is stale.
 const digest = await inputsDigest(root);
@@ -224,4 +246,4 @@ if (problems.length) {
   console.error(`\ncheck-rules: ${problems.length}`);
   Deno.exit(1);
 }
-console.log("check-rules: headers, cited paths, the lattice, the memory's offsets, SwiftUI's place, one rounding and the generated shaders hold");
+console.log("check-rules: headers, cited paths, the lattice, the memory's offsets, SwiftUI's place, one rounding, ES modules and the generated shaders hold");

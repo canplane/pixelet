@@ -1,4 +1,4 @@
-// @pxl/native/plugin/android-build.js
+// @pxl/native/plugin/android-build.ts
 
 /**
  * What an Android build of this app is for, written into the Gradle
@@ -22,9 +22,9 @@
  *   are written here, where Studio finds them already said.
  */
 
-const fs = require("node:fs");
-const path = require("node:path");
-const { withAppBuildGradle, withDangerousMod, withGradleProperties } = require("expo/config-plugins");
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { withAppBuildGradle, withDangerousMod, withGradleProperties } from "expo/config-plugins";
 
 const PROPERTIES = {
   reactNativeArchitectures: "arm64-v8a",
@@ -33,10 +33,10 @@ const PROPERTIES = {
 
 const FLAVORS = ["mobile", "quest"];
 const DEBUGGABLE = FLAVORS.flatMap((flavor) => [`${flavor}Debug`, `${flavor}DebugOptimized`]);
-const MARK = "// pxl: the flavors' debug builds (plugin/android-build.js)";
+const MARK = "// pxl: the flavors' debug builds (plugin/android-build.ts)";
 const DAEMON_JAVA = "17";
 
-module.exports = (config) => {
+export default (config) => {
   config = withGradleProperties(config, (config) => {
     const items = config.modResults.filter((item) => !(item.type === "property" && item.key in PROPERTIES));
     for (const [key, value] of Object.entries(PROPERTIES)) items.push({ type: "property", key, value });
@@ -45,7 +45,7 @@ module.exports = (config) => {
   });
   config = withDangerousMod(config, ["android", (config) => {
     const file = path.join(config.modRequest.platformProjectRoot, "gradle", "gradle-daemon-jvm.properties");
-    fs.writeFileSync(file, `# plugin/android-build.js\ntoolchainVersion=${DAEMON_JAVA}\n`);
+    fs.writeFileSync(file, `# plugin/android-build.ts\ntoolchainVersion=${DAEMON_JAVA}\n`);
     return config;
   }]);
   return withAppBuildGradle(config, (config) => {
