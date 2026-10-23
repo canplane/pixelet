@@ -153,9 +153,10 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
         {/* Over the frames a GPU read landed with; none landed is no measure, not 0. */}
         <Row k="gpu p95" v={f.gpu_read > 0 ? `${n1(f.gpu.p95)} ms of ${f.gpu_read}` : "no timestamps"} warn={f.gpu_read > 0 && f.gpu.p95 > f.last.paced_ms} />
         {heaviest(f.gpu_spans, (s) => s.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.p95)} ms`} />)}
+        {/* The pixels the last landed read's spans were measured over. */}
+        <Row k="  timed over" v={f.last.gpu_read ? valueText("gpu_px", f.last.gpu_px) : "-"} />
         <Row k="draws/triangles" v={`${drawn(f.last)[0]}/${tris(drawn(f.last)[1])}`} />
         {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
-        <Row k="world surface" v={valueText("world_px", f.last.world_px)} />
       </>
     ),
     cap: f !== null && <Row k="terrain refused" v={`${round(f.last.cap_terrain_refused)}`} warn={f.last.cap_terrain_refused > 0} />,

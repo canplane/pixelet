@@ -176,8 +176,8 @@ pub fn stage_render(paced_ms: f64) {
         GpuSample {
             read: f64::from(u8::from(stat.gpu_read)),
             spans: stat.gpu_spans,
+            px: stat.gpu_px,
             census: stat.census,
-            world_px: stat.world_px,
         },
         DeviceSample {
             blocks: stat.blocks,

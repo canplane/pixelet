@@ -23,14 +23,15 @@ const _: () = assert!(CENSUS_LEN == DRAW_PIPELINES.len(), "a census tag for ever
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GpuSample {
     /// Lags a frame or two: the read that landed with this frame, where
-    /// `read` is 1; where it is 0, nothing was measured with this frame. The
-    /// frame's GPU time is its spans' sum (pxl-render renderer.rs `gpu_ms`).
+    /// `read` is 1, its spans and `px` the world's pixels of the frame it
+    /// timed, what the spans were measured over; where it is 0, nothing was
+    /// measured with this frame and both are 0. The frame's GPU time is its
+    /// spans' sum (pxl-render renderer.rs `gpu_ms`).
     pub read: f64,
     pub spans: [f64; GPU_SPANS],
+    pub px: f64,
     /// Every draw by its pipeline: the frame's draws and triangles are its sums.
     pub census: DrawCensus,
-    /// The world surface's pixels.
-    pub world_px: f64,
 }
 
 #[repr(C)]
@@ -143,8 +144,8 @@ words!(FrameSample, FRAME::WORDS,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     worst_effect_ms => FRAME::worst_effect_ms, worst_effect_name => FRAME::worst_effect_name,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
-    gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans,
-    gpu.census => FRAME::census, gpu.world_px => FRAME::world_px,
+    gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.px => FRAME::gpu_px,
+    gpu.census => FRAME::census,
     device.blocks => FRAME::blocks, device.blocks_mb => FRAME::blocks_mb,
     device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb, device.objects => FRAME::gpu_objects,
     tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,

@@ -218,17 +218,16 @@ pub struct FrameOutput {
 #[derive(Clone, Copy)]
 pub struct FrameStat {
     /// Whether a GPU read landed with this frame: its spans are then that
-    /// read's, and else an earlier frame's, not this one's.
+    /// read's and `gpu_px` the world's pixels the frame it timed drew, what
+    /// the spans were measured over; else both are 0, as nothing was
+    /// measured with this frame.
     pub gpu_read: bool,
-    /// The world's pixels the frame the read timed drew: what its spans
-    /// were measured over.
     pub gpu_px: f64,
     /// The block table's blocks and their bytes.
     pub blocks: f64,
     pub block_bytes: f64,
     pub depth_mb: f64,
     pub layers_mb: f64,
-    pub world_px: f64,
     /// Every draw's, counted only while `counted`: its sums are the frame's
     /// draws and triangles.
     pub census: DrawCensus,
@@ -2050,14 +2049,14 @@ impl Renderer {
         let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
         let asked = g.submit_frame(encoder, written);
         release(canvas_view);
-        let mut gpu_spans = [0.0; GPU_SPAN_NAMES.len()];
-        let gpu_read = q != 0 && g.gpu_landed();
-        if q != 0 {
-            gpu_spans = core::array::from_fn(|k| g.gpu_ms(k as u32));
-        }
         // The read that landed is the one that was on its way; this frame's
         // takes its place where one was asked.
-        let gpu_px = self.read_px;
+        let gpu_read = q != 0 && g.gpu_landed();
+        let (gpu_spans, gpu_px) = if gpu_read {
+            (core::array::from_fn(|k| g.gpu_ms(k as u32)), self.read_px)
+        } else {
+            ([0.0; GPU_SPAN_NAMES.len()], 0.0)
+        };
         if asked {
             self.read_px = f64::from(world.width) * f64::from(world.height);
         }
@@ -2191,7 +2190,6 @@ impl Renderer {
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the badges' regions'.
             depth_mb: round((px * 4.0 + self.ao.depth_bytes() + self.badges.depth_bytes()) / MB),
             layers_mb: round(self.layers.bytes as f64 / MB),
-            world_px: px,
             census,
             gpu_spans,
         }
