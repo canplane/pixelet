@@ -46,6 +46,19 @@ pub fn at_zoom(tile: Zoom) -> Detail {
     }
 }
 
+/// What is held, as finely as it is held: the ground at its cells, which
+/// answer alike asked finer, and what is placed at its own. Where the eye
+/// draws it coarser is the asker's to judge by `by_distance`
+/// (control/interaction.rs `folded_at`).
+pub fn held() -> Detail {
+    let [_, finest] = asked();
+    Detail {
+        tau: 1.0,
+        range: [finest, finest],
+        eye: [0.0; 3],
+    }
+}
+
 /// The camera grid's cells at each distance from the origin at `tau`
 /// (`Tau::cell_at`), whose block, drawn whole, spans at least one cell of
 /// the grid from any direction: the rule that sizes every drawn cell.

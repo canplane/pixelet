@@ -12,6 +12,7 @@ use pxl_spec::block::object::Cube;
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
 
 pub use crate::abi::cmd::ActiveTool;
@@ -185,10 +186,15 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
 }
 
 /// Whether what `hit` struck is drawn folded: the eye's rays draw cells
-/// coarser than the box struck where it is (query/support.rs `cell_at`).
+/// coarser than the box struck where it is, by the rule they are cast by
+/// (query/ray.rs `by_distance`), which near the eye is finer than the
+/// ground's cells, as what is placed may be.
 fn folded_at(hit: &Hit, drawn: Tau) -> bool {
     let held = of_side(hit.cube.extent()[0]);
-    crate::view::observation::eye().is_some_and(|eye| crate::query::cell_at(eye, drawn, hit.cube.center()) < held)
+    crate::view::observation::eye().is_some_and(|eye| {
+        let v = v3::sub(&hit.cube.center(), &eye);
+        crate::query::by_distance(drawn).at(v3::dot(&v, &v) as f32) < held
+    })
 }
 
 /// A tap at `ndc_x`, `ndc_y` with the tool held, on the world drawn at `drawn`.

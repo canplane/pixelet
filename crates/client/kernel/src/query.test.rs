@@ -258,6 +258,24 @@ fn a_dig_is_met_as_the_cells_asked_fold_it() {
     }
 }
 
+/// What is held is met as finely as it is held: a half cube on the ground,
+/// finer than the leaves' cells, is met whole by a pick, which asks it as it
+/// is placed.
+#[test]
+fn a_half_cube_is_met_as_it_is_placed() {
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let half = units(OBJECT_COARSEST + 1);
+    let mut store = Store::default();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    write(&mut store, [x, y, 5.0], OBJECT_COARSEST + 1, red);
+    let access = World::new(&residency, &store);
+    let at = [x + half / 2.0, y + half / 2.0];
+    let hit = access.first_hit(&down(at), held()).exact().flatten().unwrap();
+    assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
+    assert_eq!([hit.point[2], hit.cube.extent()[0]], [5.0 + half, half], "{hit:?}");
+}
+
 /// In a stack with a cell left out, what stands in the gap stands on the
 /// cube under it.
 #[test]
