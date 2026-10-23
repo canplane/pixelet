@@ -198,8 +198,8 @@ fn editable(corner: &Q3, size: f64) -> bool {
 /// coarser than the box struck where it is (view/observation.rs `cell_at`).
 fn folded_at(hit: &Hit, drawn: Tau) -> bool {
     let held = of_side(hit.cube.extent()[0]);
-    crate::view::observation::observation()
-        .and_then(|o| crate::view::observation::cell_at(&o, drawn, hit.cube.center()))
+    crate::view::observation::eye()
+        .and_then(|eye| crate::view::observation::cell_at(eye, drawn, hit.cube.center()))
         .is_some_and(|cells| cells < held)
 }
 

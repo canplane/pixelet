@@ -7,7 +7,6 @@
 use crate::laid;
 use crate::scene::frame::Frame;
 use crate::sched::tick::TickContext;
-use crate::view::frame::pose::view_resize;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
@@ -203,7 +202,6 @@ pub fn take_draw() -> bool {
 
 pub fn visible_step(ctx: &mut TickContext) {
     let c = pass();
-    view_resize(ctx.state.width, ctx.state.height, crate::view::frame::resolution::display_ratio());
     let v = view();
 
     let anchor = sea_under_eye();

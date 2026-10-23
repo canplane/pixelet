@@ -350,7 +350,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let line = seen.line;
     let said = line
         .zip(seen.speaker)
-        .and_then(|(label, (feet, over))| Some((label, over, crate::view::observation::cell_at(&o, tau, crate::view::frame::coord::to_world(&feet))?)));
+        .and_then(|(label, (feet, over))| Some((label, over, crate::view::observation::cell_at(o.eye, tau, crate::view::frame::coord::to_world(&feet))?)));
     let is_drafted = |label: &Label| matches!(label, Label::Marker { at, .. } if Some(*at) == draft.map(|d| d.at));
     // A cell's markers but the waiting one: one is itself, more their count.
     let shown = found.chunk_by(|a, b| a.cell().is_some() && a.cell() == b.cell()).filter_map(|run| {

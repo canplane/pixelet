@@ -98,7 +98,7 @@ fn demand_tick(_: &mut TickContext) {
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
     let pinned = crate::layer::terrain::window::step(
         [
-            crate::view::observation::observation().map(|o| [o.eye[0], o.eye[1]]),
+            crate::view::observation::eye().map(|e| [e[0], e[1]]),
             crate::control::camera::controller::focus().map(at),
             crate::control::navigation::destination::pending().map(at),
         ],
@@ -309,8 +309,8 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     text_rise();
     let effects_ms = world_turn();
     let state = TICK_STATE.get(TickState::default);
-    state.width = width;
-    state.height = height;
+    // Before the tick, so every step and the draw see the screen it is drawn on.
+    crate::view::frame::pose::view_resize(width, height, crate::view::frame::resolution::display_ratio());
     state.dpr = dpr;
     // Step by at most MAX_STEP_S, or a pause makes a character cross a wall or
     // a damped camera overshoot. The raw gap is still recorded, or every bad
