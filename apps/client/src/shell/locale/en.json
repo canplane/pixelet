@@ -89,9 +89,9 @@
         "label": "Profiler",
         "description": "Shows frame timing, GPU, drawing, requests and memory, and records them while on."
       },
-      "gizmo": {
-        "label": "Gizmo",
-        "description": "Draws the view center, its cell and the axis rings, and the drawn pieces, their tiles and shards, in the world with a legend, for debugging."
+      "world_gizmo": {
+        "label": "World Gizmo",
+        "description": "Draws the view center, its cell and the axis rings, and over the ground the squares the world is drawn in by how they stand, their tiles and shards, with a legend, for debugging."
       }
     },
     "disclaimer": {

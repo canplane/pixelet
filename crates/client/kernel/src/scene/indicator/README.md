@@ -17,8 +17,9 @@ way a billboard would. pxl-render `look/color.rs`'s `indicator` is shared stylin
 this tier specifically (`ACTION`, `ERASE`), not a general color constant
 file.
 
-`frame_gizmo.rs` lives here too but is a debug visualization behind the
-`gizmo` setting (the focus's cell and the frames' rings), as debug
-lines, which the gizmo's own faces hide and nothing of the world does — not
-a real one-off indicator in the same sense, adjacent by folder convenience,
-not by tier.
+`frame_gizmo.rs` and `coverage_gizmo.rs` live here too but are debug
+visualizations behind the `world_gizmo` setting (the focus's cell and the frames'
+rings; the eye's windows' squares by how they stand, their tiles and
+shards), as debug lines, which the gizmos' own faces hide and nothing of the
+world does — not real one-off indicators in the same sense, adjacent by
+folder convenience, not by tier.

@@ -1,9 +1,11 @@
 {
   "$doc": [
-    "What each line of the gizmo is drawn in, so the lines and the",
+    "What each line of the world gizmo is drawn in, so the lines and the",
     "shell's legend of them read one look: the frame's marks about the focus",
-    "(scene/indicator/frame_gizmo.rs). Each #rrggbb in sRGB, with its opacity,",
-    "and dashed where a dashed line draws it: a ring of the frame."
+    "(scene/indicator/frame_gizmo.rs) and the coverage's over the ground",
+    "(scene/indicator/coverage_gizmo.rs). Each #rrggbb in sRGB, with its",
+    "opacity, and dashed where a dashed line draws it: a ring of the frame, a",
+    "stretch of the coverage."
   ],
   "frame": {
     "$type": "rgb",
@@ -31,5 +33,20 @@
       "rgb": "#0000ff",
       "$doc": "Straight up."
     }
+  },
+  "coverage": {
+    "$type": "rgb",
+    "$doc": "Over the ground, the eye's windows' squares (layer/terrain/window.rs) where the eye reads each at its zoom, in the order a stretch shared by several takes the last: a drawn square faint under what marks one not drawn.",
+    "drawn": { "rgb": "#ffffff", "alpha": { "$type": "f32", "$value": 0.4 }, "dashed": false, "$doc": "A square present, its cells filled from its own tile." },
+    "coarser": { "rgb": "#00ffff", "alpha": { "$type": "f32", "$value": 0.6 }, "dashed": false, "$doc": "A square still to land, a coarser window's square drawn in its place." },
+    "no_tile": {
+      "rgb": "#ff0000",
+      "alpha": { "$type": "f32", "$value": 0.6 },
+      "dashed": true,
+      "$doc": "A square past the source: no tile of its own, a tile over it says its ground, and a coarser square stands in for good."
+    },
+    "wanted": { "rgb": "#ffff00", "alpha": { "$type": "f32", "$value": 0.6 }, "dashed": true, "$doc": "A square still to land, nothing drawn in its place." },
+    "tile": { "rgb": "#ff9500", "alpha": { "$type": "f32", "$value": 0.9 }, "dashed": false, "$doc": "A drawn square's tile." },
+    "shard": { "rgb": "#7cff7c", "alpha": { "$type": "f32", "$value": 1.0 }, "dashed": false, "$doc": "A drawn square's shard, the unit the source serves the world in." }
   }
 }

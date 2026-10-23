@@ -149,8 +149,8 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
-  gizmo: {
+  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (scene/indicator/coverage_gizmo.rs). */
+  world_gizmo: {
     key: 13 as number,
     kind: "toggle",
     default: false,
@@ -301,8 +301,8 @@ export const SETTINGS_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
-  gizmo: {
+  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (scene/indicator/coverage_gizmo.rs). */
+  world_gizmo: {
     key: 13 as number,
     kind: "toggle",
     default: false,

@@ -14,7 +14,7 @@ import { ViewPanel } from "./view.tsx";
 const PANEL: Partial<Record<SettingName, ComponentType>> = {
   view: ViewPanel,
   profiler: ProfilerPanel,
-  gizmo: GizmoLegend,
+  world_gizmo: GizmoLegend,
 };
 
 /** Whether any panel is up, so the corner is the window's. */

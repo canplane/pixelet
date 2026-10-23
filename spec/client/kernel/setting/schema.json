@@ -204,9 +204,9 @@
       "default": false,
       "section": "debug"
     },
-    "gizmo": {
+    "world_gizmo": {
       "$doc": [
-        "Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs)."
+        "Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (scene/indicator/coverage_gizmo.rs)."
       ],
       "kind": "toggle",
       "default": false,

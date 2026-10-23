@@ -124,7 +124,7 @@ fn wanted(cell: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
 }
 
 /// The tile square `q` at `cell` lies in, and where in it, in squares.
-fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
+pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
     let per = (GROUND.tile_cells() >> SQUARE_SHIFT) as i32;
     let zoom = cell - GROUND.tile_cell_shamt();
     let t = tile_at(zoom, [q[0].div_euclid(per), q[1].div_euclid(per)]);
@@ -364,6 +364,15 @@ fn far(cell: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
 /// (pxl-kernel view/demand.rs `observe`).
 pub fn pinned() -> &'static [Tile] {
     &windows().pinned
+}
+
+/// The eye's window at `cell`'s slots as it holds them, each square
+/// present or still wanted (`Slot`); none while its centre is not. A debug
+/// reader's (scene/indicator/coverage_gizmo.rs): a copy, moving nothing.
+pub fn eye_slots(cell: Zoom) -> Option<[Slot; SLOTS as usize]> {
+    let (w, win) = (windows(), cell.checked_sub(FIRST_CELL).filter(|&w| w < EYE_WINDOWS)?);
+    first_of(w, win)?;
+    Some(core::array::from_fn(|s| w.slots[(win * SLOTS) as usize + s]))
 }
 
 /// The windows' slots and their first squares, as the GPU's cast reads

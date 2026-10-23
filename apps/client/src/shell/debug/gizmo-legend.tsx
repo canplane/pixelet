@@ -1,7 +1,7 @@
 // @pxl/client/shell/debug/gizmo-legend.tsx
 
 /**
- * What each line of the gizmo means, shown while the `gizmo`
+ * What each line of the world gizmo means, shown while the `world_gizmo`
  * setting is on. Colors and dashes are the spec's (`gizmo.spec.ts`), which
  * the kernel draws the lines in.
  */
@@ -12,7 +12,7 @@ import { useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { gauge, Head } from "./profiler/gauge.tsx";
 import { Fold } from "./fold.tsx";
-import { frame } from "./gizmo.spec.ts";
+import { coverage, frame } from "./gizmo.spec.ts";
 
 interface Look {
   rgb: number;
@@ -26,6 +26,15 @@ const FRAME: Record<keyof typeof frame, string> = {
   forward: "upright ring, forward",
   north: "ring through north",
   up: "up",
+};
+
+const COVERAGE: Record<keyof typeof coverage, string> = {
+  drawn: "square drawn",
+  coarser: "square to land, coarser drawn",
+  no_tile: "square past the source",
+  wanted: "square to land, nothing drawn",
+  tile: "a drawn square's tile",
+  shard: "a drawn square's shard",
 };
 
 const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0")}`;
@@ -44,12 +53,14 @@ function Rows<K extends string>({ looks, labels, reversed }: { looks: Record<K, 
 }
 
 export function GizmoLegend() {
-  const show = useKernel((s) => s.settings[SETTINGS.gizmo.key] === 1);
+  const show = useKernel((s) => s.settings[SETTINGS.world_gizmo.key] === 1);
   if (!show) return null;
   return (
-    <Fold name="gizmo" title="Gizmo">
+    <Fold name="world_gizmo" title="World Gizmo">
       <Head>Frame</Head>
       <Rows looks={frame} labels={FRAME} />
+      <Head>Coverage</Head>
+      <Rows looks={coverage} labels={COVERAGE} reversed />
     </Fold>
   );
 }
