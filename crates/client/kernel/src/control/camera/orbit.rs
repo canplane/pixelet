@@ -21,7 +21,6 @@ use crate::param::DOLLY_GAIN;
 use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::param::{MAX_DIST, MIN_DIST};
 use crate::setting::store::{settings_store, OrbitObstacleMode};
-use crate::view::frame::pose::view_compose;
 use terrain_gate::{allowed_view, climb_polar};
 use xpute_guest::global::Global;
 
@@ -155,6 +154,5 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
         set_eye_world(&v3::add(&center, &e));
     }
-    view_compose(crate::control::camera::controller::pose());
     Some(moving)
 }

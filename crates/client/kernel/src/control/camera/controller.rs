@@ -18,7 +18,7 @@ use crate::sched::edge::request_world_tick;
 use crate::sched::tick::TickContext;
 use crate::setting::store::{settings_store, CameraMode};
 use crate::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
-use crate::view::frame::pose::{units_per_px_at, view, view_compose, ObserverPose};
+use crate::view::frame::pose::{units_per_px_at, ObserverPose};
 use xpute_guest::global::Global;
 use xpute_kit::math::scalar::wrap;
 
@@ -99,7 +99,7 @@ pub fn polar() -> f64 {
 pub fn focus_world() -> Option<V3> {
     camera().eye?;
     if active() == Active::Tracked {
-        return Some(view().at().eye);
+        return Some(pose()?.eye);
     }
     let (e, c) = (eye_world()?, camera());
     let (d, r) = (look_dir(c.polar, c.azimuth), dist());
@@ -128,7 +128,6 @@ pub fn put_center(target: Q3, motion: Motion) {
         Active::Orbit => crate::control::camera::orbit::put(target, snap),
         Active::Free => crate::control::camera::free::put(target, snap),
     }
-    view_compose(pose());
     request_world_tick();
 }
 
@@ -313,7 +312,6 @@ fn switch() -> bool {
     if !take_mode(settings_store().camera_mode) {
         return false;
     }
-    view_compose(pose());
     request_world_tick();
     true
 }
@@ -356,13 +354,14 @@ fn take_mode(want: CameraMode) -> bool {
 }
 
 /// `q` (x, y, z, w) turns the camera's axes to the tracker's. The first of a
-/// run places the tracker's space so the camera stays where it is.
+/// run places the tracker's space so the camera stays where it is; before
+/// the camera stands anywhere there is nowhere to place it.
 pub fn tracked_pose(at: V3, q: [f64; 4]) {
     let mut turn = mat4::new();
     mat4::rotation_quat(&mut turn, q);
     let c = controllers();
     if c.tracked.is_none() {
-        let now = view().at();
+        let Some(now) = pose() else { return };
         let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) = (mat4::new(), mat4::new(), mat4::new(), [0.0; 3]);
         mat4::transpose(&mut camera_to_world, &now.rotation);
         mat4::mul(&mut world_turn, &camera_to_world, mat4::transpose(&mut turn_back, &turn));
@@ -376,13 +375,11 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
     } else if let Some(t) = &mut c.tracked {
         (t.turn, t.at) = (turn, at);
     }
-    view_compose(pose());
     request_world_tick();
 }
 
 pub fn tracked_end() {
     if controllers().tracked.take().is_some() {
-        view_compose(pose());
         request_world_tick();
     }
 }

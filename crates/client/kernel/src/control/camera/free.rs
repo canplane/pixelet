@@ -12,7 +12,6 @@ use crate::control::camera::controller::{camera, eye_world, focus, set_eye_world
 use crate::control::camera::state::camera_state;
 use crate::control::navigation::support::target;
 use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
-use crate::view::frame::pose::view_compose;
 use xpute_guest::global::Global;
 
 /// Canonical, so it holds still as the eye goes round the world. None until first put.
@@ -56,6 +55,5 @@ pub(crate) fn turn(delta: f64) -> bool {
     let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, LOOK_EPS);
     moving |= m;
     (cam.polar, cam.azimuth) = look_domain(polar, azimuth);
-    view_compose(crate::control::camera::controller::pose());
     moving
 }

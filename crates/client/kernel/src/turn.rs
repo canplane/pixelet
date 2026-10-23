@@ -124,6 +124,14 @@ fn camera_input_tick(_: &mut TickContext) {
     camera_input_step(crate::view::lens::tau());
 }
 
+/// The camera's last writer, then the view composed where it stands: after
+/// every writer of the pose (the door's events, the turn's effects, the
+/// controllers), before the phases that observe it.
+fn camera_tick(ctx: &mut TickContext) {
+    crate::control::camera::controller::camera_step(ctx);
+    crate::view::frame::pose::view_compose(crate::control::camera::controller::pose());
+}
+
 fn environment_tick(_: &mut TickContext) {
     environment_step();
 }
@@ -133,7 +141,7 @@ fn environment_tick(_: &mut TickContext) {
 pub fn boot() {
     on_tick(Phase::interaction, crate::control::camera::controller::controller_step, StepName::controller as u32);
     on_tick(Phase::interaction, camera_input_tick, StepName::input as u32);
-    on_tick(Phase::interaction, crate::control::camera::controller::camera_step, StepName::camera as u32);
+    on_tick(Phase::interaction, camera_tick, StepName::camera as u32);
     // After the view has moved, so the environment sees this tick's camera.
     on_tick(Phase::interaction, environment_tick, StepName::environment as u32);
     on_tick(Phase::interaction, companion_tick, StepName::companion as u32);
@@ -193,8 +201,6 @@ pub fn world_turn() -> f64 {
         crate::control::navigation::support::support_step();
         crate::control::navigation::destination::destination_step()
     });
-    // After every writer of the focus, before anything observes the view.
-    effect!(worst, view, crate::view::frame::pose::view_compose(crate::control::camera::controller::pose()));
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, objects, crate::layer::object::repository::step());
     effect!(worst, edit, {
