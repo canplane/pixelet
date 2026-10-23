@@ -13,7 +13,7 @@ use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, Message, OrientationState, Snapshot, SourceVersion};
 use crate::control::camera::controller::{dist, focus, Motion};
 use crate::control::camera::input::dragging;
-use crate::control::camera::state::{camera_state, IntentPatch};
+use crate::control::camera::state::camera_state;
 use crate::control::interaction::holding;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::follow_mode::{following, set_following};
@@ -155,18 +155,6 @@ pub fn tracking_action(tracking: Tracking) {
 pub fn go_to_degrees(lon: f64, lat: f64) {
     crate::control::navigation::destination::go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
     crate::control::camera::controller::come_in_to_default();
-}
-
-/// Set outright, for kernel tests and A/B comparisons at the same view: the
-/// controls take what is asked and the drawn orbit stands there at once, as
-/// a place asked for is put (`Motion::Snap`), so the view is reached with no
-/// step taken, the clock standing or not.
-pub fn set_view(dist: Option<f64>, polar: Option<f64>, azimuth: Option<f64>) {
-    let c = camera_state();
-    c.commit_intent(c.merged(IntentPatch { dist, azimuth, polar }));
-    if crate::control::camera::controller::active() == crate::control::camera::controller::Active::Orbit {
-        crate::control::camera::orbit::put_view();
-    }
 }
 
 /// The compass is asked for where it is used (`tracking_action`).

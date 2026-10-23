@@ -47,9 +47,3 @@ export function encode_nop(to: PacketRoom, value: u32): PacketWriter {
 export function encode_sys_opened(to: PacketRoom, fd: u32, res: i32, detail: u32): PacketWriter {
   return to.writer(3).u32(fd).i32(res).u32(detail);
 }
-
-/** Every command by its lowercase name: its number, and its packet's encoder, none where it has no packet. */
-export const COMMANDS = {
-  nop: [Command.NOP, encode_nop],
-  sys_opened: [Command.SYS_OPENED, encode_sys_opened],
-} as const;

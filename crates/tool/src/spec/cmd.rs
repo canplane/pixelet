@@ -304,17 +304,6 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
             tail.extend(ts_reader(spec, &c.name.to_lowercase(), &format!("{name}Signal"), signal)?);
         }
     }
-    // Every command by its name, its number and its packet's encoder, none
-    // for a bare one: what a script sends any command by.
-    tail.push(String::new());
-    tail.push("/** Every command by its lowercase name: its number, and its packet's encoder, none where it has no packet. */".into());
-    tail.push("export const COMMANDS = {".into());
-    for c in spec.commands()? {
-        let lower = c.name.to_lowercase();
-        let encode = if c.packet.is_some() { format!("encode_{lower}") } else { "null".into() };
-        tail.push(format!("  {lower}: [Command.{}, {encode}],", c.name));
-    }
-    tail.push("} as const;".into());
     uses.arrays.sort();
     uses.words.sort();
     // A helper, and a cursor type, only where a reader reads through it: an unread one fails lint.

@@ -596,10 +596,6 @@ pub enum Command {
     CHAT_SEND = 0x1701,
     /// The tracking button's press, as the button showed it.
     INPUT_TRACKING = 0x1104,
-    /// Where the camera stands, set outright rather than driven: what the kernel's own
-    /// test puts a view at, and what an A/B reads two builds at the same view with
-    /// (a development page's console, `pxl.cmd("input_view", …)`, feature/debug/console.ts).
-    INPUT_VIEW = 0x1105,
     /// The compass's press: north up.
     INPUT_COMPASS_RESET = 0x1107,
     /// A search result: the focus moved there.
@@ -639,7 +635,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 43] = [
+    pub const ALL: [Command; 42] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::SENSOR_POSITION,
@@ -668,7 +664,6 @@ impl Command {
         Command::SETTING_SET,
         Command::CHAT_SEND,
         Command::INPUT_TRACKING,
-        Command::INPUT_VIEW,
         Command::INPUT_COMPASS_RESET,
         Command::INPUT_GO_TO,
         Command::INPUT_POSE,
@@ -1397,34 +1392,6 @@ impl InputTracking {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputTracking {
             tracking: Tracking::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
-        })
-    }
-}
-
-/// Command::INPUT_VIEW's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct InputView {
-    pub dist: Option<f64>,
-    pub polar: Option<f64>,
-    pub azimuth: Option<f64>,
-}
-
-impl InputView {
-    pub fn read(pkt: &[u8]) -> Result<InputView, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputView {
-            dist: match f.at(0)?.opt() {
-                Some(c) => Some(finite(c.get_number()?)?),
-                None => None,
-            },
-            polar: match f.at(1)?.opt() {
-                Some(c) => Some(finite(c.get_number()?)?),
-                None => None,
-            },
-            azimuth: match f.at(2)?.opt() {
-                Some(c) => Some(finite(c.get_number()?)?),
-                None => None,
-            },
         })
     }
 }

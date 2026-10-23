@@ -105,22 +105,6 @@ pub fn zoom_to(dist: f64) -> f64 {
     .dist
 }
 
-/// The drawn orbit put at what the controls hold, at once, as a view set
-/// outright asks (shell.rs `set_view`); the eye moves with it where the
-/// focus stands, else when the focus is put. The climb still bounds the
-/// drawn look each frame (`turn`).
-pub(crate) fn put_view() {
-    let vs = camera_state().intent;
-    // The focus first: it is read off the eye by the orbit as it stood.
-    let center = focus_world();
-    let (o, cam) = (orbit(), camera());
-    o.dist = clamp(vs.dist, MIN_DIST, MAX_DIST);
-    (cam.polar, cam.azimuth) = look_domain(vs.polar, vs.azimuth);
-    if let Some(center) = center {
-        set_eye_world(&v3::add(&center, &orbit_eye_offset(o.dist, cam.polar, cam.azimuth)));
-    }
-}
-
 pub(crate) fn target_center() -> Option<Q3> {
     orbit().to.or_else(focus)
 }

@@ -172,11 +172,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             request_world_tick();
             Ok(Some(0))
         }
-        Command::INPUT_VIEW => {
-            let p = abi::InputView::read(packet(pkt)?)?;
-            ui::set_view(p.dist, p.polar, p.azimuth);
-            applied(s)
-        }
         Command::INPUT_COMPASS_RESET => {
             // Following the heading would turn it straight back.
             if !crate::control::navigation::follow_mode::following() {

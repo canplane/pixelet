@@ -20,10 +20,10 @@ const useBootStore = create(() => ({ boot: Boot.Starting, stop: null as string |
 export function bootstrapApp(): void {
   // The locale first: the host's boot messages are in it.
   bootstrapI18n();
-  if (__IS_DEV__) installConsole();
   boot_kernel().then(
     () => {
       console.info("[boot] the kernel started");
+      if (__IS_DEV__) installConsole();
       useBootStore.setState({ boot: Boot.Started });
       on_kernel_stop(() => useBootStore.setState({ boot: Boot.Stopped, stop: stop_code() }));
     },
