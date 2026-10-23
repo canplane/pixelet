@@ -97,7 +97,21 @@ pub const CELL_T: u32 = 0;
 pub const CELL_CORNER: u32 = 1;
 pub const CELL_WORDS: u32 = 2;
 
+/// The beam rays' buffer, the cast's own for a frame, one binding: how
+/// many pixels its reading walk missed (`MISSES`, 0 before the cast), the
+/// lines, a corner each (`LINES_AT`), the cells' starts (`cells_at`) and
+/// the pixels that missed, a word each (`list_at`), for `corners` corners.
+/// The count is at a fixed word, so the dispatch counted off it is read
+/// knowing no corner count.
+pub const MISSES: u32 = 0;
+pub const LINES_AT: u32 = 1;
+
 /// Where the cells start among the beam rays' words, past `corners` lines.
 pub const fn cells_at(corners: u32) -> u32 {
-    corners * LINE_WORDS
+    LINES_AT + corners * LINE_WORDS
+}
+
+/// Where the pixels that missed are listed, past `corners` cells.
+pub const fn list_at(corners: u32) -> u32 {
+    cells_at(corners) + corners * CELL_WORDS
 }

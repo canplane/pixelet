@@ -13,12 +13,15 @@
 //!
 //! One buffer of words:
 //!
-//! - its head: how many tiles are taken, the frame's number, the pixels
-//!   that missed, what is forgotten, and the eye's windows' slots that moved
-//!   (`HEAD_WORDS`);
+//! - its head: how many tiles are taken, the frame's number, what is
+//!   forgotten, and the eye's windows' slots that moved (`HEAD_WORDS`);
 //! - the entries, the roots' and then the tiles' (`ENTRIES_AT`);
-//! - the tiles' stack, the free ones past those taken (`STACK_AT`);
-//! - the pixels that missed, a word each (`LIST_AT`).
+//! - the tiles' stack, the free ones past those taken (`STACK_AT`).
+//!
+//! That is all of it (`WORDS`): the pixels a frame's cast missed are the
+//! cast's own for that frame, in the beam rays' buffer (`beam::list_at`),
+//! so a walk that only reads the pyramid holds its binding read-only, and
+//! a GPU's compiler types no word of it atomic for that walk.
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
 //! its frame and its pass (`tag`), and the zooms it was asked at — then the
@@ -39,16 +42,14 @@ use crate::window::{eye_cell, slot, ACROSS, EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
 use crate::world::AT_WORDS;
 use crate::Zoom;
 
-/// The head's words: how many tiles are taken, the frame's number, how many
-/// pixels missed, what this frame forgets (`FORGETS_NONE`, `FORGETS_ALL`,
-/// `FORGETS_MOVED`), and a bit a slot of the eye's windows, a window's
-/// `SLOTS` bits in turn, set where the square it holds moved or was handed
-/// since the last cast.
+/// The head's words: how many tiles are taken, the frame's number, what
+/// this frame forgets (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), and
+/// a bit a slot of the eye's windows, a window's `SLOTS` bits in turn, set
+/// where the square it holds moved or was handed since the last cast.
 pub const TAKEN: u32 = 0;
 pub const FRAME: u32 = 1;
-pub const MISSES: u32 = 2;
-pub const FORGETS: u32 = 3;
-pub const MOVED_AT: u32 = 4;
+pub const FORGETS: u32 = 2;
+pub const MOVED_AT: u32 = 3;
 pub const MOVED_WORDS: u32 = (EYE_WINDOWS * SLOTS).div_ceil(32);
 pub const HEAD_WORDS: u32 = MOVED_AT + MOVED_WORDS;
 
@@ -82,7 +83,8 @@ pub const ENTRIES_AT: u32 = HEAD_WORDS;
 /// ones from it up, the next taken first; every tile in turn where the
 /// pyramid is forgotten whole.
 pub const STACK_AT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
-pub const LIST_AT: u32 = STACK_AT + TILES;
+/// The buffer's words, whatever is drawn: none of them a pixel's.
+pub const WORDS: u32 = STACK_AT + TILES;
 
 /// No entry: a node no tile keeps.
 pub const NONE: u32 = u32::MAX;

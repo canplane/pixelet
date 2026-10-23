@@ -817,17 +817,19 @@ struct CastBuffers {
     built: Built,
     /// The camera grid's beam rays (`beam_cs`), where each cell's pixels
     /// start off them (`cells_cs`), and their buffer, over the cast's
-    /// group (pxl-portable `beam`): a line a corner, then a start a cell,
-    /// for `corners` of them, room for `beam_room` (doc/minutes/20261022-a-cell-casts-a-beam.md).
+    /// group (pxl-portable `beam`): how many pixels missed, a line a
+    /// corner, a start a cell, for `corners` of them, then the pixels that
+    /// missed, a word each; room for `beam_room` corners and pixels
+    /// (doc/minutes/20261022-a-cell-casts-a-beam.md).
     beam_built: Built,
     cells_built: Built,
     beams: u32,
     corners: [u32; 2],
-    beam_room: u32,
-    /// The observed pyramid (pxl-portable `observed`): its buffer, with room
-    /// for `seen_room` pixels' misses; the pixels the cast's reading walk
-    /// missed walked again (`miss_cs`) by the dispatch `args_cs` writes into
-    /// `args` over its own group; the pyramid forgotten (`forget_cs`) where
+    beam_room: [u32; 2],
+    /// The observed pyramid (pxl-portable `observed`): its buffer, no
+    /// pixel's; the pixels the cast's reading walk missed walked again
+    /// (`miss_cs`) by the dispatch `args_cs` writes into `args` over its own
+    /// group, off the beam rays' buffer; the pyramid forgotten (`forget_cs`) where
     /// what the world's query reads changed since the last cast: all of it
     /// (`forget`), or the nodes over the eye's windows' slots that moved
     /// (`moved`, a bit a slot, against the slots as `slots` last held them);
@@ -838,7 +840,6 @@ struct CastBuffers {
     args_built: Built,
     forget_built: Built,
     seen: u32,
-    seen_room: u32,
     args: u32,
     args_group: u32,
     frame: u32,
@@ -1138,12 +1139,11 @@ impl RaysPass {
             cells_built,
             beams: 0,
             corners: [0; 2],
-            beam_room: 0,
+            beam_room: [0; 2],
             miss_built,
             args_built,
             forget_built,
-            seen: 0,
-            seen_room: 0,
+            seen: buffer(word_bytes(observed::WORDS as usize), storage),
             args: buffer(word_bytes(3), buffer_usage::STORAGE | buffer_usage::INDIRECT),
             args_group: 0,
             frame: 0,
@@ -1229,33 +1229,24 @@ impl RaysPass {
             g.write_buffer(c.eye, 0, bytes(&cast.eye));
         }
         c.size = rays.1;
-        // The grid's corners as the eye lays them, and room for their lines
-        // and their cells' starts, made again only where they grow.
+        // The grid's corners as the eye lays them, and room for their lines,
+        // their cells' starts and every pixel to miss, made again only where
+        // the corners or the pixels outgrow it.
         let word = |k: usize| f32::from_bits(cast.eye[k]);
         let tan = [word(eye::TAN), word(eye::TAN + 1)];
         let s = beam::spacing(pxl_portable::cast::Detail { tau: word(eye::TAU), range: [0; 2] });
         c.corners = beam::corners(tan, s);
         let held = c.corners[0] * c.corners[1];
-        if held > c.beam_room {
+        let pixels = c.size[0] * c.size[1];
+        if held > c.beam_room[0] || pixels > c.beam_room[1] {
             if c.beams != 0 {
                 release(c.beams);
             }
-            let size = word_bytes((beam::cells_at(held) + held * beam::CELL_WORDS) as usize);
+            let size = word_bytes((beam::list_at(held) + pixels) as usize);
             xpute_kit::ensure!(crate::frame::shader::floor::fits(size as u64, true), ENOTRECOVERABLE, held);
-            (c.beams, c.beam_room) = (g.buffer(size, buffer_usage::STORAGE), held);
-        }
-        // The observed pyramid, with room for every pixel to miss, made again
-        // only where the pixels outgrow it, and so forgotten.
-        let pixels = c.size[0] * c.size[1];
-        if pixels > c.seen_room {
-            if c.seen != 0 {
-                release(c.seen);
-            }
-            let size = word_bytes((observed::LIST_AT + pixels) as usize);
-            xpute_kit::ensure!(crate::frame::shader::floor::fits(size as u64, true), ENOTRECOVERABLE, pixels);
-            (c.seen, c.seen_room, c.forget) = (g.buffer(size, buffer_usage::STORAGE | buffer_usage::COPY_DST), pixels, true);
+            (c.beams, c.beam_room) = (g.buffer(size, buffer_usage::STORAGE | buffer_usage::COPY_DST), [held, pixels]);
             release(c.args_group);
-            c.args_group = g.bind_group(c.args_built.layouts[0], &[buffer_entry(0, c.seen), buffer_entry(1, c.args)]);
+            c.args_group = g.bind_group(c.args_built.layouts[0], &[buffer_entry(0, c.beams), buffer_entry(1, c.args)]);
         }
         let shards_grow = cast.shards.len() > c.shard_room;
         if shards_grow {
@@ -1337,7 +1328,9 @@ impl RaysPass {
             };
             // The head before the frame's dispatches: what it forgets and over
             // which slots; forgotten whole, no tile taken and its first frame,
-            // else the next frame; no pixel missed.
+            // else the next frame. No pixel missed yet (pxl-portable
+            // `beam::MISSES`).
+            g.write_buffer(c.beams, word_bytes(beam::MISSES as usize), bytes(&[0u32]));
             let mut head = [0u32; observed::HEAD_WORDS as usize];
             c.frame = if c.forgets == observed::FORGETS_ALL { 1 } else { c.frame + 1 };
             head[observed::FRAME as usize] = c.frame;
