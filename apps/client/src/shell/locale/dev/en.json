@@ -9,7 +9,7 @@
     "debug": {
       "ray_steps": {
         "label": "Ray steps",
-        "description": "Colors each pixel by the nodes its own ray walked from its cell's start: blue few, red many, the same ramp on every screen. Grey where it took a sample's block and walked nothing."
+        "description": "Colors each point on screen by how much work it took to draw: blue for little, red for a lot. Points that borrowed a nearby result and skipped the work are grey."
       }
     }
   },

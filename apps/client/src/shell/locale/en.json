@@ -99,22 +99,22 @@
     },
     "debug": {
       "section_title": "Debug",
-      "section_caption": "Diagnostics for the view and the scheduler",
+      "section_caption": "Diagnostics for how the screen is being drawn.",
       "view": {
         "label": "View",
-        "description": "Shows where the camera and the pointer are: distance, angles, τ, coordinates and the cell zoom under the pointer."
+        "description": "Shows where the camera and the pointer are: the camera's distance and angles, and the coordinates of the point under the pointer."
       },
       "profiler": {
         "label": "Profiler",
-        "description": "Shows frame timing, GPU, drawing, requests and memory, and records them while on."
+        "description": "Shows how long each frame takes and how much graphics, network and memory it uses, and records them while on."
       },
       "world_gizmo": {
         "label": "World Gizmo",
-        "description": "Draws the view center, its cell and the axis rings, and over the ground the squares the world is drawn in by how they stand, their tiles and shards, with a legend, for debugging."
+        "description": "Draws rings that mark the screen's center and directions, and colors the ground by how far its terrain has loaded. The legend shown with it explains the colors."
       },
       "camera_gizmo": {
         "label": "Camera Gizmo",
-        "description": "Overlays equal-area rings around the screen's center and colors the world by the size of its drawn cells: green near one grid cell, blue finer, red coarser."
+        "description": "Overlays a ring-shaped grid around the screen's center and colors blocks by how large they appear on screen: green when about right, blue when smaller, red when larger."
       }
     },
     "disclaimer": {
