@@ -164,20 +164,18 @@ pub enum SettingKey {
     /// screen, N8AO's screen-space pass, the costliest of the three. AO_MODES
     /// says each.
     ao = 10,
-    /// Where the camera and the pointer are, read live (profiler/summary.rs, its view section).
-    view_overlay = 11,
     /// The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
-    performance_overlay = 12,
+    performance_overlay = 11,
     /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs).
-    world_gizmo = 13,
-    person = 14,
-    pet = 15,
+    world_gizmo = 12,
+    person = 13,
+    pet = 14,
     /// Each ray's pixel coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_rays.wgsl).
-    ray_steps = 16,
+    ray_steps = 15,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 17] = [
+    pub const ALL: [SettingKey; 16] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -189,7 +187,6 @@ impl SettingKey {
         SettingKey::edge_shade,
         SettingKey::rim_light,
         SettingKey::ao,
-        SettingKey::view_overlay,
         SettingKey::performance_overlay,
         SettingKey::world_gizmo,
         SettingKey::person,
@@ -215,7 +212,6 @@ impl SettingKey {
             SettingKey::edge_shade => SettingKind::Toggle,
             SettingKey::rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
-            SettingKey::view_overlay => SettingKind::Toggle,
             SettingKey::performance_overlay => SettingKind::Toggle,
             SettingKey::world_gizmo => SettingKind::Toggle,
             SettingKey::person => SettingKind::Index,
@@ -238,7 +234,6 @@ impl SettingKey {
             SettingKey::edge_shade => "edge_shade",
             SettingKey::rim_light => "rim_light",
             SettingKey::ao => "ao",
-            SettingKey::view_overlay => "view_overlay",
             SettingKey::performance_overlay => "performance_overlay",
             SettingKey::world_gizmo => "world_gizmo",
             SettingKey::person => "person",
@@ -285,7 +280,6 @@ pub struct Settings {
     pub edge_shade: bool,
     pub rim_light: bool,
     pub ao: AoMode,
-    pub view_overlay: bool,
     pub performance_overlay: bool,
     pub world_gizmo: bool,
     pub person: u8,
@@ -307,7 +301,6 @@ impl Settings {
         edge_shade: true,
         rim_light: true,
         ao: AoMode::corner,
-        view_overlay: false,
         performance_overlay: false,
         world_gizmo: false,
         person: 1,
@@ -330,7 +323,6 @@ impl Settings {
             SettingKey::edge_shade => self.edge_shade as u32,
             SettingKey::rim_light => self.rim_light as u32,
             SettingKey::ao => self.ao as u32,
-            SettingKey::view_overlay => self.view_overlay as u32,
             SettingKey::performance_overlay => self.performance_overlay as u32,
             SettingKey::world_gizmo => self.world_gizmo as u32,
             SettingKey::person => self.person as u32,
@@ -363,7 +355,6 @@ impl Settings {
                 Some(o) => self.ao = o,
                 None => return false,
             },
-            SettingKey::view_overlay if value <= 1 => self.view_overlay = value == 1,
             SettingKey::performance_overlay if value <= 1 => self.performance_overlay = value == 1,
             SettingKey::world_gizmo if value <= 1 => self.world_gizmo = value == 1,
             SettingKey::person => match u8::try_from(value) {

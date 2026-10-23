@@ -135,42 +135,35 @@ export const SETTINGS = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
-  /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
-  view_overlay: {
-    key: 11 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
-  },
   /** The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
   performance_overlay: {
-    key: 12 as number,
+    key: 11 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
   world_gizmo: {
-    key: 13 as number,
+    key: 12 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 14 as number,
+    key: 13 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 15 as number,
+    key: 14 as number,
     kind: "index",
     default: 5 as number,
     section: "character",
   },
   /** Each ray's pixel coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_rays.wgsl). */
   ray_steps: {
-    key: 16 as number,
+    key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
@@ -287,35 +280,28 @@ export const SETTINGS_SHIPPED = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
-  /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
-  view_overlay: {
-    key: 11 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
-  },
   /** The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
   performance_overlay: {
-    key: 12 as number,
+    key: 11 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
   world_gizmo: {
-    key: 13 as number,
+    key: 12 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 14 as number,
+    key: 13 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 15 as number,
+    key: 14 as number,
     kind: "index",
     default: 5 as number,
     section: "character",

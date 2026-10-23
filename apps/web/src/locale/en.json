@@ -81,10 +81,6 @@
     "debug": {
       "section_title": "Debug",
       "section_caption": "Diagnostics for the view and the scheduler",
-      "view_overlay": {
-        "label": "View Overlay",
-        "description": "Shows where the camera and the pointer are: distance, angles, τ, coordinates and the cell zoom under the pointer."
-      },
       "performance_overlay": {
         "label": "Performance Overlay",
         "description": "Shows frame timing, GPU, drawing, requests and memory, and records them while on."

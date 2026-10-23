@@ -8,13 +8,15 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { type FrameGroup, GROUPS, n1, valueText, zoomName } from "./lane.ts";
+import { type FrameGroup, GROUPS, n1, valueText } from "./lane.ts";
 
 const bytes = (b: number) => valueText("_bytes", b);
 import { failText } from "./report.ts";
 import { fps, type Gauge } from "./view.ts";
 import { alpha, color, textStyle } from "@/shared/ui/theme.ts";
 import { fixed } from "@/shared/fixed.ts";
+
+const or = (x: number) => (Number.isNaN(x) ? "-" : n1(x));
 
 const SPAN_ROWS = 3;
 const MISSED_WARN_SHARE = 0.1;
@@ -37,31 +39,6 @@ export const Head = ({ children, end }: { children: string; end?: ReactNode }) =
     {end}
   </View>
 );
-
-const deg = (rad: number) => (rad * 180) / Math.PI;
-const or = (x: number) => (Number.isNaN(x) ? "-" : n1(x));
-const geo = (lat: number, lon: number) => (Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`);
-const metres = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
-
-/** Live: where the camera and the pointer are now, not over the window. */
-export function ProfilerView({ v }: { v: Gauge["view"] }) {
-  const hovering = !Number.isNaN(v.hover_x);
-  return (
-    <>
-      <Head>Camera</Head>
-      <Row k="distance" v={`${n1(v.dist)} u`} />
-      <Row k="polar/azimuth" v={`${n1(deg(v.polar))}°/${n1(deg(v.azimuth))}°`} />
-      <Row k="τ" v={or(v.tau)} />
-      <Row k="center" v={geo(v.center_lat, v.center_lon)} />
-      <Row k="center altitude" v={metres(v.center_z)} />
-      <Head>Pointer</Head>
-      <Row k="hover (u)" v={hovering ? `${Math.floor(v.hover_x)}, ${Math.floor(v.hover_y)}, ${Math.floor(v.hover_z)}` : "-"} />
-      <Row k="hover" v={geo(v.hover_lat, v.hover_lon)} />
-      <Row k="hover altitude" v={metres(v.hover_alt)} />
-      <Row k="cell" v={hovering ? zoomName(v.cell_want) : "-"} />
-    </>
-  );
-}
 
 /** Whether the window is recording, under the buttons that start and stop it. */
 export function ProfilerRec({ rec }: { rec: Gauge["rec"] }) {

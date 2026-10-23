@@ -192,12 +192,6 @@
       "costs": ["", "low", "high"],
       "section": "lighting"
     },
-    "view_overlay": {
-      "$doc": ["Where the camera and the pointer are, read live (profiler/summary.rs, its view section)."],
-      "kind": "toggle",
-      "default": false,
-      "section": "debug"
-    },
     "performance_overlay": {
       "$doc": ["The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`)."],
       "kind": "toggle",
