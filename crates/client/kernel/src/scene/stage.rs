@@ -32,6 +32,7 @@ use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
 use crate::scene::environment::cloud::cloud_groups;
 use crate::scene::indicator::coverage_gizmo::coverage_gizmo_step;
+use crate::scene::indicator::frame_gizmo::frame_gizmo_step;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::{settings_store, AoMode};
 use crate::view::demand::Observed as _;
@@ -224,10 +225,15 @@ pub fn visible_step(ctx: &mut TickContext) {
         delta_s: ctx.delta,
     };
 
-    // Laid before the frame's list begins, so its lines and the origin they are
-    // drawn about are the same turn's: laid after, a new lane went up under the
-    // last origin, and every rebuild flung the lines by how far it moved.
-    coverage_gizmo_step(settings_store().world_gizmo);
+    // The world gizmo, laid before the frame's list begins, so its lines and the
+    // origin they are drawn about are the same turn's: laid after, a new lane
+    // went up under the last origin, and every rebuild flung the lines by how
+    // far it moved.
+    let show = settings_store().world_gizmo;
+    let focus = crate::control::camera::controller::focus();
+    let third_person = crate::control::camera::controller::dist() != 0.0;
+    frame_gizmo_step(show && focus.is_some(), focus, third_person.then(crate::control::camera::controller::azimuth));
+    coverage_gizmo_step(show);
     let draw = laid().is_some_and(|k| {
         let models = crate::model::models();
         let animating = k.scene.tick(&mut k.draw, models, &frame);
