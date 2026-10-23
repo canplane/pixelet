@@ -21,18 +21,11 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::demand::reach_tiles;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::io::demand::{Ask, Why};
+use crate::io::demand::Ask;
 use crate::layer::{Asks, Base};
 
 /// Only the eye. Another point observer would add its own misses.
 const OBSERVERS: u32 = 1;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Hold {
-    Hard,
-    Demand,
-    Cache,
-}
 
 /// No frame for an empty tile, whose body is its own. One asked for again
 /// (`again`) is read meanwhile and fetched once more.
@@ -58,6 +51,11 @@ impl<L> Entry<L> {
 
     fn idle(&self) -> bool {
         self.held.is_none() && self.ask.is_none()
+    }
+
+    /// Held in a frame of its own, not as an empty tile.
+    fn framed(&self) -> bool {
+        self.held.as_ref().is_some_and(|h| h.frame.is_some())
     }
 }
 
@@ -215,10 +213,6 @@ impl<L: Base> Residency<L> {
         })
     }
 
-    fn held_as(&self, p: Tile) -> Option<&Held<L>> {
-        self.entry(p)?.held.as_ref()
-    }
-
     /// Held and asked for: what a reader may read.
     fn readable(&self, p: Tile) -> Option<&Held<L>> {
         self.entry(p).filter(|e| e.ask.is_some())?.held.as_ref()
@@ -231,7 +225,7 @@ impl<L: Base> Residency<L> {
 
     /// Held in a frame of its own, not as an empty tile.
     fn framed(&self, p: Tile) -> bool {
-        self.held_as(p).is_some_and(|h| h.frame.is_some())
+        self.entry(p).is_some_and(Entry::framed)
     }
 
     /// The frame a held tile is in; none for an empty one.
@@ -347,15 +341,6 @@ impl<L: Base> Residency<L> {
         self.entry(p)?.ask
     }
 
-    fn hold(&self, p: Tile) -> Hold {
-        let Some(e) = self.entry(p) else { return Hold::Cache };
-        match e.ask.map(|a| a.why) {
-            Some(Why::Floor | Why::Destination | Why::Ancestor) => Hold::Hard,
-            Some(Why::Demand) => Hold::Demand,
-            None => Hold::Cache,
-        }
-    }
-
     /// A frame for arriving `p`: its own, a free one, or a victim among frames
     /// held only as cache. None only for a tile no longer asked for, counted;
     /// for one asked for, none means the capacity bound is broken.
@@ -366,8 +351,8 @@ impl<L: Base> Residency<L> {
         if let Some(free) = self.free.pop() {
             return Some(free);
         }
-        let unasked = self.hold(p) == Hold::Cache;
-        let mut candidates: Vec<Tile> = self.tiles.iter().filter(|&(&q, _)| self.framed(q) && self.hold(q) == Hold::Cache).map(|(&q, _)| q).collect();
+        let unasked = self.asked(p).is_none();
+        let mut candidates: Vec<Tile> = self.tiles.iter().filter(|(_, e)| e.framed() && e.ask.is_none()).map(|(&q, _)| q).collect();
         // Sorted, so the policy sees the same list for the same state.
         candidates.sort_unstable();
         let Some(at) = victim(&candidates) else {
