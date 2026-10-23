@@ -168,13 +168,15 @@ pub fn about(tan: [f32; 2], s: f32, [tx, ty]: [f32; 2]) -> [u32; 2] {
 }
 
 /// What a sample leaves for the pixels about it, in words: the node it
-/// stopped at — its zoom, `SAMPLE_NONE` where it stopped at none, its
-/// corner, its roots — and the block there.
+/// stopped at — its zoom, `SAMPLE_NONE` where it went on to its reach, its
+/// corner, its roots — the block there, and 1 where that node lacks, which
+/// a pixel entering it before any block takes as its own.
 pub const SAMPLE_ZOOM: u32 = 0;
 pub const SAMPLE_CORNER: u32 = 1;
 pub const SAMPLE_ROOTS: u32 = 4;
 pub const SAMPLE_BLOCK: u32 = 7;
-pub const SAMPLE_WORDS: u32 = 9;
+pub const SAMPLE_LACKS: u32 = 9;
+pub const SAMPLE_WORDS: u32 = 10;
 pub const SAMPLE_NONE: u32 = u32::MAX;
 
 /// The beam rays' buffer, the cast's own for a frame, one binding: how

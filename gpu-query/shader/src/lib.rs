@@ -717,8 +717,8 @@ pub fn cells_cs(
 /// its ray resumed from its cell's start as a pixel's is, walked to the
 /// block that fills through the observed pyramid writing what it asks
 /// (`Writing`), and the node and block it stopped at left for the pixels
-/// about it (`beam::SAMPLE_WORDS`), `beam::SAMPLE_NONE` where it stopped at
-/// none.
+/// about it (`beam::SAMPLE_WORDS`), `beam::SAMPLE_NONE` where it went on
+/// to its reach, and whether what it stopped at lacks.
 #[spirv(compute(threads(8, 8, 1)))]
 #[allow(clippy::too_many_arguments)]
 pub fn sample_cs(
@@ -755,7 +755,8 @@ pub fn sample_cs(
     let corners = beam::corners(tan, s);
     let base = beam::samples_at(corners[0] * corners[1]) + (id.y * n[0] + id.x) * beam::SAMPLE_WORDS;
     let stop = met.stop;
-    seen_put(beams, base + beam::SAMPLE_ZOOM, if met.ends == Ends::Stop { stop.node.zoom } else { beam::SAMPLE_NONE });
+    seen_put(beams, base + beam::SAMPLE_ZOOM, if met.ends == Ends::On { beam::SAMPLE_NONE } else { stop.node.zoom });
+    seen_put(beams, base + beam::SAMPLE_LACKS, (met.ends == Ends::Lacks) as u32);
     seen_put(beams, base + beam::SAMPLE_CORNER, stop.node.corner[0]);
     seen_put(beams, base + beam::SAMPLE_CORNER + 1, stop.node.corner[1]);
     seen_put(beams, base + beam::SAMPLE_CORNER + 2, stop.node.corner[2]);
@@ -772,7 +773,8 @@ type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// Each pixel's ray: the nearest of the blocks the samples about it stopped
 /// at that it enters (pxl-portable `beam::about`, `cast::entry`), its
-/// words; where it enters none, the ray from its cell's start, reading the
+/// words; where it enters none, or a node a sample lacks at before it, the
+/// ray from its cell's start, reading the
 /// observed pyramid alone (`Reading`), its binding read-only so no read of
 /// it is atomic: its words where every node it asked was kept, else the
 /// pixel listed in the beam rays' buffer for `miss_cs` (pxl-portable
@@ -806,6 +808,8 @@ pub fn cast_cs(
         at: 0u32,
         block: MISSED,
     };
+    // The nearest node a sample lacks at that the ray enters.
+    let mut lack = ray.reach;
     let mut j = 0;
     while j < 2 * beam::NEAR {
         let mut i = 0;
@@ -819,7 +823,10 @@ pub fn cast_cs(
                     roots: [seen_at(beams, k + beam::SAMPLE_ROOTS) as i32, seen_at(beams, k + beam::SAMPLE_ROOTS + 1) as i32, seen_at(beams, k + beam::SAMPLE_ROOTS + 2) as i32],
                 };
                 let (enter, axis, enters) = cast::entry(origin, &ray, &node);
-                if enters && enter < hit.t {
+                let lacks = seen_at(beams, k + beam::SAMPLE_LACKS) != 0;
+                if enters && lacks && enter < lack {
+                    lack = enter;
+                } else if enters && !lacks && enter < hit.t {
                     hit = cast::Stop {
                         t: enter,
                         axis,
@@ -833,7 +840,7 @@ pub fn cast_cs(
         }
         j += 1;
     }
-    if hit.t < ray.reach {
+    if hit.t < ray.reach && hit.t < lack {
         written(rays, id, word(&ray, Met { ends: Ends::Stop, stop: hit, visits: 0 }, eye.origin.w != 0));
         return;
     }
