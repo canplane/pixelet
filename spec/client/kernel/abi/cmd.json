@@ -1222,7 +1222,7 @@
           "$doc": [
             "Where the camera stands, set outright rather than driven: what the kernel's own",
             "test puts a view at, and what an A/B reads two builds at the same view with",
-            "(a development page's console, `pxl.input_view`, feature/debug/console.ts)."
+            "(a development page's console, `pxl.cmd(\"input_view\", …)`, feature/debug/console.ts)."
           ],
           "packet": [
             {

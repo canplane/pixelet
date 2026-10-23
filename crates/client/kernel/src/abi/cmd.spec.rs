@@ -598,7 +598,7 @@ pub enum Command {
     INPUT_TRACKING = 0x1104,
     /// Where the camera stands, set outright rather than driven: what the kernel's own
     /// test puts a view at, and what an A/B reads two builds at the same view with
-    /// (a development page's console, `pxl.input_view`, feature/debug/console.ts).
+    /// (a development page's console, `pxl.cmd("input_view", …)`, feature/debug/console.ts).
     INPUT_VIEW = 0x1105,
     /// The compass's press: north up.
     INPUT_COMPASS_RESET = 0x1107,
