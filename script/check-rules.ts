@@ -119,7 +119,7 @@ function resolve(path: string, from: string): string[] {
     const [app, ...within] = rest;
     tails.add(`apps/${app}/src/${within.join("/")}`).add(`apps/${app}/${within.join("/")}`);
   }
-  if (head === "@") for (const src of ownSources(from)) tails.add(`${src}${tail}`);
+  if (head === "@") { for (const src of ownSources(from)) tails.add(`${src}${tail}`); }
   if (head === "@xpute") tails.add(`xpute/ts/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir) tails.add(`${dir}src/${tail}`).add(`${dir}${tail}`);
@@ -233,9 +233,19 @@ for (const f of files) {
   if (/\.c[jt]s$/.test(f)) problems.push(`${f}: CommonJS; the tree's scripts are ES modules`);
   // This file names the patterns it refuses.
   if (!/\.[mc]?[jt]sx?$/.test(f) || f === "script/check-rules.ts") continue;
+  // Code alone: a comment's text and a string's are not CommonJS. A block
+  // comment is followed across lines; a string or a template within one.
+  let inComment = false;
   read(f)?.split("\n").forEach((line, n) => {
-    // Code alone: a comment's text and a string's are not CommonJS.
-    const code = line.replace(/\/\*.*?\*\/|\/\/.*$|^\s*\*.*$|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, "");
+    let code = line;
+    if (inComment) {
+      const end = code.indexOf("*/");
+      code = end < 0 ? "" : code.slice(end + 2);
+      inComment = end < 0;
+    }
+    code = code.replace(/\/\*.*?\*\/|\/\/.*$|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g, "");
+    const open = code.indexOf("/*");
+    if (open >= 0) [code, inComment] = [code.slice(0, open), true];
     if (COMMONJS.some((r) => r.test(code))) problems.push(`${f}:${n + 1}: CommonJS where the tree's scripts are ES modules: ${line.trim()}`);
   });
 }

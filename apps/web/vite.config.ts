@@ -170,7 +170,7 @@ function constEnum(roots: string[]): Plugin {
   const table = readEnums(roots);
   const restart = "restart the dev server";
 
-  // An id can carry a query or a hash — `?worker`, and the `#deno` the Deno
+  // An id can carry a query or a hash — `?url`, and the `#deno` the Deno
   // resolver appends to the virtual id it hands back — and either one hides
   // the extension from a `$`-anchored test. Missing a module that way is
   // silent and asymmetric: the file holding the declaration is reached under
@@ -516,15 +516,6 @@ export default defineConfig(({ mode }) => {
     },
     optimizeDeps: {
       rolldownOptions: { resolve: { extensions: [".web.mjs", ".web.js", ".web.ts", ".web.tsx", ".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"] } },
-    },
-
-    // A worker is bundled by its own Rollup pass, which gets none of the
-    // plugins above: without the deno resolver there, a worker's first
-    // `@xpute/` import does not resolve and the build stops. ES modules,
-    // for a worker spawned with `type: "module"`.
-    worker: {
-      format: "es",
-      plugins: () => [deno()],
     },
 
     // .glb is not in Vite's default asset extensions: without this each
