@@ -8,9 +8,9 @@
 //   deno run -A script/smoke.ts https://api.plei.me --origin
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { INGESTED } from "../apps/web/src/catalog/asset/ingested.spec.ts";
+import { INGESTED } from "../apps/client/src/catalog/asset/ingested.spec.ts";
 
-import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT, tileObject } from "../apps/web/src/config/route.spec.ts";
+import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT, tileObject } from "../apps/client/src/config/route.spec.ts";
 
 /** A land page in Bundang: the zoom-15 tile's name. */
 const PAGE = "010332102130223";

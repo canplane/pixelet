@@ -41,7 +41,7 @@ writes the two tables that name them, and draws `raw/place/symbol/` into the
 code that carries the place icons:
 
 - `crates/spec/src/asset/ingested.spec.rs` — what the kernel compiles
-- `apps/web/src/catalog/asset/ingested.spec.ts` — what the shell compiles
+- `apps/client/src/catalog/asset/ingested.spec.ts` — what the shell compiles
 
 **Commit both tables with the asset change, and upload before deploying.**
 The shipped palette reads that table, and a key it names that is not in the

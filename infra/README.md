@@ -208,7 +208,7 @@ optional, without which the deploy warns and trusts whatever answers.
 ## 6. Licensing and attribution
 
 The app shows each provider's notice in its own words
-(`apps/web/src/feature/setting/section/attribution.tsx`). Check the source
+(`apps/client/src/feature/setting/section/attribution.tsx`). Check the source
 before shortening, rewording or dropping one.
 
 | Provider                    | License                                                          | Notice                                                                                                                                                                                                                                                                          |

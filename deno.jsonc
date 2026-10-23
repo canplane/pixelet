@@ -2,6 +2,7 @@
   "description": "A droplet fades. A pixelet remains.",
 
   "workspace": [
+    "apps/client",
     "apps/web",
     // A package.json member: Expo and Metro find packages the npm way.
     "apps/native"
@@ -70,8 +71,8 @@
     "check:host": "cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings",
     "check:rules": "./script/check-rules.ts",
     "check:spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec",
-    "test": "deno task test:web && deno task test:xpute && deno task test:rust",
-    "test:web": "deno task --cwd apps/web test",
+    "test": "deno task test:client && deno task test:xpute && deno task test:rust",
+    "test:client": "deno task --cwd apps/client test",
     "test:xpute": "deno task --cwd xpute test",
     // pxl-tool holds every model to the committed table, which has been wrong by hand before.
     "test:rust": "cargo test --manifest-path crates/Cargo.toml -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
@@ -117,7 +118,21 @@
     "vite": "npm:vite@^8.3.0",
     "@deno/vite-plugin": "npm:@deno/vite-plugin@^2.0.3",
 
+    // What the shell is written against, for apps/client and the two apps
+    // that bundle it.
+    "react": "npm:react@19.2.3",
+    "react-dom": "npm:react-dom@19.2.3",
+    "react-router-dom": "npm:react-router-dom@^7.18.4",
+    // The shell is written, and type-checked, against React Native's own
+    // API; on the web apps/web/vite.config.ts bundles react-native-web in its
+    // place, which renders the same primitives as the DOM.
+    "react-native": "npm:react-native@0.86.3",
+    "react-native-web": "npm:react-native-web@^0.21.2",
+    "zustand": "npm:zustand@^5.0.15",
+    "phosphor-react-native": "npm:phosphor-react-native@^3.0.6",
+    "react-native-svg": "npm:react-native-svg@15.15.4",
     "i18next": "npm:i18next@^26.4.2",
+    "react-i18next": "npm:react-i18next@^17.0.14",
 
     // Dawn, the WebGPU Chrome runs, for the generated kernels' compile (script/shader-wgsl.ts).
     "webgpu": "npm:webgpu@0.6.2"

@@ -1,7 +1,7 @@
 // @pxl/web/platform/web/gpu.ts
 
 import { Command } from "@/kernel/abi/cmd.spec.ts";
-import { acquireDevice } from "@/platform/web/webgpu.ts";
+import { acquireDevice } from "./webgpu.ts";
 import { request_frame, send_next } from "@/kernel/sched.ts";
 import { Gpu, setGpu } from "@/kernel/gpu.ts";
 

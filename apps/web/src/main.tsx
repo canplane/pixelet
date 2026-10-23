@@ -12,11 +12,11 @@ import { AppRouter } from "@/app/router.tsx";
 import { bootstrapApp } from "@/app/bootstrap.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
 import { Halt } from "@/app/halt.tsx";
-import { whatIsMissing } from "@/platform/web/webgpu.ts";
+import { whatIsMissing } from "@platform/webgpu.ts";
 import "@/app/style/index.css";
 
 if (import.meta.env.DEV) {
-  const { installRemoteConsole } = await import("@/platform/web/remote-console.ts");
+  const { installRemoteConsole } = await import("@platform/remote-console.ts");
   installRemoteConsole();
 }
 

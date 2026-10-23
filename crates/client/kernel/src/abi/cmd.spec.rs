@@ -468,7 +468,7 @@ impl DevicePoseStatus {
 /// The kernel decides which message a state calls for and carries the number.
 /// It never carries the words: a string that exists to be read has no reason
 /// to sit in the kernel's memory, and the shell has the locale files already
-/// (apps/web/src/locale) — the same split `strerror` is on the other side of.
+/// (apps/client/src/locale) — the same split `strerror` is on the other side of.
 ///
 /// The number is the name here. A band is what a message is about, and a
 /// message keeps its number for as long as anything can be holding one: an

@@ -841,8 +841,8 @@ const TARGETS: [Target; 2] = [
     },
     Target {
         json: "spec/client/kernel/abi/cmd.json",
-        ts: "apps/web/src/kernel/abi/cmd.spec.ts",
-        ts_logical: "@pxl/web/kernel/abi/cmd.spec.ts",
+        ts: "apps/client/src/kernel/abi/cmd.spec.ts",
+        ts_logical: "@pxl/client/kernel/abi/cmd.spec.ts",
         rs_dir: "crates/client/kernel/src/abi",
         rs_logical: "pxl-kernel/abi",
         number: "xpute_guest::abi::number",

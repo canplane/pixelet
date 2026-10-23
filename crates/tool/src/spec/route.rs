@@ -110,7 +110,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
     ]);
 
-    let mut ts = head("@pxl/web/config/route.spec.ts");
+    let mut ts = head("@pxl/client/config/route.spec.ts");
     for (name, value) in &all {
         ts.extend(ts_doc(&doc(name).unwrap_or_default(), ""));
         ts.extend([format!("export const {name} = {};", json_str(value)), String::new()]);
@@ -146,7 +146,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     Ok(vec![
         Output::new("crates/spec/src/route.spec.rs", rs.join("\n")),
-        Output::new("apps/web/src/config/route.spec.ts", ts.join("\n")),
+        Output::new("apps/client/src/config/route.spec.ts", ts.join("\n")),
         Output::new("apps/web/cloudflare-worker/route.spec.ts", worker.join("\n")),
         Output::new(wrangler_path, wrangler),
     ])

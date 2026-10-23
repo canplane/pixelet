@@ -27,7 +27,7 @@ Nothing now.
   its bound, the column's blocks), the drawn blocks matching a condition —
   would let it read the state instead. The AI DSL experiment could start here. First see what
   the overlay's report already gives
-  (`apps/web/src/feature/debug/profiler/report.ts`).
+  (`apps/client/src/feature/debug/profiler/report.ts`).
 
 ## Parked, with the reason on file
 

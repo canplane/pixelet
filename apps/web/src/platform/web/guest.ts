@@ -12,9 +12,9 @@ import { reserve_memory } from "@xpute/host/mem/reserve.ts";
 import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem/mem.spec.ts";
 import { key } from "@/kernel/abi/directory.spec.ts";
 import { directory, type Guest } from "@/kernel/module.ts";
-import { runGpuStream } from "@/platform/web/webgpu.ts";
+import { runGpuStream } from "./webgpu.ts";
 import { DEV_BUNDLE } from "@/config/bundle.ts";
-import { HANDHELD } from "@/platform/web/device.ts";
+import { HANDHELD } from "./device.ts";
 
 /** No smaller fallback: the kernel's map needs this much. A phone gets half
  * because JavaScriptCore counts the whole reservation as page memory. */

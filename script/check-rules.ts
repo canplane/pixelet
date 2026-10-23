@@ -87,12 +87,12 @@ function exists(path: string, from: string): boolean {
     const [app, ...within] = rest;
     return suffixes.has(`apps/${app}/src/${within.join("/")}`) || suffixes.has(`apps/${app}/${within.join("/")}`);
   }
-  if (head === "@") return suffixes.has(`apps/web/src/${tail}`);
+  if (head === "@") return suffixes.has(`apps/client/src/${tail}`);
   if (head === "@xpute") return suffixes.has(`xpute/ts/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir && (suffixes.has(`${dir}src/${tail}`) || suffixes.has(`${dir}${tail}`))) return true;
   // By what git ignores, not disk: CI runs this before any build.
-  return [join(dirname(from), path), path, `apps/web/src/${path}`].some((p) => {
+  return [join(dirname(from), path), path, `apps/client/src/${path}`, `apps/web/src/${path}`].some((p) => {
     try {
       if (Deno.statSync(join(root, p)).isFile) return true;
     } catch { /* not built here */ }
@@ -112,7 +112,7 @@ function resolve(path: string, from: string): string[] {
     const [app, ...within] = rest;
     tails.add(`apps/${app}/src/${within.join("/")}`).add(`apps/${app}/${within.join("/")}`);
   }
-  if (head === "@") tails.add(`apps/web/src/${tail}`);
+  if (head === "@") tails.add(`apps/client/src/${tail}`);
   if (head === "@xpute") tails.add(`xpute/ts/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir) tails.add(`${dir}src/${tail}`).add(`${dir}${tail}`);
@@ -195,7 +195,7 @@ const NOT_EVEN = [
   /\blibm::roundf?\(/,
   /\bMath\.round\(/,
   /\bstd::round\b/,
-  // A number's text rounds its last place half up: `fixed` (apps/web shared/fixed.ts) rounds it half to even.
+  // A number's text rounds its last place half up: `fixed` (apps/client shared/fixed.ts) rounds it half to even.
   /\.toFixed\(/,
   /\.toPrecision\(/,
   // A half added inside a floor's own parentheses, or before `.floor()`.

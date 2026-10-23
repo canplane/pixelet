@@ -1,0 +1,41 @@
+{
+  // @pxl/client: the shell and the kernel's host, the same files on a page
+  // and on a device. apps/web and apps/native each bundle them over its own
+  // `@platform/`.
+
+  // no-window/no-window-prefix assume runtime-portable code; the shell reads
+  // `window` where it is the page's, behind `@platform/` or a guard.
+  "lint": {
+    "rules": { "exclude": ["no-window", "no-window-prefix"] }
+  },
+
+  "tasks": {
+    // Pure-logic modules: none of them touches the DOM or the GPU, so plain
+    // `deno test` works with no browser harness, over the module built for
+    // it. What needs a canvas is verified live.
+    "test": "deno test -A src"
+  },
+
+  "compilerOptions": {
+    "lib": ["esnext", "dom", "dom.iterable", "deno.ns"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+
+    "types": [
+      "./@types/index.d.ts",
+
+      "npm:vite/client",
+      "npm:@webgpu/types@^0.1.69",
+      "npm:@types/react@^19",
+      "npm:@types/react-dom@^19"
+    ]
+  },
+
+  "imports": {
+    "@/": "./src/",
+    // A type-check reads one platform, and it is the page's: each app
+    // bundles its own (apps/web/vite.config.ts, apps/native/metro.config.js),
+    // and apps/native/src/platform/conform.ts holds the device's to its names.
+    "@platform/": "../web/src/platform/web/"
+  }
+}

@@ -1,7 +1,7 @@
 // @pxl/native/metro.config.js
 
 /**
- * The shell is apps/web/src, the same files Vite bundles for the web; what
+ * The shell is apps/client/src, the same files Vite bundles for the web; what
  * differs on a device is behind `@platform/`, which is this app's
  * src/platform/ here. Every other prefix is the one the Deno import maps give
  * it, so the shell is read exactly as the type-check reads it.
@@ -11,11 +11,11 @@ const path = require("node:path");
 const { getDefaultConfig } = require("expo/metro-config");
 
 const root = path.resolve(__dirname, "../..");
-const web = path.join(root, "apps/web/src");
+const client = path.join(root, "apps/client/src");
 
 /** An import-map prefix and the directory it names. */
 const PREFIXES = [
-  ["@/", web + "/"],
+  ["@/", client + "/"],
   ["@xpute/kit/", path.join(root, "xpute/ts/kit/src/")],
   ["@xpute/host/", path.join(root, "xpute/ts/host/src/")],
 ];

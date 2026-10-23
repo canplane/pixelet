@@ -7,11 +7,11 @@
     "lib": ["esnext", "dom", "dom.iterable", "deno.ns"],
     "jsx": "react-jsx",
     "jsxImportSource": "react",
-    "types": ["../web/@types/index.d.ts", "npm:@types/react@^19", "npm:@webgpu/types@^0.1.69"]
+    "types": ["../client/@types/index.d.ts", "npm:@types/react@^19", "npm:@webgpu/types@^0.1.69"]
   },
 
   "imports": {
-    "@/": "../web/src/",
+    "@/": "../client/src/",
     "@platform/": "./src/platform/"
   }
 }

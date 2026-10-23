@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 
-import { DEV_PROXY_ROUTES } from "./src/config/route.ts";
+import { DEV_PROXY_ROUTES } from "../client/src/config/route.ts";
 
 const { DECL, readEnums, enumAt, literal, stale } = createRequire(import.meta.url)("./script/const-enum.cjs");
 
@@ -271,8 +271,9 @@ const remoteOriginDefault = "https://plei.me";
 
 // anti-HMR. The shell's kernel glue is here too: its modules hold the one
 // kernel's memory and device, and a hot-swapped copy ran beside them — a
-// second device beside the renderer's objects on the first.
-const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
+// second device beside the renderer's objects on the first. The built module
+// is apps/web's own, under src/kernel/.
+const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/apps/client/src/kernel/", "/apps/client/src/catalog/", "/apps/web/src/kernel/"];
 
 // One reload for a change that reaches both sides: while the kernel builds, a
 // core change waits for it, so the page never runs the shell generated from a
@@ -312,14 +313,15 @@ function fullReloadOnCoreChange() {
     enforce: "pre" as const,
 
     // Vite's watcher covers `root`, which here is apps/web: without this,
-    // nothing under xpute/ts/ is watched, handleHotUpdate below never runs
-    // for a core file, and the server keeps serving the transform it cached
-    // at first import — a core edit does nothing, and a browser reload does
-    // not help because the staleness is on the server.
+    // nothing under xpute/ts/ or apps/client/ is watched, handleHotUpdate
+    // below never runs for a core file, and the server keeps serving the
+    // transform it cached at first import — a core edit does nothing, and a
+    // browser reload does not help because the staleness is on the server.
     configureServer(server) {
       for (const pat of corePathIncludes) {
         server.watcher.add(path.resolve(__dirname, "..", "..", pat.replace(/^\/|\/$/g, "")));
       }
+      server.watcher.add(path.resolve(__dirname, "..", "client", "src"));
     },
 
     handleHotUpdate(ctx: HmrContext) {
@@ -463,7 +465,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       buildStamp(),
       remoteConsole(),
-      constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "xpute", "ts")], path.resolve(__dirname, "..", "..")),
+      constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "client", "src"), path.resolve(__dirname, "..", "..", "xpute", "ts")], path.resolve(__dirname, "..", "..")),
       deno(),
       react(),
 
@@ -475,7 +477,10 @@ export default defineConfig(({ mode }) => {
 
     resolve: {
       alias: [
-        { find: "@", replacement: path.resolve(__dirname, "src") },
+        // The shell is apps/client's; what it asks of a platform is this
+        // page's, as Metro names the device's.
+        { find: "@platform", replacement: path.resolve(__dirname, "src/platform/web") },
+        { find: "@", replacement: path.resolve(__dirname, "..", "client", "src") },
         // The shell imports React Native's API, which deno.jsonc resolves to
         // React Native itself for the type-check; a web bundle takes the
         // same names from react-native-web. Exact, so a package under

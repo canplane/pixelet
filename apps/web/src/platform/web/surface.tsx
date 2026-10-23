@@ -17,7 +17,7 @@ import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { surface_close, surface_open, surface_size } from "@/kernel/render/surface.ts";
 import { request_frame } from "@/kernel/sched.ts";
 import { useKernel } from "@/kernel/shell.ts";
-import { bindSurface, unbindSurface } from "@/platform/web/webgpu.ts";
+import { bindSurface, unbindSurface } from "./webgpu.ts";
 
 /** A wheel line in CSS pixels: a page's default line height. */
 const LINE_PX = 16;
