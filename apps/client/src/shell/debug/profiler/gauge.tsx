@@ -59,7 +59,7 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
   return (
     <>
       <Head>Camera</Head>
-      <Row k="distance" v={`${n1(v.dist)} units`} />
+      <Row k="distance (units)" v={n1(v.dist)} />
       <Row k="polar/azimuth" v={`${n1(deg(v.polar))}°/${n1(deg(v.azimuth))}°`} />
       <Row k="τ" v={or(v.tau)} />
       <Row k="center lat/lon" v={geo(v.center_lat, v.center_lon)} />
