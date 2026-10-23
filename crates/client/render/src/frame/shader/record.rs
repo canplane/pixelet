@@ -44,29 +44,28 @@ pub const FRAME_AT: [usize; 11] = [0, 16, 19, 20, 22, 23, 24, 27, 28, 29, 30];
 pub const PIPELINE_SKY: u32 = 10;
 pub const PIPELINE_MIPS: u32 = 11;
 pub const PIPELINE_DECOR_PREPASS: u32 = 12;
-pub const PIPELINE_SKINNED_PREPASS: u32 = 13;
-pub const PIPELINE_AO_DOWNSAMPLE: u32 = 14;
-pub const PIPELINE_AO_SAMPLE: u32 = 15;
-pub const PIPELINE_AO_BLUR: u32 = 16;
-pub const PIPELINE_AO_UPSAMPLE: u32 = 17;
-pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 18;
-pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 19;
-pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 20;
-pub const PIPELINE_ATMOS_EXPOSURE: u32 = 21;
-pub const PIPELINE_STARS: u32 = 22;
-pub const PIPELINE_CLOUDS: u32 = 23;
-pub const PIPELINE_CLOUDS_ABOVE: u32 = 24;
-pub const PIPELINE_CLOUD_FIELD: u32 = 25;
-pub const PIPELINE_SHEET: u32 = 26;
-pub const PIPELINE_IMPOSTOR_BAKE: u32 = 27;
-pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 28;
+pub const PIPELINE_AO_DOWNSAMPLE: u32 = 13;
+pub const PIPELINE_AO_SAMPLE: u32 = 14;
+pub const PIPELINE_AO_BLUR: u32 = 15;
+pub const PIPELINE_AO_UPSAMPLE: u32 = 16;
+pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 17;
+pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 18;
+pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 19;
+pub const PIPELINE_ATMOS_EXPOSURE: u32 = 20;
+pub const PIPELINE_STARS: u32 = 21;
+pub const PIPELINE_CLOUDS: u32 = 22;
+pub const PIPELINE_CLOUDS_ABOVE: u32 = 23;
+pub const PIPELINE_CLOUD_FIELD: u32 = 24;
+pub const PIPELINE_SHEET: u32 = 25;
+pub const PIPELINE_IMPOSTOR_BAKE: u32 = 26;
+pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 27;
 /// The billboards' regions, numbered, into a target of their own (pass/badges.rs).
-pub const PIPELINE_BADGE_REGION: u32 = 29;
+pub const PIPELINE_BADGE_REGION: u32 = 28;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
-pub const PIPELINE_DEBUG_FACE: u32 = 30;
+pub const PIPELINE_DEBUG_FACE: u32 = 29;
 /// The eye's rays, opaque at their depth (pxl-portable ray.rs).
-pub const PIPELINE_SCREEN_RAYS: u32 = 31;
-pub const PIPELINES: u32 = 32;
+pub const PIPELINE_SCREEN_RAYS: u32 = 30;
+pub const PIPELINES: u32 = 31;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -433,7 +432,6 @@ const fn plan_of(id: u32) -> Plan {
             &[&SCREEN_GROUP],
         ),
         PIPELINE_DECOR_PREPASS => plan(prepass(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS),
-        PIPELINE_SKINNED_PREPASS => plan(prepass(SHADER_SKINNED, CULL_BACK), &SKINNED_LANES, &MODEL_GROUPS),
         // Only where the opaque world left the far plane, so covered pixels never run it.
         PIPELINE_SKY => plan(
             Head {

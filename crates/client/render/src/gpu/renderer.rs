@@ -2019,8 +2019,8 @@ impl Renderer {
         // depth, their occlusion open.
         let mut bound = 0;
         let over = (self.models.over, &mut bound);
-        self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, Stage::Lit, (over.0, &mut *over.1));
-        self.decor.draw(g, pass, &draws, b, Stage::Lit, (over.0, &mut *over.1));
+        self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, (over.0, &mut *over.1));
+        self.decor.draw(g, pass, &draws, b, (over.0, &mut *over.1));
         self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, over);
         self.clouds.draw(g, pass);
         self.puck.draw_beacon(g, pass, &draws, uniforms, lists_moved);
@@ -2139,7 +2139,7 @@ impl Renderer {
             g.write_buffer(case.frame_buffer, 0, bytes(&frame));
             let view_id = g.current(s.handle);
             let pass = g.pass(encoder, &pass_desc(view_id, Load::Clear, s.depth_view, Load::Clear, 0.0, stamp.pass()));
-            case.skinned.draw(g, pass, core::iter::once(own), blocks(), Stage::Lit, (case.frames.frame, &mut 0));
+            case.skinned.draw(g, pass, core::iter::once(own), blocks(), (case.frames.frame, &mut 0));
             g.end(pass);
             release(view_id);
         }

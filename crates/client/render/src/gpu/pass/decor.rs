@@ -131,12 +131,8 @@ impl DecorPass {
         }
     }
 
-    pub fn draw(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {
-        let pipeline = match stage {
-            Stage::Lit => self.lit.pipeline,
-            Stage::Prepass => self.prepass.pipeline,
-        };
-        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, pipeline, frame);
+    pub fn draw(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, frame: (u32, &mut u32)) {
+        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.lit.pipeline, frame);
     }
 
     pub fn draw_ghosts(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, frame: (u32, &mut u32)) {
