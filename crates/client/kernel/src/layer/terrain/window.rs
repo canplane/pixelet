@@ -15,9 +15,10 @@ use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use pxl_spec_core::area::{Area, Shard};
+use pxl_spec_core::fill;
 use pxl_spec_core::ground::word;
 use pxl_spec_core::ways;
-use pxl_spec_core::window::{self, CellsBack, FreshSquare, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
+use pxl_spec_core::window::{self, CellsBack, FreshSquare, Slot, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
 use pxl_spec_core::wrap_index;
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
@@ -26,7 +27,7 @@ use xpute_kit::collection::list::List;
 
 use crate::io::source::Declared;
 use crate::layer::kept::Offered;
-use crate::layer::terrain::fixed::{cells_off, fill_off, joined_off, pool_off, records_off, CELLS_BYTES, CELLS_LANE_BYTES, POOL_BYTES, RANGE, RECORDS_ROOM_BYTES};
+use crate::layer::terrain::fixed::{cells_off, fill_off, joined_off, pool_off, records_off, CELLS_LANE_BYTES, POOL_BYTES, RANGE, RECORDS_ROOM_BYTES};
 use crate::layer::Base;
 use crate::mem::fixed::lane;
 
@@ -63,30 +64,6 @@ fn windows_at(cell: Zoom) -> [Option<u32>; 3] {
         Some(WINDOWS - 1),
     ]
 }
-
-/// What a slot holds, a row of the table the GPU's cast reads
-/// (pxl-shader `World::present`): the square its window wants there,
-/// whether its cells are present, and the fill they are on their way from
-/// (0 where none is). Neither: wanted, its tile not yet handed it.
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct Slot {
-    square: [i32; 2],
-    present: i32,
-    ticket: u32,
-}
-
-impl Slot {
-    const fn absent(square: [i32; 2]) -> Slot {
-        Slot { square, present: 0, ticket: 0 }
-    }
-
-    fn is_absent(&self) -> bool {
-        self.present == 0 && self.ticket == 0
-    }
-}
-
-const _: () = assert!(size_of::<Slot>() == 16, "a slot is a row of four words");
 
 /// A window: its cells' zoom. Its first square is its row past the slots
 /// (`first_of`).
@@ -125,8 +102,8 @@ fn windows() -> &'static mut Windows {
 
 /// Window `win`'s first square, none while its centre is not.
 fn first_of(w: &Windows, win: u32) -> Option<[i32; 2]> {
-    let row = w.slots[(SQUARES + win) as usize];
-    (row.present != 0).then_some(row.square)
+    let (first, laid) = w.slots[(SQUARES + win) as usize].held();
+    laid.then_some(first)
 }
 
 /// The windows before any centre stands: every slot absent.
@@ -168,7 +145,9 @@ fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
 /// Every square's planes on the CPU, in `.fixed.terrain` (fixed.rs): its
 /// cells as they come back and its own looks; a test's own.
 pub(crate) struct Planes {
-    pub cells: &'static mut [u8],
+    /// Each square's words as they came back, whole (`window::BACK_WORDS`),
+    /// `CELLS_LANE_BYTES` apart.
+    pub cells: &'static mut [u32],
     /// The eye's windows' levels over their squares, as the GPU folded them
     /// and the renderer reads them back (pxl-spec-core `window::fold`).
     pub joined: &'static mut [u32],
@@ -188,7 +167,7 @@ fn planes() -> &'static mut Planes {
         // SAFETY: the planes are the windows' alone, plain numbers, zeroed at boot.
         unsafe {
             Planes {
-                cells: lane(r, cells_off(0), (SQUARES * CELLS_LANE_BYTES) as usize),
+                cells: lane(r, cells_off(0), (SQUARES * CELLS_LANE_BYTES / 4) as usize),
                 joined: lane(r, joined_off(), window::EYE_JOINED_WORDS as usize),
                 records: lane(r, records_off(), (RECORDS_ROOM_BYTES / 4) as usize),
                 pool: lane(r, pool_off(), (POOL_BYTES / 4) as usize),
@@ -219,10 +198,14 @@ pub fn pool() -> ways::tree::Read<'static> {
     ways::tree::Read(planes().pool)
 }
 
-fn cells(s: u32) -> &'static [u8] {
-    let at = (s * CELLS_LANE_BYTES) as usize;
-    &planes().cells[at..at + CELLS_BYTES as usize]
+/// Square `s`'s words as they came back: a square's words whole, from its
+/// first, which pxl-spec-core reads a square's words by (`fill::column_of`).
+fn cells(s: u32) -> &'static [u32] {
+    let at = (s * CELLS_LANE_BYTES / 4) as usize;
+    &planes().cells[at..at + window::BACK_WORDS as usize]
 }
+
+const _: () = assert!(window::COLUMNS_AT == 0 && window::BACK_WORDS == window::SQUARE_WORDS, "a square comes back whole");
 
 /// The turn's windows: each centre where it now stands (`at`, in units, X
 /// then Y, by `Centre`; none where it is not), a square whose window no
@@ -396,7 +379,7 @@ pub fn pinned() -> &'static [Tile] {
 
 /// The windows' slots and their first squares, as the GPU's cast reads
 /// them (pxl-shader `World::present`, `World::origin`): a row a slot
-/// (`Slot`), then a row a window (pxl-spec-core `window::ORIGIN_AT`).
+/// (pxl-spec-core `window::Slot`), then a row a window (`window::ORIGIN_AT`).
 pub fn table() -> &'static [i32] {
     let rows = &windows().slots[..];
     // SAFETY: a slot is four plain words in order (`Slot`), so the slots are
@@ -535,28 +518,20 @@ impl Area for Windowed {
     }
 }
 
-/// Word `k` of square `s`'s cells as they came back: its columns, its
-/// levels, its cells as laid and its ways' tree's root
-/// (`window::BACK_WORDS`).
-fn back_at(s: u32, k: usize) -> u32 {
-    let c = cells(s);
-    u32::from_le_bytes([c[4 * k], c[4 * k + 1], c[4 * k + 2], c[4 * k + 3]])
-}
-
 impl Squares for Windowed {
     /// Present as the GPU holds it: its cells back, in a window at `cell`.
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
         let w = windows();
-        let held = windows_at(cell).into_iter().flatten().map(|win| win * SLOTS + window::slot(q)).find(|&i| {
-            let slot = w.slots[i as usize];
-            w.windows[(i / SLOTS) as usize].cell == cell && slot.present != 0 && slot.square == q
-        });
+        let held = windows_at(cell)
+            .into_iter()
+            .flatten()
+            .map(|win| win * SLOTS + window::slot(q))
+            .find(|&i| w.windows[(i / SLOTS) as usize].cell == cell && w.slots[i as usize].holds(q));
         (held.unwrap_or(0), held.is_some())
     }
 
     fn square(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool) {
-        let s = windows().slots[((cell - FIRST_CELL) * SLOTS + slot) as usize];
-        (s.square, s.present != 0)
+        windows().slots[((cell - FIRST_CELL) * SLOTS + slot) as usize].held()
     }
 
     /// The CPU reads a cell's own look alone, as laid: its four are it four
@@ -579,20 +554,19 @@ impl Squares for Windowed {
     }
 
     fn laid(&self, _: Zoom, s: u32, i: u32) -> u32 {
-        window::laid_at(back_at(s, (window::LAID_AT - window::COLUMNS_AT + i / 2) as usize), i)
+        fill::laid_of(cells(s), 0, i)
     }
 
     fn column(&self, _: Zoom, s: u32, i: u32) -> u32 {
-        back_at(s, i as usize)
+        fill::column_of(cells(s), 0, i)
     }
 
     fn level(&self, _: Zoom, s: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        let e = (window::LEVELS_AT - window::COLUMNS_AT + window::LEVEL_ENTRY_WORDS * window::level_index(j, at)) as usize;
-        [back_at(s, e) as i32, back_at(s, e + 1) as i32]
+        fill::level_of(cells(s), 0, j, at)
     }
 
     fn root(&self, _: Zoom, s: u32) -> u32 {
-        back_at(s, (window::ROOT_AT - window::COLUMNS_AT) as usize)
+        fill::root_of(cells(s), 0)
     }
 }
 

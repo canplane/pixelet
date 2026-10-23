@@ -17,7 +17,7 @@
 use crate::area::Shard;
 use crate::window::{
     self, column_top, handed_at, Squares, COLUMNS_AT, ELE_AT, FIRSTS_AT, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_SQUARE, FRESH_WORDS, LAID_AT, LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT,
-    LOOKS_AT, RUNS_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS, SQUARE_WORDS,
+    LOOKS_AT, ROOT_AT, RUNS_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS, SQUARE_WORDS,
 };
 use crate::{at, ground, ways, Zoom};
 
@@ -45,6 +45,11 @@ pub fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2]
 /// Cell `i` as laid off the square at `base` (`window::LAID_WORDS`).
 pub fn laid_of(ground: &[u32], base: u32, i: u32) -> u32 {
     window::laid_at(at(ground, base + LAID_AT + i / 2), i)
+}
+
+/// The root of the ways' tree off the square at `base` (`window::ROOT_AT`).
+pub fn root_of(ground: &[u32], base: u32) -> u32 {
+    at(ground, base + ROOT_AT)
 }
 
 /// The samples handed in the record at `rec` of a fresh list (`ELE_AT`),

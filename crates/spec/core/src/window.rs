@@ -627,10 +627,54 @@ pub const JOINED_ENTRIES: u32 = joined_index(JOINED_LEVELS + 1, [0, 0]);
 /// ground's and the ways' (`ground::bounds_word`): a row of the windows'
 /// buffer, an `IVec4` as their slot table's are, after it (`JOINED_AT`).
 pub const JOINED_WORDS: u32 = 4;
+/// A row of the windows' table, as the kernel writes it (pxl-kernel
+/// layer/terrain/window.rs `table`) and the GPU reads it (pxl-shader
+/// `World`), an `IVec4` of its buffer: the square a slot's window wants
+/// there, whether its cells are present, and the fill they are on their
+/// way from, 0 where none is. Neither: wanted, its tile not yet handed it.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Slot {
+    pub square: [i32; 2],
+    pub present: i32,
+    pub ticket: u32,
+}
+
+const _: () = assert!(core::mem::size_of::<Slot>() == 16, "a slot is a row of four words");
+
+impl Slot {
+    pub const fn absent(square: [i32; 2]) -> Slot {
+        Slot { square, present: 0, ticket: 0 }
+    }
+
+    /// The row the buffer's four words hold.
+    pub fn of([x, y, z, w]: [i32; 4]) -> Slot {
+        Slot {
+            square: [x, y],
+            present: z,
+            ticket: w as u32,
+        }
+    }
+
+    pub fn is_absent(&self) -> bool {
+        self.present == 0 && self.ticket == 0
+    }
+
+    /// Its square, and whether present (`Squares::square`).
+    pub fn held(&self) -> ([i32; 2], bool) {
+        (self.square, self.present != 0)
+    }
+
+    /// Whether it holds `q` present (`Squares::present`).
+    pub fn holds(&self, q: [i32; 2]) -> bool {
+        self.present != 0 && self.square[0] == q[0] && self.square[1] == q[1]
+    }
+}
+
 /// The row of the windows' buffer each window's first square is at: past
-/// every window's slots, a row a window shaped as a slot's, its square the
-/// window's first and its present word whether it is laid out
-/// (`Squares::origin`; pxl-kernel layer/terrain/window.rs `table`).
+/// every window's slots, a row a window shaped as a slot's (`Slot`), its
+/// square the window's first and present while it is laid out
+/// (`Squares::origin`).
 pub const ORIGIN_AT: u32 = SQUARES;
 /// The row of the windows' buffer the eye's windows' entries begin at:
 /// past their slots and their first squares.

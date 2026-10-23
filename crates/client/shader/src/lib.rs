@@ -172,17 +172,23 @@ impl<L: Looks> Area for World<'_, L> {
     }
 }
 
+impl<L> World<'_, L> {
+    /// Row `r` of the windows' table (`window::Slot`).
+    fn row(&self, r: u32) -> window::Slot {
+        let h = at(self.window, r);
+        window::Slot::of([h.x, h.y, h.z, h.w])
+    }
+}
+
 /// The eye's windows, as the GPU holds them.
 impl<L: Looks> Squares for World<'_, L> {
     /// The slot square `q` is held in, while it holds it present.
     fn present(&self, cell: u32, q: [i32; 2]) -> (u32, bool) {
         let s = window::slot(q);
-        let h = at(self.window, (cell - FIRST_CELL) * SLOTS + s);
-        (s, h.z != 0 && h.x == q[0] && h.y == q[1])
+        (s, self.row((cell - FIRST_CELL) * SLOTS + s).holds(q))
     }
     fn square(&self, cell: u32, slot: u32) -> ([i32; 2], bool) {
-        let h = at(self.window, (cell - FIRST_CELL) * SLOTS + slot);
-        ([h.x, h.y], h.z != 0)
+        self.row((cell - FIRST_CELL) * SLOTS + slot).held()
     }
     /// Off the windows' rows past their table (`joined_cs`).
     fn joined(&self, cell: u32, e: u32) -> [u32; window::JOINED_WORDS as usize] {
@@ -191,8 +197,7 @@ impl<L: Looks> Squares for World<'_, L> {
     }
     /// The window's row past every window's slots (`window::ORIGIN_AT`).
     fn origin(&self, cell: u32) -> ([i32; 2], bool) {
-        let r = at(self.window, window::ORIGIN_AT + (cell - FIRST_CELL));
-        ([r.x, r.y], r.z != 0)
+        self.row(window::ORIGIN_AT + (cell - FIRST_CELL)).held()
     }
     fn look(&self, cell: u32, slot: u32, i: u32) -> u32 {
         self.looks.look(((cell - FIRST_CELL) * SLOTS + slot) * SQUARE_CELLS + i)
@@ -207,7 +212,7 @@ impl<L: Looks> Squares for World<'_, L> {
         fill::laid_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
     }
     fn root(&self, cell: u32, slot: u32) -> u32 {
-        at(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot) + window::ROOT_AT)
+        fill::root_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot))
     }
 }
 
