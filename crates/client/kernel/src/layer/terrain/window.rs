@@ -54,17 +54,6 @@ const fn layout(w: u32) -> (Centre, Zoom) {
     }
 }
 
-/// The windows whose cells may be at `cell`, from the layout: the eye's,
-/// the focus's, and a destination's, whose zoom its line moves.
-fn windows_at(cell: Zoom) -> [Option<u32>; 3] {
-    let focus = LEAF_CELL - 1;
-    [
-        (FIRST_CELL..=LEAF_CELL).contains(&cell).then(|| cell - FIRST_CELL),
-        (focus..=LEAF_CELL).contains(&cell).then(|| EYE_WINDOWS + cell - focus),
-        Some(WINDOWS - 1),
-    ]
-}
-
 /// A window: its cells' zoom. Its first square is its row past the slots
 /// (`first_of`).
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -519,14 +508,14 @@ impl Area for Windowed {
 }
 
 impl Squares for Windowed {
-    /// Present as the GPU holds it: its cells back, in a window at `cell`.
+    /// Present as the GPU holds it: its cells back, in a window at `cell`,
+    /// the eye's first.
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
         let w = windows();
-        let held = windows_at(cell)
-            .into_iter()
-            .flatten()
+        let held = (0..WINDOWS)
+            .filter(|&win| w.windows[win as usize].cell == cell)
             .map(|win| win * SLOTS + window::slot(q))
-            .find(|&i| w.windows[(i / SLOTS) as usize].cell == cell && w.slots[i as usize].holds(q));
+            .find(|&i| w.slots[i as usize].holds(q));
         (held.unwrap_or(0), held.is_some())
     }
 
