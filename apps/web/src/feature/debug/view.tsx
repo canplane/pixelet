@@ -15,7 +15,7 @@ const POLL_MS = 500;
 export function ViewOverlay() {
   const show = useKernel((s) => s.settings[SETTINGS.view_overlay.key] === 1);
   const open = useOpenFold((s) => s.open === "view");
-  const [g, setG] = useState<Pick<Gauge, "view" | "quality"> | null>(null);
+  const [g, setG] = useState<Pick<Gauge, "view"> | null>(null);
 
   useEffect(() => {
     if (!show || !open) return;
