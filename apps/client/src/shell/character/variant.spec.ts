@@ -52,7 +52,7 @@ export const groups = {
   },
   /** The pets, the same way. A pet's key is its model's name. */
   pet: {
-    /** World units tall — a quarter cell, the step OBJECT_SIZES also takes. */
+    /** World units tall — a quarter cell, the step the object tiers also take. */
     size: 0.25 as number,
     keys: {
       beaver: 0 as number,

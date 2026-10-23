@@ -119,7 +119,7 @@ pub mod groups {
     }
     /// The pets, the same way. A pet's key is its model's name.
     pub mod pet {
-        /// World units tall — a quarter cell, the step OBJECT_SIZES also takes.
+        /// World units tall — a quarter cell, the step the object tiers also take.
         pub const size: f64 = 0.25;
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         #[repr(u8)]
