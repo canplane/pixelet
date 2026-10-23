@@ -162,3 +162,16 @@ Recommended by the reduce session, not ordered.
   should show the frame's own: a pixel that took a sample's block reports
   that sample's visits, recorded beside the sample's block. That waits for
   the beam layout in flight (`beam::Grid`) to be committed.
+
+## Deferred: the sun's map costs what 10-12's did not
+
+Measured 2026-10-24 on the start view, shadows on, the camera still: about
+5 to 10 frames a second for the first ten seconds, 40 to 70 after, and a
+frame of 200 to 300 ms now and then; with shadows off, 120 throughout. At
+10-12 the map was the chunks' meshes rasterized, a cost of their
+triangles. Now each of its texels walks a ray (pxl-shader `sun_cs`), about
+200 ms for the whole map, and the whole map is walked again where a
+square lands that the map lies inside, and whenever the sun steps
+(pxl-render gpu/shadow.rs `aim`). Left as it is: a proxy taken here starts
+the sun's rays as it starts the eye's, and the map's cost is measured with
+it. Shadows stay off by default, as at 10-12.
