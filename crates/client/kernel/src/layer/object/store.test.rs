@@ -178,6 +178,41 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
     }
 }
 
+#[test]
+fn a_column_reaches_as_far_as_what_is_placed_in_it_wherever_the_walk_last_stood() {
+    let mut rng = Rng(SplitMix64::new(0x7d3a_51e9_c2b4_0f86));
+    let red = cube_id(Cube::Object(Object::red));
+    let mut store = Store::default();
+    for _ in 0..300 {
+        let at = [(rng.next() % 64) as i32, (rng.next() % 64) as i32, (rng.next() % 300) as i32 - 150];
+        cube_at(&mut store, at, rng.pick(&[red, red, AIR]));
+    }
+    // Each leaf's reach along z in the column, as the cube of the column's
+    // zoom it lies in where it is finer.
+    let reach = |(zoom, [x, y]): Node<2>| {
+        let mut z: Option<[f64; 2]> = None;
+        store.each(&mut |e| {
+            let (k, at) = (zoom.min(e.zoom), e.at.map(|v| v >> e.zoom.saturating_sub(zoom)));
+            if [at[0], at[1]] == [x >> (zoom - k), y >> (zoom - k)] {
+                let s = [f64::from(at[2]) * units(k), f64::from(at[2] + 1) * units(k)];
+                z = Some(z.map_or(s, |z| [z[0].min(s[0]), z[1].max(s[1])]));
+            }
+        });
+        let whole = region((zoom, [x, y]));
+        z.map(|z| Aabb {
+            min: [whole.min[0], whole.min[1], z[0]],
+            max: [whole.max[0], whole.max[1], z[1]],
+        })
+    };
+    let mut walk = Walk::default();
+    for _ in 0..400 {
+        let zoom = rng.pick(&[UNIT_ZOOM - 6, UNIT_ZOOM - 3, UNIT_ZOOM - 1, UNIT_ZOOM, UNIT_ZOOM + 1]);
+        let side = 64 >> UNIT_ZOOM.saturating_sub(zoom) << zoom.saturating_sub(UNIT_ZOOM);
+        let node = (zoom, [0, 1].map(|_| (rng.next() % side.max(1) as u64) as i32));
+        assert_eq!(store.column(&mut walk, node), reach(node), "{node:?}");
+    }
+}
+
 fn words(text: &str) -> Option<Ext> {
     Some(Ext::MarkerText(text.to_string()))
 }

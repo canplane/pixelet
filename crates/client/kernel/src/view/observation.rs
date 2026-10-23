@@ -16,9 +16,9 @@ use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::layer::residency::{floor, Lines};
+use crate::layer::residency::floor;
 use crate::layer::Base as _;
-use crate::query::World;
+use crate::query::{Walked, World};
 use crate::view::frame::pose::view;
 use crate::view::reach::eye_height;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -101,8 +101,8 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
     let mut stack = core::mem::take(STACK.get(Vec::new));
     stack.clear();
     stack.extend(squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)));
-    // Depth first, so each square's ground line steps from its neighbour's.
-    let (world, mut lines) = (World::now(), Lines::default());
+    // Depth first, so each square's lines step from its neighbour's.
+    let (world, mut walked) = (World::now(), Walked::default());
     while let Some((zoom, xy)) = stack.pop() {
         let (cell, d) = (zoom + CHUNK_STEPS, near(zoom, xy));
         if d > o.reach {
@@ -112,7 +112,7 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
             stack.extend((0..4).map(|k| (zoom + 1, [2 * xy[0] + (k & 1), 2 * xy[1] + (k >> 1)])));
             continue;
         }
-        let Some(b) = world.bounds(&mut lines, (zoom, xy), cell).value().flatten() else { continue };
+        let Some(b) = world.bounds(&mut walked, (zoom, xy), cell).value().flatten() else { continue };
         let side = units(zoom);
         for z in (b.min[2] / side).floor() as i32..=(b.max[2] / side).floor() as i32 {
             each((zoom, [xy[0], xy[1], z]));
@@ -155,9 +155,9 @@ impl ByEye {
 }
 
 /// A layer's tile's order, from where anything stands in it as the grid's
-/// cells its own fold into read it, its ground's line stepped from where
-/// `lines` last walked: all of it where nothing is known or nothing stands.
-pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, lines: &mut Lines) -> Order {
-    let stands = World::now().bounds(lines, p.node(), lattice.grid_zoom(p.zoom));
+/// cells its own fold into read it, stepped from where `walked` last went:
+/// all of it where nothing is known or nothing stands.
+pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, walked: &mut Walked) -> Order {
+    let stands = World::now().bounds(walked, p.node(), lattice.grid_zoom(p.zoom));
     Order::of(o, &stands.value().flatten().unwrap_or(p.region()))
 }

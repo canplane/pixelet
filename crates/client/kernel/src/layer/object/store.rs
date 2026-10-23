@@ -500,25 +500,99 @@ impl Query for Store {
     }
 
     /// All resident, so every answer is exact. The cubes of the node's own
-    /// zoom that hold anything, joined: a cube is its own, and a column (a
-    /// node over the ground's two axes) the cubes of it that hold, so the
-    /// tree is walked down to the node's zoom only, along the paths that
-    /// hold. Its readers tell apart no finer than the node (pxl-kernel
-    /// view/observation.rs `cubes`, `order_of_tile`).
+    /// zoom that hold anything, joined: a cube is its own, whole where it
+    /// holds, and a column (a node over the ground's two axes) the cubes of
+    /// it that hold (`column`). Its readers tell apart no finer than the
+    /// node (pxl-kernel view/observation.rs `cubes`, `order_of_tile`).
     fn bound<const D: usize>(&self, held: &Held, node: Node<D>, _: Zoom) -> Answer<Option<Aabb>> {
-        if !held.holds() {
-            return Answer::Exact(None);
-        }
-        let (mut out, whole) = (None, region(node));
-        self.descend(about(&whole), &mut |z, _, c, leaf| {
-            let Some(aabb) = c.meet(whole) else { return false };
-            if leaf.is_none() && z < node.0 {
-                return true;
+        Answer::Exact(match D {
+            3 => held.holds().then(|| region(node)),
+            _ => self.column(&mut Walk::default(), (node.0, [node.1[0], node.1[1]])),
+        })
+    }
+}
+
+/// What a walk over columns carries down the tree from one column to the
+/// next (`Store::column`): for each zoom it stepped through, the column it
+/// stood in there, where that zoom's run of `held` ends and the z the
+/// leaves over it span; each run, the branches the tree holds in that
+/// column at that zoom, by index (`overwrite::path`) with what each holds.
+/// A walk to a column beside the last steps down only from where their
+/// columns part. Good while the store is unchanged.
+#[derive(Default)]
+pub struct Walk {
+    at: Vec<Stood>,
+    held: Vec<([i32; 3], Held)>,
+}
+
+#[derive(Clone, Copy)]
+struct Stood {
+    column: [i32; 2],
+    end: usize,
+    leaves: Option<[f64; 2]>,
+}
+
+impl Walk {
+    /// Where zoom `k`'s run of `held` begins: where the zoom over it ends.
+    fn start(&self, k: usize) -> usize {
+        k.checked_sub(1).map_or(0, |o| self.at[o].end)
+    }
+}
+
+impl Store {
+    /// The column `node` of the ground's two axes, X in the asker's frame,
+    /// as far along z as what is placed in it reaches: the cubes of its zoom
+    /// that hold and the leaves over them, none where nothing is placed in
+    /// it. Stepped down from where `walk` last went, a zoom at a time,
+    /// through the branches in its column alone.
+    pub fn column(&self, walk: &mut Walk, (zoom, xy): Node<2>) -> Option<Aabb> {
+        let p = path(zoom, [xy[0], xy[1], 0]);
+        let column = |k: usize| [p[0] >> (zoom as usize - k), p[1] >> (zoom as usize - k)];
+        let kept = walk.at.iter().take(zoom as usize + 1).enumerate().take_while(|&(k, s)| s.column == column(k)).count();
+        walk.at.truncate(kept);
+        walk.held.truncate(walk.at.last().map_or(0, |s| s.end));
+        let span = |z: usize, at: [i32; 3]| [f64::from(at[2]) * units(z as Zoom), f64::from(at[2] + 1) * units(z as Zoom)];
+        let join = |a: Option<[f64; 2]>, b: [f64; 2]| Some(a.map_or(b, |a| [a[0].min(b[0]), a[1].max(b[1])]));
+        while walk.at.len() <= zoom as usize {
+            let k = walk.at.len();
+            let c = column(k);
+            let mut leaves = k.checked_sub(1).and_then(|o| walk.at[o].leaves);
+            let mut met = |held: &mut Vec<([i32; 3], Held)>, at: [i32; 3], h: Held| {
+                if h.folded() {
+                    held.push((at, h));
+                } else if h.holds() {
+                    leaves = join(leaves, span(k, at));
+                }
+            };
+            match k.checked_sub(1) {
+                None => {
+                    for r in (0..4).map(root).filter(|r| [r[0], r[1]] == c) {
+                        met(&mut walk.held, r, self.cursor((0, r), 0));
+                    }
+                }
+                Some(o) => {
+                    for i in walk.start(o)..walk.at[o].end {
+                        let (at, h) = walk.held[i];
+                        for child in [0, 1].map(|z| [c[0], c[1], 2 * at[2] + z]) {
+                            met(&mut walk.held, child, self.child(&h, (k as Zoom, child), k as Zoom));
+                        }
+                    }
+                }
             }
-            out = Some(out.map_or(aabb, |o: Aabb| o.join(aabb)));
-            false
-        });
-        Answer::Exact(out)
+            walk.at.push(Stood {
+                column: c,
+                end: walk.held.len(),
+                leaves,
+            });
+        }
+        let k = zoom as usize;
+        let z = walk.held[walk.start(k)..walk.at[k].end].iter().fold(walk.at[k].leaves, |z, &(at, _)| join(z, span(k, at)))?;
+        let whole = region((zoom, xy));
+        let placed = Aabb {
+            min: [whole.min[0], whole.min[1], z[0]],
+            max: [whole.max[0], whole.max[1], z[1]],
+        };
+        placed.meet(whole)
     }
 }
 

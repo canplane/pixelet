@@ -26,7 +26,7 @@ mod world;
 
 pub use ray::{asked, at_zoom, by_distance, Hit, Ray, Struck};
 pub use support::{cell_at, over, under, walks};
-pub use world::World;
+pub use world::{Walked, World};
 
 #[cfg(test)]
 #[path = "query.test.rs"]

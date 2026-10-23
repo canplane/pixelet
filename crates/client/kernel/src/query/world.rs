@@ -11,11 +11,10 @@ use pxl_spec::bake::constant::EntryAt;
 
 use super::changed::Columns;
 use super::decor::Grown;
-use crate::layer::object::store::Store;
+use crate::layer::object::store::{Store, Walk};
 use crate::layer::residency::{Lines, Residency};
 use crate::layer::Answer;
 use crate::layer::Base as _;
-use crate::layer::Query;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -84,12 +83,22 @@ impl<'a> World<'a> {
     }
 }
 
+/// What a walk over columns carries from one to the next (`World::bounds`):
+/// the ground's lines and the objects' tree, each stepped down from where
+/// the last left off. Good while neither moves.
+#[derive(Default)]
+pub struct Walked {
+    ground: Lines,
+    objects: Walk,
+}
+
 impl World<'_> {
     /// Where the ground and what is placed stand in the node, as its cells
-    /// at `cell` are read; the ground's line stepped from where `lines` last
-    /// walked.
-    pub fn bounds(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
-        let objects = self.objects.bounds(node, cell).value().flatten();
-        self.terrain.bound_walked(lines, node, cell).map(|ground| ground.into_iter().chain(objects).reduce(Aabb::join))
+    /// at `cell` are read; each stepped from where `walked` last went.
+    pub fn bounds(&self, walked: &mut Walked, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
+        let objects = self.objects.column(&mut walked.objects, node);
+        self.terrain
+            .bound_walked(&mut walked.ground, node, cell)
+            .map(|ground| ground.into_iter().chain(objects).reduce(Aabb::join))
     }
 }

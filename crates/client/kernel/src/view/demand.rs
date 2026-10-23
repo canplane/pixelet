@@ -38,6 +38,7 @@ use crate::io::request::declare;
 use crate::io::source;
 use crate::layer::residency::floor;
 use crate::layer::residency::{Lines, Residency};
+use crate::query::Walked;
 use crate::view::observation::{observation, ByEye};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::morton::key_of;
@@ -148,12 +149,11 @@ impl<L: Observed> Demand<L> {
     }
 
     pub fn admit(&mut self, p: Tile, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
-        // The tile last in view order goes.
+        // The tile last in view order goes, of two as late the greater.
         let o = self.observation.as_ref();
-        let farthest = |tiles: &[Tile]| {
-            let mut lines = Lines::default();
-            let mut order = |t: Tile| o.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, L::LATTICE, t, &mut lines));
-            (0..tiles.len()).max_by_key(|&i| order(tiles[i]))
+        let farthest = |tiles: &mut dyn Iterator<Item = Tile>| {
+            let mut walked = Walked::default();
+            tiles.max_by_key(|&t| (o.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, L::LATTICE, t, &mut walked)), t))
         };
         L::residency().admit(p, farthest, receive)
     }
@@ -169,7 +169,7 @@ impl<L: Observed> Demand<L> {
         };
         // One walk down the pyramid in key order, so each tile's line, its
         // own and the ground's it is ordered by, steps from its neighbour's.
-        let (mut lines, mut ground) = (Lines::default(), Lines::default());
+        let (mut lines, mut ground) = (Lines::default(), Walked::default());
         let mut order = |o: &Observation, p: Tile| crate::view::observation::order_of_tile(o, L::LATTICE, p, &mut ground);
         if let Some(o) = o {
             if matches!(L::ASKS, Asks::View) {
