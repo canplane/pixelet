@@ -5,10 +5,11 @@
  * type-check reads them: a module resolves through its own workspace
  * member's map (`<member>/deno.jsonc`) over the root's (deno.jsonc), each
  * directory from the file that names it, so `@/` is the importing file's own
- * package. What reads the tree beside Deno — Metro's resolver, the const-enum
- * table — resolves through these and holds no list of its own. Plain
- * TypeScript over `node:` modules: Deno imports it, and Node 24 loads it
- * under a bundler that requires it.
+ * package. What reads the tree beside Deno — Vite's and Metro's resolvers,
+ * the const-enum table — resolves through these and holds no list of its
+ * own. Plain TypeScript over `node:` modules: Deno imports it, and Node, from
+ * 22.18, loads it under a bundler's config (apps/native/package.json
+ * `engines`).
  */
 
 import * as fs from "node:fs";
