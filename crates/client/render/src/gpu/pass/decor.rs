@@ -6,7 +6,7 @@
 
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
-use crate::frame::shader::record::PIPELINE_DECOR_PREPASS;
+use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
 
 use crate::gpu::api::{Gpu, Image};
 use crate::gpu::blocks::{Blocks, Draws};
@@ -20,6 +20,7 @@ pub const GROUPS: usize = 64;
 pub struct DecorPass {
     lit: Built,
     ghost: Built,
+    depth: Built,
     prepass: Built,
     uniforms: DrawUniforms,
     /// Each group's mesh, 0 for a model not yet registered, and its skin's image.
@@ -31,6 +32,7 @@ impl DecorPass {
         DecorPass {
             lit: pipelines.build(g, PIPELINE_DECOR, g.canvas()),
             ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, g.canvas()),
+            depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, g.canvas()),
             prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, g.canvas()),
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
             groups: [(0, None); GROUPS],
@@ -80,8 +82,19 @@ impl DecorPass {
         }
     }
 
-    pub fn draw(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, frame: (u32, &mut u32)) {
-        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.lit.pipeline, frame);
+    /// The listed decor, lit or its depth from the sun (`Stage::Depth`),
+    /// `frame` the group 0 the stage reads.
+    pub fn draw(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {
+        let pipeline = self.pipeline(stage);
+        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, pipeline, frame);
+    }
+
+    fn pipeline(&self, stage: Stage) -> u32 {
+        match stage {
+            Stage::Lit => self.lit.pipeline,
+            Stage::Depth => self.depth.pipeline,
+            Stage::Prepass => self.prepass.pipeline,
+        }
     }
 
     pub fn draw_ghosts(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, frame: (u32, &mut u32)) {
@@ -109,11 +122,7 @@ impl DecorPass {
     /// (pxl-spec-core `scatter::drawn`, a group's models its region `2·group`).
     pub fn draw_grown(&mut self, g: &Gpu, pass: u32, grown: Option<Drawn>, blocks: &Blocks, stage: Stage, (frame, bound): (u32, &mut u32)) {
         let Some(d) = grown else { return };
-        let pipeline = match stage {
-            Stage::Lit => self.lit.pipeline,
-            Stage::Prepass => self.prepass.pipeline,
-        };
-        g.set_pipeline(pass, pipeline);
+        g.set_pipeline(pass, self.pipeline(stage));
         if *bound != frame {
             g.set_bind_group(pass, 0, frame, &[]);
             *bound = frame;

@@ -13,8 +13,8 @@ use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::{put_f32, put_u32, Scratch};
 
-fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: Entry, air: [Entry; AIR_ENTRIES]) -> u32 {
-    let mut e = vec![buffer_entry(0, frame), ao];
+fn frame_group(g: &Gpu, layout: u32, frame: u32, shadow: [Entry; 2], ao: Entry, air: [Entry; AIR_ENTRIES]) -> u32 {
+    let mut e = vec![buffer_entry(0, frame), shadow[0], shadow[1], ao];
     e.extend(air);
     g.bind_group(layout, &e)
 }
@@ -62,9 +62,13 @@ pub(crate) fn skins_lost() {
     SKINS.set(Skins::default());
 }
 
+/// Which of a model's pipelines draws it: lit into the world's image, its
+/// depth from the sun into the shadow map, or its depth from the eye for
+/// the screen's occlusion.
 #[derive(Clone, Copy)]
 pub enum Stage {
     Lit,
+    Depth,
     Prepass,
 }
 
@@ -75,27 +79,30 @@ pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
 
 /// Group 0 as the world image's models read it, the occlusion its map, and
 /// as what is drawn over the image reads it (`over`): open, as the map is of
-/// the image beneath, which the occlusion was found over without it.
+/// the image beneath, which the occlusion was found over without it. Both
+/// read the sun's shadow map `shadow`.
 pub struct FrameGroups {
     pub frame: u32,
     pub over: u32,
     layout: u32,
+    shadow: [Entry; 2],
     air: [Entry; AIR_ENTRIES],
 }
 
 impl FrameGroups {
-    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, [ao, open]: [Entry; 2], air: [Entry; AIR_ENTRIES]) -> FrameGroups {
+    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, shadow: [Entry; 2], [ao, open]: [Entry; 2], air: [Entry; AIR_ENTRIES]) -> FrameGroups {
         FrameGroups {
-            frame: frame_group(g, layout, frame_buffer, ao, air),
-            over: frame_group(g, layout, frame_buffer, open, air),
+            frame: frame_group(g, layout, frame_buffer, shadow, ao, air),
+            over: frame_group(g, layout, frame_buffer, shadow, open, air),
             layout,
+            shadow,
             air,
         }
     }
 
     pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, ao: [Entry; 2]) {
         self.release();
-        *self = FrameGroups::new(g, self.layout, frame_buffer, ao, self.air);
+        *self = FrameGroups::new(g, self.layout, frame_buffer, self.shadow, ao, self.air);
     }
 
     pub fn release(&self) {

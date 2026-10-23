@@ -586,9 +586,11 @@ pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u3
 pub fn ground(w: &(impl Squares + crate::area::Area), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
     let read = held_to(zoom);
     let (word, column, laid, f) = cell(w, place, read, cell_at(zoom, read, b));
+    let (top, part) = crate::ground::top(zoom, column_top(column) as f32);
     let cell = crate::ground::Cell {
         look: crate::area::laid(laid, zoom, b),
-        top: crate::ground::blocks(zoom, column_top(column) as f32),
+        top,
+        part,
         fold: crate::ground::looks(word),
     };
     (cell, f)

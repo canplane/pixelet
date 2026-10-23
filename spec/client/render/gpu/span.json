@@ -14,7 +14,8 @@
     "cases",
     "fill",
     "cast",
-    "grow"
+    "grow",
+    "shadow"
   ],
   "FRAME_KINDS": [
     "none",

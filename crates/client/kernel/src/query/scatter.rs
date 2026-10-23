@@ -13,7 +13,7 @@ use pxl_spec::block::decor::Decor;
 use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec_core::overwrite;
+use pxl_spec_core::{overwrite, FRAC_W};
 use pxl_spec_core::scatter::{self as core_scatter, Grounds, Grown};
 
 use super::world::World;
@@ -47,8 +47,8 @@ impl Grounds for Asked<'_, '_> {
         &pxl_spec_core::decor::DECORS
     }
 
-    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
-        self.world.footing(cell, g).map_or((0, 0, false), |(block, top)| (block, top, true))
+    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, (i32, f32), bool) {
+        self.world.footing(cell, g).map_or((0, (0, 0.0), false), |(block, top)| (block, top, true))
     }
 
     /// Void where the world holds nothing there (`World::block`).
@@ -67,10 +67,11 @@ pub(super) fn grown_at(asked: &mut Asked, decor: &Decor, cell: [i32; 2]) -> Opti
 }
 
 /// Decor standing as `g`, as an instance: its box's min corner a leaf
-/// cell's, a unit.
+/// cell's, a unit, its base sunk under it as the GPU draws it (`Grown::sink`).
 pub fn instance(decor: &Decor, g: &Grown) -> Instance {
     let [x, y, z] = g.at;
-    let (at, meta) = decor.stand([x, y, z].map(f64::from), g.variant, g.turn, 1.0);
+    let base = f64::from(z) - f64::from(g.sink) / f64::from(1u32 << FRAC_W);
+    let (at, meta) = decor.stand([f64::from(x), f64::from(y), base], g.variant, g.turn, 1.0);
     Instance {
         id: decor.value(),
         at,
@@ -86,5 +87,6 @@ pub fn grown_of(i: &Instance) -> Option<Grown> {
         variant: m.variant,
         turn: m.turn,
         at: [x, y, z],
+        sink: libm::rint((f64::from(z) - i.at[2]) * f64::from(1u32 << FRAC_W)) as u32,
     })
 }

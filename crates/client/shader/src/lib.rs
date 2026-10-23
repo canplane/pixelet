@@ -15,7 +15,7 @@
 #![deny(warnings)]
 
 use pxl_spec_core::area::Area;
-use pxl_spec_core::answer::In;
+use pxl_spec_core::answer::{self, In};
 use pxl_spec_core::cast::{self, Detail, Ends, Met, Query, Until};
 use pxl_spec_core::decor::{Decor, COUNTS};
 use pxl_spec_core::eye;
@@ -29,7 +29,7 @@ use pxl_spec_core::scatter::{self, drawn, Grounds, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_spec_core::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_spec_core::window::Found;
 use pxl_spec_core::world::At;
-use pxl_spec_core::{at, beam, observed, ray, world, LEAF_CELL};
+use pxl_spec_core::{at, beam, faces, observed, ray, world, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::arch::IndexUnchecked;
 use spirv_std::memory::{Scope, Semantics};
@@ -59,6 +59,12 @@ pub struct Eye {
     /// `eye::NO_CUT` for none.
     pub carve: IVec4,
     pub hide: IVec4,
+    /// The camera grid the frame casts on, as the kernel laid it once
+    /// (pxl-spec-core `beam::Grid`, `grid`).
+    pub grid: [UVec4; eye::GRID_WORDS / 4],
+    /// The sun's cast, a frame's constants (pxl-spec-core `sun::Sun`), all
+    /// zero where no shadow is cast.
+    pub sun: [Vec4; 5],
 }
 
 /// Word `words`'s byte.
@@ -72,7 +78,7 @@ const _: () = {
     assert!(size_of::<Eye>() == at(eye::WORDS));
     assert!(offset_of!(Eye, origin) == at(eye::ORIGIN) && offset_of!(Eye, forward_far) == at(eye::FORWARD) && offset_of!(Eye, right_tau) == at(eye::RIGHT));
     assert!(offset_of!(Eye, up) == at(eye::UP) && offset_of!(Eye, tan) == at(eye::TAN) && offset_of!(Eye, range) == at(eye::RANGE));
-    assert!(offset_of!(Eye, carve) == at(eye::CARVE) && offset_of!(Eye, hide) == at(eye::HIDE));
+    assert!(offset_of!(Eye, carve) == at(eye::CARVE) && offset_of!(Eye, hide) == at(eye::HIDE) && offset_of!(Eye, grid) == at(eye::GRID) && offset_of!(Eye, sun) == at(eye::SUN));
 };
 
 /// A preview's entry as pxl-spec-core `overwrite` takes it.
@@ -281,33 +287,61 @@ impl Grounds for Growing<'_> {
 
     /// The world's ray down the column, the cast's own descent
     /// (pxl-spec-core `scatter::footing`).
-    fn footing(&mut self, cell: u32, g: [i32; 2]) -> (u32, i32, bool) {
+    fn footing(&mut self, cell: u32, g: [i32; 2]) -> (u32, (i32, f32), bool) {
         scatter::footing(&mut self.world, cell, g)
     }
 
-    /// Asked of the block with nothing handed down (pxl-spec-core
-    /// `world::At::of`).
     fn block(&mut self, zoom: u32, c: [i32; 3]) -> u32 {
-        let mut at = At::of(&self.world, (zoom, c));
-        self.world.node(&mut at, zoom, c, [zoom, zoom], 0.0).block[0]
+        self.world.block(zoom, c)
     }
+}
+
+impl<L: Looks> World<'_, L> {
+    /// The value of the block `c` at `zoom`, asked of the world's one
+    /// query with nothing handed down (pxl-spec-core `world::At::of`).
+    fn block(&mut self, zoom: u32, c: [i32; 3]) -> u32 {
+        let mut at = At::of(self, (zoom, c));
+        self.node(&mut at, zoom, c, [zoom, zoom], 0.0).block[0]
+    }
+
+    /// What lies about the face a ray stopped on (pxl-spec-core
+    /// `faces::word`): each block beside the stop's at its zoom
+    /// (`World::block`), filling its cube whole (`answer::whole`); a box's
+    /// own, a block kept short of its cube (`faces::BOX`); nothing where the
+    /// ray stopped on none.
+    fn faced<A: Copy>(&mut self, origin: [i32; 3], ray: &cast::Ray, met: &Met<A>) -> u32 {
+        if met.ends != Ends::Stop {
+            return 0;
+        }
+        if answer::kept(met.stop.block[0]) < answer::EIGHTHS {
+            return faces::BOX;
+        }
+        let (zoom, c) = (met.stop.node.zoom, met.stop.node.index(origin));
+        faces::word(face_of(ray, met.stop.axis), |d| answer::whole(self.block(zoom, faces::beside(zoom, c, d))))
+    }
+}
+
+/// The face a ray enters a block through across `axis` (pxl-spec-core
+/// `ray`): 2·axis, plus one where its outward normal points down the axis,
+/// against the ray.
+fn face_of(ray: &cast::Ray, axis: u32) -> u32 {
+    2 * axis + (pxl_spec_core::axis(ray.direction, axis) > 0.0) as u32
 }
 
 /// A ray's words, a layer each of `Rays`: the value it stopped on and the
 /// face it entered through, then how far as f32 bits, then the four looks
 /// the ground's block is drawn by, a byte each (`ground::word`), or in the
-/// steps view the nodes its descent asked about; where it met nothing, the
-/// first two zero.
-fn word<A: Copy>(ray: &cast::Ray, met: Met<A>, steps: bool) -> [u32; ray::WORDS as usize] {
+/// steps view the nodes its descent asked about, then what lies about its
+/// face (`World::faced`); where it met nothing, the first two zero.
+fn word<A: Copy>(ray: &cast::Ray, met: Met<A>, steps: bool, faces: u32) -> [u32; ray::WORDS as usize] {
     if met.ends != Ends::Stop {
-        return [0, 0, met.visits];
+        return [0, 0, met.visits, 0];
     }
     let s = met.stop;
-    let down = pxl_spec_core::axis(ray.direction, s.axis) > 0.0;
-    let face = 2 * s.axis + down as u32;
     let [value, four] = s.block;
-    [ray::first_word(value, face, s.node.zoom), s.t.to_bits(), if steps { met.visits } else { four }]
+    [ray::first_word(value, face_of(ray, s.axis), s.node.zoom), s.t.to_bits(), if steps { met.visits } else { four }, faces]
 }
+const _: () = assert!(ray::FACES == 3, "what lies about a ray's face is its last word");
 
 /// Where the eye's rays start, and the zooms each distance asks.
 fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
@@ -336,10 +370,17 @@ fn eye_ray(eye: &Eye, [tx, ty]: [f32; 2]) -> cast::Ray {
     cast::Ray::new(cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), tx, ty), eye.forward_far.w)
 }
 
-/// The screen's half-angles' tangents, across and up.
-fn eye_tan(eye: &Eye) -> [f32; 2] {
-    [eye.tan.x, eye.tan.y]
+/// The camera grid the frame casts on, read whole off the eye's words, as
+/// the kernel worked it out once (pxl-spec-core `beam::Grid`): no thread
+/// works any of it out again.
+fn grid(eye: &Eye) -> beam::Grid {
+    let g = &eye.grid;
+    let w = [
+        g[0].x, g[0].y, g[0].z, g[0].w, g[1].x, g[1].y, g[1].z, g[1].w, g[2].x, g[2].y, g[2].z, g[2].w, g[3].x, g[3].y, g[3].z, g[3].w,
+    ];
+    beam::Grid::of_words([eye.tan.x, eye.tan.y], w)
 }
+const _: () = assert!(eye::GRID_WORDS == 16, "`grid` reads the grid's four vec4s");
 
 /// The observed pyramid's buffer (pxl-spec-core `observed`), bound as a
 /// runtime array, whose pointer a walk holds whole: a slice's would be a
@@ -539,12 +580,7 @@ struct Beamed<'a>(&'a Beams, u32);
 impl Beamed<'_> {
     /// The node the corner's beam ray stopped at.
     fn node(self) -> cast::Node {
-        let (w, k) = (self.0, self.1);
-        cast::Node {
-            corner: [seen_at(w, k + beam::LINE_CORNER), seen_at(w, k + beam::LINE_CORNER + 1), seen_at(w, k + beam::LINE_CORNER + 2)],
-            zoom: seen_at(w, k + beam::LINE_ZOOM),
-            roots: [seen_at(w, k + beam::LINE_ROOTS) as i32, seen_at(w, k + beam::LINE_ROOTS + 1) as i32, seen_at(w, k + beam::LINE_ROOTS + 2) as i32],
-        }
+        node_at(self.0, self.1 + beam::LINE_NODE)
     }
 
     /// The first word a zoom of the line holds.
@@ -569,15 +605,34 @@ impl cast::Over<Writ> for Beamed<'_> {
     }
 }
 
-/// Where the ray at the screen's tangents `tan` starts from the cell whose
-/// first corner is `cell`: that cell's least, the corner's line it resumes
+/// The node at word `k` of the beam rays' buffer, as a line and a sample
+/// each hold one (pxl-spec-core `beam::NODE_WORDS`).
+fn node_at(w: &Beams, k: u32) -> cast::Node {
+    cast::Node {
+        corner: [seen_at(w, k + beam::NODE_CORNER), seen_at(w, k + beam::NODE_CORNER + 1), seen_at(w, k + beam::NODE_CORNER + 2)],
+        zoom: seen_at(w, k + beam::NODE_ZOOM),
+        roots: [seen_at(w, k + beam::NODE_ROOTS) as i32, seen_at(w, k + beam::NODE_ROOTS + 1) as i32, seen_at(w, k + beam::NODE_ROOTS + 2) as i32],
+    }
+}
+
+/// Node `n` put at word `k` of the beam rays' buffer, as `node_at` reads it.
+fn node_put(w: &mut Beams, k: u32, n: &cast::Node) {
+    seen_put(w, k + beam::NODE_ZOOM, n.zoom);
+    seen_put(w, k + beam::NODE_CORNER, n.corner[0]);
+    seen_put(w, k + beam::NODE_CORNER + 1, n.corner[1]);
+    seen_put(w, k + beam::NODE_CORNER + 2, n.corner[2]);
+    seen_put(w, k + beam::NODE_ROOTS, n.roots[0] as u32);
+    seen_put(w, k + beam::NODE_ROOTS + 1, n.roots[1] as u32);
+    seen_put(w, k + beam::NODE_ROOTS + 2, n.roots[2] as u32);
+}
+
+/// Where the ray at the screen's tangents `tan` starts from the screen's
+/// cell `cell` of `grid`: that cell's least, the corner's line it resumes
 /// from, and the ray (pxl-spec-core `beam`).
-fn started<'a>(eye: &Eye, beams: &'a Beams, cell: [u32; 2], tan: [f32; 2]) -> (cast::Ray, f32, Beamed<'a>) {
-    let (_, detail) = eye_origin(eye);
-    let corners = beam::corners(eye_tan(eye), beam::spacing(detail));
-    let at = beam::cells_at(corners[0] * corners[1]) + (cell[1] * corners[0] + cell[0]) * beam::CELL_WORDS;
+fn started<'a>(eye: &Eye, grid: &beam::Grid, beams: &'a Beams, cell: [u32; 2], tan: [f32; 2]) -> (cast::Ray, f32, Beamed<'a>) {
+    let at = grid.cell_at(cell);
     let t = f32::from_bits(seen_at(beams, at + beam::CELL_T));
-    (eye_ray(eye, tan), t, Beamed(beams, beam::LINES_AT + seen_at(beams, at + beam::CELL_CORNER) * beam::LINE_WORDS))
+    (eye_ray(eye, tan), t, Beamed(beams, beam::Grid::line(seen_at(beams, at + beam::CELL_CORNER))))
 }
 
 /// `ray`'s walk to the block that fills, resumed at `t` from the deepest
@@ -605,7 +660,7 @@ fn written(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
 }
 
 /// Each beam ray of the camera grid, a thread a corner (pxl-spec-core
-/// `beam::corners`): its walk from the world's root to the first block that
+/// `beam::Grid::corners`): its walk from the world's root to the first block that
 /// fills or lacks, or the first split too narrow to share
 /// (`cast::Until::Beam`), through the observed pyramid writing what it asks
 /// (`Writing`), and its line there, for the pixels about it.
@@ -625,12 +680,11 @@ pub fn beam_cs(
 ) {
     let window: &[IVec4] = window;
     let (origin, detail) = eye_origin(eye);
-    let (tan, s) = (eye_tan(eye), beam::spacing(detail));
-    let corners = beam::corners(tan, s);
-    if id.x >= corners[0] || id.y >= corners[1] {
+    let g = grid(eye);
+    if id.x >= g.corners[0] || id.y >= g.corners[1] {
         return;
     }
-    let ray = eye_ray(eye, beam::corner(tan, s, [id.x, id.y]));
+    let ray = eye_ray(eye, g.corner([id.x, id.y]));
     let tag = observed::tag(seen_at(seen, observed::FRAME), 0);
     let world = World {
         window,
@@ -641,9 +695,9 @@ pub fn beam_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let base = beam::LINES_AT + (id.y * corners[0] + id.x) * beam::LINE_WORDS;
+    let base = beam::Grid::line(g.corner_index([id.x, id.y]));
     let met = cast::rooted(&mut Writing { world, seen, tag }, origin, &ray, detail, Until::Beam, &mut Leaving(beams, base));
-    seen_put(beams, base + beam::LINE_T, beam::handed(met.stop.t, s).to_bits());
+    seen_put(beams, base + beam::LINE_T, g.handed(met.stop.t).to_bits());
 }
 
 /// A beam ray's line as it leaves it (pxl-spec-core `cast::Keep`), into the
@@ -655,13 +709,7 @@ impl cast::Keep<Writ> for Leaving<'_> {
     fn keep(&mut self, n: &cast::Node, live: Writ, stack: &[Writ; cast::DEPTH]) {
         let base = self.1;
         let beams = &mut *self.0;
-        seen_put(beams, base + beam::LINE_ZOOM, n.zoom);
-        seen_put(beams, base + beam::LINE_CORNER, n.corner[0]);
-        seen_put(beams, base + beam::LINE_CORNER + 1, n.corner[1]);
-        seen_put(beams, base + beam::LINE_CORNER + 2, n.corner[2]);
-        seen_put(beams, base + beam::LINE_ROOTS, n.roots[0] as u32);
-        seen_put(beams, base + beam::LINE_ROOTS + 1, n.roots[1] as u32);
-        seen_put(beams, base + beam::LINE_ROOTS + 2, n.roots[2] as u32);
+        node_put(beams, base + beam::LINE_NODE, n);
         let mut z = 0;
         while z <= n.zoom {
             let held = if z == n.zoom { live } else { stack[z as usize] };
@@ -679,33 +727,31 @@ impl cast::Keep<Writ> for Leaving<'_> {
 }
 
 /// Where each cell's pixels start (pxl-spec-core `beam::CELL_WORDS`), a
-/// thread a cell of the screen (`beam::span`): the least of the beam rays
-/// within its own window of its corners (`beam::cell_window`), every one
-/// cast since the widest window is `beam::past`, and that corner, whose
-/// line they resume from; past the lines in the beam rays' buffer
-/// (`beam::cells_at`).
+/// thread a cell of the screen (`beam::Grid::span`): the least of the beam
+/// rays within its own window of its corners (`Grid::cell_window`), every
+/// one cast since the widest window is the grid's `past`, and that corner,
+/// whose line they resume from; past the lines in the beam rays' buffer
+/// (`Grid::cell_at`).
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn cells_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
 ) {
-    let (_, detail) = eye_origin(eye);
-    let (tan, s) = (eye_tan(eye), beam::spacing(detail));
-    let n = beam::span(tan, s);
-    if id.x >= n[0] || id.y >= n[1] {
+    let g = grid(eye);
+    if id.x >= g.span[0] || id.y >= g.span[1] {
         return;
     }
-    let (corners, k) = (beam::corners(tan, s), beam::cell_window(tan, s, [id.x, id.y]));
-    let [x, y] = beam::first(tan, s, [id.x, id.y]);
-    let t_of = |c: u32| f32::from_bits(seen_at(beams, beam::LINES_AT + c * beam::LINE_WORDS + beam::LINE_T));
-    let first = (y - k) * corners[0] + (x - k);
+    let k = g.cell_window([id.x, id.y]);
+    let [x, y] = g.first([id.x, id.y]);
+    let t_of = |c: u32| f32::from_bits(seen_at(beams, beam::Grid::line(c) + beam::LINE_T));
+    let first = g.corner_index([x - k, y - k]);
     let (mut least, mut from) = (t_of(first), first);
     let mut j = y - k;
     while j <= y + 1 + k {
         let mut i = x - k;
         while i <= x + 1 + k {
-            let c = j * corners[0] + i;
+            let c = g.corner_index([i, j]);
             let t = t_of(c);
             if t < least {
                 (least, from) = (t, c);
@@ -714,17 +760,19 @@ pub fn cells_cs(
         }
         j += 1;
     }
-    let cell = beam::cells_at(corners[0] * corners[1]) + (y * corners[0] + x) * beam::CELL_WORDS;
+    let cell = g.cell_at([id.x, id.y]);
     seen_put(beams, cell + beam::CELL_T, least.to_bits());
     seen_put(beams, cell + beam::CELL_CORNER, from);
 }
 
-/// Each sample of the screen (pxl-spec-core `beam::samples`), a thread each:
+/// Each sample of the screen (pxl-spec-core `beam::Grid::samples`), a thread each:
 /// its ray resumed from its cell's start as a pixel's is, walked to the
 /// block that fills through the observed pyramid writing what it asks
 /// (`Writing`), and the node and block it stopped at left for the pixels
 /// about it (`beam::SAMPLE_WORDS`), `beam::SAMPLE_NONE` where it went on
-/// to its reach, and whether what it stopped at lacks.
+/// to its reach, whether what it stopped at lacks, and what lies about the
+/// face it entered (`World::faced`), asked here once for every pixel that
+/// takes the block.
 #[spirv(compute(threads(8, 8, 1)))]
 #[allow(clippy::too_many_arguments)]
 pub fn sample_cs(
@@ -741,14 +789,13 @@ pub fn sample_cs(
 ) {
     let window: &[IVec4] = window;
     let (origin, detail) = eye_origin(eye);
-    let (tan, s) = (eye_tan(eye), beam::spacing(detail));
-    let n = beam::samples(tan, s);
-    if id.x >= n[0] || id.y >= n[1] {
+    let g = grid(eye);
+    if id.x >= g.samples[0] || id.y >= g.samples[1] {
         return;
     }
-    let (ray, t, line) = started(eye, beams, beam::first(tan, s, beam::sample_cell(tan, s, [id.x, id.y])), beam::sample(tan, s, [id.x, id.y]));
+    let (ray, t, line) = started(eye, &g, beams, g.sample_cell([id.x, id.y]), g.sample([id.x, id.y]));
     let tag = observed::tag(seen_at(seen, observed::FRAME), 1);
-    let world = World {
+    let mut world = World {
         window,
         ground,
         looks,
@@ -758,20 +805,18 @@ pub fn sample_cs(
         pool: ways::tree::Read(pool),
     };
     let met = resumed(&mut Writing { world, seen, tag }, origin, &ray, detail, t, &line);
-    let corners = beam::corners(tan, s);
-    let base = beam::samples_at(corners[0] * corners[1]) + (id.y * n[0] + id.x) * beam::SAMPLE_WORDS;
+    let faces = world.faced(origin, &ray, &met);
+    let base = g.sample_at([id.x, id.y]);
     let stop = met.stop;
-    seen_put(beams, base + beam::SAMPLE_ZOOM, if met.ends == Ends::On { beam::SAMPLE_NONE } else { stop.node.zoom });
+    node_put(beams, base + beam::SAMPLE_NODE, &stop.node);
+    if met.ends == Ends::On {
+        seen_put(beams, base + beam::SAMPLE_NODE + beam::NODE_ZOOM, beam::SAMPLE_NONE);
+    }
     seen_put(beams, base + beam::SAMPLE_LACKS, (met.ends == Ends::Lacks) as u32);
-    seen_put(beams, base + beam::SAMPLE_CORNER, stop.node.corner[0]);
-    seen_put(beams, base + beam::SAMPLE_CORNER + 1, stop.node.corner[1]);
-    seen_put(beams, base + beam::SAMPLE_CORNER + 2, stop.node.corner[2]);
-    seen_put(beams, base + beam::SAMPLE_ROOTS, stop.node.roots[0] as u32);
-    seen_put(beams, base + beam::SAMPLE_ROOTS + 1, stop.node.roots[1] as u32);
-    seen_put(beams, base + beam::SAMPLE_ROOTS + 2, stop.node.roots[2] as u32);
     seen_put(beams, base + beam::SAMPLE_BLOCK, stop.block[0]);
     seen_put(beams, base + beam::SAMPLE_BLOCK + 1, stop.block[1]);
     seen_put(beams, base + beam::SAMPLE_AXIS, stop.axis);
+    seen_put(beams, base + beam::SAMPLE_FACES, faces);
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
@@ -779,34 +824,42 @@ pub fn sample_cs(
 type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// Each pixel's ray: the nearest of the blocks the samples about it stopped
-/// at that it enters (pxl-spec-core `beam::about`, `cast::entry`), its
+/// at that it enters (pxl-spec-core `beam::Grid::about`, `cast::entry`), its
 /// words, no step its own; where it enters none, or a node a sample lacks
 /// at before it, the ray from its cell's start, reading the
 /// observed pyramid alone (`Reading`), its binding read-only so no read of
-/// it is atomic: its words where every node it asked was kept, else the
-/// pixel listed in the beam rays' buffer for `miss_cs` (pxl-spec-core
-/// `beam::list_at`).
+/// it is atomic: its words where every node it asked was kept, else its
+/// first word the mark `miss_cs` walks it again by (pxl-spec-core
+/// `ray::MISS`). A block a sample stopped at comes with what lies about
+/// its face, the sample's; a pixel that walked itself asks the world's
+/// query its own (`World::faced`).
 #[spirv(compute(threads(8, 8, 1)))]
+#[allow(clippy::too_many_arguments)]
 pub fn cast_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
+    // Read-write as the group lays them out, which WebGPU holds a shader's
+    // own access to; no atomic touches them here, so their reads stay
+    // plain.
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    // Read-write as the group lays it out, which WebGPU holds a shader's
-    // own access to; no atomic touches it here, so its reads stay plain.
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
-    let seen: &Seen = seen;
+    let (seen, beams, window): (&Seen, &Beams, &[IVec4]) = (seen, beams, window);
     let size: UVec3 = rays.query_size();
     if id.x >= size.x || id.y >= size.y {
         return;
     }
     let (origin, detail) = eye_origin(eye);
-    let (tan, s) = (eye_tan(eye), beam::spacing(detail));
+    let g = grid(eye);
     let px = pixel_tan(eye, id, size);
-    let (ray, t, line) = started(eye, beams, beam::cell(tan, s, px), px);
-    let (corners, n, about) = (beam::corners(tan, s), beam::samples(tan, s), beam::about(tan, s, px));
-    let samples = beam::samples_at(corners[0] * corners[1]);
+    let (ray, t, line) = started(eye, &g, beams, g.cell(px), px);
+    let about = g.about(px);
     // The nearest block entered, at the reach where none is.
     let mut hit = cast::Stop {
         t: ray.reach,
@@ -815,21 +868,19 @@ pub fn cast_cs(
         at: 0u32,
         block: MISSED,
     };
+    // What lies about its face, the sample's.
+    let mut faces = 0;
     // The nearest node a sample lacks at that the ray enters.
     let mut lack = ray.reach;
     let mut j = 0;
     while j < 2 * beam::NEAR {
         let mut i = 0;
         while i < 2 * beam::NEAR {
-            let k = samples + ((about[1] + j) * n[0] + about[0] + i) * beam::SAMPLE_WORDS;
-            let zoom = seen_at(beams, k + beam::SAMPLE_ZOOM);
-            if zoom != beam::SAMPLE_NONE {
-                let node = cast::Node {
-                    corner: [seen_at(beams, k + beam::SAMPLE_CORNER), seen_at(beams, k + beam::SAMPLE_CORNER + 1), seen_at(beams, k + beam::SAMPLE_CORNER + 2)],
-                    zoom,
-                    roots: [seen_at(beams, k + beam::SAMPLE_ROOTS) as i32, seen_at(beams, k + beam::SAMPLE_ROOTS + 1) as i32, seen_at(beams, k + beam::SAMPLE_ROOTS + 2) as i32],
-                };
-                let (enter, axis, enters) = cast::entry(origin, &ray, &node);
+            let k = g.sample_at([about[0] + i, about[1] + j]);
+            if seen_at(beams, k + beam::SAMPLE_NODE + beam::NODE_ZOOM) != beam::SAMPLE_NONE {
+                let node = node_at(beams, k + beam::SAMPLE_NODE);
+                let block = [seen_at(beams, k + beam::SAMPLE_BLOCK), seen_at(beams, k + beam::SAMPLE_BLOCK + 1)];
+                let (enter, axis, enters) = cast::entry(origin, &ray, &node, block[0]);
                 let lacks = seen_at(beams, k + beam::SAMPLE_LACKS) != 0;
                 // A block's face the pixel enters across another axis than its
                 // sample did lies under what the sample passed: not the
@@ -843,8 +894,9 @@ pub fn cast_cs(
                         axis,
                         node,
                         at: 0u32,
-                        block: [seen_at(beams, k + beam::SAMPLE_BLOCK), seen_at(beams, k + beam::SAMPLE_BLOCK + 1)],
+                        block,
                     };
+                    faces = seen_at(beams, k + beam::SAMPLE_FACES);
                 }
             }
             i += 1;
@@ -853,40 +905,288 @@ pub fn cast_cs(
     }
     let steps = eye.origin.w != 0;
     if hit.t < ray.reach && hit.t < lack {
-        written(rays, id, word(&ray, Met { ends: Ends::Stop, stop: hit, visits: 0 }, steps));
+        written(rays, id, word(&ray, Met { ends: Ends::Stop, stop: hit, visits: 0 }, steps, faces));
         return;
     }
     let met = resumed(&mut Reading { seen }, origin, &ray, detail, t, &line);
-    // Listed through the buffer as bound: naga's atomics trace no pointer a
-    // walk's state carries.
     if met.ends == Ends::Lacks && met.stop.block[0] == MISSED[0] {
-        let k = seen_add(beams, beam::MISSES, 1);
-        seen_put(beams, beam::list_at(corners[0] * corners[1], n[0] * n[1]) + k, id.x | id.y << 16);
+        // SAFETY: within the rays, bounded by their size above.
+        unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
     } else {
-        written(rays, id, word(&ray, met, steps));
+        let mut world = World {
+            window,
+            ground,
+            looks: Unlooked(0),
+            shards,
+            overwrites,
+            eye,
+            pool: ways::tree::Read(pool),
+        };
+        written(rays, id, word(&ray, met, steps, world.faced(origin, &ray, &met)));
     }
 }
 
-/// The dispatch `miss_cs` runs by, off how many pixels missed: a workgroup
-/// each `MISS_THREADS` of them, in rows of `MISS_ROW` workgroups, as no
-/// dispatch is wider than WebGPU's floor of 65,535 a side
-/// (`dispatch_indirect`'s three words).
-#[spirv(compute(threads(1, 1, 1)))]
-pub fn args_cs(#[spirv(storage_buffer, descriptor_set = 0, binding = 0)] beams: &Beams, #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] args: &mut [u32]) {
-    let groups = seen_at(beams, beam::MISSES).div_ceil(MISS_THREADS);
-    put(args, 0, groups.min(MISS_ROW));
-    put(args, 1, groups.div_ceil(MISS_ROW));
-    put(args, 2, 1);
+/// The world's depth from the sun, a slot of the sun's clipmap each
+/// (pxl-spec-core `sun`): the slot's texel of the light box, and its ray
+/// from the box's near plane along the sun's rays, walked through the
+/// world's one query to the block that fills (`cast::first`) as the eye's
+/// are, each node asked at the zoom the eye's rays ask it, and the word it
+/// leaves there; none walked where the slot held its world texel last cast
+/// and the eye asks its stop as it did (`Sun::kept`, `Sun::stands`), its
+/// ray passing over no node the world's query answers otherwise since
+/// (`moved`, `sun::over`). Its one layer read and written in place, the one
+/// format family WebGPU lets a shader do both to, as the rays' are.
+type SunWords = Image!(2D, format = r32ui, sampled = false, arrayed = true);
+
+/// The nodes the world's query answers otherwise than when the sun's map
+/// was last cast (pxl-spec-core `sun::MOVED_WORDS`): how many and the
+/// coarsest zoom the eye asks within the light box (`Sun::farthest`), then
+/// each X, Y, its zoom, and 1 for a preview's cut, whose top bounds
+/// nothing (`moved_top`), else 0.
+#[repr(C)]
+pub struct SunMoved {
+    pub len: UVec4,
+    pub at: [IVec4; pxl_spec_core::sun::MOVED],
+}
+const _: () = assert!(core::mem::size_of::<SunMoved>() == at_word(pxl_spec_core::sun::MOVED_WORDS));
+const MOVED: usize = pxl_spec_core::sun::MOVED;
+
+/// The sun's cast off the eye's words (pxl-spec-core `sun::Sun::words`).
+fn sun_of(eye: &Eye) -> pxl_spec_core::sun::Sun {
+    let v3 = |v: Vec4| [v.x, v.y, v.z];
+    let i = |v: Vec4| v.w.to_bits() as i32;
+    pxl_spec_core::sun::Sun {
+        first: v3(eye.sun[0]),
+        reach: eye.sun[0].w,
+        across: v3(eye.sun[1]),
+        down: v3(eye.sun[2]),
+        dir: v3(eye.sun[3]),
+        bias: v3(eye.sun[4]),
+        corner: [i(eye.sun[1]), i(eye.sun[2])],
+        kept: [i(eye.sun[3]), i(eye.sun[4])],
+    }
 }
 
-/// `miss_cs`'s threads a workgroup, and its workgroups a row.
-const MISS_THREADS: u32 = 64;
-const MISS_ROW: u32 = 65_535;
+/// Slot `slot` of the clipmap `size` a side: its texel's ray, from where
+/// and at what zooms, and whether it walks again, where its world texel
+/// was not held, the eye asks its stop at another zoom, or its ray passes
+/// over a node moved where it may meet what the node holds now, `tops`
+/// how high that reaches (`moved_top`, pxl-spec-core `sun::below`).
+fn sun_slot(eye: &Eye, sun: &SunWords, moved: &SunMoved, tops: &[i32; MOVED], size: u32, slot: UVec3) -> (bool, [i32; 3], cast::Ray, Detail) {
+    let s = sun_of(eye);
+    let p = s.texel(size, [slot.x, slot.y]);
+    let (origin, mut detail) = eye_origin(eye);
+    let (o, ray, from) = pxl_spec_core::sun::ray(origin, &s, p);
+    detail.eye = from;
+    let mut walks = true;
+    if s.kept(size, p) {
+        let held: u32 = sun.read(slot);
+        if s.stands(detail, held) {
+            let t = pxl_spec_core::sun::depth_of(held) * s.reach;
+            let lacked = pxl_spec_core::sun::Held::NONE.with(held).lacked;
+            let mut k = 0;
+            while k < moved.len.x {
+                let n = moved.at[k as usize];
+                let top = if lacked { pxl_spec_core::sun::NO_TOP } else { tops[k as usize] };
+                let from = pxl_spec_core::sun::below(o[2], 0.0, s.dir[2], top, t - s.pushed());
+                if pxl_spec_core::sun::over_any(o, [[0.0; 2]; 2], s.dir, [from, t], [n.x, n.y], n.z as u32) {
+                    break;
+                }
+                k += 1;
+            }
+            walks = k < moved.len.x;
+        }
+    }
+    (walks, o, ray, detail)
+}
 
-/// Each pixel `cast_cs` listed, its ray again from its cell's start,
-/// writing what it asks into the observed pyramid (`Writing`): a thread a
-/// pixel listed.
+/// How high what moved node `n` holds now may reach, as a Q3 z: the
+/// ground's and the ways' bound over it at every zoom the eye asks within
+/// the light box, from `far` (`SunMoved`) to its finest
+/// (`window::bound_over`), no lower than the sea, rounded up as each of
+/// those zooms' blocks round it (`ground::slab`); none (`sun::NO_TOP`) for
+/// a preview's cut, or where no window holds it.
+fn moved_top<L: Looks>(world: &World<'_, L>, eye: &Eye, far: u32, n: IVec4) -> i32 {
+    if n.w != 0 {
+        return pxl_spec_core::sun::NO_TOP;
+    }
+    let zoom = n.z as u32;
+    let near = eye.range.y;
+    let far = if far < near { far } else { near };
+    let first = ground::coarsest(zoom, far);
+    let cells = [if first > near { near } else { first }, near];
+    let mut place = Found::NONE;
+    let (b, _, here) = window::bound_over(world, &mut place, cells, (zoom, [n.x, n.y]));
+    if !here {
+        return pxl_spec_core::sun::NO_TOP;
+    }
+    let hi = if b[0][1] > b[1][1] { b[0][1] } else { b[1][1] };
+    let hi = if hi > pxl_spec_core::SEA_LEVEL { hi } else { pxl_spec_core::SEA_LEVEL };
+    let over = ground::slab(pxl_spec_core::area::Shard::UNKNOWN, (zoom, [n.x, n.y, 0]), [b[0][0], hi], [far, near], false)[1];
+    pxl_spec_core::sun::top_of(if over > hi { over } else { hi })
+}
+
+/// Each moved node's top (`moved_top`), a lane a node, into the
+/// workgroup's `tops` every lane reads past the barrier.
+fn moved_tops<L: Looks>(world: &World<'_, L>, eye: &Eye, moved: &SunMoved, lane: u32, tops: &mut [i32; MOVED]) {
+    if lane < moved.len.x && lane < MOVED as u32 {
+        // SAFETY: both bounded by `MOVED` just above, and unchecked so no
+        // lane leaves before the barrier, which they all reach.
+        unsafe { *tops.index_unchecked_mut(lane as usize) = moved_top(world, eye, moved.len.y, *moved.at.index_unchecked(lane as usize)) };
+    }
+    spirv_std::arch::workgroup_memory_barrier_with_group_sync();
+}
+
+/// The sun's clipmap's tiles a slot of which may walk again, listed
+/// (pxl-spec-core `sun::TILE`): a thread a tile, judged whole — whether its
+/// run of box texels was all kept, whether the eye asks the zoom its stops
+/// were cast at wherever in their box it looks (`Sun::tile_stands`), and
+/// whether its rays together pass over a node moved (`sun::over_any`) —
+/// and the tile appended where it may, its row of the walk's dispatch with
+/// it; the walk judges each slot of a listed tile itself (`sun_slot`). A
+/// slot's own judgement for every slot of every tile, its rays against
+/// every node moved, cost the shadows tens of milliseconds a moving frame.
 #[spirv(compute(threads(64, 1, 1)))]
+#[allow(clippy::too_many_arguments)]
+pub fn sun_mark_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(local_invocation_index)] lane: u32,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
+    #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &SunMoved,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
+    #[spirv(workgroup)] tops: &mut [i32; MOVED],
+) {
+    let world = World {
+        window,
+        ground,
+        looks: Unlooked(0),
+        shards,
+        overwrites,
+        eye,
+        pool: ways::tree::Read(pool),
+    };
+    moved_tops(&world, eye, moved, lane, tops);
+    let size: UVec3 = sun.query_size();
+    let t = pxl_spec_core::sun::TILE;
+    let across = size.x / t;
+    if id.x >= across * across {
+        return;
+    }
+    let tile = [id.x % across, id.x / across];
+    let s = sun_of(eye);
+    let (p, run) = s.tile_texel(size.x, tile);
+    let mut walks = !run || !s.tile_kept(size.x, p);
+    if !walks {
+        // Its slots' words, as one: the stops they hold and the zoom they
+        // were asked at, judged where they lie as a box.
+        let mut held = pxl_spec_core::sun::Held::NONE;
+        let mut k = 0;
+        while k < t * t {
+            let word: u32 = sun.read(UVec3::new(tile[0] * t + k % t, tile[1] * t + k / t, 0));
+            held = held.with(word);
+            k += 1;
+        }
+        let (origin, detail) = eye_origin(eye);
+        walks = !s.tile_stands(detail, p, held);
+        if !walks && moved.len.x != 0 {
+            // Its rays as one: the lowest start, the nearest stop and the
+            // deepest reach (pxl-spec-core `sun::below`).
+            let (o, off) = s.tile_rays(origin, p);
+            let share = s.reach / pxl_spec_core::sun::DEPTH_ONE as f32;
+            let (reach, near) = (held.reach as f32 * share, held.near as f32 * share - s.pushed());
+            let drop = s.tile_drop();
+            let mut n = 0;
+            while n < moved.len.x {
+                let m = moved.at[n as usize];
+                let top = if held.lacked { pxl_spec_core::sun::NO_TOP } else { tops[n as usize] };
+                let from = pxl_spec_core::sun::below(o[2], drop, s.dir[2], top, near);
+                if pxl_spec_core::sun::over_any(o, off, s.dir, [from, reach], [m.x, m.y], m.z as u32) {
+                    break;
+                }
+                n += 1;
+            }
+            walks = n < moved.len.x;
+        }
+    }
+    if walks {
+        let at = add(list, pxl_spec_core::sun::LIST_COUNT as u32, 1);
+        let row = at / pxl_spec_core::sun::LIST_ACROSS + 1;
+        if pxl_spec_core::sun::LIST_ROWS < list.len() {
+            // SAFETY: just bounded by the slice's own length.
+            unsafe { spirv_std::arch::atomic_u_max::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(list.get_unchecked_mut(pxl_spec_core::sun::LIST_ROWS), row) };
+        }
+        put(list, pxl_spec_core::sun::LIST_AT as u32 + at, tile[1] << 16 | tile[0]);
+    }
+}
+
+const _: () = assert!(pxl_spec_core::sun::TILE == 8, "`sun_cs` is a workgroup a tile, its threads a side of it");
+
+/// The world's depth from the sun into the slots the mark found walk again
+/// (`sun_mark_cs`): a workgroup a listed tile, a thread a slot, each walked
+/// through the world's one query to the block that fills (`cast::first`)
+/// as the eye's rays are, and the word it leaves there.
+#[spirv(compute(threads(8, 8, 1)))]
+#[allow(clippy::too_many_arguments)]
+pub fn sun_cs(
+    #[spirv(workgroup_id)] group: UVec3,
+    #[spirv(local_invocation_id)] lane: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
+    #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &SunMoved,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &[u32],
+    #[spirv(workgroup)] tops: &mut [i32; MOVED],
+) {
+    let window: &[IVec4] = window;
+    let mut world = World {
+        window,
+        ground,
+        looks: Unlooked(0),
+        shards,
+        overwrites,
+        eye,
+        pool: ways::tree::Read(pool),
+    };
+    let t = pxl_spec_core::sun::TILE;
+    // Before any lane leaves: the barrier is every lane's.
+    moved_tops(&world, eye, moved, lane.y * t + lane.x, tops);
+    let size: UVec3 = sun.query_size();
+    let k = group.y * pxl_spec_core::sun::LIST_ACROSS + group.x;
+    if k >= at(list, pxl_spec_core::sun::LIST_COUNT as u32) {
+        return;
+    }
+    let tile = at(list, pxl_spec_core::sun::LIST_AT as u32 + k);
+    let slot = UVec3::new((tile & 0xffff) * t + lane.x, (tile >> 16) * t + lane.y, 0);
+    if slot.x >= size.x || slot.y >= size.y {
+        return;
+    }
+    let (walks, o, ray, detail) = sun_slot(eye, sun, moved, tops, size.x, slot);
+    if !walks {
+        return;
+    }
+    let s = sun_of(eye);
+    let met = cast::first(&mut world, o, &ray, detail, Until::Fills);
+    // SAFETY: within the map, bounded by its size above.
+    unsafe { sun.write(slot, s.word_of(detail, &met)) };
+}
+
+/// Each pixel `cast_cs` marked missed, its ray again from its cell's
+/// start, writing what it asks into the observed pyramid (`Writing`), and
+/// what lies about the face it stopped on (`World::faced`): a thread a
+/// drawn pixel, as the cast's, each but the marked returning at once. It
+/// runs after `cast_cs` in the cast's one pass and writes every marked
+/// pixel's words whole, so the mark never outlives the pass.
+#[spirv(compute(threads(8, 8, 1)))]
 #[allow(clippy::too_many_arguments)]
 pub fn miss_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -902,19 +1202,20 @@ pub fn miss_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
     let (window, beams): (&[IVec4], &Beams) = (window, beams);
-    let k = id.y * MISS_ROW * MISS_THREADS + id.x;
-    if k >= seen_at(beams, beam::MISSES) {
+    let size: UVec3 = rays.query_size();
+    if id.x >= size.x || id.y >= size.y {
+        return;
+    }
+    let first: u32 = rays.read(UVec3::new(id.x, id.y, 0));
+    if first != ray::MISS {
         return;
     }
     let (origin, detail) = eye_origin(eye);
-    let (tan, s) = (eye_tan(eye), beam::spacing(detail));
-    let (corners, n) = (beam::corners(tan, s), beam::samples(tan, s));
-    let listed = seen_at(beams, beam::list_at(corners[0] * corners[1], n[0] * n[1]) + k);
-    let p = UVec3::new(listed & 0xffff, listed >> 16, 0);
-    let px = pixel_tan(eye, p, rays.query_size());
-    let (ray, t, line) = started(eye, beams, beam::cell(tan, s, px), px);
+    let g = grid(eye);
+    let px = pixel_tan(eye, id, size);
+    let (ray, t, line) = started(eye, &g, beams, g.cell(px), px);
     let tag = observed::tag(seen_at(seen, observed::FRAME), 2);
-    let world = World {
+    let mut world = World {
         window,
         ground,
         looks,
@@ -924,7 +1225,7 @@ pub fn miss_cs(
         pool: ways::tree::Read(pool),
     };
     let met = resumed(&mut Writing { world, seen, tag }, origin, &ray, detail, t, &line);
-    written(rays, p, word(&ray, met, eye.origin.w != 0));
+    written(rays, id, word(&ray, met, eye.origin.w != 0, world.faced(origin, &ray, &met)));
 }
 
 /// What the observed pyramid kept forgotten, a thread an entry, where what
@@ -1623,11 +1924,12 @@ pub fn decor_cs(
     // SAFETY: an atomic add on the slot's head, its count.
     let n = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut out[scatter::head_at(square) as usize], 1) };
     let i = scatter::record_at(square * SQUARE_GROWN + n).0 as usize;
-    if n < SQUARE_GROWN && i + 3 < out.len() {
+    if n < SQUARE_GROWN && i + 4 < out.len() {
         out[i] = scatter::record_word(kind, g.variant, g.turn, cell);
         out[i + 1] = g.at[0] as u32;
         out[i + 2] = g.at[1] as u32;
         out[i + 3] = g.at[2] as u32;
+        out[i + 4] = g.sink;
     }
 }
 
@@ -1690,12 +1992,7 @@ fn count_one(eye: &Eye, params: &[u32], rows: &[Decor], grown: &mut [u32], regio
     let w = grown[i];
     let (kind, variant, _, cell) = scatter::record_of(w);
     let corner = [grown[i + 1] as i32, grown[i + 2] as i32, grown[i + 3] as i32];
-    let origin = [eye.origin.x, eye.origin.y, eye.origin.z];
-    let detail = Detail {
-        tau: eye.right_tau.w,
-        range: [eye.range.x, eye.range.y],
-        eye: [0.0; 3],
-    };
+    let (origin, detail) = eye_origin(eye);
     // Its distance once, for the zoom it is drawn at and its size.
     let d2 = scatter::distance2(origin, corner);
     let here = cell == scatter::PLACED_AT || scatter::drawn_at(detail, d2, cell);
@@ -1775,7 +2072,7 @@ pub fn decor_place_cs(
 
 /// `decor_place_cs` for the record at word `i`.
 fn place_one(params: &[u32], rows: &[Decor], grown: &[u32], regions: &mut [u32], block: &mut [u32], i: usize) {
-    if i + 3 >= grown.len() {
+    if i + 4 >= grown.len() {
         return;
     }
     let w = grown[i];
@@ -1795,7 +2092,9 @@ fn place_one(params: &[u32], rows: &[Decor], grown: &[u32], regions: &mut [u32],
     // X about the anchor the short way round: leaf cells wrap at 2^24.
     let x = (((grown[i + 1] as i32).wrapping_sub(params[anchor] as i32)) << 8 >> 8) as f32 + across as f32 / 2.0;
     let y = (grown[i + 2] as i32).wrapping_sub(params[anchor + 1] as i32) as f32 + deep as f32 / 2.0;
-    let z = (grown[i + 3] as i32).wrapping_sub(params[anchor + 2] as i32) as f32;
+    // Its base as drawn: under its box's corner by its footing's kept top.
+    let sink = grown[i + 4] as f32 / (1 << pxl_spec_core::FRAC_W) as f32;
+    let z = (grown[i + 3] as i32).wrapping_sub(params[anchor + 2] as i32) as f32 - sink;
     let (room, slot) = (room as usize, slot as usize);
     block[slot] = x.to_bits();
     block[room + slot] = y.to_bits();

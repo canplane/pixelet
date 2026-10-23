@@ -136,7 +136,21 @@ A version is never changed once written, so a tile never changes under its key (
 
 ## Inside a cell
 
-A block drawn coarser than a leaf's cell is what its zoom holds, not a summary made for drawing (`pxl-spec space/layer/lattice.rs` `Lattice::fold`): the ground's cell of a coarse tile stands at its own folded height, a whole cube, its look the majority of the looks it folds ([doc/minutes/20261005-the-ground-is-a-carto-palette.md](./doc/minutes/20261005-the-ground-is-a-carto-palette.md)); what is placed folds to the kind most of its fill is, a whole cube where half or more is filled and nothing where less is (`pxl-spec-core overwrite.rs` `value`). Heights are units at every zoom, so no ground is ever a cell part full.
+A block drawn coarser than a leaf's cell is what its zoom holds, not a summary made for drawing (`pxl-spec space/layer/lattice.rs` `Lattice::fold`): the ground's cell of a coarse tile stands at its own folded height, its look the majority of the looks it folds ([doc/minutes/20261005-the-ground-is-a-carto-palette.md](./doc/minutes/20261005-the-ground-is-a-carto-palette.md)), whole under its top block and filling the share of that block its height reaches (`pxl-spec-core ground.rs` `top`); what is placed and the ways fold to the kind most of their fill is, and the share of the cube that fills (`overwrite.rs` `value`, `filled`).
+
+A coarse block's fill is the coverage of its cube by the ground and what is written over it together, a kind that fills added beside the ground and air taken from it (`answer.rs` `cover`); it keeps that fill in eighths, floored (`eighths`), and is drawn as its cube shrunk about the cell's center by the cube root of what it keeps, so its volume is its fill, floating over what is under it (`cast.rs` `kept_bounds`). Nothing is drawn where it keeps none, and the block under a shrunk top is ground, which no cave takes (`ground.rs` `Cell::opens`). A ray stops where it enters the box and passes it as air where it misses — the eye's walk, a pixel taking a sample's block (`cast::entry`), the sun's and the pointer's alike — while a beam ray stops at its node and a bound stays the whole node, both conservative. A shrunk block's edges all meet the air, and it closes in no edge of a block beside it (`faces.rs` `BOX`, `answer.rs` `whole`); the ray's first word carries the eighths it keeps, so the screen pass draws the box (`ray.rs` `KEPT_SHIFT`). A leaf's block keeps its cube whole, so nothing walked or edited at the leaves changes.
+
+```text
+   eight voxels, one solid            the box that replaces them
+
+        ┌───┬───┐                          ┌───────┐
+        │   │   │                          │       │
+        ├───┼───┤   fill = 1/8             │  ┌─┐  │
+        │▓▓▓│   │   ∛(1/8) = 1/2  ──────▶  │  │▓│  │
+        └───┴───┘                          │  └─┘  │
+                                           └───────┘
+                                            half the side, an eighth the volume
+```
 
 Flat ground at a distance therefore reads as separated cubes rather than a sheet — the cost of a rule that treats every axis alike, taken over rules where orientation would decide whether a thing exists. What is folded is a summary, not what is held: nothing in a folded cell is struck, hidden or cut by a preview (`control/interaction.rs` `Picked`, the zoom the eye's rays draw at the struck point by `query/ray.rs` `by_distance`), and nothing in one is pointed at.
 

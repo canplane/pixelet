@@ -23,32 +23,34 @@ pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
 /// Decor draw: (block handle, group, instance count, uniform, pipeline); the
 /// uniform carries the group's first lane word, stride and index-list start.
 pub const PIPELINE_DECOR: u32 = 0;
-/// Half transparent and biased toward the eye.
+/// Half transparent, at the depth of the faces it lies on, which stand
+/// behind it (screen_rays.wgsl `behind`).
 pub const PIPELINE_GHOST_BOX: u32 = 1;
-pub const PIPELINE_GHOST_BOX_COPLANAR: u32 = 2;
-pub const PIPELINE_GHOST_DECOR: u32 = 3;
+pub const PIPELINE_GHOST_DECOR: u32 = 2;
 /// Position 3, normal 3, UV 2, joints 4 (u32), weights 4; indices follow the vertex lanes.
 pub const MODEL_VERTEX_WORDS: u32 = 16;
 /// (model handle, joint palette handle, model id, uniform, pipeline); uniform
 /// float 4 is the turn about Z.
-pub const PIPELINE_SKINNED: u32 = 4;
+pub const PIPELINE_SKINNED: u32 = 3;
 /// Zone: (zone block handle, instance count, 0, uniform, pipeline). Beacon:
 /// (0, night, 0, uniform, pipeline), uniform float 4 its spin.
-pub const PIPELINE_PUCK_ZONE: u32 = 5;
-pub const PIPELINE_PUCK_BEACON: u32 = 6;
+pub const PIPELINE_PUCK_ZONE: u32 = 4;
+pub const PIPELINE_PUCK_BEACON: u32 = 5;
 /// (block handle, count, 0, uniform, pipeline).
-pub const PIPELINE_BADGE: u32 = 7;
+pub const PIPELINE_BADGE: u32 = 6;
 /// Line segments: handle, line vertex count, face vertex count.
-pub const PIPELINE_DEBUG: u32 = 8;
+pub const PIPELINE_DEBUG: u32 = 7;
 /// Decor drawn as sprites where a variant is too small on screen for its model.
-pub const PIPELINE_IMPOSTOR: u32 = 9;
+pub const PIPELINE_IMPOSTOR: u32 = 8;
+/// The camera grid over the screen (camera_grid.wgsl): (0, 0, 0, uniform,
+/// pipeline). Listed, it also tints the rays' blocks (`frame_gizmo`).
+pub const PIPELINE_CAMERA_GRID: u32 = 9;
 
 /// Every pipeline a draw record names, in the order a frame's census counts
 /// them (pxl-kernel profiler.json CENSUS_TAGS): what the list draws is these.
 pub const DRAW_PIPELINES: [u32; 10] = [
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,
-    PIPELINE_GHOST_BOX_COPLANAR,
     PIPELINE_GHOST_DECOR,
     PIPELINE_SKINNED,
     PIPELINE_PUCK_ZONE,
@@ -56,6 +58,7 @@ pub const DRAW_PIPELINES: [u32; 10] = [
     PIPELINE_BADGE,
     PIPELINE_DEBUG,
     PIPELINE_IMPOSTOR,
+    PIPELINE_CAMERA_GRID,
 ];
 
 /// A draw record's (draws, triangles), by its pipeline's place in `DRAW_PIPELINES`.

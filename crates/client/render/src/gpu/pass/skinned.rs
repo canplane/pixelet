@@ -5,15 +5,16 @@
 
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
+use crate::frame::shader::record::PIPELINE_SKINNED_DEPTH;
 
 use crate::gpu::api::{bytes, Gpu, Image};
-
 use crate::gpu::blocks::Blocks;
-use crate::gpu::pass::model::{draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, DRAW_BYTES};
+use crate::gpu::pass::model::{draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
 
 pub struct SkinnedPass {
     lit: Built,
+    depth: Built,
     uniforms: DrawUniforms,
     /// Each model's skin image, as the frame hands them.
     skins: Vec<(u32, Image)>,
@@ -23,6 +24,7 @@ impl SkinnedPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> SkinnedPass {
         SkinnedPass {
             lit: pipelines.build(g, PIPELINE_SKINNED, g.canvas()),
+            depth: pipelines.build(g, PIPELINE_SKINNED_DEPTH, g.canvas()),
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
             skins: Vec::new(),
         }
@@ -56,9 +58,16 @@ impl SkinnedPass {
         }
     }
 
-    pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, frame: (u32, &mut u32)) {
+    /// Lit, or their depth from the sun (`Stage::Depth`), `frame` the group
+    /// 0 the stage reads.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {
         let Some(slots) = self.uniforms.slots() else { return };
-        draw_models(g, pass, &self.lit, self.lit.pipeline, frame, slots, 0, draws, |d| {
+        let pipeline = match stage {
+            Stage::Depth => self.depth.pipeline,
+            _ => self.lit.pipeline,
+        };
+        draw_models(g, pass, &self.lit, pipeline, frame, slots, 0, draws, |d| {
             let (mesh, vertex_cnt, index_cnt) = blocks.get(d[0])?;
             let skin = skin_made(self.image_of(d[2])?.0)?;
             Some(ModelDraw {

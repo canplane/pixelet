@@ -88,9 +88,10 @@ fn some_node(rng: &mut Rng, reach: f64) -> Node<3> {
 }
 
 /// Whole cells from a corner, and what the objects' pyramid holds at
-/// `zoom`'s cells, read through the store's query, with the corner in that
-/// zoom's cells.
-fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (FnvHashMap<[i32; 3], u32>, [i32; 2]) {
+/// `zoom`'s cells, read through the store's query, with the eighths of its
+/// cube it keeps (pxl-spec-core `answer::eighths`), where it keeps any, and
+/// the corner in that zoom's cells.
+fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (FnvHashMap<[i32; 3], (u32, u32)>, [i32; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
@@ -107,8 +108,9 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (FnvHashMap<[i32; 3], u
             for x in corner[0]..corner[0] + per {
                 let held = store.cursor((target, [x, y, z]), target);
                 let v = overwrite::value(&store.lanes(), held, Cut::NONE, target, [x, y, z]);
-                if v != VOID {
-                    out.insert([x, y, z], v);
+                let kept = pxl_spec_core::answer::eighths(overwrite::filled(&store.lanes(), held));
+                if v != VOID && kept > 0 {
+                    out.insert([x, y, z], (v, kept));
                 }
             }
         }
@@ -123,29 +125,31 @@ fn red() -> u32 {
 #[test]
 fn a_cell_folds_to_itself_on_a_leaf() {
     let (out, [x, y]) = folded(&[(3, 4, 5, red())], LEAF_ZOOM);
-    assert_eq!(out.get(&[x + 3, y + 4, 5]), Some(&red()));
+    assert_eq!(out.get(&[x + 3, y + 4, 5]), Some(&(red(), 8)));
     assert_eq!(out.len(), 1);
 }
 
 #[test]
-fn a_lone_cube_goes_at_the_first_fold_and_a_slab_of_half_stays() {
-    assert!(folded(&[(0, 0, 0, red())], LEAF_ZOOM - 1).0.is_empty());
+fn a_lone_cube_keeps_an_eighth_at_the_first_fold_and_none_at_the_next() {
+    let (out, [x, y]) = folded(&[(0, 0, 0, red())], LEAF_ZOOM - 1);
+    assert_eq!(out.get(&[x, y, 0]), Some(&(red(), 1)));
+    assert!(folded(&[(0, 0, 0, red())], LEAF_ZOOM - 2).0.is_empty());
     let (out, [x, y]) = folded(&[(0, 0, 0, red()), (1, 0, 0, red()), (0, 1, 0, red()), (1, 1, 0, red())], LEAF_ZOOM - 1);
-    assert_eq!(out.get(&[x, y, 0]), Some(&red()));
+    assert_eq!(out.get(&[x, y, 0]), Some(&(red(), 4)));
 }
 
 #[test]
 fn a_solid_block_keeps_folding_while_it_fills_its_parent() {
     let cube: Vec<_> = (0..64).map(|k| (k % 4, k / 4 % 4, k / 16, red())).collect();
     let (out, [x, y]) = folded(&cube, LEAF_ZOOM - 2);
-    assert_eq!(out.get(&[x, y, 0]), Some(&red()));
+    assert_eq!(out.get(&[x, y, 0]), Some(&(red(), 8)));
     assert_eq!(out.len(), 1);
 }
 
 #[test]
 fn air_is_a_value_and_folds_like_one() {
     let (out, [x, y]) = folded(&[(0, 0, 0, AIR), (1, 0, 0, AIR), (0, 1, 0, AIR), (1, 1, 0, AIR), (0, 0, 1, AIR)], LEAF_ZOOM - 1);
-    assert_eq!(out.get(&[x, y, 0]), Some(&AIR));
+    assert_eq!(out.get(&[x, y, 0]), Some(&(AIR, 5)));
 }
 
 fn cube_at(store: &mut Store, [x, y, z]: [i32; 3], state: u32) {

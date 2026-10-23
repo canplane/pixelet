@@ -68,8 +68,9 @@ pub fn location_puck_step(device_coord: Option<Q3>) {
     scene.puck.step(draw, device_coord, night);
 }
 
-/// The box's center relative to the zone's (3), and its border flags (4).
-pub const ZONE_INSTANCE_FLOATS: usize = 7;
+/// The box's center relative to the zone's (3), its border flags (4), and
+/// the faces open to the air it draws (1, a bit a face).
+pub const ZONE_INSTANCE_FLOATS: usize = 8;
 const BEACON_Z_BIAS: f64 = 0.5;
 const BEACON_SMOOTH_RATE: f64 = 6.0;
 /// How far the beacon bobs either way, in units.
@@ -156,14 +157,26 @@ impl LocationPuck {
 
         let mut lane = core::mem::take(&mut self.lane);
         lane.clear();
-        for s in zone_samples() {
-            let v = v3::add(&center_pos, &s.off);
+        let cell = units(GROUND.cell());
+        // The box on the ground's cell `off` from the center, relative to it.
+        let box_at = |off: V3| {
+            let v = v3::add(&center_pos, &off);
             let coord = world::point(v[0], v[1], v[2]);
             // An unloaded neighbor tile falls back to the center's height; 0 would sink
             // or launch that instance.
             let delta_ele = world.surface_support(&coord).value().flatten().unwrap_or(center_pos[2]) - center_pos[2];
-            let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
-            let v = v3::center(&lifted, units(GROUND.cell()));
+            v3::center(&[off[0], off[1], off[2] + delta_ele], cell)
+        };
+        for s in zone_samples() {
+            let v = box_at(s.off);
+            // A side is open over a lower cell beside it, the top always, the
+            // bottom never: bit k for face k, in the box's order (+x, -x, +y,
+            // -y, +z, -z).
+            let side = |k: usize, d: [f64; 2]| {
+                let open = box_at([s.off[0] + d[0] * cell, s.off[1] + d[1] * cell, s.off[2]])[2] < v[2];
+                u32::from(open) << k
+            };
+            let open = side(0, [1.0, 0.0]) | side(1, [-1.0, 0.0]) | side(2, [0.0, 1.0]) | side(3, [0.0, -1.0]) | 1 << 4;
             lane.extend([
                 v[0] as f32,
                 v[1] as f32,
@@ -172,6 +185,7 @@ impl LocationPuck {
                 s.borders[1] as f32,
                 s.borders[2] as f32,
                 s.borders[3] as f32,
+                open as f32,
             ]);
         }
         if self.zone.as_ref().is_none_or(|z| z.center != center_pos) || self.drawn != lane {

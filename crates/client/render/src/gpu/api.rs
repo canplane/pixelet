@@ -478,6 +478,7 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
             format: TextureFormat::rgba16float,
             dimension: TextureViewDimension::_3d,
         },
+        record::SAMPLER_COMPARISON => L::Sampler(SamplerBindingType::comparison),
         _ => L::Sampler(SamplerBindingType::filtering),
     }
 }
@@ -636,7 +637,9 @@ impl Gpu {
     }
 
     /// A render pipeline from its record (frame/shader/record.rs) over the
-    /// group layouts, drawing into `format`, depth32 its depth.
+    /// group layouts, drawing into `format`, depth32 its depth: into the
+    /// depth alone where `format` is depth32's, its fragment writing no
+    /// colour (the sun's map, gpu/shadow.rs).
     pub fn pipeline(&self, words: &[u32], layouts: &[Id], module: Id, format: Format) -> Id {
         let mut at = record::HEAD as usize;
         let mut next = || {
@@ -722,7 +725,7 @@ impl Gpu {
                 fragment: (words[1] != 0).then_some(encode::FragmentState {
                     module,
                     entry: "fs",
-                    targets: &targets,
+                    targets: if format == Format::depth32float { &[] } else { &targets },
                 }),
             },
         ));

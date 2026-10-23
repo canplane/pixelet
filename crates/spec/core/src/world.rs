@@ -9,11 +9,11 @@
 //! "The query between them"): each source answers from its own level of
 //! detail, and what it holds stays behind it.
 
-use crate::answer::{fills, slab_of, slab_word, In, Kind, ANY, PLACED_BLOCK};
+use crate::answer::{cover, eighths, fills, kept_word, slab_of, slab_word, In, Kind, ANY, PLACED_BLOCK};
 use crate::area::Shard;
 use crate::caves::Cave;
 use crate::ground::{self, Held, VOID};
-use crate::overwrite::{self, Cut, Lanes, BLOCK, PLACED, SPLIT};
+use crate::overwrite::{self, Cut, Lanes, AIR, BLOCK, FULL, PLACED, SPLIT};
 use crate::window::{Found, Squares};
 use crate::{Zoom, LEAF_CELL};
 
@@ -94,11 +94,14 @@ impl At {
 /// It is a block where `near` is its zoom or coarser, or past the ground's
 /// cells where nothing placed or carved is finer in it (`overwrite::whole`):
 /// the world holds nothing finer than the node there. A block is what is
-/// placed in it, air included, else the ground's block with what the ways
-/// write over it (their tree's leaf there, `overwrite::value`, a bore's air
-/// the ground's void, `ways::tree::read`), one value whichever source holds it
+/// placed in it where that fills it whole, air included, else the ground's
+/// block with what the ways and what is placed write over it (their tree's
+/// leaf or fold there, `overwrite::value`, a bore's air the ground's void,
+/// `ways::tree::read`), one value whichever source holds it
 /// (doc/minutes/20261005-the-ground-is-a-carto-palette.md, "One value
-/// space"); `PLACED_BLOCK` over a placed value, the source control tells an
+/// space"), keeping the eighths of its cube they fill together over it
+/// (`answer::cover`, `answer::eighths`, `answer::KEPT_SHIFT`), air where
+/// that is none; `PLACED_BLOCK` over a placed value, the source control tells an
 /// edit by, which nothing drawn reads. Its second word is the four looks
 /// the ground's block is drawn by (`ground::Cell::four`, `ground::word`),
 /// none for any other. Coarser, a split where
@@ -126,16 +129,18 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     let (place, trail) = (&mut at.ground, &mut at.ways);
     let block = zoom >= near || zoom >= LEAF_CELL && overwrite::whole(put, carve, zoom, c);
     let over = overwrite::over(lanes, put, carve, hide, zoom, c, if block { zoom } else { near });
-    if over.says == BLOCK {
-        // The four looks a filling block is drawn by, a byte each
-        // (`ground::word`): only the ground's looks, a placed cube of a
-        // look, fit; one past a byte, an object's, is drawn by its value.
+    // The four looks a filling block of what is placed is drawn by, a byte
+    // each (`ground::word`): only the ground's looks, a placed cube of a
+    // look, fit; one past a byte, an object's, is drawn by its value.
+    let laid = || {
         let four = if fills(over.block) { overwrite::looks(lanes, put, hide, zoom, c, over.block) } else { [0; 4] };
         let bytes = four[0] < 256 && four[1] < 256 && four[2] < 256 && four[3] < 256;
-        return In {
-            kind: Kind::Block,
-            block: [PLACED_BLOCK | over.block, if bytes { ground::word(four) } else { 0 }],
-        };
+        [PLACED_BLOCK | over.block, if bytes { ground::word(four) } else { 0 }]
+    };
+    // Filling its cube whole, what is placed is the block, whatever is
+    // under it.
+    if over.says == BLOCK && over.fill == FULL {
+        return In { kind: Kind::Block, block: laid() };
     }
     // Where what is placed splits the node, where along z it may fill.
     let (placed, splits) = if over.says == SPLIT {
@@ -152,22 +157,54 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
             overwrite::Held::NOTHING
         };
     }
-    // The ways where the block's column was read: their leaf over it.
+    // The ways where the block's column was read: their leaf or fold over it.
     let way = if block && i.kind == Kind::Block && place.here() {
         overwrite::value(pool, *trail, Cut::NONE, zoom, c)
     } else {
         VOID
     };
-    let (value, wrote) = if way == VOID { (i.block, false) } else { (crate::ways::tree::read(way), true) };
     if block {
-        // The ground's block's four, or a way's look four times where one
-        // wrote it, whatever its value.
-        let four = match (i.kind, wrote) {
-            (Kind::Block, false) => ground::word(cell.four(zoom, i.block)),
-            (Kind::Block, true) => ground::word([value; 4]),
-            _ => 0,
+        // Where the ground is not held, the lack, unless what is placed
+        // keeps a block there alone.
+        let lacks = In { kind: i.kind, block: [i.block, 0] };
+        if i.kind == Kind::Lacks && over.says != BLOCK {
+            return lacks;
+        }
+        // The ground's block, the share of its cube it fills and its four
+        // looks; then what each layer writes over it, the ways and what is
+        // placed, its share kept with the ground's (`answer::cover`): the
+        // block keeps the eighths of its cube all of them fill
+        // (`answer::eighths`), its look the kind most of that is.
+        let mut value = if i.kind == Kind::Block { i.block } else { VOID };
+        let mut fill = if fills(value) { cell.cover(c[2]) } else { 0 };
+        let mut four = if fills(value) { ground::word(cell.four(zoom, value)) } else { 0 };
+        if way != VOID {
+            // A way's look four times where one wrote it, whatever its value.
+            let w = crate::ways::tree::read(way);
+            let (f, theirs) = cover(fill, w, overwrite::filled(pool, *trail));
+            if theirs || !fills(value) {
+                (value, four) = (w, ground::word([w; 4]));
+            }
+            fill = f;
+        }
+        if over.says == BLOCK {
+            let (f, theirs) = cover(fill, over.block, over.fill);
+            if theirs || !fills(value) {
+                [value, four] = laid();
+            }
+            fill = f;
+        }
+        let kept = eighths(fill);
+        if kept == 0 && i.kind == Kind::Lacks {
+            return lacks;
+        }
+        let block = if kept == 0 {
+            // Nothing kept: air, what is placed's where it is air.
+            [if over.says == BLOCK && over.block == AIR { PLACED_BLOCK | AIR } else { VOID }, 0]
+        } else {
+            [kept_word(value, kept), four]
         };
-        return In { kind: i.kind, block: [value, four] };
+        return In { kind: Kind::Block, block };
     }
     // Coarser, what is placed splits it where it may fill, and the ways
     // what the ground leaves air where they may; a split's slab is every
@@ -177,7 +214,7 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     let fill = ground::meets(ways, (zoom, c[2]), near);
     let kind = if splits || i.kind == Kind::Block && fill { Kind::Split } else { i.kind };
     if kind != Kind::Split {
-        return In { kind, block: [value, 0] };
+        return In { kind, block: [i.block, 0] };
     }
     let own = match i.kind {
         Kind::Split => slab_of(i.block),

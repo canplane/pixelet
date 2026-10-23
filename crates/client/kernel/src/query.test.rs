@@ -231,14 +231,16 @@ fn a_ray_from_over_the_world_meets_the_ground_where_its_line_does() {
     assert_eq!([hit.point[2], hit.t], [top, high - top], "{hit:?}");
 }
 
-/// A dig is met as the cells asked fold it, nothing finer: at the leaves'
-/// cells a cell dug less than half is whole, its top met by a ray, and a
-/// cell dug half or more is air, the ground under it met. A walker reads the
-/// cell as its four columns one zoom finer, and stands on what is left in
-/// any of them: on the half cubes over a dug lower half.
+/// A dig is met as the cells asked fold it, nothing finer: at the leaves' cells
+/// a cell dug in part keeps the eighths left, a box of their volume about the
+/// cell's center whose top a ray meets (`answer::side`), and a cell dug whole
+/// is air, the ground under it met. A walker reads the cell as its columns at
+/// the finest zoom placed in it, and stands on what is left as it is held:
+/// on the half cubes over a dug lower half.
 #[test]
 fn a_dig_is_met_as_the_cells_asked_fold_it() {
     use crate::layer::object::store::AIR;
+    use pxl_spec_core::answer::{side, EIGHTHS};
     let _g = serial();
     let (residency, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
@@ -250,12 +252,15 @@ fn a_dig_is_met_as_the_cells_asked_fold_it() {
         }
         store
     };
-    for (n, top, stands) in [(1, 5.0, 5.0), (3, 5.0, 5.0), (4, 4.0, 5.0), (8, 4.0, 4.0)] {
+    for (n, stands) in [(1, 5.0), (3, 5.0), (4, 5.0), (8, 4.0)] {
+        let left = EIGHTHS - n as u32;
+        let top = if left == 0 { 4.0 } else { 4.5 + f64::from(side(left)) / 2.0 };
         let store = dug(n);
         let access = World::new(&residency, &store);
         let at = [x + half / 2.0, y + half / 2.0];
         let hit = access.first_hit(&down(at), at_zoom(LEAF_ZOOM)).exact().flatten().unwrap();
-        assert_eq!(hit.point[2], top, "{n} of 8 dug: {hit:?}");
+        // The top as `cast::top` gives it, a share of the cell in f32.
+        assert!((hit.cube.max[2] - top).abs() < 1e-6, "{n} of 8 dug: {hit:?}");
         assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(stands)), "{n} of 8 dug");
     }
 }

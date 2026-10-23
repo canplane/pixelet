@@ -135,42 +135,71 @@ export const SETTINGS = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
+  /** The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world
+   * cast once more from the sun, a ray a texel through the world's query at
+   * the zooms the eye's rays ask (pxl-shader `sun_cs`), decor and the
+   * actors drawn into it depth only, and a 3x3 compare per fragment; 16 MB
+   * of map. */
+  shadows: {
+    key: 11 as number,
+    kind: "toggle",
+    default: false,
+    cost: "high",
+    section: "lighting",
+  },
+  /** The pixels the world is filled at, the GPU's largest cost: two to a
+   * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
+  resolution: {
+    key: 12 as number,
+    kind: "choice",
+    default: "auto",
+    options: ["auto", "fixed", "low"],
+    section: "display",
+  },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
   view: {
-    key: 11 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`). */
   profiler: {
-    key: 12 as number,
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (scene/indicator/coverage_gizmo.rs). */
   world_gizmo: {
-    key: 13 as number,
+    key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the blocks the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (scene/indicator/camera_gizmo.rs). */
+  camera_gizmo: {
+    key: 16 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+    dev: true,
+  },
   person: {
-    key: 14 as number,
+    key: 17 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 15 as number,
+    key: 18 as number,
     kind: "index",
     default: 5 as number,
     section: "character",
   },
   /** Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (crates/client/render/src/frame/shader/screen_rays.wgsl). */
   ray_steps: {
-    key: 16 as number,
+    key: 19 as number,
     kind: "toggle",
     default: false,
     section: "debug",
@@ -287,35 +316,56 @@ export const SETTINGS_SHIPPED = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
+  /** The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world
+   * cast once more from the sun, a ray a texel through the world's query at
+   * the zooms the eye's rays ask (pxl-shader `sun_cs`), decor and the
+   * actors drawn into it depth only, and a 3x3 compare per fragment; 16 MB
+   * of map. */
+  shadows: {
+    key: 11 as number,
+    kind: "toggle",
+    default: false,
+    cost: "high",
+    section: "lighting",
+  },
+  /** The pixels the world is filled at, the GPU's largest cost: two to a
+   * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
+  resolution: {
+    key: 12 as number,
+    kind: "choice",
+    default: "auto",
+    options: ["auto", "fixed", "low"],
+    section: "display",
+  },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
   view: {
-    key: 11 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`). */
   profiler: {
-    key: 12 as number,
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (scene/indicator/coverage_gizmo.rs). */
   world_gizmo: {
-    key: 13 as number,
+    key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 14 as number,
+    key: 17 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 15 as number,
+    key: 18 as number,
     kind: "index",
     default: 5 as number,
     section: "character",

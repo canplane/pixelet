@@ -13,9 +13,10 @@
 //! Heights are f32 here, as WGSL has them. WGSL's f32 is not strictly IEEE (a
 //! division's last place, a contraction into a fused multiply-add), so a
 //! height a CPU and a GPU compute from this one source can differ in the
-//! last bit where it rounds to a block at a half.
+//! last bit where it falls on an eighth of a block.
 
-use crate::answer::{bound_of, bound_word, slab_word, In, Kind, ANY};
+use crate::answer::{bound_of, bound_word, eighths, slab_word, In, Kind, ANY};
+use crate::overwrite::FULL;
 use crate::area::{earth, walled, Area, Shard};
 use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
@@ -206,14 +207,30 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
     }
 }
 
-/// A height in leaf cells as blocks of `cell`: shifted past the leaves, the
-/// mean rounded to even under them, as WGSL's `round` does.
+/// A height in leaf cells as blocks of `cell` (`top`).
 pub fn blocks(cell: Zoom, h: f32) -> i32 {
+    top(cell, h).0
+}
+
+/// A height in leaf cells as blocks of `cell`, and the share of the top one
+/// it fills, in `overwrite::FULL`'s units: shifted past the leaves, every
+/// block whole; under them, the mean in blocks, its top the block it ends
+/// in where it fills an eighth of it or more (`answer::eighths`), the share
+/// of it filled kept there, else the block under it, whole. So a coarse
+/// cell's ground is the volume its mean height fills, as a block of it is
+/// drawn: whole under its top, its top a box its share's volume.
+pub fn top(cell: Zoom, h: f32) -> (i32, u32) {
     let d = cell as i32 - LEAF_CELL as i32;
     if d >= 0 {
-        (h as i32) << d
+        return ((h as i32) << d, FULL);
+    }
+    let q = h / (1 << -d) as f32;
+    let under = libm::floorf(q);
+    let part = ((q - under) * FULL as f32) as u32;
+    if eighths(part) == 0 {
+        (under as i32, FULL)
     } else {
-        libm::rintf(h / (1 << -d) as f32) as i32
+        (under as i32 + 1, part)
     }
 }
 
@@ -297,19 +314,19 @@ pub fn by_depth(cell: Zoom, look: u32, top: i32, z: i32) -> u32 {
 ///
 /// Over it, past the highest top any of those zooms rounds `hi` to: a
 /// coarser zoom's block may round past a finer's. Under it, the lowest
-/// face's top block at those zooms, the ground a cave leaves there, where a
+/// face's top block and the one under it at those zooms, the ground a cave
+/// leaves there (`Cell::opens`), where a
 /// cave takes all of the node (`hollow`), no bedrock is in it and no wall
 /// is about it; else from the world's bottom. Nothing (`EMPTY`) where no
 /// zoom is asked within it.
 ///
 /// What fills the node is what of it lies in the slab (`meets`): its bottom
 /// and top are whole blocks of every zoom finer than it, an even count of
-/// each, and `blocks` rounds a height to the nearest block, a tie to the
-/// even one, so a zoom's top is at most the bottom exactly when the face
-/// is at most half that zoom's block over it, the finest zoom's saying it
-/// for all of them; and a zoom's lowest top block is at least the top
-/// exactly when the face is more than half that zoom's block over it, the
-/// coarsest's saying it.
+/// each, and `blocks` ends a height at the block it fills an eighth of or
+/// more (`top`), so a zoom's top is at most the bottom exactly when the
+/// face is under an eighth of that zoom's block over it, the finest zoom's
+/// saying it for all of them. A top kept short of whole still lies in it
+/// whole, which only splits more.
 pub fn slab(shard: Shard, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far, near]: [Zoom; 2], hollow: bool) -> [i32; 2] {
     let [lo, hi] = if zoom < SHARD_ZOOM { [lo.min(SEA_LEVEL), hi.max(SEA_LEVEL)] } else { [lo, hi] };
     // No bedrock in it: the bedrock's top, rounded at `near` as a face is,
@@ -322,7 +339,9 @@ pub fn slab(shard: Shard, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far,
         let top = face_height(z, blocks(z, hi as f32));
         over = if top > over { top } else { over };
         if caved {
-            let floor = face_height(z, blocks(z, lo as f32) - leaf_blocks(z));
+            // Its top block, and the block under it where the top is a box
+            // (`Cell::opens`).
+            let floor = face_height(z, blocks(z, lo as f32) - 2 * leaf_blocks(z));
             under = if floor < under { floor } else { under };
         }
         z += 1;
@@ -469,18 +488,31 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
 }
 
 /// A cell's ground, as a column reads it: its look (`unknown` for the
-/// service area's wall), its top in blocks of its zoom, and the four looks
-/// its fold took (`looks`, `dx + 2·dy`).
+/// service area's wall), its top in blocks of its zoom and the share of
+/// its top block it fills (`top`), and the four looks its fold took
+/// (`looks`, `dx + 2·dy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub look: u32,
     pub top: i32,
+    pub part: u32,
     pub fold: [u32; 4],
 }
 
 impl Cell {
     /// No ground: void at sea level, as a column no tile is read for.
-    pub const NONE: Cell = Cell { look: VOID, top: 0, fold: [VOID; 4] };
+    pub const NONE: Cell = Cell { look: VOID, top: 0, part: FULL, fold: [VOID; 4] };
+
+    /// The share of block `z` its ground fills, in `overwrite::FULL`'s
+    /// units, where a block of it fills there (`block`): whole under its
+    /// top block, its part there (`top`).
+    pub fn cover(&self, z: i32) -> u32 {
+        if z == self.top - 1 {
+            self.part
+        } else {
+            FULL
+        }
+    }
 
     /// Whether it has ground at all: a look the catalog grounds, or the wall.
     pub fn grounded(&self) -> bool {
@@ -490,10 +522,13 @@ impl Cell {
     /// Whether a cave may take block `z` of the cell at `cell`: the ground's
     /// one rule of where a cave may take it, ground under its face block, over
     /// its bedrock, off the area's wall, the face and the bedrock rounded to
-    /// blocks as the column rounds them.
+    /// blocks as the column rounds them. Under a top kept short of whole
+    /// is ground, as under a shrunk box, so the block under it is not taken
+    /// either.
     fn opens(&self, cell: Zoom, z: i32) -> bool {
         let face = face_height(cell, self.top);
-        self.look != UNKNOWN && z < face_block(cell, face) && z >= rock(cell, face)
+        let under = face_block(cell, face) - (self.part < FULL) as i32;
+        self.look != UNKNOWN && z < under && z >= rock(cell, face)
     }
 
     /// The four looks block `g` of the cell at `cell` is drawn by: where it
@@ -524,5 +559,25 @@ impl Cell {
             return VOID;
         }
         g
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_coarse_top_keeps_the_eighths_its_mean_fills() {
+        // Blocks of eight leaf cells.
+        let cell = LEAF_CELL - 3;
+        assert_eq!(top(cell, 16.0), (2, FULL));
+        assert_eq!(top(cell, 17.0), (3, FULL / 8));
+        assert_eq!(top(cell, 23.0), (3, 7 * FULL / 8));
+        assert_eq!(top(cell, -1.0), (0, 7 * FULL / 8));
+        // An eighth of a block of 64 is 8 leaf cells: under it, nothing.
+        assert_eq!(top(LEAF_CELL - 6, 7.0), (0, FULL));
+        assert_eq!(top(LEAF_CELL - 6, 8.0), (1, FULL / 8));
+        // At the leaves, every block whole.
+        assert_eq!(top(LEAF_CELL, 5.0), (5, FULL));
     }
 }

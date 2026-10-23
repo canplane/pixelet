@@ -43,7 +43,15 @@ fn main() {
     // ray.rs), and each field read as the cast reads it.
     use pxl_spec_core::ray::*;
     let field = |name: &str, shift: u32, bits: u32| format!("fn ray_{name}(w: u32) -> u32 {{ return (w >> {shift}u) & {}u; }}\n", (1u32 << bits) - 1);
-    let ray = [field("value", 0, VALUE_BITS), field("face", FACE_SHIFT, FACE_BITS), field("zoom", ZOOM_SHIFT, ZOOM_BITS)];
+    // Its word of what lies about its face, and that word's fields, a bit an
+    // edge or a corner (pxl-spec-core faces.rs).
+    use pxl_spec_core::faces::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
+    let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
+    // The side of the box a block kept short of its cube is, by the eighths
+    // it keeps, 0 for all eight (pxl-spec-core answer.rs `side`).
+    let sides: String = (1..pxl_spec_core::answer::EIGHTHS).map(|k| format!("case {k}u: {{ return {:?}; }} ", pxl_spec_core::answer::side(k))).collect();
+    let kept = format!("fn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n");
+    let ray = [field("value", 0, VALUE_BITS), field("face", FACE_SHIFT, FACE_BITS), field("zoom", ZOOM_SHIFT, ZOOM_BITS), field("kept", KEPT_SHIFT, KEPT_BITS), kept, faces];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
     // The eye's words the screen pass reads (pxl-spec-core eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.
@@ -54,6 +62,11 @@ fn main() {
         last / 4 + 1
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
+    // A sun slot's word read as its depth, a share of the light box's
+    // (pxl-spec-core sun.rs `depth_of`): its top bits over the zoom asked.
+    use pxl_spec_core::sun::{DEPTH_ONE, ZOOM_BITS as SUN_ZOOM_BITS};
+    let sun = format!("fn sun_depth(w: u32) -> f32 {{ return f32(w >> {SUN_ZOOM_BITS}u) / {DEPTH_ONE}.0; }}\n");
+    std::fs::write(out.join("sun_word.wgsl"), sun).expect("the sun word's shader");
     std::fs::write(Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"), compute(dir)).expect("the compute layouts");
     assemble(&out);
     println!("cargo:rerun-if-changed=src/frame/shader");

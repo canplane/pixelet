@@ -17,10 +17,10 @@
 //! - the entries, the roots' and then the tiles' (`ENTRIES_AT`);
 //! - the tiles' stack, the free ones past those taken (`STACK_AT`).
 //!
-//! That is all of it (`WORDS`): the pixels a frame's cast missed are the
-//! cast's own for that frame, in the beam rays' buffer (`beam::list_at`),
-//! so a walk that only reads the pyramid holds its binding read-only, and
-//! a GPU's compiler types no word of it atomic for that walk.
+//! That is all of it (`WORDS`): the pixels a frame's cast missed are
+//! marked in their own rays (`ray::MISS`), so a walk that only reads the
+//! pyramid holds its binding read-only, and a GPU's compiler types no word
+//! of it atomic for that walk.
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
 //! its frame and its pass (`tag`), and the zooms it was asked at — then the

@@ -32,9 +32,10 @@ pub struct DecorFrame<'a> {
     /// pxl-spec-core `scatter::drawn`'s frame words, `PARAM_WORDS` of them.
     pub params: &'a [u32],
     /// Placed decor, a record each as `decor_cs` writes one: its kind,
-    /// variant and turn, then its box's min corner in leaf cells; read where
+    /// variant and turn, then its box's min corner in leaf cells, its base
+    /// sunk under it by none, as it stands where it is placed; read where
     /// it lies, unwritten until the page replays the turn.
-    pub placed: &'a [[u32; 4]],
+    pub placed: &'a [[u32; scatter::GROWN_WORDS as usize]],
     /// The anchor the lanes are about, less the frame's eye: where the decor
     /// block is drawn.
     pub translation: [f32; 3],
@@ -180,21 +181,12 @@ impl Grown {
         }
     }
 
-    /// The frame's decor handed over, none where decor is off, and what its
-    /// growth reads (`grows`); `meshes` each group's index count, none while
-    /// its model loads. Grouped again where `world` is not the one its
-    /// groups bind or the records' room grew, so a frame without decor
-    /// misses no change.
-    pub fn prepare(&mut self, g: &Gpu, frame: Option<DecorFrame>, grows: Grows, meshes: &[u32; GROUPS as usize], world: World) {
-        self.on = frame.is_some();
-        let Some(f) = frame else {
-            // Nothing grows while decor is off, and what moved meanwhile is
-            // not marked: the slots' records were not kept, so the next frame
-            // with decor grows every one.
-            self.stale = true;
-            self.counted.forget();
-            return;
-        };
+    /// The frame's decor handed over and what its growth reads (`grows`);
+    /// `meshes` each group's index count, none while its model loads.
+    /// Grouped again where `world` is not the one its groups bind or the
+    /// records' room grew, so a frame without a cast misses no change.
+    pub fn prepare(&mut self, g: &Gpu, f: DecorFrame, grows: Grows, meshes: &[u32; GROUPS as usize], world: World) {
+        self.on = true;
         let need = scatter::SLOT_RECORDS + (f.placed.len() as u32).next_power_of_two().max(64);
         let grew = need > self.room;
         if grew {
@@ -223,7 +215,10 @@ impl Grown {
         s.begin();
         s.read(f.shown);
         if !s.end() {
+            // What each slot grew was grown at the zooms it was shown at:
+            // every slot grows again.
             g.write_buffer(self.shown, 0, bytes(f.shown));
+            self.stale = true;
         }
         // The boxes the slots they meet grow again in: the edits, and each
         // cut that moved as it was and as it is, held with any a frame not

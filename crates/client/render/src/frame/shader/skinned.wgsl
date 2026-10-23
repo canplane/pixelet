@@ -53,11 +53,16 @@ fn skin_of(v: VertexIn) -> mat4x4f {
   return joint(v.joints.x) * v.weights.x + joint(v.joints.y) * v.weights.y + joint(v.joints.z) * v.weights.z + joint(v.joints.w) * v.weights.w;
 }
 
+// One function, so the depth pass places a vertex where the lit pass does.
+fn skinned_world(v: VertexIn, m: mat4x4f) -> vec3f {
+  let p = (m * vec4f(v.position, 1.0)).xyz * draw_scale();
+  return place_up(p, draw_rotation()) + draw_translation();
+}
+
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
   let m = skin_of(v);
-  let p = (m * vec4f(v.position, 1.0)).xyz * draw_scale();
-  let world = place_up(p, draw_rotation()) + draw_translation();
+  let world = skinned_world(v, m);
   let n = (m * vec4f(v.normal, 0.0)).xyz;
   var o: VertexOut;
   o.clip = frame_view_proj() * vec4f(world, 1.0);
@@ -73,10 +78,15 @@ fn vs(v: VertexIn) -> VertexOut {
   return o;
 }
 
+@vertex
+fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
+  return frame_view_proj() * vec4f(skinned_world(v, skin_of(v)), 1.0);
+}
+
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
-  let color = shade(albedo, n, i.world_pos, vec3f(screen_open(i.clip.xy)), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
+  let color = shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n), vec3f(screen_open(i.clip.xy)), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
   return vec4f(finish(color, i.clip.xy), draw_opacity());
 }

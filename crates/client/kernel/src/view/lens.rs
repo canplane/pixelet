@@ -10,7 +10,7 @@ use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::origin;
-use pxl_spec_core::eye;
+use pxl_spec_core::{beam, eye};
 
 use crate::query::asked;
 use crate::view::frame::pose::view;
@@ -74,7 +74,8 @@ impl Lens {
 /// the world where it stands there (pxl-spec `world::origin`), and whether each ray
 /// reports the nodes its descent asked, not what it met; the unit forward
 /// and the reach; the unit right and τ; the unit up; the tangents of the
-/// screen's half-angles across and up and the zooms a block is asked at. A
+/// screen's half-angles across and up and the zooms a block is asked at;
+/// the camera grid the cast lays over the screen off them, once. A
 /// ray a drawn pixel, through its middle. The cuts are the scene's. None
 /// without a screen.
 pub fn gpu_cast(o: &Observation, tau: Tau, steps: bool, words: &mut [u32; eye::WORDS]) -> Option<()> {
@@ -91,6 +92,9 @@ pub fn gpu_cast(o: &Observation, tau: Tau, steps: bool, words: &mut [u32; eye::W
     put(eye::UP, &lens.up.map(w));
     put(eye::TAN, &lens.tan.map(w));
     put(eye::RANGE, &asked());
+    // The grid off the very f32s the words above hold, so every reader's is
+    // this one (pxl-spec-core `beam::Grid`).
+    put(eye::GRID, &beam::Grid::of(lens.tan.map(|t| t as f32), tau.scale() as f32).words());
     Some(())
 }
 

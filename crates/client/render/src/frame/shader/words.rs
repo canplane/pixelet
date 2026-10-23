@@ -95,6 +95,18 @@ uniform! {
         EDGE_WIDTH: F32 = 29,
         RIM_INTENSITY: F32 = 30,
         CORNER_AO: F32 = 31,
+        /// The sun's light box from the eye's frame (gpu/shadow.rs `aim`),
+        /// how much of the sun a shadow takes, none where no map is drawn,
+        /// the normal offset a fragment takes, a texel at the map's reach,
+        /// and the share of the map's half-width the casters reach, where
+        /// the shadows end.
+        LIGHT_VIEW_PROJ: Mat4 = 32,
+        SHADOW_STRENGTH: F32 = 48,
+        SHADOW_TEXEL: F32 = 49,
+        SHADOW_RIM: F32 = 50,
+        /// Whether the camera gizmo is drawn, its tint on the rays' blocks
+        /// with it (screen_lit.wgsl `cell_share`).
+        GIZMO: F32 = 51,
     }
 }
 pub const FRAME_FLOATS: usize = floats(frame::FIELDS);

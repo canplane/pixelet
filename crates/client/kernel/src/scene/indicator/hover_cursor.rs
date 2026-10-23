@@ -4,7 +4,7 @@
 //! (pxl-render `mesh::ghost`), or one decor instance drawn by decor's. What it
 //! shows is the tool's (`control/interaction/ghost.rs`); this draws it.
 
-use pxl_render::frame::draw::{DrawList, Held, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
+use pxl_render::frame::draw::{DrawList, Held, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR};
 use pxl_render::frame::shader::record::BOX_WORDS;
 use pxl_render::frame::shader::words::NO_LAYER;
 use pxl_render::gpu::api::bytes;
@@ -21,7 +21,6 @@ enum Shape {
         offset_bits: [u64; 3],
         rgb: [u8; 3],
         layer: u8,
-        coplanar: bool,
     },
     Decor {
         group: u32,
@@ -44,7 +43,7 @@ pub struct GhostDraw {
 impl GhostDraw {
     /// Painted as `state` paints, or as untextured `rgb` where it paints
     /// nothing. Whether what is drawn changed.
-    pub fn set_box(&mut self, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) -> bool {
+    pub fn set_box(&mut self, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32) -> bool {
         let (rgb, layer) = PAINTER.look_of(state).unwrap_or(([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8));
         let offset = on_whole_units(at).1;
         let shape = Shape::Box {
@@ -52,7 +51,6 @@ impl GhostDraw {
             offset_bits: offset.map(f64::to_bits),
             rgb,
             layer,
-            coplanar,
         };
         let moved = core::mem::replace(&mut self.at, at) != at;
         if self.shape == Some(shape) {
@@ -94,12 +92,11 @@ impl GhostDraw {
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         let Some(shape) = self.shape else { return };
         match shape {
-            Shape::Box { coplanar, size_bits, .. } => {
-                let pipeline = if coplanar { PIPELINE_GHOST_BOX_COPLANAR } else { PIPELINE_GHOST_BOX };
+            Shape::Box { size_bits, .. } => {
                 let t = DrawList::translation(on_whole_units(self.at).0, eye);
                 // Written in a cell of its own size (write_lone_box).
                 let unit = f64::from_bits(size_bits) as f32;
-                draw.draw_in(pipeline, self.held.handle, 1, 0, t, GHOST_OPACITY, unit, self.z_step as f32);
+                draw.draw_in(PIPELINE_GHOST_BOX, self.held.handle, 1, 0, t, GHOST_OPACITY, unit, self.z_step as f32);
             }
             Shape::Decor { group, .. } => draw.draw_instances(PIPELINE_GHOST_DECOR, self.held.handle, group, 1, [0, 1, 6], DrawList::translation(self.at, eye), GHOST_OPACITY),
         }

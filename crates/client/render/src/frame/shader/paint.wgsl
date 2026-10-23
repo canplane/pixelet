@@ -30,8 +30,9 @@ fn srgb_to_linear(c: vec3f) -> vec3f {
 
 // A face as it is painted: its swatch and four layer taps, its normal, how
 // much its own edges darken it there (0 to 1), where it is in the world, its
-// texture coordinate with that coordinate's screen gradients, the screen's
-// ambient occlusion there, and the air between it and the eye.
+// texture coordinate with that coordinate's screen gradients, how open it is
+// to the light there (the screen's ambient occlusion, and its corners' tinted
+// occlusion where its caller knows them), and the air between it and the eye.
 struct Surface {
   rgb: vec3f,
   taps: vec4f,
@@ -41,7 +42,7 @@ struct Surface {
   box_uv: vec2f,
   ddx: vec2f,
   ddy: vec2f,
-  screen_open: f32,
+  open: vec3f,
   seen: Seen,
 };
 
@@ -70,6 +71,17 @@ fn sample_tap(layer: f32, image: u32, uv: vec2f, ddx: vec2f, ddy: vec2f, fallbac
   return textureSampleGrad(layers, layer_sampler, uv, i32(slot), ddx, ddy).rgb;
 }
 
+// How much a face's edge darkens it `d` units from the edge, where a drawn
+// pixel spans `pixel` units that way: a line `frame_edge_width` units wide
+// whatever the block's size, so perspective alone thins it far off, fading
+// out across it and a pixel past it, and as faint as the share of a pixel
+// it covers once it is thinner than one.
+fn line_at(d: f32, pixel: f32) -> f32 {
+  let w = frame_edge_width();
+  let t = 1.0 - smoothstep(0.0, w + pixel, d);
+  return t * t * min(w / pixel, 1.0);
+}
+
 fn paint(s: Surface) -> vec3f {
   // Only leaf cells carry layers; the samples are skipped, not taken and discarded.
   let textured = s.taps.x < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
@@ -82,5 +94,6 @@ fn paint(s: Surface) -> vec3f {
       + sample_tap(s.taps.w, image, s.box_uv, s.ddx, s.ddy, s.rgb)) * 0.25;
   }
   let base = albedo * mix(1.0, 1.0 - frame_edge_strength(), s.edge);
-  return shade(base, normalize(s.normal), s.world_pos, vec3f(s.screen_open), s.seen);
+  let n = normalize(s.normal);
+  return shade(base, n, s.world_pos, sun_lit(s.world_pos, n), s.open, s.seen);
 }

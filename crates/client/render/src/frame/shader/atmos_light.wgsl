@@ -61,17 +61,25 @@ fn ground_bounce_in(up: vec3f, l: Light, s: Lights) -> vec3f {
 // every face alike. Directed alone, a wall turned from the sun read as a toy's.
 const DIRECTED: f32 = 0.25;
 
+// What a cast shadow takes of the sun; all of it left the shade as dark.
+const SHADOW_DEPTH: f32 = 0.5;
+
 // A matte face of albedo one, over pi, Lambert as three's standard material at
-// roughness 1: every lit pass's, and the Earth's past the terrain.
-fn surface_light_in(n: vec3f, up: vec3f, l: Light, s: Lights) -> vec3f {
-  let alike = l.sun * max(dot(up, s.sun), 0.0) + l.other * max(dot(up, s.moon), 0.0) + l.fill;
+// roughness 1: every lit pass's, and the Earth's past the terrain. `lit` is
+// the share of the sun the face's shadow lets reach it (shadow.wgsl
+// `sun_lit`), 1 where nothing casts.
+fn surface_light_in(n: vec3f, up: vec3f, lit: f32, l: Light, s: Lights) -> vec3f {
+  // Turned from the sun, a face reads no shadow map.
+  let shaded = select(1.0, mix(1.0, lit, SHADOW_DEPTH), dot(n, s.sun) > 0.0);
+  let alike = l.sun * max(dot(up, s.sun), 0.0) * shaded + l.other * max(dot(up, s.moon), 0.0) + l.fill;
   let hemi = mix(ground_bounce_in(up, l, s), l.fill, dot(n, up) * 0.5 + 0.5);
-  let directed = l.sun * max(dot(n, s.sun), 0.0) + l.other * max(dot(n, s.moon), 0.0) + hemi;
+  let directed = l.sun * max(dot(n, s.sun), 0.0) * lit + l.other * max(dot(n, s.moon), 0.0) + hemi;
   return mix(alike, directed, DIRECTED) / PI;
 }
 
+// Where nothing casts: the Earth's picture, the clouds.
 fn surface_light(n: vec3f, up: vec3f, l: Light) -> vec3f {
-  return surface_light_in(n, up, l, lights_now());
+  return surface_light_in(n, up, 1.0, l, lights_now());
 }
 
 /* the eye */
@@ -87,7 +95,7 @@ fn noon() -> f32 {
 // the rest. In stops, which an opened night eye needs.
 fn eye_stops(s: Lights) -> f32 {
   let up = frame_up();
-  let land = dot(surface_light_in(up, up, light_unexposed_in(land_radius(), up, s), s), LUMA);
+  let land = dot(surface_light_in(up, up, 1.0, light_unexposed_in(land_radius(), up, s), s), LUMA);
   let stops = log2(max(land, 1e-30) / noon());
   let shown = clamp(stops * atmos_shown_fall(), -atmos_night_stops(), 0.0);
   return log2(atmos_exposure()) + shown - stops;

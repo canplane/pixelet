@@ -13,14 +13,14 @@
   "CENSUS_TAGS": [
     "decor",
     "ghost_box",
-    "ghost_box_coplanar",
     "ghost_decor",
     "skinned",
     "puck_zone",
     "puck_beacon",
     "badge",
     "debug",
-    "impostor"
+    "impostor",
+    "camera_grid"
   ],
   "WAKES": [
     "next",

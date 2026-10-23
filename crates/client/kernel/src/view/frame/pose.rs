@@ -29,7 +29,8 @@ pub struct View {
 
     pub width: f64,
     pub height: f64,
-    /// The world surface's drawn pixels a CSS pixel (`resolution::world_ratio`).
+    /// The display's device pixels a CSS pixel the camera grid is laid by
+    /// (`resolution::display_ratio`), whatever the load draws the world at.
     pub ratio: f64,
     /// The quality the eye's rays are cast at (`lens::tau`), of its height
     /// and ratio.

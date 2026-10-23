@@ -142,8 +142,9 @@ pub const SQUARE_GROWN: u32 = {
 const _: () = assert!(size_of::<Decor>().is_multiple_of(4), "a row is whole words, as a GPU reads the table");
 
 /// A record of decor the GPU draws: its first word (`record_word`), then
-/// its box's min corner in leaf cells.
-pub const GROWN_WORDS: u32 = 4;
+/// its box's min corner in leaf cells, then how far its base sinks under
+/// it (`Grown::sink`).
+pub const GROWN_WORDS: u32 = 5;
 
 /// The eye's windows' squares, a slot each: what the GPU grows decor in,
 /// slot `s` the square the windows' table holds at `s`.
@@ -435,9 +436,9 @@ pub trait Grounds: Lanes {
     fn rows(&self) -> &[Decor];
     /// The footing down column `g` at `cell` (`footing`), as this side
     /// casts it: the value of the block it is, as `block` answers one, and
-    /// the block over it; false where nothing fills there or the world
+    /// its top (`cast::top`); false where nothing fills there or the world
     /// lacks it.
-    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool);
+    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, (i32, f32), bool);
     /// What is in the block `c` of `zoom`, the world's one query's answer
     /// asked of it with nothing handed down: `void`, the ground's value, or
     /// `PLACED_BLOCK` over what is placed.
@@ -445,24 +446,29 @@ pub trait Grounds: Lanes {
 }
 
 /// Decor the ground grows, where it stands: its variant, its heading in
-/// quarter turns, and its box's min corner, in leaf cells.
+/// quarter turns, its box's min corner, in leaf cells, the cell over its
+/// footing's, and how far its base lies under that corner, in Q3 steps: the
+/// footing's top kept short of its cube (`cast::top`), so it stands on the
+/// top as drawn, not its cube's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Grown {
     pub variant: u32,
     pub turn: u32,
     pub at: [i32; 3],
+    pub sink: u32,
 }
 
 /// The footing down column `g` at `cell`: the first block that fills on
 /// the world's one ray straight down the column's middle, at `cell`'s
 /// blocks alone, from the top of the world (`HEIGHT_BITS`) — where a walker
 /// stands (pxl-kernel query/support.rs `highest`), whichever layer holds
-/// it. Its block as `q` answers it, and the block over it, at `cell`;
-/// false where the ray meets none.
-pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
+/// it. Its block as `q` answers it, and its top as drawn, at `cell`
+/// (`cast::top`); false where the ray meets none.
+pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> (u32, (i32, f32), bool) {
     let (o, ray, detail) = footing_ray(cell, g);
     let met = crate::cast::first(q, o, &ray, detail, crate::cast::Until::Fills);
-    (met.stop.block[0], met.stop.node.index(o)[2] + 1, met.ends == crate::cast::Ends::Stop)
+    let top = crate::cast::top(o, &met.stop.node, met.stop.block[0]);
+    (met.stop.block[0], top, met.ends == crate::cast::Ends::Stop)
 }
 
 /// The footing's ray down column `g` at `cell`: from the top of the world
@@ -494,14 +500,15 @@ pub fn stand(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate) -> 
 pub fn grown(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate, boxed: bool) -> (Grown, bool) {
     let s = LEAF_CELL - cell;
     let at = [c.cell[0] >> s, c.cell[1] >> s];
-    let (_, top, here) = q.footing(cell, at);
+    let (_, (floor, rise), here) = q.footing(cell, at);
     if !here {
-        return (Grown { variant: 0, turn: 0, at: [0; 3] }, false);
+        return (Grown { variant: 0, turn: 0, at: [0; 3], sink: 0 }, false);
     }
     let g = Grown {
         variant: 0,
         turn: 0,
-        at: [c.cell[0], c.cell[1], top * (1 << s)],
+        at: [c.cell[0], c.cell[1], (floor + 1) * (1 << s)],
+        sink: ((1.0 - rise) * (1u32 << (s + FRAC_W)) as f32 + 0.5) as u32,
     };
     asks(q, decor, cell, (true, c.seed), g, boxed)
 }

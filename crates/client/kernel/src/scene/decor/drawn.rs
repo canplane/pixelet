@@ -53,11 +53,10 @@ fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
 /// The frame's hand-over, kept so a settled frame asks the heap for nothing,
 /// and made again only where what it is made of changed.
 struct Handed {
-    on: bool,
     /// A constant of the decor table, made once.
     shown: [u32; DECORS.len()],
     params: [u32; drawn::PARAM_WORDS as usize],
-    placed: Vec<[u32; 4]>,
+    placed: Vec<[u32; scatter::GROWN_WORDS as usize]>,
     /// The boxes the objects were written in at the last take, in leaf
     /// cells, and how many the next frame hands (`edited`, `frame`).
     edits: [[i32; 4]; scatter::EDITS as usize],
@@ -96,7 +95,6 @@ static HANDED: Global<Handed> = Global::new();
 
 fn handed() -> &'static mut Handed {
     HANDED.get(|| Handed {
-        on: false,
         shown: core::array::from_fn(|k| (FIRST_CELL..=LEAF_CELL).filter(|&c| decor_shown(DECORS[k].extent(), c)).fold(0, |w, c| w | 1 << (c - FIRST_CELL))),
         params: [0; drawn::PARAM_WORDS as usize],
         placed: Vec::new(),
@@ -119,11 +117,6 @@ fn wrapped(x: i32) -> u32 {
 /// ground's decor at `scattered` left out.
 pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     let h = handed();
-    h.on = settings_store().decor;
-    if !h.on {
-        (h.seen, h.walked) = (None, None);
-        return;
-    }
     let anchor = eye.map(libm::floor);
     h.translation = [0, 1, 2].map(|k| (anchor[k] - eye[k]) as f32);
     let seen = Seen {
@@ -166,7 +159,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         }
         let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
         let [x, y, z] = index_of(UNIT_ZOOM, &e.corner());
-        placed.push([scatter::record_word(k, variant, turn, scatter::PLACED_AT), wrapped(x), y as u32, z as u32]);
+        placed.push([scatter::record_word(k, variant, turn, scatter::PLACED_AT), wrapped(x), y as u32, z as u32, 0]);
     });
 }
 
@@ -223,16 +216,17 @@ pub fn edited(regions: &[Aabb]) {
     }
 }
 
-/// The hand-over `step` made, none where decor is off; the edits `edited`
-/// gave, once.
-pub fn frame() -> Option<DecorFrame<'static>> {
+/// The hand-over `step` made; the edits `edited` gave, once. With the
+/// decor setting off the ground grows its decor at no zoom, and what was
+/// placed stays.
+pub fn frame() -> DecorFrame<'static> {
     let h = handed();
     let edited = core::mem::take(&mut h.edited);
-    h.on.then_some(DecorFrame {
-        shown: &h.shown,
+    DecorFrame {
+        shown: if settings_store().decor { &h.shown } else { &[0; DECORS.len()] },
         params: &h.params,
         placed: &h.placed,
         translation: h.translation,
         edits: &h.edits[..edited],
-    })
+    }
 }

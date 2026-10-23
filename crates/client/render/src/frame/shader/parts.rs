@@ -81,16 +81,26 @@ pub const SHADER_WAYS_FREED: u32 = 39;
 pub const SHADER_BEAM: u32 = 40;
 pub const SHADER_CELLS: u32 = 41;
 /// The pixels the cast's reading walk missed, walked again writing the
-/// observed pyramid; the dispatch they run by; and the pyramid forgotten
-/// (pxl-spec-core `observed`): a compute entry each.
+/// observed pyramid, and the pyramid forgotten (pxl-spec-core `observed`): a
+/// compute entry each.
 pub const SHADER_MISS: u32 = 42;
-pub const SHADER_ARGS: u32 = 43;
-pub const SHADER_FORGET: u32 = 44;
+pub const SHADER_FORGET: u32 = 43;
 /// The samples, a thread each, resumed from their cells' starts and walked
-/// to the blocks the pixels about them take (pxl-spec-core `beam::samples`):
+/// to the blocks the pixels about them take (pxl-spec-core `beam::Grid::samples`):
 /// a compute entry.
-pub const SHADER_SAMPLE: u32 = 45;
-pub const SHADERS: u32 = 46;
+pub const SHADER_SAMPLE: u32 = 44;
+/// The world's depth from the sun into its clipmap, generated with the cast
+/// from pxl-spec-core's `sun`: the walk, a workgroup a tile listed, its one
+/// compute entry; that depth laid into the map (sun_map.wgsl,
+/// gpu/shadow.rs); and the mark listing the tiles that walk, a compute
+/// entry of its own.
+pub const SHADER_SUN: u32 = 45;
+pub const SHADER_SUN_MAP: u32 = 46;
+pub const SHADER_SUN_MARK: u32 = 47;
+pub const SHADER_SCREEN_DEPTH: u32 = 48;
+/// The camera grid's cells over the screen (camera_grid.wgsl).
+pub const SHADER_CAMERA_GRID: u32 = 49;
+pub const SHADERS: u32 = 50;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -102,11 +112,11 @@ macro_rules! air {
 }
 
 /// What a lit draw reads before its own parts: the frame, the air and the
-/// volume before each point, the ground's light, the shading, the finish
-/// and the screen's occlusion.
+/// volume before each point, the ground's light, the shading, the sun's
+/// shadow, the finish and the screen's occlusion.
 macro_rules! lit {
     [$($own:literal),*] => {
-        air!["frame", "encode"; "atmos_air", "atmos_ground", "shade", "finish", "ao_map", $($own),*]
+        air!["frame", "encode"; "atmos_air", "atmos_ground", "shade", "shadow", "finish", "ao_map", $($own),*]
     };
 }
 
@@ -188,7 +198,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BADGE_REGION
     &["frame", "encode", "badge", "badge_region"],
     // SHADER_SCREEN_RAYS
-    lit!["lattice", "ray", "eye", "paint", "screen_rays"],
+    lit!["lattice", "ray", "eye", "paint", "screen_rays", "screen_lit"],
     // SHADER_CAST
     &["cast.gen"],
     // SHADER_BOUND
@@ -235,10 +245,18 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["cells.gen"],
     // SHADER_MISS
     &["miss.gen"],
-    // SHADER_ARGS
-    &["args.gen"],
     // SHADER_FORGET
     &["forget.gen"],
     // SHADER_SAMPLE
     &["sample.gen"],
+    // SHADER_SUN
+    &["sun.gen"],
+    // SHADER_SUN_MAP
+    &["sun_word", "sun_map"],
+    // SHADER_SUN_MARK
+    &["sun_mark.gen"],
+    // SHADER_SCREEN_DEPTH
+    lit!["lattice", "ray", "eye", "paint", "screen_rays", "screen_depth"],
+    // SHADER_CAMERA_GRID
+    &["frame", "encode", "sky_words", "camera_grid"],
 ];

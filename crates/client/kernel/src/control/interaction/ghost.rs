@@ -30,7 +30,7 @@ use xpute_guest::global::Global;
 pub enum Ghost {
     None,
     Decor { at: V3, group: u32, rotation: f64, scale: f64 },
-    Box { at: V3, size: f64, value: u32, rgb: u32, coplanar: bool },
+    Box { at: V3, size: f64, value: u32, rgb: u32 },
 }
 
 /// The look of the ground the eraser would carve, of the hovered point:
@@ -116,10 +116,6 @@ pub fn ghost() -> Ghost {
     let swatch = cube.and_then(cube_rgb);
     let fallback = if active_tool == ActiveTool::Eraser { indicator::ERASE } else { indicator::ACTION };
 
-    // A carve no longer needs the coplanar bias: its voxel is gone from the mesh
-    // while the cursor is on it.
-    let coplanar_with_terrain = !use_object_style;
-
     let scattered_ghost = hover.scattered.filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser)).and_then(|s| {
         let (Meta::Decor(m), decor) = (s.meta, Decor::of(DecorId::of(s.id)?));
         Some(Ghost::Decor {
@@ -150,7 +146,6 @@ pub fn ghost() -> Ghost {
                         _ => 0,
                     },
                     rgb: swatch.unwrap_or(fallback),
-                    coplanar: coplanar_with_terrain,
                 },
             }
         }

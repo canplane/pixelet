@@ -13,6 +13,7 @@ use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
 use crate::profiler::frame::{DeviceSample, GpuSample};
@@ -73,15 +74,17 @@ pub fn stage_write() {
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
     s[STAGE_AT::CORNER_AO] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
-    // In the pixels the world is drawn at, which the resolution steps.
-    s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH * crate::view::frame::resolution::world_ratio();
+    // In units, so neither the resolution nor a block's size moves it.
+    s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { crate::param::RIM_INTENSITY } else { 0.0 };
     s[STAGE_AT::CLOUDS] = crate::scene::environment::cloud::clouds_shown();
+    // Out to where the grid's cells one zoom coarser than the ground's leaf begin.
+    s[STAGE_AT::SHADOWS] = if settings.shadows { tau.split_distance(GROUND.cell() - 1) } else { 0.0 };
 }
 
-/// `paced_ms` is the frame's budget, the interval the host paces turns at,
-/// which the world's drawn resolution is judged against.
-pub fn stage_render(paced_ms: f64) {
+/// `pace` is the frame as the turn paced it, which the world's drawn
+/// resolution is judged by (view/frame/resolution.rs `load`).
+pub fn stage_render(pace: crate::view::frame::resolution::Pace) {
     // Nothing is drawn before the floor: its arrival asks for the next turn.
     if load_image(EARTH).is_none() {
         return;
@@ -162,14 +165,17 @@ pub fn stage_render(paced_ms: f64) {
     let objects: [f64; OBJECT_OPS - 1] = core::array::from_fn(|k| f64::from(held[k + 1]));
     // The scale the world was drawn at, before a read can move the next one.
     let scale = crate::view::frame::resolution::drawn_scale();
+    let gpu = out
+        .stat
+        .as_ref()
+        .filter(|stat| stat.gpu_read)
+        .map(|stat| (pxl_render::gpu::renderer::pixels_ms(&stat.gpu_spans), stat.gpu_px));
+    crate::view::frame::resolution::load(pace, gpu);
     let Some(stat) = out.stat else {
         set_host_frame(out.kind, GpuSample { scale, ..GpuSample::default() }, DeviceSample { objects, ..DeviceSample::default() });
         return;
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
-    if stat.gpu_read {
-        crate::view::frame::resolution::load(pxl_render::gpu::renderer::pixels_ms(&stat.gpu_spans), stat.gpu_px, paced_ms);
-    }
     set_host_frame(
         out.kind,
         GpuSample {
@@ -221,6 +227,7 @@ pub fn visible_step(ctx: &mut TickContext) {
         let models = crate::model::models();
         let animating = k.scene.tick(&mut k.draw, models, &frame);
         k.scene.begin(&mut k.draw, models, frame.eye);
+        crate::scene::indicator::camera_gizmo::draw(&mut k.draw, settings_store().camera_gizmo);
         animating
     });
     {

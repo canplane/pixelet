@@ -20,18 +20,7 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
-pub const CENSUS_TAGS: &[&str] = &[
-    "decor",
-    "ghost_box",
-    "ghost_box_coplanar",
-    "ghost_decor",
-    "skinned",
-    "puck_zone",
-    "puck_beacon",
-    "badge",
-    "debug",
-    "impostor",
-];
+pub const CENSUS_TAGS: &[&str] = &["decor", "ghost_box", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug", "impostor", "camera_grid"];
 
 pub const WAKES: &[&str] = &["next", "timer", "none"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -82,29 +71,29 @@ pub mod FRAME {
     pub const wake_in_ms: u32 = 21;
     pub const gpu_read: u32 = 22;
     pub const gpu_spans: u32 = 23;
-    pub const gpu_px: u32 = 33;
-    pub const scale: u32 = 34;
-    pub const census: u32 = 35;
-    pub const blocks: u32 = 55;
-    pub const blocks_bytes: u32 = 56;
-    pub const depth_bytes: u32 = 57;
-    pub const layers_bytes: u32 = 58;
-    pub const gpu_objects: u32 = 59;
-    pub const zoom_tiles: u32 = 70;
-    pub const tiles_place: u32 = 94;
-    pub const heap_used_bytes: u32 = 95;
-    pub const heap_live_bytes: u32 = 96;
-    pub const heap_run_bytes: u32 = 97;
-    pub const heap_slot_bytes: u32 = 98;
-    pub const heap_range_bytes: u32 = 99;
-    pub const heap_largest_free_bytes: u32 = 100;
-    pub const heap_refusals: u32 = 101;
-    pub const ring_cq_peak: u32 = 102;
-    pub const ring_held_peak: u32 = 103;
-    pub const waiting: u32 = 104;
-    pub const out: u32 = 109;
-    pub const cap_terrain_refused: u32 = 114;
-    pub const WORDS: u32 = 115;
+    pub const gpu_px: u32 = 34;
+    pub const scale: u32 = 35;
+    pub const census: u32 = 36;
+    pub const blocks: u32 = 56;
+    pub const blocks_bytes: u32 = 57;
+    pub const depth_bytes: u32 = 58;
+    pub const layers_bytes: u32 = 59;
+    pub const gpu_objects: u32 = 60;
+    pub const zoom_tiles: u32 = 71;
+    pub const tiles_place: u32 = 95;
+    pub const heap_used_bytes: u32 = 96;
+    pub const heap_live_bytes: u32 = 97;
+    pub const heap_run_bytes: u32 = 98;
+    pub const heap_slot_bytes: u32 = 99;
+    pub const heap_range_bytes: u32 = 100;
+    pub const heap_largest_free_bytes: u32 = 101;
+    pub const heap_refusals: u32 = 102;
+    pub const ring_cq_peak: u32 = 103;
+    pub const ring_held_peak: u32 = 104;
+    pub const waiting: u32 = 105;
+    pub const out: u32 = 110;
+    pub const cap_terrain_refused: u32 = 115;
+    pub const WORDS: u32 = 116;
     pub const KEYS: &[&str] = &[
         "t",
         "interval_ms",
@@ -216,9 +205,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 115;
-    pub const prev: u32 = 116;
-    pub const WORDS: u32 = 231;
+    pub const has_prev: u32 = 116;
+    pub const prev: u32 = 117;
+    pub const WORDS: u32 = 233;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -284,11 +273,11 @@ pub mod SUMMARY {
         pub const gpu: u32 = 18;
         pub const phases_p95: u32 = 21;
         pub const gpu_spans_p95: u32 = 26;
-        pub const kinds: u32 = 36;
-        pub const wakes: u32 = 44;
-        pub const heap_used_delta_bytes: u32 = 47;
-        pub const last: u32 = 48;
-        pub const WORDS: u32 = 163;
+        pub const kinds: u32 = 37;
+        pub const wakes: u32 = 45;
+        pub const heap_used_delta_bytes: u32 = 48;
+        pub const last: u32 = 49;
+        pub const WORDS: u32 = 165;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -314,13 +303,13 @@ pub mod SUMMARY {
         ];
     }
     pub mod tasks {
-        pub const AT: u32 = 166;
+        pub const AT: u32 = 168;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod steps {
-        pub const AT: u32 = 286;
+        pub const AT: u32 = 288;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
@@ -330,7 +319,7 @@ pub mod SUMMARY {
     /// The hover is what the pointer meets as drawn, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel query/ray.rs `by_distance`).
     /// The pick is what the tool held strikes there (pxl-kernel control/interaction.rs `picked`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (control/interaction/collision.rs `is_placement_blocked`).
     pub mod view {
-        pub const AT: u32 = 447;
+        pub const AT: u32 = 449;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -383,7 +372,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 470;
+    pub const WORDS: u32 = 472;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "steps", "view", "WORDS"];
 }
 

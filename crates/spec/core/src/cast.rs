@@ -22,7 +22,7 @@
 //! a node can have, and from a child it steps to the next across the face
 //! it leaves by, so no frame holds its siblings.
 
-use crate::answer::{fills, slab_of, In, Kind, AIR};
+use crate::answer::{fills, kept, side, slab_of, In, Kind, AIR, EIGHTHS};
 use crate::grid::cell_at;
 use crate::{axis, wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
@@ -309,12 +309,36 @@ fn entered(ray: &Ray, near: [f32; 3]) -> (f32, u32) {
     (greater(axis(near, e), 0.0), e)
 }
 
-/// Where `ray` from the origin `o` enters the node `n`, and whether it does
-/// within its reach: its span in the node from the origin (`spans`), and
+/// A block's planes as it is drawn, its node's planes `(lo, hi)`
+/// (`bounds`) inset about their center on every axis alike by the share of
+/// its cube its word `block` keeps (`answer::kept`, `answer::side`): a box
+/// that share's volume, its node itself where it keeps it whole.
+pub fn kept_bounds((lo, hi): ([f32; 3], [f32; 3]), block: u32) -> ([f32; 3], [f32; 3]) {
+    let k = kept(block);
+    if k == EIGHTHS {
+        return (lo, hi);
+    }
+    let by = 0.5 * (1.0 - side(k));
+    let inset = [(hi[0] - lo[0]) * by, (hi[1] - lo[1]) * by, (hi[2] - lo[2]) * by];
+    ([lo[0] + inset[0], lo[1] + inset[1], lo[2] + inset[2]], [hi[0] - inset[0], hi[1] - inset[1], hi[2] - inset[2]])
+}
+
+/// The top of the block a stop met, as it is drawn (`kept_bounds`): the
+/// floor of its node `n` on its grid from the origin `o`, and the share of
+/// the node's side its top lies over that floor — its cube's top where its
+/// word `block` keeps it whole, else its kept box's. What a walker and decor
+/// stand on (pxl-kernel query/ray.rs `hit`, `scatter::footing`).
+pub fn top(o: [i32; 3], n: &Node, block: u32) -> (i32, f32) {
+    (n.index(o)[2], kept_bounds(([0.0; 3], [1.0; 3]), block).1[2])
+}
+
+/// Where `ray` from the origin `o` enters the block `block` (a block's word,
+/// `answer`) at the node `n`, and whether it does within its reach: its span
+/// in the block as drawn from the origin (`kept_bounds`, `spans`), and
 /// where that span begins (`entered`). Only touched, at a face or an edge,
 /// is not entered, as the walk has it.
-pub fn entry(o: [i32; 3], ray: &Ray, n: &Node) -> (f32, u32, bool) {
-    let (x, y, z) = spans(ray, bounds(n, grid_of(o)), 0.0);
+pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, block: u32) -> (f32, u32, bool) {
+    let (x, y, z) = spans(ray, kept_bounds(bounds(n, grid_of(o)), block), 0.0);
     let (t0, t1) = (greater(greater(greater(0.0, x.0), y.0), z.0), lesser(lesser(lesser(ray.reach, x.1), y.1), z.1));
     let (t, e) = entered(ray, [x.0, y.0, z.0]);
     (t, e, t1 > t0)
@@ -496,8 +520,9 @@ impl<A: Copy> Keep<A> for () {
 /// whether anything under it fills at the zooms every ray from the origin
 /// asks within it (`asked`); a block — the block at that zoom, or air where
 /// nothing under it fills — the walk stops at (for an eye, where it fills,
-/// but not in the block it starts in; for what is climbed out of, where it
-/// does not) or goes on past; else its child the ray is in (PUSH, Laine &
+/// but not in the block it starts in, and where the ray enters the box a
+/// block keeping less than its cube is, `kept_bounds`; for what is climbed
+/// out of, where it does not) or goes on past; else its child the ray is in (PUSH, Laine &
 /// Karras 2010 §3). Past a node the corner steps on the axis the ray leaves
 /// by (Amanatides & Woo 1987) and the walk is at the child of the nearest
 /// ancestor holding the next node, by the highest bit the step changed
@@ -514,7 +539,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
     let mut stack = [at; DEPTH];
     let (mut low, mut visits) = (n.zoom, 0);
     // The cell's angle a beam ray's narrow splits are measured by.
-    let s = crate::beam::spacing(detail);
+    let s = crate::beam::spacing(detail.tau);
     loop {
         let u = under(n.zoom);
         let (lo, hi) = bounds(&n, og);
@@ -530,8 +555,25 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
             visits += 1;
             let inside = lo[0] <= 0.0 && 0.0 < hi[0] && lo[1] <= 0.0 && 0.0 < hi[1] && lo[2] <= 0.0 && 0.0 < hi[2];
             let side = hi[0] - lo[0];
+            // The planes the ray enters where it stops: the node's, or the
+            // box a block keeping less than its cube is.
+            let mut near = [x.0, y.0, z.0];
             let ends = match i.kind {
                 Kind::Lacks => Ends::Lacks,
+                // A block keeping less than its cube is the box its share
+                // fills (`kept_bounds`): an eye's ray stops where it enters
+                // the box and passes it as air where it misses; a beam ray
+                // stops at its node, as the samples it hands on may meet it.
+                Kind::Block if until == Until::Fills && fills(i.block[0]) && !inside && kept(i.block[0]) < EIGHTHS => {
+                    let (bx, by, bz) = spans(ray, kept_bounds((lo, hi), i.block[0]), t);
+                    let (b0, b1) = (greater(greater(greater(t, bx.0), by.0), bz.0), lesser(lesser(lesser(ray.reach, bx.1), by.1), bz.1));
+                    near = [bx.0, by.0, bz.0];
+                    if b1 > b0 {
+                        Ends::Stop
+                    } else {
+                        Ends::On
+                    }
+                }
                 Kind::Block
                     if match until {
                         Until::Fills => fills(i.block[0]) && !inside,
@@ -573,8 +615,9 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
             };
             if ends != Ends::On {
                 // Where the walk ends, its stop, made there and nowhere else:
-                // where the ray enters the node (`entered`).
-                let (t, axis) = entered(ray, [x.0, y.0, z.0]);
+                // where the ray enters the node, or its block's box
+                // (`entered`).
+                let (t, axis) = entered(ray, near);
                 let stop = Stop { t, axis, node: n, at, block: i.block };
                 keep.keep(&n, at, &stack);
                 return Met { ends, stop, visits };
@@ -655,5 +698,83 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
         };
         let node = n.index(o);
         at = if fresh { q.root(node) } else { q.child(&parent, n.zoom, node) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::answer::{kept_word, slab_word, ANY, EIGHTHS};
+    use crate::cube::ground::stone;
+    use crate::overwrite::{AIR, FULL};
+
+    /// One block of stone at `TARGET`, a unit cell, keeping `kept` eighths of
+    /// its cube; air about it.
+    struct One {
+        kept: u32,
+    }
+
+    const TARGET: [i32; 3] = [10, 0, 0];
+
+    impl Query for One {
+        type At = ();
+        fn root(&mut self, _: [i32; 3]) {}
+        fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
+        fn node(&mut self, _: &mut (), zoom: Zoom, node: [i32; 3], _: [Zoom; 2], _: f32) -> In<[u32; 2]> {
+            let s = UNIT_ZOOM - zoom;
+            let over = (0..3).all(|a| TARGET[a] >> s == node[a]);
+            match (zoom < UNIT_ZOOM, over) {
+                (true, true) => In { kind: Kind::Split, block: [slab_word(ANY), 0] },
+                (false, true) => In { kind: Kind::Block, block: [kept_word(stone as u32, self.kept), 0] },
+                _ => In { kind: Kind::Block, block: [AIR, 0] },
+            }
+        }
+    }
+
+    /// A ray along +x from five units, at `y` and `z` units, against a block
+    /// keeping `kept` eighths.
+    fn along(kept: u32, y: f32, z: f32) -> Met<()> {
+        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
+        let o = [steps(5.0), steps(y), steps(z)];
+        let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
+        let detail = Detail { tau: 1.0, range: [UNIT_ZOOM, UNIT_ZOOM], eye: [0.0; 3] };
+        first(&mut One { kept }, o, &ray, detail, Until::Fills)
+    }
+
+    #[test]
+    fn a_share_s_box_has_the_share_s_volume() {
+        for k in 1..=EIGHTHS {
+            let (lo, hi) = kept_bounds(([0.0; 3], [1.0; 3]), kept_word(0, k));
+            let volume = (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2]);
+            assert!((volume - k as f32 / EIGHTHS as f32).abs() < 1e-6, "{k}: {volume}");
+            // About the cube's center.
+            assert!((lo[0] + hi[0] - 1.0).abs() < 1e-6);
+        }
+        // What fills a share keeps its eighths, floored.
+        assert_eq!(crate::answer::eighths(FULL), EIGHTHS);
+        assert_eq!(crate::answer::eighths(FULL / 8 - 1), 0);
+        assert_eq!(crate::answer::eighths(3 * FULL / 8), 3);
+    }
+
+    #[test]
+    fn a_ray_stops_where_it_enters_the_box() {
+        // An eighth kept is a box half the side, a quarter in from each face.
+        let met = along(1, 0.5, 0.5);
+        assert_eq!(met.ends, Ends::Stop);
+        assert!((met.stop.t - 5.25).abs() < 1e-5, "{}", met.stop.t);
+        assert_eq!(met.stop.axis, 0);
+        // Whole, the cube's face.
+        let met = along(EIGHTHS, 0.5, 0.5);
+        assert!((met.stop.t - 5.0).abs() < 1e-5, "{}", met.stop.t);
+    }
+
+    #[test]
+    fn a_ray_through_the_cell_beside_the_box_passes() {
+        let met = along(1, 0.1, 0.5);
+        assert_eq!(met.ends, Ends::On);
+        let met = along(4, 0.5, 0.05);
+        assert_eq!(met.ends, Ends::On);
+        // The whole cube stops it there.
+        assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, Ends::Stop);
     }
 }

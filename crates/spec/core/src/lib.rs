@@ -20,6 +20,7 @@ pub mod cube;
 #[path = "decor.spec.rs"]
 pub mod decor;
 pub mod eye;
+pub mod faces;
 pub mod fill;
 pub mod grid;
 pub mod ground;
@@ -28,6 +29,7 @@ pub mod observed;
 pub mod overwrite;
 pub mod ray;
 pub mod scatter;
+pub mod sun;
 pub mod ways;
 pub mod window;
 pub mod world;

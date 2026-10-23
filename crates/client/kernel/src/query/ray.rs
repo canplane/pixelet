@@ -237,10 +237,10 @@ impl<'a> World<'a> {
     }
 
     /// The footing down column `g` at `cell` (pxl-spec-core
-    /// `scatter::footing`): the block met and the block over it, where the
+    /// `scatter::footing`): the block met and its top as drawn, where the
     /// world holds the column as its tiles say; none where nothing fills or
     /// a tile under the ray is lacked or only a coarser one stands in.
-    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<(u32, i32)> {
+    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<(u32, (i32, f32))> {
         let mut walker = Walker {
             world: self,
             lack: None,
@@ -257,7 +257,8 @@ impl<'a> World<'a> {
 
     /// Where the descent from `q`, the ray's origin as a position names it,
     /// stopped, in units: its node's box put back on the unit cell holding
-    /// the origin, so it lies on the origin's lap.
+    /// the origin, so it lies on the origin's lap, inset to the box its block
+    /// keeps.
     fn hit(&self, ray: &Ray, q: Q3, s: cast::Stop<At>) -> Hit {
         let (zoom, c) = s.at.node;
         let side = units(zoom);
@@ -274,12 +275,16 @@ impl<'a> World<'a> {
             true => self.objects.placed(zoom, wrap_cell(zoom, c), s.at.handed.placed).map_or(Struck::Objects, |e| Struck::Object(e.id())),
             false => Struck::Ground,
         };
+        // A block kept short of its cube is the box it is drawn as, about
+        // its cube's center, its top where decor stands too (pxl-spec-core
+        // `cast::top`).
+        let rise = f64::from(cast::top(q, &n, s.block[0]).1);
         let t = f64::from(s.t);
         Hit {
             t,
             point: ray.at(t),
             normal,
-            cube: Aabb { min, max: min.map(|v| v + side) },
+            cube: Aabb { min: min.map(|v| v + side * (1.0 - rise)), max: min.map(|v| v + side * rise) },
             struck,
         }
     }

@@ -31,6 +31,37 @@ pub const CUT_WORDS: usize = 4;
 /// Both cuts, carve then hide, as one run of words.
 pub const CUTS: usize = 2 * CUT_WORDS;
 pub const NO_CUT: u32 = crate::overwrite::Cut::NONE.zoom;
-/// Every word, the cuts last.
-pub const WORDS: usize = HIDE + CUT_WORDS;
-const _: () = assert!(STEPS == ORIGIN + 3 && REACH == FORWARD + 3 && TAU == RIGHT + 3 && TAN == UP + 4 && RANGE == TAN + 2 && CARVE == RANGE + 2 && HIDE == CARVE + CUT_WORDS);
+/// The camera grid the frame casts on (pxl-spec-core `beam::Grid`, its
+/// `words`), worked out once off the tangents and τ above where the kernel
+/// writes them: every thread of the cast and the renderer's dispatches and
+/// buffer read it here, none works it out again.
+pub const GRID: usize = HIDE + CUT_WORDS;
+pub const GRID_WORDS: usize = crate::beam::GRID_WORDS;
+/// The sun's cast into the shadow map, its frame's constants off the light
+/// box (pxl-spec-core `sun::Sun`, its `words`): texel (0, 0)'s ray's start
+/// and every ray's reach, the step to the next texel across and down, the
+/// rays' direction, and a stop's push in depth by its face's axis, a vec4
+/// each, f32 bits, the last four's fourth words the clipmap's corners
+/// (`sun::CORNER`, `sun::KEPT`). All zero where no shadow is cast. The renderer writes
+/// them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the kernel
+/// leaves them zero.
+pub const SUN: usize = GRID + GRID_WORDS;
+pub const SUN_WORDS: usize = 20;
+/// Every word, the sun's light box last.
+pub const WORDS: usize = SUN + SUN_WORDS;
+const _: () = assert!(
+    STEPS == ORIGIN + 3 && REACH == FORWARD + 3 && TAU == RIGHT + 3 && TAN == UP + 4 && RANGE == TAN + 2 && CARVE == RANGE + 2 && HIDE == CARVE + CUT_WORDS && GRID.is_multiple_of(4) && SUN.is_multiple_of(4)
+);
+
+/// The slope a caster's depth in the sun's map is pushed back by, as a
+/// rasterizer's polygon offset: its greatest slope, in depth a texel
+/// (`sun::slope`), times this. The raster casters' depth pipelines take it
+/// (pxl-render record.rs `depth_only`), and the world's cast adds it
+/// (pxl-shader `sun_cs`), so the two kinds of caster shadow alike. A
+/// receiver compares each tap at its own plane's depth there (pxl-render
+/// shadow.wgsl), so the push covers only the texels a tap filters, a texel
+/// each way, along the steeper axis; the receiver's texel of normal offset
+/// covers the other. At 2, with each tap compared at the receiver's own
+/// depth, a step a unit high shadowed the ground below it in stripes a
+/// texel apart: the taps up the slope saw past the step.
+pub const SLOPE_BIAS: f32 = 1.0;

@@ -5,7 +5,6 @@
 //! itself; the focus is that point, derived and never kept. A tracker
 //! overrides either while it holds the pose, since a tracked turn can roll.
 
-use pxl_spec::space::camera::grid::SPLIT;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
@@ -156,12 +155,11 @@ pub fn pan(dx: f64, dy: f64) {
     pan_by(-dx * upp, dy * upp);
 }
 
-/// By `cx`, `cy` cells at the focus, across and up the screen: the distance
-/// there over SPLIT, the camera grid's cell before `cell_at` quantizes it to
-/// a zoom, so a held key's speed is smooth across zooms and alike at any τ.
-pub fn pan_cells(cx: f64, cy: f64) {
-    let cell = across() / SPLIT;
-    pan_by(cx * cell, cy * cell);
+/// By `cx`, `cy` of the distance to the focus, across and up the screen, so
+/// a held key's speed is smooth across zooms and alike at any τ.
+pub fn pan_across(cx: f64, cy: f64) {
+    let d = across();
+    pan_by(cx * d, cy * d);
 }
 
 fn pan_by(lx: f64, ly: f64) {

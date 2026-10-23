@@ -75,7 +75,7 @@ fn ghost_step() {
     let changed = kernel().parts().map(|(scene, draw)| match ghost() {
         Ghost::None => scene.ghost.clear(draw),
         Ghost::Decor { at, group, rotation, scale } => scene.ghost.set_decor(draw, at, group, rotation as f32, scale as f32),
-        Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(draw, at, size, value, rgb, coplanar),
+        Ghost::Box { at, size, value, rgb } => scene.ghost.set_box(draw, at, size, value, rgb),
     });
     if changed == Some(true) {
         request_world_tick();
@@ -331,7 +331,11 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let after_tick = now();
     pump();
     crate::scene::stage::stage_write();
-    crate::scene::stage::stage_render(paced_ms);
+    crate::scene::stage::stage_render(crate::view::frame::resolution::Pace {
+        paced_ms,
+        gap_ms: delta * 1000.0,
+        moving: interactive,
+    });
     let done = now();
     profiler_frame(FrameTurn {
         tick: report,

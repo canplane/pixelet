@@ -12,7 +12,7 @@
 // for a read: the kernel writes numbers where they stay, and the words for them are
 // the shell's.
 
-export const CENSUS_TAGS = ["decor", "ghost_box", "ghost_box_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug", "impostor"] as const;
+export const CENSUS_TAGS = ["decor", "ghost_box", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug", "impostor", "camera_grid"] as const;
 
 export const WAKES = ["next", "timer", "none"] as const;
 
@@ -44,29 +44,29 @@ export const FRAME = {
   wake_in_ms: 21 as number,
   gpu_read: 22 as number,
   gpu_spans: 23 as number,
-  gpu_px: 33 as number,
-  scale: 34 as number,
-  census: 35 as number,
-  blocks: 55 as number,
-  blocks_bytes: 56 as number,
-  depth_bytes: 57 as number,
-  layers_bytes: 58 as number,
-  gpu_objects: 59 as number,
-  zoom_tiles: 70 as number,
-  tiles_place: 94 as number,
-  heap_used_bytes: 95 as number,
-  heap_live_bytes: 96 as number,
-  heap_run_bytes: 97 as number,
-  heap_slot_bytes: 98 as number,
-  heap_range_bytes: 99 as number,
-  heap_largest_free_bytes: 100 as number,
-  heap_refusals: 101 as number,
-  ring_cq_peak: 102 as number,
-  ring_held_peak: 103 as number,
-  waiting: 104 as number,
-  out: 109 as number,
-  cap_terrain_refused: 114 as number,
-  WORDS: 115 as number,
+  gpu_px: 34 as number,
+  scale: 35 as number,
+  census: 36 as number,
+  blocks: 56 as number,
+  blocks_bytes: 57 as number,
+  depth_bytes: 58 as number,
+  layers_bytes: 59 as number,
+  gpu_objects: 60 as number,
+  zoom_tiles: 71 as number,
+  tiles_place: 95 as number,
+  heap_used_bytes: 96 as number,
+  heap_live_bytes: 97 as number,
+  heap_run_bytes: 98 as number,
+  heap_slot_bytes: 99 as number,
+  heap_range_bytes: 100 as number,
+  heap_largest_free_bytes: 101 as number,
+  heap_refusals: 102 as number,
+  ring_cq_peak: 103 as number,
+  ring_held_peak: 104 as number,
+  waiting: 105 as number,
+  out: 110 as number,
+  cap_terrain_refused: 115 as number,
+  WORDS: 116 as number,
 } as const;
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it. */
@@ -106,9 +106,9 @@ export const TASK = {
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */
 export const WORST = {
   sample: 0 as number,
-  has_prev: 115 as number,
-  prev: 116 as number,
-  WORDS: 231 as number,
+  has_prev: 116 as number,
+  prev: 117 as number,
+  WORDS: 233 as number,
 } as const;
 
 export const SPREAD = {
@@ -169,19 +169,19 @@ export const SUMMARY = {
     gpu: 18 as number,
     phases_p95: 21 as number,
     gpu_spans_p95: 26 as number,
-    kinds: 36 as number,
-    wakes: 44 as number,
-    heap_used_delta_bytes: 47 as number,
-    last: 48 as number,
-    WORDS: 163 as number,
+    kinds: 37 as number,
+    wakes: 45 as number,
+    heap_used_delta_bytes: 48 as number,
+    last: 49 as number,
+    WORDS: 165 as number,
   },
   tasks: {
-    AT: 166 as number,
+    AT: 168 as number,
     slots: 0 as number,
     WORDS: 120 as number,
   },
   steps: {
-    AT: 286 as number,
+    AT: 288 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
@@ -190,7 +190,7 @@ export const SUMMARY = {
    * The hover is what the pointer meets as drawn, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel query/ray.rs `by_distance`).
    * The pick is what the tool held strikes there (pxl-kernel control/interaction.rs `picked`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (control/interaction/collision.rs `is_placement_blocked`). */
   view: {
-    AT: 447 as number,
+    AT: 449 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -216,7 +216,7 @@ export const SUMMARY = {
     blocked: 22 as number,
     WORDS: 23 as number,
   },
-  WORDS: 470 as number,
+  WORDS: 472 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words. */

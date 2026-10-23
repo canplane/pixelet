@@ -15,6 +15,7 @@ pub mod pipeline;
 pub mod put;
 pub mod read;
 pub mod renderer;
+pub mod shadow;
 pub mod sheet;
 #[path = "gpu/span.spec.rs"]
 pub mod span_spec;
