@@ -8,7 +8,6 @@ pub mod edit;
 pub mod ghost;
 pub mod pick;
 
-use pxl_spec::block::decor::Decor;
 use pxl_spec::block::object::Cube;
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::camera::grid::Tau;
@@ -22,7 +21,6 @@ use crate::control::interaction::edit::{place, place_air, place_decor, remove, w
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;
-use crate::layer::object::size::{object_size_of, MARKER_SIZE};
 use crate::layer::object::store::Entry;
 use crate::query::{Hit, World};
 use crate::view::frame::pose::view_ray;
@@ -142,19 +140,14 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         return;
     }
 
-    if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker) {
+    if let Some(tool) = PlacementTool::of(&ui) {
         hover.object_at = None;
         hover.scattered = None;
         hover.approach = None;
-        let placement_size = match ui.active_tool {
-            ActiveTool::Object => object_size_of(ui.object_tier),
-            ActiveTool::Decor => units(Decor::of(ui.decor_id).row.cell_zoom()),
-            _ => MARKER_SIZE,
-        };
         // A decor met in front of the pick is what the new cube goes flush
         // against; a scattered one is no entry, so it lands as on the ground.
         let precise_box = resolve_hit_object(&hit).map(|o| object_aabb(&o));
-        hover.coord = Some(world_adjacent_corner(&hit, placement_size, precise_box.as_ref()));
+        hover.coord = Some(world_adjacent_corner(&hit, tool.size(), precise_box.as_ref()));
         return;
     }
 
@@ -208,16 +201,22 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     let Some(hovered) = interaction().hover.coord else { return };
     let ui = interaction().holding;
     let hover = interaction().hover;
-    let object_size = object_size_of(ui.object_tier);
 
-    match ui.active_tool {
-        ActiveTool::Pointer => {
+    match PlacementTool::of(&ui) {
+        // The slot may have filled since the last hover update.
+        Some(tool) if is_placement_blocked(tool, &hovered) => {}
+        Some(tool @ PlacementTool::Object(_)) => place(&hovered, tool.size(), ui.object_cube),
+        Some(PlacementTool::Decor(id)) => place_decor(&hovered, id),
+        // It waits there for its words, which the shell asks for.
+        Some(PlacementTool::Marker) => wait_to_put(&hovered),
+        None if ui.active_tool == ActiveTool::Pointer => {
             // Recenter across the struck face, standing as a pan lands.
             let Some(approach) = hover.approach else { return };
             let target = stand(&anchor_center(&approach));
             crate::control::navigation::destination::go_to(target, crate::control::camera::controller::Motion::Smooth);
         }
-        ActiveTool::Eraser => {
+        // The eraser.
+        None => {
             match (hover.object_at, hover.scattered) {
                 (Some(at), _) => remove(at),
                 (None, Some(s)) => {
@@ -229,23 +228,6 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
                 // size tier: the scan emits nothing for a zero material whatever its
                 // sub-cell bytes, so a smaller leaf would save a bite nobody took.
                 (None, None) => place_air(&hovered, units(GROUND.cell())),
-            }
-        }
-        // The slot may have filled since the last hover update.
-        ActiveTool::Decor => {
-            if !is_placement_blocked(PlacementTool::Decor(ui.decor_id), &hovered, object_size) {
-                place_decor(&hovered, units(Decor::of(ui.decor_id).row.cell_zoom()), ui.decor_id);
-            }
-        }
-        // It waits there for its words, which the shell asks for.
-        ActiveTool::Marker => {
-            if !is_placement_blocked(PlacementTool::Marker, &hovered, object_size) {
-                wait_to_put(&hovered);
-            }
-        }
-        ActiveTool::Object => {
-            if !is_placement_blocked(PlacementTool::Object, &hovered, object_size) {
-                place(&hovered, object_size, ui.object_cube);
             }
         }
     }

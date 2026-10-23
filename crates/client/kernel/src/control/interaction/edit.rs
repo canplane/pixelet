@@ -7,7 +7,7 @@ use crate::control::interaction::collision::{is_placement_blocked, placement_rea
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::ext::Ext;
 use crate::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
-use crate::layer::object::size::{object_size_of, MARKER_SIZE};
+use crate::layer::object::size::MARKER_SIZE;
 use crate::layer::object::store::Block;
 use pxl_portable::answer::PLACED_BLOCK;
 use pxl_spec::block::ext::MARKER_TEXT_CHARS;
@@ -90,14 +90,14 @@ pub fn place(at: &Q3, size: f64, cube: Cube) {
 
 /// Placing the decor a scatter stands in a cell an erase emptied writes
 /// VOID, so the scattered instance returns as it was.
-pub fn place_decor(at: &Q3, size: f64, decor_id: DecorId) {
-    let value = if restores_scattered(at, size, decor_id).is_some() { VOID } else { decor_num_id(decor_id) };
-    write_object_value(at, size, value);
+pub fn place_decor(at: &Q3, decor_id: DecorId) {
+    let value = if restores_scattered(at, decor_id).is_some() { VOID } else { decor_num_id(decor_id) };
+    write_object_value(at, PlacementTool::Decor(decor_id).size(), value);
 }
 
 /// The decor the ground grows that `place_decor` would bring back, for its preview.
-pub fn restores_scattered(at: &Q3, size: f64, decor_id: DecorId) -> Option<Instance> {
-    (size >= units(GROUND.cell()) && carved(at)).then(|| World::now().grown(Decor::of(decor_id), at))?
+pub fn restores_scattered(at: &Q3, decor_id: DecorId) -> Option<Instance> {
+    (PlacementTool::Decor(decor_id).size() >= units(GROUND.cell()) && carved(at)).then(|| World::now().grown(Decor::of(decor_id), at))?
 }
 
 /// A marker tool's tap at `at`, a place free or holding a marker: the marker
@@ -144,7 +144,7 @@ pub fn put_marker() {
     let (zoom, cell) = (at.zoom(), at.at());
     let stands = match World::now().placed(at) {
         Some(e) => object_value_is_marker(e.state),
-        None => !is_placement_blocked(PlacementTool::Marker, &base_of(zoom, cell), MARKER_SIZE),
+        None => !is_placement_blocked(PlacementTool::Marker, &base_of(zoom, cell)),
     };
     if stands && !words.is_empty() {
         submit(Write {
@@ -199,11 +199,11 @@ pub struct Pending {
     pub digging: bool,
     /// The same check as the commit, so preview and placement cannot disagree.
     pub blocked: bool,
-    /// What `blocked` was asked of: the tool, the hovered corner, the
-    /// object's size and the store's revision. Asked again only where one
-    /// moved or a change touched the columns it reads (`placement_reads`,
+    /// What `blocked` was asked of: the tool, its zoom with it, the hovered
+    /// corner and the store's revision. Asked again only where one moved or
+    /// a change touched the columns it reads (`placement_reads`,
     /// `changed::within`), as a step each frame turn sees each change once.
-    asked: Option<(PlacementTool, Q3, f64, u32)>,
+    asked: Option<(PlacementTool, Q3, u32)>,
 }
 
 static PENDING: Global<Pending> = Global::new();
@@ -222,27 +222,20 @@ pub fn pending_step() -> RenderEdits {
     let object = hover.object_at.and_then(|at| world.placed(at));
     let scattered = hover.scattered.is_some();
     let digging = active_tool == ActiveTool::Eraser && object.is_none() && !scattered;
-    // A terrain carve is a whole cell: the scan emits nothing for a zero
-    // material whatever its sub-cell bytes, so the cell goes whole anyway.
-    let size = match (&object, active_tool) {
-        (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
-        (_, ActiveTool::Decor) => units(Decor::of(ui.decor_id).row.cell_zoom()),
-        (_, ActiveTool::Marker) => MARKER_SIZE,
-        _ if digging || scattered => units(GROUND.cell()),
-        _ => object_size_of(ui.object_tier),
+    let tool = PlacementTool::of(&ui);
+    let size = match (tool, &object) {
+        (Some(tool), _) => tool.size(),
+        (None, Some(o)) => o.size(),
+        // A terrain carve is a whole cell: the scan emits nothing for a zero
+        // material whatever its sub-cell bytes, so the cell goes whole anyway.
+        (None, None) => units(GROUND.cell()),
     };
-    let (blocked, asked) = match (&hovered, active_tool) {
-        (Some(h), ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker) => {
-            let tool = match active_tool {
-                ActiveTool::Object => PlacementTool::Object,
-                ActiveTool::Decor => PlacementTool::Decor(ui.decor_id),
-                _ => PlacementTool::Marker,
-            };
-            let object_size = object_size_of(ui.object_tier);
-            let asked = Some((tool, *h, object_size, world.revision()));
+    let (blocked, asked) = match (&hovered, tool) {
+        (Some(h), Some(tool)) => {
+            let asked = Some((tool, *h, world.revision()));
             let was = *PENDING.get(Pending::default);
-            let same = was.asked == asked && !crate::query::changed::within(placement_reads(tool, h, object_size), &[]);
-            (if same { was.blocked } else { is_placement_blocked(tool, h, object_size) }, asked)
+            let same = was.asked == asked && !crate::query::changed::within(placement_reads(tool, h), &[]);
+            (if same { was.blocked } else { is_placement_blocked(tool, h) }, asked)
         }
         _ => (false, None),
     };
