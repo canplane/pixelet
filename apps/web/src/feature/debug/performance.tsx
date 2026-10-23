@@ -15,7 +15,7 @@ import { Fold, HINT_INK } from "./fold.tsx";
 import { n1 } from "./profiler/lane.ts";
 import { profilerLog } from "./profiler/log.ts";
 import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
-import { type Gauge, profilerGaugeRead, profilerReportRead } from "./profiler/view.ts";
+import { fps, type Gauge, profilerGaugeRead, profilerReportRead } from "./profiler/view.ts";
 import { installLongFrameObservers, longFramesClear } from "./profiler/long-frame.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command, encode_input_view } from "@/kernel/abi/cmd.spec.ts";
@@ -147,10 +147,11 @@ export function PerformanceOverlay() {
   if (!show) return null;
   const recording = g?.rec.recording === true;
   const f = g?.frames ?? null;
-  const fps = f !== null && f.seconds > 0 ? ` · ${n1(f.n / f.seconds)} fps` : "";
+  const rate = f === null ? null : fps(f);
+  const title = rate === null ? "Performance" : `Performance · ${n1(rate)} fps`;
 
   return (
-    <Fold name="performance" title={`Performance${fps}`} end={<Text style={[gauge.text, gauge.key]}>Last {LIVE_WINDOW_MS / 1000} s</Text>}>
+    <Fold name="performance" title={title} end={<Text style={[gauge.text, gauge.key]}>Last {LIVE_WINDOW_MS / 1000} s</Text>}>
       <View style={styles.buttons}>
         {/* Both, not a toggle: a window opened at boot would read "Stop" until first stopped. */}
         <PanelButton

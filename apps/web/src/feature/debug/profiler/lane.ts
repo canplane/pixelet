@@ -93,26 +93,3 @@ export function valueText(name: string, v: f64): string {
   if (name.endsWith("_px")) return `${fixed(v / 1e6, 1)}Mpx`;
   return Number.isInteger(v) ? String(v) : n1(v);
 }
-
-/** A lane by its name, its unit left to its value. */
-const label = (name: string) => name.replace(UNIT, "");
-
-function listText(lane: ListLane, f: Frame): string {
-  const names = LIST_NAMES[lane];
-  if (lane === "census") {
-    const rows = f.census.map(([draws, t], i) => ({ tag: names[i] ?? String(i), draws, t })).filter((r) => r.draws > 0 || r.t > 0);
-    rows.sort((a, b) => b.t - a.t || b.draws - a.draws);
-    return rows.map((r) => `${r.tag} ${round(r.draws)}/${tris(r.t)}`).join(" ");
-  }
-  const unit = lane === "gpu_spans" || lane === "phases" ? "_ms" : "";
-  return f[lane].map((v, i) => [names[i] ?? String(i), v] as const).filter(([, v]) => v > 0).map(([n, v]) => `${n} ${valueText(unit, v)}`).join(" ") || "-";
-}
-
-export function groupText(group: FrameGroup, f: Frame): string {
-  return (FRAME_GROUPS[group] as readonly FrameLane[]).map((lane) => {
-    const l = label(lane);
-    return isList(lane) ? `${l} [${listText(lane, f)}]` : `${l} ${valueText(lane, f[lane])}`;
-  }).join("  ");
-}
-
-export const fieldText = (name: string, v: f64) => `${name.replace(UNIT, "")} ${valueText(name, v)}`;

@@ -9,7 +9,7 @@ use crate::io::failure::Outcome;
 use crate::profiler::block::TASK_PHASES;
 use crate::profiler::block::{FramesBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::profiler::frame::FrameSample;
-use crate::profiler::frame::{long, missed, off_turn_ms, overran};
+use crate::profiler::frame::{long, missed, overran};
 use crate::profiler::record::{fixed_lane, profiler_frames_since, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
 use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
@@ -98,9 +98,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         turns: sum(&|f| f.turns),
         interval: spread(scratch, moving().map(|f| f.interval_ms)),
         busy: spread(scratch, frames.iter().map(|f| f.busy_ms)),
-        off_turn: spread(scratch, frames.iter().map(off_turn_ms)),
         tick: spread(scratch, frames.iter().map(|f| f.tick_ms)),
-        tasks: spread(scratch, frames.iter().map(|f| f.tasks_ms)),
         gpu_read: count(&|f| f.gpu.read != 0.0),
         gpu: spread(scratch, read().map(|f| pxl_render::gpu::renderer::gpu_ms(&f.gpu.spans))),
         phases_p95: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k])).p95),
@@ -108,7 +106,6 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         kinds: core::array::from_fn(|k| count(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| count(&|f| f.wake == k as f64)),
         heap_used_delta_bytes: last.heap.used_bytes - first.heap.used_bytes,
-        census: core::array::from_fn(|k| [sum(&|f| f.gpu.census[k][0]) / n, sum(&|f| f.gpu.census[k][1]) / n]),
         last: *last,
     }
 }

@@ -7,7 +7,8 @@ import { copyText } from "@platform/save.ts";
 
 import { drawn, type Frame, gpuMs, n1, pct, phaseText, tris, valueText } from "./lane.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
-import type { ProfilerReport, Spread, TaskRecord, TaskSummary } from "./view.ts";
+import { fps, type ProfilerReport, type Spread, type TaskRecord, type TaskSummary } from "./view.ts";
+import { fixed } from "@/shared/fixed.ts";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 /** A count of bytes as the one MB the figures are shown in, signed. */
@@ -59,9 +60,9 @@ function windowSection(r: ProfilerReport): string[] {
   const counted = (rows: { name: string; n: f64 }[]) => rows.filter((r) => r.n > 0).map((r) => `${r.name} ${r.n}`).join("  ") || "-";
 
   return [
-    `frames n=${f.n}  over ${n1(f.seconds)}s  fps ${f.seconds > 0 ? n1(f.n / f.seconds) : "-"}  moving ${f.moving}  still ${f.n - f.moving}   refresh ${n1(last.refresh_ms)} ms   paced ${
-      n1(last.paced_ms)
-    } ms   scale ${n1(last.scale)}   turns ${f.turns}`,
+    `frames n=${f.n}  over ${n1(f.seconds)}s  fps ${n1(fps(f) ?? NaN)}  moving ${f.moving}  still ${f.n - f.moving}   refresh ${n1(last.refresh_ms)} ms   paced ${n1(last.paced_ms)} ms   scale ${
+      fixed(last.scale, 2)
+    }   turns ${f.turns}`,
     `  kinds   ${counted(f.kinds)}   wakes ${counted(f.wakes)}`,
     `  interval ${spread(f.interval)} ms   missed ${f.missed} (${pct(f.missed, f.moving)}% of moving frames)`,
     `  busy    ${spread(f.busy)} ms   (the interval's turns, rise to fall)`,

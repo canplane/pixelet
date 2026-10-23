@@ -12,7 +12,7 @@ import { type FrameGroup, GROUPS, n1, valueText, zoomName } from "./lane.ts";
 
 const bytes = (b: number) => valueText("_bytes", b);
 import { failText } from "./report.ts";
-import type { Gauge } from "./view.ts";
+import { fps, type Gauge } from "./view.ts";
 import { alpha, color, textStyle } from "@/shared/ui/theme.ts";
 import { fixed } from "@/shared/fixed.ts";
 
@@ -92,8 +92,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
     time: f !== null && (
       <>
         {/* Frames a second over the window, and at the median interval. */}
-        <Row k="fps window/p50" v={`${f.seconds > 0 ? n1(f.n / f.seconds) : "-"}/${f.interval.p50 > 0 ? n1(1000 / f.interval.p50) : "-"}`} />
-        <Row k="interval p50/p95" v={`${n1(f.interval.p50)}/${n1(f.interval.p95)} ms`} warn={f.interval.p95 > f.last.paced_ms + f.last.refresh_ms / 2} />
+        <Row k="fps window/p50" v={`${or(fps(f) ?? NaN)}/${f.interval.p50 > 0 ? n1(1000 / f.interval.p50) : "-"}`} />
+        <Row k="interval p50/p95" v={`${n1(f.interval.p50)}/${n1(f.interval.p95)} ms`} warn={f.interval.p95 >= f.last.paced_ms + f.last.refresh_ms / 2} />
         <Row k="missed/moving" v={`${f.missed}/${f.moving}`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
         <Row k="refresh/paced" v={`${n1(f.last.refresh_ms)}/${n1(f.last.paced_ms)} ms`} />
         <Row k="cpu busy p95" v={`${n1(f.busy.p95)} ms`} warn={f.busy.p95 > f.last.paced_ms} />
@@ -106,7 +106,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
         {/* Over the frames a GPU read landed with; none landed is no measure, not 0. */}
         <Row k="gpu p95" v={f.gpu_read > 0 ? `${n1(f.gpu.p95)} ms` : "no timestamps"} warn={f.gpu_read > 0 && f.gpu.p95 > f.last.paced_ms} />
         {heaviest(f.gpu_spans, (s) => s.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.p95)} ms`} />)}
-        <Row k="scale/drawn" v={`${n1(f.last.scale)}/${f.last.gpu_read ? valueText("gpu_px", f.last.gpu_px) : "-"}`} warn={f.last.scale < 1} />
+        <Row k="scale/drawn" v={`${fixed(f.last.scale, 2)}/${f.last.gpu_read ? valueText("gpu_px", f.last.gpu_px) : "-"}`} warn={f.last.scale < 1} />
       </>
     ),
     cap: null,

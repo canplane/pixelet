@@ -159,8 +159,10 @@ pub fn stage_render(paced_ms: f64) {
     // What the renderer holds, drawn this frame or not.
     let held = pxl_render::gpu::api::gpu().map_or([0; OBJECT_OPS], |g| *g.objects());
     let objects: [f64; OBJECT_OPS - 1] = core::array::from_fn(|k| f64::from(held[k + 1]));
+    // The scale the world was drawn at, before a read can move the next one.
+    let scale = crate::view::frame::resolution::drawn_scale();
     let Some(stat) = out.stat else {
-        set_host_frame(out.kind, GpuSample::default(), DeviceSample { objects, ..DeviceSample::default() });
+        set_host_frame(out.kind, GpuSample { scale, ..GpuSample::default() }, DeviceSample { objects, ..DeviceSample::default() });
         return;
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
@@ -173,7 +175,7 @@ pub fn stage_render(paced_ms: f64) {
             read: f64::from(u8::from(stat.gpu_read)),
             spans: stat.gpu_spans,
             px: stat.gpu_px,
-            scale: crate::view::frame::resolution::scale_now(),
+            scale,
             census: stat.census,
         },
         DeviceSample {

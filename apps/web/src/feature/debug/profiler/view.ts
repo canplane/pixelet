@@ -79,9 +79,7 @@ export interface FrameSummary {
   gpu_read: f64;
   interval: Spread;
   busy: Spread;
-  off_turn: Spread;
   tick: Spread;
-  tasks: Spread;
   gpu: Spread;
   /** Each phase's and each span's p95: what is read of them. */
   phases: { name: string; p95: f64 }[];
@@ -90,7 +88,6 @@ export interface FrameSummary {
   kinds: { name: string; n: f64 }[];
   wakes: { name: string; n: f64 }[];
   heap_used_delta_bytes: f64;
-  census: { tag: string; draws: f64; tris: f64 }[];
   last: Frame;
 }
 
@@ -148,18 +145,13 @@ function frameSummary(s: F64Array): FrameSummary | null {
     gpu_read: s[a + F.gpu_read],
     interval: spreadAt(s, a + F.interval),
     busy: spreadAt(s, a + F.busy),
-    off_turn: spreadAt(s, a + F.off_turn),
     tick: spreadAt(s, a + F.tick),
-    tasks: spreadAt(s, a + F.tasks),
     gpu: spreadAt(s, a + F.gpu),
     phases: PHASES.map((name, k) => ({ name, p95: s[a + F.phases_p95 + k] })),
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, p95: s[a + F.gpu_spans_p95 + k] })),
     kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
     wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
     heap_used_delta_bytes: s[a + F.heap_used_delta_bytes],
-    census: CENSUS_TAGS.map((tag, k) => ({ tag, draws: s[a + F.census + 2 * k], tris: s[a + F.census + 2 * k + 1] }))
-      .filter((r) => r.draws > 0)
-      .sort((x, y) => y.tris - x.tris),
     last: frameAt(s, a + F.last),
   };
 }
@@ -217,13 +209,15 @@ function rings(): Rings {
   };
 }
 
+/** Frames a second over a window: its intervals over its span, none under two frames. */
+export const fps = (f: { n: f64; seconds: f64 }): f64 | null => (f.n >= 2 && f.seconds > 0 ? (f.n - 1) / f.seconds : null);
+
 export interface Gauge {
   /** The frames and tasks the rings hold, as RINGS counts them. */
   rec: { recording: boolean; elapsed_ms: f64; tasks: u32; frames: u32; truncated: boolean };
   frames: FrameSummary | null;
   tasks: TaskSummary[];
   view: Record<string, f64>;
-  longs: LongFrame[];
 }
 
 /** The worst frames the kernel kept, each with the one before it where there was one. */
@@ -244,7 +238,6 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
     frames: frameSummary(s),
     tasks: taskSummaries(s),
     view: section(s, SUMMARY.view),
-    longs: longFramesSince(performance.now() - windowMs),
   };
 }
 

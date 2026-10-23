@@ -8,7 +8,7 @@
 use core::mem::{offset_of, size_of};
 
 use crate::io::spec::{STREAM_NAMES, TASK_PHASE_NAMES};
-use crate::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS};
+use crate::profiler::frame::{FrameSample, GPU_SPANS};
 use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY, WAKES};
 use crate::profiler::word::{words, Words};
 use pxl_render::gpu::span_spec::FRAME_KINDS;
@@ -58,9 +58,7 @@ pub struct FramesBlock {
     pub gpu_read: f64,
     pub interval: Spread,
     pub busy: Spread,
-    pub off_turn: Spread,
     pub tick: Spread,
-    pub tasks: Spread,
     pub gpu: Spread,
     /// The p95 alone of each phase and each span: what is read of them.
     pub phases_p95: [f64; PHASES.len()],
@@ -69,7 +67,6 @@ pub struct FramesBlock {
     pub kinds: [f64; FRAME_KINDS.len()],
     pub wakes: [f64; WAKES.len()],
     pub heap_used_delta_bytes: f64,
-    pub census: [[f64; 2]; CENSUS_LEN],
     pub last: FrameSample,
 }
 
@@ -79,11 +76,11 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     present => SUMMARY::frames::present, n => SUMMARY::frames::n, seconds => SUMMARY::frames::seconds,
     moving => SUMMARY::frames::moving, missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
     long => SUMMARY::frames::long, turns => SUMMARY::frames::turns, gpu_read => SUMMARY::frames::gpu_read,
-    interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy, off_turn => SUMMARY::frames::off_turn,
-    tick => SUMMARY::frames::tick, tasks => SUMMARY::frames::tasks, gpu => SUMMARY::frames::gpu,
+    interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy,
+    tick => SUMMARY::frames::tick, gpu => SUMMARY::frames::gpu,
     phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95,
     kinds => SUMMARY::frames::kinds, wakes => SUMMARY::frames::wakes,
-    heap_used_delta_bytes => SUMMARY::frames::heap_used_delta_bytes, census => SUMMARY::frames::census,
+    heap_used_delta_bytes => SUMMARY::frames::heap_used_delta_bytes,
     last => SUMMARY::frames::last,
 );
 

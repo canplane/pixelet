@@ -28,9 +28,14 @@ fn scale() -> &'static mut f64 {
     SCALE.get(|| 1.0)
 }
 
-/// The share of the display's pixels, each way, the world is drawn at now.
-pub fn scale_now() -> f64 {
-    *scale()
+/// The share of the display's pixels, each way, the world was last drawn
+/// at: its rays' width over the display's, which lags `scale` while a change
+/// waits to be drawn; whole before it has any.
+pub fn drawn_scale() -> f64 {
+    world().filter(|s| s.width > 0 && s.px_w > 0).map_or(1.0, |s| {
+        let dpr = if s.dpr > 0.0 { s.dpr } else { 1.0 };
+        f64::from(s.width) / (f64::from(s.px_w) * s.dpr.min(param::RESOLUTION_MAX) / dpr)
+    })
 }
 
 fn world() -> Option<&'static mut Surface> {

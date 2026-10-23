@@ -60,7 +60,7 @@ pub mod LIMITS {
     pub const KEYS: &[&str] = &["REASONS", "STEP_SLOTS", "ZOOMS"];
 }
 
-/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (xpute host sched/quantum.ts `Grant`); a moving frame whose interval ran past `paced_ms` by half a refresh or more missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `gpu_read` is 1 where a GPU read landed with the frame, whose `gpu_spans` are then that read's, its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world is drawn at now (pxl-kernel view/frame/resolution.rs); and 0 where nothing was measured with it (no read landed, or the device keeps no timestamps), its spans and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `blocks` and `blocks_bytes` are the renderer's block table, `depth_bytes` its depth targets and `layers_bytes` its texture layers (pxl-render gpu/renderer.rs `FrameStat`), and the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names.
+/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (xpute host sched/quantum.ts `Grant`); a moving frame whose interval ran past `paced_ms` by half a refresh or more missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they ran past the interval is read off the two (profiler/frame.rs `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `gpu_read` is 1 where a GPU read landed with the frame, whose `gpu_spans` are then that read's, its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-kernel view/frame/resolution.rs `drawn_scale`); and 0 where nothing was measured with it (no read landed, or the device keeps no timestamps), its spans and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `blocks` and `blocks_bytes` are the renderer's block table, `depth_bytes` its depth targets and `layers_bytes` its texture layers (pxl-render gpu/renderer.rs `FrameStat`), and the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const interval_ms: u32 = 1;
@@ -280,18 +280,15 @@ pub mod SUMMARY {
         pub const gpu_read: u32 = 8;
         pub const interval: u32 = 9;
         pub const busy: u32 = 12;
-        pub const off_turn: u32 = 15;
-        pub const tick: u32 = 18;
-        pub const tasks: u32 = 21;
-        pub const gpu: u32 = 24;
-        pub const phases_p95: u32 = 27;
-        pub const gpu_spans_p95: u32 = 32;
-        pub const kinds: u32 = 42;
-        pub const wakes: u32 = 50;
-        pub const heap_used_delta_bytes: u32 = 53;
-        pub const census: u32 = 54;
-        pub const last: u32 = 74;
-        pub const WORDS: u32 = 189;
+        pub const tick: u32 = 15;
+        pub const gpu: u32 = 18;
+        pub const phases_p95: u32 = 21;
+        pub const gpu_spans_p95: u32 = 26;
+        pub const kinds: u32 = 36;
+        pub const wakes: u32 = 44;
+        pub const heap_used_delta_bytes: u32 = 47;
+        pub const last: u32 = 48;
+        pub const WORDS: u32 = 163;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -305,28 +302,25 @@ pub mod SUMMARY {
             "gpu_read",
             "interval",
             "busy",
-            "off_turn",
             "tick",
-            "tasks",
             "gpu",
             "phases_p95",
             "gpu_spans_p95",
             "kinds",
             "wakes",
             "heap_used_delta_bytes",
-            "census",
             "last",
             "WORDS",
         ];
     }
     pub mod tasks {
-        pub const AT: u32 = 192;
+        pub const AT: u32 = 166;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod steps {
-        pub const AT: u32 = 312;
+        pub const AT: u32 = 286;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
@@ -334,7 +328,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at.
     pub mod view {
-        pub const AT: u32 = 473;
+        pub const AT: u32 = 447;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -369,7 +363,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 487;
+    pub const WORDS: u32 = 461;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "steps", "view", "WORDS"];
 }
 
