@@ -86,7 +86,11 @@ pub const SHADER_CELLS: u32 = 41;
 pub const SHADER_MISS: u32 = 42;
 pub const SHADER_ARGS: u32 = 43;
 pub const SHADER_FORGET: u32 = 44;
-pub const SHADERS: u32 = 45;
+/// The samples, a thread each, resumed from their cells' starts and walked
+/// to the blocks the pixels about them take (pxl-portable `beam::samples`):
+/// a compute entry.
+pub const SHADER_SAMPLE: u32 = 45;
+pub const SHADERS: u32 = 46;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -343,4 +347,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["args.gen"],
     // SHADER_FORGET
     &["forget.gen"],
+    // SHADER_SAMPLE
+    &["sample.gen"],
 ];

@@ -92,8 +92,13 @@ pub const NONE: u32 = u32::MAX;
 /// A children's word one walk has claimed and not yet given its tile.
 pub const CLAIMED: u32 = u32::MAX;
 
-/// The frames one clearing's keys tell apart (`tag`), before the next.
-pub const FRAMES: u32 = (1 << 19) - 1;
+/// The writing passes of a frame's cast, each a tag of its own (`tag`): the
+/// beam rays, the samples and the pixels that missed.
+pub const PASSES: u32 = 3;
+
+/// The frames one clearing's keys tell apart (`tag`), before the next: as
+/// many as the tag's 20 bits hold `PASSES` tags of.
+pub const FRAMES: u32 = (1 << 20) / PASSES - 1;
 
 /// Entry `i`'s first word.
 pub const fn entry_at(i: u32) -> u32 {
@@ -123,10 +128,11 @@ pub const fn key(tag: u32, [far, near]: [Zoom; 2]) -> u32 {
     tag | far << 20 | near << 26
 }
 
-/// A walk's tag: its frame's number and its pass, the beam rays' 0 and the
-/// pixels that missed 1. Never 0, which no key is.
+/// A walk's tag: its frame's number and its pass, the beam rays' 0, the
+/// samples' 1 and the pixels that missed 2 (`PASSES`). Never 0, which no
+/// key is.
 pub const fn tag(frame: u32, pass: u32) -> u32 {
-    2 * frame + pass
+    PASSES * frame + pass
 }
 
 /// The tag a key holds.

@@ -20,7 +20,7 @@ use crate::frame::draw::{
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
     FRAME_AT, PIPELINES, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_ARGS, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS, SHADER_JOINED,
-    SHADER_MISS, SHADER_WAYS, SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
+    SHADER_MISS, SHADER_SAMPLE, SHADER_WAYS, SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
 use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
@@ -817,17 +817,20 @@ struct CastBuffers {
     built: Built,
     /// The camera grid's beam rays (`beam_cs`), where each cell's pixels
     /// start off them (`cells_cs`, a thread a cell of the screen, `cells`),
-    /// and their buffer, over the cast's group (pxl-portable `beam`): how
-    /// many pixels missed, a line a corner, a start a cell, for `corners`
-    /// of them, then the pixels that missed, a word each; room for
-    /// `beam_room` corners and pixels
-    /// (doc/minutes/20261022-a-cell-casts-a-beam.md).
+    /// the samples walked from those starts (`sample_cs`, a thread a
+    /// sample, `samples`), and their buffer, over the cast's group
+    /// (pxl-portable `beam`): how many pixels missed, a line a corner, a
+    /// start a cell, for `corners` of them, a stop a sample, then the pixels
+    /// that missed, a word each; room for `beam_room` corners, samples and
+    /// pixels (doc/minutes/20261022-a-cell-casts-a-beam.md).
     beam_built: Built,
     cells_built: Built,
+    sample_built: Built,
     beams: u32,
     corners: [u32; 2],
     cells: [u32; 2],
-    beam_room: [u32; 2],
+    samples: [u32; 2],
+    beam_room: [u32; 3],
     /// The observed pyramid (pxl-portable `observed`): its buffer, no
     /// pixel's; the pixels the cast's reading walk missed walked again
     /// (`miss_cs`) by the dispatch `args_cs` writes into `args` over its own
@@ -1129,6 +1132,7 @@ impl RaysPass {
         let built = pipelines.build_compute(g, SHADER_CAST, group);
         let beam_built = pipelines.build_compute(g, SHADER_BEAM, group);
         let cells_built = pipelines.build_compute(g, SHADER_CELLS, group);
+        let sample_built = pipelines.build_compute(g, SHADER_SAMPLE, group);
         let joined_built = pipelines.build_compute(g, SHADER_JOINED, group);
         let miss_built = pipelines.build_compute(g, SHADER_MISS, group);
         let forget_built = pipelines.build_compute(g, SHADER_FORGET, group);
@@ -1139,10 +1143,12 @@ impl RaysPass {
             built,
             beam_built,
             cells_built,
+            sample_built,
             beams: 0,
             corners: [0; 2],
             cells: [0; 2],
-            beam_room: [0; 2],
+            samples: [0; 2],
+            beam_room: [0; 3],
             miss_built,
             args_built,
             forget_built,
@@ -1232,22 +1238,24 @@ impl RaysPass {
             g.write_buffer(c.eye, 0, bytes(&cast.eye));
         }
         c.size = rays.1;
-        // The grid's corners as the eye lays them, and room for their lines,
-        // their cells' starts and every pixel to miss, made again only where
-        // the corners or the pixels outgrow it.
+        // The grid's corners and the samples as the eye lays them, and room
+        // for the corners' lines, their cells' starts, the samples' stops
+        // and every pixel to miss, made again only where the corners, the
+        // samples or the pixels outgrow it.
         let word = |k: usize| f32::from_bits(cast.eye[k]);
         let tan = [word(eye::TAN), word(eye::TAN + 1)];
         let s = beam::spacing(pxl_portable::cast::Detail { tau: word(eye::TAU), range: [0; 2] });
-        (c.corners, c.cells) = (beam::corners(tan, s), beam::span(tan, s));
+        (c.corners, c.cells, c.samples) = (beam::corners(tan, s), beam::span(tan, s), beam::samples(tan, s));
         let held = c.corners[0] * c.corners[1];
+        let sampled = c.samples[0] * c.samples[1];
         let pixels = c.size[0] * c.size[1];
-        if held > c.beam_room[0] || pixels > c.beam_room[1] {
+        if held > c.beam_room[0] || sampled > c.beam_room[1] || pixels > c.beam_room[2] {
             if c.beams != 0 {
                 release(c.beams);
             }
-            let size = word_bytes((beam::list_at(held) + pixels) as usize);
+            let size = word_bytes((beam::list_at(held, sampled) + pixels) as usize);
             xpute_kit::ensure!(crate::frame::shader::floor::fits(size as u64, true), ENOTRECOVERABLE, held);
-            (c.beams, c.beam_room) = (g.buffer(size, buffer_usage::STORAGE | buffer_usage::COPY_DST), [held, pixels]);
+            (c.beams, c.beam_room) = (g.buffer(size, buffer_usage::STORAGE | buffer_usage::COPY_DST), [held, sampled, pixels]);
             release(c.args_group);
             c.args_group = g.bind_group(c.args_built.layouts[0], &[buffer_entry(0, c.beams), buffer_entry(1, c.args)]);
         }
@@ -1523,15 +1531,13 @@ impl RaysPass {
     fn dispatch(&self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
         let Some(c) = self.cast.as_ref() else { return };
         if self.kind == FrameKind::cast {
-            // The beam rays, a corner each; each cell's start off them; then
-            // the pixels, each from its cell's: one pass, a dispatch each,
-            // each reading what the one before wrote.
             // The observed pyramid forgotten first where it is; then the
             // beam rays writing it, a corner each; each cell's start off them;
-            // the pixels reading it, each from its cell's; and the pixels that
-            // missed again, writing it, by the dispatch counted off them. One
-            // pass, a dispatch each, each reading what the ones before wrote
-            // (pxl-portable `observed`).
+            // the samples writing it, each from its cell's start; the pixels
+            // off the samples about them, or reading it from their cell's
+            // start; and the pixels that missed again, writing it, by the
+            // dispatch counted off them. One pass, a dispatch each, each
+            // reading what the ones before wrote (pxl-portable `observed`).
             let pass = g.compute_pass(encoder, stamps[SPAN_CAST].pass());
             g.set_bind_group(pass, 0, c.group, &[]);
             if c.forgets != observed::FORGETS_NONE {
@@ -1541,6 +1547,7 @@ impl RaysPass {
             for (built, [x, y], w) in [
                 (&c.beam_built, c.corners, compute::BEAM_WORKGROUP),
                 (&c.cells_built, c.cells, compute::CELLS_WORKGROUP),
+                (&c.sample_built, c.samples, compute::SAMPLE_WORKGROUP),
                 (&c.built, c.size, compute::CAST_WORKGROUP),
             ] {
                 g.set_pipeline(pass, built.pipeline);

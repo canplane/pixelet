@@ -3,11 +3,14 @@
 //! gpu-portable: the camera grid's beam (doc/minutes/20261022-a-cell-casts-a-beam.md).
 //! A beam ray is cast through each corner of the grid's cells and walks the
 //! pyramid until it meets a block that fills or lacks, or a split narrower
-//! than it can share with the rays about it (`narrow`); each drawn pixel
-//! starts from the least of the beam rays about its cell, shortened by a
-//! margin (`handed`), and resumes from the line that beam ray left. The
-//! lattice is the grid's own, so the beam rays do not follow the screen's
-//! pixels.
+//! than it can share with the rays about it (`narrow`); each cell starts
+//! from the least of the beam rays about it, shortened by a margin
+//! (`handed`), and what resumes from the line that beam ray left is the
+//! samples, `SAMPLE` a cell a side, walked to the block that fills; each
+//! drawn pixel takes the nearest of the blocks the samples about it stopped
+//! at that its own ray enters, and walks from its cell's start only where
+//! none does. The lattice is the grid's own, so neither the beam rays nor
+//! the samples follow the screen's pixels.
 
 use crate::cast::Detail;
 use crate::grid::SPLIT;
@@ -124,12 +127,63 @@ pub const CELL_T: u32 = 0;
 pub const CELL_CORNER: u32 = 1;
 pub const CELL_WORDS: u32 = 2;
 
+/// The samples: rays on a lattice `SAMPLE` a cell a side, each resumed from
+/// its cell's start as a pixel is and walked to the block that fills; a
+/// pixel takes the nearest of the blocks the `2 · NEAR` a side samples about
+/// it stopped at that its own ray enters, and walks only where none does.
+/// The lattice runs `NEAR` samples past the screen on each side, so every
+/// sample a pixel reads is cast.
+pub const SAMPLE: u32 = 4;
+pub const NEAR: u32 = 2;
+
+/// The samples across and up, `tan` the screen's half-angles' tangents.
+pub fn samples(tan: [f32; 2], s: f32) -> [u32; 2] {
+    let n = span(tan, s);
+    [n[0] * SAMPLE + 1 + 2 * NEAR, n[1] * SAMPLE + 1 + 2 * NEAR]
+}
+
+/// The tangents across and up of sample `[i, j]`, from the screen's left
+/// and top `NEAR` samples past it.
+pub fn sample(tan: [f32; 2], s: f32, [i, j]: [u32; 2]) -> [f32; 2] {
+    let d = s / SAMPLE as f32;
+    [-tan[0] + (i as f32 - NEAR as f32) * d, tan[1] - (j as f32 - NEAR as f32) * d]
+}
+
+/// The screen's cell sample `[i, j]` starts from: the one holding it, or
+/// the nearest where it lies past the screen, as only the screen's cells
+/// have a start.
+pub fn sample_cell(tan: [f32; 2], s: f32, [i, j]: [u32; 2]) -> [u32; 2] {
+    let n = span(tan, s);
+    [((i.max(NEAR) - NEAR) / SAMPLE).min(n[0] - 1), ((j.max(NEAR) - NEAR) / SAMPLE).min(n[1] - 1)]
+}
+
+/// The first of the `2 · NEAR` a side samples about the screen's point at
+/// the tangents `[tx, ty]`: `NEAR` of them at or before the point, which
+/// the lattice's `NEAR` past the screen put a sample past the point's
+/// floor, so the first is the floor and one.
+pub fn about(tan: [f32; 2], s: f32, [tx, ty]: [f32; 2]) -> [u32; 2] {
+    let d = s / SAMPLE as f32;
+    let at = |v: f32| libm::floorf(v / d) as u32 + 1;
+    [at(tx + tan[0]), at(tan[1] - ty)]
+}
+
+/// What a sample leaves for the pixels about it, in words: the node it
+/// stopped at — its zoom, `SAMPLE_NONE` where it stopped at none, its
+/// corner, its roots — and the block there.
+pub const SAMPLE_ZOOM: u32 = 0;
+pub const SAMPLE_CORNER: u32 = 1;
+pub const SAMPLE_ROOTS: u32 = 4;
+pub const SAMPLE_BLOCK: u32 = 7;
+pub const SAMPLE_WORDS: u32 = 9;
+pub const SAMPLE_NONE: u32 = u32::MAX;
+
 /// The beam rays' buffer, the cast's own for a frame, one binding: how
 /// many pixels its reading walk missed (`MISSES`, 0 before the cast), the
-/// lines, a corner each (`LINES_AT`), the cells' starts (`cells_at`) and
-/// the pixels that missed, a word each (`list_at`), for `corners` corners.
-/// The count is at a fixed word, so the dispatch counted off it is read
-/// knowing no corner count.
+/// lines, a corner each (`LINES_AT`), the cells' starts (`cells_at`), the
+/// samples' stops (`samples_at`) and the pixels that missed, a word each
+/// (`list_at`), for `corners` corners and `samples` samples. The count is
+/// at a fixed word, so the dispatch counted off it is read knowing no
+/// corner count.
 pub const MISSES: u32 = 0;
 pub const LINES_AT: u32 = 1;
 
@@ -138,7 +192,12 @@ pub const fn cells_at(corners: u32) -> u32 {
     LINES_AT + corners * LINE_WORDS
 }
 
-/// Where the pixels that missed are listed, past `corners` cells.
-pub const fn list_at(corners: u32) -> u32 {
+/// Where the samples' stops start, past `corners` cells.
+pub const fn samples_at(corners: u32) -> u32 {
     cells_at(corners) + corners * CELL_WORDS
+}
+
+/// Where the pixels that missed are listed, past `samples` samples.
+pub const fn list_at(corners: u32, samples: u32) -> u32 {
+    samples_at(corners) + samples * SAMPLE_WORDS
 }

@@ -295,6 +295,26 @@ pub fn holding(o: [i32; 3], ray: &Ray, mut n: Node, t: f32) -> Node {
     }
 }
 
+/// Where a ray enters a node whose near planes it reaches at `near`: the
+/// axis entered across, the last of those planes the ray reaches
+/// (`crossing`), and that plane's t, no nearer than the origin — the node's
+/// and the ray's alone, whatever walk came to it.
+fn entered(ray: &Ray, near: [f32; 3]) -> (f32, u32) {
+    let e = crossing(ray.direction, near, true);
+    (greater(axis(near, e), 0.0), e)
+}
+
+/// Where `ray` from the origin `o` enters the node `n`, and whether it does
+/// within its reach: its span in the node from the origin (`spans`), and
+/// where that span begins (`entered`). Only touched, at a face or an edge,
+/// is not entered, as the walk has it.
+pub fn entry(o: [i32; 3], ray: &Ray, n: &Node) -> (f32, u32, bool) {
+    let (x, y, z) = spans(ray, bounds(n, grid_of(o)), 0.0);
+    let (t0, t1) = (greater(greater(greater(0.0, x.0), y.0), z.0), lesser(lesser(lesser(ray.reach, x.1), y.1), z.1));
+    let (t, e) = entered(ray, [x.0, y.0, z.0]);
+    (t, e, t1 > t0)
+}
+
 /// Whether the ray, at `t`, has crossed the mid plane `mid` units from the
 /// origin on an axis: the child it is in lies past that plane.
 fn past(d: f32, inv: f32, mid: f32, t: f32) -> bool {
@@ -547,14 +567,11 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
             };
             if ends != Ends::On {
                 // Where the walk ends, its stop, made there and nowhere else:
-                // the axis entered across the last of the near planes the
-                // ray reaches, and that plane, the node's and the ray's alone
-                // whatever way the walk came to it, no nearer than the origin.
-                let near = [x.0, y.0, z.0];
-                let entered = crossing(ray.direction, near, true);
+                // where the ray enters the node (`entered`).
+                let (t, axis) = entered(ray, [x.0, y.0, z.0]);
                 let stop = Stop {
-                    t: greater(axis(near, entered), 0.0),
-                    axis: entered,
+                    t,
+                    axis,
                     node: n,
                     at,
                     block: i.block,

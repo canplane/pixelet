@@ -563,16 +563,29 @@ impl cast::Over<Writ> for Beamed<'_> {
     }
 }
 
-/// Where a pixel of the `size` the rays are starts: its cell's least, the
-/// corner's line it resumes from, and its ray (pxl-portable `beam`).
-fn started<'a>(eye: &Eye, beams: &'a Beams, p: UVec3, size: UVec3) -> (cast::Ray, f32, Beamed<'a>) {
-    let ((_, detail), tan) = (eye_origin(eye), pixel_tan(eye, p, size));
-    let (screen, s) = (eye_tan(eye), beam::spacing(detail));
-    let corners = beam::corners(screen, s);
-    let c = beam::cell(screen, s, tan);
-    let cell = beam::cells_at(corners[0] * corners[1]) + (c[1] * corners[0] + c[0]) * beam::CELL_WORDS;
-    let t = f32::from_bits(seen_at(beams, cell + beam::CELL_T));
-    (eye_ray(eye, tan), t, Beamed(beams, beam::LINES_AT + seen_at(beams, cell + beam::CELL_CORNER) * beam::LINE_WORDS))
+/// Where the ray at the screen's tangents `tan` starts from the cell whose
+/// first corner is `cell`: that cell's least, the corner's line it resumes
+/// from, and the ray (pxl-portable `beam`).
+fn started<'a>(eye: &Eye, beams: &'a Beams, cell: [u32; 2], tan: [f32; 2]) -> (cast::Ray, f32, Beamed<'a>) {
+    let (_, detail) = eye_origin(eye);
+    let corners = beam::corners(eye_tan(eye), beam::spacing(detail));
+    let at = beam::cells_at(corners[0] * corners[1]) + (cell[1] * corners[0] + cell[0]) * beam::CELL_WORDS;
+    let t = f32::from_bits(seen_at(beams, at + beam::CELL_T));
+    (eye_ray(eye, tan), t, Beamed(beams, beam::LINES_AT + seen_at(beams, at + beam::CELL_CORNER) * beam::LINE_WORDS))
+}
+
+/// `ray`'s walk to the block that fills, resumed at `t` from the deepest
+/// node of `line` holding where it is there, or, where that lies in another
+/// root, from the root at it (doc/minutes/20261022-a-cell-casts-a-beam.md,
+/// "Where a pixel resumes"); through `q`, reading or writing.
+fn resumed<'a, Q: Query>(q: &mut Q, origin: [i32; 3], ray: &cast::Ray, detail: Detail, t: f32, line: &Beamed<'a>) -> Met<Q::At>
+where
+    Beamed<'a>: cast::Over<Q::At>,
+{
+    let (h, held) = line.node().over(cast::point_at(origin, ray, t));
+    let h = cast::holding(origin, ray, h, t);
+    let from = if held { (h, <Beamed<'a> as cast::Over<Q::At>>::over(line, h.zoom), t) } else { (cast::Node::ROOT, q.root(cast::Node::ROOT.index(origin)), t) };
+    cast::walk(q, origin, ray, detail, Until::Fills, from, line, &mut ())
 }
 
 /// A ray's words written into the rays at pixel `p`.
@@ -700,14 +713,70 @@ pub fn cells_cs(
     seen_put(beams, cell + beam::CELL_CORNER, from);
 }
 
+/// Each sample of the screen (pxl-portable `beam::samples`), a thread each:
+/// its ray resumed from its cell's start as a pixel's is, walked to the
+/// block that fills through the observed pyramid writing what it asks
+/// (`Writing`), and the node and block it stopped at left for the pixels
+/// about it (`beam::SAMPLE_WORDS`), `beam::SAMPLE_NONE` where it stopped at
+/// none.
+#[spirv(compute(threads(8, 8, 1)))]
+#[allow(clippy::too_many_arguments)]
+pub fn sample_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+) {
+    let window: &[IVec4] = window;
+    let (origin, detail) = eye_origin(eye);
+    let (tan, s) = (eye_tan(eye), beam::spacing(detail));
+    let n = beam::samples(tan, s);
+    if id.x >= n[0] || id.y >= n[1] {
+        return;
+    }
+    let (ray, t, line) = started(eye, beams, beam::first(tan, s, beam::sample_cell(tan, s, [id.x, id.y])), beam::sample(tan, s, [id.x, id.y]));
+    let tag = observed::tag(seen_at(seen, observed::FRAME), 1);
+    let world = World {
+        window,
+        ground,
+        looks,
+        shards,
+        overwrites,
+        eye,
+        pool: ways::tree::Read(pool),
+    };
+    let met = resumed(&mut Writing { world, seen, tag }, origin, &ray, detail, t, &line);
+    let corners = beam::corners(tan, s);
+    let base = beam::samples_at(corners[0] * corners[1]) + (id.y * n[0] + id.x) * beam::SAMPLE_WORDS;
+    let stop = met.stop;
+    seen_put(beams, base + beam::SAMPLE_ZOOM, if met.ends == Ends::Stop { stop.node.zoom } else { beam::SAMPLE_NONE });
+    seen_put(beams, base + beam::SAMPLE_CORNER, stop.node.corner[0]);
+    seen_put(beams, base + beam::SAMPLE_CORNER + 1, stop.node.corner[1]);
+    seen_put(beams, base + beam::SAMPLE_CORNER + 2, stop.node.corner[2]);
+    seen_put(beams, base + beam::SAMPLE_ROOTS, stop.node.roots[0] as u32);
+    seen_put(beams, base + beam::SAMPLE_ROOTS + 1, stop.node.roots[1] as u32);
+    seen_put(beams, base + beam::SAMPLE_ROOTS + 2, stop.node.roots[2] as u32);
+    seen_put(beams, base + beam::SAMPLE_BLOCK, stop.block[0]);
+    seen_put(beams, base + beam::SAMPLE_BLOCK + 1, stop.block[1]);
+}
+
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
 /// pxl-portable `ray`): the cast writes them.
 type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
-/// Each pixel's ray from its cell's start, reading the observed pyramid
-/// alone (`Reading`), its binding read-only so no read of it is atomic:
-/// its words where every node it asked was kept, else the pixel listed in
-/// the beam rays' buffer for `miss_cs` (pxl-portable `beam::list_at`).
+/// Each pixel's ray: the nearest of the blocks the samples about it stopped
+/// at that it enters (pxl-portable `beam::about`, `cast::entry`), its
+/// words; where it enters none, the ray from its cell's start, reading the
+/// observed pyramid alone (`Reading`), its binding read-only so no read of
+/// it is atomic: its words where every node it asked was kept, else the
+/// pixel listed in the beam rays' buffer for `miss_cs` (pxl-portable
+/// `beam::list_at`).
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn cast_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -721,20 +790,56 @@ pub fn cast_cs(
         return;
     }
     let (origin, detail) = eye_origin(eye);
-    let (ray, t, line) = started(eye, beams, id, size);
-    let mut q = Reading { seen };
-    // Resumed from the deepest node of its cell's line holding where it
-    // starts, or, where that lies in another root, from the root at it.
-    let (h, held) = line.node().over(cast::point_at(origin, &ray, t));
-    let h = cast::holding(origin, &ray, h, t);
-    let from = if held { (h, cast::Over::<u32>::over(&line, h.zoom), t) } else { (cast::Node::ROOT, q.root(cast::Node::ROOT.index(origin)), t) };
-    let met = cast::walk(&mut q, origin, &ray, detail, Until::Fills, from, &line, &mut ());
+    let (tan, s) = (eye_tan(eye), beam::spacing(detail));
+    let px = pixel_tan(eye, id, size);
+    let (ray, t, line) = started(eye, beams, beam::cell(tan, s, px), px);
+    let (corners, n, about) = (beam::corners(tan, s), beam::samples(tan, s), beam::about(tan, s, px));
+    let samples = beam::samples_at(corners[0] * corners[1]);
+    // The nearest block entered, at the reach where none is.
+    let mut hit = cast::Stop {
+        t: ray.reach,
+        axis: 0,
+        node: cast::Node::ROOT,
+        at: 0u32,
+        block: MISSED,
+    };
+    let mut j = 0;
+    while j < 2 * beam::NEAR {
+        let mut i = 0;
+        while i < 2 * beam::NEAR {
+            let k = samples + ((about[1] + j) * n[0] + about[0] + i) * beam::SAMPLE_WORDS;
+            let zoom = seen_at(beams, k + beam::SAMPLE_ZOOM);
+            if zoom != beam::SAMPLE_NONE {
+                let node = cast::Node {
+                    corner: [seen_at(beams, k + beam::SAMPLE_CORNER), seen_at(beams, k + beam::SAMPLE_CORNER + 1), seen_at(beams, k + beam::SAMPLE_CORNER + 2)],
+                    zoom,
+                    roots: [seen_at(beams, k + beam::SAMPLE_ROOTS) as i32, seen_at(beams, k + beam::SAMPLE_ROOTS + 1) as i32, seen_at(beams, k + beam::SAMPLE_ROOTS + 2) as i32],
+                };
+                let (enter, axis, enters) = cast::entry(origin, &ray, &node);
+                if enters && enter < hit.t {
+                    hit = cast::Stop {
+                        t: enter,
+                        axis,
+                        node,
+                        at: 0u32,
+                        block: [seen_at(beams, k + beam::SAMPLE_BLOCK), seen_at(beams, k + beam::SAMPLE_BLOCK + 1)],
+                    };
+                }
+            }
+            i += 1;
+        }
+        j += 1;
+    }
+    if hit.t < ray.reach {
+        written(rays, id, word(&ray, Met { ends: Ends::Stop, stop: hit, visits: 0 }, eye.origin.w != 0));
+        return;
+    }
+    let met = resumed(&mut Reading { seen }, origin, &ray, detail, t, &line);
     // Listed through the buffer as bound: naga's atomics trace no pointer a
     // walk's state carries.
     if met.ends == Ends::Lacks && met.stop.block[0] == MISSED[0] {
-        let corners = beam::corners(eye_tan(eye), beam::spacing(detail));
         let k = seen_add(beams, beam::MISSES, 1);
-        seen_put(beams, beam::list_at(corners[0] * corners[1]) + k, id.x | id.y << 16);
+        seen_put(beams, beam::list_at(corners[0] * corners[1], n[0] * n[1]) + k, id.x | id.y << 16);
     } else {
         written(rays, id, word(&ray, met, eye.origin.w != 0));
     }
@@ -780,11 +885,13 @@ pub fn miss_cs(
         return;
     }
     let (origin, detail) = eye_origin(eye);
-    let corners = beam::corners(eye_tan(eye), beam::spacing(detail));
-    let listed = seen_at(beams, beam::list_at(corners[0] * corners[1]) + k);
+    let (tan, s) = (eye_tan(eye), beam::spacing(detail));
+    let (corners, n) = (beam::corners(tan, s), beam::samples(tan, s));
+    let listed = seen_at(beams, beam::list_at(corners[0] * corners[1], n[0] * n[1]) + k);
     let p = UVec3::new(listed & 0xffff, listed >> 16, 0);
-    let (ray, t, line) = started(eye, beams, p, rays.query_size());
-    let tag = observed::tag(seen_at(seen, observed::FRAME), 1);
+    let px = pixel_tan(eye, p, rays.query_size());
+    let (ray, t, line) = started(eye, beams, beam::cell(tan, s, px), px);
+    let tag = observed::tag(seen_at(seen, observed::FRAME), 2);
     let world = World {
         window,
         ground,
@@ -794,11 +901,7 @@ pub fn miss_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    let mut q = Writing { world, seen, tag };
-    let (h, held) = line.node().over(cast::point_at(origin, &ray, t));
-    let h = cast::holding(origin, &ray, h, t);
-    let from = if held { (h, cast::Over::<Writ>::over(&line, h.zoom), t) } else { (cast::Node::ROOT, q.root(cast::Node::ROOT.index(origin)), t) };
-    let met = cast::walk(&mut q, origin, &ray, detail, Until::Fills, from, &line, &mut ());
+    let met = resumed(&mut Writing { world, seen, tag }, origin, &ray, detail, t, &line);
     written(rays, p, word(&ray, met, eye.origin.w != 0));
 }
 

@@ -29,6 +29,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_MISS => "miss_cs",
         SHADER_ARGS => "args_cs",
         SHADER_FORGET => "forget_cs",
+        SHADER_SAMPLE => "sample_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }

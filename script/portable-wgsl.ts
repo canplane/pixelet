@@ -32,6 +32,7 @@ const shaders = join(root, "crates/client/render/src/frame/shader");
 const ENTRIES = [
   ["beam_cs", "beam.gen.wgsl"],
   ["cells_cs", "cells.gen.wgsl"],
+  ["sample_cs", "sample.gen.wgsl"],
   ["cast_cs", "cast.gen.wgsl"],
   ["miss_cs", "miss.gen.wgsl"],
   ["args_cs", "args.gen.wgsl"],
