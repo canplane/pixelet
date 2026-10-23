@@ -15,8 +15,7 @@ use selection::select_visible_billboards;
 use crate::billboard::badge::{self, Label, Look};
 use crate::billboard::batch::BillboardBatch;
 use crate::billboard::chat::{shown_line, speaker};
-use crate::billboard::field::billboard_instance;
-use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set};
+use crate::billboard::field::{billboard_instance, BillboardSet};
 use crate::chunk::Chunk;
 use crate::layer::object::preview::draft;
 use crate::layer::place::carto_zoom;
@@ -48,7 +47,7 @@ use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile};
 struct Placement {
     batch: BillboardBatch,
     kept: Vec<u32>,
-    set: Option<u32>,
+    set: BillboardSet,
     drawn: Vec<u32>,
     /// Nearest the eye first: screen box, label, and where it stands.
     hits: Vec<([f64; 4], Label, Q3)>,
@@ -249,8 +248,7 @@ fn spacing_px() -> f64 {
 pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let p = PLACEMENT.get(Placement::default);
     if crate::view::observation::eye().is_none() {
-        if let Some(set) = p.set.take() {
-            remove_billboard_set(&mut crate::kernel().draw, set);
+        if p.set.free(&mut crate::kernel().draw) {
             ctx.invalidate();
         }
         // Nothing is drawn now: what comes back is laid out afresh.
@@ -435,15 +433,18 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     }
     // Written, and a frame asked, only where what is drawn changed.
     if instances != p.instances {
-        let set = *p.set.get_or_insert_with(new_billboard_set);
-        place_billboard_set(set, about);
         if let Some(k) = crate::laid() {
-            write_billboard_set(&mut k.draw, set, &instances);
+            p.set.write(&mut k.draw, about, &instances);
         }
         ctx.invalidate();
     }
     let drawn_instances = core::mem::replace(&mut p.instances, instances);
     (p.labeled, p.spare, p.spare_instances) = (labeled, drawn_before, drawn_instances);
+}
+
+/// The billboards the last step laid out, into the frame's list.
+pub fn draw(draw: &mut pxl_render::frame::draw::DrawList, eye: V3) {
+    PLACEMENT.get(Placement::default).set.draw(draw, eye);
 }
 
 /// Where a tap on a billboard goes: to its place; a marker someone put up is

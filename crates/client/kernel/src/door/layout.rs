@@ -66,14 +66,15 @@ pub enum Fixed {
 /// None is let go.
 const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::decor::assets::MODELS_MAX + crate::scene::environment::cloud::MODELS_MAX;
 
-const SINGLE_BLOCKS: usize = 3;
+/// The ghost's, the puck's zone, the debug lines' and the billboards'.
+const SINGLE_BLOCKS: usize = 4;
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a
 /// count the structure fixes (a catalog's length, the camera grid's cells,
 /// the surfaces), so overflowing the renderer's table is a bug, not a load.
 /// The renderer frees a list's blocks before taking its uploads, so it never
 /// holds more.
-const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::scene::environment::cloud::BLOCKS_MAX + crate::scene::actor::ACTORS_MAX + crate::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
+const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::scene::environment::cloud::BLOCKS_MAX + crate::scene::actor::ACTORS_MAX + SINGLE_BLOCKS;
 
 pub const BLOCK_SLOTS: usize = pxl_render::gpu::blocks::block_slots(MAX_LIVE_BLOCKS);
 
