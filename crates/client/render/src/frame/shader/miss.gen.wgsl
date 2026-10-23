@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: b27fd6b6eaa68139dab5a3d658b61a0149b5341bcbdc57e02b0c9f7aa0a596b3
+// Inputs: 409df8beac034c276b8facea7de79fcfd8a52fc0f92f7e13b57c081d9228070f
 struct type_4 {
     member: array<u32>,
 }
@@ -1104,7 +1104,7 @@ fn function_() {
                 let _e319 = (_e255 + 1u);
                 let _e321 = (_e263 + 1u);
                 let _e327 = ((_e319 + _e318) * (_e321 + _e318));
-                let _e338 = global_8.member[((((1u + (_e327 * 206u)) + (_e327 * 2u)) + ((((_e255 * 4u) + 5u) * ((_e263 * 4u) + 5u)) * 10u)) + _e208)];
+                let _e338 = global_8.member[((((1u + (_e327 * 206u)) + (_e327 * 2u)) + ((((_e255 * 4u) + 5u) * ((_e263 * 4u) + 5u)) * 11u)) + _e208)];
                 let _e339 = (_e338 & 65535u);
                 let _e341 = (_e338 >> bitcast<u32>(16i));
                 let _e342 = textureDimensions(global_11);
