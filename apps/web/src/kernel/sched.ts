@@ -55,7 +55,7 @@ export let strobe: Strobe;
 /** The page's one clock, in Unix milliseconds (WORLD_FRAME `unix_ms`). */
 let clock: () => f64 = () => Date.now();
 
-/** Replaces the clock, before the first frame. */
+/** Replaces the clock: the next frame's time, and every one after, is its. */
 export function set_clock(c: () => f64): void {
   clock = c;
 }
