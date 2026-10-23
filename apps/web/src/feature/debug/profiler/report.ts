@@ -15,7 +15,7 @@ const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 const signedBytes = (b: number) => `${b >= 0 ? "+" : ""}${valueText("_bytes", b)}`;
 const bytes = (b: number) => valueText("_bytes", b);
 /** Where the interval's turns ended: before it, by the time left, or past it,
- * by how much (the kernel's profiler/frame.rs `off_turn_ms`, `over_ms`). */
+ * by how much (the kernel's profiler/frame.rs `over_ms`). */
 const pastText = (f: Frame) => (f.busy_ms > f.interval_ms ? `over by ${n1(f.busy_ms - f.interval_ms)}` : `off-turn ${n1(f.interval_ms - f.busy_ms)}`);
 const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 

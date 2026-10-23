@@ -93,7 +93,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
       <>
         {/* Frames a second over the window, and at the median interval. */}
         <Row k="fps window/p50" v={`${or(fps(f) ?? NaN)}/${f.interval.p50 > 0 ? n1(1000 / f.interval.p50) : "-"}`} />
-        <Row k="interval p50/p95" v={`${n1(f.interval.p50)}/${n1(f.interval.p95)} ms`} warn={f.interval.p95 >= f.last.paced_ms + f.last.refresh_ms / 2} />
+        <Row k="interval p50/p95" v={`${n1(f.interval.p50)}/${n1(f.interval.p95)} ms`} warn={f.interval.p95 > f.last.paced_ms + f.last.refresh_ms / 2} />
         <Row k="missed/moving" v={`${f.missed}/${f.moving}`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
         <Row k="refresh/paced" v={`${n1(f.last.refresh_ms)}/${n1(f.last.paced_ms)} ms`} />
         <Row k="cpu busy p95" v={`${n1(f.busy.p95)} ms`} warn={f.busy.p95 > f.last.paced_ms} />

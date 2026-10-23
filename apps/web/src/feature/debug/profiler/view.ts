@@ -15,7 +15,7 @@ import { OUTCOME_NAMES, STREAM_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/deman
 import { kernel_call, kernel_memory, kernel_room } from "@/kernel/shell.ts";
 
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
-import { CENSUS_TAGS, FRAME, LOG, READ, RINGS, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WAKES, WORST } from "./profiler.spec.ts";
+import { FRAME, LOG, READ, RINGS, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WAKES, WORST } from "./profiler.spec.ts";
 import { STEP_NAMES } from "@/kernel/turn/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
 import { type Frame, frameAt } from "./lane.ts";
