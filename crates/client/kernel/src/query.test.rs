@@ -328,3 +328,22 @@ fn a_height_stands_on_the_floor_nearest_it() {
     let access = World::new(&residency, &store);
     assert_eq!(access.support_nearest(&world::point(x + 0.5, y + 0.5, 9.0)), Answer::Exact(Some(10.0)));
 }
+
+/// A reading reports the columns its queries read: a support its own
+/// cell's, a walk every cell it passes, joined.
+#[test]
+fn a_reading_reports_the_columns_its_queries_read() {
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let store = Store::default();
+    let read = changed::Columns::default();
+    let access = World::new(&residency, &store).reading(&read);
+    let cell = units(GROUND.cell());
+    let at = [x + 0.5 * cell, y + 0.5 * cell];
+    let c = at.map(|v| libm::floor(v / cell) * cell);
+    access.surface_support(&point(at[0], at[1]));
+    assert_eq!(read.get(), Some([c, c.map(|v| v + cell)]));
+    let from = world::point(at[0], at[1], over(5.0));
+    access.step_slide(&from, &world::point(at[0] + 3.0 * cell, at[1], 0.0), &from, true).unwrap();
+    assert_eq!(read.get(), Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
+}

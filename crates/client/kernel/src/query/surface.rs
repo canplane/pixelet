@@ -34,6 +34,9 @@ impl World<'_> {
                 block: pxl_spec::block::cube::sentinel::unknown,
             }));
         }
+        let side = units(cell);
+        let middle = c.map(|v| (f64::from(v) + 0.5) * side);
+        self.read(middle, middle, cell);
         let line = self.terrain.cursor((cell, c), cell);
         self.terrain.column(&line, Found::NONE, (cell, c)).map(|col| {
             col.grounded().then(|| Surface {

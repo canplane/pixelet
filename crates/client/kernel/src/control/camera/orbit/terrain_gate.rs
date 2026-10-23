@@ -13,6 +13,7 @@ use xpute_kit::math::scalar::wrap;
 use crate::control::camera::orbit::orbit_eye_offset;
 use crate::control::camera::state::Intent;
 use crate::param::EYE_CLEARANCE_U;
+use crate::query::changed::{within, Columns};
 use crate::query::{over, World};
 use crate::setting::store::{settings_store, OrbitObstacleMode};
 use crate::view::frame::coord::world_to_canonical;
@@ -48,12 +49,11 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
 
 /// Rise to the ground under the eye, reached by a step-slide at the eye's
 /// height that climbs and does not fall; none where it is slid short.
-fn climb_rise(at: &ViewPose) -> Option<f64> {
+fn climb_rise(at: &ViewPose, access: &World) -> Option<f64> {
     let (_, eye) = eye(at);
     let center = world_to_canonical(&at.target);
     let floor = index_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
     let from = world::at(i64::from(center[0]), i64::from(center[1]), q3::from_real(over(floor)));
-    let access = World::now();
     // Near, the eye's way walks the leaves; far, it is a map and goes through.
     // Where the leaf under the center, or a map's under the eye, is not held, the ground under the eye.
     let walked = access.step_slide(&from, &eye, &eye, false).unwrap_or(eye);
@@ -89,7 +89,7 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
         // A climb that would pass through something solid (a tunnel's roof to the
         // surface over it) is held as `stop` holds it.
         OrbitObstacleMode::climb => {
-            if path_clear(from, &climbed(*to)) {
+            if path_clear(from, &climbed(*to, &World::now())) {
                 return *to;
             }
         }
@@ -154,7 +154,7 @@ const CLIMB_PASSES: u32 = 2;
 /// ground.
 ///
 /// It stands while what it is made of stands: the pose, where its target is
-/// on the world, and the ground its walks read (`walked`).
+/// on the world, and the ground its walks read (`Columns`).
 pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
     let Some(at) = pose(Intent { dist, polar, azimuth }) else { return polar };
     let climb = Climb {
@@ -163,10 +163,11 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
     };
     let last = CLIMBED.get(|| None);
     match *last {
-        Some((c, polar)) if c == climb && !crate::query::changed::within(walked(&at), &[]) => polar,
+        Some(Climbed(c, read, polar)) if c == climb && !within(read, &[]) => polar,
         _ => {
-            let polar = climbed(at).polar;
-            *last = Some((climb, polar));
+            let read = Columns::default();
+            let polar = climbed(at, &World::now().reading(&read)).polar;
+            *last = read.get().map(|r| Climbed(climb, r, polar));
             polar
         }
     }
@@ -179,22 +180,16 @@ struct Climb {
     center: Q3,
 }
 
-/// The last climb and the pitch it gave.
-static CLIMBED: Global<Option<(Climb, f64)>> = Global::new();
+/// A climb, the columns it read, and the pitch it gave.
+#[derive(Clone, Copy)]
+struct Climbed(Climb, [[f64; 2]; 2], f64);
 
-/// The columns a climb from `at` reads, corners in units: its eyes stay on
-/// the line from the target to `at`'s eye, as steepening only draws the eye
-/// in, and each walk and floor reads its cells and a cell about them.
-fn walked(at: &ViewPose) -> [[f64; 2]; 2] {
-    let [center, eye] = [world_to_canonical(&at.target), eye(at).1].map(|q| [0, 1].map(|k| q3::to_real(i64::from(q[k]))));
-    let eye = [world::nearest(eye[0], center[0]), eye[1]];
-    let margin = 2.0 * units(GROUND.cell());
-    [[0, 1].map(|k| center[k].min(eye[k]) - margin), [0, 1].map(|k| center[k].max(eye[k]) + margin)]
-}
+/// The last climb.
+static CLIMBED: Global<Option<Climbed>> = Global::new();
 
-fn climbed(mut at: ViewPose) -> ViewPose {
+fn climbed(mut at: ViewPose, access: &World) -> ViewPose {
     for _ in 0..CLIMB_PASSES {
-        let Some(rise) = climb_rise(&at).filter(|r| *r > 0.0) else { break };
+        let Some(rise) = climb_rise(&at, access).filter(|r| *r > 0.0) else { break };
         // Only ever steepens.
         let solved = libm::acos((rise / at.dist).min(1.0));
         at.polar = at.polar.min(solved);

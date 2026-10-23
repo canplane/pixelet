@@ -12,6 +12,7 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::kernel;
+use crate::query::changed::{within, Columns};
 use crate::query::World;
 use crate::scene::frame::Frame;
 use crate::sched::edge::request_world_tick;
@@ -54,7 +55,7 @@ fn zone_samples() -> impl Iterator<Item = ZoneSample> {
 }
 
 /// What grounding the zone is made of, by value: the fix, and where it is
-/// in the eye's frame. With the ground its queries read (`read`), it is all.
+/// in the eye's frame. With the ground its queries read (`Columns`), it is all.
 #[derive(Clone, Copy, PartialEq)]
 struct Seen {
     device: Q3,
@@ -92,9 +93,9 @@ pub struct LocationPuck {
     last_known_device_coord: Option<Q3>,
     /// None until grounded, rather than drawing at a guessed height.
     last_known_center_z: Option<f64>,
-    /// What the zone was last grounded from, and the center it gave; none
-    /// where it found no height.
-    grounded: Option<(Seen, Option<V3>)>,
+    /// What the zone was last grounded from, the columns grounding it read,
+    /// and the center it gave; none where it found no height.
+    grounded: Option<(Seen, [[f64; 2]; 2], Option<V3>)>,
     /// The zone grounded this step, kept so a step allocates nothing.
     lane: Vec<f32>,
     /// The zone's instances drawn, ZONE_INSTANCE_FLOATS floats an instance,
@@ -120,10 +121,11 @@ impl LocationPuck {
             pos: crate::view::frame::coord::to_world(&device),
         };
         let center_pos = match self.grounded {
-            Some((s, center)) if s == seen && !crate::query::changed::within(read(&device), &[]) => center,
+            Some((s, read, center)) if s == seen && !within(read, &[]) => center,
             _ => {
-                let center = self.ground(draw, seen);
-                self.grounded = Some((seen, center));
+                let read = Columns::default();
+                let center = self.ground(World::now().reading(&read), draw, seen);
+                self.grounded = read.get().map(|r| (seen, r, center));
                 center
             }
         };
@@ -142,10 +144,10 @@ impl LocationPuck {
 
     /// The zone grounded at the fix and drawn where it changed: its center, none
     /// where the fix has no height yet.
-    fn ground(&mut self, draw: &mut DrawList, seen: Seen) -> Option<V3> {
+    fn ground(&mut self, world: World, draw: &mut DrawList, seen: Seen) -> Option<V3> {
         let (device, pos) = (seen.device, seen.pos);
         // The fix names a place and not how high.
-        if let Some(z) = World::now().surface_support(&device).value().flatten() {
+        if let Some(z) = world.surface_support(&device).value().flatten() {
             self.last_known_center_z = Some(z);
         }
         let center_z = self.last_known_center_z?;
@@ -159,7 +161,7 @@ impl LocationPuck {
             let coord = world::point(v[0], v[1], v[2]);
             // An unloaded neighbor tile falls back to the center's height; 0 would sink
             // or launch that instance.
-            let delta_ele = World::now().surface_support(&coord).value().flatten().unwrap_or(center_pos[2]) - center_pos[2];
+            let delta_ele = world.surface_support(&coord).value().flatten().unwrap_or(center_pos[2]) - center_pos[2];
             let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
             let v = v3::center(&lifted, units(GROUND.cell()));
             lane.extend([
@@ -255,12 +257,4 @@ impl LocationPuck {
         ];
         draw.draw_as(PIPELINE_PUCK_BEACON, 0, p.night as u32, 0, beacon, (p.time * 1.2) as f32, 1.0);
     }
-}
-
-/// The columns grounding the zone at `device` reads, corners in units: its
-/// cells, floored to the cell, and a cell about each.
-fn read(device: &Q3) -> [[f64; 2]; 2] {
-    let at = [0, 1].map(|k| pxl_spec::space::coord::q3::to_real(i64::from(device[k])));
-    let reach = (ZONE_RADIUS_CELL.ceil() + 2.0) * units(GROUND.cell());
-    [at.map(|v| v - reach), at.map(|v| v + reach)]
 }

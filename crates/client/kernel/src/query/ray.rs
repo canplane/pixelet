@@ -208,6 +208,8 @@ impl<'a> World<'a> {
             lines: Lines::default(),
         };
         let o = ray.origin;
+        let end = ray.at(ray.reach);
+        self.read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
         let from = cast::Ray::new(ray.direction.map(|v| v as f32), ray.reach as f32);
         let q = origin(o[0], o[1], o[2]);
         let met = cast::first(&mut walker, q, &from, detail, until);
@@ -233,6 +235,9 @@ impl<'a> World<'a> {
             strike: None,
             lines: Lines::default(),
         };
+        let side = units(cell);
+        let middle = g.map(|v| (f64::from(v) + 0.5) * side);
+        self.read(middle, middle, cell);
         let (block, top, met) = pxl_spec_core::scatter::footing(&mut walker, cell, g);
         (met && walker.lack.is_none()).then_some((block, top))
     }
