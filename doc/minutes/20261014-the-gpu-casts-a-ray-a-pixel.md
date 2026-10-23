@@ -2,6 +2,11 @@
 
 **2026-10-14** — decided in the conversation.
 
+**Status (2026-10-23): holds, and is no longer an experiment.** Every drawn
+pixel casts its ray, at the device's pixels; its start is its cell's beam
+([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)). The `rays`
+setting below is gone, and half the screen's pixels is no longer a target.
+
 What is drawn is what the eye's rays reach
 ([the ground is a grid](./20261012-the-ground-is-a-grid-then-overwrites.md)),
 and a ray reaches it by asking the world whether a node is empty
