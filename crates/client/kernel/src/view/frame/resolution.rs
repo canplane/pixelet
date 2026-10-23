@@ -6,14 +6,14 @@
 //! box whatever its size (pxl-render gpu/surface.rs), so the frame is upscaled
 //! within itself, never from the frames before: render resolution apart from
 //! display resolution where a screen outgrows its GPU (Unreal's screen
-//! percentage). Once a frame, where a GPU read landed, the cast's time stands
-//! against the frame's budget, the paced interval the host grants (xpute host
+//! percentage). Once a frame, where a GPU read landed, the frame's GPU time
+//! stands against its budget, the paced interval the host grants (xpute host
 //! sched/quantum.ts `Grant::paced_ms`): the scale moves by the square root of
-//! budget over cast, as the cast's cost goes with its rays, between
-//! `SCALE_MIN` and whole, and holds while the cast is within `SCALE_BAND` of
-//! the budget. The read lags the frame it timed, so only a frame drawn at the
-//! size drawn now is judged, and none while a change waits to be drawn; a
-//! change asks for the frame that draws it.
+//! budget over that time, as what a frame costs goes mostly with its pixels,
+//! between `SCALE_MIN` and whole, and holds while that time is within
+//! `SCALE_BAND` of the budget. The read lags the frame it timed, so only a
+//! frame drawn at the size drawn now is judged, and none while a change waits
+//! to be drawn; a change asks for the frame that draws it.
 
 use crate::param;
 use pxl_render::api_spec::surface_role;
@@ -57,19 +57,19 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
     }
 }
 
-/// A GPU read landed: the cast's `cast_ms` over the `cast_px` rays it cast,
+/// A GPU read landed: the frame's GPU time `gpu_ms` over the `gpu_px` pixels it drew,
 /// against the frame's budget `paced_ms`. A frame that cast nothing, has no
 /// budget, or was drawn at another size than now, judges nothing.
-pub fn load(cast_ms: f64, cast_px: f64, paced_ms: f64) {
+pub fn load(gpu_ms: f64, gpu_px: f64, paced_ms: f64) {
     let Some(s) = world() else { return };
-    if !(cast_ms > 0.0 && cast_px > 0.0 && paced_ms > 0.0) {
+    if !(gpu_ms > 0.0 && gpu_px > 0.0 && paced_ms > 0.0) {
         return;
     }
     let drawn = f64::from(s.width) * f64::from(s.height);
-    if s.buffer_px() != (s.width, s.height) || cast_px != drawn {
+    if s.buffer_px() != (s.width, s.height) || gpu_px != drawn {
         return;
     }
-    let ratio = paced_ms / cast_ms;
+    let ratio = paced_ms / gpu_ms;
     if (ratio - 1.0).abs() <= param::SCALE_BAND {
         return;
     }

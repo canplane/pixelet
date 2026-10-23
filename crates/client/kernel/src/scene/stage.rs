@@ -11,7 +11,6 @@ use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
-use pxl_render::gpu::span_spec::GpuSpanName;
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use xpute_guest::global::Global;
@@ -166,7 +165,7 @@ pub fn stage_render(paced_ms: f64) {
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
     if stat.gpu_read {
-        crate::view::frame::resolution::load(stat.gpu_spans[GpuSpanName::cast as usize], stat.gpu_px, paced_ms);
+        crate::view::frame::resolution::load(pxl_render::gpu::renderer::gpu_ms(&stat.gpu_spans), stat.gpu_px, paced_ms);
     }
     set_host_frame(
         out.kind,

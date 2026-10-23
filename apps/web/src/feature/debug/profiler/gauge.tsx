@@ -108,6 +108,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
   const sections: Record<FrameGroup, ReactNode> = {
     time: f !== null && (
       <>
+        {/* Frames a second over the window, and at the median interval. */}
+        <Row k="fps window/p50" v={`${f.seconds > 0 ? n1(f.n / f.seconds) : "-"}/${f.interval.p50 > 0 ? n1(1000 / f.interval.p50) : "-"}`} />
         <Row k="interval p50/p95" v={`${n1(f.interval.p50)}/${n1(f.interval.p95)} ms`} />
         <Row k="interval max" v={`${n1(f.interval.max)} ms`} warn={f.interval.max > LONG_FRAME_MS} />
         <Row k="missed/moving" v={`${f.missed}/${f.moving}`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
