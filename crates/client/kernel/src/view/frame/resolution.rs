@@ -11,9 +11,9 @@
 //! sched/quantum.ts `Grant::paced_ms`): the scale moves by the square root of
 //! budget over cast, as the cast's cost goes with its rays, between
 //! `SCALE_MIN` and whole, and holds while the cast is within `SCALE_BAND` of
-//! the budget. The read lags the frame it timed, so its time is taken per ray
-//! it cast and projected to the rays cast now: a change still in flight is
-//! not judged again.
+//! the budget. The read lags the frame it timed, so only a frame drawn at the
+//! size drawn now is judged, and none while a change waits to be drawn; a
+//! change asks for the frame that draws it.
 
 use crate::param;
 use pxl_render::api_spec::surface_role;
@@ -58,20 +58,23 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
 }
 
 /// A GPU read landed: the cast's `cast_ms` over the `cast_px` rays it cast,
-/// against the frame's budget `paced_ms`. A frame that cast nothing, or has
-/// no budget, judges nothing.
+/// against the frame's budget `paced_ms`. A frame that cast nothing, has no
+/// budget, or was drawn at another size than now, judges nothing.
 pub fn load(cast_ms: f64, cast_px: f64, paced_ms: f64) {
     let Some(s) = world() else { return };
     if !(cast_ms > 0.0 && cast_px > 0.0 && paced_ms > 0.0) {
         return;
     }
-    let (w, h) = s.buffer_px();
-    let now_ms = cast_ms * (f64::from(w) * f64::from(h)) / cast_px;
-    let ratio = paced_ms / now_ms;
+    let drawn = f64::from(s.width) * f64::from(s.height);
+    if s.buffer_px() != (s.width, s.height) || cast_px != drawn {
+        return;
+    }
+    let ratio = paced_ms / cast_ms;
     if (ratio - 1.0).abs() <= param::SCALE_BAND {
         return;
     }
     let k = scale();
     *k = (*k * libm::sqrt(ratio)).clamp(param::SCALE_MIN, 1.0);
     s.ratio = surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
+    crate::sched::edge::request_world_tick();
 }
