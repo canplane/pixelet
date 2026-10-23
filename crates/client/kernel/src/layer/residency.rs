@@ -427,6 +427,11 @@ impl<L: Base> Residency<L> {
         self.resident(p) || self.entry(p).is_some_and(|e| e.answered)
     }
 
+    /// Whether every tile asked for has its answer.
+    pub fn answered(&self) -> bool {
+        self.tiles.iter().filter(|(_, e)| e.ask.is_some()).all(|(&p, _)| self.has_answer(p))
+    }
+
     pub fn answer_above(&mut self, p: Tile) {
         if self.asked(p).is_none() {
             return;

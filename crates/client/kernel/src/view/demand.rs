@@ -98,7 +98,6 @@ struct Seen {
 pub struct Demand<L: Observed> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
-    demand: Vec<Tile>,
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
     /// The floor's tiles as last observed.
@@ -108,7 +107,10 @@ pub struct Demand<L: Observed> {
     gone: Vec<Tile>,
     /// What it reads moved since it last observed.
     moved: bool,
-    /// Reused across observations so observing stops allocating once warm.
+    /// Where an observation builds the estimator's tiles and its asks, kept
+    /// so observing stops allocating once warm. Empty between observations:
+    /// what was asked is the residency's (`Residency::ask`).
+    demand: Vec<Tile>,
     asks: FnvHashMap<Tile, Ask>,
     /// The residency's revision as it idled it (`idle`), none while it steps.
     idled: Option<u32>,
@@ -137,11 +139,6 @@ impl<L: Observed> Demand<L> {
         self.floor.iter().copied()
     }
 
-    /// Whether every tile the view needs has its answer.
-    pub fn answered(&self) -> bool {
-        self.asks.keys().all(|&p| L::residency().has_answer(p))
-    }
-
     /// No object for `p`: the tile over it says its ground; at the layer's top (`Base::top`), `Base::empty`.
     pub fn absent(&mut self, p: Tile) {
         match L::empty() {
@@ -166,9 +163,7 @@ impl<L: Observed> Demand<L> {
     #[allow(clippy::too_many_arguments)]
     pub fn observe(&mut self, o: Option<&Observation>, destination: impl Iterator<Item = Tile>, estimator: &ByEye, top: Zoom) {
         let mut demand = core::mem::take(&mut self.demand);
-        demand.clear();
         let mut asks = core::mem::take(&mut self.asks);
-        asks.clear();
         let ask = |asks: &mut FnvHashMap<Tile, Ask>, p: Tile, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
@@ -271,10 +266,12 @@ impl<L: Observed> Demand<L> {
                 self.wants.push((p.subject(), asks[&p]));
             }
         }
+        asks.clear();
         self.asks = asks;
+        demand.clear();
+        self.demand = demand;
 
         self.observation = o.copied();
-        self.demand = demand;
     }
 
     /// The layer's turn, from the live eye: the eye that is coming, which
@@ -323,7 +320,6 @@ impl<L: Observed> Demand<L> {
             return;
         }
         self.wants.clear();
-        self.asks.clear();
         L::residency().ask(&self.asks);
         declare(L::STREAM, &[]);
         self.last = None;

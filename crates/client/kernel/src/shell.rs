@@ -3,7 +3,7 @@
 //! What the page's UI reads of the kernel (a Snapshot packet, handed over
 //! only when changed) and the commands it applies to the stores.
 
-use crate::view::demand::Observed as _;
+use crate::layer::Base as _;
 use pxl_spec::block::object::{cube_id, decor_num_id};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -77,7 +77,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             // Shown once a frame went to the screen over a view whose tiles all answered.
             status: match (crate::view::observation::eye(), screen_drawn()) {
                 (None, _) => GroundStatus::Idle,
-                (Some(_), true) if TerrainTile::demand().answered() => GroundStatus::Success,
+                (Some(_), true) if TerrainTile::residency().answered() => GroundStatus::Success,
                 _ => GroundStatus::Loading,
             },
             is_off_center: off_center().is_off_center,
