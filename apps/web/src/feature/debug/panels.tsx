@@ -9,8 +9,10 @@ import { useKernel } from "@/kernel/shell.ts";
 import { type SettingName, SETTINGS, settingsIn } from "@/feature/setting/schema.ts";
 import { GizmoLegend } from "./gizmo-legend.tsx";
 import { PerformanceOverlay } from "./performance.tsx";
+import { ViewOverlay } from "./view.tsx";
 
 const PANEL: Partial<Record<SettingName, ComponentType>> = {
+  view_overlay: ViewOverlay,
   performance_overlay: PerformanceOverlay,
   world_gizmo: GizmoLegend,
 };

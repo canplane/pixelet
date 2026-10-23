@@ -30,7 +30,9 @@ export type Frame =
   & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; zoom_tiles: f64[]; gpu_objects: f64[]; waiting: f64[]; out: f64[] };
 
 /** The kernel counts by zoom: slot z, bit z or a value z is zoom z. */
-const ZOOM_NAMES = Array.from({ length: LIMITS.ZOOMS }, (_, z) => `z${z}`);
+export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
+
+const ZOOM_NAMES = Array.from({ length: LIMITS.ZOOMS }, (_, z) => zoomName(z));
 /** Slot k is the objects op k + 1 made, as no op is 0: its name, lower case. */
 const OBJECT_NAMES = Array.from({ length: op.DESTROY - 1 }, (_, k) => Object.entries(op).find(([, v]) => v === k + 1)?.[0].toLowerCase() ?? "-");
 export const LIST_NAMES: Record<ListLane, readonly string[]> = {
