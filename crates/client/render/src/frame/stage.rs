@@ -27,8 +27,10 @@ pub mod STAGE_AT {
     pub const EDGE_WIDTH: usize = LOW_SPEC + 1;
     pub const RIM_INTENSITY: usize = EDGE_WIDTH + 1;
     pub const SCREEN_AO: usize = RIM_INTENSITY + 1;
+    /// How much the inside of a cube's corners darkens, none where off.
+    pub const CORNER_AO: usize = SCREEN_AO + 1;
     /// How much of the clouds shows, none to all.
-    pub const CLOUDS: usize = SCREEN_AO + 1;
+    pub const CLOUDS: usize = CORNER_AO + 1;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

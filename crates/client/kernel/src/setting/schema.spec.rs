@@ -77,6 +77,11 @@ impl OrbitObstacleMode {
 /// Where the ambient occlusion comes from.
 ///
 ///   off    — none.
+///   corner — the screen pass's own: the floor along a cube and the inside
+///            of a corner, where a neighbouring pixel's face rises in front
+///            of the pixel's own plane within a block or two of it
+///            (crates/client/render/src/frame/shader/screen_rays.wgsl).
+///            A few taps of the rays a pixel, behind a uniform.
 ///   screen — N8AO
 ///            (crates/client/render/src/gpu/ao.rs): the world's depth drawn
 ///            once more, the occlusion sampled from it at half resolution,
@@ -86,11 +91,12 @@ impl OrbitObstacleMode {
 #[repr(u32)]
 pub enum AoMode {
     off = 0,
-    screen = 1,
+    corner = 1,
+    screen = 2,
 }
 
 impl AoMode {
-    pub const ALL: [AoMode; 2] = [AoMode::off, AoMode::screen];
+    pub const ALL: [AoMode; 3] = [AoMode::off, AoMode::corner, AoMode::screen];
 
     /// The option an index names, or none for an index past the list.
     pub fn of(index: u32) -> Option<AoMode> {
@@ -154,7 +160,9 @@ pub enum SettingKey {
     edge_shade = 8,
     /// A uniform on an already-compiled shader term; not a pass.
     rim_light = 9,
-    /// screen, N8AO's screen-space pass, or none. AO_MODES says each.
+    /// corner, the occlusion a voxel world reads off its own cubes' faces;
+    /// screen, N8AO's screen-space pass, the costliest of the three. AO_MODES
+    /// says each.
     ao = 10,
     /// Where the camera and the pointer are, read live (profiler/summary.rs, its view section).
     view_overlay = 11,
@@ -244,7 +252,7 @@ impl SettingKey {
         match self {
             SettingKey::camera_mode => &["orbit", "free"],
             SettingKey::orbit_obstacle => &["through", "stop", "climb"],
-            SettingKey::ao => &["off", "screen"],
+            SettingKey::ao => &["off", "corner", "screen"],
             _ => &[],
         }
     }
@@ -298,7 +306,7 @@ impl Settings {
         orbit_obstacle: OrbitObstacleMode::climb,
         edge_shade: true,
         rim_light: true,
-        ao: AoMode::off,
+        ao: AoMode::corner,
         view_overlay: false,
         performance_overlay: false,
         world_gizmo: false,

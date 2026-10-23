@@ -17,5 +17,6 @@ fn frame_cell() -> f32 { return frame_words[6].w; }
 fn frame_low_spec() -> f32 { return frame_words[7].x; }
 fn frame_edge_width() -> f32 { return frame_words[7].y; }
 fn frame_rim_intensity() -> f32 { return frame_words[7].z; }
+fn frame_corner_ao() -> f32 { return frame_words[7].w; }
 // Up at the eye, the world's z: the air's centre lies straight under it.
 fn frame_up() -> vec3f { return vec3f(0.0, 0.0, 1.0); }

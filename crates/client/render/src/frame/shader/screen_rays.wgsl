@@ -2,7 +2,10 @@
 
 // The eye's rays (pxl-portable `ray`), a drawn pixel each: each pixel
 // the face its ray entered, painted by paint.wgsl's `paint`, as the ghost's
-// boxes are. A pixel whose ray met nothing is left to the sky.
+// boxes are. A pixel whose ray met nothing is left to the sky. Where a
+// cube's edge meets the air, and where its corners close in, is read off
+// the rays about a pixel (`edge_at`, `corner_open`): what the screen shows
+// of the cubes, no world asked again.
 
 // The rays, a layer a word: what a ray met (value, face, zoom), how far it
 // went (f32 bits), and the four looks the ground's block is drawn by or, in
@@ -145,6 +148,87 @@ fn hit_of(c: vec2u, d: vec3f) -> Hit {
   return Hit(clamp(d * s, corner, corner + vec3f(side)), n);
 }
 
+// The side of the block a ray stopped on, in units.
+fn side_of(word: u32) -> f32 {
+  return exp2(f32(i32(UNIT_ZOOM) - i32(ray_zoom(word))));
+}
+
+// A neighbouring pixel's hit, from the eye, as `hit_of` finds this pixel's:
+// where its ray met a face and that face's normal; `met` false where it met
+// nothing, which is the air. Off the screen it is the pixel at the edge.
+struct Near {
+  met: bool,
+  at: vec3f,
+  normal: vec3f,
+};
+
+fn near(p: vec2f, size: vec2u) -> Near {
+  let q = clamp(vec2i(p), vec2i(0), vec2i(size) - vec2i(1));
+  let c = vec2u(textureLoad(rays, q, 0, 0).x, textureLoad(rays, q, 1, 0).x);
+  if (c.x == 0u) {
+    return Near(false, vec3f(0.0), vec3f(0.0));
+  }
+  let h = hit_of(c, through(vec2f(q) + 0.5, vec2f(size)));
+  return Near(true, h.at, h.normal);
+}
+
+// The eight ways about a pixel, a unit long each.
+const AROUND = array<vec2f, 8>(
+  vec2f(1.0, 0.0), vec2f(-1.0, 0.0), vec2f(0.0, 1.0), vec2f(0.0, -1.0),
+  vec2f(0.70710678, 0.70710678), vec2f(-0.70710678, 0.70710678),
+  vec2f(0.70710678, -0.70710678), vec2f(-0.70710678, -0.70710678),
+);
+
+// How far off a face's plane a point may lie and still be on it, as a share
+// of the block's side: past the hits' rounding, short of any step.
+const ON_PLANE: f32 = 1e-3;
+
+// Whether a cube's edge that meets the air lies within the edge's width of
+// this pixel on its own face: a neighbour that far across met nothing, or
+// met a point behind the face's plane, where the face falls away past a
+// convex edge or a step down. A neighbour on the plane is the next block of
+// a flat run, so a run of cubes shows no seams; one in front of it is a wall
+// rising from it, which is the corners' to shade, not the edge's.
+fn edge_at(frag: vec2f, h: Hit, side: f32, size: vec2u) -> f32 {
+  if (frame_edge_strength() <= 0.0) {
+    return 0.0;
+  }
+  let width = frame_edge_width();
+  for (var k = 0u; k < 8u; k++) {
+    let n = near(frag + AROUND[k] * width, size);
+    if (!n.met || dot(n.at - h.at, h.normal) < -ON_PLANE * side) {
+      return 1.0;
+    }
+  }
+  return 0.0;
+}
+
+// How open this pixel's face is against the cubes about it: a neighbour in
+// front of the face's plane and within a block of it in the world — a wall
+// rising from a floor, the floor along a wall, the inside of a corner —
+// closes it, the more the nearer, over about half a block. Neighbours are
+// taken half a block out as it is drawn here and half that, so the shading
+// keeps its size in the world near or far; one farther than a block, a hill
+// behind that the screen sets beside it, closes nothing.
+fn corner_open(frag: vec2f, h: Hit, side: f32, size: vec2u) -> f32 {
+  let strength = frame_corner_ao();
+  if (strength <= 0.0) {
+    return 1.0;
+  }
+  let per_px = 2.0 * bitcast<f32>(eye_word(EYE_TAN + 1u)) / f32(size.y);
+  let r = clamp(0.5 * side / (length(h.at) * per_px), 1.0, 32.0);
+  var closed = 0.0;
+  for (var k = 0u; k < 16u; k++) {
+    let n = near(frag + AROUND[k % 8u] * r * select(1.0, 0.5, k >= 8u), size);
+    let d = n.at - h.at;
+    let reach = length(d);
+    if (n.met && dot(d, h.normal) > ON_PLANE * side && reach < side) {
+      closed += 1.0 - reach / side;
+    }
+  }
+  return 1.0 - strength * min(closed / 8.0, 1.0);
+}
+
 // The face's texture coordinate: the world's position, one repeat a unit.
 fn box_uv(h: Hit) -> vec2f {
   let p = vec3f(eye_phase(0u, 0), eye_phase(1u, 0), eye_phase(2u, 0)) + h.at;
@@ -182,16 +266,18 @@ fn fs(v: VertexOut) -> FragOut {
     discard;
   }
   let painted = drawn(c);
+  let size = textureDimensions(rays);
+  let side = side_of(c.x);
   let s = Surface(
     painted.rgb,
     painted.taps,
     h.normal,
-    0.0,
+    edge_at(v.clip.xy, h, side, size),
     h.at,
     uv,
     ddx,
     ddy,
-    screen_open(v.clip.xy),
+    screen_open(v.clip.xy) * corner_open(v.clip.xy, h, side, size),
     seen_from_eye(h.at),
   );
   let clip = frame_view_proj() * vec4f(h.at, 1.0);

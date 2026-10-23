@@ -54,11 +54,16 @@
     ]
   },
   "AO_MODES": {
-    "$value": ["off", "screen"],
+    "$value": ["off", "corner", "screen"],
     "$doc": [
       "Where the ambient occlusion comes from.",
       "",
       "  off    — none.",
+      "  corner — the screen pass's own: the floor along a cube and the inside",
+      "           of a corner, where a neighbouring pixel's face rises in front",
+      "           of the pixel's own plane within a block or two of it",
+      "           (crates/client/render/src/frame/shader/screen_rays.wgsl).",
+      "           A few taps of the rays a pixel, behind a uniform.",
       "  screen — N8AO",
       "           (crates/client/render/src/gpu/ao.rs): the world's depth drawn",
       "           once more, the occlusion sampled from it at half resolution,",
@@ -177,12 +182,14 @@
     },
     "ao": {
       "$doc": [
-        "screen, N8AO's screen-space pass, or none. AO_MODES says each."
+        "corner, the occlusion a voxel world reads off its own cubes' faces;",
+        "screen, N8AO's screen-space pass, the costliest of the three. AO_MODES",
+        "says each."
       ],
       "kind": "choice",
-      "default": "off",
+      "default": "corner",
       "options": "AO_MODES",
-      "costs": ["", "high"],
+      "costs": ["", "low", "high"],
       "section": "lighting"
     },
     "view_overlay": {
