@@ -32,9 +32,8 @@ the tree, is that picture at the size of one loader.
   detail is not recovered to preserve it.
 - **Descent carries what it knows**: a ray passes empty nodes whole and
   descends only where needed; what the descent has established is reused,
-  never recomputed from the root. Speed is sought only inside the
-  hierarchy; a fast path beside it is refused even when measured faster. A
-  kind of thing is drawn wholly on the CPU or wholly on the GPU.
+  never recomputed from the root. A kind of thing is drawn wholly on the
+  CPU or wholly on the GPU.
 - **Dependencies point one way:** turn, door and shell (the UI's way in)
   wire everything from the top, and nothing below names them; control,
   which the door's events enter, moves the eye over the view and asks the
