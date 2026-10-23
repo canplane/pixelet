@@ -24,7 +24,7 @@ function drainLog(): void {
   for (const f of log.frames) console.log(`[profiler] ${frameLine(f, null)}`);
 }
 
-/** Called from the console (`__pxl_profiler_log`). */
+/** Called from the console (`pxl.log`, feature/debug/console.ts). */
 export function profilerLog(on: boolean): void {
   kernel_command(Command.PROFILER_LOG, encode_profiler_log(kernel_room, on));
   setLongFrameSink(on ? (l) => console.log(`[profiler] ${longFrameLine(l)}`) : null);

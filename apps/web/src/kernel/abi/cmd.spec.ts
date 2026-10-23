@@ -309,7 +309,7 @@ export const enum Command {
   INPUT_TRACKING = 0x1104,
   /** Where the camera stands, set outright rather than driven: what the kernel's own
    * test puts a view at, and what an A/B reads two builds at the same view with
-   * (a development page's `?eye=`, feature/debug/eye.ts). */
+   * (a development page's console, `pxl.input_view`, feature/debug/console.ts). */
   INPUT_VIEW = 0x1105,
   /** The compass's press: north up. */
   INPUT_COMPASS_RESET = 0x1107,
@@ -706,3 +706,50 @@ export interface WorldSnapshotSignal {
 export function read_world_snapshot(b: BranchCursor): WorldSnapshotSignal {
   return { at: b.at(0).get<u32>(), len: b.at(1).get<u32>() };
 }
+
+/** Every command by its lowercase name: its number, and its packet's encoder, none where it has no packet. */
+export const COMMANDS = {
+  sensor_start: [Command.SENSOR_START, null],
+  sensor_stop: [Command.SENSOR_STOP, null],
+  sensor_position: [Command.SENSOR_POSITION, encode_sensor_position],
+  sensor_orientation: [Command.SENSOR_ORIENTATION, encode_sensor_orientation],
+  sensor_error: [Command.SENSOR_ERROR, encode_sensor_error],
+  sensor_orientation_lost: [Command.SENSOR_ORIENTATION_LOST, null],
+  world_boot: [Command.WORLD_BOOT, encode_world_boot],
+  world_frame: [Command.WORLD_FRAME, encode_world_frame],
+  world_visibility: [Command.WORLD_VISIBILITY, encode_world_visibility],
+  world_source: [Command.WORLD_SOURCE, encode_world_source],
+  sensor_permission: [Command.SENSOR_PERMISSION, encode_sensor_permission],
+  input_rect: [Command.INPUT_RECT, encode_input_rect],
+  input_pointer: [Command.INPUT_POINTER, encode_input_pointer],
+  input_hold: [Command.INPUT_HOLD, encode_input_hold],
+  input_marker_words: [Command.INPUT_MARKER_WORDS, encode_input_marker_words],
+  input_marker_cancel: [Command.INPUT_MARKER_CANCEL, null],
+  input_marker_put: [Command.INPUT_MARKER_PUT, null],
+  input_wheel: [Command.INPUT_WHEEL, encode_input_wheel],
+  input_keys: [Command.INPUT_KEYS, encode_input_keys],
+  gpu_ready: [Command.GPU_READY, null],
+  surface_open: [Command.SURFACE_OPEN, encode_surface_open],
+  surface_resize: [Command.SURFACE_RESIZE, encode_surface_resize],
+  surface_close: [Command.SURFACE_CLOSE, encode_surface_close],
+  preview_open: [Command.PREVIEW_OPEN, encode_preview_open],
+  preview_close: [Command.PREVIEW_CLOSE, encode_preview_close],
+  setting_set: [Command.SETTING_SET, encode_setting_set],
+  chat_send: [Command.CHAT_SEND, encode_chat_send],
+  input_tracking: [Command.INPUT_TRACKING, encode_input_tracking],
+  input_view: [Command.INPUT_VIEW, encode_input_view],
+  input_compass_reset: [Command.INPUT_COMPASS_RESET, null],
+  input_go_to: [Command.INPUT_GO_TO, encode_input_go_to],
+  input_pose: [Command.INPUT_POSE, encode_input_pose],
+  input_pose_end: [Command.INPUT_POSE_END, null],
+  sensor_open: [Command.SENSOR_OPEN, null],
+  sensor_close: [Command.SENSOR_CLOSE, null],
+  sensor_enable_location: [Command.SENSOR_ENABLE_LOCATION, null],
+  profiler_start: [Command.PROFILER_START, null],
+  profiler_stop: [Command.PROFILER_STOP, null],
+  profiler_log: [Command.PROFILER_LOG, encode_profiler_log],
+  profiler_read: [Command.PROFILER_READ, encode_profiler_read],
+  profiler_take: [Command.PROFILER_TAKE, null],
+  profiler_rings: [Command.PROFILER_RINGS, null],
+  world_snapshot: [Command.WORLD_SNAPSHOT, null],
+} as const;

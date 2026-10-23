@@ -2,8 +2,9 @@
 
 /**
  * The performance overlay: the profiler's recording controls, exports and
- * gauge. Shown by the `performance_overlay` setting in any build; the kernel records from boot while it is on. Exposes `__pxl_profiler_trace`, `__pxl_profiler_log`,
- * `__pxl_view` and `__pxl_gauge` on `window` for A/B runs.
+ * gauge. Shown by the `performance_overlay` setting in any build; the kernel
+ * records from boot while it is on. A development page reads the same from
+ * the console (feature/debug/console.ts).
  */
 
 import { useEffect, useState } from "react";
@@ -18,8 +19,8 @@ import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
 import { fps, type Gauge, profilerGaugeRead, profilerReportRead } from "./profiler/view.ts";
 import { installLongFrameObservers, longFramesClear } from "./profiler/long-frame.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
-import { Command, encode_input_view } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, kernel_room, useKernel } from "@/kernel/shell.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
 
 const enum Tint {
@@ -91,13 +92,6 @@ const LIVE_WINDOW_MS = 10_000;
 
 const SAID_MS = 2500;
 
-type ProfilerGlobals = typeof globalThis & {
-  __pxl_profiler_trace?: () => Promise<string>;
-  __pxl_profiler_log?: (on: boolean) => void;
-  __pxl_view?: (dist: number | null, polar: number | null) => void;
-  __pxl_gauge?: (windowMs: number) => Gauge;
-};
-
 function restartWindow(): void {
   kernel_command(Command.PROFILER_START);
   longFramesClear();
@@ -130,18 +124,7 @@ export function PerformanceOverlay() {
     // buffered since load, so a panel on from boot has the boot's frames.
     longFramesClear();
     installLongFrameObservers();
-    const w = globalThis as ProfilerGlobals;
-    w.__pxl_profiler_trace = profilerTraceSave;
-    w.__pxl_profiler_log = profilerLog;
-    w.__pxl_view = (dist, polar) => kernel_command(Command.INPUT_VIEW, encode_input_view(kernel_room, dist, polar, null));
-    w.__pxl_gauge = (windowMs) => profilerGaugeRead(windowMs);
-    return () => {
-      profilerLog(false);
-      delete w.__pxl_profiler_trace;
-      delete w.__pxl_profiler_log;
-      delete w.__pxl_view;
-      delete w.__pxl_gauge;
-    };
+    return () => profilerLog(false);
   }, [show]);
 
   if (!show) return null;
