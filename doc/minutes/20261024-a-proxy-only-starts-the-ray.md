@@ -172,6 +172,10 @@ frame of 200 to 300 ms now and then; with shadows off, 120 throughout. At
 triangles. Now each of its texels walks a ray (pxl-shader `sun_cs`), about
 200 ms for the whole map, and the whole map is walked again where a
 square lands that the map lies inside, and whenever the sun steps
-(pxl-render gpu/shadow.rs `aim`). Left as it is: a proxy taken here starts
-the sun's rays as it starts the eye's, and the map's cost is measured with
-it. Shadows stay off by default, as at 10-12.
+(pxl-render gpu/shadow.rs `aim`). The eye's rays read the observed
+pyramid and share their descent by the beam; the sun's do neither: each
+walks from the roots through the world's query (`World`, `cast::first`),
+composing every node it visits again. Left as it is: a proxy taken here
+starts the sun's rays as it starts the eye's, through the path the eye's
+take, and the map's cost is measured with it. Shadows stay off by
+default, as at 10-12.
