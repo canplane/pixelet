@@ -360,16 +360,25 @@ impl DebugPass {
             }
             g.end(pass);
         }
+        // A set's faces hide only its own lines: the faced sets' lines over
+        // their faces' depth, then the rest over none, so the focus's frame
+        // is whole under the coverage laid on the ground.
         let depth_load = if faced { Load::Load } else { Load::Clear };
-        let pass = g.pass(encoder, &pass_desc(canvas, Load::Load, depth, depth_load, 0.0, stamp.pass()));
-        g.set_pipeline(pass, self.built.pipeline);
-        g.set_bind_group(pass, 0, self.frame_group, &[]);
-        for (k, _, block, lines, _, slots) in sets() {
-            let (group, offset) = slots.at(k as u32);
-            g.set_bind_group(pass, 1, group, &[offset]);
-            g.set_vertex_buffer(pass, 0, block, 0, lines * 28);
-            // A segment an instance: its two vertices, read as one.
-            g.draw(pass, 6, lines / 2, 0, 0);
+        let mut pass = g.pass(encoder, &pass_desc(canvas, Load::Load, depth, depth_load, 0.0, stamp.pass()));
+        for faces in [true, false] {
+            if faced && !faces {
+                g.end(pass);
+                pass = g.pass(encoder, &pass_desc(canvas, Load::Load, depth, Load::Clear, 0.0, stamp.pass()));
+            }
+            g.set_pipeline(pass, self.built.pipeline);
+            g.set_bind_group(pass, 0, self.frame_group, &[]);
+            for (k, _, block, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
+                let (group, offset) = slots.at(k as u32);
+                g.set_bind_group(pass, 1, group, &[offset]);
+                g.set_vertex_buffer(pass, 0, block, 0, lines * 28);
+                // A segment an instance: its two vertices, read as one.
+                g.draw(pass, 6, lines / 2, 0, 0);
+            }
         }
         if grid {
             g.set_pipeline(pass, self.grid.pipeline);
