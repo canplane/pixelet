@@ -34,7 +34,10 @@ pub struct OrientationPlatform {
 }
 
 struct Orientation {
-    last_event_at: Option<f64>,
+    /// What the watchdog judges silence from: the last event, or where
+    /// tracking began or the page came back. Read only while tracking, and
+    /// set wherever tracking begins.
+    last_event_at: f64,
     /// The turn's last; the shell's listener follows it and ignores a repeat.
     command: Option<OrientationCommand>,
 }
@@ -42,22 +45,20 @@ struct Orientation {
 static ORIENTATION: Global<Orientation> = Global::new();
 
 fn orientation() -> &'static mut Orientation {
-    ORIENTATION.get(|| Orientation { last_event_at: None, command: None })
+    ORIENTATION.get(|| Orientation { last_event_at: 0.0, command: None })
 }
 
 /// iOS's compass heading preferred, the alpha-derived one otherwise.
 pub fn orientation_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
     // An API with no sensor answers once, empty, and never again.
     if webkit_compass_heading.is_none() && alpha.is_none() && beta.is_none() && gamma.is_none() {
-        let o = orientation();
-        o.last_event_at = None;
-        o.command = Some(OrientationCommand::Remove);
+        orientation().command = Some(OrientationCommand::Remove);
         let store = device_orientation_store();
         store.set_is_tracking_orientation(false);
         store.pose = Pose::Unavailable;
         return;
     }
-    orientation().last_event_at = Some(now());
+    orientation().last_event_at = now();
     let heading = webkit_compass_heading.or_else(|| alpha.map(|a| (360.0 - a) % 360.0));
     device_orientation_store().set_orientation(heading, beta, gamma);
 }
@@ -79,7 +80,7 @@ pub fn request_orientation(platform: OrientationPlatform) -> bool {
     store.pose = Pose::Loading;
     let o = orientation();
     o.command = Some(OrientationCommand::Listen);
-    o.last_event_at = Some(now());
+    o.last_event_at = now();
     store.set_is_tracking_orientation(true);
     true
 }
@@ -95,7 +96,7 @@ pub fn orientation_permission(answer: PermissionAnswer, platform: OrientationPla
             }
         }
         PermissionAnswer::Granted if platform.needs_permission => {
-            orientation().last_event_at = Some(now());
+            orientation().last_event_at = now();
             store.set_is_tracking_orientation(true);
         }
         PermissionAnswer::Granted => {
@@ -113,7 +114,6 @@ pub fn orientation_permission(answer: PermissionAnswer, platform: OrientationPla
 }
 
 pub fn orientation_lost() {
-    orientation().last_event_at = None;
     let store = device_orientation_store();
     store.set_is_tracking_orientation(false);
     store.pose = Pose::Failed(Message::OrientationSignalLost);
@@ -129,10 +129,7 @@ pub fn orientation_close() {
 /// Background tabs stop dispatching, so judging the gap on return would read
 /// "was hidden" as "lost": take a fresh baseline instead.
 pub fn orientation_visible() {
-    let o = orientation();
-    if o.last_event_at.is_some() {
-        o.last_event_at = Some(now());
-    }
+    orientation().last_event_at = now();
 }
 
 /// Armed only while a heading is tracked, where silence is the only sign of
@@ -146,8 +143,7 @@ pub fn orientation_watchdog_step(platform: OrientationPlatform) {
         return;
     }
     let o = orientation();
-    let Some(last) = o.last_event_at else { return };
-    let lost_at = last + WATCHDOG_TIMEOUT_MS;
+    let lost_at = o.last_event_at + WATCHDOG_TIMEOUT_MS;
     if now() < lost_at {
         wake_at(lost_at);
         return;
