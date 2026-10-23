@@ -35,7 +35,7 @@ fn eye_vec3(k: u32) -> vec3f {
 }
 
 // The ray along a pixel's aim (`aim`), as the cast formed it
-// (pxl-shader `pixel_ray`): pxl-spec-core cast.rs `through`'s mirror,
+// (pxl-shader `eye_ray`): pxl-spec-core cast.rs `through`'s mirror,
 // off the eye's own words, so the t a ray left is laid along the very
 // direction it was cast in.
 fn through(a: vec3f) -> vec3f {
@@ -137,7 +137,7 @@ fn drawn(c: vec3u) -> Drawn {
   if (ray_zoom(c.x) >= GROUND_CELL) {
     return Drawn(swatch(l), vec4f(f32(l.y >> 16u)));
   }
-  let fold = vec4u(c.z & 0xffu, (c.z >> 8u) & 0xffu, (c.z >> 16u) & 0xffu, c.z >> 24u);
+  let fold = ray_looks(c.z);
   if (any(fold == vec4u(value))) {
     let sum = far(look(fold.x)) + far(look(fold.y)) + far(look(fold.z)) + far(look(fold.w));
     return Drawn(sum * 0.25, vec4f(NO_LAYER));
@@ -287,11 +287,7 @@ fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
 
 // The face's texture coordinate: the world's position, one repeat a unit.
 fn box_uv(h: Hit) -> vec2f {
-  let p = vec3f(eye_phase(0u, 0), eye_phase(1u, 0), eye_phase(2u, 0)) + h.at;
-  if (abs(h.normal.z) > 0.5) {
-    return p.xy;
-  }
-  return select(vec2f(p.x, -p.z), vec2f(p.y, -p.z), abs(h.normal.x) > 0.5);
+  return face_uv(vec3f(eye_phase(0u, 0), eye_phase(1u, 0), eye_phase(2u, 0)) + h.at, h.normal);
 }
 
 // This pixel's ray, through its middle, as the cast formed it, and what it

@@ -3,7 +3,7 @@
 // Source: crates/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through crates/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in crates/client/shader/build.
-// Inputs: 314f1df3dfeffc095b038d069beeedcdfa83e5d37220dea2a5969d6b5ad7209d
+// Inputs: ed0e74567321a598938fe9f7d3bc8060c0890fd7ceb8bd0c5ce19d45721544bb
 struct type_4 {
     member: array<u32>,
 }
@@ -13,7 +13,7 @@ struct type_16 {
     member_1: u32,
 }
 
-struct type_27 {
+struct type_31 {
     member: i32,
     member_1: u32,
 }
@@ -217,14 +217,14 @@ fn function_() {
     var local_51: f32;
     var phi_11838_: bool;
     var phi_1492_: i32;
-    var phi_8362_: type_27;
-    var phi_8377_: type_27;
+    var phi_8362_: type_31;
+    var phi_8377_: type_31;
     var phi_8410_: i32;
     var phi_8412_: i32;
     var phi_11833_: bool;
     var phi_1496_: i32;
-    var phi_8472_: type_27;
-    var phi_8487_: type_27;
+    var phi_8472_: type_31;
+    var phi_8487_: type_31;
     var phi_11828_: bool;
     var phi_1500_: u32;
     var phi_1503_: bool;
@@ -309,8 +309,8 @@ fn function_() {
     var local_57: f32;
     var phi_11880_: bool;
     var phi_1938_: i32;
-    var phi_9022_: type_27;
-    var phi_9037_: type_27;
+    var phi_9022_: type_31;
+    var phi_9037_: type_31;
     var phi_9070_: i32;
     var phi_9072_: i32;
     var phi_11875_: bool;
@@ -1570,7 +1570,7 @@ fn function_() {
                                 let _e748 = (_e747 - 24i);
                                 let _e749 = (_e748 >= 0i);
                                 if _e749 {
-                                    phi_8377_ = type_27((select(0i, select(select(i32(_e746), i32(-2147483648), (_e746 < -2147483600f)), 2147483647i, (_e746 > 2147483500f)), (_e746 == _e746)) << bitcast<u32>((_e748 & 31i))), 32768u);
+                                    phi_8377_ = type_31((select(0i, select(select(i32(_e746), i32(-2147483648), (_e746 < -2147483600f)), 2147483647i, (_e746 > 2147483500f)), (_e746 == _e746)) << bitcast<u32>((_e748 & 31i))), 32768u);
                                 } else {
                                     let _e755 = (_e746 / f32((1i << bitcast<u32>(((24i - _e747) & 31i)))));
                                     let _e756 = floor(_e755);
@@ -1578,9 +1578,9 @@ fn function_() {
                                     let _e763 = select(select(u32(_e758), 0u, (_e758 < 0f)), 4294967295u, (_e758 > 4294967000f));
                                     let _e764 = (_e763 / 4096u);
                                     if (select(_e764, 8u, (_e764 > 8u)) == 0u) {
-                                        phi_8362_ = type_27(select(0i, select(select(i32(_e756), i32(-2147483648), (_e756 < -2147483600f)), 2147483647i, (_e756 > 2147483500f)), (_e756 == _e756)), 32768u);
+                                        phi_8362_ = type_31(select(0i, select(select(i32(_e756), i32(-2147483648), (_e756 < -2147483600f)), 2147483647i, (_e756 > 2147483500f)), (_e756 == _e756)), 32768u);
                                     } else {
-                                        phi_8362_ = type_27((select(0i, select(select(i32(_e756), i32(-2147483648), (_e756 < -2147483600f)), 2147483647i, (_e756 > 2147483500f)), (_e756 == _e756)) + 1i), _e763);
+                                        phi_8362_ = type_31((select(0i, select(select(i32(_e756), i32(-2147483648), (_e756 < -2147483600f)), 2147483647i, (_e756 > 2147483500f)), (_e756 == _e756)) + 1i), _e763);
                                     }
                                     let _e786 = phi_8362_;
                                     phi_8377_ = _e786;
@@ -1611,7 +1611,7 @@ fn function_() {
                             let _e824 = (_e823 - 24i);
                             let _e825 = (_e824 >= 0i);
                             if _e825 {
-                                phi_8487_ = type_27((select(0i, select(select(i32(_e822), i32(-2147483648), (_e822 < -2147483600f)), 2147483647i, (_e822 > 2147483500f)), (_e822 == _e822)) << bitcast<u32>((_e824 & 31i))), 32768u);
+                                phi_8487_ = type_31((select(0i, select(select(i32(_e822), i32(-2147483648), (_e822 < -2147483600f)), 2147483647i, (_e822 > 2147483500f)), (_e822 == _e822)) << bitcast<u32>((_e824 & 31i))), 32768u);
                             } else {
                                 let _e831 = (_e822 / f32((1i << bitcast<u32>(((24i - _e823) & 31i)))));
                                 let _e832 = floor(_e831);
@@ -1619,9 +1619,9 @@ fn function_() {
                                 let _e839 = select(select(u32(_e834), 0u, (_e834 < 0f)), 4294967295u, (_e834 > 4294967000f));
                                 let _e840 = (_e839 / 4096u);
                                 if (select(_e840, 8u, (_e840 > 8u)) == 0u) {
-                                    phi_8472_ = type_27(select(0i, select(select(i32(_e832), i32(-2147483648), (_e832 < -2147483600f)), 2147483647i, (_e832 > 2147483500f)), (_e832 == _e832)), 32768u);
+                                    phi_8472_ = type_31(select(0i, select(select(i32(_e832), i32(-2147483648), (_e832 < -2147483600f)), 2147483647i, (_e832 > 2147483500f)), (_e832 == _e832)), 32768u);
                                 } else {
-                                    phi_8472_ = type_27((select(0i, select(select(i32(_e832), i32(-2147483648), (_e832 < -2147483600f)), 2147483647i, (_e832 > 2147483500f)), (_e832 == _e832)) + 1i), _e839);
+                                    phi_8472_ = type_31((select(0i, select(select(i32(_e832), i32(-2147483648), (_e832 < -2147483600f)), 2147483647i, (_e832 > 2147483500f)), (_e832 == _e832)) + 1i), _e839);
                                 }
                                 let _e862 = phi_8472_;
                                 phi_8487_ = _e862;
@@ -2159,7 +2159,7 @@ fn function_() {
                                                             let _e1457 = phi_1938_;
                                                             let _e1458 = f32(_e1457);
                                                             if _e825 {
-                                                                phi_9037_ = type_27((select(0i, select(select(i32(_e1458), i32(-2147483648), (_e1458 < -2147483600f)), 2147483647i, (_e1458 > 2147483500f)), (_e1458 == _e1458)) << bitcast<u32>((_e824 & 31i))), 32768u);
+                                                                phi_9037_ = type_31((select(0i, select(select(i32(_e1458), i32(-2147483648), (_e1458 < -2147483600f)), 2147483647i, (_e1458 > 2147483500f)), (_e1458 == _e1458)) << bitcast<u32>((_e824 & 31i))), 32768u);
                                                             } else {
                                                                 let _e1464 = (_e1458 / f32((1i << bitcast<u32>(((24i - _e823) & 31i)))));
                                                                 let _e1465 = floor(_e1464);
@@ -2167,9 +2167,9 @@ fn function_() {
                                                                 let _e1472 = select(select(u32(_e1467), 0u, (_e1467 < 0f)), 4294967295u, (_e1467 > 4294967000f));
                                                                 let _e1473 = (_e1472 / 4096u);
                                                                 if (select(_e1473, 8u, (_e1473 > 8u)) == 0u) {
-                                                                    phi_9022_ = type_27(select(0i, select(select(i32(_e1465), i32(-2147483648), (_e1465 < -2147483600f)), 2147483647i, (_e1465 > 2147483500f)), (_e1465 == _e1465)), 32768u);
+                                                                    phi_9022_ = type_31(select(0i, select(select(i32(_e1465), i32(-2147483648), (_e1465 < -2147483600f)), 2147483647i, (_e1465 > 2147483500f)), (_e1465 == _e1465)), 32768u);
                                                                 } else {
-                                                                    phi_9022_ = type_27((select(0i, select(select(i32(_e1465), i32(-2147483648), (_e1465 < -2147483600f)), 2147483647i, (_e1465 > 2147483500f)), (_e1465 == _e1465)) + 1i), _e1472);
+                                                                    phi_9022_ = type_31((select(0i, select(select(i32(_e1465), i32(-2147483648), (_e1465 < -2147483600f)), 2147483647i, (_e1465 > 2147483500f)), (_e1465 == _e1465)) + 1i), _e1472);
                                                                 }
                                                                 let _e1495 = phi_9022_;
                                                                 phi_9037_ = _e1495;

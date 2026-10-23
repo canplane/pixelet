@@ -71,6 +71,16 @@ fn sample_tap(layer: f32, image: u32, uv: vec2f, ddx: vec2f, ddy: vec2f, fallbac
   return textureSampleGrad(layers, layer_sampler, uv, i32(slot), ddx, ddy).rgb;
 }
 
+// A face's texture coordinate at the world point `p` it shows, its normal
+// `normal`: one repeat a unit, a top by X and Y, a side by its run and down
+// its height.
+fn face_uv(p: vec3f, normal: vec3f) -> vec2f {
+  if (abs(normal.z) > 0.5) {
+    return p.xy;
+  }
+  return select(vec2f(p.x, -p.z), vec2f(p.y, -p.z), abs(normal.x) > 0.5);
+}
+
 // How much a face's edge darkens it `d` units from the edge, where a drawn
 // pixel spans `pixel` units that way: a line `frame_edge_width` units wide
 // whatever the block's size, so perspective alone thins it far off, fading

@@ -3,7 +3,7 @@
 // Source: crates/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through crates/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in crates/client/shader/build.
-// Inputs: 314f1df3dfeffc095b038d069beeedcdfa83e5d37220dea2a5969d6b5ad7209d
+// Inputs: ed0e74567321a598938fe9f7d3bc8060c0890fd7ceb8bd0c5ce19d45721544bb
 struct type_4 {
     member: array<u32>,
 }
@@ -13,19 +13,19 @@ struct type_10 {
     member_1: u32,
 }
 
-struct type_13 {
+struct type_14 {
     member: array<vec4<i32>>,
 }
 
-struct type_18 {
+struct type_17 {
     member: u32,
     member_1: array<u32, 36>,
 }
 
-struct type_22 {
+struct type_21 {
     member: u32,
     member_1: u32,
-    member_2: array<type_18, 2>,
+    member_2: array<type_17, 2>,
     member_3: u32,
     member_4: array<u32, 8>,
     member_5: i32,
@@ -33,8 +33,8 @@ struct type_22 {
     member_7: array<array<u32, 3>, 9>,
 }
 
-struct type_24 {
-    member: array<type_22>,
+struct type_23 {
+    member: array<type_21>,
 }
 
 struct type_26 {
@@ -50,11 +50,11 @@ struct type_29 {
 var<private> global: vec3<u32>;
 var<private> global_1: vec3<u32>;
 @group(0) @binding(5)
-var<storage> global_2: type_13;
+var<storage> global_2: type_14;
 @group(0) @binding(0)
 var<storage> global_3: type_4;
 @group(0) @binding(1)
-var<storage> global_4: type_24;
+var<storage> global_4: type_23;
 @group(0) @binding(2)
 var<storage> global_5: type_4;
 @group(0) @binding(3)

@@ -121,17 +121,7 @@ fn box_vertex(v: u32, words: BoxWords) -> VertexOut {
   // not from its box: a leaf cut into several boxes still wears one tile. The
   // mesh's corner and floor stand on whole units (ghost.rs `on_whole_units`), so its own
   // coordinates are the world's modulo the repeat; v runs down a side.
-  let p = vec3f(b.min_xy, b.z.x) + size * (local + 0.5);
-  let is_side = abs(normal.z) < 0.5;
-  if (is_side) {
-    if (abs(normal.x) > 0.5) {
-      o.box_uv = vec2f(p.y, -p.z);
-    } else {
-      o.box_uv = vec2f(p.x, -p.z);
-    }
-  } else {
-    o.box_uv = p.xy;
-  }
+  o.box_uv = face_uv(vec3f(b.min_xy, b.z.x) + size * (local + 0.5), normal);
   return o;
 }
 

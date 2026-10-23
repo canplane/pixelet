@@ -56,10 +56,6 @@ pub const ZOOM_BITS: u32 = 8;
 /// A slot whose walk stopped at nothing: no zoom asked, so no eye's move
 /// casts it again.
 const NO_ZOOM: u32 = (1 << ZOOM_BITS) - 1;
-/// A slot whose walk met a node no window held (`Ends::Lacks`): nothing
-/// stopped it, and it walks again where any node it passes over moves,
-/// however high over what the node holds it passed (`below`).
-const LACKED: u32 = NO_ZOOM - 1;
 
 fn length(v: [f32; 3]) -> f32 {
     libm::sqrtf(dot(v, v))
@@ -169,26 +165,7 @@ impl Sun {
     /// Whether a kept slot's word stands under `detail`: the eye asks its
     /// stop at the zoom it was cast at, so a walk now would meet the same.
     pub fn stands(&self, detail: Detail, word: u32) -> bool {
-        word & NO_ZOOM == LACKED || self.asked(detail, word >> ZOOM_BITS) == word & NO_ZOOM
-    }
-
-    /// A slot's word for what its walk `met` (`word`, `depth`), one that
-    /// lacked told apart (`LACKED`).
-    pub fn word_of<A>(&self, detail: Detail, met: &Met<A>) -> u32 {
-        if met.ends == Ends::Lacks {
-            DEPTH_ONE << ZOOM_BITS | LACKED
-        } else {
-            self.word(detail, depth(self, met))
-        }
-    }
-
-    /// How far past where a walk stopped its slot's depth lies along its
-    /// ray, at most: the stop's push (`depth`) and the word's rounding.
-    pub fn pushed(&self) -> f32 {
-        let b = self.bias;
-        let most = if b[0] > b[1] { b[0] } else { b[1] };
-        let most = if most > b[2] { most } else { b[2] };
-        (if most > 0.0 { most } else { 0.0 }) * self.reach + 2.0 * self.reach / DEPTH_ONE as f32
+        self.asked(detail, word >> ZOOM_BITS) == word & NO_ZOOM
     }
 
     /// The box texel of a tile's first slot on each axis (`TILE`), and
@@ -214,7 +191,7 @@ impl Sun {
     /// judgement, a stop lies off where its texel lies on the near plane by
     /// its start's rounding to the Q3 grid at most, a step each way.
     pub fn tile_stands(&self, detail: Detail, p: [u32; 2], held: Held) -> bool {
-        if held.zoom == NO_ZOOM || held.zoom == LACKED {
+        if held.zoom == NO_ZOOM {
             return true;
         }
         if held.zoom == MIXED {
@@ -278,31 +255,29 @@ fn most(d: f32) -> f32 {
 /// judges the tile whole (pxl-shader `sun_mark_cs`): the nearest and the
 /// farthest stop, the zoom they were all asked at (none where no ray
 /// stopped, `MIXED` where they differ), how deep the deepest ray reaches,
-/// one that stopped at nothing to the far plane, and whether any lacked.
+/// one that stopped at nothing to the far plane.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Held {
     pub near: u32,
     pub far: u32,
     pub zoom: u32,
     pub reach: u32,
-    pub lacked: bool,
 }
 
 impl Held {
-    pub const NONE: Held = Held { near: DEPTH_ONE, far: 0, zoom: NO_ZOOM, reach: 0, lacked: false };
+    pub const NONE: Held = Held { near: DEPTH_ONE, far: 0, zoom: NO_ZOOM, reach: 0 };
 
     pub fn with(self, word: u32) -> Held {
         let (q, z) = (word >> ZOOM_BITS, word & NO_ZOOM);
         let reach = if q > self.reach { q } else { self.reach };
-        if z == NO_ZOOM || z == LACKED {
-            return Held { reach, lacked: self.lacked || z == LACKED, ..self };
+        if z == NO_ZOOM {
+            return Held { reach, ..self };
         }
         Held {
             near: if q < self.near { q } else { self.near },
             far: if q > self.far { q } else { self.far },
             zoom: if self.zoom == NO_ZOOM || self.zoom == z { z } else { MIXED },
             reach,
-            lacked: self.lacked,
         }
     }
 }
@@ -321,34 +296,6 @@ impl Sun {
             [least(a) + least(b) - pad, most(a) + most(b) + pad]
         };
         (o, [off(0), off(1)])
-    }
-
-    /// How far from the eye the light box's farthest corner lies, squared:
-    /// no ray of the map walks farther, so none asks a coarser zoom than
-    /// the eye asks there (`cast::Detail::at`). `size` texels a side.
-    pub fn farthest(&self, size: u32) -> f32 {
-        let n = size as f32;
-        let corner = |i: f32, j: f32, t: f32| {
-            let v = [
-                self.first[0] + i * self.across[0] + j * self.down[0] + t * self.dir[0],
-                self.first[1] + i * self.across[1] + j * self.down[1] + t * self.dir[1],
-                self.first[2] + i * self.across[2] + j * self.down[2] + t * self.dir[2],
-            ];
-            dot(v, v)
-        };
-        let most = |a: f32, b: f32| if a > b { a } else { b };
-        let r = self.reach;
-        let near = most(most(corner(0.0, 0.0, 0.0), corner(n, 0.0, 0.0)), most(corner(0.0, n, 0.0), corner(n, n, 0.0)));
-        let far = most(most(corner(0.0, 0.0, r), corner(n, 0.0, r)), most(corner(0.0, n, r), corner(n, n, r)));
-        most(near, far)
-    }
-
-    /// How much lower than the ray of a tile's run's first texel another
-    /// ray of the tile starts, in units, a step's rounding more
-    /// (`tile_rays`, `below`).
-    pub fn tile_drop(&self) -> f32 {
-        let side = (TILE - 1) as f32;
-        1.0 / (1u32 << FRAC_W) as f32 - least(side * self.across[2]) - least(side * self.down[2])
     }
 
     /// The sun its words lay (`words`).
@@ -397,9 +344,8 @@ pub fn depth_of(word: u32) -> f32 {
 /// filled, a preview's cuts that moved, each X, Y and its zoom. Past them,
 /// the world is cast again whole.
 pub const MOVED: usize = 32;
-/// Their words, as the sun's cast binds them: their count and the
-/// coarsest zoom the eye asks within the light box (`Sun::farthest`), then
-/// a vec4 each: X, Y, its zoom, and whether it is a preview's cut.
+/// Their words, as the sun's cast binds them: their count, then a vec4
+/// each: X, Y and its zoom.
 pub const MOVED_WORDS: usize = 4 + 4 * MOVED;
 
 /// The clipmap's tiles, `TILE` slots a side, a workgroup each: the mark
@@ -423,15 +369,14 @@ pub const LIST_EMPTY: [u32; LIST_AT] = [LIST_ACROSS, 0, 1, 0];
 /// node met nothing the node holds. X wraps round the world as a Q3
 /// position does.
 pub fn over(o: [i32; 3], dir: [f32; 3], t: f32, node: [i32; 2], zoom: Zoom) -> bool {
-    over_any(o, [[0.0; 2]; 2], dir, [0.0, t], node, zoom)
+    over_any(o, [[0.0; 2]; 2], dir, t, node, zoom)
 }
 
 /// Whether any of the rays from `o` moved by up to `off` on the world's X
 /// and Y, least and most, in units (`Sun::tile_rays`), passes over the
-/// node (`over`) between `t[0]` and `t[1]` units along `dir`: one does
-/// where the ray from `o` passes over the node widened by as much the other
-/// way. A span of no length is the point at its end.
-pub fn over_any(o: [i32; 3], off: [[f32; 2]; 2], dir: [f32; 3], [t0, t]: [f32; 2], [x, y]: [i32; 2], zoom: Zoom) -> bool {
+/// node (`over`) within `t` units along `dir`: one does where the ray from
+/// `o` passes over the node widened by as much the other way.
+pub fn over_any(o: [i32; 3], off: [[f32; 2]; 2], dir: [f32; 3], t: f32, [x, y]: [i32; 2], zoom: Zoom) -> bool {
     if zoom == 0 {
         return true;
     }
@@ -458,44 +403,7 @@ pub fn over_any(o: [i32; 3], off: [[f32; 2]; 2], dir: [f32; 3], [t0, t]: [f32; 2
     let (a, b) = (span(0, x), span(1, y));
     let from = if a.0 > b.0 { a.0 } else { b.0 };
     let to = if a.1 < b.1 { a.1 } else { b.1 };
-    let start = if t > 0.0 && t0 > 0.0 { t0 / t } else { 0.0 };
-    if start >= 1.0 {
-        return from <= 1.0 && 1.0 <= to;
-    }
-    (if from > start { from } else { start }) < (if to < 1.0 { to } else { 1.0 })
-}
-
-/// A moved node's top where nothing bounds what it holds now
-/// (pxl-shader `moved_top`): every ray over it may meet it anywhere.
-pub const NO_TOP: i32 = i32::MAX;
-
-/// A height in leaf cells as a Q3 z, as a ray's origin holds it.
-pub fn top_of(leaf: i32) -> i32 {
-    leaf.wrapping_shl(FINEST_ZOOM - crate::LEAF_CELL)
-}
-
-/// Where along a ray from `o`, down `dir`, a walk may first have met
-/// otherwise what a moved node holds, whose blocks reach no higher than
-/// `top` now (`NO_TOP` where nothing bounds them), `stop` where it stopped
-/// and `drop` how much lower than `o` another ray judged with it starts
-/// (`Sun::tile_rays`), in units: where it falls under the top; or at its
-/// stop, if sooner. A walk over the node passed only air of it until it
-/// stopped, so over the top it meets air there still, and what stopped
-/// it is met again only where it stopped, `pushed` short of its depth
-/// (`Sun::pushed`). A walk that lacked asks it wherever it passed
-/// (`LACKED`), from its start.
-pub fn below(o: i32, drop: f32, dir: f32, top: i32, stop: f32) -> f32 {
-    if top == NO_TOP || dir >= 0.0 {
-        return 0.0;
-    }
-    let over = o.wrapping_sub(top) as f32 / (1u32 << FRAC_W) as f32 - drop;
-    let t = over / -dir;
-    let t = if t < stop { t } else { stop };
-    if t > 0.0 {
-        t
-    } else {
-        0.0
-    }
+    (if from > 0.0 { from } else { 0.0 }) < (if to < 1.0 { to } else { 1.0 })
 }
 
 /// Texel `p`'s ray: its origin, the eye's Q3 `eye` and the steps to where
@@ -652,37 +560,6 @@ mod tests {
     }
 
     #[test]
-    fn a_ray_may_meet_a_moved_node_from_under_its_top_or_where_it_stopped() {
-        // From 100 up, down at 45 degrees: under a top at 10 past 90 up and across.
-        let dir = [libm::sqrtf(0.5), 0.0, -libm::sqrtf(0.5)];
-        let t = below(100 * 256, 0.0, dir[2], top_of(10), 500.0);
-        assert!((t - 90.0 * libm::sqrtf(2.0)).abs() < 1e-3, "{t}");
-        // A stop over the top is met where it stopped; a lower start sooner.
-        assert_eq!(below(100 * 256, 0.0, dir[2], top_of(10), 20.0), 20.0);
-        assert!(below(100 * 256, 4.0, dir[2], top_of(10), 500.0) < t);
-        // Nothing bounded, or a start under the top: from the start.
-        assert_eq!(below(100 * 256, 0.0, dir[2], NO_TOP, 500.0), 0.0);
-        assert_eq!(below(5 * 256, 0.0, dir[2], top_of(10), 500.0), 0.0);
-        // The span from there: a node under the ray's first stretch is off it.
-        let o = [0, 0, 100 * 256];
-        assert!(!over_any(o, [[0.0; 2]; 2], dir, [t, 200.0], [10, 0], crate::UNIT_ZOOM));
-        assert!(over_any(o, [[0.0; 2]; 2], dir, [0.0, 200.0], [10, 0], crate::UNIT_ZOOM));
-        assert!(over_any(o, [[0.0; 2]; 2], dir, [t, 200.0], [(t * dir[0]) as i32 + 2, 0], crate::UNIT_ZOOM));
-        // A span of no length is its end's point.
-        assert!(over_any(o, [[0.0; 2]; 2], dir, [20.0, 20.0], [(20.0 * dir[0]) as i32, 0], crate::UNIT_ZOOM));
-    }
-
-    #[test]
-    fn a_lacked_walk_stands_and_is_told_apart() {
-        let s = down();
-        let w = DEPTH_ONE << ZOOM_BITS | LACKED;
-        let far = Detail { tau: 1.0, range: [0, crate::FINEST_ZOOM], eye: [0.0, 0.0, 2.0] };
-        assert!(s.stands(far, w));
-        assert_eq!(depth_of(w), 1.0);
-        assert!(Held::NONE.with(w).lacked && !Held::NONE.with(s.word(far, 1.0)).lacked);
-    }
-
-    #[test]
     fn a_tile_judged_whole_walks_wherever_a_slot_of_it_would() {
         // A box 64 units a side, the sun 40 degrees off straight down and
         // turned, 64 texels a side; the eye's zooms asked finely enough that
@@ -727,7 +604,7 @@ mod tests {
             let stands = sun.tile_stands(detail, p, held);
             let (o, off) = sun.tile_rays(eye, p);
             let reach = held.reach as f32 / DEPTH_ONE as f32 * sun.reach;
-            let passes = over_any(o, off, sun.dir, [0.0, reach], node, crate::UNIT_ZOOM);
+            let passes = over_any(o, off, sun.dir, reach, node, crate::UNIT_ZOOM);
             for k in 0..TILE * TILE {
                 let q = [p[0] + k % TILE, p[1] + k / TILE];
                 let (o, _, from) = ray(eye, &sun, q);

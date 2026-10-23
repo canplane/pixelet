@@ -32,8 +32,6 @@ use crate::scene::Scene;
 use xpute_guest::global::Global;
 
 pub struct Kernel {
-    /// The memory map is laid; nothing of the world is made before it.
-    pub laid_out: bool,
     pub scene: Scene,
     /// What the renderer is handed: every layer lists into it.
     pub draw: DrawList,
@@ -42,7 +40,6 @@ pub struct Kernel {
 impl Kernel {
     fn new() -> Kernel {
         Kernel {
-            laid_out: false,
             scene: Scene::default(),
             draw: DrawList::default(),
         }
@@ -55,20 +52,18 @@ pub fn kernel() -> &'static mut Kernel {
     KERNEL.get(Kernel::new)
 }
 
-/// None before the memory map is laid, when nothing may take the heap.
+/// None before the memory map is laid (`mem::section::map`), when nothing
+/// may take the heap.
 pub fn laid() -> Option<&'static mut Kernel> {
-    let k = kernel();
-    k.laid_out.then_some(k)
+    crate::mem::section::map().map(|_| kernel())
 }
 
 impl Kernel {
     /// Split into fields so the scene and the draw list borrow at once. None
     /// before the memory map is laid.
     pub fn parts(&mut self) -> Option<(&mut Scene, &mut DrawList)> {
-        let Kernel { laid_out, scene, draw, .. } = self;
-        if !*laid_out {
-            return None;
-        }
+        crate::mem::section::map()?;
+        let Kernel { scene, draw } = self;
         Some((scene, draw))
     }
 }
