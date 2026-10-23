@@ -4,26 +4,17 @@
 //! never by length, so changing the cell rescales every tier.
 
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_TIERS};
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 
-/// Tier `i` is the cell `i` steps finer, coarsest first.
-pub const OBJECT_SIZES: [f64; OBJECT_TIERS] = {
-    let mut sizes = [0.0; OBJECT_TIERS];
-    let mut i = 0;
-    while i < OBJECT_TIERS {
-        sizes[i] = units(OBJECT_COARSEST + i as Zoom);
-        i += 1;
-    }
-    sizes
-};
-
-pub const DEFAULT_OBJECT_SIZE: f64 = OBJECT_SIZES[0];
-
 /// A marker's place: one ground cell, not tied to the object tool's live size.
-pub const MARKER_SIZE: f64 = units(GROUND.cell());
+pub const MARKER_ZOOM: Zoom = GROUND.cell();
 
-/// The default for a tier the ladder does not have.
-pub fn object_size_of(tier: u32) -> f64 {
-    OBJECT_SIZES.get(tier as usize).copied().unwrap_or(DEFAULT_OBJECT_SIZE)
+/// Tier `i` is the cell `i` steps finer, coarsest first; a tier the ladder
+/// does not have is the coarsest.
+pub fn object_zoom_of(tier: u32) -> Zoom {
+    match (tier as usize) < OBJECT_TIERS {
+        true => OBJECT_COARSEST + tier as Zoom,
+        false => OBJECT_COARSEST,
+    }
 }

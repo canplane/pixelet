@@ -19,7 +19,7 @@ use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_cell};
-use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units, Zoom, CUBE_ZOOM};
+use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, CUBE_ZOOM};
 use pxl_spec::space::hierarchy::morton::{key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::SparseTree;
 use pxl_spec::space::hierarchy::tree::{child_of, region, slot_of, Node};
@@ -191,12 +191,10 @@ pub struct Write {
 }
 
 impl Write {
-    /// `id` at the cube of `size` holding `coord`. Size is a power of two by
-    /// construction; the nearest zoom only guards against float noise.
-    pub fn at(coord: &Q3, size: f64, id: u32) -> Write {
-        let zoom = of_side(size);
+    /// `id` at the cube `at` names.
+    pub fn at(at: EntryAt, id: u32) -> Write {
         Write {
-            key: key(zoom, index_of(zoom, coord)),
+            key: key(at.zoom(), at.at()),
             id,
             ext: None,
         }

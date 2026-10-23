@@ -4,7 +4,7 @@
 // not the size tier's; the store is saved, so a wrong bite outlives the
 // session.
 
-use crate::layer::object::size::OBJECT_SIZES;
+use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::space::coord::q3::{FRAC_W, Q3};
 use pxl_spec::space::coord::zoom::{index_of, UNIT_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
@@ -51,7 +51,7 @@ fn world_struck_corner_at_cell_size_lands_on_the_struck_cell_with_no_sub_cell_re
 fn world_struck_corner_at_cell_size_names_the_cell_every_tier_lands_inside() {
     for (name, hit) in cases() {
         let cell = lattice(&world_struck_corner(&hit, units(GROUND.cell())));
-        for size in OBJECT_SIZES {
+        for size in (OBJECT_COARSEST..=OBJECT_FINEST).map(units) {
             assert_eq!(lattice(&world_struck_corner(&hit, size)), cell, "{name} at tier {size}");
         }
     }

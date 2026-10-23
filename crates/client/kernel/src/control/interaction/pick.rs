@@ -21,7 +21,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 const PICK_REACH_U: f64 = 32.0;
 
 // Above the 1/256-grid round trip's error (±1/512 u), below the gap between
-// any two OBJECT_SIZES tiers (the finest's side).
+// any two object tiers (the finest's side).
 const SAME_EXTENT_EPS: f64 = units(OBJECT_FINEST) / 16.0;
 
 /// The octree only stores a `size` object on these lines; any other corner

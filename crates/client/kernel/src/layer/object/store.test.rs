@@ -1,8 +1,7 @@
 // pxl-kernel/layer/object/store.test.rs
 
 use pxl_spec::block::cube::Object;
-use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{base_of, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::UNIT_ZOOM;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use fnv::FnvHashMap;
@@ -16,10 +15,6 @@ use pxl_spec::block::object::{cube_id, Cube};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use pxl_spec_core::overwrite::{self, Cut};
 use xpute_kit::math::rng::SplitMix64;
-
-fn corner(x: i32, y: i32, z: i32) -> Q3 {
-    base_of(UNIT_ZOOM, [x, y, z])
-}
 
 #[test]
 fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
@@ -154,7 +149,7 @@ fn air_is_a_value_and_folds_like_one() {
 }
 
 fn cube_at(store: &mut Store, [x, y, z]: [i32; 3], state: u32) {
-    store.write([Write::at(&corner(x, y, z), 1.0, state)]);
+    store.write([Write::at(EntryAt::new(UNIT_ZOOM, [x, y, z]), state)]);
 }
 
 #[test]

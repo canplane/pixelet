@@ -39,7 +39,7 @@ pub fn ghost() -> Ghost {
     let active_tool = ui.active_tool;
     let Pending {
         object: hovered_object,
-        size: preview_size,
+        zoom: preview_zoom,
         digging: digging_terrain,
         blocked,
         ..
@@ -47,7 +47,7 @@ pub fn ghost() -> Ghost {
     let textures = settings.textures;
 
     let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser) || hovered_object.is_some();
-    let current_scale = if use_object_style { preview_size } else { units(GROUND.cell()) };
+    let current_scale = units(if use_object_style { preview_zoom } else { GROUND.cell() });
 
     let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {

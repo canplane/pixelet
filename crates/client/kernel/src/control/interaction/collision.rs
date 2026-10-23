@@ -5,12 +5,12 @@ use pxl_spec::block::DecorId;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
-use pxl_spec::space::coord::zoom::{cube, index_of, of_side, units, Zoom};
+use pxl_spec::space::coord::zoom::{cube, index_of, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::control::interaction::{ActiveTool, Holding};
 use crate::layer::object::meta::user_decor_pick;
-use crate::layer::object::size::{object_size_of, MARKER_SIZE};
+use crate::layer::object::size::{object_zoom_of, MARKER_ZOOM};
 use crate::layer::object::store::{Block, Entry};
 use crate::query::World;
 
@@ -29,7 +29,7 @@ impl PlacementTool {
     /// The tool `ui` holds, where it places; none for the pointer or the eraser.
     pub fn of(ui: &Holding) -> Option<PlacementTool> {
         match ui.active_tool {
-            ActiveTool::Object => Some(PlacementTool::Object(of_side(object_size_of(ui.object_tier)))),
+            ActiveTool::Object => Some(PlacementTool::Object(object_zoom_of(ui.object_tier))),
             ActiveTool::Decor => Some(PlacementTool::Decor(ui.decor_id)),
             ActiveTool::Marker => Some(PlacementTool::Marker),
             ActiveTool::Pointer | ActiveTool::Eraser => None,
@@ -41,7 +41,7 @@ impl PlacementTool {
         match self {
             PlacementTool::Object(zoom) => zoom,
             PlacementTool::Decor(id) => Decor::of(id).row.cell_zoom(),
-            PlacementTool::Marker => of_side(MARKER_SIZE),
+            PlacementTool::Marker => MARKER_ZOOM,
         }
     }
 

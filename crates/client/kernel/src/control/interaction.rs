@@ -33,7 +33,7 @@ pub struct Holding {
     pub active_tool: ActiveTool,
     /// A placed color or a ground look.
     pub object_cube: Cube,
-    /// The object size by its tier (`object_size_of`).
+    /// The object size by its tier (`object_zoom_of`).
     pub object_tier: u32,
     pub decor_id: DecorId,
 }
@@ -166,24 +166,18 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         Some(Struck::Grown(cell, _)) => base_of(GROUND.cell(), *cell),
         None => world_adjacent_corner(&hit, units(GROUND.cell()), None),
     });
-    let (corner, size) = match struck {
-        Some(Struck::Object(o)) => (o.corner(), o.size()),
-        Some(Struck::Grown(cell, _)) => (base_of(GROUND.cell(), cell), units(GROUND.cell())),
+    let (corner, zoom) = match struck {
+        Some(Struck::Object(o)) => (o.corner(), o.zoom),
+        Some(Struck::Grown(cell, _)) => (base_of(GROUND.cell(), cell), GROUND.cell()),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
-        None => (world_struck_corner(&hit, units(GROUND.cell())), units(GROUND.cell())),
+        None => (world_struck_corner(&hit, units(GROUND.cell())), GROUND.cell()),
     };
     // Past where the world takes an edit, nothing is pointed at.
-    if !editable(&corner, size) {
+    if !World::now().editable(&cube(zoom, index_of(zoom, &corner))) {
         *hover = Hover::default();
         return;
     }
     hover.coord = Some(corner);
-}
-
-/// Whether the cube of `size` cornered at `corner` may hold an edit.
-fn editable(corner: &Q3, size: f64) -> bool {
-    let zoom = of_side(size);
-    World::now().editable(&cube(zoom, index_of(zoom, corner)))
 }
 
 /// Whether what `hit` struck is drawn folded: the eye's rays draw cells
@@ -205,7 +199,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     match PlacementTool::of(&ui) {
         // The slot may have filled since the last hover update.
         Some(tool) if is_placement_blocked(tool, &hovered) => {}
-        Some(tool @ PlacementTool::Object(_)) => place(&hovered, tool.size(), ui.object_cube),
+        Some(PlacementTool::Object(zoom)) => place(&hovered, zoom, ui.object_cube),
         Some(PlacementTool::Decor(id)) => place_decor(&hovered, id),
         // It waits there for its words, which the shell asks for.
         Some(PlacementTool::Marker) => wait_to_put(&hovered),
@@ -221,13 +215,13 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
                 (Some(at), _) => remove(at),
                 (None, Some(s)) => {
                     if let Some(cell) = s.grown_in() {
-                        place_air(&base_of(GROUND.cell(), cell), units(GROUND.cell()));
+                        place_air(EntryAt::new(GROUND.cell(), cell));
                     }
                 }
                 // AIR, not VOID: terrain has no leaf to delete. A whole cell, never the
                 // size tier: the scan emits nothing for a zero material whatever its
                 // sub-cell bytes, so a smaller leaf would save a bite nobody took.
-                (None, None) => place_air(&hovered, units(GROUND.cell())),
+                (None, None) => place_air(EntryAt::holding(GROUND.cell(), &hovered)),
             }
         }
     }
