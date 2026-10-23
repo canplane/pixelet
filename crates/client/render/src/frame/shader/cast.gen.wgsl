@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: 34e36d6201e3ded9b18736d299d2725a195a5272c12b8a71e674cf7d2783f67a
+// Inputs: 1c0430e2b4abc48a41d5fbc3a9fc211dc79fd02c5240a526f56f5743d6c92c82
 struct type_4 {
     member: array<u32>,
 }
@@ -2320,7 +2320,7 @@ fn function_() {
                         let _e2116 = (_e2110.member_1.member[0] == 4294967295u);
                         if _e2116 {
                             let _e2119 = atomicAdd((&global_3.member[2u]), 1u);
-                            atomicStore((&global_3.member[(6815876u + _e2119)]), (_e100.x | (_e100.y << bitcast<u32>(16i))));
+                            atomicStore((&global_3.member[(6881412u + _e2119)]), (_e100.x | (_e100.y << bitcast<u32>(16i))));
                         }
                         phi_2681_ = select(true, false, _e2116);
                     } else {

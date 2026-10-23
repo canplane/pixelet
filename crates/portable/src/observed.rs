@@ -13,10 +13,11 @@
 //!
 //! One buffer of words:
 //!
-//! - its head: the next free tile, the frame's number, the pixels that
-//!   missed, what is forgotten, and the eye's windows' slots that moved
+//! - its head: how many tiles are taken, the frame's number, the pixels
+//!   that missed, what is forgotten, and the eye's windows' slots that moved
 //!   (`HEAD_WORDS`);
 //! - the entries, the roots' and then the tiles' (`ENTRIES_AT`);
+//! - the tiles' stack, the free ones past those taken (`STACK_AT`);
 //! - the pixels that missed, a word each (`LIST_AT`).
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
@@ -26,18 +27,24 @@
 //! compare-and-swap, and the node, its zoom and its column (`forgets`). A key is one word, so a reader that trusts it trusts
 //! words no walk of its frame writes again: a walk writes an entry only
 //! where its key does not say what that walk asks.
+//!
+//! A tile goes back on the stack once it keeps nothing: each of its eight
+//! forgotten, its children's tile gone back before it. Its parent gives it
+//! back, the one word that names it, so a tile is never given back twice;
+//! the walks take tiles and the forgetting gives them back, in dispatches
+//! of their own, so the stack is never taken from and given to at once.
 
 use crate::answer::Kind;
 use crate::window::{eye_cell, slot, ACROSS, EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
 use crate::world::AT_WORDS;
 use crate::Zoom;
 
-/// The head's words: the next free tile, the frame's number, how many
+/// The head's words: how many tiles are taken, the frame's number, how many
 /// pixels missed, what this frame forgets (`FORGETS_NONE`, `FORGETS_ALL`,
 /// `FORGETS_MOVED`), and a bit a slot of the eye's windows, a window's
 /// `SLOTS` bits in turn, set where the square it holds moved or was handed
 /// since the last cast.
-pub const NEXT_TILE: u32 = 0;
+pub const TAKEN: u32 = 0;
 pub const FRAME: u32 = 1;
 pub const MISSES: u32 = 2;
 pub const FORGETS: u32 = 3;
@@ -71,7 +78,11 @@ pub const ENTRY_WORDS: u32 = W_NODE + 3;
 pub const TILES: u32 = 1 << 16;
 pub const ENTRIES: u32 = ROOTS + 8 * TILES;
 pub const ENTRIES_AT: u32 = HEAD_WORDS;
-pub const LIST_AT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
+/// The tiles' stack, a tile a word: those taken below `TAKEN`, the free
+/// ones from it up, the next taken first; every tile in turn where the
+/// pyramid is forgotten whole.
+pub const STACK_AT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
+pub const LIST_AT: u32 = STACK_AT + TILES;
 
 /// No entry: a node no tile keeps.
 pub const NONE: u32 = u32::MAX;

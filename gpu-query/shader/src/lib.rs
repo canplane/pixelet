@@ -434,7 +434,7 @@ struct Writ {
 /// unless this pass is still writing it (`tag`); any other asked of the
 /// world's one query there and then, from what was handed it, and written.
 /// A node's children are taken a tile once, by whichever walk swaps it in
-/// first.
+/// first, off the tiles' stack.
 struct Writing<'a, L> {
     world: World<'a, L>,
     seen: &'a mut Seen,
@@ -445,7 +445,8 @@ impl<L: Looks> Writing<'_, L> {
     /// The entry of `parent`'s child `oct`, its tile taken where it has
     /// none: claimed first by one compare-and-swap, so one walk of the many
     /// that reach a node at once takes a tile, and the rest walk on under
-    /// it with none kept; none where no tile is left.
+    /// it with none kept; none where no tile is left, one taken too many
+    /// given back at once, as no tile is given back while walks take them.
     fn tile(&mut self, parent: u32, oct: u32) -> u32 {
         let w = observed::entry_at(parent) + observed::W_CHILDREN;
         let c = seen_load(self.seen, w);
@@ -459,11 +460,13 @@ impl<L: Looks> Writing<'_, L> {
         if was != 0 {
             return if was == observed::CLAIMED { observed::NONE } else { observed::child(was - 1, oct) };
         }
-        let t = seen_add(self.seen, observed::NEXT_TILE, 1);
-        if t >= observed::TILES {
+        let k = seen_add(self.seen, observed::TAKEN, 1);
+        if k >= observed::TILES {
+            seen_add(self.seen, observed::TAKEN, 1u32.wrapping_neg());
             seen_store(self.seen, w, 0);
             return observed::NONE;
         }
+        let t = seen_at(self.seen, observed::STACK_AT + k);
         seen_store(self.seen, w, t + 1);
         observed::child(t, oct)
     }
@@ -789,9 +792,12 @@ pub fn miss_cs(
 
 /// What the observed pyramid kept forgotten, a thread an entry, where what
 /// the world's query reads changed (pxl-portable `observed::FORGETS`): every
-/// entry's key and its children's tile, or the key of each entry over a
-/// square that moved (`observed::forgets`), its children kept for the walk
-/// that asks it again.
+/// entry's key and its children's tile, every tile on the stack in turn; or
+/// the key of each entry over a square that moved (`observed::forgets`), its
+/// children kept for the walk that asks it again, and its children's tile
+/// given back once that keeps nothing. This dispatch only clears words, so
+/// a child read before its own thread cleared it keeps its tile a
+/// forgetting longer, and one read cleared is cleared.
 #[spirv(compute(threads(64, 1, 1)))]
 pub fn forget_cs(#[spirv(global_invocation_id)] id: UVec3, #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen) {
     if id.x >= observed::ENTRIES {
@@ -801,20 +807,39 @@ pub fn forget_cs(#[spirv(global_invocation_id)] id: UVec3, #[spirv(storage_buffe
     if seen_at(seen, observed::FORGETS) == observed::FORGETS_ALL {
         seen_put(seen, w + observed::W_KEY, 0);
         seen_put(seen, w + observed::W_CHILDREN, 0);
+        if id.x < observed::TILES {
+            seen_put(seen, observed::STACK_AT + id.x, id.x);
+        }
         return;
     }
-    if seen_at(seen, w + observed::W_KEY) == 0 {
+    if seen_load(seen, w + observed::W_KEY) != 0 {
+        let (zoom, x, y) = (seen_at(seen, w + observed::W_NODE), seen_at(seen, w + observed::W_NODE + 1) as i32, seen_at(seen, w + observed::W_NODE + 2) as i32);
+        let mut moved = [0; observed::MOVED_WORDS as usize];
+        let mut k = 0;
+        while k < observed::MOVED_WORDS {
+            moved[k as usize] = seen_at(seen, observed::MOVED_AT + k);
+            k += 1;
+        }
+        if observed::forgets(&moved, zoom, [x, y]) {
+            seen_store(seen, w + observed::W_KEY, 0);
+        }
+    }
+    let c = seen_load(seen, w + observed::W_CHILDREN);
+    if c == 0 {
         return;
     }
-    let (zoom, x, y) = (seen_at(seen, w + observed::W_NODE), seen_at(seen, w + observed::W_NODE + 1) as i32, seen_at(seen, w + observed::W_NODE + 2) as i32);
-    let mut moved = [0; observed::MOVED_WORDS as usize];
-    let mut k = 0;
-    while k < observed::MOVED_WORDS {
-        moved[k as usize] = seen_at(seen, observed::MOVED_AT + k);
-        k += 1;
+    let mut kept = false;
+    let mut oct = 0;
+    while oct < 8 {
+        let e = observed::entry_at(observed::child(c - 1, oct));
+        kept = kept || seen_load(seen, e + observed::W_KEY) != 0 || seen_load(seen, e + observed::W_CHILDREN) != 0;
+        oct += 1;
     }
-    if observed::forgets(&moved, zoom, [x, y]) {
-        seen_put(seen, w + observed::W_KEY, 0);
+    if !kept {
+        seen_store(seen, w + observed::W_CHILDREN, 0);
+        // One fewer taken: an add of -1, as the count's word is unsigned.
+        let k = seen_add(seen, observed::TAKEN, 1u32.wrapping_neg());
+        seen_put(seen, observed::STACK_AT + k - 1, c - 1);
     }
 }
 
