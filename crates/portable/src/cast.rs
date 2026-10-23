@@ -83,13 +83,44 @@ pub struct Ray {
 }
 
 impl Ray {
+    /// A direction component under f32's least normal magnitude
+    /// (`f32::MIN_POSITIVE`) is 0: the ray does not move along that axis.
+    /// So every reciprocal is finite (1 / 2^-126 is), a plane's offset
+    /// times it is a finite number or an infinity, never inf · 0, and no
+    /// number the walk compares is NaN; which is what lets `greater` and
+    /// `lesser` be one comparison each. The component and its reciprocal
+    /// are zeroed together, as `planes` and `past` branch on the one and
+    /// multiply by the other.
     pub fn new(direction: [f32; 3], reach: f32) -> Ray {
+        let moves = |d: f32| if libm::fabsf(d) < f32::MIN_POSITIVE { 0.0 } else { d };
+        let direction = [moves(direction[0]), moves(direction[1]), moves(direction[2])];
         let inv = |d: f32| if d == 0.0 { 0.0 } else { 1.0 / d };
         Ray {
             direction,
             reach,
             inverse: [inv(direction[0]), inv(direction[1]), inv(direction[2])],
         }
+    }
+}
+
+/// The greater and the lesser of two floats, one comparison each. IEEE's
+/// `f32::max` and `f32::min` hand back the other operand where one is NaN,
+/// and rust-gpu lowers each into two NaN-check branches — seventeen a pass
+/// of the walk's loop. No number the walk compares is NaN (`Ray::new`), so
+/// the comparison is the whole rule.
+fn greater(a: f32, b: f32) -> f32 {
+    if a > b {
+        a
+    } else {
+        b
+    }
+}
+
+fn lesser(a: f32, b: f32) -> f32 {
+    if a < b {
+        a
+    } else {
+        b
     }
 }
 
@@ -251,7 +282,7 @@ pub fn holding(o: [i32; 3], ray: &Ray, mut n: Node, t: f32) -> Node {
     let og = grid_of(o);
     loop {
         let (x, y, z) = spans(ray, bounds(&n, og), t);
-        let (t0, t1) = (t.max(x.0).max(y.0).max(z.0), ray.reach.min(x.1).min(y.1).min(z.1));
+        let (t0, t1) = (greater(greater(greater(t, x.0), y.0), z.0), lesser(lesser(lesser(ray.reach, x.1), y.1), z.1));
         if (t0 <= t && t < t1) || n.zoom == 0 {
             return n;
         }
@@ -358,8 +389,8 @@ pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 /// planes `lo` and `hi` units from the origin on each axis: its corner
 /// farthest from the origin and its point nearest it.
 fn reach(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
-    let near = [lo[0].max(0.0).min(hi[0]), lo[1].max(0.0).min(hi[1]), lo[2].max(0.0).min(hi[2])];
-    let far = [(-lo[0]).max(hi[0]), (-lo[1]).max(hi[1]), (-lo[2]).max(hi[2])];
+    let near = [lesser(greater(lo[0], 0.0), hi[0]), lesser(greater(lo[1], 0.0), hi[1]), lesser(greater(lo[2], 0.0), hi[2])];
+    let far = [greater(-lo[0], hi[0]), greater(-lo[1], hi[1]), greater(-lo[2], hi[2])];
     [squared(far), squared(near)]
 }
 
@@ -464,7 +495,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
         let (lo, hi) = bounds(&n, og);
         // The ray's span in it.
         let (x, y, z) = spans(ray, (lo, hi), t);
-        let (t0, t1) = (t.max(x.0).max(y.0).max(z.0), ray.reach.min(x.1).min(y.1).min(z.1));
+        let (t0, t1) = (greater(greater(greater(t, x.0), y.0), z.0), lesser(lesser(lesser(ray.reach, x.1), y.1), z.1));
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
         if t1 > t0 {
@@ -510,7 +541,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                         units(((v - (root << UNIT_ZOOM)) as u32) << FRAC_W, og[2], root - r0[2])
                     };
                     let (bottom, top) = planes(ray.direction[2], ray.inverse[2], level(lo), level(hi), (t0, t1));
-                    into = until == Until::Air || t0.max(bottom) < t1.min(top);
+                    into = until == Until::Air || greater(t0, bottom) < lesser(t1, top);
                     Ends::On
                 }
             };
@@ -522,7 +553,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                 let near = [x.0, y.0, z.0];
                 let entered = crossing(ray.direction, near, true);
                 let stop = Stop {
-                    t: axis(near, entered).max(0.0),
+                    t: greater(axis(near, entered), 0.0),
                     axis: entered,
                     node: n,
                     at,
@@ -580,7 +611,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
             // Never back: the next node holds where the ray is on the integers,
             // but near an edge another axis's plane, a float product, may
             // fall a last bit before it.
-            t = t.max(t1);
+            t = greater(t, t1);
             if (up && old.wrapping_add(u) == u32::MAX) || (!up && old == 0) {
                 // Past a root: into the next, from its top, over which nothing
                 // is asked or held.
