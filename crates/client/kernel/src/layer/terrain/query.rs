@@ -7,11 +7,11 @@
 //! A column's ways are its square's tree the GPU built, its blocks read
 //! back into the pool's mirror (layer/terrain/window.rs `pool`).
 
+use pxl_portable::area::Shard;
 use pxl_portable::ground::{Bounds, Cell};
 use pxl_portable::window::{self as cells, Found};
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::coord::q3;
-use pxl_spec::space::coord::zoom::{base_of, units, Zoom};
+use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, Tile};
@@ -116,18 +116,6 @@ fn held<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
     }
 }
 
-/// A node's center, in units.
-fn center_of((zoom, at): Node<2>) -> [f64; 2] {
-    let base = base_of(zoom, [at[0], at[1], 0]);
-    [i64::from(base[0]), i64::from(base[1])].map(|v| q3::to_real(v) + units(zoom) / 2.0)
-}
-
-/// Whether a node is past the service area. It never straddles the area's
-/// edge, which runs on shards' edges.
-fn past(node: Node<2>) -> bool {
-    source::past_at(center_of(node))
-}
-
 impl Query for Residency<TerrainTile> {
     type Cursor = Line;
 
@@ -153,11 +141,12 @@ impl Query for Residency<TerrainTile> {
     /// From the windows' relief over the node's own cells (`relief`), the
     /// ground's and the ways' joined, down to a cell at `cell` under its
     /// lowest, within the node. A node past the service area, no look in
-    /// it, holds nothing.
+    /// it, holds nothing: known before any of its ground arrives, a shard or
+    /// finer, as every reader knows it (pxl-portable `area::Shard`); a
+    /// coarser node may straddle the area's edge and is read.
     fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Aabb>> {
         let node = (zoom, [at[0], at[1]]);
-        // Known before any of its ground arrives.
-        if past(node) {
+        if Shard::UNKNOWN.at(&source::Declared, node).past() {
             return Answer::Exact(None);
         }
         let whole = region((zoom, at));
