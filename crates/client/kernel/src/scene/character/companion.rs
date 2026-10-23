@@ -13,13 +13,13 @@ use crate::billboard::chat::speak_from;
 use crate::io::load::load_image;
 use crate::kernel;
 use crate::laid;
-use crate::model::asset::ModelHandle;
+use crate::model::asset::{model_of, ModelHandle};
 use crate::model::variant_spec::IDLE_CLIP;
 use crate::query::changed::Asked;
 use crate::query::World;
 use crate::query::{over, under, walks};
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
-use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
+use crate::scene::character::variant::{character_variant, CharacterVariant, Group};
 use crate::sched::edge::wake_at;
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
@@ -112,7 +112,7 @@ impl Figure {
         if self.held.is_some() {
             return;
         }
-        let (Some(model), Some(_)) = (model_of(variant.model, variant.height_u), load_image(Load::Asset(variant.skin))) else {
+        let (Some(model), Some(_)) = (model_of(variant.model, Some(variant.height_u)), load_image(Load::Asset(variant.skin))) else {
             return;
         };
         let Some(Some(actor)) = laid().map(|k| k.scene.actors.new_actor(&mut k.draw, crate::model::models(), model.model)) else {

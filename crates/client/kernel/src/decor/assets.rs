@@ -8,9 +8,8 @@ use pxl_spec::asset::ingested::Asset;
 use xpute_guest::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::asset::Load;
-use crate::io::host::Refused;
-use crate::io::load::{load_failed, load_gltf, load_image, take_settled};
-use crate::model::asset::register_model;
+use crate::io::load::{load_image, take_settled};
+use crate::model::asset::{model_of, model_refusal_over};
 use crate::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::block::decor::{Decor, DECORS};
 use xpute_guest::global::Global;
@@ -30,41 +29,18 @@ impl DecorAssets {
     }
 }
 
-struct Store {
-    /// In `DECORS` order, written in place as assets arrive.
-    entries: [DecorAssets; 4],
-    /// The heap's last refusal of a model: not retried until a block is
-    /// given back.
-    refused: Option<Refused>,
-}
+/// In `DECORS` order, written in place as assets arrive.
+static STORE: Global<[DecorAssets; 4]> = Global::new();
 
-static STORE: Global<Store> = Global::new();
+/// One per asset: two decors naming the same model reach one (`model_of`).
+pub const MODELS_MAX: usize = Asset::ALL.len();
 
-/// One per asset, since an arrival settles every variant naming it.
-pub const MODELS_MAX: usize = pxl_spec::asset::ingested::Asset::ALL.len();
-
-/// Two decors may name the same model; both reach one object.
-fn settle(entries: &mut [DecorAssets], asset: Asset, model: u32) {
-    for entry in entries {
-        for (v, variant) in entry.decor.variants.iter().enumerate() {
-            if variant.model == asset {
-                entry.models[v] = Some(model);
-            }
-        }
-    }
-    request_world_tick();
-}
-
-fn store() -> &'static mut Store {
+fn store() -> &'static mut [DecorAssets; 4] {
     STORE.get(|| {
-        let entry = |decor: &'static Decor| DecorAssets {
+        DECORS.each_ref().map(|decor| DecorAssets {
             decor,
             models: vec![None; decor.variants.len()],
-        };
-        Store {
-            entries: DECORS.each_ref().map(entry),
-            refused: None,
-        }
+        })
     })
 }
 
@@ -74,13 +50,20 @@ fn wanted() -> &'static mut Notify {
     WANTED.get(Notify::new)
 }
 
+/// Wakes the task when a load arrived, or when the heap gave room back to a
+/// model it refused.
 pub fn decor_assets_wanted() {
-    let s = store();
-    if take_settled() {
-        wanted().notify();
-    }
-    if s.refused.is_some_and(Refused::over) {
-        s.refused = None;
+    let refusal_over = || {
+        store().iter().any(|entry| {
+            entry
+                .decor
+                .variants
+                .iter()
+                .zip(&entry.models)
+                .any(|(variant, model)| model.is_none() && model_refusal_over(variant.model, None))
+        })
+    };
+    if take_settled() || refusal_over() {
         wanted().notify();
     }
 }
@@ -88,33 +71,26 @@ pub fn decor_assets_wanted() {
 /// Registers whatever arrived, a variant at a time on the turn quota.
 pub async fn decor_asset_task() {
     loop {
-        let mut refused = None;
-        for b in 0..store().entries.len() {
-            let decor = store().entries[b].decor;
+        for b in 0..store().len() {
+            let decor = store()[b].decor;
             for (v, variant) in decor.variants.iter().enumerate() {
                 yield_if_spent(world_edge).await;
-                let s = store();
-                let model = Load::Asset(variant.model);
-                if s.entries[b].models[v].is_none() && !load_failed(model) {
-                    if let Some(gltf) = load_gltf(model) {
-                        match register_model(&gltf, None) {
-                            Some(handle) => settle(&mut s.entries, variant.model, handle.model),
-                            None => {
-                                refused.get_or_insert_with(Refused::now);
-                            }
-                        }
+                let slot = &mut store()[b].models[v];
+                if slot.is_none() {
+                    *slot = model_of(variant.model, None).map(|handle| handle.model);
+                    if slot.is_some() {
+                        request_world_tick();
                     }
                 }
             }
         }
-        store().refused = refused;
         notified(wanted).await;
     }
 }
 
 /// A variant still in flight reads as None.
 pub fn decor_assets() -> &'static [DecorAssets] {
-    &store().entries
+    store()
 }
 
 pub fn decor_assets_for(decor: &Decor) -> Option<&'static DecorAssets> {

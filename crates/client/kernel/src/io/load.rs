@@ -99,11 +99,6 @@ pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
     }
 }
 
-pub fn load_failed(load: Load) -> bool {
-    let n = load.number() as usize;
-    loader().entries.iter().any(|kind| matches!(kind[n], Some(Entry::Failed)))
-}
-
 /// Kind in the high word, since one asset can be wanted both as a model and as an image.
 pub fn subject_of(kind: LoadKind, load: Load) -> u64 {
     (kind as u64) << 32 | load.number() as u64

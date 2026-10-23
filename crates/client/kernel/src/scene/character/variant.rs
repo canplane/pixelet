@@ -4,11 +4,6 @@
 
 use pxl_spec::asset::ingested::Asset;
 
-use crate::asset::Load;
-use crate::io::load::load_gltf;
-use crate::model::asset::{register_model, ModelHandle};
-use xpute_guest::global::Global;
-
 use crate::model::variant_spec::groups::{person, pet};
 pub use crate::model::variant_spec::Group;
 
@@ -29,21 +24,6 @@ pub const CHARACTER_VARIANTS: usize = person::Key::ALL.len() + pet::Key::ALL.len
 
 /// A variant at its own height, and at one unit in a display case.
 pub const MODELS_MAX: usize = 2 * CHARACTER_VARIANTS;
-
-/// None inside while registration failed.
-static MODELS: Global<Vec<(Asset, u64, Option<ModelHandle>)>> = Global::new();
-
-/// `asset` registered `height` units tall, once.
-pub fn model_of(asset: Asset, height: f64) -> Option<ModelHandle> {
-    let models = MODELS.get(Vec::new);
-    if let Some((_, _, entry)) = models.iter().find(|(a, h, _)| *a == asset && *h == height.to_bits()) {
-        return entry.clone();
-    }
-    let gltf = load_gltf(Load::Asset(asset))?;
-    let handle = register_model(&gltf, Some(height));
-    models.push((asset, height.to_bits(), handle.clone()));
-    handle
-}
 
 pub fn character_variant(group: Group, number: u8) -> Option<CharacterVariant> {
     let (model, skin, height_u, move_clip) = match group {

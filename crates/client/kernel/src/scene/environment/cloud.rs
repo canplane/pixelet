@@ -24,9 +24,9 @@ use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::frame_budget::FrameBudget;
 
 use crate::asset::Load;
-use crate::io::load::{load_failed, load_gltf, load_image};
+use crate::io::load::load_image;
 use crate::kernel;
-use crate::model::asset::register_model;
+use crate::model::asset::model_of;
 use crate::scene::decor::cell::{present_block, Shown};
 use crate::scene::decor::drawn::{decor_gone_px, decor_sprite_px, sprite_reach};
 use crate::scene::decor::instance::{decor_groups, GroupLanes};
@@ -148,8 +148,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     let c = clouds();
     c.seen = f64::INFINITY;
     for (slot, asset) in c.models.iter_mut().zip(VARIANTS) {
-        if slot.is_none() && !load_failed(Load::Asset(asset)) {
-            *slot = load_gltf(Load::Asset(asset)).and_then(|gltf| register_model(&gltf, None)).map(|h| h.model);
+        if slot.is_none() {
+            *slot = model_of(asset, None).map(|h| h.model);
         }
     }
     let Some(eye) = eye() else { return };
