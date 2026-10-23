@@ -145,12 +145,8 @@ the same problem with the same result, at pixels times the log of the scene;
 for triangles the obstacle was building an acceleration structure over each
 frame's choice of clusters.
 
-It does not fit here, for three reasons.
+It does not fit here, for two reasons.
 
-- **Its occlusion depends on the frame before.** The depth it culls against
-  is last frame's. The ground decision's determinism clause
-  ([20261012](./20261012-the-ground-is-a-grid-then-overwrites.md))
-  forbids any result that depends on previous observations.
 - **Voxels are their own hierarchy.** A grid needs no structure built over
   it. Turning voxels into triangles multiplies the faces, and Nanite then
   builds a second hierarchy to undo that multiplication. Its simplification

@@ -9,8 +9,7 @@ resolution is the display's times a scale the load sets: once a frame, the
 measured cast against the paced frame's budget moves the scale by the square
 root of their ratio, between half and whole, and holds while the cast is
 within a tenth of the budget (pxl-kernel view/frame/resolution.rs); the frame
-is upscaled within itself, never from the frames before (the determinism
-clause below). The `rays` setting below is gone.
+is upscaled within itself. The `rays` setting below is gone.
 
 What is drawn is what the eye's rays reach
 ([the ground is a grid](./20261012-the-ground-is-a-grid-then-overwrites.md)),
@@ -31,9 +30,7 @@ still picks the zoom a ray asks at a distance (`Tau::cell_at`). Only the rays
 per screen change.
 
 A Retina resolution is not required. Half the screen's pixels is a
-legitimate target. Interlacing and reuse across frames are not taken: the
-result would depend on previous observations, against the determinism clause
-of 20261012.
+legitimate target.
 
 ## The structure
 

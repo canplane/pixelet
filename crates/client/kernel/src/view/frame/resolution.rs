@@ -4,9 +4,8 @@
 //! world's scaled by the load. The world's rays are cast at the display's
 //! pixels times `scale` each way, and the page shows the buffer in the layout
 //! box whatever its size (pxl-render gpu/surface.rs), so the frame is upscaled
-//! within itself, never from the frames before: render resolution apart from
-//! display resolution where a screen outgrows its GPU (Unreal's screen
-//! percentage). Once a frame, where a GPU read landed, the GPU time of its
+//! within itself: render resolution apart from display resolution where a
+//! screen outgrows its GPU (Unreal's screen percentage). Once a frame, where a GPU read landed, the GPU time of its
 //! passes drawn at the world's pixels (pxl-render gpu/renderer.rs
 //! `pixels_ms`) stands against its budget, the paced interval the host grants
 //! (xpute host sched/quantum.ts `Grant::paced_ms`): the scale moves by the
@@ -51,7 +50,7 @@ pub fn world_ratio() -> f64 {
 /// Device pixels per CSS pixel the display shows the world at, whatever the
 /// load drew it at: what the camera grid is laid by (`view_resize`), so a
 /// block's zoom, demand and a pointer's reach follow the screen, not the
-/// frames before; a pixel a CSS pixel before the world has a surface.
+/// load; a pixel a CSS pixel before the world has a surface.
 pub fn display_ratio() -> f64 {
     world().map_or(1.0, |s| s.dpr.min(param::RESOLUTION_MAX))
 }

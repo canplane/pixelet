@@ -95,9 +95,7 @@ then a function of the world and the eye alone.
   Neyret, Lefebvre, Eisemann 2009) a ray that misses requests the node, a
   producer composes it into a node pool, and the next frame reads it.
   - **Gain:** only observed nodes are made.
-  - **Loss:** a node filled a frame late makes the image depend on what
-    was observed before, against the determinism clause of 20261012 and
-    "reuse across frames is not taken" in 20261014.
+  - **Loss:** a node filled a frame late shows a frame late.
   - Filling within the frame and resuming each ray from its stop avoids
     that, but adds passes. It is the structure taken if check 4 below
     rules out filling where the sources land.
