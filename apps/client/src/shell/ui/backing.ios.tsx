@@ -18,7 +18,7 @@ import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { useVeil } from "@/shell/ui/motion/veil.ts";
 import { BackingPlace, type BackingProps } from "@/shell/ui/backing.tsx";
 import { alpha } from "@/shell/ui/theme.ts";
-import { Backing as PageBacking } from "./backing.tsx";
+import { Backing as Fill } from "./backing.tsx";
 
 // Everything the default has, but what this file draws itself.
 export * from "./backing.tsx";
@@ -67,7 +67,7 @@ export function Backing({ fill, material, tint, interactive, place, fade = 1, fa
     );
   }
 
-  if (!SYSTEM_BACKING) return <PageBacking fill={fill} place={place} fade={fade} fadeFrom={fadeFrom} transition={transition} style={style}>{children}</PageBacking>;
+  if (!SYSTEM_BACKING) return <Fill fill={fill} place={place} fade={fade} fadeFrom={fadeFrom} transition={transition} style={style}>{children}</Fill>;
 
   const { boxShadow: _shadow, borderWidth: _width, borderColor: _color, flexDirection, alignItems, justifyContent, gap, rowGap, columnGap, ...ground } = StyleSheet.flatten(style) ?? {};
   return (

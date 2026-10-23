@@ -270,8 +270,8 @@ const remoteOriginDefault = "https://plei.me";
 // anti-HMR. The shell's kernel glue is here too: its modules hold the one
 // kernel's memory and device, and a hot-swapped copy ran beside them — a
 // second device beside the renderer's objects on the first. The built module
-// is apps/web's own, under src/kernel/.
-const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/apps/client/src/kernel/", "/apps/client/src/catalog/", "/apps/web/src/kernel/"];
+// is the page's own, beside the guest.ts that opens it.
+const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/apps/client/src/kernel/", "/apps/client/src/catalog/", "/apps/web/src/guest."];
 
 // One reload for a change that reaches both sides: while the kernel builds, a
 // core change waits for it, so the page never runs the shell generated from a
@@ -354,7 +354,7 @@ function fullReloadOnCoreChange() {
 
 // The kernel's module, built again when what it is built from changes. It is
 // built once as the server starts (deno.jsonc `dev`'s dependency), and the
-// page reloads when the module under src/kernel/ is replaced
+// page reloads when src/guest.wasm is replaced
 // (fullReloadOnCoreChange), so a Rust edit otherwise waited for a hand-run
 // build or a restart of everything. Every change under crates/ asks, outside
 // cargo's own target/: cargo knows which of them the module is built from, and

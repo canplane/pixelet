@@ -20,7 +20,7 @@ import { HANDHELD } from "./device.ts";
  * because JavaScriptCore counts the whole reservation as page memory. */
 const CORE_BYTES: u32 = HANDHELD ? PHONE_BYTES : DESKTOP_BYTES;
 
-const GUEST_WASM_URL = new URL("./kernel/guest.wasm", import.meta.url);
+const GUEST_WASM_URL = new URL("./guest.wasm", import.meta.url);
 
 export async function openGuest(): Promise<Guest> {
   const memory = reserve_memory([CORE_BYTES / REGION_BYTES], REGION_BYTES);

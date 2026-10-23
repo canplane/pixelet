@@ -11,9 +11,9 @@ const TARGET = "wasm32-unknown-unknown";
 // Cargo's own rule: CARGO_TARGET_DIR, else the workspace's target/.
 const TARGET_DIR = Deno.env.get("CARGO_TARGET_DIR") ? new URL(`file://${Deno.env.get("CARGO_TARGET_DIR")}/`) : new URL("target/", CRATES);
 const BUILT = new URL(`${TARGET}/release/pxl_wasm.wasm`, TARGET_DIR);
-const OUT = new URL("../src/kernel/guest.wasm", import.meta.url);
+const OUT = new URL("../src/guest.wasm", import.meta.url);
 /** The source path each number in a published module's panics stands for; kept by the deploy, never bundled. */
-const PATHS = new URL("../src/kernel/guest.paths.json", import.meta.url);
+const PATHS = new URL("../src/guest.paths.json", import.meta.url);
 
 /** Panic locations survive `strip` and carry the home directory, so the
  * prefixes are remapped. The repo goes first since it lies under home. */
@@ -103,7 +103,7 @@ if (!status.success) Deno.exit(status.code);
 
 // Finishing an unchanged module again would reload every open dev page.
 if (modified(BUILT) === before && exists(OUT) && modified(OUT) >= before) {
-  console.log("[build-wasm] up to date -> src/kernel/guest.wasm");
+  console.log("[build-wasm] up to date -> src/guest.wasm");
   Deno.exit(0);
 }
 
@@ -125,7 +125,7 @@ try {
   if (published) await Deno.rename(numbered, PATHS);
   await Deno.rename(done, OUT);
   const said = (published ? ", without the dev-only settings" : "") + (paths > 0 ? `, and ${paths} source paths numbered` : "");
-  console.log(`[build-wasm] ${linked} -> ${(await Deno.stat(OUT)).size} bytes, stripped${said} -> src/kernel/guest.wasm`);
+  console.log(`[build-wasm] ${linked} -> ${(await Deno.stat(OUT)).size} bytes, stripped${said} -> src/guest.wasm`);
 } catch (err) {
   if (!(err instanceof Failed)) throw err;
   if (err.message) console.error(err.message);

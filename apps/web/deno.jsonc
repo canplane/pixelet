@@ -10,7 +10,7 @@
   },
 
   "tasks": {
-    // The guest's module, from crates/, into src/kernel/guest.wasm. Every
+    // The guest's module, from crates/, into src/guest.wasm. Every
     // task that loads it depends on this, so it is never stale or missing.
     "build:wasm": "deno run -A script/build-wasm.ts",
     // The same module in its published shape — without the dev-only settings

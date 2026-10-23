@@ -3,7 +3,7 @@
 import { useContext, useEffect, useRef } from "react";
 import { BackHandler } from "react-native";
 import { PanelPresence, type PanelProps } from "@/shell/ui/panel.tsx";
-import { Panel as PagePanel } from "./panel.tsx";
+import { Panel as Sheet } from "./panel.tsx";
 
 // Everything the default has, but what this file draws itself.
 export * from "./panel.tsx";
@@ -21,5 +21,5 @@ export function Panel(props: PanelProps) {
     });
     return () => back.remove();
   }, [open]);
-  return <PagePanel {...props} />;
+  return <Sheet {...props} />;
 }

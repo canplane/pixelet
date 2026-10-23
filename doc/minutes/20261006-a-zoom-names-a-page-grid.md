@@ -39,7 +39,7 @@ the same pages as before. The profiler counts its zoom slots by
 the page zoom and its height stays an L4.
 
 POI and reverse geocode are turned off meanwhile, one problem at a time
-(`apps/web/src/kernel/boot.ts` leaves their roots unbound, which the kernel
+(`apps/client/src/kernel/boot.ts` leaves their roots unbound, which the kernel
 takes as no page); BACKLOG.md holds turning them back on.
 
 ## Not yet
