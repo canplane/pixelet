@@ -3,7 +3,9 @@
 /**
  * The host's clock for one guest: a turn runs on an animation frame only when
  * the host (`request`) or the guest's last falling edge asked for one, never on
- * a timer of the host's own.
+ * a timer of the host's own; and only on every `Quantum.interval()`-th
+ * refresh, the frames between it skipped whole (`turn`), so the turns land a
+ * whole number of refreshes apart (Android Swappy's frame pacing).
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -23,6 +25,8 @@ export class Strobe {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private timer_at = Infinity;
   private last = -1;
+  /** When the last animation frame was handed, run or skipped. */
+  private tick = -1;
   private running = false;
   private readonly run = (now: f64): void => this.turn(now);
 
@@ -40,6 +44,7 @@ export class Strobe {
   start(): void {
     this.running = true;
     this.last = performance.now();
+    this.tick = this.last;
     this.request();
   }
 
@@ -77,6 +82,11 @@ export class Strobe {
   private turn(now: f64): void {
     this.frame = false;
     if (!this.running) return;
+    this.quantum.tick(now - this.tick);
+    this.tick = now;
+    // Paced: a frame nearer the last turn than the interval, less half a
+    // refresh for the frame's own jitter, is skipped, and the next asked.
+    if (now - this.last < this.quantum.interval() - this.quantum.refresh() / 2) return this.request();
     // Unclamped: how long a gap still counts as motion is the guest's call,
     // and a clamp here is where every frame worth reporting would land.
     const delta_s = Math.max(0, (now - this.last) / 1000);
