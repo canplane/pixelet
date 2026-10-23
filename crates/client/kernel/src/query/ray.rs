@@ -22,7 +22,7 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world::{point, wrap_cell};
+use pxl_spec::space::coord::world::{origin, wrap_cell};
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
@@ -193,7 +193,7 @@ impl<'a> World<'a> {
 
     /// The first block along `ray` that `until` stops at, at the zoom `detail`
     /// asks where it meets it (pxl-portable `cast::first`), from the ray's
-    /// origin as a position names it.
+    /// origin, over the world where it stands there (pxl-spec `world::origin`).
     pub(super) fn along(&self, ray: &Ray, detail: Detail, until: Until, strike: Option<Strike<'a>>) -> (Answer<Option<Hit>>, Option<Strike<'a>>) {
         let mut walker = Walker {
             world: self,
@@ -204,7 +204,7 @@ impl<'a> World<'a> {
         };
         let o = ray.origin;
         let from = cast::Ray::new(ray.direction.map(|v| v as f32), ray.reach as f32);
-        let q = point(o[0], o[1], o[2]);
+        let q = origin(o[0], o[1], o[2]);
         let met = cast::first(&mut walker, q, &from, detail, until);
         let met = (met.ends == Ends::Stop).then(|| self.hit(ray, q, met.stop));
         let answer = match (met, walker.lack, walker.answered) {

@@ -10,7 +10,7 @@ use pxl_portable::eye;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 use pxl_spec::space::coord::v3::{self, V3};
-use pxl_spec::space::coord::world::point;
+use pxl_spec::space::coord::world::origin;
 
 use crate::query::asked;
 use crate::view::frame::pose::view;
@@ -71,7 +71,8 @@ impl Lens {
 }
 
 /// What a GPU's cast of the screen's rays reads of the eye (pxl-portable
-/// `eye`, gpu-query-shader `Eye`): its Q3 position and whether each ray
+/// `eye`, gpu-query-shader `Eye`): its Q3 position as a ray's origin, over
+/// the world where it stands there (pxl-spec `world::origin`), and whether each ray
 /// reports the nodes its descent asked, not what it met; the unit forward
 /// and the reach; the unit right and τ; the unit up; the tangents of the
 /// screen's half-angles across and up and the zooms a block is asked at. A
@@ -79,7 +80,7 @@ impl Lens {
 /// without a screen.
 pub fn gpu_cast(o: &Observation, tau: Tau, steps: bool, words: &mut [u32; eye::WORDS]) -> Option<()> {
     let lens = Lens::of(o)?;
-    let q = point(o.eye[0], o.eye[1], o.eye[2]);
+    let q = origin(o.eye[0], o.eye[1], o.eye[2]);
     let w = |v: f64| (v as f32).to_bits();
     let mut put = |at: usize, v: &[u32]| words[at..at + v.len()].copy_from_slice(v);
     put(eye::ORIGIN, &q.map(|v| v as u32));

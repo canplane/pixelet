@@ -209,6 +209,26 @@ fn flat_at_five() -> (Residency<TerrainTile>, [f64; 2]) {
     (resident([x0 + 10.0, y0 + 10.0], &[(leaf, flat)]), [x0 + 10.0, y0 + 10.0])
 }
 
+/// An eye over the world's top casts from where it stands, not from the
+/// top: its ray falls through what is over the world and meets the ground
+/// where its line does.
+#[test]
+fn a_ray_from_over_the_world_meets_the_ground_where_its_line_does() {
+    let _g = serial();
+    let (residency, at) = flat_at_five();
+    let store = Store::default();
+    let access = World::new(&residency, &store);
+    let top = access.first_hit(&down(at), at_zoom(LEAF_ZOOM)).value().flatten().unwrap().point[2];
+    let high = 2.0 * world::REACH.max[2];
+    let over = Ray {
+        origin: [at[0], at[1], high],
+        direction: [0.0, 0.0, -1.0],
+        reach: 2.0 * high,
+    };
+    let hit = access.first_hit(&over, at_zoom(LEAF_ZOOM)).value().flatten().unwrap();
+    assert_eq!([hit.point[2], hit.t], [top, high - top], "{hit:?}");
+}
+
 /// A dig is met as the cells asked fold it, nothing finer: at the leaves' cells
 /// a cell dug less than half is whole, its top met by a ray and stood on by a
 /// walker, and a cell dug half or more is air, the ground under it met.

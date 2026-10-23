@@ -53,6 +53,16 @@ pub fn point(x: f64, y: f64, z: f64) -> Q3 {
     at(from_real(x), from_real(y), from_real(z))
 }
 
+/// A ray's origin from units, which may stand off the world, as an eye
+/// over it does: X goes round as at `at`, Y and Z stop only where an `i32`
+/// does. Y fills its `i32`, so it stops where the world does; Z's spare
+/// bits hold what is over the world, and a ray from there passes it whole
+/// on its way down, as it passes any empty node.
+pub fn origin(x: f64, y: f64, z: f64) -> Q3 {
+    let hold = |v: f64| from_real(v).clamp(i32::MIN.into(), i32::MAX.into()) as i32;
+    [from_real(x) as i32, hold(y), hold(z)]
+}
+
 /// From `a` to `b`, in steps: X the short way round, as an `i32` wraps; Y
 /// and Z as they are, wide, since Y does not go round.
 pub fn between(a: &Q3, b: &Q3) -> [i64; 3] {
