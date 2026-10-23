@@ -10,13 +10,13 @@ use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
 use crate::coverage::Coverage;
-use crate::terrain::CELL_U;
 use postgres::Client;
 use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+use pxl_spec::procedural::Frame;
+use pxl_spec::space::coord::adapter::epsg3857::get_tile_bbox;
 use pxl_spec::space::coord::adapter::epsg3857::BBox3857;
-use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, u_per_m};
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_kit::math::scalar::round;
 
 const HELD: usize = 512;
@@ -158,8 +158,11 @@ impl Raster {
         Ok(raster_tile)
     }
 
-    pub fn tile_grid(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Vec<i16>, postgres::Error> {
-        let [min, _] = tile_bbox;
+    /// Leaf `tile`'s padded grid of heights, in leaf cells at its scale
+    /// (pxl-portable `cells_of_m`, pxl-spec `Frame::per_m`).
+    pub fn tile_grid(&self, client: &mut Client, tile: [i64; 2]) -> Result<Vec<i16>, postgres::Error> {
+        let tile_bbox = get_tile_bbox(LEAF_ZOOM, tile);
+        let per_m = Frame::of(Tile::new(LEAF_ZOOM, tile)).per_m();
         let span = ELE_PADDED_SPAN as usize;
         let ([ref_x, ref_y], stride) = grid_of(tile_bbox);
         let env = tile_reads(tile_bbox);
@@ -228,7 +231,6 @@ impl Raster {
             y: y_axis,
         };
 
-        let cell_per_m = u_per_m(u_from_mer(min[1])) / CELL_U;
         let mut grid = vec![0i16; span * span];
         // The tile's grid from the warp's: an offset either way, since the
         // raster can start inside the padded tile at the coverage's edge.
@@ -245,7 +247,7 @@ impl Raster {
                 // PostgreSQL rounds half to even. No data is 0, the source's
                 // sea: a shard's apron covers every pad, so none lacks a shard.
                 if let Some(v) = source.sample(px, py) {
-                    grid[ele_index(c as u32, (span - 1 - r) as u32)] = round(f64::from(v) * cell_per_m) as i16;
+                    grid[ele_index(c as u32, (span - 1 - r) as u32)] = pxl_portable::cells_of_m(v, per_m) as i16;
                 }
             }
         }

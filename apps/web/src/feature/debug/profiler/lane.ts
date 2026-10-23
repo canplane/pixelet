@@ -2,41 +2,47 @@
 
 /**
  * One table of lanes the report, panel and trace all read. A lane's unit is
- * its name's suffix (`_ms`, `_mb`, `_zooms`, `_name`), so a lane the kernel
- * adds needs no word here; only list lanes are spelled out.
+ * its name's suffix (`_ms`, `_mb`, `_bytes`, `_px`, `_name`, as profiler.json
+ * FRAME says), so a lane the kernel adds needs no word here; only list
+ * lanes are spelled out.
  */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
-import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS } from "./profiler.spec.ts";
+import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS, WAKES } from "./profiler.spec.ts";
 import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
-import { GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
+import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
+import { op } from "@xpute/gpu/api.spec.ts";
+import { STREAM_NAMES } from "@/kernel/io/demand.spec.ts";
+import { fixed } from "@/shared/fixed.ts";
 
-const MB = 1048576;
+/** The one megabyte every figure in bytes is shown in. */
+export const MB = 1048576;
 
-type ListLane = "phases" | "gpu_spans" | "census" | "zoom_tris" | "zoom_tiles";
+type ListLane = "phases" | "gpu_spans" | "census" | "zoom_tiles" | "gpu_objects" | "waiting" | "out";
 type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
 type ScalarLane = Exclude<FrameLane, ListLane>;
 
 export type Frame =
   & { [K in ScalarLane]: f64 }
-  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; zoom_tris: f64[]; zoom_tiles: f64[] };
+  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; zoom_tiles: f64[]; gpu_objects: f64[]; waiting: f64[]; out: f64[] };
 
 /** The kernel counts by zoom: slot z, bit z or a value z is zoom z. */
 export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
 
-/** A wait this old says a demand was starved. */
-export const STARVED_MS = 2000;
-
 const ZOOM_NAMES = Array.from({ length: LIMITS.ZOOMS }, (_, z) => zoomName(z));
+/** Slot k is the objects op k + 1 made, as no op is 0: its name, lower case. */
+const OBJECT_NAMES = Array.from({ length: op.DESTROY - 1 }, (_, k) => Object.entries(op).find(([, v]) => v === k + 1)?.[0].toLowerCase() ?? "-");
 export const LIST_NAMES: Record<ListLane, readonly string[]> = {
   phases: PHASES,
   gpu_spans: GPU_SPAN_NAMES,
   census: CENSUS_TAGS,
-  zoom_tris: ZOOM_NAMES,
   zoom_tiles: ZOOM_NAMES,
+  gpu_objects: OBJECT_NAMES,
+  waiting: STREAM_NAMES,
+  out: STREAM_NAMES,
 };
 
 export const LANES: readonly { name: FrameLane; at: u32; width: u32 }[] = (() => {
@@ -58,13 +64,10 @@ export function frameAt(words: ArrayLike<f64>, o: u32): Frame {
   return f as Frame;
 }
 
-type FrameGroup = Exclude<keyof typeof FRAME_GROUPS, "$doc">;
+export type FrameGroup = Exclude<keyof typeof FRAME_GROUPS, "$doc">;
 export const GROUPS = Object.keys(FRAME_GROUPS).filter((g) => !g.startsWith("$")) as FrameGroup[];
 
-export const n1 = (n: number) => (n ?? 0).toFixed(1);
-
-/** The frame's time outside the kernel's turn. */
-export const offthreadMs = (f: Frame) => Math.max(0, f.dt_ms - f.task_ms);
+export const n1 = (n: number) => fixed(n ?? 0, 1);
 
 const UNIT = /_(ms|mb|bytes|px)$/;
 
@@ -75,29 +78,25 @@ export const pct = (part: number, whole: number) => (whole > 0 ? round((part / w
 
 export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
 
-export function zoomsText(bits: f64): string {
-  const out: string[] = [];
-  for (let z = 0; z < 32; z++) if (bits & (1 << z)) out.push(zoomName(z));
-  return out.length > 0 ? out.join(",") : "-";
-}
+/** A frame's GPU time: its spans' sum (pxl-render renderer.rs `gpu_ms`). */
+export const gpuMs = (f: Frame): f64 => f.gpu_spans.reduce((n, ms) => n + ms, 0);
 
-const NAME_TABLES: Record<string, readonly string[]> = { turn_step_name: EFFECT_NAMES };
+/** A frame's draws and triangles: its census's sums, every pipeline a draw names. */
+export const drawn = (f: Frame): [f64, f64] => f.census.reduce(([d, t], [cd, ct]) => [d + cd, t + ct], [0, 0]);
+
+const NAME_TABLES: Record<string, readonly string[]> = { worst_effect_name: EFFECT_NAMES, kind_name: FRAME_KINDS, wake_name: WAKES };
 
 export function valueText(name: string, v: f64): string {
   if (name.endsWith("_name")) return NAME_TABLES[name]?.[v] ?? "-";
   if (name.endsWith("_ms")) return `${n1(v)}ms`;
-  if (name.endsWith("_mb")) return `${+v.toFixed(1)}MB`;
-  if (name.endsWith("_bytes")) return `${+(v / MB).toFixed(1)}MB`;
-  if (name.endsWith("_zooms")) return zoomsText(v);
-  if (name === "triangles" || name.endsWith("_tris")) return tris(v);
-  if (name === "px") return `${(v / 1e6).toFixed(1)}Mpx`;
+  if (name.endsWith("_mb")) return `${+fixed(v, 1)}MB`;
+  if (name.endsWith("_bytes")) return `${+fixed(v / MB, 1)}MB`;
+  if (name.endsWith("_px")) return `${fixed(v / 1e6, 1)}Mpx`;
   return Number.isInteger(v) ? String(v) : n1(v);
 }
 
-function label(group: string, name: string): string {
-  const bare = name.startsWith(`${group}_`) ? name.slice(group.length + 1) : name;
-  return bare.replace(UNIT, "") || name;
-}
+/** A lane by its name, its unit left to its value. */
+const label = (name: string) => name.replace(UNIT, "");
 
 function listText(lane: ListLane, f: Frame): string {
   const names = LIST_NAMES[lane];
@@ -106,13 +105,13 @@ function listText(lane: ListLane, f: Frame): string {
     rows.sort((a, b) => b.t - a.t || b.draws - a.draws);
     return rows.map((r) => `${r.tag} ${round(r.draws)}/${tris(r.t)}`).join(" ");
   }
-  const unit = lane === "gpu_spans" || lane === "phases" ? "_ms" : lane === "zoom_tris" ? "_tris" : "";
+  const unit = lane === "gpu_spans" || lane === "phases" ? "_ms" : "";
   return f[lane].map((v, i) => [names[i] ?? String(i), v] as const).filter(([, v]) => v > 0).map(([n, v]) => `${n} ${valueText(unit, v)}`).join(" ") || "-";
 }
 
 export function groupText(group: FrameGroup, f: Frame): string {
   return (FRAME_GROUPS[group] as readonly FrameLane[]).map((lane) => {
-    const l = label(group, lane);
+    const l = label(lane);
     return isList(lane) ? `${l} [${listText(lane, f)}]` : `${l} ${valueText(lane, f[lane])}`;
   }).join("  ");
 }

@@ -4,59 +4,46 @@
 //! the settings, and everything the renderer is handed, since it reads
 //! nothing of the kernel on its own.
 
-use crate::chunk::decor::build::DecorHide;
-use crate::chunk::table::Frame;
 use crate::laid;
-use crate::sched::tick::{TickContext, HARD_SLACK_MS};
+use crate::scene::frame::Frame;
+use crate::sched::tick::TickContext;
 use crate::view::frame::pose::{globe, view_resize};
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
-use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
+use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
 use pxl_render::gpu::surface::SURFACES;
-use pxl_spec::space::coord::v3::sub3;
-use xpute_guest::clock::now;
+use pxl_spec::space::coord::v3;
 use xpute_guest::global::Global;
 
 use crate::mem::MB;
-use crate::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_PIPELINES};
+use crate::profiler::frame::{DeviceSample, GpuSample};
+use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_spec::asset::ingested::Asset;
 use xpute_kit::math::scalar::round;
 
+use crate::asset::Load;
 use crate::billboard::sheet::billboard_sheet;
 use crate::decor::assets::decor_assets;
-use crate::io::host::handheld;
-use crate::io::load::{load_image, Load};
+use crate::io::load::load_image;
 use crate::io::text::text_raster;
 use crate::kernel;
 use crate::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
-use crate::profiler::report::set_host_frame_stat;
+use crate::profiler::report::set_host_frame;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
 use crate::scene::environment::cloud::cloud_groups;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::{settings_store, AoMode};
 use crate::view::demand::Observed as _;
-use crate::view::frame::resolution::resolution_observe;
 
-/// What the screen holds of the world: nothing yet, nothing since the device
-/// went, or the last frame that went to it and whether that frame drew ground.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Screen {
-    Blank,
-    Lost,
-    Drawn { ground: bool },
-}
+/// The device the last frame went to the screen on (`device_generation`).
+static DRAWN: Global<Option<u32>> = Global::new();
 
-static SCREEN: Global<Screen> = Global::new();
-
-pub fn screen() -> Screen {
-    *SCREEN.get(|| Screen::Blank)
-}
-
-/// The device went, and what it drew with it; a frame on the next one ends this.
-pub fn screen_lost() {
-    SCREEN.set(Screen::Lost);
+/// Whether the screen holds a frame of the world: one drawn on the device
+/// there is, as a device that went took what it drew.
+pub fn screen_drawn() -> bool {
+    *DRAWN.get(|| None) == Some(pxl_render::gpu::api::device_generation())
 }
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
@@ -82,9 +69,10 @@ pub fn stage_write() {
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
     s[STAGE_AT::FOV] = v.fov;
-    // The camera grid's cell angle: the largest drawn cell per unit of
-    // distance, since a cell is drawn from its split distance on.
-    s[STAGE_AT::LOD_CELL] = crate::view::sight::cell_angle(crate::chunk::quality::effective().tau());
+    // The camera grid's cell angle: the footprint a drawn block covers per
+    // unit of distance, square on.
+    let tau = crate::view::lens::tau();
+    s[STAGE_AT::LOD_CELL] = crate::view::lens::cell_angle(tau);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
@@ -92,8 +80,8 @@ pub fn stage_write() {
     // In the pixels the world is drawn at, which the resolution steps.
     s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH * crate::view::frame::resolution::world_ratio();
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { crate::param::RIM_INTENSITY } else { 0.0 };
-    s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
     s[STAGE_AT::CLOUDS] = crate::scene::environment::cloud::clouds_shown();
+    s[STAGE_AT::RAY_STEPS] = if settings.ray_steps { 1.0 } else { 0.0 };
 }
 
 pub fn stage_render() {
@@ -129,6 +117,9 @@ pub fn stage_render() {
         case_cnt += 1;
     }
     let (window, layers) = earth_window(Earth::demand().floor());
+    let o = crate::view::observation::observation();
+    let eye = o.as_ref().and_then(crate::scene::cast::eye);
+    let mut terrain_upload = crate::scene::cast::upload;
     let out = render_frame(FrameInput {
         lists,
         environment: &kernel().scene.environment.out,
@@ -143,50 +134,59 @@ pub fn stage_render() {
             layers: &layers,
             upload: &mut earth_upload,
         },
+        ground: GroundSquares { upload: &mut terrain_upload },
+        cast: o.as_ref().and(eye).map(|(eye, tangents)| Cast {
+            eye,
+            tangents,
+            window: crate::scene::cast::window(),
+            shards: crate::scene::cast::shards(),
+            overwrites: crate::scene::cast::overwrites(),
+            decor: crate::scene::decor::drawn::frame(),
+        }),
         text: text_raster,
         billboards: billboard_sheet(),
-        handheld: handheld(),
+        admit: crate::io::host::admit_frame,
+        // The spans and the draws are the profiler's, which records only while its setting is on.
+        timed: settings_store().performance_overlay,
+        counted: settings_store().performance_overlay,
     });
     if out.redraw {
         request_world_tick();
     }
-    let Some(stat) = out.stat else { return };
-    SCREEN.set(Screen::Drawn {
-        ground: kernel().sched.shows_ground(),
-    });
-    resolution_observe(stat.gpu_ms);
-    let census: DrawCensus = CENSUS_PIPELINES.map(|p| stat.census[p as usize]);
-    set_host_frame_stat(
+    // What the renderer holds, drawn this frame or not.
+    let held = pxl_render::gpu::api::gpu().map_or([0; OBJECT_OPS], |g| *g.objects());
+    let objects: [f64; OBJECT_OPS - 1] = core::array::from_fn(|k| f64::from(held[k + 1]));
+    let Some(stat) = out.stat else {
+        set_host_frame(out.kind, GpuSample::default(), DeviceSample { objects, ..DeviceSample::default() });
+        return;
+    };
+    DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
+    set_host_frame(
+        out.kind,
         GpuSample {
-            ms: stat.gpu_ms,
+            read: f64::from(u8::from(stat.gpu_read)),
             spans: stat.gpu_spans,
-            draw_calls: stat.draw_calls,
-            triangles: stat.triangles,
-            census,
-            zoom_tris: Default::default(),
-            px: stat.px,
-            skipped: stat.skipped,
+            census: stat.census,
+            world_px: stat.world_px,
         },
         DeviceSample {
-            buffers: stat.buffers,
-            buffer_mb: round(stat.buffer_bytes / MB),
-            arena_mb: stat.arena_mb,
+            blocks: stat.blocks,
+            blocks_mb: round(stat.block_bytes / MB),
             depth_mb: stat.depth_mb,
-            shadow_mb: stat.shadow_mb,
             layers_mb: stat.layers_mb,
+            objects,
         },
     );
 }
 
 struct Pass {
-    visible_pass: Option<f64>,
     draw: bool,
 }
 
 static PASS: Global<Pass> = Global::new();
 
 fn pass() -> &'static mut Pass {
-    PASS.get(|| Pass { visible_pass: None, draw: false })
+    PASS.get(|| Pass { draw: false })
 }
 
 pub fn take_draw() -> bool {
@@ -195,7 +195,6 @@ pub fn take_draw() -> bool {
 
 pub fn visible_step(ctx: &mut TickContext) {
     let c = pass();
-    c.visible_pass = None;
     view_resize(ctx.state.width, ctx.state.height);
     let v = view();
 
@@ -205,47 +204,27 @@ pub fn visible_step(ctx: &mut TickContext) {
         anchor,
         eye: e,
         frustum: v.frustum.about(anchor),
-        camera: sub3(&e, &anchor),
+        camera: v3::sub(&e, &anchor),
         delta_s: ctx.delta,
-        remaining_ms: ctx.budget.remaining(),
-        hard_slack_ms: HARD_SLACK_MS,
         globe: Some(globe()),
     };
 
-    let t0 = now();
-    // The chunks plan first; what animates and every layer but the chunks list
-    // before the chunks draw.
-    crate::chunk::source::chunk_sources_step();
     let draw = laid().is_some_and(|k| {
-        let moving = k.sched.tick(frame, &now);
-        if let Some(d) = crate::chunk::domain::current() {
-            k.scene.coverage.step(&mut k.draw, settings_store().world_gizmo, d.pieces(), k.sched.drawn());
-        }
         let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
         k.scene.begin(&mut k.draw, &k.models, frame.eye);
-        crate::scene::indicator::camera_gizmo::draw(&mut k.draw, settings_store().camera_gizmo);
-        k.sched.draw(&frame, &mut k.draw);
-        moving || animating
+        animating
     });
-    // Decor lists after the chunks have listed theirs.
     {
         let k = kernel();
-        let edits = crate::chunk::source::previewed();
-        let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
-        crate::chunk::decor::cell::step(&pxl_spec::block::decor::DECORS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
+        let edits = crate::layer::object::preview::current();
+        crate::scene::decor::drawn::step(&k.objects, frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
         crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
     }
-    crate::chunk::place::step(ctx);
+    crate::scene::place::step(ctx, &frame);
     let k = kernel();
     k.billboards.draw(&mut k.draw, frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();
     }
-    c.visible_pass = Some(now() - t0);
-}
-
-/// How long this turn's chunks took; none where the stage was empty.
-pub fn visible_pass() -> Option<f64> {
-    pass().visible_pass
 }

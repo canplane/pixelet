@@ -4,6 +4,7 @@ use super::*;
 
 use crate::block::cube::ground;
 use crate::space::layer::tile::{neighborhood, Tile, LEAF_ZOOM};
+use pxl_portable::ground::majority;
 
 const SPAN: usize = TILE_CELLS as usize;
 const PADDED: usize = ELE_PADDED_SPAN as usize;
@@ -19,15 +20,17 @@ fn an_area_keeps_what_fills_half_its_four_and_ties_alternate_corners() {
     assert_eq!(majority([7, 7, 1, 1], GROUND.cell() - 2), 1);
 }
 
-/// A tile whose cell is `f` of it.
+/// A leaf whose cell is `f` of it, its own four looks.
 fn plane(f: impl Fn(usize, usize) -> u8) -> Ground {
     Ground {
-        cells: (0..SPAN * SPAN).map(|i| f(i % SPAN, i / SPAN)).collect::<Vec<_>>().into(),
+        cells: (0..SPAN * SPAN).flat_map(|i| [f(i % SPAN, i / SPAN); 4]).collect::<Vec<_>>().into(),
     }
 }
 
+/// Each parent cell's own look, as the zoom of the parent reads it.
 fn fold(children: [&Ground; 4], zoom: Zoom) -> Vec<u8> {
-    fold_ground(children, zoom).cells.to_vec()
+    let four = fold_ground(children, zoom).cells.to_vec();
+    four.chunks(4).map(|q| own(u32::from_le_bytes([q[0], q[1], q[2], q[3]]), GROUND.cell_zoom(zoom)) as u8).collect()
 }
 
 #[test]
@@ -159,15 +162,13 @@ fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
 
 /// The open ocean: flat water at sea level, no tile.
 fn zero_tile() -> TerrainTile {
-    let cells = vec![ground::water; SPAN * SPAN];
-    let mut t = TerrainTile::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default());
-    t.index.occupancy = Occupancy::ZERO;
-    t
+    let cells = vec![ground::water; 4 * SPAN * SPAN];
+    TerrainTile::of(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default(), Occupancy::ZERO)
 }
 
-/// Four zero tiles fold to the zero tile, index included.
+/// Zero tiles fold to the zero tile.
 #[test]
 fn the_zero_tile_folds_to_itself() {
     let zero = zero_tile();
-    assert_eq!(fold_terrain(neighborhood(Tile::new(LEAF_ZOOM - 1, 0)).map(|_| Some(&zero)), LEAF_ZOOM - 1).as_ref(), Some(&zero));
+    assert_eq!(fold_terrain(neighborhood(Tile::new(LEAF_ZOOM - 1, [0, 0])).map(|_| Some(&zero)), LEAF_ZOOM - 1).as_ref(), Some(&zero));
 }

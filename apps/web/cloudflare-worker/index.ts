@@ -10,7 +10,7 @@
  * R2 bucket, and `/geo/*` and `/api/*` are reverse-proxied to GEO_ORIGIN and API_ORIGIN as-is (see infra/README.md).
  * Keeping it on the app's own hostname is what makes them same-origin, so no
  * CORS policy exists to configure or get wrong — see
- * decision/20260816-deployment-hosting.md.
+ * doc/minutes/20260816-deployment-hosting.md.
  *
  * Lives outside src/ deliberately: this is the only server-side code in the
  * deployment, it targets the Workers runtime rather than the browser, and
@@ -68,7 +68,7 @@ import { BASE_LAYERS } from "../src/config/published.spec.ts";
 /**
  * Object keys this Worker is willing to ask R2 for, by shape alone, so what
  * was never an address does not reach the bucket; what bounds the reads is
- * the free plan's daily cap (decision/20260816-deployment-hosting.md).
+ * the free plan's daily cap (doc/minutes/20260816-deployment-hosting.md).
  *
  * - `<kind>/<object>`: a baked page, a kind of `BASE_LAYERS` and the object
  *   spec/spec/route.json shapes under it (`TILE_OBJECT`), and the Earth's

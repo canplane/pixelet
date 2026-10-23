@@ -8,11 +8,11 @@
 # The client is one core, pxl-render and pxl-kernel, and client-bracket/ is
 # how it is plugged into a place to run: pxl-wasm, the one WebAssembly module the
 # main thread and each worker instantiate for themselves
-# (decision/20260912-why-the-destination-is-wasm.md), and pxl-native, linked
+# (doc/minutes/20260912-why-the-destination-is-wasm.md), and pxl-native, linked
 # into a device's app, which draws with wgpu where the page's host draws with
 # the browser's WebGPU. A bracket is no domain: it gives the guest its
 # bounds, its clock and its doorbell (xpute-guest). The server end is native
-# (decision/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl-geo
+# (doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl-geo
 # and pxl-api over pxl-server, pxl-geo-bake beside them for what is baked
 # rather than answered, and pxl-geo-spec where the two geo halves read the
 # same tables.
@@ -29,6 +29,7 @@
 resolver = "2"
 members = [
   "spec",
+  "portable",
   "client/render",
   "client/kernel",
   "client-bracket/wasm",
@@ -133,3 +134,21 @@ panic = "unwind"
 [profile.native]
 inherits = "release"
 opt-level = 3
+
+# naga's Metal backend writes a `let` of a loop's body that `break if` reads
+# in `continuing` as its expression again after the counter moved, so the
+# loop ends an iteration early (gfx-rs/wgpu#4558). rust-gpu emits that shape
+# throughout the generated shaders: on wgpu/Metal heights_cs differed from
+# ground::height in 3791 of a square's 4096 cells, 0 with the fix. Its fix,
+# gfx-rs/wgpu#10459, sits on trunk, whose naga-types wgpu 30.0.1 no longer
+# matches, so wgpu's crates move to the same rev. Drop when a wgpu release
+# carries it.
+[patch.crates-io]
+naga = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+naga-types = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu-core = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu-core-deps-apple = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu-hal = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu-naga-bridge = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+wgpu-types = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }

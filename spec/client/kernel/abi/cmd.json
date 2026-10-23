@@ -39,7 +39,7 @@
     },
     {
       "name": "CharacterGroup",
-      "rs": "crate::scene::character::variant_spec::Group",
+      "rs": "crate::model::variant_spec::Group",
       "repr": "u8",
       "$doc": [
         "variant.json's group, by its number."
@@ -65,10 +65,6 @@
         {
           "name": "SENSOR",
           "value": 18
-        },
-        {
-          "name": "IMAGE",
-          "value": 19
         },
         {
           "name": "GPU",
@@ -240,19 +236,6 @@
       ]
     },
     {
-      "name": "ImageMinor",
-      "$doc": [
-        "An image's verbs."
-      ],
-      "format": "hex2",
-      "entries": [
-        {
-          "name": "DECODED",
-          "value": 1
-        }
-      ]
-    },
-    {
       "name": "GpuMinor",
       "$doc": [
         "The GPU's verbs."
@@ -262,10 +245,6 @@
         {
           "name": "READY",
           "value": 1
-        },
-        {
-          "name": "LOST",
-          "value": 2
         }
       ]
     },
@@ -359,6 +338,10 @@
         {
           "name": "TAKE",
           "value": 5
+        },
+        {
+          "name": "RINGS",
+          "value": 6
         }
       ]
     },
@@ -716,25 +699,6 @@
           "section": "the host answers: an I/O the process started, done"
         },
         {
-          "name": "IMAGE_DECODED",
-          "value": 4865,
-          "$doc": [
-            "An image the kernel asked decoded (host.json's IMAGE_DECODE): 0, held for the renderer",
-            "as the kernel's `image`, or -errno where the file is not an image the device decodes.",
-            "A file that did not come is the open's answer (xpute's SYS_OPENED), not this."
-          ],
-          "packet": [
-            {
-              "name": "image",
-              "type": "u32"
-            },
-            {
-              "name": "res",
-              "type": "i32"
-            }
-          ]
-        },
-        {
           "name": "SENSOR_POSITION",
           "value": 4610,
           "$doc": [
@@ -833,10 +797,6 @@
               ]
             },
             {
-              "name": "handheld",
-              "type": "bool"
-            },
-            {
               "name": "geolocation",
               "type": "bool"
             },
@@ -896,15 +856,11 @@
               "type": "f64"
             },
             {
-              "name": "delta_s",
+              "name": "frame_ms",
               "type": "f64",
               "$doc": [
-                "The frame interval and the turn, as the host measured them."
+                "The turn, as the host measured it."
               ]
-            },
-            {
-              "name": "frame_ms",
-              "type": "f64"
             },
             {
               "name": "interactive",
@@ -918,7 +874,8 @@
               "name": "unix_ms",
               "type": "f64",
               "$doc": [
-                "The wall clock, `Date.now()`."
+                "The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and",
+                "the step the tick takes, its change since the last frame."
               ]
             }
           ]
@@ -1116,24 +1073,7 @@
           "name": "GPU_READY",
           "value": 5121,
           "$doc": [
-            "A device answered; the kernel's renderer is made on it (crates/client/render/src/gpu/renderer.rs)."
-          ],
-          "packet": [
-            {
-              "name": "min_uniform_offset_alignment",
-              "type": "u32"
-            },
-            {
-              "name": "timestamps",
-              "type": "bool"
-            }
-          ]
-        },
-        {
-          "name": "GPU_LOST",
-          "value": 5122,
-          "$doc": [
-            "The device went away, and every object on it."
+            "A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (crates/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge."
           ]
         },
         {
@@ -1275,7 +1215,8 @@
           "value": 4357,
           "$doc": [
             "Where the camera stands, set outright rather than driven: what the kernel's own",
-            "test puts a view at, and what an A/B reads two builds at the same view with."
+            "test puts a view at, and what an A/B reads two builds at the same view with",
+            "(a development page's `?eye=`, feature/debug/eye.ts)."
           ],
           "packet": [
             {
@@ -1285,6 +1226,11 @@
             },
             {
               "name": "polar",
+              "type": "f64",
+              "optional": true
+            },
+            {
+              "name": "azimuth",
               "type": "f64",
               "optional": true
             }
@@ -1415,9 +1361,9 @@
           "name": "PROFILER_READ",
           "value": 6404,
           "$doc": [
-            "The profiler where it lies: the reply is the address of READ's words (profiler.json) over the",
-            "last `window_ms`, the whole recording where it is absent, good until the next turn. A number",
-            "past the door is finite, so no window is infinite."
+            "The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)",
+            "over the last `window_ms`, the whole recording where it is absent, good until the next turn. A",
+            "number past the door is finite, so no window is infinite."
           ],
           "packet": [
             {
@@ -1432,6 +1378,13 @@
           "value": 6405,
           "$doc": [
             "The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn."
+          ]
+        },
+        {
+          "name": "PROFILER_RINGS",
+          "value": 6406,
+          "$doc": [
+            "The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn."
           ]
         },
         {

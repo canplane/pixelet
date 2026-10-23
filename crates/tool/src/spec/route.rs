@@ -42,7 +42,11 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         return Err(format!("{JSON}: TILE_ROOT.object {object:?} is not {{version}}/{{name}}"));
     }
     let object_doc = [format!("A kind's tile under `TILE_PREFIX` and the kind, `{object}`.")];
-    let sphere = roots.iter().find(|(n, _)| *n == "TILE_ROOT").and_then(|(_, r)| r.str_at("sphere")).ok_or(format!("{JSON}: TILE_ROOT has no sphere"))?;
+    let sphere = roots
+        .iter()
+        .find(|(n, _)| *n == "TILE_ROOT")
+        .and_then(|(_, r)| r.str_at("sphere"))
+        .ok_or(format!("{JSON}: TILE_ROOT has no sphere"))?;
     if sphere.is_empty() || !sphere.bytes().all(|b| b.is_ascii_lowercase()) || sphere.bytes().all(|b| (b'0'..=b'3').contains(&b)) {
         return Err(format!("{JSON}: TILE_ROOT.sphere {sphere:?} is no name a tile could have"));
     }
@@ -80,8 +84,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }
     rs.extend(object_doc.iter().map(|l| format!("/// {l}")));
     rs.extend([
-        "pub fn tile_object(version: &str, name: &str) -> String {".to_string(),
-        format!("    format!({})", json_str(object)),
+        "/// Written into `w`, so a key is made where it is wanted, not allocated.".to_string(),
+        "pub fn tile_object(w: &mut impl core::fmt::Write, version: &str, name: impl core::fmt::Display) -> core::fmt::Result {".to_string(),
+        format!("    write!(w, {})", json_str(object)),
         "}".into(),
         String::new(),
         format!("/// {sphere_doc}"),

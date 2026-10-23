@@ -18,7 +18,7 @@ import { type Gauge, profilerGaugeRead, profilerReportRead } from "./profiler/vi
 import { installLongFrameObservers, longFramesClear } from "./profiler/long-frame.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command, encode_input_view } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, useKernel } from "@/kernel/shell.ts";
+import { kernel_command, kernel_room, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
 
 const enum Tint {
@@ -132,7 +132,7 @@ export function PerformanceOverlay() {
     const w = globalThis as ProfilerGlobals;
     w.__pxl_profiler_trace = profilerTraceSave;
     w.__pxl_profiler_log = profilerLog;
-    w.__pxl_view = (dist, polar) => kernel_command(Command.INPUT_VIEW, encode_input_view({ dist, polar }));
+    w.__pxl_view = (dist, polar) => kernel_command(Command.INPUT_VIEW, encode_input_view(kernel_room, dist, polar, null));
     w.__pxl_gauge = (windowMs) => profilerGaugeRead(windowMs);
     return () => {
       profilerLog(false);

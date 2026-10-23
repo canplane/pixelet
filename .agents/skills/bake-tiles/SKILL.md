@@ -12,7 +12,7 @@ how each set gets built and checked; getting it into the bucket is
 [publish-bucket](../publish-bucket/SKILL.md).
 
 Background and the reasoning behind the design are in
-[decision/20260816-deployment-hosting.md](../../../decision/20260816-deployment-hosting.md).
+[doc/minutes/20260816-deployment-hosting.md](../../../doc/minutes/20260816-deployment-hosting.md).
 Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes
@@ -138,7 +138,10 @@ that, worked back from how far each thing draws:
   The tile keeps only its own cells, and its lines' runs within their
   footprint (pxl-spec bake/separation.rs `footprint`).
 - **Elevation** is sampled `ELE_PAD` samples past the tile, what a bicubic
-  window at the tile's edge reads. The published shards
+  window at the tile's edge reads; every zoom's tile carries the samples, a
+  parent's the average of its children's over the ring about them (pxl-spec
+  bake/fold.rs `fold_ele`), and the client's GPU draws each cell's height
+  off them. The published shards
   (`infra/geo/coverage.json`) are warped each to its own edges, so
   a padded grid at a shard's edge reads its neighbor's raster, and at the
   coverage's outer edge finds none.
@@ -156,10 +159,12 @@ that, worked back from how far each thing draws:
    not the objects. With `deno task dev:tile` up — not `dev`, which proxies
    every route to the live deployment:
 
-   The set holds a tile flat under the name the dev server is asked by:
+   The set holds a tile flat under the name the dev server is asked by,
+   under the version its declaration names:
 
    ```bash
-   curl -s localhost:3001/tile/terrain/dev/<name> | zstd -dcq | shasum
+   v=$(curl -s localhost:3001/tile/source | jq -r .version.terrain)
+   curl -s localhost:3001/tile/terrain/$v/<name> | zstd -dcq | shasum
    zstd -dcq ./out/terrain/<name> | shasum
    ```
 

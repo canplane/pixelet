@@ -16,12 +16,12 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use postgres::Client;
-use pxl_spec::bake::tile::terrain::{self, TerrainTile};
-use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::elevation::Raster;
+use pxl_geo_bake::pyramid::Base as _;
 use pxl_geo_bake::separation;
 use pxl_geo_bake::terrain::absent::Absence;
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf, has_ground};
@@ -44,9 +44,9 @@ fn connect(source: &Overture, raster: &Arc<Raster>) -> Result<Db, String> {
 }
 
 /// A band's tiles row by row, each row the way the last one ended.
-fn zigzag(band: &[IVec]) -> Vec<IVec> {
+fn zigzag(band: &[[i64; 2]]) -> Vec<[i64; 2]> {
     let mut out = Vec::with_capacity(band.len());
-    for (k, row) in band.chunk_by(|a, b| ivec::Y(*a) == ivec::Y(*b)).enumerate() {
+    for (k, row) in band.chunk_by(|a, b| a[1] == b[1]).enumerate() {
         if k % 2 == 0 {
             out.extend(row.iter().copied());
         } else {
@@ -57,7 +57,7 @@ fn zigzag(band: &[IVec]) -> Vec<IVec> {
 }
 
 /// The leaves something is drawn in.
-fn land(client: &mut Client, candidates: &[IVec]) -> Result<Vec<IVec>, String> {
+fn land(client: &mut Client, candidates: &[[i64; 2]]) -> Result<Vec<[i64; 2]>, String> {
     let mut out = Vec::new();
     for batch in candidates.chunks(CLASSIFY_BATCH) {
         for (&tile, drawn) in batch.iter().zip(has_ground(client, batch).map_err(|e| e.to_string())?) {
@@ -80,16 +80,16 @@ fn run() -> Result<(), String> {
             run.stage.leaf::<TerrainTile>(shard, |set| {
                 // Each worker walks its own band of rows, zigzag, so a tile's eight
                 // around it were mostly read for the tile before.
-                rows.sort_unstable_by_key(|&p| (ivec::Y(p), ivec::X(p)));
+                rows.sort_unstable_by_key(|&p| (p[1], p[0]));
                 let band = rows.len().div_ceil(run.concurrency.max(1)).max(1);
-                let walks: Vec<Vec<IVec>> = rows.chunks(band).map(zigzag).collect();
-                let bands: Vec<&[IVec]> = walks.iter().map(Vec::as_slice).collect();
+                let walks: Vec<Vec<[i64; 2]>> = rows.chunks(band).map(zigzag).collect();
+                let bands: Vec<&[[i64; 2]]> = walks.iter().map(Vec::as_slice).collect();
                 let t = walk::over(
                     &format!("leaf/{}", shard.name()),
                     &bands,
                     bands.len(),
                     1000,
-                    ivec::repr,
+                    |[x, y]| format!("{x}:{y}"),
                     || Ok((connect(&source, &raster)?, separation::source::Walk::default())),
                     |(db, held), tile| {
                         held.keep_around(tile);
@@ -99,8 +99,9 @@ fn run() -> Result<(), String> {
                             store: held,
                         };
                         let terrain = bake_leaf(reader, tile)?;
-                        let packed = pack(&terrain::encode(&terrain).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
-                        set.write(Tile::new(LEAF_ZOOM, tile), &packed)?;
+                        let at = Tile::new(LEAF_ZOOM, tile);
+                        let packed = pack(&terrain.encode(at).map_err(|e| format!("{}: {e}", at.name()))?, Level::Stored).map_err(|e| e.to_string())?;
+                        set.write(at, &packed)?;
                         Ok(Done::Wrote { bytes: packed.len() as u64, items: 0 })
                     },
                 )?;

@@ -20,7 +20,6 @@ use pxl_geo_bake::coverage::{Coverage, SHARD_APRON};
 use pxl_geo_bake::elevation::{BLOCK, BLOCK_ZOOM};
 use pxl_spec::bake::constant::TILE_ELE_SPAN;
 use pxl_spec::space::coord::adapter::epsg3857::mer_from_u;
-use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, LEAF_ZOOM};
 use xpute_kit::math::scalar::round;
@@ -39,7 +38,7 @@ fn run() -> Result<(), String> {
         }
         let shard = coverage.shards().find(|s| s.name() == *name).ok_or(format!("{name}: no shard of the coverage"))?;
         let inner = shard.tiles(BLOCK_ZOOM);
-        let (xs, ys) = (inner.iter().map(|&p| ivec::X(p)), inner.iter().map(|&p| ivec::Y(p)));
+        let (xs, ys) = (inner.iter().map(|&p| p[0]), inner.iter().map(|&p| p[1]));
         let (x0, x1) = (xs.clone().min().unwrap_or(0), xs.max().unwrap_or(0));
         let (y0, y1) = (ys.clone().min().unwrap_or(0), ys.max().unwrap_or(0));
         let ring = ring as i64;

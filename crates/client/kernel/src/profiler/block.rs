@@ -8,9 +8,10 @@
 use core::mem::{offset_of, size_of};
 
 use crate::io::spec::{STREAM_NAMES, TASK_PHASE_NAMES};
-use crate::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS, ZOOMS};
-use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY};
+use crate::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS};
+use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY, WAKES};
 use crate::profiler::word::{words, Words};
+use pxl_render::gpu::span_spec::FRAME_KINDS;
 use xpute_guest::sched::tick::PHASES;
 
 const REASONS: usize = LIMITS::REASONS as usize;
@@ -33,14 +34,11 @@ words!(Spread, SPREAD::WORDS, p50 => SPREAD::p50, p95 => SPREAD::p95, max => SPR
 pub struct RecBlock {
     pub recording: f64,
     pub elapsed_ms: f64,
-    pub tasks: f64,
-    pub frames: f64,
     pub truncated: f64,
 }
 
 words!(RecBlock, SUMMARY::rec::WORDS,
-    recording => SUMMARY::rec::recording, elapsed_ms => SUMMARY::rec::elapsed_ms,
-    tasks => SUMMARY::rec::tasks, frames => SUMMARY::rec::frames, truncated => SUMMARY::rec::truncated,
+    recording => SUMMARY::rec::recording, elapsed_ms => SUMMARY::rec::elapsed_ms, truncated => SUMMARY::rec::truncated,
 );
 
 #[repr(C)]
@@ -53,25 +51,27 @@ pub struct FramesBlock {
     pub moving: f64,
     pub missed: f64,
     pub overran: f64,
-    pub dt: Spread,
-    pub task: Spread,
-    pub offthread: Spread,
+    /// Intervals whose turns ran past them.
+    pub long: f64,
+    pub turns: f64,
+    /// Frames a GPU read landed with: the GPU's figures are over these alone.
+    pub gpu_read: f64,
+    pub interval: Spread,
+    pub busy: Spread,
+    pub off_turn: Spread,
+    pub tick: Spread,
+    pub tasks: Spread,
     pub gpu: Spread,
-    pub sched: Spread,
-    pub chunks: Spread,
-    pub phases: [Spread; PHASES.len()],
-    pub gpu_spans: [Spread; GPU_SPANS],
-    pub per_s_runs: f64,
-    pub per_s_bakes: f64,
-    pub backlog_s: f64,
-    pub backlog_per_s_runs: f64,
-    pub backlog_per_s_bakes: f64,
-    pub chunks_per_bake: f64,
-    pub mounts_added: f64,
-    pub mounts_removed: f64,
-    pub used_delta_mb: f64,
+    /// The p95 alone of each phase, and of each span its p95 and its max:
+    /// what is read of them.
+    pub phases_p95: [f64; PHASES.len()],
+    pub gpu_spans_p95: [f64; GPU_SPANS],
+    pub gpu_spans_max: [f64; GPU_SPANS],
+    /// Frames by the renderer's FRAME_KINDS, and turns' last ask by WAKES.
+    pub kinds: [f64; FRAME_KINDS.len()],
+    pub wakes: [f64; WAKES.len()],
+    pub heap_used_delta_bytes: f64,
     pub census: [[f64; 2]; CENSUS_LEN],
-    pub zoom_tris: [f64; ZOOMS],
     pub last: FrameSample,
 }
 
@@ -80,16 +80,25 @@ const _: () = assert!(SUMMARY::frames::last + FRAME::WORDS <= SUMMARY::frames::W
 words!(FramesBlock, SUMMARY::frames::WORDS,
     present => SUMMARY::frames::present, n => SUMMARY::frames::n, seconds => SUMMARY::frames::seconds,
     moving => SUMMARY::frames::moving, missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
-    dt => SUMMARY::frames::dt, task => SUMMARY::frames::task, offthread => SUMMARY::frames::offthread,
-    gpu => SUMMARY::frames::gpu, sched => SUMMARY::frames::sched, chunks => SUMMARY::frames::chunks,
-    phases => SUMMARY::frames::phases, gpu_spans => SUMMARY::frames::gpu_spans,
-    per_s_runs => SUMMARY::frames::per_s_runs, per_s_bakes => SUMMARY::frames::per_s_bakes,
-    backlog_s => SUMMARY::frames::backlog_s, backlog_per_s_runs => SUMMARY::frames::backlog_per_s_runs,
-    backlog_per_s_bakes => SUMMARY::frames::backlog_per_s_bakes, chunks_per_bake => SUMMARY::frames::chunks_per_bake,
-    mounts_added => SUMMARY::frames::mounts_added, mounts_removed => SUMMARY::frames::mounts_removed,
-    used_delta_mb => SUMMARY::frames::used_delta_mb, census => SUMMARY::frames::census,
-    zoom_tris => SUMMARY::frames::zoom_tris, last => SUMMARY::frames::last,
+    long => SUMMARY::frames::long, turns => SUMMARY::frames::turns, gpu_read => SUMMARY::frames::gpu_read,
+    interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy, off_turn => SUMMARY::frames::off_turn,
+    tick => SUMMARY::frames::tick, tasks => SUMMARY::frames::tasks, gpu => SUMMARY::frames::gpu,
+    phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95, gpu_spans_max => SUMMARY::frames::gpu_spans_max,
+    kinds => SUMMARY::frames::kinds, wakes => SUMMARY::frames::wakes,
+    heap_used_delta_bytes => SUMMARY::frames::heap_used_delta_bytes, census => SUMMARY::frames::census,
+    last => SUMMARY::frames::last,
 );
+
+/// The interval in progress: its turns and their time, which no frame turn
+/// has closed.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct OpenBlock {
+    pub turns: f64,
+    pub busy_ms: f64,
+}
+
+words!(OpenBlock, SUMMARY::open::WORDS, turns => SUMMARY::open::turns, busy_ms => SUMMARY::open::busy_ms);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -98,7 +107,8 @@ pub struct TaskBlock {
     pub ok: f64,
     pub aborted: f64,
     pub error: f64,
-    pub lat: Spread,
+    pub lat_p50: f64,
+    pub lat_p95: f64,
     pub reason_count: f64,
     /// (reason, status, count) each, commonest first.
     pub reasons: [[f64; 3]; REASONS],
@@ -109,7 +119,7 @@ pub struct TaskBlock {
 
 words!(TaskBlock, TASK_SUMMARY::WORDS,
     n => TASK_SUMMARY::n, ok => TASK_SUMMARY::ok, aborted => TASK_SUMMARY::aborted, error => TASK_SUMMARY::error,
-    lat => TASK_SUMMARY::lat, reason_count => TASK_SUMMARY::reason_count, reasons => TASK_SUMMARY::reasons,
+    lat_p50 => TASK_SUMMARY::lat_p50, lat_p95 => TASK_SUMMARY::lat_p95, reason_count => TASK_SUMMARY::reason_count, reasons => TASK_SUMMARY::reasons,
     phase_n => TASK_SUMMARY::phase_n, phase_mean => TASK_SUMMARY::phase_mean,
 );
 
@@ -124,18 +134,10 @@ words!(TasksBlock, SUMMARY::tasks::WORDS, slots => SUMMARY::tasks::slots);
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CountersBlock {
-    pub faces_kept: f64,
-    pub faces_possible: f64,
-    pub runs_culled: f64,
-    pub runs_total: f64,
-    /// A count, not the peak a slot is sized against.
-    pub coarse_boxes: f64,
-    pub coarse_low_fill: f64,
-    pub built_runs: f64,
-    pub built_bakes: f64,
-    pub built_starved: f64,
     pub sheet_repacks: f64,
     pub sheet_uploads: f64,
+    pub terrain_admitted: f64,
+    pub terrain_evicted: f64,
 }
 
 impl CountersBlock {
@@ -157,13 +159,10 @@ impl CountersBlock {
 }
 
 words!(CountersBlock, SUMMARY::counters::WORDS,
-    faces_kept => SUMMARY::counters::faces_kept, faces_possible => SUMMARY::counters::faces_possible,
-    runs_culled => SUMMARY::counters::runs_culled, runs_total => SUMMARY::counters::runs_total,
-    coarse_boxes => SUMMARY::counters::coarse_boxes, coarse_low_fill => SUMMARY::counters::coarse_low_fill,
-    built_runs => SUMMARY::counters::built_runs,
-    built_bakes => SUMMARY::counters::built_bakes, built_starved => SUMMARY::counters::built_starved,
     sheet_repacks => SUMMARY::counters::sheet_repacks,
     sheet_uploads => SUMMARY::counters::sheet_uploads,
+    terrain_admitted => SUMMARY::counters::terrain_admitted,
+    terrain_evicted => SUMMARY::counters::terrain_evicted,
 );
 
 #[repr(C)]
@@ -183,43 +182,16 @@ words!(SheetBlock, SUMMARY::sheet::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct HeldBlock {
-    pub run_sets: f64,
-    pub run_set_mb: f64,
-    pub tiers: f64,
-    pub decor_blocks: f64,
-    pub decor_instances: f64,
-    pub decor_bytes: f64,
-}
-
-words!(HeldBlock, SUMMARY::held::WORDS,
-    run_sets => SUMMARY::held::run_sets, run_set_mb => SUMMARY::held::run_set_mb,
-    tiers => SUMMARY::held::tiers, decor_blocks => SUMMARY::held::decor_blocks,
-    decor_instances => SUMMARY::held::decor_instances, decor_bytes => SUMMARY::held::decor_bytes,
-);
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FetchBlock {
-    pub queued: f64,
-    pub running: f64,
     pub credits: f64,
 }
 
-words!(FetchBlock, SUMMARY::fetch::WORDS,
-    queued => SUMMARY::fetch::queued, running => SUMMARY::fetch::running, credits => SUMMARY::fetch::credits,
-);
+words!(FetchBlock, SUMMARY::fetch::WORDS, credits => SUMMARY::fetch::credits);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct QualityBlock {
-    pub step: f64,
-    pub star: f64,
     pub frames_held: f64,
-    pub admitted: f64,
-    pub evicted: f64,
-    pub refined: f64,
-    pub changes_peak: f64,
 }
 
 #[repr(C)]
@@ -239,7 +211,6 @@ pub struct ViewBlock {
     pub hover_lat: f64,
     pub hover_alt: f64,
     pub cell_want: f64,
-    pub cell_drawn: f64,
 }
 
 words!(ViewBlock, SUMMARY::view::WORDS,
@@ -247,14 +218,10 @@ words!(ViewBlock, SUMMARY::view::WORDS,
     center_lon => SUMMARY::view::center_lon, center_lat => SUMMARY::view::center_lat, center_z => SUMMARY::view::center_z,
     hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
     hover_lon => SUMMARY::view::hover_lon, hover_lat => SUMMARY::view::hover_lat, hover_alt => SUMMARY::view::hover_alt,
-    cell_want => SUMMARY::view::cell_want, cell_drawn => SUMMARY::view::cell_drawn,
+    cell_want => SUMMARY::view::cell_want,
 );
 
-words!(QualityBlock, SUMMARY::quality::WORDS,
-    step => SUMMARY::quality::step, star => SUMMARY::quality::star, frames_held => SUMMARY::quality::frames_held,
-    admitted => SUMMARY::quality::admitted, evicted => SUMMARY::quality::evicted,
-    refined => SUMMARY::quality::refined, changes_peak => SUMMARY::quality::changes_peak,
-);
+words!(QualityBlock, SUMMARY::quality::WORDS, frames_held => SUMMARY::quality::frames_held);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

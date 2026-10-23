@@ -8,12 +8,12 @@
 use core::panic::Location;
 pub use xpute_guest::mem::heap::HeapStat;
 
-use xpute_guest::ipc::stream::{record_bytes, WORD};
+use xpute_guest::ipc::stream::WORD;
 use xpute_guest::ipc::sys::{descriptor_turn_bytes, Sys};
 use xpute_guest::mem::base::ptr_at;
 use xpute_kit::status::errno::Errno;
 
-use crate::abi::host::{op, stream};
+use crate::abi::host::stream;
 use crate::io::file::{Kept, PATH_BYTES};
 use crate::param::MAX_CREDITS;
 use xpute_guest::global::Global;
@@ -42,18 +42,8 @@ pub fn host_rise() {
     }
 }
 
-const DECODE_ARGS: usize = 2;
-
-/// The one program call that cannot wait, counted in `RESERVE`.
-pub fn decode_image(fd: u32, image: u32) {
-    if let Some(h) = sys() {
-        let args: [u32; DECODE_ARGS] = [fd, image];
-        h.call(op::IMAGE_DECODE, &args, &[]);
-    }
-}
-
-/// The most one file records in a turn: its descriptor's, and an image's decode.
-const FILE_TURN_BYTES: usize = descriptor_turn_bytes(PATH_BYTES) + record_bytes(DECODE_ARGS, Some(0));
+/// The most one file records in a turn: its descriptor's.
+const FILE_TURN_BYTES: usize = descriptor_turn_bytes(PATH_BYTES);
 
 /// What the calls that cannot wait may record in one turn, all of them files:
 /// each credit's file answered and a new one opened on it, and each kept file
@@ -109,16 +99,6 @@ pub fn stopped() -> bool {
     *STOPPED.get(|| false)
 }
 
-static HANDHELD: Global<bool> = Global::new();
-
-pub fn set_handheld(handheld: bool) {
-    HANDHELD.set(handheld);
-}
-
-pub fn handheld() -> bool {
-    *HANDHELD.get(|| false)
-}
-
 static DEVELOPMENT: Global<bool> = Global::new();
 
 /// Development builds offer the settings schema.json marks `dev`.
@@ -148,6 +128,22 @@ fn no_heap() -> HeapStat {
 
 pub fn set_heap_stat(stat: fn() -> HeapStat) {
     HEAP.set(stat);
+}
+
+static ADMIT_FRAME: Global<fn() -> bool> = Global::new();
+
+fn every_frame() -> bool {
+    true
+}
+
+pub fn set_admit_frame(admit: fn() -> bool) {
+    ADMIT_FRAME.set(admit);
+}
+
+/// The bracket's answer (door::Bracket::admit_frame); a kernel no bracket
+/// booted admits every frame.
+pub fn admit_frame() -> bool {
+    (ADMIT_FRAME.get(|| every_frame))()
 }
 
 /// Numbers only: formatting is the bracket's, so a module that reports

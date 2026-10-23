@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, BBox3857};
+use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, BBox3857};
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::elevation::Raster;
 use crate::segment::Segment;
@@ -141,17 +142,17 @@ impl TerrainRepository {
         })
     }
 
-    /// A tile's elevation grid.
-    pub fn ele(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Vec<i16>, postgres::Error> {
-        self.raster.tile_grid(client, tile_bbox)
+    /// A leaf tile's elevation grid.
+    pub fn ele(&self, client: &mut Client, tile: [i64; 2]) -> Result<Vec<i16>, postgres::Error> {
+        self.raster.tile_grid(client, tile)
     }
 
-    pub fn fetch_tile_source(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<TileSource, postgres::Error> {
-        let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(tile_bbox);
+    pub fn fetch_tile_source(&self, client: &mut Client, tile: [i64; 2]) -> Result<TileSource, postgres::Error> {
+        let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(get_tile_bbox(LEAF_ZOOM, tile));
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
         let wkb = |row: &postgres::Row| -> Box<[u8]> { row.get::<_, &[u8]>("geom_wkb").into() };
         Ok(TileSource {
-            ele: self.raster.tile_grid(client, tile_bbox)?,
+            ele: self.raster.tile_grid(client, tile)?,
             building_rows: client
                 .query(&self.buildings, &bbox)?
                 .iter()

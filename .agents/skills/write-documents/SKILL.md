@@ -1,6 +1,6 @@
 ---
 name: write-documents
-description: How the repository's prose documents are written and reviewed — README.md, ARCHITECTURE.*.md, decision/ and the skills. Use before writing or reworking one, and when a document is hard to read but it is not obvious why.
+description: How the repository's prose documents are written and reviewed — README.md, ARCHITECTURE.*.md, doc/minutes/ and the skills. Use before writing or reworking one, and when a document is hard to read but it is not obvious why.
 ---
 
 # Writing the documents
@@ -63,7 +63,7 @@ Never introduce a term inside a parenthetical or an em-dash aside. An aside is
 the mark of something a reader may skip, and a definition is not skippable.
 
 Only a name this tree invented needs earning. `strobe`, `doorbell`, `ring`,
-`change`, `handle`, `band`, `run`, `XTP` and `PVF3` were made here, and nobody
+`change`, `handle`, `band`, `run` and `XTP` were made here, and nobody
 can look them up. `arena`, `deque`, `errno`, `buddy`, `slab`, `golden records`,
 `virtio` belong to the world, and a reader either knows one or can find it.
 Explaining those is padding. Paraphrasing one away is worse: `recorded output`
@@ -112,7 +112,7 @@ things that are not diagrams:
 - **A glossary with borders.** Boxes of label-and-description, one per term.
   Delete the box-drawing characters and nothing is lost, which means nothing
   was there.
-- **A type signature in a code fence.** `PVF3 = { i: IVec, f: FVec }` names
+- **A type signature in a code fence.** `Tile = { zoom: Zoom, at: [i64; 2] }` names
   three things and shows none of them.
 
 Draw a shape: a bit layout across two words, a flow from a provider's rows to
@@ -260,7 +260,7 @@ for a document whose order is already right.
 breaks you wrote and imposes none. The convention is therefore per file, and
 the rule is to match the file's neighbors: `README.md` and the two
 `ARCHITECTURE` documents run a paragraph to one line, while `AGENTS.md`, the
-skills and `decision/` wrap at about eighty columns. Reformatting a document to
+skills and `doc/minutes/` wrap at about eighty columns. Reformatting a document to
 the other convention makes a diff of the whole file for no reason.
 
 Diagrams are hand-aligned ASCII. Build them with a short script rather than by

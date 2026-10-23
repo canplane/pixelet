@@ -1,47 +1,33 @@
 // pxl-spec/bake/fold.rs
 
-//! One zoom coarser: a parent tile from the tiles under it, run by both the
-//! bake and the client so a deterministic rule agrees between them. Ground
-//! takes the 2×2 majority of the zoom below (as Earth Engine's `MODE` pyramiding),
-//! so a feature narrower than half a cell rounds away. Elevation is the box
-//! average, which preserves a column's volume. The index lane is carried up
-//! from the children's extents and widened by the parent's own surface.
+//! One zoom coarser: a parent tile from the tiles under it. A cell holds the
+//! four looks under it, each child cell's own (pxl-portable `ground::own`,
+//! their majority, as Earth Engine's `MODE` pyramiding, so a feature
+//! narrower than half a cell rounds away at the zoom that reads it).
+//! Elevation is the box average of the samples, which preserves a column's
+//! volume; a parent's surface is its own bicubic of its own samples.
 
-use crate::space::layer::lattice::{EXTENT, GROUND, TILE_CELLS};
+use crate::space::layer::lattice::Cells;
+use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::tile::{neighbor_index, CHILDREN};
 use xpute_kit::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use super::separation::fold_separation;
-use super::surface::extent_of;
-use super::tile::terrain::{join, Ground, Index, TerrainTile};
+use super::tile::terrain::{Ground, TerrainTile, ELE_LANE};
 use super::tile::Occupancy;
 use crate::space::coord::zoom::Zoom;
+use pxl_portable::ground::own;
 
-/// The value filling more than half of a 2×2 (or 2×2×2) block, `v[dx + 2·dy +
-/// 4·dz]`; otherwise the tie child's. The tie corner alternates with the
-/// parent cell's zoom, since a fixed corner drifts the map half a coarse cell a step.
-pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
-    let tie = v[if parent & 1 == 1 { 0 } else { N - 1 }];
-    let count = |x: T| v.iter().filter(|&&y| y == x).count();
-    let mut half = None;
-    for &x in &v {
-        match count(x) {
-            n if 2 * n > N => return x,
-            n if 2 * n == N && half.is_some_and(|h| h != x) => return tie,
-            n if 2 * n == N => half = Some(x),
-            _ => {}
-        }
-    }
-    half.unwrap_or(tie)
-}
-
-/// A cell is one look, so the majority is the look's.
+/// The four looks of each parent cell: the own look of each child cell
+/// under it, `dx + 2·dy`, as the zoom under the parent's reads it.
 pub fn fold_ground(children: [&Ground; 4], zoom: Zoom) -> Ground {
+    let under = GROUND.cell_zoom(zoom) + 1;
     let out = (0..TILE_CELLS * TILE_CELLS)
-        .map(|index| {
+        .flat_map(|index| {
             let (q, block) = GROUND.child_cells(index);
-            majority(block.map(|i| children[q].cells[i as usize]), GROUND.cell_zoom(zoom))
+            let cells = &children[q].cells;
+            block.map(|i| own(u32::from_le_bytes(core::array::from_fn(|k| cells[4 * i as usize + k])), under) as u8)
         })
         .collect::<Vec<_>>();
     Ground { cells: out.into() }
@@ -82,38 +68,19 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     }
 }
 
-/// A parent's index: each cell the union of its own surface's extent and the
-/// 2×2 child cells under it. A missing child folds as the zero tile.
-pub fn fold_index(children: [&Index; 4], own: Vec<[i16; 2]>) -> Index {
-    let extent = own
-        .into_iter()
-        .enumerate()
-        .map(|(index, [lo, hi])| {
-            let (q, block) = EXTENT.child_cells(index as u32);
-            let four = block.map(|i| children[q].extent()[i as usize]);
-            four.into_iter().fold([lo, hi], join)
-        })
-        .collect::<Vec<_>>();
-    Index::new(extent, Occupancy::of_children(children.map(|c| c.occupancy)))
-}
-
 /// A parent from the 4×4 tiles around its children; None if any of its own
-/// four is missing. A missing ring tile only degrades the padding, so a zoom
-/// out folds from what the client already holds.
+/// four is missing. A missing ring tile only degrades the padding.
 pub fn fold_terrain(around: [Option<&TerrainTile>; 16], zoom: Zoom) -> Option<TerrainTile> {
     let child = |q: usize| around[CHILDREN[q]];
     let children = [child(0)?, child(1)?, child(2)?, child(3)?];
-    let ground = fold_ground(children.map(|t| &t.ground), zoom);
-    let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
+    let mut ele = vec![0i16; ELE_LANE];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
-    let separation = fold_separation(children.map(|t| &t.separation), zoom);
-    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &separation));
-    Some(TerrainTile {
-        ground,
-        separation,
-        ele: ele.into(),
-        index,
-    })
+    Some(TerrainTile::of(
+        ele,
+        fold_ground(children.map(|t| &t.ground), zoom),
+        fold_separation(around.map(|t| t.map(|t| &t.separation)), zoom),
+        Occupancy::of_children(children.map(|t| t.occupancy)),
+    ))
 }
 
 #[cfg(test)]

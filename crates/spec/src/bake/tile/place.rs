@@ -6,16 +6,17 @@
 //! would meet, a cell an icon wide keeps one, the first by the zoom its category
 //! shows from and then its id, so what is shown only grows with the zoom and
 //! a tile is its children with what shows from its zoom on
-//! (decision/20261009-places-follow-carto.md). It is one XTP tree, as every
+//! (doc/minutes/20261009-places-follow-carto.md). It is one XTP tree, as every
 //! other baked tile is.
 
+use crate::space::layer::lattice::Cells;
 use fnv::FnvHashSet;
 
 use crate::asset::symbol::SYMBOLS;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
 use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::block::object::MARK_STEPS;
-use crate::space::coord::pvf3::pvf3::Pvf3;
+use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{Lattice, GROUND};
 use crate::space::layer::tile::{Cell, Tile, LEAF_ZOOM};
@@ -42,7 +43,7 @@ const SPREAD_STEPS: Zoom = 2;
 /// than the camera grid: which zoom of Carto's a place is drawn at there,
 /// and so which categories show, is the tile zoom of the grid's cell
 /// (`Lattice::tile_zoom_of_grid`), past the leaf too.
-pub const PLACE_LATTICE: Lattice = Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i8));
+pub const PLACE_LATTICE: Lattice = Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i32));
 
 /// The cell a place keeps to itself, as a zoom under the tile. Seen at an
 /// icon's own cell, places a few metres apart stood side by side as near as
@@ -88,8 +89,8 @@ pub const fn shown(category: u16) -> Option<Zoom> {
     let (dot, icon) = (DOT_ZOOM[category as usize - 1], ICON_ZOOM[category as usize - 1]);
     match (dot, icon) {
         (0, 0) => None,
-        (0, z) | (z, 0) => Some(z),
-        (d, i) => Some(if d < i { d } else { i }),
+        (0, z) | (z, 0) => Some(z as Zoom),
+        (d, i) => Some((if d < i { d } else { i }) as Zoom),
     }
 }
 
@@ -172,7 +173,7 @@ impl PlaceTile {
                 category: self.categories[k],
                 id: self.ids.get(i),
             },
-            from: self.from[k],
+            from: Zoom::from(self.from[k]),
             at: self.at[k].map(u32::from),
         }
     }
@@ -184,7 +185,8 @@ impl PlaceTile {
     fn push(&mut self, h: &Placed) {
         self.at.push(h.at.map(|v| v as u16));
         self.categories.push(h.place.category);
-        self.from.push(h.from);
+        // The record keeps a zoom in a byte.
+        self.from.push(h.from as u8);
         self.names.push(h.place.name);
         self.ids.push(h.place.id);
     }
@@ -192,7 +194,7 @@ impl PlaceTile {
     /// A leaf from the places standing in it: those of a category Carto draws,
     /// placed at every zoom from the coarsest through Carto's last, a cell
     /// an icon wide keeping its first; names cut to `NAME_CHARS`.
-    pub fn leaf<'a>(tile: Tile, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>) -> PlaceTile {
+    pub fn leaf<'a>(tile: Tile, places: impl IntoIterator<Item = (Q3, Place<'a>)>) -> PlaceTile {
         let names: Vec<(Cell, Zoom, String, Place<'a>)> = places
             .into_iter()
             .filter_map(|(point, place)| Some((GROUND.cell_of(LEAF_ZOOM, &point), shown(place.category)?, cut_name(place.name), place)))
@@ -308,7 +310,7 @@ pub fn decode(bytes: &[u8]) -> Result<PlaceTile, MarshalError> {
                 category: categories[i],
                 id: ids.get(i as u32).ok_or_else(malformed)?,
             },
-            from: from[i],
+            from: Zoom::from(from[i]),
             at: [u32::from(at[2 * i]), u32::from(at[2 * i + 1])],
         });
     }

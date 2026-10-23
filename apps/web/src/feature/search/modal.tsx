@@ -14,7 +14,7 @@ import { TextField } from "@/shared/ui/text-field.tsx";
 import { chrome, color, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
 import { SectionTitle } from "@/shared/ui/section-title.tsx";
 import { Command, DevicePoseStatus, encode_input_go_to, type LonLat } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, kernel_enable_location, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
+import { kernel_command, kernel_enable_location, kernel_room, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@platform/text-field.ts";
@@ -28,6 +28,7 @@ import { useCenterCoordinates, useDivisionLabel } from "@/feature/world/division
 import { DIVISION_SUBTYPE } from "@/feature/world/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
+import { fixed } from "@/shared/fixed.ts";
 
 const DEBOUNCE_MS = 300;
 
@@ -45,7 +46,7 @@ function groundDistanceM(a: LonLat, b: LonLat): f64 {
 
 function formatDistance(m: f64): string {
   if (m < 1000) return `${round(m)}m`;
-  if (m < 10000) return `${(m / 1000).toFixed(1)}km`;
+  if (m < 10000) return `${fixed(m / 1000, 1)}km`;
   return `${round(m / 1000).toLocaleString()}km`;
 }
 
@@ -193,7 +194,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   }, [q]);
 
   function select(result: SearchResult) {
-    kernel_command(Command.INPUT_GO_TO, encode_input_go_to({ lon: result.lon, lat: result.lat }));
+    kernel_command(Command.INPUT_GO_TO, encode_input_go_to(kernel_room, result.lon, result.lat));
     onClose();
   }
 

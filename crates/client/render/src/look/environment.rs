@@ -5,9 +5,9 @@
 //! sky's own, which the shaders read from its tables. Directions are
 //! in the map's axes (X east, Y north, Z up), as is the sky.
 
-use pxl_spec::space::coord::v3::{dot3, norm3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 
-use crate::look::atmosphere::{light_at, moon_phase_light, white, MOON_LIGHT, NIGHT_COLOR};
+use crate::look::atmosphere::{moon_phase_light, MOON_LIGHT, NIGHT_COLOR};
 
 /// Lighting run (24), stars' fade, clock and the anchor's longitude (4),
 /// air (4), second light (8), sun direction (4), stars' frame (12), moon
@@ -37,33 +37,20 @@ pub struct Light {
     pub star_frame: [V3; 3],
 }
 
-/// Rec. 709, as constant.wgsl's LUMA.
-pub(crate) const LUMA: [f64; 3] = [0.2126, 0.7152, 0.0722];
-
-fn luminance(c: [f64; 3]) -> f64 {
-    dot3(&LUMA, &c)
-}
-
 pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
-    // Both lights, summed so the light does not snap where they cross at dusk,
-    // each as it reaches the air; the brighter at the eye casts the shadow.
-    let sun_dir = norm3(&light.sun);
-    let w = white();
-    let moon_dir = norm3(&light.moon);
+    // Both lights, summed so the light does not snap where they cross at
+    // dusk, each as it reaches the air: the sun's first, the moon's second,
+    // each against a sun overhead at sea level, which the shaders take as
+    // white (atmos_lut.wgsl `table_white`).
+    let sun_dir = v3::norm(&light.sun);
+    let moon_dir = v3::norm(&light.moon);
     // The stars are lost in the day.
     let night = 1.0 - smoothstep(-0.1, 0.0, sun_dir[2]);
-    let elongation = libm::acos(dot3(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
+    let elongation = libm::acos(v3::dot(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
     let phase = moon_phase_light(core::f64::consts::PI - elongation);
     // Wherever the Moon is up; by day the sun outshines it.
-    let moon_color: [f64; 3] = core::array::from_fn(|k| NIGHT_COLOR[k] * MOON_LIGHT * phase * w[k]);
-    let here = |d: &[f64; 3], c: &[f64; 3]| {
-        let t = light_at(light.ground_km, d[2]);
-        luminance(core::array::from_fn(|k| c[k] * t[k]))
-    };
-    let sun = (sun_dir, w);
-    let moon = (moon_dir, moon_color);
-    let (first, other) = if here(&moon_dir, &moon_color) > here(&sun_dir, &w) { (moon, sun) } else { (sun, moon) };
-    for (at, (d, color)) in [(0, first), (ENV_OTHER_LIGHT, other)] {
+    let moon_color: [f64; 3] = core::array::from_fn(|k| NIGHT_COLOR[k] * MOON_LIGHT * phase);
+    for (at, (d, color)) in [(0, (sun_dir, [1.0; 3])), (ENV_OTHER_LIGHT, (moon_dir, moon_color))] {
         put3(o, at, f32s(&d));
         put3(o, at + 4, [color[0] as f32, color[1] as f32, color[2] as f32]);
     }

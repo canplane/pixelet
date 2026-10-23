@@ -7,10 +7,9 @@
 
 use core::f64::consts::TAU;
 
-use crate::space::coord::pvf3::{pack, FVec, IVec, Pvf3};
+use crate::space::coord::q3::{unpack, Q3};
 use crate::space::coord::world;
 use crate::space::coord::world::ROUND;
-use crate::space::coord::zoom::from_idx;
 use crate::space::coord::zoom::{units, Zoom};
 
 use super::epsg4326::EARTH_RADIUS_M;
@@ -49,23 +48,22 @@ pub fn u_from_mer(mer: f64) -> f64 {
     mer * U_PER_MER
 }
 
-pub fn project(x: f64, y: f64, z: f64) -> Pvf3 {
+pub fn project(x: f64, y: f64, z: f64) -> Q3 {
     let [x, y, _] = world::within([u_from_mer(x), u_from_mer(y), 0.0]);
     world::point(x, y, z * u_per_m(y))
 }
 
-pub fn unproject(i: IVec, f: FVec) -> G3857 {
-    let [x, y, z] = pack::unpack(i, f);
+pub fn unproject(q: &Q3) -> G3857 {
+    let [x, y, z] = unpack(q);
     [mer_from_u(x), mer_from_u(y), z / u_per_m(y)]
 }
 
 pub type BBox3857 = [G3857; 2];
 
-/// The square of the tile at `zoom` whose index is `tile_idx`. The maximum
-/// is built in u: the exclusive +2^23u edge is not an IVec.
-pub fn get_tile_bbox(zoom: Zoom, tile_idx: IVec) -> BBox3857 {
-    let min = pack::unpack(from_idx(zoom, tile_idx), 0);
+/// The square of the tile at `zoom` whose index is `tile`.
+pub fn get_tile_bbox(zoom: Zoom, tile: [i64; 2]) -> BBox3857 {
     let span = units(zoom);
+    let min = tile.map(|v| v as f64 * span);
     [[mer_from_u(min[0]), mer_from_u(min[1]), 0.0], [mer_from_u(min[0] + span), mer_from_u(min[1] + span), 0.0]]
 }
 

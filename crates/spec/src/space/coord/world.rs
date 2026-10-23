@@ -1,19 +1,31 @@
 // pxl-spec/space/coord/world.rs
 
-//! What the lanes mean: X goes once round the world, zoom 0's side; Y and Z
-//! end where their lanes do. A position enters the world only here, held
-//! inside it, so no lane ever wraps where the world does not.
+//! What a position means: X goes once round the world, zoom 0's side; Y and
+//! Z end where the world does. A position enters the world only here, held
+//! inside it, so nothing goes round where the world does not.
 
 use super::aabb::Aabb;
-use super::pvf3::core::{IVEC_Y_W, IVEC_Z_W, ONE};
-use super::pvf3::pack::pack;
-use super::pvf3::Pvf3;
+use super::q3::{from_real, FRAC_W, ONE, Q3};
 use super::v3::V3;
 use super::zoom::{cube, units, Zoom};
 
-/// Every point the world holds, in units. X is unbounded: the lane is one world round.
+/// The world's extent an axis, in bits of a unit:
+///
+/// - X, 24: a unit is a z24 cell's side, so the round is 2^24 units
+///   (`zoom.rs` `UNIT_ZOOM`), a web map's z16 pixel a z24 cell;
+/// - Y, 24: the Mercator plane is a square;
+/// - Z, 16: ±2^15 units of height, as the terrain stores a height, an `i16`
+///   in ground cells, a ground cell a unit (`bake/constant.rs`).
+pub const EXTENT: [u32; 3] = [pxl_portable::UNIT_ZOOM, pxl_portable::UNIT_ZOOM, pxl_portable::HEIGHT_BITS];
+
+const _: () = assert!(
+    EXTENT[0] + FRAC_W == i32::BITS && EXTENT[1] + FRAC_W == i32::BITS && EXTENT[2] + FRAC_W <= i32::BITS,
+    "X and Y fill a position's i32, so X goes round as one does"
+);
+
+/// Every point the world holds, in units. X is unbounded: it goes round.
 pub const REACH: Aabb = {
-    let (y, z) = ((1u64 << (IVEC_Y_W - 1)) as f64, (1u64 << (IVEC_Z_W - 1)) as f64);
+    let (y, z) = ((1u64 << (EXTENT[1] - 1)) as f64, (1u64 << (EXTENT[2] - 1)) as f64);
     Aabb {
         min: [f64::NEG_INFINITY, -y, -z],
         max: [f64::INFINITY, y, z],
@@ -26,10 +38,25 @@ pub fn within(v: V3) -> V3 {
     [v[0], v[1].clamp(REACH.min[1], top(1)), v[2].clamp(REACH.min[2], top(2))]
 }
 
-/// The one door from doubles into a position: X goes round the world, Y and
-/// Z stop at its ends.
-pub fn point(x: f64, y: f64, z: f64) -> Pvf3 {
-    pack(within([x, y, z]))
+/// The one door into a position, from steps of 1/256 unit: X goes round
+/// the world as an `i32` does, Y and Z stop at its ends.
+pub fn at(x: i64, y: i64, z: i64) -> Q3 {
+    let hold = |v: i64, k: usize| {
+        let half = 1i64 << (EXTENT[k] - 1 + FRAC_W);
+        v.clamp(-half, half - 1) as i32
+    };
+    [x as i32, hold(y, 1), hold(z, 2)]
+}
+
+/// `at` from units.
+pub fn point(x: f64, y: f64, z: f64) -> Q3 {
+    at(from_real(x), from_real(y), from_real(z))
+}
+
+/// From `a` to `b`, in steps: X the short way round, as an `i32` wraps; Y
+/// and Z as they are, wide, since Y does not go round.
+pub fn between(a: &Q3, b: &Q3) -> [i64; 3] {
+    [i64::from(b[0].wrapping_sub(a[0])), i64::from(b[1]) - i64::from(a[1]), i64::from(b[2]) - i64::from(a[2])]
 }
 
 /// One round of the world, in units: zoom 0's side.
@@ -40,7 +67,7 @@ pub const fn around(zoom: Zoom) -> i64 {
     1i64 << zoom
 }
 
-/// An X index of `z`'s cells as the lane holds it; every key goes through it.
+/// An X index of `z`'s cells as the world names it; every key goes through it.
 pub fn wrap_index(zoom: Zoom, x: i64) -> i64 {
     let across = around(zoom);
     (x + across / 2).rem_euclid(across) - across / 2
@@ -54,7 +81,7 @@ pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i64; 3]) -> [i64; 3] {
 /// The copy of `x` nearest `about`: where a stored X stands for an eye at `about`.
 pub fn nearest(x: f64, about: f64) -> f64 {
     // Whole laps added to `x`, so a point already on the lap comes back unchanged.
-    x - ROUND * libm::floor((x - about) / ROUND + 0.5)
+    x - ROUND * libm::rint((x - about) / ROUND)
 }
 
 /// `b` moved round the world to the copy nearest `about`.
@@ -74,6 +101,6 @@ pub fn node_near(zoom: Zoom, at: [i64; 3], about: f64) -> [i64; 3] {
     }
     let whole = cube(zoom, at);
     let x = (whole.min[0] + whole.max[0]) / 2.0;
-    let rounds = ((nearest(x, about) - x) / ROUND).round() as i64;
+    let rounds = libm::rint((nearest(x, about) - x) / ROUND) as i64;
     [at[0] + rounds * around(zoom), at[1], at[2]]
 }

@@ -6,6 +6,7 @@
 
 pub mod abi;
 pub mod approach;
+pub mod asset;
 pub mod billboard;
 pub mod chunk;
 pub mod control;
@@ -29,7 +30,6 @@ use crate::billboard::field::Billboards;
 use crate::model::registry::Models;
 use pxl_render::frame::draw::DrawList;
 
-use crate::chunk::table::Scheduler;
 use crate::layer::object::store::Store;
 use crate::scene::Scene;
 use xpute_guest::global::Global;
@@ -38,7 +38,6 @@ pub struct Kernel {
     /// The memory map is laid; nothing of the world is made before it.
     pub laid_out: bool,
     pub objects: Store,
-    pub sched: Scheduler,
     pub scene: Scene,
     /// What the renderer is handed: every layer lists into it.
     pub draw: DrawList,
@@ -51,7 +50,6 @@ impl Kernel {
         Kernel {
             laid_out: false,
             objects: Store::default(),
-            sched: Scheduler::new(),
             scene: Scene::default(),
             draw: DrawList::default(),
             models: Models::default(),
@@ -72,33 +70,16 @@ pub fn laid() -> Option<&'static mut Kernel> {
     k.laid_out.then_some(k)
 }
 
-/// The objects, borrowed for a turn's build.
-pub struct Build<'a> {
-    pub store: &'a crate::layer::object::store::Store,
-}
-
 impl Kernel {
-    /// Split into fields so the build and the table borrow at once. None before
-    /// the memory map is laid.
-    pub fn parts(&mut self) -> Option<(Build<'_>, &mut Scheduler, &mut Scene, &mut DrawList)> {
-        let Kernel {
-            laid_out,
-            objects,
-            sched,
-            scene,
-            draw,
-            ..
-        } = self;
+    /// Split into fields so the scene and the draw list borrow at once. None
+    /// before the memory map is laid.
+    pub fn parts(&mut self) -> Option<(&mut Scene, &mut DrawList)> {
+        let Kernel { laid_out, scene, draw, .. } = self;
         if !*laid_out {
             return None;
         }
-        Some((Build { store: objects }, sched, scene, draw))
+        Some((scene, draw))
     }
-}
-
-pub fn with_parts<R>(f: impl FnOnce(&mut Build, &mut Scheduler, &mut Scene) -> R) -> Option<R> {
-    let (mut build, sched, scene, _) = kernel().parts()?;
-    Some(f(&mut build, sched, scene))
 }
 
 /// Native tests run on several threads, and a `Global` is for one.

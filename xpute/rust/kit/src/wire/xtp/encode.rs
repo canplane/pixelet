@@ -1,12 +1,11 @@
 // xpute-kit/wire/xtp/encode.rs
 
-use crate::abi::word::field_set32;
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
 use super::spec::{
-    AlignUnit, BranchNode, EncodingState, GraftNode, Node, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType, SequenceVal, SpecialType, ALIGN, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT,
-    ELEM_SZ, GET_DESC, GET_LEN, HDR_SZ, MAGIC, MAX_PKT_SZ, NODE_IS_BRANCH, NODE_IS_GRAFT, NODE_IS_LEAF, NODE_IS_NIL, NODE_IS_SEQ, RESERVED, SET_WORD, WORD_SZ,
+    BranchNode, GraftNode, Node, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType, SequenceVal, SpecialType, ALIGN_SZ, ELEM_SZ, GET_DESC, GET_LEN, HDR_SZ, MAGIC, MAX_PKT_SZ, RESERVED,
+    WORD_SZ,
 };
 use super::view::NodeView;
 
@@ -17,297 +16,113 @@ pub struct TreeEncoderOptions {
     pub max_cap: Option<u32>,
 }
 
-/// Trusts the view layer for a node's shape; checks only the packet's bounds.
-pub struct TreeEncoder {
-    pub max_cap: u32,
-
-    pub buf: Vec<u8>,
-}
-
-impl Default for TreeEncoder {
-    fn default() -> Self {
-        TreeEncoder::new()
-    }
-}
+/// A tree walked onto `PacketWriter`, the one writer of the layout, as the
+/// C++ encoder does (cpp kit wire/xtp/view.hpp `encode`): into a fixed
+/// buffer, walked again on one twice as large where it overflowed, up to the
+/// cap. Trusts the view layer for a node's shape.
+#[derive(Default)]
+pub struct TreeEncoder;
 
 impl TreeEncoder {
     pub fn new() -> TreeEncoder {
-        TreeEncoder { max_cap: MAX_PKT_SZ, buf: Vec::new() }
+        TreeEncoder
     }
 
-    fn ensure(&mut self, new_cap: u32) -> Result<u32, MarshalError> {
-        let cap = self.buf.len() as u32;
-        if new_cap <= cap {
-            return Ok(cap);
-        }
-
-        // Doubling stops at the cap, so the cap refuses only a packet that does
-        // not fit, never a growth step.
-        if new_cap > self.max_cap {
-            return Err(MarshalError::new(Errno::EOVERFLOW));
-        }
-        let new_cap = cap.saturating_mul(2).max(new_cap).min(self.max_cap);
-
-        self.buf.resize(new_cap as usize, 0);
-        Ok(self.buf.len() as u32)
-    }
-
+    /// EINVAL for a cap outside a packet's sizes, EOVERFLOW for a tree past
+    /// the cap.
     pub fn encode<'a, V: NodeView<'a>>(&mut self, view: &V, opts: TreeEncoderOptions) -> Result<Vec<u8>, MarshalError> {
-        let node = view.node();
-
-        let _init_cap = opts.init_cap.unwrap_or(1 << 10);
         let max_cap = opts.max_cap.unwrap_or(MAX_PKT_SZ);
         if !(HDR_SZ..=MAX_PKT_SZ).contains(&max_cap) {
             return Err(MarshalError::new(Errno::EINVAL));
         }
-        self.max_cap = max_cap;
-
-        let init_cap = HDR_SZ.max(_init_cap.min(self.max_cap));
-        self.buf = vec![0u8; init_cap as usize];
-
-        SET_WORD(&mut self.buf, 0, MAGIC, RESERVED);
-
-        let mut st = EncodingState {
-            base: HDR_SZ,
-            lim: HDR_SZ,
-            type_: node.type_(),
-        };
-        self.node(node, &mut st)?;
-
-        // A grafted root's type is the one the graft read.
-        let payload_sz = st.lim - HDR_SZ;
-        let desc = field_set32(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, st.type_ as u32);
-        SET_WORD(&mut self.buf, WORD_SZ, payload_sz, desc);
-
-        let pkt_nbyte = ALIGN(HDR_SZ + payload_sz, WORD_SZ)?;
-        self.ensure(pkt_nbyte)?;
-        Ok(self.buf[..pkt_nbyte as usize].to_vec())
-    }
-
-    fn node(&mut self, node: &Node, st: &mut EncodingState) -> Result<(), MarshalError> {
-        if NODE_IS_LEAF(node) {
-            if NODE_IS_SEQ(node) {
-                let Node::Sequence(n) = node else { unreachable!() };
-                return self.seq_of(n, st);
-            }
-            let Node::Scalar(n) = node else { unreachable!() };
-            return self.scalar_of(n, st);
-        }
-
-        if NODE_IS_BRANCH(node) {
-            let Node::Branch(n) = node else { unreachable!() };
-            return self.branch_of(n, st);
-        }
-        if NODE_IS_GRAFT(node) {
-            let Node::Graft(n) = node else { unreachable!() };
-            return self.graft(n, st);
-        }
-        if NODE_IS_NIL(node) {
-            return Ok(());
-        }
-        Err(MarshalError::new(Errno::EBADMSG))
-    }
-
-    // Copies the graft's root payload without its header, aligned for its root
-    // type, so it lays out exactly as inline encoding would.
-    fn graft(&mut self, node: &GraftNode, st: &mut EncodingState) -> Result<(), MarshalError> {
-        let pkt = &node.val;
-
-        if (pkt.len() as u32) < HDR_SZ {
-            return Err(MarshalError::new(Errno::EBADMSG));
-        }
-        let hdr_view = &pkt[..HDR_SZ as usize];
-
-        if GET_LEN(hdr_view, 0)? != MAGIC {
-            return Err(MarshalError::new(Errno::EBADMSG));
-        }
-
-        let (payload_sz, type_) = GET_DESC(hdr_view, WORD_SZ)?;
-        if payload_sz > pkt.len() as u32 - HDR_SZ {
-            return Err(MarshalError::new(Errno::EBADMSG));
-        }
-        st.type_ = type_;
-
-        if payload_sz == 0 {
-            return Ok(());
-        }
-
-        let align_sz: AlignUnit = ALIGN_SZ(st.type_)?;
-        if !payload_sz.is_multiple_of(align_sz) {
-            return Err(MarshalError::new(Errno::EBADMSG));
-        }
-
-        st.base = ALIGN(st.base, align_sz)?;
-
-        if payload_sz as i64 > self.max_cap as i64 - st.base as i64 {
-            return Err(MarshalError::new(Errno::EOVERFLOW));
-        }
-        st.lim = st.base + payload_sz;
-        self.ensure(st.lim)?;
-        let at = st.base as usize;
-        self.buf[at..at + payload_sz as usize].copy_from_slice(&pkt[HDR_SZ as usize..(HDR_SZ + payload_sz) as usize]);
-        Ok(())
-    }
-
-    fn branch_of(&mut self, node: &BranchNode, st: &mut EncodingState) -> Result<(), MarshalError> {
-        let Some(children) = &node.val else { return Ok(()) };
-
-        st.base = ALIGN(st.base, WORD_SZ)?;
-        let table_start = st.base + WORD_SZ;
-
-        let len = children.len() as u32;
-        if len > (self.max_cap >> 3) {
-            return Err(MarshalError::new(Errno::EOVERFLOW));
-        }
-
-        st.lim = table_start + len * WORD_SZ;
-        self.ensure(st.lim)?;
-
-        SET_WORD(&mut self.buf, st.base, len, RESERVED);
-
-        let mut table_off = table_start;
-        let mut child_st = EncodingState {
-            base: st.lim,
-            lim: st.lim,
-            type_: SpecialType::NIL as u8,
-        };
-        for child in children {
-            child_st.base = child_st.lim;
-            child_st.type_ = child.type_();
-
-            self.node(child, &mut child_st)?;
-            let rel_off = if child_st.base == child_st.lim { 0 } else { child_st.base - st.base };
-
-            SET_WORD(&mut self.buf, table_off, rel_off, field_set32(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, child_st.type_ as u32));
-
-            table_off += WORD_SZ;
-        }
-        st.lim = ALIGN(child_st.lim, WORD_SZ)?;
-        self.ensure(st.lim)?;
-        Ok(())
-    }
-
-    fn scalar_of(&mut self, node: &ScalarNode, st: &mut EncodingState) -> Result<(), MarshalError> {
-        let type_ = node.type_;
-        let Some(val) = node.val else { return Ok(()) };
-
-        let mismatch = || MarshalError::new(Errno::EINVAL);
-
-        let w = |n: Numeric| -> Result<Vec<u8>, MarshalError> {
-            Ok(match (type_, n) {
-                (ScalarType::U8, Numeric::U8(v)) => v.to_le_bytes().to_vec(),
-                (ScalarType::I8, Numeric::I8(v)) => v.to_le_bytes().to_vec(),
-                (ScalarType::U16, Numeric::U16(v)) => v.to_le_bytes().to_vec(),
-                (ScalarType::I16, Numeric::I16(v)) => v.to_le_bytes().to_vec(),
-                (ScalarType::U32, Numeric::U32(v)) => v.to_le_bytes().to_vec(),
-                (ScalarType::I32, Numeric::I32(v)) => v.to_le_bytes().to_vec(),
-                (ScalarType::U64, Numeric::U64(v)) => v.to_le_bytes().to_vec(),
-                (ScalarType::I64, Numeric::I64(v)) => v.to_le_bytes().to_vec(),
-                (ScalarType::F32, Numeric::F32(v)) => v.to_le_bytes().to_vec(),
-                (ScalarType::F64, Numeric::F64(v)) => v.to_le_bytes().to_vec(),
-                (ScalarType::BOOL, Numeric::U8(v)) => vec![(v != 0) as u8],
-                _ => return Err(mismatch()),
-            })
-        };
-        let payload = w(val)?;
-        let elem_sz: AlignUnit = payload.len() as AlignUnit;
-
-        st.base = ALIGN(st.base, elem_sz)?;
-
-        st.lim = st.base + elem_sz;
-        self.ensure(st.lim)?;
-        self.buf[st.base as usize..st.lim as usize].copy_from_slice(&payload);
-        Ok(())
-    }
-
-    fn seq_of(&mut self, node: &SequenceNode, st: &mut EncodingState) -> Result<(), MarshalError> {
-        let type_ = node.type_;
-        let Some(val) = &node.val else { return Ok(()) };
-
-        st.base = ALIGN(st.base, WORD_SZ)?;
-        let payload_start = st.base + WORD_SZ;
-
-        let len: u32;
-        let payload_sz: u32;
-
-        match type_ {
-            SequenceType::U8_ARRAY
-            | SequenceType::I8_ARRAY
-            | SequenceType::U16_ARRAY
-            | SequenceType::I16_ARRAY
-            | SequenceType::U32_ARRAY
-            | SequenceType::I32_ARRAY
-            | SequenceType::U64_ARRAY
-            | SequenceType::I64_ARRAY
-            | SequenceType::F32_ARRAY
-            | SequenceType::F64_ARRAY => {
-                let SequenceVal::Array(arr) = val else { return Err(bad_type()) };
-                payload_sz = arr.bytes.len() as u32;
-                if !payload_sz.is_multiple_of(ELEM_SZ(type_)) {
-                    return Err(bad_type());
+        let mut cap = HDR_SZ.max(opts.init_cap.unwrap_or(1 << 10).min(max_cap));
+        loop {
+            let mut buf = vec![0u8; cap as usize];
+            let mut w = PacketWriter::root(&mut buf);
+            walk(&mut w, view.node());
+            match w.finished() {
+                Ok(n) => {
+                    buf.truncate(n as usize);
+                    return Ok(buf);
                 }
-                len = payload_sz / ELEM_SZ(type_);
-
-                if payload_sz as i64 > self.max_cap as i64 - payload_start as i64 {
-                    return Err(MarshalError::new(Errno::EOVERFLOW));
-                }
-                st.lim = payload_start + ALIGN(payload_sz, WORD_SZ)?;
-                self.ensure(st.lim)?;
-                let at = payload_start as usize;
-                self.buf[at..at + payload_sz as usize].copy_from_slice(&arr.bytes);
-            }
-
-            SequenceType::BITSET => {
-                let SequenceVal::Array(arr) = val else { return Err(bad_type()) };
-                if arr.type_ != SequenceType::BITSET {
-                    return Err(bad_type());
-                }
-                let arr = &arr.bytes;
-                len = arr.len() as u32;
-                payload_sz = ((len as u64 + 7) >> 3) as u32;
-
-                if payload_sz as i64 > self.max_cap as i64 - payload_start as i64 {
-                    return Err(MarshalError::new(Errno::EOVERFLOW));
-                }
-                st.lim = payload_start + ALIGN(payload_sz, WORD_SZ)?;
-                self.ensure(st.lim)?;
-
-                // LSB-first within each byte.
-                self.buf[payload_start as usize..(payload_start + payload_sz) as usize].fill(0);
-                for i in 0..len as usize {
-                    if arr[i] != 0 {
-                        self.buf[payload_start as usize + (i >> 3)] |= 1 << (i & 7);
-                    }
-                }
-            }
-
-            // A string fits where its UTF-8 and the NUL after it do.
-            SequenceType::STR => {
-                let SequenceVal::Str(s) = val else { return Err(bad_type()) };
-                let data = s.as_bytes();
-                len = u32::try_from(data.len())
-                    .ok()
-                    .filter(|&n| n < self.max_cap.saturating_sub(payload_start))
-                    .ok_or(MarshalError::new(Errno::EOVERFLOW))?;
-                payload_sz = len + 1;
-
-                self.ensure(payload_start + payload_sz)?;
-                let at = payload_start as usize;
-                self.buf[at..at + len as usize].copy_from_slice(data);
-                self.buf[at + len as usize] = 0;
-                st.lim = payload_start + ALIGN(payload_sz, WORD_SZ)?;
-                self.ensure(st.lim)?;
-            }
-
-            SequenceType::STRS => {
-                let SequenceVal::Strs(items) = val else { return Err(bad_type()) };
-                len = items.len() as u32;
-                self.strs_of(items, payload_start, st)?;
+                Err(e) if e.errno == Errno::EOVERFLOW && cap < max_cap => cap = if cap > max_cap / 2 { max_cap } else { cap * 2 },
+                Err(e) => return Err(e),
             }
         }
+    }
+}
 
-        SET_WORD(&mut self.buf, st.base, len, RESERVED);
-        Ok(())
+pub fn encoder() -> TreeEncoder {
+    TreeEncoder::new()
+}
+
+/// A node written as the entry the writer is at; a value its type does not
+/// name refuses the packet.
+fn walk(w: &mut PacketWriter<'_>, node: &Node) {
+    match node {
+        Node::Nil(_) => {
+            w.nil();
+        }
+        Node::Scalar(n) => scalar_into(w, n),
+        Node::Sequence(n) => seq_into(w, n),
+        Node::Branch(BranchNode { val: Some(children) }) => {
+            w.branch(children.len() as u32, |b| children.iter().for_each(|c| walk(b, c)));
+        }
+        Node::Branch(BranchNode { val: None }) => {
+            w.no_branch();
+        }
+        Node::Graft(GraftNode { val }) => {
+            w.graft(val);
+        }
+    }
+}
+
+fn scalar_into(w: &mut PacketWriter<'_>, n: &ScalarNode) {
+    let Some(v) = n.val else {
+        w.entry(None, n.type_ as u8);
+        return;
+    };
+    match (n.type_, v) {
+        (ScalarType::U8, Numeric::U8(v)) => w.u8(Some(v)),
+        (ScalarType::I8, Numeric::I8(v)) => w.i8(Some(v)),
+        (ScalarType::U16, Numeric::U16(v)) => w.u16(Some(v)),
+        (ScalarType::I16, Numeric::I16(v)) => w.i16(Some(v)),
+        (ScalarType::U32, Numeric::U32(v)) => w.u32(Some(v)),
+        (ScalarType::I32, Numeric::I32(v)) => w.i32(Some(v)),
+        (ScalarType::U64, Numeric::U64(v)) => w.u64(Some(v)),
+        (ScalarType::I64, Numeric::I64(v)) => w.i64(Some(v)),
+        (ScalarType::F32, Numeric::F32(v)) => w.f32(Some(v)),
+        (ScalarType::F64, Numeric::F64(v)) => w.f64(Some(v)),
+        (ScalarType::BOOL, Numeric::U8(v)) => w.bool(Some(v != 0)),
+        (t, _) => {
+            w.spoil(Errno::EINVAL);
+            w.entry(None, t as u8)
+        }
+    };
+}
+
+fn seq_into(w: &mut PacketWriter<'_>, n: &SequenceNode) {
+    let type_ = n.type_;
+    match (type_, &n.val) {
+        (_, None) => {
+            w.entry(None, type_ as u8);
+        }
+        (SequenceType::STR, Some(SequenceVal::Str(s))) => {
+            w.str(Some(s));
+        }
+        (SequenceType::STRS, Some(SequenceVal::Strs(items))) => {
+            w.strs(Some(items));
+        }
+        (SequenceType::BITSET, Some(SequenceVal::Array(a))) if a.type_ == SequenceType::BITSET => {
+            w.bitset(Some(&a.bytes));
+        }
+        (SequenceType::BITSET | SequenceType::STR | SequenceType::STRS, _) | (_, Some(SequenceVal::Str(_) | SequenceVal::Strs(_))) => {
+            w.spoil(Errno::EBADMSG);
+            w.entry(None, type_ as u8);
+        }
+        (_, Some(SequenceVal::Array(a))) => {
+            w.array_bytes(type_, Some(&a.bytes));
+        }
     }
 }
 
@@ -327,64 +142,73 @@ fn strs_size<S: AsRef<str>>(items: &[S]) -> u64 {
     4 * (items.len() as u64 + 1) + items.iter().map(|s| s.as_ref().len() as u64).sum::<u64>()
 }
 
-impl TreeEncoder {
-    fn strs_of(&mut self, items: &[String], payload_start: u32, st: &mut EncodingState) -> Result<(), MarshalError> {
-        let size = strs_size(items);
-        if size as i64 > self.max_cap as i64 - payload_start as i64 {
-            return Err(MarshalError::new(Errno::EOVERFLOW));
-        }
-        st.lim = payload_start + ALIGN(size as u32, WORD_SZ)?;
-        self.ensure(st.lim)?;
-        strs_payload(items, &mut self.buf[payload_start as usize..(payload_start as u64 + size) as usize]);
-        Ok(())
-    }
-}
-
-#[track_caller]
-fn bad_type() -> MarshalError {
-    MarshalError::new(Errno::EBADMSG)
-}
-
-pub fn encoder() -> TreeEncoder {
-    TreeEncoder::new()
-}
-
 const ROOT: u32 = HDR_SZ;
 
 const fn align(n: u32, unit: u32) -> u32 {
     (n + unit - 1) & !(unit - 1)
 }
 
-/// Writes a root-branch packet in place, without allocating, byte for byte as
-/// `TreeEncoder` would. A branch declares its child count up front; a child
-/// that does not fit makes `finish` refuse, and a miscount panics.
-pub struct PacketWriter<'a> {
-    buf: &'a mut [u8],
+/// The table a writer's entries go in: a branch's, or the root's, a branch
+/// of one whose entry is the header.
+#[derive(Clone, Copy)]
+struct Frame {
     base: u32,
     count: u32,
     written: u32,
+    root: bool,
+}
+
+/// Writes a packet in place into bytes the caller holds, with no tree and no
+/// allocation: the one writer of the layout, which `TreeEncoder` walks its
+/// tree onto (cpp kit wire/xtp/encode.hpp). A branch declares its child
+/// count up front; a child that does not fit makes `finish` refuse, and a
+/// miscount panics.
+pub struct PacketWriter<'a> {
+    buf: &'a mut [u8],
+    frame: Frame,
+    root_type: u8,
     lim: u32,
-    fits: bool,
+    /// The first reason only.
+    error: Option<Errno>,
 }
 
 impl<'a> PacketWriter<'a> {
-    pub fn new(buf: &'a mut [u8], count: u32) -> PacketWriter<'a> {
-        let end = u64::from(ROOT) + u64::from(WORD_SZ) * (1 + u64::from(count));
-        let fits = end <= buf.len() as u64;
-        let lim = if fits { end as u32 } else { ROOT };
+    /// A packet of one root, any node; the buffer's length is the cap, at
+    /// most MAX_PKT_SZ.
+    pub fn root(buf: &'a mut [u8]) -> PacketWriter<'a> {
+        let cap = buf.len().min(MAX_PKT_SZ as usize);
         let mut w = PacketWriter {
-            buf,
-            base: ROOT,
+            buf: &mut buf[..cap],
+            frame: Frame {
+                base: 0,
+                count: 1,
+                written: 0,
+                root: true,
+            },
+            root_type: SpecialType::NIL as u8,
+            lim: ROOT,
+            error: None,
+        };
+        match w.buf.get_mut(..ROOT as usize) {
+            Some(h) => h.fill(0),
+            None => {
+                w.spoil(Errno::EINVAL);
+            }
+        }
+        w
+    }
+
+    /// A packet whose root is a branch of `count`, its children written next.
+    pub fn new(buf: &'a mut [u8], count: u32) -> PacketWriter<'a> {
+        let mut w = PacketWriter::root(buf);
+        let at = w.branch_open(count);
+        w.root_type = SpecialType::BRANCH as u8;
+        w.frame = Frame {
+            base: at.unwrap_or(ROOT),
             count,
             written: 0,
-            lim,
-            fits,
+            root: false,
         };
-        if fits {
-            w.buf[..lim as usize].fill(0);
-            w.word(0, MAGIC, RESERVED);
-            w.word(ROOT, count, RESERVED);
-        }
         w
     }
 
@@ -394,53 +218,76 @@ impl<'a> PacketWriter<'a> {
         self.buf[at + 4..at + 8].copy_from_slice(&hi.to_le_bytes());
     }
 
+    fn spoil(&mut self, errno: Errno) -> Option<u32> {
+        self.error.get_or_insert(errno);
+        None
+    }
+
     /// In u64, as the C++ writer sizes: a count past what a u32 holds is too
     /// large, never wrapped small.
-    fn reserve(&mut self, unit: u32, bytes: u64) -> Option<usize> {
-        if !self.fits {
+    fn reserve(&mut self, unit: u32, bytes: u64) -> Option<u32> {
+        if self.error.is_some() {
             return None;
         }
         let base = align(self.lim, unit);
         let end = u64::from(base) + bytes;
         if end > self.buf.len() as u64 {
-            self.fits = false;
-            return None;
+            return self.spoil(Errno::EOVERFLOW);
         }
         self.buf[self.lim as usize..end as usize].fill(0);
         self.lim = end as u32;
-        Some(base as usize)
+        Some(base)
     }
 
-    fn entry(&mut self, base: Option<usize>, type_: u8) -> &mut Self {
-        crate::ensure!(self.written < self.count, ENOSPC, self.count);
-        if self.fits {
-            let rel_off = base.map_or(0, |b| b as u32 - self.base);
-            self.word(self.base + WORD_SZ + self.written * WORD_SZ, rel_off, type_ as u32);
+    fn entry(&mut self, at: Option<u32>, type_: u8) -> &mut Self {
+        let f = self.frame;
+        crate::ensure!(f.written < f.count, ENOSPC, f.count);
+        if f.root {
+            self.root_type = type_;
+        } else if self.error.is_none() {
+            self.word(f.base + WORD_SZ + f.written * WORD_SZ, at.map_or(0, |b| b - f.base), type_ as u32);
         }
-        self.written += 1;
+        self.frame.written += 1;
         self
     }
 
     fn scalar<const N: usize>(&mut self, type_: ScalarType, bytes: Option<[u8; N]>) -> &mut Self {
-        let base = bytes.and_then(|b| {
+        let at = bytes.and_then(|b| {
             let at = self.reserve(N as u32, N as u64)?;
-            self.buf[at..at + N].copy_from_slice(&b);
+            self.buf[at as usize..at as usize + N].copy_from_slice(&b);
             Some(at)
         });
-        self.entry(base, type_ as u8)
+        self.entry(at, type_ as u8)
     }
 
+    /// A sequence's length word and `bytes` of payload after it, filled by `fill`.
     fn seq(&mut self, type_: SequenceType, len: u32, bytes: u64, fill: impl FnOnce(&mut [u8])) -> &mut Self {
         let at = self.reserve(WORD_SZ, u64::from(WORD_SZ) + bytes.next_multiple_of(u64::from(WORD_SZ))).inspect(|&at| {
-            self.word(at as u32, len, RESERVED);
-            let payload = at + WORD_SZ as usize;
+            self.word(at, len, RESERVED);
+            let payload = (at + WORD_SZ) as usize;
             fill(&mut self.buf[payload..payload + bytes as usize]);
         });
         self.entry(at, type_ as u8)
     }
 
+    pub fn nil(&mut self) -> &mut Self {
+        self.entry(None, SpecialType::NIL as u8)
+    }
+
     pub fn u8(&mut self, v: Option<u8>) -> &mut Self {
         self.scalar(ScalarType::U8, v.map(u8::to_le_bytes))
+    }
+
+    pub fn i8(&mut self, v: Option<i8>) -> &mut Self {
+        self.scalar(ScalarType::I8, v.map(i8::to_le_bytes))
+    }
+
+    pub fn u16(&mut self, v: Option<u16>) -> &mut Self {
+        self.scalar(ScalarType::U16, v.map(u16::to_le_bytes))
+    }
+
+    pub fn i16(&mut self, v: Option<i16>) -> &mut Self {
+        self.scalar(ScalarType::I16, v.map(i16::to_le_bytes))
     }
 
     pub fn i32(&mut self, v: Option<i32>) -> &mut Self {
@@ -455,6 +302,10 @@ impl<'a> PacketWriter<'a> {
         self.scalar(ScalarType::U64, v.map(u64::to_le_bytes))
     }
 
+    pub fn i64(&mut self, v: Option<i64>) -> &mut Self {
+        self.scalar(ScalarType::I64, v.map(i64::to_le_bytes))
+    }
+
     pub fn f32(&mut self, v: Option<f32>) -> &mut Self {
         self.scalar(ScalarType::F32, v.map(f32::to_le_bytes))
     }
@@ -467,26 +318,23 @@ impl<'a> PacketWriter<'a> {
         self.scalar(ScalarType::BOOL, v.map(|b| [b as u8]))
     }
 
-    /// Refuses exactly what `TreeEncoder` refuses at the same cap.
+    /// Followed by a NUL that the length leaves out.
     pub fn str(&mut self, s: Option<&str>) -> &mut Self {
-        match s {
-            Some(s) => match u32::try_from(s.len() + 1) {
-                Ok(bytes) => self.seq(SequenceType::STR, bytes - 1, u64::from(bytes), |out| out[..s.len()].copy_from_slice(s.as_bytes())),
-                _ => {
-                    self.fits = false;
-                    self.entry(None, SequenceType::STR as u8)
-                }
-            },
-            None => self.entry(None, SequenceType::STR as u8),
-        }
+        let Some(s) = s else { return self.entry(None, SequenceType::STR as u8) };
+        self.str_with(|room| {
+            let out = room.get_mut(..s.len())?;
+            out.copy_from_slice(s.as_bytes());
+            Some(s.len())
+        })
     }
 
+    /// `len` + 1 offsets into the UTF-8 after them.
     pub fn strs<S: AsRef<str>>(&mut self, items: Option<&[S]>) -> &mut Self {
         match items {
             Some(items) => match u32::try_from(strs_size(items)) {
                 Ok(size) => self.seq(SequenceType::STRS, items.len() as u32, u64::from(size), |out| strs_payload(items, out)),
                 Err(_) => {
-                    self.fits = false;
+                    self.spoil(Errno::EOVERFLOW);
                     self.entry(None, SequenceType::STRS as u8)
                 }
             },
@@ -508,37 +356,53 @@ impl<'a> PacketWriter<'a> {
                 Ok(())
             }
         }
+        self.str_with(|buf| {
+            let mut room = Room { buf, len: 0 };
+            core::fmt::Write::write_fmt(&mut room, format_args!("{v}")).ok().map(|()| room.len)
+        })
+    }
+
+    /// A string written into the room after its length's word, `write`
+    /// answering how many bytes it wrote, or none where they did not fit:
+    /// the one way a string goes in, whether copied or written in place, so
+    /// the two lay out alike. Followed by a NUL that the length leaves out.
+    fn str_with(&mut self, write: impl FnOnce(&mut [u8]) -> Option<usize>) -> &mut Self {
         let base = align(self.lim, WORD_SZ) as usize;
         let payload = base + WORD_SZ as usize;
-        if !self.fits || payload > self.buf.len() {
-            self.fits = false;
+        if self.error.is_some() || payload > self.buf.len() {
+            self.spoil(Errno::EOVERFLOW);
             return self.entry(None, SequenceType::STR as u8);
         }
-        let mut room = Room {
-            buf: &mut self.buf[payload..],
-            len: 0,
-        };
-        let written = core::fmt::Write::write_fmt(&mut room, format_args!("{v}")).map(|_| room.len);
-        let end = written
-            .ok()
+        let end = write(&mut self.buf[payload..])
             .map(|len| (len, align((payload + len + 1) as u32, WORD_SZ) as usize))
             .filter(|&(_, end)| end <= self.buf.len());
         let Some((len, end)) = end else {
-            self.fits = false;
+            self.spoil(Errno::EOVERFLOW);
             return self.entry(None, SequenceType::STR as u8);
         };
         self.buf[self.lim as usize..payload].fill(0);
         self.buf[payload + len..end].fill(0);
         self.word(base as u32, len as u32, RESERVED);
         self.lim = end as u32;
-        self.entry(Some(base), SequenceType::STR as u8)
+        self.entry(Some(base as u32), SequenceType::STR as u8)
+    }
+
+    /// An array of `type_` from its elements' bytes, little-endian; bytes
+    /// that are not whole elements refuse the packet.
+    fn array_bytes(&mut self, type_: SequenceType, a: Option<&[u8]>) -> &mut Self {
+        let Some(a) = a else { return self.entry(None, type_ as u8) };
+        let elem = ELEM_SZ(type_) as usize;
+        match u32::try_from(a.len() / elem) {
+            Ok(len) if a.len() % elem == 0 => self.seq(type_, len, a.len() as u64, |out| out.copy_from_slice(a)),
+            _ => {
+                self.spoil(Errno::EBADMSG);
+                self.entry(None, type_ as u8)
+            }
+        }
     }
 
     pub fn u8_array(&mut self, a: Option<&[u8]>) -> &mut Self {
-        match a {
-            Some(a) => self.seq(SequenceType::U8_ARRAY, a.len() as u32, a.len() as u64, |out| out.copy_from_slice(a)),
-            None => self.entry(None, SequenceType::U8_ARRAY as u8),
-        }
+        self.array_bytes(SequenceType::U8_ARRAY, a)
     }
 
     fn array_with<const N: usize>(&mut self, type_: SequenceType, len: u32, mut value: impl FnMut(u32) -> [u8; N]) -> &mut Self {
@@ -578,28 +442,61 @@ impl<'a> PacketWriter<'a> {
         self.array_with(SequenceType::U64_ARRAY, len, |i| value(i).to_le_bytes())
     }
 
-    pub fn branch(&mut self, count: u32, fill: impl FnOnce(&mut Self)) -> &mut Self {
+    /// One byte a bit, packed low bit first.
+    pub fn bitset(&mut self, bits: Option<&[u8]>) -> &mut Self {
+        match bits {
+            Some(bits) => self.seq(SequenceType::BITSET, bits.len() as u32, (bits.len() as u64).div_ceil(8), |out| {
+                for (i, &b) in bits.iter().enumerate() {
+                    if b != 0 {
+                        out[i >> 3] |= 1 << (i & 7);
+                    }
+                }
+            }),
+            None => self.entry(None, SequenceType::BITSET as u8),
+        }
+    }
+
+    fn branch_open(&mut self, count: u32) -> Option<u32> {
         let at = self.reserve(WORD_SZ, u64::from(WORD_SZ) * (1 + u64::from(count)));
         if let Some(at) = at {
-            self.word(at as u32, count, RESERVED);
+            self.word(at, count, RESERVED);
         }
+        at
+    }
+
+    /// A branch ends on a word, so what follows it starts where the encoder
+    /// starts it.
+    fn branch_close(&mut self, at: Option<u32>) -> Option<u32> {
+        if at.is_none() || self.error.is_some() {
+            return at;
+        }
+        let end = align(self.lim, WORD_SZ);
+        if end as usize > self.buf.len() {
+            return self.spoil(Errno::EOVERFLOW);
+        }
+        self.buf[self.lim as usize..end as usize].fill(0);
+        self.lim = end;
+        at
+    }
+
+    /// Writing a different number of children than `count` is a bug.
+    pub fn branch(&mut self, count: u32, fill: impl FnOnce(&mut Self)) -> &mut Self {
+        let at = self.branch_open(count);
         // A branch that did not fit still counts its children, against a base
         // nothing is written at.
-        let outer = (self.base, self.count, self.written);
-        (self.base, self.count, self.written) = (at.map_or(ROOT, |at| at as u32), count, 0);
+        let outer = core::mem::replace(
+            &mut self.frame,
+            Frame {
+                base: at.unwrap_or(ROOT),
+                count,
+                written: 0,
+                root: false,
+            },
+        );
         fill(self);
-        crate::ensure!(self.written == self.count, ENOTRECOVERABLE, self.count, self.written);
-        (self.base, self.count, self.written) = outer;
-        // A branch ends on a word, as the encoder's does.
-        if at.is_some() && self.fits {
-            let end = align(self.lim, WORD_SZ);
-            if end as usize > self.buf.len() {
-                self.fits = false;
-            } else {
-                self.buf[self.lim as usize..end as usize].fill(0);
-                self.lim = end;
-            }
-        }
+        crate::ensure!(self.frame.written == self.frame.count, ENOTRECOVERABLE, self.frame.count, self.frame.written);
+        self.frame = outer;
+        let at = self.branch_close(at);
         self.entry(at, SpecialType::BRANCH as u8)
     }
 
@@ -607,19 +504,53 @@ impl<'a> PacketWriter<'a> {
         self.entry(None, SpecialType::BRANCH as u8)
     }
 
-    /// The packet's length, or none when a child did not fit.
-    pub fn finish(mut self) -> Option<u32> {
-        crate::ensure!(self.written == self.count, ENOTRECOVERABLE, self.count, self.written);
-        if !self.fits {
-            return None;
+    /// Its root's payload copied, placed as its root's type places it.
+    pub fn graft(&mut self, packet: &[u8]) -> &mut Self {
+        let desc = (packet.len() >= HDR_SZ as usize)
+            .then(|| GET_LEN(packet, 0).ok().filter(|&m| m == MAGIC).and_then(|_| GET_DESC(packet, WORD_SZ).ok()))
+            .flatten();
+        let Some((payload_sz, type_)) = desc else {
+            self.spoil(Errno::EBADMSG);
+            return self.entry(None, SpecialType::NIL as u8);
+        };
+        let unit = ALIGN_SZ(type_).ok().filter(|u| payload_sz.is_multiple_of(*u));
+        let at = match unit {
+            _ if payload_sz as usize > packet.len() - HDR_SZ as usize => self.spoil(Errno::EBADMSG),
+            _ if payload_sz == 0 => None,
+            None => self.spoil(Errno::EBADMSG),
+            Some(unit) => self.reserve(unit, u64::from(payload_sz)).inspect(|&at| {
+                let (at, from) = (at as usize, HDR_SZ as usize);
+                self.buf[at..at + payload_sz as usize].copy_from_slice(&packet[from..from + payload_sz as usize]);
+            }),
+        };
+        self.entry(at, type_)
+    }
+
+    /// The length, header included and to the word, or why it was refused.
+    pub fn finished(mut self) -> Result<u32, MarshalError> {
+        let f = self.frame;
+        crate::ensure!(f.written == f.count, ENOTRECOVERABLE, f.count, f.written);
+        // The root branch `new` opened, closed as `branch` closes one.
+        if !f.root {
+            self.branch_close(Some(f.base));
+        }
+        if let Some(e) = self.error {
+            return Err(MarshalError::new(e));
         }
         let end = align(self.lim, WORD_SZ);
         if end as usize > self.buf.len() {
-            return None;
+            return Err(MarshalError::new(Errno::EOVERFLOW));
         }
         self.buf[self.lim as usize..end as usize].fill(0);
-        self.word(WORD_SZ, end - HDR_SZ, SpecialType::BRANCH as u32);
-        Some(end)
+        self.word(0, MAGIC, RESERVED);
+        self.word(WORD_SZ, self.lim - HDR_SZ, self.root_type as u32);
+        Ok(end)
+    }
+
+    /// The packet's length, or none when a child did not fit: for a room
+    /// that fits a packet or not.
+    pub fn finish(self) -> Option<u32> {
+        self.finished().ok()
     }
 }
 

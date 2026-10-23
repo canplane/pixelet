@@ -30,22 +30,24 @@ constexpr std::uint16_t next_generation(std::uint16_t g) noexcept {
     return n == 0 ? 1 : n;
 }
 
+// All-zero bytes are an empty table, so one may live in memory that starts
+// zeroed, or be emptied by zeroing it, and is never built and moved.
 template <std::size_t N> class HandleTable {
     static_assert(N >= 2 && N <= (std::size_t{1} << HANDLE_SLOT_BITS), "a slot is 16 bits, and slot 0 is never handed out");
 
   public:
     std::optional<std::uint32_t> acquire() noexcept {
         std::uint32_t slot;
-        if (free_ != NONE) {
+        if (free_ != 0) {
             slot = free_;
             free_ = next_[slot];
-        } else if (fresh_ < N) {
-            slot = fresh_++;
+        } else if (std::size_t{top_} + 1 < N) {
+            slot = ++top_;
         } else {
             return std::nullopt;
         }
         generation_[slot] = next_generation(generation_[slot]);
-        live_[slot] = true;
+        made_[slot] = epoch_ + 1;
         count_++;
         return slot | std::uint32_t{generation_[slot]} << HANDLE_SLOT_BITS;
     }
@@ -54,7 +56,7 @@ template <std::size_t N> class HandleTable {
     bool release(std::uint32_t handle) noexcept {
         if (!live(handle)) return false;
         std::uint32_t slot = handle_slot(handle);
-        live_[slot] = false;
+        made_[slot] = 0;
         next_[slot] = free_;
         free_ = slot;
         count_--;
@@ -63,19 +65,36 @@ template <std::size_t N> class HandleTable {
 
     bool live(std::uint32_t handle) const noexcept {
         std::uint32_t slot = handle_slot(handle);
-        return slot != 0 && slot < N && live_[slot] && generation_[slot] == handle >> HANDLE_SLOT_BITS;
+        return slot != 0 && slot < N && made_[slot] != 0 && generation_[slot] == handle >> HANDLE_SLOT_BITS;
+    }
+
+    // From here, what is taken is what `rollback` gives back.
+    void begin() noexcept { epoch_++; }
+
+    // Every handle taken since `begin` and not yet released, released and
+    // handed to `gone`: what a transaction that did not commit made, which
+    // the other side never saw.
+    template <class F> void rollback(F &&gone) noexcept {
+        for (std::uint32_t slot = 1; slot <= top_; slot++) {
+            std::uint32_t handle = slot | std::uint32_t{generation_[slot]} << HANDLE_SLOT_BITS;
+            if (made_[slot] == epoch_ + 1 && release(handle)) gone(handle);
+        }
     }
 
     std::uint32_t count() const noexcept { return count_; }
 
   private:
-    static constexpr std::uint32_t NONE = UINT32_MAX;
-
     std::array<std::uint16_t, N> generation_{};
-    std::array<bool, N> live_{};
+    // One past the epoch a live slot was taken in; 0 for a free one. 64 bits so
+    // no count of epochs a program lives through brings a stale one round.
+    std::array<std::uint64_t, N> made_{};
+    // A free slot's next free slot; 0, which is never handed out, ends the list.
     std::array<std::uint32_t, N> next_{};
-    std::uint32_t free_ = NONE;
-    std::uint32_t fresh_ = 1;
+    std::uint32_t free_ = 0;
+    // Advanced by `begin`: the slots taken since are those made in it.
+    std::uint64_t epoch_ = 0;
+    // The highest slot handed out; those past it never have been.
+    std::uint32_t top_ = 0;
     std::uint32_t count_ = 0;
 };
 

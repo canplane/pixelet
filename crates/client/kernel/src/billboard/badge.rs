@@ -77,7 +77,7 @@ impl Label {
                 let k = usize::from(h.place.category.checked_sub(1)?);
                 let from = |z: u8| z != 0 && zoom >= i32::from(z);
                 let (icon, dot) = (from(ICON_ZOOM[k]), from(DOT_ZOOM[k]));
-                if zoom < i32::from(h.from) || !(icon || dot) {
+                if zoom < h.from as i32 || !(icon || dot) {
                     return None;
                 }
                 let named = from(LABEL_ZOOM[k]) && !h.place.name.is_empty();

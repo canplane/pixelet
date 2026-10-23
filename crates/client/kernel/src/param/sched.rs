@@ -19,9 +19,8 @@ pub const QUANTUM_SETTLE_MS: f64 = 150.0;
 /// How far a pass may overrun, so a step that reports nothing done cannot walk the whole list.
 pub const HARD_SLACK_MS: f64 = 4.0;
 
-/// The goal walk's share of the visible budget; half until measured.
-pub const VIEW_SHARE: f64 = 0.5;
-
-/// Share of the budget held back from the visible phase for content, which
-/// would otherwise starve while a load keeps the visible phase busy.
+/// Share of the budget held back for content, which would otherwise starve
+/// while a load keeps the frame busy: from the tick's visible phase, and past
+/// the frame for the turn's tasks (sched/edge.rs `tasks_after_frame`), where
+/// it is the frame's share however far the frame overran.
 pub const CONTENT_SHARE: f64 = 0.2;

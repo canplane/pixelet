@@ -30,10 +30,13 @@ infra/
 | **db-geo**  | 5433:5432      | three sources, for the bakes | PostGIS 16-3.4 |
 
 pxl-api owns db-main and probes it at boot, but no route reads it yet
-([the server in Rust](../decision/20260918-the-server-in-rust-and-the-line-already-drawn.md));
+([the server in Rust](../doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md));
 pxl-geo reads db-geo through `DB_GEO_URL`. All spatial data is EPSG:3857.
 Passwords and `ADMIN_TOKEN` come from `.env` only, and production's are its
 own.
+
+**Never `down -v` db-geo** (`pixelet-db-geo`): its volume is a
+multi-gigabyte PostGIS dataset, hours of ingest to fill again.
 
 ## 2. Filling db-geo
 
@@ -144,7 +147,9 @@ everything that builds or answers a URL:
 **The bucket is private and the Worker is the only way into it**, on the
 free plan, which fails closed at 100k requests a day, so no read can bill.
 A paid Workers plan, the `r2.dev` URL or a custom domain on the bucket breaks
-that ([deployment hosting](../decision/20260816-deployment-hosting.md)).
+that ([deployment hosting](../doc/minutes/20260816-deployment-hosting.md)).
+Writes are outside it, and nothing configures a spending cap: a publish is a
+pyramid's worth of Class A operations, so `deno task usage` comes before one.
 
 The Worker claims all four (`wrangler.jsonc` `run_worker_first`): the bucket
 answers `/tile/*`, under its path less the root, and `/asset/*`, under its
@@ -214,4 +219,4 @@ before shortening, rewording or dropping one.
 | Arnis                       | [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)        | Code, not data: the piers are ported from it ([THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)), so the app shows its NOTICE's `Copyright (c) 2022-2026 Louis Erbkamm (louis-e)`, as Apache 2.0 §4(d) asks.                                                                  |
 
 Whether a published version, fetchable tile by tile, needs a notice of its
-own beyond the app's is open (BACKLOG.md).
+own beyond the app's is open (doc/backlog.md).

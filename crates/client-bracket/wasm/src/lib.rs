@@ -46,8 +46,15 @@ fn heap_stat() -> HeapStat {
     xpute_guest::mem::heap::heap_stat(&ALLOC)
 }
 
+/// The browser paces a page's frames to what the GPU finishes, and taking a
+/// canvas's texture never blocks: every frame is admitted.
+fn admit_frame() -> bool {
+    true
+}
+
 /// What this module gives the kernel: the memory the page grew it to, the
-/// linker's end of its data, the page's clock and the allocator.
+/// linker's end of its data, the page's clock, the allocator and the frames
+/// it admits.
 fn bracket() -> Bracket {
     let stack_high = core::ptr::addr_of!(__stack_high) as u32;
     xpute_kit::ensure!(stack_high == pxl_kernel::mem::spec::STACK_BYTES, ENOTRECOVERABLE, stack_high);
@@ -57,6 +64,7 @@ fn bracket() -> Bracket {
         data_end: data_end(),
         clock: now,
         heap_stat,
+        admit_frame,
         last_words: None,
     }
 }

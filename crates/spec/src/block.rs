@@ -3,12 +3,17 @@
 //! The block catalog: the generated tables — the ids' kinds, the cubes and
 //! their colors, the decors, the marker, what an id carries beyond itself —
 //! `object`, where a block becomes the value the object store keeps, and what
-//! is in each block of the world, composed from the ground and what is placed.
+//! is in each block of the world (`sample`): the ground's grid, then what
+//! overwrites it.
 
 #[path = "block/color.spec.rs"]
 pub mod color;
-#[path = "block/cube.spec.rs"]
-pub mod cube;
+/// The ground and the cubes, one table with the GPU's (pxl-portable).
+pub use pxl_portable::cube;
+pub use pxl_portable::mask;
+pub use pxl_portable::placed;
+/// The ground's cells as they are held, one layout with the GPU's.
+pub use pxl_portable::window;
 #[path = "block/decor.spec.rs"]
 pub mod decor;
 pub mod ext;
@@ -19,12 +24,35 @@ pub mod limit;
 pub mod marker;
 pub mod object;
 pub mod sample;
-pub mod stand;
+pub mod volume;
 
 pub use decor::DecorId;
 
+use crate::bake::tile::terrain::GroundId;
 use crate::space::coord::aabb::Aabb;
-use crate::space::coord::zoom::{units, Zoom, UNIT_ZOOM};
+use crate::space::coord::zoom::units;
+
+/// What is in a block: the ground's look, a way's or a pier's, or what is
+/// placed, air included (pxl-kernel query/node.rs `drawn` answers which).
+/// Where there is none, it is void. The ground's carries the looks its block
+/// folds: coarser than the leaves a cell folds the cells under it, its color
+/// theirs; at the leaves and finer, its own four times.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Block {
+    Ground(GroundId, [GroundId; 4]),
+    Placed(u32),
+}
+
+impl Block {
+    /// Whether it fills its block: ground does, and of what is placed a cube
+    /// that is not air; decor stands in a block it leaves empty.
+    pub fn fills(self) -> bool {
+        match self {
+            Block::Ground(..) => true,
+            Block::Placed(state) => !object::object_value_is_air(state) && object::cube_of(state).is_some(),
+        }
+    }
+}
 
 /// A catalog color, packed `0xRRGGBB` by the generator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,17 +72,6 @@ impl decor::Variant {
     pub fn extent(&self) -> f64 {
         self.model.ingested().extent.unwrap_or([0.0; 3]).into_iter().fold(0.0, largest)
     }
-
-    /// Its box's sides in cells, turned `turn` quarter turns: an odd one swaps
-    /// x and y, the box keeping its min corner.
-    pub const fn cells(&self, turn: u32) -> [u32; 3] {
-        let [x, y, z] = self.size;
-        if turn.is_multiple_of(2) {
-            [x, y, z]
-        } else {
-            [y, x, z]
-        }
-    }
 }
 
 impl decor::Decor {
@@ -63,47 +80,27 @@ impl decor::Decor {
         self.id as u16
     }
 
-    pub const fn variant_count(&self) -> u32 {
-        self.variants.len() as u32
-    }
-
-    /// Whether the ground grows it on a cell of `look`.
-    pub fn allows(&self, look: crate::bake::tile::terrain::GroundId) -> bool {
-        self.on.contains(&look)
-    }
-
-    /// Its cell's zoom: a unit's, `scale_steps` coarser.
-    pub const fn cell_zoom(&self) -> Zoom {
-        (UNIT_ZOOM as i16 - self.scale_steps as i16) as Zoom
-    }
-
     /// The largest over every variant's model, in units.
     pub fn extent(&self) -> f64 {
         self.variants.iter().map(decor::Variant::extent).fold(0.0, largest)
     }
 
-    /// The widest side any variant's box has, in cells: two corners nearer
-    /// than this on both axes may claim one cell.
-    pub fn widest(&self) -> u32 {
-        self.variants.iter().map(|v| v.size[0].max(v.size[1])).max().unwrap_or(1)
-    }
-
     /// How far any variant's box, or its model about the box's middle, reaches
     /// from the box's min corner however it turns, in units.
     pub fn reach(&self) -> f64 {
-        let cell = units(self.cell_zoom());
-        let reach = |v: &decor::Variant| {
+        let cell = units(self.row.cell_zoom());
+        let reach = |(v, size): (&decor::Variant, &[u32; 3])| {
             let [ex, ey, ez] = v.model.ingested().extent.unwrap_or([0.0; 3]);
-            let [x, y, z] = v.size.map(|n| f64::from(n) * cell);
+            let [x, y, z] = size.map(|n| f64::from(n) * cell);
             let (across, up) = (x.max(y).max(ex).max(ey), z.max(ez));
             libm::sqrt(2.0 * across * across + up * up)
         };
-        self.variants.iter().map(reach).fold(0.0, largest)
+        self.variants.iter().zip(&self.row.sizes).map(reach).fold(0.0, largest)
     }
 
     /// The sides of `variant`'s box turned `turn`, in units.
     fn sides(&self, variant: u32, turn: u32) -> [f64; 3] {
-        self.variants[variant as usize].cells(turn).map(|n| f64::from(n) * units(self.cell_zoom()))
+        self.row.cells(variant, turn).map(|n| f64::from(n) * units(self.row.cell_zoom()))
     }
 
     /// `variant` turned `turn` with its box's min corner at `corner`, in
@@ -127,7 +124,7 @@ impl decor::Decor {
 
     /// Where its variants are numbered from: the variants of the decors before it.
     pub fn first_group(&self) -> u32 {
-        decor::DECORS.iter().take_while(|d| d.id != self.id).map(|d| d.variant_count()).sum()
+        decor::DECORS.iter().take_while(|d| d.id != self.id).map(|d| d.row.variants).sum()
     }
 
     /// The generator writes one entry a decor, so every id has one.

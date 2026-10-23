@@ -25,17 +25,15 @@
  * without one refuses the packet.
  */
 
-import type { BranchCursor, NodeCursor } from "@xpute/kit/wire/xtp/mod.ts";
-import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
+import type { BranchCursor, NodeCursor, PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
+import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32, u8 } from "@xpute/kit/abi/word.ts";
-import { packet } from "@xpute/host/ipc/doorbell.ts";
 
 /** What a command is about. */
 export const enum Major {
   WORLD = 0x10,
   INPUT = 0x11,
   SENSOR = 0x12,
-  IMAGE = 0x13,
   GPU = 0x14,
   SURFACE = 0x15,
   SETTING = 0x16,
@@ -85,15 +83,9 @@ export const enum SensorMinor {
   ORIENTATION_LOST = 0x0a,
 }
 
-/** An image's verbs. */
-export const enum ImageMinor {
-  DECODED = 0x01,
-}
-
 /** The GPU's verbs. */
 export const enum GpuMinor {
   READY = 0x01,
-  LOST = 0x02,
 }
 
 /** A surface's verbs. */
@@ -126,6 +118,7 @@ export const enum ProfilerMinor {
   LOG = 0x03,
   READ = 0x04,
   TAKE = 0x05,
+  RINGS = 0x06,
 }
 
 /** Where a pointer event is in its gesture. */
@@ -252,10 +245,6 @@ export const enum Command {
 
   // ---- the host answers: an I/O the process started, done ----
 
-  /** An image the kernel asked decoded (host.json's IMAGE_DECODE): 0, held for the renderer
-   * as the kernel's `image`, or -errno where the file is not an image the device decodes.
-   * A file that did not come is the open's answer (xpute's SYS_OPENED), not this. */
-  IMAGE_DECODED = 0x1301,
   /** A GPS fix; a field is absent where the browser gave none. */
   SENSOR_POSITION = 0x1202,
   /** An orientation event; a field is absent where the browser gave none. */
@@ -298,10 +287,8 @@ export const enum Command {
   INPUT_WHEEL = 0x1103,
   /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
   INPUT_KEYS = 0x1106,
-  /** A device answered; the kernel's renderer is made on it (crates/client/render/src/gpu/renderer.rs). */
+  /** A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (crates/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge. */
   GPU_READY = 0x1401,
-  /** The device went away, and every object on it. */
-  GPU_LOST = 0x1402,
 
   // ---- the shell and the process: what the UI asks of it, and what it shows the UI ----
 
@@ -321,7 +308,8 @@ export const enum Command {
   /** The tracking button's press, as the button showed it. */
   INPUT_TRACKING = 0x1104,
   /** Where the camera stands, set outright rather than driven: what the kernel's own
-   * test puts a view at, and what an A/B reads two builds at the same view with. */
+   * test puts a view at, and what an A/B reads two builds at the same view with
+   * (a development page's `?eye=`, feature/debug/eye.ts). */
   INPUT_VIEW = 0x1105,
   /** The compass's press: north up. */
   INPUT_COMPASS_RESET = 0x1107,
@@ -348,12 +336,14 @@ export const enum Command {
   PROFILER_STOP = 0x1902,
   /** The console stream on or off. */
   PROFILER_LOG = 0x1903,
-  /** The profiler where it lies: the reply is the address of READ's words (profiler.json) over the
-   * last `window_ms`, the whole recording where it is absent, good until the next turn. A number
-   * past the door is finite, so no window is infinite. */
+  /** The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)
+   * over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
+   * number past the door is finite, so no window is infinite. */
   PROFILER_READ = 0x1904,
   /** The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn. */
   PROFILER_TAKE = 0x1905,
+  /** The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn. */
+  PROFILER_RINGS = 0x1906,
   /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
    * block the kernel holds, valid until the next snapshot. */
   WORLD_SNAPSHOT = 0x1004,
@@ -546,329 +536,165 @@ export function read_sensor_stop(b: BranchCursor): SensorStopSignal {
   return { sensor: b.at(0).get<Sensor>() };
 }
 
-/** Command.IMAGE_DECODED's packet. */
-export interface ImageDecoded {
-  image: u32;
-  res: i32;
+/** Command.SENSOR_POSITION's packet, written in place into `to`. */
+export function encode_sensor_position(to: PacketRoom, lon: f64, lat: f64, altitude: f64 | null, accuracy: f64 | null, course: f64 | null): PacketWriter {
+  return to.writer(5).f64(lon).f64(lat).f64(altitude).f64(accuracy).f64(course);
 }
 
-export function encode_image_decoded(p: ImageDecoded): U8Array {
-  return packet((b) => b.u32(p.image).i32(p.res));
+/** Command.SENSOR_ORIENTATION's packet, written in place into `to`. */
+export function encode_sensor_orientation(to: PacketRoom, webkit_compass_heading: f64 | null, alpha: f64 | null, beta: f64 | null, gamma: f64 | null): PacketWriter {
+  return to.writer(4).f64(webkit_compass_heading).f64(alpha).f64(beta).f64(gamma);
 }
 
-/** Command.SENSOR_POSITION's packet. */
-export interface SensorPosition {
-  lon: f64;
-  lat: f64;
-  altitude: f64 | null;
-  accuracy: f64 | null;
-  course: f64 | null;
+/** Command.SENSOR_ERROR's packet, written in place into `to`. */
+export function encode_sensor_error(to: PacketRoom, code: GeolocationErrorCode): PacketWriter {
+  return to.writer(1).u32(code);
 }
 
-export function encode_sensor_position(p: SensorPosition): U8Array {
-  return packet((b) => b.f64(p.lon).f64(p.lat).f64(p.altitude).f64(p.accuracy).f64(p.course));
+/** Command.WORLD_BOOT's packet, written in place into `to`.
+ *
+ * @param development A development build, which offers the settings schema.json marks `dev`.
+ * @param orientation_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
+ * @param orientation_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ORIENTATION_LOST).
+ * @param settings What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file (host.json's SETTINGS_PATH), handed over unread as a process is handed its environment, which the kernel reads and from then on writes itself. */
+export function encode_world_boot(
+  to: PacketRoom,
+  development: boolean,
+  geolocation: boolean,
+  orientation: boolean,
+  orientation_permission: boolean,
+  orientation_silence_is_loss: boolean,
+  settings: string,
+): PacketWriter {
+  return to.writer(6).bool(development).bool(geolocation).bool(orientation).bool(orientation_permission).bool(orientation_silence_is_loss).str(settings);
 }
 
-/** Command.SENSOR_ORIENTATION's packet. */
-export interface SensorOrientation {
-  webkit_compass_heading: f64 | null;
-  alpha: f64 | null;
-  beta: f64 | null;
-  gamma: f64 | null;
+/** Command.WORLD_FRAME's packet, written in place into `to`.
+ *
+ * @param width The viewport, in CSS pixels.
+ * @param frame_ms The turn, as the host measured it.
+ * @param unix_ms The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and the step the tick takes, its change since the last frame. */
+export function encode_world_frame(to: PacketRoom, width: f64, height: f64, dpr: f64, frame_ms: f64, interactive: boolean, credits: u32, unix_ms: f64): PacketWriter {
+  return to.writer(7).f64(width).f64(height).f64(dpr).f64(frame_ms).bool(interactive).u32(credits).f64(unix_ms);
 }
 
-export function encode_sensor_orientation(p: SensorOrientation): U8Array {
-  return packet((b) => b.f64(p.webkit_compass_heading).f64(p.alpha).f64(p.beta).f64(p.gamma));
+/** Command.WORLD_VISIBILITY's packet, written in place into `to`. */
+export function encode_world_visibility(to: PacketRoom, visible: boolean): PacketWriter {
+  return to.writer(1).bool(visible);
 }
 
-/** Command.SENSOR_ERROR's packet. */
-export interface SensorError {
-  code: GeolocationErrorCode;
+/** Command.WORLD_SOURCE's packet, written in place into `to`.
+ *
+ * @param source The declaration as the source serves it, handed over unread. */
+export function encode_world_source(to: PacketRoom, source: string): PacketWriter {
+  return to.writer(1).str(source);
 }
 
-export function encode_sensor_error(p: SensorError): U8Array {
-  return packet((b) => b.u32(p.code));
+/** Command.SENSOR_PERMISSION's packet, written in place into `to`. */
+export function encode_sensor_permission(to: PacketRoom, sensor: Sensor, answer: PermissionAnswer): PacketWriter {
+  return to.writer(2).u32(sensor).u32(answer);
 }
 
-/** Command.WORLD_BOOT's packet. */
-export interface WorldBoot {
-  /** A development build, which offers the settings schema.json marks `dev`. */
-  development: boolean;
-  handheld: boolean;
-  geolocation: boolean;
-  orientation: boolean;
-  /** iOS 13+'s gate: requestPermission exists and must run inside a gesture. */
-  orientation_permission: boolean;
-  /** A browser's compass talks while the device is still and cannot say it stopped, so
-   * silence is the only sign of loss; a device's speaks only when the heading turns and
-   * reports a failure itself (SENSOR_ORIENTATION_LOST). */
-  orientation_silence_is_loss: boolean;
-  /** What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
-   * (host.json's SETTINGS_PATH), handed over unread as a process is handed its environment,
-   * which the kernel reads and from then on writes itself. */
-  settings: string;
+/** Command.INPUT_RECT's packet, written in place into `to`. */
+export function encode_input_rect(to: PacketRoom, left: f64, top: f64, width: f64, height: f64): PacketWriter {
+  return to.writer(4).f64(left).f64(top).f64(width).f64(height);
 }
 
-export function encode_world_boot(p: WorldBoot): U8Array {
-  return packet((b) => b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).bool(p.orientation_silence_is_loss).str(p.settings));
+/** Command.INPUT_POINTER's packet, written in place into `to`. */
+export function encode_input_pointer(to: PacketRoom, phase: PointerPhase, pointer_type: PointerType, id: i32, button: i32, x: f64, y: f64): PacketWriter {
+  return to.writer(6).u32(phase).u32(pointer_type).i32(id).i32(button).f64(x).f64(y);
 }
 
-/** Command.WORLD_FRAME's packet. */
-export interface WorldFrame {
-  /** The viewport, in CSS pixels. */
-  width: f64;
-  height: f64;
-  dpr: f64;
-  /** The frame interval and the turn, as the host measured them. */
-  delta_s: f64;
-  frame_ms: f64;
-  interactive: boolean;
-  credits: u32;
-  /** The wall clock, `Date.now()`. */
-  unix_ms: f64;
+/** Command.INPUT_HOLD's packet, written in place into `to`.
+ *
+ * @param value The held cube or decor kind, by its number in the catalog's one value space (cube.json).
+ * @param tier The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
+export function encode_input_hold(to: PacketRoom, tool: ActiveTool, value: u32, tier: u32): PacketWriter {
+  return to.writer(3).u32(tool).u32(value).u32(tier);
 }
 
-export function encode_world_frame(p: WorldFrame): U8Array {
-  return packet((b) => b.f64(p.width).f64(p.height).f64(p.dpr).f64(p.delta_s).f64(p.frame_ms).bool(p.interactive).u32(p.credits).f64(p.unix_ms));
+/** Command.INPUT_MARKER_WORDS's packet, written in place into `to`. */
+export function encode_input_marker_words(to: PacketRoom, text: string): PacketWriter {
+  return to.writer(1).str(text);
 }
 
-/** Command.WORLD_VISIBILITY's packet. */
-export interface WorldVisibility {
-  visible: boolean;
+/** Command.INPUT_WHEEL's packet, written in place into `to`. */
+export function encode_input_wheel(to: PacketRoom, delta_y: f64): PacketWriter {
+  return to.writer(1).f64(delta_y);
 }
 
-export function encode_world_visibility(p: WorldVisibility): U8Array {
-  return packet((b) => b.bool(p.visible));
+/** Command.INPUT_KEYS's packet, written in place into `to`. */
+export function encode_input_keys(to: PacketRoom, x: i32, y: i32): PacketWriter {
+  return to.writer(2).i32(x).i32(y);
 }
 
-/** Command.WORLD_SOURCE's packet. */
-export interface WorldSource {
-  /** The declaration as the source serves it, handed over unread. */
-  source: string;
+/** Command.SURFACE_OPEN's packet, written in place into `to`.
+ *
+ * @param role The renderer's surface_role (render/gpu/api.json). */
+export function encode_surface_open(to: PacketRoom, role: u32): PacketWriter {
+  return to.writer(1).u32(role);
 }
 
-export function encode_world_source(p: WorldSource): U8Array {
-  return packet((b) => b.str(p.source));
+/** Command.SURFACE_RESIZE's packet, written in place into `to`. */
+export function encode_surface_resize(to: PacketRoom, surface: u32, width: u32, height: u32, device_pixel_ratio: f64): PacketWriter {
+  return to.writer(4).u32(surface).u32(width).u32(height).f64(device_pixel_ratio);
 }
 
-/** Command.SENSOR_PERMISSION's packet. */
-export interface SensorPermission {
-  sensor: Sensor;
-  answer: PermissionAnswer;
+/** Command.SURFACE_CLOSE's packet, written in place into `to`. */
+export function encode_surface_close(to: PacketRoom, surface: u32): PacketWriter {
+  return to.writer(1).u32(surface);
 }
 
-export function encode_sensor_permission(p: SensorPermission): U8Array {
-  return packet((b) => b.u32(p.sensor).u32(p.answer));
+/** Command.PREVIEW_OPEN's packet, written in place into `to`. */
+export function encode_preview_open(to: PacketRoom, surface: u32, group: u32, number: u8): PacketWriter {
+  return to.writer(3).u32(surface).u32(group).u8(number);
 }
 
-/** Command.INPUT_RECT's packet. */
-export interface InputRect {
-  left: f64;
-  top: f64;
-  width: f64;
-  height: f64;
+/** Command.PREVIEW_CLOSE's packet, written in place into `to`. */
+export function encode_preview_close(to: PacketRoom, surface: u32): PacketWriter {
+  return to.writer(1).u32(surface);
 }
 
-export function encode_input_rect(p: InputRect): U8Array {
-  return packet((b) => b.f64(p.left).f64(p.top).f64(p.width).f64(p.height));
+/** Command.SETTING_SET's packet, written in place into `to`.
+ *
+ * @param value A toggle's 0 or 1, a choice's option by its index, or a number. */
+export function encode_setting_set(to: PacketRoom, key: u32, value: u32): PacketWriter {
+  return to.writer(2).u32(key).u32(value);
 }
 
-/** Command.INPUT_POINTER's packet. */
-export interface InputPointer {
-  phase: PointerPhase;
-  pointer_type: PointerType;
-  id: i32;
-  button: i32;
-  x: f64;
-  y: f64;
+/** Command.CHAT_SEND's packet, written in place into `to`. */
+export function encode_chat_send(to: PacketRoom, text: string): PacketWriter {
+  return to.writer(1).str(text);
 }
 
-export function encode_input_pointer(p: InputPointer): U8Array {
-  return packet((b) => b.u32(p.phase).u32(p.pointer_type).i32(p.id).i32(p.button).f64(p.x).f64(p.y));
+/** Command.INPUT_TRACKING's packet, written in place into `to`. */
+export function encode_input_tracking(to: PacketRoom, tracking: Tracking): PacketWriter {
+  return to.writer(1).u32(tracking);
 }
 
-/** Command.INPUT_HOLD's packet. */
-export interface InputHold {
-  tool: ActiveTool;
-  /** The held cube or decor kind, by its number in the catalog's one value space (cube.json). */
-  value: u32;
-  /** The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
-  tier: u32;
+/** Command.INPUT_VIEW's packet, written in place into `to`. */
+export function encode_input_view(to: PacketRoom, dist: f64 | null, polar: f64 | null, azimuth: f64 | null): PacketWriter {
+  return to.writer(3).f64(dist).f64(polar).f64(azimuth);
 }
 
-export function encode_input_hold(p: InputHold): U8Array {
-  return packet((b) => b.u32(p.tool).u32(p.value).u32(p.tier));
+/** Command.INPUT_GO_TO's packet, written in place into `to`. */
+export function encode_input_go_to(to: PacketRoom, lon: f64, lat: f64): PacketWriter {
+  return to.writer(2).f64(lon).f64(lat);
 }
 
-/** Command.INPUT_MARKER_WORDS's packet. */
-export interface InputMarkerWords {
-  text: string;
+/** Command.INPUT_POSE's packet, written in place into `to`. */
+export function encode_input_pose(to: PacketRoom, x: f64, y: f64, z: f64, qx: f64, qy: f64, qz: f64, qw: f64): PacketWriter {
+  return to.writer(7).f64(x).f64(y).f64(z).f64(qx).f64(qy).f64(qz).f64(qw);
 }
 
-export function encode_input_marker_words(p: InputMarkerWords): U8Array {
-  return packet((b) => b.str(p.text));
+/** Command.PROFILER_LOG's packet, written in place into `to`. */
+export function encode_profiler_log(to: PacketRoom, on: boolean): PacketWriter {
+  return to.writer(1).bool(on);
 }
 
-/** Command.INPUT_WHEEL's packet. */
-export interface InputWheel {
-  delta_y: f64;
-}
-
-export function encode_input_wheel(p: InputWheel): U8Array {
-  return packet((b) => b.f64(p.delta_y));
-}
-
-/** Command.INPUT_KEYS's packet. */
-export interface InputKeys {
-  x: i32;
-  y: i32;
-}
-
-export function encode_input_keys(p: InputKeys): U8Array {
-  return packet((b) => b.i32(p.x).i32(p.y));
-}
-
-/** Command.GPU_READY's packet. */
-export interface GpuReady {
-  min_uniform_offset_alignment: u32;
-  timestamps: boolean;
-}
-
-export function encode_gpu_ready(p: GpuReady): U8Array {
-  return packet((b) => b.u32(p.min_uniform_offset_alignment).bool(p.timestamps));
-}
-
-/** Command.SURFACE_OPEN's packet. */
-export interface SurfaceOpen {
-  /** The renderer's surface_role (render/gpu/api.json). */
-  role: u32;
-}
-
-export function encode_surface_open(p: SurfaceOpen): U8Array {
-  return packet((b) => b.u32(p.role));
-}
-
-/** Command.SURFACE_RESIZE's packet. */
-export interface SurfaceResize {
-  surface: u32;
-  width: u32;
-  height: u32;
-  device_pixel_ratio: f64;
-}
-
-export function encode_surface_resize(p: SurfaceResize): U8Array {
-  return packet((b) => b.u32(p.surface).u32(p.width).u32(p.height).f64(p.device_pixel_ratio));
-}
-
-/** Command.SURFACE_CLOSE's packet. */
-export interface SurfaceClose {
-  surface: u32;
-}
-
-export function encode_surface_close(p: SurfaceClose): U8Array {
-  return packet((b) => b.u32(p.surface));
-}
-
-/** Command.PREVIEW_OPEN's packet. */
-export interface PreviewOpen {
-  surface: u32;
-  group: u32;
-  number: u8;
-}
-
-export function encode_preview_open(p: PreviewOpen): U8Array {
-  return packet((b) => b.u32(p.surface).u32(p.group).u8(p.number));
-}
-
-/** Command.PREVIEW_CLOSE's packet. */
-export interface PreviewClose {
-  surface: u32;
-}
-
-export function encode_preview_close(p: PreviewClose): U8Array {
-  return packet((b) => b.u32(p.surface));
-}
-
-/** Command.SETTING_SET's packet. */
-export interface SettingSet {
-  key: u32;
-  /** A toggle's 0 or 1, a choice's option by its index, or a number. */
-  value: u32;
-}
-
-export function encode_setting_set(p: SettingSet): U8Array {
-  return packet((b) => b.u32(p.key).u32(p.value));
-}
-
-/** Command.CHAT_SEND's packet. */
-export interface ChatSend {
-  text: string;
-}
-
-export function encode_chat_send(p: ChatSend): U8Array {
-  return packet((b) => b.str(p.text));
-}
-
-/** Command.INPUT_TRACKING's packet. */
-export interface InputTracking {
-  tracking: Tracking;
-}
-
-export function encode_input_tracking(p: InputTracking): U8Array {
-  return packet((b) => b.u32(p.tracking));
-}
-
-/** Command.INPUT_VIEW's packet. */
-export interface InputView {
-  dist: f64 | null;
-  polar: f64 | null;
-}
-
-export function encode_input_view(p: InputView): U8Array {
-  return packet((b) => b.f64(p.dist).f64(p.polar));
-}
-
-/** Command.INPUT_GO_TO's packet. */
-export interface InputGoTo {
-  lon: f64;
-  lat: f64;
-}
-
-export function encode_input_go_to(p: InputGoTo): U8Array {
-  return packet((b) => b.f64(p.lon).f64(p.lat));
-}
-
-/** Command.INPUT_POSE's packet. */
-export interface InputPose {
-  x: f64;
-  y: f64;
-  z: f64;
-  qx: f64;
-  qy: f64;
-  qz: f64;
-  qw: f64;
-}
-
-export function encode_input_pose(p: InputPose): U8Array {
-  return packet((b) => b.f64(p.x).f64(p.y).f64(p.z).f64(p.qx).f64(p.qy).f64(p.qz).f64(p.qw));
-}
-
-/** Command.PROFILER_LOG's packet. */
-export interface ProfilerLog {
-  on: boolean;
-}
-
-export function encode_profiler_log(p: ProfilerLog): U8Array {
-  return packet((b) => b.bool(p.on));
-}
-
-/** Command.PROFILER_READ's packet. */
-export interface ProfilerRead {
-  window_ms: f64 | null;
-}
-
-export function encode_profiler_read(p: ProfilerRead): U8Array {
-  return packet((b) => b.f64(p.window_ms));
+/** Command.PROFILER_READ's packet, written in place into `to`. */
+export function encode_profiler_read(to: PacketRoom, window_ms: f64 | null): PacketWriter {
+  return to.writer(1).f64(window_ms);
 }
 
 /** Command.WORLD_SNAPSHOT's signal. */

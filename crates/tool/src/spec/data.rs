@@ -26,7 +26,7 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 23] = [
+const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
@@ -138,6 +138,54 @@ const DATA_SPECS: [DataSpec; 23] = [
         cpp: Some(("xpute/cpp/guest/ipc/sys.spec.hpp", "xpute::sys")),
     },
     DataSpec {
+        json: "xpute/spec/gpu/api.json",
+        uses: &[],
+        ts: Some("xpute/ts/gpu/src/api.spec.ts"),
+        rs: Some("xpute/rust/gpu/src/api.spec.rs"),
+        module: Some("spec"),
+        enums: Enums::Named(&["BINDING_KIND", "RESOURCE_KIND"]),
+        ts_names: None,
+        cpp: Some(("xpute/cpp/gpu/api.spec.hpp", "xpute::gpu")),
+    },
+    DataSpec {
+        json: "xpute/spec/gpu/enum.json",
+        uses: &[],
+        ts: Some("xpute/ts/gpu/src/enum.spec.ts"),
+        rs: Some("xpute/rust/gpu/src/enum.spec.rs"),
+        module: Some("spec"),
+        enums: Enums::Named(&[
+            "TEXTURE_FORMAT",
+            "VERTEX_FORMAT",
+            "PRIMITIVE_TOPOLOGY",
+            "INDEX_FORMAT",
+            "FRONT_FACE",
+            "CULL_MODE",
+            "COMPARE_FUNCTION",
+            "STENCIL_OPERATION",
+            "BLEND_OPERATION",
+            "BLEND_FACTOR",
+            "VERTEX_STEP_MODE",
+            "ADDRESS_MODE",
+            "FILTER_MODE",
+            "MIPMAP_FILTER_MODE",
+            "TEXTURE_DIMENSION",
+            "TEXTURE_VIEW_DIMENSION",
+            "TEXTURE_ASPECT",
+            "BUFFER_BINDING_TYPE",
+            "SAMPLER_BINDING_TYPE",
+            "TEXTURE_SAMPLE_TYPE",
+            "STORAGE_TEXTURE_ACCESS",
+            "LOAD_OP",
+            "STORE_OP",
+            "QUERY_TYPE",
+            "CANVAS_ALPHA_MODE",
+            "FEATURE_NAME",
+            "LIMIT_NAME",
+        ]),
+        ts_names: None,
+        cpp: Some(("xpute/cpp/gpu/enum.spec.hpp", "xpute::gpu")),
+    },
+    DataSpec {
         json: "xpute/spec/sched/tick.json",
         uses: &[],
         ts: Some("xpute/ts/host/src/sched/tick.spec.ts"),
@@ -168,10 +216,10 @@ const DATA_SPECS: [DataSpec; 23] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/client/kernel/scene/character/variant.json",
+        json: "spec/client/kernel/model/variant.json",
         uses: &[],
         ts: Some("apps/web/src/feature/character/variant.spec.ts"),
-        rs: Some("crates/client/kernel/src/scene/character/variant.spec.rs"),
+        rs: Some("crates/client/kernel/src/model/variant.spec.rs"),
         module: Some("variant_spec"),
         enums: Enums::All,
         ts_names: Some(&["groups", "PERSON_GENDER_PREFIXES"]),
@@ -194,7 +242,7 @@ const DATA_SPECS: [DataSpec; 23] = [
         rs: Some("crates/client/render/src/gpu/api.spec.rs"),
         module: Some("api_spec"),
         enums: Enums::None,
-        ts_names: None,
+        ts_names: Some(&["surface_role", "stream"]),
         cpp: None,
     },
     DataSpec {
@@ -233,7 +281,7 @@ const DATA_SPECS: [DataSpec; 23] = [
         ts: Some("apps/web/src/kernel/render/gpu/span.spec.ts"),
         rs: Some("crates/client/render/src/gpu/span.spec.rs"),
         module: Some("span_spec"),
-        enums: Enums::Named(&["GPU_SPAN_NAMES"]),
+        enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS"]),
         ts_names: None,
         cpp: None,
     },
@@ -244,11 +292,12 @@ const DATA_SPECS: [DataSpec; 23] = [
             "spec/client/kernel/io/demand.json",
             "spec/client/kernel/turn/step.json",
             "spec/client/render/gpu/span.json",
+            "xpute/spec/gpu/api.json",
         ],
         ts: Some("apps/web/src/feature/debug/profiler/profiler.spec.ts"),
         rs: Some("crates/client/kernel/src/profiler/profiler.spec.rs"),
         module: Some("spec"),
-        enums: Enums::None,
+        enums: Enums::Named(&["WAKES"]),
         ts_names: None,
         cpp: None,
     },
@@ -423,9 +472,25 @@ fn rs_items(name: &str, n: &Node, ty: &str, indent: &str, out: &mut Vec<String>,
     Ok(())
 }
 
+/// A member's name, as an enum takes it once made an identifier: a letter, a
+/// digit or `_`, then those or `-` (WebGPU's "2d-array").
 fn is_name(s: &str) -> bool {
     let mut c = s.chars();
-    c.next().is_some_and(|f| f.is_ascii_alphabetic() || f == '_') && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '-')
+    c.next().is_some_and(|f| f.is_ascii_alphanumeric() || f == '_') && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '-')
+}
+
+/// A member's name as a C++ enumerator: `-` an `_`, a leading digit behind
+/// an `_`, a keyword followed by one.
+fn cpp_ident(k: &str) -> String {
+    const KEYWORDS: [&str; 12] = ["float", "double", "int", "char", "bool", "default", "delete", "new", "and", "or", "not", "xor"];
+    let id: String = k.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' }).collect();
+    if KEYWORDS.contains(&id.as_str()) {
+        format!("{id}_")
+    } else if id.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("_{id}")
+    } else {
+        id
+    }
 }
 
 fn rs_leaf(name: &str, v: &Node, ty: &str, indent: &str, out: &mut Vec<String>, scope: &Scope) -> Result<(), String> {
@@ -498,6 +563,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             let logical = [
                 ("apps/web/src/", "@pxl/web/"),
                 ("xpute/ts/host/src/", "@xpute/host/"),
+                ("xpute/ts/gpu/src/", "@xpute/gpu/"),
                 ("xpute/ts/conformance/src/", "@xpute/conformance/"),
             ]
             .iter()
@@ -555,11 +621,12 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 ("crates/client/render/src/", "pxl-render"),
                 ("crates/spec/src/", "pxl-spec"),
                 ("xpute/rust/guest/src/", "xpute-guest"),
+                ("xpute/rust/gpu/src/", "xpute-gpu"),
                 ("xpute/rust/conformance/src/", "xpute-conformance"),
             ]
             .iter()
             .find_map(|(dir, name)| rs_path.strip_prefix(dir).map(|rest| (*name, rest)))
-            .ok_or(format!("{rs_path}: not under pxl-kernel, pxl-render, pxl-spec, xpute-guest or xpute-conformance"))?;
+            .ok_or(format!("{rs_path}: not under pxl-kernel, pxl-render, pxl-spec, xpute-guest, xpute-gpu or xpute-conformance"))?;
             let mut rs = vec![format!("// {crate_name}/{under_src}"), "//".into(), super::generated(d.json, base)];
             if let Some(doc) = &head_doc {
                 rs.push("//".into());
@@ -653,11 +720,11 @@ fn cpp_items(name: &str, n: &Node, ty: &str, numbered: bool, out: &mut Vec<Strin
         out.push(format!("}} // namespace {name}"));
         return Ok(());
     }
-    if let Node::Arr(list) = n {
+    if let Node::Arr(list) = if n.is_wrapper() { n.value() } else { n } {
         let names = list.iter().map(|v| v.str().ok_or(format!("{name}: a C++ list takes names only"))).collect::<Result<Vec<_>, _>>()?;
         if numbered {
             out.push(format!("enum class {} : std::uint8_t {{", enum_name(name)));
-            out.extend(names.iter().enumerate().map(|(k, v)| format!("    {v} = {k},")));
+            out.extend(names.iter().enumerate().map(|(k, v)| format!("    {} = {k},", cpp_ident(v))));
             out.extend(["};".to_string(), String::new()]);
         }
         let quoted: Vec<String> = names.iter().map(|v| json_str(v)).collect();

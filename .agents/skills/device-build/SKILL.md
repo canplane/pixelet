@@ -244,8 +244,9 @@ position is only what `geo fix` gives. There it has named the place.
   check a build with `llvm-readelf -lW <lib>.so` (every LOAD's alignment
   `0x4000`).
 - **`Surface::configure` refuses `Bgra8Unorm`**: Android's Vulkan surfaces
-  offer RGBA. The device backend takes the system's preferred format
-  (pxl-render `gpu/api/device.rs`), as the page takes the browser's.
+  offer RGBA. The native bracket gives xpute's host the system's preferred
+  format (`crates/client-bracket/native/src/surface.rs`), which the kernel
+  reads from the device's block, as the page takes the browser's.
 - **`Unable to find View for tag: …` from `updateOverflowInset`, seconds in**:
   Fabric never made a view it later reaches, its trace in logcat a
   `MissingViewState` soft exception at the first mount. It was a plain view

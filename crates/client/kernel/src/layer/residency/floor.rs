@@ -40,11 +40,17 @@ impl<L: Base> Fallback for TopRing<L> {
     const TILES: u32 = reach_tiles(L::LATTICE);
 
     fn floor(o: &Observation, top: Zoom, each: impl FnMut(Tile)) {
-        let over = (o.eye[2] - o.ground).max(0.0);
-        if over < o.far() {
-            tiles_within(top, [o.eye[0], o.eye[1]], (o.far() * o.far() - over * over).sqrt()).for_each(each);
+        if let Some(r) = ring(o) {
+            tiles_within(top, [o.eye[0], o.eye[1]], r).for_each(each);
         }
     }
+}
+
+/// How far from the eye the top's ground is held: the far edge cut by the
+/// ground; none where the eye is over the edge.
+pub fn ring(o: &Observation) -> Option<f64> {
+    let over = (o.eye[2] - o.ground).max(0.0);
+    (over < o.far()).then(|| (o.far() * o.far() - over * over).sqrt())
 }
 
 pub type Floor<L> = TopRing<L>;

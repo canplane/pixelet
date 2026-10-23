@@ -11,17 +11,17 @@
 use std::rc::Rc;
 
 use pxl_render::asset::gltf::{parse_gltf, Gltf};
-use pxl_spec::asset::ingested::Asset;
-use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
+use xpute_guest::sched::edge::{next_turn, yield_if_spent};
 
 use crate::abi::host::root;
+use crate::asset::{Load, LoadKind, LOADS};
 use crate::io::demand::Ask;
 use crate::io::failure::Ended;
-use crate::io::file::{self, Opened, Owner};
-use crate::io::host::decode_image;
+use crate::io::file::{self, Opened, Owner, Path};
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::io::source;
 use crate::sched::edge::{request_world_tick, world_edge};
+use core::fmt::Write as _;
 use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::route::{tile_object, TILE_SPHERE};
 use xpute_guest::abi::handle::Slots;
@@ -29,59 +29,31 @@ use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LoadKind {
-    Gltf = 0,
-    Image = 1,
-}
-
-/// The texture pack's image is written beside the asset table, not as a row of
-/// it; the Earth's picture whole is the earth layer's, under its version.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Load {
-    Asset(Asset),
-    Pack,
-    Sphere,
-}
-
-impl Load {
-    pub fn number(self) -> u32 {
-        match self {
-            Load::Asset(a) => a as u32,
-            Load::Pack => Asset::ALL.len() as u32,
-            Load::Sphere => Asset::ALL.len() as u32 + 1,
-        }
-    }
-
-    pub fn of(number: u32) -> Option<Load> {
-        match number.checked_sub(Asset::ALL.len() as u32) {
-            Some(0) => Some(Load::Pack),
-            Some(1) => Some(Load::Sphere),
-            Some(_) => None,
-            None => u16::try_from(number).ok().and_then(Asset::of).map(Load::Asset),
-        }
-    }
-}
-
 /// `Arrived` exists because the read's credit is released when the bytes
 /// land (parsing is not I/O and would starve tile reads), but the asset is
 /// not usable yet. Without it, "not usable" read as "not asked for" and one
 /// model was re-read 38 times, once a turn, for as long as its parse took.
 enum Entry<T> {
     Pending,
-    /// A model: open as this descriptor, this long, unparsed. An image: the
-    /// handle it is being decoded under.
-    Arrived(u32, u32),
+    /// Its file in its arrival's task, being read.
+    Arrived,
+    /// An image handed to the device, ready once the host's word says it
+    /// landed (`load_image`).
+    Landing(T),
     Ready(T),
     Failed,
 }
 
-/// Every asset, the pack and the sphere.
-pub const LOADS: usize = Asset::ALL.len() + 2;
+/// An image's handle and the device it was handed to (`device_generation`).
+#[derive(Clone, Copy)]
+struct Image {
+    handle: u32,
+    on: u32,
+}
 
 struct Loader {
     gltf: Vec<Option<Entry<Rc<Gltf>>>>,
-    image: Vec<Option<Entry<u32>>>,
+    image: Vec<Option<Entry<Image>>>,
     /// Kept so saying the wants every turn allocates nothing.
     wants: Vec<(u64, Ask)>,
 }
@@ -108,13 +80,30 @@ pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
     }
 }
 
+/// An image's handle once its texture is there. Its landing is the word the
+/// host writes, read here where the image is read, so nothing waits on it;
+/// once read it stays, since the texture is taken from the host's record,
+/// while the device it went to does: one handed to a device since gone is
+/// asked for again.
 pub fn load_image(load: Load) -> Option<u32> {
     let l = loader();
-    match &l.image[load.number() as usize] {
-        Some(Entry::Ready(h)) => Some(*h),
+    let entry = &mut l.image[load.number() as usize];
+    if let Some(Entry::Landing(i) | Entry::Ready(i)) = entry {
+        if i.on != pxl_render::gpu::api::device_generation() {
+            IMAGES.get(Slots::default).remove(i.handle);
+            *entry = None;
+        }
+    }
+    if let Some(Entry::Landing(i)) = entry {
+        if pxl_render::gpu::api::image_landed(i.handle) {
+            *entry = Some(Entry::Ready(*i));
+        }
+    }
+    match entry {
+        Some(Entry::Ready(i)) => Some(i.handle),
         Some(_) => None,
         None => {
-            l.image[load.number() as usize] = Some(Entry::Pending);
+            *entry = Some(Entry::Pending);
             None
         }
     }
@@ -148,7 +137,8 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
         if matches!(l.gltf[n], Some(Entry::Pending)) {
             l.wants.push((subject_of(LoadKind::Gltf, load), Ask::PLAIN));
         }
-        if matches!(l.image[n], Some(Entry::Pending)) {
+        // An image is read only where a device can take it.
+        if matches!(l.image[n], Some(Entry::Pending)) && pxl_render::gpu::api::device().is_some() {
             l.wants.push((subject_of(LoadKind::Image, load), Ask::PLAIN));
         }
     }
@@ -162,8 +152,6 @@ fn ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
     what
 }
 
-static ARRIVALS: Global<Notify> = Global::new();
-
 static SETTLED: Global<bool> = Global::new();
 
 /// Whether a load settled, arrived or failed, since last taken: what waits on
@@ -176,10 +164,6 @@ fn settled() {
     *SETTLED.get(|| false) = true;
 }
 
-fn arrivals() -> &'static mut Notify {
-    ARRIVALS.get(Notify::new)
-}
-
 pub fn open_asset(credit: Credit, kind: LoadKind, load: Load) {
     let key = credit.key();
     let owner = match kind {
@@ -187,8 +171,13 @@ pub fn open_asset(credit: Credit, kind: LoadKind, load: Load) {
         LoadKind::Image => Owner::Image { key },
     };
     match load {
-        Load::Sphere => file::open(credit, BaseLayer::earth as u32, &tile_object(source::whole(BaseLayer::earth), TILE_SPHERE), owner),
-        _ => file::open(credit, root::ASSET, &load.number().to_string(), owner),
+        Load::Sphere => file::open(
+            credit,
+            BaseLayer::earth as u32,
+            Path::of(|w| tile_object(w, source::whole(BaseLayer::earth), TILE_SPHERE)).as_str(),
+            owner,
+        ),
+        _ => file::open(credit, root::ASSET, Path::of(|w| write!(w, "{}", load.number())).as_str(), owner),
     };
 }
 
@@ -201,11 +190,10 @@ pub fn cancel_asset(key: u64) -> bool {
     true
 }
 
-static IMAGES: Global<Slots<()>> = Global::new();
+static IMAGES: Global<Slots<(), { LOADS + 1 }>> = Global::new();
 
-/// The file is closed in the same turn: the host takes its bytes when it runs the decode.
 pub fn image_opened(fd: u32, key: u64, opened: Opened) {
-    let Opened::Bytes(_) = opened else {
+    let Opened::Bytes(n) = opened else {
         load_rejected(key, Ended::Failed(opened.failure()));
         return;
     };
@@ -213,33 +201,31 @@ pub fn image_opened(fd: u32, key: u64, opened: Opened) {
         file::close(fd);
         return;
     };
-    let image = IMAGES.get(Slots::default).insert(());
-    decode_image(fd, image);
-    file::close(fd);
-    loader().image[load.number() as usize] = Some(Entry::Arrived(image, 0));
+    arrive(LoadKind::Image, load.number() as usize, fd, n);
 }
 
 /// The GPU is gone, and with it every image the textures took: each is loaded
 /// again, under a new handle, when it is next asked for.
-pub fn images_lost() {
-    let l = loader();
-    for entry in &mut l.image {
-        if let Some(Entry::Ready(h) | Entry::Arrived(h, _)) = *entry {
-            IMAGES.get(Slots::default).remove(h);
-            *entry = None;
-        }
-    }
-}
-
-/// A file the device cannot decode is the asset's own failure, so it is final.
-pub fn image_decoded(image: u32, decoded: Result<u32, Errno>) {
-    let l = loader();
-    let Some(n) = (0..LOADS).find(|&n| matches!(l.image[n], Some(Entry::Arrived(h, _)) if h == image)) else {
+/// An image's bytes, read, into a texture where the device is: landing until
+/// the host says it is there (`load_image`). A file the device cannot decode is
+/// the asset's own failure, so it is final; a device gone since it was asked
+/// for takes it again when one is back (`load_image`).
+fn image_arrived(n: usize, file: Vec<u8>) {
+    if pxl_render::gpu::api::device().is_none() {
+        loader().image[n] = None;
         return;
-    };
-    l.image[n] = Some(if decoded.is_ok() { Entry::Ready(image) } else { Entry::Failed });
-    settled();
-    request_world_tick();
+    }
+    let image = IMAGES.get(Slots::default).insert(());
+    if !pxl_render::gpu::api::image_arrive(image, file) {
+        IMAGES.get(Slots::default).remove(image);
+        loader().image[n] = Some(Entry::Failed);
+        settled();
+        return;
+    }
+    loader().image[n] = Some(Entry::Landing(Image {
+        handle: image,
+        on: pxl_render::gpu::api::device_generation(),
+    }));
 }
 
 pub fn model_opened(fd: u32, key: u64, opened: Opened) {
@@ -251,44 +237,54 @@ pub fn model_opened(fd: u32, key: u64, opened: Opened) {
         file::close(fd);
         return;
     };
-    loader().gltf[load.number() as usize] = Some(Entry::Arrived(fd, n));
-    arrivals().notify();
+    arrive(LoadKind::Gltf, load.number() as usize, fd, n);
 }
 
-fn next_arrival() -> Option<(usize, u32, u32)> {
-    let l = loader();
-    (0..LOADS).find_map(|n| match l.gltf[n] {
-        Some(Entry::Arrived(body, bytes)) => Some((n, body, bytes)),
-        _ => None,
-    })
-}
-
-pub async fn gltf_task() {
-    loop {
-        notified(arrivals).await;
-        while let Some((n, fd, bytes)) = next_arrival() {
-            yield_if_spent(world_edge).await;
-            let mut buf = Vec::new();
-            if buf.try_reserve_exact(bytes as usize).is_err() {
-                file::close(fd);
-                loader().gltf[n] = Some(Entry::Failed);
-                continue;
-            }
-            buf.resize(bytes as usize, 0);
-            // SAFETY: `buf` is held across the turn the host fills it in.
-            unsafe { file::read(fd, &mut buf) };
-            file::close(fd);
-            // In once the host has run the turn's records.
-            next_turn(world_edge).await;
-            let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
-                Ok(g) => Entry::Ready(Rc::new(g)),
-                Err(_) => Entry::Failed,
-            };
-            loader().gltf[n] = Some(entry);
-            settled();
-            request_world_tick();
-        }
+/// A file opened, read in its own task: no arrival waits on another's
+/// parse or landing. Where the turn's quota is spent before the tasks run, as
+/// it is while the frame outweighs its share, each task advances a step a
+/// turn, so k arrivals advance k steps, not one.
+fn arrive(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
+    match kind {
+        LoadKind::Gltf => loader().gltf[n] = Some(Entry::Arrived),
+        LoadKind::Image => loader().image[n] = Some(Entry::Arrived),
     }
+    // The pool holds a task for each kind of every load (TASKS), and each
+    // has one file in flight at most, so there is always room.
+    let spawned = xpute_guest::sched::task::spawn(arrival(kind, n, fd, bytes), crate::sched::edge::TaskPriority::Arrival as u8);
+    xpute_kit::ensure!(spawned, ENOSPC, n);
+}
+
+/// An asset file arrived, read whole: a model parsed, an image put into its
+/// texture.
+async fn arrival(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
+    yield_if_spent(world_edge).await;
+    let mut buf = Vec::new();
+    if buf.try_reserve_exact(bytes as usize).is_err() {
+        file::close(fd);
+        match kind {
+            LoadKind::Gltf => loader().gltf[n] = Some(Entry::Failed),
+            LoadKind::Image => loader().image[n] = Some(Entry::Failed),
+        }
+        return;
+    }
+    buf.resize(bytes as usize, 0);
+    // SAFETY: `buf` is held across the turn the host fills it in.
+    unsafe { file::read(fd, &mut buf) };
+    file::close(fd);
+    // In once the host has run the turn's records.
+    next_turn(world_edge).await;
+    if kind == LoadKind::Image {
+        image_arrived(n, buf);
+        return;
+    }
+    let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
+        Ok(g) => Entry::Ready(Rc::new(g)),
+        Err(_) => Entry::Failed,
+    };
+    loader().gltf[n] = Some(entry);
+    settled();
+    request_world_tick();
 }
 
 /// The transport failed, not the asset: it is wanted again, and the request scheduler

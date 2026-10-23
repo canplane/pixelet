@@ -709,7 +709,7 @@ pub const INGESTED: [IngestedAsset; 160] = [
 
 /// Which of a box's images a tile is, as Minecraft's `cube_bottom_top`
 /// names them. Which face of a box wears which is the renderer's
-/// (chunk.wgsl): a cell below the surface wears its bottom on every side.
+/// (paint.wgsl): a cell below the surface wears its bottom on every side.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CubeFace {
     Top,

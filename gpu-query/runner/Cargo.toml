@@ -1,0 +1,11 @@
+[package]
+name = "gpu-query-runner"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# What its examples run on: wgpu on the device, with the workspace's naga
+# patch (gpu-query/Cargo.toml).
+[dependencies]
+wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
+pollster = "1"

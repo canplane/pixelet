@@ -7,19 +7,20 @@
 //! unless a store keeps it.
 
 use core::fmt;
-use std::collections::VecDeque;
 
 use xpute_guest::ipc::sys::Fd;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free, Block};
 use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
+use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 
 use crate::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::io::failure::{Ended, Failure};
-use crate::io::file::{self, Opened, Owner};
+use crate::io::file::{self, Opened, Owner, Path};
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::io::source;
+use crate::param::MAX_CREDITS;
 use crate::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::route::tile_object;
 use pxl_spec::space::hierarchy::morton::write_name;
@@ -42,9 +43,9 @@ impl fmt::Display for DemandName {
 
 pub fn start(credit: Credit, stream: Stream, subject: u64) {
     let Some(bake) = stream.bake() else { return };
-    let name = tile_object(source::version(bake, Tile::of_subject(subject)), &DemandName(stream, subject).to_string());
+    let name = Path::of(|w| tile_object(w, source::version(bake, Tile::of_subject(subject)), DemandName(stream, subject)));
     let owner = Owner::Fetch { key: credit.key(), at_ms: now() };
-    file::open(credit, bake as u32, &name, owner);
+    file::open(credit, bake as u32, name.as_str(), owner);
 }
 
 /// Settled as stopped at once: nothing is reported for a closed descriptor.
@@ -83,7 +84,8 @@ struct Arrival {
     net_ms: f64,
 }
 
-static ARRIVED: Global<Vec<Arrival>> = Global::new();
+/// No more arrive at once than fetches are out, each on its credit.
+static ARRIVED: Global<List<Arrival, { MAX_CREDITS as usize }>> = Global::new();
 
 /// An answer, a body or the source's absence, kept for its owner to take:
 /// what it does with it (admits a tile, opens a group) is the owner's. The
@@ -97,14 +99,15 @@ pub struct Answered {
     pub phases: Phases,
 }
 
-static ANSWERED: Global<VecDeque<Answered>> = Global::new();
+/// No more are kept than fetches are out, each on its credit, oldest first.
+static ANSWERED: Global<List<Answered, { MAX_CREDITS as usize }>> = Global::new();
 
 /// The oldest answer of one of `of`, not yet taken. No more are kept than
 /// fetches are out, so the scan is short.
 pub fn next_answered(of: &[Stream]) -> Option<Answered> {
-    let all = ANSWERED.get(VecDeque::new);
+    let all = ANSWERED.get(List::new);
     let at = all.iter().position(|a| of.contains(&a.stream))?;
-    all.remove(at)
+    Some(all.remove(at))
 }
 
 /// An answer's fetch settles once its owner has taken it in, or refused it.
@@ -113,8 +116,8 @@ pub fn answer_settled(key: u64, result: Result<(), Failure>, phases: Phases) {
 }
 static ARRIVALS: Global<Notify> = Global::new();
 
-fn arrived() -> &'static mut Vec<Arrival> {
-    ARRIVED.get(Vec::new)
+fn arrived() -> &'static mut List<Arrival, { MAX_CREDITS as usize }> {
+    ARRIVED.get(List::new)
 }
 
 fn arrivals() -> &'static mut Notify {
@@ -155,7 +158,7 @@ pub async fn fetch_task() {
     loop {
         notified(arrivals).await;
         while !arrived().is_empty() {
-            let received: Vec<_> = std::mem::take(arrived());
+            let received = core::mem::take(arrived());
             next_turn(world_edge).await;
             for arrival in received {
                 yield_if_spent(world_edge).await;
@@ -185,7 +188,7 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         Got::Absent | Got::Read(Some(_)) => {
             // An asset loads through io/load, never a fetch: nothing would take its answer.
             xpute_kit::ensure!(stream != Stream::asset, ENOTRECOVERABLE);
-            ANSWERED.get(VecDeque::new).push_back(Answered { key, stream, subject, block, phases });
+            ANSWERED.get(List::new).push(Answered { key, stream, subject, block, phases });
             request_world_tick();
             return;
         }

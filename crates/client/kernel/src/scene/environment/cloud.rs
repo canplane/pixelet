@@ -5,29 +5,31 @@
 //! layer and no chunk holds it. It is laid on the field's own map, which the
 //! wind carries (`pxl-render look/cloud.rs` `drift`): a block of cells there
 //! is built once and drawn moved, each instance a model, a sprite or nothing
-//! by its size on the screen (`chunk/decor/cell.rs` `present_block`).
+//! by its size on the screen (`scene/decor/cell.rs` `present_block`).
 
 use fnv::FnvHashMap;
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::pass::decor::GROUPS;
-use pxl_render::look::cloud::{drift, lattice_hash, shown, CUMULUS_KM};
+use pxl_render::look::cloud::{drift, lattice_hash, shown, CUMULUS_KM, WIND};
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::block::decor::DECORS;
+use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::frame_budget::FrameBudget;
 
-use crate::chunk::decor::build::decor_sprite_px;
-use crate::chunk::decor::cell::{present_block, Shown};
-use crate::chunk::decor::instance::GroupLanes;
-use crate::chunk::table::Frame;
-use crate::io::load::{load_failed, load_gltf, load_image, Load};
+use crate::asset::Load;
+use crate::io::load::{load_failed, load_gltf, load_image};
 use crate::kernel;
 use crate::model::asset::register_model;
+use crate::scene::decor::cell::{present_block, Shown};
+use crate::scene::decor::drawn::{decor_sprite_px, sprite_reach};
+use crate::scene::decor::instance::GroupLanes;
+use crate::scene::frame::Frame;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::{globe, km_per_u, units_per_px_at};
 use crate::view::observation::eye;
@@ -52,13 +54,21 @@ const _: () = assert!(FIRST_GROUP + VARIANTS.len() <= GROUPS, "a draw group each
 const CELL_SHAMT: u32 = 12;
 const CELL: f64 = (1u32 << CELL_SHAMT) as f64;
 /// The cells around the world, so a cell's hash wraps with the map.
-const CELLS_AROUND: i64 = 1 << (pxl_spec::space::coord::pvf3::core::IVEC_X_W - CELL_SHAMT);
+const CELLS_AROUND: i64 = 1 << (pxl_spec::space::coord::world::EXTENT[0] - CELL_SHAMT);
 /// A block is built and drawn as one, this many cells a side.
 const BLOCK_CELLS: u32 = 16;
 const BLOCK: f64 = CELL * BLOCK_CELLS as f64;
 /// A cloud's width in units, at the least and the most: about 2 to 3.5 km,
 /// whatever the spacing.
 const WIDTH: [f64; 2] = [1024.0, 1840.0];
+/// The farthest a block is built: where the widest cloud is a sprite's worth.
+const REACH_MAX: f64 = sprite_reach(WIDTH[1]);
+/// The most blocks the reach spans, the keys of a side squared: its share of
+/// the renderer's block table.
+pub const BLOCKS_MAX: usize = {
+    let side = (2.0 * REACH_MAX / BLOCK) as usize + 2;
+    side * side
+};
 /// The share of cells holding a cloud, the same everywhere: tied to the
 /// field, the cumulus gathered in patches with bare country between.
 const SHARE: f64 = 0.5;
@@ -81,6 +91,9 @@ struct Clouds {
     gone: Vec<[i64; 2]>,
     lanes: [Vec<[f32; 5]>; VARIANTS.len()],
     sprites: Vec<u32>,
+    /// How far from the eye the nearest block drawn last turn stands; none
+    /// drawn, infinite.
+    seen: f64,
 }
 
 static CLOUDS: Global<Clouds> = Global::new();
@@ -112,6 +125,13 @@ fn layer_u() -> f64 {
     CUMULUS_KM / km_per_u()
 }
 
+/// How long the wind takes to carry the clouds a camera cell at the nearest
+/// drawn, in seconds (`cell_there`): what drifts less is not seen to move.
+/// Infinite while none is drawn.
+pub fn drift_step_s() -> f64 {
+    crate::view::lens::cell_there(clouds().seen) / libm::hypot(WIND[0], WIND[1])
+}
+
 /// How much of the clouds shows: none where the setting is off, and fading
 /// as the eye climbs to where they are gone.
 pub fn clouds_shown() -> f64 {
@@ -125,6 +145,7 @@ pub fn clouds_shown() -> f64 {
 /// of, and lists them.
 pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     let c = clouds();
+    c.seen = f64::INFINITY;
     for (slot, asset) in c.models.iter_mut().zip(VARIANTS) {
         if slot.is_none() && !load_failed(Load::Asset(asset)) {
             *slot = load_gltf(Load::Asset(asset)).and_then(|gltf| register_model(&gltf, None)).map(|h| h.model);
@@ -143,7 +164,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     // To the horizon over the layer, and no farther than its largest cloud is a sprite's worth.
     let r = globe().radius_u();
     let horizon = |h: f64| libm::sqrt(2.0 * r * h + h * h);
-    let reach = (horizon(eye[2].max(0.0)) + horizon(base)).min(largest / units_per_px_at(1.0) / decor_sprite_px());
+    let reach = (horizon(eye[2].max(0.0)) + horizon(base)).min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
     let span = |k: usize| libm::floor((on_map[k] - reach) / BLOCK) as i64..=libm::floor((on_map[k] + reach) / BLOCK) as i64;
     let near = |key: [i64; 2]| {
@@ -190,11 +211,18 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     for (&key, b) in &c.blocks {
         let corner = [key[0] as f64 * BLOCK - moved[0], key[1] as f64 * BLOCK - moved[1]];
         let [zlo, zhi] = b.heights.map(f64::from);
-        let middle = [corner[0] + BLOCK / 2.0, corner[1] + BLOCK / 2.0, (zlo + zhi) / 2.0];
-        let [across, up] = [BLOCK / 2.0 + largest / 2.0, (zhi - zlo) / 2.0 + largest / 2.0];
-        let radius = libm::sqrt(2.0 * across * across + up * up);
-        if !frame.sees(middle, radius) {
+        let reach = largest / 2.0;
+        if !frame.sees_box([corner[0] - reach, corner[1] - reach, zlo - reach], [corner[0] + BLOCK + reach, corner[1] + BLOCK + reach, zhi + reach]) {
             continue;
+        }
+        // The nearest cloud the view holds, each as the box it stands in.
+        for cloud in clouds_of(key, base) {
+            let at = [corner[0] + cloud.local[0], corner[1] + cloud.local[1], cloud.z];
+            let half = [cloud.width / 2.0, cloud.width / 2.0, cloud.height / 2.0];
+            if frame.sees_box(core::array::from_fn(|k| at[k] - half[k]), core::array::from_fn(|k| at[k] + half[k])) {
+                let gap: V3 = core::array::from_fn(|k| ((if k == 0 { nearest(at[0], eye[0]) } else { at[k] }) - eye[k]).abs() - half[k]);
+                c.seen = c.seen.min(v3::len(&gap.map(|g| g.max(0.0))));
+            }
         }
         let block = Shown {
             handle: b.handle,
@@ -211,6 +239,45 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     }
 }
 
+/// A cloud of a block, about the block's corner on the field's map.
+struct Cloud {
+    variant: usize,
+    local: [f64; 2],
+    /// Its middle's height, its width, and its height, in units.
+    z: f64,
+    width: f64,
+    height: f64,
+    spin: f64,
+    scale: f64,
+}
+
+/// The block's clouds: a cell a cloud where the field's hash says one is.
+fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
+    (0..BLOCK_CELLS).flat_map(move |j| (0..BLOCK_CELLS).map(move |i| (i, j))).filter_map(move |(i, j)| {
+        let cell = [key[0] * i64::from(BLOCK_CELLS) + i64::from(i), key[1] * i64::from(BLOCK_CELLS) + i64::from(j)];
+        let at = cell.map(|v| (v & (CELLS_AROUND - 1)) as u32);
+        if lattice_hash(at, SALT) >= SHARE {
+            return None;
+        }
+        let jitter = [lattice_hash(at, SALT + 1), lattice_hash(at, SALT + 2)];
+        let local = [(f64::from(i) + 0.25 + 0.5 * jitter[0]) * CELL, (f64::from(j) + 0.25 + 0.5 * jitter[1]) * CELL];
+        let variant = ((lattice_hash(at, SALT + 4) * VARIANTS.len() as f64) as usize).min(VARIANTS.len() - 1);
+        let asset = VARIANTS[variant];
+        let width = WIDTH[0] + (WIDTH[1] - WIDTH[0]) * lattice_hash(at, SALT + 3);
+        let scale = width / widest(asset);
+        let height = extent(asset)[2] * scale;
+        Some(Cloud {
+            variant,
+            local,
+            z: base + 0.5 * height,
+            width,
+            height,
+            spin: core::f64::consts::TAU * lattice_hash(at, SALT + 5),
+            scale,
+        })
+    })
+}
+
 /// The block's clouds on the field's map, as decor's lanes about its corner;
 /// none where the heap refused.
 fn build(key: [i64; 2], base: f64, lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()], draw: &mut DrawList) -> Option<Block> {
@@ -218,24 +285,9 @@ fn build(key: [i64; 2], base: f64, lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()], 
         l.clear();
     }
     let mut heights = [f32::INFINITY, f32::NEG_INFINITY];
-    for j in 0..BLOCK_CELLS {
-        for i in 0..BLOCK_CELLS {
-            let cell = [key[0] * i64::from(BLOCK_CELLS) + i64::from(i), key[1] * i64::from(BLOCK_CELLS) + i64::from(j)];
-            let at = cell.map(|v| (v & (CELLS_AROUND - 1)) as u32);
-            let jitter = [lattice_hash(at, SALT + 1), lattice_hash(at, SALT + 2)];
-            let local = [(f64::from(i) + 0.25 + 0.5 * jitter[0]) * CELL, (f64::from(j) + 0.25 + 0.5 * jitter[1]) * CELL];
-            if lattice_hash(at, SALT) >= SHARE {
-                continue;
-            }
-            let variant = ((lattice_hash(at, SALT + 4) * VARIANTS.len() as f64) as usize).min(VARIANTS.len() - 1);
-            let asset = VARIANTS[variant];
-            let width = WIDTH[0] + (WIDTH[1] - WIDTH[0]) * lattice_hash(at, SALT + 3);
-            let scale = width / widest(asset);
-            let z = base + 0.5 * extent(asset)[2] * scale;
-            let spin = core::f64::consts::TAU * lattice_hash(at, SALT + 5);
-            heights = [heights[0].min((z - width / 2.0) as f32), heights[1].max((z + width / 2.0) as f32)];
-            lanes[variant].push([local[0] as f32, local[1] as f32, z as f32, spin as f32, scale as f32]);
-        }
+    for c in clouds_of(key, base) {
+        heights = [heights[0].min((c.z - c.width / 2.0) as f32), heights[1].max((c.z + c.width / 2.0) as f32)];
+        lanes[c.variant].push([c.local[0] as f32, c.local[1] as f32, c.z as f32, c.spin as f32, c.scale as f32]);
     }
     let instances: usize = lanes.iter().map(Vec::len).sum();
     let header = 1 + lanes.len();

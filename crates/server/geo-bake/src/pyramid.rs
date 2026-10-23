@@ -12,7 +12,6 @@ use std::path::PathBuf;
 
 use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
@@ -29,7 +28,8 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// The zoom its tiles are made at; every coarser one is folded.
     const LEAF: Zoom = LEAF_ZOOM;
 
-    fn encode(&self) -> Result<Vec<u8>, String>;
+    /// As tile `at` is published.
+    fn encode(&self, at: Tile) -> Result<Vec<u8>, String>;
     fn decode(raw: &[u8]) -> Result<Self, String>;
 
     fn sources(p: Tile) -> Vec<Tile> {
@@ -245,14 +245,14 @@ fn readers<L: Base>(below: &[Tile]) -> Vec<Tile> {
     let mut out = BTreeSet::new();
     for &c in below {
         let q = c.parent();
-        let [x, y] = [ivec::X(q.tile), ivec::Y(q.tile)];
+        let [x, y] = q.at;
         for (dx, dy) in (-1..=1).flat_map(|dy| (-1..=1).map(move |dx| (dx, dy))) {
             if !tile_rows(q.zoom).contains(&(y + dy)) {
                 continue;
             }
             let p = tile_at(q.zoom, [x + dx, y + dy]);
             if L::sources(p).contains(&c) {
-                out.insert((y + dy, ivec::X(p.tile), p));
+                out.insert((y + dy, p.at[0], p));
             }
         }
     }
@@ -262,7 +262,7 @@ fn readers<L: Base>(below: &[Tile]) -> Vec<Tile> {
 /// Folds `targets`, a zoom's parents in rows; returns those staged and those
 /// gone. Each worker keeps only the child rows its current parent row reads.
 fn fold_zoom<L: Base>(set: &Staged<'_>, targets: &[Tile], absent: &impl Absent<L>, workers: usize) -> Result<(Vec<Tile>, Vec<Tile>), String> {
-    let rows: Vec<&[Tile]> = targets.chunk_by(|a, b| ivec::Y(a.tile) == ivec::Y(b.tile)).collect();
+    let rows: Vec<&[Tile]> = targets.chunk_by(|a, b| a.at[1] == b.at[1]).collect();
     let band = rows.len().div_ceil(workers.max(1)).max(1);
     let bands = std::thread::scope(|scope| {
         let handles: Vec<_> = rows.chunks(band).map(|band| scope.spawn(move || fold_band(set, band, absent))).collect();
@@ -279,15 +279,17 @@ fn fold_band<L: Base>(set: &Staged<'_>, rows: &[&[Tile]], absent: &impl Absent<L
     let mut held: FnvHashMap<Tile, Option<L>> = FnvHashMap::default();
     let (mut written, mut gone) = (Vec::new(), Vec::new());
     for row in rows {
-        let y = ivec::Y(row[0].tile);
-        held.retain(|p, _| ivec::Y(p.tile) >= 2 * y - 1);
+        let y = row[0].at[1];
+        held.retain(|p, _| p.at[1] >= 2 * y - 1);
         for &parent in row.iter() {
             for p in L::sources(parent) {
                 if let std::collections::hash_map::Entry::Vacant(e) = held.entry(p) {
                     e.insert(set.read::<L>(p)?);
                 }
             }
-            let after = fold_parent(parent, |p| held.get(&p).and_then(Option::as_ref), absent).map(|t| t.encode()).transpose()?;
+            let after = fold_parent(parent, |p| held.get(&p).and_then(Option::as_ref), absent)
+                .map(|t| t.encode(parent).map_err(|e| format!("{}: {e}", parent.name())))
+                .transpose()?;
             if set.content(parent)? == after {
                 continue;
             }

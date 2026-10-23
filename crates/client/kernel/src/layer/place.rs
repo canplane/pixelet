@@ -2,7 +2,7 @@
 
 //! Places as a layer of the pyramid: what OpenStreetMap Carto would draw of
 //! a tile at its zoom, read where the camera grid's cell is a cell of the
-//! tile, an icon wide, and drawn as Carto draws it (`chunk/place.rs`).
+//! tile, an icon wide, and drawn as Carto draws it (`scene/place.rs`).
 
 use pxl_spec::bake::tile::place::{self, PlaceTile, PLACE_LATTICE};
 use pxl_spec::space::layer::lattice::Lattice;
@@ -13,6 +13,7 @@ use crate::layer::residency::Residency;
 use crate::layer::Base;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 
 static PLACE: Global<Residency<PlaceTile>> = Global::new();
@@ -29,7 +30,7 @@ impl Base for PlaceTile {
     }
 
     /// Small, so held on the heap; the record is only a count slot.
-    fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PlaceTile, Failure> {
+    fn receive(_tile: Tile, _record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PlaceTile, Failure> {
         Ok(place::decode(pkt)?)
     }
 

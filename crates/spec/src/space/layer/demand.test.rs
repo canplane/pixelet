@@ -2,12 +2,20 @@
 
 use super::*;
 use crate::space::camera::grid::*;
+use crate::space::coord::zoom::FINEST_ZOOM;
+use crate::space::layer::lattice::demand_reach;
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::tile::*;
 
 /// The ground tile a distance folds from, past the pyramid's ends too.
 fn zoom_at(r: f64) -> i32 {
     GROUND.tile_zoom_of_grid(cell_at(r))
+}
+
+/// The distance just short of `r` as the rule reads a distance: the f32
+/// before it (pxl-portable `cast::cell_at`).
+fn short_of(r: f64) -> f64 {
+    f64::from(f32::from_bits((r as f32).to_bits() - 1))
 }
 
 /// Feet on a tile's corners, edges and inside, either side of the origin.
@@ -26,7 +34,7 @@ fn feet(zoom: Zoom) -> Vec<[f64; 2]> {
 }
 
 fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Tile> {
-    tiles_within(zoom, foot, GROUND.demand_reach(zoom)).collect()
+    tiles_within(zoom, foot, demand_reach(GROUND, zoom)).collect()
 }
 
 #[test]
@@ -55,8 +63,8 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
 #[test]
 fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {
     for zoom in GROUND.top()..=LEAF_ZOOM {
-        let r = GROUND.demand_reach(zoom);
-        assert_eq!(zoom_at(r * (1.0 - 1e-12)), zoom as i32, "z{zoom} is asked for up to its radius");
+        let r = demand_reach(GROUND, zoom);
+        assert_eq!(zoom_at(short_of(r)), zoom as i32, "z{zoom} is asked for up to its radius");
         assert_eq!(zoom_at(r), zoom as i32 - 1, "and not at it");
     }
 }
@@ -64,8 +72,9 @@ fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {
 #[test]
 fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
     let mut last = i32::MAX;
-    // Inside the world: no cell is coarser than z0's.
-    for r in core::iter::successors(Some(0.01), |r| Some(r * 1.01)).take_while(|r| r * 32.0 < split_distance(0)) {
+    // Inside the world: no cell is coarser than z0's, and none finer than a
+    // position names (`FINEST_ZOOM`), even scaled finer by 2^3 below.
+    for r in core::iter::successors(Some(split_distance(FINEST_ZOOM - 3)), |r| Some(r * 1.01)).take_while(|r| r * 32.0 < split_distance(0)) {
         let z = zoom_at(r);
         assert!(z <= last, "{r}: z{z} after z{last}");
         last = z;
@@ -75,6 +84,6 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
     }
     for z in GROUND.top() as i32..=LEAF_ZOOM as i32 + 3 {
         assert_eq!(zoom_at(split_distance(GROUND.grid_zoom(z as Zoom))), z, "a zoom begins at its split distance");
-        assert_eq!(zoom_at(split_distance(GROUND.grid_zoom(z as Zoom - 1)) * (1.0 - 1e-12)), z, "and ends where the next coarser begins");
+        assert_eq!(zoom_at(short_of(split_distance(GROUND.grid_zoom(z as Zoom - 1)))), z, "and ends where the next coarser begins");
     }
 }

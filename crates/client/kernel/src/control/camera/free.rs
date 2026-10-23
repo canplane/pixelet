@@ -4,9 +4,7 @@
 //! is no control: the target stands where the pan's walk stands it, and the
 //! drawn eye eases to it, so a step comes as every other move does.
 
-use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::q3::Q3;
 
 use crate::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::controller::look_domain;
@@ -14,30 +12,13 @@ use crate::control::camera::controller::{camera, eye_world, focus, set_eye_world
 use crate::control::camera::state::camera_state;
 use crate::control::navigation::support::target;
 use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
-use crate::query::{Detail, Ray, World};
-use crate::view::frame::pose::{view, view_compose};
+use crate::view::frame::pose::view_compose;
 use xpute_guest::global::Global;
 
-/// The first resident thing it meets, else the sea, else `fallback` along it.
-pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
-    let ray = Ray {
-        origin: eye,
-        direction: forward,
-        reach: view().far,
-    };
-    let t = match World::now().first_hit(&ray, Detail::Distance(Tau::FINEST)).value().flatten() {
-        Some(hit) => hit.t,
-        // The sea is z = 0.
-        None if forward[2] < -1e-9 && ray.origin[2] > 0.0 => -ray.origin[2] / forward[2],
-        None => fallback,
-    };
-    std::array::from_fn(|k| eye[k] + forward[k] * t)
-}
-
 /// Canonical, so it holds still as the eye goes round the world. None until first put.
-static TO: Global<Option<Pvf3>> = Global::new();
+static TO: Global<Option<Q3>> = Global::new();
 
-fn to() -> &'static mut Option<Pvf3> {
+fn to() -> &'static mut Option<Q3> {
     TO.get(|| None)
 }
 
@@ -46,11 +27,11 @@ const EYE_EPS: f64 = 0.001;
 const LOOK_EPS: f64 = 0.0001;
 
 /// First person, the eye's target is the focus.
-pub(crate) fn target_center() -> Option<Pvf3> {
+pub(crate) fn target_center() -> Option<Q3> {
     to().or_else(focus)
 }
 
-pub(crate) fn put(at: Pvf3, snap: bool) {
+pub(crate) fn put(at: Q3, snap: bool) {
     *to() = Some(at);
     if snap {
         set_eye_world(&target(to(), eye_world().unwrap_or_default()));

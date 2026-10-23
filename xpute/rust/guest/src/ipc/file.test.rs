@@ -9,7 +9,7 @@ fn sys() -> Sys {
 
 #[test]
 fn file_an_answer_to_a_closed_descriptor_reaches_no_one_even_once_its_slot_is_taken_again() {
-    let (mut sys, mut files) = (sys(), Files::new());
+    let (mut sys, mut files) = (sys(), Files::<_, 8>::new());
     let a = files.open(&mut sys, 7, "a", "first");
     assert_eq!(files.owner(a), Some(&"first"));
     assert_eq!(files.close(&mut sys, a), Some("first"));

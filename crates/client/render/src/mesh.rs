@@ -1,9 +1,8 @@
 // pxl-render/mesh.rs
 
-//! A chunk's cells to triangles: the column runs its layers write, and the
-//! mesher. A face between two solid cells is never drawn.
+//! What a block is painted as (its look's words and layers), and the hover
+//! ghost's box.
 
-pub mod chunk;
+pub mod ghost;
 pub mod paint;
-pub mod run;
 pub mod word;

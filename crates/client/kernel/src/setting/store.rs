@@ -9,7 +9,7 @@ use xpute_kit::codec::json::{read_json, JsonType};
 
 use crate::io::file::{self, Kept};
 use crate::io::host::development;
-pub use crate::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
+pub use crate::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, SettingKey, SettingKind, Settings};
 use xpute_guest::global::Global;
 
 /// A dev-only setting outside a development build is not offered: storage

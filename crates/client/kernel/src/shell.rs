@@ -6,7 +6,7 @@
 use crate::view::demand::Observed as _;
 use pxl_spec::block::object::{cube_id, decor_num_id};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{self, Q3};
 use xpute_kit::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
@@ -23,7 +23,7 @@ use crate::control::sensor::reading::{device_location_store, device_orientation_
 use crate::layer::division::named;
 use crate::scene::character::companion::companion_load_store;
 use crate::scene::character::preview::{preview_rows, CASES_MAX};
-use crate::scene::stage::{screen, Screen};
+use crate::scene::stage::screen_drawn;
 use crate::setting::store::{settings_store, SettingKey};
 use crate::turn::world_platform;
 use crate::view::frame::pose::units_per_px_at;
@@ -32,7 +32,7 @@ use xpute_kit::status::errno::Errno;
 
 /// The focus's division and each above it, broad to narrow. Every language
 /// is sent, so switching language re-reads rather than refetches.
-fn division_parts(at: Option<Pvf3>, each: &mut dyn FnMut(&DivisionPart<'_>)) {
+fn division_parts(at: Option<Q3>, each: &mut dyn FnMut(&DivisionPart<'_>)) {
     let Some(at) = at else { return };
     named(&at, |part| {
         let names = |each: &mut dyn FnMut(&LangName<'_>)| {
@@ -59,7 +59,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let companion = companion_load_store();
     let at = crate::control::camera::controller::focus();
     let center = at.map(|c| {
-        let g = epsg4326::unproject(c.i, c.f);
+        let g = epsg4326::unproject(&c);
         LonLat { lon: g[0], lat: g[1] }
     });
     let values = SettingKey::ALL.map(|key| settings.get(key));
@@ -73,17 +73,15 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     }
     let snapshot = Snapshot {
         focus: FocusState {
-            // Shown once a frame that drew ground went to the screen, or one went over
-            // a view whose tiles all answered, which over a source's void draws nothing.
-            status: match (crate::view::observation::eye(), screen()) {
+            // Shown once a frame went to the screen over a view whose tiles all answered.
+            status: match (crate::view::observation::eye(), screen_drawn()) {
                 (None, _) => GroundStatus::Idle,
-                (Some(_), Screen::Drawn { ground: true }) => GroundStatus::Success,
-                (Some(_), Screen::Drawn { ground: false }) if TerrainTile::demand().answered() => GroundStatus::Success,
+                (Some(_), true) if TerrainTile::demand().answered() => GroundStatus::Success,
                 _ => GroundStatus::Loading,
             },
             is_off_center: off_center().is_off_center,
             center,
-            outside: at.is_some_and(|c| crate::io::source::past_at([pvf3::X(&c), pvf3::Y(&c)].map(pvf3::to_real))),
+            outside: at.is_some_and(|c| crate::io::source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))),
         },
         location: LocationState {
             status: location.pose.status(),
@@ -161,9 +159,16 @@ pub fn go_to_degrees(lon: f64, lat: f64) {
     crate::control::camera::controller::come_in_to_default();
 }
 
-/// Set outright, for kernel tests and A/B comparisons at the same view.
-pub fn set_view(dist: Option<f64>, polar: Option<f64>) {
-    crate::control::camera::controller::set_intent(IntentPatch { dist, azimuth: None, polar });
+/// Set outright, for kernel tests and A/B comparisons at the same view: the
+/// controls take what is asked and the drawn orbit stands there at once, as
+/// a place asked for is put (`Motion::Snap`), so the view is reached with no
+/// step taken, the clock standing or not.
+pub fn set_view(dist: Option<f64>, polar: Option<f64>, azimuth: Option<f64>) {
+    let c = camera_state();
+    c.commit_intent(c.merged(IntentPatch { dist, azimuth, polar }));
+    if crate::control::camera::controller::active() == crate::control::camera::controller::Active::Orbit {
+        crate::control::camera::orbit::put_view();
+    }
 }
 
 /// The compass is asked for where it is used (`tracking_action`).
@@ -197,6 +202,6 @@ fn stall() -> Option<Message> {
 /// The view's scale at the focus, as the meters a logical pixel spans;
 /// 0 where the camera stands at the center: no distance, no scale.
 fn m_per_px() -> f64 {
-    let y_u = focus().map_or(0.0, |c| pvf3::to_real(pvf3::Y(&c)));
+    let y_u = focus().map_or(0.0, |c| q3::to_real(i64::from(c[1])));
     units_per_px_at(dist()) / epsg3857::u_per_m(y_u)
 }

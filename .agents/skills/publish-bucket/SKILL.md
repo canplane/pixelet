@@ -127,7 +127,7 @@ prefix and point `source` at it.
 `Content-Encoding` they were packed in** — the manifest's `content_encoding`,
 which the bake writes beside the set: zstd (`util.rs` `CONTENT_ENCODING`). The
 browser decodes by that header, and the kernel and the shell never see the
-codec (decision/20260913-compression-by-traffic.md). A wrong label hands the
+codec (doc/minutes/20260913-compression-by-traffic.md). A wrong label hands the
 client compressed bytes it does not know to decode. This is the single
 easiest step to get wrong, and it fails as a decode error far from its
 cause.

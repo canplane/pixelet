@@ -164,12 +164,6 @@ export const LE = true as const;
 
 export const MAGIC = 0x00505458 as const; // "XTP\0" little-endian word
 
-export interface EncodingState {
-  base: u32;
-  lim: u32;
-  type: NodeType;
-}
-
 export const DESC_TYPE_W: u32 = 8;
 export const DESC_TYPE_SHAMT: u32 = 0;
 export const DESC_TYPE_MASK: u32 = (1 << DESC_TYPE_W) - 1;

@@ -6,24 +6,6 @@
 // registers them, and the effects a turn runs around them. The profiler records and
 // reports them by these names (spec/client/kernel/profiler/profiler.json).
 
-export const STEP_NAMES = ["controller", "input", "camera", "environment", "companion", "preview", "sight", "goal", "demand", "chunks", "world_gizmo", "profiler"] as const;
+export const STEP_NAMES = ["controller", "input", "camera", "environment", "companion", "preview", "demand", "scene", "world_gizmo"] as const;
 
-export const EFFECT_NAMES = [
-  "navigation",
-  "bootstrap",
-  "geolocation",
-  "orientation",
-  "follow",
-  "destination",
-  "view",
-  "decor",
-  "objects",
-  "written",
-  "chunk_sources",
-  "edit",
-  "hover",
-  "puck",
-  "settings",
-  "assets",
-  "pump",
-] as const;
+export const EFFECT_NAMES = ["navigation", "bootstrap", "orientation", "follow", "destination", "view", "decor", "objects", "edit", "hover", "puck", "settings", "assets", "pump"] as const;

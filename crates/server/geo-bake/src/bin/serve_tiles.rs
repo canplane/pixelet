@@ -5,7 +5,9 @@
 //! Earth's picture is baked offline by pxl-tool, so it is served from that
 //! bake (`--out`), under the names the bucket holds, whichever way the rest is.
 //! `--shelf` serves each kind's set (tile/shard.rs), so a bake is looked at
-//! before anything is published.
+//! before anything is published. A tile goes out immutable under a version
+//! that names what is served, as the Worker's do: a set's, its manifest's
+//! digest; the oven's, the token its cache holds (`version_of`).
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -21,13 +23,13 @@ use pxl_geo_bake::demand::{
 };
 use pxl_geo_bake::source::{self, Overrides};
 use pxl_geo_bake::util::CONTENT_ENCODING;
-use pxl_spec::bake::published::FORMAT;
+use pxl_spec::bake::published::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::sharded;
 use pxl_spec::route::{tile_object_parts, ASSET_ROOT, TILE_ROOT, TILE_SPHERE};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
-use std::path::PathBuf;
+use std::path::{Path as FsPath, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -38,16 +40,69 @@ enum Tiles {
     Shelf(PathBuf),
 }
 
-/// The version it declares its tiles under: it serves one thing, so the
-/// version names nothing and is never read.
-const VERSION: &str = "dev";
-
 struct App {
     tiles: Tiles,
-    /// The source's declaration (pxl-geo-bake source.rs).
-    source: String,
+    /// The oven's cache, whose token names what it serves.
+    cache: PathBuf,
+    top_zoom: Zoom,
+    coverage: Vec<String>,
     asset_dir: PathBuf,
     out: PathBuf,
+}
+
+/// The token an oven's cache holds, made with the directory, so a purge of
+/// it is a new version.
+const OVEN_TOKEN: &str = "version";
+
+/// A version named by bytes that change whenever what is served does.
+fn named(bytes: &[u8]) -> String {
+    let mut h = fnv::FnvHasher::default();
+    std::hash::Hasher::write(&mut h, bytes);
+    format!("dev-{:016x}", std::hash::Hasher::finish(&h))
+}
+
+/// What a kind is served under now: a set's, its manifest's digest, which
+/// every bake writes again; the oven's, its cache's token.
+fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
+    let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
+    match &app.tiles {
+        _ if !sharded(layer) => read(&app.out.join(EARTH).join(pxl_geo_bake::pyramid::MANIFEST)).map(|b| named(&b)),
+        Tiles::Shelf(dir) => read(&dir.join(layer.name()).join(pxl_geo_bake::pyramid::MANIFEST)).map(|b| named(&b)),
+        Tiles::Oven(_) => {
+            let token = app.cache.join(OVEN_TOKEN);
+            if !token.exists() {
+                std::fs::create_dir_all(&app.cache).map_err(|e| format!("{}: {e}", app.cache.display()))?;
+                let made = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+                std::fs::write(&token, made.to_string()).map_err(|e| format!("{}: {e}", token.display()))?;
+            }
+            read(&token).map(|b| named(&b))
+        }
+    }
+}
+
+/// The source's declaration (pxl-geo-bake source.rs) as the server stands
+/// now: a shelf's sets as their manifests say, the oven the coverage in the
+/// formats this code writes; the Earth's picture its bake's.
+fn declaration(app: &App) -> Result<String, String> {
+    let kinds = source::try_kinds(|l| {
+        let version = version_of(app, l)?;
+        match &app.tiles {
+            _ if !sharded(l) => Ok(source::Kind {
+                shard: None,
+                ..source::of_set(&app.out.join(EARTH), &version)?
+            }),
+            Tiles::Shelf(dir) => match source::of_set(&dir.join(l.name()), &version)? {
+                k if k.shard.is_some() => Ok(k),
+                _ => Err(format!("{}: its manifest names no shards the set holds", dir.join(l.name()).display())),
+            },
+            Tiles::Oven(_) => Ok(source::Kind {
+                format: FORMAT.of(l),
+                version,
+                shard: Some(source::tiles(app.coverage.iter().map(String::as_str))?),
+            }),
+        }
+    })?;
+    Ok(source::declaration(app.top_zoom, &kinds, &Overrides::new())?.to_string())
 }
 
 const EARTH: &str = "earth";
@@ -62,12 +117,13 @@ async fn earth(app: &App, name: &str) -> Response {
     }
 }
 
+/// Immutable, as the Worker serves a tile: its version names its bytes.
 fn packed(bytes: Vec<u8>) -> Response {
     (
         [
             (header::CONTENT_TYPE, "application/octet-stream"),
             (header::CONTENT_ENCODING, CONTENT_ENCODING),
-            (header::CACHE_CONTROL, "no-store"),
+            (header::CACHE_CONTROL, "public, max-age=31536000, immutable, no-transform"),
         ],
         Bytes::from(bytes),
     )
@@ -75,9 +131,14 @@ fn packed(bytes: Vec<u8>) -> Response {
 }
 
 async fn tile(State(app): State<Arc<App>>, Path((kind, object)): Path<(String, String)>) -> Response {
-    let Some((_, name)) = tile_object_parts(&object) else {
+    let Some((version, name)) = tile_object_parts(&object) else {
         return StatusCode::NOT_FOUND.into_response();
     };
+    // Only what is served now, so nothing is kept under a version that named other bytes.
+    let layer = BaseLayer::ALL.into_iter().find(|l| l.name() == kind);
+    if layer.is_none_or(|l| version_of(&app, l).ok().as_deref() != Some(version)) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     let name = name.to_string();
     if kind == EARTH {
         return earth(&app, &name).await;
@@ -114,8 +175,15 @@ async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
     }
 }
 
+/// Made again at each ask, so a set baked again under a running server is a new version.
 async fn source(State(app): State<Arc<App>>) -> Response {
-    ([(header::CONTENT_TYPE, "application/json"), (header::CACHE_CONTROL, "no-store")], app.source.clone()).into_response()
+    match declaration(&app) {
+        Ok(declared) => ([(header::CONTENT_TYPE, "application/json"), (header::CACHE_CONTROL, "no-store")], declared).into_response(),
+        Err(e) => {
+            eprintln!("[tile] {e}");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
 }
 
 const ASSET_TYPES: [(&str, &str); 3] = [("glb", "model/gltf-binary"), ("png", "image/png"), ("webp", "image/webp")];
@@ -181,34 +249,20 @@ fn run() -> Result<(), String> {
         Some(dir) => (Tiles::Shelf(dir), GROUND.top()),
         None => {
             let top_zoom = LEAF_ZOOM.checked_sub(folds).filter(|&z| z >= GROUND.top()).ok_or("--folds past the pyramid's top")?;
-            (Tiles::Oven(Server::open(workers, cache, top_zoom, limits)?), top_zoom)
+            (Tiles::Oven(Server::open(workers, cache.clone(), top_zoom, limits)?), top_zoom)
         }
     };
-    // What it serves: a shelf's sets as their manifests say, the oven the
-    // coverage in the formats this code writes; the Earth's picture its bake's.
     let coverage: Vec<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
-    let kinds = source::try_kinds(|l| match &tiles {
-        _ if !sharded(l) => Ok(source::Kind {
-            shard: None,
-            ..source::of_set(&out.join(EARTH), VERSION)?
-        }),
-        Tiles::Shelf(dir) => match source::of_set(&dir.join(l.name()), VERSION)? {
-            k if k.shard.is_some() => Ok(k),
-            _ => Err(format!("{}: its manifest names no shards the set holds", dir.join(l.name()).display())),
-        },
-        Tiles::Oven(_) => Ok(source::Kind {
-            format: FORMAT.of(l),
-            version: VERSION.into(),
-            shard: Some(source::tiles(coverage.iter().map(String::as_str))?),
-        }),
-    })?;
-    let declared = source::declaration(top_zoom, &kinds, &Overrides::new())?.to_string();
     let app = Arc::new(App {
         tiles,
-        source: declared,
+        cache: cache.clone(),
+        top_zoom,
+        coverage,
         asset_dir,
         out,
     });
+    // Refused at start as a client would refuse it.
+    declaration(&app)?;
 
     let router = Router::new()
         .route(&format!("{TILE_ROOT}/source"), get(source))

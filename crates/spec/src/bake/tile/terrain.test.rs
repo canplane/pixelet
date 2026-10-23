@@ -16,46 +16,34 @@ impl Rng {
     }
 }
 
-/// Random lanes, each index cell's lowest under its highest.
+/// Random lines.
+fn lines(rng: &mut Rng) -> Separation {
+    let mut separation = separation::Builder::default();
+    for _ in 0..3 {
+        let points: Vec<([f64; 2], i16, u8)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16, rng.next() as u8)).collect();
+        separation.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, separation::Form::of((rng.next() % 3) as u8), rng.next() as u8);
+    }
+    separation.finish()
+}
+
+/// Random lanes, as the bake holds them.
 fn tile(seed: u64) -> TerrainTile {
     let mut rng = Rng(SplitMix64::new(seed));
     let ele: Vec<i16> = (0..ELE_LANE).map(|_| rng.next() as i16).collect();
-    let cells: Vec<GroundId> = (0..GROUND_LANE).map(|_| rng.next() as GroundId).collect();
-    let extent: Vec<[i16; 2]> = (0..EXTENT_LANE)
-        .map(|_| {
-            let (a, b) = (rng.next() as i16, rng.next() as i16);
-            [a.min(b), a.max(b)]
-        })
-        .collect();
-    let mut separation = separation::Builder::default();
-    for _ in 0..3 {
-        let points: Vec<([f64; 2], i16)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16)).collect();
-        separation.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, separation::Form::of((rng.next() % 3) as u8), rng.next() as u8);
-    }
-    TerrainTile {
-        ele: ele.into(),
-        ground: Ground { cells: cells.into() },
-        separation: separation.finish(),
-        index: Index::new(extent, Occupancy::of_bits(0b10101).unwrap()),
-    }
+    let cells: Vec<GroundId> = (0..LOOK_LANE).map(|_| rng.next() as GroundId).collect();
+    TerrainTile::of(ele, Ground { cells: cells.into() }, lines(&mut rng), Occupancy::of_bits(0b10101).unwrap())
 }
 
-fn room() -> TileRoom {
-    TileRoom {
-        ground: vec![0; GROUND_LANE].leak(),
-        ele: vec![0; ELE_LANE].leak(),
-        extent: vec![[0; 2]; EXTENT_LANE].leak(),
-        coarse: vec![[0; 2]; COARSE_LANE].leak(),
-        separation: separation::Room {
-            starts: vec![0; separation::MAX_LINES + 1].leak(),
-            points: vec![[0; 2]; separation::MAX_POINTS].leak(),
-            tops: vec![0; separation::MAX_POINTS].leak(),
-            width: vec![0; separation::MAX_LINES].leak(),
-            kind: vec![0; separation::MAX_LINES].leak(),
-            form: vec![0; separation::MAX_LINES].leak(),
-            clear: vec![0; separation::MAX_LINES].leak(),
-            boxes: vec![[0; 4]; separation::MAX_BOXES].leak(),
-        },
+fn room() -> separation::Room {
+    separation::Room {
+        starts: vec![0; separation::MAX_LINES + 1].leak(),
+        points: vec![[0; 2]; separation::MAX_POINTS].leak(),
+        tops: vec![0; separation::MAX_POINTS].leak(),
+        width: vec![0; separation::MAX_LINES].leak(),
+        kind: vec![0; separation::MAX_LINES].leak(),
+        form: vec![0; separation::MAX_LINES].leak(),
+        clear: vec![0; separation::MAX_LINES].leak(),
+        boxes: vec![[0; 4]; separation::MAX_BOXES].leak(),
     }
 }
 
@@ -74,8 +62,14 @@ fn the_formats_write_and_read_what_the_record_holds() {
     let terrain = encode(&tile).unwrap();
     assert_eq!(format!("{:016x}", fnv(&terrain)), v.s("terrain.fnv"), "the tile's bytes");
     assert_eq!(decode(&terrain).unwrap(), tile, "a tile reads back as it was written");
-    let room = room();
-    assert_eq!(decode_into(&terrain, room).unwrap(), tile, "a tile reads into its room as it was written");
+    // On the CPU its lines, but for what only a fold reads.
+    let resident = decode_into(&terrain, room()).unwrap();
+    let held = separation::Separation {
+        coarsest: Default::default(),
+        ..tile.separation.clone()
+    };
+    assert_eq!(resident.separation, held, "its lines");
+    assert_eq!(resident.occupancy, tile.occupancy);
 }
 
 #[test]
@@ -85,27 +79,6 @@ fn a_packet_that_is_not_a_tile_is_refused() {
     assert!(decode(&small).is_err());
     let room = room();
     assert!(decode_into(&small, room).is_err());
-}
-
-/// Every index block is exactly the join of its cells, at every size.
-#[test]
-fn a_block_says_what_its_cells_say() {
-    for seed in [1, 0x2545_f491, 0x9e37_79b9_7f4a_7c15] {
-        let index = tile(seed).index;
-        let n = EXTENT.tile_cells();
-        for j in 0..=n.trailing_zeros() {
-            let side = 1 << j;
-            for y in (0..n).step_by(side as usize) {
-                for x in (0..n).step_by(side as usize) {
-                    let lane = index.extent();
-                    let cells = (y..y + side).flat_map(|cy| (x..x + side).map(move |cx| lane[EXTENT.cell_index(cx, cy) as usize]));
-                    let lo = cells.clone().map(|c| drawn(c)[0]).min().unwrap();
-                    let hi = cells.map(|c| drawn(c)[1]).max().unwrap();
-                    assert_eq!(index.over([x, y], side), [lo, hi], "{side} from ({x}, {y})");
-                }
-            }
-        }
-    }
 }
 
 /// Every valid occupancy byte round-trips and no other is accepted.

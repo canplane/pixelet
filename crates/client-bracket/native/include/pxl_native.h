@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 // The doorbell: a turn of quota_ms, and when the kernel wants the next, in ms
@@ -17,14 +18,14 @@ double pxl_interrupt(double quota_ms);
 // may be null) — what the shell reads the directory and the rings through.
 uint8_t *pxl_memory(uint32_t *bytes);
 
-// Opens the device, writing its uniform offset alignment and whether it
-// times its passes: 0 when it is open, -1 when the system has none.
-int32_t pxl_gpu_open(uint32_t *align, uint32_t *timestamps);
+// Opens the device: 0 when it is open, -1 when the system has none. What it
+// is, the kernel reads from the block its first call asks the host for.
+int32_t pxl_gpu_open(void);
 
-// Decodes the PNG or WebP of `bytes` bytes at `file` and holds it for the
-// renderer as `handle`, which the kernel issued: 1, or 0 when it does not
-// decode. Any thread.
-uint32_t pxl_image_hold(uint32_t handle, const uint8_t *file, uint32_t bytes);
+// `f` is what the device's host calls to ask a turn, from whichever thread
+// learned of a completion (an image decoded): it sends the app an event, and
+// JavaScript asks for the turn that reads it.
+void pxl_wake_on(void (*f)(void));
 
 // Binds the kernel's surface `handle` to `layer`, a view's CAMetalLayer,
 // which the view keeps until it has unbound it: 0, or -2 when no device is
@@ -32,3 +33,10 @@ uint32_t pxl_image_hold(uint32_t handle, const uint8_t *file, uint32_t bytes);
 int32_t pxl_surface_bind(uint32_t handle, void *layer);
 // Lets `handle`'s layer go, if it is still the one bound under its slot.
 void pxl_surface_unbind(uint32_t handle);
+
+// A body the app's fetch hands over still zstd (src/unpack.rs), which never
+// reaches the kernel and so runs on the caller's thread, off the JavaScript
+// thread: 0 with the decoded bytes at *out, *out_len long, the library's
+// until pxl_unpacked_free; -1 where it does not decode.
+int32_t pxl_unpack(const uint8_t *src, size_t len, uint8_t **out, size_t *out_len);
+void pxl_unpacked_free(uint8_t *out, size_t len);

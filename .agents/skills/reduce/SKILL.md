@@ -1,13 +1,12 @@
 ---
 name: reduce
-description: How a structural audit and cleanup is run — finding where the tree strays from the main axis or keeps a fact twice, ranking what to remove, and landing it beside other agents. Use when asked to audit, tidy or reduce the tree, or before a refactor whose point is a simpler structure. The principles it applies are AGENTS.md's "The main axis" and "Architecture first".
+description: How a structural audit and cleanup is run — finding where the tree strays from the main axis or keeps a fact twice, ranking what to remove, and landing it beside other agents. Use when asked to audit, tidy or reduce the tree, or before a refactor whose point is a simpler structure. The principles it applies are AGENTS.md's "The main axis".
 ---
 
 # Running a reduction
 
-The principles are AGENTS.md's: "The main axis" says what the tree should
-look like and how a reduction is valued, "Architecture first" how a change
-is made. This is the procedure that applies them, the same each time.
+The principles are AGENTS.md's "The main axis": what the tree should
+look like and how a reduction is valued. This is the procedure that applies them, the same each time.
 
 ## 1. Find
 

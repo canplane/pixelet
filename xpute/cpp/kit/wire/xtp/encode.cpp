@@ -87,18 +87,13 @@ std::optional<std::uint32_t> PacketWriter::str_commit(std::uint32_t len) noexcep
 }
 
 PacketWriter &PacketWriter::str(std::optional<std::string_view> s) noexcept {
-    std::optional<std::uint32_t> at;
-    if (s) {
-        if (std::optional<std::uint32_t> room = str_room()) {
-            if (s->size() > *room) {
-                spoil(Errno::eoverflow);
-            } else {
-                std::memcpy(buf_.data() + str_payload(), s->data(), s->size());
-                at = str_commit(static_cast<std::uint32_t>(s->size()));
-            }
-        }
-    }
-    return entry(at, type_of(SequenceType::str));
+    if (!s) return entry(std::nullopt, type_of(SequenceType::str));
+    // Copied the way a string written in place goes in, so the two lay out alike.
+    return str_with([&](std::span<char> room) -> std::optional<std::size_t> {
+        if (s->size() > room.size()) return std::nullopt;
+        std::memcpy(room.data(), s->data(), s->size());
+        return s->size();
+    });
 }
 
 PacketWriter &PacketWriter::strs(std::optional<std::span<const std::string_view>> items) noexcept {

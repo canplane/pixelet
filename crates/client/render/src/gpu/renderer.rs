@@ -4,9 +4,9 @@
 //! Depth is reversed f32 throughout, near 1 and far 0: float precision and
 //! perspective depth cancel, so far coplanar faces stop fighting.
 
-use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
-use pxl_spec::space::coord::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
-use pxl_spec::space::coord::v3::{norm3, sub3, V3};
+use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
+use pxl_spec::space::coord::mat4::{self, Mat4};
+use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
@@ -14,19 +14,24 @@ use xpute_guest::mem::heap::{alloc, free};
 use xpute_kit::math::scalar::round;
 
 use crate::frame::draw::{
-    uniform_of, Lists, CHUNK_UNIT, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX,
-    PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
+    census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
+    PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
+use crate::frame::screen_cells::SCREEN_CELLS_MAX;
+use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
 use crate::frame::shader::record::{
-    FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_DEBUG_FACE, PIPELINE_SKY,
+    FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_FACE, SHADER_HEIGHTS, SHADER_START, SHADER_WAYS,
 };
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, frame_begin, frame_commit, frame_room, gpu, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
-use crate::gpu::api_spec::{dimension, format, load, resource, surface_role};
-use crate::gpu::arena::{arena_buffer, arena_bytes, arena_lose};
-use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
-use crate::gpu::clouds::{self, CloudPass};
+use crate::gpu::api::{
+    buffer_entry, buffer_range_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, sampler_entry, texture_usage, view_entry, word_bytes,
+    write_buffer_bytes, Device, Entry, Format, Gpu, Load, Stamp, DONE,
+};
+use crate::gpu::api_spec::surface_role;
+use crate::gpu::atmosphere::{Atmosphere, AIR_ENTRIES};
+use crate::gpu::clouds::CloudPass;
+use crate::gpu::grown::{DecorFrame, Drawn, Grown};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::{Layers, Mips};
 use crate::gpu::pass::badges::BadgePass;
@@ -36,17 +41,15 @@ use crate::gpu::pass::model::{frame_layout, FrameGroups, Stage};
 use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::shadow::Shadow;
 use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
-use pxl_spec::space::camera::grid::CHUNK_CELLS;
+use crate::mesh::paint::ground::look_words;
+use pxl_portable::scatter::GROUPS;
+use pxl_spec::block::window::{BACK_WORDS, ELE_AT, FRESH_WORDS, HANDED, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
-use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -61,19 +64,14 @@ const LOW_SPEC: usize = FRAME_AT[4];
 const EDGE_WIDTH: usize = FRAME_AT[5];
 const RIM_INTENSITY: usize = FRAME_AT[6];
 const VIEWPORT: usize = FRAME_AT[7];
-const SHADOW_STRENGTH: usize = FRAME_AT[8];
-const SHADOW_TEXEL: usize = FRAME_AT[9];
-const VIGNETTE: usize = FRAME_AT[10];
-const AO_STRENGTH: usize = FRAME_AT[11];
-const SCREEN_AO: usize = FRAME_AT[12];
-const LIGHT_VIEW_PROJ: usize = FRAME_AT[13];
-const OTHER: usize = FRAME_AT[14];
-const PLANET: usize = FRAME_AT[15];
-const GLOBE: usize = FRAME_AT[16];
-const UP: usize = FRAME_AT[17];
-const CELL: usize = FRAME_AT[18];
-const GIZMO: usize = FRAME_AT[19];
-const SHADOW_RIM: usize = FRAME_AT[20];
+const VIGNETTE: usize = FRAME_AT[8];
+const AO_STRENGTH: usize = FRAME_AT[9];
+const SCREEN_AO: usize = FRAME_AT[10];
+const OTHER: usize = FRAME_AT[11];
+const PLANET: usize = FRAME_AT[12];
+const GLOBE: usize = FRAME_AT[13];
+const UP: usize = FRAME_AT[14];
+const CELL: usize = FRAME_AT[15];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_FLOATS: usize = 16;
@@ -87,13 +85,16 @@ const MOON_TEX_SZ: u32 = 512;
 
 const _: () = assert!(GPU_SPAN_NAMES.len() <= 32, "a span a bit of the mask the host is told");
 const SPAN_AIR: usize = GpuSpanName::air as usize;
-const SPAN_SHADOW: usize = GpuSpanName::shadow as usize;
 const SPAN_PREPASS: usize = GpuSpanName::prepass as usize;
 const SPAN_AO: usize = GpuSpanName::ao as usize;
 const SPAN_WORLD: usize = GpuSpanName::world as usize;
+const SPAN_OVERLAY: usize = GpuSpanName::overlay as usize;
 const SPAN_BADGES: usize = GpuSpanName::badges as usize;
 const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
 const SPAN_CASES: usize = GpuSpanName::cases as usize;
+const SPAN_FILL: usize = GpuSpanName::fill as usize;
+const SPAN_CAST: usize = GpuSpanName::cast as usize;
+const SPAN_FACE: usize = GpuSpanName::face as usize;
 
 type Frame = [f32; FRAME_FLOATS];
 
@@ -109,11 +110,30 @@ pub struct FrameInput<'a> {
     pub moon: fn() -> Option<u32>,
     pub earth: fn() -> Option<u32>,
     pub earth_tiles: EarthTiles<'a>,
+    /// The terrain's held tiles, whose cells the GPU draws whether or not
+    /// an eye casts.
+    pub ground: GroundSquares<'a>,
+    /// The eye's rays cast on the GPU into the lane the screen's cells draw;
+    /// none without an eye, and the lane holds no cells.
+    pub cast: Option<Cast<'a>>,
     pub billboards: &'a mut Sheet,
     pub text: TextOf,
-    /// A phone gets a smaller shadow map.
-    pub handheld: bool,
+    /// Whether the surfaces take a frame now without blocking; one admitted
+    /// is drawn. Asked only once nothing else stops the frame.
+    pub admit: fn() -> bool,
+    /// Whether its GPU spans are timed and read back (GPU_SPAN_NAMES): only
+    /// for a reader of them, as their read's landing wakes a turn.
+    pub timed: bool,
+    /// Whether its draws are counted (`FrameStat::census`): the profiler's
+    /// alone, so a frame it does not record counts none.
+    pub counted: bool,
 }
+
+/// The buffers squares' cells come back through: what a frame hands, a
+/// mapping still out a frame more (pxl-portable `window::HANDED`).
+const READS: usize = 2 * HANDED as usize;
+/// A buffer of them carrying no square.
+const FREE: u32 = u32::MAX;
 
 /// The earth layer's tiles as the GPU reads them: the floor's window, its
 /// south-west tile first, and per tile its layer plus one; `upload` hands each
@@ -127,7 +147,85 @@ pub struct EarthTiles<'a> {
 /// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
+/// The ground's windows as the GPU holds them (pxl-portable `window`,
+/// `SQUARES` of them): the squares to hand it.
+pub struct GroundSquares<'a> {
+    /// Hands each square whose cells the GPU is to draw to the writer.
+    pub upload: &'a mut TerrainUpload,
+}
+
+/// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`): the
+/// eye, its lane's tangents, the terrain's tiles as the GPU holds them, and
+/// what is placed.
+pub struct Cast<'a> {
+    /// The eye as seven vec4s (pxl-kernel view/lens.rs `gpu_cast`, scene/
+    /// cast.rs `eye`): its origin in Q3 steps, forward and the reach, right
+    /// and τ, up, the lane's cells across and up with the zooms a block is
+    /// asked at, and a preview's cut to air and its left-out leaf.
+    pub eye: [u32; CAST_EYE_WORDS],
+    /// Each column's tangent then each row's, where they live, unwritten
+    /// until the page replays the turn.
+    pub tangents: &'a [f32],
+    /// Per window of the eye's, from the top's, a row a slot: the square it
+    /// holds, X and Y, and whether it is present, and a spare.
+    pub window: &'a [i32],
+    /// Each shard the service area serves: its tile zoom, x and y, a spare.
+    pub shards: &'a [[i32; 4]],
+    pub overwrites: Overwrites<'a>,
+    /// The decor the GPU grows and draws over the same world, none where
+    /// decor is off (gpu/grown.rs).
+    pub decor: Option<DecorFrame<'a>>,
+}
+
+pub const CAST_EYE_WORDS: usize = 28;
+
+/// The overwrites' tree (pxl-kernel layer/object/store.rs) as it lives: its
+/// heap and data lanes, unwritten until the page replays the turn, the room
+/// either has before it grows, and the revision they are at.
+pub struct Overwrites<'a> {
+    pub heap: &'a [u32],
+    pub data: &'a [u32],
+    pub room: usize,
+    pub revision: u32,
+}
+
+/// Where a square's cells, which the GPU draws, come back to in the
+/// module's memory (`Renderer::read_back`): its heights then its levels,
+/// the kernel's word that takes `ticket | DONE` once this fill's are in,
+/// and the ticket.
+#[derive(Clone, Copy, Default)]
+pub struct CellsBack {
+    pub cells: u32,
+    pub word: u32,
+    pub ticket: u32,
+}
+
+/// A square handed to the GPU: its place among the windows' squares, where
+/// it lies in its tile in squares (X low, Y high), its four looks a cell,
+/// its share of its tile's ways' bound, its tile's padded samples, its lines
+/// as far as they are written, and where its cells, joined with the ways,
+/// come back to.
+pub struct Square<'a> {
+    pub square: u32,
+    pub place: u32,
+    /// Its cells' zoom, its window's (pxl-portable `window::FRESH_WORDS`).
+    pub cell: u32,
+    pub looks: &'a [u8],
+    pub samples: &'a [u8],
+    /// Its lines (pxl-portable `window::LINES_AT`), the words written.
+    pub lines: &'a [u32],
+    pub back: CellsBack,
+}
+
+/// Takes a square while the turn's stream has room for it.
+pub type TerrainWrite<'a> = dyn FnMut(Square<'_>) -> bool + 'a;
+
+pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
+
 pub struct FrameOutput {
+    /// What the frame turn made: decided where each case is (no device or
+    /// surface, not admitted, dropped from the stream, and the cast's kind).
+    pub kind: FrameKind,
     /// A surface waits on a size to settle, so another turn is wanted.
     pub redraw: bool,
     pub stat: Option<FrameStat>,
@@ -135,20 +233,25 @@ pub struct FrameOutput {
 
 #[derive(Clone, Copy)]
 pub struct FrameStat {
-    pub gpu_ms: f64,
-    pub draw_calls: f64,
-    pub triangles: f64,
-    pub buffers: f64,
-    pub buffer_bytes: f64,
+    /// Whether a GPU read landed with this frame: its spans are then that
+    /// read's, and else an earlier frame's, not this one's.
+    pub gpu_read: bool,
+    /// The block table's blocks and their bytes.
+    pub blocks: f64,
+    pub block_bytes: f64,
     pub depth_mb: f64,
-    pub shadow_mb: f64,
     pub layers_mb: f64,
-    pub px: f64,
-    pub census: [[f64; 2]; PIPELINES as usize],
+    pub world_px: f64,
+    /// Every draw's, counted only while `counted`: its sums are the frame's
+    /// draws and triangles.
+    pub census: DrawCensus,
     pub gpu_spans: [f64; GPU_SPAN_NAMES.len()],
-    pub arena_mb: f64,
-    /// 1 where the frame did not fit the GPU stream and was not drawn.
-    pub skipped: f64,
+}
+
+/// A frame's GPU time: its spans' sum, the passes timed. The span from the
+/// first to the last would count what lies between submits.
+pub fn gpu_ms(spans: &[f64]) -> f64 {
+    spans.iter().sum()
 }
 
 pub fn put_f32(buf: &mut [u8], at: usize, v: f32) {
@@ -175,8 +278,8 @@ pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
 /// projecting two points in the shader kept a direction to only ~1e-3 rad,
 /// which the secant carried out to kilometers at the horizon: the clouds shook.
 pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
-    let mut inv = mat4();
-    mat4_invert(&mut inv, view_proj);
+    let mut inv = mat4::new();
+    mat4::invert(&mut inv, view_proj);
     let point = |x: f64, y: f64| -> V3 {
         let clip = [x, y, 0.5, 1.0];
         let row = |r: usize| (0..4).map(|c| inv[c * 4 + r] * clip[c]).sum::<f64>();
@@ -185,25 +288,20 @@ pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
     };
     let c = point(0.0, 0.0);
     for (k, (to, from)) in [(point(1.0, 0.0), c), (point(0.0, 1.0), c), (c, *eye)].into_iter().enumerate() {
-        for (o, e) in out[at + 4 * k..at + 4 * k + 3].iter_mut().zip(sub3(&to, &from)) {
+        for (o, e) in out[at + 4 * k..at + 4 * k + 3].iter_mut().zip(v3::sub(&to, &from)) {
             *o = e as f32;
         }
     }
 }
 
-pub fn frame_group(g: &Gpu, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32; 5], air: [u32; AIR_WORDS]) -> u32 {
-    let id = object();
-    let mut e = [0u32; 20 + AIR_WORDS];
-    e[..5].copy_from_slice(&buffer_entry(0, frame));
-    e[5..15].copy_from_slice(&shadow);
-    e[15..20].copy_from_slice(&ao);
-    e[20..].copy_from_slice(&air);
-    g.bind_group(id, layout, &e);
-    id
+pub fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: Entry, air: [Entry; AIR_ENTRIES]) -> u32 {
+    let mut e = vec![buffer_entry(0, frame), ao];
+    e.extend(air);
+    g.bind_group(layout, &e)
 }
 
 /// Each skin image as one texture's view, made the first time a skin binds it:
-/// the host lets a decoded image go as it uploads it (`Gpu::image_texture`), so
+/// an image's texture is taken once (`Gpu::image_texture`), so
 /// a skin made again, or by another pass, binds what is here. As many as the
 /// skins the asset table names.
 static SKIN_VIEWS: Global<Vec<(u32, u32)>> = Global::new();
@@ -213,44 +311,14 @@ fn skin_view(g: &Gpu, image: u32) -> u32 {
     if let Some(&(_, view)) = views.iter().find(|&&(i, _)| i == image) {
         return view;
     }
-    let (texture, view) = (object(), object());
-    g.image_texture(texture, image);
-    g.view(view, texture, dimension::D2, 0, 1, 0, 1);
+    let texture = g.image_texture(image);
+    let view = g.view(texture, false, 0, 1, 0, 1);
     views.push((image, view));
     view
 }
 
 pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> u32 {
-    let group = object();
-    g.bind_group(group, layout, &[0, resource::VIEW, skin_view(g, image), 0, 0, 1, resource::SAMPLER, sampler, 0, 0]);
-    group
-}
-
-/// Whether a chunk casts the sun's shadow: it draws the ground as held, its
-/// grid cell the one a leaf's cells fold into, or finer.
-fn casts(unit: f32) -> bool {
-    f64::from(unit) <= units(GROUND.grid_zoom(LEAF_ZOOM))
-}
-
-/// How far from the eye the casting chunks reach; none where nothing casts.
-fn shadow_reach(records: &[[u32; DRAW_WORDS]], uniforms: &[f32]) -> Option<f64> {
-    let mut far = 0.0f64;
-    for d in records.iter().filter(|d| matches!(d[4], PIPELINE_CHUNK | PIPELINE_CHUNK_COARSE)) {
-        let u = uniform_of(uniforms, d);
-        if !casts(u[CHUNK_UNIT]) {
-            continue;
-        }
-        // The cube's farthest corner from the eye.
-        let side = f64::from(u[CHUNK_UNIT]) * f64::from(CHUNK_CELLS);
-        let corner: f64 = (0..3)
-            .map(|k| {
-                let d = f64::from(u[k]).abs().max((f64::from(u[k]) + side).abs());
-                d * d
-            })
-            .sum();
-        far = far.max(libm::sqrt(corner));
-    }
-    (far > 0.0).then_some(far)
+    g.bind_group(layout, &[view_entry(0, skin_view(g, image)), sampler_entry(1, sampler)])
 }
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
@@ -322,6 +390,13 @@ impl Scratch {
     }
 }
 
+/// Its block goes with it: the renderer is dropped whole when the GPU is lost.
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        self.free();
+    }
+}
+
 const EMPTY: u32 = 0;
 
 /// A power of two so a position wraps by masking, at least twice `live` so
@@ -358,8 +433,10 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 /// Handle, address, length, the two counts, buffer, group.
 const BLOCK_LANES: usize = 7;
 
+/// The table's lanes, then the draw list's (frame/draw.rs `lanes_bytes`),
+/// room for the most blocks live, half the slots.
 pub const fn blocks_bytes(slots: usize) -> u32 {
-    (BLOCK_LANES * slots * 4) as u32
+    (BLOCK_LANES * slots * 4) as u32 + crate::frame::draw::lanes_bytes(slots / 2)
 }
 
 /// # Safety
@@ -381,6 +458,8 @@ pub unsafe fn set_blocks(at: u32, slots: usize) {
         bytes: 0,
         missing: 0,
     });
+    // SAFETY: the range's rest past the table, the lists' alone.
+    unsafe { crate::frame::draw::set_lanes(at + (BLOCK_LANES * slots * 4) as u32, slots / 2) };
 }
 
 fn home(handle: u32, slots: usize) -> usize {
@@ -408,15 +487,10 @@ impl Blocks {
 
     /// False, the block still missing, where the turn's stream has no room.
     fn put(&mut self, g: &Gpu, i: usize) -> bool {
-        if !room(self.len[i]) {
+        if !room(write_buffer_bytes(memory(self.at[i], self.len[i] & !3))) {
             return false;
         }
-        let buffer = object();
-        g.buffer(
-            buffer,
-            buffer_size(self.len[i]),
-            buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST,
-        );
+        let buffer = g.buffer(buffer_size(self.len[i]), buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(buffer, 0, memory(self.at[i], self.len[i] & !3));
         self.buffer[i] = buffer;
         self.group[i] = 0;
@@ -473,7 +547,7 @@ impl Blocks {
         self.at[i] = at;
         let (Some(g), buffer @ 1..) = (g, self.buffer[i]) else { return };
         let bytes = len.min(self.len[i].saturating_sub(from)) & !3;
-        if room(bytes) {
+        if room(write_buffer_bytes(memory(at + from, bytes))) {
             g.write_buffer(buffer, from, memory(at + from, bytes));
         } else {
             release(self.group[i]);
@@ -519,12 +593,11 @@ impl Blocks {
         }
     }
 
-    /// For a draw binding it as a vertex buffer: the ghost's box goes through the chunk pipeline.
+    /// For a draw binding it as a vertex buffer: the ghost's boxes are read through it (box.wgsl).
     pub fn group(&mut self, g: &Gpu, handle: u32, layout: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
         if self.group[i] == 0 {
-            let id = object();
-            g.bind_group(id, layout, &buffer_entry(0, self.buffer[i]));
+            let id = g.bind_group(layout, &[buffer_entry(0, self.buffer[i])]);
             self.group[i] = id;
         }
         Some(self.group[i])
@@ -537,14 +610,14 @@ fn blocks() -> &'static mut Blocks {
     BLOCKS.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
 }
 
-#[derive(Clone, Copy)]
-struct Device {
-    align: u32,
-    timestamps: bool,
-}
-
-static DEVICE: Global<Option<Device>> = Global::new();
 static RENDERER: Global<Option<Renderer>> = Global::new();
+
+/// Each light's step, the sun's first: the height it moves before the sky as
+/// drawn moves a display level (gpu/atmosphere.rs `steps`); none before any
+/// view's slope has landed.
+pub fn sky_steps() -> [Option<f32>; 2] {
+    RENDERER.get(|| None).as_ref().map_or([None; 2], |r| r.atmosphere.steps())
+}
 
 static REDRAW: Global<bool> = Global::new();
 
@@ -552,26 +625,20 @@ static REDRAW: Global<bool> = Global::new();
 /// power of two no larger, so a larger one is no device's.
 pub const UNIFORM_ALIGN_MAX: u32 = 256;
 
-pub fn gpu_created(align: u32, timestamps: bool) {
-    DEVICE.set(Some(Device { align, timestamps }));
-}
-
 pub fn device_ready() -> bool {
-    DEVICE.get(|| None).is_some()
+    device().is_some()
 }
 
 pub fn gpu_lost() {
-    DEVICE.set(None);
     RENDERER.set(None);
     SKIN_VIEWS.set(Vec::new());
-    forget_objects();
+    device_lost();
     blocks().lose();
-    arena_lose();
     surfaces_lost();
 }
 
 pub fn surface_closed(s: Surface) {
-    for id in [s.depth_view, s.depth] {
+    for id in [s.depth_view, s.depth, s.world_view, s.world, s.world_depth_view, s.world_depth] {
         release(id);
     }
     let slot = handle_slot(s.handle) as usize;
@@ -594,29 +661,18 @@ struct DebugPass {
     faces: Built,
     frame_group: u32,
     sets: Vec<(u32, u32)>,
-    grid: Built,
-    grid_group: u32,
 }
 
 impl DebugPass {
-    fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> DebugPass {
-        let built = pipelines.build(g, PIPELINE_DEBUG, format::CANVAS);
-        let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, format::CANVAS);
-        let frame_group = object();
-        g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
-        let grid = pipelines.build(g, PIPELINE_CAMERA_GRID, format::CANVAS);
-        let grid_group = object();
-        let mut entries = [0u32; 10];
-        entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
-        entries[5..].copy_from_slice(&buffer_entry(1, sky_buffer));
-        g.bind_group(grid_group, grid.layouts[0], &entries);
+    fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> DebugPass {
+        let built = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
+        let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
+        let frame_group = g.bind_group(built.layouts[0], &[buffer_entry(0, frame_buffer)]);
         DebugPass {
             built,
             faces,
             frame_group,
             sets: Vec::new(),
-            grid,
-            grid_group,
         }
     }
 
@@ -624,10 +680,8 @@ impl DebugPass {
     /// outlives its frame.
     fn prepare(&mut self, g: &Gpu, draws: &Draws) {
         while self.sets.len() < draws.of(PIPELINE_DEBUG).len() {
-            let buffer = object();
-            g.buffer(buffer, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            let group = object();
-            g.bind_group(group, self.built.layouts[1], &buffer_entry(0, buffer));
+            let buffer = g.buffer(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            let group = g.bind_group(self.built.layouts[1], &[buffer_entry(0, buffer)]);
             self.sets.push((buffer, group));
         }
     }
@@ -635,8 +689,7 @@ impl DebugPass {
     /// `depth` is the world's, which nothing reads after this.
     #[allow(clippy::too_many_arguments)]
     fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
-        let grid = draws.of(PIPELINE_CAMERA_GRID).len() > 0;
-        if draws.of(PIPELINE_DEBUG).len() == 0 && !grid {
+        if draws.of(PIPELINE_DEBUG).len() == 0 {
             return;
         }
         // Each set held: its own uniform and bind group, its line vertices and its face vertices.
@@ -653,8 +706,7 @@ impl DebugPass {
         // With no faces the lines' pass clears the depth itself.
         let faced = sets().any(|s| s.4 > 0);
         if faced {
-            let pass = object();
-            g.pass(pass, encoder, &pass_desc(0, load::CLEAR, depth, load::CLEAR, 0.0, stamp.pass()));
+            let pass = g.pass(encoder, &pass_desc(0, Load::Clear, depth, Load::Clear, 0.0, stamp.pass()));
             g.set_pipeline(pass, self.faces.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
             for (k, _, block, lines, faces) in sets().filter(|s| s.4 > 0) {
@@ -663,11 +715,9 @@ impl DebugPass {
                 g.draw(pass, faces, 1, 0, 0);
             }
             g.end(pass);
-            release(pass);
         }
-        let pass = object();
-        let depth_load = if faced { load::LOAD } else { load::CLEAR };
-        g.pass(pass, encoder, &pass_desc(canvas, load::LOAD, depth, depth_load, 0.0, stamp.pass()));
+        let depth_load = if faced { Load::Load } else { Load::Clear };
+        let pass = g.pass(encoder, &pass_desc(canvas, Load::Load, depth, depth_load, 0.0, stamp.pass()));
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         for (k, _, block, lines, _) in sets() {
@@ -676,14 +726,586 @@ impl DebugPass {
             // A segment an instance: its two vertices, read as one.
             g.draw(pass, 6, lines / 2, 0, 0);
         }
-        if grid {
-            g.set_pipeline(pass, self.grid.pipeline);
-            g.set_bind_group(pass, 0, self.grid_group, &[]);
-            g.draw(pass, 3, 1, 0, 0);
+        g.end(pass);
+    }
+}
+
+/// The rays' cells, drawn straight to the screen where each pixel's ray
+/// meets the face its cell's ray met, painted by paint.wgsl's `paint`
+/// (frame/screen_cells.rs). The lane is written by the GPU's cast where it
+/// runs (`Cast`), else by the CPU's, uploaded from where it lives once a
+/// cast.
+struct ScreenCellsPass {
+    built: Built,
+    group: u32,
+    /// The lit pass's entries it paints by (`Renderer::lit_entries`); none
+    /// until the renderer hands them.
+    lit: Vec<Entry>,
+    sky_buffer: u32,
+    looks: u32,
+    /// Where the eye is in the world, as `screen_cells.wgsl`'s `eye_at`.
+    eye_at: u32,
+    lane: u32,
+    /// Cells the lane holds past its header.
+    room: usize,
+    generation: u32,
+    ground: Option<GroundBuffers>,
+    cast: Option<CastBuffers>,
+    /// What this frame does with the cast, as `prepare` decided it: nothing
+    /// cast (`plain`), the ray lane standing (`standing`), or a cast run
+    /// (`cast`). `dispatch` and the frame's report read it.
+    kind: FrameKind,
+}
+
+/// The terrain's frames on the GPU and the passes that draw their cells.
+struct GroundBuffers {
+    /// Per square of the windows, its looks as handed, its cells' heights
+    /// and levels, which `heights_cs` and `bound_cs` write in the turn it
+    /// is handed, its tile's samples and lines as handed, and its ways'
+    /// runs, which `ways_cs` writes then (pxl-portable
+    /// `window::SQUARE_WORDS`).
+    ground: u32,
+    /// The squares that turn handed, two words each, `heights_cs`'s,
+    /// `bound_cs`'s and `ways_cs`'s one per `id.z`.
+    fresh: u32,
+    fresh_len: u32,
+    /// Per square place (`window::SQUARES`), its cells' way back: the fill
+    /// the next landing must be of (its ticket 0 where none is asked).
+    asked: [CellsBack; SQUARES as usize],
+    /// The buffers cells are copied into and mapped back through, as many as
+    /// a frame hands squares a mapping still out a frame more (`READS`);
+    /// each one's square and the fill it carries (`FREE` where none), and
+    /// its mapping's own word (`read_back`), which the host writes: held
+    /// where the guest's allocator puts it, inside the region the host
+    /// addresses, as an arriving image's word is. A static is outside it on
+    /// a device.
+    reads: [u32; READS],
+    held: [(u32, u32); READS],
+    mapping: Box<[u32; READS]>,
+    heights_built: Built,
+    heights_group: u32,
+    bound_built: Built,
+    /// `bound_cs`'s group, its level at a dynamic offset (`SLOT_STRIDE`).
+    bound_group: u32,
+    /// `ways_cs`'s, and its group, its pass at a dynamic offset.
+    ways_built: Built,
+    ways_group: u32,
+}
+
+/// What the GPU's cast reads and the lane it writes.
+struct CastBuffers {
+    built: Built,
+    /// Where its rays start, asked before it (`start_cs`), and its blocks'
+    /// face bits, asked after it (`face_cs`), over its group.
+    start_built: Built,
+    face_built: Built,
+    starts: u32,
+    /// Its group 0, and the buffers it binds (`cast_group`): made again
+    /// exactly when one of them is another.
+    group: u32,
+    bound: [u32; 8],
+    eye: u32,
+    window: u32,
+    window_words: usize,
+    tangents: u32,
+    /// Tangents the buffer holds.
+    tangent_room: usize,
+    shards: u32,
+    /// Shards the buffer holds.
+    shard_room: usize,
+    across: [u32; 2],
+    /// The overwrites' heap lane then their data lane, each `overwrite_room`
+    /// words, the lanes' own room; the revision it holds, none at first.
+    overwrites: u32,
+    overwrite_room: usize,
+    overwrite_revision: Option<u32>,
+    grown: Grown,
+    /// What the last cast read (`Read`), and whether this frame's is the
+    /// same: the lane and the decor grown over it stand, and nothing is
+    /// cast.
+    read: Read,
+}
+
+/// A stage's whole input as it last read it, byte for byte: what the stage
+/// makes is one function of it, so a frame that reads the same stands on
+/// what it made — the cast's lane and the decor grown over it (stage 1),
+/// the world image (stage 2). Each lane is read with its length, so no two
+/// sets read alike; what changed without words to read is marked so.
+#[derive(Default)]
+pub(crate) struct Read {
+    bytes: Vec<u8>,
+    at: usize,
+    same: bool,
+}
+
+impl Read {
+    pub(crate) fn begin(&mut self) {
+        (self.at, self.same) = (0, true);
+    }
+
+    pub(crate) fn take(&mut self, lane: &[u8]) {
+        let end = self.at + lane.len();
+        if self.bytes.get(self.at..end) != Some(lane) {
+            self.same = false;
+            if self.bytes.len() < end {
+                self.bytes.resize(end, 0);
+            }
+            self.bytes[self.at..end].copy_from_slice(lane);
+        }
+        self.at = end;
+    }
+
+    pub(crate) fn read<T: Copy>(&mut self, lane: &[T]) {
+        self.take(bytes(&[lane.len() as u32]));
+        self.take(bytes(lane));
+    }
+
+    /// Whether anything read so far differs from the last time.
+    pub(crate) fn moved(&self) -> bool {
+        !self.same
+    }
+
+    /// What this frame changed of the stage's input that has no words, as
+    /// an image come or a table drawn.
+    pub(crate) fn mark(&mut self, changed: bool) {
+        self.same &= !changed;
+    }
+
+    /// Whether all of it read as the last time.
+    pub(crate) fn end(&mut self) -> bool {
+        let same = self.same && self.at == self.bytes.len();
+        self.bytes.truncate(self.at);
+        same
+    }
+
+    /// The lane no longer holds what was read: the next frame casts.
+    pub(crate) fn forget(&mut self) {
+        self.bytes.clear();
+    }
+}
+
+/// A square on the GPU, in bytes.
+const SQUARE_BYTES: u32 = SQUARE_WORDS * 4;
+
+/// The cast's group 0: the eye, the window, the tiles' frames, the lane it
+/// writes, the lane's tangents, the served shards and the overwrites.
+const CAST_GROUP: [u32; 24] = [
+    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE_RW,
+];
+
+/// `heights_cs`'s group 0: the fresh frames and the frames it writes the
+/// cells of.
+const HEIGHTS_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
+
+/// `bound_cs`'s and `ways_cs`'s group 0: its level or its pass, the fresh
+/// frames and the frames it writes the levels or the runs of.
+const BOUND_GROUP: [u32; 9] = [0, COMPUTE, UNIFORM_DYNAMIC, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE_RW];
+
+/// A number's slot in the fill's numbers, read at a dynamic offset: every
+/// device's dynamic offset alignment.
+const SLOT_STRIDE: u32 = UNIFORM_ALIGN_MAX;
+
+impl ScreenCellsPass {
+    fn new(g: &Gpu, pipelines: &mut Pipelines, sky_buffer: u32) -> ScreenCellsPass {
+        let built = pipelines.build(g, PIPELINE_SCREEN_CELLS, g.canvas());
+        let words = look_words();
+        let looks = g.buffer(word_bytes(2 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        g.write_buffer(looks, 0, bytes(&words));
+        let eye_at = g.buffer(word_bytes(8), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let mut p = ScreenCellsPass {
+            built,
+            group: 0,
+            lit: Vec::new(),
+            sky_buffer,
+            looks,
+            eye_at,
+            lane: 0,
+            room: 0,
+            generation: 0,
+            ground: None,
+            cast: None,
+            kind: FrameKind::plain,
+        };
+        p.fit(g, SCREEN_CELLS_MAX);
+        p
+    }
+
+    /// A lane of at least `cells`, its groups made again over it.
+    fn fit(&mut self, g: &Gpu, cells: usize) {
+        if cells <= self.room {
+            return;
+        }
+        if self.lane != 0 {
+            release(self.lane);
+        }
+        self.room = cells;
+        self.lane = g.buffer(word_bytes(4 * (1 + cells)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        self.regroup(g);
+        // A new lane holds no cast.
+        self.generation = 0;
+    }
+
+    /// The lit pass's entries, handed again whenever one of its objects is
+    /// made again.
+    fn lit(&mut self, g: &Gpu, entries: Vec<Entry>) {
+        self.lit = entries;
+        self.regroup(g);
+    }
+
+    fn regroup(&mut self, g: &Gpu) {
+        if self.lit.is_empty() || self.lane == 0 {
+            return;
+        }
+        release(self.group);
+        let mut e = self.lit.clone();
+        e.push(buffer_entry(3, self.lane));
+        e.push(buffer_entry(19, self.sky_buffer));
+        e.push(buffer_entry(20, self.looks));
+        e.push(buffer_entry(21, self.eye_at));
+        self.group = g.bind_group(self.built.layouts[0], &e);
+    }
+
+    /// Each held tile the GPU does not yet hold handed to its frame, copied
+    /// into the turn's stream as it has room, the packets they live in let
+    /// go once handed; whether or not an eye casts, as a tile's cells are
+    /// no eye's.
+    fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: GroundSquares) {
+        let gb = self.ground.get_or_insert_with(|| {
+            let buffer = |size: u32, usage: u32| g.buffer(size, usage);
+            let (storage, squares) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, SQUARES);
+            let frames_buffer = buffer(squares * SQUARE_BYTES, storage | buffer_usage::COPY_SRC);
+            let fresh = buffer(word_bytes((FRESH_WORDS * squares) as usize), storage);
+            let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &HEIGHTS_GROUP);
+            let heights_group = g.bind_group(heights_built.layouts[0], &[buffer_entry(0, fresh), buffer_entry(1, frames_buffer)]);
+            // Each slot's number in it, written once: `bound_cs`'s level,
+            // `ways_cs`'s pass.
+            let slots = buffer((LEVELS + 1) * SLOT_STRIDE, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            for k in 0..=LEVELS {
+                g.write_buffer(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
+            }
+            let entries = [buffer_range_entry(0, slots, 0, 16), buffer_entry(1, fresh), buffer_entry(2, frames_buffer)];
+            let (bound_built, ways_built) = (pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP), pipelines.build_compute(g, SHADER_WAYS, &BOUND_GROUP));
+            let (bound_group, ways_group) = (g.bind_group(bound_built.layouts[0], &entries), g.bind_group(ways_built.layouts[0], &entries));
+            GroundBuffers {
+                ground: frames_buffer,
+                fresh,
+                fresh_len: 0,
+                asked: [CellsBack::default(); SQUARES as usize],
+                reads: core::array::from_fn(|_| buffer(BACK_WORDS * 4, buffer_usage::MAP_READ | buffer_usage::COPY_DST)),
+                held: [(FREE, 0); READS],
+                mapping: Box::new([0; READS]),
+                heights_built,
+                heights_group,
+                bound_built,
+                bound_group,
+                ways_built,
+                ways_group,
+            }
+        });
+        let mut fresh = 0;
+        (ground.upload)(&mut |q| {
+            let fresh_entry = [q.square, q.place, q.cell];
+            if !room(write_buffer_bytes(q.looks) + write_buffer_bytes(q.samples) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&fresh_entry))) {
+                return false;
+            }
+            let at = q.square * SQUARE_BYTES;
+            g.write_buffer(gb.ground, at, q.looks);
+            g.write_buffer(gb.ground, at + ELE_AT * 4, q.samples);
+            g.write_buffer(gb.ground, at + LINES_AT * 4, bytes(q.lines));
+            g.write_buffer(gb.fresh, word_bytes((FRESH_WORDS * fresh) as usize), bytes(&fresh_entry));
+            gb.asked[q.square as usize] = q.back;
+            fresh += 1;
+            true
+        });
+        gb.fresh_len = fresh;
+    }
+
+    /// The lane for this frame: the GPU's cast where an eye casts, its eye
+    /// handed over first; else a lane of no cells.
+    fn prepare(&mut self, g: &Gpu, pipelines: &mut Pipelines, cast: Option<Cast>, meshes: &[u32; GROUPS as usize]) {
+        let s = stage_lane();
+        let steps = u32::from(s[STAGE_AT::RAY_STEPS] != 0.0);
+        // The eye's whole units wrap: a block's place is read off their low bits.
+        let eye: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::EYE + k]);
+        let whole = eye.map(|v| libm::floor(v) as i64 as u32);
+        let part = eye.map(|v| ((v - libm::floor(v)) as f32).to_bits());
+        g.write_buffer(self.eye_at, 0, bytes(&[whole[0], whole[1], whole[2], 0, part[0], part[1], part[2], 0]));
+        // No cast, no world: a lane of no cells, no ray cast into it and no
+        // decor grown. What the cast reads stands for the next: the ground
+        // it binds is made once.
+        let (Some(cast), Some(ground)) = (cast, self.ground.as_ref().map(|gb| gb.ground)) else {
+            self.kind = FrameKind::plain;
+            if let Some(c) = self.cast.as_mut() {
+                c.across = [0; 2];
+                c.grown.off();
+                c.read.forget();
+            }
+            g.write_buffer(self.lane, 0, bytes(&[0u32, 0, steps, 0]));
+            return;
+        };
+        if self.cast.is_none() {
+            let built = pipelines.build_compute(g, SHADER_CAST, &CAST_GROUP);
+            let start_built = pipelines.build_compute(g, SHADER_START, &CAST_GROUP);
+            let face_built = pipelines.build_compute(g, SHADER_FACE, &CAST_GROUP);
+            let buffer = |size: u32, usage: u32| g.buffer(size, usage);
+            let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
+            let c = CastBuffers {
+                built,
+                start_built,
+                face_built,
+                starts: buffer(word_bytes(START_WORDS), buffer_usage::STORAGE),
+                group: 0,
+                bound: [0; 8],
+                eye: buffer(word_bytes(CAST_EYE_WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
+                window: buffer(word_bytes(cast.window.len()), storage),
+                window_words: cast.window.len(),
+                tangents: 0,
+                tangent_room: 0,
+                shards: 0,
+                shard_room: 0,
+                across: [0; 2],
+                overwrites: 0,
+                overwrite_room: 0,
+                overwrite_revision: None,
+                grown: Grown::new(g, pipelines),
+                read: Read::default(),
+            };
+            self.cast = Some(c);
+        }
+        let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
+        // The cast and the decor it grows read exactly this, all of it here:
+        // a field the frame hands the cast fails to destructure until it is
+        // read. The overwrites' contents are their revision's.
+        let Cast {
+            eye,
+            tangents,
+            window,
+            shards,
+            overwrites: Overwrites { heap: _, data: _, room, revision },
+            decor,
+        } = &cast;
+        let r = &mut c.read;
+        r.begin();
+        r.read(eye);
+        r.read(tangents);
+        r.read(window);
+        r.read(shards);
+        r.read(&[*room as u32, *revision, steps]);
+        match decor {
+            Some(DecorFrame { shown, params, placed, translation }) => {
+                r.read(shown);
+                r.read(params);
+                r.read(placed);
+                r.read(translation);
+            }
+            None => r.read::<u32>(&[]),
+        }
+        r.read(meshes);
+        // And the ground's squares, written this frame or not.
+        let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
+        if r.end() && fresh == 0 && c.group != 0 {
+            self.kind = FrameKind::standing;
+            return;
+        }
+        self.kind = FrameKind::cast;
+        xpute_kit::ensure!(cast.window.len() <= c.window_words, ENOTRECOVERABLE, cast.window.len());
+        g.write_buffer(c.window, 0, bytes(cast.window));
+        g.write_buffer(c.eye, 0, bytes(&cast.eye));
+        c.across = [cast.eye[16], cast.eye[17]];
+        let shards_grow = cast.shards.len() > c.shard_room;
+        if shards_grow {
+            if c.shards != 0 {
+                release(c.shards);
+            }
+            c.shard_room = cast.shards.len();
+            c.shards = g.buffer(word_bytes(4 * c.shard_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        }
+        g.write_buffer(c.shards, 0, bytes(cast.shards));
+        let tangents_grow = cast.tangents.len() > c.tangent_room;
+        if tangents_grow {
+            if c.tangents != 0 {
+                release(c.tangents);
+            }
+            c.tangent_room = cast.tangents.len();
+            c.tangents = g.buffer(word_bytes(c.tangent_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        }
+        g.upload_buffer(c.tangents, 0, bytes(cast.tangents));
+        // Sized by the lanes' own room, so it is made again only when they grow.
+        let o = &cast.overwrites;
+        let overwrites_grow = o.room != c.overwrite_room;
+        if overwrites_grow {
+            if c.overwrites != 0 {
+                release(c.overwrites);
+            }
+            c.overwrite_room = o.room;
+            c.overwrites = g.buffer(word_bytes(2 * o.room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+            c.overwrite_revision = None;
+        }
+        if c.overwrite_revision != Some(o.revision) {
+            g.upload_buffer(c.overwrites, 0, bytes(o.heap));
+            g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
+            c.overwrite_revision = Some(o.revision);
+        }
+        let cells = (c.across[0] * c.across[1]) as usize;
+        self.fit(g, cells);
+        let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
+        let bound = [c.eye, c.window, ground, self.lane, c.tangents, c.shards, c.overwrites, c.starts];
+        if bound != c.bound {
+            release(c.group);
+            c.group = cast_group(g, &c.built, bound);
+            c.bound = bound;
+        }
+        let world = [c.eye, c.window, ground, c.shards, c.overwrites];
+        c.grown.prepare(g, cast.decor, meshes, world);
+        g.write_buffer(self.lane, 0, bytes(&[c.across[0], c.across[1], steps, 0]));
+    }
+
+    /// The cells of the frames this turn uploaded, from their samples, then
+    /// their ways' runs, then their bounds a level a dispatch, each over the
+    /// one before, and cells and bounds read back where the CPU looks them
+    /// up: ahead of the frame, as they outlive it, so no frame the window
+    /// names is cast before its cells are written, even when the frame
+    /// proper is dropped.
+    /// Whether it recorded any.
+    fn grids(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
+        let Some(c) = self.ground.as_mut().filter(|c| c.fresh_len != 0) else { return false };
+        let pass = g.compute_pass(encoder, stamp.pass());
+        g.set_pipeline(pass, c.heights_built.pipeline);
+        g.set_bind_group(pass, 0, c.heights_group, &[]);
+        g.dispatch(pass, (SQUARE / 2).div_ceil(BOUND_WORKGROUP), SQUARE.div_ceil(BOUND_WORKGROUP), c.fresh_len);
+        // A column a thread, over the faces just drawn: the columns'
+        // runs counted, summed a square a thread, written, then each bin's
+        // ways' word off them, before the levels join it.
+        g.set_pipeline(pass, c.ways_built.pipeline);
+        for k in 0..4 {
+            g.set_bind_group(pass, 0, c.ways_group, &[k * SLOT_STRIDE]);
+            let across = if k % 2 == 1 { 1 } else { SQUARE_CELLS / WAYS_WORKGROUP };
+            g.dispatch(pass, across, 1, c.fresh_len);
+        }
+        g.set_pipeline(pass, c.bound_built.pipeline);
+        for j in 1..=LEVELS {
+            g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
+            let side = (SQUARE >> j).div_ceil(BOUND_WORKGROUP);
+            g.dispatch(pass, side, side, c.fresh_len);
         }
         g.end(pass);
-        release(pass);
+        true
     }
+
+    /// The squares the grids wrote mapped back where the CPU looks them up,
+    /// once the encoder that wrote them is submitted: a square's heights and
+    /// levels lie together, so one mapping brings both.
+    ///
+    /// A square asked takes a free buffer of `READS`, which maps once at a
+    /// time and lands whatever fill it carried. One that landed for the
+    /// square's latest fill marks it read: the kernel's word takes `ticket |
+    /// DONE`. One that landed for an earlier fill is discarded, and the
+    /// latest fill copied again: its bytes went into the square's cells while
+    /// the kernel holds the square Sent (or Absent, if it moved), which
+    /// nothing reads, and the latest fill's landing writes them again before
+    /// the word says read. A landed buffer is free again; a square with none
+    /// free waits, Sent, for a later turn. A mapping still on its way is
+    /// waited for, looked at only when a turn runs: nothing asks a turn for
+    /// it. The turn's squares are done with here.
+    ///
+    /// On a device, a mapping that completes after the last asked turn is
+    /// seen at the next turn: the host learns of it only by polling the
+    /// device, and a thread waiting there (wgpu `poll(Wait)`) holds the lock a
+    /// surface's present takes (wgpu-core's `Device::poll` reads its
+    /// `snatchable_lock` across the fence wait, `Surface::present` writes
+    /// it), so none waits. Where read-backs matter on a settled
+    /// view, the platform's own completion (a command buffer's handler, a
+    /// timeline semaphore) is the wake.
+    fn read_back(&mut self, g: &Gpu) {
+        let Some(c) = self.ground.as_mut() else { return };
+        c.fresh_len = 0;
+        for k in 0..READS {
+            let (s, ticket) = c.held[k];
+            if s == FREE || c.mapping[k] & DONE == 0 {
+                continue;
+            }
+            let back = &mut c.asked[s as usize];
+            if back.ticket == ticket {
+                // SAFETY: the kernel's word for the square, which it handed
+                // with this fill (pxl-kernel layer/terrain/window.rs).
+                unsafe { *ptr_at::<u32>(back.word as usize) = ticket | DONE };
+                back.ticket = 0;
+            }
+            c.held[k] = (FREE, 0);
+        }
+        let mut copy = None;
+        let mut taken = [false; READS];
+        let mut free = 0;
+        for s in 0..SQUARES {
+            let ticket = c.asked[s as usize].ticket;
+            if ticket == 0 || c.held.iter().any(|h| h.0 == s) {
+                continue;
+            }
+            let Some(k) = (free..READS).find(|&k| c.held[k].0 == FREE) else { break };
+            free = k + 1;
+            let e = *copy.get_or_insert_with(|| g.encoder());
+            g.copy_buffer(e, (c.ground, s * SQUARE_BYTES + HEIGHTS_AT * 4), (c.reads[k], 0), BACK_WORDS * 4);
+            (c.held[k], taken[k]) = ((s, ticket), true);
+        }
+        let Some(e) = copy else { return };
+        g.submit(e);
+        for k in (0..READS).filter(|&k| taken[k]) {
+            let (s, ticket) = c.held[k];
+            g.map_read(c.reads[k], 0, BACK_WORDS * 4, c.asked[s as usize].cells, &mut c.mapping[k], ticket);
+        }
+    }
+
+    /// The GPU's cast into the lane, a ray a cell, where it runs; then the
+    /// decor the ground grows over the same world, a candidate a thread.
+    fn dispatch(&self, g: &Gpu, encoder: u32, cast: &mut Stamp, faces: &mut Stamp) {
+        let Some(c) = self.cast.as_ref().filter(|_| self.kind == FrameKind::cast) else { return };
+        let cells = [c.across[0].div_ceil(CAST_WORKGROUP), c.across[1].div_ceil(CAST_WORKGROUP)];
+        let pass = g.compute_pass(encoder, cast.pass());
+        g.set_bind_group(pass, 0, c.group, &[]);
+        g.set_pipeline(pass, c.start_built.pipeline);
+        g.dispatch(pass, 1, 1, 1);
+        g.set_pipeline(pass, c.built.pipeline);
+        g.dispatch(pass, cells[0], cells[1], 1);
+        c.grown.dispatch(g, pass);
+        g.end(pass);
+        // A kernel a job: the face bits over what the cast found.
+        let pass = g.compute_pass(encoder, faces.pass());
+        g.set_bind_group(pass, 0, c.group, &[]);
+        g.set_pipeline(pass, c.face_built.pipeline);
+        g.dispatch(pass, cells[0], cells[1], 1);
+        g.end(pass);
+    }
+
+    /// The decor the GPU grew this frame, as the draws read it.
+    fn grown(&self) -> Option<Drawn> {
+        self.cast.as_ref().and_then(|c| c.grown.drawn())
+    }
+
+    /// Returns the group 0 it leaves bound.
+    fn draw(&self, g: &Gpu, pass: u32) -> u32 {
+        g.set_pipeline(pass, self.built.pipeline);
+        g.set_bind_group(pass, 0, self.group, &[]);
+        g.draw(pass, 3, 1, 0, 0);
+        self.group
+    }
+}
+
+/// The cast's workgroup, a side: `cast_cs`'s.
+const CAST_WORKGROUP: u32 = 8;
+/// `start_cs`'s words: the start's node, what was handed it, and the stack,
+/// an `At` two words (gpu-query-shader `START_WORDS`).
+const START_WORDS: usize = 4 + 2 * (1 + pxl_portable::cast::DEPTH);
+/// `heights_cs`'s and `bound_cs`'s workgroup, a side, a frame a layer.
+const BOUND_WORKGROUP: u32 = 8;
+/// `ways_cs`'s workgroup: columns in a row.
+const WAYS_WORKGROUP: u32 = 64;
+
+/// The cast's group 0 over `bound`: the eye, the window, the tiles' frames,
+/// the lane, its tangents, the served shards, the overwrites and where its
+/// rays start (`start_cs` writes it, `cast_cs` reads it).
+fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
+    let entries: [Entry; 8] = core::array::from_fn(|k| buffer_entry(k as u32, bound[k]));
+    g.bind_group(built.layouts[0], &entries)
 }
 
 /// A variant picker case: its own frame, drawn at one sample with no shadow.
@@ -698,13 +1320,12 @@ const CASE_TARGET: V3 = [0.0, 0.0, 0.55];
 const CASE_FOV_DEG: f64 = 35.0;
 
 impl Case {
-    fn new(g: &Gpu, pipelines: &mut Pipelines, shadow: &Shadow, ao: &ScreenAo, air: [u32; AIR_WORDS], align: u32) -> Case {
-        let frame_buffer = object();
-        g.buffer(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+    fn new(g: &Gpu, pipelines: &mut Pipelines, ao: &ScreenAo, air: [Entry; AIR_ENTRIES], align: u32) -> Case {
+        let frame_buffer = g.buffer(word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let layout = frame_layout(g, pipelines);
         Case {
             frame_buffer,
-            frames: FrameGroups::new(g, layout, frame_buffer, shadow.blank_entries(1), None, ao.blank_entry(7), air),
+            frames: FrameGroups::new(g, layout, frame_buffer, [ao.blank_entry(7); 2], air),
             skinned: SkinnedPass::new(g, pipelines, align),
         }
     }
@@ -726,20 +1347,11 @@ pub struct Renderer {
     sky: [f32; SKY_FLOATS],
     sky_built: Built,
     sky_group: u32,
-    chunk: Built,
-    chunk_depth: Built,
-    chunk_prepass: Built,
-    chunk_coarse: Built,
-    chunk_coarse_depth: Built,
-    chunk_coarse_prepass: Built,
     ghost: [Built; 2],
     draws_buffer: u32,
     draws_bytes: u32,
     bind_group: u32,
-    light_group: u32,
     models: FrameGroups,
-    shadow: Shadow,
-    shadows: bool,
     ao: ScreenAo,
     screen_ao: bool,
     atmosphere: Atmosphere,
@@ -754,70 +1366,60 @@ pub struct Renderer {
     puck: PuckPass,
     badges: BadgePass,
     debug: DebugPass,
+    screen: ScreenCellsPass,
+    /// The world image's whole input as the last image drew it (stage 2):
+    /// the frame's, the sky's and the stars' words, the air's, the image's
+    /// own textures, and what came or was drawn again without words.
+    world: Read,
+    /// What the frame draws from besides the world image, as last read: the
+    /// draws and the blocks they read, the badges' sheet, the clouds' words
+    /// and the cases. With the image's, the frame's whole input.
+    frame_read: Read,
+    /// What lays the world image on a frame, and its group over the views
+    /// it was made for.
+    blit: Built,
+    blit_group: u32,
+    blit_views: [u32; 2],
     cases: [Option<Case>; SURFACES],
     order: Vec<u32>,
 }
 
 impl Renderer {
-    fn new(g: &Gpu, device: Device, handheld: bool) -> Renderer {
+    fn new(g: &Gpu, device: Device) -> Renderer {
         let mut pipelines = Pipelines::new();
-        let frame_buffer = object();
-        g.buffer(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let sky_buffer = object();
-        g.buffer(sky_buffer, word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let shadow = Shadow::new(g, handheld);
+        let frame_buffer = g.buffer(word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let sky_buffer = g.buffer(word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buffer);
         let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer);
         let air = atmosphere.entries();
-        let stars = StarPass::new(g, &mut pipelines, frame_buffer);
+        let stars = StarPass::new(g, &mut pipelines, frame_buffer, air);
         let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
-        let mips = Mips::new(g, &mut pipelines, format::RGBA8_SRGB);
+        let mips = Mips::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let layers = Layers::new(g);
-        let chunk = pipelines.build(g, PIPELINE_CHUNK, format::CANVAS);
-        let sky_built = pipelines.build(g, PIPELINE_SKY, format::CANVAS);
-        let sky_group = object();
+        let sky_built = pipelines.build(g, PIPELINE_SKY, g.canvas());
         let moon = ImageMap::new(g, MOON_TEX_SZ, MOON_TEX_SZ);
-        let mut sky_entries = [0u32; 20 + AIR_WORDS];
-        sky_entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
-        sky_entries[5..10].copy_from_slice(&buffer_entry(1, sky_buffer));
-        sky_entries[10..15].copy_from_slice(&[2, resource::VIEW, moon.view, 0, 0]);
-        sky_entries[15..20].copy_from_slice(&[3, resource::SAMPLER, moon.sampler, 0, 0]);
-        sky_entries[20..].copy_from_slice(&air);
-        g.bind_group(sky_group, sky_built.layouts[0], &sky_entries);
-        let draws_buffer = object();
-        g.buffer(draws_buffer, DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        let models = FrameGroups::new(
-            g,
-            frame_layout(g, &mut pipelines),
-            frame_buffer,
-            shadow.entries(1),
-            Some((shadow.light_frame, shadow.blank_entries(1))),
-            ao.blank_entry(7),
-            air,
-        );
-        let query_set = if device.timestamps {
-            let q = object();
-            g.query_set(q, 2 * GPU_SPAN_NAMES.len() as u32);
-            q
-        } else {
-            0
-        };
+        let mut sky_entries = vec![buffer_entry(0, frame_buffer), buffer_entry(19, sky_buffer), view_entry(2, moon.view), sampler_entry(3, moon.sampler)];
+        sky_entries.extend(air);
+        let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
+        let draws_buffer = g.buffer(DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let models = FrameGroups::new(g, frame_layout(g, &mut pipelines), frame_buffer, [ao.blank_entry(7); 2], air);
+        let query_set = if device.timestamps { g.spans() } else { 0 };
         let mut r = Renderer {
             align: device.align,
             query_set,
-            chunk,
-            chunk_depth: pipelines.build(g, PIPELINE_CHUNK_DEPTH, format::CANVAS),
-            chunk_prepass: pipelines.build(g, PIPELINE_CHUNK_PREPASS, format::CANVAS),
-            chunk_coarse: pipelines.build(g, PIPELINE_CHUNK_COARSE, format::CANVAS),
-            chunk_coarse_depth: pipelines.build(g, PIPELINE_CHUNK_COARSE_DEPTH, format::CANVAS),
-            chunk_coarse_prepass: pipelines.build(g, PIPELINE_CHUNK_COARSE_PREPASS, format::CANVAS),
-            ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS)],
+            ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, g.canvas()), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, g.canvas())],
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
             puck: PuckPass::new(g, &mut pipelines, frame_buffer, air),
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
-            debug: DebugPass::new(g, &mut pipelines, frame_buffer, sky_buffer),
+            debug: DebugPass::new(g, &mut pipelines, frame_buffer),
+            screen: ScreenCellsPass::new(g, &mut pipelines, sky_buffer),
+            world: Read::default(),
+            frame_read: Read::default(),
+            blit: pipelines.build(g, PIPELINE_BLIT, g.canvas()),
+            blit_group: 0,
+            blit_views: [0; 2],
             pipelines,
             frame_buffer,
             frame: [0.0; FRAME_FLOATS],
@@ -828,10 +1430,7 @@ impl Renderer {
             draws_buffer,
             draws_bytes: DRAWS_INITIAL * 4,
             bind_group: 0,
-            light_group: 0,
             models,
-            shadow,
-            shadows: false,
             ao,
             screen_ao: false,
             atmosphere,
@@ -843,44 +1442,45 @@ impl Renderer {
             cases: [const { None }; SURFACES],
             order: Vec::new(),
         };
-        r.chunk_groups(g);
+        r.box_groups(g);
         r
     }
 
-    fn chunk_group(&self, g: &Gpu, frame: u32, shadow: [u32; 10]) -> u32 {
-        let mut e = [0u32; 40 + AIR_WORDS];
-        e[..5].copy_from_slice(&buffer_entry(0, frame));
-        e[5..15].copy_from_slice(&shadow);
-        e[15..20].copy_from_slice(&buffer_entry(3, self.draws_buffer));
-        e[20..25].copy_from_slice(&[4, resource::VIEW, self.layers.view, 0, 0]);
-        e[25..30].copy_from_slice(&buffer_entry(5, self.layers.table));
-        e[30..35].copy_from_slice(&[6, resource::SAMPLER, self.layers.sampler, 0, 0]);
-        e[35..40].copy_from_slice(&self.ao.entry(7));
-        e[40..].copy_from_slice(&self.atmosphere.entries());
-        let id = object();
-        g.bind_group(id, self.chunk.layouts[0], &e);
-        id
+    /// What a block's face is painted by, wherever it is drawn from
+    /// (paint.wgsl): the frame, the layers, the occlusion and the air.
+    fn lit_entries(&self, frame: u32) -> Vec<Entry> {
+        let mut e = vec![
+            buffer_entry(0, frame),
+            view_entry(4, self.layers.view),
+            buffer_entry(5, self.layers.table),
+            sampler_entry(6, self.layers.sampler),
+            self.ao.entry(7),
+        ];
+        e.extend(self.atmosphere.entries());
+        e
     }
 
-    fn chunk_groups(&mut self, g: &Gpu) {
+    /// The ghost boxes' group 0: what a block's face is painted by, and the draws.
+    fn box_groups(&mut self, g: &Gpu) {
         release(self.bind_group);
-        release(self.light_group);
-        self.bind_group = self.chunk_group(g, self.frame_buffer, self.shadow.entries(1));
-        self.light_group = self.chunk_group(g, self.shadow.light_frame, self.shadow.blank_entries(1));
+        let mut e = self.lit_entries(self.frame_buffer);
+        e.push(buffer_entry(3, self.draws_buffer));
+        self.bind_group = g.bind_group(self.ghost[0].layouts[0], &e);
+        let lit = self.lit_entries(self.frame_buffer);
+        self.screen.lit(g, lit);
     }
 
     /// The occlusion map is a new object, so every lit pass's group 0 is remade.
     fn rebind(&mut self, g: &Gpu) {
-        self.chunk_groups(g);
-        let light = Some((self.shadow.light_frame, self.shadow.blank_entries(1)));
-        self.models.rebind(g, self.frame_buffer, self.shadow.entries(1), light, self.ao.entry(7));
+        self.box_groups(g);
+        self.models.rebind(g, self.frame_buffer, [self.ao.entry(7), self.ao.blank_entry(7)]);
     }
 
-    fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32], reach: Option<f64>) {
+    fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32]) {
         let s = stage_lane();
-        let (mut a, mut m, mut proj) = (mat4(), mat4(), mat4());
+        let (mut a, mut m, mut proj) = (mat4::new(), mat4::new(), mat4::new());
         a.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
-        mat4_mul(&mut proj, &GL_TO_WGPU, &a);
+        mat4::mul(&mut proj, &GL_TO_WGPU, &a);
         // The badges measure their size in view space.
         let b = &mut self.badges;
         put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
@@ -889,7 +1489,7 @@ impl Renderer {
 
         let u = &mut self.frame;
         a.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
-        mat4_mul(&mut m, &GL_TO_WGPU, &a);
+        mat4::mul(&mut m, &GL_TO_WGPU, &a);
         put_mat(u, VIEW_PROJ, &m);
         // Everything is drawn in the eye's frame; positions are taken against the eye
         // in f64 before they are narrowed.
@@ -900,9 +1500,8 @@ impl Renderer {
         let center: V3 = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_world[k]);
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
-        let up = norm3(&sub3(&eye, &planet_center));
-        self.clouds.lay_out(g, &m, &eye, env, s[STAGE_AT::CLOUDS]);
-        self.atmosphere.set_clouds(&clouds::field([eye_world[0], eye_world[1]], env));
+        let up = v3::norm(&v3::sub(&eye, &planet_center));
+        self.clouds.lay_out(g, &m, &eye, [eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS]);
         self.stars.lay_out(g, &m, env, width);
         put_ray(&mut self.sky, 0, &m, &eye);
         self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
@@ -938,45 +1537,24 @@ impl Renderer {
             MERCATOR_RADIUS_U as f32,
         ];
         put_globe(u, &globe);
-        let reach = reach.filter(|_| s[STAGE_AT::SHADOWS] != 0.0);
-        self.shadows = reach.is_some();
-        u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
-        if let Some(far) = reach {
-            // Up to a power of two, so the snap grid and the texel move only in steps;
-            // the shadows fade by the casters' own reach, where the self-shadowing ends.
-            let reach = libm::exp2(libm::ceil(libm::log2(far)));
-            self.shadow.aim(g, &env[0..3], eye, reach, eye_world.map(|v| -v), globe);
-            put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
-            u[SHADOW_TEXEL] = self.shadow.texel as f32;
-            u[SHADOW_RIM] = (far / reach) as f32;
-        }
 
         self.atmosphere.lay_out(g, env, &up);
     }
 
     /// A box is one instance shared by 36 vertices; a draw's first box is its first
-    /// instance. Both vertex slots bind the same buffer so one shader serves both
-    /// formats; the record index rides on the first vertex.
-    /// `casters`, the draws' uniforms when drawing the shadow map: only a chunk
-    /// that `casts` is drawn into it.
-    fn draw_meshes(&self, g: &Gpu, pass: u32, draws: &Draws, which: u32, own: Option<u32>, casters: Option<&[f32]>) {
+    /// instance. Both vertex slots bind the same buffer; the record index rides
+    /// on the first vertex.
+    fn draw_boxes(&self, g: &Gpu, pass: u32, draws: &Draws, which: u32, own: u32) {
         let b = blocks();
         let mut bound = 0;
         for d in draws.of(which) {
-            if casters.is_some_and(|u| !casts(uniform_of(u, d)[CHUNK_UNIT])) {
-                continue;
-            }
             let (handle, box_cnt, first_box, uniform) = (d[0], d[1], d[2], d[3]);
-            let buffer = if matches!(which, PIPELINE_CHUNK | PIPELINE_CHUNK_COARSE) {
-                arena_buffer(handle as usize)
-            } else {
-                b.get(handle).map(|(buffer, ..)| buffer)
-            };
+            let buffer = b.get(handle).map(|(buffer, ..)| buffer);
             // A missing buffer is a fault in the list. Skipping it silently once drew no
             // ground at all with every gauge reading normal.
             let Some(buffer) = buffer else { xpute_kit::bug!(ENOTRECOVERABLE, handle, which) };
-            if let (Some(p), 0) = (own, bound) {
-                g.set_pipeline(pass, p);
+            if bound == 0 {
+                g.set_pipeline(pass, own);
                 g.set_bind_group(pass, 0, self.bind_group, &[]);
             }
             if buffer != bound {
@@ -988,56 +1566,72 @@ impl Renderer {
         }
     }
 
-    /// The impostors are the lit pass's alone. `bound` comes back as the group 0 the pass has.
-    #[allow(clippy::too_many_arguments)]
-    fn draw_opaque(&mut self, g: &Gpu, pass: u32, draws: &Draws, b: &mut Blocks, stage: Stage, chunk: [u32; 2], group: u32, models: u32, casters: Option<&[f32]>) -> u32 {
-        g.set_pipeline(pass, chunk[0]);
-        g.set_bind_group(pass, 0, group, &[]);
-        self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, None, casters);
-        g.set_pipeline(pass, chunk[1]);
-        self.draw_meshes(g, pass, draws, PIPELINE_CHUNK_COARSE, None, casters);
-        let mut bound = group;
-        self.decor.draw(g, pass, draws, b, stage, (models, &mut bound));
-        self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, stage, (models, &mut bound));
+    /// The world image's opaque models: the decor grown over the world. The
+    /// impostors are the lit pass's alone. `bound` comes back as the group 0
+    /// the pass has.
+    fn draw_opaque(&mut self, g: &Gpu, pass: u32, b: &mut Blocks, stage: Stage) -> u32 {
+        let mut bound = 0;
+        self.decor.draw_grown(g, pass, self.screen.grown(), b, stage, (self.models.frame, &mut bound));
         bound
     }
 
-    fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> FrameStat {
+    /// A frame in three stages, each standing while what it reads stands:
+    /// the cast's lane (stage 1, `ScreenCellsPass::prepare`); the world
+    /// image, everything the world and its light make, into the surface's own
+    /// colour and depth (stage 2, `world`); and the frame, the image laid on
+    /// it whole and over it what moves on its own — the actors, whose clips
+    /// play, the clouds, which the wind carries, the puck, the ghosts, the
+    /// badges, the gizmos (stage 3, every frame).
+    fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> (FrameKind, FrameStat) {
+        let mut read = core::mem::take(&mut self.world);
+        read.begin();
+        let mut rest = core::mem::take(&mut self.frame_read);
+        rest.begin();
         self.decor.set_models(input.decor);
         self.impostor.set_models(input.decor);
         for &(model, image) in input.skins {
             self.skinned.set_skin(g, model, image);
         }
-        self.layers.step(g, &self.mips, input.pack);
-        self.moon.step(g, &self.mips, input.moon);
-        self.atmosphere.earth_step(g, &self.mips, input.earth);
+        read.read(input.skins);
+        read.mark(self.layers.step(g, &self.mips, input.pack));
+        read.mark(self.moon.step(g, &self.mips, input.moon));
+        read.mark(self.atmosphere.earth_step(g, &self.mips, input.earth));
+        let cast = input.cast;
+        self.screen.hand(g, &mut self.pipelines, input.ground);
         let tiles = input.earth_tiles;
-        self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload);
-        self.badges.sync_sheet(g, &self.mips, input.billboards, input.text);
-        let (records, uniforms) = take_lists(Some(g), input.lists);
+        read.mark(self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload));
+        rest.mark(self.badges.sync_sheet(g, &self.mips, input.billboards, input.text));
+        let (records, uniforms, blocks_moved) = take_lists(Some(g), input.lists);
+        rest.mark(blocks_moved);
+        rest.read(records);
+        rest.read(uniforms);
+        rest.read(input.cases);
 
         targets(g, world);
-        let reach = shadow_reach(records.as_chunks::<DRAW_WORDS>().0, uniforms);
-        self.lay_out(g, world.width, world.height, input.environment, reach);
+        self.lay_out(g, world.width, world.height, input.environment);
         if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
             self.rebind(g);
+            read.mark(true);
         }
         g.write_buffer(self.sky_buffer, 0, bytes(&self.sky));
         let uniform_bytes = word_bytes(uniforms.len());
         if uniform_bytes > self.draws_bytes {
             release(self.draws_buffer);
             self.draws_bytes = uniform_bytes * 2;
-            self.draws_buffer = object();
-            g.buffer(self.draws_buffer, self.draws_bytes, buffer_usage::STORAGE | buffer_usage::COPY_DST);
-            self.chunk_groups(g);
+            self.draws_buffer = g.buffer(self.draws_bytes, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+            self.box_groups(g);
         }
         if !uniforms.is_empty() {
             g.write_buffer(self.draws_buffer, 0, bytes(uniforms));
         }
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
-        self.frame[GIZMO] = if draws.of(PIPELINE_CAMERA_GRID).len() > 0 { 1.0 } else { 0.0 };
         g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
+        read.read(&self.frame);
+        read.read(&self.sky);
+        read.read(self.stars.words());
+        read.read(self.atmosphere.words());
+        read.read(&[world.world, world.world_depth, u32::from(self.screen_ao)]);
         let b = blocks();
         self.decor.prepare(g, &draws, uniforms, b);
         self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, b);
@@ -1045,81 +1639,130 @@ impl Renderer {
         self.puck.prepare_zone(g, &draws, b);
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
+        let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
+        self.screen.prepare(g, &mut self.pipelines, cast, &meshes);
+        self.decor.prepare_grown(g, self.screen.grown());
+        self.impostor.prepare_grown(g, self.screen.grown());
         self.prepare_cases(g, &draws, uniforms, input.cases);
-        let q = self.query_set;
+        let q = if input.timed { self.query_set } else { 0 };
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [Stamp; GPU_SPAN_NAMES.len()] = core::array::from_fn(|span| Stamp::of(q, span));
         // What outlives the frame is drawn and submitted ahead of it: from here on
         // the frame only describes itself.
-        let ahead = object();
-        g.encoder(ahead);
-        self.impostor.bake(g, ahead, &mut self.decor, b);
-        self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR]);
-        g.submit(ahead);
-        release(ahead);
+        let ahead = g.encoder();
+        let baked = self.impostor.bake(g, ahead, &mut self.decor, b);
+        read.mark(baked);
+        let gridded = self.screen.grids(g, ahead, &mut stamps[SPAN_FILL]);
+        let (tables, exposed) = self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR], read.moved());
+        read.mark(tables);
+        if baked || gridded || exposed {
+            g.submit(ahead);
+        } else {
+            release(ahead);
+        }
+        self.atmosphere.read_back(g);
+        self.screen.read_back(g);
+        // The image stands where it read all as last time over a lane that stood.
+        let still = read.end() && self.screen.kind != FrameKind::cast;
+        rest.read(self.clouds.words());
+        // The frame stands where the image does and the rest of what it
+        // draws from read as last time: nothing is drawn, nothing submitted,
+        // and the canvases keep the frame they show.
+        if still && rest.end() && !gridded {
+            self.world = read;
+            self.frame_read = rest;
+            let stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES.len()]);
+            self.order = order;
+            return (FrameKind::stood, stat);
+        }
 
         // The frame proper changes nothing that outlives it, so one too large
         // for the stream is dropped whole and the screen keeps the last.
         frame_begin();
-        let encoder = object();
-        g.encoder(encoder);
-        if self.shadows {
-            let pass = self.shadow.begin(g, encoder, &mut stamps[SPAN_SHADOW]);
-            let chunk = [self.chunk_depth.pipeline, self.chunk_coarse_depth.pipeline];
-            self.draw_opaque(g, pass, &draws, b, Stage::Depth, chunk, self.light_group, self.models.light, Some(uniforms));
+        let encoder = g.encoder();
+        let [cast, faces] = stamps.get_disjoint_mut([SPAN_CAST, SPAN_FACE]).or_bug(Errno::ENOTRECOVERABLE);
+        self.screen.dispatch(g, encoder, cast, faces);
+        if !still {
+            if self.screen_ao {
+                let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
+                self.draw_opaque(g, pass, b, Stage::Prepass);
+                g.end(pass);
+                self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
+            }
+            let pass = g.pass(encoder, &pass_desc(world.world_view, Load::Clear, world.world_depth_view, Load::Clear, 0.0, stamps[SPAN_WORLD].pass()));
+            self.draw_opaque(g, pass, b, Stage::Lit);
+            let mut bound = self.screen.draw(g, pass);
+            // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
+            self.impostor.draw_grown(g, pass, self.screen.grown(), GROUPS, (self.models.frame, &mut bound));
+            // At the far plane after the opaque world, so only empty pixels run the sky shader.
+            g.set_pipeline(pass, self.sky_built.pipeline);
+            g.set_bind_group(pass, 0, self.sky_group, &[]);
+            g.draw(pass, 3, 1, 0, 0);
+            self.stars.draw(g, pass);
             g.end(pass);
-            release(pass);
         }
-        if self.screen_ao {
-            let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
-            let chunk = [self.chunk_prepass.pipeline, self.chunk_coarse_prepass.pipeline];
-            self.draw_opaque(g, pass, &draws, b, Stage::Prepass, chunk, self.bind_group, self.models.frame, None);
-            g.end(pass);
-            release(pass);
-            self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
+        let canvas_view = g.current(world.handle);
+        let pass = g.pass(encoder, &pass_desc(canvas_view, Load::Clear, world.depth_view, Load::Clear, 0.0, stamps[SPAN_OVERLAY].pass()));
+        let views = [world.world_view, world.world_depth_view];
+        if views != self.blit_views {
+            release(self.blit_group);
+            self.blit_group = g.bind_group(self.blit.layouts[0], &[view_entry(0, views[0]), view_entry(1, views[1])]);
+            self.blit_views = views;
         }
-        let canvas_view = object();
-        g.current(world.handle, canvas_view);
-        let pass = object();
-        g.pass(pass, encoder, &pass_desc(canvas_view, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
-        let chunk = [self.chunk.pipeline, self.chunk_coarse.pipeline];
-        let mut bound = self.draw_opaque(g, pass, &draws, b, Stage::Lit, chunk, self.bind_group, self.models.frame, None);
-        // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
-        self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, (self.models.frame, &mut bound));
-        // At the far plane after the opaque world, so only empty pixels run the sky shader.
-        g.set_pipeline(pass, self.sky_built.pipeline);
-        g.set_bind_group(pass, 0, self.sky_group, &[]);
+        g.set_pipeline(pass, self.blit.pipeline);
+        g.set_bind_group(pass, 0, self.blit_group, &[]);
         g.draw(pass, 3, 1, 0, 0);
-        self.stars.draw(g, pass);
+        // The actors, whose clips play, and the clouds the kernel lists, the
+        // cumulus, which the wind carries: drawn over the image against its
+        // depth, as a moving object is over a cached world, their occlusion
+        // open.
+        let mut bound = 0;
+        let over = (self.models.over, &mut bound);
+        self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, Stage::Lit, (over.0, &mut *over.1));
+        self.decor.draw(g, pass, &draws, b, Stage::Lit, (over.0, &mut *over.1));
+        self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, over);
         self.clouds.draw(g, pass);
         self.puck.draw_beacon(g, pass, &draws, uniforms);
         self.puck.draw_zone(g, pass, &draws, uniforms, b);
-        self.draw_meshes(g, pass, &draws, PIPELINE_GHOST_BOX, Some(self.ghost[0].pipeline), None);
-        self.draw_meshes(g, pass, &draws, PIPELINE_GHOST_BOX_COPLANAR, Some(self.ghost[1].pipeline), None);
+        self.draw_boxes(g, pass, &draws, PIPELINE_GHOST_BOX, self.ghost[0].pipeline);
+        self.draw_boxes(g, pass, &draws, PIPELINE_GHOST_BOX_COPLANAR, self.ghost[1].pipeline);
         let mut bound = 0;
         self.decor.draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         g.end(pass);
-        release(pass);
         self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
         self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_DEBUG]);
         self.draw_cases(g, encoder, &draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
-        let (mut gpu_ms, mut gpu_spans) = (0.0, [0.0; GPU_SPAN_NAMES.len()]);
-        if q != 0 {
-            let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
-            g.timestamps(encoder, q, written);
-            gpu_spans = core::array::from_fn(|k| g.gpu_ms(k as u32));
-            gpu_ms = g.gpu_ms(GPU_SPAN_NAMES.len() as u32);
-        }
-        g.submit(encoder);
-        release(encoder);
+        let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
+        g.submit_frame(encoder, written);
         release(canvas_view);
+        let mut gpu_spans = [0.0; GPU_SPAN_NAMES.len()];
+        let gpu_read = q != 0 && g.gpu_landed();
+        if q != 0 {
+            gpu_spans = core::array::from_fn(|k| g.gpu_ms(k as u32));
+        }
         let skipped = !frame_commit();
         if skipped {
             REDRAW.set(true);
+            // Its cast and its image were dropped with it: the lane and the
+            // image hold older ones.
+            if let Some(c) = self.screen.cast.as_mut() {
+                c.read.forget();
+            }
+            read.forget();
+            rest.forget();
         }
-        let stat = self.stat(draws.records, world, skipped, (gpu_ms, gpu_spans));
+        self.world = read;
+        rest.end();
+        self.frame_read = rest;
+        let kind = match (skipped, still) {
+            (true, _) => FrameKind::dropped,
+            (false, true) => FrameKind::still,
+            (false, false) => self.screen.kind,
+        };
+        let mut stat = self.stat(draws.records, world, input.counted, gpu_spans);
+        stat.gpu_read = gpu_read;
         self.order = order;
-        stat
+        (kind, stat)
     }
 
     /// The cases drawn this frame: a surface still a case, and its actor's draw.
@@ -1139,7 +1782,7 @@ impl Renderer {
             targets(g, s);
             let slot = handle_slot(id) as usize;
             if self.cases[slot].is_none() {
-                self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, &self.ao, self.atmosphere.entries(), self.align));
+                self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.ao, self.atmosphere.entries(), self.align));
             }
             let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
             case.skinned.set_skin(g, model, image);
@@ -1155,45 +1798,41 @@ impl Renderer {
             let actor = [u[0] as f64, u[1] as f64, u[2] as f64];
             let mut frame = self.frame;
             let u = &mut frame;
-            let (mut proj, mut view, mut t, mut m, mut n) = (mat4(), mat4(), mat4(), mat4(), mat4());
-            mat4_perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, 0.1, 100.0);
-            mat4_look_at(&mut view, CASE_EYE, CASE_TARGET, [0.0, 0.0, 1.0]);
-            mat4_translation(&mut t, -actor[0], -actor[1], -actor[2]);
-            mat4_mul(&mut m, &GL_TO_WGPU, &proj);
-            mat4_mul(&mut n, &m, &view);
-            mat4_mul(&mut m, &n, &t);
+            let (mut proj, mut view, mut t, mut m, mut n) = (mat4::new(), mat4::new(), mat4::new(), mat4::new(), mat4::new());
+            mat4::perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, 0.1, 100.0);
+            mat4::look_at(&mut view, CASE_EYE, CASE_TARGET, [0.0, 0.0, 1.0]);
+            mat4::translation(&mut t, -actor[0], -actor[1], -actor[2]);
+            mat4::mul(&mut m, &GL_TO_WGPU, &proj);
+            mat4::mul(&mut n, &m, &view);
+            mat4::mul(&mut m, &n, &t);
             put_mat(u, VIEW_PROJ, &m);
             u[CAMERA_POS] = (CASE_EYE[0] + actor[0]) as f32;
             u[CAMERA_POS + 1] = (CASE_EYE[1] + actor[1]) as f32;
             u[CAMERA_POS + 2] = (CASE_EYE[2] + actor[2]) as f32;
             u[VIEWPORT] = s.width as f32;
             u[VIEWPORT + 1] = s.height as f32;
-            u[SHADOW_STRENGTH] = 0.0;
             u[VIGNETTE] = 0.0;
             u[SCREEN_AO] = 0.0;
             // No planet: the case is a room of its own.
             u[PLANET + 2] = 0.0;
             g.write_buffer(case.frame_buffer, 0, bytes(&frame));
-            let view_id = object();
-            g.current(s.handle, view_id);
-            let pass = object();
-            g.pass(pass, encoder, &pass_desc(view_id, load::CLEAR, s.depth_view, load::CLEAR, 0.0, stamp.pass()));
+            let view_id = g.current(s.handle);
+            let pass = g.pass(encoder, &pass_desc(view_id, Load::Clear, s.depth_view, Load::Clear, 0.0, stamp.pass()));
             case.skinned.draw(g, pass, core::iter::once(own), blocks(), Stage::Lit, (case.frames.frame, &mut 0));
             g.end(pass);
-            release(pass);
             release(view_id);
         }
     }
 
     /// What the scheduler asked for: a draw passed over because its block, skin or
-    /// sprite is not on the device yet is still counted.
-    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, skipped: bool, (gpu_ms, gpu_spans): (f64, [f64; GPU_SPAN_NAMES.len()])) -> FrameStat {
+    /// sprite is not on the device yet is still counted. The draws are counted
+    /// only while `counted`, the profiler's, so a frame no one reads counts none.
+    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, counted: bool, gpu_spans: [f64; GPU_SPAN_NAMES.len()]) -> FrameStat {
         let b = blocks();
-        let mut triangles = 0u32;
-        let mut census = [[0.0; 2]; PIPELINES as usize];
-        for d in draws {
+        let mut census: DrawCensus = [[0.0; 2]; DRAW_PIPELINES.len()];
+        for d in draws.iter().filter(|_| counted) {
             let tris = match d[4] {
-                PIPELINE_CHUNK | PIPELINE_CHUNK_COARSE | PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[1] * 12,
+                PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[1] * 12,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
                 PIPELINE_IMPOSTOR => 2 * d[2],
                 PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, index_cnt)| index_cnt / 3),
@@ -1204,28 +1843,21 @@ impl Renderer {
                 PIPELINE_DEBUG => d[1] + d[2] / 3,
                 _ => 0,
             };
-            triangles += tris;
-            if let Some(c) = census.get_mut(d[4] as usize) {
-                c[0] += 1.0;
-                c[1] += tris as f64;
-            }
+            let c = &mut census[census_slot(d[4])];
+            c[0] += 1.0;
+            c[1] += tris as f64;
         }
         let px = world.width as f64 * world.height as f64;
         FrameStat {
-            gpu_ms,
-            draw_calls: draws.len() as f64,
-            triangles: triangles as f64,
-            buffers: b.count as f64,
-            buffer_bytes: b.bytes as f64,
+            gpu_read: false,
+            blocks: b.count as f64,
+            block_bytes: b.bytes as f64,
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the badges' regions'.
             depth_mb: round((px * 4.0 + self.ao.depth_bytes() + self.badges.depth_bytes()) / MB),
-            shadow_mb: round(self.shadow.bytes as f64 / MB),
             layers_mb: round(self.layers.bytes as f64 / MB),
-            px,
+            world_px: px,
             census,
             gpu_spans,
-            arena_mb: round(arena_bytes() as f64 / MB),
-            skipped: f64::from(u8::from(skipped)),
         }
     }
 }
@@ -1257,13 +1889,20 @@ fn targets(g: &Gpu, s: &mut Surface) {
     }
     s.waited = 0;
     g.resize(s.handle, width, height);
-    for id in [s.depth_view, s.depth] {
+    for id in [s.depth_view, s.depth, s.world_view, s.world, s.world_depth_view, s.world_depth] {
         release(id);
     }
-    s.depth = object();
-    g.texture(s.depth, width, height, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
-    s.depth_view = object();
-    g.view(s.depth_view, s.depth, dimension::D2, 0, 1, 0, 1);
+    let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
+    s.depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
+    s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
+    // The world's alone draws over an image of it; a case draws straight.
+    (s.world, s.world_view, s.world_depth, s.world_depth_view) = (0, 0, 0, 0);
+    if s.role == surface_role::WORLD {
+        s.world = g.texture(width, height, 1, g.canvas(), 1, usage);
+        s.world_view = g.view(s.world, false, 0, 1, 0, 1);
+        s.world_depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
+        s.world_depth_view = g.view(s.world_depth, false, 0, 1, 0, 1);
+    }
     s.width = width;
     s.height = height;
 }
@@ -1272,27 +1911,38 @@ fn targets(g: &Gpu, s: &mut Surface) {
 pub fn render_frame(input: FrameInput) -> FrameOutput {
     REDRAW.set(false);
     let world = surfaces().find(|s| s.role == surface_role::WORLD);
-    let (Some(g), Some(device), Some(world)) = (gpu(), *DEVICE.get(|| None), world) else {
+    let (Some(g), Some(device), Some(world)) = (gpu(), device(), world) else {
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
-        return FrameOutput { redraw: false, stat: None };
+        return FrameOutput {
+            kind: FrameKind::unready,
+            redraw: false,
+            stat: None,
+        };
     };
-    // The GPU holds as many frames as it may: skip rather than wait.
-    if !frame_room() {
+    // The surfaces would block: skip rather than wait.
+    if !(input.admit)() {
         take_lists(Some(g), input.lists);
-        return FrameOutput { redraw: true, stat: None };
+        return FrameOutput {
+            kind: FrameKind::held,
+            redraw: true,
+            stat: None,
+        };
     }
     let slot = RENDERER.get(|| None);
-    let r = slot.get_or_insert_with(|| Renderer::new(g, device, input.handheld));
+    let r = slot.get_or_insert_with(|| Renderer::new(g, device));
     blocks().restore(g);
-    let stat = r.frame(g, world, input);
+    let (kind, stat) = r.frame(g, world, input);
     FrameOutput {
+        kind,
         redraw: *REDRAW.get(|| false),
         stat: Some(stat),
     }
 }
 
 /// Blocks listed with no device wait in the table for the next one.
-fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
+/// The draws and their uniforms, and whether a block was let go, made or
+/// rewritten.
+fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32], bool) {
     let b = blocks();
     // Frees first, so the table never holds a block beside its replacement.
     for &handle in lists.frees {
@@ -1304,5 +1954,6 @@ fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
     for r in lists.rewrites.as_chunks::<REWRITE_WORDS>().0 {
         b.rewrite(g, r[0], r[1], r[2], r[3]);
     }
-    (lists.draws, lists.uniforms)
+    let moved = !(lists.frees.is_empty() && lists.uploads.is_empty() && lists.rewrites.is_empty());
+    (lists.draws, lists.uniforms, moved)
 }

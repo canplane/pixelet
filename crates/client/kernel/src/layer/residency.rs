@@ -2,8 +2,11 @@
 
 //! Residency: which of a layer's tiles are held, in which frame, and what
 //! answers a tile that is not. Any tile fits any frame. Tiles the fallback
-//! asks for are held hard; the rest is cache. A held tile is readable on its
-//! own, so a missing ancestor never hides a resident descendant. A miss
+//! asks for are held hard; the rest is cache. A tile is readable while it is
+//! held and asked for, on its own, so a missing ancestor never hides a
+//! resident descendant; a tile held only as cache is bytes kept for when it
+//! is asked again, and answers nothing, so what is read is a function of
+//! what this observation asks and never of where the eye has been. A miss
 //! falls back to the nearest resident tile over it (`drawn_from`).
 //!
 //! Capacity is asserted, not observed, since thrash here would be silent:
@@ -44,10 +47,12 @@ pub trait Victim {
     fn victim(&self, candidates: &[Candidate]) -> Option<usize>;
 }
 
-/// No frame for an empty tile, whose body is its own.
+/// No frame for an empty tile, whose body is its own. One asked for again
+/// (`again`) is read meanwhile and fetched once more.
 struct Held<L> {
     body: L,
     frame: Option<u32>,
+    again: bool,
 }
 
 struct Entry<L> {
@@ -87,7 +92,7 @@ pub struct Residency<L: Base> {
 /// holds only what it asks for (`Base::ASKS`).
 impl<L: Base> Residency<L> {
     /// The zooms the layer's pyramid holds, its leaves to its lattice's top.
-    pub const ZOOMS: u32 = (L::LEAF - L::LATTICE.top() + 1) as u32;
+    pub const ZOOMS: u32 = (L::LEAF - L::LATTICE.top() + 1);
 
     /// A destination's line from its leaf to the top.
     pub const DESTINATION_TILES: u32 = Self::ZOOMS;
@@ -104,12 +109,12 @@ impl<L: Base> Residency<L> {
         0
     };
 
-    /// Held hard apart from the view: the floor and a destination's line. A new
-    /// consumer that cannot take a coarser answer would declare its tiles here.
+    /// Held hard apart from the view: the floor, a destination's line, and
+    /// what a reader that cannot take a coarser answer declares (`Base::PINNED`).
     const PINNED_TILES: u32 = match L::ASKS {
         Asks::Floor => Floor::<L>::TILES,
-        Asks::Line => Self::DESTINATION_TILES,
-        Asks::View => Floor::<L>::TILES + Self::DESTINATION_TILES,
+        Asks::Line => Self::DESTINATION_TILES + L::PINNED,
+        Asks::View => Floor::<L>::TILES + Self::DESTINATION_TILES + L::PINNED,
     };
 
     /// What is held hard at most.
@@ -184,7 +189,7 @@ impl Default for Lines {
 impl Line {
     /// Over the top: nothing.
     const ABOVE: Line = Line {
-        tile: Tile { zoom: 0, tile: 0 },
+        tile: Tile { zoom: 0, at: [0, 0] },
         drawn: None,
         source: None,
         settled: false,
@@ -217,8 +222,14 @@ impl<L: Base> Residency<L> {
         self.entry(p)?.held.as_ref()
     }
 
+    /// Held and asked for: what a reader may read.
+    fn readable(&self, p: Tile) -> Option<&Held<L>> {
+        self.entry(p).filter(|e| e.ask.is_some())?.held.as_ref()
+    }
+
+    /// Held and asked for, and not asked for again: nothing more is fetched for it.
     pub fn resident(&self, p: Tile) -> bool {
-        self.held_as(p).is_some()
+        self.readable(p).is_some_and(|h| !h.again)
     }
 
     /// Held in a frame of its own, not as an empty tile.
@@ -228,15 +239,16 @@ impl<L: Base> Residency<L> {
 
     /// The frame a held tile is in; none for an empty one.
     pub fn frame(&self, p: Tile) -> Option<u32> {
-        self.held_as(p)?.frame
+        self.readable(p)?.frame
     }
 
     pub fn get(&self, p: Tile) -> Option<&L> {
-        self.held_as(p).map(|h| &h.body)
+        self.readable(p).map(|h| &h.body)
     }
 
+    /// Every readable tile.
     pub fn held(&self) -> impl Iterator<Item = (Tile, &L)> {
-        self.tiles.iter().filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
+        self.tiles.iter().filter(|(_, e)| e.ask.is_some()).filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
     }
 
     pub fn frames_used(&self) -> u32 {
@@ -268,7 +280,7 @@ impl<L: Base> Residency<L> {
     /// descent pays one lookup a step and never walks back up.
     pub fn step(&self, parent: &Line, child: Tile) -> Line {
         let e = self.entry(child);
-        let held = e.and_then(|e| e.held.as_ref());
+        let held = e.filter(|e| e.ask.is_some()).and_then(|e| e.held.as_ref());
         // Answered for itself, or its parent holds no child there.
         let said = e.is_some_and(|e| e.answered) || parent.children.is_some_and(|o| !o.has_child(child.slot()));
         let over = match parent.resident() {
@@ -310,8 +322,12 @@ impl<L: Base> Residency<L> {
     pub fn ask(&mut self, asks: &FnvHashMap<Tile, Ask>) {
         xpute_kit::ensure!(asks.len() <= Self::FRAMES as usize, ENOTRECOVERABLE, asks.len());
         for (&p, e) in &mut self.tiles {
+            let was = e.ask.is_some();
             e.ask = asks.get(&p).copied();
-            if e.ask.is_none() && core::mem::take(&mut e.answered) {
+            // A held tile asked for again, or no longer, is read or not: its
+            // answer moved as surely as one arriving or going.
+            let read = e.held.is_some() && was != e.ask.is_some();
+            if read | (e.ask.is_none() && core::mem::take(&mut e.answered)) {
                 self.moved.push(p);
             }
         }
@@ -431,8 +447,31 @@ impl<L: Base> Residency<L> {
     }
 
     fn put(&mut self, p: Tile, body: L, frame: Option<u32>) {
-        self.entry_mut(p).held = Some(Held { body, frame });
+        self.entry_mut(p).held = Some(Held { body, frame, again: false });
         self.moved.push(p);
+    }
+
+    /// A framed tile held is fetched once more, read meanwhile: what a
+    /// layer that keeps nothing of a packet asks when it needs it again.
+    pub fn again(&mut self, p: Tile) {
+        if let Some(h) = self.tiles.get_mut(&p).and_then(|e| e.held.as_mut()).filter(|h| h.frame.is_some()) {
+            h.again = true;
+        }
+    }
+
+    /// Held and asked for again (`again`).
+    pub fn again_held(&self, p: Tile) -> bool {
+        self.readable(p).is_some_and(|h| h.again)
+    }
+
+    /// What is read over `p` moved, as a tile's arriving would.
+    pub fn moved_at(&mut self, p: Tile) {
+        self.moved.push(p);
+    }
+
+    /// The tile held in frame `record`.
+    pub fn in_frame(&self, record: u32) -> Option<Tile> {
+        self.tiles.iter().find(|(_, e)| e.held.as_ref().is_some_and(|h| h.frame == Some(record))).map(|(&p, _)| p)
     }
 
     /// Returns the frame `p` was in, if any, for the caller to fill or free.

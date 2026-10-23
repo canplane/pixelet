@@ -23,19 +23,24 @@ std::uint32_t Stream::open(std::uint32_t op, std::uint32_t n, std::source_locati
     return off + 2 * WORD;
 }
 
+std::optional<std::uint32_t> Stream::reserve(std::uint32_t op, std::uint32_t n, std::source_location from) noexcept {
+    if (mark_ && (spilled_ || std::uint64_t{left()} < (std::uint64_t{2} + n) * WORD)) {
+        spilled_ = true;
+        return std::nullopt;
+    }
+    return open(op, n, from);
+}
+
 void Stream::record(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint32_t> tail,
                     std::optional<std::span<const std::uint8_t>> bytes, std::source_location from) noexcept {
     auto a = static_cast<std::uint32_t>(args.size()), t = static_cast<std::uint32_t>(tail.size());
-    if (mark_ && (spilled_ || !fits(a + t, bytes ? std::optional<std::uint32_t>{static_cast<std::uint32_t>(bytes->size())} : std::nullopt, 0))) {
-        spilled_ = true;
-        return;
-    }
     std::uint32_t byte_words = static_cast<std::uint32_t>(record_words(0, bytes ? std::optional<std::uint64_t>{bytes->size()} : std::nullopt) - 2);
-    std::uint32_t w = open(op, a + t + byte_words, from);
-    for (std::uint32_t i = 0; i < a; i++) mem_.set_word(w + WORD * i, args[i]);
-    for (std::uint32_t i = 0; i < t; i++) mem_.set_word(w + WORD * (a + i), tail[i]);
+    std::optional<std::uint32_t> w = reserve(op, a + t + byte_words, from);
+    if (!w) return;
+    for (std::uint32_t i = 0; i < a; i++) mem_.set_word(*w + WORD * i, args[i]);
+    for (std::uint32_t i = 0; i < t; i++) mem_.set_word(*w + WORD * (a + i), tail[i]);
     if (bytes) {
-        std::uint32_t k = w + WORD * (a + t);
+        std::uint32_t k = *w + WORD * (a + t);
         mem_.set_word(k, static_cast<std::uint32_t>(bytes->size()));
         if (byte_words > 1) mem_.set_word(k + WORD * (byte_words - 1), 0);
         std::memcpy(mem_.at(k + WORD), bytes->data(), bytes->size());

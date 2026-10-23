@@ -12,7 +12,7 @@ use pxl_spec::block::decor::Decor;
 use pxl_spec::block::object::Cube;
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::lattice::GROUND;
 
 pub use crate::abi::cmd::ActiveTool;
@@ -52,12 +52,12 @@ impl Default for Holding {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Hover {
-    pub coord: Option<Pvf3>,
+    pub coord: Option<Q3>,
     pub object_at: Option<EntryAt>,
     /// A decor the ground grew, which has no entry.
     pub scattered: Option<Instance>,
     /// Where the focus sent there starts from.
-    pub approach: Option<Pvf3>,
+    pub approach: Option<Q3>,
 }
 
 struct Interaction {
@@ -145,7 +145,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     let hit = pick.hit;
     let hover = &mut interaction().hover;
     // A folded cell is a summary, not what is held: nothing in it is struck.
-    if folded_at(&hit) {
+    if folded_at(&hit, drawn) {
         *hover = Hover::default();
         return;
     }
@@ -156,7 +156,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         hover.approach = None;
         let placement_size = match ui.active_tool {
             ActiveTool::Object => object_size_of(ui.object_tier),
-            ActiveTool::Decor => units(Decor::of(ui.decor_id).cell_zoom()),
+            ActiveTool::Decor => units(Decor::of(ui.decor_id).row.cell_zoom()),
             _ => MARKER_SIZE,
         };
         // A decor met in front of the pick is what the new cube goes flush against.
@@ -195,18 +195,18 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
 }
 
 /// Whether the cube of `size` cornered at `corner` may hold an edit.
-fn editable(corner: &Pvf3, size: f64) -> bool {
+fn editable(corner: &Q3, size: f64) -> bool {
     let zoom = of_side(size);
     World::now().editable(&cube(zoom, index_of(zoom, corner)))
 }
 
-/// Whether what `hit` struck is drawn folded: the finest drawn chunk there
-/// has cells coarser than the box struck.
-fn folded_at(hit: &Hit) -> bool {
-    let [x, y, z] = hit.cube.center();
-    let at = crate::view::frame::coord::world_to_canonical(&[x, y, z]);
+/// Whether what `hit` struck is drawn folded: the eye's rays draw cells
+/// coarser than the box struck where it is (view/observation.rs `cell_at`).
+fn folded_at(hit: &Hit, drawn: Tau) -> bool {
     let held = of_side(hit.cube.extent()[0]);
-    crate::with_parts(|_, sched, _| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
+    crate::view::observation::observation()
+        .and_then(|o| crate::view::observation::cell_at(&o, drawn, hit.cube.center()))
+        .is_some_and(|cells| cells < held)
 }
 
 /// A tap at `ndc_x`, `ndc_y` with the tool held, on the world drawn at `drawn`.
@@ -241,7 +241,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         // The slot may have filled since the last hover update.
         ActiveTool::Decor => {
             if !is_placement_blocked(PlacementTool::Decor(ui.decor_id), &hovered, object_size) {
-                place_decor(&hovered, units(Decor::of(ui.decor_id).cell_zoom()), ui.decor_id);
+                place_decor(&hovered, units(Decor::of(ui.decor_id).row.cell_zoom()), ui.decor_id);
             }
         }
         // It waits there for its words, which the shell asks for.

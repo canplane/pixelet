@@ -8,7 +8,7 @@ _Started on December 15, 2025._
 
 **pixelet puts the real Earth into blocks — your street, its buildings, the river beside it, the hills behind it — and lets you build on it.**
 
-<img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.png" height="480">
+<img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.webp" width="100%">
 
 The planet is too large to load or draw at once, so pixelet follows one rule: **draw what the eye can tell apart, and nothing else.** A city, a mountain range or a tower behind a ridge costs the cells it covers on the screen, not what it holds.
 
@@ -32,12 +32,12 @@ tiles ────────────────────────�
 ```
 
 - **Real geography is baked ahead; what you build is live.** [Overture Maps](https://overturemaps.org/)' geometry, OpenStreetMap's coastline and [GEDTM30](https://doi.org/10.5281/zenodo.18887460)'s elevation are painted into tiles before anyone asks; what players place is kept as they place it, and the trees and cars the ground grows are worked out where they stand, never stored.
-- **Cells express detail, chunks are drawn, tiles are fetched.** One cell of the eye's view is one thing drawn, a chunk is a cube of those cells, and a tile is what arrives when the view lacks it.
+- **Cells express detail, tiles are fetched.** One cell of the eye's view is one ray the cast draws, and a tile is what arrives when the view lacks it.
 - **The same world runs in a browser and on a device**, through one Rust kernel drawing with WebGPU.
 
 ## The eye decides
 
-The world has its own fixed lattice. The eye lays a second grid over it, cells of equal solid angle, so they grow with distance. Where the eye can tell more apart, chunks split; where it cannot, they fold into one thing drawn.
+The world has its own fixed lattice. The eye lays a second grid over it, cells of equal solid angle, so they grow with distance. Where the eye can tell more apart, its cells are finer; where it cannot, one cell draws what they fold into.
 
 ---
 
@@ -143,7 +143,7 @@ filled by the bakes, offline
 
 The four roots are written in one file, `spec/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
 
-Two formats were made here: **PVF3**, pixelet's packed fixed-point coordinate, and **XTP**, xpute's relocatable binary tree, read without copying.
+One format was made here: **XTP**, xpute's relocatable binary tree, read without copying.
 
 ---
 
@@ -188,27 +188,27 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 ├── asset/                    # Shipped models, texture pack and sky, imported by nothing
 ├── script/                   # the tree's checks, the deployment smoke, the usage report
 ├── infra/                    # local and production compose files, and what fills db-geo
-└── decision/                 # Each decision and why, closed/ for those no longer cited,
-                              #   experiment/ for measurements
+└── doc/                      # The record: backlog.md what is queued, minutes/ each meeting's
+                              #   record (archive/ those retired), experiment/ measurements
 ```
 
 **What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the servers, the bakes and the asset ingest compile the model, so they are crates; the Overture and elevation ingests put a provider's data into Postgres sharing nothing with the model, so they are scripts under `infra/geo/`. The host and the shell are TypeScript because neither decides anything about the world; what they need of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is generated from.
 
-| Crate / package | What it is                                                                                                                               |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `pxl-spec`      | The model: PVF3, the zooms and lattices, the block catalog, the command numbers, the tile formats, the asset tables. One implementation. |
-| `pxl-render`    | The view: the column runs, the mesher, glTF, the badge sheet, the draw list, the shaders, the renderer. It knows no kernel.              |
-| `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                    |
-| `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.               |
-| `pxl-native`    | The guest on a device: a static library that runs every call on a thread of its own and exports `pxl_interrupt` through the C ABI.       |
-| `apps/web`      | The kernel's host and its shell, both apps'; and the Cloudflare Worker that serves it all.                                               |
-| `apps/native`   | The device app: the same host and shell run by Metro, what only a device does, and the native module that links the kernel.              |
-| `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                              |
-| `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                 |
-| `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                               |
-| `pxl-api`       | The application's server.                                                                                                                |
-| `pxl-geo-bake`  | The bakes — terrain, place, division, earth — and, behind a feature, the dev tile server.                                                |
-| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables; generates code from `spec/`; bakes the stars, the Moon, the brand.  |
+| Crate / package | What it is                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pxl-spec`      | The model: the position, the zooms and lattices, the block catalog, the command numbers, the tile formats, the asset tables. One implementation. |
+| `pxl-render`    | The view: glTF, the badge sheet, the draw list, the shaders, the renderer. It knows no kernel.                                                   |
+| `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                            |
+| `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                       |
+| `pxl-native`    | The guest on a device: a static library that runs every call on a thread of its own and exports `pxl_interrupt` through the C ABI.               |
+| `apps/web`      | The kernel's host and its shell, both apps'; and the Cloudflare Worker that serves it all.                                                       |
+| `apps/native`   | The device app: the same host and shell run by Metro, what only a device does, and the native module that links the kernel.                      |
+| `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                                      |
+| `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                         |
+| `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                                       |
+| `pxl-api`       | The application's server.                                                                                                                        |
+| `pxl-geo-bake`  | The bakes — terrain, place, division, earth — and, behind a feature, the dev tile server.                                                        |
+| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables; generates code from `spec/`; bakes the stars, the Moon, the brand.          |
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat. The kernel's are named as the chain is:
 
@@ -229,7 +229,7 @@ The casing in the tree is not mixed by accident. Rust, the xpute packages and th
 
 ## Learn More
 
-[AGENTS.md](./AGENTS.md) is how to work in the tree, [BACKLOG.md](./BACKLOG.md) what is queued next, and [decision/](./decision/) why things went the way they did.
+[AGENTS.md](./AGENTS.md) is how to work in the tree, [doc/backlog.md](./doc/backlog.md) what is queued next, and [doc/minutes/](./doc/minutes/) why things went the way they did.
 
 `xpute/` is xpute's repository root, developed here and copied out byte for byte by `xpute/script/export.ts` (`deno task export:xpute`): [xpute/README.md](./xpute/README.md) and [xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) are the system under the application — its memory, rings, turn, handles, contract and wire formats — with `xpute/LICENSE` and `xpute/THIRD_PARTY_NOTICES.md` beside them. Nothing under it names pixelet.
 

@@ -7,18 +7,19 @@
 //! only where it says more than its parent, which a reader that holds the
 //! parent then reads instead.
 
+use crate::space::layer::lattice::Cells;
 use fnv::FnvHashMap;
 
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
-use crate::bake::fold::majority;
 use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
 use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::division::Subtype;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
+use pxl_portable::ground::majority;
 
 /// The finest tile Overture makes of its divisions (overture-tiles
 /// `profiles/Divisions.java`, `MAXZOOM`): finer views read it.

@@ -7,23 +7,22 @@
 use crate::billboard::sheet::billboard_sheet;
 use crate::control::camera::controller;
 use crate::io::failure::Outcome;
-use crate::io::request::{counts, credits};
+use crate::io::request::credits;
 use crate::layer::Base as _;
 use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
-use crate::profiler::block::{FetchBlock, FramesBlock, HeldBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
-use crate::profiler::frame::FrameSample;
-use crate::profiler::frame::{missed, overran};
+use crate::profiler::block::{FetchBlock, FramesBlock, OpenBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::profiler::frame::{long, missed, off_turn_ms, overran};
+use crate::profiler::frame::{FrameSample, GPU_SPANS};
 use crate::profiler::log::window_baseline;
-use crate::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
+use crate::profiler::record::{fixed_lane, profiler_frames_since, profiler_open_interval, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
 use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
 use crate::sched::tick::tick_step_stats;
-use crate::{kernel, with_parts};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg4326;
-use pxl_spec::space::coord::pvf3::pack;
+use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -80,15 +79,14 @@ pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
         &RecBlock {
             recording: rec.recording as u8 as f64,
             elapsed_ms: rec.elapsed_ms,
-            tasks: rec.tasks as f64,
-            frames: rec.frames as f64,
             truncated: rec.truncated as u8 as f64,
         },
     );
 
     put(out, SUMMARY::frames::AT, &frames(scratch, profiler_frames_since(since)));
+    let open = profiler_open_interval().map_or(OpenBlock::default(), |f| OpenBlock { turns: f.turns, busy_ms: f.busy_ms });
+    put(out, SUMMARY::open::AT, &open);
     put(out, SUMMARY::tasks::AT, &tasks(scratch, profiler_tasks_since(since)));
-    put(out, SUMMARY::peak::AT, &profiler_frame_peak());
     side(out);
     out
 }
@@ -100,38 +98,36 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
     let sum = |pick: &dyn Fn(&FrameSample) -> f64| frames.iter().map(pick).sum::<f64>();
     let seconds = ((last.t - first.t) / 1000.0).max(1e-3);
     let moving = || frames.iter().filter(|f| f.settled == 0.0);
-    let (runs, bakes) = (sum(&|f| f.work.runs), sum(&|f| f.work.bakes));
-    let backlog = || frames.iter().filter(|f| f.lod.pending > 0.0);
-    let backlog_s = (backlog().map(|f| f.dt_ms).sum::<f64>() / 1000.0).max(1e-3);
     let n = frames.len() as f64;
 
+    let count = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
+    // A span the frame did not run reads 0 and is left out.
+    // The GPU's figures over the frames a read landed with, each read once.
+    let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
+    let spans: [Spread; GPU_SPANS] = core::array::from_fn(|k| spread(scratch, read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0)));
     FramesBlock {
         present: 1.0,
         n,
         seconds,
         moving: moving().count() as f64,
         missed: moving().filter(|f| missed(f)).count() as f64,
-        overran: frames.iter().filter(|f| overran(f)).count() as f64,
-        dt: spread(scratch, moving().map(|f| f.dt_ms)),
-        task: spread(scratch, frames.iter().map(|f| f.task_ms)),
-        offthread: spread(scratch, frames.iter().map(|f| (f.dt_ms - f.task_ms).max(0.0))),
-        gpu: spread(scratch, frames.iter().map(|f| f.gpu.ms)),
-        sched: spread(scratch, frames.iter().map(|f| f.sched_ms)),
-        chunks: spread(scratch, frames.iter().map(|f| f.chunks_ms)),
-        phases: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k]))),
-        // A span the frame did not run reads 0 and is left out.
-        gpu_spans: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0))),
-        per_s_runs: runs / seconds,
-        per_s_bakes: bakes / seconds,
-        backlog_s,
-        backlog_per_s_runs: backlog().map(|f| f.work.runs).sum::<f64>() / backlog_s,
-        backlog_per_s_bakes: backlog().map(|f| f.work.bakes).sum::<f64>() / backlog_s,
-        chunks_per_bake: if bakes > 0.0 { sum(&|f| f.chunks_ms) / bakes } else { f64::NAN },
-        mounts_added: sum(&|f| f.mounts.added),
-        mounts_removed: sum(&|f| f.mounts.removed),
-        used_delta_mb: last.heap.used_mb - first.heap.used_mb,
+        overran: count(&overran),
+        long: count(&long),
+        turns: sum(&|f| f.turns),
+        interval: spread(scratch, moving().map(|f| f.interval_ms)),
+        busy: spread(scratch, frames.iter().map(|f| f.busy_ms)),
+        off_turn: spread(scratch, frames.iter().map(off_turn_ms)),
+        tick: spread(scratch, frames.iter().map(|f| f.tick_ms)),
+        tasks: spread(scratch, frames.iter().map(|f| f.tasks_ms)),
+        gpu_read: count(&|f| f.gpu.read != 0.0),
+        gpu: spread(scratch, read().map(|f| pxl_render::gpu::renderer::gpu_ms(&f.gpu.spans))),
+        phases_p95: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k])).p95),
+        gpu_spans_p95: spans.map(|s| s.p95),
+        gpu_spans_max: spans.map(|s| s.max),
+        kinds: core::array::from_fn(|k| count(&|f| f.kind == k as f64)),
+        wakes: core::array::from_fn(|k| count(&|f| f.wake == k as f64)),
+        heap_used_delta_bytes: last.heap.used_bytes - first.heap.used_bytes,
         census: core::array::from_fn(|k| [sum(&|f| f.gpu.census[k][0]) / n, sum(&|f| f.gpu.census[k][1]) / n]),
-        zoom_tris: core::array::from_fn(|z| sum(&|f| f.gpu.zoom_tris[z]) / n),
         last: *last,
     }
 }
@@ -175,12 +171,14 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
             }
         }
 
+        let lat = spread(scratch, mine().filter(|r| r.outcome == ok).map(|r| r.end_ms - r.enqueue_ms));
         *slot = TaskBlock {
             n: n as f64,
             ok: mine().filter(|r| r.outcome == ok).count() as f64,
             aborted: mine().filter(|r| r.outcome == aborted).count() as f64,
             error: mine().filter(|r| r.outcome == error).count() as f64,
-            lat: spread(scratch, mine().filter(|r| r.outcome == ok).map(|r| r.end_ms - r.enqueue_ms)),
+            lat_p50: lat.p50,
+            lat_p95: lat.p95,
             reason_count: shown as f64,
             reasons: core::array::from_fn(|i| if i < shown { [counted[i].0, counted[i].1, counted[i].2] } else { [0.0; 3] }),
             phase_n: phase_n as f64,
@@ -206,52 +204,18 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let held = with_parts(|_, sched, _| sched.held()).unwrap_or_default();
-    let (decor_blocks, decor_instances) = crate::chunk::decor::cell::counts();
-    put(
-        out,
-        SUMMARY::held::AT,
-        &HeldBlock {
-            run_sets: held.run_sets as f64,
-            run_set_mb: held.run_set_mb as f64,
-            tiers: held.tiers as f64,
-            decor_blocks: decor_blocks as f64,
-            decor_instances: decor_instances as f64,
-            decor_bytes: crate::chunk::decor::cell::bytes() as f64,
-        },
-    );
+    put(out, SUMMARY::fetch::AT, &FetchBlock { credits: credits() as f64 });
 
-    let (queued, running) = counts();
-    put(
-        out,
-        SUMMARY::fetch::AT,
-        &FetchBlock {
-            queued: queued as f64,
-            running: running as f64,
-            credits: credits() as f64,
-        },
-    );
-
-    let [step, star] = crate::chunk::quality::reading();
-    let residency = TerrainTile::residency();
-    let [admitted, evicted] = residency.churn();
-    let [refined, changes_peak] = kernel().sched.pace();
     put(
         out,
         SUMMARY::quality::AT,
         &QualityBlock {
-            step: step as f64,
-            star: star as f64,
-            frames_held: residency.frames_used() as f64,
-            admitted: admitted as f64,
-            evicted: evicted as f64,
-            refined: refined as f64,
-            changes_peak: changes_peak as f64,
+            frames_held: TerrainTile::residency().frames_used() as f64,
         },
     );
 
     // What the pointer meets as drawn, whether or not it could strike it there.
-    let met = crate::control::interaction::pointed().zip(crate::chunk::domain::current()).and_then(|([x, y], d)| {
+    let met = crate::control::interaction::pointed().map(|at| (at, crate::view::lens::tau())).and_then(|([x, y], tau)| {
         let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
         crate::view::frame::pose::view_ray(x, y, &mut origin, &mut direction);
         let ray = crate::query::Ray {
@@ -259,15 +223,14 @@ fn side(out: &mut [f64]) {
             direction,
             reach: crate::view::frame::pose::view().far,
         };
-        let hit = crate::query::World::now().first_hit(&ray, crate::query::Detail::Distance(d.tau())).value().flatten()?;
-        // The grid's cell there is the distance's (`Tau::cell_at`), as the chunks are cut.
-        Some((crate::view::frame::coord::world_to_canonical(&hit.point), d.tau().cell_at(hit.t)))
+        let hit = crate::query::World::now().first_hit(&ray, crate::query::Detail::Distance(tau)).value().flatten()?;
+        // The grid's cell there is the distance's (`Tau::cell_at`), as the camera grid is cut.
+        Some((crate::view::frame::coord::world_to_canonical(&hit.point), tau.cell_at(hit.t)))
     });
     let (hover, cell_want) = (met.map(|m| m.0), met.map(|m| m.1));
-    let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| pack::unpack(p.i, p.f));
-    let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
-    let [center_lon, center_lat, center_z] = controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
-    let cell_drawn = hover.and_then(|p| with_parts(|_, sched, _| sched.cells_at(&p)).flatten());
+    let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));
+    let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
+    let [center_lon, center_lat, center_z] = controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
     let zoom = |z: Option<Zoom>| z.map_or(f64::NAN, f64::from);
     put(
         out,
@@ -276,7 +239,7 @@ fn side(out: &mut [f64]) {
             dist: controller::dist(),
             polar: controller::polar(),
             azimuth: controller::azimuth(),
-            tau: crate::chunk::domain::current().map_or(f64::NAN, |d| d.tau().scale()),
+            tau: crate::view::lens::tau().scale(),
             center_lon,
             center_lat,
             center_z,
@@ -287,7 +250,6 @@ fn side(out: &mut [f64]) {
             hover_lat,
             hover_alt,
             cell_want: zoom(cell_want),
-            cell_drawn: zoom(cell_drawn),
         },
     );
 
@@ -306,23 +268,15 @@ fn side(out: &mut [f64]) {
     put(out, SUMMARY::steps::AT, &steps);
 }
 
-/// The counters as they stand, from the builds and the billboard sheet.
+/// The counters as they stand, from the billboard sheet and the terrain's
+/// residency, which the window counts from its baseline.
 pub fn counters() -> CountersBlock {
-    let k = kernel();
-    let st = k.sched.builder.stat;
-    let c = k.sched.builder.bake_context().counters;
     let sheet = billboard_sheet().stats();
+    let [admitted, evicted] = TerrainTile::residency().churn();
     CountersBlock {
-        faces_kept: c.faces_kept as f64,
-        faces_possible: c.faces_possible as f64,
-        runs_culled: c.culled as f64,
-        runs_total: c.total_runs as f64,
-        coarse_boxes: c.coarse_total as f64,
-        coarse_low_fill: c.coarse_low_fill as f64,
-        built_runs: st.runs as f64,
-        built_bakes: st.bakes as f64,
-        built_starved: st.starved as f64,
         sheet_repacks: sheet.repacks as f64,
         sheet_uploads: sheet.uploads as f64,
+        terrain_admitted: f64::from(admitted),
+        terrain_evicted: f64::from(evicted),
     }
 }

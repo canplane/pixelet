@@ -12,7 +12,7 @@ import { useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
 import { gauge, Head } from "./profiler/gauge.tsx";
 import { Fold } from "./fold.tsx";
-import { coverage, frame } from "./gizmo.spec.ts";
+import { frame } from "./gizmo.spec.ts";
 
 interface Look {
   rgb: number;
@@ -26,16 +26,6 @@ const FRAME: Record<keyof typeof frame, string> = {
   forward: "upright ring, forward",
   north: "ring through north",
   up: "up",
-};
-
-const COVERAGE: Record<keyof typeof coverage, string> = {
-  drawn: "drawn",
-  drawn_from_floor: "drawn from the floor's tile",
-  unbuilt: "goal, mesh not built",
-  floor_only: "goal, only the floor's tile",
-  no_tile: "goal, no tile on its line",
-  tile: "a drawn piece's tile",
-  shard: "a drawn piece's shard",
 };
 
 const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0")}`;
@@ -60,8 +50,6 @@ export function GizmoLegend() {
     <Fold name="world_gizmo" title="World Gizmo">
       <Head>Frame</Head>
       <Rows looks={frame} labels={FRAME} />
-      <Head>Coverage</Head>
-      <Rows looks={coverage} labels={COVERAGE} reversed />
     </Fold>
   );
 }

@@ -25,13 +25,18 @@ object PxlGuest {
   /** The memory, a direct buffer over the whole region the guest took. */
   external fun memory(): ByteBuffer
 
-  /** The device's uniform offset alignment and whether it times its passes,
-   * or null where the system has no GPU. */
-  external fun gpuOpen(): IntArray?
+  /** Whether the device opened; what it is, the kernel reads from the host. */
+  external fun gpuOpen(): Boolean
 
-  /** Decodes a PNG or a WebP and holds it for the renderer as the kernel's
-   * `handle`: 1, or 0 when it does not decode. */
-  external fun imageHold(handle: Int, file: ByteArray): Int
+  /** What `wake` calls: the module's event (PlatformModule.kt `onWake`). */
+  @Volatile var woken: (() -> Unit)? = null
+
+  /** Called by the device's host (src/android.rs `wake`) from whichever
+   * thread learned of a completion, attached to the VM there, to ask the turn
+   * that reads it. */
+  @JvmStatic fun wake() {
+    woken?.invoke()
+  }
 
   /** Binds the kernel's surface `handle` to `surface`, which the caller
    * keeps until it has unbound it: 0, -2 when no device is open, -3 when the
@@ -40,4 +45,8 @@ object PxlGuest {
 
   /** Lets `handle`'s surface go. */
   external fun surfaceUnbind(handle: Int)
+
+  /** A zstd body decoded into a direct buffer, or null where it does not
+   * decode. It never reaches the kernel: any thread, at any time. */
+  external fun unpack(packed: ByteArray): ByteBuffer?
 }

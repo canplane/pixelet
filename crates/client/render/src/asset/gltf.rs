@@ -6,7 +6,7 @@
 
 use core::future::Future;
 
-use pxl_spec::space::coord::mat4::{mat4, mat4_mul, Mat4};
+use pxl_spec::space::coord::mat4::{self, Mat4};
 
 use xpute_kit::codec::json::{read_json, JsonValue};
 use xpute_kit::status::errno::Errno;
@@ -303,7 +303,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>
         let translation = floats(n.get("translation"), [0.0; 3]);
         let rotation = floats(n.get("rotation"), [0.0, 0.0, 0.0, 1.0]);
         let scale = floats(n.get("scale"), [1.0; 3]);
-        let mut local = mat4();
+        let mut local = mat4::new();
         if n.get("matrix").is_some() {
             local = floats(n.get("matrix"), local);
         } else {
@@ -424,8 +424,8 @@ pub fn world_matrices(gltf: &Gltf) -> Vec<Mat4> {
     fn visit(gltf: &Gltf, out: &mut [Mat4], i: usize, parent: Option<Mat4>) {
         match parent {
             Some(p) => {
-                let mut m = mat4();
-                mat4_mul(&mut m, &p, &gltf.nodes[i].local);
+                let mut m = mat4::new();
+                mat4::mul(&mut m, &p, &gltf.nodes[i].local);
                 out[i] = m;
             }
             None => out[i] = gltf.nodes[i].local,
@@ -435,7 +435,7 @@ pub fn world_matrices(gltf: &Gltf) -> Vec<Mat4> {
             visit(gltf, out, c as usize, Some(here));
         }
     }
-    let mut out = vec![mat4(); gltf.nodes.len()];
+    let mut out = vec![mat4::new(); gltf.nodes.len()];
     for &r in &gltf.roots {
         visit(gltf, &mut out, r as usize, None);
     }

@@ -28,7 +28,6 @@ import { root, SETTINGS_PATH } from "@/kernel/abi/host.spec.ts";
 import { bytes_at } from "@/kernel/module.ts";
 import { gpuBoot } from "@platform/gpu.ts";
 import { onlineWatch } from "@platform/online.ts";
-import { HANDHELD } from "@platform/device.ts";
 import { start_sched, strobe } from "@/kernel/sched.ts";
 import { set_snapshot } from "@/kernel/snapshot.ts";
 
@@ -64,19 +63,20 @@ export async function boot_kernel(): Promise<void> {
   gpuBoot();
   onlineWatch();
   const boot = (settings: string) =>
-    encode_world_boot({
-      development: __IS_DEV__,
-      handheld: HANDHELD,
-      geolocation: geolocationSupported(),
-      orientation: orientationSupported(),
-      orientation_permission: orientationNeedsPermission(),
-      orientation_silence_is_loss: orientationSilenceIsLoss(),
+    encode_world_boot(
+      GUEST_DOORBELL,
+      __IS_DEV__,
+      geolocationSupported(),
+      orientationSupported(),
+      orientationNeedsPermission(),
+      orientationSilenceIsLoss(),
       settings,
-    });
+    );
   // Storage is the user's to edit: kept settings too large to send are no
-  // settings, and the kernel starts from the defaults.
-  const kept = boot(read_storage(SETTINGS_PATH) ?? "");
-  const booted = GUEST_DOORBELL.call(Command.WORLD_BOOT, GUEST_DOORBELL.fits(kept) ? kept : boot(""), (result) => result);
+  // settings, and the kernel starts from the defaults, written over them.
+  let pkt = boot(read_storage(SETTINGS_PATH) ?? "");
+  if (!GUEST_DOORBELL.fits(pkt)) pkt = boot("");
+  const booted = GUEST_DOORBELL.call(Command.WORLD_BOOT, pkt, (result) => result);
   if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
   void declare_source();

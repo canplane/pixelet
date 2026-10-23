@@ -1,7 +1,7 @@
 # Characters (the Actor tier)
 
 This directory is the current, only member of the "Actor" rendering tier —
-see [decision/20260907-world-rendering-tiers.md](/decision/20260907-world-rendering-tiers.md)
+see [doc/minutes/20260907-world-rendering-tiers.md](/doc/minutes/20260907-world-rendering-tiers.md)
 for the full taxonomy this belongs to. Kept as `character/`, not renamed to
 `actors/`, on purpose: "Character" is already a real user-facing concept
 (Settings > Character, the drawer's Character tab — which variant a person or
@@ -18,5 +18,5 @@ distinct" instance count. `companion.rs`'s `Figure` (person + pet) is the
 only instance today.
 
 The person's chat line is no Actor of its own: it is a billboard label as a
-marker's is, laid out with them (`../../chunk/place.rs`), and the companion
+marker's is, laid out with them (`../place.rs`), and the companion
 only hands down where it is said from (`../../billboard/chat.rs` `speak_from`).

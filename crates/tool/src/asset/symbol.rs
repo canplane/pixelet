@@ -53,7 +53,7 @@ fn outline(group: &resvg::usvg::Group, out: &mut Vec<(String, bool)>) {
             resvg::usvg::Node::Path(p) => {
                 let Some(fill) = p.fill() else { continue };
                 let Some(data) = p.data().clone().transform(p.abs_transform()) else { continue };
-                let n = |v: f32| format!("{}", (v * 1000.0).round() / 1000.0);
+                let n = |v: f32| format!("{}", (v * 1000.0).round_ties_even() / 1000.0);
                 let d: Vec<String> = data
                     .segments()
                     .map(|s| match s {

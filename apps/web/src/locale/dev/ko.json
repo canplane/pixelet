@@ -7,10 +7,14 @@
       }
     },
     "debug": {
-      "camera_gizmo": {
-        "label": "카메라 기즈모",
-        "description": "화면 중심을 둘러싼 같은 넓이의 고리 격자를 겹쳐 보여 주고, 그려진 셀의 크기를 색으로 표시합니다. 격자 한 칸 정도면 초록, 더 세밀하면 파랑, 더 거칠면 빨강입니다."
-      }
+      "rays": {
+        "label": "광선",
+        "description": "화면이 그리는 광선을 누가 몇 개 쏘는지입니다.",
+        "cells": { "label": "GPU, 격자 칸", "description": "GPU, 카메라 격자 칸 하나에 광선 하나." },
+        "half": { "label": "GPU, 절반 해상도", "description": "가로세로 두 CSS 픽셀마다 광선 하나." },
+        "full": { "label": "GPU, 전체 해상도", "description": "CSS 픽셀 하나에 광선 하나." }
+      },
+      "ray_steps": { "label": "광선 단계", "description": "광선마다 하강이 세계에 물은 노드 수로 색을 칠합니다. 적으면 파랑, 많으면 빨강이고, 어느 화면이든 같은 눈금입니다." }
     }
   },
   "world": {

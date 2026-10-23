@@ -5,20 +5,20 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
+use pxl_render::gpu::api::device_generation;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::world::{around, wrap_index};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
 
 use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::ptr_at;
-use xpute_guest::mem::heap::{free, Block};
+use xpute_guest::mem::heap::Block;
 
 use crate::io::demand::{Phases, Stream};
 use crate::io::failure::Failure;
+use crate::layer::kept::{Kept, Offered};
 use crate::layer::residency::Residency;
 use crate::layer::{Asks, Base};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -44,52 +44,41 @@ impl Base for Earth {
         EARTH.get(Residency::default)
     }
 
-    fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<Earth, Failure> {
+    fn receive(_tile: Tile, _record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<Earth, Failure> {
         earth::decode(pkt)?;
         Ok(Earth)
     }
-}
 
-/// Per frame, the packet whose texels are not yet on the GPU; a frame taken
-/// again replaces it.
-static UPLOADS: Global<Vec<Option<Block>>> = Global::new();
-
-fn uploads() -> &'static mut Vec<Option<Block>> {
-    UPLOADS.get(|| vec![None; Residency::<Earth>::FRAMES as usize])
-}
-
-fn view<'a>((at, bytes): Block) -> &'a [u8] {
-    // SAFETY: a body's block, kept here alone until it is freed.
-    unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at), bytes as usize) }
-}
-
-fn release(block: Option<Block>) {
-    if let Some(block) = block {
-        // SAFETY: a body's block, released once.
-        unsafe { free(block) };
+    /// The texels are kept until the GPU has them.
+    fn keep(record: Option<u32>, block: Block) {
+        kept().keep(record, block);
     }
 }
 
-/// The packet is kept until its texels are uploaded in the frame `record`
-/// took it into, or freed where no frame took it.
-pub fn keep(record: Option<u32>, block: Block) {
-    match record {
-        Some(record) => release(uploads()[record as usize].replace(block)),
-        None => release(Some(block)),
-    }
+/// The texels the GPU does not hold yet, off their packets.
+static KEPT: Global<Kept> = Global::new();
+
+fn kept() -> &'static mut Kept {
+    KEPT.get(|| Kept::new(Residency::<Earth>::FRAMES))
 }
 
 /// Each waiting packet's texels to `write`, into its frame's layer, while it
-/// takes them.
+/// takes them; a tile whose texels went to a device since gone is fetched
+/// again, as its packet was freed once sent.
 pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
-    for (record, slot) in uploads().iter_mut().enumerate() {
-        let Some(block) = *slot else { continue };
-        let Ok(texels) = earth::decode(view(block)) else { continue };
-        if !write(record as u32, texels) {
-            return;
+    let (kept, on) = (kept(), device_generation());
+    for record in 0..EARTH_FRAMES {
+        if kept.sent_on(record).is_some_and(|s| s != on) {
+            if let Some(p) = Earth::residency().in_frame(record) {
+                Earth::residency().again(p);
+            }
         }
-        release(slot.take());
     }
+    // A packet `receive` read reads again.
+    kept.send(on, &mut |record, pkt| match earth::decode(pkt).map(|texels| write(record, texels)) {
+        Err(_) | Ok(true) => Offered::Taken,
+        Ok(false) => Offered::Full,
+    });
 }
 
 /// The floor's tiles (`floor`, the view's) at the top as a window, its south-west tile first, and
@@ -97,7 +86,7 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
 /// answers: residency as the GPU reads it, kept nowhere.
 pub fn earth_window(floor: impl Iterator<Item = Tile> + Clone) -> ([i32; 2], [u32; REACH_TILES as usize]) {
     let mut layers = [0; REACH_TILES as usize];
-    let at = |p: Tile| [ivec::X(p.tile), ivec::Y(p.tile)];
+    let at = |p: Tile| p.at;
     let Some([first, _]) = floor.clone().next().map(at) else { return ([0; 2], layers) };
     // X wraps: the window's west tile is the one fewest tiles east of the first.
     let around = around(EARTH_ZOOM);
@@ -106,7 +95,7 @@ pub fn earth_window(floor: impl Iterator<Item = Tile> + Clone) -> ([i32; 2], [u3
     let y0 = floor.clone().map(|p| at(p)[1]).min().unwrap_or(0);
     for p in floor {
         let Some(record) = Earth::residency().frame(p) else { continue };
-        if uploads()[record as usize].is_none() {
+        if kept().sent_on(record) == Some(device_generation()) {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
             layers[(dy * REACH_ACROSS + dx) as usize] = record + 1;

@@ -1,4 +1,4 @@
-// The shading every lit pass shares, so a chunk, decor and an actor cannot be lit differently.
+// The shading every lit pass shares, so the screen's cells, decor and an actor cannot be lit differently.
 
 // The exponent only sets the band's width; rim_intensity scales the peak.
 const RIM_POWER: f32 = 1.0;
@@ -14,7 +14,7 @@ fn rim(n: vec3f, world_pos: vec3f) -> f32 {
 // `open` scales all of the light, the sun's too: no shadow is drawn by default,
 // and over the sky's light alone a corner went unmarked in the sun.
 // Opaque to the drawn edge: where ground is drawn, the Earth's picture never shows through it.
-fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, open: vec3f, seen: Seen) -> vec3f {
-  let color = albedo * surface_light(n, up_at(world_pos), lit, seen.light) * open * (1.0 + rim(n, world_pos));
+fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, open: vec3f, seen: Seen) -> vec3f {
+  let color = albedo * surface_light(n, up_at(world_pos), seen.light) * open * (1.0 + rim(n, world_pos));
   return color * seen.through + seen.scattered;
 }

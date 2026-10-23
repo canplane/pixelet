@@ -6,15 +6,18 @@
 // of them (pxl-geo-bake bin/declare_source.rs, refusing what a client would)
 // and uploads it; nothing in the tree changes, so nothing is built or deployed.
 //
-// `<kind>` uploads `out/<kind>.publish/` as a new version and serves it, named
+// `upload <kind>` uploads `out/<kind>.publish/` as a new version, named
 // `v<format>.<UTC day>.<n>`, n past every version of that format and day the
-// bucket holds, so no version is written over. `serve <kind> <version>`
-// serves a version the bucket holds again, as going back is. `override
-// <shard> <kind> <version>` serves that version for a shard and the tiles
-// under it, `-` dropping it. Uses the AWS CLI's `r2` profile and `$R2`, the bucket's S3
-// endpoint (publish-bucket).
+// bucket holds, so no version is written over, and serves nothing: what the
+// clients deployed read stays as it is until a version is served. `<kind>`
+// uploads and serves it. `serve <kind> <version>` serves a version the bucket
+// holds, as a new format's is with the client that reads it, and going back
+// is. `override <shard> <kind> <version>` serves that version for a shard
+// and the tiles under it, `-` dropping it. Uses the AWS CLI's `r2` profile
+// and `$R2`, the bucket's S3 endpoint (publish-bucket).
 //
 //   ./script/publish.ts <terrain|place|division|earth>…
+//   ./script/publish.ts upload <terrain|place|division|earth>…
 //   ./script/publish.ts serve <kind> <version>
 //   ./script/publish.ts override <shard> <kind> <version|->
 
@@ -142,7 +145,9 @@ async function serve(declaration: Uint8Array): Promise<void> {
   console.log(`[publish] ${SOURCE} uploaded`);
 }
 
-async function publish(record: Served, kind: string): Promise<void> {
+/** `out/<kind>.publish/` uploaded as a new version, and what it is: served by
+ * no one until a declaration names it (`serve`). */
+async function upload(record: Served, kind: string): Promise<Kind> {
   const dir = `out/${kind}.publish`;
   try {
     Deno.statSync(dir);
@@ -154,9 +159,9 @@ async function publish(record: Served, kind: string): Promise<void> {
   const { format, shard } = manifest;
   if (!Number.isInteger(format)) die(`${dir}/${MANIFEST} names no format the set is in`);
   const name = await nextName(kind, format, new Date().toISOString().slice(0, 10));
-  record.kind[kind] = { version: name, format, ...(shard ? { shard } : {}) };
+  const version: Kind = { version: name, format, ...(shard ? { shard } : {}) };
   // Refused before a byte goes up: a version no declaration can name serves no one.
-  await declared(record);
+  await declared({ ...record, kind: { ...record.kind, [kind]: version } });
 
   const objects = files(dir);
   const at = `s3://${BUCKET}/${kind}/${tileObject(name, "")}`;
@@ -184,13 +189,13 @@ async function publish(record: Served, kind: string): Promise<void> {
   await aws(["s3", "cp", `${dir}/${MANIFEST}`, `${at}${MANIFEST}`, "--content-type", "application/json"], true);
 
   Deno.removeSync(dir, { recursive: true });
-  console.log(`[publish/${kind}] ${kind} is served from ${name}`);
+  console.log(`[publish/${kind}] ${kind}/${name} uploaded`);
+  return version;
 }
 
-try {
-  const [first, ...rest] = Deno.args;
-  endpoint();
-  const record = await servedNow();
+/** What `args` changes of what the bucket serves, `record`: the declaration
+ * to serve, or none where nothing is served (`upload`). */
+async function command(record: Served, [first, ...rest]: string[]): Promise<Served | undefined> {
   if (first === "serve") {
     const [kind, version] = rest;
     if (!KINDS.includes(kind) || !version) die("usage: ./script/publish.ts serve <kind> <version>");
@@ -203,11 +208,24 @@ try {
     else own[kind] = version;
     if (Object.keys(own).length > 0) record.override[shard] = own;
     else delete record.override[shard];
+  } else if (first === "upload") {
+    if (rest.length === 0 || rest.some((k) => !KINDS.includes(k))) die(`usage: ./script/publish.ts upload <${KINDS.join("|")}>…`);
+    for (const kind of rest) await upload(record, kind);
+    return undefined;
   } else {
-    if (Deno.args.length === 0 || Deno.args.some((k) => !KINDS.includes(k))) die(`usage: ./script/publish.ts <${KINDS.join("|")}>… | serve <kind> <version> | override <shard> <kind> <version|->`);
-    for (const kind of Deno.args) await publish(record, kind);
+    const kinds = [first, ...rest];
+    if (!first || kinds.some((k) => !KINDS.includes(k))) {
+      die(`usage: ./script/publish.ts [upload] <${KINDS.join("|")}>… | serve <kind> <version> | override <shard> <kind> <version|->`);
+    }
+    for (const kind of kinds) record.kind[kind] = await upload(record, kind);
   }
-  await serve(await declared(record));
+  return record;
+}
+
+try {
+  endpoint();
+  const served = await command(await servedNow(), Deno.args);
+  if (served) await serve(await declared(served));
 } catch (e) {
   if (!(e instanceof Refused)) throw e;
   console.error(`[publish] ${e.message}`);

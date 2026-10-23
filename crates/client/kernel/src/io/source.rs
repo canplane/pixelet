@@ -7,10 +7,12 @@
 //! no served shard is over or under is never asked for, and a tile is opened
 //! under the version that serves it, which the client does not read.
 
+use pxl_portable::area::{self, Area};
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{is_version, key, sharded};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
@@ -66,7 +68,34 @@ pub fn serves(layer: BaseLayer, p: Tile) -> bool {
 /// source is declared and serves no shard over its leaf. The one judgement of
 /// where the area ends, for what is drawn, walked, edited and said alike.
 pub fn past_at([x, y]: [f64; 2]) -> bool {
-    declared().is_some_and(|s| !s.covers(GROUND.cell_of(LEAF_ZOOM, &world::point(x, y, 0.0)).tile()))
+    let leaf = GROUND.cell_of(LEAF_ZOOM, &world::point(x, y, 0.0)).tile().at;
+    area::past(&Declared, leaf.map(|v| v as i32))
+}
+
+/// The service area as pxl-portable's rules read it: the declared source's
+/// shards, and no end before one is declared.
+pub struct Declared;
+
+impl Area for Declared {
+    fn ends(&self) -> bool {
+        declared().is_some()
+    }
+    fn shards(&self) -> u32 {
+        declared().map_or(0, |s| s.shard.len() as u32)
+    }
+    fn shard(&self, i: u32) -> (Zoom, [i32; 2]) {
+        let t = declared().or_bug(Errno::ENOTRECOVERABLE).shard[i as usize].tile;
+        (t.zoom, t.at.map(|v| v as i32))
+    }
+}
+
+/// Each served shard's tile, as a GPU's area reads it.
+pub fn served(each: &mut dyn FnMut(Zoom, [i32; 2])) {
+    if let Some(s) = declared() {
+        for k in &s.shard {
+            each(k.tile.zoom, k.tile.at.map(|v| v as i32));
+        }
+    }
 }
 
 /// The kind's own version, over every shard's: an object no shard holds

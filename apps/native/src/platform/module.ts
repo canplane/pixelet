@@ -6,12 +6,15 @@ import type { f32, f64, u32 } from "@xpute/kit/abi/word.ts";
 import { requireNativeModule } from "expo";
 
 interface PxlPlatform {
+  /** The module's event (Expo's EventEmitter): `onWake`, the device's host
+   * asking a turn (gpu.ts). */
+  addListener(event: "onWake", listener: () => void): { remove(): void };
   memory(): ArrayBuffer;
   interrupt(quotaMs: f64): f64;
-  /** Uniform offset alignment and whether it times passes; null with no GPU. */
-  gpuOpen(): [u32, u32] | null;
-  /** Decodes off the JS thread; 1, or 0 when it does not decode. */
-  imageHold(handle: u32, file: Uint8Array): Promise<u32>;
+  /** Whether the device opened; what it is, the kernel reads from the host. */
+  gpuOpen(): boolean;
+  /** A body sent zstd, decoded off the JavaScript thread (origin.ts). */
+  unpack(packed: Uint8Array): Promise<ArrayBuffer>;
   storageGet(key: string): string | null;
   storageSet(key: string, value: string): void;
   clipboardSet(text: string): void;

@@ -31,7 +31,11 @@ export async function fetchSearch(query: string, opts?: { near?: { lon: f64; lat
   if (opts?.near) params.set("near", `${opts.near.lon},${opts.near.lat}`);
 
   const res = await originGet(`${SEARCH_URL}?${params.toString()}`, opts?.signal);
-  if (!res.ok) throw new Error(`[search] http ${res.status}`);
+  if (!res.ok) {
+    // A refusal's body is not read: let go, not held until collected.
+    await res.body?.cancel();
+    throw new Error(`[search] http ${res.status}`);
+  }
   const results = await res.json() as (Omit<SearchResult, "context"> & { context: WirePart[] })[];
   return results.map((r) => ({ ...r, context: r.context.flatMap(namePart) }));
 }

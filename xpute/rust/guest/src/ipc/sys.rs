@@ -88,7 +88,7 @@ impl Sys {
     /// `call` where it fits with `reserve` bytes left after it; false, and
     /// nothing recorded, where it does not, for the caller to ask again a later turn.
     pub fn try_call(&mut self, op: u32, args: &[u32], bytes: &[u8], reserve: usize) -> bool {
-        if !self.stream.fits(args.len(), Some(bytes.len()), reserve) {
+        if !self.stream.fits(record_bytes(args.len(), Some(bytes.len())), reserve) {
             return false;
         }
         self.call(op, args, bytes);

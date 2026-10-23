@@ -55,7 +55,7 @@ fn a_markers_cell_lies_in_its_chunk() {
         for cell in 19..=at.zoom() + CHUNK_STEPS {
             let (z, c) = marker_cell_of(cell, at);
             let chunk = cell - CHUNK_STEPS;
-            assert_eq!(ancestor_of(c, u32::from(z - chunk)), ancestor_of(at.at(), u32::from(at.zoom() - chunk)), "{at:?} at {cell}");
+            assert_eq!(ancestor_of(c, z - chunk), ancestor_of(at.at(), at.zoom() - chunk), "{at:?} at {cell}");
         }
     }
 }

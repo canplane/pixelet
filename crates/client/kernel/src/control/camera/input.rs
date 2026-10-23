@@ -425,7 +425,7 @@ pub fn camera_keys(x: i32, y: i32) {
     request_world_tick();
 }
 
-/// `drawn` is the τ the chunks draw at, which the hover strikes decor by.
+/// `drawn` is the τ the frame draws at, which the hover strikes decor by.
 pub fn camera_input_step(drawn: Tau) {
     let s = input();
     if s.keys != [0.0; 2] {

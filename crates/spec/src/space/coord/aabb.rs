@@ -2,7 +2,7 @@
 
 //! A box of the world: two corners in units, its sides along the axes.
 
-use super::v3::{ceil3, floor3, len3, V3};
+use super::v3::{self, V3};
 
 /// An axis-aligned box, in units.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -17,6 +17,11 @@ impl Aabb {
         let min: V3 = std::array::from_fn(|k| self.min[k].max(other.min[k]));
         let max: V3 = std::array::from_fn(|k| self.max[k].min(other.max[k]));
         (0..3).all(|k| min[k] <= max[k]).then_some(Aabb { min, max })
+    }
+
+    /// Whether the two share room, not only a face.
+    pub fn shares(self, other: Aabb) -> bool {
+        (0..3).all(|k| self.min[k] < other.max[k] && other.min[k] < self.max[k])
     }
 
     pub fn join(self, other: Aabb) -> Aabb {
@@ -36,7 +41,7 @@ impl Aabb {
 
     /// The bounding sphere's, about `center`.
     pub fn radius(self) -> f64 {
-        len3(&self.extent()) / 2.0
+        v3::len(&self.extent()) / 2.0
     }
 
     /// The slab test: where the ray enters and leaves, unclipped, and the axis
@@ -80,8 +85,8 @@ impl Aabb {
     /// Grown outward to whole cells of `side`.
     pub fn snapped_out(self, side: f64) -> Aabb {
         Aabb {
-            min: floor3(&self.min, side),
-            max: ceil3(&self.max, side),
+            min: v3::floor(&self.min, side),
+            max: v3::ceil(&self.max, side),
         }
     }
 

@@ -5,3 +5,4 @@
 pub mod arena;
 pub mod deque;
 pub mod heap;
+pub mod list;

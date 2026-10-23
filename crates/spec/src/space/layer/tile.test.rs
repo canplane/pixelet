@@ -2,16 +2,15 @@
 
 use super::*;
 use crate::space::coord::world::{around, nearest, ROUND};
+use crate::space::coord::zoom::UNIT_ZOOM;
+use crate::space::layer::lattice::Cells;
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::lattice::*;
 
 /// A cell's center and the coarser cell's over it are one computation: the cell `up` zooms coarser.
 #[test]
 fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
-    let point = Pvf3 {
-        i: ivec::gather(-1234, 5678, 0),
-        ..Default::default()
-    };
+    let point = base_of(UNIT_ZOOM, [-1234, 5678, 0]);
     for zoom in [LEAF_ZOOM, LEAF_ZOOM - 3, LEAF_ZOOM - 7] {
         let cell = GROUND.cell_of(zoom, &point);
         assert_eq!(cell.tile_zoom(), zoom);
@@ -19,11 +18,11 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
         assert_eq!(cell.up(2), GROUND.cell_of(zoom - 2, &point), "the cell over it");
         let side = cell.side();
         let c = cell.center(10.0);
-        let at = pack::unpack(c.i, c.f);
+        let at = q3::unpack(&c);
         let base = cell.base();
         assert_eq!(at[2], 10.0 + side / 2.0);
-        assert_eq!(at[0], pvf3::to_real(pvf3::X(&base)) + side / 2.0);
-        assert_eq!(at[1], pvf3::to_real(pvf3::Y(&base)) + side / 2.0);
+        assert_eq!(at[0], q3::to_real(i64::from(base[0])) + side / 2.0);
+        assert_eq!(at[1], q3::to_real(i64::from(base[1])) + side / 2.0);
     }
 }
 
@@ -32,10 +31,7 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
 fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
     let coarse = Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 2);
     for (x, y) in [(-1234, 5678), (0, 0), (97, -3)] {
-        let point = Pvf3 {
-            i: ivec::gather(x, y, 0),
-            ..Default::default()
-        };
+        let point = base_of(UNIT_ZOOM, [x, y, 0]);
         let fine = GROUND.cell_of(LEAF_ZOOM, &point);
         for zoom in [LEAF_ZOOM, 12, GROUND.top()] {
             let outer = coarse.cell_of(zoom, &point);
@@ -50,10 +46,7 @@ fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
 #[test]
 fn a_cells_place_in_a_tile_above_lies_in_the_tile_cell_over_it() {
     for (x, y) in [(-1234, 5678), (0, 0), (97, -3), (400_000, -250_000)] {
-        let point = Pvf3 {
-            i: ivec::gather(x, y, 0),
-            ..Default::default()
-        };
+        let point = base_of(UNIT_ZOOM, [x, y, 0]);
         for zoom in [LEAF_ZOOM, 13] {
             let cell = GROUND.cell_of(zoom, &point);
             let [tx, ty] = cell.in_tile();
@@ -73,10 +66,7 @@ fn a_cells_place_in_a_tile_above_lies_in_the_tile_cell_over_it() {
 #[test]
 fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {
     let coarse = Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 2);
-    let point = Pvf3 {
-        i: ivec::gather(-1234, 5678, 0),
-        ..Default::default()
-    };
+    let point = base_of(UNIT_ZOOM, [-1234, 5678, 0]);
     for zoom in [LEAF_ZOOM, 13] {
         let (a, b) = (coarse.cell_of(zoom, &point), GROUND.cell_of(zoom - 2, &point));
         assert_eq!(a.side(), b.side());
@@ -89,7 +79,7 @@ fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {
 /// `child_cells` inverts `parent_cell` in every lattice.
 #[test]
 fn a_parent_cell_and_its_child_cells_are_one_relation() {
-    let p = Tile::new(13, ivec::gather(-5, 7, 0));
+    let p = Tile::new(13, [-5, 7]);
     let around = neighborhood(p);
     assert!((0..4).all(|q| around[CHILDREN[q]] == p.children()[q]));
     for lattice in [GROUND, Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 4)] {
@@ -126,7 +116,7 @@ fn a_point_goes_round_in_x_and_stops_at_the_edge_in_y() {
 /// A Bundang tile, (11569, 3671): rows count from the south and a first
 /// digit is the signs, written out because the orientation is what can be
 /// silently wrong. The bucket's keys are these names.
-const BUNDANG: IVec = 12720250262323200;
+const BUNDANG: [i64; 2] = [11569, 3671];
 const BUNDANG_NAME: &str = "010332102130223";
 
 #[test]
@@ -141,7 +131,7 @@ fn the_known_tile_is_named_as_the_bucket_holds_it() {
 fn a_coarser_tile_is_named_by_a_prefix_of_the_leaf_under_it() {
     for zoom in GROUND.top()..LEAF_ZOOM {
         let coarse = Tile::over(zoom, BUNDANG).name();
-        assert_eq!(coarse.len(), usize::from(zoom));
+        assert_eq!(coarse.len(), zoom as usize);
         assert!(BUNDANG_NAME.starts_with(&coarse), "z{zoom} {coarse}");
     }
 }
@@ -152,7 +142,7 @@ fn every_tile_survives_its_name_at_every_zoom() {
     for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
         for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
             for zoom in GROUND.top()..=LEAF_ZOOM {
-                let p = Tile::over(zoom, ivec::gather(x, y, 0));
+                let p = Tile::over(zoom, [x, y]);
                 assert_eq!(Tile::of_name(&p.name()), Some(p), "({x}, {y}) at z{zoom}");
             }
         }
@@ -165,6 +155,6 @@ fn what_is_not_a_held_tile_s_name_is_refused() {
     assert_eq!(Tile::of_name("4"), None, "a digit is a zoom's two bits");
     assert_eq!(Tile::of_name("13211032031200a"), None);
     assert_eq!(Tile::of_name("-1321103203120"), None, "the digits carry the sign");
-    assert_eq!(Tile::of_name(&"0".repeat(usize::from(LEAF_ZOOM) + 1)), None, "nothing is finer than a leaf");
+    assert_eq!(Tile::of_name(&"0".repeat(LEAF_ZOOM as usize + 1)), None, "nothing is finer than a leaf");
     assert_eq!(Tile::of_name("0"), None, "coarser than the top");
 }

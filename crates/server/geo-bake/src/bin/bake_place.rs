@@ -16,9 +16,8 @@ use pxl_geo_bake::pyramid::Base;
 use pxl_geo_bake::tile::shard::Run;
 use pxl_geo_bake::util::{pack, Level};
 use pxl_spec::bake::tile::place::PlaceTile;
-use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::Tile;
 
 fn run() -> Result<(), String> {
     let run = Run::parse("place")?;
@@ -26,11 +25,11 @@ fn run() -> Result<(), String> {
     if run.leaf {
         let (_, mut client) = Overture::reading(&[&place::READS], &run.shards.iter().copied().collect())?;
         for &shard in &run.shards {
-            let within = Tile::new(SHARD_ZOOM, ivec::gather(shard.at[0], shard.at[1], 0));
+            let within = Tile::new(SHARD_ZOOM, shard.at);
             let tiles = leaves(&mut client, &coverage, within)?;
             run.stage.leaf::<PlaceTile>(shard, |set| {
                 for (tile, place) in &tiles {
-                    set.write(Tile::new(LEAF_ZOOM, *tile), &pack(&place.encode()?, Level::Stored).map_err(|e| e.to_string())?)?;
+                    set.write(*tile, &pack(&place.encode(*tile)?, Level::Stored).map_err(|e| e.to_string())?)?;
                 }
                 Ok(())
             })?;

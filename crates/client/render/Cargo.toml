@@ -14,24 +14,16 @@ libm.workspace = true
 xpute-guest = { path = "../../../xpute/rust/guest" }
 xpute-kit = { path = "../../../xpute/rust/kit" }
 pxl-spec = { path = "../../spec" }
+# The GPU's decor pass's bounds and the record it writes (gpu/renderer.rs).
+pxl-portable = { path = "../../portable" }
 
-# The device's GPU, where the kernel draws itself (gpu/api/device.rs): what the
-# browser's WebGPU is to the page, a Metal or Vulkan device behind the same
-# API. Only the device app asks for it (`device`); without it the calls are
-# recorded (gpu/api/record.rs), for the page in the module and for nothing in
-# a test, which so links no GPU.
-wgpu = { version = "30", default-features = false, features = ["metal", "vulkan", "wgsl"], optional = true }
-# Waits out the adapter's and the device's futures at start-up, which wgpu
-# resolves at once on a native backend.
-pollster = { version = "1", optional = true }
-# The images a load holds, decoded where the device is, as the browser decodes
-# them for the page: the kernel loads PNGs, and the texture pack's sheet as a
-# WebP.
-png = { version = "0.18", optional = true }
-image-webp = { version = "0.2", optional = true }
+# WebGPU's calls written into a stream (gpu/api.rs): xpute's encoder, which
+# the page's host and the device app's run alike.
+xpute-gpu = { path = "../../../xpute/rust/gpu" }
 
-[features]
-device = ["dep:wgpu", "dep:pollster", "dep:png", "dep:image-webp"]
+[build-dependencies]
+# The zooms the screen's rays are painted by (build.rs `lattice.wgsl`).
+pxl-portable = { path = "../../portable" }
 
 [dev-dependencies]
 # The shaders' validator, under `cargo test` only: never in the module.

@@ -14,7 +14,7 @@ const POINTS: [[i64; 3]; 6] = [
 
 /// A point's node at `zoom`, a unit point's ancestor.
 fn at(p: [i64; 3], zoom: Zoom) -> [i64; 3] {
-    ancestor_of(p, u32::from(UNIT_ZOOM - zoom))
+    ancestor_of(p, UNIT_ZOOM - zoom)
 }
 
 fn digits_of(key: u128) -> (u128, u32) {
@@ -34,7 +34,7 @@ fn a_coarser_key_s_digits_prefix_a_finer_one_s() {
     }
 }
 
-/// Z has no digit until its lane is reached, so to z8 a cube is its column.
+/// Z has no digit until its extent is reached, so to z8 a cube is its column.
 #[test]
 fn a_3d_key_is_the_2d_one_to_z8() {
     for p in POINTS {
@@ -50,7 +50,7 @@ fn a_3d_key_is_the_2d_one_to_z8() {
 fn a_key_reads_back_as_its_node() {
     for p in POINTS {
         for zoom in 0..=UNIT_ZOOM + 3 {
-            let node = ancestor_of(p.map(|v| v << 3), u32::from(UNIT_ZOOM + 3 - zoom));
+            let node = ancestor_of(p.map(|v| v << 3), UNIT_ZOOM + 3 - zoom);
             let (z, back) = node_of::<3>(key_of(zoom, node));
             let lane = |v: i64, axis: usize| signed(v, digits(axis, zoom));
             assert_eq!((z, back), (zoom, [lane(node[0], 0), lane(node[1], 1), lane(node[2], 2)]), "{p:?} z{zoom}");

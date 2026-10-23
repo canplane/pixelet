@@ -16,15 +16,19 @@ use crate::kernel;
 use crate::layer::earth::Earth;
 use crate::layer::residency::Residency;
 use crate::mem::section;
+use crate::profiler::record::profiler_record_turn;
+use crate::profiler::spec::Wake;
 use layout::DOOR_LAYOUT;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
+use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_guest::ipc::door::Door;
 use xpute_guest::ipc::ring::Ring;
 use xpute_guest::mem::base::{off_of, off_of_slice, ptr_at};
+use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::wire::xtp::PacketWriter;
 
@@ -34,6 +38,12 @@ pub struct Bracket {
     pub data_end: u32,
     pub clock: fn() -> f64,
     pub heap_stat: fn() -> HeapStat,
+    /// Whether the surfaces take a frame now without blocking; one admitted
+    /// is drawn this turn, and the bracket counts it until the GPU has done
+    /// it. A page's always: the browser paces its frames. A device's while
+    /// fewer than two are unfinished, since taking a drawable there blocks
+    /// the thread that waits for the turn.
+    pub admit_frame: fn() -> bool,
     /// Where a bracket whose process dies with the kernel reports why: no host
     /// is left to run the record, and a panic's text is not in its numbers.
     /// None where the host outlives the kernel (a page).
@@ -107,6 +117,7 @@ fn host_attached(s: &mut State) {
 fn boot(b: &Bracket) {
     xpute_guest::clock::set_clock(b.clock);
     crate::io::host::set_heap_stat(b.heap_stat);
+    crate::io::host::set_admit_frame(b.admit_frame);
     crate::io::host::set_last_words(b.last_words);
     executor::install();
     // Named invariants report through `bug!`; a core panic reports only its location.
@@ -145,12 +156,10 @@ fn fixed_at(f: layout::Fixed) -> u32 {
 /// Lays the memory map. Returns where GPU calls are
 /// recorded for the host, 0 where the kernel makes them itself.
 fn lay_out(b: &Bracket) -> u32 {
-    // The map first: the kernel's first use makes the chunk table, which lives in `.fixed`.
+    // The map first: what lives in `.fixed` is handed its range from it.
     section::set_map(section::lay_out(b.given, b.data_end, layout::FIXED_BYTES));
     // Each range to its owner.
     crate::layer::terrain::fixed::RANGE.set(layout::range(layout::Fixed::Terrain));
-    crate::chunk::build::BAKE_RANGE.set(layout::range(layout::Fixed::Bake));
-    crate::chunk::table::MOUNTS_RANGE.set(layout::range(layout::Fixed::Mounts));
     crate::profiler::record::RANGE.set(layout::range(layout::Fixed::Profiler));
     kernel().laid_out = true;
     // A layer asks for no more tiles than its residency frames.
@@ -182,24 +191,36 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
     if core::mem::take(&mut s.profiler_taken) {
         crate::profiler::log::profiler_log_clear();
     }
+    let rise = now();
     crate::io::host::host_rise();
     crate::sched::edge::world_edge().rise(quota_ms);
+    // The device's loss, as its host wrote it into the device's block: before
+    // the commands, as a device answering again among them asks that block anew.
+    if pxl_render::gpu::api::take_device_lost() {
+        pxl_render::gpu::renderer::gpu_lost();
+    }
     door().drain(|number, pkt| apply::apply(s, number, pkt));
+    let drained = now();
     if quota_ms > 0.0 || world_frame_waiting() {
         xpute_guest::sched::task::poll();
     }
+    let polled = now();
     if take_world_drawn() {
         post_shell(s);
     }
     pxl_render::gpu::api::gpu_publish();
     crate::io::host::host_fall();
-    let wake = crate::sched::edge::world_fall();
+    let fall = crate::sched::edge::world_fall();
     // What the completion ring had no room for is still in the submission ring.
-    if door().pending() {
-        0.0
-    } else {
-        wake
-    }
+    let wake = if door().pending() { 0.0 } else { fall };
+    let asked = match wake {
+        0.0 => Wake::next,
+        w if w < 0.0 => Wake::none,
+        _ => Wake::timer,
+    };
+    let fell = now();
+    profiler_record_turn(fell - rise, polled - drained, f64::from(asked as u8), wake.max(0.0));
+    wake
 }
 
 /// Grows to the largest snapshot and stays, so a settled turn allocates nothing.
@@ -254,7 +275,7 @@ fn post_shell(s: &mut State) {
     });
     // Collected first: stopping a read settles it, which must not happen inside
     // the request scheduler's own walk.
-    let mut stops = Vec::new();
+    let mut stops = List::<u64, { crate::param::MAX_CREDITS as usize }>::new();
     take_stops(|key| stops.push(key));
     for key in stops {
         if !crate::io::fetch::cancel(key) {

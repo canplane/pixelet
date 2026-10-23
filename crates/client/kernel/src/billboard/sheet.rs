@@ -34,5 +34,5 @@ pub fn remove_billboard_set(set: u32) {
     k.billboards.remove(&mut k.draw, set);
 }
 
-/// One set: the place step lays out every billboard (`chunk/place.rs`).
+/// One set: the place step lays out every billboard (`scene/place.rs`).
 pub const SETS_MAX: usize = 1;

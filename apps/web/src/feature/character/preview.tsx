@@ -10,7 +10,7 @@ import { Spinner } from "@platform/icon.tsx";
 import { LABEL } from "@platform/palette.ts";
 import { CaseSurface } from "@platform/surface.tsx";
 import { Command, encode_preview_close, encode_preview_open } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, useKernel } from "@/kernel/shell.ts";
+import { kernel_command, kernel_room, useKernel } from "@/kernel/shell.ts";
 import type { CharacterVariant } from "@/feature/character/variant.ts";
 import { chrome } from "@/shared/ui/theme.ts";
 
@@ -34,8 +34,8 @@ export function CharacterPreview(props: CharacterPreviewProps) {
           openKey={`${variant.group}:${variant.number}`}
           onOpen={(surface) => {
             setSurface(surface);
-            kernel_command(Command.PREVIEW_OPEN, encode_preview_open({ surface, group: variant.group, number: variant.number }));
-            return () => kernel_command(Command.PREVIEW_CLOSE, encode_preview_close({ surface }));
+            kernel_command(Command.PREVIEW_OPEN, encode_preview_open(kernel_room, surface, variant.group, variant.number));
+            return () => kernel_command(Command.PREVIEW_CLOSE, encode_preview_close(kernel_room, surface));
           }}
         />
       </View>

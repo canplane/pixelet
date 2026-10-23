@@ -202,17 +202,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .collect::<Result<_, _>>()?;
         rs.push(format!("            SettingKey::{} => matches!(value, {}),", s.key, dev.join(" | ")));
     }
-    rs.extend([
-        "            _ => false,".to_string(),
-        "        }".into(),
-        "    }".into(),
-        String::new(),
-        "    /// Read by a chunk's build, so a change builds the chunks again.".into(),
-        "    pub fn sources_chunks(self) -> bool {".into(),
-        format!("        {}", keys_where(&|s| s.flag("sources_chunks"))),
-        "    }".into(),
-        "}".into(),
-    ]);
+    rs.extend(["            _ => false,".to_string(), "        }".into(), "    }".into(), "}".into()]);
     let field_type = |s: &Setting| -> Result<String, String> {
         match s.kind() {
             "toggle" => Ok("bool".to_string()),
@@ -316,7 +306,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             out.push(("$doc".to_string(), doc.clone()));
         }
         for (f, v) in s.spec.entries() {
-            if f == "$doc" || f == "sources_chunks" {
+            if f == "$doc" {
                 continue;
             }
             let value = match f.as_str() {

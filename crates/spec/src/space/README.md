@@ -1,47 +1,46 @@
-# One address, and every size is a zoom
+# A position, and every size is a zoom
 
-Everything in this world has one address: a single 64-bit word. Every
-coarser grouping of the world — the cell an object fills, the chunk a
-renderer draws, the tile a request fetches — is that same word shifted down
-each lane. A size is a **zoom**, one number for all of them, and grouping is
-a shift, never a division.
+Everything in this world has a position: three integers, an axis each,
+counting 256ths of a unit. Every coarser grouping of the world — the cell an
+object fills, the camera grid's cell a ray draws, the tile a request fetches — is
+that position shifted down on each axis. A size is a **zoom**, one number
+for all of them, and grouping is a shift, never a division.
 
 What a unit is worth in meters is not in this module. The lattice counts
 units; what a unit means belongs to whoever projects it. That split is why
 no file here carries a distance, and it is the one thing to understand
 before reading anything here.
 
-## An address
+## A position
 
-A point on the lattice is an `IVec`: one `u64` holding three signed lanes.
+A position is a `Q3` (`coord/q3.rs`): three `i32`, each axis its unit index
+over 8 bits of fraction. An axis holds as many index bits as the world is
+wide on it (`coord/world.rs` `EXTENT`):
 
 ```
- 63                      40 39                      16 15                 0
-┌──────────────────────────┬──────────────────────────┬────────────────────┐
-│       X  (24 bits)       │       Y  (24 bits)       │    Z  (16 bits)    │
-└──────────────────────────┴──────────────────────────┴────────────────────┘
+     31                                  8 7         0
+X, Y ┌────────────────────────────────────┬───────────┐
+     │         unit index, 24 bits         │  256ths   │
+     └────────────────────────────────────┴───────────┘
+     31          24 23                    8 7         0
+Z    ┌─────────────┬──────────────────────┬───────────┐
+     │  its sign   │  unit index, 16 bits │  256ths   │
+     └─────────────┴──────────────────────┴───────────┘
 ```
 
-One word rather than three so that an address is one comparable, hashable
-key. X carries a cyclic seam, its two ends meeting where the world wraps; Y
-and Z are plain signed extents. Z is the narrowest because altitude needs the
-least room, and the three widths are what fit one word.
+X goes once round the world in 2^24 units, Y spans the square Mercator
+plane, and Z the ±2^15 units of height the terrain's `i16` heights reach. X
+fills its `i32` exactly, so X goes round as the type wraps: the short way
+between two positions is X's difference taken wrapping (`world::between`).
+Y does not go round, and a Y difference is taken wider. A position enters
+the world only through `world::at` or `point`, which hold Y and Z inside it.
 
-Signedness is a lane's own interpretation, not a storage rule, so every
-operation on a lane is per lane. `ivec::sh` shifts each lane separately and
-never the packed word: one raw word shift leaks bits across a lane boundary
-and corrupts every lane but the outermost, positive or negative alike. The
-same holds for add, subtract and compare, and why the obvious SWAR shortcut
-does not pay here is [coord/pvf3/README.md](./coord/pvf3/README.md).
-
-A position between two cells is a `Pvf3`: the `IVec` and an `FVec` beside
-it, which holds each axis's place within its cell in 256ths, the two reading
-as one fixed-point scalar an axis. Two positions are equal when their words are, and a sum lands on a
-lane rather than between two doubles.
+All of it is integer, so a position is the same bits on every machine;
+doubles meet it only going in and out (`q3::from_real`, `unpack`).
 
 ## A size is a zoom
 
-The X lane is one world of 2^24 units, so a thing the world over 2^z wide is
+X goes once round the world in 2^24 units, so a thing the world over 2^z wide is
 at zoom z: z is 24 less the log of its side in units (`coord/zoom.rs`). A bigger
 zoom is finer, one zoom finer is half as wide, and the unit itself is z24.
 
@@ -53,26 +52,25 @@ zoom is finer, one zoom finer is half as wide, and the unit itself is z24.
 
 The zooms are size and nothing else — the rightmost column is this program's
 arrangement, not the number's meaning. A zoom finer than z24 is a fraction
-of a unit and lives in the `FVec`, down to z32, a 256th.
+of a unit and lives in a position's fraction, down to z32, a 256th.
 
 A size answers the same questions at every zoom (`coord/zoom.rs`): its side in
 units (`units`), how many of a finer zoom's cells stand across it (`count`),
 which cell a point lies in and where that cell begins (`index_of`,
-`base_of`), and its box (`cube`). An address goes to its cell's index and
-back the same way, a shift of each lane (`idx`, `from_idx`). The world is
+`base_of`), and its box (`cube`). The world is
 zoom 0's cell, once around in X (`ROUND`, `around`, `wrap_index`), and a
-stored X stands where it is nearest the eye (`nearest`); all of it is `coord/world.rs`'s,
-not PVF3's, which is only the format.
+stored X stands where it is nearest the eye (`nearest`); all of it is
+`coord/world.rs`'s.
 
-A zoom's side can reach a lane's width, and then that lane collapses: Z is
-16 bits wide, so from z8 coarser a cell is horizontal, and nothing had to
-say so.
+A zoom's side can reach the world's extent on an axis, and then that axis
+collapses: the world is 2^16 units tall, so from z8 coarser a cell is
+horizontal, and nothing had to say so.
 
 ## A unit has no size
 
-`coord/pvf3/pack.rs` states the rule: doubles go in and out with 1.0 as one
-lattice unit, and whatever a unit is in meters is the caller's scaling. Nothing under `pvf3/` carries a
-distance.
+`coord/q3.rs` states the rule: doubles go in and out with 1.0 as one unit,
+and whatever a unit is in meters is the caller's scaling. Nothing in it
+carries a distance.
 
 Meaning enters at an **adapter**, and only there:
 
@@ -83,10 +81,10 @@ Meaning enters at an **adapter**, and only there:
 
 ### What the adapter makes the zooms, here
 
-The X lane is exactly one EPSG:3857 world. So the lattice is that world cut
+X's round is exactly one EPSG:3857 world. So the lattice is that world cut
 2^24 ways, and a z24 cell is a z16 pixel of the standard's 256-pixel tiles
 and a z15 tile its z15 tile, exactly — not by design of the number but
-because the lane width and the world are the same thing.
+because X's extent and that world are the same thing.
 
 | zoom | side  | planar meters |
 | ---- | ----- | ------------- |
@@ -95,7 +93,7 @@ because the lane width and the world are the same thing.
 | z15  | 512u  | 1,223.0       |
 | z12  | 4096u | 9,783.9       |
 
-That identity holds by two constants agreeing — the X lane is one world, a
+That identity holds by two constants agreeing — X's round is one world, a
 ground cell is one unit — and a web map's zoom is the adapter's to name
 ([`coord/adapter/3857.rs`](./coord/adapter/3857.rs) `web_zoom_of`), for comparing with
 one; nothing in the pyramid counts in it.
@@ -122,9 +120,9 @@ together (`Tile`, `layer/tile.rs`); `idx(LEAF_ZOOM, addr)` always answers the le
 question: which 512u square.
 
 The distance chooses a cell zoom (`camera/grid.rs` `cell_at`), and terrain's tile
-zoom is the one whose cells those are (`Lattice::tile_zoom`); the kernel's mesher
+zoom is the one whose cells those are (`Lattice::tile_zoom`); the cast
 measures its own step against the same cell zoom
-([every size is a zoom](../../../../decision/20261006-every-size-is-a-zoom.md)).
+([every size is a zoom](../../../../doc/minutes/20261006-every-size-is-a-zoom.md)).
 
 ## The trees share their geometry and nothing else
 
@@ -136,11 +134,11 @@ written once. What a node holds, whether it is resident, how it is stored
 and how a reader walks it are each tree's own, and follow from what it
 represents:
 
-|                                                 | axes | resident                             | a node holds                                                    | stored                                                           | walked                                                          |
-| ----------------------------------------------- | ---- | ------------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------- |
-| the pyramid (`layer/tile.rs`)                   | 2    | resident by tile: one can be missing | a layer's fold of all under it                                  | a record a tile                                                  | from a point, up to the nearest resident tile                   |
-| a tile's index (`bake/tile/terrain.rs` `Index`) | 2    | with its tile                        | the lowest and highest drawn under a cell                       | dense lanes in the tile, and coarser cells of them               | a coarse cell passed whole where a ray is above it              |
-| the objects (pxl-kernel object/store.rs)        | 3    | whole                                | its leaf's value, or the majority of its eight, read when asked | the leaves alone, one tree a column (`hierarchy/sparse_tree.rs`) | down a cube's key range, by a box, or along a ray nearest first |
+|                                                     | axes | resident                                                                           | a node holds                                                    | stored                                                                                                                                      | walked                                                          |
+| --------------------------------------------------- | ---- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| the pyramid (`layer/tile.rs`)                       | 2    | resident by tile: one can be missing                                               | a layer's fold of all under it                                  | a record a tile                                                                                                                             | from a point, up to the nearest resident tile                   |
+| a window's bound (pxl-portable window.rs `bounded`) | 2    | with its square, while a window about the eye, the focus or a destination holds it | the lowest and highest drawn under a cell, the ways' included   | made by the GPU from a square's cells and its ways, a level a zoom to the square whole, and read back; squares joined to the window's width | a coarse cell passed whole where a ray is above it              |
+| the objects (pxl-kernel object/store.rs)            | 3    | whole                                                                              | its leaf's value, or the majority of its eight, read when asked | the leaves alone, one tree a column (`hierarchy/sparse_tree.rs`)                                                                            | down a cube's key range, by a box, or along a ray nearest first |
 
 The pyramid is a tree across zooms: every tile holds a summary of the
 ground under it — terrain's cells voted and averaged, places summed — so a
@@ -161,7 +159,7 @@ holds two places, so the tree of places is only as deep as a crowd needs,
 and terrain marks only a child that is the zero tile, its vote being lossy.
 
 They stay two because one is resident by tile and the other is not. Objects
-keep no coarse zoom: a chunk folds a node's leaves when it is built. Were
+keep no coarse zoom: their query folds a node's leaves when it is asked. Were
 objects ever resident by tile, their branches would be a layer of the
 pyramid, and a block of equal leaves joined its occupancy.
 
@@ -173,9 +171,9 @@ first, since none is missing.
 
 ## What else is here
 
-|                              |                                                                                                                                         |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| [`coord/`](./coord/)         | where and how big: the packed words (`pvf3/`), sizes as zooms (`zoom.rs`), what the lanes mean (`world.rs`), the adapters, `v3`, `mat4` |
-| [`hierarchy/`](./hierarchy/) | parent and child in any number of axes (`tree.rs`), a node's one key (`morton.rs`), a sparse octree (`sparse_tree.rs`)                  |
-| [`camera/`](./camera/)       | the camera grid, its cell zoom a distance is drawn at and the chunk (`grid.rs`), and the eye (`eye.rs`)                                 |
-| [`layer/`](./layer/)         | a layer's lattice (`lattice.rs`), the pyramid of tiles (`tile.rs`), and what an observation demands of them (`demand.rs`)               |
+|                              |                                                                                                                                     |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| [`coord/`](./coord/)         | where and how big: a position (`q3.rs`), sizes as zooms (`zoom.rs`), what a position means (`world.rs`), the adapters, `v3`, `mat4` |
+| [`hierarchy/`](./hierarchy/) | parent and child in any number of axes (`tree.rs`), a node's one key (`morton.rs`), a sparse octree (`sparse_tree.rs`)              |
+| [`camera/`](./camera/)       | the camera grid, its cell zoom a distance is drawn at and the chunk (`grid.rs`), and the eye (`eye.rs`)                             |
+| [`layer/`](./layer/)         | a layer's lattice (`lattice.rs`), the pyramid of tiles (`tile.rs`), and what an observation demands of them (`demand.rs`)           |

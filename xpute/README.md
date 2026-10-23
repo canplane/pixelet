@@ -42,6 +42,7 @@ Golden records under `spec/golden/` hold the languages to each other wherever by
 ```text
 rust/kit  ·  ts/kit  ·  cpp/kit                the same kit, in each language
 rust/guest  ·  cpp/guest  ·  ts/host               the guest end, in each language · the host end
+rust/gpu  ·  ts/gpu  ·  cpp/gpu                WebGPU's calls, which a guest writes and a host runs
 rust/conformance  ·  cpp/conformance              a guest in each, and the contract's traces
 ts/conformance                                    the host that runs the traces against them
 spec                                              numbers all of them are generated from
@@ -66,6 +67,7 @@ Deno 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target, a C++20 com
 deno task check   # deno fmt --check, deno check, cargo fmt --check, clippy, the C++ compiled
 deno task test    # deno test, cargo test and the C++ tests, the golden records included,
                   # then the traces run against every guest, native and WebAssembly
+deno task test:gpu  # the GPU hosts against golden/gpu: the native one on wgpu, the web one in Chrome (installed, or $CHROME)
 deno task lint    # deno lint
 ```
 

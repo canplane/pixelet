@@ -3,9 +3,11 @@
 //! How far the orbit gets toward what the controls ask before terrain is in
 //! the way. The controls keep what was asked; the drawn orbit stops short.
 
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::coord::v3::{add3, V3};
+use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::GROUND;
+use xpute_guest::global::Global;
 use xpute_kit::math::scalar::wrap;
 
 use crate::control::camera::orbit::orbit_eye_offset;
@@ -56,12 +58,12 @@ fn climb_rise(at: &ViewPose) -> Option<f64> {
     let (_, eye) = eye(at);
     let center = world_to_canonical(&at.target);
     let floor = index_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
-    let from = pvf3::gather(pvf3::X(&center), pvf3::Y(&center), pvf3::from_real(over(floor)));
+    let from = world::at(i64::from(center[0]), i64::from(center[1]), q3::from_real(over(floor)));
     let access = World::now();
     // Near, the eye's way walks the leaves; far, it is a map and goes through.
     // Where the leaf under the center, or a map's under the eye, is not held, the ground under the eye.
     let walked = access.step_slide(&from, &eye, &eye, false).unwrap_or(eye);
-    if pvf3::X(&walked) != pvf3::X(&eye) || pvf3::Y(&walked) != pvf3::Y(&eye) {
+    if i64::from(walked[0]) != i64::from(eye[0]) || i64::from(walked[1]) != i64::from(eye[1]) {
         return None;
     }
     let ground = access.floor_under(&walked, LEAF_ZOOM).value().flatten()?;
@@ -74,9 +76,9 @@ fn penetration(at: &ViewPose) -> Option<f64> {
 }
 
 /// The eye, local and canonical.
-fn eye(at: &ViewPose) -> (V3, Pvf3) {
+fn eye(at: &ViewPose) -> (V3, Q3) {
     let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
-    let world: V3 = add3(&at.target, &offset);
+    let world: V3 = v3::add(&at.target, &offset);
     (world, world_to_canonical(&world))
 }
 
@@ -155,8 +157,44 @@ const CLIMB_PASSES: u32 = 2;
 /// The shallowest pitch that clears terrain, solved as `acos(h / dist)`
 /// rather than scanned: a scan's fixed angles made the camera judder on flat
 /// ground.
+///
+/// It stands while what it is made of stands: the pose, where its target is
+/// on the world, and the ground its walks read (`walked`).
 pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
-    pose(ViewTriple { dist, polar, azimuth }).map_or(polar, |at| climbed(at).polar)
+    let Some(at) = pose(ViewTriple { dist, polar, azimuth }) else { return polar };
+    let climb = Climb {
+        at,
+        center: world_to_canonical(&at.target),
+    };
+    let last = CLIMBED.get(|| None);
+    match *last {
+        Some((c, polar)) if c == climb && !crate::query::changed::within(walked(&at), &[]) => polar,
+        _ => {
+            let polar = climbed(at).polar;
+            *last = Some((climb, polar));
+            polar
+        }
+    }
+}
+
+/// What a climb is made of, by value.
+#[derive(Clone, Copy, PartialEq)]
+struct Climb {
+    at: ViewPose,
+    center: Q3,
+}
+
+/// The last climb and the pitch it gave.
+static CLIMBED: Global<Option<(Climb, f64)>> = Global::new();
+
+/// The columns a climb from `at` reads, corners in units: its eyes stay on
+/// the line from the target to `at`'s eye, as steepening only draws the eye
+/// in, and each walk and floor reads its cells and a cell about them.
+fn walked(at: &ViewPose) -> [[f64; 2]; 2] {
+    let [center, eye] = [world_to_canonical(&at.target), eye(at).1].map(|q| [0, 1].map(|k| q3::to_real(i64::from(q[k]))));
+    let eye = [world::nearest(eye[0], center[0]), eye[1]];
+    let margin = 2.0 * units(GROUND.cell());
+    [[0, 1].map(|k| center[k].min(eye[k]) - margin), [0, 1].map(|k| center[k].max(eye[k]) + margin)]
 }
 
 fn climbed(mut at: ViewPose) -> ViewPose {

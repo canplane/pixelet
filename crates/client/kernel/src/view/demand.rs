@@ -3,10 +3,10 @@
 //! The pyramid as the client holds it, for every layer on the ground: the
 //! tiles held (residency.rs) and what an observation asks for of them.
 //!
-//! Asks are the observation's demand, as the estimator names it, merged with
+//! Asks are the live eye's demand, as the estimator names it, merged with
 //! the fallback's tiles and a destination's, the best reason per tile.
-//! Nothing drawn enters them but what the turn hands in: the goal the chunks
-//! last published and the quality's τ, decided first. Where a tile marks a
+//! Nothing drawn enters them but the quality's τ the turn hands in, decided
+//! first. Where a tile marks a
 //! child as no tile (`Base::occupancy`), its ground is the tile's and the
 //! child is never asked for.
 
@@ -18,7 +18,7 @@ use xpute_guest::global::Global;
 use crate::io::demand::Stream;
 use crate::io::fetch::{answer_settled, body, next_answered, release, Answered};
 use crate::io::request::attempt_of;
-use crate::layer::earth::{self, Earth};
+use crate::layer::earth::Earth;
 use crate::layer::{Asks, Base};
 use crate::sched::edge::world_edge;
 use pxl_spec::bake::tile::division::DivisionTile;
@@ -38,10 +38,10 @@ use crate::io::failure::Failure;
 use crate::io::request::declare;
 use crate::io::source;
 use crate::layer::residency::floor::{self, Fallback, Floor};
-use crate::layer::residency::{Candidate, Residency, Victim};
-use crate::view::observation::{observation, ByFootprints};
-use crate::view::sight::Footprint;
+use crate::layer::residency::{Candidate, Lines, Residency, Victim};
+use crate::view::observation::{observation, ByEye};
 use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::hierarchy::morton::key_of;
 
 /// A layer as the view asks of it: its demand, held beside its records.
 pub trait Observed: Base {
@@ -89,15 +89,11 @@ impl Observed for Earth {
 
 /// Everything the asks depend on, as read; two turns agreeing on all of it
 /// ask for the same tiles, so the second decides nothing.
-#[derive(PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 struct Seen {
     o: Option<Observation>,
-    floor: Vec<Tile>,
     destination: Option<Tile>,
     tau: Tau,
-    /// The published goal's.
-    footprints: Vec<Footprint>,
-    lacks: Vec<Tile>,
 }
 
 /// Evicts the tile last in view order.
@@ -105,18 +101,10 @@ struct Farthest<'a>(Option<&'a Observation>, Lattice);
 
 impl Victim for Farthest<'_> {
     fn victim(&self, candidates: &[Candidate]) -> Option<usize> {
-        let order = |c: &Candidate| self.0.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, self.1, c.tile));
+        let mut lines = Lines::default();
+        let mut order = |c: &Candidate| self.0.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, self.1, c.tile, &mut lines));
         (0..candidates.len()).max_by_key(|&i| order(&candidates[i]))
     }
-}
-
-/// The goal materialization last published, which demand follows: what it
-/// was observed from, the footprints its rays met and the tiles they lacked.
-#[derive(Clone, Copy)]
-pub struct Published<'a> {
-    pub observation: &'a Observation,
-    pub footprints: &'a [Footprint],
-    pub lacks: &'a [Tile],
 }
 
 pub struct Demand<L: Observed> {
@@ -125,8 +113,8 @@ pub struct Demand<L: Observed> {
     demand: Vec<Tile>,
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
-    /// What this turn reads, kept so a turn allocates nothing.
-    now: Option<Seen>,
+    /// The floor's tiles as last observed.
+    floor: Vec<Tile>,
     /// What it reads moved since it last observed.
     moved: bool,
     /// Reused across observations so observing stops allocating once warm.
@@ -141,7 +129,7 @@ impl<L: Observed> Default for Demand<L> {
             demand: Vec::new(),
             wants: Vec::new(),
             last: None,
-            now: None,
+            floor: Vec::new(),
             moved: false,
             asks: FnvHashMap::with_capacity_and_hasher(Residency::<L>::FRAMES as usize, Default::default()),
         }
@@ -167,7 +155,7 @@ impl<L: Observed> Demand<L> {
 
     /// The floor's tiles as last observed.
     pub fn floor(&self) -> impl Iterator<Item = Tile> + Clone + '_ {
-        self.last.iter().flat_map(|seen| seen.floor.iter().copied())
+        self.floor.iter().copied()
     }
 
     pub fn demand(&self) -> &[Tile] {
@@ -195,15 +183,7 @@ impl<L: Observed> Demand<L> {
     /// Builds the asks for `o`: the estimator's demand, the floor and the
     /// destination's line.
     #[allow(clippy::too_many_arguments)]
-    pub fn observe(
-        &mut self,
-        o: Option<&Observation>,
-        // the floor's eye, if not `o`'s
-        floor_at: Option<&Observation>,
-        destination: impl Iterator<Item = Tile>,
-        estimator: &ByFootprints,
-        top: Zoom,
-    ) {
+    pub fn observe(&mut self, o: Option<&Observation>, destination: impl Iterator<Item = Tile>, estimator: &ByEye, top: Zoom) {
         let mut demand = core::mem::take(&mut self.demand);
         demand.clear();
         let mut asks = core::mem::take(&mut self.asks);
@@ -211,15 +191,18 @@ impl<L: Observed> Demand<L> {
         let ask = |asks: &mut FnvHashMap<Tile, Ask>, p: Tile, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
-        let order = |o: &Observation, p: Tile| crate::view::observation::order_of_tile(o, L::LATTICE, p);
+        // One walk down the pyramid in key order, so each tile's line, its
+        // own and the ground's it is ordered by, steps from its neighbour's.
+        let (mut lines, mut ground) = (Lines::default(), Lines::default());
+        let mut order = |o: &Observation, p: Tile| crate::view::observation::order_of_tile(o, L::LATTICE, p, &mut ground);
         if let Some(o) = o {
             if matches!(L::ASKS, Asks::View) {
                 estimator.requirements(o, &mut |p| demand.push(p));
             }
-            demand.sort_unstable();
+            demand.sort_unstable_by_key(|p| key_of::<2>(p.zoom, p.at));
             demand.dedup();
             for &p in &demand {
-                let at = L::residency().source(p).unwrap_or(p);
+                let at = L::residency().seek(&mut lines, p).source.unwrap_or(p);
                 ask(&mut asks, at, Ask { why: Why::Demand, order: order(o, p) });
                 // A line already asked is asked to the top.
                 for q in std::iter::successors(Some(at), |q| (q.zoom > top).then(|| q.parent())).skip(1) {
@@ -244,13 +227,12 @@ impl<L: Observed> Demand<L> {
             }
             xpute_kit::ensure!(read.iter().all(|&n| n <= Residency::<L>::ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
             if !matches!(L::ASKS, Asks::Line) {
-                let mut floor = 0u32;
-                let f = floor_at.unwrap_or(o);
-                Floor::<L>::floor(f, top, |p| {
-                    floor += 1;
+                self.floor.clear();
+                Floor::<L>::floor(o, top, |p| {
+                    self.floor.push(p);
                     ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
                 });
-                xpute_kit::ensure!(floor <= Floor::<L>::TILES, ENOTRECOVERABLE, floor);
+                xpute_kit::ensure!(self.floor.len() <= Floor::<L>::TILES as usize, ENOTRECOVERABLE, self.floor.len());
             }
         }
         // The whole line, not only the finest tile: which one says the ground is
@@ -268,11 +250,18 @@ impl<L: Observed> Demand<L> {
                 },
             );
         }
-        xpute_kit::ensure!(named <= if matches!(L::ASKS, Asks::Floor) { 0 } else { Residency::<L>::DESTINATION_TILES }, ENOTRECOVERABLE, named);
+        xpute_kit::ensure!(
+            named <= if matches!(L::ASKS, Asks::Floor) { 0 } else { Residency::<L>::DESTINATION_TILES + L::PINNED },
+            ENOTRECOVERABLE,
+            named
+        );
 
         L::residency().ask(&asks);
         // A tile no served shard is over or under is answered as its absence is, and never asked for.
-        let unanswered = |p: Tile| !L::residency().resident(p) && !L::residency().settled(p);
+        let unanswered = |p: Tile| {
+            let r = L::residency();
+            !r.resident(p) && (!r.settled(p) || r.again_held(p))
+        };
         if let Some(layer) = L::STREAM.bake() {
             for &p in asks.keys() {
                 if unanswered(p) && !source::serves(layer, p) {
@@ -292,70 +281,38 @@ impl<L: Observed> Demand<L> {
         &self.wants
     }
 
-    /// The layer's turn. Quality is decided first so asks match what is drawn.
-    /// Observes again whenever anything in `Seen` changed.
+    /// The layer's turn, from the live eye: the eye that is coming, which
+    /// every cast reads as it arrives. Quality is decided first so asks match
+    /// what is drawn. Observes again whenever anything in `Seen` changed.
     ///
     /// `destination` is asked for with its line even with no observation yet:
-    /// at the first fix the camera waits for that ground. `far` cuts the
-    /// observation where the layer stops being drawn.
-    pub fn step(&mut self, destination: Option<Tile>, published: Option<Published>, tau: Tau) {
+    /// at the first fix the camera waits for that ground; and `pinned`, the
+    /// tiles a reader that takes no coarser answer declares (`Base::PINNED`),
+    /// as the destination is. A layer with a top of its own is observed out
+    /// to its own reach, unfogged.
+    pub fn step(&mut self, destination: Option<Tile>, pinned: &[Tile], tau: Tau) {
         // Nothing coarser than the layer's own top is drawn, whatever the source holds.
         let Some(top) = L::TOP.or(floor::top()).map(|t| t.max(L::LATTICE.top())) else { return };
-        let own = |o: Observation| match L::TOP {
+        let o = observation().map(|o| match L::TOP {
             Some(_) => Observation {
                 reach: L::reach(),
                 fog: f64::INFINITY,
                 ..o
             },
             None => o,
-        };
-        let live = observation().map(own);
-        let seen_from = live.map(|live| published.as_ref().map_or(live, |d| own(*d.observation)));
-        let mut now = self.now.take().unwrap_or_else(|| Seen {
-            o: None,
-            floor: Vec::new(),
-            destination: None,
-            tau,
-            footprints: Vec::new(),
-            lacks: Vec::new(),
         });
-        // the floor follows the live eye, so a jump asks for it at once
-        now.floor.clear();
-        if let Some(l) = &live {
-            Floor::<L>::floor(l, top, |p| now.floor.push(p));
-        }
-        if seen_from.is_none() && destination.is_none() {
-            self.now = Some(now);
+        if o.is_none() && destination.is_none() && pinned.is_empty() {
             return;
         }
-        let tau = match seen_from {
-            Some(_) => tau,
-            None => Tau::FINEST,
-        };
-        let o = seen_from.map(|o| Observation { reach: o.reach.min(L::reach()), ..o });
-        (now.o, now.destination, now.tau) = (o, destination, tau);
-        now.footprints.clear();
-        now.footprints.extend_from_slice(published.as_ref().map_or(&[], |d| d.footprints));
-        now.lacks.clear();
-        now.lacks.extend_from_slice(published.as_ref().map_or(&[], |d| d.lacks));
-        if core::mem::take(&mut self.moved) | (self.last.as_ref() != Some(&now)) {
-            let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent())));
-            self.observe(
-                o.as_ref(),
-                live.as_ref(),
-                line,
-                &ByFootprints {
-                    tau,
-                    lattice: L::LATTICE,
-                    top,
-                    footprints: published.as_ref().map_or(&[], |d| d.footprints),
-                    lacks: published.as_ref().map_or(&[], |d| d.lacks),
-                },
-                top,
-            );
-            self.now = self.last.replace(now);
-        } else {
-            self.now = Some(now);
+        let tau = if o.is_some() { tau } else { Tau::FINEST };
+        let now = Seen { o, destination, tau };
+        if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
+            let line = destination
+                .into_iter()
+                .flat_map(|p| std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent())))
+                .chain(pinned.iter().copied());
+            self.observe(o.as_ref(), line, &ByEye { tau, lattice: L::LATTICE, top }, top);
+            self.last = Some(now);
         }
         declare(L::STREAM, &self.wants);
     }
@@ -401,18 +358,7 @@ pub fn admit_arrived() {
             (Stream::terrain, block) => arrived::<TerrainTile>(tile, block, &mut phases),
             (Stream::place, block) => arrived::<PlaceTile>(tile, block, &mut phases),
             (Stream::division, block) => arrived::<DivisionTile>(tile, block, &mut phases),
-            (Stream::earth, None) => arrived::<Earth>(tile, None, &mut phases),
-            (Stream::earth, Some(b)) => {
-                let mut framed = None;
-                let result = Earth::demand().admit(tile, |record| {
-                    let earth = Earth::receive(record, body(b), &mut phases)?;
-                    framed = Some(record);
-                    Ok(earth)
-                });
-                // The texels are kept until the GPU has them.
-                earth::keep(framed, b);
-                result
-            }
+            (Stream::earth, block) => arrived::<Earth>(tile, block, &mut phases),
             (_, block) => {
                 release(block);
                 Err(Errno::ENOTRECOVERABLE.into())
@@ -428,7 +374,12 @@ fn arrived<L: Observed>(p: Tile, block: Option<Block>, phases: &mut Phases) -> R
         L::demand().absent(p);
         return Ok(());
     };
-    let result = L::demand().admit(p, |record| L::receive(record, body(b), phases));
-    release(Some(b));
+    let mut framed = None;
+    let result = L::demand().admit(p, |record| {
+        let tile = L::receive(p, record, body(b), phases)?;
+        framed = Some(record);
+        Ok(tile)
+    });
+    L::keep(framed, b);
     result
 }

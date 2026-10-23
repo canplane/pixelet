@@ -74,9 +74,9 @@ fn a_change_of_person_leaves_the_focus() {
     }
     // Under a tracker the change waits, and the base is left as it was.
     controllers().tracked = Some(Tracked {
-        world_turn: mat4(),
+        world_turn: mat4::new(),
         world_at: [0.0; 3],
-        turn: mat4(),
+        turn: mat4::new(),
         at: [0.0; 3],
     });
     assert!(!take_mode(CameraMode::free), "taken under a tracker");

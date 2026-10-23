@@ -31,7 +31,7 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, as
         let d = data.clone();
         data.cache
             .once(p.name(), asked, move |lease| async move {
-                if !d.coverage.meets(p.zoom, p.tile) {
+                if !d.coverage.meets(p.zoom, p.at) {
                     return d.cache.publish(&p.name(), None).map_err(Failure::from);
                 }
                 if p.zoom < kind.leaf() {
@@ -54,6 +54,8 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, as
 
 pub(super) fn execute<L: Base>(p: Tile, cache: &Path, out: &Path, leaf: impl FnOnce() -> Result<Option<L>, String>, absent: &impl Absent<L>) -> Result<(), String> {
     let tile = if p.zoom == L::LEAF { leaf()? } else { fold_stored(&TileSet::new(cache), p, absent)? };
-    let packet = tile.map(|tile| pack(&tile.encode()?, Level::Live).map_err(|e| e.to_string())).transpose()?;
+    let packet = tile
+        .map(|tile| pack(&tile.encode(p).map_err(|e| format!("{}: {e}", p.name()))?, Level::Live).map_err(|e| e.to_string()))
+        .transpose()?;
     job::write_packet(out, packet.as_deref())
 }

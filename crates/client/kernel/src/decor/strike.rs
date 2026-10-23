@@ -6,7 +6,7 @@
 
 use pxl_spec::block::decor::{Decor, DECORS};
 use pxl_spec::block::DecorId;
-use pxl_spec::space::coord::v3::{cross3, dot3, sub3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem::base::ptr_at;
 
 use crate::decor::assets::decor_assets_for;
@@ -35,7 +35,7 @@ pub fn strike(models: &Models, i: &Instance, o: V3, d: V3, limit: f64) -> Option
         )
     };
     let s = m.scale * mesh.scale as f64;
-    let p = sub3(&o, &i.at);
+    let p = v3::sub(&o, &i.at);
     if !ray_meets_sphere(&p, &d, mesh.radius as f64 * s, limit) {
         return None;
     }
@@ -59,8 +59,8 @@ pub fn strike(models: &Models, i: &Instance, o: V3, d: V3, limit: f64) -> Option
 
 /// `p` is relative to the sphere's center.
 fn ray_meets_sphere(p: &V3, d: &V3, r: f64, limit: f64) -> bool {
-    let b = dot3(p, d);
-    let c = dot3(p, p) - r * r;
+    let b = v3::dot(p, d);
+    let c = v3::dot(p, p) - r * r;
     if c <= 0.0 {
         return true;
     }
@@ -76,23 +76,23 @@ fn ray_meets_sphere(p: &V3, d: &V3, r: f64, limit: f64) -> bool {
 fn ray_triangle(o: &[f64; 3], d: &[f64; 3], a: &[f32], b: &[f32], c: &[f32]) -> Option<f64> {
     let e1 = [b[0] as f64 - a[0] as f64, b[1] as f64 - a[1] as f64, b[2] as f64 - a[2] as f64];
     let e2 = [c[0] as f64 - a[0] as f64, c[1] as f64 - a[1] as f64, c[2] as f64 - a[2] as f64];
-    let p = cross3(d, &e2);
-    let det = dot3(&e1, &p);
+    let p = v3::cross(d, &e2);
+    let det = v3::dot(&e1, &p);
     if det.abs() < 1e-12 {
         return None;
     }
     let inv = 1.0 / det;
     let s = [o[0] - a[0] as f64, o[1] - a[1] as f64, o[2] - a[2] as f64];
-    let u = dot3(&s, &p) * inv;
+    let u = v3::dot(&s, &p) * inv;
     if !(0.0..=1.0).contains(&u) {
         return None;
     }
-    let q = cross3(&s, &e1);
-    let v = dot3(d, &q) * inv;
+    let q = v3::cross(&s, &e1);
+    let v = v3::dot(d, &q) * inv;
     if v < 0.0 || u + v > 1.0 {
         return None;
     }
-    let t = dot3(&e2, &q) * inv;
+    let t = v3::dot(&e2, &q) * inv;
     (t > 0.0).then_some(t)
 }
 

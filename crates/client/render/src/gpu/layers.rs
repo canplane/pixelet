@@ -10,8 +10,9 @@ use pxl_spec::asset::ingested::{CubeFace, PACK};
 use pxl_spec::asset::{shipped_texture_tile, TileOrigin};
 
 use crate::frame::shader::record::PIPELINE_MIPS;
-use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, release, texture_usage, Gpu, Stamp};
-use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+
+use crate::gpu::api::{buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, Format, Gpu, Load};
 use crate::gpu::pipeline::Pipelines;
 use crate::mesh::paint::palette::{palette, LAYERS};
 
@@ -29,10 +30,9 @@ pub struct Mips {
 
 impl Mips {
     /// A pipeline draws into the format it was built for, so each format needs its own.
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, format: u32) -> Mips {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, format: Format) -> Mips {
         let built = pipelines.build(g, PIPELINE_MIPS, format);
-        let sampler = object();
-        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
+        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::clamp_to_edge, None, 1);
         Mips {
             pipeline: built.pipeline,
             layout: built.layouts[0],
@@ -41,18 +41,13 @@ impl Mips {
     }
 
     pub fn build(&self, g: &Gpu, texture: u32, levels: u32, first_layer: u32, layers: u32) {
-        let encoder = object();
-        g.encoder(encoder);
+        let encoder = g.encoder();
         for layer in first_layer..first_layer + layers {
             for level in 1..levels {
-                let above = object();
-                g.view(above, texture, dimension::D2, level - 1, 1, layer, 1);
-                let target = object();
-                g.view(target, texture, dimension::D2, level, 1, layer, 1);
-                let group = object();
-                g.bind_group(group, self.layout, &[0, resource::VIEW, above, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
-                let pass = object();
-                g.pass(pass, encoder, &pass_desc(target, load::CLEAR, 0, load::CLEAR, 0.0, Stamp::UNTIMED));
+                let above = g.view(texture, false, level - 1, 1, layer, 1);
+                let target = g.view(texture, false, level, 1, layer, 1);
+                let group = g.bind_group(self.layout, &[view_entry(0, above), sampler_entry(1, self.sampler)]);
+                let pass = g.pass(encoder, &pass_desc(target, Load::Clear, 0, Load::Clear, 0.0, None));
                 g.set_pipeline(pass, self.pipeline);
                 g.set_bind_group(pass, 0, group, &[]);
                 g.draw(pass, 3, 1, 0, 0);
@@ -64,7 +59,6 @@ impl Mips {
             }
         }
         g.submit(encoder);
-        release(encoder);
     }
 
     pub fn release(self) {
@@ -128,17 +122,13 @@ impl Layers {
         let slots = tiles.len() as u32;
         let levels = mip_levels(LAYER_TEX_SZ, LAYER_TEX_SZ);
         let usage = texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT;
-        let tex = object();
-        g.texture(tex, LAYER_TEX_SZ, LAYER_TEX_SZ, slots, format::RGBA8_SRGB, levels, usage);
-        let view = object();
-        g.view(view, tex, dimension::D2_ARRAY, 0, levels, 0, slots);
+        let tex = g.texture(LAYER_TEX_SZ, LAYER_TEX_SZ, slots, Format::rgba8unorm_srgb, levels, usage);
+        let view = g.view(tex, true, 0, levels, 0, slots);
         // Anisotropic 4x: the ground is mostly seen at a grazing angle, where an
         // isotropic mip blurs the tile along the view.
-        let sampler = object();
-        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 4);
-        let table = object();
+        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::linear, AddressMode::repeat, None, 4);
         let blank: Vec<u32> = vec![NO_SLOTS; LAYERS];
-        g.buffer(table, (blank.len() * 4) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let table = g.buffer((blank.len() * 4) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(table, 0, bytes(&blank));
         // A chain is under four thirds of its first level.
         let bytes = (0..levels).map(|level| (LAYER_TEX_SZ >> level).pow(2) * 4 * slots).sum();
@@ -154,24 +144,23 @@ impl Layers {
         }
     }
 
-    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<u32>) {
+    /// Whether the pack came this frame.
+    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<u32>) -> bool {
         if self.loaded {
-            return;
+            return false;
         }
-        let Some(image) = pack() else { return };
+        let Some(image) = pack() else { return false };
         let (tiles, table) = plan();
-        let texture = object();
-        g.image_texture(texture, image);
-        let encoder = object();
-        g.encoder(encoder);
+        let texture = g.image_texture(image);
+        let encoder = g.encoder();
         for (slot, tile) in tiles.iter().enumerate() {
             g.copy_texture(encoder, texture, tile.x, tile.y, self.tex, 0, 0, slot as u32, LAYER_TEX_SZ, LAYER_TEX_SZ);
         }
         g.submit(encoder);
-        release(encoder);
         release(texture);
         mips.build(g, self.tex, self.levels, 0, self.slots);
         g.write_buffer(self.table, 0, bytes(&table));
         self.loaded = true;
+        true
     }
 }

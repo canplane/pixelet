@@ -11,7 +11,6 @@
     "the shell's."
   ],
   "CENSUS_TAGS": [
-    "chunk",
     "decor",
     "ghost_box",
     "ghost_box_coplanar",
@@ -21,190 +20,129 @@
     "puck_beacon",
     "badge",
     "debug",
-    "chunk_coarse",
     "impostor"
   ],
+  "WAKES": [
+    "next",
+    "timer",
+    "none"
+  ],
+  "$WAKES": "What a turn asked of the host as it fell (xpute guest sched/edge.rs `fall`): the next frame, a timer, or nothing.",
   "LIMITS": {
     "$type": "u32",
     "REASONS": 4,
     "STEP_SLOTS": 32,
     "ZOOMS": 24,
-    "$ZOOMS": "A lane a zoom slot, by the zoom itself: slot z holds a cell of zoom z's tiles, past the leaves for the objects' finer cells (pxl-spec space/layer/lattice.rs `Lattice::tile_zoom`)."
+    "$ZOOMS": "A lane a zoom slot, by the zoom itself: slot z holds a cell of zoom z's tiles, past the leaves for the objects' finer cells (pxl-portable lattice.rs `Lattice::tile_zoom`)."
   },
   "FRAME": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One rendered frame (profiler/frame.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z."
+      "One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `gpu_read` is 1 where a GPU read landed with the frame, whose `gpu_spans` are then that read's and its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and 0 where nothing was measured with it (no read landed, or the device keeps no timestamps). `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `blocks` and `blocks_mb` are the renderer's block table (pxl-render gpu/renderer.rs `Blocks`), and the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`). A lane's name says its unit: `_ms`, `_mb`, `_bytes`, `_px`, and `_name` for an index into a list of names."
     ],
     "t": 1,
-    "dt_ms": 1,
-    "frame_ms": 1,
+    "interval_ms": 1,
+    "display_ms": 1,
     "settled": 1,
-    "sched_ms": 1,
+    "turns": 1,
+    "busy_ms": 1,
     "budget_ms": 1,
+    "effects_ms": 1,
+    "tick_ms": 1,
     "phases": "PHASES",
-    "chunks_ms": 1,
-    "task_ms": 1,
-    "gpu_ms": 1,
+    "stage_ms": 1,
+    "tasks_ms": 1,
+    "worst_effect_ms": 1,
+    "worst_effect_name": 1,
+    "kind_name": 1,
+    "wake_name": 1,
+    "wake_in_ms": 1,
+    "gpu_read": 1,
     "gpu_spans": "GPU_SPAN_NAMES",
-    "draw_calls": 1,
-    "triangles": 1,
     "census": "2 * CENSUS_TAGS",
-    "zoom_tris": "LIMITS.ZOOMS",
-    "px": 1,
-    "gpu_skipped": 1,
-    "buffers": 1,
-    "buffer_mb": 1,
-    "arena_mb": 1,
+    "world_px": 1,
+    "blocks": 1,
+    "blocks_mb": 1,
     "tex_depth_mb": 1,
-    "tex_shadow_mb": 1,
     "tex_layers_mb": 1,
-    "lod_chunks": 1,
-    "lod_in_frustum": 1,
-    "lod_pending": 1,
-    "lod_settling": 1,
-    "lod_offscreen_pending": 1,
-    "lod_oldest_release_ms": 1,
-    "lod_oldest_visible_ms": 1,
-    "mounts_added": 1,
-    "mounts_removed": 1,
-    "mounts_layouts": 1,
-    "tiles_total": 1,
+    "gpu_objects": "op.DESTROY - 1",
     "zoom_tiles": "LIMITS.ZOOMS",
     "tiles_place": 1,
-    "heap_used_mb": 1,
-    "heap_live_mb": 1,
-    "heap_run_mb": 1,
-    "heap_slot_mb": 1,
-    "heap_range_mb": 1,
+    "heap_used_bytes": 1,
+    "heap_live_bytes": 1,
+    "heap_run_bytes": 1,
+    "heap_slot_bytes": 1,
+    "heap_range_bytes": 1,
+    "heap_largest_free_bytes": 1,
     "heap_refusals": 1,
-    "heap_largest_free_mb": 1,
+    "heap_releases": 1,
     "ring_cq_peak": 1,
     "ring_held_peak": 1,
-    "work_runs": 1,
-    "work_bakes": 1,
-    "work_fine_peak": 1,
-    "work_coarse_peak": 1,
-    "q_terrain": 1,
-    "q_place": 1,
-    "stale_hidden": 1,
-    "stale_uncovered": 1,
-    "stale_unready": 1,
-    "slot_waits": 1,
-    "slot_wait_zooms": 1,
-    "slot_chained": 1,
-    "cap_commit_left": 1,
-    "cap_record_refused": 1,
-    "turn_effects_ms": 1,
-    "turn_stage_ms": 1,
-    "turn_step_ms": 1,
-    "turn_step_name": 1,
-    "cover_rule": 1,
-    "cover_drawn": 1,
-    "cover_gaps": 1,
-    "view_rays": 1,
-    "view_visits": 1
+    "waiting": "STREAM_NAMES",
+    "out": "STREAM_NAMES",
+    "cap_terrain_refused": 1
   },
   "FRAME_GROUPS": {
     "$doc": [
-      "What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it."
+      "What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it."
     ],
-    "pace": [
+    "time": [
       "t",
-      "dt_ms",
-      "frame_ms",
+      "interval_ms",
+      "display_ms",
       "settled",
-      "sched_ms",
-      "budget_ms",
-      "phases",
-      "chunks_ms",
-      "task_ms"
+      "turns",
+      "busy_ms",
+      "budget_ms"
     ],
     "turn": [
-      "turn_effects_ms",
-      "turn_stage_ms",
-      "turn_step_ms",
-      "turn_step_name"
+      "effects_ms",
+      "tick_ms",
+      "phases",
+      "stage_ms",
+      "tasks_ms",
+      "worst_effect_ms",
+      "worst_effect_name"
+    ],
+    "frame": [
+      "kind_name",
+      "wake_name",
+      "wake_in_ms"
     ],
     "gpu": [
-      "gpu_ms",
+      "gpu_read",
       "gpu_spans",
-      "draw_calls",
-      "triangles",
       "census",
-      "zoom_tris",
-      "px",
-      "gpu_skipped"
-    ],
-    "lod": [
-      "lod_chunks",
-      "lod_in_frustum",
-      "lod_pending",
-      "lod_settling",
-      "lod_offscreen_pending",
-      "lod_oldest_release_ms",
-      "lod_oldest_visible_ms"
-    ],
-    "mounts": [
-      "mounts_added",
-      "mounts_removed",
-      "mounts_layouts"
-    ],
-    "stale": [
-      "stale_hidden",
-      "stale_uncovered",
-      "stale_unready"
-    ],
-    "slot": [
-      "slot_waits",
-      "slot_wait_zooms",
-      "slot_chained"
+      "world_px"
     ],
     "cap": [
-      "cap_commit_left",
-      "cap_record_refused"
+      "cap_terrain_refused"
     ],
-    "work": [
-      "work_runs",
-      "work_bakes",
-      "work_fine_peak",
-      "work_coarse_peak"
-    ],
-    "q": [
-      "q_terrain",
-      "q_place"
+    "requests": [
+      "waiting",
+      "out"
     ],
     "tiles": [
-      "tiles_total",
       "zoom_tiles",
       "tiles_place"
     ],
-    "cover": [
-      "cover_rule",
-      "cover_drawn",
-      "cover_gaps"
-    ],
-    "view": [
-      "view_rays",
-      "view_visits"
-    ],
     "device": [
-      "buffers",
-      "buffer_mb",
-      "arena_mb",
+      "blocks",
+      "blocks_mb",
       "tex_depth_mb",
-      "tex_shadow_mb",
-      "tex_layers_mb"
+      "tex_layers_mb",
+      "gpu_objects"
     ],
     "heap": [
-      "heap_used_mb",
-      "heap_live_mb",
-      "heap_run_mb",
-      "heap_slot_mb",
-      "heap_range_mb",
+      "heap_used_bytes",
+      "heap_live_bytes",
+      "heap_run_bytes",
+      "heap_slot_bytes",
+      "heap_range_bytes",
+      "heap_largest_free_bytes",
       "heap_refusals",
-      "heap_largest_free_mb"
+      "heap_releases"
     ],
     "ring": [
       "ring_cq_peak",
@@ -254,13 +192,14 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes."
+      "One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported."
     ],
     "n": 1,
     "ok": 1,
     "aborted": 1,
     "error": 1,
-    "lat": "SPREAD",
+    "lat_p50": 1,
+    "lat_p95": 1,
     "reason_count": 1,
     "reasons": "3 * LIMITS.REASONS",
     "phase_n": 1,
@@ -287,8 +226,6 @@
     "rec": {
       "recording": 1,
       "elapsed_ms": 1,
-      "tasks": 1,
-      "frames": 1,
       "truncated": 1
     },
     "frames": {
@@ -298,42 +235,42 @@
       "moving": 1,
       "missed": 1,
       "overran": 1,
-      "dt": "SPREAD",
-      "task": "SPREAD",
-      "offthread": "SPREAD",
+      "long": 1,
+      "turns": 1,
+      "gpu_read": 1,
+      "interval": "SPREAD",
+      "busy": "SPREAD",
+      "off_turn": "SPREAD",
+      "tick": "SPREAD",
+      "tasks": "SPREAD",
       "gpu": "SPREAD",
-      "sched": "SPREAD",
-      "chunks": "SPREAD",
-      "phases": "PHASES * SPREAD",
-      "gpu_spans": "GPU_SPAN_NAMES * SPREAD",
-      "per_s_runs": 1,
-      "per_s_bakes": 1,
-      "backlog_s": 1,
-      "backlog_per_s_runs": 1,
-      "backlog_per_s_bakes": 1,
-      "chunks_per_bake": 1,
-      "mounts_added": 1,
-      "mounts_removed": 1,
-      "used_delta_mb": 1,
+      "phases_p95": "PHASES",
+      "gpu_spans_p95": "GPU_SPAN_NAMES",
+      "gpu_spans_max": "GPU_SPAN_NAMES",
+      "kinds": "FRAME_KINDS",
+      "wakes": "WAKES",
+      "heap_used_delta_bytes": 1,
       "census": "2 * CENSUS_TAGS",
-      "zoom_tris": "LIMITS.ZOOMS",
       "last": "FRAME"
+    },
+    "open": {
+      "$doc": [
+        "The interval in progress, which no frame turn has closed yet: its turns and their time, rise to fall. A settled view's turns are here, if any run."
+      ],
+      "turns": 1,
+      "busy_ms": 1
     },
     "tasks": {
       "slots": "STREAM_NAMES * TASK_SUMMARY"
     },
     "counters": {
-      "faces_kept": 1,
-      "faces_possible": 1,
-      "runs_culled": 1,
-      "runs_total": 1,
-      "coarse_boxes": 1,
-      "coarse_low_fill": 1,
-      "built_runs": 1,
-      "built_bakes": 1,
-      "built_starved": 1,
+      "$doc": [
+        "Counts since the window began, its baseline taken off: a settled view moves none of them."
+      ],
       "sheet_repacks": 1,
-      "sheet_uploads": 1
+      "sheet_uploads": 1,
+      "terrain_admitted": 1,
+      "terrain_evicted": 1
     },
     "sheet": {
       "size": 1,
@@ -342,55 +279,19 @@
       "used_px": 1,
       "initial": 1
     },
-    "held": {
-      "run_sets": 1,
-      "run_set_mb": 1,
-      "tiers": 1,
-      "decor_blocks": 1,
-      "decor_instances": 1,
-      "decor_bytes": 1
-    },
     "fetch": {
-      "queued": 1,
-      "running": 1,
       "credits": 1
-    },
-    "peak": {
-      "present": 1,
-      "dt_ms": 1,
-      "sched_ms": 1,
-      "chunks_ms": 1,
-      "gpu_ms": 1,
-      "draw_calls": 1,
-      "triangles": 1,
-      "q_terrain": 1,
-      "q_place": 1,
-      "chunks": 1,
-      "in_frustum": 1,
-      "pending": 1,
-      "settling": 1,
-      "offscreen_pending": 1,
-      "oldest_release_ms": 1,
-      "oldest_visible_ms": 1,
-      "fine_peak": 1,
-      "coarse_peak": 1
     },
     "steps": {
       "count": 1,
       "slots": "LIMITS.STEP_SLOTS * STEP"
     },
     "quality": {
-      "step": 1,
-      "star": 1,
-      "frames_held": 1,
-      "admitted": 1,
-      "evicted": 1,
-      "refined": 1,
-      "changes_peak": 1
+      "frames_held": 1
     },
     "view": {
       "$doc": [
-        "Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, as zooms: `cell_want` the camera grid's cell the view wants there, at the distance it is met at, and `cell_drawn` the cells of the chunk drawn there now, coarser while the finer is on its way."
+        "Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at."
       ],
       "dist": 1,
       "polar": 1,
@@ -405,18 +306,24 @@
       "hover_lon": 1,
       "hover_lat": 1,
       "hover_alt": 1,
-      "cell_want": 1,
-      "cell_drawn": 1
+      "cell_want": 1
     }
   },
   "READ": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count."
+      "What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words."
     ],
     "summary_at": 1,
-    "summary_words": 1,
+    "summary_words": 1
+  },
+  "RINGS": {
+    "$type": "u32",
+    "$packed": true,
+    "$doc": [
+      "What PROFILER_RINGS answers with the address of: u32 words, each ring's address in the module's memory and its record count."
+    ],
     "frames_at": 1,
     "frames_count": 1,
     "tasks_at": 1,

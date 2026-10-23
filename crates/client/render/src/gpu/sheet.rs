@@ -7,8 +7,9 @@
 pub mod shelf;
 
 use crate::frame::shader::record::PIPELINE_SHEET;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, room, texture_usage, Gpu, Stamp};
-use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, write_buffer_bytes, write_texture_bytes, Format, Gpu, Load};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::PAD;
 use crate::gpu::text::{Font, Raster, TextOf};
@@ -174,10 +175,9 @@ pub struct SheetPainter {
 
 impl SheetPainter {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> SheetPainter {
-        let sampler = object();
-        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
+        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::clamp_to_edge, None, 1);
         SheetPainter {
-            built: pipelines.build(g, PIPELINE_SHEET, format::RGBA8_SRGB),
+            built: pipelines.build(g, PIPELINE_SHEET, Format::rgba8unorm_srgb),
             sampler,
         }
     }
@@ -192,20 +192,13 @@ impl SheetPainter {
             rasters.push(r);
         }
         let icons: Vec<Vec<u8>> = sketch.icons.iter().map(|i| tinted(i.symbol, i.color)).collect();
-        // The text's and the icons' pixels and the shapes', which go into the stream whole.
         let drawn = rasters.len() + icons.len();
-        let payload = rasters.iter().map(|r| r.pixels.len()).chain(icons.iter().map(Vec::len)).sum::<usize>() + (sketch.shapes.len() + drawn) * SHAPE_FLOATS * 4;
-        if !room(payload as u32) {
-            return false;
-        }
         let [x, y, w, h] = rect;
 
         let icon_side = if icons.is_empty() { 1 } else { SYMBOL_PX };
         let layer_w = rasters.iter().map(|r| r.width).max().unwrap_or(1).max(icon_side);
         let layer_h = rasters.iter().map(|r| r.height).max().unwrap_or(1).max(icon_side);
         let layers = (drawn as u32).max(1);
-        let lines = object();
-        g.texture(lines, layer_w, layer_h, layers, format::RGBA8_SRGB, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST);
         let mut shapes = sketch.shapes.clone();
         let placed: Vec<([f32; 4], [f32; 4])> = sketch
             .lines
@@ -213,7 +206,6 @@ impl SheetPainter {
             .zip(&rasters)
             .enumerate()
             .map(|(layer, (line, r))| {
-                g.write_texture(lines, layer as u32, r.width, r.height, r.pixels);
                 let start = match line.align {
                     Align::Left => px(line.at[0]),
                     Align::Center => px(line.at[0]) - r.advance / 2.0,
@@ -243,40 +235,42 @@ impl SheetPainter {
         for &(place, cover) in &placed {
             shapes.push(shape(TEXT, place, 0, cover, [0.0; 2]));
         }
-        for (k, (icon, pixels)) in sketch.icons.iter().zip(&icons).enumerate() {
+        for (k, icon) in sketch.icons.iter().enumerate() {
             let layer = (rasters.len() + k) as u32;
-            g.write_texture(lines, layer, SYMBOL_PX, SYMBOL_PX, pixels);
             let half = SYMBOL_PX as f32 / 2.0;
             let (x0, y0) = (round(px(icon.at[0]) - half), round(px(icon.at[1]) - half));
             let place = [x0, y0, x0 + SYMBOL_PX as f32, y0 + SYMBOL_PX as f32];
             let cover = [layer as f32, SYMBOL_PX as f32 / layer_w as f32, SYMBOL_PX as f32 / layer_h as f32, 0.0];
             shapes.push(shape(TEXT, place, 0, cover, [0.0; 2]));
         }
-        let lines_view = object();
-        g.view(lines_view, lines, dimension::D2_ARRAY, 0, 1, 0, layers);
-
-        let size = object();
-        g.buffer(size, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        g.write_buffer(size, 0, bytes(&[w as f32, h as f32, 0.0, 0.0]));
-        let instances = object();
+        // What goes into the stream whole, asked of it at once: the text's and
+        // the icons' pixels, the size and the shapes, as their writers measure them.
+        let size_bytes = [w as f32, h as f32, 0.0, 0.0];
         let instance_bytes = bytes(shapes.as_flattened());
-        g.buffer(instances, instance_bytes.len().max(16) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let pixels = rasters.iter().map(|r| r.pixels).chain(icons.iter().map(Vec::as_slice));
+        if !room(pixels.map(write_texture_bytes).sum::<usize>() + write_buffer_bytes(bytes(&size_bytes)) + write_buffer_bytes(instance_bytes)) {
+            return false;
+        }
+        let lines = g.texture(layer_w, layer_h, layers, Format::rgba8unorm_srgb, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST);
+        for (layer, r) in rasters.iter().enumerate() {
+            g.write_texture(lines, layer as u32, r.width, r.height, r.pixels);
+        }
+        for (k, pixels) in icons.iter().enumerate() {
+            g.write_texture(lines, (rasters.len() + k) as u32, SYMBOL_PX, SYMBOL_PX, pixels);
+        }
+        let lines_view = g.view(lines, true, 0, 1, 0, layers);
+
+        let size = g.buffer(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.write_buffer(size, 0, bytes(&size_bytes));
+        let instances = g.buffer(instance_bytes.len().max(16) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(instances, 0, instance_bytes);
 
-        let entry_group = object();
-        let mut e = [0u32; 10];
-        e[..5].copy_from_slice(&buffer_entry(0, size));
-        e[5..].copy_from_slice(&buffer_entry(1, instances));
-        g.bind_group(entry_group, self.built.layouts[0], &e);
-        let lines_group = object();
-        g.bind_group(lines_group, self.built.layouts[1], &[0, resource::VIEW, lines_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
+        let entry_group = g.bind_group(self.built.layouts[0], &[buffer_entry(0, size), buffer_entry(1, instances)]);
+        let lines_group = g.bind_group(self.built.layouts[1], &[view_entry(0, lines_view), sampler_entry(1, self.sampler)]);
 
-        let target = object();
-        g.texture(target, w, h, 1, format::RGBA8_SRGB, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::COPY_SRC);
-        let target_view = object();
-        g.view(target_view, target, dimension::D2, 0, 1, 0, 1);
-        let pass = object();
-        g.pass(pass, encoder, &pass_desc(target_view, load::CLEAR, 0, load::CLEAR, 0.0, Stamp::UNTIMED));
+        let target = g.texture(w, h, 1, Format::rgba8unorm_srgb, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::COPY_SRC);
+        let target_view = g.view(target, false, 0, 1, 0, 1);
+        let pass = g.pass(encoder, &pass_desc(target_view, Load::Clear, 0, Load::Clear, 0.0, None));
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, entry_group, &[]);
         g.set_bind_group(pass, 1, lines_group, &[]);

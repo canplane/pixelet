@@ -1,15 +1,16 @@
 // pxl-render/gpu/ao.rs
 
-//! Screen-space occlusion (N8AO), switchable beside the chunk's own corner
-//! occlusion: a depth prepass, then downsample, sample, denoise twice and
+//! Screen-space occlusion (N8AO), switchable beside a face's own corner
+//! occlusion (paint.wgsl `occlusion_of`): a depth prepass, then downsample, sample, denoise twice and
 //! upsample to a one-byte map every lit pass reads at group 0 binding 7.
 //! About 11 bytes a pixel and one extra geometry pass.
 
-use pxl_spec::space::coord::mat4::{mat4_invert, Mat4};
+use pxl_spec::space::coord::mat4::{self, Mat4};
 
 use crate::frame::shader::record::{PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE, PIPELINE_AO_UPSAMPLE};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
-use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+
+use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, Stamp};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_mat;
 
@@ -57,25 +58,18 @@ impl ScreenAo {
     }
 
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32, frame_buffer: u32) -> ScreenAo {
-        let blank = object();
-        g.texture(blank, 1, 1, 1, format::R8, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST);
+        let blank = g.texture(1, 1, 1, Format::r8unorm, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST);
         g.write_texture(blank, 0, 1, 1, &[255]);
-        let blank_view = object();
-        g.view(blank_view, blank, dimension::D2, 0, 1, 0, 1);
-        let noise = object();
-        g.texture(noise, NOISE_SIDE, NOISE_SIDE, 1, format::RGBA8, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST);
+        let blank_view = g.view(blank, false, 0, 1, 0, 1);
+        let noise = g.texture(NOISE_SIDE, NOISE_SIDE, 1, Format::rgba8unorm, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST);
         g.write_texture(noise, 0, NOISE_SIDE, NOISE_SIDE, NOISE);
-        let noise_view = object();
-        g.view(noise_view, noise, dimension::D2, 0, 1, 0, 1);
-        let uniform = object();
-        g.buffer(uniform, word_bytes(AO_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let noise_view = g.view(noise, false, 0, 1, 0, 1);
+        let uniform = g.buffer(word_bytes(AO_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let stride = 16u32.max(align);
-        let run = object();
-        g.buffer(run, stride * 2, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let run = g.buffer(stride * 2, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         g.write_buffer(run, 0, bytes(&[0.0f32, 0.0, 0.0, 0.0]));
         g.write_buffer(run, stride, bytes(&[1.0f32, 0.0, 0.0, 0.0]));
-        let sampler = object();
-        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
+        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::clamp_to_edge, None, 1);
         ScreenAo {
             blank_view,
             noise_view,
@@ -85,10 +79,10 @@ impl ScreenAo {
             run,
             stride,
             sampler,
-            downsample: pipelines.build(g, PIPELINE_AO_DOWNSAMPLE, format::RGBA32F),
-            sample: pipelines.build(g, PIPELINE_AO_SAMPLE, format::CANVAS),
-            blur: pipelines.build(g, PIPELINE_AO_BLUR, format::CANVAS),
-            upsample: pipelines.build(g, PIPELINE_AO_UPSAMPLE, format::R8),
+            downsample: pipelines.build(g, PIPELINE_AO_DOWNSAMPLE, Format::rgba32float),
+            sample: pipelines.build(g, PIPELINE_AO_SAMPLE, g.canvas()),
+            blur: pipelines.build(g, PIPELINE_AO_BLUR, g.canvas()),
+            upsample: pipelines.build(g, PIPELINE_AO_UPSAMPLE, Format::r8unorm),
             width: 0,
             height: 0,
             depth: 0,
@@ -103,18 +97,18 @@ impl ScreenAo {
         }
     }
 
-    pub fn entry(&self, binding: u32) -> [u32; 5] {
-        [binding, resource::VIEW, if self.map_view != 0 { self.map_view } else { self.blank_view }, 0, 0]
+    pub fn entry(&self, binding: u32) -> Entry {
+        view_entry(binding, if self.map_view != 0 { self.map_view } else { self.blank_view })
     }
 
-    pub fn blank_entry(&self, binding: u32) -> [u32; 5] {
-        [binding, resource::VIEW, self.blank_view, 0, 0]
+    pub fn blank_entry(&self, binding: u32) -> Entry {
+        view_entry(binding, self.blank_view)
     }
 
     pub fn lay_out(&mut self, g: &Gpu, proj: &Mat4, width: u32, height: u32) {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
-        mat4_invert(&mut inv, proj);
+        mat4::invert(&mut inv, proj);
         put_mat(u, 0, proj);
         put_mat(u, 16, &inv);
         u[HALF] = (width / 2) as f32;
@@ -130,37 +124,28 @@ impl ScreenAo {
         self.release_images();
         let (hw, hh) = ((width / 2).max(1), (height / 2).max(1));
         let attach = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-        self.depth = object();
-        g.texture(self.depth, width, height, 1, format::DEPTH32, 1, attach);
-        self.depth_view = object();
-        g.view(self.depth_view, self.depth, dimension::D2, 0, 1, 0, 1);
-        self.half = object();
-        g.texture(self.half, hw, hh, 1, format::RGBA32F, 1, attach);
-        self.half_view = object();
-        g.view(self.half_view, self.half, dimension::D2, 0, 1, 0, 1);
+        self.depth = g.texture(width, height, 1, Format::depth32float, 1, attach);
+        self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);
+        self.half = g.texture(hw, hh, 1, Format::rgba32float, 1, attach);
+        self.half_view = g.view(self.half, false, 0, 1, 0, 1);
         for k in 0..2 {
-            self.ping[k] = object();
-            g.texture(self.ping[k], hw, hh, 1, format::CANVAS, 1, attach);
-            self.ping_view[k] = object();
-            g.view(self.ping_view[k], self.ping[k], dimension::D2, 0, 1, 0, 1);
+            self.ping[k] = g.texture(hw, hh, 1, g.canvas(), 1, attach);
+            self.ping_view[k] = g.view(self.ping[k], false, 0, 1, 0, 1);
         }
-        self.map = object();
-        g.texture(self.map, width, height, 1, format::R8, 1, attach);
-        self.map_view = object();
-        g.view(self.map_view, self.map, dimension::D2, 0, 1, 0, 1);
+        self.map = g.texture(width, height, 1, Format::r8unorm, 1, attach);
+        self.map_view = g.view(self.map, false, 0, 1, 0, 1);
         self.width = width;
         self.height = height;
 
-        let view = |binding: u32, id: u32| [binding, resource::VIEW, id, 0, 0];
-        let sampler = [4, resource::SAMPLER, self.sampler, 0, 0];
-        let run = [5, resource::BUFFER, self.run, 0, self.stride];
+        let view = view_entry;
+        let sampler = sampler_entry(4, self.sampler);
+        let run = buffer_range_entry(5, self.run, 0, self.stride);
         // The AO's uniform at 6; the frame's at 0 where a pass reads the screen's size or the fog.
-        let group = |layout: u32, frame: bool, between: &[[u32; 5]]| {
-            let id = object();
+        let group = |layout: u32, frame: bool, between: &[Entry]| {
             let frame = frame.then(|| buffer_entry(0, self.frame_buffer));
-            let e: Vec<u32> = frame.iter().chain(between).chain(&[buffer_entry(6, self.uniform)]).flatten().copied().collect();
-            g.bind_group(id, layout, &e);
-            id
+            let e: Vec<Entry> = frame.iter().chain(between).chain(&[buffer_entry(6, self.uniform)]).copied().collect();
+
+            g.bind_group(layout, &e)
         };
         let g0 = group(self.downsample.layouts[0], true, &[view(1, self.depth_view)]);
         let g1 = group(self.sample.layouts[0], false, &[view(1, self.half_view), view(2, self.noise_view)]);
@@ -202,9 +187,7 @@ impl ScreenAo {
     }
 
     pub fn begin_prepass(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> u32 {
-        let pass = object();
-        g.pass(pass, encoder, &pass_desc(0, load::CLEAR, self.depth_view, load::CLEAR, 0.0, stamp.pass()));
-        pass
+        g.pass(encoder, &pass_desc(0, Load::Clear, self.depth_view, Load::Clear, 0.0, stamp.pass()))
     }
 
     pub fn run(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) {
@@ -216,8 +199,7 @@ impl ScreenAo {
             (self.upsample.pipeline, self.groups[4], self.map_view, 0),
         ];
         for (k, &(pipeline, group, target, offset)) in steps.iter().enumerate() {
-            let pass = object();
-            g.pass(pass, encoder, &pass_desc(target, load::CLEAR, 0, load::CLEAR, 0.0, stamp.pass()));
+            let pass = g.pass(encoder, &pass_desc(target, Load::Clear, 0, Load::Clear, 0.0, stamp.pass()));
             g.set_pipeline(pass, pipeline);
             if k == 2 || k == 3 {
                 g.set_bind_group(pass, 0, group, &[offset]);
@@ -226,7 +208,6 @@ impl ScreenAo {
             }
             g.draw(pass, 3, 1, 0, 0);
             g.end(pass);
-            release(pass);
         }
     }
 }

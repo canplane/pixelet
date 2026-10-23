@@ -4,24 +4,23 @@
 //! is known of what a box of the world holds.
 
 use crate::io::demand::Order;
+use pxl_spec::space::layer::lattice::demand_reach;
 
 use pxl_spec::space::camera::eye::{Frustum, Observation};
-use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::camera::grid::{Tau, CHUNK_STEPS};
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::hierarchy::tree::{region, Node};
-use pxl_spec::space::layer::demand::band;
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::layer::residency::floor;
-use crate::layer::{Answer, Query};
+use crate::layer::residency::{floor, Lines};
 use crate::query::World;
 use crate::view::frame::pose::globe;
 use crate::view::frame::pose::view;
 use crate::view::reach::{eye_height, reach_at};
-use crate::view::sight::Footprint;
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::Zoom;
 
 pub fn eye() -> Option<V3> {
     Some(view().pose?.eye)
@@ -40,80 +39,99 @@ pub fn observation() -> Option<Observation> {
     Some(Observation {
         eye,
         frustum: Some(frustum_of_view()),
-        reach: GROUND.demand_reach(top),
+        reach: demand_reach(GROUND, top),
         fog: reach_at(eye[2]),
         planet: globe().radius_u(),
         ground: eye[2] - height,
     })
 }
 
-/// Where anything stands in a node as the world answers it at `cell`: none
-/// where nothing does, the whole node where nothing is known.
-pub fn within<const D: usize>(node: Node<D>, cell: Zoom) -> Option<Aabb> {
-    match World::now().bounds(node, cell) {
-        Answer::Nothing(_) => Some(region(node)),
-        held => held.value().flatten().map(|b| b.aabb),
+/// The cubes `CHUNK_STEPS` zooms over the cells a reader draws, the ground
+/// about the eye cut into one partition: from the coarsest squares within the
+/// far edge, a square splits into its four while its nearest point is nearer
+/// than its cell zoom's split distance (`Tau::split_distance`), the rule a
+/// ray's descent asks by, taken about the eye's height; each square left is
+/// at the zoom its nearest point asks, and in each, the cubes the world stands
+/// in there. A function of the eye and the world alone, never of what a ray
+/// met; a column it knows nothing of yet names none, as nothing there is to
+/// stand in.
+pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
+    let Some(top) = floor::top() else { return };
+    let over = (o.eye[2] - o.ground).max(0.0);
+    let coarsest = GROUND.grid_zoom(top.max(GROUND.top())).max(CHUNK_STEPS);
+    let near = |zoom: Zoom, [x, y]: [i64; 2]| {
+        let side = units(zoom);
+        let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);
+        libm::hypot(libm::hypot(gap(x as f64 * side, o.eye[0]), gap(y as f64 * side, o.eye[1])), over)
+    };
+    let zoom = coarsest - CHUNK_STEPS;
+    let flat = (o.far() * o.far() - over * over).max(0.0).sqrt();
+    let mut stack: Vec<(Zoom, [i64; 2])> = squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)).collect();
+    // Depth first, so each square's ground line steps from its neighbour's.
+    let (world, mut lines) = (World::now(), Lines::default());
+    while let Some((zoom, xy)) = stack.pop() {
+        let (cell, d) = (zoom + CHUNK_STEPS, near(zoom, xy));
+        if d > o.far() {
+            continue;
+        }
+        if cell < GROUND.cell() && d < tau.split_distance(cell) {
+            stack.extend((0..4).map(|k| (zoom + 1, [2 * xy[0] + (k & 1), 2 * xy[1] + (k >> 1)])));
+            continue;
+        }
+        let Some(b) = world.bounds(&mut lines, (zoom, xy), cell).value().flatten() else { continue };
+        let side = units(zoom);
+        for z in (b.aabb.min[2] / side).floor() as i64..=(b.aabb.max[2] / side).floor() as i64 {
+            each((zoom, [xy[0], xy[1], z]));
+        }
     }
 }
 
-/// The estimator from what the screen's patches saw: the ground their footprints touch
-/// at each zoom whose band holds it, plus what their rays lacked. Ground no
-/// ray reaches is left to the floor. A lack is recast when it arrives, so
-/// requirements grow toward what exact records would give and never rest
-/// short of it.
-pub struct ByFootprints<'a> {
+/// The cell zoom the eye's rays draw at `at`: the camera grid's rule at its
+/// distance (`Tau::cell_at`), no coarser than a tile draws and no finer than
+/// the ground's cells.
+pub fn cell_at(o: &Observation, tau: Tau, at: V3) -> Option<Zoom> {
+    let top = floor::top()?;
+    let d = pxl_spec::space::coord::v3::len(&pxl_spec::space::coord::v3::sub(&at, &o.eye));
+    Some(tau.cell_at(d).clamp(GROUND.grid_zoom(top.max(GROUND.top())), GROUND.cell()))
+}
+
+/// How far from the eye a layer's tiles at `zoom` are asked for: at the
+/// source's `top` the floor's (residency/floor.rs `ring`), past it the
+/// zoom's band (pxl-spec layer/demand.rs `band`); none past the far edge.
+pub fn reach(o: &Observation, tau: Tau, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {
+    if zoom == top {
+        return floor::ring(o);
+    }
+    band(o, tau, lattice, top, zoom).map(|(_, to)| to)
+}
+
+/// What the view asks a layer for: at each zoom under the source's top, which
+/// the floor holds, to the leaves, every tile within `reach` of the eye. It
+/// is a function of the eye alone, never of what the rays met, so what is
+/// asked, and so what is read, cannot depend on what was held before: the
+/// rays only see it arrive.
+pub struct ByEye {
     pub tau: Tau,
     /// The layer's, whose tiles' cells say which zoom a distance asks for.
     pub lattice: Lattice,
     /// The coarsest zoom the source supplies whole; no requirement is coarser.
     pub top: Zoom,
-    pub footprints: &'a [Footprint],
-    pub lacks: &'a [Tile],
 }
 
-impl ByFootprints<'_> {
-    /// The tiles required: each at a zoom whose band holds what its column
-    /// is known to hold, as `at` reads at that zoom's cells.
+impl ByEye {
     pub fn requirements(&self, o: &Observation, each: &mut dyn FnMut(Tile)) {
-        let required = |zoom: Zoom, at: Node<2>| {
-            let Some((from, to)) = band(o, self.tau, self.lattice, self.top, zoom) else { return false };
-            let Some(held) = within(at, self.lattice.grid_zoom(zoom)) else { return false };
-            let m = o.measure(&held);
-            m.seen && m.near < to && m.near <= o.far() && m.far >= from
-        };
-        for &lack in self.lacks {
-            let line = std::iter::successors(Some(lack), |q| (q.zoom > self.top).then(|| q.parent()));
-            if let Some(p) = line.into_iter().find(|q| required(q.zoom, lack.node())) {
-                each(p);
-            }
-        }
-        for f in self.footprints {
-            let b = f.aabb();
-            for zoom in (self.top..=LEAF_ZOOM).rev() {
-                let Some((_, to)) = band(o, self.tau, self.lattice, self.top, zoom) else { break };
-                let reach = to.min(o.far());
-                let lo = [b.min[0].max(o.eye[0] - reach), b.min[1].max(o.eye[1] - reach)];
-                let hi = [b.max[0].min(o.eye[0] + reach), b.max[1].min(o.eye[1] + reach)];
-                if lo[0] > hi[0] || lo[1] > hi[1] {
-                    continue;
-                }
-                let span = units(zoom);
-                let rows = |k: usize| (lo[k] / span).floor() as i64..=(hi[k] / span).floor() as i64;
-                for y in rows(1).filter(|y| tile_rows(zoom).contains(y)) {
-                    for x in rows(0) {
-                        let p = tile_at(zoom, [x, y]);
-                        if f.touches(&p.region()) && required(zoom, p.node()) {
-                            each(p);
-                        }
-                    }
-                }
+        for zoom in self.top + 1..=LEAF_ZOOM {
+            if let Some(r) = reach(o, self.tau, self.lattice, self.top, zoom) {
+                tiles_within(zoom, [o.eye[0], o.eye[1]], r).for_each(&mut *each);
             }
         }
     }
 }
 
-/// A layer's tile's order, read in the grid's cells its own fold into: all
-/// of it where nothing is known.
-pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile) -> Order {
-    Order::of(o, &within(p.node(), lattice.grid_zoom(p.zoom)).unwrap_or(p.region()))
+/// A layer's tile's order, from where anything stands in it as the grid's
+/// cells its own fold into read it, its ground's line stepped from where
+/// `lines` last walked: all of it where nothing is known or nothing stands.
+pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, lines: &mut Lines) -> Order {
+    let stands = World::now().bounds(lines, p.node(), lattice.grid_zoom(p.zoom));
+    Order::of(o, &stands.value().flatten().map_or(p.region(), |b| b.aabb))
 }

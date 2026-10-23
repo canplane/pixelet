@@ -53,7 +53,7 @@ pub const fn marker_cell(cell: Zoom) -> i32 {
 /// where it is finer.
 pub fn marker_cell_of(cell: Zoom, at: EntryAt) -> (Zoom, [i64; 3]) {
     let z = (marker_cell(cell).max(0) as Zoom).min(at.zoom());
-    (z, ancestor_of(at.at(), u32::from(at.zoom() - z)))
+    (z, ancestor_of(at.at(), at.zoom() - z))
 }
 
 /// Whether a marker shows where the camera grid's cell is at `cell`: its
@@ -64,12 +64,6 @@ pub const fn marker_shows(cell: Zoom) -> bool {
 
 pub fn object_value_is_marker(value: u32) -> bool {
     kind_of(value) == Some(Kind::marker)
-}
-
-/// Whether a leaf is drawn as a voxel (a placeable cube or air) rather than
-/// an instance or nothing.
-pub fn object_value_is_voxel(value: u32) -> bool {
-    object_value_is_air(value) || cube_of(value).is_some()
 }
 
 pub fn decor_num_id(id: DecorId) -> u32 {

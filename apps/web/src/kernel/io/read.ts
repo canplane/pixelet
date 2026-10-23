@@ -38,9 +38,10 @@ async function get(url: string, name: string, signal: AbortSignal): Promise<U8Ar
 }
 
 /**
- * A body still packed means the browser cannot decode the stored encoding;
- * the Worker cannot refuse it there, since Cloudflare rewrites
- * `accept-encoding` before the Worker sees it.
+ * A body still packed means the transport did not decode the stored
+ * encoding: a browser that cannot, which the Worker cannot refuse, since
+ * Cloudflare rewrites `accept-encoding` before the Worker sees it; or a
+ * device whose own decode (platform/origin.ts) was skipped.
  */
 function packed(body: U8Array): boolean {
   return (body[0] === 0x28 && body[1] === 0xb5) || (body[0] === 0x1f && body[1] === 0x8b);

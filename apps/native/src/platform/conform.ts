@@ -14,7 +14,6 @@ import type * as WebDevice from "../../../web/src/platform/web/device.ts";
 import type * as WebIcon from "../../../web/src/platform/web/icon.tsx";
 import type * as WebGesture from "../../../web/src/platform/web/gesture.ts";
 import type * as WebGpu from "../../../web/src/platform/web/gpu.ts";
-import type * as WebImage from "../../../web/src/platform/web/image.ts";
 import type * as WebLocale from "../../../web/src/platform/web/locale.ts";
 import type * as WebMotion from "../../../web/src/platform/web/motion.tsx";
 import type * as WebOrigin from "../../../web/src/platform/web/origin.ts";
@@ -41,7 +40,6 @@ import * as Device from "./device.ts";
 import * as Icon from "./icon.tsx";
 import * as Gesture from "./gesture.ts";
 import * as Gpu from "./gpu.ts";
-import * as Image from "./image.ts";
 import * as Locale from "./locale.ts";
 import * as Motion from "./motion.tsx";
 import * as Origin from "./origin.ts";
@@ -77,7 +75,6 @@ export const CONFORMS = [
   Icon satisfies typeof WebIcon,
   Gesture satisfies typeof WebGesture,
   Gpu satisfies typeof WebGpu,
-  Image satisfies typeof WebImage,
   Locale satisfies typeof WebLocale,
   Motion satisfies typeof WebMotion,
   Origin satisfies typeof WebOrigin,

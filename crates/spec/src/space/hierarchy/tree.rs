@@ -12,7 +12,7 @@ use crate::space::coord::zoom::{units, Zoom};
 pub type Node<const D: usize> = (Zoom, [i64; D]);
 
 /// The box a node stands for: a cube in three axes, and in fewer the column
-/// over every axis it does not name, as far as the lanes reach.
+/// over every axis it does not name, as far as the world reaches.
 pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
     let side = units(zoom);
     let mut b = REACH;
@@ -23,7 +23,7 @@ pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
     b
 }
 
-/// A floor on the signed lanes.
+/// A floor on the signed axes.
 pub fn parent_of<const D: usize>(at: [i64; D]) -> [i64; D] {
     at.map(|v| v.div_euclid(2))
 }
@@ -61,9 +61,9 @@ pub fn first_descendant_of<const D: usize>(at: [i64; D], steps: u32) -> [i64; D]
 /// Whether two nodes overlap; in one hierarchy they nest or are apart.
 pub fn share<const D: usize>((a_zoom, a): Node<D>, (b_zoom, b): Node<D>) -> bool {
     if a_zoom >= b_zoom {
-        ancestor_of(a, u32::from(a_zoom - b_zoom)) == b
+        ancestor_of(a, a_zoom - b_zoom) == b
     } else {
-        ancestor_of(b, u32::from(b_zoom - a_zoom)) == a
+        ancestor_of(b, b_zoom - a_zoom) == a
     }
 }
 

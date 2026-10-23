@@ -5,8 +5,8 @@ struct Atmosphere {
   bottom_radius: f32,
   ozone_absorption: vec3f,
   top_radius: f32,
-  // A sun overhead at sea level as white.
-  white: vec3f,
+  // Free.
+  white_free: vec3f,
   rayleigh_scale_height: f32,
   sun_dir: vec3f,
   mie_scattering: f32,
@@ -24,20 +24,14 @@ struct Atmosphere {
   shown_fall: f32,
   moon_dir: vec3f,
   moon_light: f32,
-  // The same for every pixel.
-  sun_seen: vec3f,
+  // Free.
+  free: vec3f,
   // Radians; the latitude is the frame's globe's.
   center_lon: f32,
   // Lights the ground, never drawn: drawn, the sky went pale blue.
   night_sky: vec3f,
   // The Earth's face under the eye: at sea level the terrain floated on it.
   land_altitude_km: f32,
-  cloud_base: vec2u,
-  cloud_frac: vec2f,
-  cloud_count: u32,
-  cloud_altitude_km: f32,
-  // Cells the field has moved under the map.
-  cloud_drift: vec2f,
   // A lit city's radiance where the picture holds all of it.
   city_light: vec3f,
   // In units.
@@ -49,7 +43,7 @@ struct Atmosphere {
 };
 
 // The test holds both to the host's (gpu/atmosphere.rs).
-const ATMOS_VEC4S: u32 = 15u;
+const ATMOS_VEC4S: u32 = 13u;
 const EARTH_TILE_BITS: u32 = 4u;
 
 // Field by field, never as a struct: a struct lost Safari's WebGPU its GPU process.
@@ -59,7 +53,6 @@ fn atmos_rayleigh_scattering() -> vec3f { return atmos_words[0].xyz; }
 fn atmos_bottom_radius() -> f32 { return atmos_words[0].w; }
 fn atmos_ozone_absorption() -> vec3f { return atmos_words[1].xyz; }
 fn atmos_top_radius() -> f32 { return atmos_words[1].w; }
-fn atmos_white() -> vec3f { return atmos_words[2].xyz; }
 fn atmos_rayleigh_scale_height() -> f32 { return atmos_words[2].w; }
 fn atmos_sun_dir() -> vec3f { return atmos_words[3].xyz; }
 fn atmos_mie_scattering() -> f32 { return atmos_words[3].w; }
@@ -77,19 +70,13 @@ fn atmos_night_stops() -> f32 { return atmos_words[6].z; }
 fn atmos_shown_fall() -> f32 { return atmos_words[6].w; }
 fn atmos_moon_dir() -> vec3f { return atmos_words[7].xyz; }
 fn atmos_moon_light() -> f32 { return atmos_words[7].w; }
-fn atmos_sun_seen() -> vec3f { return atmos_words[8].xyz; }
 fn atmos_center_lon() -> f32 { return atmos_words[8].w; }
 fn atmos_night_sky() -> vec3f { return atmos_words[9].xyz; }
 fn atmos_land_altitude_km() -> f32 { return atmos_words[9].w; }
-fn atmos_cloud_base() -> vec2u { return bitcast<vec2u>(atmos_words[10].xy); }
-fn atmos_cloud_frac() -> vec2f { return atmos_words[10].zw; }
-fn atmos_cloud_count() -> u32 { return bitcast<u32>(atmos_words[11].x); }
-fn atmos_cloud_altitude_km() -> f32 { return atmos_words[11].y; }
-fn atmos_cloud_drift() -> vec2f { return atmos_words[11].zw; }
-fn atmos_city_light() -> vec3f { return atmos_words[12].xyz; }
-fn atmos_earth_reach() -> f32 { return atmos_words[12].w; }
-fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[13]); }
-fn atmos_earth_tiles() -> vec4u { return bitcast<vec4u>(atmos_words[14]); }
+fn atmos_city_light() -> vec3f { return atmos_words[10].xyz; }
+fn atmos_earth_reach() -> f32 { return atmos_words[10].w; }
+fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[11]); }
+fn atmos_earth_tiles() -> vec4u { return bitcast<vec4u>(atmos_words[12]); }
 
 
 /* the medium */

@@ -6,12 +6,13 @@
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
-use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::abi::handle::Slots;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
 use crate::model::registry::{blend, Models};
+use crate::scene::frame::Frame;
 
 /// The companion's and the display cases'.
 pub const ACTORS_MAX: usize = crate::scene::character::companion::ACTORS_MAX + crate::scene::character::preview::CASES_MAX;
@@ -37,17 +38,19 @@ pub struct Actor {
     palette_handle: u32,
     local: Vec<[f32; 10]>,
     global: Vec<[f32; 16]>,
+    /// Its palette shows its clips at their clocks: posed again only where
+    /// it moves where it is seen, or where it does not show them.
+    posed: bool,
 }
 
 #[derive(Default)]
 pub struct Actors {
-    actors: Slots<Actor>,
+    actors: Slots<Actor, { ACTORS_MAX + 1 }>,
     from: Vec<[f32; 10]>,
 }
 
 impl Actors {
     pub fn new_actor(&mut self, draw: &mut DrawList, models: &Models, model: u32) -> Option<u32> {
-        xpute_kit::ensure!(self.actors.iter().count() < ACTORS_MAX, ENOTRECOVERABLE);
         let joints = models.get(model)?.joints();
         let palette_bytes = word_bytes(joints.max(1) * 16);
         let (palette_at, palette_bytes) = alloc(palette_bytes)?;
@@ -76,6 +79,7 @@ impl Actors {
             palette_handle,
             local: vec![[0.0; 10]; joints],
             global: vec![[0.0; 16]; joints],
+            posed: false,
         };
         Some(self.actors.insert(actor))
     }
@@ -96,6 +100,7 @@ impl Actors {
         }
         a.previous = a.current;
         a.current = Some(Playing { clip, time: 0.0 });
+        a.posed = false;
         a.fade = 0.0;
         a.fade_len = if a.previous.is_some() { fade_s.max(0.0) } else { 0.0 };
     }
@@ -110,35 +115,61 @@ impl Actors {
 
     /// Whether any actor plays a clip of some length: the only thing that asks
     /// for the next frame.
-    pub fn tick(&mut self, draw: &mut DrawList, models: &Models, dt: f32) -> bool {
+    /// Every actor's clock advanced; true where one the eye can see moves: in
+    /// the view and a cell of the camera grid across or more, as the rays
+    /// observe nothing smaller, and its clip moving it a cell or more, or
+    /// fading into the next. So a frame is asked only for what can be seen to
+    /// change. A clip moving it less holds its time and its pose until the eye
+    /// comes close enough to see it move.
+    pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
+        let dt = frame.delta_s as f32;
         let mut animating = false;
         let Actors { actors, from } = self;
         for a in actors.values_mut() {
             let Some(m) = models.get(a.model) else { continue };
             let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
-            animating |= a.current.as_ref().and_then(length).is_some();
+            let (about, r) = (v3::sub(&a.at, &frame.anchor), f64::from(m.radius() * m.scale()));
+            // What spans a camera cell at the actor's distance is observed.
+            let cell_there = crate::view::lens::cell_there(v3::len(&v3::sub(&about, &frame.camera)));
+            let seen = a.visible && frame.frustum.sees(about, r) && 2.0 * r >= cell_there;
+            // A clip of some length plays, or one fades into the next.
+            let playing = a.current.filter(|p| length(p).is_some());
+            let moving = playing.is_some() || a.previous.is_some();
+            let moves = seen && (a.previous.is_some() || playing.is_some_and(|p| f64::from(m.motion(p.clip) * m.scale()) >= cell_there));
+            animating |= moves;
             let wrap = |p: &mut Playing| {
                 p.time += dt;
                 if let Some(d) = length(p) {
                     p.time %= d;
                 }
             };
-            if let Some(p) = a.current.as_mut() {
-                wrap(p);
-            }
-            if let Some(p) = a.previous.as_mut() {
-                wrap(p);
-            }
-            if a.previous.is_some() {
-                a.fade += dt;
-                if a.fade >= a.fade_len {
-                    a.previous = None;
+            // Seen, its clip holds where its motion is too small to see.
+            let runs = moves || !seen;
+            if runs {
+                if let Some(p) = a.current.as_mut() {
+                    wrap(p);
+                }
+                if let Some(p) = a.previous.as_mut() {
+                    wrap(p);
+                }
+                if a.previous.is_some() {
+                    a.fade += dt;
+                    if a.fade >= a.fade_len {
+                        a.previous = None;
+                    }
                 }
             }
             let joints = m.joints();
             if joints == 0 {
                 continue;
             }
+            // Unseen, its clocks run on and its palette waits for it to be
+            // seen; held, its pose stands as it was.
+            if !moves && (a.posed || !seen) {
+                a.posed &= !(moving && runs);
+                continue;
+            }
+            a.posed = true;
             m.pose(a.current.map(|p| (p.clip, p.time)), &mut a.local);
             if let Some(prev) = a.previous {
                 from.resize(joints, [0.0; 10]);

@@ -7,7 +7,8 @@ mod answer;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Lattice;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use xpute_guest::mem::heap::Block;
 
 use crate::io::demand::{Phases, Stream};
 use crate::io::failure::Failure;
@@ -16,13 +17,14 @@ use residency::Residency;
 pub mod division;
 pub mod earth;
 pub mod instance;
+pub mod kept;
 pub mod object;
 pub mod place;
 mod query;
 pub mod residency;
 pub mod terrain;
 
-pub use answer::{Answer, Relief};
+pub use answer::Answer;
 pub use query::{Bound, Query};
 
 /// What a layer asks for of the view.
@@ -57,10 +59,21 @@ pub trait Base: Clone + 'static {
     /// the ground stops.
     const TOP: Option<Zoom> = None;
 
+    /// The most tiles a reader that takes no coarser answer pins apart from
+    /// the view and a destination's line (pxl-kernel view/demand.rs `step`).
+    const PINNED: u32 = 0;
+
     /// Its records, which it alone holds.
     fn residency() -> &'static mut Residency<Self>;
 
-    fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
+    fn receive(tile: Tile, record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
+
+    /// The packet a tile came in, once the frame `record` took the tile or
+    /// none did: freed, or kept where the GPU takes the tile off it
+    /// (`kept::Kept`).
+    fn keep(_record: Option<u32>, block: Block) {
+        crate::io::fetch::release(Some(block));
+    }
 
     /// A tile with nothing in it, which answers an absent tile at the top.
     fn empty() -> Option<Self> {

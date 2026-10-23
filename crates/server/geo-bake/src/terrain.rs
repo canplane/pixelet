@@ -7,9 +7,12 @@ pub mod pipeline;
 pub mod repository;
 pub mod source;
 
+use pxl_portable::ways::SPANS;
 use pxl_spec::bake::fold::fold_terrain;
+use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::bake::tile::Occupancy;
+use pxl_spec::block::window::{RUNS_SQUARE, SQUARE};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
@@ -20,7 +23,19 @@ pub const CELL_U: f64 = units(GROUND.cell());
 impl crate::pyramid::Base for TerrainTile {
     const LAYER: pxl_spec::bake::published::BaseLayer = pxl_spec::bake::published::BaseLayer::terrain;
 
-    fn encode(&self) -> Result<Vec<u8>, String> {
+    /// Refused where a record's room does not hold its lines (pxl-spec
+    /// `Separation::fits`), or a window's square would hold more of its
+    /// ways' entries than a client gives one (pxl-spec `terrain::ways_fit`),
+    /// or more of its ways' runs, or a column more spans (`terrain::runs_fit`).
+    fn encode(&self, at: Tile) -> Result<Vec<u8>, String> {
+        self.separation
+            .fits()
+            .map_err(|[lines, points]| format!("its ways hold {lines} lines and {points} points, past MAX_LINES ({MAX_LINES}) or MAX_POINTS ({MAX_POINTS})"))?;
+        terrain::ways_fit(&self.separation, SQUARE)
+            .map_err(|([qx, qy], n)| format!("its square ({qx}, {qy}) holds {n} of the ways' entries, past WAYS_SQUARE_SEGMENTS ({})", terrain::WAYS_SQUARE_SEGMENTS))?;
+        terrain::runs_fit(at, self).map_err(|([qx, qy], [runs, spans])| {
+            format!("its square ({qx}, {qy}) reads as {runs} of the ways' runs and a column {spans} spans, past RUNS_SQUARE ({RUNS_SQUARE}) or SPANS ({SPANS})")
+        })?;
         terrain::encode(self).map_err(|e| format!("{e:?}"))
     }
 
@@ -34,10 +49,10 @@ impl crate::pyramid::Base for TerrainTile {
     }
 
     fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
-        fold_terrain(neighborhood(p).map(held), p.zoom)
+        fold_terrain(neighborhood(p).map(held), p.zoom).map(|t| terrain::drawn(p, t))
     }
 
     fn occupancy(&self) -> Occupancy {
-        self.index.occupancy
+        self.occupancy
     }
 }

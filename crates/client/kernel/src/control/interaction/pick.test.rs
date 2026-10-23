@@ -5,7 +5,8 @@
 // session.
 
 use crate::layer::object::size::OBJECT_SIZES;
-use pxl_spec::space::coord::pvf3::{fvec, ivec};
+use pxl_spec::space::coord::q3::{FRAC_W, Q3};
+use pxl_spec::space::coord::zoom::{index_of, UNIT_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;
@@ -20,6 +21,7 @@ fn struck(normal: V3, point: V3) -> Hit {
             min: [3.0, 5.0, 2.0],
             max: [4.0, 6.0, 3.0],
         },
+        block: None,
         struck: Struck::Ground,
     }
 }
@@ -32,8 +34,9 @@ fn cases() -> [(&'static str, Hit); 3] {
     ]
 }
 
-fn lattice(p: &Pvf3) -> (i64, i64, i64) {
-    (ivec::X(p.i), ivec::Y(p.i), ivec::Z(p.i))
+fn lattice(p: &Q3) -> (i64, i64, i64) {
+    let [x, y, z] = index_of(UNIT_ZOOM, p);
+    (x, y, z)
 }
 
 #[test]
@@ -41,7 +44,7 @@ fn world_struck_corner_at_cell_size_lands_on_the_struck_cell_with_no_sub_cell_re
     for (name, hit) in cases() {
         let p = world_struck_corner(&hit, units(GROUND.cell()));
         assert_eq!(lattice(&p), (3, 5, 2), "{name}");
-        assert_eq!((fvec::X(p.f), fvec::Y(p.f), fvec::Z(p.f)), (0, 0, 0), "{name}");
+        assert_eq!(p.map(|v| v.rem_euclid(1 << FRAC_W)), [0, 0, 0], "{name}");
     }
 }
 

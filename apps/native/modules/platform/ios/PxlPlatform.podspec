@@ -42,6 +42,9 @@ Pod::Spec.new do |s|
   # alone (build-native.ts); a Release build makes every architecture it is
   # not told otherwise, and an Intel slice would link no kernel.
   s.user_target_xcconfig = {
+    # The app imports this pod's Swift module, which imports PxlNative, and
+    # Xcode's scan of the app's modules resolves that one from here too.
+    'SWIFT_INCLUDE_PATHS' => '$(inherited) "$(PODS_ROOT)/../../../../crates/client-bracket/native/include"',
     'LIBRARY_SEARCH_PATHS' => '$(inherited) "$(PODS_CONFIGURATION_BUILD_DIR)/PxlNative"',
     'OTHER_LDFLAGS' => '$(inherited) -lpxl_native',
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'x86_64',

@@ -8,7 +8,7 @@ use pxl_render::look::color::indicator;
 use pxl_spec::block::decor::Decor;
 use pxl_spec::block::object::{cube_id, cube_of, cube_rgb, Cube};
 use pxl_spec::block::DecorId;
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -80,7 +80,7 @@ pub fn ghost() -> Ghost {
     // Placing back an erased scattered decor restores that instance; the ghost
     // shows it.
     let restored = match (active_tool, &hovered) {
-        (ActiveTool::Decor, Some(h)) => restores_scattered(h, units(Decor::of(ui.decor_id).cell_zoom()), ui.decor_id),
+        (ActiveTool::Decor, Some(h)) => restores_scattered(h, units(Decor::of(ui.decor_id).row.cell_zoom()), ui.decor_id),
         _ => None,
     };
     // Where it would stand, and what it would carry.
@@ -90,7 +90,7 @@ pub fn ghost() -> Ghost {
             Some((d.at, m))
         }
         (Some(b), Some(c), None) => {
-            let (variant, turn) = user_decor_pick(c.i, b.variant_count());
+            let (variant, turn) = user_decor_pick(&c, b);
             Some(b.stand(real(&c), variant, turn, 1.0))
         }
         _ => None,
@@ -148,6 +148,6 @@ pub fn ghost() -> Ghost {
 }
 
 /// `p` in units, in the canonical frame.
-fn real(p: &Pvf3) -> V3 {
-    [pvf3::to_real(pvf3::X(p)), pvf3::to_real(pvf3::Y(p)), pvf3::to_real(pvf3::Z(p))]
+fn real(p: &Q3) -> V3 {
+    [q3::to_real(i64::from(p[0])), q3::to_real(i64::from(p[1])), q3::to_real(i64::from(p[2]))]
 }

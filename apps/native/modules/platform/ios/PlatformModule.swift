@@ -16,6 +16,9 @@ import UIKit
 /// guest runs each on its own thread while this one waits
 /// (crates/client-bracket/native/src/thread.rs), and an image's decode runs off both.
 public class PlatformModule: Module {
+  /// The module `pxl_wake_on`'s function sends through.
+  nonisolated(unsafe) static weak var current: PlatformModule?
+
   public func definition() -> ModuleDefinition {
     Name("PxlPlatform")
 
@@ -23,12 +26,24 @@ public class PlatformModule: Module {
 
     OnCreate {
       ViewModifierRegistry.register(contentScrollsModifier) { _, _, _ in ContentScrollsModifier() }
+      PlatformModule.current = self
+      // A C function captures nothing, so it reaches the module through the
+      // static. Called from the thread that learned of a completion: Expo's
+      // sendEvent schedules the event onto the JavaScript thread itself.
+      pxl_wake_on { PlatformModule.current?.sendEvent("onWake") }
     }
     OnDestroy {
       ViewModifierRegistry.unregister(contentScrollsModifier)
+      PlatformModule.current = nil
     }
 
-    // ---- the kernel (platform/guest.ts, gpu.ts, image.ts) ----
+    // ---- the kernel's turns (platform/gpu.ts) ----
+
+    /// The device's host asks a turn: a completion it writes at the next
+    /// turn's poll would otherwise wait for an input to be read.
+    Events("onWake")
+
+    // ---- the kernel (platform/guest.ts, gpu.ts) ----
 
     Function("memory") { () throws -> NativeArrayBuffer in
       var bytes: UInt32 = 0
@@ -42,22 +57,24 @@ public class PlatformModule: Module {
       pxl_interrupt(quotaMs)
     }
 
-    /// The device's uniform offset alignment and whether it times its
-    /// passes, or nil where the system has no GPU.
-    Function("gpuOpen") { () -> [UInt32]? in
-      var align: UInt32 = 0
-      var timestamps: UInt32 = 0
-      return pxl_gpu_open(&align, &timestamps) == 0 ? [align, timestamps] : nil
+    /// Whether the device opened; what it is, the kernel reads from the host.
+    Function("gpuOpen") { () -> Bool in
+      pxl_gpu_open() == 0
     }
 
-    /// Decodes a PNG or a WebP and holds it for the renderer as the kernel's
-    /// `handle`: 1, or 0 when it does not decode. Async, so it runs on the
-    /// module's queue rather than the JavaScript thread: a large image costs
-    /// no turn.
-    AsyncFunction("imageHold") { (handle: UInt32, file: Data) -> UInt32 in
-      file.withUnsafeBytes { bytes in
-        pxl_image_hold(handle, bytes.bindMemory(to: UInt8.self).baseAddress, UInt32(bytes.count))
+    // ---- the transport (platform/origin.ts) ----
+
+    /// A body fetched still zstd, decoded off the JavaScript thread on the
+    /// module's queue, into the library's bytes, which JavaScript takes
+    /// without a copy and the library lets go with the buffer.
+    AsyncFunction("unpack") { (packed: Data) throws -> NativeArrayBuffer in
+      var out: UnsafeMutablePointer<UInt8>?
+      var count = 0
+      let decoded = packed.withUnsafeBytes { (src: UnsafeRawBufferPointer) in
+        pxl_unpack(src.bindMemory(to: UInt8.self).baseAddress, src.count, &out, &count)
       }
+      guard decoded == 0, let bytes = out else { throw UnpackException() }
+      return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: bytes, count: count), cleanup: { pxl_unpacked_free(bytes, count) })
     }
 
     // ---- storage (platform/storage.ts) ----
@@ -153,5 +170,11 @@ public class PlatformModule: Module {
 internal final class MemoryException: Exception, @unchecked Sendable {
   override var reason: String {
     "the guest has no memory"
+  }
+}
+
+internal final class UnpackException: Exception, @unchecked Sendable {
+  override var reason: String {
+    "a body sent zstd does not decode"
   }
 }

@@ -11,8 +11,8 @@ pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, s
         out,
         || {
             let coverage = crate::coverage::Coverage::of_source()?;
-            let (_, mut client) = job::connect(&[&crate::division::READS], &coverage.around(p.zoom, p.tile), seconds)?;
-            crate::division::leaf(&mut client, p.tile)
+            let (_, mut client) = job::connect(&[&crate::division::READS], &coverage.around(p.zoom, p.at), seconds)?;
+            crate::division::leaf(&mut client, p.at)
         },
         &DivisionTile::default(),
     )

@@ -29,7 +29,6 @@ use crate::pyramid::{ancestor, fold, unasked, write_manifest, Absent, Base, Stag
 use crate::source;
 use crate::util::git_sha;
 use pxl_spec::bake::published::FORMAT;
-use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
@@ -49,7 +48,7 @@ fn io(p: &Path, e: std::io::Error) -> String {
 }
 
 fn shard_tile(shard: Node) -> Tile {
-    Tile::new(SHARD_ZOOM, ivec::gather(shard.at[0], shard.at[1], 0))
+    Tile::new(SHARD_ZOOM, shard.at)
 }
 
 impl Stage {

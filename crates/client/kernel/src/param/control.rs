@@ -10,17 +10,15 @@ pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
 // ---- the camera ----
 
-/// Degrees from the ground plane.
-pub const DEFAULT_TILT_DEG: f64 = 30.0;
-
 /// The orbit eye's least height over its floor: one cell, so the eye is never
 /// in the cell its floor tops.
 pub const EYE_CLEARANCE_U: f64 = 1.0;
 
 pub const DEFAULT_DIST: f64 = 16.0;
 pub const DEFAULT_AZIMUTH: f64 = 0.0;
-/// 0 = straight down, PI / 2 = horizontal; (90 - DEFAULT_TILT_DEG)°.
-pub const DEFAULT_POLAR: f64 = 1.0471975511965976;
+/// From straight down (0) toward horizontal (PI / 2): 60°, the eye 30° above
+/// the ground plane.
+pub const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
 /// Felt-right against the scale bar: about 0.18 m on a 1080px viewport at
 /// Seoul's latitude.
 pub const MIN_DIST: f64 = 2.0;

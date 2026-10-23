@@ -33,23 +33,6 @@ fn moon_shown() -> vec3f {
   return shown() * atmos_moon_light();
 }
 
-// Each light through the air above a point, and the sky's on an up-facing face there.
-struct Light {
-  sun: vec3f,
-  other: vec3f,
-  fill: vec3f,
-};
-
-// Before the eye: what the exposure meters.
-fn light_unexposed(r: f32, up: vec3f) -> Light {
-  let sky = sky_ground(r, dot(up, atmos_sun_dir())).rgb + sky_ground(r, dot(up, atmos_moon_dir())).rgb * atmos_moon_light();
-  return Light(
-    frame_sun_color() * sun_transmittance(r, dot(up, frame_sun_dir())),
-    frame_other_color() * sun_transmittance(r, dot(up, frame_other_dir())),
-    sky * atmos_white() + atmos_night_sky(),
-  );
-}
-
 fn light_at(r: f32, up: vec3f) -> Light {
   let l = light_unexposed(r, up);
   let e = exposure();
@@ -59,29 +42,6 @@ fn light_at(r: f32, up: vec3f) -> Light {
 fn light_of(world_pos: vec3f) -> Light {
   return light_at(radius_of(world_pos), up_at(world_pos));
 }
-
-// The ground under a down-facing face, at the Earth's mean albedo.
-fn ground_bounce(up: vec3f, l: Light) -> vec3f {
-  return atmos_ground_albedo() * (l.sun * max(dot(up, frame_sun_dir()), 0.0) + l.other * max(dot(up, frame_other_dir()), 0.0) + l.fill);
-}
-
-// The share that keeps its direction; the rest, an up-facing face's, reaches
-// every face alike. Directed alone, a wall turned from the sun read as a toy's.
-const DIRECTED: f32 = 0.25;
-// What a cast shadow takes of the sun; all of it left the shade as dark.
-const SHADOW_DEPTH: f32 = 0.5;
-
-// A matte face of albedo one, over pi, Lambert as three's standard material at
-// roughness 1: every lit pass's, and the Earth's past the terrain.
-fn surface_light(n: vec3f, up: vec3f, lit: f32, l: Light) -> vec3f {
-  // Turned from the sun, a face reads no shadow map.
-  let shaded = select(1.0, mix(1.0, lit, SHADOW_DEPTH), dot(n, frame_sun_dir()) > 0.0);
-  let alike = l.sun * max(dot(up, frame_sun_dir()), 0.0) * shaded + l.other * max(dot(up, frame_other_dir()), 0.0) + l.fill;
-  let hemi = mix(ground_bounce(up, l), l.fill, dot(n, up) * 0.5 + 0.5);
-  let directed = l.sun * max(dot(n, frame_sun_dir()), 0.0) * lit + l.other * max(dot(n, frame_other_dir()), 0.0) + hemi;
-  return mix(alike, directed, DIRECTED) / PI;
-}
-
 
 /* sky */
 
@@ -164,14 +124,14 @@ fn earth_face(n: vec3f, octaves: f32) -> vec4f {
 
 // On where night falls on them, as the sky's night falls (look/environment.rs).
 fn city_shown(lights: f32, up: vec3f) -> vec3f {
-  return atmos_city_light() * lights * lights * exposure() * (1.0 - smoothstep(-0.1, 0.0, dot(up, atmos_sun_dir())));
+  return atmos_city_light() * atmos_white() * lights * lights * exposure() * (1.0 - smoothstep(-0.1, 0.0, dot(up, atmos_sun_dir())));
 }
 
 // Doubled, picked by eye beside the original; the cities are not its to scale.
 const EARTH_GAIN: f32 = 2.0;
 
-// Lit by the terrain's own light, so the drawn edge is no seam; no shadow map
-// reaches it. It comes in over the octave to the earth layer's reach, where
+// Lit by the terrain's own light, so the drawn edge is no seam. It comes in
+// over the octave to the earth layer's reach, where
 // the terrain ends seen from the globe; nearer, the ground is the voxels' or
 // the air's alone.
 fn beyond(air: Air) -> vec3f {
@@ -180,7 +140,7 @@ fn beyond(air: Air) -> vec3f {
   if (air.ground && shown > 0.0) {
     let n = air.normal;
     let face = earth_face(n, air.octaves);
-    light += air.end * shown * (EARTH_GAIN * face.rgb * surface_light(n, n, 1.0, light_at(land_radius(), n)) + city_shown(face.a, n));
+    light += air.end * shown * (EARTH_GAIN * face.rgb * surface_light(n, n, light_at(land_radius(), n)) + city_shown(face.a, n));
   }
   return light;
 }
@@ -235,14 +195,8 @@ fn seen_from_eye(world_pos: vec3f) -> Seen {
 
 /* glare */
 
-// Spencer et al. 1995's halo; ISO 9358 veiling glare is 1-10%, GLARE_VEIL its middle.
-const GLARE_HALO_SHARE: f32 = 0.6205;
-const GLARE_VEIL: f32 = 0.03;
-
 // Over the sky only.
 fn glare(dir: vec3f) -> vec3f {
   let s = atmos_sun_dir();
-  let theta = degrees(atan2(length(cross(dir, s)), dot(dir, s))) + 0.02;
-  let psf = 0.478 * 20.91 / (theta * theta * theta) + 0.138 * 72.37 / (theta * theta);
-  return atmos_sun_seen() * shown() * psf * (GLARE_VEIL / GLARE_HALO_SHARE);
+  return glare_toward(dir, s, dot(s, frame_up()), exposure());
 }

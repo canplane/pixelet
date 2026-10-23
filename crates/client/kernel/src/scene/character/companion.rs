@@ -8,22 +8,24 @@
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::approach::damp_alpha;
+use crate::asset::Load;
 use crate::billboard::chat::speak_from;
-use crate::io::load::{load_image, Load};
+use crate::io::load::load_image;
 use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
+use crate::model::variant_spec::IDLE_CLIP;
 use crate::query::World;
 use crate::query::{over, under};
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
-use crate::scene::character::variant_spec::IDLE_CLIP;
 use crate::sched::edge::wake_at;
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
 use crate::view::frame::coord::{to_world, world_to_canonical};
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
@@ -61,7 +63,6 @@ const FOLLOW_WALK_LINGER_S: f64 = 1.5;
 struct Held {
     actor: u32,
     model: ModelHandle,
-    skin: u32,
 }
 
 struct Figure {
@@ -113,13 +114,13 @@ impl Figure {
         if self.held.is_some() {
             return;
         }
-        let (Some(model), Some(skin)) = (model_of(variant.model, variant.height_u), load_image(Load::Asset(variant.skin))) else {
+        let (Some(model), Some(_)) = (model_of(variant.model, variant.height_u), load_image(Load::Asset(variant.skin))) else {
             return;
         };
         let Some(Some(actor)) = laid().map(|k| k.scene.actors.new_actor(&mut k.draw, &k.models, model.model)) else {
             return;
         };
-        self.held = Some(Held { actor, model, skin });
+        self.held = Some(Held { actor, model });
         self.at = target;
         self.set_ready(true);
     }
@@ -280,7 +281,7 @@ pub struct CompanionProps {
     pub following: bool,
     /// The eye, which decides whether it walks or the world is a map, and the
     /// τ the world is drawn at: what it is drawn standing on.
-    pub eye: Pvf3,
+    pub eye: Q3,
     pub tau: Tau,
 }
 
@@ -332,10 +333,14 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     }
 }
 
-/// (model, image handle) for the shell's skinned pass.
+/// (model, image handle) for the shell's skinned pass: the image as the
+/// loader has it now, which a lost device takes back until it lands again.
 pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
     let c: &'static _ = companion();
-    [&c.person, &c.pet].into_iter().flatten().filter_map(|w| w.held.as_ref()).map(|h| (h.model.model, h.skin))
+    [&c.person, &c.pet]
+        .into_iter()
+        .flatten()
+        .filter_map(|w| Some((w.held.as_ref()?.model.model, load_image(Load::Asset(w.variant.skin))?)))
 }
 
 /// The world's step-slide from `from`, its floor at `stands`, toward `to`:
@@ -347,12 +352,10 @@ fn walk_to(from: [f64; 2], stands: f64, to: [f64; 2], p: &CompanionProps) -> Opt
     Some(([at[0], at[1]], under(at[2])))
 }
 
-/// The floor `stands` as the chunks compose it under `at`: the world asked at
-/// the zoom the camera grid at `tau` takes there from the eye, as a chunk takes
-/// its own. Not the box a coarse chunk draws, which only summarizes the cells
-/// it folds and can stand off this by up to a grid cell; a folded cell is
-/// struck by nothing. A coarser answer is taken, as a chunk draws its
-/// ancestors' where its own is not held.
+/// The floor `stands` as the eye's rays draw it under `at`: the world asked
+/// at the zoom the camera grid at `tau` takes there from the eye. A coarser
+/// answer is taken where that zoom is not held, as a ray draws the ground it
+/// has.
 fn drawn_floor(at: [f64; 2], stands: f64, p: &CompanionProps) -> f64 {
     let center = [at[0], at[1], over(stands)];
     let eye = to_world(&p.eye);

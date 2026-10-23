@@ -3,17 +3,17 @@
 //! The kernel as an Android app reaches it. Kotlin's `PxlGuest`
 //! (apps/native/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlGuest.kt)
 //! declares these as `external` functions, and each is the C ABI's call an
-//! iPhone's Swift makes (lib.rs, surface.rs, image.rs) under the name JNI
+//! iPhone's Swift makes (lib.rs, surface.rs, unpack.rs) under the name JNI
 //! looks for. Only JNI's own values cross: a number, an array, the memory as
 //! a direct buffer over the region — which Kotlin hands JavaScript as it is,
 //! as Swift hands it the region — and a view's `Surface`, made the native
 //! window wgpu draws through.
 
 use fnv::FnvHashMap;
-use std::ptr::{null_mut, NonNull};
-use std::sync::Mutex;
+use std::ptr::NonNull;
+use std::sync::{Mutex, OnceLock};
 
-use jni_sys::{jbyteArray, jclass, jdouble, jint, jintArray, jobject, JNIEnv, JNINativeInterface_};
+use jni_sys::{jboolean, jbyteArray, jclass, jdouble, jint, jmethodID, jobject, jvalue, JNIEnv, JNINativeInterface_, JavaVM, JNI_ABORT, JNI_OK};
 use ndk_sys::{ANativeWindow, ANativeWindow_fromSurface, ANativeWindow_release};
 use wgpu::rwh::{AndroidDisplayHandle, AndroidNdkWindowHandle, RawDisplayHandle, RawWindowHandle};
 use xpute_kit::status::bug::OrBug;
@@ -53,48 +53,128 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_memory(env:
     unsafe { make(env, at.cast(), i64::from(bytes)) }
 }
 
-/// Opens the device: its uniform offset alignment and whether it times its
-/// passes, or null where the system has no GPU (surface.rs `pxl_gpu_open`).
+/// `f` over the bytes of `packed`, a Java byte array, let go unwritten after.
+///
+/// # Safety
+/// `env` is the environment JNI called with, `packed` a live byte array.
+unsafe fn with_bytes<R>(env: *mut JNIEnv, packed: jbyteArray, f: impl FnOnce(*const u8, usize) -> R) -> R {
+    let jni = unsafe { jni(env) };
+    let (length, elements, release) = (
+        jni.GetArrayLength.or_bug(Errno::ENOSYS),
+        jni.GetByteArrayElements.or_bug(Errno::ENOSYS),
+        jni.ReleaseByteArrayElements.or_bug(Errno::ENOSYS),
+    );
+    // SAFETY: the caller's array, read until it is released below.
+    let (len, at) = unsafe { (length(env, packed), elements(env, packed, core::ptr::null_mut())) };
+    let r = f(at.cast_const().cast(), usize::try_from(len).unwrap_or(0));
+    // SAFETY: the elements just taken, nothing written to them.
+    unsafe { release(env, packed, at, JNI_ABORT) };
+    r
+}
+
+/// A zstd body decoded into a direct buffer Java owns, the decoded bytes
+/// copied once into it; null where it does not decode (unpack.rs `decode`).
 ///
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(env: *mut JNIEnv, _class: jclass) -> jintArray {
-    let (mut align, mut timestamps) = (0u32, 0u32);
-    // SAFETY: our own words.
-    if unsafe { crate::surface::pxl_gpu_open(&raw mut align, &raw mut timestamps) } != 0 {
-        return null_mut();
-    }
-    // SAFETY: the environment JNI called with.
-    let table = unsafe { jni(env) };
-    let words = [align as jint, timestamps as jint];
-    // SAFETY: a fresh array of the two words it is filled with.
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_unpack(env: *mut JNIEnv, _class: jclass, packed: jbyteArray) -> jobject {
+    // SAFETY: JNI's array, its own length.
+    let Some(raw) = (unsafe { with_bytes(env, packed, |at, len| crate::unpack::decode(core::slice::from_raw_parts(at, len))) }) else {
+        return core::ptr::null_mut();
+    };
+    let Ok(size) = jint::try_from(raw.len()) else { return core::ptr::null_mut() };
+    let jni = unsafe { jni(env) };
+    let (find, method, call, address) = (
+        jni.FindClass.or_bug(Errno::ENOSYS),
+        jni.GetStaticMethodID.or_bug(Errno::ENOSYS),
+        jni.CallStaticObjectMethodA.or_bug(Errno::ENOSYS),
+        jni.GetDirectBufferAddress.or_bug(Errno::ENOSYS),
+    );
+    // SAFETY: JNI's own class and method, named as the JVM names them; a
+    // failed lookup or allocation leaves its exception for Kotlin, and null.
     unsafe {
-        let array = table.NewIntArray.or_bug(Errno::ENOSYS)(env, 2);
-        table.SetIntArrayRegion.or_bug(Errno::ENOSYS)(env, array, 0, 2, words.as_ptr());
-        array
+        let class = find(env, c"java/nio/ByteBuffer".as_ptr());
+        let allocate = if class.is_null() {
+            core::ptr::null_mut()
+        } else {
+            method(env, class, c"allocateDirect".as_ptr(), c"(I)Ljava/nio/ByteBuffer;".as_ptr())
+        };
+        if allocate.is_null() {
+            return core::ptr::null_mut();
+        }
+        let out = call(env, class, allocate, &jvalue { i: size });
+        let at = if out.is_null() { core::ptr::null_mut() } else { address(env, out).cast::<u8>() };
+        if at.is_null() {
+            return core::ptr::null_mut();
+        }
+        core::ptr::copy_nonoverlapping(raw.as_ptr(), at, raw.len());
+        out
     }
 }
 
-/// Decodes an image and holds it for the renderer as the kernel's `handle`:
-/// 1, or 0 (image.rs `pxl_image_hold`). Off the kernel's thread, as on an
-/// iPhone.
+/// The VM, `PxlGuest`'s class held past the call, and its static `wake`:
+/// what a completion calls to ask a turn (`wake`). Taken as the device opens,
+/// on a thread Java made, since a thread the host made finds no class of the
+/// app's by name.
+struct Wake {
+    vm: *mut JavaVM,
+    class: jclass,
+    method: jmethodID,
+}
+
+// SAFETY: JNI's VM is one for the process and may be used from any thread; a
+// global reference and a method ID stay valid in every thread until let go.
+unsafe impl Send for Wake {}
+unsafe impl Sync for Wake {}
+
+static WAKE: OnceLock<Wake> = OnceLock::new();
+
+/// Opens the device: whether it opened (surface.rs `pxl_gpu_open`). `this` is
+/// `PxlGuest`, a Kotlin object, whose calls are its instance's.
 ///
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_imageHold(env: *mut JNIEnv, _class: jclass, handle: jint, file: jbyteArray) -> jint {
-    // SAFETY: the environment JNI called with.
-    let table = unsafe { jni(env) };
-    // SAFETY: `file` is the byte array the call was given, copied whole.
-    let bytes = unsafe {
-        let len = table.GetArrayLength.or_bug(Errno::ENOSYS)(env, file);
-        let mut bytes = vec![0u8; len as usize];
-        table.GetByteArrayRegion.or_bug(Errno::ENOSYS)(env, file, 0, len, bytes.as_mut_ptr().cast());
-        bytes
-    };
-    // SAFETY: our own bytes, for the call.
-    unsafe { crate::image::pxl_image_hold(handle as u32, bytes.as_ptr(), bytes.len() as u32) as jint }
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(env: *mut JNIEnv, this: jobject) -> jboolean {
+    let j = unsafe { jni(env) };
+    let mut vm: *mut JavaVM = core::ptr::null_mut();
+    // SAFETY: JNI's own calls on the environment it called with; the class
+    // is held globally, so it outlives this call.
+    unsafe {
+        if j.GetJavaVM.or_bug(Errno::ENOSYS)(env, &raw mut vm) == JNI_OK {
+            let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(env, j.GetObjectClass.or_bug(Errno::ENOSYS)(env, this));
+            let method = j.GetStaticMethodID.or_bug(Errno::ENOSYS)(env, class, c"wake".as_ptr(), c"()V".as_ptr());
+            if !method.is_null() {
+                let _ = WAKE.set(Wake { vm, class, method });
+            }
+        }
+    }
+    jboolean::from(crate::surface::pxl_gpu_open() == 0)
+}
+
+/// `PxlGuest.wake`, from whichever thread learned of a completion (surface.rs
+/// `wake`). JNI may be called only from a thread attached to the VM, so the
+/// caller is attached, for good and as a daemon: the host's threads live as
+/// long as it does, and a daemon keeps no VM from exiting. Kotlin sends the
+/// app's event from there, which Expo carries to the JavaScript thread.
+pub fn wake() {
+    let Some(&Wake { vm, class, method }) = WAKE.get() else { return };
+    let mut env: *mut JNIEnv = core::ptr::null_mut();
+    // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
+    // class and method JNI gave while the device opened, the class held.
+    unsafe {
+        let attach = (**vm).AttachCurrentThreadAsDaemon.or_bug(Errno::ENOSYS);
+        if attach(vm, (&raw mut env).cast(), core::ptr::null_mut()) != JNI_OK {
+            return;
+        }
+        let j = jni(env);
+        j.CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(env, class, method, core::ptr::null());
+        // What Kotlin threw has no Java caller here to reach.
+        if j.ExceptionCheck.or_bug(Errno::ENOSYS)(env) != 0 {
+            j.ExceptionClear.or_bug(Errno::ENOSYS)(env);
+        }
+    }
 }
 
 /// Binds the kernel's surface `handle` to a view's `surface`, through the

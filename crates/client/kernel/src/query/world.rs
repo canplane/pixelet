@@ -4,17 +4,16 @@
 //! place. Objects are all resident, so what the world knows is what the
 //! ground knows.
 
-use crate::layer::residency::Line;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 
-use super::block::Column;
+use crate::layer::object::preview;
 use crate::layer::object::store::EntryAt;
 
 use super::decor::Grown;
 use crate::kernel;
 use crate::layer::object::store::Store;
-use crate::layer::residency::Residency;
+use crate::layer::residency::{Lines, Residency};
 use crate::layer::Answer;
 use crate::layer::Base as _;
 use crate::layer::{Bound, Query};
@@ -36,13 +35,15 @@ pub struct World<'a> {
 }
 
 impl World<'static> {
+    /// The world as stored: what every mechanic asks, the pick, a walk, the
+    /// camera's clearance, an edit's reads and decor's footing.
     pub fn now() -> World<'static> {
         let objects: &'static Store = &kernel().objects;
         World::new(TerrainTile::residency(), objects)
     }
 
-    /// As `now`, and decor is struck too, where the chunks drawing at `tau`
-    /// hold it: the pointer's pick, which alone asks what a decor thing is.
+    /// As `now`, and decor is struck too, where the frame drawing at `tau`
+    /// holds it: the pointer's pick, which alone asks what a decor thing is.
     pub fn striking_decor(self, tau: Tau) -> World<'static> {
         let decor = Grown { models: &kernel().models, tau };
         World { decor: Some(decor), ..self }
@@ -61,47 +62,33 @@ impl<'a> World<'a> {
         }
     }
 
-    /// As a preview shows it: `hide` left out, `carve` cut to air.
+    /// As the pointer's preview draws it (`preview::current`): what the eye's
+    /// cast asks, and nothing else.
+    pub fn previewed(self) -> World<'a> {
+        let edits = preview::current();
+        self.previewing(edits.hide, edits.carve)
+    }
+
+    /// As a preview shows it: `hide` left out, `carve` cut to air, at the
+    /// entry's zoom or finer, where it is drawn as held; coarser, the stored
+    /// fold stands.
     pub fn previewing(self, hide: Option<EntryAt>, carve: Option<EntryAt>) -> World<'a> {
         World { hide, carve, ..self }
     }
 
+    /// Each ray it casts adds the nodes its descent asked about to `visits`
+    /// (pxl-portable `cast::Met::visits`).
     pub fn counting(self, visits: &'a std::cell::Cell<u64>) -> World<'a> {
         World { visits: Some(visits), ..self }
     }
-
-    pub(super) fn visit(&self) {
-        if let Some(v) = self.visits {
-            v.set(v.get() + 1);
-        }
-    }
 }
 
-impl Query for World<'_> {
-    type Record<'b>
-        = Column<'b>
-    where
-        Self: 'b;
-
-    type Cursor = Line;
-
-    fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Line {
-        self.terrain.cursor(node, cell)
-    }
-
-    fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell: Zoom) -> Line {
-        self.terrain.child(parent, node, cell)
-    }
-
-    /// What can show of the ground and what is placed, which a chunk finer
-    /// under the node may draw at any zoom it is asked at.
-    fn bound<const D: usize>(&self, at: &Line, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+impl World<'_> {
+    /// Where the ground and what is placed stand in the node, as its cells
+    /// at `cell` are read; the ground's line stepped from where `lines` last
+    /// walked.
+    pub fn bounds(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Bound>> {
         let objects = self.objects.bounds(node, cell).value().flatten();
-        self.terrain.bound(at, node, cell).map(|ground| Bound::join(ground, objects))
-    }
-
-    /// A chunk column's records to compose its blocks from.
-    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Column<'_>> {
-        self.column(node, cell)
+        self.terrain.bound_walked(lines, node, cell).map(|ground| Bound::join(ground, objects))
     }
 }

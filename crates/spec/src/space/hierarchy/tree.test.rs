@@ -40,12 +40,12 @@ fn several_steps_are_one_step_taken_as_many_times() {
 fn nodes_share_ground_only_where_one_lies_under_the_other() {
     let at = (20, [3i64, -2]);
     assert!(share(at, at));
-    for steps in 1..4u8 {
-        let first = (20 + steps, first_descendant_of(at.1, u32::from(steps)));
+    for steps in 1..4u32 {
+        let first = (20 + steps, first_descendant_of(at.1, steps));
         assert!(share(at, first) && share(first, at));
-        let beside = (20 + steps, first_descendant_of([4, -2], u32::from(steps)));
+        let beside = (20 + steps, first_descendant_of([4, -2], steps));
         assert!(!share(at, beside) && !share(beside, at));
-        assert!(share((20 - steps, ancestor_of(at.1, u32::from(steps))), at));
+        assert!(share((20 - steps, ancestor_of(at.1, steps)), at));
     }
 }
 

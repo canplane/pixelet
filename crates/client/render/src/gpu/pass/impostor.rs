@@ -7,9 +7,11 @@
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_IMPOSTOR};
 use crate::frame::shader::record::PIPELINE_IMPOSTOR_BAKE;
-use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, release, texture_usage, Gpu, Stamp};
-use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
-use crate::gpu::pass::decor::{DecorPass, GROUPS};
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+
+use crate::gpu::api::{buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, Format, Gpu, Load};
+use crate::gpu::grown::Drawn;
+use crate::gpu::pass::decor::{block_group, uniform_group, DecorPass, GROUPS};
 use crate::gpu::pass::model::{draw_model, draw_models, put_instances, DrawUniforms, ModelDraw};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Blocks;
@@ -39,6 +41,10 @@ pub struct ImpostorPass {
     fit: [[f32; 4]; GROUPS],
     baked: [Option<Baked>; GROUPS],
     wanted: [Option<Baked>; GROUPS],
+    /// The GPU's decor's bind groups (gpu/grown.rs), each with the buffer it
+    /// binds: its regions' draw uniforms and its block.
+    grown_uniforms: (u32, u32),
+    grown_block: (u32, u32),
 }
 
 /// A little room around it so a filtered edge reads nothing past it.
@@ -50,49 +56,24 @@ fn fit_of(extent: Extent) -> [f32; 4] {
 
 impl ImpostorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> ImpostorPass {
-        let draw = pipelines.build(g, PIPELINE_IMPOSTOR, format::CANVAS);
-        let bake = pipelines.build(g, PIPELINE_IMPOSTOR_BAKE, format::RGBA8_SRGB);
-        let sampler = object();
-        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);
-        let atlas = object();
-        g.texture(
-            atlas,
+        let draw = pipelines.build(g, PIPELINE_IMPOSTOR, g.canvas());
+        let bake = pipelines.build(g, PIPELINE_IMPOSTOR_BAKE, Format::rgba8unorm_srgb);
+        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::linear, AddressMode::clamp_to_edge, None, 1);
+        let atlas = g.texture(
             SPRITE,
             SPRITE,
             GROUPS as u32,
-            format::RGBA8_SRGB,
+            Format::rgba8unorm_srgb,
             1,
             texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
         );
-        let atlas_view = object();
-        g.view(atlas_view, atlas, dimension::D2_ARRAY, 0, 1, 0, GROUPS as u32);
-        let depth = object();
-        g.texture(depth, SPRITE, SPRITE, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT);
-        let depth_view = object();
-        g.view(depth_view, depth, dimension::D2, 0, 1, 0, 1);
-        let fits = object();
-        g.buffer(fits, (GROUPS * 16) as u32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let group = object();
-        g.bind_group(
-            group,
+        let atlas_view = g.view(atlas, true, 0, 1, 0, GROUPS as u32);
+        let depth = g.texture(SPRITE, SPRITE, 1, Format::depth32float, 1, texture_usage::RENDER_ATTACHMENT);
+        let depth_view = g.view(depth, false, 0, 1, 0, 1);
+        let fits = g.buffer((GROUPS * 16) as u32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let group = g.bind_group(
             draw.layouts[2],
-            &[
-                0,
-                resource::VIEW,
-                atlas_view,
-                0,
-                0,
-                1,
-                resource::SAMPLER,
-                sampler,
-                0,
-                0,
-                2,
-                resource::BUFFER,
-                fits,
-                0,
-                (GROUPS * 16) as u32,
-            ],
+            &[view_entry(0, atlas_view), sampler_entry(1, sampler), buffer_range_entry(2, fits, 0, (GROUPS * 16) as u32)],
         );
         ImpostorPass {
             draw,
@@ -106,6 +87,8 @@ impl ImpostorPass {
             fit: [[0.0; 4]; GROUPS],
             baked: [None; GROUPS],
             wanted: [None; GROUPS],
+            grown_uniforms: (0, 0),
+            grown_block: (0, 0),
         }
     }
 
@@ -115,37 +98,41 @@ impl ImpostorPass {
         }
     }
 
-    pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &mut DecorPass, blocks: &Blocks) {
-        let due: Vec<(usize, Baked)> = (0..GROUPS)
-            .filter_map(|k| self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w)).map(|w| (k, w)))
-            .collect();
+    /// Whether a group was baked again.
+    pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &mut DecorPass, blocks: &Blocks) -> bool {
+        // The groups whose model or extent moved since baked, each once.
+        let (mut due, mut len) = ([(0, Baked::default()); GROUPS], 0);
+        for k in 0..GROUPS {
+            if let Some(w) = self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w)) {
+                (due[len], len) = ((k, w), len + 1);
+            }
+        }
+        let due = &due[..len];
         if due.is_empty() {
-            return;
+            return false;
         }
         self.fit_uniforms.write(g, self.bake.layouts[0], due.len() as u32, due.iter(), |buf, &(_, w)| {
             buf[..FIT_BYTES as usize].copy_from_slice(bytes(&fit_of(w.2)));
         });
-        let Some(slots) = self.fit_uniforms.slots() else { return };
+        let Some(slots) = self.fit_uniforms.slots() else { return false };
         for (n, &(k, w)) in due.iter().enumerate() {
             let Some((model, vertex_cnt, index_cnt, skin)) = decor.model_of(g, k as u32, blocks) else {
                 continue;
             };
             let (fit_group, offset) = slots.at(n as u32);
-            let layer = object();
-            g.view(layer, self.atlas, dimension::D2, 0, 1, k as u32, 1);
-            let pass = object();
-            g.pass(pass, encoder, &pass_desc(layer, load::CLEAR, self.depth_view, load::CLEAR, 1.0, Stamp::UNTIMED));
+            let layer = g.view(self.atlas, false, 0, 1, k as u32, 1);
+            let pass = g.pass(encoder, &pass_desc(layer, Load::Clear, self.depth_view, Load::Clear, 1.0, None));
             g.set_pipeline(pass, self.bake.pipeline);
             g.set_bind_group(pass, 0, fit_group, &[offset]);
             g.set_bind_group(pass, 1, skin, &[]);
             draw_model(g, pass, &self.bake, &mut 0, model, vertex_cnt, index_cnt, 1);
             g.end(pass);
-            release(pass);
             release(layer);
             self.fit[k] = fit_of(w.2);
             self.baked[k] = Some(w);
         }
         g.write_buffer(self.fits, 0, bytes(self.fit.as_flattened()));
+        true
     }
 
     /// Every block group the draws will bind is made here, so drawing makes
@@ -171,5 +158,33 @@ impl ImpostorPass {
                 instances: d[2],
             })
         });
+    }
+
+    /// The GPU's decor's bind groups, made again only where its buffers were.
+    pub fn prepare_grown(&mut self, g: &Gpu, grown: Option<Drawn>) {
+        let Some(d) = grown else { return };
+        self.grown_uniforms = uniform_group(g, self.grown_uniforms, d.uniforms, self.draw.layouts[1]);
+        self.grown_block = block_group(g, self.grown_block, d.block, self.draw.layouts[3]);
+    }
+
+    /// The sprites the GPU grew, an indirect draw a group whose layer is
+    /// drawn (pxl-portable `scatter::drawn`, a group's sprites its region
+    /// `2·group + 1`).
+    pub fn draw_grown(&self, g: &Gpu, pass: u32, grown: Option<Drawn>, groups: u32, (frame, bound): (u32, &mut u32)) {
+        let Some(d) = grown.filter(|_| self.grown_block.1 != 0) else { return };
+        g.set_pipeline(pass, self.draw.pipeline);
+        if *bound != frame {
+            g.set_bind_group(pass, 0, frame, &[]);
+            *bound = frame;
+        }
+        g.set_bind_group(pass, 2, self.group, &[]);
+        g.set_bind_group(pass, 3, self.grown_block.1, &[]);
+        for group in 0..groups.min(GROUPS as u32) {
+            if self.baked[group as usize].is_none() {
+                continue;
+            }
+            g.set_bind_group(pass, 1, self.grown_uniforms.1, &[d.uniform_at(2 * group + 1)]);
+            g.draw_indirect(pass, d.args, d.args_at(2 * group + 1));
+        }
     }
 }

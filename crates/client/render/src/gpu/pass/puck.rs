@@ -3,9 +3,8 @@
 //! The location puck: an instanced zone of unit boxes and an octahedron beacon.
 
 use crate::frame::draw::{uniform_of, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, Gpu};
-use crate::gpu::api_spec::format;
-use crate::gpu::atmosphere::AIR_WORDS;
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, Entry, Gpu};
+use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{buffer_size, Blocks, Draws};
 use crate::look::color::indicator;
@@ -82,35 +81,25 @@ pub struct PuckPass {
 }
 
 fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
-    let id = object();
-    g.buffer(id, buffer_size(data.len() as u32), usage | buffer_usage::COPY_DST);
+    let id = g.buffer(buffer_size(data.len() as u32), usage | buffer_usage::COPY_DST);
     g.write_buffer(id, 0, data);
     id
 }
 
 impl PuckPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [u32; AIR_WORDS]) -> PuckPass {
-        let zone = pipelines.build(g, PIPELINE_PUCK_ZONE, format::CANVAS);
-        let beacon = pipelines.build(g, PIPELINE_PUCK_BEACON, format::CANVAS);
-        let uniform = || {
-            let id = object();
-            g.buffer(id, 32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            id
-        };
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [Entry; AIR_ENTRIES]) -> PuckPass {
+        let zone = pipelines.build(g, PIPELINE_PUCK_ZONE, g.canvas());
+        let beacon = pipelines.build(g, PIPELINE_PUCK_BEACON, g.canvas());
+        let uniform = || g.buffer(32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let (zone_uniform, beacon_uniform) = (uniform(), uniform());
-        let group = |layout: u32, buffer: u32| {
-            let id = object();
-            g.bind_group(id, layout, &buffer_entry(0, buffer));
-            id
-        };
+        let group = |layout: u32, buffer: u32| g.bind_group(layout, &[buffer_entry(0, buffer)]);
         let (box_p, box_uv, box_i) = box_lanes();
         let (oct_p, oct_n) = octahedron_lanes();
         let [r, gr, b] = linear_rgb(indicator::ACTION);
         // The beacon is lit through the air: the air's words, transmittance and sampler.
-        let mut lit = buffer_entry(0, frame_buffer).to_vec();
-        lit.extend(air.as_chunks::<5>().0.iter().filter(|c| [8, 9, 11].contains(&c[0])).flatten());
-        let beacon_frame_group = object();
-        g.bind_group(beacon_frame_group, beacon.layouts[0], &lit);
+        let mut lit = vec![buffer_entry(0, frame_buffer)];
+        lit.extend(air.iter().filter(|e| [8, 9, 11].contains(&e.binding)));
+        let beacon_frame_group = g.bind_group(beacon.layouts[0], &lit);
         PuckPass {
             frame_group: group(zone.layouts[0], frame_buffer),
             beacon_frame_group,

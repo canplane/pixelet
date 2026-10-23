@@ -10,16 +10,19 @@ import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
-import { n1, pct, STARVED_MS, tris, valueText, zoomName, zoomsText } from "./lane.ts";
+import { STREAM_NAMES } from "@/kernel/io/demand.spec.ts";
+import { drawn, type FrameGroup, GROUPS, LIST_NAMES, MB, n1, pct, tris, valueText, zoomName } from "./lane.ts";
+
+const bytes = (b: number) => valueText("_bytes", b);
 import { BOUND, failText } from "./report.ts";
-import type { FrameSummary, Gauge, Spread } from "./view.ts";
+import type { FrameSummary, Gauge } from "./view.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
 import { kernel_memory } from "@/kernel/shell.ts";
 import { alpha, color, textStyle } from "@/shared/ui/theme.ts";
+import { fixed } from "@/shared/fixed.ts";
 
 const CENSUS_ROWS = 5;
 const SPAN_ROWS = 3;
-const ZOOM_ROWS = 3;
 const MISSED_WARN_SHARE = 0.1;
 /** LoAF's own threshold for a long frame. */
 const LONG_FRAME_MS = 50;
@@ -49,28 +52,27 @@ export const Head = ({ children, end }: { children: string; end?: ReactNode }) =
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 const or = (x: number) => (Number.isNaN(x) ? "-" : n1(x));
-const geo = (lat: number, lon: number) => (Number.isNaN(lat) ? "-" : `${lat.toFixed(5)}°, ${lon.toFixed(5)}°`);
+const geo = (lat: number, lon: number) => (Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`);
 const metres = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
-const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
+const phase = (f: FrameSummary, name: string): number => f.phases.find((p) => p.name === name)?.p95 ?? 0;
 
 /** Live: where the camera and the pointer are now, not over the window. */
-export function ProfilerView({ v, q }: { v: Gauge["view"]; q: Gauge["quality"] }) {
+export function ProfilerView({ v }: { v: Gauge["view"] }) {
   const hovering = !Number.isNaN(v.hover_x);
   return (
     <>
       <Head>Camera</Head>
       <Row k="distance" v={`${n1(v.dist)} u`} />
       <Row k="polar/azimuth" v={`${n1(deg(v.polar))}°/${n1(deg(v.azimuth))}°`} />
-      {/* The ladder's step over the screen's target, and the step it settled on. */}
-      <Row k="τ · step/star" v={`${or(v.tau)} · ${q.step}/${q.star}`} />
+      <Row k="τ" v={or(v.tau)} />
       <Row k="center" v={geo(v.center_lat, v.center_lon)} />
       <Row k="center altitude" v={metres(v.center_z)} />
       <Head>Pointer</Head>
       <Row k="hover (u)" v={hovering ? `${Math.floor(v.hover_x)}, ${Math.floor(v.hover_y)}, ${Math.floor(v.hover_z)}` : "-"} />
       <Row k="hover" v={geo(v.hover_lat, v.hover_lon)} />
       <Row k="hover altitude" v={metres(v.hover_alt)} />
-      <Row k="cells wanted/drawn" v={hovering ? `${zoomName(v.cell_want)}/${zoomName(v.cell_drawn)}` : "-"} warn={v.cell_drawn < v.cell_want} />
+      <Row k="cell" v={hovering ? zoomName(v.cell_want) : "-"} />
     </>
   );
 }
@@ -84,7 +86,7 @@ export function ProfilerRec({ rec }: { rec: Gauge["rec"] }) {
           <View style={[gauge.recDot, rec.recording && gauge.recDotOn]} />
           <Text style={[gauge.text, rec.recording && gauge.warn]}>{rec.recording ? "Recording" : "Stopped"}</Text>
         </View>
-        <Text style={gauge.text}>{`${(rec.elapsed_ms / 1000).toFixed(1)} s`}</Text>
+        <Text style={gauge.text}>{`${fixed(rec.elapsed_ms / 1000, 1)} s`}</Text>
       </View>
       <Row k="frames/tasks" v={`${rec.frames}/${rec.tasks}${rec.truncated ? " truncated" : ""}`} warn={rec.truncated} />
     </View>
@@ -96,120 +98,136 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
 
   const f = g.frames;
   const sheetPct = pct(g.sheet.used_px, g.sheet.size * g.sheet.size);
-  const [kept, possible] = [g.counters.faces_kept, g.counters.faces_possible];
   const heaviest = <T,>(rows: T[], by: (r: T) => number, n: number) => [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) => by(r) > 0);
+  // The terrain's tiles, read off its zooms.
+  const terrain = f === null ? 0 : f.last.zoom_tiles.reduce((n, z) => n + z, 0);
   const worstLong = g.longs.reduce<LongFrame | null>((w, l) => (!w || l.durationMs > w.durationMs ? l : w), null);
+
+  // A section a group of profiler.json FRAME_GROUPS, in its order: the panel
+  // reads its heads where the report does. Each holds what reads its lanes.
+  const sections: Record<FrameGroup, ReactNode> = {
+    time: f !== null && (
+      <>
+        <Row k="interval p50/p95" v={`${n1(f.interval.p50)}/${n1(f.interval.p95)} ms`} />
+        <Row k="interval max" v={`${n1(f.interval.max)} ms`} warn={f.interval.max > LONG_FRAME_MS} />
+        <Row k="missed/moving" v={`${f.missed}/${f.moving}`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
+        <Row k="budget/display" v={`${n1(f.last.budget_ms)}/${n1(f.last.display_ms)} ms${f.last.settled ? " still" : ""}`} />
+        {/* The interval's turns, rise to fall, and what they left of it: past it is a long frame. */}
+        <Row k="busy/off-turn p95" v={`${n1(f.busy.p95)}/${n1(f.off_turn.p95)} ms`} />
+        <Row k="long frames" v={`${f.long} of ${f.n}`} warn={f.long > 0} />
+        {!loafSupported() && <Row k="browser long frames" v="unsupported" />}
+        {loafSupported() && (
+          <Row
+            k="worst browser frame"
+            v={worstLong ? `${n1(worstLong.durationMs)} ms s${n1(worstLong.scriptMs)} r${n1(worstLong.renderMs)}` : `none of ${g.longs.length}`}
+            warn={!!worstLong && worstLong.durationMs > 100}
+          />
+        )}
+      </>
+    ),
+    turn: f !== null && (
+      <>
+        <Row k="tick p95/max" v={`${n1(f.tick.p95)}/${n1(f.tick.max)} ms`} warn={f.overran > 0} />
+        <Row
+          k="phase i/v/c/s p95"
+          v={`${n1(phase(f, "interaction"))}/${n1(phase(f, "visible"))}/${n1(phase(f, "content"))}/${n1(phase(f, "cosmetic"))}`}
+          warn={phase(f, "interaction") > INTERACTION_WARN_MS}
+        />
+        <Row k="tasks p95" v={`${n1(f.tasks.p95)} ms`} />
+        <Row k="effects/stage" v={`${n1(f.last.effects_ms)}/${n1(f.last.stage_ms)} ms`} warn={f.last.effects_ms > 4} />
+        <Row k="worst effect" v={`${n1(f.last.worst_effect_ms)} ms ${EFFECT_NAMES[f.last.worst_effect_name] ?? "-"}`} warn={f.last.worst_effect_ms > 4} />
+        <Row k="open turns/busy" v={`${g.open.turns}/${n1(g.open.busy_ms)} ms`} />
+      </>
+    ),
+    frame: f !== null && (
+      <>
+        <Row k="kinds" v={f.kinds.filter((k) => k.n > 0).map((k) => `${k.name} ${k.n}`).join(" ") || "-"} />
+        <Row k="wakes" v={f.wakes.filter((w) => w.n > 0).map((w) => `${w.name} ${w.n}`).join(" ") || "-"} />
+        {/* A settled view asks no timer; one asked says how soon. */}
+        <Row k="last wake" v={`${valueText("wake_name", f.last.wake_name)}${f.last.wake_in_ms > 0 ? ` in ${n1(f.last.wake_in_ms)} ms` : ""}`} />
+      </>
+    ),
+    gpu: f !== null && (
+      <>
+        {/* Over the frames a GPU read landed with; none landed is no measure, not 0. */}
+        <Row k="gpu p95" v={f.gpu_read > 0 ? `${n1(f.gpu.p95)} ms of ${f.gpu_read}` : "no timestamps"} warn={f.gpu_read > 0 && f.gpu.p95 > f.last.display_ms} />
+        {heaviest(f.gpu_spans, (s) => s.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.p95)} ms`} />)}
+        <Row k="draws/triangles" v={`${drawn(f.last)[0]}/${tris(drawn(f.last)[1])}`} />
+        {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
+        <Row k="world surface" v={valueText("world_px", f.last.world_px)} />
+      </>
+    ),
+    cap: f !== null && <Row k="terrain refused" v={`${round(f.last.cap_terrain_refused)}`} warn={f.last.cap_terrain_refused > 0} />,
+    requests: (
+      <>
+        {f !== null && STREAM_NAMES.map((name, s) =>
+          (f.last.waiting[s] > 0 || f.last.out[s] > 0) && <Row key={name} k={`${name} waiting/out`} v={`${f.last.waiting[s]}/${f.last.out[s]}`} warn={f.last.waiting[s] > 12} />
+        )}
+        {g.tasks.length === 0 && <Note>none in the window</Note>}
+        {g.tasks.map((t) => (
+          <View key={t.stream}>
+            <Row k={`${t.stream}${BOUND[t.stream] ? ` (${BOUND[t.stream]})` : ""} p50/p95`} v={`${n1(t.lat.p50)}/${n1(t.lat.p95)} ms`} />
+            <Row k="  ok/aborted/failed" v={`${t.ok}/${t.aborted}/${t.error}`} warn={t.error > 0} />
+            {t.reasons.length > 0 && <Row k="  top failure" v={`${failText(t.reasons[0].fail, t.reasons[0].detail)} ×${t.reasons[0].n}`} warn />}
+          </View>
+        ))}
+      </>
+    ),
+    tiles: f !== null && (
+      <>
+        <Row
+          k="terrain/place"
+          v={`${terrain}/${f.last.tiles_place}${terrain > 0 ? ` ${zoomName(f.last.zoom_tiles.findLastIndex((n) => n > 0))}..${zoomName(f.last.zoom_tiles.findIndex((n) => n > 0))}` : ""}`}
+        />
+        {/* Since the window began: a settled view moves none of them. */}
+        <Row k="terrain admitted/evicted" v={`${g.counters.terrain_admitted}/${g.counters.terrain_evicted}`} />
+      </>
+    ),
+    device: f !== null && (
+      <>
+        <Row k="blocks" v={`${f.last.blocks} ${valueText("_mb", f.last.blocks_mb)}`} />
+        <Row k="depth/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_layers_mb} MB`} />
+        {/* The leak bar's figure: flat over a pan loop and across a lost device. */}
+        <Row k="gpu objects" v={`${f.last.gpu_objects.reduce((n, o) => n + o, 0)}`} />
+        <Row
+          k="  by op"
+          v={f.last.gpu_objects.map((n, k) => [LIST_NAMES.gpu_objects[k], n] as const).filter(([, n]) => n > 0).map(([name, n]) => `${name} ${n}`).join(" ") || "-"}
+        />
+        {g.sheet.entries > 0 && <Row k="sheet" v={`${g.sheet.size}px ${g.sheet.entries} ${sheetPct}%`} warn={g.sheet.size > g.sheet.initial && sheetPct < ATLAS_SPARSE_PCT} />}
+        <Row k="sheet repacks/uploads" v={`${g.counters.sheet_repacks}/${g.counters.sheet_uploads}`} />
+      </>
+    ),
+    heap: f !== null && (
+      <>
+        <Row k="used change" v={`${f.heap_used_delta_bytes >= 0 ? "+" : ""}${bytes(f.heap_used_delta_bytes)}`} />
+        {/* `live` counts a carved run whole; `slot` is what slots hold. The shares are computed here, not separate lanes. */}
+        <Row
+          k="used/live of"
+          v={`${bytes(f.last.heap_used_bytes)}/${bytes(f.last.heap_live_bytes)} of ${bytes(f.last.heap_range_bytes)} ${pct(f.last.heap_live_bytes, f.last.heap_range_bytes)}%`}
+          warn={f.last.heap_live_bytes >= f.last.heap_range_bytes * 0.8}
+        />
+        <Row
+          k="slab runs/slots"
+          v={`${bytes(f.last.heap_run_bytes)}/${bytes(f.last.heap_slot_bytes)} ${pct(f.last.heap_slot_bytes, f.last.heap_run_bytes)}%`}
+          warn={f.last.heap_run_bytes > MB && f.last.heap_slot_bytes < f.last.heap_run_bytes / 2}
+        />
+        <Row k="refused/largest free" v={`${f.last.heap_refusals}/${bytes(f.last.heap_largest_free_bytes)}`} warn={f.last.heap_refusals > 0} />
+        <Row k="releases" v={`${f.last.heap_releases}`} />
+        <Row k="kernel memory" v={bytes(kernel_memory().byteLength)} />
+      </>
+    ),
+    ring: f !== null && <Row k="answers/held peak" v={`${f.last.ring_cq_peak}/${f.last.ring_held_peak}`} warn={f.last.ring_held_peak > 0} />,
+  };
 
   return (
     <>
       {f === null && <Note>no frames sampled yet</Note>}
-      {f !== null && (
-        <>
-          <Head>Frame/GPU</Head>
-          <Row k="frame p50/p95" v={`${n1(f.dt.p50)}/${n1(f.dt.p95)} ms`} />
-          <Row k="frame max" v={`${n1(f.dt.max)} ms`} warn={f.dt.max > LONG_FRAME_MS} />
-          <Row k="missed/moving" v={`${f.missed}/${f.moving}`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
-          <Row k="budget/frame" v={`${n1(f.last.budget_ms)}/${n1(f.last.frame_ms)} ms${f.last.settled ? " still" : ""}`} />
-          <Row k="task/off-thread p95" v={`${n1(f.task.p95)}/${n1(f.offthread.p95)} ms`} warn={f.offthread.p95 > f.last.frame_ms} />
-          <Row k="tick p95/max" v={`${n1(f.sched.p95)}/${n1(f.sched.max)} ms`} warn={f.overran > 0} />
-          <Row
-            k="phase i/v/c/s p95"
-            v={`${n1(phase(f, "interaction").p95)}/${n1(phase(f, "visible").p95)}/${n1(phase(f, "content").p95)}/${n1(phase(f, "cosmetic").p95)}`}
-            warn={phase(f, "interaction").p95 > INTERACTION_WARN_MS}
-          />
-          <Row k="chunks p95" v={`${n1(f.chunks.p95)} ms`} />
-          {
-            /* `task` less the three parts is the unmeasured region, where a fold
-                          once took 70 ms of a turn. */
-          }
-          <Row k="effects/stage" v={`${n1(f.last.turn_effects_ms)}/${n1(f.last.turn_stage_ms)} ms`} warn={f.last.turn_effects_ms > 4} />
-          <Row k="worst effect" v={`${n1(f.last.turn_step_ms)} ms ${EFFECT_NAMES[f.last.turn_step_name] ?? "-"}`} warn={f.last.turn_step_ms > 4} />
-          <Row k="gpu p95" v={f.gpu.p95 > 0 ? `${n1(f.gpu.p95)} ms` : "n/a"} warn={f.gpu.p95 > f.last.frame_ms} />
-          {heaviest(f.gpu_spans, (s) => s.spread.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.spread.p95)} ms`} />)}
-          {!loafSupported() && <Row k="long frames" v="unsupported" />}
-          {loafSupported() && (
-            <Row
-              k="worst long frame"
-              v={worstLong ? `${n1(worstLong.durationMs)} ms s${n1(worstLong.scriptMs)} r${n1(worstLong.renderMs)}` : `none of ${g.longs.length}`}
-              warn={!!worstLong && worstLong.durationMs > 100}
-            />
-          )}
-
-          <Head>Draw/LOD</Head>
-          <Row k="chunks/in view/pending" v={`${f.last.lod_chunks}/${f.last.lod_in_frustum}/${f.last.lod_pending}`} />
-          <Row
-            k="off-view · oldest off/in"
-            v={`${f.last.lod_offscreen_pending} · ${round(f.last.lod_oldest_release_ms)}/${round(f.last.lod_oldest_visible_ms)} ms`}
-            warn={Math.max(f.last.lod_oldest_release_ms, f.last.lod_oldest_visible_ms) > STARVED_MS}
-          />
-          <Row
-            k="built hidden/refused/waiting"
-            v={`${round(f.last.stale_hidden)}/${round(f.last.stale_uncovered)}/${round(f.last.stale_unready)}`}
-          />
-          <Row
-            k="slots waiting/chained"
-            v={`${round(f.last.slot_waits)}/${round(f.last.slot_chained)} ${zoomsText(f.last.slot_wait_zooms)}`}
-            warn={f.last.slot_waits > 0}
-          />
-          <Row
-            k="commit room/terrain refused"
-            v={`${round(f.last.cap_commit_left)}/${round(f.last.cap_record_refused)}`}
-            warn={f.last.cap_record_refused > 0}
-          />
-          <Row k="draws/triangles" v={`${f.last.draw_calls}/${tris(f.last.triangles)}`} />
-          {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
-          {heaviest(f.zoom_tris.map((t, k) => ({ k, t })), (r) => r.t, ZOOM_ROWS).map((r) => <Row key={r.k} k={`  ${zoomName(r.k)} triangles`} v={tris(r.t)} />)}
-          <Row k="world surface" v={valueText("px", f.last.px)} />
-          <Row k="bakes/runs per s" v={`${round(f.backlogPerS[1])}/${round(f.backlogPerS[0])}`} />
-          <Row k="faces kept" v={`${pct(kept, possible)}%`} />
-        </>
-      )}
-
-      <Head>Requests</Head>
-      {f !== null && <Row k="queued terrain/place" v={`${f.last.q_terrain}/${f.last.q_place}`} warn={f.last.q_terrain + f.last.q_place > 12} />}
-      {g.tasks.length === 0 && <Note>none in the window</Note>}
-      {g.tasks.map((t) => (
-        <View key={t.stream}>
-          <Row k={`${t.stream}${BOUND[t.stream] ? ` (${BOUND[t.stream]})` : ""} p50/p95`} v={`${n1(t.lat.p50)}/${n1(t.lat.p95)} ms`} />
-          <Row k="  ok/aborted/failed" v={`${t.ok}/${t.aborted}/${t.error}`} warn={t.error > 0} />
-          {t.reasons.length > 0 && <Row k="  top failure" v={`${failText(t.reasons[0].fail, t.reasons[0].detail)} ×${t.reasons[0].n}`} warn />}
+      {GROUPS.filter((group) => sections[group]).map((group) => (
+        <View key={group}>
+          <Head>{group}</Head>
+          {sections[group]}
         </View>
       ))}
-
-      {f !== null && (
-        <>
-          <Head>Door</Head>
-          <Row k="answers/held peak" v={`${f.last.ring_cq_peak}/${f.last.ring_held_peak}`} warn={f.last.ring_held_peak > 0} />
-
-          <Head>Memory</Head>
-          <Row k="heap peak change" v={`${f.used_delta_mb >= 0 ? "+" : ""}${f.used_delta_mb} MB`} />
-          {
-            /* `live` counts a carved run whole; `slot` is what is held. The shares
-                          are computed here, not separate lanes. */
-          }
-          <Row
-            k="heap peak/live of"
-            v={`${f.last.heap_used_mb}/${f.last.heap_live_mb} of ${f.last.heap_range_mb} MB ${pct(f.last.heap_live_mb, f.last.heap_range_mb)}%`}
-            warn={f.last.heap_live_mb >= f.last.heap_range_mb * 0.8}
-          />
-          <Row
-            k="slab runs/slots"
-            v={`${n1(f.last.heap_run_mb)}/${n1(f.last.heap_slot_mb)} MB ${pct(f.last.heap_slot_mb, f.last.heap_run_mb)}%`}
-            warn={f.last.heap_run_mb > 1 && f.last.heap_slot_mb < f.last.heap_run_mb / 2}
-          />
-          <Row k="refused/largest free" v={`${f.last.heap_refusals}/${n1(f.last.heap_largest_free_mb)} MB`} warn={f.last.heap_refusals > 0} />
-          <Row
-            k="tiles terrain/place"
-            v={`${f.last.tiles_total}/${f.last.tiles_place}${
-              f.last.tiles_total > 0 ? ` ${zoomName(f.last.zoom_tiles.findLastIndex((n) => n > 0))}..${zoomName(f.last.zoom_tiles.findIndex((n) => n > 0))}` : ""
-            }`}
-          />
-          <Row k="kernel memory" v={`${round(kernel_memory().byteLength / 1048576)} MB`} />
-          <Row k="buffers/arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}/${valueText("_mb", f.last.arena_mb)}`} />
-          <Row k="depth/shadow/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_shadow_mb}/${f.last.tex_layers_mb} MB`} />
-          {g.sheet.entries > 0 && <Row k="sheet" v={`${g.sheet.size}px ${g.sheet.entries} ${sheetPct}%`} warn={g.sheet.size > g.sheet.initial && sheetPct < ATLAS_SPARSE_PCT} />}
-        </>
-      )}
     </>
   );
 }

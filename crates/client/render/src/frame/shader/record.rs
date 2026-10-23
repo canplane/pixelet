@@ -4,7 +4,7 @@
 //! blend state) as one source the host turns into WebGPU or wgpu descriptors.
 //! `cargo test` compiles and validates every shader with naga.
 
-pub const SHADER_CHUNK: u32 = 0;
+pub const SHADER_BOX: u32 = 0;
 pub const SHADER_DECOR: u32 = 1;
 pub const SHADER_SKINNED: u32 = 2;
 pub const SHADER_PUCK_ZONE: u32 = 3;
@@ -28,9 +28,43 @@ pub const SHADER_SHEET: u32 = 20;
 pub const SHADER_IMPOSTOR: u32 = 21;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
-pub const SHADER_CAMERA_GRID: u32 = 24;
-pub const SHADER_BADGE_REGION: u32 = 25;
-pub const SHADERS: u32 = 26;
+pub const SHADER_BADGE_REGION: u32 = 24;
+/// The camera grid's cells drawn straight to the screen (frame/screen_cells.rs).
+pub const SHADER_SCREEN_CELLS: u32 = 25;
+/// The eye's rays cast on the GPU into the screen's lane, generated from
+/// pxl-portable's descent (script/portable-wgsl.ts): its one compute entry.
+pub const SHADER_CAST: u32 = 26;
+/// Each newly held terrain frame's bound over its cells' heights, a level a
+/// dispatch, generated with the cast from pxl-portable's `ground::join`: its
+/// one compute entry.
+pub const SHADER_BOUND: u32 = 27;
+/// Each newly held terrain frame's cells' heights off its samples,
+/// generated with the cast from pxl-portable's `ground::height`: its one
+/// compute entry.
+pub const SHADER_HEIGHTS: u32 = 28;
+/// The decor the ground grows in the eye's windows, generated with the cast
+/// from pxl-portable's `scatter`: its one compute entry.
+pub const SHADER_GROWN: u32 = 29;
+/// What `SHADER_GROWN` and placed decor leave, sized for the screen and
+/// counted a draw region each; the regions laid out with their indirect
+/// args; each drawn into the decor block: pxl-portable `scatter::drawn`.
+pub const SHADER_GROWN_COUNT: u32 = 30;
+pub const SHADER_GROWN_ARGS: u32 = 31;
+pub const SHADER_GROWN_PLACE: u32 = 32;
+/// Each newly held terrain frame's ways, its columns' runs along z off its
+/// lines, generated with the cast from pxl-portable's `ways`: its one
+/// compute entry.
+pub const SHADER_WAYS: u32 = 33;
+/// The world image laid on a frame (blit.wgsl).
+pub const SHADER_BLIT: u32 = 34;
+/// Where every ray of the cast starts alike, asked once a frame before it,
+/// generated with the cast from pxl-portable's `cast::start`: its one
+/// compute entry.
+pub const SHADER_START: u32 = 35;
+/// The face bits of each block the cast found, over the lane, generated
+/// with the cast from pxl-portable's `mask`: its one compute entry.
+pub const SHADER_FACE: u32 = 36;
+pub const SHADERS: u32 = 37;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -38,9 +72,26 @@ macro_rules! wgsl {
     ($($name:literal),+) => { concat!(include_str!(concat!(env!("OUT_DIR"), "/shader/constant.wgsl")), "\n", $(include_str!(concat!(env!("OUT_DIR"), "/shader/", $name, ".wgsl")), "\n"),+) };
 }
 
+/// A compute shader's one entry point, as its source names it.
+pub fn compute_entry(kind: u32) -> &'static str {
+    match kind {
+        SHADER_CAST => "cast_cs",
+        SHADER_START => "start_cs",
+        SHADER_FACE => "face_cs",
+        SHADER_BOUND => "bound_cs",
+        SHADER_HEIGHTS => "heights_cs",
+        SHADER_GROWN => "decor_cs",
+        SHADER_GROWN_COUNT => "decor_count_cs",
+        SHADER_GROWN_ARGS => "decor_args_cs",
+        SHADER_GROWN_PLACE => "decor_place_cs",
+        SHADER_WAYS => "ways_cs",
+        _ => xpute_kit::bug!(EINVAL, kind),
+    }
+}
+
 pub fn source(kind: u32) -> &'static str {
     match kind {
-        SHADER_CHUNK => wgsl!(
+        SHADER_BOX => wgsl!(
             "frame",
             "globe",
             "encode",
@@ -50,14 +101,15 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_sky",
             "atmos_eye",
             "atmos_march",
+            "atmos_light",
             "atmos_view",
             "atmos_ground",
             "shade",
             "finish",
-            "shadow",
             "ao_map",
             "faces",
-            "chunk"
+            "paint",
+            "box"
         ),
         SHADER_DECOR => wgsl!(
             "frame",
@@ -69,11 +121,11 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_sky",
             "atmos_eye",
             "atmos_march",
+            "atmos_light",
             "atmos_view",
             "atmos_ground",
             "shade",
             "finish",
-            "shadow",
             "ao_map",
             "place",
             "decor"
@@ -88,17 +140,29 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_sky",
             "atmos_eye",
             "atmos_march",
+            "atmos_light",
             "atmos_view",
             "atmos_ground",
             "shade",
             "finish",
-            "shadow",
             "ao_map",
             "place",
             "skinned"
         ),
         SHADER_PUCK_ZONE => wgsl!("frame", "globe", "encode", "finish", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!("frame", "globe", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "place", "puck", "puck_beacon"),
+        SHADER_PUCK_BEACON => wgsl!(
+            "frame",
+            "globe",
+            "encode",
+            "finish",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_eye_unit",
+            "place",
+            "puck",
+            "puck_beacon"
+        ),
         SHADER_BADGE => wgsl!("frame", "globe", "encode", "badge", "badge_sprite"),
         SHADER_BADGE_REGION => wgsl!("frame", "globe", "encode", "badge", "badge_region"),
         SHADER_SKY => wgsl!(
@@ -113,14 +177,48 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_sky",
             "atmos_eye",
             "atmos_march",
+            "atmos_light",
             "atmos_view",
             "atmos_ground",
             "sky_words",
             "sky"
         ),
         SHADER_DEBUG => wgsl!("frame", "globe", "encode", "debug"),
-        SHADER_CAMERA_GRID => wgsl!("frame", "globe", "encode", "sky_words", "camera_grid"),
+        SHADER_SCREEN_CELLS => wgsl!(
+            "frame",
+            "globe",
+            "encode",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_sky",
+            "atmos_eye",
+            "atmos_march",
+            "atmos_light",
+            "atmos_view",
+            "atmos_ground",
+            "shade",
+            "finish",
+            "ao_map",
+            "faces",
+            "lattice",
+            "paint",
+            "sky_words",
+            "screen_cells"
+        ),
+        // As generated: no constants of ours before it to clash with its names.
+        SHADER_CAST => include_str!(concat!(env!("OUT_DIR"), "/shader/cast.gen.wgsl")),
+        SHADER_START => include_str!(concat!(env!("OUT_DIR"), "/shader/start.gen.wgsl")),
+        SHADER_FACE => include_str!(concat!(env!("OUT_DIR"), "/shader/face.gen.wgsl")),
+        SHADER_BOUND => include_str!(concat!(env!("OUT_DIR"), "/shader/bound.gen.wgsl")),
+        SHADER_HEIGHTS => include_str!(concat!(env!("OUT_DIR"), "/shader/heights.gen.wgsl")),
+        SHADER_GROWN => include_str!(concat!(env!("OUT_DIR"), "/shader/decor.gen.wgsl")),
+        SHADER_GROWN_COUNT => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_count.gen.wgsl")),
+        SHADER_GROWN_ARGS => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_args.gen.wgsl")),
+        SHADER_GROWN_PLACE => include_str!(concat!(env!("OUT_DIR"), "/shader/decor_place.gen.wgsl")),
+        SHADER_WAYS => include_str!(concat!(env!("OUT_DIR"), "/shader/ways.gen.wgsl")),
         SHADER_MIPS => wgsl!("mips"),
+        SHADER_BLIT => wgsl!("blit"),
         SHADER_SHEET => wgsl!("sheet"),
         SHADER_IMPOSTOR => wgsl!(
             "frame",
@@ -132,11 +230,11 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_sky",
             "atmos_eye",
             "atmos_march",
+            "atmos_light",
             "atmos_view",
             "atmos_ground",
             "shade",
             "finish",
-            "shadow",
             "ao_map",
             "impostor"
         ),
@@ -147,8 +245,21 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_AO_UPSAMPLE => wgsl!("frame", "globe", "ao_view", "ao_upsample"),
         SHADER_ATMOS_TRANSMITTANCE => wgsl!("atmos_medium", "atmos_pass", "atmos_transmittance"),
         SHADER_ATMOS_MULTISCATTER => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_multiscatter"),
-        SHADER_ATMOS_SKY_VIEW => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_march", "atmos_skyview"),
-        SHADER_ATMOS_IRRADIANCE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_march", "atmos_irradiance"),
+        SHADER_ATMOS_SKY_VIEW => wgsl!(
+            "frame",
+            "globe",
+            "encode",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_ground",
+            "atmos_eye_unit",
+            "atmos_light",
+            "atmos_pass",
+            "atmos_march",
+            "atmos_skyview"
+        ),
+        SHADER_ATMOS_IRRADIANCE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_eye_unit", "atmos_pass", "atmos_march", "atmos_irradiance"),
         SHADER_ATMOS_EXPOSURE => wgsl!(
             "frame",
             "globe",
@@ -159,12 +270,13 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_sky",
             "atmos_eye_unit",
             "atmos_march",
+            "atmos_light",
             "atmos_view",
             "atmos_ground",
             "atmos_pass",
             "atmos_exposure"
         ),
-        SHADER_STARS => wgsl!("frame", "globe", "encode", "stars"),
+        SHADER_STARS => wgsl!("frame", "globe", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "stars"),
         SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
         SHADER_CLOUDS => wgsl!(
             "frame",
@@ -178,6 +290,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_sky",
             "atmos_eye",
             "atmos_march",
+            "atmos_light",
             "atmos_view",
             "atmos_ground",
             "cloud_tile",
@@ -188,17 +301,14 @@ pub fn source(kind: u32) -> &'static str {
     }
 }
 
-pub const FRAME_FLOATS: usize = 92;
+pub const FRAME_FLOATS: usize = 72;
 /// Frame uniform field offsets in floats, in frame.wgsl's order.
-pub const FRAME_AT: [usize; 21] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84, 87, 88, 89];
+pub const FRAME_AT: [usize; 16] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 52, 60, 64, 68, 71];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
-pub const PIPELINE_CHUNK_DEPTH: u32 = 10;
-pub const PIPELINE_DECOR_DEPTH: u32 = 11;
-pub const PIPELINE_SKINNED_DEPTH: u32 = 12;
 pub const PIPELINE_SKY: u32 = 13;
 pub const PIPELINE_MIPS: u32 = 14;
-pub const PIPELINE_CHUNK_PREPASS: u32 = 15;
+pub const PIPELINE_BLIT: u32 = 15;
 pub const PIPELINE_DECOR_PREPASS: u32 = 16;
 pub const PIPELINE_SKINNED_PREPASS: u32 = 17;
 pub const PIPELINE_AO_DOWNSAMPLE: u32 = 18;
@@ -213,8 +323,6 @@ pub const PIPELINE_STARS: u32 = 26;
 pub const PIPELINE_CLOUDS: u32 = 27;
 pub const PIPELINE_CLOUDS_ABOVE: u32 = 28;
 pub const PIPELINE_CLOUD_FIELD: u32 = 29;
-pub const PIPELINE_CHUNK_COARSE_DEPTH: u32 = 30;
-pub const PIPELINE_CHUNK_COARSE_PREPASS: u32 = 31;
 pub const PIPELINE_SHEET: u32 = 33;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 35;
 pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 37;
@@ -222,19 +330,25 @@ pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 37;
 pub const PIPELINE_BADGE_REGION: u32 = 39;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 40;
-pub const PIPELINES: u32 = 41;
+/// The camera grid's cells, opaque at their rays' depth (frame/screen_cells.rs).
+pub const PIPELINE_SCREEN_CELLS: u32 = 41;
+pub const PIPELINES: u32 = 42;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
 // buffers (count; stride, step, attribute count, (location, offset, format)
 // each); then bind groups (count; entry count, (binding, visibility, kind) each).
 pub use crate::gpu::api_spec::record::*;
+/// A binding's stages are xpute's own bits (SHADER_STAGE), none, one or both.
+pub use xpute_gpu::spec::SHADER_STAGE::{COMPUTE, FRAGMENT, VERTEX};
+pub const NONE: u32 = 0;
+pub const BOTH: u32 = VERTEX | FRAGMENT;
 
 use crate::frame::draw::{
-    PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
-    PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
+    PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
+    PIPELINE_SKINNED,
 };
-use crate::mesh::chunk::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
+use crate::mesh::ghost::BOX_WORDS;
 
 const fn f(v: f32) -> u32 {
     v.to_bits()
@@ -257,12 +371,7 @@ struct Head {
 }
 
 /// The shell holds the same list against the same numbers.
-pub const VERTEX_ENTRY: [&str; 4] = ["vs", "vs_coarse", "vs_depth", "vs_coarse_depth"];
-
-const fn at_coarse(h: Head) -> Head {
-    let vertex = if h.vertex == VS_DEPTH { VS_COARSE_DEPTH } else { VS_COARSE };
-    Head { vertex, ..h }
-}
+pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_depth"];
 
 const fn lit(shader: u32, cull: u32) -> Head {
     Head {
@@ -295,12 +404,10 @@ const fn blended(shader: u32, cull: u32, bias: i32, slope: f32) -> Head {
     }
 }
 
-const SHADOW_SLOPE_BIAS: f32 = 2.0;
+const DEPTH_SLOPE_BIAS: f32 = 2.0;
 
-/// Into the shadow map: plain less-than depth, no fragment stage, both sides.
-/// Pushed back by its slope to the sun, as a rasterizer's polygon offset: a face
-/// the sun grazes spans more depth in a texel than the map holds, and lit
-/// itself in diagonal stripes without it.
+/// Depth alone: plain less-than, no fragment stage, both sides, pushed back
+/// by its slope as a rasterizer's polygon offset.
 const fn depth_only(shader: u32) -> Head {
     Head {
         shader,
@@ -310,7 +417,7 @@ const fn depth_only(shader: u32) -> Head {
         depth_write: true,
         depth_compare: LESS,
         depth_bias: 0,
-        depth_bias_slope: f(SHADOW_SLOPE_BIAS),
+        depth_bias_slope: f(DEPTH_SLOPE_BIAS),
         blend: OPAQUE,
         vertex: VS_DEPTH,
     }
@@ -404,27 +511,13 @@ const fn air(stages: [u32; 10]) -> [[u32; 3]; 10] {
 const AIR: [[u32; 3]; 10] = air([FRAGMENT; 10]);
 /// Laid out where atmos_view.wgsl declares it and nothing reads it.
 const AIR_UNREAD: [[u32; 3]; 10] = air([NONE; 10]);
-const LIT_FRAME: [[u32; 3]; 14] = {
+const LIT_FRAME: [[u32; 3]; 12] = {
     // The air in the vertex stage, where each point's lights and veil are
-    // worked out; a fragment reads only its words. The sky's views and the
-    // Earth's picture are the sky pass's, laid out unread.
-    let a = air([BOTH, VERTEX, NONE, VERTEX, VERTEX, NONE, NONE, NONE, VERTEX, VERTEX]);
-    [
-        [0, BOTH, UNIFORM],
-        [1, FRAGMENT, DEPTH],
-        [2, FRAGMENT, SAMPLER_COMPARISON],
-        [7, FRAGMENT, TEXTURE],
-        a[0],
-        a[1],
-        a[2],
-        a[3],
-        a[4],
-        a[5],
-        a[6],
-        a[7],
-        a[8],
-        a[9],
-    ]
+    // worked out; a fragment reads its words and the eye's texel, whose white
+    // it shows by (atmos_eye.wgsl). The sky's views and the Earth's picture
+    // are the sky pass's, laid out unread.
+    let a = air([BOTH, VERTEX, NONE, VERTEX, BOTH, NONE, NONE, NONE, VERTEX, VERTEX]);
+    [[0, BOTH, UNIFORM], [7, FRAGMENT, TEXTURE], a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9]]
 };
 /// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
 const CLOUD_GROUP: [[u32; 3]; 14] = {
@@ -448,18 +541,27 @@ const CLOUD_GROUP: [[u32; 3]; 14] = {
 };
 const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 
-/// The mesh is a per-instance vertex buffer, so a draw reaches its boxes by
-/// its first instance. The two formats differ only in stride, so a coarse draw
-/// binds the same buffer again for the two words it lacks.
-fn chunk_lanes(fine: bool) -> Vec<Vec<u32>> {
-    let stride = if fine { FINE_BOX_WORDS * 4 } else { COARSE_BOX_WORDS * 4 };
-    let rest = if fine { 16 } else { 0 };
-    vec![vec![stride, PER_INSTANCE, 1, 0, 0, U32X4], vec![stride, PER_INSTANCE, 1, 1, rest, U32X2]]
+/// The boxes are a per-instance vertex buffer, so a draw reaches its boxes by
+/// its first instance.
+fn box_lanes() -> Vec<Vec<u32>> {
+    let stride = BOX_WORDS * 4;
+    vec![vec![stride, PER_INSTANCE, 1, 0, 0, U32X4], vec![stride, PER_INSTANCE, 1, 1, 16, U32X2]]
 }
-fn chunk_groups() -> Vec<Vec<u32>> {
+fn box_groups() -> Vec<Vec<u32>> {
     let mut g0 = LIT_FRAME.to_vec();
     g0.extend([[3, VERTEX, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
     vec![group(&g0)]
+}
+/// The lit pass's frame, occlusion, air and layers, all read where
+/// a pixel is painted; then the lane, the sky's words, the looks and the
+/// eye's place.
+fn screen_groups() -> Vec<u32> {
+    let a = air([FRAGMENT, FRAGMENT, NONE, FRAGMENT, FRAGMENT, NONE, NONE, NONE, FRAGMENT, FRAGMENT]);
+    let mut g = vec![[0, FRAGMENT, UNIFORM], [7, FRAGMENT, TEXTURE]];
+    g.extend(a);
+    g.extend([[3, FRAGMENT, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
+    g.extend([[19, FRAGMENT, UNIFORM], [20, FRAGMENT, STORAGE], [21, FRAGMENT, UNIFORM]]);
+    group(&g)
 }
 fn model_lanes(skinned: bool) -> Vec<Vec<u32>> {
     let mut lanes = vec![lane(12, 0, F32X3), lane(12, 1, F32X3), lane(8, 2, F32X2)];
@@ -476,12 +578,10 @@ fn model_groups() -> Vec<Vec<u32>> {
 pub fn pipeline(id: u32) -> Vec<u32> {
     let frame = |visibility: u32| group(&[[0, visibility, UNIFORM]]);
     match id {
-        PIPELINE_CHUNK => record(lit(SHADER_CHUNK, CULL_BACK), &chunk_lanes(true), &chunk_groups()),
-        PIPELINE_CHUNK_COARSE => record(at_coarse(lit(SHADER_CHUNK, CULL_BACK)), &chunk_lanes(false), &chunk_groups()),
         PIPELINE_DECOR => record(lit(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
         // Slightly clear of a surface it sits on, strongly clear of one it sits in.
-        PIPELINE_GHOST_BOX => record(blended(SHADER_CHUNK, CULL_BACK, 1, 1.0), &chunk_lanes(true), &chunk_groups()),
-        PIPELINE_GHOST_BOX_COPLANAR => record(blended(SHADER_CHUNK, CULL_BACK, 8, 2.0), &chunk_lanes(true), &chunk_groups()),
+        PIPELINE_GHOST_BOX => record(blended(SHADER_BOX, CULL_BACK, 1, 1.0), &box_lanes(), &box_groups()),
+        PIPELINE_GHOST_BOX_COPLANAR => record(blended(SHADER_BOX, CULL_BACK, 8, 2.0), &box_lanes(), &box_groups()),
         PIPELINE_GHOST_DECOR => record(blended(SHADER_DECOR, CULL_NONE, 1, 1.0), &model_lanes(false), &model_groups()),
         // Back faces culled: drawn both sides, a closed body's inner faces fight its
         // outer ones at a distance and the character shimmers.
@@ -538,21 +638,15 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[lane(12, 0, F32X3)],
             &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM]])],
         ),
-        PIPELINE_CAMERA_GRID => record(
+        PIPELINE_SCREEN_CELLS => record(
             Head {
-                depth_compare: ALWAYS,
-                blend: ALPHA,
-                ..blended(SHADER_CAMERA_GRID, CULL_NONE, 0, 0.0)
+                depth_write: true,
+                blend: OPAQUE,
+                ..blended(SHADER_SCREEN_CELLS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM]])],
+            &[screen_groups()],
         ),
-        PIPELINE_CHUNK_DEPTH => record(depth_only(SHADER_CHUNK), &chunk_lanes(true), &chunk_groups()),
-        PIPELINE_CHUNK_COARSE_DEPTH => record(at_coarse(depth_only(SHADER_CHUNK)), &chunk_lanes(false), &chunk_groups()),
-        PIPELINE_DECOR_DEPTH => record(depth_only(SHADER_DECOR), &model_lanes(false), &model_groups()),
-        PIPELINE_SKINNED_DEPTH => record(depth_only(SHADER_SKINNED), &model_lanes(true), &model_groups()),
-        PIPELINE_CHUNK_PREPASS => record(prepass(SHADER_CHUNK, CULL_BACK), &chunk_lanes(true), &chunk_groups()),
-        PIPELINE_CHUNK_COARSE_PREPASS => record(at_coarse(prepass(SHADER_CHUNK, CULL_BACK)), &chunk_lanes(false), &chunk_groups()),
         PIPELINE_DECOR_PREPASS => record(prepass(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
         PIPELINE_SKINNED_PREPASS => record(prepass(SHADER_SKINNED, CULL_BACK), &model_lanes(true), &model_groups()),
         // Only where the opaque world left the far plane, so covered pixels never run it.
@@ -565,7 +659,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[],
             &[group(&[
                 [0, FRAGMENT, UNIFORM],
-                [1, FRAGMENT, UNIFORM],
+                [19, FRAGMENT, UNIFORM],
                 [2, FRAGMENT, TEXTURE_ARRAY],
                 [3, FRAGMENT, SAMPLER],
                 AIR[0],
@@ -581,6 +675,16 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             ])],
         ),
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
+        // Every pixel, its depth too, so what is drawn over it meets the world's.
+        PIPELINE_BLIT => record(
+            Head {
+                depth_write: true,
+                depth_compare: ALWAYS,
+                ..screen(SHADER_BLIT)
+            },
+            &[],
+            &[group(&[[0, FRAGMENT, TEXTURE_UNFILTERED], [1, FRAGMENT, DEPTH]])],
+        ),
         PIPELINE_IMPOSTOR => record(
             Head {
                 topology: STRIP,
@@ -647,7 +751,16 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_ATMOS_SKY_VIEW => record(
             screen(SHADER_ATMOS_SKY_VIEW),
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE], [14, FRAGMENT, UNIFORM]])],
+            &[group(&[
+                [0, FRAGMENT, UNIFORM],
+                AIR[0],
+                AIR[1],
+                AIR[3],
+                AIR[8],
+                [12, FRAGMENT, TEXTURE],
+                [14, FRAGMENT, UNIFORM],
+                [20, FRAGMENT, STORAGE_RW],
+            ])],
         ),
         PIPELINE_ATMOS_IRRADIANCE => record(screen(SHADER_ATMOS_IRRADIANCE), &[], &[group(&[AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE]])]),
         // The light on the land under the eye: the air's words and the tables it is lit by.
@@ -675,7 +788,10 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_STARS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]])],
+            &[
+                group(&[[0, VERTEX, UNIFORM], [8, VERTEX, UNIFORM], [9, VERTEX, TEXTURE], [11, VERTEX, SAMPLER]]),
+                group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]]),
+            ],
         ),
         // From under the sheets only where the world left the far plane; from over them everywhere.
         PIPELINE_CLOUDS => record(

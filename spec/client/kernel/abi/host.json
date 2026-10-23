@@ -27,15 +27,6 @@
         "a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most"
       ]
     },
-    "IMAGE_DECODE": {
-      "$value": 2147483651,
-      "$doc": [
-        "fd, image: the file opened as `fd` decoded where the device is and held for the",
-        "renderer as `image`, a handle the kernel issued; answered by IMAGE_DECODED. The",
-        "host takes the file's bytes when it runs this, so the kernel may close `fd` in the",
-        "same turn."
-      ]
-    },
     "TEXT_RASTER": {
       "$value": 2147483650,
       "$doc": [

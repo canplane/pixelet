@@ -8,7 +8,7 @@
 pub mod spec;
 
 use crate::layer::Base as _;
-use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
 use xpute_guest::sched::edge::{notified, Notify};
 
@@ -17,7 +17,6 @@ use crate::control::navigation::bootstrap::map_bootstrap_step;
 use crate::control::navigation::follow_mode::follow_mode_step;
 use crate::control::navigation::off_center::{off_center, off_center_step};
 use crate::control::sensor::device_orientation::{orientation_watchdog_step, OrientationPlatform};
-use crate::control::sensor::geolocation::geolocation_step;
 use crate::io::request::{pump, set_credits};
 use crate::io::text::text_rise;
 use pxl_spec::bake::tile::place::PlaceTile;
@@ -26,7 +25,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use crate::decor::assets::decor_assets_wanted;
 use crate::kernel;
 use crate::layer::earth::Earth;
-use crate::profiler::report::{report_step, set_host_task_ms, set_turn_timing};
+use crate::profiler::report::{profiler_frame, FrameTurn};
 use crate::scene::character::companion::{companion_step, CompanionProps};
 use crate::scene::environment::environment_step;
 use crate::scene::indicator::frame_gizmo::frame_gizmo_step;
@@ -65,14 +64,14 @@ fn companion_props() -> Option<CompanionProps> {
         steered: crate::control::camera::input::steering(),
         following: crate::control::navigation::follow_mode::following(),
         eye,
-        tau: crate::chunk::quality::effective().tau(),
+        tau: crate::view::lens::tau(),
     })
 }
 
 /// The tool's ghost, drawn by the scene.
 fn ghost_step() {
     use crate::control::interaction::ghost::{ghost, Ghost};
-    let changed = kernel().parts().map(|(_, _, scene, draw)| match ghost() {
+    let changed = kernel().parts().map(|(scene, draw)| match ghost() {
         Ghost::None => scene.ghost.clear(draw),
         Ghost::Decor { at, group, rotation, scale } => scene.ghost.set_decor(draw, at, group, rotation as f32, scale as f32),
         Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(draw, at, size, value, rgb, coplanar),
@@ -93,43 +92,33 @@ fn world_gizmo_tick(_: &mut TickContext) {
     frame_gizmo_step(show, focus, third_person.then(crate::control::camera::controller::azimuth));
 }
 
-/// The rays a new goal starts from.
-fn sight_tick(_: &mut TickContext) {
-    crate::chunk::quality::sight();
-}
-
-/// A slice of the goal walk, then quality. An unfinished walk asks for another turn.
-fn goal_tick(ctx: &mut TickContext) {
-    let end = now() + ctx.budget.remaining() * crate::param::VIEW_SHARE;
-    crate::chunk::quality::step(&|| now() >= end);
-    if crate::chunk::domain::walking() {
-        ctx.invalidate();
-    }
-}
-
-/// Each pyramid layer's tiles, from the published goal.
+/// Each pyramid layer's tiles, from the live eye.
 fn demand_tick(_: &mut TickContext) {
+    // The ground's windows where their centres now stand, before what arrives fills them.
+    let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
+    let pinned = crate::layer::terrain::window::step([
+        crate::view::observation::observation().map(|o| [o.eye[0], o.eye[1]]),
+        crate::control::camera::controller::focus().map(at),
+        crate::control::navigation::destination::pending().map(at),
+    ]);
+    if pinned {
+        TerrainTile::demand().moved();
+    }
     crate::view::demand::admit_arrived();
     changes_step();
-    // Demand follows the goal the chunks published, at the quality decided first.
-    let published = crate::chunk::domain::current().map(|d| crate::view::demand::Published {
-        observation: d.observation(),
-        footprints: d.footprints(),
-        lacks: d.lacks(),
-    });
-    let tau = crate::chunk::quality::effective().tau();
-    TerrainTile::demand().step(crate::control::navigation::destination::tile(), published, tau);
+    let tau = crate::view::lens::tau();
+    TerrainTile::demand().step(crate::control::navigation::destination::tile(), crate::layer::terrain::window::pinned(), tau);
     // Nothing is fetched while places are hidden.
     match crate::setting::store::settings_store().place {
-        true => PlaceTile::demand().step(None, published, tau),
+        true => PlaceTile::demand().step(None, &[], tau),
         false => PlaceTile::demand().idle(),
     }
-    Earth::demand().step(None, published, tau);
-    DivisionTile::demand().step(crate::layer::division::line(crate::control::camera::controller::focus()), published, tau);
+    Earth::demand().step(None, &[], tau);
+    DivisionTile::demand().step(crate::layer::division::line(crate::control::camera::controller::focus()), &[], tau);
 }
 
 fn camera_input_tick(_: &mut TickContext) {
-    camera_input_step(crate::chunk::quality::effective().tau());
+    camera_input_step(crate::view::lens::tau());
 }
 
 fn environment_tick(_: &mut TickContext) {
@@ -146,33 +135,18 @@ pub fn boot() {
     on_tick(Phase::interaction, environment_tick, StepName::environment as u32);
     on_tick(Phase::interaction, companion_tick, StepName::companion as u32);
     on_tick(Phase::interaction, crate::scene::character::preview::preview_step, StepName::preview as u32);
-    on_tick(Phase::visible, sight_tick, StepName::sight as u32);
-    on_tick(Phase::visible, goal_tick, StepName::goal as u32);
     on_tick(Phase::visible, demand_tick, StepName::demand as u32);
-    on_tick(Phase::visible, visible_step, StepName::chunks as u32);
+    on_tick(Phase::visible, visible_step, StepName::scene as u32);
     on_tick(Phase::cosmetic, world_gizmo_tick, StepName::world_gizmo as u32);
-    on_tick(Phase::report, report_step, StepName::profiler as u32);
     world_tasks();
-}
-
-/// The executor may ignore this order; nothing relies on it.
-#[repr(u8)]
-#[derive(Clone, Copy)]
-enum TaskPriority {
-    Frame,
-    Arrival,
-    Build,
-    Background,
 }
 
 /// No more than edge.rs's TASKS; a refusal means the executor holds fewer, and aborts.
 fn world_tasks() {
+    use crate::sched::edge::TaskPriority::*;
     use xpute_guest::sched::task::spawn;
-    use TaskPriority::*;
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
-        && spawn(crate::io::load::gltf_task(), Arrival as u8)
-        && spawn(crate::chunk::build::build_task(), Build as u8)
         && spawn(crate::decor::assets::decor_asset_task(), Background as u8)
         && spawn(crate::layer::object::repository::task(), Background as u8);
     if !spawned {
@@ -209,7 +183,6 @@ pub fn world_turn() -> f64 {
     let mut worst = (0.0f64, None);
     effect!(worst, navigation, off_center_step());
     effect!(worst, bootstrap, map_bootstrap_step());
-    effect!(worst, geolocation, geolocation_step(platform.geolocation));
     effect!(worst, orientation, orientation_watchdog_step(platform.orientation));
     effect!(worst, follow, follow_mode_step());
     effect!(worst, destination, crate::control::navigation::destination::destination_step());
@@ -218,7 +191,9 @@ pub fn world_turn() -> f64 {
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, objects, crate::layer::object::repository::step());
     effect!(worst, edit, {
-        if crate::chunk::source::preview(crate::control::interaction::edit::pending_step()) {
+        let edits = crate::control::interaction::edit::pending_step();
+        // A new preview moves the world as drawn where it was and where it is.
+        if crate::layer::object::preview::set(edits).is_some() {
             request_world_tick();
         }
     });
@@ -300,7 +275,9 @@ async fn frame_task() {
         notified(frames).await;
         let Some(host) = FRAME.get(|| None).take() else { continue };
         let edge = world_edge();
+        let frame_ms = host.frame_ms;
         world_frame(host, edge.quota_ms(), edge.edge_at());
+        crate::sched::edge::tasks_after_frame(frame_ms);
         DRAWN.set(true);
     }
 }
@@ -334,12 +311,18 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let report = run_tick(state, step, quota_ms, edge_at);
     let after_tick = now();
     pump();
-    crate::view::frame::resolution::resolution_step(state);
     crate::scene::stage::stage_write();
     crate::scene::stage::stage_render();
     let done = now();
-    set_turn_timing(effects_ms, done - after_tick);
-    set_host_task_ms(done - t0);
+    profiler_frame(FrameTurn {
+        tick: report,
+        interval_ms: delta * 1000.0,
+        display_ms: frame_ms,
+        settled: !interactive,
+        effects_ms,
+        stage_ms: done - after_tick,
+        task_ms: done - t0,
+    });
     if report.invalidated || take_draw() {
         request_world_tick();
     }
@@ -348,30 +331,22 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
 
 /// What moved this turn, told to what reads it: the tiles whose answer moved
 /// (identities, not contents, which a tile's identity fixes) and where the
-/// objects were written. Taken after arrivals are admitted, before the
-/// layers observe and the chunks compare their sources.
+/// objects were written, the ground's held by the query
+/// (query/changed.rs). Taken after arrivals are admitted, before the
+/// layers observe.
 fn changes_step() {
-    static MOVED: Global<[Vec<pxl_spec::space::layer::tile::Tile>; 4]> = Global::new();
-    static WRITTEN: Global<Vec<Aabb>> = Global::new();
-    let [ground, places, earth, divisions] = MOVED.get(Default::default);
-    let written = WRITTEN.get(Vec::new);
-    TerrainTile::residency().take_moved(ground);
+    static MOVED: Global<[Vec<pxl_spec::space::layer::tile::Tile>; 3]> = Global::new();
+    let [places, earth, divisions] = MOVED.get(Default::default);
+    let shared = crate::query::changed::take();
     PlaceTile::residency().take_moved(places);
     Earth::residency().take_moved(earth);
     DivisionTile::residency().take_moved(divisions);
-    crate::layer::object::store::take_written(written);
-    let shared = !ground.is_empty() || !written.is_empty();
-    if !written.is_empty() {
-        crate::chunk::source::objects_written(written);
-    }
     if shared {
-        crate::chunk::source::chunk_sources_changed();
-        crate::chunk::domain::moved(ground.iter().map(|p| p.region()).chain(written.iter().copied()));
         TerrainTile::demand().moved();
     }
     if shared || !places.is_empty() {
         PlaceTile::demand().moved();
-        crate::chunk::place::moved();
+        crate::scene::place::moved(places);
     }
     if shared || !earth.is_empty() {
         Earth::demand().moved();

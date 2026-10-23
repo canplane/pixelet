@@ -4,9 +4,9 @@
 //
 // The color of every look and every placed color: what a cube *is* to
 // the eye when no texture is drawn over it — everything drawn with the
-// pack off reads this, the coarse tiers included, which summarize it
+// pack off reads this, the coarse blocks included, which summarize it
 // the way they summarize the tiles with the pack on
-// (pxl-render mesh/chunk.rs). A texture pack decorates these; it
+// (pxl-render paint.wgsl). A texture pack decorates these; it
 // does not replace them.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON

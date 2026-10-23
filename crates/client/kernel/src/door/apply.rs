@@ -5,7 +5,7 @@
 use super::{post_shell, State};
 use crate::abi::cmd::{self as abi, Command};
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use xpute_guest::abi::cmd as xpute_cmd;
 use xpute_guest::mem::base::{off_of, off_of_slice};
 use xpute_kit::status::errno::Errno;
@@ -61,12 +61,16 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     match cmd {
         Command::WORLD_FRAME => {
             let p = abi::WorldFrame::read(packet(pkt)?)?;
-            refuse_unless(p.dpr > 0.0 && p.delta_s >= 0.0 && p.frame_ms >= 0.0, Errno::EINVAL)?;
+            refuse_unless(p.dpr > 0.0 && p.frame_ms >= 0.0 && p.unix_ms.is_finite(), Errno::EINVAL)?;
+            // The step is the one clock's change since the last frame: none on
+            // the first, and none where the clock was set back.
+            let last = crate::io::host::wall_now();
+            let delta = if last > 0.0 { ((p.unix_ms - last) / 1000.0).max(0.0) } else { 0.0 };
             crate::turn::world_frame_asked(crate::turn::HostFrame {
                 width: p.width,
                 height: p.height,
                 dpr: p.dpr,
-                delta: p.delta_s,
+                delta,
                 frame_ms: p.frame_ms,
                 interactive: p.interactive,
                 credits: p.credits,
@@ -78,7 +82,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let p = abi::WorldBoot::read(packet(pkt)?)?;
             super::host_attached(s);
             crate::io::host::set_development(p.development);
-            crate::io::host::set_handheld(p.handheld);
             crate::turn::set_world_platform(crate::turn::Platform {
                 geolocation: p.geolocation,
                 orientation: device_orientation::OrientationPlatform {
@@ -175,7 +178,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::INPUT_VIEW => {
             let p = abi::InputView::read(packet(pkt)?)?;
-            ui::set_view(p.dist, p.polar);
+            ui::set_view(p.dist, p.polar, p.azimuth);
             applied(s)
         }
         Command::INPUT_COMPASS_RESET => {
@@ -259,23 +262,9 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             ui::sensors_close();
             applied(s)
         }
-        Command::IMAGE_DECODED => {
-            let p = abi::ImageDecoded::read(packet(pkt)?)?;
-            crate::io::load::image_decoded(p.image, crate::io::host::answered(p.res));
-            Ok(Some(0))
-        }
         Command::GPU_READY => {
-            let p = abi::GpuReady::read(packet(pkt)?)?;
-            let align = p.min_uniform_offset_alignment;
-            refuse_unless(align.is_power_of_two() && align <= pxl_render::gpu::renderer::UNIFORM_ALIGN_MAX, Errno::EINVAL)?;
-            pxl_render::gpu::renderer::gpu_created(p.min_uniform_offset_alignment, p.timestamps);
+            pxl_render::gpu::api::device_answered();
             request_world_tick();
-            Ok(Some(0))
-        }
-        Command::GPU_LOST => {
-            pxl_render::gpu::renderer::gpu_lost();
-            crate::scene::stage::screen_lost();
-            crate::io::load::images_lost();
             Ok(Some(0))
         }
         Command::SURFACE_OPEN => {
@@ -304,13 +293,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let p = abi::SettingSet::read(packet(pkt)?)?;
             let changed = settings_store().set_setting(p.key, p.value);
             refuse_unless(changed.is_some(), Errno::EINVAL)?;
-            if changed == Some(true) {
-                if p.key.sources_chunks() {
-                    crate::chunk::source::chunk_sources_changed();
-                }
-                if p.key == SettingKey::performance_overlay {
-                    profiler_follow(p.value == 1, crate::profiler::summary::counters());
-                }
+            if changed == Some(true) && p.key == SettingKey::performance_overlay {
+                profiler_follow(p.value == 1, crate::profiler::summary::counters());
             }
             applied(s)
         }
@@ -348,6 +332,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // Memory is at most 1 GiB, so an address fits an i32.
         Command::PROFILER_READ => Ok(Some(profiler_read(abi::ProfilerRead::read(packet(pkt)?)?.window_ms) as i32)),
         Command::PROFILER_TAKE => Ok(Some(profiler_take(s) as i32)),
+        Command::PROFILER_RINGS => Ok(Some(profiler_rings() as i32)),
         Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP => Ok(None),
     }
 }
@@ -370,25 +355,35 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
 }
 
 /// The address of READ's words (profiler.json): the summary over
-/// `window_ms` and the three rings. Read in place rather than posted:
-/// `Door::post` asserts on a full completion ring, and reading allocates
-/// nothing in the heap being measured. Valid until the next turn.
+/// `window_ms`. Read in place rather than posted: `Door::post` asserts on a
+/// full completion ring, and reading allocates nothing in the heap being
+/// measured. Valid until the next turn.
 fn profiler_read(window_ms: Option<f64>) -> u32 {
-    use crate::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
     use crate::profiler::spec::READ;
     // On the heap, not a static: a native build's statics are outside the shell-readable memory.
     static WORDS: xpute_guest::global::Global<Box<[u32; READ::WORDS as usize]>> = xpute_guest::global::Global::new();
     let summary = crate::profiler::summary::profiler_summarize(window_ms);
-    let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
     w[READ::summary_at as usize] = off_of_slice(&raw const *summary) as u32;
     w[READ::summary_words as usize] = summary.len() as u32;
-    w[READ::frames_at as usize] = off_of_slice(&raw const *frames) as u32;
-    w[READ::frames_count as usize] = frames.len() as u32;
-    w[READ::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
-    w[READ::tasks_count as usize] = tasks.len() as u32;
-    w[READ::worst_at as usize] = off_of_slice(&raw const *worst) as u32;
-    w[READ::worst_count as usize] = worst.len() as u32;
+    off_of(w.as_ptr()) as u32
+}
+
+/// The address of RINGS's words: the three rings as they lie, which a
+/// reader of every record asks without the summary it would not read.
+fn profiler_rings() -> u32 {
+    use crate::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
+    use crate::profiler::spec::RINGS;
+    // On the heap, as READ's words are.
+    static WORDS: xpute_guest::global::Global<Box<[u32; RINGS::WORDS as usize]>> = xpute_guest::global::Global::new();
+    let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
+    let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));
+    w[RINGS::frames_at as usize] = off_of_slice(&raw const *frames) as u32;
+    w[RINGS::frames_count as usize] = frames.len() as u32;
+    w[RINGS::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
+    w[RINGS::tasks_count as usize] = tasks.len() as u32;
+    w[RINGS::worst_at as usize] = off_of_slice(&raw const *worst) as u32;
+    w[RINGS::worst_count as usize] = worst.len() as u32;
     off_of(w.as_ptr()) as u32
 }
 
@@ -414,7 +409,7 @@ mod test;
 
 /// What a tap on a badge does with the tool held.
 enum BadgeTap {
-    Go(Pvf3),
+    Go(Q3),
     Remove(EntryAt),
     Wait(EntryAt),
 }
@@ -423,9 +418,9 @@ enum BadgeTap {
 /// the eraser takes away a marker someone put up, and the marker tool has the
 /// waiting marker stand there. None where no badge there takes it.
 fn badge_tap(x: f64, y: f64) -> Option<BadgeTap> {
-    use crate::chunk::place::Went;
     use crate::control::interaction::ActiveTool;
-    match (crate::control::interaction::holding().active_tool, crate::chunk::place::tap(x, y)?) {
+    use crate::scene::place::Went;
+    match (crate::control::interaction::holding().active_tool, crate::scene::place::tap(x, y)?) {
         (ActiveTool::Pointer, Went::To(at) | Went::Marker(_, at)) => Some(BadgeTap::Go(at)),
         (ActiveTool::Eraser, Went::Marker(e, _)) => Some(BadgeTap::Remove(e)),
         (ActiveTool::Marker, Went::Marker(e, _)) => Some(BadgeTap::Wait(e)),
@@ -443,6 +438,6 @@ fn tap_at(x: f64, y: f64) {
         Some(BadgeTap::Go(at)) => crate::control::navigation::destination::go_to_place(at),
         Some(BadgeTap::Remove(e)) => crate::control::interaction::edit::remove(e),
         Some(BadgeTap::Wait(e)) => crate::control::interaction::edit::wait_at(e),
-        None => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
+        None => crate::control::interaction::tap(x, y, crate::view::lens::tau()),
     }
 }

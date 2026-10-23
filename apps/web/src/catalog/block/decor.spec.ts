@@ -11,7 +11,7 @@
 // grows it on its own. A kind's `seed` names its scatter, so changing it
 // reshuffles every one the ground grows; `density` is its mean candidates per
 // cell at the cell's zoom, the intensity of the Poisson process that scatters
-// it (pxl-spec procedural.rs); `on` the looks it may stand on; `orientation`
+// it (pxl-portable scatter.rs); `on` the looks it may stand on; `orientation`
 // a random heading, or along the road or rail its cell lies on. A variant's
 // skin is its pack's colormap, kept outside the glb.
 //

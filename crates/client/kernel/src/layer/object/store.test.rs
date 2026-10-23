@@ -1,17 +1,24 @@
 // pxl-kernel/layer/object/store.test.rs
 
 use pxl_spec::block::cube::Object;
-use pxl_spec::space::coord::pvf3::ivec;
+use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::coord::zoom::{base_of, UNIT_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 
+use fnv::FnvHashMap;
+use pxl_spec::space::coord::zoom::SHARD_ZOOM;
+use pxl_spec::space::hierarchy::morton::child_cube;
+
 use super::*;
+use crate::layer::Query;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::block::object::{cube_id, Cube};
+use pxl_spec::block::placed::{self, Cut};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_kit::math::rng::SplitMix64;
 
-fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
-    Pvf3 { i: ivec::gather(x, y, z), f: 0 }
+fn corner(x: i64, y: i64, z: i64) -> Q3 {
+    base_of(UNIT_ZOOM, [x, y, z])
 }
 
 #[test]
@@ -25,9 +32,12 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
                 ext: None
             }])
             .is_empty());
-        assert_eq!(
-            store.node(OBJECT_FINEST, first_descendant_of(at, u32::from(OBJECT_FINEST - OBJECT_COARSEST))).0.state,
-            3,
+        let finest = at.map(|v| v << (OBJECT_FINEST - OBJECT_COARSEST));
+        assert!(
+            {
+                let held = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
+                held.holds() && !held.folded() && placed::value(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest.map(|v| v as i32)) == 3
+            },
             "a cell leaf covers its steps"
         );
         let mut met = Vec::new();
@@ -82,8 +92,9 @@ fn some_node(rng: &mut Rng, reach: f64) -> Node<3> {
     (zoom, at)
 }
 
-/// Whole cells from a corner, and what the store keeps folded at `zoom`'s
-/// cells, with the corner in that zoom's cells.
+/// Whole cells from a corner, and what the objects' pyramid holds at
+/// `zoom`'s cells, read through the store's query, with the corner in that
+/// zoom's cells.
 fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (FnvHashMap<[i64; 3], u32>, [i64; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
@@ -96,7 +107,17 @@ fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (FnvHashMap<[i64; 3], u
     let corner = base.map(|v| v >> (GROUND.cell() - target));
     let per = 64 >> (GROUND.cell() - target);
     let mut out = FnvHashMap::default();
-    store.fold_at(target, corner, [corner[0] + per, corner[1] + per], None, &mut out).unwrap();
+    for z in -4..8 {
+        for y in corner[1]..corner[1] + per {
+            for x in corner[0]..corner[0] + per {
+                let held = store.cursor((target, [x, y, z]), target);
+                let v = placed::value(&store.lanes(), held, Cut::NONE, target, [x, y, z].map(|v| v as i32));
+                if v != VOID {
+                    out.insert([x, y, z], v);
+                }
+            }
+        }
+    }
     (out, corner)
 }
 
@@ -217,7 +238,7 @@ fn eight_markers_filling_a_cell_stay_eight() {
 }
 
 #[test]
-fn a_column_read_whole_meets_its_leaves() {
+fn a_shard_read_whole_meets_its_leaves() {
     let mut store = Store::default();
     let at = [5, 7, 2];
     store.write([Write {

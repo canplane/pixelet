@@ -19,7 +19,7 @@
 /// The coarsest chunk that draws a marker: z14, where OpenMapTiles' `poi`
 /// layer holds every point (layers/poi/poi.yaml). What someone puts up, and
 /// what someone says, the bubble over their character, judged by the chunk
-/// drawing where its speaker stands (pxl-kernel chunk/place.rs).
+/// drawing where its speaker stands (pxl-kernel scene/place.rs).
 pub const MARKER_SHOWN_FROM: u8 = 14;
 
 /// A marker's cell on the camera grid, in zooms: −1 spans two of the grid's

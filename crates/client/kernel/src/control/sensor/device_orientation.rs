@@ -15,7 +15,6 @@ use xpute_guest::global::Global;
 /// gap while tracking is taken as loss. Only valid where the sensor talks
 /// while still (`silence_is_loss`).
 const WATCHDOG_TIMEOUT_MS: f64 = 8000.0;
-const WATCHDOG_INTERVAL_MS: f64 = 3000.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OrientationCommand {
@@ -36,7 +35,6 @@ pub struct OrientationPlatform {
 
 struct Orientation {
     last_event_at: Option<f64>,
-    watchdog_at: f64,
     /// The turn's last; the shell's listener follows it and ignores a repeat.
     command: Option<OrientationCommand>,
 }
@@ -44,11 +42,7 @@ struct Orientation {
 static ORIENTATION: Global<Orientation> = Global::new();
 
 fn orientation() -> &'static mut Orientation {
-    ORIENTATION.get(|| Orientation {
-        last_event_at: None,
-        watchdog_at: 0.0,
-        command: None,
-    })
+    ORIENTATION.get(|| Orientation { last_event_at: None, command: None })
 }
 
 /// iOS's compass heading preferred, the alpha-derived one otherwise.
@@ -141,32 +135,25 @@ pub fn orientation_visible() {
     }
 }
 
-/// Also the only path back once lost; iOS recovery stays manual (the compass
-/// button), since its request needs a user gesture.
+/// Armed only while a heading is tracked, where silence is the only sign of
+/// its loss: nothing tracked, nothing is woken for. It wakes once, where
+/// the silence since the last event would be a loss; an event before then
+/// moves that deadline, so a talking sensor is never polled. A heading is
+/// asked for when the sensors open and again when the user follows
+/// (pxl-kernel shell.rs `tracking_action`), never on a timer.
 pub fn orientation_watchdog_step(platform: OrientationPlatform) {
-    if !platform.silence_is_loss {
+    if !platform.silence_is_loss || !device_orientation_store().is_tracking_orientation {
         return;
     }
     let o = orientation();
-    let t = now();
-    if t < o.watchdog_at {
-        wake_at(o.watchdog_at);
-        return;
-    }
-    o.watchdog_at = t + WATCHDOG_INTERVAL_MS;
-    wake_at(o.watchdog_at);
-    let store = device_orientation_store();
-    if !store.is_tracking_orientation {
-        if !platform.needs_permission {
-            request_orientation(platform);
-        }
-        return;
-    }
     let Some(last) = o.last_event_at else { return };
-    if t - last > WATCHDOG_TIMEOUT_MS {
-        o.command = Some(OrientationCommand::Remove);
-        orientation_lost();
+    let lost_at = last + WATCHDOG_TIMEOUT_MS;
+    if now() < lost_at {
+        wake_at(lost_at);
+        return;
     }
+    o.command = Some(OrientationCommand::Remove);
+    orientation_lost();
 }
 
 pub fn take_orientation_command() -> Option<OrientationCommand> {

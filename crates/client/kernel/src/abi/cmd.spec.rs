@@ -42,7 +42,6 @@ pub enum Major {
     WORLD = 0x10,
     INPUT = 0x11,
     SENSOR = 0x12,
-    IMAGE = 0x13,
     GPU = 0x14,
     SURFACE = 0x15,
     SETTING = 0x16,
@@ -52,11 +51,10 @@ pub enum Major {
 }
 
 impl Major {
-    pub const ALL: [Major; 10] = [
+    pub const ALL: [Major; 9] = [
         Major::WORLD,
         Major::INPUT,
         Major::SENSOR,
-        Major::IMAGE,
         Major::GPU,
         Major::SURFACE,
         Major::SETTING,
@@ -171,32 +169,15 @@ impl SensorMinor {
     }
 }
 
-/// An image's verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ImageMinor {
-    DECODED = 0x01,
-}
-
-impl ImageMinor {
-    pub const ALL: [ImageMinor; 1] = [ImageMinor::DECODED];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<ImageMinor> {
-        ImageMinor::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
 /// The GPU's verbs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum GpuMinor {
     READY = 0x01,
-    LOST = 0x02,
 }
 
 impl GpuMinor {
-    pub const ALL: [GpuMinor; 2] = [GpuMinor::READY, GpuMinor::LOST];
+    pub const ALL: [GpuMinor; 1] = [GpuMinor::READY];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<GpuMinor> {
@@ -280,10 +261,18 @@ pub enum ProfilerMinor {
     LOG = 0x03,
     READ = 0x04,
     TAKE = 0x05,
+    RINGS = 0x06,
 }
 
 impl ProfilerMinor {
-    pub const ALL: [ProfilerMinor; 5] = [ProfilerMinor::START, ProfilerMinor::STOP, ProfilerMinor::LOG, ProfilerMinor::READ, ProfilerMinor::TAKE];
+    pub const ALL: [ProfilerMinor; 6] = [
+        ProfilerMinor::START,
+        ProfilerMinor::STOP,
+        ProfilerMinor::LOG,
+        ProfilerMinor::READ,
+        ProfilerMinor::TAKE,
+        ProfilerMinor::RINGS,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<ProfilerMinor> {
@@ -547,10 +536,6 @@ pub enum Command {
     SENSOR_STOP = 0x1203,
 
     // ---- the host answers: an I/O the process started, done ----
-    /// An image the kernel asked decoded (host.json's IMAGE_DECODE): 0, held for the renderer
-    /// as the kernel's `image`, or -errno where the file is not an image the device decodes.
-    /// A file that did not come is the open's answer (xpute's SYS_OPENED), not this.
-    IMAGE_DECODED = 0x1301,
     /// A GPS fix; a field is absent where the browser gave none.
     SENSOR_POSITION = 0x1202,
     /// An orientation event; a field is absent where the browser gave none.
@@ -592,10 +577,8 @@ pub enum Command {
     INPUT_WHEEL = 0x1103,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_KEYS = 0x1106,
-    /// A device answered; the kernel's renderer is made on it (crates/client/render/src/gpu/renderer.rs).
+    /// A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (crates/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge.
     GPU_READY = 0x1401,
-    /// The device went away, and every object on it.
-    GPU_LOST = 0x1402,
 
     // ---- the shell and the process: what the UI asks of it, and what it shows the UI ----
     /// A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on.
@@ -614,7 +597,8 @@ pub enum Command {
     /// The tracking button's press, as the button showed it.
     INPUT_TRACKING = 0x1104,
     /// Where the camera stands, set outright rather than driven: what the kernel's own
-    /// test puts a view at, and what an A/B reads two builds at the same view with.
+    /// test puts a view at, and what an A/B reads two builds at the same view with
+    /// (a development page's `?eye=`, feature/debug/eye.ts).
     INPUT_VIEW = 0x1105,
     /// The compass's press: north up.
     INPUT_COMPASS_RESET = 0x1107,
@@ -641,22 +625,23 @@ pub enum Command {
     PROFILER_STOP = 0x1902,
     /// The console stream on or off.
     PROFILER_LOG = 0x1903,
-    /// The profiler where it lies: the reply is the address of READ's words (profiler.json) over the
-    /// last `window_ms`, the whole recording where it is absent, good until the next turn. A number
-    /// past the door is finite, so no window is infinite.
+    /// The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)
+    /// over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
+    /// number past the door is finite, so no window is infinite.
     PROFILER_READ = 0x1904,
     /// The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn.
     PROFILER_TAKE = 0x1905,
+    /// The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn.
+    PROFILER_RINGS = 0x1906,
     /// The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
     /// block the kernel holds, valid until the next snapshot.
     WORLD_SNAPSHOT = 0x1004,
 }
 
 impl Command {
-    pub const ALL: [Command; 44] = [
+    pub const ALL: [Command; 43] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
-        Command::IMAGE_DECODED,
         Command::SENSOR_POSITION,
         Command::SENSOR_ORIENTATION,
         Command::SENSOR_ERROR,
@@ -675,7 +660,6 @@ impl Command {
         Command::INPUT_WHEEL,
         Command::INPUT_KEYS,
         Command::GPU_READY,
-        Command::GPU_LOST,
         Command::SURFACE_OPEN,
         Command::SURFACE_RESIZE,
         Command::SURFACE_CLOSE,
@@ -697,6 +681,7 @@ impl Command {
         Command::PROFILER_LOG,
         Command::PROFILER_READ,
         Command::PROFILER_TAKE,
+        Command::PROFILER_RINGS,
         Command::WORLD_SNAPSHOT,
     ];
 
@@ -980,23 +965,6 @@ impl SensorStopSignal {
     }
 }
 
-/// Command::IMAGE_DECODED's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct ImageDecoded {
-    pub image: u32,
-    pub res: i32,
-}
-
-impl ImageDecoded {
-    pub fn read(pkt: &[u8]) -> Result<ImageDecoded, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(ImageDecoded {
-            image: integer::<u32>(f.at(0)?.get_number()?)?,
-            res: integer::<i32>(f.at(1)?.get_number()?)?,
-        })
-    }
-}
-
 /// Command::SENSOR_POSITION's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct SensorPosition {
@@ -1082,7 +1050,6 @@ impl SensorError {
 pub struct WorldBoot<'a> {
     /// A development build, which offers the settings schema.json marks `dev`.
     pub development: bool,
-    pub handheld: bool,
     pub geolocation: bool,
     pub orientation: bool,
     /// iOS 13+'s gate: requestPermission exists and must run inside a gesture.
@@ -1102,12 +1069,11 @@ impl<'a> WorldBoot<'a> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(WorldBoot {
             development: f.at(0)?.get_bool()?,
-            handheld: f.at(1)?.get_bool()?,
-            geolocation: f.at(2)?.get_bool()?,
-            orientation: f.at(3)?.get_bool()?,
-            orientation_permission: f.at(4)?.get_bool()?,
-            orientation_silence_is_loss: f.at(5)?.get_bool()?,
-            settings: f.at(6)?.get_str_ref()?,
+            geolocation: f.at(1)?.get_bool()?,
+            orientation: f.at(2)?.get_bool()?,
+            orientation_permission: f.at(3)?.get_bool()?,
+            orientation_silence_is_loss: f.at(4)?.get_bool()?,
+            settings: f.at(5)?.get_str_ref()?,
         })
     }
 }
@@ -1119,12 +1085,12 @@ pub struct WorldFrame {
     pub width: f64,
     pub height: f64,
     pub dpr: f64,
-    /// The frame interval and the turn, as the host measured them.
-    pub delta_s: f64,
+    /// The turn, as the host measured it.
     pub frame_ms: f64,
     pub interactive: bool,
     pub credits: u32,
-    /// The wall clock, `Date.now()`.
+    /// The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and
+    /// the step the tick takes, its change since the last frame.
     pub unix_ms: f64,
 }
 
@@ -1135,11 +1101,10 @@ impl WorldFrame {
             width: finite(f.at(0)?.get_number()?)?,
             height: finite(f.at(1)?.get_number()?)?,
             dpr: finite(f.at(2)?.get_number()?)?,
-            delta_s: finite(f.at(3)?.get_number()?)?,
-            frame_ms: finite(f.at(4)?.get_number()?)?,
-            interactive: f.at(5)?.get_bool()?,
-            credits: integer::<u32>(f.at(6)?.get_number()?)?,
-            unix_ms: finite(f.at(7)?.get_number()?)?,
+            frame_ms: finite(f.at(3)?.get_number()?)?,
+            interactive: f.at(4)?.get_bool()?,
+            credits: integer::<u32>(f.at(5)?.get_number()?)?,
+            unix_ms: finite(f.at(6)?.get_number()?)?,
         })
     }
 }
@@ -1300,23 +1265,6 @@ impl InputKeys {
     }
 }
 
-/// Command::GPU_READY's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct GpuReady {
-    pub min_uniform_offset_alignment: u32,
-    pub timestamps: bool,
-}
-
-impl GpuReady {
-    pub fn read(pkt: &[u8]) -> Result<GpuReady, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(GpuReady {
-            min_uniform_offset_alignment: integer::<u32>(f.at(0)?.get_number()?)?,
-            timestamps: f.at(1)?.get_bool()?,
-        })
-    }
-}
-
 /// Command::SURFACE_OPEN's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct SurfaceOpen {
@@ -1373,7 +1321,7 @@ impl SurfaceClose {
 #[derive(Clone, Copy, Debug)]
 pub struct PreviewOpen {
     pub surface: u32,
-    pub group: crate::scene::character::variant_spec::Group,
+    pub group: crate::model::variant_spec::Group,
     pub number: u8,
 }
 
@@ -1382,7 +1330,7 @@ impl PreviewOpen {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(PreviewOpen {
             surface: integer::<u32>(f.at(0)?.get_number()?)?,
-            group: crate::scene::character::variant_spec::Group::of(integer::<u8>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
+            group: crate::model::variant_spec::Group::of(integer::<u8>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
             number: integer::<u8>(f.at(2)?.get_number()?)?,
         })
     }
@@ -1454,6 +1402,7 @@ impl InputTracking {
 pub struct InputView {
     pub dist: Option<f64>,
     pub polar: Option<f64>,
+    pub azimuth: Option<f64>,
 }
 
 impl InputView {
@@ -1465,6 +1414,10 @@ impl InputView {
                 None => None,
             },
             polar: match f.at(1)?.opt() {
+                Some(c) => Some(finite(c.get_number()?)?),
+                None => None,
+            },
+            azimuth: match f.at(2)?.opt() {
                 Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },

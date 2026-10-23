@@ -34,7 +34,7 @@ class PlatformModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PxlPlatform")
 
-    // ---- the kernel (platform/guest.ts, gpu.ts, image.ts) ----
+    // ---- the kernel (platform/guest.ts, gpu.ts) ----
 
     // The region is the guest's for the app's life: nothing is let go when
     // the buffer is.
@@ -42,14 +42,28 @@ class PlatformModule : Module() {
 
     Function("interrupt") { quotaMs: Double -> PxlGuest.interrupt(quotaMs) }
 
-    /** The device's uniform offset alignment and whether it times its
-     * passes, or null where the system has no GPU. */
-    Function("gpuOpen") { PxlGuest.gpuOpen()?.toList() }
+    /** Whether the device opened; what it is, the kernel reads from the host. */
+    Function("gpuOpen") { PxlGuest.gpuOpen() }
 
-    /** Decodes a PNG or a WebP and holds it for the renderer: its handle, or 0
-     * when it does not decode. Async, so it runs off the JavaScript thread: a
-     * large image costs no turn. */
-    AsyncFunction("imageHold") { handle: Int, file: ByteArray -> PxlGuest.imageHold(handle, file) }
+    // ---- the kernel's turns (platform/gpu.ts) ----
+
+    /** The device's host asks a turn: a completion it writes at the next
+     * turn's poll would otherwise wait for an input to be read. Sent from the
+     * thread that learned of the completion; Expo carries the event to the
+     * JavaScript thread itself. */
+    Events("onWake")
+
+    OnCreate { PxlGuest.woken = { sendEvent("onWake") } }
+
+    OnDestroy { PxlGuest.woken = null }
+
+    // ---- the transport (platform/origin.ts) ----
+
+    /** A body fetched still zstd, decoded off the JavaScript thread on the
+     * module's queue, into a direct buffer JavaScript takes without a copy. */
+    AsyncFunction("unpack") { packed: ByteArray ->
+      NativeArrayBuffer(PxlGuest.unpack(packed) ?: throw CodedException("a body sent zstd does not decode"))
+    }
 
     // ---- storage (platform/storage.ts) ----
     //

@@ -1,17 +1,20 @@
 // pxl-kernel/layer/object/preview.rs
 
 //! An edit not yet made, as what it changes in what is drawn: the pointer
-//! decides it, the chunks draw without it; and a marker waiting for its
-//! words, drawn with the words it has so far.
+//! decides it, the world as drawn composes it (`World::previewed`); and a
+//! marker waiting for its words, drawn with the words it has so far.
 
 use crate::sched::edge::request_world_tick;
 use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::zoom::cube;
 use xpute_guest::global::Global;
 
-/// What the eraser's preview changes in the drawn build only: the pick and
-/// the cell queries still see what it hides, or hover would clear, the hide
-/// lift and the pick hit it again, forever. No revision moves, so saves do
-/// not see the hover.
+/// What the eraser's preview changes in what is drawn only: every mechanic
+/// — the pick, a walk, the camera's clearance, an edit's own reads, decor's
+/// footing — asks the stored world (`World::now`), or hover would clear,
+/// the hide lift and the pick hit it again, forever, and a walker would fall
+/// into a hole not dug. No revision moves, so saves do not see the hover.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RenderEdits {
     /// The placed object hidden, and whether it is drawn in tiers, decor, or
@@ -22,6 +25,28 @@ pub struct RenderEdits {
     pub carve: Option<EntryAt>,
     /// The scattered decor hidden, by the cell it stands in.
     pub scattered: Option<[i64; 3]>,
+}
+
+impl RenderEdits {
+    /// The cubes it changes, where the world as drawn moves when it does.
+    pub fn cubes(&self) -> impl Iterator<Item = Aabb> {
+        [self.hide, self.carve].into_iter().flatten().map(|e| cube(e.zoom(), e.at()))
+    }
+}
+
+/// The pointer's preview, the one copy of it.
+static PREVIEW: Global<RenderEdits> = Global::new();
+
+/// Hands the pointer's preview over once a turn: the one it replaced, where
+/// it changed.
+pub fn set(edits: RenderEdits) -> Option<RenderEdits> {
+    let was = core::mem::replace(PREVIEW.get(RenderEdits::default), edits);
+    (was != edits).then_some(was)
+}
+
+/// The preview in force.
+pub fn current() -> RenderEdits {
+    *PREVIEW.get(RenderEdits::default)
 }
 
 /// A marker the tool left waiting for its words, at a place free or holding

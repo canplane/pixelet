@@ -20,7 +20,7 @@ that must reach a user are shown.
 How bridges and tunnels stand is [louis-e/arnis][arnis] at `c96872e`
 (Apache-2.0), its [element processing][processing] for bridges,
 highways and railways without the blocks it places
-([decision](./decision/20261006-bridges-and-tunnels-as-arnis-solves-them.md)):
+([decision](./doc/minutes/20261006-bridges-and-tunnels-as-arnis-solves-them.md)):
 the bake's solve in `separation/arnis.rs`, whose head carries the license notice,
 and the piers in `procedural.rs`, which reach the client and are marked
 where they begin. Both read Overture's fields for OSM's tags and take their

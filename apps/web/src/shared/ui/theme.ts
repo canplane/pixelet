@@ -147,7 +147,7 @@ export const chrome = {
   inset: 16,
   control: 48,
   controlGap: 8,
-  /** iOS's least touch target (decision/20260928-three-sizes-of-a-control.md). */
+  /** iOS's least touch target (doc/minutes/20260928-three-sizes-of-a-control.md). */
   target: 44,
   glyph: 20,
   selection: 36,

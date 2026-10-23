@@ -1,7 +1,7 @@
 # Indicators (the one-off indicator tier)
 
 This directory is the current home of the "one-off indicator" rendering
-tier — see [decision/20260907-world-rendering-tiers.md](/decision/20260907-world-rendering-tiers.md)
+tier — see [doc/minutes/20260907-world-rendering-tiers.md](/doc/minutes/20260907-world-rendering-tiers.md)
 for the full taxonomy. `hover_cursor.rs` and `location_puck.rs` were
 already co-located here before that document named the pattern; this file
 just makes the grouping explicit.
@@ -17,10 +17,8 @@ way a billboard would. pxl-render `look/color.rs`'s `indicator` is shared stylin
 this tier specifically (`ACTION`, `ERASE`), not a general color constant
 file.
 
-`frame_gizmo.rs`, `coverage_gizmo.rs` and `camera_gizmo.rs` live here too
-but are debug visualizations behind the `world_gizmo` setting (the focus's
-cell and the frames' rings; the drawn pieces, the goal and their shards) and the
-`camera_gizmo` setting (the camera grid's cells), as debug lines, which the
-gizmos' own faces hide and nothing of the world does — not real
-one-off indicators in the same sense, adjacent by folder convenience, not by
-tier.
+`frame_gizmo.rs` lives here too but is a debug visualization behind the
+`world_gizmo` setting (the focus's cell and the frames' rings), as debug
+lines, which the gizmo's own faces hide and nothing of the world does — not
+a real one-off indicator in the same sense, adjacent by folder convenience,
+not by tier.

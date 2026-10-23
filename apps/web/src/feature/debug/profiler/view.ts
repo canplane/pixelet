@@ -12,12 +12,12 @@ import { td } from "@xpute/kit/codec/encoding.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
 import { OUTCOME_NAMES, STREAM_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/demand.spec.ts";
-import { kernel_call, kernel_memory } from "@/kernel/shell.ts";
+import { kernel_call, kernel_memory, kernel_room } from "@/kernel/shell.ts";
 
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
-import { CENSUS_TAGS, FRAME, LOG, READ, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WORST } from "./profiler.spec.ts";
+import { CENSUS_TAGS, FRAME, LOG, READ, RINGS, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WAKES, WORST } from "./profiler.spec.ts";
 import { STEP_NAMES } from "@/kernel/turn/step.spec.ts";
-import { GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
+import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
 import { type Frame, frameAt } from "./lane.ts";
 import { type LongFrame, longFramesSince } from "./long-frame.ts";
 
@@ -72,22 +72,25 @@ export interface FrameSummary {
   moving: f64;
   missed: f64;
   overran: f64;
-  dt: Spread;
-  task: Spread;
-  offthread: Spread;
+  /** Intervals whose turns ran past them. */
+  long: f64;
+  turns: f64;
+  /** Frames a GPU read landed with, which the GPU's figures are over. */
+  gpu_read: f64;
+  interval: Spread;
+  busy: Spread;
+  off_turn: Spread;
+  tick: Spread;
+  tasks: Spread;
   gpu: Spread;
-  sched: Spread;
-  chunks: Spread;
-  phases: { name: string; spread: Spread }[];
-  gpu_spans: { name: string; spread: Spread }[];
-  perS: [f64, f64];
-  backlog_s: f64;
-  backlogPerS: [f64, f64];
-  chunks_per_bake: f64 | null;
-  mounts: [f64, f64];
-  used_delta_mb: f64;
+  /** Each phase's p95, and each span's p95 and max: what is read of them. */
+  phases: { name: string; p95: f64 }[];
+  gpu_spans: { name: string; p95: f64; max: f64 }[];
+  /** Frames by the renderer's kind, and the turns' last ask by wake. */
+  kinds: { name: string; n: f64 }[];
+  wakes: { name: string; n: f64 }[];
+  heap_used_delta_bytes: f64;
   census: { tag: string; draws: f64; tris: f64 }[];
-  zoom_tris: f64[];
   last: Frame;
 }
 
@@ -112,7 +115,7 @@ export interface TaskSummary {
   ok: u32;
   aborted: u32;
   error: u32;
-  lat: Spread;
+  lat: { p50: f64; p95: f64 };
   reasons: { fail: u32; detail: u32; n: u32 }[];
   phase_mean: [string, f64][] | null;
 }
@@ -121,9 +124,8 @@ export interface ProfilerReport {
   t: f64;
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
-  sections: Record<"counters" | "sheet" | "held" | "fetch" | "quality" | "view", Record<string, f64>>;
+  sections: Record<"open" | "counters" | "sheet" | "fetch" | "quality" | "view", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
-  peak: Record<string, f64> | null;
   tasks: TaskSummary[];
   recent: TaskRecord[];
   worst: { sample: Frame; prev: Frame | null }[];
@@ -136,31 +138,29 @@ function frameSummary(s: F64Array): FrameSummary | null {
   const F = SUMMARY.frames;
   const a = F.AT;
   if (s[a + F.present] === 0) return null;
-  const nanNull = (v: f64) => (Number.isNaN(v) ? null : v);
   return {
     n: s[a + F.n],
     seconds: s[a + F.seconds],
     moving: s[a + F.moving],
     missed: s[a + F.missed],
     overran: s[a + F.overran],
-    dt: spreadAt(s, a + F.dt),
-    task: spreadAt(s, a + F.task),
-    offthread: spreadAt(s, a + F.offthread),
+    long: s[a + F.long],
+    turns: s[a + F.turns],
+    gpu_read: s[a + F.gpu_read],
+    interval: spreadAt(s, a + F.interval),
+    busy: spreadAt(s, a + F.busy),
+    off_turn: spreadAt(s, a + F.off_turn),
+    tick: spreadAt(s, a + F.tick),
+    tasks: spreadAt(s, a + F.tasks),
     gpu: spreadAt(s, a + F.gpu),
-    sched: spreadAt(s, a + F.sched),
-    chunks: spreadAt(s, a + F.chunks),
-    phases: PHASES.map((name, k) => ({ name, spread: spreadAt(s, a + F.phases + k * SPREAD.WORDS) })),
-    gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.gpu_spans + k * SPREAD.WORDS) })),
-    perS: [s[a + F.per_s_runs], s[a + F.per_s_bakes]],
-    backlog_s: s[a + F.backlog_s],
-    backlogPerS: [s[a + F.backlog_per_s_runs], s[a + F.backlog_per_s_bakes]],
-    chunks_per_bake: nanNull(s[a + F.chunks_per_bake]),
-    mounts: [s[a + F.mounts_added], s[a + F.mounts_removed]],
-    used_delta_mb: s[a + F.used_delta_mb],
+    phases: PHASES.map((name, k) => ({ name, p95: s[a + F.phases_p95 + k] })),
+    gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, p95: s[a + F.gpu_spans_p95 + k], max: s[a + F.gpu_spans_max + k] })),
+    kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
+    wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
+    heap_used_delta_bytes: s[a + F.heap_used_delta_bytes],
     census: CENSUS_TAGS.map((tag, k) => ({ tag, draws: s[a + F.census + 2 * k], tris: s[a + F.census + 2 * k + 1] }))
       .filter((r) => r.draws > 0)
       .sort((x, y) => y.tris - x.tris),
-    zoom_tris: Array.from({ length: F.last - F.zoom_tris }, (_, k) => s[a + F.zoom_tris + k]),
     last: frameAt(s, a + F.last),
   };
 }
@@ -182,7 +182,7 @@ function taskSummaries(s: F64Array): TaskSummary[] {
       ok: s[a + TASK_SUMMARY.ok],
       aborted: s[a + TASK_SUMMARY.aborted],
       error: s[a + TASK_SUMMARY.error],
-      lat: spreadAt(s, a + TASK_SUMMARY.lat),
+      lat: { p50: s[a + TASK_SUMMARY.lat_p50], p95: s[a + TASK_SUMMARY.lat_p95] },
       reasons,
       phase_mean: s[a + TASK_SUMMARY.phase_n] > 0 ? means : null,
     });
@@ -196,27 +196,34 @@ function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
   return out;
 }
 
-interface Read {
-  summary: F64Array;
+/** The summary over the last `windowMs`, or the whole recording at null. */
+function read(windowMs: f64 | null): F64Array {
+  const r = u32s(kernel_call(Command.PROFILER_READ, encode_profiler_read(kernel_room, windowMs)), READ.WORDS);
+  return words(r[READ.summary_at], r[READ.summary_words]);
+}
+
+interface Rings {
   frames: [u32, u32];
   tasks: [u32, u32];
   worst: [u32, u32];
 }
 
-/** Over the last `windowMs`, or the whole recording at null. */
-function read(windowMs: f64 | null): Read {
-  const r = u32s(kernel_call(Command.PROFILER_READ, encode_profiler_read({ window_ms: windowMs })), READ.WORDS);
+/** The rings as they lie, each its address and count, with nothing reduced. */
+function rings(): Rings {
+  const r = u32s(kernel_call(Command.PROFILER_RINGS), RINGS.WORDS);
   return {
-    summary: words(r[READ.summary_at], r[READ.summary_words]),
-    frames: [r[READ.frames_at], r[READ.frames_count]],
-    tasks: [r[READ.tasks_at], r[READ.tasks_count]],
-    worst: [r[READ.worst_at], r[READ.worst_count]],
+    frames: [r[RINGS.frames_at], r[RINGS.frames_count]],
+    tasks: [r[RINGS.tasks_at], r[RINGS.tasks_count]],
+    worst: [r[RINGS.worst_at], r[RINGS.worst_count]],
   };
 }
 
 export interface Gauge {
+  /** The frames and tasks the rings hold, as RINGS counts them. */
   rec: { recording: boolean; elapsed_ms: f64; tasks: u32; frames: u32; truncated: boolean };
   frames: FrameSummary | null;
+  /** The interval in progress, which no frame turn has closed. */
+  open: { turns: f64; busy_ms: f64 };
   tasks: TaskSummary[];
   counters: Record<string, f64>;
   sheet: { size: u32; entries: u32; shelves: u32; used_px: u32; initial: u32 };
@@ -235,11 +242,13 @@ function worstAt([at, count]: [u32, u32]): ProfilerReport["worst"] {
 }
 
 export function profilerGaugeRead(windowMs: f64): Gauge {
-  const { summary: s } = read(windowMs);
+  const s = read(windowMs);
+  const { frames, tasks } = rings();
   const r = section(s, SUMMARY.rec);
   return {
-    rec: { recording: r.recording !== 0, elapsed_ms: r.elapsed_ms, tasks: r.tasks, frames: r.frames, truncated: r.truncated !== 0 },
+    rec: { recording: r.recording !== 0, elapsed_ms: r.elapsed_ms, tasks: tasks[1], frames: frames[1], truncated: r.truncated !== 0 },
     frames: frameSummary(s),
+    open: section(s, SUMMARY.open) as Gauge["open"],
     tasks: taskSummaries(s),
     counters: section(s, SUMMARY.counters),
     sheet: section(s, SUMMARY.sheet) as Gauge["sheet"],
@@ -250,8 +259,8 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
 }
 
 export function profilerReportRead(): ProfilerReport {
-  const { summary: s, tasks, worst } = read(null);
-  const peak = section(s, SUMMARY.peak);
+  const s = read(null);
+  const { tasks, worst } = rings();
   const stepsAt = SUMMARY.steps.AT;
   const steps = Array.from({ length: s[stepsAt + SUMMARY.steps.count] }, (_, i) => {
     const w = stepsAt + SUMMARY.steps.slots + i * STEP.WORDS;
@@ -269,15 +278,14 @@ export function profilerReportRead(): ProfilerReport {
     build: { number: BUILD_NUMBER, id: BUILD_ID, time: BUILD_TIME },
     frames: frameSummary(s),
     sections: {
+      open: section(s, SUMMARY.open),
       counters: section(s, SUMMARY.counters),
       sheet: section(s, SUMMARY.sheet),
-      held: section(s, SUMMARY.held),
       fetch: section(s, SUMMARY.fetch),
       quality: section(s, SUMMARY.quality),
       view: section(s, SUMMARY.view),
     },
     steps,
-    peak: peak.present === 0 ? null : Object.fromEntries(Object.entries(peak).filter(([k]) => k !== "present")),
     tasks: taskSummaries(s),
     recent: tasksAt(tasks[0] + recentFrom * TASK.WORDS * WORD, tasks[1] - recentFrom),
     worst: worstAt(worst),
@@ -286,7 +294,7 @@ export function profilerReportRead(): ProfilerReport {
 }
 
 export function profilerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; worst: ProfilerReport["worst"] } {
-  const { tasks, frames, worst } = read(0);
+  const { tasks, frames, worst } = rings();
   return { frames: framesAt(frames[0], frames[1]), tasks: tasksAt(tasks[0], tasks[1]), worst: worstAt(worst) };
 }
 

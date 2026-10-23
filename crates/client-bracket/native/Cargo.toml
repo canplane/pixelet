@@ -19,13 +19,23 @@ fnv.workspace = true
 xpute-kit = { path = "../../../xpute/rust/kit" }
 xpute-guest = { path = "../../../xpute/rust/guest" }
 pxl-kernel = { path = "../../client/kernel", default-features = false }
-pxl-render = { path = "../../client/render", features = ["device"] }
-# The view's layer or window made a surface on (src/surface.rs); the device
-# and every call on it are pxl-render's. Metal on an iPhone, Vulkan on
-# Android; each backend compiles to nothing on the other's system.
+pxl-render = { path = "../../client/render" }
+# The host that runs the renderer's stream on the device after each turn
+# (src/gpu.rs), as the page's runs it on WebGPU.
+xpute-gpu = { path = "../../../xpute/rust/gpu", features = ["host"] }
+# The device, and the view's layer or window made a surface on (src/gpu.rs).
+# Metal on an iPhone, Vulkan on Android; each backend compiles to nothing on
+# the other's system.
 wgpu = { version = "30", default-features = false, features = ["metal", "vulkan", "wgsl"] }
+# Waits out the adapter's and the device's futures at start-up, which wgpu
+# resolves at once on a native backend.
+pollster = "1"
 # The kernel's region, mapped from the system (src/memory.rs).
 libc = "0.2"
+# The bodies the app's fetch hands over still zstd (src/unpack.rs): a reader
+# of RFC 8878's frame, as a browser's decoder is, in Rust, so no target's
+# build needs a C compiler for it.
+ruzstd = { version = "0.9", default-features = false, features = ["std"] }
 
 # What an Android app reaches the kernel through (src/android.rs): the NDK's
 # own headers — JNI, the native window a view's surface is, and the log —

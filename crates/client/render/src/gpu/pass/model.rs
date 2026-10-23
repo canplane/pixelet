@@ -4,50 +4,50 @@
 //! uniform slots written once before the pass, and the draw loop.
 
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
-use crate::gpu::api::{buffer_usage, object, release, Gpu};
-use crate::gpu::api_spec::{format, resource};
-use crate::gpu::atmosphere::AIR_WORDS;
+use crate::gpu::api::{buffer_range_entry, buffer_usage, release, Entry, Gpu};
+use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{frame_group, put_f32, put_u32, Scratch};
 
 #[derive(Clone, Copy)]
 pub enum Stage {
     Lit,
-    Depth,
     Prepass,
 }
 
 /// A layout is shared by its words, so one group 0 serves every model pipeline.
 pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
-    pipelines.build(g, PIPELINE_SKINNED, format::CANVAS).layouts[0]
+    pipelines.build(g, PIPELINE_SKINNED, g.canvas()).layouts[0]
 }
 
-/// The light's is none where nothing is drawn into a shadow map.
+/// Group 0 as the world image's models read it, the occlusion its map, and
+/// as what is drawn over the image reads it (`over`): open, as the map is of
+/// the image beneath, which the occlusion was found over without it.
 pub struct FrameGroups {
     pub frame: u32,
-    pub light: u32,
+    pub over: u32,
     layout: u32,
-    air: [u32; AIR_WORDS],
+    air: [Entry; AIR_ENTRIES],
 }
 
 impl FrameGroups {
-    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5], air: [u32; AIR_WORDS]) -> FrameGroups {
+    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, [ao, open]: [Entry; 2], air: [Entry; AIR_ENTRIES]) -> FrameGroups {
         FrameGroups {
-            frame: frame_group(g, layout, frame_buffer, shadow, ao, air),
-            light: light.map_or(0, |(frame, entries)| frame_group(g, layout, frame, entries, ao, air)),
+            frame: frame_group(g, layout, frame_buffer, ao, air),
+            over: frame_group(g, layout, frame_buffer, open, air),
             layout,
             air,
         }
     }
 
-    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5]) {
+    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, ao: [Entry; 2]) {
         self.release();
-        *self = FrameGroups::new(g, self.layout, frame_buffer, shadow, light, ao, self.air);
+        *self = FrameGroups::new(g, self.layout, frame_buffer, ao, self.air);
     }
 
     pub fn release(&self) {
         release(self.frame);
-        release(self.light);
+        release(self.over);
     }
 }
 
@@ -95,10 +95,8 @@ impl DrawUniforms {
         if need > self.capacity {
             release(self.group);
             release(self.buffer);
-            self.buffer = object();
-            g.buffer(self.buffer, need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            self.group = object();
-            g.bind_group(self.group, layout, &[0, resource::BUFFER, self.buffer, 0, self.bytes]);
+            self.buffer = g.buffer(need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            self.group = g.bind_group(layout, &[buffer_range_entry(0, self.buffer, 0, self.bytes)]);
             self.capacity = need;
         }
         let stride = self.stride as usize;
@@ -185,6 +183,12 @@ pub fn draw_models<'a>(
 
 #[allow(clippy::too_many_arguments)]
 pub fn draw_model(g: &Gpu, pass: u32, lit: &Built, bound: &mut u32, mesh: u32, vertex_cnt: u32, index_cnt: u32, instances: u32) {
+    bind_mesh(g, pass, lit, bound, mesh, vertex_cnt, index_cnt);
+    g.draw_indexed(pass, index_cnt, instances, 0, 0);
+}
+
+/// A mesh's vertex lanes and indices bound, unless `bound` is it already.
+pub fn bind_mesh(g: &Gpu, pass: u32, lit: &Built, bound: &mut u32, mesh: u32, vertex_cnt: u32, index_cnt: u32) {
     if *bound != mesh {
         let mut at = 0;
         for lane in 0..lit.lanes {
@@ -195,5 +199,4 @@ pub fn draw_model(g: &Gpu, pass: u32, lit: &Built, bound: &mut u32, mesh: u32, v
         g.set_index_buffer(pass, mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, index_cnt * 4);
         *bound = mesh;
     }
-    g.draw_indexed(pass, index_cnt, instances, 0, 0);
 }

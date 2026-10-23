@@ -29,7 +29,7 @@ function sectioned<S, T>(items: readonly T[], sectionOf: (item: T) => S): Map<S,
 const SECTIONS = sectioned(allCubes, cubeSection);
 const DECOR_SECTIONS = sectioned(decorIds, decorSection);
 
-// A press lands on 44 at least (decision/20260928-three-sizes-of-a-control.md); a circle cut a block's texture away, so a rounded square.
+// A press lands on 44 at least (doc/minutes/20260928-three-sizes-of-a-control.md); a circle cut a block's texture away, so a rounded square.
 const GRID_GAP = 4;
 const LIT_SCALE = 1.05;
 const LIT_INK = 2;

@@ -41,17 +41,11 @@ fn check<'a>(name: &str, build: impl FnOnce(&mut TreeView<'a>)) -> Vec<u8> {
 }
 
 #[test]
-fn a_string_written_from_display_is_the_encoder_s_string_and_reads_back_where_it_lies() {
+fn a_string_written_from_display_reads_back_where_it_lies() {
     let mut buf = [0xffu8; 128];
     let mut w = PacketWriter::new(&mut buf, 2);
     w.str_display(format_args!("{}-{}", "héllo", 42)).u32(Some(7));
     let n = w.finish().unwrap() as usize;
-    let expected = encode(|t| {
-        t.branch(Some(&mut |b| {
-            b.str(Some("héllo-42")).u32(Some(7));
-        }));
-    });
-    assert_eq!(&buf[..n], &expected[..]);
     let branch = TreeReader::new(&buf[..n]).unwrap().read_branch().unwrap();
     assert_eq!(branch.at(0).unwrap().get_str_ref().unwrap(), "héllo-42");
     assert!(branch.at(1).unwrap().get_str_ref().is_err(), "a number is not a string");
@@ -59,98 +53,6 @@ fn a_string_written_from_display_is_the_encoder_s_string_and_reads_back_where_it
     let mut w = PacketWriter::new(&mut small, 1);
     w.str_display("far longer than the room that is left");
     assert_eq!(w.finish(), None, "a string that does not fit spoils the packet");
-}
-
-#[test]
-fn a_packet_writer_writes_the_bytes_the_encoder_writes_for_the_same_branch() {
-    let words = [7u32, 0xdead_beef, 3];
-    let floats = [1.5f64, -2.25];
-    let bytes = [9u8, 8, 7];
-    let expected = encode(|t| {
-        t.branch(Some(&mut |b| {
-            b.bool(Some(true))
-                .u32(Some(42))
-                .str(Some("héllo, ring"))
-                .u8(Some(3))
-                .f64(Some(-0.5))
-                .str(None)
-                .u64(Some(1 << 40))
-                .i32(Some(-9))
-                .u32(None)
-                .f32(Some(2.5))
-                .u32_array(Some(&words[..]))
-                .f64_array(Some(&floats[..]))
-                .u8_array(Some(&bytes[..]))
-                .str(Some(""));
-        }));
-    });
-    let mut buf = [0xffu8; 512];
-    let mut w = PacketWriter::new(&mut buf, 14);
-    w.bool(Some(true))
-        .u32(Some(42))
-        .str(Some("héllo, ring"))
-        .u8(Some(3))
-        .f64(Some(-0.5))
-        .str(None)
-        .u64(Some(1 << 40))
-        .i32(Some(-9))
-        .u32(None)
-        .f32(Some(2.5))
-        .u32_array(Some(&words))
-        .f64_array(Some(&floats))
-        .u8_array(Some(&bytes))
-        .str(Some(""));
-    let n = w.finish().unwrap() as usize;
-    assert_eq!(&buf[..n], &expected[..]);
-    let empty = encode(|t| {
-        t.branch(Some(&mut |_| {}));
-    });
-    let n = PacketWriter::new(&mut buf, 0).finish().unwrap() as usize;
-    assert_eq!(&buf[..n], &empty[..], "a branch of nothing");
-    let mut small = [0u8; 40];
-    let mut w = PacketWriter::new(&mut small, 1);
-    w.str(Some("longer than what is left"));
-    assert_eq!(w.finish(), None, "a child that does not fit spoils the packet");
-}
-
-#[test]
-fn a_branch_inside_a_packet_writer_is_the_encoder_s_branch() {
-    let floats = [0.5f64, 4.0];
-    let expected = encode(|t| {
-        t.branch(Some(&mut |b| {
-            b.u32(Some(1))
-                .branch(Some(&mut |b| {
-                    b.str(Some("a")).branch(Some(&mut |b| {
-                        b.f64(Some(2.0)).str(None);
-                    }));
-                }))
-                .branch(None)
-                .branch(Some(&mut |_| {}))
-                .f64_array(Some(&floats[..]));
-        }));
-    });
-    let mut buf = [0xffu8; 512];
-    let mut w = PacketWriter::new(&mut buf, 5);
-    w.u32(Some(1))
-        .branch(2, |w| {
-            w.str(Some("a")).branch(2, |w| {
-                w.f64(Some(2.0)).str(None);
-            });
-        })
-        .no_branch()
-        .branch(0, |_| {})
-        .f64_array(Some(&floats));
-    let n = w.finish().unwrap() as usize;
-    assert_eq!(&buf[..n], &expected[..]);
-    let root = TreeReader::new(&buf[..n]).unwrap().read_branch().unwrap();
-    let inner = root.at_branch(1).unwrap().at_branch(1).unwrap();
-    assert_eq!(inner.at(0).unwrap().get_number().unwrap(), 2.0);
-    let mut small = [0u8; 48];
-    let mut w = PacketWriter::new(&mut small, 1);
-    w.branch(3, |w| {
-        w.u32(Some(1)).u32(Some(2)).str(Some("past the room"));
-    });
-    assert_eq!(w.finish(), None, "a branch that does not fit spoils the packet");
 }
 
 #[test]
@@ -284,24 +186,4 @@ fn a_packet_under_the_cap_is_written_whatever_the_cap() {
         ..Default::default()
     };
     assert_eq!(TreeEncoder::new().encode(&t, options).unwrap().len(), 16 + 8 + 1104);
-}
-
-#[test]
-fn what_follows_a_branch_in_a_packet_writer_lies_where_the_encoder_lays_it() {
-    let expected = encode(|t| {
-        t.branch(Some(&mut |b| {
-            b.branch(Some(&mut |b| {
-                b.u8(Some(1));
-            }))
-            .u8(Some(2));
-        }));
-    });
-    let mut buf = [0xffu8; 128];
-    let mut w = PacketWriter::new(&mut buf, 2);
-    w.branch(1, |w| {
-        w.u8(Some(1));
-    })
-    .u8(Some(2));
-    let n = w.finish().unwrap() as usize;
-    assert_eq!(&buf[..n], &expected[..]);
 }

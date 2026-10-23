@@ -1,7 +1,8 @@
 // pxl-kernel/control/navigation/off_center.rs
 
 use pxl_spec::space::coord::adapter::epsg4326;
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::world;
 
 use crate::control::navigation::support::unknown_z;
 use crate::control::sensor::reading::device_location_store;
@@ -9,14 +10,14 @@ use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct OffCenter {
-    pub device_coord: Option<Pvf3>,
+    pub device_coord: Option<Q3>,
     pub is_off_center: bool,
 }
 
 static OFF_CENTER: Global<bool> = Global::new();
 
 /// At its altitude; where the device gives none, its Z unknown.
-fn device_coord() -> Option<Pvf3> {
+fn device_coord() -> Option<Q3> {
     device_location_store().location.map(|l| {
         let [lng, lat] = l.coords;
         let at = epsg4326::project(&[lng, lat, l.altitude.unwrap_or(0.0)]);
@@ -43,11 +44,8 @@ pub fn off_center_step() {
     // their mismatch could hold it off-center forever.
     match (crate::control::camera::controller::focus(), device_coord()) {
         (Some(center), Some(device)) => {
-            // PVF3 X wraps a full world period, so the difference is short across the
-            // antimeridian.
-            let delta = pvf3::sub(&device, &center);
-            let dx = pvf3::to_real(pvf3::X(&delta));
-            let dy = pvf3::to_real(pvf3::Y(&device) - pvf3::Y(&center));
+            // X the short way across the antimeridian.
+            let [dx, dy, _] = world::between(&center, &device).map(q3::to_real);
             let dist = (dx * dx + dy * dy).sqrt();
             if !*off && dist > 10.0 {
                 *off = true;

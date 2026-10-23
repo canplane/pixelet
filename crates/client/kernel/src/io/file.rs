@@ -10,11 +10,12 @@ use xpute_guest::ipc::sys::Fd;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::abi::host::{root, OBJECTS_PATH, SETTINGS_PATH};
+use crate::asset::LOADS;
 use crate::io::failure::Failure;
 use crate::io::host::{answered, heap_stat, sys, turn};
-use crate::io::load::LOADS;
 use crate::io::request::Credit;
 use crate::mem::spec::MIN_HEAP_BYTES;
+use crate::param::MAX_CREDITS;
 use crate::sched::edge::request_world_tick;
 use pxl_spec::bake::source::VERSION_BYTES;
 use xpute_guest::global::Global;
@@ -63,9 +64,13 @@ pub enum Owner {
     Write,
 }
 
-static FILES: Global<Files<Owner>> = Global::new();
+/// The most files open at once, and slot 0: a credit's each (`open` takes
+/// one), each kept file's read, and a write, opened and closed in one call.
+const OPEN: usize = MAX_CREDITS as usize + Kept::ALL.len() + 2;
 
-fn files() -> &'static mut Files<Owner> {
+static FILES: Global<Files<Owner, OPEN>> = Global::new();
+
+fn files() -> &'static mut Files<Owner, OPEN> {
     FILES.get(Files::new)
 }
 
@@ -176,6 +181,37 @@ pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
 pub fn close(fd: Fd) {
     if let Some(sys) = sys() {
         files().close(sys, fd);
+    }
+}
+
+/// A path as `open` takes it, written where it is wanted: at most
+/// `PATH_BYTES`, so no path is allocated.
+pub struct Path {
+    bytes: [u8; PATH_BYTES],
+    len: usize,
+}
+
+impl Path {
+    /// The path `write` writes; past `PATH_BYTES` is a bug, as `named` says.
+    pub fn of(write: impl FnOnce(&mut Path) -> core::fmt::Result) -> Path {
+        let mut p = Path { bytes: [0; PATH_BYTES], len: 0 };
+        xpute_kit::ensure!(write(&mut p).is_ok(), EMSGSIZE, PATH_BYTES);
+        p
+    }
+
+    pub fn as_str(&self) -> &str {
+        // SAFETY: only `write_str`'s whole strs are in it.
+        unsafe { core::str::from_utf8_unchecked(&self.bytes[..self.len]) }
+    }
+}
+
+impl core::fmt::Write for Path {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        let end = self.len + s.len();
+        let to = self.bytes.get_mut(self.len..end).ok_or(core::fmt::Error)?;
+        to.copy_from_slice(s.as_bytes());
+        self.len = end;
+        Ok(())
     }
 }
 

@@ -80,6 +80,14 @@ Files are reached as Plan 9 reaches them: the guest issues the descriptor, a han
 
 These are a service the boundary carries, not rules of the boundary, so their traces are apart from the contract's: the host's end is held by `spec/conformance/sys/`, and every guest by `spec/conformance/file.tsv`, which checks that an answer reaches only a descriptor still open.
 
+## A GPU's calls, in WebGPU's words
+
+The calls a renderer makes to a device were the case streams were made for, and most of what they say is no one program's: what a buffer is, how a pipeline reads its vertices, which pass a draw belongs to are WebGPU's. So xpute writes them down once, in WebGPU's own vocabulary (`spec/gpu/`). Each enumeration is its spec's strings in order, a member's number its place in the list, so a host hands the string to the device as it is. Each call is an op whose words follow the descriptor WebGPU takes, every format, entry point and blend state given as data and nothing defaulted on the program's behalf.
+
+A guest writes them into a stream of its own through the encoder (`gpu/encode`), which takes each object's handle from one table, and a transaction that does not fit gives back the handles its objects took, and writes a record twice, once to count its words and once into the room the stream reserved for them. A host runs them on its device. The two agree on those words and nothing else, so a guest that draws a triangle and one that sums two arrays ask nothing more of xpute than the calls each makes. Three calls finish after the turn that follows them, an image copied in, a buffer read back and the queue's work done, so each names a word the host sets to its ticket with `DONE` once they have, and the guest reads the word rather than counting on the order.
+
+It stands beside `kit` and the two ends, not inside them: it is one kind of call, and a program that never reaches a GPU links none of it. What a program builds over it, a shorthand for its own pipelines, the names of the spans it times, how many frames it keeps in flight, stays the program's, written into these calls rather than added to them.
+
 ---
 
 ## The packet
@@ -216,16 +224,19 @@ Everything above is implemented in more than one language, and the implementatio
 
 - `kit`: `abi` words and the command number · `alloc` slab and buddy · `codec` JSON · `collection` arena, deque, heap · `math` scalar, rng · `status` errno, error, bug · `wire` XTP, TLV · `golden` the record reader.
 - `guest`: `mem` sections, the base, the heap door and a heap to install between bounds the guest gives · `module` what a WebAssembly guest reads of its module: where the linker stopped, the memory given, the host's clock · `ipc` directory, frame, ring, stream, sys and the file table, the guest's door · `sched` quantum, tick, pass, task, edge · `abi` commands, handles · `clock` · `global`.
+- `gpu`: the ops and WebGPU's enumerations from `spec/gpu/`, and `encode`, the calls written into a stream, and behind the `host` feature `host`, a stream's calls run on a wgpu device.
 
 **TypeScript** (`ts/`)
 
 - `kit`: `abi` `codec` `collection` `math` `status` `wire` `golden` as the Rust, plus `lang` (comparators, iterators, types) and `env` (feature detection); no `alloc`, since a TypeScript program has no linear heap of its own, and no `bug`, since a thrown error carries its stack.
 - `host`: `mem` the reservation · `ipc` directory, frame, ring, stream, sys, the host's doorbell · `sched` quantum, **strobe** · `abi` commands, handles.
+- `gpu`: the ops and WebGPU's enumerations from `spec/gpu/`, and `host`, a stream's calls run on a WebGPU device.
 
 **C++** (`cpp/`)
 
 - `kit`: `abi` `alloc` `codec` `collection` `math` `status` `wire` `golden` as the Rust, and `codec` hex, base64url and FNV, which the Rust takes as crates.
 - `guest`: `mem` the memory, sections and the heap door · `ipc` directory, frame, ring, stream, sys and the file table, the guest's door · `sched` quantum, tick, pass, task, edge · `abi` commands, handles · `clock`.
+- `gpu`: the ops and WebGPU's enumerations from `spec/gpu/`, and `encode`, the calls written into a stream.
 
 The two layers differ in what they ask of a program. `kit` asks nothing: link it and call it. `guest` and `host` ask a program to run xpute's way — memory granted once, work in turns, I/O by asking.
 
@@ -239,7 +250,7 @@ Under `spec/golden/` are lines of `path<TAB>value`, produced once, checked once,
 
 There are two kinds, and the difference decides whether a record may ever be re-recorded.
 
-- **Across a protocol** — `wire/xtp`, `wire/tlv`, and `codec/json`'s grammar: which texts are JSON at all, as the host's own `JSON.parse` judges them, so a document a guest reads in place is one the host would have read. Every language that carries one must produce these bytes and judgments, to the last one, and each one's tests read the same files.
+- **Across a protocol** — `wire/xtp`, `wire/tlv`, and `codec/json`'s grammar: which texts are JSON at all, as the host's own `JSON.parse` judges them, so a document a guest reads in place is one the host would have read; and `gpu/programs`: the words each encoder writes for the same calls, and the bytes each host reads back from them. Every language that carries one must produce these bytes and judgments, to the last one, and each one's tests read the same files.
 - **Inside a language** — everything else. A record holds one implementation to itself. Where Rust and JavaScript's `Math` round differently, neither is wrong, and each record follows its own implementation.
 
 The rule in one line: inside a language, each follows its own; across a protocol, the results must match exactly.

@@ -13,6 +13,7 @@ use crate::space::camera::grid::{split_distance, Tau};
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::world::REACH;
 use crate::space::coord::zoom::{units, Zoom};
+use crate::space::layer::lattice::demand_reach;
 
 /// The distances a layer's `zoom` is required over: from where the grid's
 /// cell its tiles fold into begins (0 for the leaves) to where the next
@@ -29,7 +30,7 @@ pub fn band(o: &Observation, tau: Tau, lattice: Lattice, top: Zoom, zoom: Zoom) 
 /// ⌊d / tile⌋ + 2, the same at every zoom. A tile of fewer grid cells is
 /// asked for more of.
 pub const fn reach_across(lattice: Lattice) -> u32 {
-    (2.0 * lattice.demand_reach(LEAF_ZOOM) / units(LEAF_ZOOM)) as u32 + 2
+    (2.0 * demand_reach(lattice, LEAF_ZOOM) / units(LEAF_ZOOM)) as u32 + 2
 }
 
 /// The most of a lattice's tiles a zoom's demand names about one observer.

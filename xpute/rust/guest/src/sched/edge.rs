@@ -16,6 +16,9 @@ use crate::clock::now;
 pub struct Edge<const N: usize> {
     edge_at: f64,
     quota_ms: f64,
+    /// When the turn's tasks yield: the quota's end, or later where the guest
+    /// kept them a share past what ran before them (`extend_to`).
+    until: f64,
     parked: [Option<Waker>; N],
     parked_len: usize,
     asked: bool,
@@ -27,6 +30,7 @@ impl<const N: usize> Edge<N> {
         Edge {
             edge_at: 0.0,
             quota_ms: 0.0,
+            until: 0.0,
             parked: [const { None }; N],
             parked_len: 0,
             asked: false,
@@ -37,6 +41,7 @@ impl<const N: usize> Edge<N> {
     pub fn rise(&mut self, quota_ms: f64) {
         self.edge_at = now();
         self.quota_ms = quota_ms;
+        self.until = self.edge_at + quota_ms;
         for waker in self.parked[..self.parked_len].iter_mut() {
             if let Some(w) = waker.take() {
                 w.wake();
@@ -66,11 +71,19 @@ impl<const N: usize> Edge<N> {
     }
 
     pub fn remaining(&self) -> f64 {
-        (self.edge_at + self.quota_ms - now()).max(0.0)
+        (self.until - now()).max(0.0)
     }
 
     pub fn spent(&self) -> bool {
-        now() >= self.edge_at + self.quota_ms
+        now() >= self.until
+    }
+
+    /// The tasks yield no sooner than `at`, whatever the quota: a share the
+    /// guest keeps them past what ran before them, so what overran the quota
+    /// does not take the tasks' turn too. The share is the guest's policy;
+    /// the edge keeps only the deadline.
+    pub fn extend_to(&mut self, at: f64) {
+        self.until = self.until.max(at);
     }
 
     pub fn ask_next(&mut self) {

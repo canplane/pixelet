@@ -264,13 +264,6 @@ pub const LE: bool = true;
 
 pub const MAGIC: u32 = 0x00505458; // "XTP\0" little-endian word
 
-#[derive(Clone, Copy, Debug)]
-pub struct EncodingState {
-    pub base: u32,
-    pub lim: u32,
-    pub type_: NodeType,
-}
-
 pub const DESC_TYPE_W: u32 = 8;
 pub const DESC_TYPE_SHAMT: u32 = 0;
 pub const DESC_TYPE_MASK: u32 = (1 << DESC_TYPE_W) - 1;

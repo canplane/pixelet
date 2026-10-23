@@ -18,22 +18,16 @@
 // is numbered by its place in SETTINGS (the kernel's SettingKey), which is
 // what crosses for it. An `index` is a place in a list kept elsewhere — the
 // person and the pet are by theirs in variant.json — and crosses as itself.
-// `sources_chunks` marks one a chunk's build reads, so that changing it
-// builds the chunks again.
 
 export const SETTINGS = {
   /** Ground color from the art pack (four taps of the layer array per
-   * fragment) instead of the flat per-instance average. The chunk shader's
+   * fragment) instead of the flat per-instance average. The paint shader's
    * `frame.low_spec` is this, inverted.
    *
    * Low because the four taps are all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
    * pass of its own, and no work off the GPU past an atlas the client
-   * already holds.
-   *
-   * It sources the chunks: the shader samples a leaf's layer or does not,
-   * but a tier over it carries one color and no layer to sample, so which
-   * color that is was baked in (mesh/chunk.rs). */
+   * already holds. */
   textures: {
     key: 0 as number,
     kind: "toggle",
@@ -43,7 +37,7 @@ export const SETTINGS = {
   },
   /** Procedurally scattered decor only; what the player placed stays.
    *
-   * Med because it is models rather than a shading term: a chunk builds its
+   * Med because it is models rather than a shading term: a cube of the eye's builds its
    * decor and the frame draws it, so what it costs follows what is in view.
    * It has been the frame's own bottleneck — 20260912-what-to-render-when.md
    * reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
@@ -113,7 +107,7 @@ export const SETTINGS = {
     section: "camera",
     dev_options: ["through"],
   },
-  /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/chunk.wgsl).
+  /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
     key: 8 as number,
@@ -141,82 +135,68 @@ export const SETTINGS = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
-  /** The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world drawn once more
-   * from the sun each frame, depth only, and a 3x3 compare per fragment;
-   * 16 MB of map on a desktop, 4 on a phone. */
-  shadows: {
-    key: 11 as number,
-    kind: "toggle",
-    default: false,
-    section: "lighting",
-    cost: "high",
-  },
-  /** The pixels the world is filled at, the GPU's largest cost: two to a
-   * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
-  resolution: {
-    key: 12 as number,
-    kind: "choice",
-    default: "auto",
-    options: ["auto", "fixed", "low"],
-    section: "display",
-  },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
   view_overlay: {
-    key: 13 as number,
+    key: 11 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
   performance_overlay: {
-    key: 14 as number,
+    key: 12 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs). */
+  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
   world_gizmo: {
-    key: 15 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
-  },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/indicator/camera_gizmo.rs). */
-  camera_gizmo: {
-    key: 16 as number,
-    kind: "toggle",
-    default: false,
-    section: "debug",
-    dev: true,
   },
   person: {
-    key: 17 as number,
+    key: 14 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 18 as number,
+    key: 15 as number,
     kind: "index",
     default: 5 as number,
     section: "character",
+  },
+  /** How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each. */
+  rays: {
+    key: 16 as number,
+    kind: "choice",
+    default: "half",
+    options: ["cells", "half", "full"],
+    section: "debug",
+    dev: true,
+  },
+  /** Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl). */
+  ray_steps: {
+    key: 17 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+    dev: true,
   },
 } as const;
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */
 export const SETTINGS_SHIPPED = {
   /** Ground color from the art pack (four taps of the layer array per
-   * fragment) instead of the flat per-instance average. The chunk shader's
+   * fragment) instead of the flat per-instance average. The paint shader's
    * `frame.low_spec` is this, inverted.
    *
    * Low because the four taps are all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
    * pass of its own, and no work off the GPU past an atlas the client
-   * already holds.
-   *
-   * It sources the chunks: the shader samples a leaf's layer or does not,
-   * but a tier over it carries one color and no layer to sample, so which
-   * color that is was baked in (mesh/chunk.rs). */
+   * already holds. */
   textures: {
     key: 0 as number,
     kind: "toggle",
@@ -226,7 +206,7 @@ export const SETTINGS_SHIPPED = {
   },
   /** Procedurally scattered decor only; what the player placed stays.
    *
-   * Med because it is models rather than a shading term: a chunk builds its
+   * Med because it is models rather than a shading term: a cube of the eye's builds its
    * decor and the frame draws it, so what it costs follows what is in view.
    * It has been the frame's own bottleneck — 20260912-what-to-render-when.md
    * reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
@@ -288,7 +268,7 @@ export const SETTINGS_SHIPPED = {
     section: "camera",
     dev_options: ["through"],
   },
-  /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/chunk.wgsl).
+  /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
     key: 8 as number,
@@ -316,54 +296,35 @@ export const SETTINGS_SHIPPED = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
-  /** The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world drawn once more
-   * from the sun each frame, depth only, and a 3x3 compare per fragment;
-   * 16 MB of map on a desktop, 4 on a phone. */
-  shadows: {
-    key: 11 as number,
-    kind: "toggle",
-    default: false,
-    section: "lighting",
-    cost: "high",
-  },
-  /** The pixels the world is filled at, the GPU's largest cost: two to a
-   * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
-  resolution: {
-    key: 12 as number,
-    kind: "choice",
-    default: "auto",
-    options: ["auto", "fixed", "low"],
-    section: "display",
-  },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
   view_overlay: {
-    key: 13 as number,
+    key: 11 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
   performance_overlay: {
-    key: 14 as number,
+    key: 12 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs). */
+  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs). */
   world_gizmo: {
-    key: 15 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 17 as number,
+    key: 14 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 18 as number,
+    key: 15 as number,
     kind: "index",
     default: 5 as number,
     section: "character",

@@ -7,9 +7,9 @@
 
 pub mod terrain_gate;
 
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 
-use pxl_spec::space::coord::v3::{add3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 use xpute_kit::math::scalar::clamp;
 
 use crate::approach::{approach_angle, approach_scalar, approach_vec};
@@ -28,7 +28,7 @@ use xpute_guest::global::Global;
 pub struct OrbitState {
     pub dist: f64,
     /// None until first put.
-    to: Option<Pvf3>,
+    to: Option<Q3>,
     pinch_from: Anchor,
 }
 
@@ -119,17 +119,33 @@ pub fn zoom_to(dist: f64) -> f64 {
     .dist
 }
 
-pub(crate) fn target_center() -> Option<Pvf3> {
+/// The drawn orbit put at what the controls hold, at once, as a view set
+/// outright asks (shell.rs `set_view`); the eye moves with it where the
+/// focus stands, else when the focus is put. The climb still bounds the
+/// drawn look each frame (`turn`).
+pub(crate) fn put_view() {
+    let vs = camera_state().intent;
+    // The focus first: it is read off the eye by the orbit as it stood.
+    let center = focus_world();
+    let (o, cam) = (orbit(), camera());
+    o.dist = clamp(vs.dist, MIN_DIST, MAX_DIST);
+    (cam.polar, cam.azimuth) = look_domain(vs.polar, vs.azimuth);
+    if let Some(center) = center {
+        set_eye_world(&v3::add(&center, &orbit_eye_offset(o.dist, cam.polar, cam.azimuth)));
+    }
+}
+
+pub(crate) fn target_center() -> Option<Q3> {
     orbit().to.or_else(focus)
 }
 
-pub(crate) fn put(at: Pvf3, snap: bool) {
+pub(crate) fn put(at: Q3, snap: bool) {
     orbit().to = Some(at);
     if snap {
         let (o, cam) = (orbit(), camera());
         let center = target(&mut o.to, focus_world().unwrap_or_default());
         let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
-        set_eye_world(&add3(&center, &e));
+        set_eye_world(&v3::add(&center, &e));
     }
 }
 
@@ -167,7 +183,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     // Written only where something moved, so nothing is written back at rest.
     if (center, o.dist, cam.polar, cam.azimuth) != was {
         let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
-        set_eye_world(&add3(&center, &e));
+        set_eye_world(&v3::add(&center, &e));
     }
     view_compose(crate::control::camera::controller::pose());
     Some(moving)
