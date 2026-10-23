@@ -398,15 +398,9 @@ impl<L: Base> Residency<L> {
         self.resident(p) || self.entry(p).is_some_and(|e| e.answered)
     }
 
-    /// Whether every tile asked for shows: its answer, or a resident tile
-    /// over it drawing it coarser (`drawn_from`), as a finer tile asked for
-    /// while the eye moves is.
-    pub fn shown(&self) -> bool {
-        let mut lines = Lines::default();
-        self.tiles
-            .iter()
-            .filter(|(_, e)| e.ask.is_some())
-            .all(|(&p, _)| self.has_answer(p) || self.seek(&mut lines, p).drawn.is_some())
+    /// Whether every tile asked for has its answer.
+    pub fn answered(&self) -> bool {
+        self.tiles.iter().filter(|(_, e)| e.ask.is_some()).all(|(&p, _)| self.has_answer(p))
     }
 
     pub fn answer_above(&mut self, p: Tile) {
