@@ -6,8 +6,10 @@
 //! (`Upright`), the ray every reader casts (`World::along`): the first block
 //! that fills, or out of what fills the first that does not.
 
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{REACH, ROUND};
 use pxl_spec::space::coord::zoom::{units, Zoom};
@@ -35,19 +37,21 @@ pub fn under(z: f64) -> f64 {
     z - units(GROUND.cell()) / 2.0
 }
 
-/// The tile zoom the camera grid at `tau` draws the ground at, at `at` seen
-/// from `eye`.
-fn seen_zoom(at: &Q3, eye: &Q3, tau: Tau) -> Zoom {
-    let [a, e] = [at, eye].map(|p| [i64::from(p[0]), i64::from(p[1]), i64::from(p[2])].map(q3::to_real));
-    let d = [wrap(a[0] - e[0], -ROUND / 2.0, ROUND / 2.0), a[1] - e[1], a[2] - e[2]];
-    GROUND.z_at(tau, d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).min(LEAF_ZOOM)
+/// The cell zoom the eye's rays draw at `at`: the camera grid's rule at its
+/// distance (`Tau::cell_at`), no finer than the ground's cells and, once the
+/// source declares its top, no coarser than a tile draws.
+pub fn cell_at(eye: V3, tau: Tau, at: V3) -> Zoom {
+    let v = v3::sub(&at, &eye);
+    let cell = tau.cell_at(v3::dot(&v, &v)).min(GROUND.cell());
+    TerrainTile::top().map_or(cell, |top| cell.max(GROUND.grid_zoom(top)))
 }
 
 /// Whether a walker at `at`, seen from `eye`, walks: the camera grid at the
-/// criterion's own τ draws the ground there at its own cells. Else the world
-/// is a map to it (`step_slide`).
+/// criterion's own τ draws the ground there at its own cells (`cell_at`),
+/// X the short way round. Else the world is a map to it (`step_slide`).
 pub fn walks(at: &Q3, eye: &Q3) -> bool {
-    seen_zoom(at, eye, Tau::FINEST) == LEAF_ZOOM
+    let (a, e) = (q3::unpack(at), q3::unpack(eye));
+    cell_at(e, Tau::FINEST, [world::nearest(a[0], e[0]), a[1], a[2]]) == GROUND.cell()
 }
 
 /// A point's place on the ground, in units.

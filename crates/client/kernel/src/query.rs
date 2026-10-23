@@ -25,7 +25,7 @@ mod surface;
 mod world;
 
 pub use ray::{asked, at_zoom, by_distance, Hit, Ray, Struck};
-pub use support::{over, under, walks};
+pub use support::{cell_at, over, under, walks};
 pub use world::World;
 
 #[cfg(test)]

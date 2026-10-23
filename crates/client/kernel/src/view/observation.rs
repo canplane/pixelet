@@ -121,15 +121,6 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
     *STACK.get(Vec::new) = stack;
 }
 
-/// The cell zoom the eye's rays draw at `at`: the camera grid's rule at its
-/// distance (`Tau::cell_at`), no coarser than a tile draws and no finer than
-/// the ground's cells.
-pub fn cell_at(eye: V3, tau: Tau, at: V3) -> Option<Zoom> {
-    let top = TerrainTile::top()?;
-    let v = pxl_spec::space::coord::v3::sub(&at, &eye);
-    Some(tau.cell_at(pxl_spec::space::coord::v3::dot(&v, &v)).clamp(GROUND.grid_zoom(top), GROUND.cell()))
-}
-
 /// How far from the eye a layer's tiles at `zoom` are asked for: at the
 /// source's `top` the floor's (residency/floor.rs `ring`), past it the
 /// zoom's band (pxl-spec layer/demand.rs `band`); none past the far edge.

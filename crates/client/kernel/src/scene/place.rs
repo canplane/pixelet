@@ -22,7 +22,6 @@ use crate::layer::place::carto_zoom;
 use crate::query::{at_zoom, Ray, World};
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
-use crate::view::demand::Observed as _;
 use crate::view::frame::pose::ndc_to_px;
 use core::hash::Hasher;
 use pxl_render::gpu::sheet::shelf::NO_SLOT;
@@ -34,7 +33,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use fnv::{FnvHashMap, FnvHashSet};
-use pxl_spec::bake::tile::place::{stands, PlaceTile, PLACE_FIRST, PLACE_LATTICE, SPACING_CELLS};
+use pxl_spec::bake::tile::place::{stands, PLACE_FIRST, PLACE_LATTICE, SPACING_CELLS};
 use pxl_spec::space::camera::grid::px_per_unit;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world::{point, REACH};
@@ -259,7 +258,6 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         badge::retain(&FnvHashSet::default());
         return;
     }
-    let _tiles = PlaceTile::demand();
     // No observation yet, the source's reach not declared: laid out afresh
     // once there is one, so the tiles that moved meanwhile are not kept.
     let Some(o) = crate::view::observation::observation() else {
@@ -345,7 +343,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let line = seen.line;
     let said = line
         .zip(seen.speaker)
-        .and_then(|(label, (feet, over))| Some((label, over, crate::view::observation::cell_at(o.eye, tau, crate::view::frame::coord::to_world(&feet))?)));
+        .map(|(label, (feet, over))| (label, over, crate::query::cell_at(o.eye, tau, crate::view::frame::coord::to_world(&feet))));
     let is_drafted = |label: &Label| matches!(label, Label::Marker { at, .. } if Some(*at) == draft.map(|d| d.at));
     // A cell's markers but the waiting one: one is itself, more their count.
     let shown = found.chunk_by(|a, b| a.cell().is_some() && a.cell() == b.cell()).filter_map(|run| {

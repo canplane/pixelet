@@ -12,7 +12,7 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_kit::math::scalar::clamp;
 
-use crate::approach::{approach_angle, approach_scalar, approach_vec};
+use crate::approach::{approach_angle, approach_vec};
 use crate::control::camera::controller::{camera, focus, focus_world, look_dir, look_domain, set_eye_world};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::state::{camera_state, Intent, IntentPatch};
@@ -128,7 +128,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     let to = target(&mut o.to, drawn_center);
     let (center, mut moving) = approach_vec(drawn_center, to, POS_DAMP, delta, CENTER_EPS);
 
-    let (dist, m) = approach_scalar(o.dist, vs.dist, CAM_DAMP, delta, DIST_EPS);
+    let ([dist], m) = approach_vec([o.dist], [vs.dist], CAM_DAMP, delta, DIST_EPS);
     o.dist = clamp(dist, MIN_DIST, MAX_DIST);
     moving |= m;
 
@@ -143,7 +143,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         (true, false) => CLIMB_RELAX_DAMP,
         (false, _) => CAM_DAMP,
     };
-    let (polar, m) = approach_scalar(cam.polar, polar, rate, delta, POLAR_EPS);
+    let ([polar], m) = approach_vec([cam.polar], [polar], rate, delta, POLAR_EPS);
     moving |= m;
     let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, AZIMUTH_EPS);
     moving |= m;

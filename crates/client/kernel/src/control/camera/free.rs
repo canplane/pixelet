@@ -6,7 +6,7 @@
 
 use pxl_spec::space::coord::q3::Q3;
 
-use crate::approach::{approach_angle, approach_scalar, approach_vec};
+use crate::approach::{approach_angle, approach_vec};
 use crate::control::camera::controller::look_domain;
 use crate::control::camera::controller::{camera, eye_world, focus, set_eye_world};
 use crate::control::camera::state::camera_state;
@@ -50,7 +50,7 @@ pub(crate) fn turn(delta: f64) -> bool {
     }
     let vs = camera_state().intent;
     let cam = camera();
-    let (polar, m) = approach_scalar(cam.polar, vs.polar, CAM_DAMP, delta, LOOK_EPS);
+    let ([polar], m) = approach_vec([cam.polar], [vs.polar], CAM_DAMP, delta, LOOK_EPS);
     moving |= m;
     let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, LOOK_EPS);
     moving |= m;

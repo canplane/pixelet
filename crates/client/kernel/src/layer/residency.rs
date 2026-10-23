@@ -288,10 +288,6 @@ impl<L: Base> Residency<L> {
         }
     }
 
-    pub fn settled(&self, p: Tile) -> bool {
-        self.line(p).settled
-    }
-
     /// The finest resident tile on `p`'s line: the miss's answer.
     pub fn drawn_from(&self, p: Tile) -> Option<Tile> {
         self.line(p).drawn
@@ -402,9 +398,15 @@ impl<L: Base> Residency<L> {
         self.resident(p) || self.entry(p).is_some_and(|e| e.answered)
     }
 
-    /// Whether every tile asked for has its answer.
-    pub fn answered(&self) -> bool {
-        self.tiles.iter().filter(|(_, e)| e.ask.is_some()).all(|(&p, _)| self.has_answer(p))
+    /// Whether every tile asked for shows: its answer, or a resident tile
+    /// over it drawing it coarser (`drawn_from`), as a finer tile asked for
+    /// while the eye moves is.
+    pub fn shown(&self) -> bool {
+        let mut lines = Lines::default();
+        self.tiles
+            .iter()
+            .filter(|(_, e)| e.ask.is_some())
+            .all(|(&p, _)| self.has_answer(p) || self.seek(&mut lines, p).drawn.is_some())
     }
 
     pub fn answer_above(&mut self, p: Tile) {

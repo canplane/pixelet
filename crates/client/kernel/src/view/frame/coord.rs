@@ -13,7 +13,7 @@ use xpute_kit::math::scalar::round;
 use crate::view::frame::pose::view;
 
 /// A canonical point in the world's doubles, on the lap nearest `near_x`.
-pub fn canonical_to_world(p: &Q3, near_x: f64) -> V3 {
+fn canonical_to_world(p: &Q3, near_x: f64) -> V3 {
     let [x, y, z] = q3::unpack(p);
     [nearest(x, near_x), y, z]
 }

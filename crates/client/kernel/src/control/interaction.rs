@@ -181,12 +181,10 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
 }
 
 /// Whether what `hit` struck is drawn folded: the eye's rays draw cells
-/// coarser than the box struck where it is (view/observation.rs `cell_at`).
+/// coarser than the box struck where it is (query/support.rs `cell_at`).
 fn folded_at(hit: &Hit, drawn: Tau) -> bool {
     let held = of_side(hit.cube.extent()[0]);
-    crate::view::observation::eye()
-        .and_then(|eye| crate::view::observation::cell_at(eye, drawn, hit.cube.center()))
-        .is_some_and(|cells| cells < held)
+    crate::view::observation::eye().is_some_and(|eye| crate::query::cell_at(eye, drawn, hit.cube.center()) < held)
 }
 
 /// A tap at `ndc_x`, `ndc_y` with the tool held, on the world drawn at `drawn`.
