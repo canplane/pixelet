@@ -126,11 +126,12 @@ fn layer_u() -> f64 {
     CUMULUS_KM / km_per_u()
 }
 
-/// How long the wind takes to carry the clouds a camera cell at the nearest
-/// drawn, in seconds (`cell_there`): what drifts less is not seen to move.
-/// Infinite while none is drawn.
+/// How long the wind takes to carry the clouds a pixel at the nearest drawn,
+/// in seconds (`units_per_px_at`): what drifts less is not seen to move. A
+/// camera cell's step, a dozen pixels at once, was seen as the clouds
+/// stopping and jumping. Infinite while none is drawn.
 pub fn drift_step_s() -> f64 {
-    crate::view::lens::cell_there(clouds().seen) / libm::hypot(WIND[0], WIND[1])
+    units_per_px_at(clouds().seen) / libm::hypot(WIND[0], WIND[1])
 }
 
 /// How much of the clouds shows: none where the setting is off, and fading
