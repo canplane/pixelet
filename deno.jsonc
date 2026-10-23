@@ -2,6 +2,7 @@
   "description": "A droplet fades. A pixelet remains.",
 
   "workspace": [
+    "apps/client",
     "apps/web",
     // A package.json member: Expo and Metro find packages the npm way.
     "apps/native"
@@ -10,7 +11,7 @@
 
   // Vite's deps cache and the trees of generated or downloaded data are no workspace source;
   // xpute/ is its own workspace, reached through the import map below.
-  "exclude": ["xpute/", "**/.vite/", "**/dist/", "**/node_modules/", "out/", "cache/", "infra/geo/elevation/warped/"],
+  "exclude": ["xpute/", "**/.vite/", "**/dist/", "**/node_modules/", "out/", "infra/geo/elevation/warped/"],
 
   "tasks": {
     // Run here. Where the tiles come from, a bakery's three: `dev` has them
@@ -35,7 +36,7 @@
     "preview:shelf": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile --shelf ./out) & (deno task --cwd apps/web preview:shelf) & wait\"",
     // A purge by command, after a re-ingest or a bake change: the oven's cache
     // whole; the shelf's sets, each kind named or all three, with what is staged.
-    "clear:oven": "rm -rf cache/tile",
+    "clear:oven": "rm -rf out/oven",
     "clear:shelf": "sh -c '[ $# -gt 0 ] || set -- terrain place division; for k; do rm -rf \"out/$k\" \"out/$k.stage\" \"out/$k.publish\"; done' --",
 
     // What makes the repository's data, a binary each (script/tool.ts):
@@ -70,8 +71,8 @@
     "check:host": "cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings",
     "check:rules": "./script/check-rules.ts",
     "check:spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec",
-    "test": "deno task test:web && deno task test:xpute && deno task test:rust",
-    "test:web": "deno task --cwd apps/web test",
+    "test": "deno task test:client && deno task test:xpute && deno task test:rust",
+    "test:client": "deno task --cwd apps/client test",
     "test:xpute": "deno task --cwd xpute test",
     // pxl-tool holds every model to the committed table, which has been wrong by hand before.
     "test:rust": "cargo test --manifest-path crates/Cargo.toml -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
@@ -89,7 +90,7 @@
 
     // The rest.
     "export:xpute": "./xpute/script/export.ts",
-    // apps/web/.build_number is written by any read of the build log, so it is refreshed before vite reads it.
+    // apps/client/.build_number is written by any read of the build log, so it is refreshed before vite reads it.
     "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labeled from the cached number\" >&2'"
   },
 
@@ -109,17 +110,10 @@
     "@xpute/gpu/": "./xpute/ts/gpu/src/",
     "@xpute/conformance/": "./xpute/ts/conformance/src/",
 
-    "@std/assert": "jsr:@std/assert@^1",
-
     "@std/path": "jsr:@std/path@^1",
     "@std/jsonc": "jsr:@std/jsonc@^1",
 
-    "vite": "npm:vite@^8.3.0",
-    "@deno/vite-plugin": "npm:@deno/vite-plugin@^2.0.3",
-
-    "i18next": "npm:i18next@^26.4.2",
-
-    // Dawn, the WebGPU Chrome runs, for the generated kernels' compile (script/portable-wgsl.ts).
+    // Dawn, the WebGPU Chrome runs, for the generated kernels' compile (script/shader-wgsl.ts).
     "webgpu": "npm:webgpu@0.6.2"
   },
 

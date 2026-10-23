@@ -9,12 +9,12 @@
 use pxl_spec::space::camera::grid::Tau;
 use std::collections::BTreeMap;
 
-use crate::param::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_CELLS_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
+use crate::param::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
 
 use crate::abi::cmd::{InputRect, PointerType};
 use crate::control::camera::controller::{active, Active};
 use crate::control::camera::gesture::{linear, Anchor};
-use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
+use crate::control::camera::state::{camera_state, IntentPatch};
 use crate::control::interaction::{clear_hover, clear_hover_coord, hover_at};
 use crate::control::navigation::destination::cancel as cancel_destination;
 use crate::control::navigation::follow_mode::set_following;
@@ -257,7 +257,6 @@ pub fn camera_pointer_down(pointer_type: PointerType, pointer_id: i32, button: i
     if pointer_type == PointerType::Touch {
         s.hovering = false;
         s.active_pointers.insert(pointer_id, PointerPos { x: client_x, y: client_y });
-        camera.camera_status = CameraStatus::Drag;
         set_following(false);
         match s.active_pointers.len() {
             1 => {
@@ -294,7 +293,6 @@ pub fn camera_pointer_down(pointer_type: PointerType, pointer_id: i32, button: i
         s.rotate_tilt = Anchor::new(camera.intent.polar, client_y);
     }
     update_pointer(s, client_x, client_y);
-    camera.camera_status = CameraStatus::Drag;
     set_following(false);
 }
 
@@ -350,14 +348,12 @@ fn tap_if_still(s: &Input, mode: DragMode) -> Option<[f64; 2]> {
 /// A pointer went up or was canceled; where it tapped, if it was a tap.
 pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[f64; 2]> {
     let s = input();
-    let camera = camera_state();
     if pointer_type == PointerType::Touch {
         s.active_pointers.remove(&pointer_id);
         match s.active_pointers.len() {
             0 => {
                 let mode = s.drag_mode;
                 s.drag_mode = DragMode::None;
-                camera.camera_status = CameraStatus::Idle;
                 request_world_tick();
                 if mode != DragMode::None {
                     return tap_if_still(s, mode);
@@ -380,7 +376,6 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
     }
     let mode = s.drag_mode;
     s.drag_mode = DragMode::None;
-    camera.camera_status = CameraStatus::Idle;
     // A pan moves nothing once the pointer is up, so the companion would not see
     // the release until something else asked for a turn.
     request_world_tick();
@@ -422,11 +417,11 @@ pub fn camera_input_step(drawn: Tau) {
     let s = input();
     if s.keys != [0.0; 2] {
         let at = now();
-        let cells = KEY_PAN_CELLS_PER_S * (at - s.keys_at) / 1000.0;
+        let share = KEY_PAN_PER_S * (at - s.keys_at) / 1000.0;
         s.keys_at = at;
         // A key moves the view the way it points, the screen's down being the way's up.
-        let way = [s.keys[0] * cells, -s.keys[1] * cells];
-        by_hand(|| crate::control::camera::controller::pan_cells(way[0], way[1]));
+        let way = [s.keys[0] * share, -s.keys[1] * share];
+        by_hand(|| crate::control::camera::controller::pan_across(way[0], way[1]));
         request_world_tick();
     }
     if s.hover_pending {
@@ -458,6 +453,7 @@ pub fn pinching() -> bool {
     input().drag_mode == DragMode::Pinch
 }
 
+/// A pointer holds the camera: a pan, a rotate or a pinch is under way.
 pub fn dragging() -> bool {
     input().drag_mode != DragMode::None
 }

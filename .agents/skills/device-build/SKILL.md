@@ -26,8 +26,8 @@ you mean before trusting what a Debug build shows.
 
 A build CI did not number labels itself `#<n>-<commit>`: the last number
 this checkout saw published, then what it was built from
-(`apps/native/metro.config.js`), fixed in the bundle when Metro makes it. The
-`<n>` is a cache, `apps/web/.build_number`, which a deploy through CI never
+(`apps/native/metro.config.ts`), fixed in the bundle when Metro makes it. The
+`<n>` is a cache, `apps/client/.build_number`, which a deploy through CI never
 writes, so bring it up to date before a Release:
 
 ```bash
@@ -44,9 +44,13 @@ before it, whatever is deployed after; to carry the new one, deploy first.
 
 - Xcode with a signing team for a phone, CocoaPods, Node (for Expo's native
   build), and the Rust targets, which `rust-toolchain.toml` installs.
-- Node on `PATH` for `prebuild` and `pod install`, and named for Xcode's
-  script phases in `apps/native/ios/.xcode.env.local`
-  (`export NODE_BINARY=…`), which prebuild does not write.
+- Node, as `apps/native/package.json`'s `engines` asks, on `PATH` for `pod
+  install`, whose scripts call `node` by name, and named for Xcode's script
+  phases in `apps/native/ios/.xcode.env.local` (`export NODE_BINARY=…`),
+  which prebuild does not write. Node runs only that toolchain: its
+  bundling phases run Expo's CLI, which loads the app's TypeScript configs
+  with Node's own type stripping (22.18 on). Every task of the tree runs
+  under Deno.
 
 ### Generate
 
@@ -59,7 +63,7 @@ Again after anything under `modules/platform/` gains a file (a new Swift
 file is added to the pod only by `pod install`), after `app.json` or a plugin
 changes, or after a dependency is added.
 
-`plugin/ios-build.js` sets the iOS the pods and the app target: the highest
+`plugin/ios-build.ts` sets the iOS the pods and the app target: the highest
 floor of what the app links, which its dependencies decide. A target is where
 a build links, not a promise of what runs.
 
@@ -150,7 +154,7 @@ not run it yet.
   has been called". `apps/native/.java-version` names 17 for jenv:
   `jenv add <JDK 17 home>` once, and Gradle run under `apps/native` gets it
   (`jenv exec ./gradlew …`, or `JAVA_HOME` set by jenv's export plugin).
-  `plugin/android-build.js` writes Gradle's daemon criteria
+  `plugin/android-build.ts` writes Gradle's daemon criteria
   (`android/gradle/gradle-daemon-jvm.properties`) for 17, so the daemon
   runs on a 17 Gradle finds whatever launches it; opening the project in
   Android Studio once wrote them for its own Java 25, which outranks
@@ -164,7 +168,7 @@ not run it yet.
 (cd apps/native && deno install && deno run -A npm:expo@57.0.25 prebuild --platform android --no-install)
 ```
 
-`plugin/android-build.js` writes what the build is for into
+`plugin/android-build.ts` writes what the build is for into
 `gradle.properties`: arm64-v8a alone, since the kernel is built for no other
 ABI and an APK carrying one without it dies on those phones, and the SDK
 floor of the Vulkan this build takes for wgpu.
@@ -251,5 +255,5 @@ position is only what `geo fix` gives. There it has named the place.
   Fabric never made a view it later reaches, its trace in logcat a
   `MissingViewState` soft exception at the first mount. It was a plain view
   whose flattening changed as a toast's touch came and went (`collapsable`
-  in `web/src/platform/web/pill.tsx`); the mount state logged before the
+  in `apps/client/src/shell/ui/pill.tsx`); the mount state logged before the
   crash shows what the missing tag holds.

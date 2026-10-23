@@ -27,46 +27,48 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_BEAM => "beam_cs",
         SHADER_CELLS => "cells_cs",
         SHADER_MISS => "miss_cs",
-        SHADER_ARGS => "args_cs",
         SHADER_FORGET => "forget_cs",
         SHADER_SAMPLE => "sample_cs",
+        SHADER_SUN => "sun_cs",
+        SHADER_SUN_MARK => "sun_mark_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }
 
 include!(concat!(env!("OUT_DIR"), "/sources.rs"));
 
-/// Frame uniform field offsets in floats, in frame.wgsl's order (its size
-/// frame/shader/words.rs's `FRAME_FLOATS`).
-pub const FRAME_AT: [usize; 15] = [0, 16, 19, 20, 23, 24, 27, 28, 31, 32, 35, 36, 39, 40, 44];
-
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_SKY: u32 = 10;
 pub const PIPELINE_MIPS: u32 = 11;
 pub const PIPELINE_DECOR_PREPASS: u32 = 12;
-pub const PIPELINE_SKINNED_PREPASS: u32 = 13;
-pub const PIPELINE_AO_DOWNSAMPLE: u32 = 14;
-pub const PIPELINE_AO_SAMPLE: u32 = 15;
-pub const PIPELINE_AO_BLUR: u32 = 16;
-pub const PIPELINE_AO_UPSAMPLE: u32 = 17;
-pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 18;
-pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 19;
-pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 20;
-pub const PIPELINE_ATMOS_EXPOSURE: u32 = 21;
-pub const PIPELINE_STARS: u32 = 22;
-pub const PIPELINE_CLOUDS: u32 = 23;
-pub const PIPELINE_CLOUDS_ABOVE: u32 = 24;
-pub const PIPELINE_CLOUD_FIELD: u32 = 25;
-pub const PIPELINE_SHEET: u32 = 26;
-pub const PIPELINE_IMPOSTOR_BAKE: u32 = 27;
-pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 28;
+pub const PIPELINE_AO_DOWNSAMPLE: u32 = 13;
+pub const PIPELINE_AO_SAMPLE: u32 = 14;
+pub const PIPELINE_AO_BLUR: u32 = 15;
+pub const PIPELINE_AO_UPSAMPLE: u32 = 16;
+pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 17;
+pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 18;
+pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 19;
+pub const PIPELINE_ATMOS_EXPOSURE: u32 = 20;
+pub const PIPELINE_STARS: u32 = 21;
+pub const PIPELINE_CLOUDS: u32 = 22;
+pub const PIPELINE_CLOUDS_ABOVE: u32 = 23;
+pub const PIPELINE_CLOUD_FIELD: u32 = 24;
+pub const PIPELINE_SHEET: u32 = 25;
+pub const PIPELINE_IMPOSTOR_BAKE: u32 = 26;
+pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 27;
 /// The billboards' regions, numbered, into a target of their own (pass/badges.rs).
-pub const PIPELINE_BADGE_REGION: u32 = 29;
+pub const PIPELINE_BADGE_REGION: u32 = 28;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
-pub const PIPELINE_DEBUG_FACE: u32 = 30;
-/// The eye's rays, opaque at their depth (pxl-portable ray.rs).
-pub const PIPELINE_SCREEN_RAYS: u32 = 31;
-pub const PIPELINES: u32 = 32;
+pub const PIPELINE_DEBUG_FACE: u32 = 29;
+/// The eye's rays, opaque at their depth (pxl-spec-core ray.rs).
+pub const PIPELINE_SCREEN_RAYS: u32 = 30;
+/// Decor's and the actors' depth from the sun, and the world's laid in
+/// before them, into the sun's shadow map (gpu/shadow.rs).
+pub const PIPELINE_DECOR_DEPTH: u32 = 31;
+pub const PIPELINE_SKINNED_DEPTH: u32 = 32;
+pub const PIPELINE_SUN_MAP: u32 = 33;
+pub const PIPELINE_SCREEN_PREPASS: u32 = 34;
+pub const PIPELINES: u32 = 35;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -134,7 +136,7 @@ pub const fn same<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) -> b
 }
 
 use crate::frame::draw::{
-    PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
+    PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
     PIPELINE_SKINNED,
 };
 use crate::frame::shader::floor;
@@ -178,8 +180,7 @@ const fn lit(shader: u32, cull: u32) -> Head {
     }
 }
 
-/// Positive bias is toward the eye under reversed depth.
-const fn blended(shader: u32, cull: u32, bias: i32, slope: f32) -> Head {
+const fn blended(shader: u32, cull: u32) -> Head {
     Head {
         shader,
         fragment: true,
@@ -187,14 +188,15 @@ const fn blended(shader: u32, cull: u32, bias: i32, slope: f32) -> Head {
         cull,
         depth_write: false,
         depth_compare: GREATER,
-        depth_bias: i(bias),
-        depth_bias_slope: f(slope),
+        depth_bias: 0,
+        depth_bias_slope: 0,
         blend: ALPHA,
         vertex: VS,
     }
 }
 
-const DEPTH_SLOPE_BIAS: f32 = 2.0;
+/// The sun's map's casters' alike, raster and cast (pxl-spec-core `eye::SLOPE_BIAS`).
+const DEPTH_SLOPE_BIAS: f32 = pxl_spec_core::eye::SLOPE_BIAS;
 
 /// Depth alone: plain less-than, no fragment stage, both sides, pushed back
 /// by its slope as a rasterizer's polygon offset.
@@ -227,7 +229,7 @@ const fn screen(shader: u32) -> Head {
     Head {
         depth_compare: NO_DEPTH,
         blend: OPAQUE,
-        ..blended(shader, CULL_NONE, 0, 0.0)
+        ..blended(shader, CULL_NONE)
     }
 }
 
@@ -249,41 +251,28 @@ const AIR_SLOTS: [[u32; 2]; 11] = [
 
 /// The air's bindings, as every pass that binds the air lays them out.
 const AIR: [[u32; 2]; 11] = AIR_SLOTS;
-const LIT_FRAME: [[u32; 2]; 13] = {
+/// The sun's shadow map and its comparing sampler (shadow.wgsl), read where
+/// a lit fragment is shaded.
+const SHADOW: [[u32; 2]; 2] = [[1, DEPTH], [2, SAMPLER_COMPARISON]];
+const LIT_FRAME: [[u32; 2]; 15] = {
     // The air in the vertex stage, where each point's lights and veil are
     // worked out; a fragment reads its words and the eye's texel, whose white
     // it shows by (atmos_eye.wgsl). The sky's views and the Earth's picture
     // are the sky pass's, laid out unread.
-    [[0, UNIFORM], [7, TEXTURE], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9], AIR[10]]
+    [[0, UNIFORM], SHADOW[0], SHADOW[1], [7, TEXTURE], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9], AIR[10]]
 };
 /// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
-const CLOUD_GROUP: [[u32; 2]; 15] = {
-    [
-        [0, UNIFORM],
-        [1, UNIFORM],
-        [2, TEXTURE],
-        [3, SAMPLER],
-        AIR[0],
-        AIR[1],
-        AIR[2],
-        AIR[3],
-        AIR[4],
-        AIR[5],
-        AIR[6],
-        AIR[7],
-        AIR[8],
-        AIR[9],
-        AIR[10],
-    ]
-};
+const CLOUD_GROUP: [[u32; 2]; 16] = and([[0, UNIFORM], [19, UNIFORM], [1, UNIFORM], [2, TEXTURE], [3, SAMPLER]], AIR);
 const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 
-/// The lit pass's frame, occlusion, air and layers, all read where
+/// The lit pass's frame, shadow, occlusion, air and layers, all read where
 /// a pixel is painted; then the rays, the looks and the eye's words: the
 /// most entries any group has (`GROUP_ENTRIES`).
-const SCREEN_GROUP: [[u32; 2]; 19] = {
+const SCREEN_GROUP: [[u32; 2]; 21] = {
     [
         [0, UNIFORM],
+        SHADOW[0],
+        SHADOW[1],
         [7, TEXTURE],
         AIR[0],
         AIR[1],
@@ -363,12 +352,26 @@ const fn and<const N: usize, const M: usize, const R: usize>(a: [[u32; 2]; N], b
 
 type Group = &'static [[u32; 2]];
 const FRAME: Group = &[[0, UNIFORM]];
-const BOX_GROUP: [[u32; 2]; 17] = and(LIT_FRAME, [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
-const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &[[0, UNIFORM_DYNAMIC]], &SKIN, &[[0, STORAGE]]];
-/// A billboard set's uniform and instances, and what its pass reads at an
-/// anchor: the world's depth for the regions, the regions for the sprites.
-const BADGE_SPRITES: Group = &[[0, UNIFORM], [1, STORAGE], [2, TEXTURE_UNFILTERED]];
-const BADGE_REGIONS: Group = &[[0, UNIFORM], [1, STORAGE], [2, DEPTH]];
+const BOX_GROUP: [[u32; 2]; 19] = and(LIT_FRAME, [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
+/// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`),
+/// and its block: one layout each wherever a draw binds them, so a group
+/// one owner makes binds in every pipeline that names them (gpu/grown.rs,
+/// gpu/blocks.rs).
+const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
+const BLOCK: [[u32; 2]; 1] = [[0, STORAGE]];
+/// A block's group as every pipeline binding one lays it out, which the
+/// draw list's blocks are grouped in (gpu/blocks.rs `Blocks::group`).
+pub const BLOCK_LAYOUT: [u32; 3] = [BLOCK[0][0], seen(&BLOCK, BLOCK[0][0]), BLOCK[0][1]];
+
+const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &BLOCK];
+/// A model's depth from the sun: the light's frame alone in group 0, where
+/// its place is read; the rest as the lit pass binds them.
+const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
+/// A billboard set's instances, and what its pass reads at an anchor: the
+/// world's depth for the regions, the regions for the sprites. Its uniform is
+/// a draw's (`DRAW`).
+const BADGE_SPRITES: Group = &[[0, STORAGE], [1, TEXTURE_UNFILTERED]];
+const BADGE_REGIONS: Group = &[[0, STORAGE], [1, DEPTH]];
 const SKY_GROUP: [[u32; 2]; 15] = and([[0, UNIFORM], [19, UNIFORM], [2, TEXTURE_ARRAY], [3, SAMPLER]], AIR);
 
 /// A pipeline's record before its groups' stages: its head, its lanes and
@@ -390,23 +393,23 @@ const fn plan(head: Head, lanes: &'static [Lane], groups: &'static [Group]) -> P
 const fn plan_of(id: u32) -> Plan {
     match id {
         PIPELINE_DECOR => plan(lit(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS),
-        // Slightly clear of a surface it sits on, strongly clear of one it sits in.
-        PIPELINE_GHOST_BOX => plan(blended(SHADER_BOX, CULL_BACK, 1, 1.0), &BOX_LANES, &[&BOX_GROUP]),
-        PIPELINE_GHOST_BOX_COPLANAR => plan(blended(SHADER_BOX, CULL_BACK, 8, 2.0), &BOX_LANES, &[&BOX_GROUP]),
-        PIPELINE_GHOST_DECOR => plan(blended(SHADER_DECOR, CULL_NONE, 1, 1.0), &MODEL_LANES, &MODEL_GROUPS),
+        // What is laid on the world's faces draws at its own depth: the
+        // world's stands behind it (screen_rays.wgsl `behind`).
+        PIPELINE_GHOST_BOX => plan(blended(SHADER_BOX, CULL_BACK), &BOX_LANES, &[&BOX_GROUP]),
+        PIPELINE_GHOST_DECOR => plan(blended(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS),
         // Back faces culled: drawn both sides, a closed body's inner faces fight its
         // outer ones at a distance and the character shimmers.
         PIPELINE_SKINNED => plan(lit(SHADER_SKINNED, CULL_BACK), &SKINNED_LANES, &MODEL_GROUPS),
-        PIPELINE_PUCK_ZONE => plan(blended(SHADER_PUCK_ZONE, CULL_NONE, 4, 1.0), &PUCK_ZONE_LANES, &[FRAME, &[[0, UNIFORM]], &[[0, STORAGE]]]),
-        PIPELINE_PUCK_BEACON => plan(lit(SHADER_PUCK_BEACON, CULL_BACK), &PUCK_BEACON_LANES, &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &[[0, UNIFORM]]]),
+        PIPELINE_PUCK_ZONE => plan(blended(SHADER_PUCK_ZONE, CULL_NONE), &PUCK_ZONE_LANES, &[FRAME, &DRAW, &BLOCK]),
+        PIPELINE_PUCK_BEACON => plan(lit(SHADER_PUCK_BEACON, CULL_BACK), &PUCK_BEACON_LANES, &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &DRAW]),
         PIPELINE_BADGE => plan(
             Head {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
-                ..blended(SHADER_BADGE, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_BADGE, CULL_NONE)
             },
             &[],
-            &[FRAME, BADGE_SPRITES, &SKIN],
+            &[FRAME, &DRAW, BADGE_SPRITES, &SKIN],
         ),
         PIPELINE_BADGE_REGION => plan(
             Head {
@@ -414,19 +417,19 @@ const fn plan_of(id: u32) -> Plan {
                 depth_write: true,
                 depth_compare: GREATER_EQUAL,
                 blend: OPAQUE,
-                ..blended(SHADER_BADGE_REGION, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_BADGE_REGION, CULL_NONE)
             },
             &[],
-            &[FRAME, BADGE_REGIONS],
+            &[FRAME, &DRAW, BADGE_REGIONS],
         ),
         // Against the gizmos' own faces, not the world's depth.
         PIPELINE_DEBUG => plan(
             Head {
                 blend: ALPHA,
-                ..blended(SHADER_DEBUG, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_DEBUG, CULL_NONE)
             },
             &DEBUG_LANES,
-            &[FRAME, &[[0, UNIFORM]]],
+            &[FRAME, &DRAW],
         ),
         // Pushed back by their slope as a rasterizer's polygon offset is, so
         // the lines that bound a face stay in front of it.
@@ -439,25 +442,61 @@ const fn plan_of(id: u32) -> Plan {
                 ..depth_only(SHADER_DEBUG)
             },
             &DEBUG_FACE_LANES,
-            &[FRAME, &[[0, UNIFORM]]],
+            &[FRAME, &DRAW],
+        ),
+        // Over everything, against no depth.
+        PIPELINE_CAMERA_GRID => plan(
+            Head {
+                depth_compare: ALWAYS,
+                ..blended(SHADER_CAMERA_GRID, CULL_NONE)
+            },
+            &[],
+            &[&[[0, UNIFORM], [19, UNIFORM]]],
         ),
         PIPELINE_SCREEN_RAYS => plan(
             Head {
                 depth_write: true,
                 blend: OPAQUE,
-                ..blended(SHADER_SCREEN_RAYS, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_SCREEN_RAYS, CULL_NONE)
             },
             &[],
             &[&SCREEN_GROUP],
         ),
         PIPELINE_DECOR_PREPASS => plan(prepass(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS),
-        PIPELINE_SKINNED_PREPASS => plan(prepass(SHADER_SKINNED, CULL_BACK), &SKINNED_LANES, &MODEL_GROUPS),
+        PIPELINE_DECOR_DEPTH => plan(depth_only(SHADER_DECOR), &MODEL_LANES, &DEPTH_GROUPS),
+        PIPELINE_SKINNED_DEPTH => plan(depth_only(SHADER_SKINNED), &SKINNED_LANES, &DEPTH_GROUPS),
+        // Every texel of the box the world's cast holds, whatever lies
+        // there: its clipmap's words and the box's corner, before the
+        // casters drawn over it, into the depth alone (gpu/api.rs
+        // `pipeline`), its fragment the depth.
+        PIPELINE_SUN_MAP => plan(
+            Head {
+                fragment: true,
+                depth_compare: ALWAYS,
+                depth_bias_slope: 0,
+                vertex: VS,
+                ..depth_only(SHADER_SUN_MAP)
+            },
+            &[],
+            &[&[[0, TEXTURE_UINT_ARRAY], [1, UNIFORM]]],
+        ),
+        // The screen's depth alone into the occlusion's prepass (gpu/ao.rs),
+        // the group the lit screen pass binds.
+        PIPELINE_SCREEN_PREPASS => plan(
+            Head {
+                fragment: true,
+                vertex: VS,
+                ..prepass(SHADER_SCREEN_DEPTH, CULL_NONE)
+            },
+            &[],
+            &[&SCREEN_GROUP],
+        ),
         // Only where the opaque world left the far plane, so covered pixels never run it.
         PIPELINE_SKY => plan(
             Head {
                 depth_compare: GREATER_EQUAL,
                 blend: OPAQUE,
-                ..blended(SHADER_SKY, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_SKY, CULL_NONE)
             },
             &[],
             &[&SKY_GROUP],
@@ -469,7 +508,7 @@ const fn plan_of(id: u32) -> Plan {
                 ..lit(SHADER_IMPOSTOR, CULL_NONE)
             },
             &[],
-            &[&LIT_FRAME, &[[0, UNIFORM_DYNAMIC]], &[[0, TEXTURE_ARRAY], [1, SAMPLER], [2, UNIFORM]], &[[0, STORAGE]]],
+            &[&LIT_FRAME, &DRAW, &[[0, TEXTURE_ARRAY], [1, SAMPLER], [2, UNIFORM]], &BLOCK],
         ),
         PIPELINE_IMPOSTOR_BAKE => plan(
             Head {
@@ -478,7 +517,7 @@ const fn plan_of(id: u32) -> Plan {
                 ..depth_only(SHADER_IMPOSTOR_BAKE)
             },
             &MODEL_LANES,
-            &[&[[0, UNIFORM_DYNAMIC]], &SKIN],
+            &[&DRAW, &SKIN],
         ),
         PIPELINE_SHEET => plan(
             Head {
@@ -520,7 +559,7 @@ const fn plan_of(id: u32) -> Plan {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
                 blend: ADD,
-                ..blended(SHADER_STARS, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_STARS, CULL_NONE)
             },
             &[],
             &[&[[0, UNIFORM], [8, UNIFORM], [9, TEXTURE], [11, SAMPLER]], &[[0, UNIFORM], [1, STORAGE]]],
@@ -529,7 +568,7 @@ const fn plan_of(id: u32) -> Plan {
         PIPELINE_CLOUDS => plan(
             Head {
                 depth_compare: GREATER_EQUAL,
-                ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_CLOUDS, CULL_NONE)
             },
             &[],
             &[&CLOUD_GROUP],
@@ -537,7 +576,7 @@ const fn plan_of(id: u32) -> Plan {
         PIPELINE_CLOUDS_ABOVE => plan(
             Head {
                 depth_compare: ALWAYS,
-                ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_CLOUDS, CULL_NONE)
             },
             &[],
             &[&CLOUD_GROUP],
@@ -578,17 +617,21 @@ const fn alike(a: Group, b: Group) -> bool {
     true
 }
 
-/// The stages binding `binding` of group `k` is seen from: those that read
-/// it in every shader whose pipeline lays out the same group at the same
-/// place, so the one layout those pipelines share holds for each, and from
-/// no stage written by hand.
-const fn seen(group: Group, k: usize, binding: u32) -> u32 {
+/// The stages binding `binding` of `group` is seen from: those that read
+/// it in every shader whose pipeline lays out the same group, wherever, so
+/// the one layout those pipelines share holds for each, and from no stage
+/// written by hand.
+const fn seen(group: Group, binding: u32) -> u32 {
     let mut stages = NONE;
     let mut id = 0;
     while id < PIPELINES {
         let p = plan_of(id);
-        if k < p.groups.len() && alike(p.groups[k], group) {
-            stages |= stages_of(p.head.shader, k as u32, binding);
+        let mut k = 0;
+        while k < p.groups.len() {
+            if alike(p.groups[k], group) {
+                stages |= stages_of(p.head.shader, k as u32, binding);
+            }
+            k += 1;
         }
         id += 1;
     }
@@ -668,7 +711,7 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
         n += 1;
         let mut e = 0;
         while e < g.len() {
-            (out[n], out[n + 1], out[n + 2]) = (g[e][0], seen(g, k, g[e][0]), g[e][1]);
+            (out[n], out[n + 1], out[n + 2]) = (g[e][0], seen(g, g[e][0]), g[e][1]);
             (n, e) = (n + 3, e + 1);
         }
         k += 1;

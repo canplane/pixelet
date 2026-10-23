@@ -2,11 +2,12 @@
 
 //! What a task's run came to, and why it failed.
 
-use core::fmt;
 use core::panic::Location;
 
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
+
+use crate::io::host::Refused;
 
 pub use crate::io::spec::OutcomeName as Outcome;
 
@@ -41,15 +42,6 @@ impl From<MarshalError> for Failure {
     }
 }
 
-impl fmt::Display for Failure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.detail {
-            0 => write!(f, "errno {}", self.errno as i32),
-            detail => write!(f, "errno {} {detail}", self.errno as i32),
-        }
-    }
-}
-
 /// How a run ended: one value, so a run that ended well carries no failure
 /// and a failed one always does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +49,10 @@ pub enum Ended {
     Ok,
     Aborted,
     Failed(Failure),
+    /// The heap refused its body room, as its release count was then: no
+    /// failure of the object's or the server's, and over once the heap gives
+    /// some back (`Refused::over`).
+    Refused(Refused),
 }
 
 impl Ended {
@@ -64,7 +60,7 @@ impl Ended {
         match self {
             Ended::Ok => Outcome::ok,
             Ended::Aborted => Outcome::aborted,
-            Ended::Failed(_) => Outcome::error,
+            Ended::Failed(_) | Ended::Refused(_) => Outcome::error,
         }
     }
 }

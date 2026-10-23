@@ -2,14 +2,14 @@
 
 //! The ground's surface: a cell's top and the block its face is, read off
 //! the windows by the one reading of a column the GPU reads too
-//! (pxl-portable `window::ground`), the area's edge laid on it. What a
+//! (pxl-spec-core `window::ground`), the area's edge laid on it. What a
 //! policy over the ground — where a walker stands over it — reads, knowing
 //! no tile.
 
-use pxl_portable::area::Shard;
-use pxl_portable::window::Found;
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec_core::area::Shard;
+use pxl_spec_core::window::Found;
 
 use super::world::World;
 use crate::layer::terrain::window::Windowed;
@@ -30,10 +30,13 @@ impl World<'_> {
         let shard = Shard::UNKNOWN.at(&Windowed, (cell, c));
         if shard.past() {
             return Answer::Exact(Some(Surface {
-                top: f64::from(pxl_portable::SEA_LEVEL),
+                top: f64::from(pxl_spec_core::SEA_LEVEL),
                 block: pxl_spec::block::cube::sentinel::unknown,
             }));
         }
+        let side = units(cell);
+        let middle = c.map(|v| (f64::from(v) + 0.5) * side);
+        self.read(middle, middle, cell);
         let line = self.terrain.cursor((cell, c), cell);
         self.terrain.column(&line, Found::NONE, (cell, c)).map(|col| {
             col.grounded().then(|| Surface {

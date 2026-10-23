@@ -1,8 +1,7 @@
 // pxl-kernel/layer/object/store.test.rs
 
 use pxl_spec::block::cube::Object;
-use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{base_of, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::UNIT_ZOOM;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use fnv::FnvHashMap;
@@ -11,15 +10,11 @@ use pxl_spec::space::hierarchy::morton::child_cube;
 
 use super::*;
 use crate::layer::Query;
-use pxl_portable::overwrite::{self, Cut};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::block::object::{cube_id, Cube};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec_core::overwrite::{self, Cut};
 use xpute_kit::math::rng::SplitMix64;
-
-fn corner(x: i32, y: i32, z: i32) -> Q3 {
-    base_of(UNIT_ZOOM, [x, y, z])
-}
 
 #[test]
 fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
@@ -93,9 +88,10 @@ fn some_node(rng: &mut Rng, reach: f64) -> Node<3> {
 }
 
 /// Whole cells from a corner, and what the objects' pyramid holds at
-/// `zoom`'s cells, read through the store's query, with the corner in that
-/// zoom's cells.
-fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (FnvHashMap<[i32; 3], u32>, [i32; 2]) {
+/// `zoom`'s cells, read through the store's query, with the eighths of its
+/// cube it keeps (pxl-spec-core `answer::eighths`), where it keeps any, and
+/// the corner in that zoom's cells.
+fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (FnvHashMap<[i32; 3], (u32, u32)>, [i32; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
@@ -112,8 +108,9 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (FnvHashMap<[i32; 3], u
             for x in corner[0]..corner[0] + per {
                 let held = store.cursor((target, [x, y, z]), target);
                 let v = overwrite::value(&store.lanes(), held, Cut::NONE, target, [x, y, z]);
-                if v != VOID {
-                    out.insert([x, y, z], v);
+                let kept = pxl_spec_core::answer::eighths(overwrite::filled(&store.lanes(), held));
+                if v != VOID && kept > 0 {
+                    out.insert([x, y, z], (v, kept));
                 }
             }
         }
@@ -128,33 +125,35 @@ fn red() -> u32 {
 #[test]
 fn a_cell_folds_to_itself_on_a_leaf() {
     let (out, [x, y]) = folded(&[(3, 4, 5, red())], LEAF_ZOOM);
-    assert_eq!(out.get(&[x + 3, y + 4, 5]), Some(&red()));
+    assert_eq!(out.get(&[x + 3, y + 4, 5]), Some(&(red(), 8)));
     assert_eq!(out.len(), 1);
 }
 
 #[test]
-fn a_lone_cube_goes_at_the_first_fold_and_a_slab_of_half_stays() {
-    assert!(folded(&[(0, 0, 0, red())], LEAF_ZOOM - 1).0.is_empty());
+fn a_lone_cube_keeps_an_eighth_at_the_first_fold_and_none_at_the_next() {
+    let (out, [x, y]) = folded(&[(0, 0, 0, red())], LEAF_ZOOM - 1);
+    assert_eq!(out.get(&[x, y, 0]), Some(&(red(), 1)));
+    assert!(folded(&[(0, 0, 0, red())], LEAF_ZOOM - 2).0.is_empty());
     let (out, [x, y]) = folded(&[(0, 0, 0, red()), (1, 0, 0, red()), (0, 1, 0, red()), (1, 1, 0, red())], LEAF_ZOOM - 1);
-    assert_eq!(out.get(&[x, y, 0]), Some(&red()));
+    assert_eq!(out.get(&[x, y, 0]), Some(&(red(), 4)));
 }
 
 #[test]
 fn a_solid_block_keeps_folding_while_it_fills_its_parent() {
     let cube: Vec<_> = (0..64).map(|k| (k % 4, k / 4 % 4, k / 16, red())).collect();
     let (out, [x, y]) = folded(&cube, LEAF_ZOOM - 2);
-    assert_eq!(out.get(&[x, y, 0]), Some(&red()));
+    assert_eq!(out.get(&[x, y, 0]), Some(&(red(), 8)));
     assert_eq!(out.len(), 1);
 }
 
 #[test]
 fn air_is_a_value_and_folds_like_one() {
     let (out, [x, y]) = folded(&[(0, 0, 0, AIR), (1, 0, 0, AIR), (0, 1, 0, AIR), (1, 1, 0, AIR), (0, 0, 1, AIR)], LEAF_ZOOM - 1);
-    assert_eq!(out.get(&[x, y, 0]), Some(&AIR));
+    assert_eq!(out.get(&[x, y, 0]), Some(&(AIR, 5)));
 }
 
 fn cube_at(store: &mut Store, [x, y, z]: [i32; 3], state: u32) {
-    store.write([Write::at(&corner(x, y, z), 1.0, state)]);
+    store.write([Write::at(EntryAt::new(UNIT_ZOOM, [x, y, z]), state)]);
 }
 
 #[test]
@@ -180,6 +179,41 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         let given = bound(&stores[0], (zoom, at));
         assert_eq!(bound(&stores[1], (zoom, turn(at))), given.map(turn_box), "{at:?} at z{zoom}");
         assert_eq!(bound(&stores[2], (zoom, turn(turn(at)))), given.map(|b| turn_box(turn_box(b))), "{at:?} at z{zoom}");
+    }
+}
+
+#[test]
+fn a_column_reaches_as_far_as_what_is_placed_in_it_wherever_the_walk_last_stood() {
+    let mut rng = Rng(SplitMix64::new(0x7d3a_51e9_c2b4_0f86));
+    let red = cube_id(Cube::Object(Object::red));
+    let mut store = Store::default();
+    for _ in 0..300 {
+        let at = [(rng.next() % 64) as i32, (rng.next() % 64) as i32, (rng.next() % 300) as i32 - 150];
+        cube_at(&mut store, at, rng.pick(&[red, red, AIR]));
+    }
+    // Each leaf's reach along z in the column, as the cube of the column's
+    // zoom it lies in where it is finer.
+    let reach = |(zoom, [x, y]): Node<2>| {
+        let mut z: Option<[f64; 2]> = None;
+        store.each(&mut |e| {
+            let (k, at) = (zoom.min(e.zoom), e.at.map(|v| v >> e.zoom.saturating_sub(zoom)));
+            if [at[0], at[1]] == [x >> (zoom - k), y >> (zoom - k)] {
+                let s = [f64::from(at[2]) * units(k), f64::from(at[2] + 1) * units(k)];
+                z = Some(z.map_or(s, |z| [z[0].min(s[0]), z[1].max(s[1])]));
+            }
+        });
+        let whole = region((zoom, [x, y]));
+        z.map(|z| Aabb {
+            min: [whole.min[0], whole.min[1], z[0]],
+            max: [whole.max[0], whole.max[1], z[1]],
+        })
+    };
+    let mut walk = Walk::default();
+    for _ in 0..400 {
+        let zoom = rng.pick(&[UNIT_ZOOM - 6, UNIT_ZOOM - 3, UNIT_ZOOM - 1, UNIT_ZOOM, UNIT_ZOOM + 1]);
+        let side = 64 >> UNIT_ZOOM.saturating_sub(zoom) << zoom.saturating_sub(UNIT_ZOOM);
+        let node = (zoom, [0, 1].map(|_| (rng.next() % side.max(1) as u64) as i32));
+        assert_eq!(store.column(&mut walk, node), reach(node), "{node:?}");
     }
 }
 

@@ -4,11 +4,13 @@
 //! at most once. An asset is a want in the request scheduler like a tile, sharing
 //! its credits, and stays wanted until it arrives.
 //!
-//! A read that did not arrive is retried; bytes that do not parse are final,
-//! since asking again returns the same bytes. An image is its file's bytes,
-//! kept for as long as the kernel runs and handed to the renderer under the
-//! asset's number, which makes its texture on whatever device there is
-//! (pxl-render `Gpu::image`): io is transport, and the device the renderer's.
+//! A read that did not arrive is retried, and one the heap refused room for
+//! is asked again once the heap gives some back; bytes that do not parse are
+//! final, since asking again returns the same bytes. An image is its file's
+//! bytes, kept for as long as the kernel runs and handed to the renderer
+//! under the asset's number, which makes its texture on whatever device
+//! there is (pxl-render `Gpu::image`): io is transport, and the device the
+//! renderer's.
 
 use std::rc::Rc;
 
@@ -20,6 +22,7 @@ use crate::asset::{Load, LoadKind, LOADS};
 use crate::io::demand::Ask;
 use crate::io::failure::Ended;
 use crate::io::file::{self, Opened, Owner, Path};
+use crate::io::host::Refused;
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::io::source;
 use crate::sched::edge::{request_world_tick, world_edge};
@@ -34,49 +37,46 @@ use xpute_kit::status::errno::Errno;
 /// land (parsing is not I/O and would starve tile reads), but the asset is
 /// not usable yet. Without it, "not usable" read as "not asked for" and one
 /// model was re-read 38 times, once a turn, for as long as its parse took.
-enum Entry<T> {
+enum Entry {
     Pending,
     /// Its file in its arrival's task, being read.
     Arrived,
-    Ready(T),
+    /// The heap refused its bytes room: a wait, not a failure, so it is
+    /// pending again once the heap gives some back (`load_wants`).
+    Refused(Refused),
+    /// A parsed model.
+    Model(Rc<Gltf>),
+    /// An image's bytes, sized by its header.
+    Image(Vec<u8>),
     Failed,
 }
 
 struct Loader {
-    gltf: Vec<Option<Entry<Rc<Gltf>>>>,
-    image: Vec<Option<Entry<Vec<u8>>>>,
+    /// By kind, then by load: one asset can be wanted as both.
+    entries: [Vec<Option<Entry>>; 2],
     /// Kept so saying the wants every turn allocates nothing.
     wants: Vec<(u64, Ask)>,
+}
+
+impl Loader {
+    fn at(&mut self, kind: LoadKind, n: usize) -> &mut Option<Entry> {
+        &mut self.entries[kind as usize][n]
+    }
 }
 
 static LOADER: Global<Loader> = Global::new();
 
 fn loader() -> &'static mut Loader {
     LOADER.get(|| Loader {
-        gltf: (0..LOADS).map(|_| None).collect(),
-        image: (0..LOADS).map(|_| None).collect(),
+        entries: [(); 2].map(|()| (0..LOADS).map(|_| None).collect()),
         wants: Vec::new(),
     })
 }
 
 pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
-    let l = loader();
-    match &l.gltf[load.number() as usize] {
-        Some(Entry::Ready(g)) => Some(g.clone()),
-        Some(_) => None,
-        None => {
-            l.gltf[load.number() as usize] = Some(Entry::Pending);
-            None
-        }
-    }
-}
-
-/// An image as the renderer takes it: the asset's number and its file's
-/// bytes, once read; none while it loads.
-pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
-    let entry = &mut loader().image[load.number() as usize];
+    let entry = loader().at(LoadKind::Gltf, load.number() as usize);
     match entry {
-        Some(Entry::Ready(file)) => Some((load.number(), file.as_slice())),
+        Some(Entry::Model(g)) => Some(g.clone()),
         Some(_) => None,
         None => {
             *entry = Some(Entry::Pending);
@@ -85,10 +85,18 @@ pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
     }
 }
 
-pub fn load_failed(load: Load) -> bool {
-    let l = loader();
-    let n = load.number() as usize;
-    matches!(l.gltf[n], Some(Entry::Failed)) || matches!(l.image[n], Some(Entry::Failed))
+/// An image as the renderer takes it: the asset's number and its file's
+/// bytes, once read; none while it loads.
+pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
+    let entry = loader().at(LoadKind::Image, load.number() as usize);
+    match entry {
+        Some(Entry::Image(file)) => Some((load.number(), file.as_slice())),
+        Some(_) => None,
+        None => {
+            *entry = Some(Entry::Pending);
+            None
+        }
+    }
 }
 
 /// Kind in the high word, since one asset can be wanted both as a model and as an image.
@@ -112,16 +120,23 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
             if load == Load::Sphere && source::top().is_none() {
                 continue;
             }
-            let pending = match kind {
-                LoadKind::Gltf => matches!(l.gltf[n], Some(Entry::Pending)),
-                LoadKind::Image => matches!(l.image[n], Some(Entry::Pending)),
-            };
-            if pending {
+            if pending(l.at(kind, n)) {
                 l.wants.push((subject_of(kind, load), Ask::PLAIN));
             }
         }
     }
     &l.wants
+}
+
+/// Whether a load is wanted: pending, or refused by a heap that has since
+/// given room back.
+fn pending(entry: &mut Option<Entry>) -> bool {
+    if let Some(Entry::Refused(refused)) = entry {
+        if refused.over() {
+            *entry = Some(Entry::Pending);
+        }
+    }
+    matches!(entry, Some(Entry::Pending))
 }
 
 /// The credit ends when the host reports; parsing afterwards does not hold it.
@@ -143,12 +158,10 @@ fn settled() {
     *SETTLED.get(|| false) = true;
 }
 
-pub fn open_asset(credit: Credit, kind: LoadKind, load: Load) {
-    let key = credit.key();
-    let owner = match kind {
-        LoadKind::Gltf => Owner::Model { key },
-        LoadKind::Image => Owner::Image { key },
-    };
+/// A model and an image of one load are the same file; which it is read as
+/// is its attempt's subject's (`opened`).
+pub fn open_asset(credit: Credit, load: Load) {
+    let owner = Owner::Load { key: credit.key() };
     match load {
         Load::Sphere => file::open(
             credit,
@@ -161,7 +174,7 @@ pub fn open_asset(credit: Credit, kind: LoadKind, load: Load) {
 }
 
 pub fn cancel_asset(key: u64) -> bool {
-    let Some(fd) = file::held_for(|o| *o == Owner::Model { key } || *o == Owner::Image { key }) else {
+    let Some(fd) = file::held_for(|o| *o == Owner::Load { key }) else {
         return false;
     };
     file::close(fd);
@@ -169,38 +182,26 @@ pub fn cancel_asset(key: u64) -> bool {
     true
 }
 
-pub fn image_opened(fd: u32, key: u64, opened: Opened) {
+pub fn opened(fd: u32, key: u64, opened: Opened) {
     let Opened::Bytes(n) = opened else {
         load_rejected(key, Ended::Failed(opened.failure()));
         return;
     };
-    let Some((_, load)) = ended(key, Ended::Ok) else {
+    let Some((kind, load)) = ended(key, Ended::Ok) else {
         file::close(fd);
         return;
     };
-    arrive(LoadKind::Image, load.number() as usize, fd, n);
+    arrive(kind, load.number() as usize, fd, n);
 }
 
 /// An image's bytes, read: kept, where a header gives its size
 /// (pxl-spec `asset::image_size`); a file no header sizes is the asset's
 /// own failure, so it is final.
 fn image_arrived(n: usize, file: Vec<u8>) {
-    loader().image[n] = Some(if pxl_spec::asset::image_size(&file).is_some() { Entry::Ready(file) } else { Entry::Failed });
+    *loader().at(LoadKind::Image, n) = Some(if pxl_spec::asset::image_size(&file).is_some() { Entry::Image(file) } else { Entry::Failed });
     settled();
     // A turn hands it on.
     request_world_tick();
-}
-
-pub fn model_opened(fd: u32, key: u64, opened: Opened) {
-    let Opened::Bytes(n) = opened else {
-        load_rejected(key, Ended::Failed(opened.failure()));
-        return;
-    };
-    let Some((_, load)) = ended(key, Ended::Ok) else {
-        file::close(fd);
-        return;
-    };
-    arrive(LoadKind::Gltf, load.number() as usize, fd, n);
 }
 
 /// A file opened, read in its own task: no arrival waits on another's
@@ -208,10 +209,7 @@ pub fn model_opened(fd: u32, key: u64, opened: Opened) {
 /// it is while the frame outweighs its share, each task advances a step a
 /// turn, so k arrivals advance k steps, not one.
 fn arrive(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
-    match kind {
-        LoadKind::Gltf => loader().gltf[n] = Some(Entry::Arrived),
-        LoadKind::Image => loader().image[n] = Some(Entry::Arrived),
-    }
+    *loader().at(kind, n) = Some(Entry::Arrived);
     // The pool holds a task for each kind of every load (TASKS), and each
     // has one file in flight at most, so there is always room.
     let spawned = xpute_guest::sched::task::spawn(arrival(kind, n, fd, bytes), crate::sched::edge::TaskPriority::Arrival as u8);
@@ -222,19 +220,14 @@ fn arrive(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
 /// texture.
 async fn arrival(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
     yield_if_spent(world_edge).await;
-    let mut buf = Vec::new();
-    if buf.try_reserve_exact(bytes as usize).is_err() {
-        file::close(fd);
-        match kind {
-            LoadKind::Gltf => loader().gltf[n] = Some(Entry::Failed),
-            LoadKind::Image => loader().image[n] = Some(Entry::Failed),
-        }
-        return;
-    }
-    buf.resize(bytes as usize, 0);
     // SAFETY: `buf` is held across the turn the host fills it in.
-    unsafe { file::read(fd, &mut buf) };
-    file::close(fd);
+    let buf = match unsafe { file::read_whole(fd, bytes) } {
+        Ok(buf) => buf,
+        Err(refused) => {
+            *loader().at(kind, n) = Some(Entry::Refused(refused));
+            return;
+        }
+    };
     // In once the host has run the turn's records.
     next_turn(world_edge).await;
     if kind == LoadKind::Image {
@@ -242,10 +235,10 @@ async fn arrival(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
         return;
     }
     let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
-        Ok(g) => Entry::Ready(Rc::new(g)),
+        Ok(g) => Entry::Model(Rc::new(g)),
         Err(_) => Entry::Failed,
     };
-    loader().gltf[n] = Some(entry);
+    *loader().at(LoadKind::Gltf, n) = Some(entry);
     settled();
     request_world_tick();
 }
@@ -254,11 +247,6 @@ async fn arrival(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
 /// decides the wait.
 pub fn load_rejected(key: u64, how: Ended) {
     let Some((kind, load)) = ended(key, how) else { return };
-    let l = loader();
-    let n = load.number() as usize;
-    match kind {
-        LoadKind::Gltf => l.gltf[n] = None,
-        LoadKind::Image => l.image[n] = None,
-    }
+    *loader().at(kind, load.number() as usize) = None;
     settled();
 }

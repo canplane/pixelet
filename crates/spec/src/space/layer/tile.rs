@@ -12,11 +12,11 @@ use crate::space::coord::world;
 use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
 use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, region, slot_of, Node};
-use pxl_portable::wrap_index;
+use pxl_spec_core::wrap_index;
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
 /// world 2^15 round.
-pub use pxl_portable::LEAF_ZOOM;
+pub use pxl_spec_core::LEAF_ZOOM;
 const _: () = assert!(morton::bits::<2>(LEAF_ZOOM) < 63, "a tile's key fits its subject's word");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

@@ -1,6 +1,6 @@
 # @pxl/native/modules/platform/ios/PxlPlatform.podspec
 #
-# The device's half of the app's platform (apps/native/src/platform/): the
+# The device's half of the app's platform (apps/native/src/): the
 # view the kernel draws into, the kernel linked with it, and what the shell
 # asks of the system — storage, the clipboard, text, the compass. The kernel
 # is in the guest (crates/client-bracket/native), built by this pod's script phase

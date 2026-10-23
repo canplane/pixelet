@@ -31,6 +31,8 @@ pub struct Scene {
     pub puck: LocationPuck,
     pub environment: EnvironmentDraw,
     pub debug: DebugLines,
+    /// The coverage gizmo's (scene/indicator/coverage_gizmo.rs).
+    pub coverage: DebugLines,
 }
 
 impl Scene {
@@ -46,5 +48,6 @@ impl Scene {
         self.actors.draw(draw, models, eye);
         self.puck.draw(draw, eye);
         self.debug.draw(draw, eye);
+        self.coverage.draw(draw, eye);
     }
 }

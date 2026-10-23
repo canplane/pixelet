@@ -49,13 +49,17 @@ pub fn line(focus: Option<Q3>) -> Option<Tile> {
     })
 }
 
-/// The divisions of the cell `at` is in, broad to narrow, from the deepest
-/// tile held over it: the held parent names the point while the tile under
-/// it is on its way.
-pub fn named(at: &Q3, mut each: impl FnMut(&Division)) {
-    let held = DivisionTile::residency();
-    let Some(from) = line(Some(*at)).and_then(|p| held.drawn_from(p)) else { return };
-    if let Some(tile) = held.get(from) {
-        tile.name_at(GROUND.cell_of(from.zoom, at).index()).for_each(&mut each);
+/// Where the divisions of the cell `at` is in are named: the deepest tile
+/// held over it, the held parent while the tile under it is on its way, and
+/// the cell in it. A tile's identity fixes what it names.
+pub fn naming(at: &Q3) -> Option<(Tile, u32)> {
+    let from = line(Some(*at)).and_then(|p| DivisionTile::residency().drawn_from(p))?;
+    Some((from, GROUND.cell_of(from.zoom, at).index()))
+}
+
+/// The divisions named at `naming`'s cell, broad to narrow.
+pub fn named((from, cell): (Tile, u32), each: impl FnMut(&Division)) {
+    if let Some(tile) = DivisionTile::residency().get(from) {
+        tile.name_at(cell).for_each(each);
     }
 }

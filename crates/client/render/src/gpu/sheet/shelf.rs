@@ -32,17 +32,6 @@ pub enum DrawSpec {
     Bubble { lines: Vec<String>, box_w: f64 },
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct SheetStats {
-    /// Device pixels; the sheet is square.
-    pub size: u32,
-    pub entries: u32,
-    pub shelves: u32,
-    pub used_px: u32,
-    pub repacks: u32,
-    pub uploads: u32,
-}
-
 /// Freed slots are matched by size class, not exact fit. 16 device pixels is 8
 /// logical at the badge render scale.
 const WIDTH_BUCKET: u32 = 16;
@@ -178,10 +167,7 @@ pub struct Sheet {
     draws: Vec<Option<DrawSpec>>,
 
     generation: u32,
-    live: u32,
     used_px: u32,
-    repacks: u32,
-    uploads: u32,
 
     dirty: SlotSet,
 }
@@ -248,7 +234,6 @@ impl Sheet {
         self.ch[s] = h.ceil() as u32;
         self.draws[s] = Some(draw);
         self.state[s] = LIVE;
-        self.live += 1;
         self.mark_dirty(slot as u32);
         slot
     }
@@ -270,7 +255,6 @@ impl Sheet {
             }
         } else {
             *paint = self.dirty;
-            self.uploads += paint.len();
         }
         self.dirty = SlotSet::default();
         Flush {
@@ -286,19 +270,7 @@ impl Sheet {
             return;
         }
         self.state[s] = FREE;
-        self.live -= 1;
         self.used_px -= self.w[s] * self.h[s];
-    }
-
-    pub fn stats(&self) -> SheetStats {
-        SheetStats {
-            size: self.size,
-            entries: self.live,
-            shelves: self.shelves.h.len() as u32,
-            used_px: self.used_px,
-            repacks: self.repacks,
-            uploads: self.uploads,
-        }
     }
 
     fn take_free(&mut self, w: u32, h: u32) -> i32 {
@@ -380,7 +352,6 @@ impl Sheet {
             }
         }
         self.used_px = 0;
-        self.repacks += 1;
         self.generation += 1;
         for (i, &s) in slots.iter().enumerate() {
             (self.x[s], self.y[s]) = plan.at[i];

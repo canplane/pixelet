@@ -54,7 +54,6 @@ fn heap_sample() -> HeapSample {
         range_bytes: h.range as f64,
         largest_free_bytes: h.largest_free as f64,
         refusals: h.refusals as f64,
-        releases: h.releases as f64,
     }
 }
 

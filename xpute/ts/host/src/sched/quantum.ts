@@ -13,19 +13,20 @@
  * display as 2.1 ms. Gaps past MAX_FRAME_GAP_MS are idle, not frames.
  *
  * A turn runs on every `divisor`-th refresh (Android Swappy's swap interval),
- * so the frame interval is a whole multiple of the refresh — 60 Hz on a 120 Hz
- * display — and never half of one late. The divisor is stepped as Swappy
- * steps it: up at once where a turn's gap ran a refresh past its interval, a
- * missed vsync; down after `FRAME_WINDOW` interactive turns in a row that
- * missed none, and back up where that proves too soon.
+ * so the frame interval is a whole multiple of the refresh and never half of
+ * one late: the most refreshes that fit `PACED_MAX_MS`, 60 Hz, and at least
+ * one — 60 Hz on a 120 Hz display, 72 on a 144, 90 on a 90, and the refresh
+ * itself where a browser caps it below 60. The divisor is the display's, not
+ * the load's: what a frame costs is the drawn resolution's to fit (pxl-kernel
+ * view/frame/resolution.rs), so one controller answers it.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
 export const FRAME_WINDOW = 64;
 const MAX_FRAME_GAP_MS = 50;
-/** The most refreshes a turn is paced over: 30 Hz on a 120 Hz display. */
-const MAX_DIVISOR = 4;
+/** The longest interval turns are paced at: 60 Hz. */
+const PACED_MAX_MS = 1000 / 60;
 
 /** The guest waits on something only the host brings: an input or an arrival. */
 export const NO_WAKE: f64 = -1;
@@ -49,15 +50,9 @@ export class Quantum {
   private readonly gaps = new Float64Array(FRAME_WINDOW).fill(1000 / 60);
   private readonly sorted = new Float64Array(FRAME_WINDOW);
   private gap_at = 0;
-  private prev_interactive = false;
   private overrun_ms = 0;
   private input_at = -Infinity;
   private asked_next = false;
-  private divisor = 1;
-  /** Interactive turns in a row that missed no vsync at this divisor. */
-  private held = 0;
-  /** The divisor a step down left, which a miss goes back to. */
-  private above = MAX_DIVISOR;
 
   constructor(private readonly policy: QuantumPolicy) {}
 
@@ -80,29 +75,19 @@ export class Quantum {
     return this.sorted[FRAME_WINDOW / 4];
   }
 
-  /** The interval turns are paced at: a whole number of refreshes. */
+  /**
+   * The interval turns are paced at: the most whole refreshes within
+   * `PACED_MAX_MS`, an eighth of a refresh allowed for the spread of its
+   * measure, so a 120 Hz display read at 8.34 ms still paces at two; one at
+   * least.
+   */
   paced(refresh_ms: f64): f64 {
-    return this.divisor * refresh_ms;
+    const divisor = Math.max(1, Math.floor((PACED_MAX_MS + refresh_ms / 8) / refresh_ms));
+    return divisor * refresh_ms;
   }
 
   /** `wake_ms`: 0 for the next frame, NO_WAKE for none. */
-  observe(delta_s: f64, turn_ms: f64, grant: Grant, wake_ms: f64): void {
-    const gap_ms = delta_s * 1000;
-    const interactive = grant.interactive;
-    if (interactive && this.prev_interactive && gap_ms <= MAX_FRAME_GAP_MS) {
-      if (gap_ms > grant.paced_ms + grant.refresh_ms / 2) {
-        // A vsync missed: paced over one more refresh, at once.
-        this.above = Math.min(MAX_DIVISOR, this.divisor + 1);
-        this.divisor = this.above;
-        this.held = 0;
-      } else if (++this.held >= FRAME_WINDOW && this.divisor > 1 && this.divisor <= this.above) {
-        // A window held: one refresh fewer, kept while it holds.
-        this.above = this.divisor;
-        this.divisor -= 1;
-        this.held = 0;
-      }
-    }
-    this.prev_interactive = interactive;
+  observe(turn_ms: f64, grant: Grant, wake_ms: f64): void {
     this.overrun_ms = Math.max(0, turn_ms - grant.quota_ms);
     this.asked_next = wake_ms === 0;
   }

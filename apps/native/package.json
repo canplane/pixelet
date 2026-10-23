@@ -2,7 +2,11 @@
   "name": "@pxl/native",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "main": "index.ts",
+  "engines": {
+    "node": "^22.18.0 || >=23.6.0"
+  },
   "scripts": {
     "start": "EXPO_NO_TYPESCRIPT_SETUP=1 deno run -A npm:expo@57.0.25 start"
   },

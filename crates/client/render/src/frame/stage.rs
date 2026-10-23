@@ -5,7 +5,7 @@
 
 use xpute_guest::global::Global;
 
-pub const STAGE_WORDS: usize = STAGE_AT::CLOUDS + 1;
+pub const STAGE_WORDS: usize = STAGE_AT::SHADOWS + 1;
 
 /// Where each value sits in the lane.
 #[allow(non_snake_case)]
@@ -27,8 +27,14 @@ pub mod STAGE_AT {
     pub const EDGE_WIDTH: usize = LOW_SPEC + 1;
     pub const RIM_INTENSITY: usize = EDGE_WIDTH + 1;
     pub const SCREEN_AO: usize = RIM_INTENSITY + 1;
+    /// How much the inside of a cube's corners darkens, none where off.
+    pub const CORNER_AO: usize = SCREEN_AO + 1;
     /// How much of the clouds shows, none to all.
-    pub const CLOUDS: usize = SCREEN_AO + 1;
+    pub const CLOUDS: usize = CORNER_AO + 1;
+    /// How far from the eye the sun's shadows are cast, in units: as far as
+    /// the camera grid asks the ground's leaf cells or finer, where the
+    /// casters are drawn whole; none where the shadows are off.
+    pub const SHADOWS: usize = CLOUDS + 1;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

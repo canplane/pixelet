@@ -7,14 +7,13 @@
 use crate::laid;
 use crate::scene::frame::Frame;
 use crate::sched::tick::TickContext;
-use crate::view::frame::pose::view_resize;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
-use pxl_render::gpu::span_spec::GpuSpanName;
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
 use crate::profiler::frame::{DeviceSample, GpuSample};
@@ -32,6 +31,8 @@ use crate::profiler::report::set_host_frame;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
 use crate::scene::environment::cloud::cloud_groups;
+use crate::scene::indicator::coverage_gizmo::coverage_gizmo_step;
+use crate::scene::indicator::frame_gizmo::frame_gizmo_step;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::{settings_store, AoMode};
 use crate::view::demand::Observed as _;
@@ -66,23 +67,26 @@ pub fn stage_write() {
     s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.at().eye);
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
-    s[STAGE_AT::FOV] = v.fov;
+    s[STAGE_AT::FOV] = crate::param::FOV;
     // The camera grid's cell angle: the footprint a drawn block covers per
     // unit of distance, square on.
     let tau = crate::view::lens::tau();
     s[STAGE_AT::LOD_CELL] = crate::view::lens::cell_angle(tau);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
+    s[STAGE_AT::CORNER_AO] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
-    // In the pixels the world is drawn at, which the resolution steps.
-    s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH * crate::view::frame::resolution::world_ratio();
+    // In units, so neither the resolution nor a block's size moves it.
+    s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { crate::param::RIM_INTENSITY } else { 0.0 };
     s[STAGE_AT::CLOUDS] = crate::scene::environment::cloud::clouds_shown();
+    // Out to where the grid's cells one zoom coarser than the ground's leaf begin.
+    s[STAGE_AT::SHADOWS] = if settings.shadows { tau.split_distance(GROUND.cell() - 1) } else { 0.0 };
 }
 
-/// `paced_ms` is the frame's budget, the interval the host paces turns at,
-/// which the world's drawn resolution is judged against.
-pub fn stage_render(paced_ms: f64) {
+/// `pace` is the frame as the turn paced it, which the world's drawn
+/// resolution is judged by (view/frame/resolution.rs `load`).
+pub fn stage_render(pace: crate::view::frame::resolution::Pace) {
     // Nothing is drawn before the floor: its arrival asks for the next turn.
     if load_image(EARTH).is_none() {
         return;
@@ -153,7 +157,7 @@ pub fn stage_render(paced_ms: f64) {
         billboards: billboard_sheet(),
         admit: crate::io::host::admit_frame,
         // The draws are the profiler's, which records only while its setting is on.
-        counted: settings_store().performance_overlay,
+        counted: settings_store().profiler,
     });
     if out.redraw {
         request_world_tick();
@@ -161,20 +165,26 @@ pub fn stage_render(paced_ms: f64) {
     // What the renderer holds, drawn this frame or not.
     let held = pxl_render::gpu::api::gpu().map_or([0; OBJECT_OPS], |g| *g.objects());
     let objects: [f64; OBJECT_OPS - 1] = core::array::from_fn(|k| f64::from(held[k + 1]));
+    // The scale the world was drawn at, before a read can move the next one.
+    let scale = crate::view::frame::resolution::drawn_scale();
+    let gpu = out
+        .stat
+        .as_ref()
+        .filter(|stat| stat.gpu_read)
+        .map(|stat| (pxl_render::gpu::renderer::pixels_ms(&stat.gpu_spans), stat.gpu_px));
+    crate::view::frame::resolution::load(pace, gpu);
     let Some(stat) = out.stat else {
-        set_host_frame(out.kind, GpuSample::default(), DeviceSample { objects, ..DeviceSample::default() });
+        set_host_frame(out.kind, GpuSample { scale, ..GpuSample::default() }, DeviceSample { objects, ..DeviceSample::default() });
         return;
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
-    if stat.gpu_read {
-        crate::view::frame::resolution::load(stat.gpu_spans[GpuSpanName::cast as usize], stat.gpu_px, paced_ms);
-    }
     set_host_frame(
         out.kind,
         GpuSample {
             read: f64::from(u8::from(stat.gpu_read)),
             spans: stat.gpu_spans,
             px: stat.gpu_px,
+            scale,
             census: stat.census,
         },
         DeviceSample {
@@ -203,7 +213,6 @@ pub fn take_draw() -> bool {
 
 pub fn visible_step(ctx: &mut TickContext) {
     let c = pass();
-    view_resize(ctx.state.width, ctx.state.height, crate::view::frame::resolution::world_ratio());
     let v = view();
 
     let anchor = sea_under_eye();
@@ -216,20 +225,30 @@ pub fn visible_step(ctx: &mut TickContext) {
         delta_s: ctx.delta,
     };
 
+    // The world gizmo, laid before the frame's list begins, so its lines and the
+    // origin they are drawn about are the same turn's: laid after, a new lane
+    // went up under the last origin, and every rebuild flung the lines by how
+    // far it moved.
+    let show = settings_store().world_gizmo;
+    let focus = crate::control::camera::controller::focus();
+    let third_person = crate::control::camera::controller::dist() != 0.0;
+    frame_gizmo_step(show && focus.is_some(), focus, third_person.then(crate::control::camera::controller::azimuth));
+    coverage_gizmo_step(show);
     let draw = laid().is_some_and(|k| {
         let models = crate::model::models();
         let animating = k.scene.tick(&mut k.draw, models, &frame);
         k.scene.begin(&mut k.draw, models, frame.eye);
+        crate::scene::indicator::camera_gizmo::draw(&mut k.draw, settings_store().camera_gizmo);
         animating
     });
     {
         let k = kernel();
         let edits = crate::layer::object::preview::current();
-        crate::scene::decor::drawn::step(crate::layer::object::store::objects(), frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
+        crate::scene::decor::drawn::step(frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
         crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
     }
     crate::scene::place::step(ctx, &frame);
-    crate::billboard::field::billboards().draw(&mut kernel().draw, frame.eye);
+    crate::scene::place::draw(&mut kernel().draw, frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();

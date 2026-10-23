@@ -32,42 +32,42 @@ pub const SHADER_IMPOSTOR: u32 = 21;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
 pub const SHADER_BADGE_REGION: u32 = 24;
-/// The eye's rays drawn at their pixels (pxl-portable ray.rs).
+/// The eye's rays drawn at their pixels (pxl-spec-core ray.rs).
 pub const SHADER_SCREEN_RAYS: u32 = 25;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
-/// pxl-portable's descent (script/portable-wgsl.ts): its one compute entry.
+/// pxl-spec-core's descent (script/shader-wgsl.ts): its one compute entry.
 pub const SHADER_CAST: u32 = 26;
 /// Each newly held square's levels over its columns, a level a dispatch,
-/// generated with the cast from pxl-portable's `fill::level` and
+/// generated with the cast from pxl-spec-core's `fill::level` and
 /// `window::join`: its one compute entry.
 pub const SHADER_BOUND: u32 = 27;
 /// Each newly held square's columns' ground tops off its samples,
-/// generated with the cast from pxl-portable's `ground::height`: its one
+/// generated with the cast from pxl-spec-core's `ground::height`: its one
 /// compute entry.
 pub const SHADER_HEIGHTS: u32 = 28;
 /// The decor the ground grows in the eye's windows, generated with the cast
-/// from pxl-portable's `scatter`: its one compute entry.
+/// from pxl-spec-core's `scatter`: its one compute entry.
 pub const SHADER_GROWN: u32 = 29;
 /// What `SHADER_GROWN` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
-/// args; each drawn into the decor block: pxl-portable `scatter::drawn`.
+/// args; each drawn into the decor block: pxl-spec-core `scatter::drawn`.
 pub const SHADER_GROWN_COUNT: u32 = 30;
 pub const SHADER_GROWN_ARGS: u32 = 31;
 pub const SHADER_GROWN_PLACE: u32 = 32;
 /// Each newly held terrain frame's ways, its columns' runs along z off its
-/// lines, generated with the cast from pxl-portable's `ways`: its one
+/// lines, generated with the cast from pxl-spec-core's `ways`: its one
 /// compute entry.
 pub const SHADER_WAYS: u32 = 33;
 /// Which eye slots' decor grows again this frame, listed for
 /// `SHADER_GROWN`'s dispatch: its one compute entry.
 pub const SHADER_GROWN_MARK: u32 = 34;
 /// The eye's windows folded over their squares, generated with the cast
-/// from pxl-portable's `window::fold`: its one compute entry.
+/// from pxl-spec-core's `window::fold`: its one compute entry.
 pub const SHADER_JOINED: u32 = 35;
-/// The air's volume, a froxel a thread (atmos_froxel.wgsl): its one
-/// compute entry.
+/// The air's volume, a column of froxels a workgroup (atmos_froxel.wgsl):
+/// its one compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 36;
-/// Each handed square's ways as blocks in one pool (pxl-portable
+/// Each handed square's ways as blocks in one pool (pxl-spec-core
 /// `ways::tree`), generated with the cast: a re-filled square's old blocks
 /// given back, its tree built off the pool's stack, the blocks its build
 /// gave back pushed after: a compute entry each.
@@ -75,84 +75,58 @@ pub const SHADER_WAYS_FREE: u32 = 37;
 pub const SHADER_WAYS_TREE: u32 = 38;
 pub const SHADER_WAYS_FREED: u32 = 39;
 /// The camera grid's beam rays, a thread a corner, and where each cell's
-/// pixels start off them, generated with the cast from pxl-portable's
+/// pixels start off them, generated with the cast from pxl-spec-core's
 /// `beam` (doc/minutes/20261022-a-cell-casts-a-beam.md): a compute entry
 /// each.
 pub const SHADER_BEAM: u32 = 40;
 pub const SHADER_CELLS: u32 = 41;
 /// The pixels the cast's reading walk missed, walked again writing the
-/// observed pyramid; the dispatch they run by; and the pyramid forgotten
-/// (pxl-portable `observed`): a compute entry each.
+/// observed pyramid, and the pyramid forgotten (pxl-spec-core `observed`): a
+/// compute entry each.
 pub const SHADER_MISS: u32 = 42;
-pub const SHADER_ARGS: u32 = 43;
-pub const SHADER_FORGET: u32 = 44;
+pub const SHADER_FORGET: u32 = 43;
 /// The samples, a thread each, resumed from their cells' starts and walked
-/// to the blocks the pixels about them take (pxl-portable `beam::samples`):
+/// to the blocks the pixels about them take (pxl-spec-core `beam::Grid::samples`):
 /// a compute entry.
-pub const SHADER_SAMPLE: u32 = 45;
-pub const SHADERS: u32 = 46;
+pub const SHADER_SAMPLE: u32 = 44;
+/// The world's depth from the sun into its clipmap, generated with the cast
+/// from pxl-spec-core's `sun`: the walk, a workgroup a tile listed, its one
+/// compute entry; that depth laid into the map (sun_map.wgsl,
+/// gpu/shadow.rs); and the mark listing the tiles that walk, a compute
+/// entry of its own.
+pub const SHADER_SUN: u32 = 45;
+pub const SHADER_SUN_MAP: u32 = 46;
+pub const SHADER_SUN_MARK: u32 = 47;
+pub const SHADER_SCREEN_DEPTH: u32 = 48;
+/// The camera grid's cells over the screen (camera_grid.wgsl).
+pub const SHADER_CAMERA_GRID: u32 = 49;
+pub const SHADERS: u32 = 50;
+
+/// The air as the frame's shaders read it: its medium, its tables and the
+/// sky, the eye in it, the march through it, its light and the view
+/// through it, between a shader's own parts before and after.
+macro_rules! air {
+    [$($before:literal),*; $($after:literal),*] => {
+        &[$($before,)* "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_eye", "atmos_march", "atmos_light", "atmos_view", $($after),*]
+    };
+}
+
+/// What a lit draw reads before its own parts: the frame, the air and the
+/// volume before each point, the ground's light, the shading, the sun's
+/// shadow, the finish and the screen's occlusion.
+macro_rules! lit {
+    [$($own:literal),*] => {
+        air!["frame", "encode"; "atmos_air", "atmos_ground", "shade", "shadow", "finish", "ao_map", $($own),*]
+    };
+}
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
-    &[
-        "frame",
-        "encode",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "shade",
-        "finish",
-        "ao_map",
-        "paint",
-        "box",
-    ],
+    lit!["paint", "box"],
     // SHADER_DECOR
-    &[
-        "frame",
-        "encode",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "shade",
-        "finish",
-        "ao_map",
-        "place",
-        "decor",
-    ],
+    lit!["place", "instances", "decor"],
     // SHADER_SKINNED
-    &[
-        "frame",
-        "encode",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "shade",
-        "finish",
-        "ao_map",
-        "place",
-        "skinned",
-    ],
+    lit!["place", "skinned"],
     // SHADER_PUCK_ZONE
     &["frame", "encode", "finish", "puck", "puck_zone"],
     // SHADER_PUCK_BEACON
@@ -160,24 +134,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BADGE
     &["frame", "encode", "badge", "badge_sprite"],
     // SHADER_SKY
-    &[
-        "frame",
-        "encode",
-        "finish",
-        "dither",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "sky_words",
-        "sky",
-    ],
+    air!["frame", "encode", "finish", "dither"; "atmos_air", "atmos_ground", "sky_words", "sky"],
     // SHADER_DEBUG
     &["frame", "encode", "debug"],
     // SHADER_MIPS
@@ -227,47 +184,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_STARS
     &["frame", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "stars"],
     // SHADER_CLOUDS
-    &[
-        "frame",
-        "encode",
-        "finish",
-        "noise",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_ground",
-        "cloud_tile",
-        "cloud_field",
-        "clouds",
-    ],
+    air!["frame", "encode", "finish", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "sky_words", "clouds"],
     // SHADER_CLOUD_FIELD
     &["noise", "cloud_tile", "atmos_pass", "cloud_bake"],
     // SHADER_SHEET
     &["sheet"],
     // SHADER_IMPOSTOR
-    &[
-        "frame",
-        "encode",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "shade",
-        "finish",
-        "ao_map",
-        "impostor",
-    ],
+    lit!["instances", "impostor"],
     // SHADER_IMPOSTOR_BAKE
     &["impostor_bake"],
     // SHADER_ATMOS_IRRADIANCE
@@ -275,28 +198,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BADGE_REGION
     &["frame", "encode", "badge", "badge_region"],
     // SHADER_SCREEN_RAYS
-    &[
-        "frame",
-        "encode",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "shade",
-        "finish",
-        "ao_map",
-        "lattice",
-        "ray",
-        "eye",
-        "paint",
-        "screen_rays",
-    ],
+    lit!["lattice", "ray", "eye", "paint", "screen_rays", "screen_lit"],
     // SHADER_CAST
     &["cast.gen"],
     // SHADER_BOUND
@@ -343,10 +245,18 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["cells.gen"],
     // SHADER_MISS
     &["miss.gen"],
-    // SHADER_ARGS
-    &["args.gen"],
     // SHADER_FORGET
     &["forget.gen"],
     // SHADER_SAMPLE
     &["sample.gen"],
+    // SHADER_SUN
+    &["sun.gen"],
+    // SHADER_SUN_MAP
+    &["sun_word", "sun_map"],
+    // SHADER_SUN_MARK
+    &["sun_mark.gen"],
+    // SHADER_SCREEN_DEPTH
+    lit!["lattice", "ray", "eye", "paint", "screen_rays", "screen_depth"],
+    // SHADER_CAMERA_GRID
+    &["frame", "encode", "sky_words", "camera_grid"],
 ];

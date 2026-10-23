@@ -9,12 +9,12 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use pxl_spec::bake::constant::EntryAt;
 
+use super::changed::Columns;
 use super::decor::Grown;
-use crate::layer::object::store::Store;
+use crate::layer::object::store::{Store, Walk};
 use crate::layer::residency::{Lines, Residency};
 use crate::layer::Answer;
 use crate::layer::Base as _;
-use crate::layer::Query;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -30,6 +30,8 @@ pub struct World<'a> {
     /// What of what is placed a preview hides, and what it cuts to air.
     pub(super) hide: Option<EntryAt>,
     pub(super) carve: Option<EntryAt>,
+    /// Where what its queries read is reported, if anywhere.
+    pub(super) reading: Option<&'a Columns>,
 }
 
 impl World<'static> {
@@ -56,6 +58,7 @@ impl<'a> World<'a> {
             decor: None,
             hide: None,
             carve: None,
+            reading: None,
         }
     }
 
@@ -65,14 +68,37 @@ impl<'a> World<'a> {
     pub fn previewing(self, hide: Option<EntryAt>, carve: Option<EntryAt>) -> World<'a> {
         World { hide, carve, ..self }
     }
+
+    /// As it is, the columns its queries read reported into `columns`.
+    pub fn reading(self, columns: &'a Columns) -> World<'a> {
+        World { reading: Some(columns), ..self }
+    }
+
+    /// The cells of `zoom` the box from `a` to `b` lies in, read
+    /// (`reading`).
+    pub(super) fn read(&self, a: [f64; 2], b: [f64; 2], zoom: Zoom) {
+        if let Some(c) = self.reading {
+            c.read(a, b, zoom);
+        }
+    }
+}
+
+/// What a walk over columns carries from one to the next (`World::bounds`):
+/// the ground's lines and the objects' tree, each stepped down from where
+/// the last left off. Good while neither moves.
+#[derive(Default)]
+pub struct Walked {
+    ground: Lines,
+    objects: Walk,
 }
 
 impl World<'_> {
     /// Where the ground and what is placed stand in the node, as its cells
-    /// at `cell` are read; the ground's line stepped from where `lines` last
-    /// walked.
-    pub fn bounds(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
-        let objects = self.objects.bounds(node, cell).value().flatten();
-        self.terrain.bound_walked(lines, node, cell).map(|ground| ground.into_iter().chain(objects).reduce(Aabb::join))
+    /// at `cell` are read; each stepped from where `walked` last went.
+    pub fn bounds(&self, walked: &mut Walked, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
+        let objects = self.objects.column(&mut walked.objects, node);
+        self.terrain
+            .bound_walked(&mut walked.ground, node, cell)
+            .map(|ground| ground.into_iter().chain(objects).reduce(Aabb::join))
     }
 }

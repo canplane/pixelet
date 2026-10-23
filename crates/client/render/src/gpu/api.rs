@@ -49,6 +49,16 @@ use crate::frame::shader::record::GROUP_ENTRIES;
 
 const SPANS: usize = GPU_SPAN_NAMES.len();
 
+/// WebGPU's default minUniformBufferOffsetAlignment: an adapter's limit is a
+/// power of two no larger, so a larger one is no device's.
+pub const UNIFORM_ALIGN_MAX: u32 = 256;
+
+/// An image file as its asker hands it: its name, the asker's own and the
+/// same for one file wherever it is handed, and its bytes, handed for as
+/// long as the image is wanted, so a device gone takes it again from them
+/// (`Gpu::image`).
+pub type Image = (u32, &'static [u8]);
+
 /// The device's block (xpute DEVICE): a word a limit, the features a bit
 /// each, the timestamp period, the preferred surface format, the status.
 const FEATURE_WORDS: usize = FEATURE_NAME.len().div_ceil(32);
@@ -296,7 +306,7 @@ pub fn device() -> Option<Device> {
         };
         let canvas = *Format::ALL.get(word(PERIOD_AT + 1) as usize).or_bug(Errno::EINVAL);
         let align = limit("minUniformBufferOffsetAlignment");
-        xpute_kit::ensure!(align.is_power_of_two() && align <= crate::gpu::renderer::UNIFORM_ALIGN_MAX, EINVAL, align);
+        xpute_kit::ensure!(align.is_power_of_two() && align <= UNIFORM_ALIGN_MAX, EINVAL, align);
         s.device = Some(Device {
             align,
             timestamps: feature("timestamp-query"),
@@ -468,6 +478,7 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
             format: TextureFormat::rgba16float,
             dimension: TextureViewDimension::_3d,
         },
+        record::SAMPLER_COMPARISON => L::Sampler(SamplerBindingType::comparison),
         _ => L::Sampler(SamplerBindingType::filtering),
     }
 }
@@ -626,7 +637,9 @@ impl Gpu {
     }
 
     /// A render pipeline from its record (frame/shader/record.rs) over the
-    /// group layouts, drawing into `format`, depth32 its depth.
+    /// group layouts, drawing into `format`, depth32 its depth: into the
+    /// depth alone where `format` is depth32's, its fragment writing no
+    /// colour (the sun's map, gpu/shadow.rs).
     pub fn pipeline(&self, words: &[u32], layouts: &[Id], module: Id, format: Format) -> Id {
         let mut at = record::HEAD as usize;
         let mut next = || {
@@ -712,7 +725,7 @@ impl Gpu {
                 fragment: (words[1] != 0).then_some(encode::FragmentState {
                     module,
                     entry: "fs",
-                    targets: &targets,
+                    targets: if format == Format::depth32float { &[] } else { &targets },
                 }),
             },
         ));
@@ -782,7 +795,7 @@ impl Gpu {
     /// file whose size no header gives (pxl-spec `asset::image_size`),
     /// which the kernel does not hand.
     /// The file's bytes are its asker's for as long as the image is wanted
-    /// (`renderer::Image`), so the host reads them where they lie.
+    /// (`Image`), so the host reads them where they lie.
     pub fn image(&self, image: u32, file: &'static [u8]) -> Option<Id> {
         let images = &mut self.s().images;
         if let Some(k) = images.iter().position(|a| a.image == image) {

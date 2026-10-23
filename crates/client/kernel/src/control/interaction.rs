@@ -8,11 +8,11 @@ pub mod edit;
 pub mod ghost;
 pub mod pick;
 
-use pxl_spec::block::decor::Decor;
 use pxl_spec::block::object::Cube;
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
 
 pub use crate::abi::cmd::ActiveTool;
@@ -22,12 +22,11 @@ use crate::control::interaction::edit::{place, place_air, place_decor, remove, w
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;
-use crate::layer::object::size::{object_size_of, MARKER_SIZE};
 use crate::layer::object::store::Entry;
 use crate::query::{Hit, World};
-use crate::view::frame::pose::view_ray;
+use crate::view::frame::pose::ray_of;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units};
+use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units, Zoom};
 use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -35,7 +34,7 @@ pub struct Holding {
     pub active_tool: ActiveTool,
     /// A placed color or a ground look.
     pub object_cube: Cube,
-    /// The object size by its tier (`object_size_of`).
+    /// The object size by its tier (`object_zoom_of`).
     pub object_tier: u32,
     pub decor_id: DecorId,
 }
@@ -123,46 +122,61 @@ fn resolve_struck(hit: &Hit) -> Option<Struck> {
     }
 }
 
-/// A scattered instance is not an entry, so a placement lands as on the ground.
-fn resolve_hit_target(hit: &Hit) -> Option<Entry> {
-    match resolve_struck(hit) {
-        Some(Struck::Object(o)) => Some(o),
-        _ => resolve_hit_object(hit),
+/// What the hover's pick met, and the cell zoom the eye's rays draw where
+/// it struck, by the rule they are cast by (query/ray.rs `by_distance`),
+/// which near the eye is finer than the ground's cells, as what is placed
+/// may be; none without an eye.
+pub(crate) struct Picked {
+    pub hit: Hit,
+    pub drawn: Option<Zoom>,
+}
+
+impl Picked {
+    /// The zoom of the box struck.
+    pub fn held(&self) -> Zoom {
+        of_side(self.hit.cube.extent()[0])
     }
+
+    /// Whether the rays draw coarser there than the box struck: a summary,
+    /// not what is held, so nothing in it is struck.
+    pub fn folded(&self) -> bool {
+        self.drawn.is_some_and(|z| z < self.held())
+    }
+}
+
+/// What the hover picks at `ndc_x`, `ndc_y` on the world drawn at `drawn`,
+/// from the pose as the camera holds it now, which a door event or a
+/// controller may have moved since the turn composed the view.
+pub(crate) fn picked(ndc_x: f64, ndc_y: f64, drawn: Tau) -> Option<Picked> {
+    let pose = crate::control::camera::controller::pose()?;
+    let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
+    ray_of(pose, ndc_x, ndc_y, &mut origin, &mut direction);
+    let hit = ray_pick(origin, direction, drawn)?;
+    let drawn = crate::view::observation::eye().map(|eye| {
+        let v = v3::sub(&hit.cube.center(), &eye);
+        crate::query::by_distance(drawn).at(v3::dot(&v, &v) as f32)
+    });
+    Some(Picked { hit, drawn })
 }
 
 /// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.
 pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
-    let mut origin = [0.0; 3];
-    let mut direction = [0.0; 3];
-    view_ray(ndc_x, ndc_y, &mut origin, &mut direction);
-
     let ui = interaction().holding;
     interaction().pointed = Some([ndc_x, ndc_y]);
-    let Some(pick) = ray_pick(origin, direction, drawn) else {
-        interaction().hover = Hover::default();
-        return;
-    };
-    let hit = pick.hit;
     let hover = &mut interaction().hover;
-    // A folded cell is a summary, not what is held: nothing in it is struck.
-    if folded_at(&hit, drawn) {
+    let Some(Picked { hit, .. }) = picked(ndc_x, ndc_y, drawn).filter(|p| !p.folded()) else {
         *hover = Hover::default();
         return;
-    }
+    };
 
-    if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker) {
+    if let Some(tool) = PlacementTool::of(&ui) {
         hover.object_at = None;
         hover.scattered = None;
         hover.approach = None;
-        let placement_size = match ui.active_tool {
-            ActiveTool::Object => object_size_of(ui.object_tier),
-            ActiveTool::Decor => units(Decor::of(ui.decor_id).row.cell_zoom()),
-            _ => MARKER_SIZE,
-        };
-        // A decor met in front of the pick is what the new cube goes flush against.
-        let precise_box = resolve_hit_target(&hit).map(|o| object_aabb(&o));
-        hover.coord = Some(world_adjacent_corner(&hit, placement_size, precise_box.as_ref()));
+        // A decor met in front of the pick is what the new cube goes flush
+        // against; a scattered one is no entry, so it lands as on the ground.
+        let precise_box = resolve_hit_object(&hit).map(|o| object_aabb(&o));
+        hover.coord = Some(world_adjacent_corner(&hit, tool.size(), precise_box.as_ref()));
         return;
     }
 
@@ -181,33 +195,18 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         Some(Struck::Grown(cell, _)) => base_of(GROUND.cell(), *cell),
         None => world_adjacent_corner(&hit, units(GROUND.cell()), None),
     });
-    let (corner, size) = match struck {
-        Some(Struck::Object(o)) => (o.corner(), o.size()),
-        Some(Struck::Grown(cell, _)) => (base_of(GROUND.cell(), cell), units(GROUND.cell())),
+    let (corner, zoom) = match struck {
+        Some(Struck::Object(o)) => (o.corner(), o.zoom),
+        Some(Struck::Grown(cell, _)) => (base_of(GROUND.cell(), cell), GROUND.cell()),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
-        None => (world_struck_corner(&hit, units(GROUND.cell())), units(GROUND.cell())),
+        None => (world_struck_corner(&hit, units(GROUND.cell())), GROUND.cell()),
     };
     // Past where the world takes an edit, nothing is pointed at.
-    if !editable(&corner, size) {
+    if !World::now().editable(&cube(zoom, index_of(zoom, &corner))) {
         *hover = Hover::default();
         return;
     }
     hover.coord = Some(corner);
-}
-
-/// Whether the cube of `size` cornered at `corner` may hold an edit.
-fn editable(corner: &Q3, size: f64) -> bool {
-    let zoom = of_side(size);
-    World::now().editable(&cube(zoom, index_of(zoom, corner)))
-}
-
-/// Whether what `hit` struck is drawn folded: the eye's rays draw cells
-/// coarser than the box struck where it is (view/observation.rs `cell_at`).
-fn folded_at(hit: &Hit, drawn: Tau) -> bool {
-    let held = of_side(hit.cube.extent()[0]);
-    crate::view::observation::observation()
-        .and_then(|o| crate::view::observation::cell_at(&o, drawn, hit.cube.center()))
-        .is_some_and(|cells| cells < held)
 }
 
 /// A tap at `ndc_x`, `ndc_y` with the tool held, on the world drawn at `drawn`.
@@ -216,44 +215,33 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     let Some(hovered) = interaction().hover.coord else { return };
     let ui = interaction().holding;
     let hover = interaction().hover;
-    let object_size = object_size_of(ui.object_tier);
 
-    match ui.active_tool {
-        ActiveTool::Pointer => {
+    match PlacementTool::of(&ui) {
+        // The slot may have filled since the last hover update.
+        Some(tool) if is_placement_blocked(tool, &hovered) => {}
+        Some(PlacementTool::Object(zoom)) => place(&hovered, zoom, ui.object_cube),
+        Some(PlacementTool::Decor(id)) => place_decor(&hovered, id),
+        // It waits there for its words, which the shell asks for.
+        Some(PlacementTool::Marker) => wait_to_put(&hovered),
+        None if ui.active_tool == ActiveTool::Pointer => {
             // Recenter across the struck face, standing as a pan lands.
             let Some(approach) = hover.approach else { return };
             let target = stand(&anchor_center(&approach));
             crate::control::navigation::destination::go_to(target, crate::control::camera::controller::Motion::Smooth);
         }
-        ActiveTool::Eraser => {
+        // The eraser.
+        None => {
             match (hover.object_at, hover.scattered) {
                 (Some(at), _) => remove(at),
                 (None, Some(s)) => {
                     if let Some(cell) = s.grown_in() {
-                        place_air(&base_of(GROUND.cell(), cell), units(GROUND.cell()));
+                        place_air(EntryAt::new(GROUND.cell(), cell));
                     }
                 }
                 // AIR, not VOID: terrain has no leaf to delete. A whole cell, never the
                 // size tier: the scan emits nothing for a zero material whatever its
                 // sub-cell bytes, so a smaller leaf would save a bite nobody took.
-                (None, None) => place_air(&hovered, units(GROUND.cell())),
-            }
-        }
-        // The slot may have filled since the last hover update.
-        ActiveTool::Decor => {
-            if !is_placement_blocked(PlacementTool::Decor(ui.decor_id), &hovered, object_size) {
-                place_decor(&hovered, units(Decor::of(ui.decor_id).row.cell_zoom()), ui.decor_id);
-            }
-        }
-        // It waits there for its words, which the shell asks for.
-        ActiveTool::Marker => {
-            if !is_placement_blocked(PlacementTool::Marker, &hovered, object_size) {
-                wait_to_put(&hovered);
-            }
-        }
-        ActiveTool::Object => {
-            if !is_placement_blocked(PlacementTool::Object, &hovered, object_size) {
-                place(&hovered, object_size, ui.object_cube);
+                (None, None) => place_air(EntryAt::holding(GROUND.cell(), &hovered)),
             }
         }
     }

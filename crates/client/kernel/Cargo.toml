@@ -16,7 +16,7 @@ libm.workspace = true
 xpute-guest = { path = "../../../xpute/rust/guest" }
 xpute-kit = { path = "../../../xpute/rust/kit" }
 pxl-spec = { path = "../../spec" }
-pxl-portable = { path = "../../portable" }
+pxl-spec-core = { path = "../../spec/core" }
 pxl-render = { path = "../render" }
 # The executor the door polls the kernel's tasks on inside a turn
 # (door/executor.rs). No platform feature: the pender is the kernel's own, and

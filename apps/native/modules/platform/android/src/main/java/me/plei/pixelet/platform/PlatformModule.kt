@@ -16,7 +16,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.typedarray.Uint8Array
 
 /**
- * The device's half of the app's platform (apps/native/src/platform/) on
+ * The device's half of the app's platform (apps/native/src/) on
  * Android, the module an iPhone's PlatformModule.swift is: the kernel as the
  * shell reaches it, the view it draws into, and what the shell asks of the
  * system, under the same names.
@@ -109,7 +109,7 @@ class PlatformModule : Module() {
     /** How much of the screen's bottom inset takes a touch, in
      * density-independent pixels: the navigation buttons' bar, or none with
      * gesture navigation, whose handle only takes a swipe. What the shell
-     * rests its bottom chrome clear of (shared/ui/bottom-rest.ts). */
+     * rests its bottom chrome clear of (apps/client/src/shell/ui/bottom-rest.ts). */
     Function("tappableBottom") {
       val view = appContext.currentActivity?.window?.decorView ?: return@Function 0.0
       val insets = ViewCompat.getRootWindowInsets(view) ?: return@Function 0.0

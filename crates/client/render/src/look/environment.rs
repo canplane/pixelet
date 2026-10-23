@@ -9,18 +9,17 @@ use pxl_spec::space::coord::v3::{self, V3};
 
 use crate::look::atmosphere::{moon_phase_light, MOON_LIGHT, NIGHT_COLOR};
 
-/// The sun's light (8): its direction, a pad, its colour, a pad; the
-/// Moon's (8): its direction, its light, its colour, a pad; the stars'
+/// The sun's direction and a pad (4); the Moon's direction and its light
+/// (4); the Moon's colour and a pad (4), the sun's being white; the stars'
 /// fade, clock and the anchor's longitude (4); air (4); the stars' frame
 /// (12).
-pub const ENV_FLOATS: usize = 36;
-pub const ENV_SUN_LIGHT: usize = 0;
-pub const ENV_MOON_LIGHT: usize = 8;
-/// A light's colour, past its direction.
-pub const LIGHT_COLOR: usize = 4;
-pub const ENV_SKY: usize = 16;
-pub const ENV_AIR: usize = 20;
-pub const ENV_STARS: usize = 24;
+pub const ENV_FLOATS: usize = 32;
+pub const ENV_SUN: usize = 0;
+pub const ENV_MOON: usize = 4;
+pub const ENV_MOON_COLOR: usize = 8;
+pub const ENV_SKY: usize = 12;
+pub const ENV_AIR: usize = 16;
+pub const ENV_STARS: usize = 20;
 
 #[derive(Clone, Copy)]
 pub struct Light {
@@ -41,9 +40,9 @@ pub struct Light {
 
 pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     // Both lights, summed so the light does not snap where they cross at
-    // dusk, each as it reaches the air: the sun's first, the moon's second,
-    // each against a sun overhead at sea level, which the shaders take as
-    // white (atmos_lut.wgsl `table_white`).
+    // dusk, each as it reaches the air, against a sun overhead at sea
+    // level, which the shaders take as white (atmos_lut.wgsl
+    // `table_white`): the sun's is that white, the Moon's its colour.
     let sun_dir = v3::norm(&light.sun);
     let moon_dir = v3::norm(&light.moon);
     // The stars are lost in the day.
@@ -52,11 +51,10 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     let phase = moon_phase_light(core::f64::consts::PI - elongation);
     // Wherever the Moon is up; by day the sun outshines it.
     let moon_color: [f64; 3] = core::array::from_fn(|k| NIGHT_COLOR[k] * MOON_LIGHT * phase);
-    for (at, (d, color)) in [(ENV_SUN_LIGHT, (sun_dir, [1.0; 3])), (ENV_MOON_LIGHT, (moon_dir, moon_color))] {
-        put3(o, at, f32s(&d));
-        put3(o, at + LIGHT_COLOR, [color[0] as f32, color[1] as f32, color[2] as f32]);
-    }
-    o[ENV_MOON_LIGHT + 3] = (MOON_LIGHT * phase) as f32;
+    put3(o, ENV_SUN, f32s(&sun_dir));
+    put3(o, ENV_MOON, f32s(&moon_dir));
+    o[ENV_MOON + 3] = (MOON_LIGHT * phase) as f32;
+    put3(o, ENV_MOON_COLOR, f32s(&moon_color));
     o[ENV_SKY] = (light.stars * night) as f32;
     o[ENV_SKY + 1] = light.time as f32;
     o[ENV_SKY + 2] = light.longitude as f32;

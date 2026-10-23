@@ -16,7 +16,7 @@ use super::zoom::{cube, units, Zoom};
 /// - Y, 24: the Mercator plane is a square;
 /// - Z, 16: ±2^15 units of height, as the terrain stores a height, an `i16`
 ///   in ground cells, a ground cell a unit (`bake/constant.rs`).
-pub const EXTENT: [u32; 3] = [pxl_portable::UNIT_ZOOM, pxl_portable::UNIT_ZOOM, pxl_portable::HEIGHT_BITS];
+pub const EXTENT: [u32; 3] = [pxl_spec_core::UNIT_ZOOM, pxl_spec_core::UNIT_ZOOM, pxl_spec_core::HEIGHT_BITS];
 
 const _: () = assert!(
     EXTENT[0] + FRAC_W == i32::BITS && EXTENT[1] + FRAC_W == i32::BITS && EXTENT[2] + FRAC_W <= i32::BITS,
@@ -53,6 +53,16 @@ pub fn point(x: f64, y: f64, z: f64) -> Q3 {
     at(from_real(x), from_real(y), from_real(z))
 }
 
+/// A ray's origin from units, which may stand off the world, as an eye
+/// over it does: X goes round as at `at`, Y and Z stop only where an `i32`
+/// does. Y fills its `i32`, so it stops where the world does; Z's spare
+/// bits hold what is over the world, and a ray from there passes it whole
+/// on its way down, as it passes any empty node.
+pub fn origin(x: f64, y: f64, z: f64) -> Q3 {
+    let hold = |v: f64| from_real(v).clamp(i32::MIN.into(), i32::MAX.into()) as i32;
+    [from_real(x) as i32, hold(y), hold(z)]
+}
+
 /// From `a` to `b`, in steps: X the short way round, as an `i32` wraps; Y
 /// and Z as they are, wide, since Y does not go round.
 pub fn between(a: &Q3, b: &Q3) -> [i64; 3] {
@@ -67,10 +77,10 @@ pub const fn around(zoom: Zoom) -> i64 {
     1i64 << zoom
 }
 
-/// A cell at `z` named as pxl-portable's `wrap_index` names its X, which
+/// A cell at `z` named as pxl-spec-core's `wrap_index` names its X, which
 /// every key goes through.
 pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i32; 3]) -> [i32; 3] {
-    [pxl_portable::wrap_index(zoom, x), y, h]
+    [pxl_spec_core::wrap_index(zoom, x), y, h]
 }
 
 /// The copy of `x` nearest `about`: where a stored X stands for an eye at `about`.

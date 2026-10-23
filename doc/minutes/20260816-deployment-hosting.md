@@ -368,7 +368,7 @@ warns about; nothing needed them.
 
 `plei.me` rather than one of the `xpute.*` domains the account also holds.
 `@xpute/core` is a runtime kit that carries no pixelet knowledge and is meant
-to stay portable (AGENTS.md), so spending that name on one of the things
+to stay portable, so spending that name on one of the things
 built with it would be the same conflation the package boundary exists to
 prevent.
 

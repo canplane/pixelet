@@ -38,6 +38,7 @@ use crate::io::request::declare;
 use crate::io::source;
 use crate::layer::residency::floor;
 use crate::layer::residency::{Lines, Residency};
+use crate::query::Walked;
 use crate::view::observation::{observation, ByEye};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::morton::key_of;
@@ -98,7 +99,6 @@ struct Seen {
 pub struct Demand<L: Observed> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
-    demand: Vec<Tile>,
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
     /// The floor's tiles as last observed.
@@ -108,7 +108,10 @@ pub struct Demand<L: Observed> {
     gone: Vec<Tile>,
     /// What it reads moved since it last observed.
     moved: bool,
-    /// Reused across observations so observing stops allocating once warm.
+    /// Where an observation builds the estimator's tiles and its asks, kept
+    /// so observing stops allocating once warm. Empty between observations:
+    /// what was asked is the residency's (`Residency::ask`).
+    demand: Vec<Tile>,
     asks: FnvHashMap<Tile, Ask>,
     /// The residency's revision as it idled it (`idle`), none while it steps.
     idled: Option<u32>,
@@ -137,27 +140,20 @@ impl<L: Observed> Demand<L> {
         self.floor.iter().copied()
     }
 
-    /// Whether every tile the view needs has its answer.
-    pub fn answered(&self) -> bool {
-        self.asks.keys().all(|&p| L::residency().has_answer(p))
-    }
-
-    /// No object for `p`: the tile over it says its ground; at the source's top, `Base::empty`.
+    /// No object for `p`: the tile over it says its ground; at the layer's top (`Base::top`), `Base::empty`.
     pub fn absent(&mut self, p: Tile) {
-        let top = L::TOP.or(source::top()).unwrap_or(L::LATTICE.top());
         match L::empty() {
-            Some(empty) if p.zoom <= top => L::residency().set(p, empty),
+            Some(empty) if L::top().is_some_and(|top| p.zoom <= top) => L::residency().set(p, empty),
             _ => L::residency().answer_above(p),
         }
     }
 
     pub fn admit(&mut self, p: Tile, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
-        // The tile last in view order goes.
+        // The tile last in view order goes, of two as late the greater.
         let o = self.observation.as_ref();
-        let farthest = |tiles: &[Tile]| {
-            let mut lines = Lines::default();
-            let mut order = |t: Tile| o.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, L::LATTICE, t, &mut lines));
-            (0..tiles.len()).max_by_key(|&i| order(tiles[i]))
+        let farthest = |tiles: &mut dyn Iterator<Item = Tile>| {
+            let mut walked = Walked::default();
+            tiles.max_by_key(|&t| (o.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, L::LATTICE, t, &mut walked)), t))
         };
         L::residency().admit(p, farthest, receive)
     }
@@ -167,15 +163,13 @@ impl<L: Observed> Demand<L> {
     #[allow(clippy::too_many_arguments)]
     pub fn observe(&mut self, o: Option<&Observation>, destination: impl Iterator<Item = Tile>, estimator: &ByEye, top: Zoom) {
         let mut demand = core::mem::take(&mut self.demand);
-        demand.clear();
         let mut asks = core::mem::take(&mut self.asks);
-        asks.clear();
         let ask = |asks: &mut FnvHashMap<Tile, Ask>, p: Tile, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
         // One walk down the pyramid in key order, so each tile's line, its
         // own and the ground's it is ordered by, steps from its neighbour's.
-        let (mut lines, mut ground) = (Lines::default(), Lines::default());
+        let (mut lines, mut ground) = (Lines::default(), Walked::default());
         let mut order = |o: &Observation, p: Tile| crate::view::observation::order_of_tile(o, L::LATTICE, p, &mut ground);
         if let Some(o) = o {
             if matches!(L::ASKS, Asks::View) {
@@ -272,10 +266,12 @@ impl<L: Observed> Demand<L> {
                 self.wants.push((p.subject(), asks[&p]));
             }
         }
+        asks.clear();
         self.asks = asks;
+        demand.clear();
+        self.demand = demand;
 
         self.observation = o.copied();
-        self.demand = demand;
     }
 
     /// The layer's turn, from the live eye: the eye that is coming, which
@@ -288,8 +284,7 @@ impl<L: Observed> Demand<L> {
     /// as the destination is. A layer with a top of its own is observed out
     /// to its own reach.
     pub fn step(&mut self, destination: Option<Tile>, pinned: &[Tile], tau: Tau) {
-        // Nothing coarser than the layer's own top is drawn, whatever the source holds.
-        let Some(top) = L::TOP.or(source::top()).map(|t| t.max(L::LATTICE.top())) else { return };
+        let Some(top) = L::top() else { return };
         let o = observation().map(|o| match L::TOP {
             Some(_) => Observation { reach: L::reach(), ..o },
             None => o,
@@ -325,7 +320,6 @@ impl<L: Observed> Demand<L> {
             return;
         }
         self.wants.clear();
-        self.asks.clear();
         L::residency().ask(&self.asks);
         declare(L::STREAM, &[]);
         self.last = None;

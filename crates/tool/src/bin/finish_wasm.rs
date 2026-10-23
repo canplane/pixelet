@@ -78,15 +78,16 @@ fn exported_only(bytes: &[u8], keep: &[String]) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// The workspace's members, as crates/Cargo.toml lists them: Cargo hands rustc
-/// a member's paths relative to the workspace, so no prefix remap reaches them.
-/// Included, so a change to the list rebuilds this tool.
+/// The workspace's members, as crates/Cargo.toml lists them in the tree the
+/// tool runs in (`pxl_tool::root`): Cargo hands rustc a member's paths
+/// relative to the workspace, so no prefix remap reaches them.
 fn members() -> Result<Vec<String>, String> {
-    const MANIFEST: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../Cargo.toml"));
+    let at = pxl_tool::root().join("crates/Cargo.toml");
+    let manifest = std::fs::read_to_string(&at).map_err(|e| format!("{}: {e}", at.display()))?;
     let list = regex::Regex::new(r"(?ms)^\s*members\s*=\s*\[([^\]]*)\]").map_err(|e| e.to_string())?;
     let comment = regex::Regex::new(r"(?m)#.*$").map_err(|e| e.to_string())?;
     let quoted = regex::Regex::new(r#""([^"]+)""#).map_err(|e| e.to_string())?;
-    let body = list.captures(MANIFEST).ok_or("crates/Cargo.toml: no workspace members")?;
+    let body = list.captures(&manifest).ok_or("crates/Cargo.toml: no workspace members")?;
     let body = comment.replace_all(&body[1], "");
     Ok(quoted.captures_iter(&body).map(|c| format!("{}/src/", &c[1])).collect())
 }

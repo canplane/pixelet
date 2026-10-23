@@ -14,7 +14,7 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
-pub const STEP_NAMES: &[&str] = &["controller", "input", "camera", "environment", "companion", "preview", "demand", "scene", "world_gizmo"];
+pub const STEP_NAMES: &[&str] = &["controller", "input", "camera", "environment", "companion", "preview", "demand", "scene"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
@@ -26,12 +26,11 @@ pub enum StepName {
     preview = 5,
     demand = 6,
     scene = 7,
-    world_gizmo = 8,
 }
 
 impl StepName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [StepName; 9] = [
+    pub const ALL: [StepName; 8] = [
         StepName::controller,
         StepName::input,
         StepName::camera,
@@ -40,7 +39,6 @@ impl StepName {
         StepName::preview,
         StepName::demand,
         StepName::scene,
-        StepName::world_gizmo,
     ];
 
     /// The member a number names, or none for a number the set does not
@@ -56,7 +54,6 @@ pub const EFFECT_NAMES: &[&str] = &[
     "orientation",
     "follow",
     "destination",
-    "view",
     "decor",
     "objects",
     "edit",
@@ -74,26 +71,24 @@ pub enum EffectName {
     orientation = 2,
     follow = 3,
     destination = 4,
-    view = 5,
-    decor = 6,
-    objects = 7,
-    edit = 8,
-    hover = 9,
-    puck = 10,
-    settings = 11,
-    assets = 12,
-    pump = 13,
+    decor = 5,
+    objects = 6,
+    edit = 7,
+    hover = 8,
+    puck = 9,
+    settings = 10,
+    assets = 11,
+    pump = 12,
 }
 
 impl EffectName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [EffectName; 14] = [
+    pub const ALL: [EffectName; 13] = [
         EffectName::navigation,
         EffectName::bootstrap,
         EffectName::orientation,
         EffectName::follow,
         EffectName::destination,
-        EffectName::view,
         EffectName::decor,
         EffectName::objects,
         EffectName::edit,

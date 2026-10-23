@@ -4,23 +4,17 @@
 //! place by the panel and the report so both agree. Sections go only through
 //! `put`; indexing lanes by hand let sections drift out of order (2026-09-23).
 
-use crate::billboard::sheet::billboard_sheet;
 use crate::control::camera::controller;
 use crate::io::failure::Outcome;
-use crate::io::request::credits;
-use crate::layer::Base as _;
-use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
-use crate::profiler::block::{FetchBlock, FramesBlock, OpenBlock, QualityBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
-use crate::profiler::frame::{long, missed, off_turn_ms, overran};
-use crate::profiler::frame::{FrameSample, GPU_SPANS};
-use crate::profiler::log::window_baseline;
-use crate::profiler::record::{fixed_lane, profiler_frames_since, profiler_open_interval, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
+use crate::profiler::block::{FramesBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::profiler::frame::FrameSample;
+use crate::profiler::frame::{long, missed, overran};
+use crate::profiler::record::{fixed_lane, profiler_frames_since, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
 use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
 use crate::sched::tick::tick_step_stats;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -75,8 +69,6 @@ pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
     put(out, SUMMARY::rec::AT, &profiler_recording_state());
 
     put(out, SUMMARY::frames::AT, &frames(scratch, profiler_frames_since(since)));
-    let open = profiler_open_interval().map_or(OpenBlock::default(), |f| OpenBlock { turns: f.turns, busy_ms: f.busy_ms });
-    put(out, SUMMARY::open::AT, &open);
     put(out, SUMMARY::tasks::AT, &tasks(scratch, profiler_tasks_since(since)));
     side(out);
     out
@@ -95,7 +87,6 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
     // A span the frame did not run reads 0 and is left out.
     // The GPU's figures over the frames a read landed with, each read once.
     let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
-    let spans: [Spread; GPU_SPANS] = core::array::from_fn(|k| spread(scratch, read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0)));
     FramesBlock {
         present: 1.0,
         n,
@@ -107,18 +98,14 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         turns: sum(&|f| f.turns),
         interval: spread(scratch, moving().map(|f| f.interval_ms)),
         busy: spread(scratch, frames.iter().map(|f| f.busy_ms)),
-        off_turn: spread(scratch, frames.iter().map(off_turn_ms)),
         tick: spread(scratch, frames.iter().map(|f| f.tick_ms)),
-        tasks: spread(scratch, frames.iter().map(|f| f.tasks_ms)),
         gpu_read: count(&|f| f.gpu.read != 0.0),
         gpu: spread(scratch, read().map(|f| pxl_render::gpu::renderer::gpu_ms(&f.gpu.spans))),
         phases_p95: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k])).p95),
-        gpu_spans_p95: spans.map(|s| s.p95),
-        gpu_spans_max: spans.map(|s| s.max),
+        gpu_spans_p95: core::array::from_fn(|k| spread(scratch, read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0)).p95),
         kinds: core::array::from_fn(|k| count(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| count(&|f| f.wake == k as f64)),
         heap_used_delta_bytes: last.heap.used_bytes - first.heap.used_bytes,
-        census: core::array::from_fn(|k| [sum(&|f| f.gpu.census[k][0]) / n, sum(&|f| f.gpu.census[k][1]) / n]),
         last: *last,
     }
 }
@@ -180,45 +167,36 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
 }
 
 fn side(out: &mut [f64]) {
-    put(out, SUMMARY::counters::AT, &counters().minus(&window_baseline()));
-
-    let sheet = billboard_sheet().stats();
-    put(
-        out,
-        SUMMARY::sheet::AT,
-        &SheetBlock {
-            size: sheet.size as f64,
-            entries: sheet.entries as f64,
-            shelves: sheet.shelves as f64,
-            used_px: sheet.used_px as f64,
-            initial: pxl_render::gpu::sheet::shelf::INITIAL_SIZE as f64,
-        },
-    );
-
-    put(out, SUMMARY::fetch::AT, &FetchBlock { credits: credits() as f64 });
-
-    put(
-        out,
-        SUMMARY::quality::AT,
-        &QualityBlock {
-            frames_held: TerrainTile::residency().frames_used() as f64,
-        },
-    );
-
-    // What the pointer meets as drawn, whether or not it could strike it there.
-    let met = crate::control::interaction::pointed().map(|at| (at, crate::view::lens::tau())).and_then(|([x, y], tau)| {
+    use crate::control::interaction::{self, collision};
+    let tau = crate::view::lens::tau();
+    let pointed = interaction::pointed();
+    // What the pointer meets as drawn, whatever the tool could strike there,
+    // and the zoom the rays draw it at.
+    let met = pointed.and_then(|[x, y]| {
         let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
-        crate::view::frame::pose::view_ray(x, y, &mut origin, &mut direction);
+        let pose = crate::view::frame::pose::view();
+        crate::view::frame::pose::ray_of(pose.at(), x, y, &mut origin, &mut direction);
         let ray = crate::query::Ray {
             origin,
             direction,
             reach: crate::view::observation::eye_reach().unwrap_or(0.0),
         };
-        let hit = crate::query::World::now().first_hit(&ray, crate::query::by_distance(tau)).value().flatten()?;
-        // The grid's cell there is the distance's (`Tau::cell_at`), as the camera grid is cut.
-        Some((crate::view::frame::coord::world_to_canonical(&hit.point), tau.cell_at(hit.t * hit.t)))
+        let detail = crate::query::by_distance(tau);
+        let hit = crate::query::World::now().first_hit(&ray, detail).value().flatten()?;
+        Some((crate::view::frame::coord::world_to_canonical(&hit.point), detail.at((hit.t * hit.t) as f32)))
     });
-    let (hover, cell_want) = (met.map(|m| m.0), met.map(|m| m.1));
+    let (hover, cell) = (met.map(|m| m.0), met.map(|m| m.1));
+    // What the tool held strikes there, as the hover picks it.
+    let picked = pointed.and_then(|[x, y]| interaction::picked(x, y, tau));
+    let struck = picked.as_ref().map_or(f64::NAN, |p| match p.hit.struck {
+        crate::query::Struck::Ground => 0.0,
+        crate::query::Struck::Object(_) => 1.0,
+        crate::query::Struck::Objects => 2.0,
+        crate::query::Struck::Decor(_) => 3.0,
+    });
+    let tool = collision::PlacementTool::of(&interaction::holding());
+    let place = interaction::hover().coord.filter(|_| tool.is_some());
+    let [place_x, place_y, place_z] = place.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
     let [center_lon, center_lat, center_z] = controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
@@ -240,7 +218,16 @@ fn side(out: &mut [f64]) {
             hover_lon,
             hover_lat,
             hover_alt,
-            cell_want: zoom(cell_want),
+            cell: zoom(cell),
+            struck,
+            held: zoom(picked.as_ref().map(|p| p.held())),
+            drawn: zoom(picked.as_ref().and_then(|p| p.drawn)),
+            folded: picked.as_ref().map_or(f64::NAN, |p| f64::from(u8::from(p.folded()))),
+            place_x,
+            place_y,
+            place_z,
+            place_zoom: zoom(tool.map(|t| t.zoom())),
+            blocked: tool.zip(place).map_or(f64::NAN, |(t, p)| f64::from(u8::from(collision::is_placement_blocked(t, &p)))),
         },
     );
 
@@ -257,17 +244,4 @@ fn side(out: &mut [f64]) {
         steps.count += 1.0;
     }
     put(out, SUMMARY::steps::AT, &steps);
-}
-
-/// The counters as they stand, from the billboard sheet and the terrain's
-/// residency, which the window counts from its baseline.
-pub fn counters() -> CountersBlock {
-    let sheet = billboard_sheet().stats();
-    let [admitted, evicted] = TerrainTile::residency().churn();
-    CountersBlock {
-        sheet_repacks: sheet.repacks as f64,
-        sheet_uploads: sheet.uploads as f64,
-        terrain_admitted: f64::from(admitted),
-        terrain_evicted: f64::from(evicted),
-    }
 }

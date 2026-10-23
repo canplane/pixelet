@@ -19,59 +19,28 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use xpute_guest::mem::base::off_of;
 
+use crate::frame::shader::words::atmos::{
+    BOTTOM_RADIUS, CAMERA_ALTITUDE, CITY_LIGHT, EARTH_REACH, EARTH_TILES, EARTH_WINDOW, EXPOSURE, GROUND_ALBEDO, KM_PER_U, LAND_ALTITUDE_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT, MIE_SCATTERING,
+    MOON_COLOR, MOON_DIR, MOON_LIGHT, NIGHT_SKY, NIGHT_STOPS, OZONE_ABSORPTION, OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING, SHOWN_FALL, SUN_ANGULAR_RADIUS, SUN_DIR,
+    TOP_RADIUS,
+};
 use crate::frame::shader::words::{AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::Read;
-use crate::gpu::renderer::Upload;
+use crate::gpu::read::Read;
 use crate::look::atmosphere as model;
-use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_SUN_LIGHT};
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_MOON_COLOR, ENV_SUN};
 
-/// One past the last field: the device rounds the struct up to a 16-byte row.
-/// Offsets in floats into the struct.
-pub(crate) const RAYLEIGH_SCATTERING: usize = 0;
-pub(crate) const BOTTOM_RADIUS: usize = 3;
-pub(crate) const OZONE_ABSORPTION: usize = 4;
-pub(crate) const TOP_RADIUS: usize = 7;
-// 8 to 10 free.
-pub(crate) const RAYLEIGH_SCALE_HEIGHT: usize = 11;
-pub(crate) const SUN_DIR: usize = 12;
-pub(crate) const MIE_SCATTERING: usize = 15;
-pub(crate) const CAMERA_ALTITUDE: usize = 16;
-pub(crate) const KM_PER_U: usize = 17;
-pub(crate) const MIE_EXTINCTION: usize = 18;
-pub(crate) const MIE_SCALE_HEIGHT: usize = 19;
-pub(crate) const MIE_G: usize = 20;
-pub(crate) const OZONE_CENTER: usize = 21;
-pub(crate) const OZONE_HALF_WIDTH: usize = 22;
-pub(crate) const GROUND_ALBEDO: usize = 23;
-pub(crate) const SUN_ANGULAR_RADIUS: usize = 24;
-pub(crate) const EXPOSURE: usize = 25;
-pub(crate) const NIGHT_STOPS: usize = 26;
-pub(crate) const SHOWN_FALL: usize = 27;
-pub(crate) const MOON_DIR: usize = 28;
-pub(crate) const MOON_LIGHT: usize = 31;
-// 32 to 35 free.
-pub(crate) const NIGHT_SKY: usize = 36;
-pub(crate) const LAND_ALTITUDE: usize = 39;
-pub(crate) const CITY_LIGHT: usize = 40;
-pub(crate) const EARTH_REACH: usize = 43;
-pub(crate) const EARTH_WINDOW: usize = 44;
-pub(crate) const EARTH_TILES: usize = 48;
+/// Hands each waiting tile's layer and texels to the writer while it takes them.
+pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
 /// Bindings 8 through 18, and the air's volume at 22: eleven entries.
 pub const AIR_ENTRIES: usize = 11;
 
-/// The air's volume's terms, a depth of froxels each (atmos_froxel.wgsl):
-/// what the air scatters and lets through, then the sun's, the other
-/// light's and the sky's light.
-const AIR_TERMS: u32 = 4;
-/// The volume's maker's workgroup, a side each way (atmos_froxel.wgsl).
-const FROXEL_WORKGROUP: u32 = 4;
 /// What the volume's maker binds: the frame, the volume it writes, the
 /// air's words and the tables it marches through, and the sky's ray.
-const FROXEL_GROUP: [u32; 27] = [
+const FROXEL_GROUP: [u32; 24] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -91,9 +60,6 @@ const FROXEL_GROUP: [u32; 27] = [
     COMPUTE,
     TEXTURE,
     13,
-    COMPUTE,
-    TEXTURE,
-    18,
     COMPUTE,
     TEXTURE,
     19,
@@ -220,7 +186,8 @@ impl Atmosphere {
         ]
         .map(|id| pipelines.build(g, id, Format::rgba16float));
         let n = AIR_FROXELS;
-        let volume = g.volume_view(g.volume([n, n, AIR_TERMS * n], Format::rgba16float, texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING));
+        // A slice past the air's, which holds each column's span (atmos_froxel.wgsl).
+        let volume = g.volume_view(g.volume([n, n, n + 1], Format::rgba16float, texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING));
 
         let mut atmosphere = Atmosphere {
             uniform,
@@ -290,7 +257,7 @@ impl Atmosphere {
         for (k, entries) in reads {
             atmosphere.groups[k] = g.bind_group(atmosphere.passes[pass_of(k)].layouts[0], &entries);
         }
-        let froxel = of(&[8, 9, 11, 12, 13, 18], &[frame, view_entry(1, volume), buffer_entry(19, sky_buffer)]);
+        let froxel = of(&[8, 9, 11, 12, 13], &[frame, view_entry(1, volume), buffer_entry(19, sky_buffer)]);
         atmosphere.froxel_group = g.bind_group(atmosphere.froxel.layouts[0], &froxel);
         atmosphere
     }
@@ -327,8 +294,8 @@ impl Atmosphere {
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_pipeline(pass, self.froxel.pipeline);
         g.set_bind_group(pass, 0, self.froxel_group, &[]);
-        let groups = AIR_FROXELS.div_ceil(FROXEL_WORKGROUP);
-        g.dispatch(pass, groups, groups, groups);
+        // A column of froxels a workgroup (atmos_froxel.wgsl).
+        g.dispatch(pass, AIR_FROXELS, AIR_FROXELS, 1);
         g.end(pass);
         true
     }
@@ -369,14 +336,15 @@ impl Atmosphere {
     /// Every light's and ray's height is measured up the world's z, straight
     /// up where the eye stands.
     pub fn lay_out(&mut self, g: &Gpu, env: &[f32]) {
-        let (sun, moon) = (&env[ENV_SUN_LIGHT..ENV_SUN_LIGHT + 3], &env[ENV_MOON_LIGHT..ENV_MOON_LIGHT + 4]);
+        let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
         let altitude_km = env[ENV_AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
         self.words[MOON_DIR..MOON_DIR + 3].copy_from_slice(&moon[..3]);
         self.words[MOON_LIGHT] = moon[3];
+        self.words[MOON_COLOR..MOON_COLOR + 3].copy_from_slice(&env[ENV_MOON_COLOR..ENV_MOON_COLOR + 3]);
         self.words[CAMERA_ALTITUDE] = altitude_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
-        self.words[LAND_ALTITUDE] = env[ENV_AIR + 3];
+        self.words[LAND_ALTITUDE_KM] = env[ENV_AIR + 3];
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         let r = &mut self.read;
         r.begin();

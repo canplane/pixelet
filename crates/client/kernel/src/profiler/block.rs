@@ -8,7 +8,7 @@
 use core::mem::{offset_of, size_of};
 
 use crate::io::spec::{STREAM_NAMES, TASK_PHASE_NAMES};
-use crate::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS};
+use crate::profiler::frame::{FrameSample, GPU_SPANS};
 use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY, WAKES};
 use crate::profiler::word::{words, Words};
 use pxl_render::gpu::span_spec::FRAME_KINDS;
@@ -58,20 +58,15 @@ pub struct FramesBlock {
     pub gpu_read: f64,
     pub interval: Spread,
     pub busy: Spread,
-    pub off_turn: Spread,
     pub tick: Spread,
-    pub tasks: Spread,
     pub gpu: Spread,
-    /// The p95 alone of each phase, and of each span its p95 and its max:
-    /// what is read of them.
+    /// The p95 alone of each phase and each span: what is read of them.
     pub phases_p95: [f64; PHASES.len()],
     pub gpu_spans_p95: [f64; GPU_SPANS],
-    pub gpu_spans_max: [f64; GPU_SPANS],
     /// Frames by the renderer's FRAME_KINDS, and turns' last ask by WAKES.
     pub kinds: [f64; FRAME_KINDS.len()],
     pub wakes: [f64; WAKES.len()],
     pub heap_used_delta_bytes: f64,
-    pub census: [[f64; 2]; CENSUS_LEN],
     pub last: FrameSample,
 }
 
@@ -81,24 +76,13 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     present => SUMMARY::frames::present, n => SUMMARY::frames::n, seconds => SUMMARY::frames::seconds,
     moving => SUMMARY::frames::moving, missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
     long => SUMMARY::frames::long, turns => SUMMARY::frames::turns, gpu_read => SUMMARY::frames::gpu_read,
-    interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy, off_turn => SUMMARY::frames::off_turn,
-    tick => SUMMARY::frames::tick, tasks => SUMMARY::frames::tasks, gpu => SUMMARY::frames::gpu,
-    phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95, gpu_spans_max => SUMMARY::frames::gpu_spans_max,
+    interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy,
+    tick => SUMMARY::frames::tick, gpu => SUMMARY::frames::gpu,
+    phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95,
     kinds => SUMMARY::frames::kinds, wakes => SUMMARY::frames::wakes,
-    heap_used_delta_bytes => SUMMARY::frames::heap_used_delta_bytes, census => SUMMARY::frames::census,
+    heap_used_delta_bytes => SUMMARY::frames::heap_used_delta_bytes,
     last => SUMMARY::frames::last,
 );
-
-/// The interval in progress: its turns and their time, which no frame turn
-/// has closed.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct OpenBlock {
-    pub turns: f64,
-    pub busy_ms: f64,
-}
-
-words!(OpenBlock, SUMMARY::open::WORDS, turns => SUMMARY::open::turns, busy_ms => SUMMARY::open::busy_ms);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -133,69 +117,6 @@ words!(TasksBlock, SUMMARY::tasks::WORDS, slots => SUMMARY::tasks::slots);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct CountersBlock {
-    pub sheet_repacks: f64,
-    pub sheet_uploads: f64,
-    pub terrain_admitted: f64,
-    pub terrain_evicted: f64,
-}
-
-impl CountersBlock {
-    /// Word by word, so a counter added to the block is subtracted without being named here.
-    pub fn minus(mut self, b: &CountersBlock) -> CountersBlock {
-        let n = size_of::<CountersBlock>() / 8;
-        // SAFETY: `words!` below holds the block to plain f64s end to end.
-        let (a, b) = unsafe {
-            (
-                core::slice::from_raw_parts_mut((&raw mut self).cast::<f64>(), n),
-                core::slice::from_raw_parts(std::ptr::from_ref(b).cast::<f64>(), n),
-            )
-        };
-        for (x, y) in a.iter_mut().zip(b) {
-            *x -= y;
-        }
-        self
-    }
-}
-
-words!(CountersBlock, SUMMARY::counters::WORDS,
-    sheet_repacks => SUMMARY::counters::sheet_repacks,
-    sheet_uploads => SUMMARY::counters::sheet_uploads,
-    terrain_admitted => SUMMARY::counters::terrain_admitted,
-    terrain_evicted => SUMMARY::counters::terrain_evicted,
-);
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct SheetBlock {
-    pub size: f64,
-    pub entries: f64,
-    pub shelves: f64,
-    pub used_px: f64,
-    pub initial: f64,
-}
-
-words!(SheetBlock, SUMMARY::sheet::WORDS,
-    size => SUMMARY::sheet::size, entries => SUMMARY::sheet::entries,
-    shelves => SUMMARY::sheet::shelves, used_px => SUMMARY::sheet::used_px, initial => SUMMARY::sheet::initial,
-);
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct FetchBlock {
-    pub credits: f64,
-}
-
-words!(FetchBlock, SUMMARY::fetch::WORDS, credits => SUMMARY::fetch::credits);
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct QualityBlock {
-    pub frames_held: f64,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ViewBlock {
     pub dist: f64,
     pub polar: f64,
@@ -210,7 +131,16 @@ pub struct ViewBlock {
     pub hover_lon: f64,
     pub hover_lat: f64,
     pub hover_alt: f64,
-    pub cell_want: f64,
+    pub cell: f64,
+    pub struck: f64,
+    pub held: f64,
+    pub drawn: f64,
+    pub folded: f64,
+    pub place_x: f64,
+    pub place_y: f64,
+    pub place_z: f64,
+    pub place_zoom: f64,
+    pub blocked: f64,
 }
 
 words!(ViewBlock, SUMMARY::view::WORDS,
@@ -218,10 +148,10 @@ words!(ViewBlock, SUMMARY::view::WORDS,
     center_lon => SUMMARY::view::center_lon, center_lat => SUMMARY::view::center_lat, center_z => SUMMARY::view::center_z,
     hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
     hover_lon => SUMMARY::view::hover_lon, hover_lat => SUMMARY::view::hover_lat, hover_alt => SUMMARY::view::hover_alt,
-    cell_want => SUMMARY::view::cell_want,
+    cell => SUMMARY::view::cell, struck => SUMMARY::view::struck, held => SUMMARY::view::held, drawn => SUMMARY::view::drawn,
+    folded => SUMMARY::view::folded, place_x => SUMMARY::view::place_x, place_y => SUMMARY::view::place_y, place_z => SUMMARY::view::place_z,
+    place_zoom => SUMMARY::view::place_zoom, blocked => SUMMARY::view::blocked,
 );
-
-words!(QualityBlock, SUMMARY::quality::WORDS, frames_held => SUMMARY::quality::frames_held);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

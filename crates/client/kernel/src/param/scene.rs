@@ -10,10 +10,16 @@
 /// light, the sky a fifth of a day's light on a face of albedo 0.3.
 pub const RIM_INTENSITY: f64 = 0.5;
 
-/// Edge shading on a cube's silhouette: its darkening, and its width in CSS
-/// pixels, one line drawn round every cube alike, near or far, large or small.
+/// Edge shading along a cube's creases, convex and concave: its darkening,
+/// and its width in units, one line alike on blocks of every size and
+/// thinned by perspective alone: about a CSS pixel at the default orbit's
+/// focus.
 pub const EDGE_STRENGTH: f64 = 0.3;
-pub const EDGE_WIDTH: f64 = 2.0;
+pub const EDGE_WIDTH: f64 = 1.0 / 64.0;
+
+/// Corner occlusion's darkening at its deepest, written where the setting
+/// asks for it; the shader cannot see a setting.
+pub const AO_STRENGTH: f64 = 0.2;
 
 // ---- places ----
 

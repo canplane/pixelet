@@ -42,7 +42,7 @@ The versions the client requests, and the shards it requests them for, are
 the bucket's `source`, which `deno task publish` alone writes and the client
 reads at boot; nothing in the tree records them, so a publish is never a
 commit or a deploy; the asset keys are the generated table
-`apps/web/src/catalog/asset/ingested.spec.ts`. The object
+`apps/client/src/catalog/asset/ingested.spec.ts`. The object
 name carries no extension, so **content-type and content-encoding are
 stored with the object at upload** — that is what every flag below is for.
 
@@ -154,7 +154,7 @@ deno task publish earth
 deno task ingest:asset
 # -> ./out/asset/<sha256>.<ext>, as the bucket holds them, and
 #    regenerates crates/spec/src/asset/ingested.spec.rs and
-#    apps/web/src/catalog/asset/ingested.spec.ts
+#    apps/client/src/catalog/asset/ingested.spec.ts
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   aws s3 sync ./out/asset s3://pixelet-tiles/asset \

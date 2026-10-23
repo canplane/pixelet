@@ -46,11 +46,11 @@ control; it makes no such promise for a SwiftUI one, and one was seen to
 lose it.
 
 - The switch is React Native's Switch, taking its own touch
-  (apps/native/src/platform/toggle-row.tsx).
+  (apps/client/src/shell/ui/toggle-row.ios.tsx).
 - The segmented control, the other SwiftUI control inside the sheet, is
   UIKit's, a view of the module (SegmentedControl.swift).
 - `check:rules` holds `@expo/ui` to the sheet (panel.tsx), and
-  apps/native/src/platform/README.md says which technology draws each piece.
+  apps/client/src/shell/ui/README.md says which technology draws each piece.
 
 ## Not done
 

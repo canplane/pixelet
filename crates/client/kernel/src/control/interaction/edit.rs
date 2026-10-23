@@ -7,18 +7,18 @@ use crate::control::interaction::collision::{is_placement_blocked, placement_rea
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::ext::Ext;
 use crate::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
-use crate::layer::object::size::{object_size_of, MARKER_SIZE};
+use crate::layer::object::size::MARKER_ZOOM;
 use crate::layer::object::store::Block;
-use pxl_portable::answer::PLACED_BLOCK;
 use pxl_spec::block::ext::MARKER_TEXT_CHARS;
 use pxl_spec::block::object::{cube_id, decor_num_id, Cube};
 use pxl_spec::block::object::{object_value_is_marker, MARKER};
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
-use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units};
+use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec_core::answer::PLACED_BLOCK;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
@@ -35,18 +35,11 @@ fn carved(at: &Q3) -> bool {
     World::now().block_of(at).value() == Some(PLACED_BLOCK | AIR)
 }
 
-/// The never-written AIR entry the eraser's preview injects into the drawn
-/// build where it hovers bare terrain: the cube of `size` holding `at`.
-pub fn carve_entry(at: &Q3, size: f64) -> EntryAt {
-    let zoom = of_side(size);
-    EntryAt::new(zoom, index_of(zoom, at))
-}
-
 // ---- Mutations ----
 
 /// A write of VOID collapses its path back, so a redundant record never sits in a save.
-fn write_object_value(coord: &Q3, size: f64, val: u32) {
-    submit(Write::at(coord, size, val));
+fn write_object_value(at: EntryAt, val: u32) {
+    submit(Write::at(at, val));
 }
 
 /// A write is made here at once and sent to be kept, where the world takes
@@ -64,13 +57,12 @@ fn submit(write: Write) {
 /// an AIR leaf, and the ground there without it is that look, its stratum's
 /// at that depth (without the carve, every cube stacked on matching ground
 /// was dropped).
-fn place_value_is_redundant(at: &Q3, size: f64, cube: Cube) -> bool {
-    if size < units(GROUND.cell()) || !carved(at) {
+fn place_value_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
+    if zoom > GROUND.cell() || !carved(at) {
         return false;
     }
     let Cube::Ground(look) = cube else { return false };
-    let zoom = of_side(size);
-    let entry = EntryAt::new(zoom, index_of(zoom, at));
+    let entry = EntryAt::holding(zoom, at);
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
     let ground = World::now().previewing(Some(entry), None).block_of(&middle(entry)).exact();
     ground == Some(look as u32)
@@ -83,21 +75,21 @@ fn middle(at: EntryAt) -> Q3 {
 }
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
-pub fn place(at: &Q3, size: f64, cube: Cube) {
-    let val = if place_value_is_redundant(at, size, cube) { VOID } else { cube_id(cube) };
-    write_object_value(at, size, val);
+pub fn place(at: &Q3, zoom: Zoom, cube: Cube) {
+    let val = if place_value_is_redundant(at, zoom, cube) { VOID } else { cube_id(cube) };
+    write_object_value(EntryAt::holding(zoom, at), val);
 }
 
 /// Placing the decor a scatter stands in a cell an erase emptied writes
 /// VOID, so the scattered instance returns as it was.
-pub fn place_decor(at: &Q3, size: f64, decor_id: DecorId) {
-    let value = if restores_scattered(at, size, decor_id).is_some() { VOID } else { decor_num_id(decor_id) };
-    write_object_value(at, size, value);
+pub fn place_decor(at: &Q3, decor_id: DecorId) {
+    let value = if restores_scattered(at, decor_id).is_some() { VOID } else { decor_num_id(decor_id) };
+    write_object_value(EntryAt::holding(PlacementTool::Decor(decor_id).zoom(), at), value);
 }
 
 /// The decor the ground grows that `place_decor` would bring back, for its preview.
-pub fn restores_scattered(at: &Q3, size: f64, decor_id: DecorId) -> Option<Instance> {
-    (size >= units(GROUND.cell()) && carved(at)).then(|| World::now().grown(Decor::of(decor_id), at))?
+pub fn restores_scattered(at: &Q3, decor_id: DecorId) -> Option<Instance> {
+    (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && carved(at)).then(|| World::now().grown(Decor::of(decor_id), at))?
 }
 
 /// A marker tool's tap at `at`, a place free or holding a marker: the marker
@@ -111,8 +103,7 @@ pub fn wait_at(at: EntryAt) {
 
 /// A marker tool's tap on the free cell whose min corner is `corner`.
 pub fn wait_to_put(corner: &Q3) {
-    let zoom = of_side(MARKER_SIZE);
-    wait_at(EntryAt::new(zoom, index_of(zoom, corner)));
+    wait_at(EntryAt::holding(MARKER_ZOOM, corner));
 }
 
 /// Nothing waits any more.
@@ -144,7 +135,7 @@ pub fn put_marker() {
     let (zoom, cell) = (at.zoom(), at.at());
     let stands = match World::now().placed(at) {
         Some(e) => object_value_is_marker(e.state),
-        None => !is_placement_blocked(PlacementTool::Marker, &base_of(zoom, cell), MARKER_SIZE),
+        None => !is_placement_blocked(PlacementTool::Marker, &base_of(zoom, cell)),
     };
     if stands && !words.is_empty() {
         submit(Write {
@@ -157,8 +148,8 @@ pub fn put_marker() {
 
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
 /// baked terrain, which has no leaf of its own to delete.
-pub fn place_air(at: &Q3, size: f64) {
-    write_object_value(at, size, cube::object::air as u32);
+pub fn place_air(at: EntryAt) {
+    write_object_value(at, cube::object::air as u32);
 }
 
 /// The eraser leaves its cell empty: where the ground fills it once the
@@ -176,7 +167,7 @@ pub fn remove(at: EntryAt) {
     // Only the resident finest leaf can say what fills the cube without it, as
     // `place_value_is_redundant` asks; elsewhere it is emptied as asked.
     let id = match world.previewing(Some(at), None).block_of(&middle(at)).exact() {
-        Some(v) if v != VOID && !pxl_portable::answer::placed(v) => AIR,
+        Some(v) if v != VOID && !pxl_spec_core::answer::placed(v) => AIR,
         None => AIR,
         Some(_) => VOID,
     };
@@ -186,7 +177,7 @@ pub fn remove(at: EntryAt) {
         ext: None,
     });
     for c in erased {
-        write_object_value(&base_of(GROUND.cell(), c), units(GROUND.cell()), VOID);
+        write_object_value(EntryAt::new(GROUND.cell(), c), VOID);
     }
 }
 
@@ -195,15 +186,16 @@ pub fn remove(at: EntryAt) {
 #[derive(Clone, Copy, Default)]
 pub struct Pending {
     pub object: Option<Entry>,
-    pub size: f64,
+    /// The cube the edit fills or takes.
+    pub zoom: Zoom,
     pub digging: bool,
     /// The same check as the commit, so preview and placement cannot disagree.
     pub blocked: bool,
-    /// What `blocked` was asked of: the tool, the hovered corner, the
-    /// object's size and the store's revision. Asked again only where one
-    /// moved or a change touched the columns it reads (`placement_reads`,
+    /// What `blocked` was asked of: the tool, its zoom with it, the hovered
+    /// corner and the store's revision. Asked again only where one moved or
+    /// a change touched the columns it reads (`placement_reads`,
     /// `changed::within`), as a step each frame turn sees each change once.
-    asked: Option<(PlacementTool, Q3, f64, u32)>,
+    asked: Option<(PlacementTool, Q3, u32)>,
 }
 
 static PENDING: Global<Pending> = Global::new();
@@ -222,27 +214,20 @@ pub fn pending_step() -> RenderEdits {
     let object = hover.object_at.and_then(|at| world.placed(at));
     let scattered = hover.scattered.is_some();
     let digging = active_tool == ActiveTool::Eraser && object.is_none() && !scattered;
-    // A terrain carve is a whole cell: the scan emits nothing for a zero
-    // material whatever its sub-cell bytes, so the cell goes whole anyway.
-    let size = match (&object, active_tool) {
-        (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
-        (_, ActiveTool::Decor) => units(Decor::of(ui.decor_id).row.cell_zoom()),
-        (_, ActiveTool::Marker) => MARKER_SIZE,
-        _ if digging || scattered => units(GROUND.cell()),
-        _ => object_size_of(ui.object_tier),
+    let tool = PlacementTool::of(&ui);
+    let zoom = match (tool, &object) {
+        (Some(tool), _) => tool.zoom(),
+        (None, Some(o)) => o.zoom,
+        // A terrain carve is a whole cell: the scan emits nothing for a zero
+        // material whatever its sub-cell bytes, so the cell goes whole anyway.
+        (None, None) => GROUND.cell(),
     };
-    let (blocked, asked) = match (&hovered, active_tool) {
-        (Some(h), ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker) => {
-            let tool = match active_tool {
-                ActiveTool::Object => PlacementTool::Object,
-                ActiveTool::Decor => PlacementTool::Decor(ui.decor_id),
-                _ => PlacementTool::Marker,
-            };
-            let object_size = object_size_of(ui.object_tier);
-            let asked = Some((tool, *h, object_size, world.revision()));
+    let (blocked, asked) = match (&hovered, tool) {
+        (Some(h), Some(tool)) => {
+            let asked = Some((tool, *h, world.revision()));
             let was = *PENDING.get(Pending::default);
-            let same = was.asked == asked && !crate::query::changed::within(placement_reads(tool, h, object_size), &[]);
-            (if same { was.blocked } else { is_placement_blocked(tool, h, object_size) }, asked)
+            let same = was.asked == asked && !crate::query::changed::within(placement_reads(tool, h), &[]);
+            (if same { was.blocked } else { is_placement_blocked(tool, h) }, asked)
         }
         _ => (false, None),
     };
@@ -252,13 +237,15 @@ pub fn pending_step() -> RenderEdits {
     let edits = RenderEdits {
         hide: hidden.map(|o| o.id()),
         hide_in: (!matches!(block, Some(Block::Decor { .. })), !matches!(block, Some(Block::Cube { .. }))),
-        // What is one voxel below shows through the ghost.
-        carve: hovered.filter(|_| digging).map(|h| carve_entry(&h, size)),
+        // The never-written AIR entry injected into the drawn build where
+        // the eraser hovers bare terrain: what is one voxel below shows
+        // through the ghost.
+        carve: hovered.filter(|_| digging).map(|h| EntryAt::holding(zoom, &h)),
         scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).and_then(|s| s.grown_in()),
     };
     *PENDING.get(Pending::default) = Pending {
         object,
-        size,
+        zoom,
         digging,
         blocked,
         asked,

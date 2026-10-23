@@ -19,13 +19,6 @@ fn norm_polar(polar: f64) -> f64 {
     look_domain(polar, 0.0).0
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum CameraStatus {
-    #[default]
-    Idle,
-    Drag,
-}
-
 /// What the controls ask; the drawn camera (controller.rs `Camera`) eases toward it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Intent {
@@ -44,14 +37,12 @@ pub struct IntentPatch {
 }
 
 pub struct CameraState {
-    pub camera_status: CameraStatus,
     pub intent: Intent,
 }
 
 impl CameraState {
     fn new() -> CameraState {
         CameraState {
-            camera_status: CameraStatus::Idle,
             intent: Intent {
                 dist: DEFAULT_DIST,
                 azimuth: DEFAULT_AZIMUTH,

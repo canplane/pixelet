@@ -7,22 +7,14 @@
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::frame::shader::words::CLOUDS_FLOATS;
+use crate::frame::shader::words::clouds::{BASE, COUNT, DRIFT, FRAC, REACH, SHOWN};
+use crate::frame::shader::words::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::look::cloud::{drift, CUMULUS_KM, LATTICE_COUNT, LATTICE_SHAMT, TILE_TEXELS};
+use crate::look::cloud::{drift, CUMULUS_KM, LATTICE_COUNT, LATTICE_SHAMT};
 use crate::look::environment::{ENV_AIR, ENV_SKY};
-
-/// The ray, its first word's last lane how much of the clouds shows, then
-/// the field the eye is over (frame/shader/clouds.wgsl `Clouds`).
-const SHOWN: usize = 3;
-const BASE: usize = 12;
-const FRAC: usize = 14;
-const COUNT: usize = 16;
-const REACH: usize = 17;
-const DRIFT: usize = 18;
 
 pub struct CloudPass {
     below: Built,
@@ -34,25 +26,32 @@ pub struct CloudPass {
 }
 
 impl CloudPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [Entry; AIR_ENTRIES]) -> CloudPass {
+    /// `sky_buffer`, the sky's words, whose ray each pixel's is.
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32, air: [Entry; AIR_ENTRIES]) -> CloudPass {
         let below = pipelines.build(g, PIPELINE_CLOUDS, g.canvas());
         let above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, g.canvas());
         let tile = g.texture(
-            TILE_TEXELS,
-            TILE_TEXELS,
+            CLOUD_TILE_TEXELS,
+            CLOUD_TILE_TEXELS,
             1,
             Format::r8unorm,
-            mip_levels(TILE_TEXELS, TILE_TEXELS),
+            mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
             texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT,
         );
-        let tile_view = g.view(tile, false, 0, mip_levels(TILE_TEXELS, TILE_TEXELS), 0, 1);
+        let tile_view = g.view(tile, false, 0, mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS), 0, 1);
         // Repeated, since the tile meets itself.
         let tile_sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::linear, AddressMode::repeat, None, 1);
         let uniform = g.buffer(word_bytes(CLOUDS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let mut e = vec![buffer_entry(0, frame_buffer), buffer_entry(1, uniform), view_entry(2, tile_view), sampler_entry(3, tile_sampler)];
+        let mut e = vec![
+            buffer_entry(0, frame_buffer),
+            buffer_entry(19, sky_buffer),
+            buffer_entry(1, uniform),
+            view_entry(2, tile_view),
+            sampler_entry(3, tile_sampler),
+        ];
         e.extend(air);
         let group = g.bind_group(below.layouts[0], &e);
-        bake(g, pipelines, tile, mip_levels(TILE_TEXELS, TILE_TEXELS));
+        bake(g, pipelines, tile, mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS));
         CloudPass {
             below,
             above,
@@ -64,15 +63,11 @@ impl CloudPass {
     }
 
     /// `shown`, how much of the clouds the kernel shows; `over`, the eye's
-    /// place on the map in the world's doubles. The field moves with the
-    /// wind, so its words are the clouds' own, apart from the sky's.
-    /// Along the sky's `ray` (`put_ray`, the eye at its origin), over `over`
-    /// in the world; `reach_km` how far it observes: past it no sheet is
-    /// drawn.
-    pub fn lay_out(&mut self, ray: &[f32], over: [f64; 2], env: &[f32], shown: f64, reach_km: f32) {
-        for k in 0..3 {
-            self.words[4 * k..4 * k + 3].copy_from_slice(&ray[4 * k..4 * k + 3]);
-        }
+    /// place on the map in the world's doubles; `reach_km` how far it
+    /// observes: past it no sheet is drawn. The field moves with the wind,
+    /// so its words are the clouds' own, apart from the sky's, whose ray
+    /// they are drawn along.
+    pub fn lay_out(&mut self, over: [f64; 2], env: &[f32], shown: f64, reach_km: f32) {
         self.words[SHOWN] = shown as f32;
         self.words[REACH] = reach_km;
         field(&mut self.words, over, env);

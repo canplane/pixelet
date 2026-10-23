@@ -6,7 +6,7 @@
 //! through POSITION_UNAVAILABLE and TIMEOUT
 //! (https://www.w3.org/TR/geolocation/#watchposition-method), so nothing is
 //! retried here; a device's module re-arms its own watch where its platform
-//! ends one (apps/native/src/platform/sensor.ts).
+//! ends one (apps/native/src/sensor.ts).
 
 use crate::abi::cmd::GeolocationErrorCode;
 use crate::abi::cmd::Message;
@@ -26,7 +26,6 @@ pub enum GeolocationCommand {
 struct Geolocation {
     /// What a return to the foreground resumes.
     open: bool,
-    watching: bool,
     /// The turn's last; the shell's watch follows it and ignores a repeat.
     command: Option<GeolocationCommand>,
 }
@@ -34,35 +33,30 @@ struct Geolocation {
 static GEOLOCATION: Global<Geolocation> = Global::new();
 
 fn geolocation() -> &'static mut Geolocation {
-    GEOLOCATION.get(|| Geolocation {
-        open: false,
-        watching: false,
-        command: None,
-    })
+    GEOLOCATION.get(|| Geolocation { open: false, command: None })
 }
 
+/// A watch runs while the store tracks the location
+/// (`DeviceLocationStore::is_tracking_location`).
 pub fn start_watching(supported: bool) {
-    let g = geolocation();
-    if g.watching {
+    let store = device_location_store();
+    if store.is_tracking_location {
         return;
     }
-    let store = device_location_store();
     if !supported {
         store.pose = Pose::Failed(Message::GeolocationUnsupported);
         return;
     }
     store.pose = Pose::Loading;
     store.set_is_tracking_location(true);
-    g.watching = true;
-    g.command = Some(GeolocationCommand::Start);
+    geolocation().command = Some(GeolocationCommand::Start);
 }
 
 pub fn stop_watching() {
-    let g = geolocation();
-    if g.watching {
-        g.watching = false;
-        g.command = Some(GeolocationCommand::Stop);
-        device_location_store().set_is_tracking_location(false);
+    let store = device_location_store();
+    if store.is_tracking_location {
+        store.set_is_tracking_location(false);
+        geolocation().command = Some(GeolocationCommand::Stop);
     }
 }
 
@@ -114,7 +108,6 @@ pub fn geolocation_error(code: GeolocationErrorCode) {
         GeolocationErrorCode::Other => Message::GeolocationGenericError,
     });
     if matches!(code, GeolocationErrorCode::PermissionDenied | GeolocationErrorCode::Other) {
-        geolocation().watching = false;
         store.set_is_tracking_location(false);
     }
 }

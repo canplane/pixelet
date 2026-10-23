@@ -6,9 +6,8 @@
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_BADGE};
 use pxl_render::gpu::api::bytes;
 use pxl_spec::space::coord::v3::V3;
-use xpute_guest::abi::handle::Slots;
 
-use crate::billboard::sheet::{billboard_sheet, SETS_MAX};
+use crate::billboard::sheet::billboard_sheet;
 
 /// Anchor relative to the set's (3), logical size in pixels (2), sheet
 /// rectangle (4), anchor's place down the sprite, 0 top 1 bottom (1), and
@@ -38,55 +37,34 @@ pub fn billboard_instance(at: V3, size: [f64; 2], slot: u32, down: f64, region: 
     .map(|v| v as f32)
 }
 
-struct Set {
+/// The billboards laid out, about an origin, in one heap block the renderer
+/// mirrors: the place step's (`scene/place.rs`).
+#[derive(Default)]
+pub struct BillboardSet {
     origin: V3,
     held: Held,
     count: u32,
 }
 
-#[derive(Default)]
-pub struct Billboards {
-    sets: Slots<Set, { SETS_MAX + 1 }>,
-}
-
-/// The sets, the billboards' own: a leaf holds what it lays out, as the
-/// terrain holds its tiles, and is handed the draw list it writes into.
-static BILLBOARDS: xpute_guest::global::Global<Billboards> = xpute_guest::global::Global::new();
-
-pub fn billboards() -> &'static mut Billboards {
-    BILLBOARDS.get(Billboards::default)
-}
-
-impl Billboards {
-    pub fn new_set(&mut self) -> u32 {
-        self.sets.insert(Set {
-            origin: [0.0; 3],
-            held: Held::default(),
-            count: 0,
-        })
+impl BillboardSet {
+    /// `lane` holds BILLBOARD_FLOATS floats an instance, relative to `origin`.
+    pub fn write(&mut self, draw: &mut DrawList, origin: V3, lane: &[f32]) {
+        let written = self.held.write(draw, bytes(lane));
+        self.count = if written { (lane.len() / BILLBOARD_FLOATS) as u32 } else { 0 };
+        self.origin = origin;
     }
 
-    pub fn write(&mut self, draw: &mut DrawList, id: u32, lane: &[f32]) {
-        let Some(s) = self.sets.get_mut(id) else { return };
-        let written = s.held.write(draw, bytes(lane));
-        s.count = if written { (lane.len() / BILLBOARD_FLOATS) as u32 } else { 0 };
-    }
-
-    pub fn place(&mut self, id: u32, origin: V3) {
-        if let Some(s) = self.sets.get_mut(id) {
-            s.origin = origin;
-        }
-    }
-
-    pub fn remove(&mut self, draw: &mut DrawList, id: u32) {
-        if let Some(mut s) = self.sets.remove(id) {
-            s.held.free(draw);
-        }
+    /// Whether it held a block.
+    pub fn free(&mut self, draw: &mut DrawList) -> bool {
+        let held = self.held.bytes > 0;
+        self.held.free(draw);
+        self.count = 0;
+        held
     }
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
-        for (_, s) in self.sets.iter().filter(|(_, s)| s.count > 0 && s.held.handle != 0) {
-            draw.draw_as(PIPELINE_BADGE, s.held.handle, s.count, 0, DrawList::translation(s.origin, eye), 0.0, 1.0);
+        if self.count > 0 && self.held.handle != 0 {
+            draw.draw_as(PIPELINE_BADGE, self.held.handle, self.count, 0, DrawList::translation(self.origin, eye), 0.0, 1.0);
         }
     }
 }

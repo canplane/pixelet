@@ -4,9 +4,9 @@ import ExpoModulesCore
 import UIKit
 
 /// UIKit's segmented control, for the shell's Segmented
-/// (apps/native/src/platform/segmented.tsx). UIKit's rather than SwiftUI's
+/// (apps/client/src/shell/ui/segmented.ios.tsx). UIKit's rather than SwiftUI's
 /// Picker: a control that takes a touch inside React Native's views is
-/// UIKit's (apps/native/src/platform/README.md says why).
+/// UIKit's (apps/client/src/shell/ui/README.md says why).
 ///
 /// Held to the shell's value: a pick is reported and the control shows it at
 /// once, and the shell's `selectedIndex` then says what stands.

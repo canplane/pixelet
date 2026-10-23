@@ -9,9 +9,9 @@ use crate::asset::Load;
 use crate::io::load::load_image;
 use crate::kernel;
 use crate::laid;
-use crate::model::asset::ModelHandle;
+use crate::model::asset::{model_of, ModelHandle};
 use crate::model::variant_spec::IDLE_CLIP;
-use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
+use crate::scene::character::variant::{character_variant, CharacterVariant, Group};
 use crate::sched::edge::request_world_tick;
 use crate::sched::tick::TickContext;
 use xpute_guest::global::Global;
@@ -86,7 +86,7 @@ pub fn preview_step(ctx: &mut TickContext) {
     let mut turned = false;
     for case in &mut c.cases {
         if case.model.is_none() {
-            case.model = model_of(case.variant.model, 1.0);
+            case.model = model_of(case.variant.model, Some(1.0));
         }
         if case.actor.is_none() {
             if let (Some(model), Some(_)) = (&case.model, load_image(Load::Asset(case.variant.skin))) {

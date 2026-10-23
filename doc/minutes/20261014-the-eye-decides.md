@@ -49,7 +49,7 @@ what stands on it. In the same weeks coordinates became relative to the eye
 
 A chunk meshed whole draws what no eye can see. A heightfield chunk `n`
 cells a side has a surface of about `n²` faces. Caves are hash-drawn
-pockets through the ground (`crates/portable/src/caves.rs`), and their walls
+pockets through the ground (`crates/spec/core/src/caves.rs`), and their walls
 grow with the volume, toward `n³`. A camera on the surface sees almost none
 of them, and the chunk drew them all.
 
@@ -70,7 +70,7 @@ whole-chunk build. Casting a ray a pixel drops the second.
 
 **14 October** (`5bdc893dc` and the decision above). A ray a pixel on the
 GPU, with nothing turned back into geometry. The descent is one source,
-`crates/portable/src/cast.rs`, compiled for the CPU and through rust-gpu to
+`crates/spec/core/src/cast.rs`, compiled for the CPU and through rust-gpu to
 WGSL. The camera grid still chooses the zoom a ray asks at each distance,
 so the resolution rule did not change; only the number of rays did. A
 pixel is not the final form of the rule, only its finest setting: one ray a
@@ -145,12 +145,8 @@ the same problem with the same result, at pixels times the log of the scene;
 for triangles the obstacle was building an acceleration structure over each
 frame's choice of clusters.
 
-It does not fit here, for three reasons.
+It does not fit here, for two reasons.
 
-- **Its occlusion depends on the frame before.** The depth it culls against
-  is last frame's. The ground decision's determinism clause
-  ([20261012](./20261012-the-ground-is-a-grid-then-overwrites.md))
-  forbids any result that depends on previous observations.
 - **Voxels are their own hierarchy.** A grid needs no structure built over
   it. Turning voxels into triangles multiplies the faces, and Nanite then
   builds a second hierarchy to undo that multiplication. Its simplification
@@ -168,7 +164,7 @@ for voxels can cast into the voxel hierarchy directly.
 A ray here does what a ray does in a bounding volume hierarchy (BVH): it
 asks a node whether anything under it is filled, passes it whole if not,
 and descends into the children it meets, nearest first
-(`crates/portable/src/cast.rs`). Three things make up that hierarchy, and none
+(`crates/spec/core/src/cast.rs`). Three things make up that hierarchy, and none
 is built while drawing.
 
 - **The tree** is the zooms: eight children a node, an octree whose nodes
@@ -176,7 +172,7 @@ is built while drawing.
 - **The bound** says whether a node can be passed. The ground's is the
   lowest and highest it draws over a column, read from a tile's index lane,
   whose coarser levels hold the join of the cells under them
-  (`crates/portable/src/ground.rs` `over`, `relief`). Outside this is called a
+  (`crates/spec/core/src/ground.rs` `over`, `relief`). Outside this is called a
   min-max (or maximum) mipmap, the usual structure for casting rays at a
   heightmap. The kernel's query carries a box a node
   (`crates/client/kernel/src/layer/query.rs` `Bound`), as a BVH does.

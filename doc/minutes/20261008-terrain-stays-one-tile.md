@@ -33,7 +33,7 @@ that is worth what it costs.
   leaf. Exact, and the kernel past the edge unchanged. Rejected on the
   costs:
   - **Requests.** Every tile goes through the Worker, which fails closed at
-    100k a day on the free plan (AGENTS.md "Scope"). A node becomes up to
+    100k a day on the free plan. A node becomes up to
     three asks, and a channel is learned to have stopped only by a 404,
     which is an ask too.
   - **A lost object reads as right.** A missing tile today falls back

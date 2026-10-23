@@ -2,7 +2,7 @@
 
 //! The first block a ray meets, at the zoom its distance asks
 //! (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md): the
-//! descent is pxl-portable's (`cast::first`), the one a GPU's cast runs too,
+//! descent is pxl-spec-core's (`cast::first`), the one a GPU's cast runs too,
 //! and the world answers it here from everything it holds, each node handed
 //! what its parent found (`Walker`). What only the CPU answers, decor,
 //! rides on that answer.
@@ -13,19 +13,19 @@ use super::world::World;
 use crate::layer::instance::{Instance, Source};
 use crate::layer::residency::Lines;
 use crate::layer::Answer;
-use pxl_portable::answer::{self, In, Kind};
-pub(super) use pxl_portable::cast::Until;
-use pxl_portable::cast::{self, Detail, Ends, Query};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world::{point, wrap_cell};
+use pxl_spec::space::coord::world::{origin, wrap_cell};
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
+use pxl_spec_core::answer::{self, In, Kind};
+pub(super) use pxl_spec_core::cast::Until;
+use pxl_spec_core::cast::{self, Detail, Ends, Query};
 
 /// The zooms a block is asked at: no coarser than a tile draws and no finer
 /// than what is placed is held.
@@ -34,12 +34,29 @@ pub fn asked() -> [Zoom; 2] {
 }
 
 /// The cells of tiles at the zoom `tile` wherever they are, as the descent
-/// reads a level of detail (pxl-portable `cast::Detail`): a range of that
+/// reads a level of detail (pxl-spec-core `cast::Detail`): a range of that
 /// zoom's cells alone, held to the zooms a block is asked at (`asked`).
 pub fn at_zoom(tile: Zoom) -> Detail {
     let [lo, hi] = asked();
     let z = GROUND.cell_zoom(tile).clamp(lo, hi);
-    Detail { tau: 1.0, range: [z, z] }
+    Detail {
+        tau: 1.0,
+        range: [z, z],
+        eye: [0.0; 3],
+    }
+}
+
+/// What is held, as finely as it is held: the ground at its cells, which
+/// answer alike asked finer, and what is placed at its own. Where the eye
+/// draws it coarser is the asker's to judge by `by_distance`
+/// (control/interaction.rs `Picked`).
+pub fn held() -> Detail {
+    let [_, finest] = asked();
+    Detail {
+        tau: 1.0,
+        range: [finest, finest],
+        eye: [0.0; 3],
+    }
 }
 
 /// The camera grid's cells at each distance from the origin at `tau`
@@ -49,6 +66,7 @@ pub fn by_distance(tau: Tau) -> Detail {
     Detail {
         tau: tau.scale() as f32,
         range: asked(),
+        eye: [0.0; 3],
     }
 }
 
@@ -192,8 +210,8 @@ impl<'a> World<'a> {
     }
 
     /// The first block along `ray` that `until` stops at, at the zoom `detail`
-    /// asks where it meets it (pxl-portable `cast::first`), from the ray's
-    /// origin as a position names it.
+    /// asks where it meets it (pxl-spec-core `cast::first`), from the ray's
+    /// origin, over the world where it stands there (pxl-spec `world::origin`).
     pub(super) fn along(&self, ray: &Ray, detail: Detail, until: Until, strike: Option<Strike<'a>>) -> (Answer<Option<Hit>>, Option<Strike<'a>>) {
         let mut walker = Walker {
             world: self,
@@ -203,8 +221,10 @@ impl<'a> World<'a> {
             lines: Lines::default(),
         };
         let o = ray.origin;
+        let end = ray.at(ray.reach);
+        self.read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
         let from = cast::Ray::new(ray.direction.map(|v| v as f32), ray.reach as f32);
-        let q = point(o[0], o[1], o[2]);
+        let q = origin(o[0], o[1], o[2]);
         let met = cast::first(&mut walker, q, &from, detail, until);
         let met = (met.ends == Ends::Stop).then(|| self.hit(ray, q, met.stop));
         let answer = match (met, walker.lack, walker.answered) {
@@ -216,11 +236,11 @@ impl<'a> World<'a> {
         (answer, walker.strike.map(|(_, s)| s))
     }
 
-    /// The footing down column `g` at `cell` (pxl-portable
-    /// `scatter::footing`): the block met and the block over it, where the
+    /// The footing down column `g` at `cell` (pxl-spec-core
+    /// `scatter::footing`): the block met and its top as drawn, where the
     /// world holds the column as its tiles say; none where nothing fills or
     /// a tile under the ray is lacked or only a coarser one stands in.
-    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<(u32, i32)> {
+    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<(u32, (i32, f32))> {
         let mut walker = Walker {
             world: self,
             lack: None,
@@ -228,13 +248,17 @@ impl<'a> World<'a> {
             strike: None,
             lines: Lines::default(),
         };
-        let (block, top, met) = pxl_portable::scatter::footing(&mut walker, cell, g);
+        let side = units(cell);
+        let middle = g.map(|v| (f64::from(v) + 0.5) * side);
+        self.read(middle, middle, cell);
+        let (block, top, met) = pxl_spec_core::scatter::footing(&mut walker, cell, g);
         (met && walker.lack.is_none()).then_some((block, top))
     }
 
     /// Where the descent from `q`, the ray's origin as a position names it,
     /// stopped, in units: its node's box put back on the unit cell holding
-    /// the origin, so it lies on the origin's lap.
+    /// the origin, so it lies on the origin's lap, inset to the box its block
+    /// keeps.
     fn hit(&self, ray: &Ray, q: Q3, s: cast::Stop<At>) -> Hit {
         let (zoom, c) = s.at.node;
         let side = units(zoom);
@@ -251,12 +275,16 @@ impl<'a> World<'a> {
             true => self.objects.placed(zoom, wrap_cell(zoom, c), s.at.handed.placed).map_or(Struck::Objects, |e| Struck::Object(e.id())),
             false => Struck::Ground,
         };
+        // A block kept short of its cube is the box it is drawn as, about
+        // its cube's center, its top where decor stands too (pxl-spec-core
+        // `cast::top`).
+        let rise = f64::from(cast::top(q, &n, s.block[0]).1);
         let t = f64::from(s.t);
         Hit {
             t,
             point: ray.at(t),
             normal,
-            cube: Aabb { min, max: min.map(|v| v + side) },
+            cube: Aabb { min: min.map(|v| v + side * (1.0 - rise)), max: min.map(|v| v + side * rise) },
             struck,
         }
     }

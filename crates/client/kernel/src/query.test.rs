@@ -3,7 +3,7 @@
 // The query's laws over a leaf tile's four children folded into their
 // parent as the bake folds them, and objects written into a store.
 
-use pxl_spec::bake::constant::OBJECT_COARSEST;
+use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::Ground;
 use pxl_spec::block::cube::{self, ground, sentinel};
 use pxl_spec::block::object::{cube_id, Cube};
@@ -209,12 +209,38 @@ fn flat_at_five() -> (Residency<TerrainTile>, [f64; 2]) {
     (resident([x0 + 10.0, y0 + 10.0], &[(leaf, flat)]), [x0 + 10.0, y0 + 10.0])
 }
 
+/// An eye over the world's top casts from where it stands, not from the
+/// top: its ray falls through what is over the world and meets the ground
+/// where its line does.
+#[test]
+fn a_ray_from_over_the_world_meets_the_ground_where_its_line_does() {
+    let _g = serial();
+    let (residency, at) = flat_at_five();
+    let store = Store::default();
+    let access = World::new(&residency, &store);
+    let top = access.first_hit(&down(at), at_zoom(LEAF_ZOOM)).value().flatten().unwrap().point[2];
+    let high = 2.0 * world::REACH.max[2];
+    let over = Ray {
+        origin: [at[0], at[1], high],
+        direction: [0.0, 0.0, -1.0],
+        reach: 2.0 * high,
+    };
+    let met = access.first_hit(&over, at_zoom(LEAF_ZOOM));
+    assert!(matches!(met, Answer::Exact(_)), "{met:?}");
+    let hit = met.value().flatten().unwrap();
+    assert_eq!([hit.point[2], hit.t], [top, high - top], "{hit:?}");
+}
+
 /// A dig is met as the cells asked fold it, nothing finer: at the leaves' cells
-/// a cell dug less than half is whole, its top met by a ray and stood on by a
-/// walker, and a cell dug half or more is air, the ground under it met.
+/// a cell dug in part keeps the eighths left, a box of their volume about the
+/// cell's center whose top a ray meets (`answer::side`), and a cell dug whole
+/// is air, the ground under it met. A walker reads the cell as its columns at
+/// the finest zoom placed in it, and stands on what is left as it is held:
+/// on the half cubes over a dug lower half.
 #[test]
 fn a_dig_is_met_as_the_cells_asked_fold_it() {
     use crate::layer::object::store::AIR;
+    use pxl_spec_core::answer::{side, EIGHTHS};
     let _g = serial();
     let (residency, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
@@ -226,13 +252,53 @@ fn a_dig_is_met_as_the_cells_asked_fold_it() {
         }
         store
     };
-    for (n, top) in [(1, 5.0), (3, 5.0), (4, 4.0), (8, 4.0)] {
+    for (n, stands) in [(1, 5.0), (3, 5.0), (4, 5.0), (8, 4.0)] {
+        let left = EIGHTHS - n as u32;
+        let top = if left == 0 { 4.0 } else { 4.5 + f64::from(side(left)) / 2.0 };
         let store = dug(n);
         let access = World::new(&residency, &store);
         let at = [x + half / 2.0, y + half / 2.0];
         let hit = access.first_hit(&down(at), at_zoom(LEAF_ZOOM)).exact().flatten().unwrap();
-        assert_eq!(hit.point[2], top, "{n} of 8 dug: {hit:?}");
-        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(top)), "{n} of 8 dug");
+        // The top as `cast::top` gives it, a share of the cell in f32.
+        assert!((hit.cube.max[2] - top).abs() < 1e-6, "{n} of 8 dug: {hit:?}");
+        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(stands)), "{n} of 8 dug");
+    }
+}
+
+/// What is held is met as finely as it is held: a half cube on the ground,
+/// finer than the leaves' cells, is met whole by a pick, which asks it as it
+/// is placed.
+#[test]
+fn a_half_cube_is_met_as_it_is_placed() {
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let half = units(OBJECT_COARSEST + 1);
+    let mut store = Store::default();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    write(&mut store, [x, y, 5.0], OBJECT_COARSEST + 1, red);
+    let access = World::new(&residency, &store);
+    let at = [x + half / 2.0, y + half / 2.0];
+    let hit = access.first_hit(&down(at), held()).exact().flatten().unwrap();
+    assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
+    assert_eq!([hit.point[2], hit.cube.extent()[0]], [5.0 + half, half], "{hit:?}");
+}
+
+/// A walker stands on what is placed as it is held, wherever in its cell it
+/// lies and however small: its cell is read as columns at the finest zoom
+/// placed in it.
+#[test]
+fn a_walker_stands_on_a_cube_of_any_tier_anywhere_in_its_cell() {
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
+        let (cell, side) = (units(GROUND.cell()), units(zoom));
+        let mut store = Store::default();
+        // In the cell's far corner, off its middle.
+        write(&mut store, [x + cell - side, y + cell - side, 5.0], zoom, red);
+        let access = World::new(&residency, &store);
+        let at = point(x + 0.1, y + 0.1);
+        assert_eq!(access.surface_support(&at), Answer::Exact(Some(5.0 + side)), "a cube of z{zoom}");
     }
 }
 
@@ -305,4 +371,23 @@ fn a_height_stands_on_the_floor_nearest_it() {
     write(&mut store, [x, y, 8.0], OBJECT_COARSEST, red);
     let access = World::new(&residency, &store);
     assert_eq!(access.support_nearest(&world::point(x + 0.5, y + 0.5, 9.0)), Answer::Exact(Some(10.0)));
+}
+
+/// A reading reports the columns its queries read: a support its own
+/// cell's, a walk every cell it passes, joined.
+#[test]
+fn a_reading_reports_the_columns_its_queries_read() {
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let store = Store::default();
+    let read = changed::Columns::default();
+    let access = World::new(&residency, &store).reading(&read);
+    let cell = units(GROUND.cell());
+    let at = [x + 0.5 * cell, y + 0.5 * cell];
+    let c = at.map(|v| libm::floor(v / cell) * cell);
+    access.surface_support(&point(at[0], at[1]));
+    assert_eq!(read.get(), Some([c, c.map(|v| v + cell)]));
+    let from = world::point(at[0], at[1], over(5.0));
+    access.step_slide(&from, &world::point(at[0] + 3.0 * cell, at[1], 0.0), &from, true).unwrap();
+    assert_eq!(read.get(), Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
 }
