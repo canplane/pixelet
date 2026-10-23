@@ -123,14 +123,6 @@ fn resolve_struck(hit: &Hit) -> Option<Struck> {
     }
 }
 
-/// A scattered instance is not an entry, so a placement lands as on the ground.
-fn resolve_hit_target(hit: &Hit) -> Option<Entry> {
-    match resolve_struck(hit) {
-        Some(Struck::Object(o)) => Some(o),
-        _ => resolve_hit_object(hit),
-    }
-}
-
 /// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.
 pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     let mut origin = [0.0; 3];
@@ -160,8 +152,9 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
             ActiveTool::Decor => units(Decor::of(ui.decor_id).row.cell_zoom()),
             _ => MARKER_SIZE,
         };
-        // A decor met in front of the pick is what the new cube goes flush against.
-        let precise_box = resolve_hit_target(&hit).map(|o| object_aabb(&o));
+        // A decor met in front of the pick is what the new cube goes flush
+        // against; a scattered one is no entry, so it lands as on the ground.
+        let precise_box = resolve_hit_object(&hit).map(|o| object_aabb(&o));
         hover.coord = Some(world_adjacent_corner(&hit, placement_size, precise_box.as_ref()));
         return;
     }
