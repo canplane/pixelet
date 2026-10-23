@@ -183,7 +183,6 @@ export const SETTINGS = {
     kind: "toggle",
     default: false,
     section: "debug",
-    dev: true,
   },
   person: {
     key: 17 as number,
@@ -354,6 +353,13 @@ export const SETTINGS_SHIPPED = {
   /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (scene/indicator/coverage_gizmo.rs). */
   world_gizmo: {
     key: 15 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the blocks the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (scene/indicator/camera_gizmo.rs). */
+  camera_gizmo: {
+    key: 16 as number,
     kind: "toggle",
     default: false,
     section: "debug",
