@@ -58,37 +58,35 @@ pub const SHADER_GROWN_PLACE: u32 = 32;
 /// lines, generated with the cast from pxl-portable's `ways`: its one
 /// compute entry.
 pub const SHADER_WAYS: u32 = 33;
-/// The world image laid on a frame (blit.wgsl).
-pub const SHADER_BLIT: u32 = 34;
 /// Which eye slots' decor grows again this frame, listed for
 /// `SHADER_GROWN`'s dispatch: its one compute entry.
-pub const SHADER_GROWN_MARK: u32 = 35;
+pub const SHADER_GROWN_MARK: u32 = 34;
 /// The eye's windows folded over their squares, generated with the cast
 /// from pxl-portable's `window::fold`: its one compute entry.
-pub const SHADER_JOINED: u32 = 36;
+pub const SHADER_JOINED: u32 = 35;
 /// The air's volume, a froxel a thread (atmos_froxel.wgsl): its one
 /// compute entry.
-pub const SHADER_ATMOS_FROXEL: u32 = 37;
+pub const SHADER_ATMOS_FROXEL: u32 = 36;
 /// Each handed square's ways as blocks in one pool (pxl-portable
 /// `ways::tree`), generated with the cast: a re-filled square's old blocks
 /// given back, its tree built off the pool's stack, the blocks its build
 /// gave back pushed after: a compute entry each.
-pub const SHADER_WAYS_FREE: u32 = 38;
-pub const SHADER_WAYS_TREE: u32 = 39;
-pub const SHADER_WAYS_FREED: u32 = 40;
+pub const SHADER_WAYS_FREE: u32 = 37;
+pub const SHADER_WAYS_TREE: u32 = 38;
+pub const SHADER_WAYS_FREED: u32 = 39;
 /// The camera grid's beam rays, a thread a corner, and where each cell's
 /// pixels start off them, generated with the cast from pxl-portable's
 /// `beam` (doc/minutes/20261022-a-cell-casts-a-beam.md): a compute entry
 /// each.
-pub const SHADER_BEAM: u32 = 41;
-pub const SHADER_CELLS: u32 = 42;
+pub const SHADER_BEAM: u32 = 40;
+pub const SHADER_CELLS: u32 = 41;
 /// The pixels the cast's reading walk missed, walked again writing the
 /// observed pyramid; the dispatch they run by; and the pyramid forgotten
 /// (pxl-portable `observed`): a compute entry each.
-pub const SHADER_MISS: u32 = 43;
-pub const SHADER_ARGS: u32 = 44;
-pub const SHADER_FORGET: u32 = 45;
-pub const SHADERS: u32 = 46;
+pub const SHADER_MISS: u32 = 42;
+pub const SHADER_ARGS: u32 = 43;
+pub const SHADER_FORGET: u32 = 44;
+pub const SHADERS: u32 = 45;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -311,8 +309,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["decor_place.gen"],
     // SHADER_WAYS
     &["ways.gen"],
-    // SHADER_BLIT
-    &["blit"],
     // SHADER_GROWN_MARK
     &["decor_mark.gen"],
     // SHADER_JOINED

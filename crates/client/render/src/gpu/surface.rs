@@ -28,18 +28,12 @@ pub struct Surface {
     pub height: u32,
     pub wanted: (u32, u32),
     pub waited: u32,
-    /// The frame's depth, under what stage 3 draws.
+    /// The frame's depth, the world's and over it what moves on its own
+    /// (gpu/renderer.rs, stage 2).
     pub depth: u32,
     pub depth_view: u32,
-    /// The world image the frame is drawn over (gpu/renderer.rs, stage 2):
-    /// its colour, in the canvas's format, and its depth, each at the
-    /// frame's size and made with it.
-    pub world: u32,
-    pub world_view: u32,
-    pub world_depth: u32,
-    pub world_depth_view: u32,
     /// The eye's rays as the cast leaves them, a drawn pixel each, made with
-    /// the world image: `ray::WORDS` layers of `r32uint`, a word of the ray's a
+    /// the depth: `ray::WORDS` layers of `r32uint`, a word of the ray's a
     /// layer (pxl-portable `ray`).
     pub rays: u32,
     pub rays_view: u32,
@@ -47,17 +41,8 @@ pub struct Surface {
 
 impl Surface {
     /// What it holds on the GPU, every one made again with its size.
-    pub fn targets(&self) -> [u32; 8] {
-        [
-            self.depth_view,
-            self.depth,
-            self.world_view,
-            self.world,
-            self.world_depth_view,
-            self.world_depth,
-            self.rays_view,
-            self.rays,
-        ]
+    pub fn targets(&self) -> [u32; 4] {
+        [self.depth_view, self.depth, self.rays_view, self.rays]
     }
 
     pub fn buffer_px(&self) -> (u32, u32) {

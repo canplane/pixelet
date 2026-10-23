@@ -19,8 +19,8 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_ARGS, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS,
-    SHADER_JOINED, SHADER_MISS, SHADER_WAYS, SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
+    FRAME_AT, PIPELINES, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_ARGS, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS, SHADER_JOINED,
+    SHADER_MISS, SHADER_WAYS, SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
 use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
@@ -87,7 +87,6 @@ const SPAN_AIR: usize = GpuSpanName::air as usize;
 const SPAN_PREPASS: usize = GpuSpanName::prepass as usize;
 const SPAN_AO: usize = GpuSpanName::ao as usize;
 const SPAN_WORLD: usize = GpuSpanName::world as usize;
-const SPAN_OVERLAY: usize = GpuSpanName::overlay as usize;
 const SPAN_BADGES: usize = GpuSpanName::badges as usize;
 const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
 const SPAN_CASES: usize = GpuSpanName::cases as usize;
@@ -886,7 +885,7 @@ struct CastBuffers {
 /// A stage's whole input as it last read it, byte for byte: what the stage
 /// makes is one function of it, so a frame that reads the same stands on
 /// what it made — the cast's rays and the decor grown over them (stage 1),
-/// the world image (stage 2). Each lane is read with its length, so no two
+/// the frame (stage 2). Each lane is read with its length, so no two
 /// sets read alike; what changed without words to read is marked so.
 #[derive(Default)]
 pub(crate) struct Read {
@@ -1676,23 +1675,16 @@ pub struct Renderer {
     badges: BadgePass,
     debug: DebugPass,
     screen: RaysPass,
-    /// The world image's whole input as the last image drew it (stage 2):
-    /// the frame's, the sky's and the stars' words, the air's, the image's
-    /// own textures, and what came or was drawn again without words.
-    world: Read,
-    /// What the frame draws from besides the world image, as last read: the
-    /// draws and the blocks they read, the badges' sheet, the clouds' words
-    /// and the cases. With the image's, the frame's whole input.
+    /// The frame's whole input as the last frame drew it (stage 2): the
+    /// frame's, the sky's and the stars' words, the air's, the surface's
+    /// textures, the draws and the blocks they read, the badges' sheet, the
+    /// clouds' words and the cases, and what came or was drawn again without
+    /// words.
     frame_read: Read,
     /// What the occlusion was last made from: the frame's words, its own,
-    /// the surface and the decor its prepass draws. The world image is made
+    /// the surface and the decor its prepass draws. The frame is drawn
     /// again for more than these, and the occlusion only where they moved.
     ao_read: Read,
-    /// What lays the world image on a frame, and its group over the views
-    /// it was made for.
-    blit: Built,
-    blit_group: u32,
-    blit_views: [u32; 2],
     cases: [Option<Case>; SURFACES],
     order: Vec<u32>,
 }
@@ -1728,12 +1720,8 @@ impl Renderer {
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer),
             screen: RaysPass::new(g, &mut pipelines),
-            world: Read::default(),
             frame_read: Read::default(),
             ao_read: Read::default(),
-            blit: pipelines.build(g, PIPELINE_BLIT, g.canvas()),
-            blit_group: 0,
-            blit_views: [0; 2],
             pipelines,
             frame_buffer,
             frame: [0.0; FRAME_FLOATS],
@@ -1876,18 +1864,17 @@ impl Renderer {
         bound
     }
 
-    /// A frame in three stages, each standing while what it reads stands:
-    /// the cast's rays (stage 1, `RaysPass::prepare`); the world
-    /// image, everything the world and its light make, into the surface's own
-    /// colour and depth (stage 2, `world`); and the frame, the image laid on
-    /// it whole and over it what moves on its own — the actors, whose clips
-    /// play, the clouds, which the wind carries, the puck, the ghosts, the
-    /// badges, the gizmos (stage 3, every frame).
+    /// A frame in two stages, each standing while what it reads stands:
+    /// the cast's rays (stage 1, `RaysPass::prepare`); and the frame,
+    /// everything the world and its light make off those rays, then over it
+    /// what moves on its own — the actors, whose clips play, the clouds,
+    /// which the wind carries, the puck, the ghosts, the badges, the gizmos
+    /// (stage 2, `frame_read`). The rays hold the world as the cast left
+    /// it, so the frame draws it again off them rather than off an image of
+    /// it: that costs what laying an image would.
     fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> (FrameKind, FrameStat) {
-        let mut read = core::mem::take(&mut self.world);
+        let mut read = core::mem::take(&mut self.frame_read);
         read.begin();
-        let mut rest = core::mem::take(&mut self.frame_read);
-        rest.begin();
         self.decor.set_models(input.decor);
         self.impostor.set_models(input.decor.iter().map(|&(mesh, image, extent)| (mesh, image.map(|i| i.0), extent)));
         for &(model, image) in input.skins {
@@ -1907,13 +1894,13 @@ impl Renderer {
         self.screen.hand(g, &mut self.pipelines, input.ground.upload);
         let tiles = input.earth_tiles;
         read.mark(self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload));
-        rest.mark(self.badges.sync_sheet(g, &self.mips, input.billboards, input.text));
+        read.mark(self.badges.sync_sheet(g, &self.mips, input.billboards, input.text));
         let (records, uniforms, blocks_moved) = take_lists(Some(g), input.lists);
-        rest.mark(blocks_moved);
+        read.mark(blocks_moved);
         // Each list's writers write again only where it moved.
-        let uniforms_moved = rest.read(uniforms);
-        let lists_moved = rest.read(records) | uniforms_moved;
-        rest.read(input.cases);
+        let uniforms_moved = read.read(uniforms);
+        let lists_moved = read.read(records) | uniforms_moved;
+        read.read(input.cases);
 
         targets(g, world);
         // How far the eye observes, as far as the clouds are drawn.
@@ -1952,7 +1939,7 @@ impl Renderer {
             self.ao.write(g);
         }
         read.read(self.atmosphere.words());
-        read.read(&[world.world, world.world_depth, u32::from(self.screen_ao)]);
+        read.read(&[world.depth, world.rays, u32::from(self.screen_ao)]);
         let b = blocks();
         self.decor.prepare(g, &draws, uniforms, lists_moved, b);
         self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
@@ -1962,9 +1949,9 @@ impl Renderer {
         self.debug.prepare(g, &draws);
         let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
         self.screen.prepare(g, cast, &meshes, (world.rays_view, [world.width, world.height]));
-        // The image draws the decor grown, so it reads whether that is on:
+        // The frame draws the decor grown, so it reads whether that is on:
         // decor turned off grows nothing and casts no ray again, yet the
-        // image stands without it.
+        // frame stands without it.
         read.read(&[u32::from(self.screen.grown().is_some())]);
         self.decor.prepare_grown(g, self.screen.grown());
         self.impostor.prepare_grown(g, self.screen.grown());
@@ -1990,17 +1977,14 @@ impl Renderer {
         }
         self.atmosphere.read_back(g);
         self.screen.read_back(g, input.ground.landed, input.ground.joined, input.ground.records);
-        // The image stands where it read all as last time over rays that stood.
-        let still = read.end() && self.screen.kind != FrameKind::cast && !self.screen.grows();
-        if rest.read(self.clouds.words()) {
+        if read.read(self.clouds.words()) {
             self.clouds.write(g);
         }
-        // The frame stands where the image does and the rest of what it
-        // draws from read as last time: nothing is drawn, nothing submitted,
-        // and the canvases keep the frame they show.
-        if still && rest.end() && !gridded {
-            self.world = read;
-            self.frame_read = rest;
+        // The frame stands where all it draws from read as last time over
+        // rays that stood: nothing is drawn, nothing submitted, and the
+        // canvases keep the frame they show.
+        if read.end() && self.screen.kind != FrameKind::cast && !self.screen.grows() && !gridded {
+            self.frame_read = read;
             let stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES.len()]);
             self.order = order;
             return (FrameKind::stood, stat);
@@ -2018,40 +2002,26 @@ impl Renderer {
         a.read(&[world.width, world.height, u32::from(self.screen_ao), u32::from(self.screen.grown().is_some())]);
         a.mark(ao_remade || self.screen.grows());
         let ao_moved = !a.end();
-        if !still {
-            if self.screen_ao && ao_moved {
-                let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
-                self.draw_opaque(g, pass, b, Stage::Prepass);
-                g.end(pass);
-                self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
-            }
-            let pass = g.pass(encoder, &pass_desc(world.world_view, Load::Clear, world.world_depth_view, Load::Clear, 0.0, stamps[SPAN_WORLD].pass()));
-            self.draw_opaque(g, pass, b, Stage::Lit);
-            let mut bound = self.screen.draw(g, pass);
-            // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
-            self.impostor.draw_grown(g, pass, self.screen.grown(), GROUPS, (self.models.frame, &mut bound));
-            // At the far plane after the opaque world, so only empty pixels run the sky shader.
-            g.set_pipeline(pass, self.sky_built.pipeline);
-            g.set_bind_group(pass, 0, self.sky_group, &[]);
-            g.draw(pass, 3, 1, 0, 0);
-            self.stars.draw(g, pass);
+        if self.screen_ao && ao_moved {
+            let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
+            self.draw_opaque(g, pass, b, Stage::Prepass);
             g.end(pass);
+            self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
         }
         let canvas_view = g.current(world.handle);
-        let pass = g.pass(encoder, &pass_desc(canvas_view, Load::Clear, world.depth_view, Load::Clear, 0.0, stamps[SPAN_OVERLAY].pass()));
-        let views = [world.world_view, world.world_depth_view];
-        if views != self.blit_views {
-            release(self.blit_group);
-            self.blit_group = g.bind_group(self.blit.layouts[0], &[view_entry(0, views[0]), view_entry(1, views[1])]);
-            self.blit_views = views;
-        }
-        g.set_pipeline(pass, self.blit.pipeline);
-        g.set_bind_group(pass, 0, self.blit_group, &[]);
+        let pass = g.pass(encoder, &pass_desc(canvas_view, Load::Clear, world.depth_view, Load::Clear, 0.0, stamps[SPAN_WORLD].pass()));
+        self.draw_opaque(g, pass, b, Stage::Lit);
+        let mut bound = self.screen.draw(g, pass);
+        // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
+        self.impostor.draw_grown(g, pass, self.screen.grown(), GROUPS, (self.models.frame, &mut bound));
+        // At the far plane after the opaque world, so only empty pixels run the sky shader.
+        g.set_pipeline(pass, self.sky_built.pipeline);
+        g.set_bind_group(pass, 0, self.sky_group, &[]);
         g.draw(pass, 3, 1, 0, 0);
+        self.stars.draw(g, pass);
         // The actors, whose clips play, and the clouds the kernel lists, the
-        // cumulus, which the wind carries: drawn over the image against its
-        // depth, as a moving object is over a cached world, their occlusion
-        // open.
+        // cumulus, which the wind carries: drawn over the world against its
+        // depth, their occlusion open.
         let mut bound = 0;
         let over = (self.models.over, &mut bound);
         self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, Stage::Lit, (over.0, &mut *over.1));
@@ -2089,7 +2059,6 @@ impl Renderer {
                 case.read.forget();
             }
             read.forget();
-            rest.forget();
             self.ao_read.forget();
         } else if self.screen.grows() {
             // Drawn: what its decor marked by is done with.
@@ -2097,14 +2066,9 @@ impl Renderer {
                 c.grown.drawn_frame();
             }
         }
-        self.world = read;
-        rest.end();
-        self.frame_read = rest;
-        let kind = match (skipped, still) {
-            (true, _) => FrameKind::dropped,
-            (false, true) => FrameKind::still,
-            (false, false) => self.screen.kind,
-        };
+        read.end();
+        self.frame_read = read;
+        let kind = if skipped { FrameKind::dropped } else { self.screen.kind };
         let mut stat = self.stat(draws.records, world, input.counted, gpu_spans);
         stat.gpu_read = gpu_read;
         self.order = order;
@@ -2250,13 +2214,9 @@ fn targets(g: &Gpu, s: &mut Surface) {
     let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
     s.depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
     s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
-    // The world's alone draws over an image of it; a case draws straight.
-    (s.world, s.world_view, s.world_depth, s.world_depth_view, s.rays, s.rays_view) = (0, 0, 0, 0, 0, 0);
+    // The world's alone holds the cast's rays.
+    (s.rays, s.rays_view) = (0, 0);
     if s.role == surface_role::WORLD {
-        s.world = g.texture(width, height, 1, g.canvas(), 1, usage);
-        s.world_view = g.view(s.world, false, 0, 1, 0, 1);
-        s.world_depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
-        s.world_depth_view = g.view(s.world_depth, false, 0, 1, 0, 1);
         // Written by the cast, read by the screen pass.
         let rays = texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING;
         s.rays = g.texture(width, height, ray::WORDS, Format::r32uint, 1, rays);
