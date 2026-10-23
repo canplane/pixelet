@@ -30,7 +30,7 @@ fn run() -> Result<(), String> {
         for &shard in &run.shards {
             let tiles = shard.tiles(DIVISION_LEAF);
             run.stage.leaf::<DivisionTile>(shard, |set| {
-                let bands: Vec<&[[i64; 2]]> = tiles.chunks(1).collect();
+                let bands: Vec<&[[i32; 2]]> = tiles.chunks(1).collect();
                 let t = over(
                     &format!("division/{}", shard.name()),
                     &bands,

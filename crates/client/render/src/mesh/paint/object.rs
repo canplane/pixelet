@@ -8,7 +8,6 @@ use pxl_spec::block::object::{cube_id, decor_ids, decor_num_id, ALL_CUBES};
 
 use crate::mesh::paint::palette::rgb255;
 use crate::mesh::paint::palette::LAYER_IDX;
-use crate::mesh::word::NO_LAYER;
 use pxl_spec::block::object::{cube_rgb, Cube};
 use std::sync::LazyLock;
 use xpute_kit::status::bug::OrBug;
@@ -16,22 +15,13 @@ use xpute_kit::status::errno::Errno;
 
 const AIR: u32 = cube::object::air as u32;
 
-/// Decor renders as instanced geometry, not a cell.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Kind {
-    Untaught = 0,
-    Solid = 1,
-    Air = 2,
-    Decor = 3,
-}
-
 /// The one table, fixed by the catalog.
 pub static PAINTER: LazyLock<Painter> = LazyLock::new(Painter::new);
 
+/// Every state the catalog names, a cube's look its own; air and decor,
+/// which no cell is drawn as, none.
 pub struct Painter {
-    kinds: Vec<Kind>,
-    swatches: Vec<[u8; 3]>,
-    layers: Vec<u8>,
+    looks: Vec<Option<([u8; 3], u8)>>,
 }
 
 impl Default for Painter {
@@ -42,54 +32,27 @@ impl Default for Painter {
 
 impl Painter {
     pub fn new() -> Painter {
-        let mut p = Painter {
-            kinds: Vec::new(),
-            swatches: Vec::new(),
-            layers: Vec::new(),
-        };
+        // A state past a leaf's width is a catalog bug and is not named,
+        // rather than sizing the table to it.
+        let named = ALL_CUBES.iter().map(|&c| cube_id(c)).chain([AIR]).chain(decor_ids.iter().map(|&id| decor_num_id(id)));
+        let states = named.filter(|&s| s < u16::MAX as u32).max().map_or(0, |s| s as usize + 1);
+        let mut looks = vec![None; states];
         for &cube in ALL_CUBES.iter() {
-            let (swatch, layer) = solid_look(cube);
-            p.set(cube_id(cube), Kind::Solid, swatch, layer);
+            if let Some(l) = looks.get_mut(cube_id(cube) as usize) {
+                *l = Some(solid_look(cube));
+            }
         }
-        p.set(AIR, Kind::Air, [0; 3], NO_LAYER as u8);
-        for &id in decor_ids.iter() {
-            p.set(decor_num_id(id), Kind::Decor, [0; 3], NO_LAYER as u8);
-        }
-        p
+        Painter { looks }
     }
 
-    /// A state past a leaf's width is a catalog bug and is not set, rather than
-    /// sizing the tables to it.
-    fn set(&mut self, state: u32, kind: Kind, swatch: [u8; 3], layer: u8) {
-        if state >= u16::MAX as u32 {
-            return;
-        }
-        let i = state as usize;
-        if i >= self.kinds.len() {
-            self.kinds.resize(i + 1, Kind::Untaught);
-            self.swatches.resize(i + 1, [0; 3]);
-            self.layers.resize(i + 1, NO_LAYER as u8);
-        }
-        self.kinds[i] = kind;
-        self.swatches[i] = swatch;
-        self.layers[i] = layer;
+    /// The states the catalog names, every one under it.
+    pub fn states(&self) -> usize {
+        self.looks.len()
     }
 
-    /// Every state's swatch, by state: black where none is taught.
-    pub fn swatches(&self) -> &[[u8; 3]] {
-        &self.swatches
-    }
-
-    /// Its swatch and texture layer; none for untaught, air and decor.
+    /// Its swatch and texture layer; none for air, decor and what is not named.
     pub fn look_of(&self, state: u32) -> Option<([u8; 3], u8)> {
-        match self.kind(state) {
-            Kind::Solid => Some((self.swatches[state as usize], self.layers[state as usize])),
-            _ => None,
-        }
-    }
-
-    fn kind(&self, state: u32) -> Kind {
-        self.kinds.get(state as usize).copied().unwrap_or(Kind::Untaught)
+        self.looks.get(state as usize).copied().flatten()
     }
 }
 
@@ -97,7 +60,3 @@ impl Painter {
 pub fn solid_look(cube: Cube) -> ([u8; 3], u8) {
     (rgb255(cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE)), LAYER_IDX(cube) as u8)
 }
-
-#[cfg(test)]
-#[path = "object.test.rs"]
-mod test;

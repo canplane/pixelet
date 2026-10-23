@@ -80,7 +80,7 @@ pub const BLOCK_SLOTS: usize = pxl_render::gpu::renderer::block_slots(MAX_LIVE_B
 const FIXED: [u32; 5] = [
     crate::layer::terrain::fixed::TERRAIN_BYTES,
     pxl_render::gpu::renderer::blocks_bytes(BLOCK_SLOTS),
-    pxl_render::gpu::api_spec::stream::BYTES,
+    pxl_render::api_spec::stream::BYTES,
     crate::abi::host::stream::BYTES,
     crate::profiler::record::PROFILER_BYTES,
 ];

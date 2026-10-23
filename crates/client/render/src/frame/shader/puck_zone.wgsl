@@ -21,7 +21,7 @@ fn vs(v: VertexIn) -> VertexOut {
   let k = v.i * 7u;
   let center = vec3f(zone[k], zone[k + 1u], zone[k + 2u]);
   var o: VertexOut;
-  o.clip = frame_view_proj() * vec4f(on_globe(v.position + center + draw_translation()), 1.0);
+  o.clip = frame_view_proj() * vec4f(v.position + center + draw_translation(), 1.0);
   o.uv = v.uv;
   o.borders = vec4f(zone[k + 3u], zone[k + 4u], zone[k + 5u], zone[k + 6u]);
   return o;

@@ -6,7 +6,6 @@
 //! (`Upright`), the ray every reader casts (`World::along`): the first block
 //! that fills, or out of what fills the first that does not.
 
-use pxl_spec::block::Block;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
@@ -19,8 +18,8 @@ use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::block::Surface;
-use super::ray::{Detail, Ray, Until};
+use super::ray::{at_zoom, Ray, Until};
+use super::surface::Surface;
 use super::world::World;
 use crate::layer::*;
 use pxl_spec::space::layer::tile::Tile;
@@ -41,7 +40,14 @@ pub fn under(z: f64) -> f64 {
 fn seen_zoom(at: &Q3, eye: &Q3, tau: Tau) -> Zoom {
     let [a, e] = [at, eye].map(|p| [i64::from(p[0]), i64::from(p[1]), i64::from(p[2])].map(q3::to_real));
     let d = [wrap(a[0] - e[0], -ROUND / 2.0, ROUND / 2.0), a[1] - e[1], a[2] - e[2]];
-    GROUND.z_at(tau, libm::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2])).min(LEAF_ZOOM)
+    GROUND.z_at(tau, d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).min(LEAF_ZOOM)
+}
+
+/// Whether a walker at `at`, seen from `eye`, walks: the camera grid at the
+/// criterion's own τ draws the ground there at its own cells. Else the world
+/// is a map to it (`step_slide`).
+pub fn walks(at: &Q3, eye: &Q3) -> bool {
+    seen_zoom(at, eye, Tau::FINEST) == LEAF_ZOOM
 }
 
 /// A point's place on the ground, in units.
@@ -78,7 +84,7 @@ impl<'w, 'a> Upright<'w, 'a> {
             direction: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             reach: (to - z).abs(),
         };
-        let (answer, _) = self.world.along(&ray, Detail::Zoom(self.zoom), until, None);
+        let (answer, _) = self.world.along(&ray, at_zoom(self.zoom), until, None);
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
@@ -112,7 +118,7 @@ impl<'w, 'a> Upright<'w, 'a> {
     fn surface(&mut self) -> Option<f64> {
         let cell = GROUND.cell_zoom(self.zoom);
         let side = units(cell);
-        let answer = self.world.surface_of(cell, self.at.map(|v| libm::floor(v / side) as i64));
+        let answer = self.world.surface_of(cell, self.at.map(|v| libm::floor(v / side) as i32));
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
@@ -136,12 +142,12 @@ impl<'a> World<'a> {
         self.surface_of(cell, c)
     }
 
-    /// What is in the leaf block at `at`, as the cast draws it; none where
-    /// it is void.
-    pub fn block_of(&self, at: &Q3) -> Answer<Option<Block>> {
+    /// What is in the leaf block at `at`, as the cast draws it: its value
+    /// (pxl-portable `world::node`'s), void where none.
+    pub fn block_of(&self, at: &Q3) -> Answer<u32> {
         let side = units(GROUND.cell());
         let p = [i64::from(at[0]), i64::from(at[1]), i64::from(at[2])].map(q3::to_real);
-        self.block((GROUND.cell(), p.map(|v| (v / side).floor() as i64)))
+        self.block((GROUND.cell(), p.map(|v| (v / side).floor() as i32)))
     }
 
     /// Where a walker stands from the drawn surface, ignoring `at`'s height
@@ -189,14 +195,6 @@ impl<'a> World<'a> {
         c.done(nearest)
     }
 
-    /// The bottom of the first solid over `at`; none under open sky.
-    pub fn ceiling_over(&self, at: &Q3) -> Answer<Option<f64>> {
-        let z = q3::to_real(i64::from(at[2]));
-        let mut c = Upright::new(self, xy(at), LEAF_ZOOM);
-        let over = c.above(z, REACH.max[2]);
-        c.done(over)
-    }
-
     /// Where a walker standing at the center `from` ends going toward `to`,
     /// a leaf cell at a time. Our rule after Quake III's PM_StepSlideMove
     /// (id Software, code/game/bg_slidemove.c), which steps up and slides a
@@ -219,7 +217,7 @@ impl<'a> World<'a> {
         let mut floor = under(sz);
         let gather = |x: f64, y: f64, floor: f64| world::at(q3::from_real(x), q3::from_real(y), q3::from_real(over(floor)));
         let [tx, ty] = [i64::from(to[0]), i64::from(to[1])].map(q3::to_real);
-        if seen_zoom(from, eye, Tau::FINEST) < LEAF_ZOOM {
+        if !walks(from, eye) {
             let at = world::at(i64::from(to[0]), i64::from(to[1]), i64::from(from[2]));
             if !self.within(&at) {
                 return Some(*from);

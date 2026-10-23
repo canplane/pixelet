@@ -6,10 +6,14 @@
 //! that floor; a center put over coarser ground keeps its Z unknown and
 //! stands on the finest ground known there until the leaves' is.
 
+use crate::query::changed::Asked;
 use crate::query::{over, under};
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world::{self, EXTENT};
+use pxl_spec::space::coord::world::{self, REACH};
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::lattice::GROUND;
+use xpute_guest::global::Global;
 
 use crate::layer::Answer;
 use crate::query::World;
@@ -17,8 +21,9 @@ use crate::setting::store::settings_store;
 use crate::view::frame::coord::{to_world, world_to_canonical};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-/// The world's floor, under any ground.
-const UNKNOWN_Z: i64 = -(1 << (EXTENT[2] - 1)) << FRAC_W;
+/// The world's floor (`world::REACH`), under any ground, in steps: what a
+/// point whose height is not known holds.
+const UNKNOWN_Z: i64 = (REACH.min[2] as i64) << FRAC_W;
 
 fn with_z(at: &Q3, z: i64) -> Q3 {
     world::at(i64::from(at[0]), i64::from(at[1]), z)
@@ -52,13 +57,32 @@ pub fn stand_over(at: &Q3, top: f64) -> Q3 {
     with_z(at, q3::from_real(over(top)))
 }
 
+/// What `standing` found under an unknown Z, of that point and its cell's
+/// columns and one about: a camera's target and a destination ask it every
+/// tick until a leaf gives the Z, and a target twice in one (`target`).
+static STOOD: Global<Asked<Q3, Answer<Option<Q3>>>> = Global::new();
+
+fn stood() -> &'static mut Asked<Q3, Answer<Option<Q3>>> {
+    STOOD.get(|| Asked::NONE)
+}
+
+/// The turn's look at what `standing` kept, a change under it letting it go
+/// (`changed::Asked::kept`): every frame turn, so each change is seen once.
+pub fn support_step() {
+    stood().kept();
+}
+
 /// An unknown Z on the surface of the finest ground known there; none where
-/// nothing stands.
+/// nothing stands. Kept while the point is the one asked and nothing changed
+/// under it (`STOOD`).
 fn standing(at: &Q3) -> Answer<Option<Q3>> {
     if !is_unknown(at) {
         return Answer::Exact(Some(*at));
     }
-    World::now().surface_support(at).map(|top| top.map(|top| stand_over(at, top)))
+    let cell = units(GROUND.cell());
+    let c = to_world(at);
+    let columns = [[c[0] - cell, c[1] - cell], [c[0] + cell, c[1] + cell]];
+    stood().of(*at, columns, || World::now().surface_support(at).map(|top| top.map(|top| stand_over(at, top))))
 }
 
 /// The floor `center` is drawn on: its own, or where its height is not known

@@ -8,7 +8,7 @@
 //! retried here; a device's module re-arms its own watch where its platform
 //! ends one (apps/native/src/platform/sensor.ts).
 
-pub use crate::abi::cmd::GeolocationErrorCode;
+use crate::abi::cmd::GeolocationErrorCode;
 use crate::abi::cmd::Message;
 use crate::control::sensor::reading::{device_location_store, Pose};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};

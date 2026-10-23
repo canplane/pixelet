@@ -5,13 +5,15 @@
 //! "The query between them"), one record of a node answering two sizes.
 //!
 //! At the zoom a reader asks, it is what the node is, the block, by the one
-//! rule (`pxl-spec block/sample.rs` `at`), each source answering from its own
+//! rule (pxl-portable `ground::node`), each source answering from its own
 //! level of detail at that zoom and from what the node's parent found,
 //! handed down (`At`; `World::block` for an asker with none):
 //!
-//! - the ground: its tile drawing that zoom's cells, the cell's height and
-//!   face as it folds them, and the ways whose boxes reach the cell, found
-//!   on that tile (`Grid::read`, the cell and the ring about it);
+//! - the ground: its column off the windows, as the GPU drew it and the CPU
+//!   read it back, and the area's edge laid on it; the ways off the tree the
+//!   GPU built of its square, its blocks read back into the pool's mirror,
+//!   read as the GPU reads them (pxl-portable `window::ground`,
+//!   `ways::tree`);
 //! - the caves: the hash pyramid's node at that zoom, its value
 //!   (`procedural.rs` `Cave`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
@@ -24,15 +26,16 @@
 //! the node's parent found, handed down, as surely or more cautiously, which
 //! only splits more, never from detail finer than asked:
 //!
-//! - the ground: by its one rule (pxl-portable `ground::lay`, as a cell's
-//!   block asks it of one block) over the lowest and highest the windows
+//! - the ground: by its one rule (pxl-portable `ground::slab`, as a cell's
+//!   block asks `Cell::opens` of one block) over the lowest and highest the windows
 //!   hold under the node (`Residency::relief`, off the finest window holding
 //!   its cells), every cell under it at each zoom asked over the ground, or
 //!   ground a cave may take with a cave through all of it;
-//! - the ways: the same levels, which join each bin's ways' bound with the
-//!   ground's (pxl-portable `window`); a way a coarser tile drops as
-//!   narrower than half its cell is dropped there, as its level of detail
-//!   does;
+//! - the ways: by their own rule (pxl-portable `ways::slab`) over their
+//!   own bound in the same levels, the leaf cells each column's runs write
+//!   joined apart from the ground's (pxl-portable fill.rs `level`); a way a
+//!   coarser tile drops as narrower than half its cell is dropped there, as
+//!   its level of detail does;
 //! - the caves: the hash node hollow and drawing nothing again under it
 //!   (`procedural::Cave`, one draw of its parent's);
 //! - what is placed: no record of the objects' pyramid at the node.
@@ -40,204 +43,121 @@
 //! A source not holding the node answers that it lacks it, never air and
 //! never that nothing fills.
 
+use pxl_portable::answer::{In, Kind};
 use pxl_portable::area::Area;
-use pxl_portable::cast::Kind;
-use pxl_portable::cube::sentinel;
+use pxl_portable::ground::VOID;
 use pxl_portable::ground::{self, Cell};
-use pxl_portable::mask::{filled, mask};
+use pxl_portable::overwrite::Cut;
+use pxl_portable::window::{self, Found};
+use pxl_portable::world;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::bake::tile::terrain::GroundId;
-use pxl_spec::block::placed::{self, Cut, Held, BLOCK, SPLIT};
-use pxl_spec::block::Block;
-use pxl_spec::procedural::Cave;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::{child_of, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
-use xpute_guest::global::Global;
 
-use super::block::Patch;
 use super::world::World;
 use crate::io::source;
-use crate::layer::residency::Line;
-use crate::layer::{Answer, Query};
+use crate::layer::residency::Lines;
+use crate::layer::terrain::window::{pool, Windowed};
+use crate::layer::Answer;
 
 /// The coarsest zoom a block is asked at: the coarsest cells a tile draws.
 pub(super) fn coarsest() -> Zoom {
     GROUND.grid_zoom(GROUND.top())
 }
 
-/// What is in a node, at the zoom asked or over it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) enum In {
-    /// Coarser than asked: nothing under it fills at the zooms asked.
-    Empty,
-    /// Coarser than asked: something under it may fill.
-    Split,
-    /// At the zoom asked: the block, none for air or void.
-    Block(Option<Block>),
-}
-
 /// A node as a descent reaches it, X on the asker's lap, and what its
-/// ancestors found, handed to its children.
+/// ancestors found, handed to its children (pxl-portable `world::At`).
 #[derive(Clone, Copy)]
 pub(super) struct At {
     pub(super) node: Node<3>,
-    cave: Cave,
-    placed: Held,
-    /// The ground's line its cell was asked on.
-    line: Option<Line>,
+    pub(super) handed: world::At,
 }
 
-/// The patch a block reads its cell and the ring about it into, kept so a
-/// settled ask takes nothing from the heap.
-static CELL: Global<Patch> = Global::new();
-
 impl World<'_> {
-    /// What is in the block `b` of `zoom`, X on the asker's lap, at its own
-    /// zoom, `coarsest` or finer, for an asker with nothing handed down
-    /// (`drawn`).
-    pub fn block(&self, node: Node<3>) -> Answer<Option<Block>> {
-        self.drawn(&mut self.start(node))
+    /// What is placed as of now: the objects' store's revision, which every
+    /// write moves (layer/object/store.rs).
+    pub fn revision(&self) -> u32 {
+        self.objects.revision()
     }
 
-    /// The face bits of the block `b` of `zoom` (pxl-portable `mask`): the
-    /// blocks about it asked of the world's one query (`block`), each once,
-    /// as a chunk's box reads its own; one not held fills nothing.
-    pub fn faces(&self, (zoom, b): Node<3>) -> u32 {
-        mask(filled(|[x, y, z]| {
-            let n = [b[0] + i64::from(x), b[1] + i64::from(y), b[2] + i64::from(z)];
-            self.block((zoom, n)).value().flatten().is_some_and(Block::fills)
-        }))
+    /// What is in the block `node`, X on the asker's lap, at its own
+    /// zoom, `coarsest` or finer, for an asker with nothing handed down
+    /// (`drawn`).
+    pub fn block(&self, node: Node<3>) -> Answer<u32> {
+        self.drawn(&mut self.start(node), &mut Lines::default())
     }
 
     /// A node with nothing handed down, a descent's root among them: each
     /// source found down its line from the top.
-    pub(super) fn start(&self, (zoom, at): Node<3>) -> At {
+    pub(super) fn start(&self, node: Node<3>) -> At {
         At {
-            node: (zoom, at),
-            cave: Cave::of(zoom, at.map(|v| v as i32)),
-            placed: self.objects.cursor((zoom, at), zoom),
-            line: None,
+            node,
+            handed: world::At::of(&self.objects.lanes(), node),
         }
-    }
-
-    /// The ground's line `at`'s cells at `cell` are read on, stepped from
-    /// its parent's, and handed on.
-    fn line(&self, at: &mut At, cell: Zoom) -> Line {
-        let (zoom, c) = at.node;
-        let xy = (zoom, [c[0], c[1]]);
-        let line = match at.line {
-            Some(l) => self.terrain.child(&l, xy, cell),
-            None => self.terrain.cursor(xy, cell),
-        };
-        at.line = Some(line);
-        line
     }
 
     /// What is in `at`'s block, at its own zoom, `coarsest` or finer: none
-    /// where it is air or void, else what fills it or not, the layers read
-    /// top down, each handed down — what is placed, the objects' record, a
-    /// preview's cut its air; what the ways write; and the ground's, by its
-    /// one answer for a node (pxl-portable `ground::node`): the Earth's past
-    /// the service area, air over its tile's bound, else its cell off the
-    /// tile drawing that zoom's cells, with the ring about it, and the caves'
-    /// value.
-    pub(super) fn drawn(&self, at: &mut At) -> Answer<Option<Block>> {
-        let (zoom, b) = at.node;
+    /// where it is air or void, else what fills it (`node`, asked at its
+    /// own zoom). `lines` are the ground's lines the asker read, which its
+    /// own steps from (`node`).
+    pub(super) fn drawn(&self, at: &mut At, lines: &mut Lines) -> Answer<u32> {
+        let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        let placed = placed::over(&self.objects.lanes(), at.placed, self.cut(self.carve), self.cut(self.hide), zoom, b.map(|v| v as i32), true);
-        if placed.says == BLOCK {
-            return Answer::Exact(Some(Block::Placed(placed.block)));
-        }
-        let cave = at.cave;
-        let mut reading = Reading::new(self, at);
-        let (ground, _, ()) = ground::node(&mut reading, cave, (zoom, b.map(|v| v as i32)), [zoom, zoom], true);
-        // The ways are read with the cell, and stand within its tile's bound.
-        let grid = reading.read.then(|| CELL.get(Patch::default).grid()).flatten();
-        reading.answer(ground.kind != Kind::Lacks, || match grid {
-            Some(grid) => grid.ways_over(b, ground.block),
-            None => (ground.block.0 != u32::from(sentinel::void)).then(|| {
-                let g = ground.block.0 as GroundId;
-                Block::Ground(g, ground.block.1.map(|v| v as GroundId))
-            }),
-        })
+        self.node(at, [zoom, zoom], lines).map(|i| if i.kind == Kind::Block { i.block[0] } else { VOID })
     }
 
-    /// Whether the world holds nothing finer than `at`'s node, so every node
-    /// under it is the node itself (the ground decision's "Level of detail is
-    /// the world there"): the ground, its ways and the caves have no detail
-    /// past the ground's cells, and nothing placed or carved is finer in it,
-    /// none placed under it or one placed covering it whole.
-    fn whole(&self, at: &At) -> bool {
-        let (zoom, c) = at.node;
-        zoom >= GROUND.cell() && placed::whole(at.placed, self.cut(self.carve), zoom, c.map(|v| v as i32))
-    }
-
-    /// A preview's entry as pxl-portable `placed` takes it.
+    /// A preview's entry as pxl-portable `overwrite` takes it.
     fn cut(&self, entry: Option<EntryAt>) -> Cut {
-        entry.map_or(Cut::NONE, |e| Cut {
-            zoom: e.zoom(),
-            at: e.at().map(|v| v as i32),
-        })
+        entry.map_or(Cut::NONE, |e| Cut { zoom: e.zoom(), at: e.at() })
     }
 
     /// Its child `k`, in `child_of`'s order, with what it found handed down.
     pub(super) fn child(&self, at: &At, k: usize) -> At {
         let (zoom, c) = at.node;
-        let (z, child) = (zoom + 1, child_of(c, k));
+        let node = (zoom + 1, child_of(c, k));
         At {
-            node: (z, child),
-            cave: at.cave.child(z, child.map(|v| v as i32)),
-            placed: self.objects.child(&at.placed, (z, child), z),
-            line: at.line,
+            node,
+            handed: at.handed.child(&self.objects.lanes(), &pool(), node),
         }
     }
 
     /// What is in `at`'s node, asked from `far` to `near`, the zooms a reader
-    /// asks within it: at `near` (or finer), or where the world holds nothing
-    /// finer than the node (`whole`), the block (`drawn`); coarser, what is
-    /// placed under it splits it, else the ground's one answer for a node
-    /// (pxl-portable `ground::node`), whether anything under it fills at
-    /// those zooms.
-    pub(super) fn node(&self, at: &mut At, [far, near]: [Zoom; 2]) -> Answer<In> {
-        let (zoom, c) = at.node;
-        if zoom >= near || self.whole(at) {
-            return self.drawn(at).map(In::Block);
-        }
-        if placed::over(&self.objects.lanes(), at.placed, Cut::NONE, Cut::NONE, zoom, c.map(|v| v as i32), false).says == SPLIT {
-            return Answer::Exact(In::Split);
-        }
-        let cave = at.cave;
-        let mut reading = Reading::new(self, at);
-        let (ground, _, ()) = ground::node(&mut reading, cave, (zoom, c.map(|v| v as i32)), [far, near], false);
-        reading.answer(ground.kind != Kind::Lacks, || match ground.kind {
-            Kind::Split => In::Split,
-            _ => In::Empty,
-        })
+    /// asks within it: the world's one query (pxl-portable `world::node`),
+    /// the ground read as the GPU reads it, off what it drew and read back
+    /// (`Windowed`), down the node's line through the residency
+    /// (`Reading`). Its answer (pxl-portable `answer`): a split and its
+    /// slab; a block, the zoom asked's, void for air; or, coarser than asked
+    /// and nothing under it filling, air its size, which its zoom against
+    /// `asked` tells. The four looks a block is drawn by are the GPU's to
+    /// draw. `lines` are the ground's lines the walk asking it read, which
+    /// its own steps from (`line_walked`).
+    pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2], lines: &mut Lines) -> Answer<In<[u32; 2]>> {
+        let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);
+        let mut reading = Reading::new(self, lines);
+        let i = world::node(&mut reading, &Windowed, &lanes, &pool(), &mut at.handed, at.node, asked, cuts);
+        reading.answer(i.kind != Kind::Lacks, || i)
     }
 }
 
 /// The ground as a node's reading holds it (pxl-portable `ground::Held`):
-/// the world's residency down the node's line, the first tile it found
-/// lacked or only a coarser one standing in for, and whether the cell's grid
-/// was read, so the ways over it can be.
+/// the world's residency down the node's line, the lines its walk read,
+/// and the first tile it found lacked or only a coarser one standing in for.
 struct Reading<'r, 'a> {
     world: &'r World<'a>,
-    at: &'r mut At,
+    lines: &'r mut Lines,
     lacked: Option<Tile>,
     coarser: Option<Tile>,
-    read: bool,
 }
 
 impl<'r, 'a> Reading<'r, 'a> {
-    fn new(world: &'r World<'a>, at: &'r mut At) -> Reading<'r, 'a> {
+    fn new(world: &'r World<'a>, lines: &'r mut Lines) -> Reading<'r, 'a> {
         Reading {
             world,
-            at,
+            lines,
             lacked: None,
             coarser: None,
-            read: false,
         }
     }
 
@@ -271,43 +191,28 @@ impl Area for Reading<'_, '_> {
     fn ends(&self) -> bool {
         source::Declared.ends()
     }
-    fn shards(&self) -> u32 {
-        source::Declared.shards()
-    }
-    fn shard(&self, i: u32) -> (Zoom, [i32; 2]) {
-        source::Declared.shard(i)
+    fn nine(&self, key: u32) -> u32 {
+        source::Declared.nine(key)
     }
 }
 
 impl ground::Held for Reading<'_, '_> {
-    type Place = ();
-
-    /// The bound over the node of the tile `cell` reads its cells from, off
-    /// its line (pxl-portable `Held::relief`); a node with no ground under
-    /// it, `EMPTY`.
-    fn relief(&mut self, cell: Zoom, _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
-        let (zoom, c) = self.at.node;
-        let line = self.world.line(self.at, cell);
-        match self.take(self.world.terrain.relief(&line, (zoom, [c[0], c[1]]))) {
-            Some(r) => (r.unwrap_or(ground::EMPTY), true),
-            None => (ground::EMPTY, false),
+    /// The bound over the node of the cells at `cell`, off the windows,
+    /// stepped from `place` (pxl-portable `Held::relief`); its line names the
+    /// tile a lack or a coarser window stands for; where it lacks, `EMPTY`
+    /// and false.
+    fn relief(&mut self, place: &mut Found, cells: [Zoom; 2], (zoom, c): (Zoom, [i32; 3])) -> (ground::Bounds, bool) {
+        let line = self.world.terrain.line_walked(self.lines, (zoom, [c[0], c[1]]), cells[1]);
+        match self.take(self.world.terrain.relief(&line, place, (zoom, [c[0], c[1]]), cells)) {
+            Some(r) => (r, true),
+            None => ([ground::EMPTY; 2], false),
         }
     }
 
-    /// The block's cell and the ring about it read into the patch (`CELL`)
-    /// off the line the descent carries, as the ways over it are read with
-    /// it, off the patch itself: no place.
-    fn cell(&mut self, zoom: Zoom, _: [i32; 3]) -> (Cell, (), bool) {
-        let (_, b) = self.at.node;
-        let line = self.world.line(self.at, zoom);
-        let patch = CELL.get(Patch::default);
-        let read = self.take(self.world.patch_ground(&line, (zoom, [b[0], b[1]]), zoom, zoom, 1, patch));
-        match read.and(patch.grid()) {
-            Some(grid) => {
-                self.read = true;
-                (grid.cell_at([b[0], b[1]]).unwrap_or(Cell::NONE), (), true)
-            }
-            None => (Cell::NONE, (), false),
-        }
+    /// The block's column off the windows, the area's edge laid on it, as
+    /// the GPU reads it (pxl-portable `window::ground`), stepped from where
+    /// its relief found its cells.
+    fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell {
+        window::ground(&Windowed, place, zoom, [c[0], c[1]]).0
     }
 }

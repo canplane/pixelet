@@ -47,7 +47,7 @@ struct Placed {
 fn placed(vi: u32, ii: u32, region: bool) -> Placed {
   // BILLBOARD_FLOATS floats an instance.
   let k = ii * 11u;
-  let anchor = on_globe(vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge_translation());
+  let anchor = vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge_translation();
   let sprite_w = instances[k + 3u];
   let size_px = vec2f(select(sprite_w, instances[k + 10u], region), instances[k + 4u]);
   let frac = instances[k + 9u];

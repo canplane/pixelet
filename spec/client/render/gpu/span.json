@@ -9,13 +9,12 @@
     "prepass",
     "ao",
     "world",
-    "overlay",
     "badges",
     "debug",
     "cases",
     "fill",
     "cast",
-    "face"
+    "grow"
   ],
   "FRAME_KINDS": [
     "none",
@@ -25,8 +24,7 @@
     "plain",
     "standing",
     "cast",
-    "still",
     "stood"
   ],
-  "$FRAME_KINDS": "What the renderer made of a frame turn, where it decides it (pxl-render gpu/renderer.rs `render_frame`, `FrameKind`): `none` before it was asked; `unready` with no device or surface; `held` where the surfaces would block (not admitted); `dropped` where the frame did not fit the GPU stream; `plain` drawn with nothing cast; `standing` drawn on the standing ray lane; `cast` drawn with a cast; `still` drawn over the standing world image, its overlay alone; `stood` where nothing the frame reads changed, so nothing is drawn or submitted and the canvases keep what they show."
+  "$FRAME_KINDS": "What the renderer made of a frame turn, where it decides it (pxl-render gpu/renderer.rs `render_frame`, `FrameKind`): `none` before it was asked; `unready` with no device or surface; `held` where the surfaces would block (not admitted); `dropped` where the frame did not fit the GPU stream; `plain` drawn with nothing cast; `standing` drawn on the standing ray lane; `cast` drawn with a cast; `stood` where nothing the frame reads changed, so nothing is drawn or submitted and the canvases keep what they show."
 }

@@ -1,13 +1,13 @@
 // pxl-render/gpu/ao.rs
 
-//! Screen-space occlusion (N8AO), switchable beside a face's own corner
-//! occlusion (paint.wgsl `occlusion_of`): a depth prepass, then downsample, sample, denoise twice and
+//! Screen-space occlusion (N8AO): a depth prepass, then downsample, sample, denoise twice and
 //! upsample to a one-byte map every lit pass reads at group 0 binding 7.
 //! About 11 bytes a pixel and one extra geometry pass.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 
 use crate::frame::shader::record::{PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE, PIPELINE_AO_UPSAMPLE};
+use crate::frame::shader::words::AO_FLOATS;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, Stamp};
@@ -15,7 +15,6 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_mat;
 
 /// proj, inv_proj, half, padding.
-const AO_FLOATS: usize = 36;
 const HALF: usize = 32;
 
 /// N8AO's blue noise; its four channels are the hemisphere spin, the ray push
@@ -105,7 +104,7 @@ impl ScreenAo {
         view_entry(binding, self.blank_view)
     }
 
-    pub fn lay_out(&mut self, g: &Gpu, proj: &Mat4, width: u32, height: u32) {
+    pub fn lay_out(&mut self, proj: &Mat4, width: u32, height: u32) {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
         mat4::invert(&mut inv, proj);
@@ -113,7 +112,16 @@ impl ScreenAo {
         put_mat(u, 16, &inv);
         u[HALF] = (width / 2) as f32;
         u[HALF + 1] = (height / 2) as f32;
-        g.write_buffer(self.uniform, 0, bytes(u));
+    }
+
+    /// The words its passes read, as `lay_out` wrote them.
+    pub fn words(&self) -> &[f32] {
+        &self.uniform_words
+    }
+
+    /// `words` written, where the frame's read found them moved.
+    pub fn write(&self, g: &Gpu) {
+        g.write_buffer(self.uniform, 0, bytes(&self.uniform_words));
     }
 
     /// True when the images were remade, so the groups that bind them must be too.

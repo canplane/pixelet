@@ -16,7 +16,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// Heights at points from the tiles' elevations, in cells, as the client's
 /// `ground_ele_at` reads the elevation; a point's tile must be held.
-pub fn sample_cells(eles: &FnvHashMap<[i64; 2], Vec<i16>>, points: &[[f64; 2]]) -> Result<Vec<i32>, String> {
+pub fn sample_cells(eles: &FnvHashMap<[i32; 2], Vec<i16>>, points: &[[f64; 2]]) -> Result<Vec<i32>, String> {
     points
         .iter()
         .map(|&[x, y]| {
@@ -29,7 +29,7 @@ pub fn sample_cells(eles: &FnvHashMap<[i64; 2], Vec<i16>>, points: &[[f64; 2]]) 
         .collect()
 }
 
-pub fn tile_of([x, y]: [f64; 2]) -> [i64; 2] {
+pub fn tile_of([x, y]: [f64; 2]) -> [i32; 2] {
     let at = epsg3857::project(x, y, 0.0);
     let [x, y, _] = index_of(LEAF_ZOOM, &at);
     [x, y]

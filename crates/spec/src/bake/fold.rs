@@ -43,7 +43,7 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     let inner = TILE_ELE_SPAN as i64;
     let (pad, padded) = (ELE_PAD as i64, ELE_PADDED_SPAN as usize);
     let read = |qx: i64, qy: i64, mx: i64, my: i64| -> Option<i64> {
-        let grid = around[neighbor_index(qx, qy)]?;
+        let grid = around[neighbor_index(qx as i32, qy as i32)]?;
         Some(grid[ele_index((mx - qx * inner + pad) as u32, (my - qy * inner + pad) as u32)] as i64)
     };
     let of_block = |mx: i64, my: i64| -> Option<i64> {

@@ -111,7 +111,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
         <Row k="interval p50/p95" v={`${n1(f.interval.p50)}/${n1(f.interval.p95)} ms`} />
         <Row k="interval max" v={`${n1(f.interval.max)} ms`} warn={f.interval.max > LONG_FRAME_MS} />
         <Row k="missed/moving" v={`${f.missed}/${f.moving}`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
-        <Row k="budget/display" v={`${n1(f.last.budget_ms)}/${n1(f.last.display_ms)} ms${f.last.settled ? " still" : ""}`} />
+        {/* The display's refresh, the interval the host paces turns at, and the tick's budget within it. */}
+        <Row k="refresh/paced/budget" v={`${n1(f.last.refresh_ms)}/${n1(f.last.paced_ms)}/${n1(f.last.budget_ms)} ms${f.last.settled ? " still" : ""}`} />
         {/* The interval's turns, rise to fall, and what they left of it: past it is a long frame. */}
         <Row k="busy/off-turn p95" v={`${n1(f.busy.p95)}/${n1(f.off_turn.p95)} ms`} />
         <Row k="long frames" v={`${f.long} of ${f.n}`} warn={f.long > 0} />
@@ -150,11 +151,12 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
     gpu: f !== null && (
       <>
         {/* Over the frames a GPU read landed with; none landed is no measure, not 0. */}
-        <Row k="gpu p95" v={f.gpu_read > 0 ? `${n1(f.gpu.p95)} ms of ${f.gpu_read}` : "no timestamps"} warn={f.gpu_read > 0 && f.gpu.p95 > f.last.display_ms} />
+        <Row k="gpu p95" v={f.gpu_read > 0 ? `${n1(f.gpu.p95)} ms of ${f.gpu_read}` : "no timestamps"} warn={f.gpu_read > 0 && f.gpu.p95 > f.last.paced_ms} />
         {heaviest(f.gpu_spans, (s) => s.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.p95)} ms`} />)}
+        {/* The pixels the last landed read's spans were measured over. */}
+        <Row k="  timed over" v={f.last.gpu_read ? valueText("gpu_px", f.last.gpu_px) : "-"} />
         <Row k="draws/triangles" v={`${drawn(f.last)[0]}/${tris(drawn(f.last)[1])}`} />
         {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
-        <Row k="world surface" v={valueText("world_px", f.last.world_px)} />
       </>
     ),
     cap: f !== null && <Row k="terrain refused" v={`${round(f.last.cap_terrain_refused)}`} warn={f.last.cap_terrain_refused > 0} />,
@@ -185,8 +187,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
     ),
     device: f !== null && (
       <>
-        <Row k="blocks" v={`${f.last.blocks} ${valueText("_mb", f.last.blocks_mb)}`} />
-        <Row k="depth/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_layers_mb} MB`} />
+        <Row k="blocks" v={`${f.last.blocks} ${bytes(f.last.blocks_bytes)}`} />
+        <Row k="depth/layers" v={`${bytes(f.last.depth_bytes)}/${bytes(f.last.layers_bytes)}`} />
         {/* The leak bar's figure: flat over a pan loop and across a lost device. */}
         <Row k="gpu objects" v={`${f.last.gpu_objects.reduce((n, o) => n + o, 0)}`} />
         <Row

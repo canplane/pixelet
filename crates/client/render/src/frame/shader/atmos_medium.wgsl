@@ -24,10 +24,8 @@ struct Atmosphere {
   shown_fall: f32,
   moon_dir: vec3f,
   moon_light: f32,
-  // Free.
-  free: vec3f,
-  // Radians; the latitude is the frame's globe's.
-  center_lon: f32,
+  // Free (32 to 35).
+  free: vec4f,
   // Lights the ground, never drawn: drawn, the sky went pale blue.
   night_sky: vec3f,
   // The Earth's face under the eye: at sea level the terrain floated on it.
@@ -41,10 +39,6 @@ struct Atmosphere {
   earth_window: vec4i,
   earth_tiles: vec4u,
 };
-
-// The test holds both to the host's (gpu/atmosphere.rs).
-const ATMOS_VEC4S: u32 = 13u;
-const EARTH_TILE_BITS: u32 = 4u;
 
 // Field by field, never as a struct: a struct lost Safari's WebGPU its GPU process.
 @group(0) @binding(8) var<uniform> atmos_words: array<vec4f, ATMOS_VEC4S>;
@@ -70,7 +64,6 @@ fn atmos_night_stops() -> f32 { return atmos_words[6].z; }
 fn atmos_shown_fall() -> f32 { return atmos_words[6].w; }
 fn atmos_moon_dir() -> vec3f { return atmos_words[7].xyz; }
 fn atmos_moon_light() -> f32 { return atmos_words[7].w; }
-fn atmos_center_lon() -> f32 { return atmos_words[8].w; }
 fn atmos_night_sky() -> vec3f { return atmos_words[9].xyz; }
 fn atmos_land_altitude_km() -> f32 { return atmos_words[9].w; }
 fn atmos_city_light() -> vec3f { return atmos_words[10].xyz; }
@@ -156,17 +149,22 @@ fn air_path(r: f32, mu: f32) -> f32 {
 }
 
 // For drawing only; the tables keep the radius they were baked at.
+// How far under the eye the land it stands over lies, in km: the plane at
+// its ground's height.
+fn land_below_km() -> f32 {
+  return atmos_camera_altitude() - atmos_land_altitude_km();
+}
+
+// Whether a ray from the eye along `dir` falls to that land: the world's z
+// is up.
+fn falls_to_land(dir: vec3f) -> bool {
+  return dir.z < 0.0 && land_below_km() > 0.0;
+}
+
 fn land_radius() -> f32 {
   return atmos_bottom_radius() + atmos_land_altitude_km();
 }
 
-fn meets_land(r: f32, mu: f32) -> bool {
-  return meets_sphere(r, mu, land_radius());
-}
-
-fn to_land(r: f32, mu: f32) -> f32 {
-  return to_sphere(r, mu, land_radius());
-}
 
 
 /* tables */

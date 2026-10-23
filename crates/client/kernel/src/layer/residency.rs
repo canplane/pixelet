@@ -21,8 +21,6 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::demand::reach_tiles;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use floor::{Fallback, Floor};
-
 use crate::io::demand::{Ask, Why};
 use crate::layer::{Asks, Base};
 
@@ -34,17 +32,6 @@ enum Hold {
     Hard,
     Demand,
     Cache,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Candidate {
-    pub tile: Tile,
-}
-
-/// Which frame goes when one must, chosen only among those that may, so a
-/// policy changes what is held next and never what is correct.
-pub trait Victim {
-    fn victim(&self, candidates: &[Candidate]) -> Option<usize>;
 }
 
 /// No frame for an empty tile, whose body is its own. One asked for again
@@ -76,6 +63,14 @@ impl<L> Entry<L> {
 
 pub struct Residency<L: Base> {
     tiles: FnvHashMap<Tile, Entry<L>>,
+    /// The tile each frame holds: the frames' side of `Held::frame`, one
+    /// association read both ways — a tile's frame by every reader of a
+    /// tile (`frame`, `framed`; layer/earth.rs `earth_window`,
+    /// layer/terrain/tile.rs `kept_for`, layer/terrain/window.rs `voids`),
+    /// a frame's tile by the GPU's hand-offs, which walk the frames
+    /// (scene/cast.rs `upload`, layer/earth.rs `earth_upload`). Written only
+    /// where a frame is taken or given up (`put`, `remove`).
+    in_frame: Vec<Option<Tile>>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
     going: Vec<Tile>,
@@ -83,6 +78,10 @@ pub struct Residency<L: Base> {
     /// from above or no longer. A tile's content is fixed by its identity, so
     /// this is all that changes.
     moved: Vec<Tile>,
+    /// How many times what it holds moved: a tile held or let go, asked for
+    /// again or no longer, answered from above. Not what is read over a
+    /// tile (`moved_at`), which holds nothing.
+    revision: u32,
     refused: u32,
     admitted: u32,
     evicted: u32,
@@ -112,16 +111,16 @@ impl<L: Base> Residency<L> {
     /// Held hard apart from the view: the floor, a destination's line, and
     /// what a reader that cannot take a coarser answer declares (`Base::PINNED`).
     const PINNED_TILES: u32 = match L::ASKS {
-        Asks::Floor => Floor::<L>::TILES,
+        Asks::Floor => floor::tiles(L::LATTICE),
         Asks::Line => Self::DESTINATION_TILES + L::PINNED,
-        Asks::View => Floor::<L>::TILES + Self::DESTINATION_TILES + L::PINNED,
+        Asks::View => floor::tiles(L::LATTICE) + Self::DESTINATION_TILES + L::PINNED,
     };
 
     /// What is held hard at most.
     const HARD_TILES: u32 = Self::PINNED_TILES + Self::ANCESTOR_TILES;
 
     /// A frame for a tile nothing holds hard to land in. The floor alone holds
-    /// every tile it asks for hard, and asks for at most `Floor::TILES`, so a
+    /// every tile it asks for hard, and asks for at most `floor::tiles`, so a
     /// tile it asks for finds a frame free or held only as cache.
     const WORKSPACE: u32 = matches!(L::ASKS, Asks::View) as u32;
 
@@ -141,10 +140,12 @@ impl<L: Base> Default for Residency<L> {
         let () = Self::SAFE;
         Residency {
             tiles: FnvHashMap::with_capacity_and_hasher(Self::ENTRIES as usize, Default::default()),
+            in_frame: vec![None; Self::FRAMES as usize],
             // Lowest first, as the frames are taken.
             free: (0..Self::FRAMES).rev().collect(),
             going: Vec::with_capacity(Self::ENTRIES as usize),
             moved: Vec::new(),
+            revision: 0,
             refused: 0,
             admitted: 0,
             evicted: 0,
@@ -329,6 +330,7 @@ impl<L: Base> Residency<L> {
             let read = e.held.is_some() && was != e.ask.is_some();
             if read | (e.ask.is_none() && core::mem::take(&mut e.answered)) {
                 self.moved.push(p);
+                self.revision = self.revision.wrapping_add(1);
             }
         }
         let mut going = core::mem::take(&mut self.going);
@@ -365,7 +367,7 @@ impl<L: Base> Residency<L> {
     /// A frame for arriving `p`: its own, a free one, or a victim among frames
     /// held only as cache. None only for a tile no longer asked for, counted;
     /// for one asked for, none means the capacity bound is broken.
-    fn frame_for(&mut self, p: Tile, victim: &impl Victim) -> Option<u32> {
+    fn frame_for(&mut self, p: Tile, victim: impl FnOnce(&[Tile]) -> Option<usize>) -> Option<u32> {
         if self.framed(p) {
             return self.remove(p);
         }
@@ -373,21 +375,16 @@ impl<L: Base> Residency<L> {
             return Some(free);
         }
         let unasked = self.hold(p) == Hold::Cache;
-        let mut candidates: Vec<Candidate> = self
-            .tiles
-            .iter()
-            .filter(|&(&q, _)| self.framed(q) && self.hold(q) == Hold::Cache)
-            .map(|(&q, _)| Candidate { tile: q })
-            .collect();
+        let mut candidates: Vec<Tile> = self.tiles.iter().filter(|&(&q, _)| self.framed(q) && self.hold(q) == Hold::Cache).map(|(&q, _)| q).collect();
         // Sorted, so the policy sees the same list for the same state.
-        candidates.sort_unstable_by_key(|c| c.tile);
-        let Some(at) = victim.victim(&candidates) else {
+        candidates.sort_unstable();
+        let Some(at) = victim(&candidates) else {
             xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
             self.refused += 1;
             return None;
         };
         self.evicted = self.evicted.wrapping_add(1);
-        self.remove(candidates[at].tile)
+        self.remove(candidates[at])
     }
 
     pub fn churn(&self) -> [u32; 2] {
@@ -400,7 +397,10 @@ impl<L: Base> Residency<L> {
 
     /// The frame is emptied first, so a body that fails to decode leaves it free
     /// rather than another tile reading half-overwritten bytes.
-    pub fn admit<E>(&mut self, p: Tile, victim: &impl Victim, receive: impl FnOnce(u32) -> Result<L, E>) -> Result<(), E> {
+    /// `victim` picks which frame goes when one must, among the frames held
+    /// only as cache, so a policy changes what is held next and never what
+    /// is correct; none where none may.
+    pub fn admit<E>(&mut self, p: Tile, victim: impl FnOnce(&[Tile]) -> Option<usize>, receive: impl FnOnce(u32) -> Result<L, E>) -> Result<(), E> {
         let Some(record) = self.frame_for(p, victim) else { return Ok(()) };
         match receive(record) {
             Ok(tile) => {
@@ -437,7 +437,14 @@ impl<L: Base> Residency<L> {
         }
         if !core::mem::replace(&mut self.entry_mut(p).answered, true) {
             self.moved.push(p);
+            self.revision = self.revision.wrapping_add(1);
         }
+    }
+
+    /// What it holds as of now (`revision`): equal where nothing it holds
+    /// moved between.
+    pub fn revision(&self) -> u32 {
+        self.revision
     }
 
     /// The tiles whose answer moved since last taken, into `out`.
@@ -447,8 +454,14 @@ impl<L: Base> Residency<L> {
     }
 
     fn put(&mut self, p: Tile, body: L, frame: Option<u32>) {
-        self.entry_mut(p).held = Some(Held { body, frame, again: false });
+        if let Some(was) = self.entry_mut(p).held.replace(Held { body, frame, again: false }).and_then(|h| h.frame) {
+            self.in_frame[was as usize] = None;
+        }
+        if let Some(f) = frame {
+            self.in_frame[f as usize] = Some(p);
+        }
         self.moved.push(p);
+        self.revision = self.revision.wrapping_add(1);
     }
 
     /// A framed tile held is fetched once more, read meanwhile: what a
@@ -471,7 +484,7 @@ impl<L: Base> Residency<L> {
 
     /// The tile held in frame `record`.
     pub fn in_frame(&self, record: u32) -> Option<Tile> {
-        self.tiles.iter().find(|(_, e)| e.held.as_ref().is_some_and(|h| h.frame == Some(record))).map(|(&p, _)| p)
+        self.in_frame[record as usize]
     }
 
     /// Returns the frame `p` was in, if any, for the caller to fill or free.
@@ -481,7 +494,11 @@ impl<L: Base> Residency<L> {
         if e.get().idle() {
             e.remove();
         }
+        if let Some(f) = held.frame {
+            self.in_frame[f as usize] = None;
+        }
         self.moved.push(p);
+        self.revision = self.revision.wrapping_add(1);
         held.frame
     }
 }

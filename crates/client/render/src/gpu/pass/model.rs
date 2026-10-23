@@ -86,12 +86,17 @@ impl DrawUniforms {
     }
 
     /// One write: a later write to the same buffer before the submit would stand
-    /// for every draw. Grows to the next power of two, eight at least.
-    pub fn write<T>(&mut self, g: &Gpu, layout: u32, count: u32, draws: impl Iterator<Item = T>, mut put: impl FnMut(&mut [u8], T)) {
+    /// for every draw. Grows to the next power of two, eight at least. Written
+    /// only where the lists the draws are made from `moved`, or it grew: else
+    /// the buffer holds these bytes already.
+    pub fn write<T>(&mut self, g: &Gpu, layout: u32, count: u32, draws: impl Iterator<Item = T>, moved: bool, mut put: impl FnMut(&mut [u8], T)) {
         if count == 0 {
             return;
         }
         let need = self.stride * count.next_power_of_two().max(8);
+        if !moved && need <= self.capacity {
+            return;
+        }
         if need > self.capacity {
             release(self.group);
             release(self.buffer);

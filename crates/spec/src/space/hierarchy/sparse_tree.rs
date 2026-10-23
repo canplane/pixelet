@@ -7,10 +7,13 @@
 //! its path, frees what it replaces, joins a block of equal leaves into one,
 //! so one picture has one tree, and folds every branch left on its path
 //! again. A freed block is reused and no other moves, so a subtree comes and
-//! goes without the others' blocks changing place.
+//! goes without the others' blocks changing place. The blocks a write
+//! changes are listed for a copy of the lanes to take just those
+//! (`take_written`): its path's, its leaf's and what it allocates; a freed
+//! block is no reader's until it is allocated again.
 
 use super::tree::{children, slot_of};
-use pxl_portable::placed::BRANCH;
+use pxl_portable::overwrite::BRANCH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slot<T> {
@@ -23,10 +26,13 @@ pub struct SparseTree<T: Copy + PartialEq, const D: usize> {
     heap: Vec<u32>,
     data: Vec<T>,
     free: Vec<u32>,
+    /// The first slots of the blocks written since they were last taken, a
+    /// block once a write.
+    written: Vec<u32>,
 }
 
 /// The child on the way to `at`, `steps` levels over it.
-fn toward<const D: usize>(at: [i64; D], steps: u32) -> usize {
+fn toward<const D: usize>(at: [i32; D], steps: u32) -> usize {
     slot_of(at.map(|v| v >> steps))
 }
 
@@ -39,7 +45,21 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
             heap: vec![0; Self::WIDTH],
             data: vec![value; Self::WIDTH],
             free: Vec::new(),
+            written: vec![0],
         }
+    }
+
+    /// The blocks written since they were last taken, their first slots, into
+    /// `into`, which held the last taken; none listed after.
+    pub fn take_written(&mut self, into: &mut Vec<u32>) {
+        into.clear();
+        core::mem::swap(into, &mut self.written);
+    }
+
+    /// Lists the block `slot` lies in: blocks start a whole block apart from
+    /// the root's (`alloc`).
+    fn touch(&mut self, slot: usize) {
+        self.written.push((slot - slot % Self::WIDTH) as u32);
     }
 
     /// The heap lane, a word a slot: its child block with `BRANCH`, or 0.
@@ -64,7 +84,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
 
     /// The node `depth` levels under the root holding `at`, its index at that
     /// depth: its slot and how deep it is, or the leaf above it and its depth.
-    pub fn get(&self, depth: u32, at: [i64; D]) -> (u32, Slot<T>) {
+    pub fn get(&self, depth: u32, at: [i32; D]) -> (u32, Slot<T>) {
         xpute_kit::ensure!(depth >= 1, EINVAL, depth);
         let mut base = 0;
         for d in 1..=depth {
@@ -79,7 +99,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     /// Makes the node `depth` levels under the root holding `at` one leaf of
     /// `value`, each branch over it its block `fold` folds, given its depth;
     /// whether anything changed.
-    pub fn set(&mut self, depth: u32, at: [i64; D], value: T, fold: impl Fn(&Self, u32, u32) -> T) -> bool {
+    pub fn set(&mut self, depth: u32, at: [i32; D], value: T, fold: impl Fn(&Self, u32, u32) -> T) -> bool {
         xpute_kit::ensure!((1..=32).contains(&depth), EINVAL, depth);
         let mut path = [0usize; 32];
         let mut base = 0;
@@ -91,6 +111,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
                 }
                 let block = self.alloc(self.data[slot]);
                 self.heap[slot] = block | BRANCH;
+                self.touch(slot);
             }
             path[d as usize] = slot;
             base = (self.heap[slot] & !BRANCH) as usize;
@@ -101,6 +122,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
         }
         self.release(slot);
         self.data[slot] = value;
+        self.touch(slot);
         for d in (1..depth).rev() {
             let parent = path[d as usize];
             let block = (self.heap[parent] & !BRANCH) as usize;
@@ -110,11 +132,13 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
             } else {
                 self.data[parent] = fold(self, block as u32, d);
             }
+            self.touch(parent);
         }
         true
     }
 
-    fn slot(&self, slot: usize) -> Slot<T> {
+    /// What slot `slot` holds.
+    pub fn slot(&self, slot: usize) -> Slot<T> {
         match self.heap[slot] {
             0 => Slot::Leaf(self.data[slot]),
             h => Slot::Branch(h & !BRANCH, self.data[slot]),
@@ -134,6 +158,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
         };
         self.heap[block..block + Self::WIDTH].fill(0);
         self.data[block..block + Self::WIDTH].fill(value);
+        self.touch(block);
         block as u32
     }
 

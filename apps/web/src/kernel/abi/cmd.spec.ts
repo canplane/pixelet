@@ -572,10 +572,10 @@ export function encode_world_boot(
 /** Command.WORLD_FRAME's packet, written in place into `to`.
  *
  * @param width The viewport, in CSS pixels.
- * @param frame_ms The turn, as the host measured it.
+ * @param refresh_ms The display's refresh, as the host measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (xpute host sched/quantum.ts `Grant`): the frame's budget.
  * @param unix_ms The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and the step the tick takes, its change since the last frame. */
-export function encode_world_frame(to: PacketRoom, width: f64, height: f64, dpr: f64, frame_ms: f64, interactive: boolean, credits: u32, unix_ms: f64): PacketWriter {
-  return to.writer(7).f64(width).f64(height).f64(dpr).f64(frame_ms).bool(interactive).u32(credits).f64(unix_ms);
+export function encode_world_frame(to: PacketRoom, width: f64, height: f64, dpr: f64, refresh_ms: f64, paced_ms: f64, interactive: boolean, credits: u32, unix_ms: f64): PacketWriter {
+  return to.writer(8).f64(width).f64(height).f64(dpr).f64(refresh_ms).f64(paced_ms).bool(interactive).u32(credits).f64(unix_ms);
 }
 
 /** Command.WORLD_VISIBILITY's packet, written in place into `to`. */

@@ -16,7 +16,7 @@ Deno.test("quantum - the quota follows the display's measured frame, not an assu
   const at_60 = fill(q, 1 / 60, 0, 0);
   const at_165 = fill(q, 1 / 165, 0, 0);
   assert(at_165.quota_ms < at_60.quota_ms);
-  assertAlmostEquals(at_165.frame_ms, 1000 / 165, 1e-9);
+  assertAlmostEquals(at_165.paced_ms, 1000 / 165, 1e-9);
   assertAlmostEquals(at_165.quota_ms, (1000 / 165) * (1 - POLICY.margin_share), 1e-9);
 });
 
@@ -24,7 +24,7 @@ Deno.test("quantum - a gap that is not a frame moves nothing", () => {
   const q = new Quantum(POLICY);
   const before = fill(q, 1 / 165, 0, 0);
   q.observe(3, 0, before, 0);
-  assertEquals(q.grant(0).frame_ms, before.frame_ms);
+  assertEquals(q.grant(0).paced_ms, before.paced_ms);
 });
 
 Deno.test("quantum - a still guest's frame gaps do not teach the quantum a faster display", () => {
@@ -33,7 +33,7 @@ Deno.test("quantum - a still guest's frame gaps do not teach the quantum a faste
   // The host catching up after a long still turn: gaps far shorter than any
   // real refresh interval.
   const still = fill(q, 0.002, 0, NO_WAKE);
-  assertEquals(still.frame_ms, moving.frame_ms);
+  assertEquals(still.paced_ms, moving.paced_ms);
 });
 
 Deno.test("quantum - what a turn overran comes off its own next quota, down to nothing", () => {
@@ -49,11 +49,11 @@ Deno.test("quantum - input, or a guest asking for the next edge, makes a turn in
   const q = new Quantum(POLICY);
   const idle = fill(q, 1 / 30, 0, NO_WAKE);
   assert(!idle.interactive);
-  assertAlmostEquals(idle.quota_ms, idle.frame_ms * POLICY.batch_frames * (1 - POLICY.margin_share), 1e-9);
+  assertAlmostEquals(idle.quota_ms, idle.paced_ms * POLICY.batch_frames * (1 - POLICY.margin_share), 1e-9);
   q.input(1000);
   assert(q.grant(1000 + POLICY.settle_ms - 1).interactive);
   assert(!q.grant(1000 + POLICY.settle_ms).interactive);
   const asked = fill(q, 1 / 30, 0, 0);
   assert(asked.interactive);
-  assertAlmostEquals(asked.quota_ms, asked.frame_ms * (1 - POLICY.margin_share), 1e-9);
+  assertAlmostEquals(asked.quota_ms, asked.paced_ms * (1 - POLICY.margin_share), 1e-9);
 });

@@ -15,13 +15,6 @@ pub fn linear(v: u8) -> f64 {
     }
 }
 
-/// Linear light back to an sRGB channel.
-pub fn srgb(c: f64) -> u8 {
-    let c = c.clamp(0.0, 1.0);
-    let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * libm::pow(c, 1.0 / 2.4) - 0.055 };
-    xpute_kit::math::scalar::round(s * 255.0).clamp(0.0, 255.0) as u8
-}
-
 /// An indicator's colors.
 pub mod indicator {
     /// Reserved for "you could grab this", never for a preview of a change.

@@ -23,9 +23,10 @@ use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adja
 use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;
 use crate::layer::object::size::{object_size_of, MARKER_SIZE};
-use crate::layer::object::store::{Entry, EntryAt};
+use crate::layer::object::store::Entry;
 use crate::query::{Hit, World};
 use crate::view::frame::pose::view_ray;
+use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units};
 use xpute_guest::global::Global;
 
@@ -108,7 +109,7 @@ pub(crate) fn clear_hover_coord() {
 enum Struck {
     Object(Entry),
     /// Grown by the ground, in its leaf cell.
-    Grown([i64; 3], Instance),
+    Grown([i32; 3], Instance),
 }
 
 /// What the pick struck, as a tool reads it: a placed object, or a decor the ground grew.

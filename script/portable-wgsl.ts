@@ -12,6 +12,12 @@
 //   deno run -A script/portable-wgsl.ts            write them
 //   deno run -A script/portable-wgsl.ts --check    fail if one is not current
 //
+// Either way each module is compiled first by Tint, the WGSL compiler a
+// browser's WebGPU runs (Dawn's, npm:webgpu), and its compute pipeline made
+// on the platform's floor, and nothing is written where one is refused:
+// naga, which reads the SPIR-V into WGSL, takes modules Tint refuses (a
+// literal past f32's range, at e84ddd56e).
+//
 // The check judges only that each checked-in file is what the source makes
 // now; it never compares two implementations, since there is one. Each file
 // carries the digest of the sources that made it (`inputsDigest`), which
@@ -24,11 +30,17 @@ const root = dirname(dirname(fromFileUrl(import.meta.url)));
 const shaders = join(root, "crates/client/render/src/frame/shader");
 // Each entry and the file it is checked in as.
 const ENTRIES = [
+  ["beam_cs", "beam.gen.wgsl"],
+  ["cells_cs", "cells.gen.wgsl"],
+  ["sample_cs", "sample.gen.wgsl"],
   ["cast_cs", "cast.gen.wgsl"],
-  ["start_cs", "start.gen.wgsl"],
-  ["face_cs", "face.gen.wgsl"],
+  ["miss_cs", "miss.gen.wgsl"],
+  ["args_cs", "args.gen.wgsl"],
+  ["forget_cs", "forget.gen.wgsl"],
+  ["joined_cs", "joined.gen.wgsl"],
   ["heights_cs", "heights.gen.wgsl"],
   ["bound_cs", "bound.gen.wgsl"],
+  ["decor_mark_cs", "decor_mark.gen.wgsl"],
   ["decor_cs", "decor.gen.wgsl"],
   ["decor_count_cs", "decor_count.gen.wgsl"],
   [
@@ -37,22 +49,25 @@ const ENTRIES = [
   ],
   ["decor_place_cs", "decor_place.gen.wgsl"],
   ["ways_cs", "ways.gen.wgsl"],
+  ["ways_free_cs", "ways_free.gen.wgsl"],
+  ["ways_tree_cs", "ways_tree.gen.wgsl"],
+  ["ways_freed_cs", "ways_freed.gen.wgsl"],
 ];
 // rust-gpu's own pin (rustc_codegen_spirv 0.10.0-alpha.1 build.rs), as gpu-query/rust-toolchain.toml holds it.
 const NIGHTLY = "nightly-2026-04-11";
 const IMAGE = "rust:1-bookworm";
-const BUILT = "gpu-query/target-linux/spirv-builder/spirv-unknown-naga-wgsl/release/deps/gpu_query_shader.spvs";
+const BUILT = "gpu-query/target-linux/spirv-builder/spirv-unknown-vulkan1.3/release/deps/gpu_query_shader.spvs";
 
 /** Where a generated file names the digest of the sources that made it. */
 export const INPUTS = "// Inputs: ";
 
-/** What rust-gpu compiles into the entries: pxl-portable, the shader crate,
- * xpute-kit beneath them, their lock and the toolchain's pin — every Rust,
+/** What makes the entries: pxl-portable, the shader crate, the builder that
+ * reads its SPIR-V into WGSL, xpute-kit beneath them, their lock and the toolchain's pin — every Rust,
  * TOML and lock file under them the tree holds (`git ls-files -co
  * --exclude-standard`, as check:rules lists it), so a new one counts before
  * it is added and nothing ignored does. Wider than what reaches a shader: a
  * change elsewhere in them asks for a regenerate that differs only here. */
-const INPUT_ROOTS = ["crates/portable/", "gpu-query/shader/", "xpute/rust/kit/", "gpu-query/Cargo.lock", "gpu-query/rust-toolchain.toml"];
+const INPUT_ROOTS = ["crates/portable/", "gpu-query/shader/", "gpu-query/builder/", "xpute/rust/kit/", "gpu-query/Cargo.lock", "gpu-query/rust-toolchain.toml"];
 
 /** SHA-256 over each input's path and bytes, in path order. */
 export async function inputsDigest(root: string): Promise<string> {
@@ -92,7 +107,7 @@ const HEADER = (digest: string) =>
     "// `deno run -A script/portable-wgsl.ts`; `--check` fails when it is stale.",
     "// Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,",
     "// through gpu-query/shader, by",
-    `// rust-gpu 0.10.0-alpha.1 (${NIGHTLY}) for spirv-unknown-naga-wgsl.`,
+    `// rust-gpu 0.10.0-alpha.1 (${NIGHTLY}) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.`,
     `${INPUTS}${digest}`,
     "",
   ].join("\n");
@@ -127,10 +142,48 @@ function generate(digest: string): Map<string, string> {
   return new Map(ENTRIES.map(([entry, file]) => [join(shaders, file), HEADER(digest) + Deno.readTextFileSync(join(root, BUILT, `${entry}.wgsl`))]));
 }
 
+/** What Tint refuses of `made`, each entry's module by the file it is
+ * written as: its compile's errors and its compute pipeline's, made with the
+ * layout its module declares on a device of the default limits, the floor
+ * every WebGPU device binds (frame/shader/floor.rs). */
+export async function refused(made: Map<string, string>): Promise<string[]> {
+  // Here, not at the top, so what imports this module for its digest
+  // (check:rules) loads no device.
+  const { create, globals } = await import("webgpu");
+  Object.assign(globalThis, globals);
+  // Held to the end (`void gpu` below): an instance collected while its
+  // device works ends the process.
+  const gpu = create([]);
+  const adapter = await gpu.requestAdapter();
+  if (!adapter) return ["no WebGPU adapter to compile on"];
+  const device = await adapter.requestDevice();
+  const out: string[] = [];
+  for (const [entry, file] of ENTRIES) {
+    const code = made.get(join(shaders, file));
+    if (code === undefined) continue;
+    device.pushErrorScope("validation");
+    const module = device.createShaderModule({ code });
+    const errors = (await module.getCompilationInfo()).messages.filter((m) => m.type === "error");
+    out.push(...errors.map((m) => `${file}:${m.lineNum}:${m.linePos}: ${m.message}`));
+    // Its errors, as the module's past its compile, the scope's.
+    device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: entry } });
+    // A module that does not compile fails its pipeline too: said once.
+    const scoped = await device.popErrorScope();
+    if (scoped && errors.length === 0) out.push(`${file}: ${scoped.message.split("\n")[0]}`);
+  }
+  device.destroy();
+  void gpu;
+  return out;
+}
+
 if (import.meta.main) {
   const check = Deno.args.includes("--check");
+  const modules = generate(await inputsDigest(root));
+  const refusals = await refused(modules);
+  for (const r of refusals) console.error(`refused by Tint: ${r}`);
+  if (refusals.length > 0) Deno.exit(1);
   let stale = false;
-  for (const [target, made] of generate(await inputsDigest(root))) {
+  for (const [target, made] of modules) {
     if (check) {
       let held = "";
       try {

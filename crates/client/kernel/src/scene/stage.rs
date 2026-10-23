@@ -7,20 +7,19 @@
 use crate::laid;
 use crate::scene::frame::Frame;
 use crate::sched::tick::TickContext;
-use crate::view::frame::pose::{globe, view_resize};
-use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
+use crate::view::frame::pose::view_resize;
+use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundSquares};
+use pxl_render::gpu::span_spec::GpuSpanName;
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use xpute_guest::global::Global;
 
-use crate::mem::MB;
 use crate::profiler::frame::{DeviceSample, GpuSample};
 use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_spec::asset::ingested::Asset;
-use xpute_kit::math::scalar::round;
 
 use crate::asset::Load;
 use crate::billboard::sheet::billboard_sheet;
@@ -58,14 +57,13 @@ const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame 
 pub fn stage_write() {
     let v = view();
     let settings = settings_store();
-    let s = stage_lane_mut();
+    let s = stage_lane();
     // The GPU gets the eye's frame, where the draws' points are.
     let (view_proj, camera) = v.eye_frame();
     s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&camera);
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
     s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
     s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.at().eye);
-    s[STAGE_AT::GLOBE_ANCHOR..STAGE_AT::GLOBE_ANCHOR + 3].copy_from_slice(&sea_under_eye());
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
     s[STAGE_AT::FOV] = v.fov;
@@ -74,23 +72,23 @@ pub fn stage_write() {
     let tau = crate::view::lens::tau();
     s[STAGE_AT::LOD_CELL] = crate::view::lens::cell_angle(tau);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
-    s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
     s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
     // In the pixels the world is drawn at, which the resolution steps.
     s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH * crate::view::frame::resolution::world_ratio();
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { crate::param::RIM_INTENSITY } else { 0.0 };
     s[STAGE_AT::CLOUDS] = crate::scene::environment::cloud::clouds_shown();
-    s[STAGE_AT::RAY_STEPS] = if settings.ray_steps { 1.0 } else { 0.0 };
 }
 
-pub fn stage_render() {
+/// `paced_ms` is the frame's budget, the interval the host paces turns at,
+/// which the world's drawn resolution is judged against.
+pub fn stage_render(paced_ms: f64) {
     // Nothing is drawn before the floor: its arrival asks for the next turn.
     if load_image(EARTH).is_none() {
         return;
     }
     let lists = kernel().draw.take();
-    let models = &kernel().models;
+    let models = crate::model::models();
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
     let variants = decor_assets().iter().flat_map(|entry| {
         (0..entry.models.len()).map(move |v| {
@@ -104,22 +102,26 @@ pub fn stage_render() {
     for (group, mesh, image, extent) in cloud_groups() {
         decor[group] = (mesh, image, extent);
     }
-    let mut skins = [(0u32, 0u32); 2];
+    let none: (u32, &'static [u8]) = (0, &[]);
+    let mut skins = [(0u32, none); 2];
     let mut skin_cnt = 0;
     for (slot, row) in skins.iter_mut().zip(companion_skins()) {
         *slot = row;
         skin_cnt += 1;
     }
-    let mut cases = [(0u32, 0u32, 0u32); SURFACES];
+    let mut cases = [(0u32, 0u32, none); SURFACES];
     let mut case_cnt = 0;
     for (slot, row) in cases.iter_mut().zip(preview_rows()) {
         *slot = row;
         case_cnt += 1;
     }
-    let (window, layers) = earth_window(Earth::demand().floor());
+    let on = pxl_render::gpu::api::device_generation();
+    let (window, layers) = earth_window(Earth::demand().floor(), on);
+    let mut earth_upload = move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth_upload(write, on);
     let o = crate::view::observation::observation();
     let eye = o.as_ref().and_then(crate::scene::cast::eye);
     let mut terrain_upload = crate::scene::cast::upload;
+    let mut terrain_landed = crate::layer::terrain::window::landed;
     let out = render_frame(FrameInput {
         lists,
         environment: &kernel().scene.environment.out,
@@ -134,11 +136,15 @@ pub fn stage_render() {
             layers: &layers,
             upload: &mut earth_upload,
         },
-        ground: GroundSquares { upload: &mut terrain_upload },
-        cast: o.as_ref().and(eye).map(|(eye, tangents)| Cast {
+        ground: GroundSquares {
+            upload: &mut terrain_upload,
+            landed: &mut terrain_landed,
+            joined: crate::layer::terrain::window::joined_lane(),
+            records: crate::layer::terrain::window::records_lane(),
+        },
+        cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
-            tangents,
-            window: crate::scene::cast::window(),
+            window: crate::layer::terrain::window::table(),
             shards: crate::scene::cast::shards(),
             overwrites: crate::scene::cast::overwrites(),
             decor: crate::scene::decor::drawn::frame(),
@@ -146,8 +152,7 @@ pub fn stage_render() {
         text: text_raster,
         billboards: billboard_sheet(),
         admit: crate::io::host::admit_frame,
-        // The spans and the draws are the profiler's, which records only while its setting is on.
-        timed: settings_store().performance_overlay,
+        // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().performance_overlay,
     });
     if out.redraw {
@@ -161,19 +166,22 @@ pub fn stage_render() {
         return;
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
+    if stat.gpu_read {
+        crate::view::frame::resolution::load(stat.gpu_spans[GpuSpanName::cast as usize], stat.gpu_px, paced_ms);
+    }
     set_host_frame(
         out.kind,
         GpuSample {
             read: f64::from(u8::from(stat.gpu_read)),
             spans: stat.gpu_spans,
+            px: stat.gpu_px,
             census: stat.census,
-            world_px: stat.world_px,
         },
         DeviceSample {
             blocks: stat.blocks,
-            blocks_mb: round(stat.block_bytes / MB),
-            depth_mb: stat.depth_mb,
-            layers_mb: stat.layers_mb,
+            blocks_bytes: stat.block_bytes,
+            depth_bytes: stat.depth_bytes,
+            layers_bytes: stat.layers_bytes,
             objects,
         },
     );
@@ -195,7 +203,7 @@ pub fn take_draw() -> bool {
 
 pub fn visible_step(ctx: &mut TickContext) {
     let c = pass();
-    view_resize(ctx.state.width, ctx.state.height);
+    view_resize(ctx.state.width, ctx.state.height, crate::view::frame::resolution::world_ratio());
     let v = view();
 
     let anchor = sea_under_eye();
@@ -206,23 +214,22 @@ pub fn visible_step(ctx: &mut TickContext) {
         frustum: v.frustum.about(anchor),
         camera: v3::sub(&e, &anchor),
         delta_s: ctx.delta,
-        globe: Some(globe()),
     };
 
     let draw = laid().is_some_and(|k| {
-        let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
-        k.scene.begin(&mut k.draw, &k.models, frame.eye);
+        let models = crate::model::models();
+        let animating = k.scene.tick(&mut k.draw, models, &frame);
+        k.scene.begin(&mut k.draw, models, frame.eye);
         animating
     });
     {
         let k = kernel();
         let edits = crate::layer::object::preview::current();
-        crate::scene::decor::drawn::step(&k.objects, frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
+        crate::scene::decor::drawn::step(crate::layer::object::store::objects(), frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
         crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
     }
     crate::scene::place::step(ctx, &frame);
-    let k = kernel();
-    k.billboards.draw(&mut k.draw, frame.eye);
+    crate::billboard::field::billboards().draw(&mut kernel().draw, frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();

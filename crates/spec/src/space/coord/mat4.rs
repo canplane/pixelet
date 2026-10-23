@@ -118,15 +118,20 @@ pub fn transpose<'a>(out: &'a mut Mat4, m: &Mat4) -> &'a mut Mat4 {
     out
 }
 
-/// GL's perspective: clip z in [-1, 1], `fov` the vertical angle in radians.
-pub fn perspective(out: &mut Mat4, fov: f64, aspect: f64, near: f64, far: f64) -> &mut Mat4 {
+/// The device's perspective, `fov` the vertical angle in radians: depth
+/// reversed with the far plane at infinity (Reed, "Depth Precision
+/// Visualized", NVIDIA, 2015; Upchurch & Desbrun, "Tightening the Precision
+/// of Perspective Rendering", 2012), so a point `d` ahead of the eye lies at
+/// depth `near / d`, 1 at the near plane and falling to 0 at infinity, as
+/// WebGPU's [0, 1] clip takes it; the nearer depth is the greater, and no
+/// plane past the eye bounds what is drawn.
+pub fn perspective(out: &mut Mat4, fov: f64, aspect: f64, near: f64) -> &mut Mat4 {
     let f = 1.0 / libm::tan(fov / 2.0);
     out.fill(0.0);
     out[0] = f / aspect;
     out[5] = f;
-    out[10] = (far + near) / (near - far);
     out[11] = -1.0;
-    out[14] = (2.0 * far * near) / (near - far);
+    out[14] = near;
     out
 }
 
@@ -197,14 +202,11 @@ pub fn transform_direction<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64
     out
 }
 
-/// The clip-space w of m × (x, y, z, 1): the point's depth for a projection.
-pub fn clip_w(m: &Mat4, x: f64, y: f64, z: f64) -> f64 {
-    m[3] * x + m[7] * y + m[11] * z + m[15]
-}
-
-/// The frustum's six planes (nx, ny, nz, d), normals in, normalized: left,
-/// right, bottom, top, near, far.
-pub fn frustum_planes<'a>(out: &'a mut [f64; 24], m: &Mat4) -> &'a mut [f64; 24] {
+/// The frustum's planes (nx, ny, nz, d), normals in, normalized, of a
+/// projection as `perspective` makes one: left, right, bottom, top and near
+/// (depth at most 1). Its far plane is at infinity, which holds every point,
+/// so there is none.
+pub fn frustum_planes<'a>(out: &'a mut [f64; 20], m: &Mat4) -> &'a mut [f64; 20] {
     let rows = [[m[0], m[4], m[8], m[12]], [m[1], m[5], m[9], m[13]], [m[2], m[6], m[10], m[14]], [m[3], m[7], m[11], m[15]]];
     let w = rows[3];
     let mut put = |k: usize, a: [f64; 4], sign: f64| {
@@ -219,8 +221,7 @@ pub fn frustum_planes<'a>(out: &'a mut [f64; 24], m: &Mat4) -> &'a mut [f64; 24]
     put(1, rows[0], -1.0);
     put(2, rows[1], 1.0);
     put(3, rows[1], -1.0);
-    put(4, rows[2], 1.0);
-    put(5, rows[2], -1.0);
+    put(4, rows[2], -1.0);
     out
 }
 

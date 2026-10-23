@@ -17,7 +17,7 @@ use crate::sched::tick::TickContext;
 use xpute_guest::global::Global;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
-/// Past any terrain and the fog, so the world never draws it.
+/// Under the sea below the eye, past any terrain, so the world never draws it.
 const CASE_DEPTH_U: f64 = 100_000.0;
 
 struct Case {
@@ -71,7 +71,9 @@ pub fn preview_close(id: u32) -> bool {
     true
 }
 
-/// An open case is what asks the world's tick to run.
+/// An open case is what asks the world's tick to run, while it turns: one
+/// still loading draws nothing and asks nothing, its model or skin landing
+/// waking the turn that lays it.
 pub fn preview_step(ctx: &mut TickContext) {
     let c = cases();
     if c.cases.is_empty() {
@@ -81,6 +83,7 @@ pub fn preview_step(ctx: &mut TickContext) {
     // its draw resolves a unit-tall model.
     let mut at = crate::view::frame::pose::sea_under_eye();
     at[2] -= CASE_DEPTH_U;
+    let mut turned = false;
     for case in &mut c.cases {
         if case.model.is_none() {
             case.model = model_of(case.variant.model, 1.0);
@@ -88,7 +91,7 @@ pub fn preview_step(ctx: &mut TickContext) {
         if case.actor.is_none() {
             if let (Some(model), Some(_)) = (&case.model, load_image(Load::Asset(case.variant.skin))) {
                 let id = model.model;
-                case.actor = laid().and_then(|k| k.scene.actors.new_actor(&mut k.draw, &k.models, id));
+                case.actor = laid().and_then(|k| k.scene.actors.new_actor(&mut k.draw, crate::model::models(), id));
                 if let (Some(actor), true) = (case.actor, IDLE_CLIP < model.clip_count) {
                     kernel().scene.actors.play(actor, IDLE_CLIP, 0.0);
                 }
@@ -100,13 +103,16 @@ pub fn preview_step(ctx: &mut TickContext) {
             a.at = at;
             a.rotation_z = case.spin as f32;
             a.visible = true;
+            turned = true;
         }
     }
-    ctx.invalidate();
+    if turned {
+        ctx.invalidate();
+    }
 }
 
 /// (case, model, skin image), the image as the loader has it now.
-pub fn preview_rows() -> impl Iterator<Item = (u32, u32, u32)> {
+pub fn preview_rows() -> impl Iterator<Item = (u32, u32, (u32, &'static [u8]))> {
     let c: &'static _ = cases();
     c.cases.iter().filter_map(|case| match (&case.model, case.actor) {
         (Some(model), Some(_)) => Some((case.id, model.model, load_image(Load::Asset(case.variant.skin))?)),

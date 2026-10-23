@@ -38,10 +38,6 @@ impl Lattice {
         Lattice { scale_steps: steps, ..self }
     }
 
-    pub const fn scale_steps(self) -> i32 {
-        self.scale_steps
-    }
-
     /// The coarsest tile it is kept in: the one whose cells fold into the
     /// coarsest grid cell any chunk has, a 3D root's (`SHARD_ZOOM`) cells. The
     /// ground's lands on z4 exactly: z8's chunks have z13 cells, which the
@@ -65,11 +61,6 @@ impl Lattice {
         } else {
             LEAF_ZOOM as i32
         }) as Zoom
-    }
-
-    /// A node's side at `zoom` in the cells of the tile it reads.
-    pub const fn read_side(self, zoom: Zoom, cell: Zoom) -> u32 {
-        self.tile_cells() >> (zoom - self.read_zoom(cell))
     }
 
     /// Its finest cell's zoom: its cells' on a leaf tile.

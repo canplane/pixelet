@@ -64,10 +64,6 @@
           "label": "Off",
           "description": "Applies uniform ambient lighting to all surfaces."
         },
-        "corner": {
-          "label": "Corners",
-          "description": "Darkens contact areas and inside corners so cubes look grounded instead of floating. Light on performance."
-        },
         "screen": {
           "label": "Detailed (SSAO)",
           "description": "Adds detailed contact shadows to corners and crevices for greater depth. This is the most demanding option because it processes the entire screen."

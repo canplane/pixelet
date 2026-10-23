@@ -23,7 +23,7 @@
       "word, then each span's begin and end ticks (gpu/api.rs lays them out and",
       "holds this number to it)."
     ],
-    "HEAD": 81,
+    "HEAD": 77,
     "BYTES": {
       "$value": 4194304,
       "$doc": [
@@ -54,7 +54,12 @@
       "its shader the pipeline enters, a vertex step and format, and a binding's",
       "kind (its stages are xpute's SHADER_STAGE) — TEXTURE_UNFILTERED a texture in a",
       "format no sampler",
-      "filters (RGBA32F), read by textureLoad alone."
+      "filters (RGBA32F), read by textureLoad alone; TEXTURE_UINT_ARRAY a u32",
+      "texture's layers, read by textureLoad; STORAGE_TEXTURE_RW an r32uint",
+      "texture's layers read and written in place, the one format family WebGPU",
+      "lets a shader do both to; TEXTURE_3D a filtered volume (the air's,",
+      "gpu/atmosphere.rs); STORAGE_TEXTURE_3D an rgba16float volume a compute",
+      "pass writes."
     ],
     "HEAD": 10,
     "TRIANGLES": 0,
@@ -73,6 +78,7 @@
     "VS_DEPTH": 1,
     "PER_VERTEX": 0,
     "PER_INSTANCE": 1,
+    "U32": 5,
     "U32X2": 6,
     "F32X2": 1,
     "F32X3": 2,
@@ -86,6 +92,10 @@
     "DEPTH": 5,
     "SAMPLER": 6,
     "TEXTURE_UNFILTERED": 8,
-    "STORAGE_RW": 9
+    "STORAGE_RW": 9,
+    "TEXTURE_UINT_ARRAY": 10,
+    "STORAGE_TEXTURE_RW": 11,
+    "TEXTURE_3D": 12,
+    "STORAGE_TEXTURE_3D": 13
   }
 }

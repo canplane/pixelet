@@ -7,7 +7,7 @@
 const SUN_LIMB: f32 = 0.6;
 const MOON_ALBEDO: f32 = 0.12;
 // The map's mean over the disc (printed by download_moon) scales it to MOON_ALBEDO.
-const MOON_MAP_RADIUS_TEXELS: f32 = 256.0;
+const MOON_MAP_RADIUS_TEXELS: f32 = f32(MOON_TEXELS) / 2.0;
 const MOON_MAP_MEAN: f32 = 0.2459;
 // The eye adapts to the Moon, so its seas show where the sky's exposure would
 // drown the disc white.
@@ -32,7 +32,8 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
 
 fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
   let mu = dot(dir, frame_up());
-  if (meets_ground(r, mu) || dot(dir, atmos_sun_dir()) <= 0.0 || a >= 1.0 + w) {
+  // Behind the land the eye stands over.
+  if (falls_to_land(dir) || dot(dir, atmos_sun_dir()) <= 0.0 || a >= 1.0 + w) {
     return vec3f(0.0);
   }
   let inside = min(a, 1.0);
@@ -45,7 +46,7 @@ fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
 fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
   let axis = atmos_moon_dir();
   let mu = dot(dir, frame_up());
-  if (meets_ground(r, mu) || dot(dir, axis) <= 0.0 || a >= 1.0 + w) {
+  if (falls_to_land(dir) || dot(dir, axis) <= 0.0 || a >= 1.0 + w) {
     return vec3f(0.0);
   }
   let edge = 1.0 - smoothstep(1.0 - w, 1.0 + w, a);
@@ -88,7 +89,7 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let across = (dir - dot(dir, atmos_moon_dir()) * atmos_moon_dir()) / (MOON_ANGULAR_RADIUS * DISC_SCALE);
   let moon_a = length(across);
   let moon_w = max(fwidth(moon_a), 1e-4);
-  var color = beyond(air_along(dir)) + sun_disc(dir, r, sun_a, sun_w) + moon_disc(dir, r, across, moon_a, moon_w) + glare(dir);
+  var color = beyond(dir) + sun_disc(dir, r, sun_a, sun_w) + moon_disc(dir, r, across, moon_a, moon_w) + glare(dir);
   // On the encoded value, where a step is one step at every brightness.
   return vec4f(finish(color, v.clip.xy) + (hash(v.clip.xy) - 0.5) / 255.0, 1.0);
 }

@@ -131,7 +131,8 @@ pub fn square_lines(tile: Tile, separation: &Separation, place: [u32; 2], scratc
 
 /// A window's square as its fill reads it (pxl-portable `window::Square`):
 /// its cells' zoom and place in its tile, its lines as `square_lines` lays
-/// them, cell `i`'s four looks as a word (`looks`), and column `c`'s height,
+/// them, cell `i` as laid off its four looks (`looks`, its own look, none
+/// about it gone), and column `c`'s height,
 /// counted from its first cell, its ring included (`height`).
 pub struct Laid<'a, L, H> {
     pub cell: Zoom,
@@ -151,8 +152,10 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_portable::window::Square for
     fn line(&self, k: u32) -> u32 {
         self.lines[k as usize]
     }
-    fn looks(&self, i: u32) -> u32 {
-        (self.looks)(i)
+    /// Inside the area, none about it past: a bake sizes the most runs a
+    /// client's fill writes, and no wall cuts its ways.
+    fn laid(&self, i: u32) -> u32 {
+        pxl_portable::window::laid_half(pxl_portable::ground::own((self.looks)(i), self.cell), 0)
     }
     fn height(&self, c: [i32; 2]) -> i32 {
         (self.height)(c)
@@ -161,8 +164,9 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> pxl_portable::window::Square for
 
 /// Cell `i` of the square at `place` (in squares), in its tile's cells.
 fn square_cell(place: [u32; 2], i: u32) -> [u32; 2] {
-    use pxl_portable::window::SQUARE;
-    [place[0] * SQUARE + i % SQUARE, place[1] * SQUARE + i / SQUARE]
+    use pxl_portable::window::{of_index, SQUARE};
+    let [x, y] = of_index(i);
+    [place[0] * SQUARE + x, place[1] * SQUARE + y]
 }
 
 /// The window's square at `place` (in squares) of `tile` as its fill reads
@@ -188,30 +192,67 @@ fn laid<'a>(tile: Tile, ground: &'a Ground, ele: &'a [i16], place: [u32; 2], lin
     }
 }
 
-/// The window's square at `place` (in squares) of `tile` laid into `lane`
-/// as a client hands it to a GPU (pxl-portable window.rs `SQUARE_WORDS`):
-/// its looks four a cell (`handed`), its tile's padded samples, and its
-/// lines (`square_lines`, with `scratch`); the rest zero, for the fill.
-fn lane(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, u32)], lane: &mut [u32]) {
-    use pxl_portable::window::{ELE_AT, LINES_AT, LINES_WORDS, SQUARE_CELLS};
-    lane.fill(0);
+/// The window's square at `place` (in squares) of `tile` handed into
+/// `record` as a client hands it to a GPU's fill (pxl-portable window.rs
+/// `HANDED_WORDS`): its looks four a cell (`handed`), its tile's padded
+/// samples, and its lines (`square_lines`, with `scratch`); the rest zero.
+fn record(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, u32)], record: &mut [u32]) {
+    use pxl_portable::window::{ELE_AT, LINES_AT, LINES_WORDS, LOOKS_AT, SQUARE_CELLS};
+    record.fill(0);
     for i in 0..SQUARE_CELLS {
         let at = square_cell(place, i);
-        lane[i as usize] = pxl_portable::ground::word(four_looks(&held.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize).map(u32::from));
+        record[(LOOKS_AT + i) as usize] = pxl_portable::ground::word(four_looks(&held.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize).map(u32::from));
     }
     for (k, pair) in held.ele.chunks(2).enumerate() {
-        lane[ELE_AT as usize + k] = u32::from(pair[0] as u16) | u32::from(pair.get(1).map_or(0, |&v| v as u16)) << 16;
+        record[ELE_AT as usize + k] = u32::from(pair[0] as u16) | u32::from(pair.get(1).map_or(0, |&v| v as u16)) << 16;
     }
-    square_lines(tile, &held.separation, place, scratch, &mut lane[LINES_AT as usize..(LINES_AT + LINES_WORDS) as usize]);
+    square_lines(tile, &held.separation, place, scratch, &mut record[LINES_AT as usize..(LINES_AT + LINES_WORDS) as usize]);
 }
 
 /// What the window's square at `place` (in squares) of `tile` reads as,
-/// laid into `lane` (`lane`) and filled as a GPU fills it (pxl-portable
-/// `fill::square`): the runs its ways read as, and the most spans a column
-/// makes.
-pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, u32)], lane: &mut [u32]) -> [u32; 2] {
-    self::lane(tile, held, place, scratch, lane);
-    pxl_portable::fill::square(lane, place, crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom))
+/// handed into `handed` (`record`) and filled into `lane`, its runs into
+/// `runs`, its scratch (`ways::tree::SCRATCH_WORDS`), as a GPU fills it
+/// (pxl-portable `fill::square`): the runs its ways read as, and the most
+/// spans a column makes.
+pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mut [(u32, u32)], [handed, lane, runs]: [&mut [u32]; 3]) -> [u32; 2] {
+    use pxl_portable::window::SQUARE;
+    record(tile, held, place, scratch, handed);
+    let cell = crate::space::layer::lattice::GROUND.cell_zoom(tile.zoom);
+    let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * SQUARE) as i32);
+    let first = [pxl_portable::wrap_index(cell, first[0]), first[1]];
+    pxl_portable::fill::square(handed, lane, runs, place, cell, first)
+}
+
+/// Each square of `tile`'s windows' ways' tree as a GPU builds it, row by
+/// row of its squares (pxl-portable `fill::tree`): the blocks it takes,
+/// and those it holds once folded; none for a tile without ways, whose
+/// squares hold their root's block alone. `runs` its scratch as a GPU's, and
+/// `pool` a square's room to build in, its heap words then its data words.
+pub fn square_blocks(tile: Tile, held: &TerrainTile, scratch: &mut [(u32, u32)], [handed, lane, runs, pool]: [&mut [u32]; 4]) -> Vec<[u32; 2]> {
+    use pxl_portable::window::SQUARE;
+    if held.separation.is_empty() {
+        return Vec::new();
+    }
+    let side = TILE_CELLS / SQUARE;
+    (0..side * side)
+        .map(|k| {
+            square_runs(tile, held, [k % side, k / side], scratch, [handed, lane, runs]);
+            pxl_portable::fill::tree(lane, runs, pxl_portable::fill::of(handed, 0), pool, 1)
+        })
+        .collect()
+}
+
+/// The blocks the windows' trees take wherever the eye is, of the pool
+/// (pxl-portable `ways::tree::POOL_BLOCKS`): each eye's window's most at
+/// its cells (`worst`, the most any placement of it holds), the others'
+/// each the most of any, the squares handed a frame each the most a square
+/// takes before its fold gives blocks back (`taken`), and a root's block a
+/// square besides.
+pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
+    use pxl_portable::window::{EYE_WINDOWS, FIRST_CELL, HANDED, SQUARES, WINDOWS};
+    let cells = FIRST_CELL..FIRST_CELL + EYE_WINDOWS;
+    let most = cells.clone().map(&worst).max().unwrap_or(0);
+    cells.map(worst).sum::<u64>() + u64::from(WINDOWS - EYE_WINDOWS) * most + u64::from(HANDED) * taken + u64::from(SQUARES)
 }
 
 /// `held` with only the lines it draws at `tile`'s zoom: each read alone,
@@ -268,16 +309,21 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
 /// more than `ways::SPANS` spans; the first that does not, and what it
 /// reads as.
 pub fn runs_fit(tile: Tile, held: &TerrainTile) -> Result<(), ([u32; 2], [u32; 2])> {
-    use pxl_portable::window::{RUNS_SQUARE, SQUARE, SQUARE_WORDS};
+    use pxl_portable::window::{HANDED_WORDS, RUNS_SQUARE, SQUARE, SQUARE_WORDS};
     if held.separation.is_empty() {
         return Ok(());
     }
-    let (mut scratch, mut lane) = (vec![(0, 0); WAYS_SQUARE_SEGMENTS], vec![0; SQUARE_WORDS as usize]);
+    let mut scratch = vec![(0, 0); WAYS_SQUARE_SEGMENTS];
+    let (mut handed, mut lane, mut runs) = (
+        vec![0; HANDED_WORDS as usize],
+        vec![0; SQUARE_WORDS as usize],
+        vec![0; pxl_portable::ways::tree::SCRATCH_WORDS as usize],
+    );
     for qy in 0..TILE_CELLS / SQUARE {
         for qx in 0..TILE_CELLS / SQUARE {
-            let [runs, spans] = square_runs(tile, held, [qx, qy], &mut scratch, &mut lane);
-            if runs > RUNS_SQUARE || spans > pxl_portable::ways::SPANS as u32 {
-                return Err(([qx, qy], [runs, spans]));
+            let [n, spans] = square_runs(tile, held, [qx, qy], &mut scratch, [&mut handed, &mut lane, &mut runs]);
+            if n > RUNS_SQUARE || spans > pxl_portable::ways::SPANS as u32 {
+                return Err(([qx, qy], [n, spans]));
             }
         }
     }

@@ -143,11 +143,11 @@ impl TerrainRepository {
     }
 
     /// A leaf tile's elevation grid.
-    pub fn ele(&self, client: &mut Client, tile: [i64; 2]) -> Result<Vec<i16>, postgres::Error> {
+    pub fn ele(&self, client: &mut Client, tile: [i32; 2]) -> Result<Vec<i16>, postgres::Error> {
         self.raster.tile_grid(client, tile)
     }
 
-    pub fn fetch_tile_source(&self, client: &mut Client, tile: [i64; 2]) -> Result<TileSource, postgres::Error> {
+    pub fn fetch_tile_source(&self, client: &mut Client, tile: [i32; 2]) -> Result<TileSource, postgres::Error> {
         let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(get_tile_bbox(LEAF_ZOOM, tile));
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
         let wkb = |row: &postgres::Row| -> Box<[u8]> { row.get::<_, &[u8]>("geom_wkb").into() };

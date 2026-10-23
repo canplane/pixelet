@@ -11,13 +11,13 @@ use pxl_spec::space::hierarchy::morton::child_cube;
 
 use super::*;
 use crate::layer::Query;
+use pxl_portable::overwrite::{self, Cut};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::block::object::{cube_id, Cube};
-use pxl_spec::block::placed::{self, Cut};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_kit::math::rng::SplitMix64;
 
-fn corner(x: i64, y: i64, z: i64) -> Q3 {
+fn corner(x: i32, y: i32, z: i32) -> Q3 {
     base_of(UNIT_ZOOM, [x, y, z])
 }
 
@@ -36,12 +36,12 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
         assert!(
             {
                 let held = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
-                held.holds() && !held.folded() && placed::value(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest.map(|v| v as i32)) == 3
+                held.holds() && !held.folded() && overwrite::value(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
             },
             "a cell leaf covers its steps"
         );
         let mut met = Vec::new();
-        store.each_in(OBJECT_COARSEST, at, &mut |e| met.push(*e));
+        store.read((OBJECT_COARSEST, at)).entries(&mut |e| met.push(*e));
         assert_eq!(
             met,
             vec![Entry {
@@ -88,14 +88,14 @@ impl Rng {
 /// A node from a unit to a kilometer wide, within `reach` units of the origin.
 fn some_node(rng: &mut Rng, reach: f64) -> Node<3> {
     let zoom: Zoom = rng.pick(&[24, 21, 18, 16, 14]);
-    let at = [0, 1, 2].map(|_| ((rng.next() % (2 * reach as u64)) as f64 - reach).div_euclid(units(zoom)) as i64);
+    let at = [0, 1, 2].map(|_| ((rng.next() % (2 * reach as u64)) as f64 - reach).div_euclid(units(zoom)) as i32);
     (zoom, at)
 }
 
 /// Whole cells from a corner, and what the objects' pyramid holds at
 /// `zoom`'s cells, read through the store's query, with the corner in that
 /// zoom's cells.
-fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (FnvHashMap<[i64; 3], u32>, [i64; 2]) {
+fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (FnvHashMap<[i32; 3], u32>, [i32; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
@@ -111,7 +111,7 @@ fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (FnvHashMap<[i64; 3], u
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
                 let held = store.cursor((target, [x, y, z]), target);
-                let v = placed::value(&store.lanes(), held, Cut::NONE, target, [x, y, z].map(|v| v as i32));
+                let v = overwrite::value(&store.lanes(), held, Cut::NONE, target, [x, y, z]);
                 if v != VOID {
                     out.insert([x, y, z], v);
                 }
@@ -153,7 +153,7 @@ fn air_is_a_value_and_folds_like_one() {
     assert_eq!(out.get(&[x, y, 0]), Some(&AIR));
 }
 
-fn cube_at(store: &mut Store, [x, y, z]: [i64; 3], state: u32) {
+fn cube_at(store: &mut Store, [x, y, z]: [i32; 3], state: u32) {
     store.write([Write::at(&corner(x, y, z), 1.0, state)]);
 }
 
@@ -161,20 +161,20 @@ fn cube_at(store: &mut Store, [x, y, z]: [i64; 3], state: u32) {
 fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
     let mut rng = Rng(SplitMix64::new(0x2c1b_3c6d_a5b4_9f1e));
     let red = cube_id(Cube::Object(Object::red));
-    let turn = |[x, y, z]: [i64; 3]| [y, z, x];
+    let turn = |[x, y, z]: [i32; 3]| [y, z, x];
     let turn_box = |b: Aabb| Aabb {
         min: [b.min[1], b.min[2], b.min[0]],
         max: [b.max[1], b.max[2], b.max[0]],
     };
     let mut stores = [Store::default(), Store::default(), Store::default()];
     for _ in 0..300 {
-        let at = [0, 1, 2].map(|_| (rng.next() % 300) as i64 - 150);
+        let at = [0, 1, 2].map(|_| (rng.next() % 300) as i32 - 150);
         let state = rng.pick(&[red, red, AIR, VOID]);
         cube_at(&mut stores[0], at, state);
         cube_at(&mut stores[1], turn(at), state);
         cube_at(&mut stores[2], turn(turn(at)), state);
     }
-    let bound = |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).value().flatten().map(|b| b.aabb);
+    let bound = |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).value().flatten();
     for _ in 0..500 {
         let (zoom, at) = some_node(&mut rng, 200.0);
         let given = bound(&stores[0], (zoom, at));
@@ -197,21 +197,21 @@ fn a_leaf_keeps_its_words_and_an_erase_frees_them() {
         id: MARKER,
         ext: words("cafe"),
     }]);
-    let e = store.placed(zoom, at).expect("placed");
+    let e = store.read((zoom, at)).placed().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
     store.write([Write {
         key: key(zoom, at),
         id: VOID,
         ext: None,
     }]);
-    assert!(store.placed(zoom, at).is_none());
+    assert!(store.read((zoom, at)).placed().is_none());
     // The freed slot is the next one kept: nothing outlived its leaf.
     store.write([Write {
         key: key(zoom, at),
         id: MARKER,
         ext: words("bar"),
     }]);
-    let e = store.placed(zoom, at).expect("placed again");
+    let e = store.read((zoom, at)).placed().expect("placed again");
     assert_eq!(e.ext, 1);
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
 }
@@ -249,8 +249,7 @@ fn a_shard_read_whole_meets_its_leaves() {
     // The node of a whole shard: its tree's root, read through the region.
     let shard = [at[0] >> (OBJECT_COARSEST - SHARD_ZOOM), at[1] >> (OBJECT_COARSEST - SHARD_ZOOM), 0];
     let mut met = 0;
-    store.read((SHARD_ZOOM, shard), SHARD_ZOOM).value().expect("read").entries(&mut |_| met += 1);
+    store.read((SHARD_ZOOM, shard)).entries(&mut |_| met += 1);
     assert_eq!(met, 1);
     assert!(store.bounds::<3>((SHARD_ZOOM, shard), SHARD_ZOOM).value().flatten().is_some());
-    assert!(store.holds(SHARD_ZOOM, shard));
 }

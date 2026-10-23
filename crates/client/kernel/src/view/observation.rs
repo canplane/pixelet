@@ -5,8 +5,9 @@
 
 use crate::io::demand::Order;
 use pxl_spec::space::layer::lattice::demand_reach;
+use xpute_guest::global::Global;
 
-use pxl_spec::space::camera::eye::{Frustum, Observation};
+use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{Tau, CHUNK_STEPS};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
@@ -17,32 +18,59 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::layer::residency::{floor, Lines};
 use crate::query::World;
-use crate::view::frame::pose::globe;
 use crate::view::frame::pose::view;
-use crate::view::reach::{eye_height, reach_at};
+use crate::view::reach::eye_height;
 use pxl_spec::space::coord::zoom::Zoom;
 
 pub fn eye() -> Option<V3> {
     Some(view().pose?.eye)
 }
 
-pub fn frustum_of_view() -> Frustum {
-    view().frustum
+/// How far the eye observes: as far as the source's top is demanded. None
+/// before the source declares its top.
+pub fn eye_reach() -> Option<f64> {
+    crate::io::source::top().map(|top| demand_reach(GROUND, top))
 }
 
-/// Out to where the air ends the ground or the source's top ends, whichever
-/// is nearer. None before the source declares its top.
+/// The turn's observation, made by its first reader after the view is
+/// composed where it moved (`turn`, `forget`): the eye and its ground's
+/// floor asked once where they moved, however many read it.
+static OBSERVED: Global<Option<Option<Observation>>> = Global::new();
+
+/// The turn's view moved: the next reader makes the observation again.
+pub fn forget() {
+    *OBSERVED.get(|| None) = None;
+}
+
+/// A turn begins, the pose `moved` or not: the observation stands where it
+/// did not, the reach is what it was, and no change touched the ground under
+/// the eye, whose height over it it holds (`changed::within`, asked each
+/// frame turn, so each change is seen once); else it is made again.
+pub fn turn(moved: bool) {
+    let stands = !moved
+        && match *OBSERVED.get(|| None) {
+            Some(Some(o)) => Some(o.reach) == eye_reach() && !crate::query::changed::within([[o.eye[0], o.eye[1]]; 2], &[]),
+            Some(None) => eye().is_none() || eye_reach().is_none(),
+            None => false,
+        };
+    if !stands {
+        forget();
+    }
+}
+
+/// Out to `eye_reach`. None before the camera stands anywhere or the source
+/// declares its top.
 pub fn observation() -> Option<Observation> {
-    let eye = eye()?;
-    let top = floor::top()?;
-    let height = eye_height();
-    Some(Observation {
-        eye,
-        frustum: Some(frustum_of_view()),
-        reach: demand_reach(GROUND, top),
-        fog: reach_at(eye[2]),
-        planet: globe().radius_u(),
-        ground: eye[2] - height,
+    *OBSERVED.get(|| None).get_or_insert_with(|| {
+        let eye = eye()?;
+        let reach = eye_reach()?;
+        let height = eye_height();
+        Some(Observation {
+            eye,
+            frustum: Some(view().frustum),
+            reach,
+            ground: eye[2] - height,
+        })
     })
 }
 
@@ -56,22 +84,26 @@ pub fn observation() -> Option<Observation> {
 /// met; a column it knows nothing of yet names none, as nothing there is to
 /// stand in.
 pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
-    let Some(top) = floor::top() else { return };
+    let Some(top) = crate::io::source::top() else { return };
     let over = (o.eye[2] - o.ground).max(0.0);
     let coarsest = GROUND.grid_zoom(top.max(GROUND.top())).max(CHUNK_STEPS);
-    let near = |zoom: Zoom, [x, y]: [i64; 2]| {
+    let near = |zoom: Zoom, [x, y]: [i32; 2]| {
         let side = units(zoom);
         let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);
         libm::hypot(libm::hypot(gap(x as f64 * side, o.eye[0]), gap(y as f64 * side, o.eye[1])), over)
     };
     let zoom = coarsest - CHUNK_STEPS;
-    let flat = (o.far() * o.far() - over * over).max(0.0).sqrt();
-    let mut stack: Vec<(Zoom, [i64; 2])> = squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)).collect();
+    let flat = (o.reach * o.reach - over * over).max(0.0).sqrt();
+    // Its room kept from one walk to the next.
+    static STACK: Global<Vec<(Zoom, [i32; 2])>> = Global::new();
+    let mut stack = core::mem::take(STACK.get(Vec::new));
+    stack.clear();
+    stack.extend(squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)));
     // Depth first, so each square's ground line steps from its neighbour's.
     let (world, mut lines) = (World::now(), Lines::default());
     while let Some((zoom, xy)) = stack.pop() {
         let (cell, d) = (zoom + CHUNK_STEPS, near(zoom, xy));
-        if d > o.far() {
+        if d > o.reach {
             continue;
         }
         if cell < GROUND.cell() && d < tau.split_distance(cell) {
@@ -80,19 +112,20 @@ pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
         }
         let Some(b) = world.bounds(&mut lines, (zoom, xy), cell).value().flatten() else { continue };
         let side = units(zoom);
-        for z in (b.aabb.min[2] / side).floor() as i64..=(b.aabb.max[2] / side).floor() as i64 {
+        for z in (b.min[2] / side).floor() as i32..=(b.max[2] / side).floor() as i32 {
             each((zoom, [xy[0], xy[1], z]));
         }
     }
+    *STACK.get(Vec::new) = stack;
 }
 
 /// The cell zoom the eye's rays draw at `at`: the camera grid's rule at its
 /// distance (`Tau::cell_at`), no coarser than a tile draws and no finer than
 /// the ground's cells.
 pub fn cell_at(o: &Observation, tau: Tau, at: V3) -> Option<Zoom> {
-    let top = floor::top()?;
-    let d = pxl_spec::space::coord::v3::len(&pxl_spec::space::coord::v3::sub(&at, &o.eye));
-    Some(tau.cell_at(d).clamp(GROUND.grid_zoom(top.max(GROUND.top())), GROUND.cell()))
+    let top = crate::io::source::top()?;
+    let v = pxl_spec::space::coord::v3::sub(&at, &o.eye);
+    Some(tau.cell_at(pxl_spec::space::coord::v3::dot(&v, &v)).clamp(GROUND.grid_zoom(top.max(GROUND.top())), GROUND.cell()))
 }
 
 /// How far from the eye a layer's tiles at `zoom` are asked for: at the
@@ -133,5 +166,5 @@ impl ByEye {
 /// `lines` last walked: all of it where nothing is known or nothing stands.
 pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, lines: &mut Lines) -> Order {
     let stands = World::now().bounds(lines, p.node(), lattice.grid_zoom(p.zoom));
-    Order::of(o, &stands.value().flatten().map_or(p.region(), |b| b.aabb))
+    Order::of(o, &stands.value().flatten().unwrap_or(p.region()))
 }

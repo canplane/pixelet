@@ -51,7 +51,7 @@ pub const fn marker_cell(cell: Zoom) -> i32 {
 /// The marker's cell holding a marker at `at` where the camera grid's cell
 /// is at `cell`, which counts the markers in it as one; the marker's own
 /// where it is finer.
-pub fn marker_cell_of(cell: Zoom, at: EntryAt) -> (Zoom, [i64; 3]) {
+pub fn marker_cell_of(cell: Zoom, at: EntryAt) -> (Zoom, [i32; 3]) {
     let z = (marker_cell(cell).max(0) as Zoom).min(at.zoom());
     (z, ancestor_of(at.at(), at.zoom() - z))
 }

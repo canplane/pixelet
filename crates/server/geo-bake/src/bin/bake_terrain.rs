@@ -44,7 +44,7 @@ fn connect(source: &Overture, raster: &Arc<Raster>) -> Result<Db, String> {
 }
 
 /// A band's tiles row by row, each row the way the last one ended.
-fn zigzag(band: &[[i64; 2]]) -> Vec<[i64; 2]> {
+fn zigzag(band: &[[i32; 2]]) -> Vec<[i32; 2]> {
     let mut out = Vec::with_capacity(band.len());
     for (k, row) in band.chunk_by(|a, b| a[1] == b[1]).enumerate() {
         if k % 2 == 0 {
@@ -57,7 +57,7 @@ fn zigzag(band: &[[i64; 2]]) -> Vec<[i64; 2]> {
 }
 
 /// The leaves something is drawn in.
-fn land(client: &mut Client, candidates: &[[i64; 2]]) -> Result<Vec<[i64; 2]>, String> {
+fn land(client: &mut Client, candidates: &[[i32; 2]]) -> Result<Vec<[i32; 2]>, String> {
     let mut out = Vec::new();
     for batch in candidates.chunks(CLASSIFY_BATCH) {
         for (&tile, drawn) in batch.iter().zip(has_ground(client, batch).map_err(|e| e.to_string())?) {
@@ -82,8 +82,8 @@ fn run() -> Result<(), String> {
                 // around it were mostly read for the tile before.
                 rows.sort_unstable_by_key(|&p| (p[1], p[0]));
                 let band = rows.len().div_ceil(run.concurrency.max(1)).max(1);
-                let walks: Vec<Vec<[i64; 2]>> = rows.chunks(band).map(zigzag).collect();
-                let bands: Vec<&[[i64; 2]]> = walks.iter().map(Vec::as_slice).collect();
+                let walks: Vec<Vec<[i32; 2]>> = rows.chunks(band).map(zigzag).collect();
+                let bands: Vec<&[[i32; 2]]> = walks.iter().map(Vec::as_slice).collect();
                 let t = walk::over(
                     &format!("leaf/{}", shard.name()),
                     &bands,

@@ -5,8 +5,10 @@
 //! its credits, and stays wanted until it arrives.
 //!
 //! A read that did not arrive is retried; bytes that do not parse are final,
-//! since asking again returns the same bytes. Images are decoded by the host
-//! under a kernel-issued handle and never cross into the kernel.
+//! since asking again returns the same bytes. An image is its file's bytes,
+//! kept for as long as the kernel runs and handed to the renderer under the
+//! asset's number, which makes its texture on whatever device there is
+//! (pxl-render `Gpu::image`): io is transport, and the device the renderer's.
 
 use std::rc::Rc;
 
@@ -24,7 +26,6 @@ use crate::sched::edge::{request_world_tick, world_edge};
 use core::fmt::Write as _;
 use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::route::{tile_object, TILE_SPHERE};
-use xpute_guest::abi::handle::Slots;
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -37,23 +38,13 @@ enum Entry<T> {
     Pending,
     /// Its file in its arrival's task, being read.
     Arrived,
-    /// An image handed to the device, ready once the host's word says it
-    /// landed (`load_image`).
-    Landing(T),
     Ready(T),
     Failed,
 }
 
-/// An image's handle and the device it was handed to (`device_generation`).
-#[derive(Clone, Copy)]
-struct Image {
-    handle: u32,
-    on: u32,
-}
-
 struct Loader {
     gltf: Vec<Option<Entry<Rc<Gltf>>>>,
-    image: Vec<Option<Entry<Image>>>,
+    image: Vec<Option<Entry<Vec<u8>>>>,
     /// Kept so saying the wants every turn allocates nothing.
     wants: Vec<(u64, Ask)>,
 }
@@ -80,27 +71,12 @@ pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
     }
 }
 
-/// An image's handle once its texture is there. Its landing is the word the
-/// host writes, read here where the image is read, so nothing waits on it;
-/// once read it stays, since the texture is taken from the host's record,
-/// while the device it went to does: one handed to a device since gone is
-/// asked for again.
-pub fn load_image(load: Load) -> Option<u32> {
-    let l = loader();
-    let entry = &mut l.image[load.number() as usize];
-    if let Some(Entry::Landing(i) | Entry::Ready(i)) = entry {
-        if i.on != pxl_render::gpu::api::device_generation() {
-            IMAGES.get(Slots::default).remove(i.handle);
-            *entry = None;
-        }
-    }
-    if let Some(Entry::Landing(i)) = entry {
-        if pxl_render::gpu::api::image_landed(i.handle) {
-            *entry = Some(Entry::Ready(*i));
-        }
-    }
+/// An image as the renderer takes it: the asset's number and its file's
+/// bytes, once read; none while it loads.
+pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
+    let entry = &mut loader().image[load.number() as usize];
     match entry {
-        Some(Entry::Ready(i)) => Some(i.handle),
+        Some(Entry::Ready(file)) => Some((load.number(), file.as_slice())),
         Some(_) => None,
         None => {
             *entry = Some(Entry::Pending);
@@ -128,18 +104,21 @@ pub fn of_subject(subject: u64) -> Option<(LoadKind, Load)> {
 pub fn load_wants() -> &'static [(u64, Ask)] {
     let l = loader();
     l.wants.clear();
-    for n in 0..LOADS {
-        let load = Load::of(n as u32).or_bug(Errno::ENOTRECOVERABLE);
-        // The Earth's is opened under the version its source declares.
-        if load == Load::Sphere && source::top().is_none() {
-            continue;
-        }
-        if matches!(l.gltf[n], Some(Entry::Pending)) {
-            l.wants.push((subject_of(LoadKind::Gltf, load), Ask::PLAIN));
-        }
-        // An image is read only where a device can take it.
-        if matches!(l.image[n], Some(Entry::Pending)) && pxl_render::gpu::api::device().is_some() {
-            l.wants.push((subject_of(LoadKind::Image, load), Ask::PLAIN));
+    // By subject, as a stream's wants are said: the models, then the images.
+    for kind in [LoadKind::Gltf, LoadKind::Image] {
+        for n in 0..LOADS {
+            let load = Load::of(n as u32).or_bug(Errno::ENOTRECOVERABLE);
+            // The Earth's is opened under the version its source declares.
+            if load == Load::Sphere && source::top().is_none() {
+                continue;
+            }
+            let pending = match kind {
+                LoadKind::Gltf => matches!(l.gltf[n], Some(Entry::Pending)),
+                LoadKind::Image => matches!(l.image[n], Some(Entry::Pending)),
+            };
+            if pending {
+                l.wants.push((subject_of(kind, load), Ask::PLAIN));
+            }
         }
     }
     &l.wants
@@ -190,8 +169,6 @@ pub fn cancel_asset(key: u64) -> bool {
     true
 }
 
-static IMAGES: Global<Slots<(), { LOADS + 1 }>> = Global::new();
-
 pub fn image_opened(fd: u32, key: u64, opened: Opened) {
     let Opened::Bytes(n) = opened else {
         load_rejected(key, Ended::Failed(opened.failure()));
@@ -204,28 +181,14 @@ pub fn image_opened(fd: u32, key: u64, opened: Opened) {
     arrive(LoadKind::Image, load.number() as usize, fd, n);
 }
 
-/// The GPU is gone, and with it every image the textures took: each is loaded
-/// again, under a new handle, when it is next asked for.
-/// An image's bytes, read, into a texture where the device is: landing until
-/// the host says it is there (`load_image`). A file the device cannot decode is
-/// the asset's own failure, so it is final; a device gone since it was asked
-/// for takes it again when one is back (`load_image`).
+/// An image's bytes, read: kept, where a header gives its size
+/// (pxl-spec `asset::image_size`); a file no header sizes is the asset's
+/// own failure, so it is final.
 fn image_arrived(n: usize, file: Vec<u8>) {
-    if pxl_render::gpu::api::device().is_none() {
-        loader().image[n] = None;
-        return;
-    }
-    let image = IMAGES.get(Slots::default).insert(());
-    if !pxl_render::gpu::api::image_arrive(image, file) {
-        IMAGES.get(Slots::default).remove(image);
-        loader().image[n] = Some(Entry::Failed);
-        settled();
-        return;
-    }
-    loader().image[n] = Some(Entry::Landing(Image {
-        handle: image,
-        on: pxl_render::gpu::api::device_generation(),
-    }));
+    loader().image[n] = Some(if pxl_spec::asset::image_size(&file).is_some() { Entry::Ready(file) } else { Entry::Failed });
+    settled();
+    // A turn hands it on.
+    request_world_tick();
 }
 
 pub fn model_opened(fd: u32, key: u64, opened: Opened) {

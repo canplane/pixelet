@@ -58,7 +58,7 @@ fn companion_props() -> Option<CompanionProps> {
     let center = crate::view::frame::coord::to_world(&goal);
     Some(CompanionProps {
         center: [center[0], center[1]],
-        floor: crate::control::navigation::support::floor_seen(&goal),
+        floor: crate::scene::character::companion::focus_floor(goal, [center[0], center[1]], || crate::control::navigation::support::floor_seen(&goal)),
         azimuth: crate::control::camera::controller::azimuth(),
         dragging: crate::control::camera::state::camera_state().camera_status == crate::control::camera::state::CameraStatus::Drag,
         steered: crate::control::camera::input::steering(),
@@ -96,11 +96,14 @@ fn world_gizmo_tick(_: &mut TickContext) {
 fn demand_tick(_: &mut TickContext) {
     // The ground's windows where their centres now stand, before what arrives fills them.
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
-    let pinned = crate::layer::terrain::window::step([
-        crate::view::observation::observation().map(|o| [o.eye[0], o.eye[1]]),
-        crate::control::camera::controller::focus().map(at),
-        crate::control::navigation::destination::pending().map(at),
-    ]);
+    let pinned = crate::layer::terrain::window::step(
+        [
+            crate::view::observation::observation().map(|o| [o.eye[0], o.eye[1]]),
+            crate::control::camera::controller::focus().map(at),
+            crate::control::navigation::destination::pending().map(at),
+        ],
+        pxl_render::gpu::api::device_generation(),
+    );
     if pinned {
         TerrainTile::demand().moved();
     }
@@ -185,7 +188,11 @@ pub fn world_turn() -> f64 {
     effect!(worst, bootstrap, map_bootstrap_step());
     effect!(worst, orientation, orientation_watchdog_step(platform.orientation));
     effect!(worst, follow, follow_mode_step());
-    effect!(worst, destination, crate::control::navigation::destination::destination_step());
+    effect!(worst, destination, {
+        // What the walker found under an unknown Z, let go where it moved.
+        crate::control::navigation::support::support_step();
+        crate::control::navigation::destination::destination_step()
+    });
     // After every writer of the focus, before anything observes the view.
     effect!(worst, view, crate::view::frame::pose::view_compose(crate::control::camera::controller::pose()));
     effect!(worst, decor, decor_assets_wanted());
@@ -241,7 +248,11 @@ pub struct HostFrame {
     pub height: f64,
     pub dpr: f64,
     pub delta: f64,
-    pub frame_ms: f64,
+    /// The display's refresh, and the interval the host paces turns at, a
+    /// whole number of refreshes: the frame's budget (xpute host
+    /// sched/quantum.ts `Grant`).
+    pub refresh_ms: f64,
+    pub paced_ms: f64,
     pub interactive: bool,
     pub credits: u32,
 }
@@ -275,9 +286,9 @@ async fn frame_task() {
         notified(frames).await;
         let Some(host) = FRAME.get(|| None).take() else { continue };
         let edge = world_edge();
-        let frame_ms = host.frame_ms;
+        let paced_ms = host.paced_ms;
         world_frame(host, edge.quota_ms(), edge.edge_at());
-        crate::sched::edge::tasks_after_frame(frame_ms);
+        crate::sched::edge::tasks_after_frame(paced_ms);
         DRAWN.set(true);
     }
 }
@@ -288,7 +299,8 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
         height,
         dpr,
         delta,
-        frame_ms,
+        refresh_ms,
+        paced_ms,
         interactive,
         credits,
     } = host;
@@ -306,18 +318,18 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let step = delta.min(MAX_STEP_S);
     state.gap_s = delta;
     state.elapsed_s += step;
-    state.frame_ms = frame_ms;
     state.interactive = interactive;
     let report = run_tick(state, step, quota_ms, edge_at);
     let after_tick = now();
     pump();
     crate::scene::stage::stage_write();
-    crate::scene::stage::stage_render();
+    crate::scene::stage::stage_render(paced_ms);
     let done = now();
     profiler_frame(FrameTurn {
         tick: report,
         interval_ms: delta * 1000.0,
-        display_ms: frame_ms,
+        refresh_ms,
+        paced_ms,
         settled: !interactive,
         effects_ms,
         stage_ms: done - after_tick,
@@ -338,6 +350,7 @@ fn changes_step() {
     static MOVED: Global<[Vec<pxl_spec::space::layer::tile::Tile>; 3]> = Global::new();
     let [places, earth, divisions] = MOVED.get(Default::default);
     let shared = crate::query::changed::take();
+    crate::scene::decor::drawn::edited(crate::query::changed::written());
     PlaceTile::residency().take_moved(places);
     Earth::residency().take_moved(earth);
     DivisionTile::residency().take_moved(divisions);

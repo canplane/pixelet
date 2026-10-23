@@ -16,7 +16,6 @@ pub struct TickState {
     pub dpr: f64,
     /// Behind the wall clock by what pauses cost (MAX_STEP_S).
     pub elapsed_s: f64,
-    pub frame_ms: f64,
     pub interactive: bool,
     /// The raw gap, which past MAX_STEP_S exceeds the step. Only the profiler reads it.
     pub gap_s: f64,

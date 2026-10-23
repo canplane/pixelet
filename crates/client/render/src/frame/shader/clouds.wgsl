@@ -17,7 +17,7 @@ struct Clouds {
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process.
-@group(0) @binding(1) var<uniform> clouds_words: array<vec4f, 5>;
+@group(0) @binding(1) var<uniform> clouds_words: array<vec4f, CLOUDS_VEC4S>;
 @group(0) @binding(2) var cloud_tile: texture_2d<f32>;
 @group(0) @binding(3) var cloud_tile_sampler: sampler;
 
@@ -28,6 +28,8 @@ fn clouds_base() -> vec2u { return bitcast<vec2u>(clouds_words[3].xy); }
 fn clouds_frac() -> vec2f { return clouds_words[3].zw; }
 fn clouds_count() -> u32 { return bitcast<u32>(clouds_words[4].x); }
 fn clouds_drift() -> vec2f { return clouds_words[4].zw; }
+// How far the eye observes, in km: past it no sheet is drawn.
+fn clouds_reach() -> f32 { return clouds_words[4].y; }
 
 // The lattice's footprint where `dir` is `t` km on, before any branch takes a derivative.
 fn footprint_at(dir: vec3f, t: f32) -> f32 {
@@ -46,16 +48,6 @@ fn vs(@builtin(vertex_index) i: u32) -> CloudOut {
   o.clip = vec4f(p, 0.0, 1.0);
   o.ndc = p;
   return o;
-}
-
-// Where a ray from radius `r0` at cosine `mu` is inside a sphere of radius `r`, or (-1, -1).
-fn ray_sphere(r0: f32, mu: f32, r: f32) -> vec2f {
-  let disc = r0 * r0 * (mu * mu - 1.0) + r * r;
-  if (disc < 0.0) {
-    return vec2f(-1.0);
-  }
-  let root = sqrt(disc);
-  return vec2f(-r0 * mu - root, -r0 * mu + root);
 }
 
 struct Sheet {
@@ -79,12 +71,11 @@ struct Layer {
   t: f32,
 };
 
-// Where `dir` meets the sphere `km` over the ground: the way out from under it,
-// the way in from over it.
-fn sheet_t(r0: f32, mu: f32, km: f32) -> f32 {
-  let r = atmos_bottom_radius() + km;
-  let at = ray_sphere(r0, mu, r);
-  return select(at.y, at.x, r0 > r);
+// Where a ray rising at `mu` meets the sheet `km` over the sea, in km: the
+// plane at that height, from under it or over it; none where it never does.
+fn sheet_t(mu: f32, km: f32) -> f32 {
+  let t = (km - atmos_camera_altitude()) / mu;
+  return select(-1.0, t, mu != 0.0);
 }
 
 // Lit where the ray meets it as the cumulus' faces are, the face turned to the
@@ -108,15 +99,14 @@ fn sheet(s: Sheet, dir: vec3f, t: f32, footprint: f32, reach: f32) -> Layer {
 @fragment
 fn fs(v: CloudOut) -> @location(0) vec4f {
   let dir = normalize(clouds_ray() * vec3f(v.ndc, 1.0));
-  let r0 = camera_r();
   let mu = dot(dir, frame_up());
-  let reach = cloud_reach(CIRRUS.km);
-  let alto_t = sheet_t(r0, mu, ALTOCUMULUS.km);
-  let cirrus_t = sheet_t(r0, mu, CIRRUS.km);
+  let reach = clouds_reach();
+  let alto_t = sheet_t(mu, ALTOCUMULUS.km);
+  let cirrus_t = sheet_t(mu, CIRRUS.km);
   let alto_footprint = footprint_at(dir, alto_t);
   let cirrus_footprint = footprint_at(dir, cirrus_t);
 
-  var near = sheet(ALTOCUMULUS, dir, alto_t, alto_footprint, cloud_reach(ALTOCUMULUS.km));
+  var near = sheet(ALTOCUMULUS, dir, alto_t, alto_footprint, reach);
   var far = sheet(CIRRUS, dir, cirrus_t, cirrus_footprint, reach);
   if (far.t < near.t) {
     let x = near;

@@ -52,7 +52,7 @@ impl TileRows {
     }
 }
 
-fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: [i64; 2]) -> Result<TileRows, String> {
+fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: [i32; 2]) -> Result<TileRows, String> {
     let [min, max] = epsg3857::get_tile_bbox(LEAF_ZOOM, tile);
     let env: [&(dyn ToSql + Sync); 4] = [&min[0], &min[1], &max[0], &max[1]];
     let read = |client: &mut Client, sql: &str| client.query(sql, &env).map_err(|e| e.to_string());
@@ -68,14 +68,14 @@ fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: [i64; 2]) -> R
 
 /// Where a tile's rows are kept for its neighbours.
 pub trait Store {
-    fn tile(&mut self, client: &mut Client, repo: &TerrainRepository, tile: [i64; 2]) -> Result<TileRows, String>;
+    fn tile(&mut self, client: &mut Client, repo: &TerrainRepository, tile: [i32; 2]) -> Result<TileRows, String>;
 }
 
 /// On disk, shared by the processes that bake tiles on demand.
 pub struct Disk<'a>(pub &'a Path);
 
 impl Store for Disk<'_> {
-    fn tile(&mut self, client: &mut Client, repo: &TerrainRepository, tile: [i64; 2]) -> Result<TileRows, String> {
+    fn tile(&mut self, client: &mut Client, repo: &TerrainRepository, tile: [i32; 2]) -> Result<TileRows, String> {
         memo_rows(client, repo, tile, self.0)
     }
 }
@@ -84,19 +84,19 @@ impl Store for Disk<'_> {
 /// eight around it and no more.
 #[derive(Default)]
 pub struct Walk {
-    held: FnvHashMap<[i64; 2], TileRows>,
+    held: FnvHashMap<[i32; 2], TileRows>,
 }
 
 impl Walk {
     /// Drops what is not in `tile`'s 3×3.
-    pub fn keep_around(&mut self, tile: [i64; 2]) {
-        let near = |p: [i64; 2]| (p[0] - tile[0]).abs() <= 1 && (p[1] - tile[1]).abs() <= 1;
+    pub fn keep_around(&mut self, tile: [i32; 2]) {
+        let near = |p: [i32; 2]| (p[0] - tile[0]).abs() <= 1 && (p[1] - tile[1]).abs() <= 1;
         self.held.retain(|&p, _| near(p));
     }
 }
 
 impl Store for Walk {
-    fn tile(&mut self, client: &mut Client, repo: &TerrainRepository, tile: [i64; 2]) -> Result<TileRows, String> {
+    fn tile(&mut self, client: &mut Client, repo: &TerrainRepository, tile: [i32; 2]) -> Result<TileRows, String> {
         if let Some(rows) = self.held.get(&tile) {
             return Ok(rows.clone());
         }
@@ -107,7 +107,7 @@ impl Store for Walk {
 }
 
 /// A tile's rows from `memo` when read before, else from the DB into it.
-fn memo_rows(client: &mut Client, repo: &TerrainRepository, tile: [i64; 2], memo: &Path) -> Result<TileRows, String> {
+fn memo_rows(client: &mut Client, repo: &TerrainRepository, tile: [i32; 2], memo: &Path) -> Result<TileRows, String> {
     let file = memo.join(Tile::new(LEAF_ZOOM, tile).name());
     if let Some(rows) = std::fs::read(&file).ok().and_then(|b| unpack(&b).ok()).and_then(|b| serde_json::from_slice(&b).ok()) {
         return Ok(rows);
@@ -120,7 +120,7 @@ fn memo_rows(client: &mut Client, repo: &TerrainRepository, tile: [i64; 2], memo
 }
 
 /// A tile and the eight around it.
-pub fn ring(tile: [i64; 2]) -> Vec<[i64; 2]> {
+pub fn ring(tile: [i32; 2]) -> Vec<[i32; 2]> {
     let [px, py] = tile;
     (-1..=1).flat_map(|dy| (-1..=1).map(move |dx| [px + dx, py + dy])).collect()
 }

@@ -37,7 +37,7 @@ pub const GROUND_READS: [&str; 1] = [HAS_GROUND_SQL];
 pub const READS: [&[&str]; 3] = [&GROUND_READS, &repository::READS, &separation::source::READS];
 
 /// A tile nothing is drawn in is open water; a cheap check, not the carve.
-pub fn has_ground(client: &mut Client, tiles: &[[i64; 2]]) -> Result<Vec<bool>, postgres::Error> {
+pub fn has_ground(client: &mut Client, tiles: &[[i32; 2]]) -> Result<Vec<bool>, postgres::Error> {
     let bbox: Vec<[f64; 4]> = tiles
         .iter()
         .map(|&p| {
@@ -60,7 +60,7 @@ pub fn has_ground(client: &mut Client, tiles: &[[i64; 2]]) -> Result<Vec<bool>, 
 
 /// A leaf: its separation solved, its surface painted around its lines, the two
 /// one tile.
-pub fn bake_leaf(r: &mut separation::Reader<impl Store>, tile: [i64; 2]) -> Result<TerrainTile, String> {
+pub fn bake_leaf(r: &mut separation::Reader<impl Store>, tile: [i32; 2]) -> Result<TerrainTile, String> {
     let solved = separation::solve_tile(r, tile)?;
     let surface = fetch_surface(r.repo, r.client, tile, &solved.drawn)?;
     let lines = bake_separation(&solved.lines, tile);

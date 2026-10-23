@@ -290,10 +290,6 @@ impl Sheet {
         self.used_px -= self.w[s] * self.h[s];
     }
 
-    pub fn sheet_generation(&self) -> u32 {
-        self.generation
-    }
-
     pub fn stats(&self) -> SheetStats {
         SheetStats {
             size: self.size,

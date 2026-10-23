@@ -15,7 +15,7 @@ use pxl_spec::space::coord::zoom::{index_of, units, Zoom};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Chunk {
     zoom: Zoom,
-    at: [i64; 3],
+    at: [i32; 3],
 }
 
 impl Chunk {
@@ -24,7 +24,7 @@ impl Chunk {
         Chunk { zoom, at: index_of(zoom, at) }
     }
 
-    pub fn indexed(zoom: Zoom, at: [i64; 3]) -> Chunk {
+    pub fn indexed(zoom: Zoom, at: [i32; 3]) -> Chunk {
         Chunk { zoom, at }
     }
 
@@ -69,11 +69,11 @@ impl Chunk {
         }
     }
 
-    pub fn node(self) -> (Zoom, [i64; 3]) {
+    pub fn node(self) -> (Zoom, [i32; 3]) {
         (self.zoom, self.at)
     }
 
-    pub fn column(self) -> (Zoom, [i64; 2]) {
+    pub fn column(self) -> (Zoom, [i32; 2]) {
         let [x, y, _] = self.at;
         (self.zoom, [x, y])
     }

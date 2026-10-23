@@ -20,9 +20,9 @@ use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_bil
 use crate::chunk::Chunk;
 use crate::layer::object::preview::draft;
 use crate::layer::place::carto_zoom;
+use crate::layer::residency::Lines;
 use crate::layer::Base;
-use crate::layer::Query;
-use crate::query::{Detail, Ray, World};
+use crate::query::{at_zoom, Ray, World};
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
 use crate::view::demand::Observed as _;
@@ -36,7 +36,7 @@ use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use fnv::FnvHashSet;
+use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::bake::tile::place::{stands, PlaceTile, PLACE_FIRST, PLACE_LATTICE, SPACING_CELLS};
 use pxl_spec::space::camera::grid::px_per_unit;
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -75,6 +75,10 @@ struct Placement {
     spare: Vec<(Label, Q3)>,
     /// Markers and lines not ready yet, kept to become so.
     pending: Vec<Label>,
+    /// What was drawn last by the thing it shows, and the labels the badges
+    /// keep: made each run, their room kept.
+    before: FnvHashMap<Thing, Label>,
+    keep: FnvHashSet<Label>,
     /// What the billboard set holds, and the buffer the next run lays out
     /// into, swapped as `labeled` and `spare` are.
     instances: Vec<f32>,
@@ -107,7 +111,7 @@ struct Seen {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Thing {
     Marker(EntryAt),
-    Count((Zoom, [i64; 3])),
+    Count((Zoom, [i32; 3])),
     Chat,
 }
 
@@ -133,7 +137,7 @@ struct Shown {
 }
 
 impl Shown {
-    fn cell(&self) -> Option<(Zoom, [i64; 3])> {
+    fn cell(&self) -> Option<(Zoom, [i32; 3])> {
         self.crowd.map(|c| c.cell)
     }
 }
@@ -142,7 +146,7 @@ impl Shown {
 /// their count stands.
 #[derive(Clone, Copy)]
 struct Crowd {
-    cell: (Zoom, [i64; 3]),
+    cell: (Zoom, [i32; 3]),
     count_at: Option<Q3>,
 }
 
@@ -167,8 +171,8 @@ fn markers(chunk: Chunk, found: &mut Vec<Shown>) {
         return;
     }
     let region = chunk.region();
-    let objects = &crate::kernel().objects;
-    let Some(cells) = objects.read(chunk.node(), chunk.cell_zoom()).value() else { return };
+    let objects = crate::layer::object::store::objects();
+    let cells = objects.read(chunk.node());
     let from = found.len();
     cells.entries(&mut |e| {
         if !object_value_is_marker(e.state) {
@@ -200,7 +204,7 @@ fn markers(chunk: Chunk, found: &mut Vec<Shown>) {
 
 /// Where the count of a cell's markers stands: at its middle, half a marker
 /// at `marker` over what is drawn there first within it, or over its floor.
-fn crowd_at(zoom: Zoom, at: [i64; 3], marker: Zoom, detail: Zoom) -> Q3 {
+fn crowd_at(zoom: Zoom, at: [i32; 3], marker: Zoom, detail: Zoom) -> Q3 {
     let c = cube(zoom, at);
     let [x, y, _] = c.center();
     let top = surface(&point(x, y, c.min[2]), (c.max[2], c.min[2]), detail).unwrap_or(c.min[2]);
@@ -228,7 +232,7 @@ fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
         direction: [0.0, 0.0, -1.0],
         reach: high - low,
     };
-    let hit = World::now().first_hit(&ray, Detail::Zoom(zoom)).value().flatten()?;
+    let hit = World::now().first_hit(&ray, at_zoom(zoom)).value().flatten()?;
     Some(high - hit.t)
 }
 
@@ -249,7 +253,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let p = PLACEMENT.get(Placement::default);
     if crate::view::observation::eye().is_none() {
         if let Some(set) = p.set.take() {
-            remove_billboard_set(set);
+            remove_billboard_set(&mut crate::kernel().draw, set);
             ctx.invalidate();
         }
         // Nothing is drawn now: what comes back is laid out afresh.
@@ -261,7 +265,13 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         return;
     }
     let _tiles = PlaceTile::demand();
-    let Some(o) = crate::view::observation::observation() else { return };
+    // No observation yet, the source's reach not declared: laid out afresh
+    // once there is one, so the tiles that moved meanwhile are not kept.
+    let Some(o) = crate::view::observation::observation() else {
+        (p.last, p.found_for) = (None, None);
+        p.moved_places.clear();
+        return;
+    };
     let tau = crate::view::lens::tau();
     let draft = draft();
     // A waiting marker is shown wherever it is.
@@ -355,7 +365,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     // What was drawn last by the thing it shows, read once: a marker's
     // words or the line changed, and what was drawn stays until the new one
     // is ready to show.
-    let before: fnv::FnvHashMap<Thing, Label> = drawn_before.iter().filter_map(|&(l, _)| Some((thing(l)?, l))).collect();
+    let before = &mut p.before;
+    before.clear();
+    before.extend(drawn_before.iter().filter_map(|&(l, _)| Some((thing(l)?, l))));
     let mut unlaid = false;
     // Laid out last, so a line wins a tie with a badge (the sort's tiebreak).
     for (label, center, cell_zoom) in drafted.into_iter().chain(shown).chain(said) {
@@ -378,10 +390,14 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         labeled.push((label, center));
     }
     // The line's slot is kept while it is said, wherever its speaker is.
-    badge::retain(&labeled.iter().map(|l| l.0).chain(p.pending.iter().copied()).chain(line).collect());
+    p.keep.clear();
+    p.keep.extend(labeled.iter().map(|l| l.0).chain(p.pending.iter().copied()).chain(line));
+    let freed = badge::retain(&p.keep);
     // Painted at render, or laid out by the host, neither of which asks a
-    // turn: one looks again.
-    p.waiting = !p.pending.is_empty() || unlaid || unread > 0;
+    // turn: one looks again, while a label is on its way (`badge::coming`),
+    // or once a slot let go may make room for one that had none.
+    let pending = p.pending.iter().any(|&l| badge::coming(l)) || freed && !p.pending.is_empty();
+    p.waiting = pending || unlaid || unread > 0;
     if p.waiting {
         crate::sched::edge::request_world_tick();
     }
@@ -424,7 +440,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     if instances != p.instances {
         let set = *p.set.get_or_insert_with(new_billboard_set);
         place_billboard_set(set, about);
-        write_billboard_set(set, &instances);
+        if let Some(k) = crate::laid() {
+            write_billboard_set(&mut k.draw, set, &instances);
+        }
         ctx.invalidate();
     }
     let drawn_instances = core::mem::replace(&mut p.instances, instances);
@@ -459,18 +477,20 @@ fn places_in(chunk: Chunk, found: &mut Vec<Shown>) {
     }
     let t = PLACE_LATTICE.read_zoom(chunk.cell_zoom());
     let (z, column) = chunk.column();
-    let tiles: Vec<_> = if t <= z {
-        vec![tile_at(t, ancestor_of(column, z - t))]
+    // The tile over the column, or its tiles under it: `n` a side from the first.
+    let ([x0, y0], n) = if t <= z {
+        (ancestor_of(column, z - t), 1)
     } else {
-        let n = 1i64 << (t - z);
-        let [x0, y0] = first_descendant_of(column, t - z);
-        (y0..y0 + n).filter(|y| tile_rows(t).contains(y)).flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y]))).collect()
+        (first_descendant_of(column, t - z), 1 << (t - z))
     };
+    let tiles = (y0..y0 + n).filter(|y| tile_rows(t).contains(y)).flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y])));
     let (h0, h1) = chunk.z_range();
     let detail = GROUND.read_zoom(chunk.cell_zoom());
     let held = PlaceTile::residency();
+    // The chunk's tiles are siblings: their lines step from one another's.
+    let mut lines = Lines::default();
     for tile in tiles {
-        let Some(src) = held.source(tile) else { continue };
+        let Some(src) = held.seek(&mut lines, tile).source else { continue };
         let Some(places) = held.get(src) else { continue };
         for (place, h) in places.iter() {
             if h.from as i32 > zoom {

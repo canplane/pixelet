@@ -75,7 +75,8 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
     }
 
     laid().and_then(|k| {
-        let (model, block) = k.models.new_model(vertex_cnt, index_cnt, joint_cnt)?;
+        let models = crate::model::models();
+        let (model, block) = models.new_model(vertex_cnt, index_cnt, joint_cnt)?;
         let n = (vertex_cnt * MODEL_VERTEX_WORDS + index_cnt) as usize;
         // SAFETY: the model's block, `n` words, ours until sealed.
         let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), n) };
@@ -153,14 +154,14 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
         }
         for j in 0..joint_cnt {
             let Some(&n) = joint_nodes.get(j as usize) else {
-                k.models.joint(model, j, -1, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], IDENTITY, IDENTITY);
+                models.joint(model, j, -1, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], IDENTITY, IDENTITY);
                 continue;
             };
             let node = &gltf.nodes[n as usize];
             let parent_node = node.parent;
             let parent = if parent_node >= 0 { joint_of.get(&(parent_node as u32)).map_or(-1, |&p| p as i32) } else { -1 };
             if still {
-                k.models.joint(model, j, parent, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], IDENTITY, IDENTITY);
+                models.joint(model, j, parent, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], IDENTITY, IDENTITY);
                 continue;
             }
             let t = node.translation;
@@ -173,14 +174,14 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             } else {
                 IDENTITY
             };
-            k.models.joint(model, j, parent, rest, root_pre, *inverse_bind_of.get(&n).unwrap_or(&IDENTITY));
+            models.joint(model, j, parent, rest, root_pre, *inverse_bind_of.get(&n).unwrap_or(&IDENTITY));
         }
 
         for anim in &gltf.animations {
-            let c = k.models.clip(model, anim.duration as f32);
+            let c = models.clip(model, anim.duration as f32);
             for channel in &anim.channels {
                 let Some(&joint) = joint_of.get(&channel.node) else { continue };
-                k.models.channel(model, c, joint, channel.path as u8, channel.step, &channel.times, &channel.values);
+                models.channel(model, c, joint, channel.path as u8, channel.step, &channel.times, &channel.values);
             }
         }
 
@@ -190,7 +191,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             _ => 1.0,
         };
         // SAFETY: the model's block is in the volumes' memory.
-        unsafe { k.models.seal(&mut k.draw, model, scale) };
+        unsafe { models.seal(&mut k.draw, model, scale) };
         Some(ModelHandle {
             model,
             clip_count: gltf.animations.len() as u32,

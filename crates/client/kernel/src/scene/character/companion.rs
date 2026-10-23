@@ -15,8 +15,9 @@ use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
 use crate::model::variant_spec::IDLE_CLIP;
+use crate::query::changed::Asked;
 use crate::query::World;
-use crate::query::{over, under};
+use crate::query::{over, under, walks};
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::sched::edge::wake_at;
@@ -25,6 +26,7 @@ use crate::setting::store::settings_store;
 use crate::view::frame::coord::{to_world, world_to_canonical};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
@@ -79,6 +81,9 @@ struct Figure {
     initial_facing_done: bool,
     follow_walk_until: f64,
     stands_z: Option<f64>,
+    /// The floor it is drawn on (`drawn_floor`), of where it stands, its
+    /// floor there and the zoom the eye draws it at.
+    drawn: Asked<([f64; 2], f64, Zoom), f64>,
 }
 
 impl Figure {
@@ -96,6 +101,7 @@ impl Figure {
             initial_facing_done: false,
             follow_walk_until: 0.0,
             stands_z: None,
+            drawn: Asked::NONE,
         }
     }
 
@@ -117,7 +123,7 @@ impl Figure {
         let (Some(model), Some(_)) = (model_of(variant.model, variant.height_u), load_image(Load::Asset(variant.skin))) else {
             return;
         };
-        let Some(Some(actor)) = laid().map(|k| k.scene.actors.new_actor(&mut k.draw, &k.models, model.model)) else {
+        let Some(Some(actor)) = laid().map(|k| k.scene.actors.new_actor(&mut k.draw, crate::model::models(), model.model)) else {
             return;
         };
         self.held = Some(Held { actor, model });
@@ -240,7 +246,7 @@ impl Figure {
         let Some(held) = &self.held else { return };
         let sched = &mut kernel().scene;
         if let Some(a) = sched.actors.actor(held.actor) {
-            a.at = [at[0], at[1], drawn_floor(at, *stands, p)];
+            a.at = [at[0], at[1], drawn_floor(&mut self.drawn, at, *stands, p)];
             a.rotation_z = self.heading as f32;
             a.visible = true;
         }
@@ -257,12 +263,23 @@ impl Figure {
 struct Companion {
     person: Option<Figure>,
     pet: Option<Figure>,
+    /// The pet's floor beside the person, walked to from the person's: of
+    /// the person's place and floor, the pet's target and whether the eye
+    /// sees a walk there (`walks`).
+    beside: Asked<([f64; 2], f64, [f64; 2], bool), f64>,
+    /// The floor the focus is drawn on, of the focus (`focus_floor`).
+    floor: Asked<Q3, Option<f64>>,
 }
 
 static COMPANION: Global<Companion> = Global::new();
 
 fn companion() -> &'static mut Companion {
-    COMPANION.get(|| Companion { person: None, pet: None })
+    COMPANION.get(|| Companion {
+        person: None,
+        pet: None,
+        beside: Asked::NONE,
+        floor: Asked::NONE,
+    })
 }
 
 /// In the world's doubles.
@@ -285,6 +302,15 @@ pub struct CompanionProps {
     pub tau: Tau,
 }
 
+/// The floor the focus `goal` is drawn on, `center` its place in units:
+/// `ask`'s, kept while the focus stands and no change touched its column
+/// (`Asked`), as the figures' own floors are.
+pub fn focus_floor(goal: Q3, center: [f64; 2], ask: impl FnOnce() -> Option<f64>) -> Option<f64> {
+    let (c, cell) = (companion(), units(GROUND.cell()));
+    c.floor.kept();
+    c.floor.of(goal, [center.map(|v| v - cell), center.map(|v| v + cell)], ask)
+}
+
 fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: [f64; 2]) -> &'a mut Figure {
     if slot.as_ref().is_some_and(|w| w.variant.number != variant.number) {
         if let Some(mut old) = slot.take() {
@@ -296,6 +322,12 @@ fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, targ
 
 pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let c = companion();
+    c.beside.kept();
+    // Looked at each frame turn, a focus not asked of this one too.
+    c.floor.kept();
+    for f in [&mut c.person, &mut c.pet].into_iter().flatten() {
+        f.drawn.kept();
+    }
     let Some(p) = props else {
         for slot in [&mut c.person, &mut c.pet] {
             if let Some(mut w) = slot.take() {
@@ -325,9 +357,16 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
     let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
-    // Its own floor beside the person, walked to from the person.
+    // Its own floor beside the person, walked to from the person: over the
+    // columns between the two, a cell either side.
     let reached = |(beside, _): &([f64; 2], f64)| libm::hypot(beside[0] - pet_target[0], beside[1] - pet_target[1]) <= WALK_EPS;
-    let walked = |floor: f64| walk_to(p.center, floor, pet_target, &p).filter(reached).map_or(floor, |(_, z)| z);
+    let cell = units(GROUND.cell());
+    let columns = [0, 1].map(|end| core::array::from_fn(|k| if end == 0 { p.center[k].min(pet_target[k]) - cell } else { p.center[k].max(pet_target[k]) + cell }));
+    let from = |floor: f64| world_to_canonical(&[p.center[0], p.center[1], over(floor)]);
+    let mut walked = |floor: f64| {
+        let of = (p.center, floor, pet_target, walks(&from(floor), &p.eye));
+        c.beside.of(of, columns, || walk_to(p.center, floor, pet_target, &p).filter(reached).map_or(floor, |(_, z)| z))
+    };
     if let Some((target, z)) = p.floor.map(|z| (pet_target, walked(z))).or_else(|| hold(pet)) {
         pet.step(ctx, target, z, &p);
     }
@@ -335,7 +374,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
 /// (model, image handle) for the shell's skinned pass: the image as the
 /// loader has it now, which a lost device takes back until it lands again.
-pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
+pub fn companion_skins() -> impl Iterator<Item = (u32, (u32, &'static [u8]))> {
     let c: &'static _ = companion();
     [&c.person, &c.pet]
         .into_iter()
@@ -353,14 +392,17 @@ fn walk_to(from: [f64; 2], stands: f64, to: [f64; 2], p: &CompanionProps) -> Opt
 }
 
 /// The floor `stands` as the eye's rays draw it under `at`: the world asked
-/// at the zoom the camera grid at `tau` takes there from the eye. A coarser
-/// answer is taken where that zoom is not held, as a ray draws the ground it
-/// has.
-fn drawn_floor(at: [f64; 2], stands: f64, p: &CompanionProps) -> f64 {
+/// at the zoom the camera grid at `tau` takes there from the eye, kept in
+/// `asked` while none of it moves. A coarser answer is taken where that zoom
+/// is not held, as a ray draws the ground it has.
+fn drawn_floor(asked: &mut Asked<([f64; 2], f64, Zoom), f64>, at: [f64; 2], stands: f64, p: &CompanionProps) -> f64 {
     let center = [at[0], at[1], over(stands)];
     let eye = to_world(&p.eye);
-    let r = libm::sqrt((0..3).map(|k| (center[k] - eye[k]) * (center[k] - eye[k])).sum());
-    World::now().floor_under(&world_to_canonical(&center), GROUND.z_at(p.tau, r)).value().flatten().unwrap_or(stands)
+    let r2 = (0..3).map(|k| (center[k] - eye[k]) * (center[k] - eye[k])).sum();
+    let zoom = GROUND.z_at(p.tau, r2);
+    asked.of((at, stands, zoom), [at, at], || {
+        World::now().floor_under(&world_to_canonical(&center), zoom).value().flatten().unwrap_or(stands)
+    })
 }
 
 /// Whether the companion's models have loaded: a live, unpersisted signal

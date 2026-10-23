@@ -6,5 +6,3 @@ pub mod fixed;
 mod query;
 pub mod tile;
 pub mod window;
-
-pub use query::Source;

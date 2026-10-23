@@ -79,7 +79,7 @@ fn the_way_between_two_positions_takes_the_short_way_across_the_antimeridian() {
 #[test]
 fn epsg3857_tile_bbox_preserves_the_exclusive_positive_world_boundary() {
     // The last tile before X's positive edge at 2^23 units.
-    let last = (1i64 << 23) / crate::space::coord::zoom::units(Z15) as i64 - 1;
+    let last = (1i32 << 23) / crate::space::coord::zoom::units(Z15) as i32 - 1;
     let tile_idx = [last, last];
     let [_, max] = get_tile_bbox(Z15, tile_idx);
 

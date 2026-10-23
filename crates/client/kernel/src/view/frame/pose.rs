@@ -5,6 +5,7 @@
 //! the pose; nothing here knows which.
 
 use pxl_spec::space::camera::eye::Frustum;
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -13,8 +14,6 @@ use pxl_spec::space::coord::world::nearest;
 
 use crate::param::FALLBACK_G4326;
 use crate::param::FOV;
-use crate::view::reach::{far_clip_at, near_clip_at};
-use pxl_spec::space::coord::globe::Globe;
 use xpute_guest::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
@@ -31,8 +30,11 @@ pub struct View {
     pub width: f64,
     pub height: f64,
     pub fov: f64,
-    pub near: f64,
-    pub far: f64,
+    /// The world surface's drawn pixels a CSS pixel (`resolution::world_ratio`).
+    pub ratio: f64,
+    /// The quality the eye's rays are cast at (`lens::tau`), of the three
+    /// above.
+    pub tau: Tau,
 
     pub view_matrix: Mat4,
     pub inv_view_matrix: Mat4,
@@ -49,9 +51,9 @@ impl View {
             width: 1.0,
             height: 1.0,
             fov: crate::param::FOV,
-            near: crate::param::NEAR,
-            // Set with the camera; reversed depth takes an endless far until then.
-            far: f64::INFINITY,
+            // A pixel a CSS pixel until a surface says.
+            ratio: 1.0,
+            tau: crate::view::lens::tau_of(1.0, crate::param::FOV, 1.0),
             view_matrix: mat4::new(),
             inv_view_matrix: mat4::new(),
             proj: mat4::new(),
@@ -94,8 +96,8 @@ pub fn view() -> &'static mut View {
     VIEW.get(View::new)
 }
 
-/// The sea under the eye: where the globe placement is the identity at the
-/// eye. The sphere is the same whichever point it is laid about.
+/// The sea under the eye: what is drawn about it in f32 is held to a unit
+/// near the eye.
 pub fn sea_under_eye() -> V3 {
     let e = view().at().eye;
     [e[0], e[1], 0.0]
@@ -108,15 +110,10 @@ pub fn globe_anchor() -> Option<G4326> {
     Some(epsg4326::from_mercator(&[epsg3857::mer_from_u(nearest(x, 0.0)), epsg3857::mer_from_u(y), 0.0]))
 }
 
-/// Where the world is laid on the planet: the anchor, or before the camera
-/// stands anywhere the place it starts from.
+/// The eye's longitude and latitude, which the sky is seen from: the
+/// anchor, or before the camera stands anywhere the place it starts from.
 pub fn anchor() -> G4326 {
     globe_anchor().unwrap_or(FALLBACK_G4326)
-}
-
-/// The planet the world is laid on, tangent at the anchor.
-pub fn globe() -> Globe {
-    Globe::at(anchor()[1].to_radians())
 }
 
 /// Mercator stretches by the secant of the latitude, heights alike; at the
@@ -125,18 +122,32 @@ pub fn km_per_u() -> f64 {
     libm::cos(anchor()[1].to_radians()) / epsg3857::u_per_m(0.0) / 1000.0
 }
 
-pub fn view_resize(width: f64, height: f64) {
+/// The view `width` × `height` CSS pixels, its world surface drawn at
+/// `ratio`: what its matrices and its τ are made of, made again only where
+/// one moved.
+pub fn view_resize(width: f64, height: f64, ratio: f64) {
     let v = view();
-    if width == v.width && height == v.height {
+    let (width, height) = (width.max(1.0), height.max(1.0));
+    if width == v.width && height == v.height && ratio == v.ratio {
         return;
     }
-    v.width = width.max(1.0);
-    v.height = height.max(1.0);
+    (v.width, v.height, v.ratio) = (width, height, ratio);
+    v.tau = crate::view::lens::tau_of(height, v.fov, ratio);
+    crate::view::observation::forget();
     compose();
 }
 
-/// Takes the pose the controllers hold and composes the matrices from it.
+/// Takes the pose the controllers hold and composes the matrices from it,
+/// where it moved. A turn's observation is the eye's as it stands at the
+/// turn's start (`observation::observation`), which is what it was where
+/// neither the pose nor the ground under the eye moved
+/// (`observation::turn`), and is made again where either did.
 pub fn view_compose(pose: Option<ObserverPose>) {
+    let moved = view().pose != pose;
+    crate::view::observation::turn(moved);
+    if !moved {
+        return;
+    }
     view().pose = pose;
     compose();
 }
@@ -150,10 +161,9 @@ fn compose() {
     mat4::mul(&mut v.view_matrix, &at.rotation, &to_eye);
     let vm = v.view_matrix;
     mat4::invert(&mut v.inv_view_matrix, &vm);
-    let altitude = e[2];
-    v.near = near_clip_at(altitude);
-    v.far = far_clip_at(altitude);
-    mat4::perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near, v.far);
+    // Reversed depth in floats with the far plane at infinity: one near
+    // plane holds every height's precision.
+    mat4::perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, crate::param::NEAR);
     let proj = v.proj;
     mat4::mul(&mut v.world_view_proj, &proj, &vm);
     let lvp = v.world_view_proj;
@@ -165,9 +175,10 @@ fn compose() {
 pub fn view_ray(ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
     let v = view();
     *origin = v.at().eye;
-    let mut far = [0.0; 3];
-    mat4::transform_point(&mut far, &v.inv_world_view_proj, ndc_x, ndc_y, 1.0);
-    mat4::transform_direction(direction, &mat4::new(), far[0] - origin[0], far[1] - origin[1], far[2] - origin[2]);
+    // Depth 1 is the near plane: a point on the ray.
+    let mut near = [0.0; 3];
+    mat4::transform_point(&mut near, &v.inv_world_view_proj, ndc_x, ndc_y, 1.0);
+    mat4::transform_direction(direction, &mat4::new(), near[0] - origin[0], near[1] - origin[1], near[2] - origin[2]);
 }
 
 /// `ndc` in [−1, 1], y up, as logical pixels from the view's top left.

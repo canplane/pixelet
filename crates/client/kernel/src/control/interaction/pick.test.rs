@@ -21,7 +21,6 @@ fn struck(normal: V3, point: V3) -> Hit {
             min: [3.0, 5.0, 2.0],
             max: [4.0, 6.0, 3.0],
         },
-        block: None,
         struck: Struck::Ground,
     }
 }
@@ -34,7 +33,7 @@ fn cases() -> [(&'static str, Hit); 3] {
     ]
 }
 
-fn lattice(p: &Q3) -> (i64, i64, i64) {
+fn lattice(p: &Q3) -> (i32, i32, i32) {
     let [x, y, z] = index_of(UNIT_ZOOM, p);
     (x, y, z)
 }

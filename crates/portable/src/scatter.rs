@@ -14,13 +14,15 @@
 
 use xpute_kit::math::rng::{derive_seed_u32, SplitMix32};
 
-use crate::cast::{Detail, SPLIT};
+use crate::answer::PLACED_BLOCK;
+use crate::cast::Detail;
 use crate::caves::node_seed;
 use crate::cube::{sentinel, Ground};
 use crate::decor::{Counts, Decor, Orientation, BLOCK, DECORS};
 use crate::lattice::GROUND;
-use crate::placed::{self, Lanes, PLACED};
-use crate::{Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, UNIT_ZOOM};
+use crate::overwrite::{self, Lanes, PLACED};
+use crate::window::{EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
+use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, UNIT_ZOOM};
 
 const BLOCK_SHIFT: u32 = BLOCK.trailing_zeros();
 const _: () = assert!(BLOCK.is_power_of_two(), "a block's side is a power of two, so a uniform cell in it is a draw's top bits");
@@ -139,11 +141,119 @@ pub const SQUARE_GROWN: u32 = {
 
 const _: () = assert!(size_of::<Decor>().is_multiple_of(4), "a row is whole words, as a GPU reads the table");
 
-/// What the GPU's decor pass writes, a record a decor it grows after a
-/// count and its pad: its kind, variant and turn, a byte each, then its
-/// box's min corner in leaf cells.
-pub const GROWN_AT: u32 = 4;
+/// A record of decor the GPU draws: its first word (`record_word`), then
+/// its box's min corner in leaf cells.
 pub const GROWN_WORDS: u32 = 4;
+
+/// The eye's windows' squares, a slot each: what the GPU grows decor in,
+/// slot `s` the square the windows' table holds at `s`.
+pub const EYE_SLOTS: u32 = EYE_WINDOWS * SLOTS;
+
+/// The GPU's decor in one buffer of words: a head per eye slot, then each
+/// slot's `SQUARE_GROWN` records, then placed decor's head and its records.
+/// A head is its records' count, the square they were grown for, X and Y,
+/// and 1 once they were: a slot whose square the windows no longer hold
+/// there is skipped by it (`grown_for`). Placed decor's head is its count.
+pub const HEAD_WORDS: u32 = 4;
+const SLOTS_AT: u32 = EYE_SLOTS * HEAD_WORDS;
+/// Records the slots hold, every one, ahead of placed decor's.
+pub const SLOT_RECORDS: u32 = EYE_SLOTS * SQUARE_GROWN;
+pub const PLACED_HEAD: u32 = SLOTS_AT + SLOT_RECORDS * GROWN_WORDS;
+
+/// Slot `s`'s head.
+pub const fn head_at(s: u32) -> u32 {
+    s * HEAD_WORDS
+}
+
+/// Record `n`, the slots' first, slot by slot, then placed decor's: its
+/// first word, its head, and its index under that head, which the head's
+/// count bounds.
+pub const fn record_at(n: u32) -> (u32, u32, u32) {
+    if n < SLOT_RECORDS {
+        (SLOTS_AT + n * GROWN_WORDS, head_at(n / SQUARE_GROWN), n % SQUARE_GROWN)
+    } else {
+        let i = n - SLOT_RECORDS;
+        (PLACED_HEAD + HEAD_WORDS + i * GROWN_WORDS, PLACED_HEAD, i)
+    }
+}
+
+/// Whether a slot's head says its records were grown for the square `q`.
+pub const fn grown_for(head: [u32; 4], q: [i32; 2]) -> bool {
+    head[3] == 1 && head[1] as i32 == q[0] && head[2] as i32 == q[1]
+}
+
+/// The edits a frame hands decor's growth at most (pxl-kernel
+/// scene/decor/drawn.rs): each the columns an overwrite wrote, a box of
+/// leaf cells `[x0, y0, x1, y1)`, X on any lap; past them the kernel unions
+/// the rest into the last.
+pub const EDITS: u32 = 8;
+/// The boxes a frame's growth is asked over: the edits, and a preview's
+/// cut and left-out leaf as they were and as they are; past them the
+/// renderer joins the rest into the last (pxl-render gpu/grown.rs `hold`).
+pub const BOXES: u32 = EDITS + 4;
+/// What `decor_mark_cs` reads first: whether every slot grows, decor having
+/// been off; the squares filled this frame; the boxes; then the boxes, four
+/// words each.
+pub const MARKS_AT: u32 = 4;
+pub const MARKS_WORDS: u32 = MARKS_AT + 4 * BOXES;
+/// What `decor_mark_cs` writes and `decor_cs` is dispatched by: its
+/// workgroups across, up and the slot-kinds listed, a pad, then the list,
+/// a slot and its kind (`<< 16`) each, in no order.
+pub const GROWS_AT: u32 = 4;
+
+/// The words of what `decor_mark_cs` lists.
+pub const GROWS_WORDS: u32 = GROWS_AT + EYE_SLOTS * DECORS.len() as u32;
+
+/// The leaf cells a preview's entry at `zoom` and `at` covers, as a box.
+pub const fn cut_box(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
+    if zoom <= LEAF_CELL {
+        let s = LEAF_CELL - zoom;
+        [at[0] << s, at[1] << s, (at[0] + 1) << s, (at[1] + 1) << s]
+    } else {
+        let s = zoom - LEAF_CELL;
+        [at[0] >> s, at[1] >> s, (at[0] >> s) + 1, (at[1] >> s) + 1]
+    }
+}
+
+/// Whether the box `b` of leaf cells meets square `q` of the window at
+/// `cell` or a square beside it: what decor in the square stands and grows
+/// on reads that far (`stand`'s faces), X round the world.
+pub fn meets(cell: Zoom, q: [i32; 2], b: [i32; 4]) -> bool {
+    let k = SQUARE_SHIFT + LEAF_CELL - cell;
+    let side = 1i32 << k;
+    let (lo, wide) = ([(q[0] << k) - side, (q[1] << k) - side], 3 * side);
+    // The box's first column from the region's, the short way round.
+    let (from, width) = (wrap_index(LEAF_CELL, b[0] - lo[0]), b[2] - b[0]);
+    // Met where it starts in the region or over it, or runs on round the
+    // world into it.
+    let across = width >= 1 << LEAF_CELL || (from < wide && from + width > 0) || from + width > 1 << LEAF_CELL;
+    across && b[1] < lo[1] + wide && b[3] > lo[1]
+}
+
+/// Whether squares `a` and `b` of the window at `cell` are one or beside
+/// each other, X round the world.
+pub fn beside(cell: Zoom, a: [i32; 2], b: [i32; 2]) -> bool {
+    let (dx, dy) = (wrap_index(cell - SQUARE_SHIFT, a[0] - b[0]), a[1] - b[1]);
+    dx.abs() <= 1 && dy.abs() <= 1
+}
+
+/// The zoom a record names where it is drawn at any distance: placed decor,
+/// which no window grows. No window's cells are at it (`FIRST_CELL`).
+pub const PLACED_AT: Zoom = 0;
+const _: () = assert!(crate::window::FIRST_CELL > PLACED_AT);
+
+/// A record's first word: its kind and variant, a byte each, its turn in
+/// quarters, and the window zoom it was grown at, the one it is drawn at
+/// where the rays ask it (`drawn_at`), `PLACED_AT` for placed decor; past
+/// them, once sized, its region (`drawn::REGION_SHIFT`).
+pub const fn record_word(kind: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
+    kind | variant << 8 | turn << 16 | cell << 18
+}
+
+/// A record's kind, variant, turn and zoom (`record_word`).
+pub const fn record_of(w: u32) -> (u32, u32, u32, Zoom) {
+    (w & 0xff, (w >> 8) & 0xff, (w >> 16) & 3, (w >> 18) & ((1 << crate::ZOOM_BITS) - 1))
+}
 
 /// Every variant of every kind, numbered kind by kind in the catalog's
 /// order: a decor's draw group (`first_group`).
@@ -204,6 +314,26 @@ pub mod drawn {
     pub const HIDE: u32 = 8;
     pub const EXTENTS: u32 = 12;
     pub const PARAM_WORDS: u32 = EXTENTS + GROUPS;
+
+    /// What a thing spanning `px` pixels is drawn as: a model at
+    /// `model_px` or more, else a sprite at `sprite_px` or more, else
+    /// nothing. A group's region is `2·group` past its tier where drawn.
+    pub const MODEL: u32 = 0;
+    pub const SPRITE: u32 = 1;
+    pub const GONE: u32 = 2;
+
+    /// The tier of what spans `px` pixels, against the model's and the
+    /// sprite's floors: the one rule decor's count and the CPU's clouds
+    /// both size by.
+    pub fn tier(px: f32, model_px: f32, sprite_px: f32) -> u32 {
+        if px >= model_px {
+            MODEL
+        } else if px >= sprite_px {
+            SPRITE
+        } else {
+            GONE
+        }
+    }
 }
 
 /// Candidate `i` of the `n`-th block meeting `region` (`block_of`); false
@@ -273,31 +403,6 @@ pub fn side_of(decor: &Decor, c: &Candidate) -> i32 {
 /// it does not resolve curves.
 pub const ALIGN_NEIGHBOR_RADIUS: i32 = 3;
 
-/// A candidate's variant and its heading in quarter turns, its seed's draws
-/// in order. Along transport, a plurality vote of the cells `way` says are
-/// one, by their offset from the candidate's, along each axis: a quarter
-/// turn if horizontal wins, else none (a tie or isolated cell has no real
-/// answer), and a half more on a draw, as two-way traffic faces both ways.
-pub fn pose(decor: &Decor, c: &Candidate, mut way: impl FnMut([i32; 2]) -> bool) -> (u32, u32) {
-    let mut draws = SplitMix32::new(c.seed);
-    let variant = variant_of(decor, &mut draws);
-    let turn = match decor.orientation {
-        Orientation::random => draws.next_u32() >> 30,
-        Orientation::along_transport => {
-            let flip = draws.next_u32() >> 31;
-            let (mut horizontal, mut vertical) = (0, 0);
-            let mut d = 1;
-            while d <= ALIGN_NEIGHBOR_RADIUS {
-                horizontal += u32::from(way([-d, 0])) + u32::from(way([d, 0]));
-                vertical += u32::from(way([0, -d])) + u32::from(way([0, d]));
-                d += 1;
-            }
-            u32::from(horizontal > vertical) + 2 * flip
-        }
-    };
-    (variant, turn)
-}
-
 /// Whether `c` stands at `zoom`: no candidate born there or coarser, before
 /// it, claims a cell of its square.
 pub fn stands(decor: &Decor, zoom: Zoom, c: &Candidate) -> bool {
@@ -321,39 +426,22 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
     best.filter(|b| stands(decor, LEAF_ZOOM, b))
 }
 
-/// A block's word where what is placed answered it, over its value, as the
-/// world's one query reads on the GPU (gpu-query shader `World`) and
-/// `Grounds::block` hands it.
-pub const PLACED_BLOCK: u32 = 1 << 16;
-
 /// What growing decor asks of the world, as either side holds it: the
-/// ground's cells, the world's one query by a descent, what is placed
-/// (`Lanes`), and the catalog's rows where it reads them.
+/// world's one query, of the ray down a column and of a block, what is
+/// placed (`Lanes`), and the catalog's rows where it reads them.
 pub trait Grounds: Lanes {
-    /// What a descent hands a node: what its ancestors found.
-    type At: Copy;
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
     /// reads them from a buffer, never a table it copies.
     fn rows(&self) -> &[Decor];
-    /// The ground's cell `g` at `cell`, as a grid reads it: its face's look
-    /// and its top, in blocks of `cell`; false where it has no ground.
-    fn face(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool);
-    /// The node `c` of `zoom` with what its line from the root found: where
-    /// a descent starts.
-    fn start(&mut self, zoom: Zoom, c: [i32; 3]) -> Self::At;
-    /// What is in the block `c` of `zoom` under the node of `from` that `at`
-    /// was handed for, a child a zoom down from it, the world's one query's
-    /// answer: `void`, the ground's value, or `PLACED_BLOCK` over what is
-    /// placed.
-    fn block(&mut self, at: &Self::At, from: Zoom, zoom: Zoom, c: [i32; 3]) -> u32;
-}
-
-/// Zooms over the blocks `[lo, hi]` of `zoom` to the node holding them
-/// all: the bits the corners differ in, on the axis they differ most; more
-/// than `zoom` where no node does, the world having a root a node of zoom 0.
-fn holding(lo: [i32; 3], hi: [i32; 3]) -> u32 {
-    let d = (lo[0] ^ hi[0]) | (lo[1] ^ hi[1]) | (lo[2] ^ hi[2]);
-    32 - (d as u32).leading_zeros()
+    /// The footing down column `g` at `cell` (`footing`), as this side
+    /// casts it: the value of the block it is, as `block` answers one, and
+    /// the block over it; false where nothing fills there or the world
+    /// lacks it.
+    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool);
+    /// What is in the block `c` of `zoom`, the world's one query's answer
+    /// asked of it with nothing handed down: `void`, the ground's value, or
+    /// `PLACED_BLOCK` over what is placed.
+    fn block(&mut self, zoom: Zoom, c: [i32; 3]) -> u32;
 }
 
 /// Decor the ground grows, where it stands: its variant, its heading in
@@ -365,117 +453,164 @@ pub struct Grown {
     pub at: [i32; 3],
 }
 
-/// Where candidate `c` of `decor` stands on the ground's cells at `cell`, as
-/// those cells draw it: on its cell's top, facing as its cells' looks vote
-/// (`pose`); false where its cell has no ground. Whether its footing holds
-/// there is `grows`'.
+/// The footing down column `g` at `cell`: the first block that fills on
+/// the world's one ray straight down the column's middle, at `cell`'s
+/// blocks alone, from the top of the world (`HEIGHT_BITS`) — where a walker
+/// stands (pxl-kernel query/support.rs `highest`), whichever layer holds
+/// it. Its block as `q` answers it, and the block over it, at `cell`;
+/// false where the ray meets none.
+pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
+    let (o, ray, detail) = footing_ray(cell, g);
+    let met = crate::cast::first(q, o, &ray, detail, crate::cast::Until::Fills);
+    (met.stop.block[0], met.stop.node.index(o)[2] + 1, met.ends == crate::cast::Ends::Stop)
+}
+
+/// The footing's ray down column `g` at `cell`: from the top of the world
+/// over the column's middle, straight down, at `cell`'s blocks alone.
+fn footing_ray(cell: Zoom, g: [i32; 2]) -> ([i32; 3], crate::cast::Ray, crate::cast::Detail) {
+    let s = crate::FINEST_ZOOM - cell;
+    let mid = |v: i32| v.wrapping_shl(s).wrapping_add((1 << s) >> 1);
+    let top = ((1i32 << (crate::HEIGHT_BITS - 1)) << FRAC_W) - 1;
+    let o = [mid(g[0]), mid(g[1]), top];
+    let ray = crate::cast::Ray::new([0.0, 0.0, -1.0], (1u32 << crate::HEIGHT_BITS) as f32);
+    (o, ray, crate::cast::Detail { tau: 1.0, range: [cell, cell] })
+}
+
+/// The value a block answer holds, without whether what is placed holds it
+/// (`PLACED_BLOCK`): a look reads the same whichever layer holds it.
+fn value(v: u32) -> u32 {
+    v & (PLACED_BLOCK - 1)
+}
+
+/// Where candidate `c` of `decor` stands at `cell`: on its column's footing
+/// (`footing`), facing as the blocks beside it at the footing's level vote
+/// (`asks`); false where the column has none.
 pub fn stand(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate) -> (Grown, bool) {
+    grown(q, decor, cell, c, false)
+}
+
+/// `stand`, then whether `decor` grows where it stands (`grows`), every block
+/// both ask asked at one place (`asks`): what a GPU grows a candidate by.
+pub fn grown(q: &mut impl Grounds, decor: &Decor, cell: Zoom, c: &Candidate, boxed: bool) -> (Grown, bool) {
     let s = LEAF_CELL - cell;
     let at = [c.cell[0] >> s, c.cell[1] >> s];
-    let (_, top, here) = q.face(cell, at);
+    let (_, top, here) = q.footing(cell, at);
     if !here {
         return (Grown { variant: 0, turn: 0, at: [0; 3] }, false);
     }
-    let (variant, turn) = pose(decor, c, |[dx, dy]| {
-        let (look, _, here) = q.face(cell, [at[0] + dx, at[1] + dy]);
-        here && Ground::transports(look)
-    });
     let g = Grown {
-        variant,
-        turn,
+        variant: 0,
+        turn: 0,
         at: [c.cell[0], c.cell[1], top * (1 << s)],
     };
-    (g, true)
+    asks(q, decor, cell, (true, c.seed), g, boxed)
 }
 
-/// Whether `decor` standing as `g` grows on the ground's cells at `cell`:
-/// every block of its box void and every one under its base ground it grows
-/// on, each asked of the world's one query at `cell` down from the node
-/// holding them all, descended to once; air placed in it or under it no
-/// void; and no placed decor claims its room (`claimed`).
+/// Whether `decor` standing as `g` grows at `cell`: every block of its box
+/// void and every one under its base a look it grows on, whichever layer
+/// holds it, each asked of the world's one query at `cell`; air placed in it
+/// or under it no void; and no placed decor claims its room (`claimed`).
 pub fn grows(q: &mut impl Grounds, decor: &Decor, cell: Zoom, g: &Grown) -> bool {
+    asks(q, decor, cell, (false, 0), *g, true).1
+}
+
+/// Every block growing decor asks of the world, at one place, as a GPU
+/// inlines a call once a place it is called from: where a candidate is
+/// `posed`, by its `seed`, the cells about its footing its pose votes on, then,
+/// where `boxed`, the box of `g` as that pose turned it (`grows`'s rule).
+/// The pose is the candidate's variant and its heading in quarter turns,
+/// its seed's draws in order: along transport, a plurality vote of the
+/// cells a way runs on, by their offset from the candidate's, along each
+/// axis — a quarter turn if horizontal wins, else none (a tie or isolated
+/// cell has no real answer), and a half more on a draw, as two-way traffic
+/// faces both ways — the four at a distance in turn, before, after, under,
+/// over. What stands, and whether it grows there.
+fn asks(q: &mut impl Grounds, decor: &Decor, cell: Zoom, (posed, seed): (bool, u32), mut g: Grown, boxed: bool) -> (Grown, bool) {
     let s = LEAF_CELL - cell;
-    let [w, d, h] = decor.cells(g.variant, g.turn);
-    let (w, d, h) = (w as i32, d as i32, h as i32);
-    let [x0, y0, z] = g.at;
-    let lo = [x0 >> s, y0 >> s, (z - 1) >> s];
-    let hi = [(x0 + w - 1) >> s, (y0 + d - 1) >> s, (z + h - 1) >> s];
-    let k = holding(lo, hi);
-    let held = k <= cell;
-    let start = q.start(if held { cell - k } else { cell }, if held { [lo[0] >> k, lo[1] >> k, lo[2] >> k] } else { lo });
-    // The box's columns, each from the block under its base up: one ask a
-    // block, down from the node holding the box, or from its own root where
-    // none does (`holding`).
-    let mut by = lo[1];
-    while by <= hi[1] {
-        let mut bx = lo[0];
-        while bx <= hi[0] {
-            let mut bz = lo[2];
-            while bz <= hi[2] {
-                let c = [bx, by, bz];
-                let (at, from) = if held { (start, cell - k) } else { (q.start(cell, c), cell) };
-                let v = q.block(&at, from, cell, c);
-                let holds = if bz == lo[2] { v & PLACED_BLOCK == 0 && decor.allows(v) } else { v == sentinel::void as u32 };
-                if !holds {
-                    return false;
-                }
-                bz += 1;
+    let (mut flip, mut voting) = (0, 0);
+    if posed {
+        let mut draws = SplitMix32::new(seed);
+        g.variant = variant_of(decor, &mut draws);
+        match decor.orientation {
+            Orientation::random => g.turn = draws.next_u32() >> 30,
+            Orientation::along_transport => {
+                flip = draws.next_u32() >> 31;
+                voting = 4 * ALIGN_NEIGHBOR_RADIUS;
             }
-            bx += 1;
         }
-        by += 1;
     }
-    !claimed(q, g.at, [w, d, h])
+    let foot = [g.at[0] >> s, g.at[1] >> s, (g.at[2] >> s) - 1];
+    let (mut horizontal, mut vertical) = (0, 0);
+    // The box, laid out once the vote is in: its blocks, from the one under
+    // its base up, a column at a time.
+    let (mut lo, mut n) = ([0; 3], [0; 3]);
+    let mut ask = 0;
+    loop {
+        let voted = ask >= voting;
+        let j = ask - voted as i32 * voting;
+        if voted && j == 0 {
+            // The vote is in: the turn it gives, then the box it turns.
+            if voting > 0 {
+                g.turn = u32::from(horizontal > vertical) + 2 * flip;
+            }
+            if !boxed {
+                break;
+            }
+            let [w, d, h] = decor.cells(g.variant, g.turn);
+            let [x0, y0, z] = g.at;
+            lo = [x0 >> s, y0 >> s, (z - 1) >> s];
+            let hi = [(x0 + w as i32 - 1) >> s, (y0 + d as i32 - 1) >> s, (z + h as i32 - 1) >> s];
+            n = [hi[0] - lo[0] + 1, hi[1] - lo[1] + 1, hi[2] - lo[2] + 1];
+        }
+        if voted && j >= n[0] * n[1] * n[2] {
+            break;
+        }
+        let b = if voted {
+            [lo[0] + j / n[2] % n[0], lo[1] + j / (n[2] * n[0]), lo[2] + j % n[2]]
+        } else {
+            let (d, side) = (ask / 4 + 1, ask % 4);
+            let along = if side % 2 == 0 { -d } else { d };
+            if side < 2 {
+                [foot[0] + along, foot[1], foot[2]]
+            } else {
+                [foot[0], foot[1] + along, foot[2]]
+            }
+        };
+        let v = q.block(cell, b);
+        if voted {
+            let holds = if b[2] == lo[2] { decor.allows(value(v)) } else { v == sentinel::void as u32 };
+            if !holds {
+                return (g, false);
+            }
+        } else if Ground::transports(value(v)) {
+            if ask % 4 < 2 {
+                horizontal += 1;
+            } else {
+                vertical += 1;
+            }
+        }
+        ask += 1;
+    }
+    let [w, d, h] = decor.cells(g.variant, g.turn);
+    (g, !boxed || !claimed(q, g.at, [w as i32, d as i32, h as i32]))
 }
 
 /// How far decor standing at `at` (leaf cells) lies from `origin` (Q3
-/// steps), in units: from its cell's middle at its base, X round the world
-/// as the steps wrap.
-pub fn distance(origin: [i32; 3], at: [i32; 3]) -> f32 {
+/// steps), in units, squared: from its cell's middle at its base, X round
+/// the world as the steps wrap.
+pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
     let half = 1 << (FRAC_W - 1);
     let step = |v: i32, o: i32, mid: i32| (v.wrapping_shl(FRAC_W).wrapping_add(mid).wrapping_sub(o)) as f32 / (1 << FRAC_W) as f32;
     let [dx, dy, dz] = [step(at[0], origin[0], half), step(at[1], origin[1], half), step(at[2], origin[2], 0)];
-    libm::sqrtf(dx * dx + dy * dy + dz * dz)
+    dx * dx + dy * dy + dz * dz
 }
 
-/// Whether decor standing at `at` is drawn at `cell` for an eye at
-/// `origin`: the zoom the rays ask at its distance (`Detail::at`), so each
-/// decor is drawn at one zoom, where the rays draw the ground about it.
-pub fn drawn_at(detail: Detail, origin: [i32; 3], at: [i32; 3], cell: Zoom) -> bool {
-    detail.at(distance(origin, at)) == cell
-}
-
-/// Whether the square of leaf cells `region`, its heights within `[lo, hi]`
-/// (leaf cells), may hold decor drawn at `cell` for an eye at `origin`
-/// (`drawn_at`): some of it nearer than where the rays ask a coarser zoom,
-/// and some farther than where they ask a finer one.
-pub fn meets_band(detail: Detail, origin: [i32; 3], region: [[i32; 2]; 2], [lo, hi]: [i32; 2], cell: Zoom) -> bool {
-    if cell < detail.range[0] || cell > detail.range[1] {
-        return false;
-    }
-    let [min, max] = region;
-    // The nearest and farthest a span of leaf cells `[a, b)` (`[a, b]` up)
-    // lies from the eye on an axis, in units, as the steps wrap.
-    let unit = (1 << FRAC_W) as f32;
-    let span = |a: i32, b: i32, o: i32| {
-        let (a, b) = (a.wrapping_shl(FRAC_W).wrapping_sub(o) as f32 / unit, b.wrapping_shl(FRAC_W).wrapping_sub(o) as f32 / unit);
-        let near = if a > 0.0 {
-            a
-        } else if b < 0.0 {
-            -b
-        } else {
-            0.0
-        };
-        (near, if -a > b { -a } else { b })
-    };
-    let (nx, fx) = span(min[0], max[0], origin[0]);
-    let (ny, fy) = span(min[1], max[1], origin[1]);
-    let (nz, fz) = span(lo, hi, origin[2]);
-    let near = libm::sqrtf(nx * nx + ny * ny + nz * nz) * detail.tau;
-    let far = (libm::sqrtf(fx * fx + fy * fy + fz * fz) + 1.0) * detail.tau;
-    // Where the rays ask `cell`: [split / 2 · 2^(UNIT_ZOOM − cell), twice that).
-    let from = SPLIT / 2.0 * (1u32 << (UNIT_ZOOM - cell)) as f32;
-    (cell == detail.range[0] || near < 2.0 * from) && (cell == detail.range[1] || far >= from)
+/// Whether decor `d2` from the eye, its distance squared (`distance2`), is
+/// drawn at `cell`: the zoom the rays ask at its distance (`Detail::at`),
+/// so each decor is drawn at one zoom, where the rays draw the ground
+/// about it.
+pub fn drawn_at(detail: Detail, d2: f32, cell: Zoom) -> bool {
+    detail.at(d2) == cell
 }
 
 /// Placed decor's tag (`node_seed`).
@@ -538,7 +673,7 @@ pub fn claimed(lanes: &impl Grounds, at: [i32; 3], cells: [i32; 3]) -> bool {
         while n[1] <= hi[1] >> s {
             n[0] = lo[0] >> s;
             while n[0] <= hi[0] >> s {
-                let node = placed::cursor(lanes, PLACED, CLAIM_ZOOM, n);
+                let node = overwrite::cursor(lanes, PLACED, CLAIM_ZOOM, n);
                 if node.holds() && claimed_in(lanes, n, node, lo, hi, at, cells) {
                     return true;
                 }
@@ -551,43 +686,47 @@ pub fn claimed(lanes: &impl Grounds, at: [i32; 3], cells: [i32; 3]) -> bool {
     false
 }
 
+/// Zooms from a claim's first node down to the unit cells a corner names.
+const CLAIM_LEVELS: usize = (UNIT_ZOOM - CLAIM_ZOOM) as usize;
+
 /// `claimed`, over the corners in `[lo, hi]` within the node `n` at
-/// `CLAIM_ZOOM`, holding `node`, each a placed decor's leaf or not, stepped
-/// down from it.
-fn claimed_in(lanes: &impl Grounds, n: [i32; 3], node: placed::Held, lo: [i32; 3], hi: [i32; 3], at: [i32; 3], cells: [i32; 3]) -> bool {
-    let s = UNIT_ZOOM - CLAIM_ZOOM;
-    let first = [lo[0].max(n[0] << s), lo[1].max(n[1] << s), lo[2].max(n[2] << s)];
-    let last = [hi[0].min((n[0] << s) + (1 << s) - 1), hi[1].min((n[1] << s) + (1 << s) - 1), hi[2].min((n[2] << s) + (1 << s) - 1)];
-    let mut u = first;
-    while u[2] <= last[2] {
-        u[1] = first[1];
-        while u[1] <= last[1] {
-            u[0] = first[0];
-            while u[0] <= last[0] {
-                let mut held = node;
-                let mut z = CLAIM_ZOOM;
-                while z < UNIT_ZOOM {
-                    z += 1;
-                    let t = UNIT_ZOOM - z;
-                    held = placed::child(lanes, held, z, [u[0] >> t, u[1] >> t, u[2] >> t]);
-                }
-                if held.holds() && !held.folded() && held.zoom() == UNIT_ZOOM {
-                    let (k, decor) = row_of(lanes.rows(), lanes.data(held.slot()) & 0xffff);
-                    if decor {
-                        let d = &lanes.rows()[k as usize];
-                        let (variant, turn) = placed_pose(d, u);
-                        let [w, e, h] = d.cells(variant, turn);
-                        let (w, e, h) = (w as i32, e as i32, h as i32);
-                        if u[0] < at[0] + cells[0] && at[0] < u[0] + w && u[1] < at[1] + cells[1] && at[1] < u[1] + e && u[2] < at[2] + cells[2] && at[2] < u[2] + h {
-                            return true;
-                        }
-                    }
-                }
-                u[0] += 1;
-            }
-            u[1] += 1;
+/// `CLAIM_ZOOM`, holding `node`: one descent of its branches, each child
+/// stepped once where it is folded and meets `[lo, hi]`, a placed decor's
+/// leaf at a unit cell asked of its box.
+fn claimed_in(lanes: &impl Grounds, n: [i32; 3], node: overwrite::Held, lo: [i32; 3], hi: [i32; 3], at: [i32; 3], cells: [i32; 3]) -> bool {
+    // The nodes gone into, a level each, and the child each is at.
+    let (mut held, mut index, mut next) = ([node; CLAIM_LEVELS + 1], [n; CLAIM_LEVELS + 1], [0u32; CLAIM_LEVELS + 1]);
+    let mut d = 1;
+    while d > 0 {
+        if next[d] == 8 {
+            d -= 1;
+            next[d] += 1;
+            continue;
         }
-        u[2] += 1;
+        let (o, p) = (next[d], index[d - 1]);
+        let c = [2 * p[0] + (o & 1) as i32, 2 * p[1] + (o >> 1 & 1) as i32, 2 * p[2] + (o >> 2 & 1) as i32];
+        let z = CLAIM_ZOOM + d as Zoom;
+        let t = UNIT_ZOOM - z;
+        let meets = c[0] << t <= hi[0] && (c[0] + 1) << t > lo[0] && c[1] << t <= hi[1] && (c[1] + 1) << t > lo[1] && c[2] << t <= hi[2] && (c[2] + 1) << t > lo[2];
+        let h = if meets { overwrite::child(lanes, held[d - 1], z, c) } else { overwrite::Held::NOTHING };
+        if h.holds() && h.folded() && d < CLAIM_LEVELS {
+            (held[d], index[d], next[d + 1]) = (h, c, 0);
+            d += 1;
+            continue;
+        }
+        if d == CLAIM_LEVELS && h.holds() && !h.folded() && h.zoom() == UNIT_ZOOM {
+            let (k, decor) = row_of(lanes.rows(), lanes.data(h.slot()) & 0xffff);
+            if decor {
+                let row = &lanes.rows()[k as usize];
+                let (variant, turn) = placed_pose(row, c);
+                let [w, e, v] = row.cells(variant, turn);
+                let (w, e, v) = (w as i32, e as i32, v as i32);
+                if c[0] < at[0] + cells[0] && at[0] < c[0] + w && c[1] < at[1] + cells[1] && at[1] < c[1] + e && c[2] < at[2] + cells[2] && at[2] < c[2] + v {
+                    return true;
+                }
+            }
+        }
+        next[d] += 1;
     }
     false
 }

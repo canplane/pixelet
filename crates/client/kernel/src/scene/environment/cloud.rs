@@ -9,6 +9,7 @@
 
 use fnv::FnvHashMap;
 
+use pxl_portable::scatter::drawn;
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::look::cloud::{drift, lattice_hash, shown, CUMULUS_KM, WIND};
@@ -27,11 +28,11 @@ use crate::io::load::{load_failed, load_gltf, load_image};
 use crate::kernel;
 use crate::model::asset::register_model;
 use crate::scene::decor::cell::{present_block, Shown};
-use crate::scene::decor::drawn::{decor_sprite_px, sprite_reach};
-use crate::scene::decor::instance::GroupLanes;
+use crate::scene::decor::drawn::{decor_gone_px, decor_sprite_px, sprite_reach};
+use crate::scene::decor::instance::{decor_groups, GroupLanes};
 use crate::scene::frame::Frame;
 use crate::setting::store::settings_store;
-use crate::view::frame::pose::{globe, km_per_u, units_per_px_at};
+use crate::view::frame::pose::{km_per_u, units_per_px_at};
 use crate::view::observation::eye;
 
 const VARIANTS: [Asset; 3] = [Asset::sky_cloud_cumulus_1_glb, Asset::sky_cloud_cumulus_2_glb, Asset::sky_cloud_stratus_glb];
@@ -103,8 +104,8 @@ fn clouds() -> &'static mut Clouds {
 }
 
 /// Each variant's draw group: its mesh, 0 while it loads, its skin and its extent.
-pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<u32>, [f32; 3])> {
-    let models = &kernel().models;
+pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<pxl_render::gpu::renderer::Image>, [f32; 3])> {
+    let models = crate::model::models();
     let skin = load_image(Load::Asset(SKIN));
     clouds().models.iter().zip(VARIANTS).enumerate().map(move |(k, (m, asset))| {
         let mesh = m.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle);
@@ -161,10 +162,9 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     let moved = drift(f64::from(env[ENV_SKY + 1]));
     let base = layer_u();
     let largest = WIDTH[1];
-    // To the horizon over the layer, and no farther than its largest cloud is a sprite's worth.
-    let r = globe().radius_u();
-    let horizon = |h: f64| libm::sqrt(2.0 * r * h + h * h);
-    let reach = (horizon(eye[2].max(0.0)) + horizon(base)).min(REACH_MAX);
+    // As far as the eye observes, a flat layer hiding under no horizon, and no
+    // farther than its largest cloud is a sprite's worth.
+    let reach = crate::view::observation::eye_reach().unwrap_or(0.0).min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
     let span = |k: usize| libm::floor((on_map[k] - reach) / BLOCK) as i64..=libm::floor((on_map[k] + reach) / BLOCK) as i64;
     let near = |key: [i64; 2]| {
@@ -179,7 +179,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     for y in span(1) {
         for x in span(0) {
             let d = near([x, y]).max(1e-3);
-            if d <= reach && largest / units_per_px_at(d) >= decor_sprite_px() {
+            if d <= reach && drawn::tier((largest / units_per_px_at(d)) as f32, decor_gone_px() as f32, decor_sprite_px() as f32) != drawn::GONE {
                 c.wanted.push([x, y]);
             }
         }
@@ -215,13 +215,14 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
         if !frame.sees_box([corner[0] - reach, corner[1] - reach, zlo - reach], [corner[0] + BLOCK + reach, corner[1] + BLOCK + reach, zhi + reach]) {
             continue;
         }
-        // The nearest cloud the view holds, each as the box it stands in.
-        for cloud in clouds_of(key, base) {
-            let at = [corner[0] + cloud.local[0], corner[1] + cloud.local[1], cloud.z];
-            let half = [cloud.width / 2.0, cloud.width / 2.0, cloud.height / 2.0];
+        // The nearest cloud the view holds, each as the box it stands in, no
+        // nearer than the near plane, short of which nothing is drawn: from
+        // inside a box the drift is still a cell's at that distance.
+        for (local, half) in built(b) {
+            let at = [corner[0] + local[0], corner[1] + local[1], local[2]];
             if frame.sees_box(core::array::from_fn(|k| at[k] - half[k]), core::array::from_fn(|k| at[k] + half[k])) {
                 let gap: V3 = core::array::from_fn(|k| ((if k == 0 { nearest(at[0], eye[0]) } else { at[k] }) - eye[k]).abs() - half[k]);
-                c.seen = c.seen.min(v3::len(&gap.map(|g| g.max(0.0))));
+                c.seen = c.seen.min(v3::len(&gap.map(|g| g.max(0.0))).max(crate::param::NEAR));
             }
         }
         let block = Shown {
@@ -243,10 +244,9 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
 struct Cloud {
     variant: usize,
     local: [f64; 2],
-    /// Its middle's height, its width, and its height, in units.
+    /// Its middle's height and its width, in units.
     z: f64,
     width: f64,
-    height: f64,
     spin: f64,
     scale: f64,
 }
@@ -271,9 +271,28 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
             local,
             z: base + 0.5 * height,
             width,
-            height,
             spin: core::f64::consts::TAU * lattice_hash(at, SALT + 5),
             scale,
+        })
+    })
+}
+
+/// The block's clouds as `build` laid them, read off its lanes: each one's
+/// middle about the block's corner, its height over the datum, and its half
+/// extent. The field's hash is asked once a block, where it is built.
+fn built(b: &Block) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
+    // SAFETY: the block's bytes, held until it goes, which is after this turn reads them.
+    let words: &[u32] = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(b.at as usize), b.bytes as usize / 4) };
+    decor_groups(words).zip(VARIANTS).flat_map(move |((first, n), asset)| {
+        let lane = GroupLanes {
+            first: first as usize,
+            count: n as usize,
+        };
+        (0..n as usize).map(move |i| {
+            let at = |k: usize| f64::from(f32::from_bits(words[lane.f32_at(k, i)]));
+            let scale = at(4);
+            let side = widest(asset) * scale / 2.0;
+            ([at(0), at(1), at(2)], [side, side, extent(asset)[2] * scale / 2.0])
         })
     })
 }

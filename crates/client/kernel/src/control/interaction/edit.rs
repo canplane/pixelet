@@ -3,12 +3,13 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the world's query and written to the store.
 
-use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
+use crate::control::interaction::collision::{is_placement_blocked, placement_reads, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::ext::Ext;
 use crate::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
 use crate::layer::object::size::{object_size_of, MARKER_SIZE};
 use crate::layer::object::store::Block;
+use pxl_portable::answer::PLACED_BLOCK;
 use pxl_spec::block::ext::MARKER_TEXT_CHARS;
 use pxl_spec::block::object::{cube_id, decor_num_id, Cube};
 use pxl_spec::block::object::{object_value_is_marker, MARKER};
@@ -23,14 +24,15 @@ use xpute_kit::status::errno::Errno;
 
 use crate::layer::instance::Instance;
 use crate::layer::object::repository;
-use crate::layer::object::store::{apply, Entry, EntryAt, Write, AIR, VOID};
+use crate::layer::object::store::{apply, Entry, Write, AIR, VOID};
 use crate::query::World;
+use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::block::decor::Decor;
 
 /// Whether air is written where `at` is: a carve of the ground, or what was
 /// placed there taken back.
 fn carved(at: &Q3) -> bool {
-    matches!(World::now().block_of(at).value(), Some(Some(pxl_spec::block::Block::Placed(AIR))))
+    World::now().block_of(at).value() == Some(PLACED_BLOCK | AIR)
 }
 
 /// The never-written AIR entry the eraser's preview injects into the drawn
@@ -71,7 +73,7 @@ fn place_value_is_redundant(at: &Q3, size: f64, cube: Cube) -> bool {
     let entry = EntryAt::new(zoom, index_of(zoom, at));
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
     let ground = World::now().previewing(Some(entry), None).block_of(&middle(entry)).exact();
-    matches!(ground, Some(Some(pxl_spec::block::Block::Ground(g, _))) if g == look as u8)
+    ground == Some(look as u32)
 }
 
 /// The middle of the cube `at` names.
@@ -165,7 +167,7 @@ pub fn place_air(at: &Q3, size: f64) {
 /// given back too.
 pub fn remove(at: EntryAt) {
     let world = World::now();
-    let erased: Vec<[i64; 3]> = world
+    let erased: Vec<[i32; 3]> = world
         .grown_over(&cube(at.zoom(), at.at()))
         .into_iter()
         .filter_map(|i| i.grown_in())
@@ -174,7 +176,8 @@ pub fn remove(at: EntryAt) {
     // Only the resident finest leaf can say what fills the cube without it, as
     // `place_value_is_redundant` asks; elsewhere it is emptied as asked.
     let id = match world.previewing(Some(at), None).block_of(&middle(at)).exact() {
-        Some(Some(pxl_spec::block::Block::Ground(..))) | None => AIR,
+        Some(v) if v != VOID && !pxl_portable::answer::placed(v) => AIR,
+        None => AIR,
         Some(_) => VOID,
     };
     submit(Write {
@@ -196,6 +199,11 @@ pub struct Pending {
     pub digging: bool,
     /// The same check as the commit, so preview and placement cannot disagree.
     pub blocked: bool,
+    /// What `blocked` was asked of: the tool, the hovered corner, the
+    /// object's size and the store's revision. Asked again only where one
+    /// moved or a change touched the columns it reads (`placement_reads`,
+    /// `changed::within`), as a step each frame turn sees each change once.
+    asked: Option<(PlacementTool, Q3, f64, u32)>,
 }
 
 static PENDING: Global<Pending> = Global::new();
@@ -223,16 +231,20 @@ pub fn pending_step() -> RenderEdits {
         _ if digging || scattered => units(GROUND.cell()),
         _ => object_size_of(ui.object_tier),
     };
-    let blocked = match (&hovered, active_tool) {
+    let (blocked, asked) = match (&hovered, active_tool) {
         (Some(h), ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker) => {
             let tool = match active_tool {
                 ActiveTool::Object => PlacementTool::Object,
                 ActiveTool::Decor => PlacementTool::Decor(ui.decor_id),
                 _ => PlacementTool::Marker,
             };
-            is_placement_blocked(tool, h, object_size_of(ui.object_tier))
+            let object_size = object_size_of(ui.object_tier);
+            let asked = Some((tool, *h, object_size, world.revision()));
+            let was = *PENDING.get(Pending::default);
+            let same = was.asked == asked && !crate::query::changed::within(placement_reads(tool, h, object_size), &[]);
+            (if same { was.blocked } else { is_placement_blocked(tool, h, object_size) }, asked)
         }
-        _ => false,
+        _ => (false, None),
     };
     // The real object's hide lands a tick or more after the ghost, accepted.
     let hidden = object.filter(|_| active_tool == ActiveTool::Eraser);
@@ -244,6 +256,12 @@ pub fn pending_step() -> RenderEdits {
         carve: hovered.filter(|_| digging).map(|h| carve_entry(&h, size)),
         scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).and_then(|s| s.grown_in()),
     };
-    *PENDING.get(Pending::default) = Pending { object, size, digging, blocked };
+    *PENDING.get(Pending::default) = Pending {
+        object,
+        size,
+        digging,
+        blocked,
+        asked,
+    };
     edits
 }

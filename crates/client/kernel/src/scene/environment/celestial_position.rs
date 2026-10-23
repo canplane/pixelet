@@ -40,20 +40,14 @@ fn local_sidereal(d: f64, lon: f64) -> f64 {
     norm360(gmst + lon)
 }
 
-/// X east, Y north, Z up, at distance 100. Azimuth by Duffett-Smith's
-/// construction.
+/// X east, Y north, Z up, at distance 100: right ascension `ra` and
+/// declination `dec`, in degrees, turned by the sky's one rotation
+/// (`equatorial_to_local`).
 fn local_direction(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> [f64; 3] {
-    let lst = local_sidereal(d, lon);
-    let hour_angle = (lst - ra + 180.0).rem_euclid(360.0) - 180.0;
-    let (ha, dec, lat) = (hour_angle * DEG, dec * DEG, lat * DEG);
-    let alt = libm::asin(libm::sin(dec) * libm::sin(lat) + libm::cos(dec) * libm::cos(lat) * libm::cos(ha));
-    let cos_az = ((libm::sin(dec) - libm::sin(alt) * libm::sin(lat)) / (libm::cos(alt) * libm::cos(lat))).clamp(-1.0, 1.0);
-    let mut az = libm::acos(cos_az);
-    if libm::sin(ha) > 0.0 {
-        az = 2.0 * core::f64::consts::PI - az;
-    }
-    let horizontal = libm::cos(alt) * 100.0;
-    [libm::sin(az) * horizontal, libm::cos(az) * horizontal, libm::sin(alt) * 100.0]
+    let m = equatorial_to_local(d, lat, lon);
+    let ((sa, ca), (sd, cd)) = (libm::sincos(ra * DEG), libm::sincos(dec * DEG));
+    let e = [cd * ca, cd * sa, sd];
+    core::array::from_fn(|r| 100.0 * (m[r][0] * e[0] + m[r][1] * e[1] + m[r][2] * e[2]))
 }
 
 /// Days since J2000.0 at Unix milliseconds `unix_ms`.
@@ -67,8 +61,8 @@ pub fn sun_position(d: f64, lat: f64, lon: f64) -> [f64; 3] {
 }
 
 /// Equatorial (X to the vernal equinox, Z to the pole) to local (X east,
-/// Y north, Z up), as rows: the same sky as `local_direction` as one matrix
-/// for the nine thousand stars.
+/// Y north, Z up), as rows: the sky's one rotation, the sun's, the moon's
+/// and the nine thousand stars'.
 pub fn equatorial_to_local(d: f64, lat: f64, lon: f64) -> [[f64; 3]; 3] {
     let (sl, cl) = libm::sincos(local_sidereal(d, lon) * DEG);
     let (sp, cp) = libm::sincos(lat * DEG);
@@ -80,7 +74,3 @@ pub fn moon_position(d: f64, lat: f64, lon: f64) -> [f64; 3] {
     let (ra, dec) = moon_equatorial(d, obliquity);
     local_direction(ra, dec, lat, lon, d)
 }
-
-#[cfg(test)]
-#[path = "celestial_position.test.rs"]
-mod test;

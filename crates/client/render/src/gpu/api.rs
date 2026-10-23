@@ -15,7 +15,8 @@ pub use xpute_gpu::encode::OBJECT_OPS;
 use xpute_gpu::encode::{self, call, Gpu as Encoder, Id};
 use xpute_gpu::enums::{
     AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction, CullMode, FilterMode, FrontFace, IndexFormat, LoadOp, MipmapFilterMode, PrimitiveTopology,
-    QueryType, SamplerBindingType, StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat, VertexStepMode, FEATURE_NAME, LIMIT_NAME,
+    QueryType, SamplerBindingType, StorageTextureAccess, StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat, VertexStepMode, FEATURE_NAME,
+    LIMIT_NAME,
 };
 use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, STATUS, TEXTURE_USAGE};
 use xpute_guest::abi::handle::handle_slot;
@@ -29,8 +30,8 @@ pub use xpute_gpu::enums::TextureFormat as Format;
 /// Set in a completion word once what it waits for is done.
 pub use xpute_gpu::spec::DONE;
 
+use crate::api_spec::{record, stream};
 use crate::frame::shader::record::VERTEX_ENTRY;
-use crate::gpu::api_spec::{record, stream};
 use crate::gpu::span_spec::GPU_SPAN_NAMES;
 
 pub mod buffer_usage {
@@ -38,16 +39,13 @@ pub mod buffer_usage {
 }
 
 pub mod texture_usage {
-    pub use xpute_gpu::spec::TEXTURE_USAGE::{COPY_DST, COPY_SRC, RENDER_ATTACHMENT, TEXTURE_BINDING};
+    pub use xpute_gpu::spec::TEXTURE_USAGE::{COPY_DST, COPY_SRC, RENDER_ATTACHMENT, STORAGE_BINDING, TEXTURE_BINDING};
 }
 
 /// The objects the renderer may hold at once.
 pub const OBJECTS: usize = 1 << 15;
 
-/// The most entries a group has, a layout's and a bind group's alike: the
-/// screen's lit group (frame/shader/record.rs, and renderer.rs's lit
-/// entries), its 19; a group past it is refused where it is made.
-pub const GROUP_ENTRIES: usize = 19;
+use crate::frame::shader::record::GROUP_ENTRIES;
 
 const SPANS: usize = GPU_SPAN_NAMES.len();
 
@@ -222,7 +220,6 @@ struct Arriving {
     image: u32,
     texture: Id,
     word: Box<u32>,
-    _file: Vec<u8>,
 }
 
 static STATE: Global<Option<State>> = Global::new();
@@ -374,48 +371,10 @@ pub fn gpu_publish() {
     }
 }
 
-/// The width and height a PNG's or a WebP's header gives; none for any other file.
-fn image_size(file: &[u8]) -> Option<(u32, u32)> {
-    let be = |at: usize| Some(u32::from_be_bytes(file.get(at..at + 4)?.try_into().ok()?));
-    let le24 = |at: usize| Some(u32::from_le_bytes([*file.get(at)?, *file.get(at + 1)?, *file.get(at + 2)?, 0]));
-    let le16 = |at: usize| Some(u32::from(u16::from_le_bytes(file.get(at..at + 2)?.try_into().ok()?)));
-    if file.starts_with(b"\x89PNG\r\n\x1a\n") {
-        return Some((be(16)?, be(20)?));
-    }
-    if !(file.starts_with(b"RIFF") && file.get(8..12) == Some(b"WEBP")) {
-        return None;
-    }
-    match file.get(12..16)? {
-        // Lossy: the frame's 14-bit width and height after its start code.
-        b"VP8 " => Some((le16(26)? & 0x3fff, le16(28)? & 0x3fff)),
-        // Lossless: 14 bits each, less one, after the signature byte.
-        b"VP8L" => {
-            let bits = u32::from_le_bytes(file.get(21..25)?.try_into().ok()?);
-            Some(((bits & 0x3fff) + 1, (bits >> 14 & 0x3fff) + 1))
-        }
-        // Extended: the canvas's 24-bit width and height, less one.
-        b"VP8X" => Some((le24(24)? + 1, le24(27)? + 1)),
-        _ => None,
-    }
-}
-
-/// The image file `file`, which the kernel read as `image`, copied into a
-/// texture of its size where the device decodes it; false for a file whose
-/// size no header here gives, as a device that cannot decode it.
-pub fn image_arrive(image: u32, file: Vec<u8>) -> bool {
-    let Some(g) = gpu() else { return false };
-    let Some((width, height)) = image_size(&file) else { return false };
-    let usage = TEXTURE_USAGE::TEXTURE_BINDING | TEXTURE_USAGE::COPY_SRC | TEXTURE_USAGE::COPY_DST | TEXTURE_USAGE::RENDER_ATTACHMENT;
-    let texture = g.texture(width, height, 1, Format::rgba8unorm_srgb, 1, usage);
-    let mut word = Box::new(0);
-    g.copy_image(texture, &file, &mut word, image & !DONE | 1);
-    state().images.push(Arriving { image, texture, word, _file: file });
-    true
-}
-
-/// Whether `image`'s texture is there to be taken (`Gpu::image_texture`).
-pub fn image_landed(image: u32) -> bool {
-    STATE.get(|| None).as_ref().is_some_and(|s| s.images.iter().any(|a| a.image == image && *a.word & DONE != 0))
+/// Whether an image handed to the device has yet to land (`Gpu::image`):
+/// another turn is wanted to take it.
+pub fn images_landing() -> bool {
+    STATE.get(|| None).as_ref().is_some_and(|s| s.images.iter().any(|a| *a.word & DONE == 0))
 }
 
 /// A frame's records are one: past the range they are dropped whole, with
@@ -471,6 +430,7 @@ fn vertex_format(code: u32) -> VertexFormat {
         record::F32X4 => VertexFormat::float32x4,
         record::U32X4 => VertexFormat::uint32x4,
         record::U32X2 => VertexFormat::uint32x2,
+        record::U32 => VertexFormat::uint32,
         _ => xpute_kit::bug!(EINVAL, code),
     }
 }
@@ -496,6 +456,18 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
         record::TEXTURE_ARRAY => texture(TextureSampleType::float, TextureViewDimension::_2d_array),
         record::DEPTH => texture(TextureSampleType::depth, TextureViewDimension::_2d),
         record::TEXTURE_UNFILTERED => texture(TextureSampleType::unfilterable_float, TextureViewDimension::_2d),
+        record::TEXTURE_UINT_ARRAY => texture(TextureSampleType::uint, TextureViewDimension::_2d_array),
+        record::STORAGE_TEXTURE_RW => L::StorageTexture {
+            access: StorageTextureAccess::read_write,
+            format: TextureFormat::r32uint,
+            dimension: TextureViewDimension::_2d_array,
+        },
+        record::TEXTURE_3D => texture(TextureSampleType::float, TextureViewDimension::_3d),
+        record::STORAGE_TEXTURE_3D => L::StorageTexture {
+            access: StorageTextureAccess::write_only,
+            format: TextureFormat::rgba16float,
+            dimension: TextureViewDimension::_3d,
+        },
         _ => L::Sampler(SamplerBindingType::filtering),
     }
 }
@@ -527,7 +499,11 @@ impl Gpu {
         state()
     }
 
+    /// A buffer of `size` bytes, one every device makes and, as storage,
+    /// binds (frame/shader/floor.rs `fits`): a size past that is a bug the
+    /// structure let through, not a device to fall short on.
     pub fn buffer(&self, size: u32, usage: u32) -> Id {
+        xpute_kit::ensure!(crate::frame::shader::floor::fits(u64::from(size), usage & buffer_usage::STORAGE != 0), ENOSPC, size);
         let s = self.s();
         made(s.encoder.buffer(
             &mut s.stream,
@@ -551,6 +527,40 @@ impl Gpu {
                 format,
                 usage,
                 view_formats: &[],
+            },
+        ))
+    }
+
+    /// A volume `size` texels on a side each way: no mips, no layers.
+    pub fn volume(&self, size: [u32; 3], format: Format, usage: u32) -> Id {
+        let s = self.s();
+        made(s.encoder.texture(
+            &mut s.stream,
+            &encode::TextureDescriptor {
+                size,
+                mip_levels: 1,
+                samples: 1,
+                dimension: TextureDimension::_3d,
+                format,
+                usage,
+                view_formats: &[],
+            },
+        ))
+    }
+
+    /// A volume's view, whole (`volume`).
+    pub fn volume_view(&self, texture: Id) -> Id {
+        let s = self.s();
+        made(s.encoder.view(
+            &mut s.stream,
+            texture,
+            &encode::ViewDescriptor {
+                dimension: Some(TextureViewDimension::_3d),
+                base_mip: 0,
+                mips: Some(1),
+                base_layer: 0,
+                layers: Some(1),
+                ..Default::default()
             },
         ))
     }
@@ -765,12 +775,26 @@ impl Gpu {
         call::copy_external_image(&mut self.s().stream, &to, false, false, file, word, ticket);
     }
 
-    /// The texture `image` arrived in, taken: each image is copied in once,
-    /// for the one that takes it. 0 for one not yet there.
-    pub fn image_texture(&self, image: u32) -> Id {
+    /// The texture the image file `file`, named `image` by whoever hands it,
+    /// is copied into, taken once it has landed: each image is copied in
+    /// once, on this device, for the one that takes it. None while it
+    /// lands, the first ask handing it to the device; none for good for a
+    /// file whose size no header gives (pxl-spec `asset::image_size`),
+    /// which the kernel does not hand.
+    /// The file's bytes are its asker's for as long as the image is wanted
+    /// (`renderer::Image`), so the host reads them where they lie.
+    pub fn image(&self, image: u32, file: &'static [u8]) -> Option<Id> {
         let images = &mut self.s().images;
-        let Some(k) = images.iter().position(|a| a.image == image && *a.word & DONE != 0) else { return 0 };
-        images.swap_remove(k).texture
+        if let Some(k) = images.iter().position(|a| a.image == image) {
+            return (*images[k].word & DONE != 0).then(|| images.swap_remove(k).texture);
+        }
+        let (width, height) = pxl_spec::asset::image_size(file)?;
+        let usage = TEXTURE_USAGE::TEXTURE_BINDING | TEXTURE_USAGE::COPY_SRC | TEXTURE_USAGE::COPY_DST | TEXTURE_USAGE::RENDER_ATTACHMENT;
+        let texture = self.texture(width, height, 1, Format::rgba8unorm_srgb, 1, usage);
+        let mut word = Box::new(0);
+        self.copy_image(texture, file, &mut word, image & !DONE | 1);
+        self.s().images.push(Arriving { image, texture, word });
+        None
     }
 
     pub fn encoder(&self) -> Id {
@@ -836,6 +860,12 @@ impl Gpu {
         call::dispatch(&mut self.s().stream, pass, [x, y, z]);
     }
 
+    /// Workgroups as `buffer` holds them from `offset`, across, up and deep:
+    /// a count only the GPU knows.
+    pub fn dispatch_indirect(&self, pass: Id, buffer: Id, offset: u32) {
+        call::dispatch_indirect(&mut self.s().stream, pass, buffer, offset);
+    }
+
     pub fn set_pipeline(&self, pass: Id, pipeline: Id) {
         call::set_pipeline(&mut self.s().stream, pass, pipeline);
     }
@@ -886,12 +916,14 @@ impl Gpu {
     /// where it wrote any and no mapping is still on its way, submitted. One
     /// mapping at most is on its way, so its ticket need not tell them apart.
     /// A mapping that landed is taken in first: asking for the next writes its
-    /// ticket over the word that says so.
-    pub fn submit_frame(&self, encoder: Id, written: u32) {
+    /// ticket over the word that says so. Whether this frame's spans are on
+    /// their way back.
+    pub fn submit_frame(&self, encoder: Id, written: u32) -> bool {
         let s = self.s();
         s.gpu_landed = take_stamps(s);
         let stamps_free = *head(STAMPS_WORD_AT) == 0;
-        if let (Some((set, resolve, mapped)), true) = (s.stamps, stamps_free && written != 0) {
+        let asked = stamps_free && written != 0;
+        if let (Some((set, resolve, mapped)), true) = (s.stamps, asked) {
             let bytes = 2 * SPANS as u32 * 8;
             call::resolve_query_set(&mut s.stream, encoder, set, 0, 2 * SPANS as u32, resolve, 0);
             call::copy_buffer_to_buffer(&mut s.stream, encoder, (resolve, 0), (mapped, 0), bytes);
@@ -906,8 +938,10 @@ impl Gpu {
                 )
             };
             call::map_async(&mut s.stream, mapped, 0, ticks, word, 1);
+            true
         } else {
             s.encoder.submit(&mut s.stream, &[encoder]);
+            false
         }
     }
 

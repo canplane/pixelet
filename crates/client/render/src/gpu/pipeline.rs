@@ -77,7 +77,6 @@ impl Pipelines {
             return b;
         }
         let words = record_of(id);
-        xpute_kit::ensure!(!words.is_empty(), ENOTRECOVERABLE, id);
         let module = self.module(g, words[0]);
         let mut b = Built::default();
         let mut at = HEAD as usize;
@@ -94,7 +93,7 @@ impl Pipelines {
             b.layouts[group] = self.layout(g, &words[at + 1..at + 1 + 3 * n]);
             at += 1 + 3 * n;
         }
-        b.pipeline = g.pipeline(&words, &b.layouts[..groups], module, format);
+        b.pipeline = g.pipeline(words, &b.layouts[..groups], module, format);
         xpute_kit::ensure!(self.built_len < BUILT, ENOSPC, BUILT);
         self.built[self.built_len] = (key, b);
         self.built_len += 1;

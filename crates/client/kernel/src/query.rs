@@ -12,7 +12,6 @@
 //! on what is on screen. A node coarser than asked is not what is drawn
 //! there: it is asked only whether anything under it fills, at any zoom.
 
-mod block;
 pub mod changed;
 mod decor;
 mod limit;
@@ -24,11 +23,8 @@ mod support;
 mod surface;
 mod world;
 
-pub use block::Surface;
-pub use ray::{asked, Detail, Hit, Ray, Struck};
-pub use scatter::ring;
-pub use support::{over, under};
-pub use surface::Surfaces;
+pub use ray::{asked, at_zoom, by_distance, Hit, Ray, Struck};
+pub use support::{over, under, walks};
 pub use world::World;
 
 #[cfg(test)]

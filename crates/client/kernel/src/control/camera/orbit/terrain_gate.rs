@@ -11,19 +11,13 @@ use xpute_guest::global::Global;
 use xpute_kit::math::scalar::wrap;
 
 use crate::control::camera::orbit::orbit_eye_offset;
+use crate::control::camera::state::Intent;
 use crate::param::EYE_CLEARANCE_U;
 use crate::query::{over, World};
 use crate::setting::store::{settings_store, OrbitObstacleMode};
 use crate::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::zoom::{index_of, units};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ViewTriple {
-    pub dist: f64,
-    pub polar: f64,
-    pub azimuth: f64,
-}
 
 /// The target is part of the pose: the eye is `target + offset`, and a gate
 /// that read only the offset could be walked through by panning.
@@ -35,7 +29,7 @@ pub struct ViewPose {
     pub azimuth: f64,
 }
 
-pub fn pose(view: ViewTriple) -> Option<ViewPose> {
+pub fn pose(view: Intent) -> Option<ViewPose> {
     Some(ViewPose {
         target: crate::control::camera::controller::focus_world()?,
         dist: view.dist,
@@ -140,10 +134,11 @@ fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
     (1..=STEP_SAMPLES).all(|i| !in_solid(&between(from, to, i as f64 / STEP_SAMPLES as f64)))
 }
 
-pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
+/// How far toward `to` the orbit gets from `from`, as the controls ask it.
+pub fn allowed_view(to: Intent, from: Intent) -> Intent {
     let (Some(from_pose), Some(to_pose)) = (pose(from), pose(to)) else { return to };
     let reached = allowed_step(&to_pose, &from_pose);
-    ViewTriple {
+    Intent {
         dist: reached.dist,
         polar: reached.polar,
         azimuth: reached.azimuth,
@@ -161,7 +156,7 @@ const CLIMB_PASSES: u32 = 2;
 /// It stands while what it is made of stands: the pose, where its target is
 /// on the world, and the ground its walks read (`walked`).
 pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
-    let Some(at) = pose(ViewTriple { dist, polar, azimuth }) else { return polar };
+    let Some(at) = pose(Intent { dist, polar, azimuth }) else { return polar };
     let climb = Climb {
         at,
         center: world_to_canonical(&at.target),

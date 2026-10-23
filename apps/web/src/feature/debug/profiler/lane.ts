@@ -2,7 +2,7 @@
 
 /**
  * One table of lanes the report, panel and trace all read. A lane's unit is
- * its name's suffix (`_ms`, `_mb`, `_bytes`, `_px`, `_name`, as profiler.json
+ * its name's suffix (`_ms`, `_bytes`, `_px`, `_name`, as profiler.json
  * FRAME says), so a lane the kernel adds needs no word here; only list
  * lanes are spelled out.
  */
@@ -69,7 +69,7 @@ export const GROUPS = Object.keys(FRAME_GROUPS).filter((g) => !g.startsWith("$")
 
 export const n1 = (n: number) => fixed(n ?? 0, 1);
 
-const UNIT = /_(ms|mb|bytes|px)$/;
+const UNIT = /_(ms|bytes|px)$/;
 
 /** A task phase's mean or total: bytes are counted, the rest are ms. */
 export const phaseText = ([k, v]: [string, f64]) => `${k.replace(UNIT, "")} ${k === "bytes" ? round(v) : n1(v)}`;
@@ -89,7 +89,6 @@ const NAME_TABLES: Record<string, readonly string[]> = { worst_effect_name: EFFE
 export function valueText(name: string, v: f64): string {
   if (name.endsWith("_name")) return NAME_TABLES[name]?.[v] ?? "-";
   if (name.endsWith("_ms")) return `${n1(v)}ms`;
-  if (name.endsWith("_mb")) return `${+fixed(v, 1)}MB`;
   if (name.endsWith("_bytes")) return `${+fixed(v / MB, 1)}MB`;
   if (name.endsWith("_px")) return `${fixed(v / 1e6, 1)}Mpx`;
   return Number.isInteger(v) ? String(v) : n1(v);

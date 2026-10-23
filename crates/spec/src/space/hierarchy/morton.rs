@@ -37,7 +37,7 @@ fn axes<const D: usize>(zoom: Zoom) -> impl Iterator<Item = usize> {
 }
 
 /// The key of the node at `zoom` whose index is `at`.
-pub fn key_of<const D: usize>(zoom: Zoom, at: [i64; D]) -> u128 {
+pub fn key_of<const D: usize>(zoom: Zoom, at: [i32; D]) -> u128 {
     let n = bits::<D>(zoom);
     (digits_of(zoom, &at) << (127 - n)) | (1 << (126 - n))
 }
@@ -49,7 +49,7 @@ const fn first_zoom(axis: usize) -> Zoom {
 
 /// `at`'s digits at `zoom`, coarsest first: zooms with the same axes are a
 /// run of each axis's next low bits, interleaved in `axes`' order.
-fn digits_of<const D: usize>(zoom: Zoom, at: &[i64; D]) -> u128 {
+fn digits_of<const D: usize>(zoom: Zoom, at: &[i32; D]) -> u128 {
     let mut key = 0u128;
     let mut z = 1;
     while z <= zoom {
@@ -58,7 +58,7 @@ fn digits_of<const D: usize>(zoom: Zoom, at: &[i64; D]) -> u128 {
         let mut run = 0u128;
         for (p, i) in axes::<D>(z).enumerate() {
             // The axis's digits at zooms `z..next`, finest lowest.
-            let lane = ((at[i] >> (zoom + 1 - next)) as u64) & ((1u64 << len) - 1);
+            let lane = ((at[i] >> (zoom + 1 - next)) as u32 as u64) & ((1u64 << len) - 1);
             run |= u128::from(spread(lane, k)) << (k - 1 - p as u32);
         }
         key = (key << (len * k)) | run;
@@ -94,12 +94,12 @@ fn spread(v: u64, n: u32) -> u64 {
 /// `key_of`'s inverse: the zoom, and each axis's index at it, signed.
 pub fn node_of<const D: usize>(key: u128) -> Node<D> {
     let n = 126 - key.trailing_zeros();
-    let (mut zoom, mut read, mut at) = (0, 0, [0i64; D]);
+    let (mut zoom, mut read, mut at) = (0, 0, [0i32; D]);
     while read < n {
         zoom += 1;
         for i in axes::<D>(zoom) {
             read += 1;
-            at[i] = (at[i] << 1) | ((key >> (127 - read)) & 1) as i64;
+            at[i] = (at[i] << 1) | ((key >> (127 - read)) & 1) as i32;
         }
     }
     (zoom, std::array::from_fn(|i| signed(at[i], digits(i, zoom))))
@@ -144,16 +144,16 @@ pub fn key_of_name<const D: usize>(name: &str) -> Option<u128> {
 
 /// A cube's child at `slot`, its Z as Z's digits there name it: two's
 /// complement, so the first is its sign. X and Y keep the index as given.
-pub fn child_cube(zoom: Zoom, at: [i64; 3], slot: usize) -> [i64; 3] {
+pub fn child_cube(zoom: Zoom, at: [i32; 3], slot: usize) -> [i32; 3] {
     let [x, y, z] = crate::space::hierarchy::tree::child_of(at, slot);
     [x, y, signed(z, digits(2, zoom + 1))]
 }
 
 /// `v`'s low `width` bits as a two's complement number.
-fn signed(v: i64, width: u32) -> i64 {
+fn signed(v: i32, width: u32) -> i32 {
     match width {
         0 => 0,
-        w => (v << (64 - w)) >> (64 - w),
+        w => v.wrapping_shl(32 - w) >> (32 - w),
     }
 }
 

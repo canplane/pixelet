@@ -3,7 +3,7 @@
 **2026-10-14** — a discussion with the user. It decides nothing. It records
 why the drawing came to cast a ray a pixel, why the usual alternatives were
 left, and where the structure points next. The decision it explains is
-[the GPU casts a ray a pixel](../decision/20261014-the-gpu-casts-a-ray-a-pixel.md).
+[the GPU casts a ray a pixel](./20261014-the-gpu-casts-a-ray-a-pixel.md).
 
 ## Two orders of drawing
 
@@ -149,7 +149,7 @@ It does not fit here, for three reasons.
 
 - **Its occlusion depends on the frame before.** The depth it culls against
   is last frame's. The ground decision's determinism clause
-  ([20261012](../decision/20261012-the-ground-is-a-grid-then-overwrites.md))
+  ([20261012](./20261012-the-ground-is-a-grid-then-overwrites.md))
   forbids any result that depends on previous observations.
 - **Voxels are their own hierarchy.** A grid needs no structure built over
   it. Turning voxels into triangles multiplies the faces, and Nanite then

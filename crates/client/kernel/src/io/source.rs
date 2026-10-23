@@ -11,7 +11,7 @@ use pxl_portable::area::{self, Area};
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{is_version, key, sharded};
 use pxl_spec::space::coord::world;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -32,6 +32,31 @@ struct Source {
     top_zoom: Zoom,
     version: [String; BaseLayer::ALL.len()],
     shard: Vec<Shard>,
+    /// The area at `SHARD_ZOOM` (pxl-portable `area::Area`): every cell's
+    /// nine by its key (`area::shard_key`), none beside no served one.
+    nine: Vec<u16>,
+    /// The pyramid's nodes from zoom 0 to `SHARD_ZOOM`, each where its zoom
+    /// and its row and column address it (`node_of`): the finest shard over
+    /// it, one past its index (0 none), and whether a shard is at or under
+    /// it (`UNDER`).
+    nodes: Vec<u32>,
+    /// Each shard's version a kind, as the finest shard over it, itself
+    /// among them, that names one, the last of the finest as declared
+    /// (`version_of`); none where none does.
+    versions: Vec<[Option<u16>; BaseLayer::ALL.len()]>,
+}
+
+/// A node's word's bit: a shard is at or under it.
+const UNDER: u32 = 1 << 16;
+
+/// Where the node `(zoom, at)`, no finer than `SHARD_ZOOM`, lies among
+/// `Source::nodes`: its zoom's first, then a row of its zoom's tiles south
+/// to north (`tile_rows`) and a column round the world. None past the rows.
+fn node_of(zoom: Zoom, at: [i32; 2]) -> Option<usize> {
+    let n = 1i64 << zoom;
+    let row = i64::from(at[1]) + n / 2;
+    let first = ((1i64 << (2 * zoom)) - 1) / 3;
+    (0..n).contains(&row).then(|| (first + row * n + i64::from(at[0]).rem_euclid(n)) as usize)
 }
 
 static DECLARED: Global<Option<Source>> = Global::new();
@@ -69,7 +94,7 @@ pub fn serves(layer: BaseLayer, p: Tile) -> bool {
 /// where the area ends, for what is drawn, walked, edited and said alike.
 pub fn past_at([x, y]: [f64; 2]) -> bool {
     let leaf = GROUND.cell_of(LEAF_ZOOM, &world::point(x, y, 0.0)).tile().at;
-    area::past(&Declared, leaf.map(|v| v as i32))
+    area::past(&Declared, leaf)
 }
 
 /// The service area as pxl-portable's rules read it: the declared source's
@@ -80,22 +105,15 @@ impl Area for Declared {
     fn ends(&self) -> bool {
         declared().is_some()
     }
-    fn shards(&self) -> u32 {
-        declared().map_or(0, |s| s.shard.len() as u32)
-    }
-    fn shard(&self, i: u32) -> (Zoom, [i32; 2]) {
-        let t = declared().or_bug(Errno::ENOTRECOVERABLE).shard[i as usize].tile;
-        (t.zoom, t.at.map(|v| v as i32))
+    fn nine(&self, key: u32) -> u32 {
+        declared().map_or(0, |s| u32::from(s.nine[key as usize]))
     }
 }
 
-/// Each served shard's tile, as a GPU's area reads it.
-pub fn served(each: &mut dyn FnMut(Zoom, [i32; 2])) {
-    if let Some(s) = declared() {
-        for k in &s.shard {
-            each(k.tile.zoom, k.tile.at.map(|v| v as i32));
-        }
-    }
+/// The area's cells' nines by key, as a GPU's area reads them (`Area`);
+/// none before a source is declared.
+pub fn nines() -> &'static [u16] {
+    declared().map_or(&[], |s| &s.nine)
 }
 
 /// The kind's own version, over every shard's: an object no shard holds
@@ -111,19 +129,26 @@ pub fn version(layer: BaseLayer, p: Tile) -> &'static str {
 }
 
 impl Source {
-    fn covers(&self, p: Tile) -> bool {
-        self.shard.iter().any(|k| over(k.tile, p) || over(p, k.tile))
+    /// `p`'s node among `nodes`: itself, or past `SHARD_ZOOM` the one over
+    /// it there, which every shard over it is over too (no shard is finer).
+    fn node_over(&self, p: Tile) -> Option<u32> {
+        let z = p.zoom.min(SHARD_ZOOM);
+        node_of(z, Tile::over(z, p.first_leaf()).at).map(|i| self.nodes[i])
     }
 
-    /// The finest key over `p` that names one for `layer`, else the source's.
+    /// A shard over `p`, or at or under it: one read.
+    fn covers(&self, p: Tile) -> bool {
+        self.node_over(p).is_some_and(|w| w & 0xffff != 0 || p.zoom <= SHARD_ZOOM && w & UNDER != 0)
+    }
+
+    /// The finest key over `p` that names one for `layer`, else the source's:
+    /// the finest shard over it, then its version's (`versions`).
     fn version_of(&self, layer: BaseLayer, p: Tile) -> &str {
-        let own = self
-            .shard
-            .iter()
-            .filter(|k| sharded(layer) && over(k.tile, p))
-            .filter_map(|k| Some((k.tile.zoom, k.version[layer as usize].as_deref()?)))
-            .max_by_key(|&(zoom, _)| zoom);
-        own.map_or(&self.version[layer as usize], |(_, v)| v)
+        let finest = self.node_over(p).map_or(0, |w| w & 0xffff);
+        let own = (sharded(layer) && finest != 0).then(|| self.versions[finest as usize - 1][layer as usize]).flatten();
+        own.map_or(&self.version[layer as usize], |k| {
+            self.shard[usize::from(k)].version[layer as usize].as_deref().or_bug(Errno::ENOTRECOVERABLE)
+        })
     }
 }
 
@@ -158,10 +183,86 @@ fn parse(text: &str) -> Option<Source> {
     if version.iter().any(Option::is_none) {
         return None;
     }
+    // Every cell a shard covers at `SHARD_ZOOM`, a key no finer (`key`),
+    // served; then every cell it and each beside it, its nine laid once
+    // where its key addresses it (`area::nine`). A row off the world has no
+    // key: served where any covered cell is off it, as one key for all.
+    let cells = area::SHARD_CELLS as usize;
+    let (mut served, mut off, mut covered) = (vec![false; cells], false, Vec::new());
+    for k in &shard {
+        let d = SHARD_ZOOM - k.tile.zoom;
+        let [x, y] = k.tile.at.map(|v| v << d);
+        for j in 0..1 << d {
+            for i in 0..1 << d {
+                match area::shard_key([x + i, y + j]) {
+                    area::NO_KEY => off = true,
+                    key => served[key as usize] = true,
+                }
+                covered.push([x + i, y + j]);
+            }
+        }
+    }
+    let serves = |c: [i32; 2]| match area::shard_key(c) {
+        area::NO_KEY => off,
+        key => served[key as usize],
+    };
+    let mut nine = vec![0u16; cells];
+    for &[x, y] in &covered {
+        for k in 0..9 {
+            let n = [pxl_portable::wrap_index(SHARD_ZOOM, x + k % 3 - 1), y + k / 3 - 1];
+            let key = area::shard_key(n);
+            if key != area::NO_KEY {
+                nine[key as usize] = area::nine(serves, n) as u16;
+            }
+        }
+    }
+    // The pyramid's nodes to `SHARD_ZOOM`: a shard is at or under its own
+    // node and every node over it, and the finest shard over each node at
+    // or under its own, the last of the finest as declared.
+    let mut nodes = vec![0u32; ((1usize << (2 * (SHARD_ZOOM + 1))) - 1) / 3];
+    for (n, k) in shard.iter().enumerate() {
+        let (zk, at) = (k.tile.zoom, k.tile.at);
+        for z in 0..=zk {
+            if let Some(i) = node_of(z, at.map(|v| v >> (zk - z))) {
+                nodes[i] |= UNDER;
+            }
+        }
+        for z in zk..=SHARD_ZOOM {
+            let d = z - zk;
+            for j in 0..1 << d {
+                for i in 0..1 << d {
+                    let Some(at) = node_of(z, [(at[0] << d) + i, (at[1] << d) + j]) else { continue };
+                    let was = nodes[at] & 0xffff;
+                    if was == 0 || shard[was as usize - 1].tile.zoom <= zk {
+                        nodes[at] = nodes[at] & UNDER | (n as u32 + 1);
+                    }
+                }
+            }
+        }
+    }
+    // Each shard's version a kind: the finest shard over it that names one,
+    // the last of the finest as declared, as `max_by_key` keeps the last of
+    // equals.
+    let versions = (0..shard.len())
+        .map(|i| {
+            core::array::from_fn(|l| {
+                let mut best: Option<usize> = None;
+                for (j, k) in shard.iter().enumerate() {
+                    if over(k.tile, shard[i].tile) && k.version[l].is_some() && best.is_none_or(|b| shard[b].tile.zoom <= k.tile.zoom) {
+                        best = Some(j);
+                    }
+                }
+                best.map(|b| b as u16)
+            })
+        })
+        .collect();
     Some(Source {
         top_zoom,
         version: version.map(Option::unwrap_or_default),
         shard,
+        nine,
+        nodes,
+        versions,
     })
 }
 

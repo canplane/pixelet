@@ -16,7 +16,7 @@ use crate::layer::object::store::Entry;
 /// `corner` gives it (pxl-portable `placed_pose`), so the hover ghost
 /// predicts exactly what a placement gets.
 pub fn user_decor_pick(corner: &Q3, decor: &Decor) -> (u32, u32) {
-    placed_pose(decor.row, index_of(UNIT_ZOOM, corner).map(|v| v as i32))
+    placed_pose(decor.row, index_of(UNIT_ZOOM, corner))
 }
 
 /// A placed decor as one instance, its box's min corner at its entry's; none

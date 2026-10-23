@@ -23,24 +23,27 @@ const _: () = assert!(CENSUS_LEN == DRAW_PIPELINES.len(), "a census tag for ever
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GpuSample {
     /// Lags a frame or two: the read that landed with this frame, where
-    /// `read` is 1; where it is 0, nothing was measured with this frame. The
-    /// frame's GPU time is its spans' sum (pxl-render renderer.rs `gpu_ms`).
+    /// `read` is 1, its spans and `px` the world's pixels of the frame it
+    /// timed, what the spans were measured over; where it is 0, nothing was
+    /// measured with this frame and both are 0. The frame's GPU time is its
+    /// spans' sum (pxl-render renderer.rs `gpu_ms`).
     pub read: f64,
     pub spans: [f64; GPU_SPANS],
+    pub px: f64,
     /// Every draw by its pipeline: the frame's draws and triangles are its sums.
     pub census: DrawCensus,
-    /// The world surface's pixels.
-    pub world_px: f64,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DeviceSample {
-    /// The renderer's block table: its blocks and their bytes in MB.
+    /// The renderer's block table, its blocks and their bytes, and its depth
+    /// targets' and texture layers' bytes: each as counted (pxl-render
+    /// gpu/renderer.rs `FrameStat`).
     pub blocks: f64,
-    pub blocks_mb: f64,
-    pub depth_mb: f64,
-    pub layers_mb: f64,
+    pub blocks_bytes: f64,
+    pub depth_bytes: f64,
+    pub layers_bytes: f64,
     /// The GPU objects the renderer holds, by the op that made them, as its
     /// encoder counts them (xpute-gpu encode `Gpu::objects`): op k + 1 in
     /// slot k, as no op is 0.
@@ -92,7 +95,11 @@ pub struct FrameSample {
     /// The host's interval from this frame to the next, which the turns in
     /// it filled: not the world's step, which stops at MAX_STEP_S.
     pub interval_ms: f64,
-    pub display_ms: f64,
+    /// The display's refresh, and the interval the host paced this frame at,
+    /// a whole number of refreshes, as the host granted them (xpute host
+    /// sched/quantum.ts `Grant`).
+    pub refresh_ms: f64,
+    pub paced_ms: f64,
     /// 1 where the host settled the interval, not interactive, as it says
     /// with the frame that closes it: written once, as the interval lands.
     pub settled: f64,
@@ -134,15 +141,15 @@ pub struct WorstFrame {
 }
 
 words!(FrameSample, FRAME::WORDS,
-    t => FRAME::t, interval_ms => FRAME::interval_ms, display_ms => FRAME::display_ms, settled => FRAME::settled,
+    t => FRAME::t, interval_ms => FRAME::interval_ms, refresh_ms => FRAME::refresh_ms, paced_ms => FRAME::paced_ms, settled => FRAME::settled,
     turns => FRAME::turns, busy_ms => FRAME::busy_ms, budget_ms => FRAME::budget_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     worst_effect_ms => FRAME::worst_effect_ms, worst_effect_name => FRAME::worst_effect_name,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
-    gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans,
-    gpu.census => FRAME::census, gpu.world_px => FRAME::world_px,
-    device.blocks => FRAME::blocks, device.blocks_mb => FRAME::blocks_mb,
-    device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb, device.objects => FRAME::gpu_objects,
+    gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.px => FRAME::gpu_px,
+    gpu.census => FRAME::census,
+    device.blocks => FRAME::blocks, device.blocks_bytes => FRAME::blocks_bytes,
+    device.depth_bytes => FRAME::depth_bytes, device.layers_bytes => FRAME::layers_bytes, device.objects => FRAME::gpu_objects,
     tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
     heap.used_bytes => FRAME::heap_used_bytes, heap.live_bytes => FRAME::heap_live_bytes, heap.run_bytes => FRAME::heap_run_bytes,
     heap.slot_bytes => FRAME::heap_slot_bytes, heap.range_bytes => FRAME::heap_range_bytes,
@@ -163,12 +170,13 @@ const _: () = assert!(
     "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
 );
 
-const MISSED_INTERVALS: f64 = 1.5;
-
-/// A frame that dropped a vsync while moving. Still frames take a larger
-/// budget on purpose, and a repeated image is no visible stutter.
+/// A frame that dropped a vsync while moving: its interval ran past the
+/// paced one by half a refresh or more, so the next frame landed a refresh
+/// late at least — the host's own test (xpute host sched/quantum.ts
+/// `observe`). Still frames take a larger budget on purpose, and a repeated
+/// image is no visible stutter.
 pub fn missed(f: &FrameSample) -> bool {
-    f.settled == 0.0 && f.interval_ms > f.display_ms * MISSED_INTERVALS
+    f.settled == 0.0 && f.interval_ms > f.paced_ms + f.refresh_ms / 2.0
 }
 
 /// Past even the hard ceiling: one step too big for the forward-progress waiver.

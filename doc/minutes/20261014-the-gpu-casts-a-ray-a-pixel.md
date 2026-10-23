@@ -2,6 +2,16 @@
 
 **2026-10-14** — decided in the conversation.
 
+**Status (2026-10-23): holds, and is no longer an experiment.** A ray a
+pixel of the render resolution, its start its cell's beam
+([a cell casts a beam](./20261022-a-cell-casts-a-beam.md)). The render
+resolution is the display's times a scale the load sets: once a frame, the
+measured cast against the paced frame's budget moves the scale by the square
+root of their ratio, between half and whole, and holds while the cast is
+within a tenth of the budget (pxl-kernel view/frame/resolution.rs); the frame
+is upscaled within itself, never from the frames before (the determinism
+clause below). The `rays` setting below is gone.
+
 What is drawn is what the eye's rays reach
 ([the ground is a grid](./20261012-the-ground-is-a-grid-then-overwrites.md)),
 and a ray reaches it by asking the world whether a node is empty

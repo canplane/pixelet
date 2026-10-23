@@ -4,15 +4,16 @@ pub mod absent;
 pub mod bake;
 pub mod leaf;
 pub mod pipeline;
+pub mod pool;
 pub mod repository;
 pub mod source;
 
 use pxl_portable::ways::SPANS;
+use pxl_portable::window::{RUNS_SQUARE, SQUARE};
 use pxl_spec::bake::fold::fold_terrain;
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::block::window::{RUNS_SQUARE, SQUARE};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
@@ -54,5 +55,11 @@ impl crate::pyramid::Base for TerrainTile {
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy
+    }
+
+    /// Refused where the set's ways' trees would not fit the client's pool
+    /// wherever the eye is (`pool::fits`).
+    fn fits_set(set: &crate::pyramid::Staged<'_>, workers: usize) -> Result<(), String> {
+        pool::fits(set, workers)
     }
 }

@@ -26,34 +26,25 @@ pub mod shell;
 pub mod turn;
 pub mod view;
 
-use crate::billboard::field::Billboards;
-use crate::model::registry::Models;
 use pxl_render::frame::draw::DrawList;
 
-use crate::layer::object::store::Store;
 use crate::scene::Scene;
 use xpute_guest::global::Global;
 
 pub struct Kernel {
     /// The memory map is laid; nothing of the world is made before it.
     pub laid_out: bool,
-    pub objects: Store,
     pub scene: Scene,
     /// What the renderer is handed: every layer lists into it.
     pub draw: DrawList,
-    pub models: Models,
-    pub billboards: Billboards,
 }
 
 impl Kernel {
     fn new() -> Kernel {
         Kernel {
             laid_out: false,
-            objects: Store::default(),
             scene: Scene::default(),
             draw: DrawList::default(),
-            models: Models::default(),
-            billboards: Billboards::default(),
         }
     }
 }

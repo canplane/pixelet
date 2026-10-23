@@ -9,7 +9,7 @@ use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
 use xpute_kit::wire::xtp::PacketWriter;
 
-pub use crate::abi::cmd::Tracking;
+use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, Message, OrientationState, Snapshot, SourceVersion};
 use crate::control::camera::controller::{dist, focus, Motion};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};

@@ -6,6 +6,8 @@
 //! pack ships nothing for takes none and reads as the box's color.
 //! Without the mip chain the far ground crawls as the camera moves.
 
+use crate::frame::shader::words::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
+use crate::gpu::renderer::Image;
 use pxl_spec::asset::ingested::{CubeFace, PACK};
 use pxl_spec::asset::{shipped_texture_tile, TileOrigin};
 
@@ -66,12 +68,8 @@ impl Mips {
     }
 }
 
-/// Ten bits, past any array WebGPU gives (maxTextureArrayLayers is 256).
-const NO_SLOT: u32 = 0x3ff;
-const SLOT_BITS: u32 = 10;
-
 const fn slot_word(top: u32, side: u32, bottom: u32) -> u32 {
-    top | (side << SLOT_BITS) | (bottom << (2 * SLOT_BITS))
+    top << (IMAGE_TOP * SLOT_BITS) | side << (IMAGE_SIDE * SLOT_BITS) | bottom << (IMAGE_BOTTOM * SLOT_BITS)
 }
 
 const NO_SLOTS: u32 = slot_word(NO_SLOT, NO_SLOT, NO_SLOT);
@@ -93,7 +91,7 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
             // A block wears what the pack ships for it: a side or a bottom of its
             // own where it has one, its top's image on every face where it has
             // not, as a cube_all. The dirt under a face is its own block, the
-            // stratum under it (`pxl-spec block/sample.rs` `strata`), never a side.
+            // stratum under it (pxl-portable ground.rs `Cell::block`), never a side.
             let top = shipped_texture_tile(cube, CubeFace::Top);
             let side = shipped_texture_tile(cube, CubeFace::Side).or(top);
             let bottom = shipped_texture_tile(cube, CubeFace::Bottom).or(top);
@@ -145,13 +143,12 @@ impl Layers {
     }
 
     /// Whether the pack came this frame.
-    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<u32>) -> bool {
+    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<Image>) -> bool {
         if self.loaded {
             return false;
         }
-        let Some(image) = pack() else { return false };
+        let Some(texture) = pack().and_then(|(image, file)| g.image(image, file)) else { return false };
         let (tiles, table) = plan();
-        let texture = g.image_texture(image);
         let encoder = g.encoder();
         for (slot, tile) in tiles.iter().enumerate() {
             g.copy_texture(encoder, texture, tile.x, tile.y, self.tex, 0, 0, slot as u32, LAYER_TEX_SZ, LAYER_TEX_SZ);

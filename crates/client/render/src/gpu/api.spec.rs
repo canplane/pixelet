@@ -31,7 +31,7 @@ pub mod surface_role {
 /// word, then each span's begin and end ticks (gpu/api.rs lays them out and
 /// holds this number to it).
 pub mod stream {
-    pub const HEAD: u32 = 81;
+    pub const HEAD: u32 = 77;
     /// The range's size: the stream, what one turn may send the device, then at
     /// its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an
     /// empty one of. A product number, said rather than derived: a turn's uploads
@@ -53,7 +53,12 @@ pub mod stream {
 /// its shader the pipeline enters, a vertex step and format, and a binding's
 /// kind (its stages are xpute's SHADER_STAGE) — TEXTURE_UNFILTERED a texture in a
 /// format no sampler
-/// filters (RGBA32F), read by textureLoad alone.
+/// filters (RGBA32F), read by textureLoad alone; TEXTURE_UINT_ARRAY a u32
+/// texture's layers, read by textureLoad; STORAGE_TEXTURE_RW an r32uint
+/// texture's layers read and written in place, the one format family WebGPU
+/// lets a shader do both to; TEXTURE_3D a filtered volume (the air's,
+/// gpu/atmosphere.rs); STORAGE_TEXTURE_3D an rgba16float volume a compute
+/// pass writes.
 pub mod record {
     pub const HEAD: u32 = 10;
     pub const TRIANGLES: u32 = 0;
@@ -72,6 +77,7 @@ pub mod record {
     pub const VS_DEPTH: u32 = 1;
     pub const PER_VERTEX: u32 = 0;
     pub const PER_INSTANCE: u32 = 1;
+    pub const U32: u32 = 5;
     pub const U32X2: u32 = 6;
     pub const F32X2: u32 = 1;
     pub const F32X3: u32 = 2;
@@ -86,6 +92,10 @@ pub mod record {
     pub const SAMPLER: u32 = 6;
     pub const TEXTURE_UNFILTERED: u32 = 8;
     pub const STORAGE_RW: u32 = 9;
+    pub const TEXTURE_UINT_ARRAY: u32 = 10;
+    pub const STORAGE_TEXTURE_RW: u32 = 11;
+    pub const TEXTURE_3D: u32 = 12;
+    pub const STORAGE_TEXTURE_3D: u32 = 13;
     pub const KEYS: &[&str] = &[
         "HEAD",
         "TRIANGLES",
@@ -104,6 +114,7 @@ pub mod record {
         "VS_DEPTH",
         "PER_VERTEX",
         "PER_INSTANCE",
+        "U32",
         "U32X2",
         "F32X2",
         "F32X3",
@@ -118,5 +129,9 @@ pub mod record {
         "SAMPLER",
         "TEXTURE_UNFILTERED",
         "STORAGE_RW",
+        "TEXTURE_UINT_ARRAY",
+        "STORAGE_TEXTURE_RW",
+        "TEXTURE_3D",
+        "STORAGE_TEXTURE_3D",
     ];
 }

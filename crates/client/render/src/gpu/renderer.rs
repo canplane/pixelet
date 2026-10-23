@@ -1,8 +1,7 @@
 // pxl-render/gpu/renderer.rs
 
-//! Executes the scheduler's draw lists on the device, in the kernel's own turn.
-//! Depth is reversed f32 throughout, near 1 and far 0: float precision and
-//! perspective depth cancel, so far coplanar faces stop fighting.
+//! Executes the scheduler's draw lists on the device, in the kernel's own turn,
+//! in the device's depth (`mat4::perspective`).
 
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -11,27 +10,27 @@ use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
-use xpute_kit::math::scalar::round;
 
+use crate::api_spec::surface_role;
 use crate::frame::draw::{
     census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
-    PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
+    PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
 };
-use crate::frame::screen_cells::SCREEN_CELLS_MAX;
-use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM, UNIFORM_DYNAMIC};
+use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS, PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_FACE, SHADER_HEIGHTS, SHADER_START, SHADER_WAYS,
+    FRAME_AT, PIPELINES, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_ARGS, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS, SHADER_JOINED,
+    SHADER_MISS, SHADER_SAMPLE, SHADER_WAYS, SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
+use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{
     buffer_entry, buffer_range_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, sampler_entry, texture_usage, view_entry, word_bytes,
     write_buffer_bytes, Device, Entry, Format, Gpu, Load, Stamp, DONE,
 };
-use crate::gpu::api_spec::surface_role;
 use crate::gpu::atmosphere::{Atmosphere, AIR_ENTRIES};
 use crate::gpu::clouds::CloudPass;
-use crate::gpu::grown::{DecorFrame, Drawn, Grown};
+use crate::gpu::grown::{DecorFrame, Drawn, Grown, Grows};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::{Layers, Mips};
 use crate::gpu::pass::badges::BadgePass;
@@ -45,56 +44,53 @@ use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
-use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
+use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_STARS, ENV_SUN_LIGHT, LIGHT_COLOR};
 use crate::mesh::paint::ground::look_words;
+use pxl_portable::beam;
+use pxl_portable::eye;
+use pxl_portable::observed;
+use pxl_portable::ray;
 use pxl_portable::scatter::GROUPS;
-use pxl_spec::block::window::{BACK_WORDS, ELE_AT, FRESH_WORDS, HANDED, HEIGHTS_AT, LEVELS, LINES_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
-use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
+use pxl_portable::ways;
+use pxl_portable::window::{self, CellsBack, FreshSquare, BACK_WORDS, COLUMNS_AT, ELE_AT, HANDED, HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
+use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
+use pxl_spec::space::coord::world;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-
-/// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
-const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
 
 pub(crate) const VIEW_PROJ: usize = FRAME_AT[0];
 const CAMERA_POS: usize = FRAME_AT[1];
 const EDGE_STRENGTH: usize = FRAME_AT[2];
-const ENV: usize = FRAME_AT[3];
+const SUN_DIR: usize = FRAME_AT[3];
 const LOW_SPEC: usize = FRAME_AT[4];
-const EDGE_WIDTH: usize = FRAME_AT[5];
-const RIM_INTENSITY: usize = FRAME_AT[6];
-const VIEWPORT: usize = FRAME_AT[7];
-const VIGNETTE: usize = FRAME_AT[8];
-const AO_STRENGTH: usize = FRAME_AT[9];
-const SCREEN_AO: usize = FRAME_AT[10];
-const OTHER: usize = FRAME_AT[11];
-const PLANET: usize = FRAME_AT[12];
-const GLOBE: usize = FRAME_AT[13];
-const UP: usize = FRAME_AT[14];
-const CELL: usize = FRAME_AT[15];
+const SUN_COLOR: usize = FRAME_AT[5];
+const EDGE_WIDTH: usize = FRAME_AT[6];
+const OTHER_DIR: usize = FRAME_AT[7];
+const RIM_INTENSITY: usize = FRAME_AT[8];
+const OTHER_COLOR: usize = FRAME_AT[9];
+const VIGNETTE: usize = FRAME_AT[10];
+const VIEWPORT: usize = FRAME_AT[11];
+const SCREEN_AO: usize = FRAME_AT[12];
+const MAP: usize = FRAME_AT[13];
+const CELL: usize = FRAME_AT[14];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
-pub(crate) const SKY_FLOATS: usize = 16;
 pub(crate) const SKY_POLE: usize = 12;
 pub(crate) const SKY_MAPPED: usize = 15;
 const BOX_VERTICES: u32 = 36;
-const DRAWS_INITIAL: u32 = 256 * UNIFORM_FLOATS as u32;
-const MB: f64 = 1_048_576.0;
-/// The Moon's near side as download_moon cuts it; sky.wgsl reads its half.
-const MOON_TEX_SZ: u32 = 512;
+const DRAWS_INITIAL: u32 = 256 * DRAW_FLOATS as u32;
 
 const _: () = assert!(GPU_SPAN_NAMES.len() <= 32, "a span a bit of the mask the host is told");
 const SPAN_AIR: usize = GpuSpanName::air as usize;
 const SPAN_PREPASS: usize = GpuSpanName::prepass as usize;
 const SPAN_AO: usize = GpuSpanName::ao as usize;
 const SPAN_WORLD: usize = GpuSpanName::world as usize;
-const SPAN_OVERLAY: usize = GpuSpanName::overlay as usize;
 const SPAN_BADGES: usize = GpuSpanName::badges as usize;
 const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
 const SPAN_CASES: usize = GpuSpanName::cases as usize;
 const SPAN_FILL: usize = GpuSpanName::fill as usize;
 const SPAN_CAST: usize = GpuSpanName::cast as usize;
-const SPAN_FACE: usize = GpuSpanName::face as usize;
+const SPAN_GROW: usize = GpuSpanName::grow as usize;
 
 type Frame = [f32; FRAME_FLOATS];
 
@@ -102,28 +98,26 @@ pub struct FrameInput<'a> {
     pub lists: Lists<'a>,
     pub environment: &'a [f32],
     /// 0 while it loads.
-    pub decor: &'a [(u32, Option<u32>, Extent)],
-    pub skins: &'a [(u32, u32)],
-    pub cases: &'a [(u32, u32, u32)],
+    pub decor: &'a [(u32, Option<Image>, Extent)],
+    pub skins: &'a [(u32, Image)],
+    pub cases: &'a [(u32, u32, Image)],
     /// The texture pack's image; none while it loads.
-    pub pack: fn() -> Option<u32>,
-    pub moon: fn() -> Option<u32>,
-    pub earth: fn() -> Option<u32>,
+    pub pack: fn() -> Option<Image>,
+    pub moon: fn() -> Option<Image>,
+    pub earth: fn() -> Option<Image>,
     pub earth_tiles: EarthTiles<'a>,
     /// The terrain's held tiles, whose cells the GPU draws whether or not
     /// an eye casts.
     pub ground: GroundSquares<'a>,
-    /// The eye's rays cast on the GPU into the lane the screen's cells draw;
-    /// none without an eye, and the lane holds no cells.
+    /// The eye's rays cast on the GPU into the world surface's rays the
+    /// screen pass draws, a drawn pixel each; none without an eye, and none
+    /// drawn.
     pub cast: Option<Cast<'a>>,
     pub billboards: &'a mut Sheet,
     pub text: TextOf,
     /// Whether the surfaces take a frame now without blocking; one admitted
     /// is drawn. Asked only once nothing else stops the frame.
     pub admit: fn() -> bool,
-    /// Whether its GPU spans are timed and read back (GPU_SPAN_NAMES): only
-    /// for a reader of them, as their read's landing wakes a turn.
-    pub timed: bool,
     /// Whether its draws are counted (`FrameStat::census`): the profiler's
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
@@ -131,7 +125,7 @@ pub struct FrameInput<'a> {
 
 /// The buffers squares' cells come back through: what a frame hands, a
 /// mapping still out a frame more (pxl-portable `window::HANDED`).
-const READS: usize = 2 * HANDED as usize;
+const READS: usize = window::READS as usize;
 /// A buffer of them carrying no square.
 const FREE: u32 = u32::MAX;
 
@@ -148,28 +142,42 @@ pub struct EarthTiles<'a> {
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
 /// The ground's windows as the GPU holds them (pxl-portable `window`,
-/// `SQUARES` of them): the squares to hand it.
+/// `SQUARES` of them): the squares to hand it, and where their cells come
+/// back.
 pub struct GroundSquares<'a> {
     /// Hands each square whose cells the GPU is to draw to the writer.
     pub upload: &'a mut TerrainUpload,
+    /// Told each square whose cells came back, and the fill they are of
+    /// (`CellsBack::ticket`).
+    pub landed: &'a mut CellsLanded,
+    /// Where the eye's windows folded over their squares come back to in
+    /// the module's memory (`joined_cs`; pxl-portable
+    /// `window::EYE_JOINED_WORDS`).
+    pub joined: u32,
+    /// Where each read's records come back to in the module's memory, read
+    /// `k`'s at `records + k · ways::tree::RECORDS_BYTES`: the blocks its
+    /// square's ways' tree holds (gpu-query-shader `ways_tree_cs`).
+    pub records: u32,
 }
 
-/// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`): the
-/// eye, its lane's tangents, the terrain's tiles as the GPU holds them, and
-/// what is placed.
+/// A square whose cells came back, the fill they are of
+/// (`CellsBack::ticket`), and the read they came through, whose records'
+/// room holds its ways' blocks (`GroundSquares::records`).
+pub type CellsLanded = dyn FnMut(u32, u32, u32);
+
+/// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`), a ray
+/// a drawn pixel of the world surface: the eye, the terrain's tiles as the
+/// GPU holds them, and what is placed.
 pub struct Cast<'a> {
-    /// The eye as seven vec4s (pxl-kernel view/lens.rs `gpu_cast`, scene/
-    /// cast.rs `eye`): its origin in Q3 steps, forward and the reach, right
-    /// and τ, up, the lane's cells across and up with the zooms a block is
-    /// asked at, and a preview's cut to air and its left-out leaf.
-    pub eye: [u32; CAST_EYE_WORDS],
-    /// Each column's tangent then each row's, where they live, unwritten
-    /// until the page replays the turn.
-    pub tangents: &'a [f32],
+    /// The eye (pxl-portable `eye`; pxl-kernel view/lens.rs `gpu_cast`,
+    /// scene/cast.rs `eye`).
+    pub eye: [u32; eye::WORDS],
     /// Per window of the eye's, from the top's, a row a slot: the square it
     /// holds, X and Y, and whether it is present, and a spare.
     pub window: &'a [i32],
-    /// Each shard the service area serves: its tile zoom, x and y, a spare.
+    /// The service area's index (pxl-portable `area::Area`), its keys four a
+    /// row (pxl-kernel scene/cast.rs `shards`); read where it lies,
+    /// unwritten until the page replays the turn.
     pub shards: &'a [[i32; 4]],
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU grows and draws over the same world, none where
@@ -177,48 +185,22 @@ pub struct Cast<'a> {
     pub decor: Option<DecorFrame<'a>>,
 }
 
-pub const CAST_EYE_WORDS: usize = 28;
-
 /// The overwrites' tree (pxl-kernel layer/object/store.rs) as it lives: its
 /// heap and data lanes, unwritten until the page replays the turn, the room
-/// either has before it grows, and the revision they are at.
+/// either has before it grows, the revision they are at, and the blocks
+/// written since `since`, the revision they were last handed at, by their
+/// first slots (`GpuLanes`).
 pub struct Overwrites<'a> {
     pub heap: &'a [u32],
     pub data: &'a [u32],
     pub room: usize,
     pub revision: u32,
-}
-
-/// Where a square's cells, which the GPU draws, come back to in the
-/// module's memory (`Renderer::read_back`): its heights then its levels,
-/// the kernel's word that takes `ticket | DONE` once this fill's are in,
-/// and the ticket.
-#[derive(Clone, Copy, Default)]
-pub struct CellsBack {
-    pub cells: u32,
-    pub word: u32,
-    pub ticket: u32,
-}
-
-/// A square handed to the GPU: its place among the windows' squares, where
-/// it lies in its tile in squares (X low, Y high), its four looks a cell,
-/// its share of its tile's ways' bound, its tile's padded samples, its lines
-/// as far as they are written, and where its cells, joined with the ways,
-/// come back to.
-pub struct Square<'a> {
-    pub square: u32,
-    pub place: u32,
-    /// Its cells' zoom, its window's (pxl-portable `window::FRESH_WORDS`).
-    pub cell: u32,
-    pub looks: &'a [u8],
-    pub samples: &'a [u8],
-    /// Its lines (pxl-portable `window::LINES_AT`), the words written.
-    pub lines: &'a [u32],
-    pub back: CellsBack,
+    pub since: u32,
+    pub written: &'a [u32],
 }
 
 /// Takes a square while the turn's stream has room for it.
-pub type TerrainWrite<'a> = dyn FnMut(Square<'_>) -> bool + 'a;
+pub type TerrainWrite<'a> = dyn FnMut(FreshSquare<'_>) -> bool + 'a;
 
 pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
@@ -234,14 +216,17 @@ pub struct FrameOutput {
 #[derive(Clone, Copy)]
 pub struct FrameStat {
     /// Whether a GPU read landed with this frame: its spans are then that
-    /// read's, and else an earlier frame's, not this one's.
+    /// read's and `gpu_px` the world's pixels the frame it timed drew, what
+    /// the spans were measured over; else both are 0, as nothing was
+    /// measured with this frame.
     pub gpu_read: bool,
-    /// The block table's blocks and their bytes.
+    pub gpu_px: f64,
+    /// The block table's blocks and their bytes, the depth targets' bytes
+    /// and the texture layers': each as counted, in bytes.
     pub blocks: f64,
     pub block_bytes: f64,
-    pub depth_mb: f64,
-    pub layers_mb: f64,
-    pub world_px: f64,
+    pub depth_bytes: f64,
+    pub layers_bytes: f64,
     /// Every draw's, counted only while `counted`: its sums are the frame's
     /// draws and triangles.
     pub census: DrawCensus,
@@ -262,17 +247,14 @@ pub fn put_u32(buf: &mut [u8], at: usize, v: u32) {
     buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
 }
 
-/// The planet's and the globe's four floats each into a frame.
-pub(crate) fn put_globe(frame: &mut [f32], globe: &[f32; 8]) {
-    frame[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
-    frame[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
-}
-
 pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
     for (i, v) in m.iter().enumerate() {
         out[at + i] = *v as f32;
     }
 }
+
+/// The ray's words `put_ray` writes: its three columns, a vec4 each.
+pub(crate) const RAY_FLOATS: usize = 12;
 
 /// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, taken in f64. Un-
 /// projecting two points in the shader kept a direction to only ~1e-3 rad,
@@ -300,25 +282,32 @@ pub fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: Entry, air: [Entry; AIR
     g.bind_group(layout, &e)
 }
 
+/// An image file as its asker hands it: its name, the asker's own and the
+/// same for one file wherever it is handed, and its bytes, handed for as
+/// long as the image is wanted, so a device gone takes it again from them
+/// (`Gpu::image`).
+pub type Image = (u32, &'static [u8]);
+
 /// Each skin image as one texture's view, made the first time a skin binds it:
-/// an image's texture is taken once (`Gpu::image_texture`), so
+/// an image's texture is taken once (`Gpu::image`), so
 /// a skin made again, or by another pass, binds what is here. As many as the
 /// skins the asset table names.
 static SKIN_VIEWS: Global<Vec<(u32, u32)>> = Global::new();
 
-fn skin_view(g: &Gpu, image: u32) -> u32 {
+fn skin_view(g: &Gpu, (image, file): Image) -> Option<u32> {
     let views = SKIN_VIEWS.get(Vec::new);
     if let Some(&(_, view)) = views.iter().find(|&&(i, _)| i == image) {
-        return view;
+        return Some(view);
     }
-    let texture = g.image_texture(image);
+    let texture = g.image(image, file)?;
     let view = g.view(texture, false, 0, 1, 0, 1);
     views.push((image, view));
-    view
+    Some(view)
 }
 
-pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> u32 {
-    g.bind_group(layout, &[view_entry(0, skin_view(g, image)), sampler_entry(1, sampler)])
+/// A skin's bind group; none while its image lands.
+pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: Image) -> Option<u32> {
+    Some(g.bind_group(layout, &[view_entry(0, skin_view(g, image)?), sampler_entry(1, sampler)]))
 }
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
@@ -625,10 +614,6 @@ static REDRAW: Global<bool> = Global::new();
 /// power of two no larger, so a larger one is no device's.
 pub const UNIFORM_ALIGN_MAX: u32 = 256;
 
-pub fn device_ready() -> bool {
-    device().is_some()
-}
-
 pub fn gpu_lost() {
     RENDERER.set(None);
     SKIN_VIEWS.set(Vec::new());
@@ -638,7 +623,7 @@ pub fn gpu_lost() {
 }
 
 pub fn surface_closed(s: Surface) {
-    for id in [s.depth_view, s.depth, s.world_view, s.world, s.world_depth_view, s.world_depth] {
+    for id in s.targets() {
         release(id);
     }
     let slot = handle_slot(s.handle) as usize;
@@ -652,7 +637,7 @@ pub fn surface_closed(s: Surface) {
 /// The dev gizmos, over the finished world in passes of their own: their
 /// faces into the world's depth, cleared once the world is done with it, then
 /// their lines against those faces alone, so a gizmo hides gizmos and nothing
-/// of the world hides one; the camera grid follows them.
+/// of the world hides one.
 ///
 /// Each set takes its own translation, so a buffer and a group a set, grown
 /// to the most sets a frame has drawn.
@@ -688,7 +673,8 @@ impl DebugPass {
 
     /// `depth` is the world's, which nothing reads after this.
     #[allow(clippy::too_many_arguments)]
-    fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
+    /// Each set's uniform written where the lists it is made from `moved`.
+    fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, uniforms: &[f32], moved: bool, blocks: &Blocks, stamp: &mut Stamp) {
         if draws.of(PIPELINE_DEBUG).len() == 0 {
             return;
         }
@@ -699,7 +685,7 @@ impl DebugPass {
                 (d[1] > 0).then_some((k, d, block, d[1], d[2]))
             })
         };
-        for (k, d, ..) in sets() {
+        for (k, d, ..) in sets().filter(|_| moved) {
             let u = uniform_of(uniforms, d);
             g.write_buffer(self.sets[k].0, 0, bytes(&[u[0], u[1], u[2], 0.0]));
         }
@@ -730,48 +716,49 @@ impl DebugPass {
     }
 }
 
-/// The rays' cells, drawn straight to the screen where each pixel's ray
-/// meets the face its cell's ray met, painted by paint.wgsl's `paint`
-/// (frame/screen_cells.rs). The lane is written by the GPU's cast where it
-/// runs (`Cast`), else by the CPU's, uploaded from where it lives once a
-/// cast.
-struct ScreenCellsPass {
+/// The eye's rays, each drawn at its own pixel where it met a face, painted
+/// by paint.wgsl's `paint` (pxl-portable ray.rs), from the world surface's
+/// `rays` the GPU's cast leaves (`Cast`).
+struct RaysPass {
     built: Built,
+    /// Its group 0 over the lit pass's entries and what it binds besides
+    /// (`bound`, the surface's rays and the cast's eye): made again exactly
+    /// when one of them is another.
     group: u32,
+    bound: [u32; 2],
     /// The lit pass's entries it paints by (`Renderer::lit_entries`); none
     /// until the renderer hands them.
     lit: Vec<Entry>,
-    sky_buffer: u32,
     looks: u32,
-    /// Where the eye is in the world, as `screen_cells.wgsl`'s `eye_at`.
-    eye_at: u32,
-    lane: u32,
-    /// Cells the lane holds past its header.
-    room: usize,
-    generation: u32,
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
     /// What this frame does with the cast, as `prepare` decided it: nothing
-    /// cast (`plain`), the ray lane standing (`standing`), or a cast run
+    /// cast (`plain`), the rays standing (`standing`), or a cast run
     /// (`cast`). `dispatch` and the frame's report read it.
     kind: FrameKind,
 }
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
 struct GroundBuffers {
-    /// Per square of the windows, its looks as handed, its cells' heights
-    /// and levels, which `heights_cs` and `bound_cs` write in the turn it
-    /// is handed, its tile's samples and lines as handed, and its ways'
-    /// runs, which `ways_cs` writes then (pxl-portable
-    /// `window::SQUARE_WORDS`).
+    /// Per square of the windows, its columns, levels, runs and cells as
+    /// laid, which `heights_cs`, `ways_cs` and `bound_cs` write in the turn
+    /// it is handed (pxl-portable `window::SQUARE_WORDS`).
     ground: u32,
-    /// The squares that turn handed, two words each, `heights_cs`'s,
+    /// Per square, its cells' four looks (`LOOKS_BYTES`).
+    looks: u32,
+    /// The squares the turn handed, `window::HANDED` at most, a record each
+    /// (`window::HANDED_WORDS`): its words, then its looks, its tile's
+    /// samples and its lines, which only its fill reads; `heights_cs`'s,
     /// `bound_cs`'s and `ways_cs`'s one per `id.z`.
     fresh: u32,
     fresh_len: u32,
     /// Per square place (`window::SQUARES`), its cells' way back: the fill
     /// the next landing must be of (its ticket 0 where none is asked).
     asked: [CellsBack; SQUARES as usize],
+    /// The squares the frame handed, in the order handed, each with a read
+    /// of its own (`hand` hands none past the reads free): a fill's records
+    /// live in its frame's scratch, so its read is taken in its frame.
+    handed: [u32; HANDED as usize],
     /// The buffers cells are copied into and mapped back through, as many as
     /// a frame hands squares a mapping still out a frame more (`READS`);
     /// each one's square and the fill it carries (`FREE` where none), and
@@ -782,6 +769,14 @@ struct GroundBuffers {
     reads: [u32; READS],
     held: [(u32, u32); READS],
     mapping: Box<[u32; READS]>,
+    /// Each read's records (`ways::tree::RECORDS_BYTES`), mapped beside
+    /// its square's words, and its mapping's word: a read lands with both.
+    record_reads: [u32; READS],
+    record_mapping: Box<[u32; READS]>,
+    /// The ways' pool, which the cast reads, and the handed squares'
+    /// scratch, whose records each read copies (`ways::tree::SCRATCH_WORDS`).
+    pool: u32,
+    scratch: u32,
     heights_built: Built,
     heights_group: u32,
     bound_built: Built,
@@ -790,30 +785,95 @@ struct GroundBuffers {
     /// `ways_cs`'s, and its group, its pass at a dynamic offset.
     ways_built: Built,
     ways_group: u32,
+    /// A re-filled square's old ways' tree given back, its new one built,
+    /// the blocks the build gave back pushed (pxl-portable `ways::tree`):
+    /// each pass and its group, over the ways' pool, heap words then data
+    /// words (`POOL_BYTES`), its free stack, the count taken then the ids,
+    /// block 0 never among them (`STACK_WORDS`), and each handed square's scratch
+    /// past its build (`ways::tree::SCRATCH_WORDS`).
+    free_built: Built,
+    free_group: u32,
+    tree_built: Built,
+    tree_group: u32,
+    freed_built: Built,
+    freed_group: u32,
 }
 
-/// What the GPU's cast reads and the lane it writes.
+/// The ways' pool on the GPU, in bytes: a slot two words, eight a block.
+const POOL_BYTES: u64 = ways::tree::POOL_BLOCKS as u64 * 8 * 2 * 4;
+const _: () = assert!(
+    crate::frame::shader::floor::fits(POOL_BYTES, true),
+    "POOL_BYTES: the ways' pool binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
+);
+/// Its free stack: the count taken, then every block's id but block 0's,
+/// every block free but block 0 as WebGPU makes it, zeroed (gpu-query
+/// shader `TAKEN`, `id`), so nothing is written to start it.
+const STACK_WORDS: u32 = ways::tree::POOL_BLOCKS;
+
+/// What the GPU's cast reads; it writes the world surface's rays.
 struct CastBuffers {
     built: Built,
-    /// Where its rays start, asked before it (`start_cs`), and its blocks'
-    /// face bits, asked after it (`face_cs`), over its group.
-    start_built: Built,
-    face_built: Built,
-    starts: u32,
+    /// The camera grid's beam rays (`beam_cs`), where each cell's pixels
+    /// start off them (`cells_cs`, a thread a cell of the screen, `cells`),
+    /// the samples walked from those starts (`sample_cs`, a thread a
+    /// sample, `samples`), and their buffer, over the cast's group
+    /// (pxl-portable `beam`): how many pixels missed, a line a corner, a
+    /// start a cell, for `corners` of them, a stop a sample, then the pixels
+    /// that missed, a word each; room for `beam_room` corners, samples and
+    /// pixels (doc/minutes/20261022-a-cell-casts-a-beam.md).
+    beam_built: Built,
+    cells_built: Built,
+    sample_built: Built,
+    beams: u32,
+    corners: [u32; 2],
+    cells: [u32; 2],
+    samples: [u32; 2],
+    beam_room: [u32; 3],
+    /// The observed pyramid (pxl-portable `observed`): its buffer, no
+    /// pixel's; the pixels the cast's reading walk missed walked again
+    /// (`miss_cs`) by the dispatch `args_cs` writes into `args` over its own
+    /// group, off the beam rays' buffer; the pyramid forgotten (`forget_cs`) where
+    /// what the world's query reads changed since the last cast: all of it
+    /// (`forget`), or the nodes over the eye's windows' slots that moved
+    /// (`moved`, a bit a slot, against the slots as `slots` last held them);
+    /// as this frame's cast does (`forgets`, pxl-portable
+    /// `observed::FORGETS`). `frame` numbers the casts since it was last
+    /// forgotten whole, and `cuts` are the preview's cuts it was asked with.
+    miss_built: Built,
+    args_built: Built,
+    forget_built: Built,
+    seen: u32,
+    args: u32,
+    args_group: u32,
+    frame: u32,
+    forget: bool,
+    moved: [u32; observed::MOVED_WORDS as usize],
+    slots: Vec<i32>,
+    forgets: u32,
+    cuts: [u32; eye::CUTS],
+    /// The eye's windows folded over their squares (`joined_cs`), over its
+    /// group, the window buffer's rows past their slot table
+    /// (`window::JOINED_AT`), written where the windows' slots moved
+    /// (`refold`); then copied into `joined_read` and mapped back
+    /// (`read_back`), once a mapping is free, while `joined_back`; the
+    /// mapping's own word where the guest's allocator puts it, as a
+    /// square's is.
+    joined_built: Built,
+    joined_read: u32,
+    joined_mapping: Box<u32>,
+    refold: bool,
+    joined_back: bool,
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
     group: u32,
-    bound: [u32; 8],
+    bound: [u32; 10],
     eye: u32,
     window: u32,
-    window_words: usize,
-    tangents: u32,
-    /// Tangents the buffer holds.
-    tangent_room: usize,
     shards: u32,
     /// Shards the buffer holds.
     shard_room: usize,
-    across: [u32; 2],
+    /// The drawn pixels it casts, a ray each: the world surface's.
+    size: [u32; 2],
     /// The overwrites' heap lane then their data lane, each `overwrite_room`
     /// words, the lanes' own room; the revision it holds, none at first.
     overwrites: u32,
@@ -821,15 +881,15 @@ struct CastBuffers {
     overwrite_revision: Option<u32>,
     grown: Grown,
     /// What the last cast read (`Read`), and whether this frame's is the
-    /// same: the lane and the decor grown over it stand, and nothing is
+    /// same: the rays and the decor grown over them stand, and nothing is
     /// cast.
     read: Read,
 }
 
 /// A stage's whole input as it last read it, byte for byte: what the stage
 /// makes is one function of it, so a frame that reads the same stands on
-/// what it made — the cast's lane and the decor grown over it (stage 1),
-/// the world image (stage 2). Each lane is read with its length, so no two
+/// what it made — the cast's rays and the decor grown over them (stage 1),
+/// the frame (stage 2). Each lane is read with its length, so no two
 /// sets read alike; what changed without words to read is marked so.
 #[derive(Default)]
 pub(crate) struct Read {
@@ -843,9 +903,11 @@ impl Read {
         (self.at, self.same) = (0, true);
     }
 
-    pub(crate) fn take(&mut self, lane: &[u8]) {
+    /// Whether `lane` reads otherwise than it did at this place last time.
+    pub(crate) fn take(&mut self, lane: &[u8]) -> bool {
         let end = self.at + lane.len();
-        if self.bytes.get(self.at..end) != Some(lane) {
+        let moved = self.bytes.get(self.at..end) != Some(lane);
+        if moved {
             self.same = false;
             if self.bytes.len() < end {
                 self.bytes.resize(end, 0);
@@ -853,16 +915,13 @@ impl Read {
             self.bytes[self.at..end].copy_from_slice(lane);
         }
         self.at = end;
+        moved
     }
 
-    pub(crate) fn read<T: Copy>(&mut self, lane: &[T]) {
-        self.take(bytes(&[lane.len() as u32]));
-        self.take(bytes(lane));
-    }
-
-    /// Whether anything read so far differs from the last time.
-    pub(crate) fn moved(&self) -> bool {
-        !self.same
+    /// Whether `lane`, with its length, moved: what its writer needs to
+    /// write again, and no more.
+    pub(crate) fn read<T: Copy>(&mut self, lane: &[T]) -> bool {
+        self.take(bytes(&[lane.len() as u32])) | self.take(bytes(lane))
     }
 
     /// What this frame changed of the stage's input that has no words, as
@@ -878,7 +937,7 @@ impl Read {
         same
     }
 
-    /// The lane no longer holds what was read: the next frame casts.
+    /// The rays no longer hold what was read: the next frame casts.
     pub(crate) fn forget(&mut self) {
         self.bytes.clear();
     }
@@ -887,231 +946,317 @@ impl Read {
 /// A square on the GPU, in bytes.
 const SQUARE_BYTES: u32 = SQUARE_WORDS * 4;
 
-/// The cast's group 0: the eye, the window, the tiles' frames, the lane it
-/// writes, the lane's tangents, the served shards and the overwrites.
-const CAST_GROUP: [u32; 24] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE_RW,
-];
+/// The windows' squares on the GPU, in bytes: one storage buffer, bound
+/// whole by the cast's, the levels' and the ways' groups.
+const GROUND_BYTES: u64 = SQUARES as u64 * SQUARE_BYTES as u64;
+const _: () = assert!(
+    crate::frame::shader::floor::fits(GROUND_BYTES, true),
+    "GROUND_BYTES: the windows' squares bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
+);
 
-/// `heights_cs`'s group 0: the fresh frames and the frames it writes the
-/// cells of.
-const HEIGHTS_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
+/// The windows' squares' cells' four looks, a word a cell in the squares'
+/// order: written by the fill off each handed square (`heights_cs`), read
+/// by the cast at a hit (gpu-query-shader `World`'s `Looks`). Their own
+/// buffer, as the squares' binding has no room for them.
+const LOOKS_BYTES: u64 = SQUARES as u64 * SQUARE_CELLS as u64 * 4;
+const _: () = assert!(
+    crate::frame::shader::floor::fits(LOOKS_BYTES, true),
+    "LOOKS_BYTES: the squares' looks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
+);
 
-/// `bound_cs`'s and `ways_cs`'s group 0: its level or its pass, the fresh
-/// frames and the frames it writes the levels or the runs of.
-const BOUND_GROUP: [u32; 9] = [0, COMPUTE, UNIFORM_DYNAMIC, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE_RW];
+/// `bound_cs`'s and `ways_cs`'s one group: its level or its pass at a
+/// dynamic offset (`SLOT_STRIDE`), the fresh frames, the frames it writes
+/// the levels of, and the handed squares' scratch it writes or reads the
+/// runs in. The cast's and `joined_cs`'s one group is the cast's, which
+/// binds all of theirs.
+const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
+const _: () = assert!(same(compute::BOUND_GROUP, compute::WAYS_GROUP), "the levels' and the ways' passes share a group");
+const _: () = assert!(compute::WAYS_WORKGROUP[0] == pxl_portable::fill::SCAN_THREADS, "a square's columns are summed by one workgroup");
+const _: () = assert!(
+    within(compute::JOINED_GROUP, compute::MISS_GROUP)
+        && within(compute::BEAM_GROUP, compute::MISS_GROUP)
+        && within(compute::CELLS_GROUP, compute::MISS_GROUP)
+        && within(compute::CAST_GROUP, compute::MISS_GROUP)
+        && within(compute::FORGET_GROUP, compute::MISS_GROUP),
+    "the fold, the beam, the cells, the reading cast and the forgetting bind the group the missed pixels' cast binds whole"
+);
 
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
 /// device's dynamic offset alignment.
 const SLOT_STRIDE: u32 = UNIFORM_ALIGN_MAX;
 
-impl ScreenCellsPass {
-    fn new(g: &Gpu, pipelines: &mut Pipelines, sky_buffer: u32) -> ScreenCellsPass {
-        let built = pipelines.build(g, PIPELINE_SCREEN_CELLS, g.canvas());
+impl RaysPass {
+    fn new(g: &Gpu, pipelines: &mut Pipelines) -> RaysPass {
+        let built = pipelines.build(g, PIPELINE_SCREEN_RAYS, g.canvas());
         let words = look_words();
-        let looks = g.buffer(word_bytes(2 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let looks = g.buffer(word_bytes(4 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(looks, 0, bytes(&words));
-        let eye_at = g.buffer(word_bytes(8), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let mut p = ScreenCellsPass {
+        RaysPass {
             built,
             group: 0,
+            bound: [0; 2],
             lit: Vec::new(),
-            sky_buffer,
             looks,
-            eye_at,
-            lane: 0,
-            room: 0,
-            generation: 0,
             ground: None,
             cast: None,
             kind: FrameKind::plain,
-        };
-        p.fit(g, SCREEN_CELLS_MAX);
-        p
-    }
-
-    /// A lane of at least `cells`, its groups made again over it.
-    fn fit(&mut self, g: &Gpu, cells: usize) {
-        if cells <= self.room {
-            return;
         }
-        if self.lane != 0 {
-            release(self.lane);
-        }
-        self.room = cells;
-        self.lane = g.buffer(word_bytes(4 * (1 + cells)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        self.regroup(g);
-        // A new lane holds no cast.
-        self.generation = 0;
     }
 
     /// The lit pass's entries, handed again whenever one of its objects is
-    /// made again.
-    fn lit(&mut self, g: &Gpu, entries: Vec<Entry>) {
+    /// made again: the group is made again over them when next drawn.
+    fn lit(&mut self, entries: Vec<Entry>) {
         self.lit = entries;
-        self.regroup(g);
+        self.bound = [0; 2];
     }
 
-    fn regroup(&mut self, g: &Gpu) {
-        if self.lit.is_empty() || self.lane == 0 {
+    /// The group over `bound`, the surface's rays and the cast's eye, made
+    /// again where either is another or the lit pass's entries were handed.
+    fn regroup(&mut self, g: &Gpu, bound: [u32; 2]) {
+        if bound == self.bound || self.lit.is_empty() {
             return;
         }
         release(self.group);
         let mut e = self.lit.clone();
-        e.push(buffer_entry(3, self.lane));
-        e.push(buffer_entry(19, self.sky_buffer));
+        e.push(view_entry(3, bound[0]));
         e.push(buffer_entry(20, self.looks));
-        e.push(buffer_entry(21, self.eye_at));
+        e.push(buffer_entry(21, bound[1]));
         self.group = g.bind_group(self.built.layouts[0], &e);
+        self.bound = bound;
     }
 
     /// Each held tile the GPU does not yet hold handed to its frame, copied
     /// into the turn's stream as it has room, the packets they live in let
     /// go once handed; whether or not an eye casts, as a tile's cells are
     /// no eye's.
-    fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: GroundSquares) {
+    fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, upload: &mut TerrainUpload) {
         let gb = self.ground.get_or_insert_with(|| {
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
-            let (storage, squares) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, SQUARES);
-            let frames_buffer = buffer(squares * SQUARE_BYTES, storage | buffer_usage::COPY_SRC);
-            let fresh = buffer(word_bytes((FRESH_WORDS * squares) as usize), storage);
-            let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &HEIGHTS_GROUP);
-            let heights_group = g.bind_group(heights_built.layouts[0], &[buffer_entry(0, fresh), buffer_entry(1, frames_buffer)]);
+            let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
+            let frames_buffer = buffer(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
+            let fresh = buffer(word_bytes((HANDED_WORDS * HANDED) as usize), storage);
+            let looks = buffer(LOOKS_BYTES as u32, storage);
+            let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &compute::HEIGHTS_GROUP);
+            let heights_group = g.bind_group(heights_built.layouts[0], &[buffer_entry(0, fresh), buffer_entry(1, frames_buffer), buffer_entry(2, looks)]);
             // Each slot's number in it, written once: `bound_cs`'s level,
             // `ways_cs`'s pass.
             let slots = buffer((LEVELS + 1) * SLOT_STRIDE, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             for k in 0..=LEVELS {
                 g.write_buffer(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
             }
-            let entries = [buffer_range_entry(0, slots, 0, 16), buffer_entry(1, fresh), buffer_entry(2, frames_buffer)];
+            let scratch = buffer(word_bytes((HANDED * ways::tree::SCRATCH_WORDS) as usize), buffer_usage::STORAGE | buffer_usage::COPY_SRC);
+            let entries = [buffer_range_entry(0, slots, 0, 16), buffer_entry(1, fresh), buffer_entry(2, frames_buffer), buffer_entry(3, scratch)];
             let (bound_built, ways_built) = (pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP), pipelines.build_compute(g, SHADER_WAYS, &BOUND_GROUP));
             let (bound_group, ways_group) = (g.bind_group(bound_built.layouts[0], &entries), g.bind_group(ways_built.layouts[0], &entries));
+            let pool = buffer(POOL_BYTES as u32, buffer_usage::STORAGE);
+            let stack = buffer(word_bytes(STACK_WORDS as usize), buffer_usage::STORAGE);
+            let free_built = pipelines.build_compute(g, SHADER_WAYS_FREE, &compute::WAYS_FREE_GROUP);
+            let free_group = g.bind_group(
+                free_built.layouts[0],
+                &[buffer_entry(0, fresh), buffer_entry(1, frames_buffer), buffer_entry(2, pool), buffer_entry(3, stack)],
+            );
+            let tree_built = pipelines.build_compute(g, SHADER_WAYS_TREE, &compute::WAYS_TREE_GROUP);
+            let tree_group = g.bind_group(
+                tree_built.layouts[0],
+                &[
+                    buffer_entry(0, fresh),
+                    buffer_entry(1, frames_buffer),
+                    buffer_entry(2, pool),
+                    buffer_entry(3, stack),
+                    buffer_entry(4, scratch),
+                ],
+            );
+            let freed_built = pipelines.build_compute(g, SHADER_WAYS_FREED, &compute::WAYS_FREED_GROUP);
+            let freed_group = g.bind_group(freed_built.layouts[0], &[buffer_entry(0, scratch), buffer_entry(1, stack)]);
             GroundBuffers {
                 ground: frames_buffer,
+                looks,
                 fresh,
                 fresh_len: 0,
                 asked: [CellsBack::default(); SQUARES as usize],
+                handed: [0; HANDED as usize],
                 reads: core::array::from_fn(|_| buffer(BACK_WORDS * 4, buffer_usage::MAP_READ | buffer_usage::COPY_DST)),
                 held: [(FREE, 0); READS],
                 mapping: Box::new([0; READS]),
+                record_reads: core::array::from_fn(|_| buffer(ways::tree::RECORDS_BYTES, buffer_usage::MAP_READ | buffer_usage::COPY_DST)),
+                record_mapping: Box::new([0; READS]),
+                pool,
+                scratch,
                 heights_built,
                 heights_group,
                 bound_built,
                 bound_group,
                 ways_built,
                 ways_group,
+                free_built,
+                free_group,
+                tree_built,
+                tree_group,
+                freed_built,
+                freed_group,
             }
         });
+        // A square handed takes a read its frame: none past those free.
+        let free = gb.held.iter().filter(|h| h.0 == FREE).count().min(HANDED as usize) as u32;
         let mut fresh = 0;
-        (ground.upload)(&mut |q| {
-            let fresh_entry = [q.square, q.place, q.cell];
-            if !room(write_buffer_bytes(q.looks) + write_buffer_bytes(q.samples) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&fresh_entry))) {
+        upload(&mut |q| {
+            if fresh == free || !room(write_buffer_bytes(q.looks) + write_buffer_bytes(bytes(q.samples)) + write_buffer_bytes(bytes(q.lines)) + write_buffer_bytes(bytes(&q.fresh))) {
                 return false;
             }
-            let at = q.square * SQUARE_BYTES;
-            g.write_buffer(gb.ground, at, q.looks);
-            g.write_buffer(gb.ground, at + ELE_AT * 4, q.samples);
-            g.write_buffer(gb.ground, at + LINES_AT * 4, bytes(q.lines));
-            g.write_buffer(gb.fresh, word_bytes((FRESH_WORDS * fresh) as usize), bytes(&fresh_entry));
-            gb.asked[q.square as usize] = q.back;
+            let (square, at) = (q.fresh[window::FRESH_SQUARE as usize], window::handed_at(fresh) * 4);
+            g.write_buffer(gb.fresh, at, bytes(&q.fresh));
+            g.write_buffer(gb.fresh, at + LOOKS_AT * 4, q.looks);
+            g.write_buffer(gb.fresh, at + ELE_AT * 4, bytes(q.samples));
+            g.write_buffer(gb.fresh, at + LINES_AT * 4, bytes(q.lines));
+            gb.asked[square as usize] = q.back;
+            gb.handed[fresh as usize] = square;
             fresh += 1;
             true
         });
         gb.fresh_len = fresh;
     }
 
-    /// The lane for this frame: the GPU's cast where an eye casts, its eye
-    /// handed over first; else a lane of no cells.
-    fn prepare(&mut self, g: &Gpu, pipelines: &mut Pipelines, cast: Option<Cast>, meshes: &[u32; GROUPS as usize]) {
-        let s = stage_lane();
-        let steps = u32::from(s[STAGE_AT::RAY_STEPS] != 0.0);
-        // The eye's whole units wrap: a block's place is read off their low bits.
-        let eye: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::EYE + k]);
-        let whole = eye.map(|v| libm::floor(v) as i64 as u32);
-        let part = eye.map(|v| ((v - libm::floor(v)) as f32).to_bits());
-        g.write_buffer(self.eye_at, 0, bytes(&[whole[0], whole[1], whole[2], 0, part[0], part[1], part[2], 0]));
-        // No cast, no world: a lane of no cells, no ray cast into it and no
-        // decor grown. What the cast reads stands for the next: the ground
-        // it binds is made once.
-        let (Some(cast), Some(ground)) = (cast, self.ground.as_ref().map(|gb| gb.ground)) else {
+    /// The cast pass's pipelines and buffers, made once, where the frame
+    /// first casts: before any of its uploads (`hand`), which take the
+    /// stream only while `stream::RESERVE` is left after them, so the
+    /// shaders made here are never left without room.
+    fn make(&mut self, g: &Gpu, pipelines: &mut Pipelines) {
+        if self.cast.is_some() {
+            return;
+        }
+        // One group for every kernel over the cast's world: the one the missed
+        // pixels' cast binds whole.
+        let group = &compute::MISS_GROUP;
+        let built = pipelines.build_compute(g, SHADER_CAST, group);
+        let beam_built = pipelines.build_compute(g, SHADER_BEAM, group);
+        let cells_built = pipelines.build_compute(g, SHADER_CELLS, group);
+        let sample_built = pipelines.build_compute(g, SHADER_SAMPLE, group);
+        let joined_built = pipelines.build_compute(g, SHADER_JOINED, group);
+        let miss_built = pipelines.build_compute(g, SHADER_MISS, group);
+        let forget_built = pipelines.build_compute(g, SHADER_FORGET, group);
+        let args_built = pipelines.build_compute(g, SHADER_ARGS, &compute::ARGS_GROUP);
+        let buffer = |size: u32, usage: u32| g.buffer(size, usage);
+        let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
+        let c = CastBuffers {
+            built,
+            beam_built,
+            cells_built,
+            sample_built,
+            beams: 0,
+            corners: [0; 2],
+            cells: [0; 2],
+            samples: [0; 2],
+            beam_room: [0; 3],
+            miss_built,
+            args_built,
+            forget_built,
+            seen: buffer(word_bytes(observed::WORDS as usize), storage),
+            args: buffer(word_bytes(3), buffer_usage::STORAGE | buffer_usage::INDIRECT),
+            args_group: 0,
+            frame: 0,
+            forget: true,
+            moved: [0; observed::MOVED_WORDS as usize],
+            slots: Vec::new(),
+            forgets: observed::FORGETS_NONE,
+            cuts: [0; eye::CUTS],
+            joined_built,
+            joined_read: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::MAP_READ | buffer_usage::COPY_DST),
+            joined_mapping: Box::new(DONE),
+            refold: false,
+            joined_back: false,
+            group: 0,
+            bound: [0; 10],
+            eye: buffer(word_bytes(eye::WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
+            window: buffer(word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize), storage | buffer_usage::COPY_SRC),
+            shards: 0,
+            shard_room: 0,
+            size: [0; 2],
+            overwrites: 0,
+            overwrite_room: 0,
+            overwrite_revision: None,
+            grown: Grown::new(g, pipelines),
+            read: Read::default(),
+        };
+        self.cast = Some(c);
+    }
+
+    /// The rays for this frame into the world surface's (`rays`, its view,
+    /// and its drawn pixels): the GPU's cast where an eye casts, its eye
+    /// handed over first.
+    fn prepare(&mut self, g: &Gpu, cast: Option<Cast>, meshes: &[u32; GROUPS as usize], rays: (u32, [u32; 2])) {
+        // No cast, no world: no ray cast, none drawn and no decor grown.
+        // What the cast reads stands for the next: the ground it binds is
+        // made once.
+        let (Some(cast), Some((ground, looks, pool))) = (cast, self.ground.as_ref().map(|gb| (gb.ground, gb.looks, gb.pool))) else {
             self.kind = FrameKind::plain;
             if let Some(c) = self.cast.as_mut() {
-                c.across = [0; 2];
                 c.grown.off();
                 c.read.forget();
             }
-            g.write_buffer(self.lane, 0, bytes(&[0u32, 0, steps, 0]));
             return;
         };
-        if self.cast.is_none() {
-            let built = pipelines.build_compute(g, SHADER_CAST, &CAST_GROUP);
-            let start_built = pipelines.build_compute(g, SHADER_START, &CAST_GROUP);
-            let face_built = pipelines.build_compute(g, SHADER_FACE, &CAST_GROUP);
-            let buffer = |size: u32, usage: u32| g.buffer(size, usage);
-            let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-            let c = CastBuffers {
-                built,
-                start_built,
-                face_built,
-                starts: buffer(word_bytes(START_WORDS), buffer_usage::STORAGE),
-                group: 0,
-                bound: [0; 8],
-                eye: buffer(word_bytes(CAST_EYE_WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
-                window: buffer(word_bytes(cast.window.len()), storage),
-                window_words: cast.window.len(),
-                tangents: 0,
-                tangent_room: 0,
-                shards: 0,
-                shard_room: 0,
-                across: [0; 2],
-                overwrites: 0,
-                overwrite_room: 0,
-                overwrite_revision: None,
-                grown: Grown::new(g, pipelines),
-                read: Read::default(),
-            };
-            self.cast = Some(c);
-        }
         let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
-        // The cast and the decor it grows read exactly this, all of it here:
-        // a field the frame hands the cast fails to destructure until it is
-        // read. The overwrites' contents are their revision's.
+        // The cast reads exactly this, all of it here: a field the frame hands
+        // the cast fails to destructure until it is read. The overwrites'
+        // contents are their revision's. The decor it grows reads its own
+        // (`Grown::prepare`), so a change to decor alone casts no ray again.
         let Cast {
             eye,
-            tangents,
             window,
             shards,
-            overwrites: Overwrites { heap: _, data: _, room, revision },
-            decor,
+            overwrites:
+                Overwrites {
+                    heap: _,
+                    data: _,
+                    room,
+                    revision,
+                    since: _,
+                    written: _,
+                },
+            decor: _,
         } = &cast;
         let r = &mut c.read;
         r.begin();
-        r.read(eye);
-        r.read(tangents);
-        r.read(window);
-        r.read(shards);
-        r.read(&[*room as u32, *revision, steps]);
-        match decor {
-            Some(DecorFrame { shown, params, placed, translation }) => {
-                r.read(shown);
-                r.read(params);
-                r.read(placed);
-                r.read(translation);
-            }
-            None => r.read::<u32>(&[]),
-        }
-        r.read(meshes);
+        // Each lane written again where it moved.
+        let eye_moved = r.read(eye);
+        let window_moved = r.read(window);
+        let shards_moved = r.read(shards);
+        // A surface made again holds no rays.
+        r.read(&[*room as u32, *revision, rays.0]);
         // And the ground's squares, written this frame or not.
         let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
-        if r.end() && fresh == 0 && c.group != 0 {
-            self.kind = FrameKind::standing;
-            return;
+        self.kind = if r.end() && fresh == 0 && c.group != 0 { FrameKind::standing } else { FrameKind::cast };
+        // The slot table fills the rows before the fold's (`window::JOINED_AT`).
+        xpute_kit::ensure!(cast.window.len() == (4 * window::JOINED_AT) as usize, ENOTRECOVERABLE, cast.window.len());
+        if window_moved {
+            g.write_buffer(c.window, 0, bytes(cast.window));
+            c.refold = true;
         }
-        self.kind = FrameKind::cast;
-        xpute_kit::ensure!(cast.window.len() <= c.window_words, ENOTRECOVERABLE, cast.window.len());
-        g.write_buffer(c.window, 0, bytes(cast.window));
-        g.write_buffer(c.eye, 0, bytes(&cast.eye));
-        c.across = [cast.eye[16], cast.eye[17]];
+        if eye_moved {
+            g.write_buffer(c.eye, 0, bytes(&cast.eye));
+        }
+        c.size = rays.1;
+        // The grid's corners and the samples as the eye lays them, and room
+        // for the corners' lines, their cells' starts, the samples' stops
+        // and every pixel to miss, made again only where the corners, the
+        // samples or the pixels outgrow it.
+        let word = |k: usize| f32::from_bits(cast.eye[k]);
+        let tan = [word(eye::TAN), word(eye::TAN + 1)];
+        let s = beam::spacing(pxl_portable::cast::Detail { tau: word(eye::TAU), range: [0; 2] });
+        (c.corners, c.cells, c.samples) = (beam::corners(tan, s), beam::span(tan, s), beam::samples(tan, s));
+        let held = c.corners[0] * c.corners[1];
+        let sampled = c.samples[0] * c.samples[1];
+        let pixels = c.size[0] * c.size[1];
+        if held > c.beam_room[0] || sampled > c.beam_room[1] || pixels > c.beam_room[2] {
+            if c.beams != 0 {
+                release(c.beams);
+            }
+            let size = word_bytes((beam::list_at(held, sampled) + pixels) as usize);
+            xpute_kit::ensure!(crate::frame::shader::floor::fits(size as u64, true), ENOTRECOVERABLE, held);
+            (c.beams, c.beam_room) = (g.buffer(size, buffer_usage::STORAGE | buffer_usage::COPY_DST), [held, sampled, pixels]);
+            release(c.args_group);
+            c.args_group = g.bind_group(c.args_built.layouts[0], &[buffer_entry(0, c.beams), buffer_entry(1, c.args)]);
+        }
         let shards_grow = cast.shards.len() > c.shard_room;
         if shards_grow {
             if c.shards != 0 {
@@ -1120,16 +1265,10 @@ impl ScreenCellsPass {
             c.shard_room = cast.shards.len();
             c.shards = g.buffer(word_bytes(4 * c.shard_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         }
-        g.write_buffer(c.shards, 0, bytes(cast.shards));
-        let tangents_grow = cast.tangents.len() > c.tangent_room;
-        if tangents_grow {
-            if c.tangents != 0 {
-                release(c.tangents);
-            }
-            c.tangent_room = cast.tangents.len();
-            c.tangents = g.buffer(word_bytes(c.tangent_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        if shards_moved || shards_grow {
+            // Read where the kernel holds it, one record however large.
+            g.upload_buffer(c.shards, 0, bytes(cast.shards));
         }
-        g.upload_buffer(c.tangents, 0, bytes(cast.tangents));
         // Sized by the lanes' own room, so it is made again only when they grow.
         let o = &cast.overwrites;
         let overwrites_grow = o.room != c.overwrite_room;
@@ -1141,28 +1280,97 @@ impl ScreenCellsPass {
             c.overwrites = g.buffer(word_bytes(2 * o.room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
             c.overwrite_revision = None;
         }
-        if c.overwrite_revision != Some(o.revision) {
-            g.upload_buffer(c.overwrites, 0, bytes(o.heap));
-            g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
+        let overwrites_moved = c.overwrite_revision != Some(o.revision);
+        if overwrites_moved {
+            // Held at `since`: the blocks written after it alone, a record
+            // each, where the stream has room for them all; else both lanes
+            // whole, read where they live, two records however large.
+            fn block(lane: &[u32], first: u32) -> &[u32] {
+                &lane[first as usize..first as usize + 8]
+            }
+            let listed = |lane: &[u32]| o.written.iter().map(|&f| write_buffer_bytes(bytes(block(lane, f)))).sum::<usize>();
+            if c.overwrite_revision == Some(o.since) && crate::gpu::api::room(listed(o.heap) + listed(o.data)) {
+                for &first in o.written {
+                    g.write_buffer(c.overwrites, word_bytes(first as usize), bytes(block(o.heap, first)));
+                    g.write_buffer(c.overwrites, word_bytes(o.room + first as usize), bytes(block(o.data, first)));
+                }
+            } else {
+                g.upload_buffer(c.overwrites, 0, bytes(o.heap));
+                g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
+            }
             c.overwrite_revision = Some(o.revision);
         }
-        let cells = (c.across[0] * c.across[1]) as usize;
-        self.fit(g, cells);
-        let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
-        let bound = [c.eye, c.window, ground, self.lane, c.tangents, c.shards, c.overwrites, c.starts];
+        // What the world's query reads moved: the windows, the squares the
+        // turn handed (their cells, looks and ways), the service area, what
+        // is placed, a preview's cuts. What the observed pyramid kept is
+        // forgotten; so it is once its frames would outrun a key's tag.
+        let cuts: [u32; eye::CUTS] = cast.eye[eye::CARVE..eye::CARVE + eye::CUTS].try_into().or_bug(Errno::ENOTRECOVERABLE);
+        c.forget |= shards_moved || shards_grow || overwrites_moved || cuts != c.cuts || c.frame >= observed::FRAMES;
+        c.cuts = cuts;
+        // The eye's windows' slots that hold another square, or whose square
+        // the turn handed: what is over them is asked again.
+        let eye_rows = (window::EYE_WINDOWS * window::SLOTS) as usize;
+        if window_moved {
+            let rows = &cast.window[..4 * eye_rows];
+            for k in 0..eye_rows {
+                if c.slots.get(4 * k..4 * k + 4) != Some(&rows[4 * k..4 * k + 4]) {
+                    c.moved[k / 32] |= 1 << (k % 32);
+                }
+            }
+            c.slots.clear();
+            c.slots.extend_from_slice(rows);
+        }
+        if let Some(gb) = self.ground.as_ref() {
+            for &s in &gb.handed[..fresh as usize] {
+                if (s as usize) < eye_rows {
+                    c.moved[s as usize / 32] |= 1 << (s % 32);
+                }
+            }
+        }
+        if self.kind == FrameKind::cast {
+            c.forgets = if c.forget {
+                observed::FORGETS_ALL
+            } else if c.moved.iter().any(|&m| m != 0) {
+                observed::FORGETS_MOVED
+            } else {
+                observed::FORGETS_NONE
+            };
+            // The head before the frame's dispatches: what it forgets and over
+            // which slots; forgotten whole, no tile taken and its first frame,
+            // else the next frame. No pixel missed yet (pxl-portable
+            // `beam::MISSES`).
+            g.write_buffer(c.beams, word_bytes(beam::MISSES as usize), bytes(&[0u32]));
+            let mut head = [0u32; observed::HEAD_WORDS as usize];
+            c.frame = if c.forgets == observed::FORGETS_ALL { 1 } else { c.frame + 1 };
+            head[observed::FRAME as usize] = c.frame;
+            head[observed::FORGETS as usize] = c.forgets;
+            head[observed::MOVED_AT as usize..].copy_from_slice(&c.moved);
+            let from = if c.forgets == observed::FORGETS_ALL { 0 } else { observed::FRAME as usize };
+            g.write_buffer(c.seen, word_bytes(from), bytes(&head[from..]));
+            (c.forget, c.moved) = (false, [0; observed::MOVED_WORDS as usize]);
+        }
+        let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, pool, c.beams, c.seen];
         if bound != c.bound {
             release(c.group);
             c.group = cast_group(g, &c.built, bound);
             c.bound = bound;
         }
-        let world = [c.eye, c.window, ground, c.shards, c.overwrites];
-        c.grown.prepare(g, cast.decor, meshes, world);
-        g.write_buffer(self.lane, 0, bytes(&[c.across[0], c.across[1], steps, 0]));
+        let fresh_squares = self.ground.as_ref().map_or(0, |gb| gb.fresh);
+        let world = [c.eye, c.window, ground, c.shards, c.overwrites, pool, fresh_squares];
+        let grows = Grows {
+            window: cast.window,
+            cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS].try_into().or_bug(Errno::ENOTRECOVERABLE),
+            filled: fresh,
+            eye: &cast.eye,
+        };
+        c.grown.prepare(g, cast.decor, grows, meshes, world);
+        let eye = c.eye;
+        self.regroup(g, [rays.0, eye]);
     }
 
-    /// The cells of the frames this turn uploaded, from their samples, then
-    /// their ways' runs, then their bounds a level a dispatch, each over the
-    /// one before, and cells and bounds read back where the CPU looks them
+    /// The columns of the frames this turn uploaded, their tops from their
+    /// samples, then their ways' runs, then their levels a dispatch, level 0
+    /// a column's own and each over the one before, and cells and bounds read back where the CPU looks them
     /// up: ahead of the frame, as they outlive it, so no frame the window
     /// names is cast before its cells are written, even when the frame
     /// proper is dropped.
@@ -1170,40 +1378,56 @@ impl ScreenCellsPass {
     fn grids(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
         let Some(c) = self.ground.as_mut().filter(|c| c.fresh_len != 0) else { return false };
         let pass = g.compute_pass(encoder, stamp.pass());
+        // A re-filled square's old ways' blocks given back, off its root word
+        // before its build writes another (pxl-portable `ways::tree`).
+        g.set_pipeline(pass, c.free_built.pipeline);
+        g.set_bind_group(pass, 0, c.free_group, &[]);
+        g.dispatch(pass, 1, 1, c.fresh_len);
         g.set_pipeline(pass, c.heights_built.pipeline);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
-        g.dispatch(pass, (SQUARE / 2).div_ceil(BOUND_WORKGROUP), SQUARE.div_ceil(BOUND_WORKGROUP), c.fresh_len);
-        // A column a thread, over the faces just drawn: the columns'
-        // runs counted, summed a square a thread, written, then each bin's
-        // ways' word off them, before the levels join it.
+        let w = compute::HEIGHTS_WORKGROUP;
+        g.dispatch(pass, SQUARE.div_ceil(w[0]), SQUARE.div_ceil(w[1]), c.fresh_len);
+        // A column a thread, over the tops just drawn: the columns' runs
+        // counted, summed a square a workgroup (pxl-portable
+        // `fill::SCAN_THREADS`), written, before the levels fold them.
         g.set_pipeline(pass, c.ways_built.pipeline);
-        for k in 0..4 {
+        for k in 0..3 {
             g.set_bind_group(pass, 0, c.ways_group, &[k * SLOT_STRIDE]);
-            let across = if k % 2 == 1 { 1 } else { SQUARE_CELLS / WAYS_WORKGROUP };
+            let across = if k == 1 { 1 } else { SQUARE_CELLS / compute::WAYS_WORKGROUP[0] };
             g.dispatch(pass, across, 1, c.fresh_len);
         }
         g.set_pipeline(pass, c.bound_built.pipeline);
-        for j in 1..=LEVELS {
+        for j in 0..=LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
-            let side = (SQUARE >> j).div_ceil(BOUND_WORKGROUP);
+            let side = (SQUARE >> j).div_ceil(compute::BOUND_WORKGROUP[0]);
             g.dispatch(pass, side, side, c.fresh_len);
         }
+        // Each square's ways as blocks, a workgroup a square, over its runs
+        // and the levels just folded; then what its build gave back pushed,
+        // a dispatch after, so no push lands under another square's ids
+        // while it reads them.
+        g.set_pipeline(pass, c.tree_built.pipeline);
+        g.set_bind_group(pass, 0, c.tree_group, &[]);
+        g.dispatch(pass, 1, 1, c.fresh_len);
+        g.set_pipeline(pass, c.freed_built.pipeline);
+        g.set_bind_group(pass, 0, c.freed_group, &[]);
+        g.dispatch(pass, 1, 1, c.fresh_len);
         g.end(pass);
         true
     }
 
     /// The squares the grids wrote mapped back where the CPU looks them up,
-    /// once the encoder that wrote them is submitted: a square's heights and
-    /// levels lie together, so one mapping brings both.
+    /// once the encoder that wrote them is submitted: a square's columns,
+    /// levels and runs lie together (`window::BACK_WORDS`), so one mapping
+    /// brings them all.
     ///
     /// A square asked takes a free buffer of `READS`, which maps once at a
     /// time and lands whatever fill it carried. One that landed for the
-    /// square's latest fill marks it read: the kernel's word takes `ticket |
-    /// DONE`. One that landed for an earlier fill is discarded, and the
-    /// latest fill copied again: its bytes went into the square's cells while
-    /// the kernel holds the square Sent (or Absent, if it moved), which
-    /// nothing reads, and the latest fill's landing writes them again before
-    /// the word says read. A landed buffer is free again; a square with none
+    /// square's latest fill is told `landed`. One that landed for an earlier
+    /// fill is discarded, and the latest fill copied again: its bytes went
+    /// into the square's cells while the kernel holds the square on its way
+    /// (or absent, if it moved), which nothing reads, and the latest fill's
+    /// landing writes them again before it is told. A landed buffer is free again; a square with none
     /// free waits, Sent, for a later turn. A mapping still on its way is
     /// waited for, looked at only when a turn runs: nothing asks a turn for
     /// it. The turn's squares are done with here.
@@ -1216,64 +1440,135 @@ impl ScreenCellsPass {
     /// it), so none waits. Where read-backs matter on a settled
     /// view, the platform's own completion (a command buffer's handler, a
     /// timeline semaphore) is the wake.
-    fn read_back(&mut self, g: &Gpu) {
+    fn read_back(&mut self, g: &Gpu, landed: &mut CellsLanded, joined: u32, records: u32) {
+        // The fold, once its mapping is free: a frame-old copy reads safely,
+        // as an entry answers only for the block whose key it holds.
+        if let Some(c) = self.cast.as_mut().filter(|c| c.joined_back && *c.joined_mapping & DONE != 0) {
+            let (e, size) = (g.encoder(), word_bytes(window::EYE_JOINED_WORDS as usize));
+            g.copy_buffer(e, (c.window, word_bytes((4 * window::JOINED_AT) as usize)), (c.joined_read, 0), size);
+            g.submit(e);
+            g.map_read(c.joined_read, 0, size, joined, &mut c.joined_mapping, 1);
+            c.joined_back = false;
+        }
         let Some(c) = self.ground.as_mut() else { return };
-        c.fresh_len = 0;
+        // A read lands with its square's words and its records both: told
+        // where it is of the square's latest fill, discarded where a later
+        // fill asked again, whose own read brings it.
         for k in 0..READS {
             let (s, ticket) = c.held[k];
-            if s == FREE || c.mapping[k] & DONE == 0 {
+            if s == FREE || c.mapping[k] & DONE == 0 || c.record_mapping[k] & DONE == 0 {
                 continue;
             }
             let back = &mut c.asked[s as usize];
             if back.ticket == ticket {
-                // SAFETY: the kernel's word for the square, which it handed
-                // with this fill (pxl-kernel layer/terrain/window.rs).
-                unsafe { *ptr_at::<u32>(back.word as usize) = ticket | DONE };
+                landed(s, ticket, k as u32);
                 back.ticket = 0;
             }
             c.held[k] = (FREE, 0);
         }
-        let mut copy = None;
+        // Each square the frame handed, its words and its build's records
+        // copied in its frame, into a read `hand` kept free for it.
+        let fresh = core::mem::take(&mut c.fresh_len);
+        if fresh == 0 {
+            return;
+        }
+        let e = g.encoder();
         let mut taken = [false; READS];
         let mut free = 0;
-        for s in 0..SQUARES {
-            let ticket = c.asked[s as usize].ticket;
-            if ticket == 0 || c.held.iter().any(|h| h.0 == s) {
-                continue;
-            }
+        for h in 0..fresh {
+            let s = c.handed[h as usize];
             let Some(k) = (free..READS).find(|&k| c.held[k].0 == FREE) else { break };
             free = k + 1;
-            let e = *copy.get_or_insert_with(|| g.encoder());
-            g.copy_buffer(e, (c.ground, s * SQUARE_BYTES + HEIGHTS_AT * 4), (c.reads[k], 0), BACK_WORDS * 4);
-            (c.held[k], taken[k]) = ((s, ticket), true);
+            g.copy_buffer(e, (c.ground, s * SQUARE_BYTES + COLUMNS_AT * 4), (c.reads[k], 0), BACK_WORDS * 4);
+            g.copy_buffer(
+                e,
+                (c.scratch, word_bytes((h * ways::tree::SCRATCH_WORDS + ways::tree::RECORDS_AT) as usize)),
+                (c.record_reads[k], 0),
+                ways::tree::RECORDS_BYTES,
+            );
+            (c.held[k], taken[k]) = ((s, c.asked[s as usize].ticket), true);
         }
-        let Some(e) = copy else { return };
         g.submit(e);
         for k in (0..READS).filter(|&k| taken[k]) {
             let (s, ticket) = c.held[k];
             g.map_read(c.reads[k], 0, BACK_WORDS * 4, c.asked[s as usize].cells, &mut c.mapping[k], ticket);
+            g.map_read(
+                c.record_reads[k],
+                0,
+                ways::tree::RECORDS_BYTES,
+                records + k as u32 * ways::tree::RECORDS_BYTES,
+                &mut c.record_mapping[k],
+                ticket,
+            );
         }
     }
 
-    /// The GPU's cast into the lane, a ray a cell, where it runs; then the
-    /// decor the ground grows over the same world, a candidate a thread.
-    fn dispatch(&self, g: &Gpu, encoder: u32, cast: &mut Stamp, faces: &mut Stamp) {
-        let Some(c) = self.cast.as_ref().filter(|_| self.kind == FrameKind::cast) else { return };
-        let cells = [c.across[0].div_ceil(CAST_WORKGROUP), c.across[1].div_ceil(CAST_WORKGROUP)];
-        let pass = g.compute_pass(encoder, cast.pass());
+    /// The eye's windows folded over their squares where their slots moved
+    /// (`joined_cs`): ahead of the frame, as the fold outlives it, and then
+    /// mapped back (`read_back`).
+    fn fold(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
+        let Some(c) = self.cast.as_mut().filter(|c| c.refold && c.group != 0) else { return false };
+        let pass = g.compute_pass(encoder, stamp.pass());
         g.set_bind_group(pass, 0, c.group, &[]);
-        g.set_pipeline(pass, c.start_built.pipeline);
-        g.dispatch(pass, 1, 1, 1);
-        g.set_pipeline(pass, c.built.pipeline);
-        g.dispatch(pass, cells[0], cells[1], 1);
-        c.grown.dispatch(g, pass);
+        g.set_pipeline(pass, c.joined_built.pipeline);
+        // A level a dispatch, each over the one under it, its level the
+        // dispatch's depth (`joined_cs`).
+        for l in 1..=window::JOINED_LEVELS {
+            let blocks = (window::ACROSS >> l) * (window::ACROSS >> l);
+            g.dispatch(pass, (blocks * window::EYE_WINDOWS).div_ceil(compute::JOINED_WORKGROUP[0]), 1, l);
+        }
         g.end(pass);
-        // A kernel a job: the face bits over what the cast found.
-        let pass = g.compute_pass(encoder, faces.pass());
-        g.set_bind_group(pass, 0, c.group, &[]);
-        g.set_pipeline(pass, c.face_built.pipeline);
-        g.dispatch(pass, cells[0], cells[1], 1);
-        g.end(pass);
+        (c.refold, c.joined_back) = (false, true);
+        true
+    }
+
+    /// The cast where the frame casts, then the decor grown over the
+    /// world where it moves: each a pass of its own
+    /// over the cast's group, timed in its own span, so what each costs is
+    /// read apart.
+    fn dispatch(&self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
+        let Some(c) = self.cast.as_ref() else { return };
+        if self.kind == FrameKind::cast {
+            // The observed pyramid forgotten first where it is; then the
+            // beam rays writing it, a corner each; each cell's start off them;
+            // the samples writing it, each from its cell's start; the pixels
+            // off the samples about them, or reading it from their cell's
+            // start; and the pixels that missed again, writing it, by the
+            // dispatch counted off them. One pass, a dispatch each, each
+            // reading what the ones before wrote (pxl-portable `observed`).
+            let pass = g.compute_pass(encoder, stamps[SPAN_CAST].pass());
+            g.set_bind_group(pass, 0, c.group, &[]);
+            if c.forgets != observed::FORGETS_NONE {
+                g.set_pipeline(pass, c.forget_built.pipeline);
+                g.dispatch(pass, observed::ENTRIES.div_ceil(compute::FORGET_WORKGROUP[0]), 1, 1);
+            }
+            for (built, [x, y], w) in [
+                (&c.beam_built, c.corners, compute::BEAM_WORKGROUP),
+                (&c.cells_built, c.cells, compute::CELLS_WORKGROUP),
+                (&c.sample_built, c.samples, compute::SAMPLE_WORKGROUP),
+                (&c.built, c.size, compute::CAST_WORKGROUP),
+            ] {
+                g.set_pipeline(pass, built.pipeline);
+                g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+            }
+            g.set_pipeline(pass, c.args_built.pipeline);
+            g.set_bind_group(pass, 0, c.args_group, &[]);
+            g.dispatch(pass, 1, 1, 1);
+            g.set_pipeline(pass, c.miss_built.pipeline);
+            g.set_bind_group(pass, 0, c.group, &[]);
+            g.dispatch_indirect(pass, c.args, 0);
+            g.end(pass);
+        }
+        if self.grows() {
+            let pass = g.compute_pass(encoder, stamps[SPAN_GROW].pass());
+            c.grown.dispatch(g, pass);
+            g.end(pass);
+        }
+    }
+
+    /// Whether the decor grown over the cast's world moves this frame.
+    fn grows(&self) -> bool {
+        self.cast.as_ref().is_some_and(|c| c.grown.works())
     }
 
     /// The decor the GPU grew this frame, as the draws read it.
@@ -1281,8 +1576,11 @@ impl ScreenCellsPass {
         self.cast.as_ref().and_then(|c| c.grown.drawn())
     }
 
-    /// Returns the group 0 it leaves bound.
+    /// Returns the group 0 it leaves bound: none where no eye casts.
     fn draw(&self, g: &Gpu, pass: u32) -> u32 {
+        if self.kind == FrameKind::plain || self.group == 0 {
+            return 0;
+        }
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.group, &[]);
         g.draw(pass, 3, 1, 0, 0);
@@ -1290,21 +1588,25 @@ impl ScreenCellsPass {
     }
 }
 
-/// The cast's workgroup, a side: `cast_cs`'s.
-const CAST_WORKGROUP: u32 = 8;
-/// `start_cs`'s words: the start's node, what was handed it, and the stack,
-/// an `At` two words (gpu-query-shader `START_WORDS`).
-const START_WORDS: usize = 4 + 2 * (1 + pxl_portable::cast::DEPTH);
-/// `heights_cs`'s and `bound_cs`'s workgroup, a side, a frame a layer.
-const BOUND_WORKGROUP: u32 = 8;
-/// `ways_cs`'s workgroup: columns in a row.
-const WAYS_WORKGROUP: u32 = 64;
-
-/// The cast's group 0 over `bound`: the eye, the window, the tiles' frames,
-/// the lane, its tangents, the served shards, the overwrites and where its
-/// rays start (`start_cs` writes it, `cast_cs` reads it).
-fn cast_group(g: &Gpu, built: &Built, bound: [u32; 8]) -> u32 {
-    let entries: [Entry; 8] = core::array::from_fn(|k| buffer_entry(k as u32, bound[k]));
+/// The cast's group 0 over `bound`: the eye, the window and its fold
+/// (`joined_cs` writes it, the cast reads it), the tiles' frames, the
+/// surface's rays, the squares' looks, the service area's index, the
+/// overwrites, the ways' pool, the beam rays' lines and the cells' starts,
+/// and the observed pyramid.
+fn cast_group(g: &Gpu, built: &Built, bound: [u32; 10]) -> u32 {
+    let [eye, window, ground, rays, looks, shards, overwrites, pool, beams, seen] = bound;
+    let entries = [
+        buffer_entry(0, eye),
+        buffer_entry(1, window),
+        buffer_entry(2, ground),
+        view_entry(3, rays),
+        buffer_entry(4, looks),
+        buffer_entry(5, shards),
+        buffer_entry(6, overwrites),
+        buffer_entry(7, pool),
+        buffer_entry(8, beams),
+        buffer_entry(9, seen),
+    ];
     g.bind_group(built.layouts[0], &entries)
 }
 
@@ -1313,11 +1615,17 @@ struct Case {
     frame_buffer: u32,
     frames: FrameGroups,
     skinned: SkinnedPass,
+    /// What its picture is made of as last drawn: its frame words, its
+    /// actor's draw and uniform, its skin and its surface; it stands, and
+    /// its surface keeps its picture, while they do.
+    read: Read,
 }
 
 const CASE_EYE: V3 = [0.0, -2.2, 0.9];
 const CASE_TARGET: V3 = [0.0, 0.0, 0.55];
 const CASE_FOV_DEG: f64 = 35.0;
+/// The case's near plane: a room of its own, a model a unit tall in it.
+const CASE_NEAR: f64 = 0.1;
 
 impl Case {
     fn new(g: &Gpu, pipelines: &mut Pipelines, ao: &ScreenAo, air: [Entry; AIR_ENTRIES], align: u32) -> Case {
@@ -1327,6 +1635,7 @@ impl Case {
             frame_buffer,
             frames: FrameGroups::new(g, layout, frame_buffer, [ao.blank_entry(7); 2], air),
             skinned: SkinnedPass::new(g, pipelines, align),
+            read: Read::default(),
         }
     }
 
@@ -1339,7 +1648,12 @@ impl Case {
 
 pub struct Renderer {
     align: u32,
+    /// The spans' queries (`Gpu::spans`); 0 where the device keeps no
+    /// timestamps, and no frame is timed.
     query_set: u32,
+    /// The world's pixels of the frame whose spans' read is on its way: one
+    /// read at most is (`Gpu::submit_frame`).
+    read_px: f64,
     pipelines: Pipelines,
     frame_buffer: u32,
     frame: Frame,
@@ -1366,20 +1680,17 @@ pub struct Renderer {
     puck: PuckPass,
     badges: BadgePass,
     debug: DebugPass,
-    screen: ScreenCellsPass,
-    /// The world image's whole input as the last image drew it (stage 2):
-    /// the frame's, the sky's and the stars' words, the air's, the image's
-    /// own textures, and what came or was drawn again without words.
-    world: Read,
-    /// What the frame draws from besides the world image, as last read: the
-    /// draws and the blocks they read, the badges' sheet, the clouds' words
-    /// and the cases. With the image's, the frame's whole input.
+    screen: RaysPass,
+    /// The frame's whole input as the last frame drew it (stage 2): the
+    /// frame's, the sky's and the stars' words, the air's, the surface's
+    /// textures, the draws and the blocks they read, the badges' sheet, the
+    /// clouds' words and the cases, and what came or was drawn again without
+    /// words.
     frame_read: Read,
-    /// What lays the world image on a frame, and its group over the views
-    /// it was made for.
-    blit: Built,
-    blit_group: u32,
-    blit_views: [u32; 2],
+    /// What the occlusion was last made from: the frame's words, its own,
+    /// the surface and the decor its prepass draws. The frame is drawn
+    /// again for more than these, and the occlusion only where they moved.
+    ao_read: Read,
     cases: [Option<Case>; SURFACES],
     order: Vec<u32>,
 }
@@ -1390,14 +1701,14 @@ impl Renderer {
         let frame_buffer = g.buffer(word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let sky_buffer = g.buffer(word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buffer);
-        let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer);
+        let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer, sky_buffer);
         let air = atmosphere.entries();
         let stars = StarPass::new(g, &mut pipelines, frame_buffer, air);
         let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
         let mips = Mips::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let layers = Layers::new(g);
         let sky_built = pipelines.build(g, PIPELINE_SKY, g.canvas());
-        let moon = ImageMap::new(g, MOON_TEX_SZ, MOON_TEX_SZ);
+        let moon = ImageMap::new(g, MOON_TEXELS, MOON_TEXELS);
         let mut sky_entries = vec![buffer_entry(0, frame_buffer), buffer_entry(19, sky_buffer), view_entry(2, moon.view), sampler_entry(3, moon.sampler)];
         sky_entries.extend(air);
         let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
@@ -1407,6 +1718,7 @@ impl Renderer {
         let mut r = Renderer {
             align: device.align,
             query_set,
+            read_px: 0.0,
             ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, g.canvas()), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, g.canvas())],
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
@@ -1414,12 +1726,9 @@ impl Renderer {
             puck: PuckPass::new(g, &mut pipelines, frame_buffer, air),
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer),
-            screen: ScreenCellsPass::new(g, &mut pipelines, sky_buffer),
-            world: Read::default(),
+            screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
-            blit: pipelines.build(g, PIPELINE_BLIT, g.canvas()),
-            blit_group: 0,
-            blit_views: [0; 2],
+            ao_read: Read::default(),
             pipelines,
             frame_buffer,
             frame: [0.0; FRAME_FLOATS],
@@ -1467,7 +1776,7 @@ impl Renderer {
         e.push(buffer_entry(3, self.draws_buffer));
         self.bind_group = g.bind_group(self.ghost[0].layouts[0], &e);
         let lit = self.lit_entries(self.frame_buffer);
-        self.screen.lit(g, lit);
+        self.screen.lit(lit);
     }
 
     /// The occlusion map is a new object, so every lit pass's group 0 is remade.
@@ -1476,11 +1785,11 @@ impl Renderer {
         self.models.rebind(g, self.frame_buffer, [self.ao.entry(7), self.ao.blank_entry(7)]);
     }
 
-    fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32]) {
+    /// `reach` how far the eye observes, in units; none without an eye.
+    fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32], reach: f32) {
         let s = stage_lane();
-        let (mut a, mut m, mut proj) = (mat4::new(), mat4::new(), mat4::new());
-        a.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
-        mat4::mul(&mut proj, &GL_TO_WGPU, &a);
+        let (mut m, mut proj) = (mat4::new(), mat4::new());
+        proj.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
         // The badges measure their size in view space.
         let b = &mut self.badges;
         put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
@@ -1488,57 +1797,44 @@ impl Renderer {
         b.px_k = (s[STAGE_AT::VIEWPORT + 1] / (2.0 * libm::tan(s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0))) as f32;
 
         let u = &mut self.frame;
-        a.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
-        mat4::mul(&mut m, &GL_TO_WGPU, &a);
+        m.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
         put_mat(u, VIEW_PROJ, &m);
         // Everything is drawn in the eye's frame; positions are taken against the eye
         // in f64 before they are narrowed.
         let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
         let eye = [0.0; 3];
-        // The globe places by offset from its anchor and height alone, so placing in
-        // the eye's frame matches the world less the eye.
-        let center: V3 = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_world[k]);
-        let sphere = Globe::at(env[ENV_AIR + 2] as f64);
-        let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
-        let up = v3::norm(&v3::sub(&eye, &planet_center));
-        self.clouds.lay_out(g, &m, &eye, [eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS]);
-        self.stars.lay_out(g, &m, env, width);
         put_ray(&mut self.sky, 0, &m, &eye);
+        self.clouds
+            .lay_out(&self.sky[..RAY_FLOATS], [eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS], reach * env[ENV_AIR + 1]);
+        self.stars.lay_out(&m, env, width);
         self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
         self.sky[SKY_MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         for i in 0..3 {
             u[CAMERA_POS + i] = eye[i] as f32;
-            u[UP + i] = up[i] as f32;
         }
         u[EDGE_STRENGTH] = s[STAGE_AT::EDGE_STRENGTH] as f32;
         u[CELL] = s[STAGE_AT::LOD_CELL] as f32;
-        u[ENV..ENV + 24].copy_from_slice(&env[0..24]);
-        u[OTHER..OTHER + 8].copy_from_slice(&env[ENV_OTHER_LIGHT..ENV_OTHER_LIGHT + 8]);
+        for (dir, color, at) in [(SUN_DIR, SUN_COLOR, ENV_SUN_LIGHT), (OTHER_DIR, OTHER_COLOR, ENV_MOON_LIGHT)] {
+            u[dir..dir + 3].copy_from_slice(&env[at..at + 3]);
+            u[color..color + 3].copy_from_slice(&env[at + LIGHT_COLOR..at + LIGHT_COLOR + 3]);
+        }
         u[LOW_SPEC] = s[STAGE_AT::LOW_SPEC] as f32;
         u[EDGE_WIDTH] = s[STAGE_AT::EDGE_WIDTH] as f32;
         u[RIM_INTENSITY] = s[STAGE_AT::RIM_INTENSITY] as f32;
         u[VIEWPORT] = width as f32;
         u[VIEWPORT + 1] = height as f32;
         u[VIGNETTE] = 1.0;
-        u[AO_STRENGTH] = s[STAGE_AT::AO_STRENGTH] as f32;
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
         if self.screen_ao {
-            self.ao.lay_out(g, &proj, width, height);
+            self.ao.lay_out(&proj, width, height);
         }
-        let globe = [
-            center[0] as f32,
-            center[1] as f32,
-            sphere.radius_u() as f32,
-            center[2] as f32,
-            sphere.e0 as f32,
-            sphere.sin_lat as f32,
-            sphere.cos_lat as f32,
-            MERCATOR_RADIUS_U as f32,
-        ];
-        put_globe(u, &globe);
+        // The eye's own place on the map, Mercator's longitude and ordinate
+        // (its units over the map's radius in them), and that radius.
+        let lon = world::nearest(eye_world[0], 0.0) / MERCATOR_RADIUS_U;
+        u[MAP..MAP + 3].copy_from_slice(&[lon as f32, (eye_world[1] / MERCATOR_RADIUS_U) as f32, MERCATOR_RADIUS_U as f32]);
 
-        self.atmosphere.lay_out(g, env, &up);
+        self.atmosphere.lay_out(g, env);
     }
 
     /// A box is one instance shared by 36 vertices; a draw's first box is its first
@@ -1575,76 +1871,99 @@ impl Renderer {
         bound
     }
 
-    /// A frame in three stages, each standing while what it reads stands:
-    /// the cast's lane (stage 1, `ScreenCellsPass::prepare`); the world
-    /// image, everything the world and its light make, into the surface's own
-    /// colour and depth (stage 2, `world`); and the frame, the image laid on
-    /// it whole and over it what moves on its own — the actors, whose clips
-    /// play, the clouds, which the wind carries, the puck, the ghosts, the
-    /// badges, the gizmos (stage 3, every frame).
+    /// A frame in two stages, each standing while what it reads stands:
+    /// the cast's rays (stage 1, `RaysPass::prepare`); and the frame,
+    /// everything the world and its light make off those rays, then over it
+    /// what moves on its own — the actors, whose clips play, the clouds,
+    /// which the wind carries, the puck, the ghosts, the badges, the gizmos
+    /// (stage 2, `frame_read`). The rays hold the world as the cast left
+    /// it, so the frame draws it again off them rather than off an image of
+    /// it: that costs what laying an image would.
     fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> (FrameKind, FrameStat) {
-        let mut read = core::mem::take(&mut self.world);
+        let mut read = core::mem::take(&mut self.frame_read);
         read.begin();
-        let mut rest = core::mem::take(&mut self.frame_read);
-        rest.begin();
         self.decor.set_models(input.decor);
-        self.impostor.set_models(input.decor);
+        self.impostor.set_models(input.decor.iter().map(|&(mesh, image, extent)| (mesh, image.map(|i| i.0), extent)));
         for &(model, image) in input.skins {
             self.skinned.set_skin(g, model, image);
         }
         read.read(input.skins);
         read.mark(self.layers.step(g, &self.mips, input.pack));
         read.mark(self.moon.step(g, &self.mips, input.moon));
-        read.mark(self.atmosphere.earth_step(g, &self.mips, input.earth));
+        read.mark(self.atmosphere.earth.step(g, &self.mips, input.earth));
         let cast = input.cast;
-        self.screen.hand(g, &mut self.pipelines, input.ground);
+        // What the frame cannot put off is recorded before what can wait:
+        // the cast pass made first, then the squares' uploads, which take
+        // only the room left.
+        if cast.is_some() {
+            self.screen.make(g, &mut self.pipelines);
+        }
+        self.screen.hand(g, &mut self.pipelines, input.ground.upload);
         let tiles = input.earth_tiles;
         read.mark(self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload));
-        rest.mark(self.badges.sync_sheet(g, &self.mips, input.billboards, input.text));
+        read.mark(self.badges.sync_sheet(g, &self.mips, input.billboards, input.text));
         let (records, uniforms, blocks_moved) = take_lists(Some(g), input.lists);
-        rest.mark(blocks_moved);
-        rest.read(records);
-        rest.read(uniforms);
-        rest.read(input.cases);
+        read.mark(blocks_moved);
+        // Each list's writers write again only where it moved.
+        let uniforms_moved = read.read(uniforms);
+        let lists_moved = read.read(records) | uniforms_moved;
+        read.read(input.cases);
 
         targets(g, world);
-        self.lay_out(g, world.width, world.height, input.environment);
-        if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
+        // How far the eye observes, as far as the clouds are drawn.
+        let reach = cast.as_ref().map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));
+        self.lay_out(g, world.width, world.height, input.environment, reach);
+        let ao_remade = self.screen_ao && self.ao.ensure(g, world.width, world.height);
+        if ao_remade {
             self.rebind(g);
             read.mark(true);
         }
-        g.write_buffer(self.sky_buffer, 0, bytes(&self.sky));
         let uniform_bytes = word_bytes(uniforms.len());
-        if uniform_bytes > self.draws_bytes {
+        let grew = uniform_bytes > self.draws_bytes;
+        if grew {
             release(self.draws_buffer);
             self.draws_bytes = uniform_bytes * 2;
             self.draws_buffer = g.buffer(self.draws_bytes, buffer_usage::STORAGE | buffer_usage::COPY_DST);
             self.box_groups(g);
         }
-        if !uniforms.is_empty() {
-            g.write_buffer(self.draws_buffer, 0, bytes(uniforms));
+        if !uniforms.is_empty() && (grew || uniforms_moved) {
+            // Read where the draw list holds them, one record however many.
+            g.upload_buffer(self.draws_buffer, 0, bytes(uniforms));
         }
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
-        g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
-        read.read(&self.frame);
-        read.read(&self.sky);
-        read.read(self.stars.words());
+        // Each uniform written where the image's read finds it moved.
+        if read.read(&self.frame) {
+            g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
+        }
+        if read.read(&self.sky) {
+            g.write_buffer(self.sky_buffer, 0, bytes(&self.sky));
+        }
+        if read.read(self.stars.words()) {
+            self.stars.write(g);
+        }
+        if self.screen_ao && read.read(self.ao.words()) {
+            self.ao.write(g);
+        }
         read.read(self.atmosphere.words());
-        read.read(&[world.world, world.world_depth, u32::from(self.screen_ao)]);
+        read.read(&[world.depth, world.rays, u32::from(self.screen_ao)]);
         let b = blocks();
-        self.decor.prepare(g, &draws, uniforms, b);
-        self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, b);
-        self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, b);
+        self.decor.prepare(g, &draws, uniforms, lists_moved, b);
+        self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
+        self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
         self.puck.prepare_zone(g, &draws, b);
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
         let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
-        self.screen.prepare(g, &mut self.pipelines, cast, &meshes);
+        self.screen.prepare(g, cast, &meshes, (world.rays_view, [world.width, world.height]));
+        // The frame draws the decor grown, so it reads whether that is on:
+        // decor turned off grows nothing and casts no ray again, yet the
+        // frame stands without it.
+        read.read(&[u32::from(self.screen.grown().is_some())]);
         self.decor.prepare_grown(g, self.screen.grown());
         self.impostor.prepare_grown(g, self.screen.grown());
-        self.prepare_cases(g, &draws, uniforms, input.cases);
-        let q = if input.timed { self.query_set } else { 0 };
+        self.prepare_cases(g, &draws, uniforms, input.cases, lists_moved);
+        let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [Stamp; GPU_SPAN_NAMES.len()] = core::array::from_fn(|span| Stamp::of(q, span));
         // What outlives the frame is drawn and submitted ahead of it: from here on
@@ -1653,24 +1972,26 @@ impl Renderer {
         let baked = self.impostor.bake(g, ahead, &mut self.decor, b);
         read.mark(baked);
         let gridded = self.screen.grids(g, ahead, &mut stamps[SPAN_FILL]);
-        let (tables, exposed) = self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR], read.moved());
+        let folded = self.screen.fold(g, ahead, &mut stamps[SPAN_FILL]);
+        let (tables, exposed) = self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR]);
         read.mark(tables);
-        if baked || gridded || exposed {
+        let aired = self.atmosphere.froxel(g, ahead, [&self.frame, &self.sky], exposed, &mut stamps[SPAN_AIR]);
+        read.mark(aired);
+        if baked || gridded || folded || exposed || aired {
             g.submit(ahead);
         } else {
             release(ahead);
         }
         self.atmosphere.read_back(g);
-        self.screen.read_back(g);
-        // The image stands where it read all as last time over a lane that stood.
-        let still = read.end() && self.screen.kind != FrameKind::cast;
-        rest.read(self.clouds.words());
-        // The frame stands where the image does and the rest of what it
-        // draws from read as last time: nothing is drawn, nothing submitted,
-        // and the canvases keep the frame they show.
-        if still && rest.end() && !gridded {
-            self.world = read;
-            self.frame_read = rest;
+        self.screen.read_back(g, input.ground.landed, input.ground.joined, input.ground.records);
+        if read.read(self.clouds.words()) {
+            self.clouds.write(g);
+        }
+        // The frame stands where all it draws from read as last time over
+        // rays that stood: nothing is drawn, nothing submitted, and the
+        // canvases keep the frame they show.
+        if read.end() && self.screen.kind != FrameKind::cast && !self.screen.grows() && !gridded {
+            self.frame_read = read;
             let stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES.len()]);
             self.order = order;
             return (FrameKind::stood, stat);
@@ -1680,93 +2001,96 @@ impl Renderer {
         // for the stream is dropped whole and the screen keeps the last.
         frame_begin();
         let encoder = g.encoder();
-        let [cast, faces] = stamps.get_disjoint_mut([SPAN_CAST, SPAN_FACE]).or_bug(Errno::ENOTRECOVERABLE);
-        self.screen.dispatch(g, encoder, cast, faces);
-        if !still {
-            if self.screen_ao {
-                let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
-                self.draw_opaque(g, pass, b, Stage::Prepass);
-                g.end(pass);
-                self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
-            }
-            let pass = g.pass(encoder, &pass_desc(world.world_view, Load::Clear, world.world_depth_view, Load::Clear, 0.0, stamps[SPAN_WORLD].pass()));
-            self.draw_opaque(g, pass, b, Stage::Lit);
-            let mut bound = self.screen.draw(g, pass);
-            // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
-            self.impostor.draw_grown(g, pass, self.screen.grown(), GROUPS, (self.models.frame, &mut bound));
-            // At the far plane after the opaque world, so only empty pixels run the sky shader.
-            g.set_pipeline(pass, self.sky_built.pipeline);
-            g.set_bind_group(pass, 0, self.sky_group, &[]);
-            g.draw(pass, 3, 1, 0, 0);
-            self.stars.draw(g, pass);
+        self.screen.dispatch(g, encoder, &mut stamps);
+        let a = &mut self.ao_read;
+        a.begin();
+        a.read(&self.frame);
+        a.read(self.ao.words());
+        a.read(&[world.width, world.height, u32::from(self.screen_ao), u32::from(self.screen.grown().is_some())]);
+        a.mark(ao_remade || self.screen.grows());
+        let ao_moved = !a.end();
+        if self.screen_ao && ao_moved {
+            let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
+            self.draw_opaque(g, pass, b, Stage::Prepass);
             g.end(pass);
+            self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
         }
         let canvas_view = g.current(world.handle);
-        let pass = g.pass(encoder, &pass_desc(canvas_view, Load::Clear, world.depth_view, Load::Clear, 0.0, stamps[SPAN_OVERLAY].pass()));
-        let views = [world.world_view, world.world_depth_view];
-        if views != self.blit_views {
-            release(self.blit_group);
-            self.blit_group = g.bind_group(self.blit.layouts[0], &[view_entry(0, views[0]), view_entry(1, views[1])]);
-            self.blit_views = views;
-        }
-        g.set_pipeline(pass, self.blit.pipeline);
-        g.set_bind_group(pass, 0, self.blit_group, &[]);
+        let pass = g.pass(encoder, &pass_desc(canvas_view, Load::Clear, world.depth_view, Load::Clear, 0.0, stamps[SPAN_WORLD].pass()));
+        self.draw_opaque(g, pass, b, Stage::Lit);
+        let mut bound = self.screen.draw(g, pass);
+        // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
+        self.impostor.draw_grown(g, pass, self.screen.grown(), GROUPS, (self.models.frame, &mut bound));
+        // At the far plane after the opaque world, so only empty pixels run the sky shader.
+        g.set_pipeline(pass, self.sky_built.pipeline);
+        g.set_bind_group(pass, 0, self.sky_group, &[]);
         g.draw(pass, 3, 1, 0, 0);
+        self.stars.draw(g, pass);
         // The actors, whose clips play, and the clouds the kernel lists, the
-        // cumulus, which the wind carries: drawn over the image against its
-        // depth, as a moving object is over a cached world, their occlusion
-        // open.
+        // cumulus, which the wind carries: drawn over the world against its
+        // depth, their occlusion open.
         let mut bound = 0;
         let over = (self.models.over, &mut bound);
         self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, Stage::Lit, (over.0, &mut *over.1));
         self.decor.draw(g, pass, &draws, b, Stage::Lit, (over.0, &mut *over.1));
         self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, over);
         self.clouds.draw(g, pass);
-        self.puck.draw_beacon(g, pass, &draws, uniforms);
-        self.puck.draw_zone(g, pass, &draws, uniforms, b);
+        self.puck.draw_beacon(g, pass, &draws, uniforms, lists_moved);
+        self.puck.draw_zone(g, pass, &draws, uniforms, lists_moved, b);
         self.draw_boxes(g, pass, &draws, PIPELINE_GHOST_BOX, self.ghost[0].pipeline);
         self.draw_boxes(g, pass, &draws, PIPELINE_GHOST_BOX_COPLANAR, self.ghost[1].pipeline);
         let mut bound = 0;
         self.decor.draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         g.end(pass);
         self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
-        self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_DEBUG]);
-        self.draw_cases(g, encoder, &draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
+        self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, lists_moved, b, &mut stamps[SPAN_DEBUG]);
+        self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, blocks_moved || tables || exposed, &mut stamps[SPAN_CASES]);
         let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
-        g.submit_frame(encoder, written);
+        let asked = g.submit_frame(encoder, written);
         release(canvas_view);
-        let mut gpu_spans = [0.0; GPU_SPAN_NAMES.len()];
+        // The read that landed is the one that was on its way; this frame's
+        // takes its place where one was asked.
         let gpu_read = q != 0 && g.gpu_landed();
-        if q != 0 {
-            gpu_spans = core::array::from_fn(|k| g.gpu_ms(k as u32));
+        let (gpu_spans, gpu_px) = if gpu_read {
+            (core::array::from_fn(|k| g.gpu_ms(k as u32)), self.read_px)
+        } else {
+            ([0.0; GPU_SPAN_NAMES.len()], 0.0)
+        };
+        if asked {
+            self.read_px = f64::from(world.width) * f64::from(world.height);
         }
         let skipped = !frame_commit();
         if skipped {
             REDRAW.set(true);
-            // Its cast and its image were dropped with it: the lane and the
+            // Its cast and its image were dropped with it: the rays and the
             // image hold older ones.
             if let Some(c) = self.screen.cast.as_mut() {
                 c.read.forget();
+                c.grown.dropped();
+            }
+            for case in self.cases.iter_mut().flatten() {
+                case.read.forget();
             }
             read.forget();
-            rest.forget();
+            self.ao_read.forget();
+        } else if self.screen.grows() {
+            // Drawn: what its decor marked by is done with.
+            if let Some(c) = self.screen.cast.as_mut() {
+                c.grown.drawn_frame();
+            }
         }
-        self.world = read;
-        rest.end();
-        self.frame_read = rest;
-        let kind = match (skipped, still) {
-            (true, _) => FrameKind::dropped,
-            (false, true) => FrameKind::still,
-            (false, false) => self.screen.kind,
-        };
+        read.end();
+        self.frame_read = read;
+        let kind = if skipped { FrameKind::dropped } else { self.screen.kind };
         let mut stat = self.stat(draws.records, world, input.counted, gpu_spans);
         stat.gpu_read = gpu_read;
+        stat.gpu_px = gpu_px;
         self.order = order;
         (kind, stat)
     }
 
     /// The cases drawn this frame: a surface still a case, and its actor's draw.
-    fn cases<'a, 'd>(draws: &'a Draws<'d>, cases: &'a [(u32, u32, u32)]) -> impl Iterator<Item = (u32, u32, u32, &'d [u32; DRAW_WORDS])> + 'a {
+    fn cases<'a, 'd>(draws: &'a Draws<'d>, cases: &'a [(u32, u32, Image)]) -> impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])> + 'a {
         cases.iter().filter_map(move |&(id, model, image)| {
             surface(id).filter(|s| s.role == surface_role::CASE)?;
             let own = draws.of(PIPELINE_SKINNED).find(|d| d[2] == model)?;
@@ -1776,7 +2100,7 @@ impl Renderer {
 
     /// Each case's targets, passes and skin, made here so drawing makes nothing
     /// that outlives its frame.
-    fn prepare_cases(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, u32)]) {
+    fn prepare_cases(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, Image)], moved: bool) {
         for (id, model, image, own) in Self::cases(draws, cases) {
             let Some(s) = surface(id) else { continue };
             targets(g, s);
@@ -1786,12 +2110,14 @@ impl Renderer {
             }
             let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
             case.skinned.set_skin(g, model, image);
-            case.skinned.prepare(g, core::iter::once(own), uniforms, blocks());
+            case.skinned.prepare(g, core::iter::once(own), uniforms, moved, blocks());
         }
     }
 
-    fn draw_cases(&mut self, g: &Gpu, encoder: u32, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, u32)], stamp: &mut Stamp) {
-        for (id, _, _, own) in Self::cases(draws, cases) {
+    /// Each case whose picture's makings moved, `moved` what moved without
+    /// words: the models' blocks, the air's tables or its exposure.
+    fn draw_cases<'d>(&mut self, g: &Gpu, encoder: u32, cases: impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])>, uniforms: &[f32], moved: bool, stamp: &mut Stamp) {
+        for (id, model, image, own) in cases {
             let Some(s) = surface(id) else { continue };
             let Some(case) = self.cases[handle_slot(id) as usize].as_mut() else { continue };
             let u = uniform_of(uniforms, own);
@@ -1799,11 +2125,10 @@ impl Renderer {
             let mut frame = self.frame;
             let u = &mut frame;
             let (mut proj, mut view, mut t, mut m, mut n) = (mat4::new(), mat4::new(), mat4::new(), mat4::new(), mat4::new());
-            mat4::perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, 0.1, 100.0);
+            mat4::perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, CASE_NEAR);
             mat4::look_at(&mut view, CASE_EYE, CASE_TARGET, [0.0, 0.0, 1.0]);
             mat4::translation(&mut t, -actor[0], -actor[1], -actor[2]);
-            mat4::mul(&mut m, &GL_TO_WGPU, &proj);
-            mat4::mul(&mut n, &m, &view);
+            mat4::mul(&mut n, &proj, &view);
             mat4::mul(&mut m, &n, &t);
             put_mat(u, VIEW_PROJ, &m);
             u[CAMERA_POS] = (CASE_EYE[0] + actor[0]) as f32;
@@ -1813,8 +2138,16 @@ impl Renderer {
             u[VIEWPORT + 1] = s.height as f32;
             u[VIGNETTE] = 0.0;
             u[SCREEN_AO] = 0.0;
-            // No planet: the case is a room of its own.
-            u[PLANET + 2] = 0.0;
+            let r = &mut case.read;
+            r.begin();
+            r.read(&frame);
+            r.read(own);
+            r.read(uniform_of(uniforms, own));
+            r.read(&[model, image.0, s.width, s.height, s.depth]);
+            r.mark(moved);
+            if r.end() {
+                continue;
+            }
             g.write_buffer(case.frame_buffer, 0, bytes(&frame));
             let view_id = g.current(s.handle);
             let pass = g.pass(encoder, &pass_desc(view_id, Load::Clear, s.depth_view, Load::Clear, 0.0, stamp.pass()));
@@ -1850,12 +2183,12 @@ impl Renderer {
         let px = world.width as f64 * world.height as f64;
         FrameStat {
             gpu_read: false,
+            gpu_px: 0.0,
             blocks: b.count as f64,
             block_bytes: b.bytes as f64,
             // The depth targets at the world's size: its own, one f32 a pixel, AO's and the badges' regions'.
-            depth_mb: round((px * 4.0 + self.ao.depth_bytes() + self.badges.depth_bytes()) / MB),
-            layers_mb: round(self.layers.bytes as f64 / MB),
-            world_px: px,
+            depth_bytes: px * 4.0 + self.ao.depth_bytes() + self.badges.depth_bytes(),
+            layers_bytes: self.layers.bytes as f64,
             census,
             gpu_spans,
         }
@@ -1889,22 +2222,31 @@ fn targets(g: &Gpu, s: &mut Surface) {
     }
     s.waited = 0;
     g.resize(s.handle, width, height);
-    for id in [s.depth_view, s.depth, s.world_view, s.world, s.world_depth_view, s.world_depth] {
+    for id in s.targets() {
         release(id);
     }
     let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
     s.depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
     s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
-    // The world's alone draws over an image of it; a case draws straight.
-    (s.world, s.world_view, s.world_depth, s.world_depth_view) = (0, 0, 0, 0);
+    // The world's alone holds the cast's rays.
+    (s.rays, s.rays_view) = (0, 0);
     if s.role == surface_role::WORLD {
-        s.world = g.texture(width, height, 1, g.canvas(), 1, usage);
-        s.world_view = g.view(s.world, false, 0, 1, 0, 1);
-        s.world_depth = g.texture(width, height, 1, Format::depth32float, 1, usage);
-        s.world_depth_view = g.view(s.world_depth, false, 0, 1, 0, 1);
+        // Written by the cast, read by the screen pass.
+        let rays = texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING;
+        s.rays = g.texture(width, height, ray::WORDS, Format::r32uint, 1, rays);
+        s.rays_view = g.view(s.rays, true, 0, 1, 0, ray::WORDS);
     }
     s.width = width;
     s.height = height;
+}
+
+/// A frame's cast handed and never drawn: the edits its decor named, held
+/// for the next that is.
+fn unconsumed(cast: &Option<Cast>) {
+    let Some(d) = cast.as_ref().and_then(|c| c.decor.as_ref()) else { return };
+    if let Some(c) = RENDERER.get(|| None).as_mut().and_then(|r| r.screen.cast.as_mut()) {
+        c.grown.unconsumed(d.edits);
+    }
 }
 
 /// Without a device or the world's canvas, the lists are recorded for the frame that has both.
@@ -1912,6 +2254,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     REDRAW.set(false);
     let world = surfaces().find(|s| s.role == surface_role::WORLD);
     let (Some(g), Some(device), Some(world)) = (gpu(), device(), world) else {
+        unconsumed(&input.cast);
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
         return FrameOutput {
             kind: FrameKind::unready,
@@ -1921,6 +2264,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     };
     // The surfaces would block: skip rather than wait.
     if !(input.admit)() {
+        unconsumed(&input.cast);
         take_lists(Some(g), input.lists);
         return FrameOutput {
             kind: FrameKind::held,
@@ -1934,7 +2278,8 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     let (kind, stat) = r.frame(g, world, input);
     FrameOutput {
         kind,
-        redraw: *REDRAW.get(|| false),
+        // An image landing is taken on a turn to come.
+        redraw: *REDRAW.get(|| false) || crate::gpu::api::images_landing(),
         stat: Some(stat),
     }
 }

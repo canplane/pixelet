@@ -25,7 +25,7 @@ pub mod residency;
 pub mod terrain;
 
 pub use answer::Answer;
-pub use query::{Bound, Query};
+pub use query::Query;
 
 /// What a layer asks for of the view.
 #[derive(Clone, Copy)]
@@ -54,7 +54,7 @@ pub trait Base: Clone + 'static {
     const ASKS: Asks = Asks::View;
 
     /// The coarsest zoom the layer's own source supplies whole, where one
-    /// differs from the ground's declared top (`floor::top`). Its floor is
+    /// differs from the ground's declared top (io/source.rs `top`). Its floor is
     /// then that zoom's whole reach about the eye: it is drawn past where
     /// the ground stops.
     const TOP: Option<Zoom> = None;

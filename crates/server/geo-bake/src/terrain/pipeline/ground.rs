@@ -8,7 +8,6 @@ use crate::terrain::CELL_U;
 use pxl_portable::lattice::CELL_CENTER;
 use pxl_portable::ways;
 use pxl_spec::bake::tile::terrain::{Ground, GroundId};
-use pxl_spec::bake::way;
 use pxl_spec::block::cube::ground;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 
@@ -120,7 +119,7 @@ pub(crate) fn render_polygon<T: Copy>(points: &[P], value: T, cells: &mut [T], h
 /// where `cut` says at its first and last.
 fn render_linear_feat(points: &[P], value: GroundId, cells: &mut [GroundId], width_cell: f64, cut: [bool; 2], mask: Sea) {
     let (width, center) = (width_cell as f32, f64::from(CELL_CENTER));
-    let reach = f64::from(way::reach(width));
+    let reach = f64::from(ways::reach(width));
     let last = points.len().saturating_sub(2);
     for (s, w) in points.windows(2).enumerate() {
         let (a, b) = ([w[0][0], w[0][1]], [w[1][0], w[1][1]]);

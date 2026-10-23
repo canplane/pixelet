@@ -4,110 +4,105 @@
 //! (layer/terrain/window.rs) at the cells of the tile its cells fold from,
 //! off the finest window holding them: exact where that is the zoom its
 //! tile's line says its ground at, coarser where only one over holds them.
-//! Its lines are read from the resident tile it is drawn from.
+//! A column's ways are its square's tree the GPU built, its blocks read
+//! back into the pool's mirror (layer/terrain/window.rs `pool`).
 
-use pxl_portable::window::{self as cells, SQUARE_SHIFT};
+use pxl_portable::ground::{Bounds, Cell};
+use pxl_portable::window::{self as cells, Found};
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::block::sample::TileSource;
-use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::q3;
-use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{base_of, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
-use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, Tile};
 
 use crate::io::source;
 use crate::layer::residency::{Line, Lines, Residency};
 use crate::layer::terrain::window::Windowed;
-use pxl_portable::window::FIRST_CELL;
 
-use crate::layer::{Answer, Bound, Query};
+use crate::layer::{Answer, Query};
+use pxl_spec::space::coord::aabb::Aabb;
 
-/// Where a node's cells are read from: the tile that answered, and where the
-/// first cell of the tile asked lies in it, `n` of the asked tile's cells to
-/// one of its own.
-#[derive(Clone, Copy)]
-pub struct Source<'a> {
-    pub tile: &'a TerrainTile,
-    pub from: Tile,
-    pub origin: [i64; 2],
-    pub n: u32,
-}
+impl Residency<TerrainTile> {
+    /// The lowest and highest the ground holds over the column `node`'s own
+    /// cells, in leaf cells, and the ways apart (pxl-portable
+    /// `ground::Bounds`): the bounds over the cells of `line`'s tile, off
+    /// the finest window holding them, one look-up whatever the node's size
+    /// (`relief`). A coarser window standing in holds its own cells, which
+    /// its bound holds, and names the tile lacked; where no window holds it,
+    /// the lack, never nothing. Past the service area no window holds
+    /// anything: a reader asks that first, the descent of its shard
+    /// (pxl-portable `area::Shard`). `place` is where a node over it found
+    /// its cells, or `Found::NONE`, and becomes where its own are
+    /// (pxl-portable `window::step`). Its cells are read at `cell` as the
+    /// GPU reads them (pxl-portable `window::bound_over`); `line` names the
+    /// tile and says whether the window read is its ground's own.
+    pub fn relief(&self, line: &Line, place: &mut Found, node: Node<2>, zooms: [Zoom; 2]) -> Answer<Bounds> {
+        let (r, from, here) = cells::bound_over(&Windowed, place, zooms, node);
+        held(line, from, here, r)
+    }
 
-impl<'a> Source<'a> {
-    pub fn view(&self) -> TileSource<'a> {
-        TileSource {
-            separation: &self.tile.separation,
-            frame: Frame::of(self.from),
-            origin: self.origin,
-            n: self.n,
+    /// The column `c` at `zoom` off the windows, the area's edge laid on
+    /// it, as the GPU reads it (pxl-portable `window::ground`), stepped from
+    /// `place`: exact where `line`
+    /// says the ground at the window it was read off or coarser, else
+    /// coarser, naming its tile (`held`); where no window holds it, the
+    /// lack.
+    pub fn column(&self, line: &Line, place: Found, (zoom, c): Node<2>) -> Answer<Cell> {
+        let (cell, f) = cells::ground(&Windowed, place, zoom, c);
+        held(line, f.from(), f.here(), cell)
+    }
+
+    /// The line `node`'s cells at `cell` are read on, stepped from where
+    /// `lines` last walked: a tile under one it holds from that one's line, a
+    /// coarser one its own as an ancestor read it, so nodes beside or under
+    /// each other share their lines down to where they part, and pay a
+    /// look-up a zoom only past it.
+    pub fn line_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line {
+        self.seek(lines, bound_tile(node, cell))
+    }
+
+    /// The line `node`'s cells at `cell` are read on, off `over`, the line its
+    /// parent column's were: that line where it is the same tile's, stepped
+    /// from it where it is the tile's parent's (`step`), else walked from the
+    /// top, as `seek` steps.
+    pub fn line_under(&self, over: Option<&Line>, node: Node<2>, cell: Zoom) -> Line {
+        let tile = bound_tile(node, cell);
+        match over {
+            Some(o) if o.tile == tile => *o,
+            Some(o) if tile.zoom > GROUND.top() && o.tile == tile.parent() => self.step(o, tile),
+            _ => self.line(tile),
         }
+    }
+
+    /// `relief` over `node`'s cells at `cell`, its line walked (`line_walked`).
+    pub fn relief_walked(&self, lines: &mut Lines, place: &mut Found, node: Node<2>, cell: Zoom) -> Answer<Bounds> {
+        self.relief(&self.line_walked(lines, node, cell), place, node, [cell, cell])
+    }
+
+    /// `bound`, its line walked (`line_walked`): a walk in key order pays one
+    /// look-up a node.
+    pub fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
+        self.bound(&self.line_walked(lines, node, cell), node, cell)
     }
 }
 
 impl Residency<TerrainTile> {
-    /// The lowest and highest the ground holds over the column `node`'s own
-    /// cells, in leaf cells: the bound over the cells of `line`'s tile, off
-    /// the finest window holding them, one look-up whatever the node's size
-    /// (`relief`). A coarser window standing in holds its own cells, which
-    /// its bound holds, and names the tile lacked. None for a column a shard
-    /// or finer past the service area, where no tile is; where no window
-    /// holds it, the lack, never nothing.
-    pub fn relief(&self, line: &Line, node: Node<2>) -> Answer<Option<[i32; 2]>> {
-        if node.0 >= SHARD_ZOOM && past(node) {
-            return Answer::Exact(None);
+    /// `tile`'s line, stepped down from `from`'s, a tile over it or itself:
+    /// a look-up a zoom between them.
+    fn down(&self, from: &Line, tile: Tile) -> Line {
+        match tile == from.tile {
+            true => *from,
+            false => self.step(&self.down(from, tile.parent()), tile),
         }
-        let (r, from, here) = relief(line.tile, node);
-        held(line, from, here, Some(r))
-    }
-
-    /// `bound`, its line stepped from where `lines` last walked: a walk in
-    /// key order pays one look-up a node.
-    pub fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Bound>> {
-        self.bound(&self.seek(lines, bound_tile(node, cell)), node, cell)
-    }
-
-    /// Whether the windows hold the cells of `line`'s tile under `node` as
-    /// its line says them, each square of them read (`held`).
-    pub fn cells_held(&self, line: &Line, (zoom, at): Node<2>) -> Answer<()> {
-        let cell = GROUND.cell_zoom(line.tile.zoom);
-        let [lo, hi] = match cell.checked_sub(zoom) {
-            Some(d) => [at.map(|v| v << d), at.map(|v| ((v + 1) << d) - 1)],
-            None => [at.map(|v| v >> (zoom - cell)); 2],
-        }
-        .map(|c| c.map(|v| (v >> SQUARE_SHIFT) as i32));
-        let mut coarsest = cell;
-        for y in lo[1]..=hi[1] {
-            for x in lo[0]..=hi[0] {
-                let (from, _, _, here) = cells::find(&Windowed, cell, [x << SQUARE_SHIFT, y << SQUARE_SHIFT], FIRST_CELL);
-                if !here {
-                    return Answer::Nothing(line.tile);
-                }
-                coarsest = coarsest.min(from);
-            }
-        }
-        held(line, coarsest, true, ())
-    }
-
-    /// The cells of the tile `line` walked to as the resident tile it is
-    /// drawn from holds them; none where none is held.
-    pub fn source_of(&self, line: &Line) -> Option<Source<'_>> {
-        let from = line.drawn?;
-        let corner = GROUND.cell_at(line.tile, GROUND.cell_index(0, 0));
-        Some(Source {
-            tile: self.get(from)?,
-            from,
-            origin: corner.in_tile_above(line.tile.zoom - from.zoom),
-            n: count(GROUND.cell_zoom(line.tile.zoom), GROUND.cell_zoom(from.zoom)),
-        })
     }
 }
 
 /// The tile a node's bound is read from: its cells' tile, within the
-/// pyramid's zooms.
+/// pyramid's zooms, or where the node is wider than one, its own, the
+/// finest one tile holding it.
 fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
-    let read = GROUND.read_zoom(cell);
+    let read = GROUND.read_zoom(cell).min(zoom);
     tile_at(read, ancestor_of([at[0], at[1]], zoom - read))
 }
 
@@ -119,12 +114,6 @@ fn held<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
         true if line.source.is_some_and(|s| from >= GROUND.cell_zoom(s.zoom)) => Answer::Exact(v),
         true => Answer::Coarser(v, line.tile),
     }
-}
-
-/// The bound under a node over the cells of `tile`, off the finest window
-/// holding them (pxl-portable `window::bounded`), and that window's zoom.
-fn relief(tile: Tile, (zoom, at): Node<2>) -> ([i32; 2], Zoom, bool) {
-    cells::bounded(&Windowed, GROUND.cell_zoom(tile.zoom), (zoom, at.map(|v| v as i32)), FIRST_CELL)
 }
 
 /// A node's center, in units.
@@ -140,54 +129,47 @@ fn past(node: Node<2>) -> bool {
 }
 
 impl Query for Residency<TerrainTile> {
-    type Record<'a> = Source<'a>;
-
     type Cursor = Line;
 
     fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Line {
         self.line(bound_tile(node, cell))
     }
 
-    /// The tile a child reads is its parent's, or one of its children.
+    /// The tile a child reads is its parent's or one under it, stepped down
+    /// from the parent's line a zoom at a time (`down`); a coarser one, whose
+    /// line no child holds, is walked from the top.
     fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell: Zoom) -> Line {
-        match bound_tile(node, cell) {
-            tile if tile == parent.tile => *parent,
-            tile if tile.zoom == parent.tile.zoom + 1 && tile.parent() == parent.tile => self.step(parent, tile),
-            tile => self.line(tile),
+        let tile = bound_tile(node, cell);
+        let mut over = tile;
+        while over.zoom > parent.tile.zoom {
+            over = over.parent();
+        }
+        match over == parent.tile {
+            true => self.down(parent, tile),
+            false => self.line(tile),
         }
     }
 
-    /// From the relief of the tile it is drawn from over the node's own
-    /// cells, down to a cell at `cell` under its lowest, within the node. A
-    /// node past the service area, no look in it, holds nothing.
-    fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+    /// From the windows' relief over the node's own cells (`relief`), the
+    /// ground's and the ways' joined, down to a cell at `cell` under its
+    /// lowest, within the node. A node past the service area, no look in
+    /// it, holds nothing.
+    fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Aabb>> {
         let node = (zoom, [at[0], at[1]]);
         // Known before any of its ground arrives.
         if past(node) {
             return Answer::Exact(None);
         }
         let whole = region((zoom, at));
-        self.relief(line, node).map(|r| {
-            let [lo, hi] = r.unwrap_or_default();
+        let mut place = Found::NONE;
+        self.relief(line, &mut place, node, [cell, cell]).map(|[ground, ways]| {
+            let [lo, hi] = [ground[0].min(ways[0]), ground[1].max(ways[1])];
             let lo = (f64::from(lo) * units(GROUND.cell()) - units(cell)).max(whole.min[2]);
             let hi = (f64::from(hi) * units(GROUND.cell())).min(whole.max[2]);
-            (lo <= hi).then(|| Bound {
-                aabb: pxl_spec::space::coord::aabb::Aabb {
-                    min: [whole.min[0], whole.min[1], lo],
-                    max: [whole.max[0], whole.max[1], hi],
-                },
-                finest: GROUND.cell(),
+            (lo <= hi).then(|| Aabb {
+                min: [whole.min[0], whole.min[1], lo],
+                max: [whole.max[0], whole.max[1], hi],
             })
         })
-    }
-
-    /// The lines over the node's tile, as `held` says the tile it is drawn
-    /// from: exact where a resident tile says it, else coarser.
-    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Source<'_>> {
-        let line = self.cursor(node, cell);
-        match self.source_of(&line) {
-            Some(s) => held(&line, GROUND.cell_zoom(s.from.zoom), true, s),
-            None => Answer::Nothing(line.tile),
-        }
     }
 }

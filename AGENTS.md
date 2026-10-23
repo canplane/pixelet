@@ -7,9 +7,18 @@ down one picture; a user-level loader, kept in the agents' memory outside
 the tree, is that picture at the size of one loader.
 
 - **The eye decides.** The view is a grid of angular cells about the eye,
-  one ray a cell; only what those rays observe is drawn, by the same rule
-  wherever the eye is. A block is observed at the zoom whose block, drawn
-  whole, spans at least a cell of the camera grid at its distance.
+  and the grid decides what is asked: a block is observed at the zoom whose
+  block, drawn whole, spans at least a cell of the camera grid at its
+  distance, and the grid's rays walk the descent a cell's pixels share
+  (doc/minutes/20261022-a-cell-casts-a-beam.md). Under each cell, samples
+  four a side walk on from the cell's start, and a pixel shows the nearest
+  of the blocks the samples about it stopped at that its own ray enters; it
+  walks itself only where none is. The pixels are the render resolution's:
+  the display's times a scale the load sets — once a frame, the measured
+  cast against the paced frame's budget moves the scale by the square root
+  of their ratio, between half and whole, held while the cast is within a
+  tenth of the budget — upscaled within the frame (Unreal's screen
+  percentage, DLSS's 8K from 1440p); never from the frames before.
 - **The query is the only seam.** Every reader of the world — a ray, a
   walk, an edit, a placement — asks the same query directly for what is in a
   node at its zoom. Each source answers from its own level of detail; its

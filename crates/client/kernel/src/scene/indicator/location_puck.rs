@@ -18,7 +18,6 @@ use crate::kernel;
 use crate::query::World;
 use crate::scene::frame::Frame;
 use crate::sched::edge::request_world_tick;
-use crate::view::reach::view_reach;
 use xpute_guest::global::Global;
 
 // A world-space footprint (4u), whatever the ground's cell; the .707 is a
@@ -203,6 +202,8 @@ fn clear(p: &mut Puck) {
 pub const ZONE_INSTANCE_FLOATS: usize = 7;
 const BEACON_Z_BIAS: f64 = 0.5;
 const BEACON_SMOOTH_RATE: f64 = 6.0;
+/// How far the beacon bobs either way, in units.
+const BEACON_BOB: f64 = 0.1;
 
 pub struct PuckDraw {
     at: usize,
@@ -213,7 +214,9 @@ pub struct PuckDraw {
     /// Relative to the center.
     target: [f64; 2],
     shown: Option<[f64; 2]>,
-    snap_dist2: f64,
+    /// The zone's, past which the beacon snaps to its target rather than
+    /// slide.
+    radius: f64,
     night: bool,
     time: f64,
     visible: bool,
@@ -225,8 +228,9 @@ pub struct LocationPuck {
 }
 
 impl LocationPuck {
-    /// `lane` holds ZONE_INSTANCE_FLOATS floats an instance. Replaces what was there.
-    pub fn set_zone(&mut self, draw: &mut DrawList, center: V3, lane: &[f32], snap_dist: f64) {
+    /// `lane` holds ZONE_INSTANCE_FLOATS floats an instance, the zone
+    /// `radius` wide. Replaces what was there.
+    pub fn set_zone(&mut self, draw: &mut DrawList, center: V3, lane: &[f32], radius: f64) {
         let count = (lane.len() / ZONE_INSTANCE_FLOATS) as u32;
         let bytes = word_bytes(lane.len()).max(4);
         let keep = self.puck.as_ref().is_some_and(|p| p.bytes == bytes);
@@ -241,7 +245,7 @@ impl LocationPuck {
                 center,
                 target: [0.0; 2],
                 shown: None,
-                snap_dist2: snap_dist * snap_dist,
+                radius,
                 night: false,
                 time: 0.0,
                 visible: false,
@@ -279,26 +283,33 @@ impl LocationPuck {
         }
     }
 
-    /// Whether anything is animating and wants frames.
+    /// Whether anything is animating and wants frames. The puck is drawn
+    /// where an actor would be (scene/actor.rs `tick`): in the frustum and
+    /// spanning a camera cell at its distance; and it moves, its beacon
+    /// sliding to its target or bobbing, only where the move spans one, so a
+    /// frame is asked only for what can be seen to change. Else the beacon
+    /// stands at its target and its time holds.
     pub fn tick(&mut self, frame: &Frame) -> bool {
         let Some(p) = self.puck.as_mut() else { return false };
         let dt = frame.delta_s;
-        p.time += dt;
+        let to = v3::sub(&frame.world_of(p.center), &frame.camera);
+        let cell_there = crate::view::lens::cell_there(v3::len(&to));
+        p.visible = frame.sees(p.center, p.radius) && 2.0 * p.radius >= cell_there;
         let shown = p.shown.get_or_insert(p.target);
-        let gap = [p.target[0] - shown[0], p.target[1] - shown[1]];
-        if gap[0] * gap[0] + gap[1] * gap[1] > p.snap_dist2 {
-            *shown = p.target;
-        } else {
+        let gap = libm::hypot(p.target[0] - shown[0], p.target[1] - shown[1]);
+        let slides = p.visible && gap <= p.radius && gap >= cell_there;
+        if slides {
             let a = 1.0 - libm::exp(-BEACON_SMOOTH_RATE * dt);
-            shown[0] += gap[0] * a;
-            shown[1] += gap[1] * a;
+            shown[0] += (p.target[0] - shown[0]) * a;
+            shown[1] += (p.target[1] - shown[1]) * a;
+        } else {
+            *shown = p.target;
         }
-        // Hidden past the fog's far edge, as three's puck was.
-        let [x, y, z] = frame.world_of([p.center[0] + shown[0], p.center[1] + shown[1], p.center[2] + BEACON_Z_BIAS]);
-        let c = frame.camera;
-        let ([dx, dy, dz], reach) = ([x - c[0], y - c[1], z - c[2]], view_reach());
-        p.visible = dx * dx + dy * dy + dz * dz < reach * reach;
-        p.visible
+        let bobs = p.visible && 2.0 * BEACON_BOB >= cell_there;
+        if bobs {
+            p.time += dt;
+        }
+        slides || bobs
     }
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
@@ -312,7 +323,7 @@ impl LocationPuck {
         let beacon = [
             center[0] + shown[0] as f32,
             center[1] + shown[1] as f32,
-            center[2] + (BEACON_Z_BIAS + libm::sin(p.time * 2.0) * 0.1) as f32,
+            center[2] + (BEACON_Z_BIAS + libm::sin(p.time * 2.0) * BEACON_BOB) as f32,
         ];
         draw.draw_as(PIPELINE_PUCK_BEACON, 0, p.night as u32, 0, beacon, (p.time * 1.2) as f32, 1.0);
     }

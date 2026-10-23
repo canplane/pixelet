@@ -11,7 +11,6 @@ pub mod layout;
 
 use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
 use crate::io::demand::Stream;
-use crate::io::host::HeapStat;
 use crate::kernel;
 use crate::layer::earth::Earth;
 use crate::layer::residency::Residency;
@@ -28,6 +27,7 @@ use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, w
 use xpute_guest::ipc::door::Door;
 use xpute_guest::ipc::ring::Ring;
 use xpute_guest::mem::base::{off_of, off_of_slice, ptr_at};
+use xpute_guest::mem::heap::HeapStat;
 use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::wire::xtp::PacketWriter;
@@ -250,7 +250,7 @@ fn post_shell(s: &mut State) {
         if let Some(len) = crate::shell::ui_snapshot(buf) {
             break len;
         }
-        let room = (buf.len() * 2).max(section::PAGE_BYTES as usize);
+        let room = (buf.len() * 2).max(xpute_guest::mem::section::PAGE_BYTES as usize);
         buf.resize(room, 0);
     };
     let mut h = fnv::FnvHasher::default();

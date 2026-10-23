@@ -38,7 +38,9 @@ export function taskLine(r: TaskRecord): string {
 /** Geometry, textures and heap only mean anything as deltas from `prev`. */
 export function frameLine(s: Frame, prev: Frame | null): string {
   const [draws, triangles] = drawn(s);
-  const d = prev === null ? "" : `  Δblocks ${signed(s.blocks - prev.blocks)} Δblocks_mb ${signed(s.blocks_mb - prev.blocks_mb)} Δheap used ${signedBytes(s.heap_used_bytes - prev.heap_used_bytes)}`;
+  const d = prev === null
+    ? ""
+    : `  Δblocks ${signed(s.blocks - prev.blocks)} Δblocks bytes ${signedBytes(s.blocks_bytes - prev.blocks_bytes)} Δheap used ${signedBytes(s.heap_used_bytes - prev.heap_used_bytes)}`;
   return `[${n1(s.t).padStart(9)}] ${valueText("kind_name", s.kind_name)}  interval ${n1(s.interval_ms)} = ${s.turns} turns ${n1(s.busy_ms)} + ${pastText(s)}  tick ${n1(s.tick_ms)}/${
     n1(s.budget_ms)
   }${s.settled ? " (still)" : ""}  gpu ${s.gpu_read ? n1(gpuMs(s)) : "-"}  draws ${draws} tris ${tris(triangles)}  blocks ${s.blocks}  heap used ${bytes(s.heap_used_bytes)}${d}`;
@@ -57,7 +59,7 @@ function windowSection(r: ProfilerReport): string[] {
   const counted = (rows: { name: string; n: f64 }[]) => rows.filter((r) => r.n > 0).map((r) => `${r.name} ${r.n}`).join("  ") || "-";
 
   return [
-    `frames n=${f.n}  over ${n1(f.seconds)}s  moving ${f.moving}  still ${f.n - f.moving}   display ${n1(last.display_ms)} ms   turns ${f.turns}`,
+    `frames n=${f.n}  over ${n1(f.seconds)}s  moving ${f.moving}  still ${f.n - f.moving}   refresh ${n1(last.refresh_ms)} ms   paced ${n1(last.paced_ms)} ms   turns ${f.turns}`,
     `  kinds   ${counted(f.kinds)}   wakes ${counted(f.wakes)}`,
     `  interval ${spread(f.interval)} ms   missed ${f.missed} (${pct(f.missed, f.moving)}% of moving frames)`,
     `  busy    ${spread(f.busy)} ms   (the interval's turns, rise to fall)`,

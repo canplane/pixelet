@@ -23,6 +23,8 @@ xpute-kit = { path = "../../../xpute/rust/kit" }
 # call, and each worker is a thread with its own connection.
 postgres = { version = "0.19", features = ["with-serde_json-1"] }
 zstd = "0.13"
+# The star catalog as CDS packs it (bin/bake_star.rs).
+flate2 = "1"
 # The Earth's picture: its sources are JPEG, its global form WebP.
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 webp = "0.3"

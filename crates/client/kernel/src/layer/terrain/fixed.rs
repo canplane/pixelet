@@ -3,11 +3,15 @@
 //! `.fixed.terrain`: the room every resident terrain tile and every held
 //! square lies in, and where a record's bytes are. A plane is one lane of
 //! every frame, or of every square, end to end; planes in order: the
-//! separation's eight, a tile's; then a square's cells, its looks, and the
-//! word its cells come back under; then the room a fill works in, once.
+//! separation's seven, a tile's; then a square's cells; then
+//! the eye's windows' levels over their squares as the GPU folded them,
+//! once; then a landing square's ways' records, a read-back each; then the
+//! CPU's mirror of the GPU's ways' pool, once; then the room a fill works
+//! in, once.
 
-use pxl_portable::window::{BACK_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
-use pxl_spec::bake::separation::{MAX_BOXES, MAX_LINES, MAX_POINTS};
+use pxl_portable::ways::tree::{POOL_BLOCKS, RECORDS_BYTES};
+use pxl_portable::window::{BACK_WORDS, EYE_JOINED_WORDS, LINES_WORDS, READS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
+use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::LOOK_LANE;
 
 use crate::layer::residency::Residency;
@@ -25,8 +29,8 @@ const fn lane(count: usize, size: usize) -> u32 {
 }
 
 /// The separation's lanes, a plane each in order: line starts, points, tops,
-/// width, kind, form, clear, boxes.
-pub const SEPARATION_LANE_BYTES: [u32; 8] = [
+/// width, kind, form, clear.
+pub const SEPARATION_LANE_BYTES: [u32; 7] = [
     lane(MAX_LINES + 1, 4),
     lane(MAX_POINTS, 4),
     lane(MAX_POINTS, 2),
@@ -34,7 +38,6 @@ pub const SEPARATION_LANE_BYTES: [u32; 8] = [
     lane(MAX_LINES, 1),
     lane(MAX_LINES, 1),
     lane(MAX_LINES, 1),
-    lane(MAX_BOXES, 8),
 ];
 
 const fn sum(lanes: &[u32]) -> u32 {
@@ -49,17 +52,24 @@ const fn sum(lanes: &[u32]) -> u32 {
 
 pub const SEPARATION_BYTES: u32 = FRAMES * sum(&SEPARATION_LANE_BYTES);
 
-/// One square's cells as the GPU drew them, read back whole: each cell's
-/// height, an i16, then its levels and its ways' bound, a word an entry
-/// (pxl-portable `window::BACK_WORDS`).
+/// One square's cells as the GPU drew them, read back whole: its columns,
+/// a word a cell (its ground's top), then its levels, its cells as laid and
+/// its ways' tree's root (pxl-portable `window::BACK_WORDS`).
 pub const CELLS_BYTES: u32 = BACK_WORDS * 4;
 pub const CELLS_LANE_BYTES: u32 = lane(CELLS_BYTES as usize, 1);
 
-/// One square's looks: a cell's own, a byte.
-pub const LOOK_LANE_BYTES: u32 = SQUARE_CELLS;
+/// The eye's windows' levels over their squares (pxl-portable
+/// `window::fold`), read back as the GPU folded them (pxl-render
+/// `GroundSquares::joined`).
+pub const JOINED_BYTES: u32 = lane(EYE_JOINED_WORDS as usize, 4);
 
-/// The word a square's cells come back under (pxl-render `Renderer::read_back`).
-pub const BACK_LANE_BYTES: u32 = 4;
+/// A landing square's ways' records (pxl-portable `ways::tree::RECORDS_WORDS`),
+/// a room a read-back, read once it lands into the pool's mirror.
+pub const RECORDS_ROOM_BYTES: u32 = READS * RECORDS_BYTES;
+
+/// The GPU's ways' pool as the CPU mirrors it, block for block at the same
+/// slots (pxl-portable `ways::tree::Read`): its heap words, then its data.
+pub const POOL_BYTES: u32 = lane(16 * POOL_BLOCKS as usize, 4);
 
 /// The room a fill works in (window.rs `fill`), a lane each in order: a
 /// tile's looks four a cell as handed, a square's cut from them, its lines,
@@ -72,11 +82,9 @@ pub const FILL_LANE_BYTES: [u32; 4] = [
 ];
 
 /// Where the fill's room starts, on a cache line.
-const FILL_AT: u32 = lane((SEPARATION_BYTES + SQUARES * (CELLS_LANE_BYTES + LOOK_LANE_BYTES + BACK_LANE_BYTES)) as usize, 1);
+const FILL_AT: u32 = pool_off() + POOL_BYTES;
 
 pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_LANE_BYTES);
-
-const _: () = assert!(LOOK_LANE_BYTES.is_multiple_of(64), "terrain: a look lane must be whole cache lines");
 
 pub const fn separation_off(record: u32, lane: usize) -> u32 {
     let mut plane = 0;
@@ -92,12 +100,16 @@ pub const fn cells_off(square: u32) -> u32 {
     SEPARATION_BYTES + square * CELLS_LANE_BYTES
 }
 
-pub const fn looks_off(square: u32) -> u32 {
-    SEPARATION_BYTES + SQUARES * CELLS_LANE_BYTES + square * LOOK_LANE_BYTES
+pub const fn joined_off() -> u32 {
+    cells_off(SQUARES)
 }
 
-pub const fn back_off(square: u32) -> u32 {
-    SEPARATION_BYTES + SQUARES * (CELLS_LANE_BYTES + LOOK_LANE_BYTES) + square * BACK_LANE_BYTES
+pub const fn records_off() -> u32 {
+    lane((joined_off() + JOINED_BYTES) as usize, 1)
+}
+
+pub const fn pool_off() -> u32 {
+    records_off() + RECORDS_ROOM_BYTES
 }
 
 pub const fn fill_off(lane: usize) -> u32 {

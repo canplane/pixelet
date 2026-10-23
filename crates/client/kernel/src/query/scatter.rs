@@ -2,51 +2,38 @@
 
 //! How the ground grows decor on its own: never stored, a pure function of
 //! each decor's seed (the catalog's, spec/spec/block/decor.json) and the
-//! ground's face as the world answers it, so a cell grows the same wherever
-//! it is read. It reads no tile: where it may stand is the world's
-//! (`World::grows`), which way it faces and how high it stands its face's
-//! (`World::surfaces`).
+//! world as its one query answers it, so a cell grows the same wherever it
+//! is read and whichever layer holds what it stands on. It reads no tile:
+//! where it stands is its column's footing, the world's ray down it
+//! (`World::footing`), and which way it faces and whether it grows the
+//! world's blocks about it (pxl-portable `scatter::stand`, `grows`).
 
-use pxl_portable::placed;
-use pxl_portable::scatter::{self as portable, Grounds, Grown, ALIGN_NEIGHBOR_RADIUS, PLACED_BLOCK};
+use pxl_portable::overwrite;
+use pxl_portable::scatter::{self as portable, Grounds, Grown};
 use pxl_spec::block::cube::sentinel;
 use pxl_spec::block::decor::Decor;
-use pxl_spec::block::Block;
 use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use super::surface::Surfaces;
 use super::world::World;
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::store;
 
-/// Cells about a node its decor reads: the faces a turn is voted from, and
-/// the widest box's footing past the cell it stands in.
-pub fn ring(decors: &[Decor]) -> u32 {
-    decors.iter().map(|d| d.row.widest()).fold(ALIGN_NEIGHBOR_RADIUS as u32, u32::max)
-}
-
 /// The world as decor's growth asks it on the CPU (pxl-portable
-/// `Grounds`): the ground's cells off `face`, read once about what is
-/// asked, the world's one query, and what is placed.
-pub(super) struct Asked<'a, 'w, 'f> {
+/// `Grounds`): the world's one query and its ray, and what is placed.
+pub(super) struct Asked<'a, 'w> {
     world: &'a World<'w>,
-    face: &'a Surfaces<'f>,
     lanes: store::Lanes<'a>,
 }
 
-impl<'a, 'w, 'f> Asked<'a, 'w, 'f> {
-    pub(super) fn new(world: &'a World<'w>, face: &'a Surfaces<'f>) -> Asked<'a, 'w, 'f> {
-        Asked {
-            world,
-            face,
-            lanes: world.objects.lanes(),
-        }
+impl<'a, 'w> Asked<'a, 'w> {
+    pub(super) fn new(world: &'a World<'w>) -> Asked<'a, 'w> {
+        Asked { world, lanes: world.objects.lanes() }
     }
 }
 
-impl placed::Lanes for Asked<'_, '_, '_> {
+impl overwrite::Lanes for Asked<'_, '_> {
     fn heap(&self, slot: u32) -> u32 {
         self.lanes.heap(slot)
     }
@@ -55,46 +42,26 @@ impl placed::Lanes for Asked<'_, '_, '_> {
     }
 }
 
-impl Grounds for Asked<'_, '_, '_> {
-    type At = super::node::At;
-
+impl Grounds for Asked<'_, '_> {
     fn rows(&self) -> &[pxl_portable::decor::Decor] {
         &pxl_portable::decor::DECORS
     }
 
-    /// Off `face`, whose cells are at `cell`; none past what it read.
-    fn face(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
-        debug_assert_eq!(cell, self.face.cell());
-        match self.face.ground(g.map(i64::from)) {
-            Some((look, top)) => (u32::from(look), top, true),
-            None => (0, 0, false),
-        }
+    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
+        self.world.footing(cell, g).map_or((0, 0, false), |(block, top)| (block, top, true))
     }
 
-    fn start(&mut self, zoom: Zoom, c: [i32; 3]) -> Self::At {
-        self.world.start((zoom, c.map(i64::from)))
-    }
-
-    /// Void where the world holds nothing there.
-    fn block(&mut self, at: &Self::At, from: Zoom, zoom: Zoom, c: [i32; 3]) -> u32 {
-        let mut at = *at;
-        for z in from + 1..=zoom {
-            let s = zoom - z;
-            at = self.world.child(&at, (0..3).map(|i| (((c[i] >> s) & 1) as usize) << i).sum());
-        }
-        match self.world.drawn(&mut at).value().flatten() {
-            Some(Block::Ground(g, _)) => u32::from(g),
-            Some(Block::Placed(v)) => PLACED_BLOCK | v,
-            None => u32::from(sentinel::void),
-        }
+    /// Void where the world holds nothing there (`World::block`).
+    fn block(&mut self, zoom: Zoom, c: [i32; 3]) -> u32 {
+        self.world.block((zoom, c)).value().unwrap_or(u32::from(sentinel::void))
     }
 }
 
 /// What the ground stands of `decor` in the leaf `cell` on `face`, the
 /// leaf's ground read about it (`World::grown_in`): the leaf scatter, cell
 /// by cell, which a region grows the same (pxl-spec procedural.test.rs).
-pub(super) fn grown_at(asked: &mut Asked, decor: &Decor, cell: [i64; 2]) -> Option<Instance> {
-    let candidate = scatter_at(decor.row, cell.map(|v| v as i32))?;
+pub(super) fn grown_at(asked: &mut Asked, decor: &Decor, cell: [i32; 2]) -> Option<Instance> {
+    let candidate = scatter_at(decor.row, cell)?;
     let (g, here) = portable::stand(asked, decor.row, GROUND.cell(), &candidate);
     here.then(|| instance(decor, &g))
 }
@@ -107,7 +74,7 @@ pub fn instance(decor: &Decor, g: &Grown) -> Instance {
     Instance {
         id: decor.value(),
         at,
-        source: Source::Ground([x, y, z].map(i64::from)),
+        source: Source::Ground([x, y, z]),
         meta: Meta::Decor(meta),
     }
 }
@@ -118,6 +85,6 @@ pub fn grown_of(i: &Instance) -> Option<Grown> {
     Some(Grown {
         variant: m.variant,
         turn: m.turn,
-        at: [x, y, z].map(|v| v as i32),
+        at: [x, y, z],
     })
 }

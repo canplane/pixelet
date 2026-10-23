@@ -10,8 +10,6 @@ use super::lattice::{Lattice, GROUND};
 use super::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 use crate::space::camera::eye::Observation;
 use crate::space::camera::grid::{split_distance, Tau};
-use crate::space::coord::aabb::Aabb;
-use crate::space::coord::world::REACH;
 use crate::space::coord::zoom::{units, Zoom};
 use crate::space::layer::lattice::demand_reach;
 
@@ -23,7 +21,7 @@ pub fn band(o: &Observation, tau: Tau, lattice: Lattice, top: Zoom, zoom: Zoom) 
     let from = if zoom == LEAF_ZOOM { 0.0 } else { tau.split_distance(lattice.grid_zoom(zoom)) };
     let coarser = lattice.grid_zoom(zoom - 1);
     let to = if zoom == top { split_distance(coarser) } else { tau.split_distance(coarser) };
-    (from <= o.far()).then_some((from, to))
+    (from <= o.reach).then_some((from, to))
 }
 
 /// The most of a lattice's tiles a zoom's demand spans along an axis:
@@ -49,30 +47,13 @@ pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item
 }
 
 /// `tiles_within` before X wraps.
-pub fn squares_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = [i64; 2]> {
+pub fn squares_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = [i32; 2]> {
     let span = units(zoom);
-    let rows = |c: f64| ((c - radius) / span).floor() as i64..=((c + radius) / span).floor() as i64;
+    let rows = |c: f64| ((c - radius) / span).floor() as i32..=((c + radius) / span).floor() as i32;
     let (xs, ys) = (rows(at[0]), rows(at[1]));
-    let gap = move |c: f64, i: i64| (i as f64 * span - c).max(c - (i + 1) as f64 * span).max(0.0);
+    let gap = move |c: f64, i: i32| (f64::from(i) * span - c).max(c - f64::from(i + 1) * span).max(0.0);
     ys.flat_map(move |y| xs.clone().map(move |x| [x, y]))
         .filter(move |&[x, y]| libm::hypot(gap(at[0], x), gap(at[1], y)) <= radius)
-}
-
-/// The cubes `side` wide meeting `b` inside `REACH`.
-pub fn cubes_meeting(side: f64, b: Aabb) -> impl Iterator<Item = [i64; 3]> {
-    let b = b.meet(REACH).map(|b| {
-        let row = |k: usize| {
-            let hi = if b.max[k] < REACH.max[k] { (b.max[k] / side).floor() } else { (b.max[k] / side).ceil() - 1.0 };
-            (b.min[k] / side).floor() as i64..=hi as i64
-        };
-        [row(0), row(1), row(2)]
-    });
-    b.into_iter().flat_map(|[xs, ys, zs]| {
-        zs.flat_map(move |z| {
-            let xs = xs.clone();
-            ys.clone().flat_map(move |y| xs.clone().map(move |x| [x, y, z]))
-        })
-    })
 }
 
 #[cfg(test)]

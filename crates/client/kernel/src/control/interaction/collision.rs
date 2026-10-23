@@ -37,6 +37,18 @@ fn room(tool: PlacementTool, corner: &Q3, object_size: f64) -> Aabb {
     }
 }
 
+/// The columns `is_placement_blocked` reads the world over, in units, X then
+/// Y, lowest then highest: its room's, and about it what decor grown under
+/// it stands, turns and claims by — a decor's reach past it, the cells its
+/// pose votes by about each — and the room's own width again, where
+/// `World::editable` bounds it by the nodes about it.
+pub fn placement_reads(tool: PlacementTool, corner: &Q3, object_size: f64) -> [[f64; 2]; 2] {
+    let room = room(tool, corner, object_size);
+    let width = (room.max[0] - room.min[0]).max(room.max[1] - room.min[1]);
+    let pad = crate::decor::strike::reach() + f64::from(pxl_portable::scatter::ALIGN_NEIGHBOR_RADIUS + 1) * units(GROUND.cell()) + width;
+    [[room.min[0] - pad, room.min[1] - pad], [room.max[0] + pad, room.max[1] + pad]]
+}
+
 /// The shared check for the placement commit and its hover preview: its room
 /// is where the world takes an edit (`World::editable`), and nothing placed,
 /// nor a placed decor's box, shares it. A decor or a marker is stood on

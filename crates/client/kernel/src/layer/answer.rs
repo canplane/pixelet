@@ -41,16 +41,4 @@ impl<T> Answer<T> {
             Answer::Nothing(l) => Answer::Nothing(l),
         }
     }
-
-    /// `f` of the value, keeping the tile this one lacked.
-    pub fn and_then<U>(self, f: impl FnOnce(T) -> Answer<U>) -> Answer<U> {
-        match self {
-            Answer::Exact(v) => f(v),
-            Answer::Coarser(v, l) => match f(v) {
-                Answer::Exact(u) | Answer::Coarser(u, _) => Answer::Coarser(u, l),
-                Answer::Nothing(n) => Answer::Nothing(n),
-            },
-            Answer::Nothing(l) => Answer::Nothing(l),
-        }
-    }
 }

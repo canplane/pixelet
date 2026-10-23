@@ -23,7 +23,7 @@ pub struct Surface {
 
 /// The approaches' looks laid into its cells (pxl-spec bake/way.rs `lay`),
 /// then its lines those it draws (pxl-spec bake/tile/terrain.rs `drawn`).
-pub fn assemble(tile: [i64; 2], surface: Surface, lines: Separation) -> TerrainTile {
+pub fn assemble(tile: [i32; 2], surface: Surface, lines: Separation) -> TerrainTile {
     let mut looks = surface.ground.cells.into_owned();
     let tile = Tile::new(LEAF_ZOOM, tile);
     lay(&lines, Frame::of(tile), &mut looks);
@@ -31,7 +31,7 @@ pub fn assemble(tile: [i64; 2], surface: Surface, lines: Separation) -> TerrainT
 }
 
 /// `drawn`: the ranges of the tile's ways its lines draw.
-pub fn bake_surface(tile_idx: [i64; 2], source: TileSource, drawn: &[Drawn]) -> Surface {
+pub fn bake_surface(tile_idx: [i32; 2], source: TileSource, drawn: &[Drawn]) -> Surface {
     let tile_min = epsg3857::get_tile_bbox(LEAF_ZOOM, tile_idx)[0];
     let mut features: Vec<Feature> = Vec::new();
     features.extend(source.building_rows.iter().flat_map(|row| buildings(row, tile_min)));

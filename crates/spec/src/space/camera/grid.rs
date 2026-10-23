@@ -12,7 +12,7 @@ use crate::space::coord::zoom::{units, Zoom};
 /// (`target_cell_px`). One cell of the grid is one thing drawn; what lies
 /// inside it is its layer's to fold (pxl-portable, which a GPU's cast sizes
 /// its cells by too).
-pub const SPLIT: f64 = pxl_portable::cast::SPLIT as f64;
+pub const SPLIT: f64 = pxl_portable::grid::SPLIT as f64;
 
 /// The view `SPLIT` is stated at: 1080 CSS px high, drawn at
 /// `RATIO_MAX`, and 50° across it.
@@ -25,8 +25,8 @@ pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
     viewport_h / (2.0 * libm::tan((fov_deg * core::f64::consts::PI) / 360.0))
 }
 
-/// Drawn pixels per CSS pixel at most (pxl-portable `cast::RATIO_MAX`).
-pub const RATIO_MAX: f64 = pxl_portable::cast::RATIO_MAX as f64;
+/// Drawn pixels per CSS pixel at most (pxl-portable `grid::RATIO_MAX`).
+pub const RATIO_MAX: f64 = pxl_portable::grid::RATIO_MAX as f64;
 
 /// The drawn pixels a camera grid's cell spans, at the reference view: about
 /// twelve, at every ratio. A block drawn for it spans that to twice that.
@@ -38,16 +38,6 @@ pub fn target_cell_px() -> f64 {
 /// going out: where its side spans two of the camera grid's cells.
 pub const fn split_distance(cell_zoom: Zoom) -> f64 {
     SPLIT * units(cell_zoom) / 2.0
-}
-
-/// The camera grid's cell zoom at `r` from the eye: the widest cell whose
-/// split distance is within `r`, which is the finest whose side spans one of
-/// the grid's cells there, `r / SPLIT`. A block drawn whole, all its faces, is
-/// at least its side wide from any direction, so the face a ray meets does
-/// not enter. Finer than the ground's near the eye, held to what a zoom can
-/// name: pxl-portable's, the one rule the CPU and a GPU's cast size by.
-pub fn cell_at(r: f64) -> Zoom {
-    pxl_portable::cast::cell_at(r as f32)
 }
 
 /// The criterion's one scale factor, at least 1: every zoom's split
@@ -73,8 +63,16 @@ impl Tau {
         split_distance(cell_zoom) / self.0
     }
 
-    pub fn cell_at(self, r: f64) -> Zoom {
-        cell_at(r * self.0)
+    /// The camera grid's cell zoom at `r2`, a distance from the eye squared:
+    /// the widest cell whose split distance is within the distance, which is
+    /// the finest whose side spans one of the grid's cells there, `r / SPLIT`.
+    /// A block drawn whole, all its faces, is at least its side wide from any
+    /// direction, so the face a ray meets does not enter. Finer than the
+    /// ground's near the eye, held to what a zoom can name: pxl-portable's, the
+    /// one rule the CPU and a GPU's cast size by, of the one input, a square;
+    /// the distance as τ scales it.
+    pub fn cell_at(self, r2: f64) -> Zoom {
+        pxl_portable::grid::cell_at((r2 * (self.0 * self.0)) as f32)
     }
 }
 

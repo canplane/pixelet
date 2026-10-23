@@ -1,13 +1,11 @@
 // pxl-kernel/layer/object/preview.rs
 
 //! An edit not yet made, as what it changes in what is drawn: the pointer
-//! decides it, the world as drawn composes it (`World::previewed`); and a
+//! decides it, the world as drawn composes it (`World::previewing`); and a
 //! marker waiting for its words, drawn with the words it has so far.
 
 use crate::sched::edge::request_world_tick;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::zoom::cube;
 use xpute_guest::global::Global;
 
 /// What the eraser's preview changes in what is drawn only: every mechanic
@@ -24,14 +22,7 @@ pub struct RenderEdits {
     /// An AIR entry over bare terrain, which has no leaf to hide.
     pub carve: Option<EntryAt>,
     /// The scattered decor hidden, by the cell it stands in.
-    pub scattered: Option<[i64; 3]>,
-}
-
-impl RenderEdits {
-    /// The cubes it changes, where the world as drawn moves when it does.
-    pub fn cubes(&self) -> impl Iterator<Item = Aabb> {
-        [self.hide, self.carve].into_iter().flatten().map(|e| cube(e.zoom(), e.at()))
-    }
+    pub scattered: Option<[i32; 3]>,
 }
 
 /// The pointer's preview, the one copy of it.
@@ -65,8 +56,8 @@ pub fn words_at(at: EntryAt) -> Option<&'static str> {
     if let Some(d) = draft().filter(|d| d.at == at) {
         return Some(&d.words);
     }
-    let objects = &crate::kernel().objects;
-    objects.words(&objects.placed(at.zoom(), at.at())?)
+    let objects = crate::layer::object::store::objects();
+    objects.words(&objects.read((at.zoom(), at.at())).placed()?)
 }
 
 /// The one waiting, which the badges draw.

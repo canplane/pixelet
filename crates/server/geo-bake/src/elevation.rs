@@ -160,7 +160,7 @@ impl Raster {
 
     /// Leaf `tile`'s padded grid of heights, in leaf cells at its scale
     /// (pxl-portable `cells_of_m`, pxl-spec `Frame::per_m`).
-    pub fn tile_grid(&self, client: &mut Client, tile: [i64; 2]) -> Result<Vec<i16>, postgres::Error> {
+    pub fn tile_grid(&self, client: &mut Client, tile: [i32; 2]) -> Result<Vec<i16>, postgres::Error> {
         let tile_bbox = get_tile_bbox(LEAF_ZOOM, tile);
         let per_m = Frame::of(Tile::new(LEAF_ZOOM, tile)).per_m();
         let span = ELE_PADDED_SPAN as usize;

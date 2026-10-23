@@ -10,21 +10,27 @@
 
 #![no_std]
 
+pub mod answer;
 pub mod area;
+pub mod beam;
 pub mod cast;
 pub mod caves;
 #[path = "cube.spec.rs"]
 pub mod cube;
 #[path = "decor.spec.rs"]
 pub mod decor;
+pub mod eye;
 pub mod fill;
+pub mod grid;
 pub mod ground;
 pub mod lattice;
-pub mod mask;
-pub mod placed;
+pub mod observed;
+pub mod overwrite;
+pub mod ray;
 pub mod scatter;
 pub mod ways;
 pub mod window;
+pub mod world;
 
 /// Every size is a zoom (pxl-spec space/coord/zoom.rs).
 pub type Zoom = u32;
@@ -98,6 +104,20 @@ pub fn axis<T: Copy>(v: [T; 3], a: u32) -> T {
         v[1]
     } else {
         v[2]
+    }
+}
+
+/// A zoom's bits wherever one is packed in a word: every zoom fits them.
+pub const ZOOM_BITS: u32 = 6;
+const _: () = assert!(FINEST_ZOOM < 1 << ZOOM_BITS);
+
+/// Index `v` along an axis at `zoom` as an index at `to`: the first of the
+/// finer that lie in it, or the coarser it lies in, the floor.
+pub const fn index_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
+    if to >= zoom {
+        v << (to - zoom)
+    } else {
+        v >> (zoom - to)
     }
 }
 

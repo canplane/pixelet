@@ -14,7 +14,7 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
-pub const GPU_SPAN_NAMES: &[&str] = &["air", "prepass", "ao", "world", "overlay", "badges", "debug", "cases", "fill", "cast", "face"];
+pub const GPU_SPAN_NAMES: &[&str] = &["air", "prepass", "ao", "world", "badges", "debug", "cases", "fill", "cast", "grow"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -22,29 +22,27 @@ pub enum GpuSpanName {
     prepass = 1,
     ao = 2,
     world = 3,
-    overlay = 4,
-    badges = 5,
-    debug = 6,
-    cases = 7,
-    fill = 8,
-    cast = 9,
-    face = 10,
+    badges = 4,
+    debug = 5,
+    cases = 6,
+    fill = 7,
+    cast = 8,
+    grow = 9,
 }
 
 impl GpuSpanName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [GpuSpanName; 11] = [
+    pub const ALL: [GpuSpanName; 10] = [
         GpuSpanName::air,
         GpuSpanName::prepass,
         GpuSpanName::ao,
         GpuSpanName::world,
-        GpuSpanName::overlay,
         GpuSpanName::badges,
         GpuSpanName::debug,
         GpuSpanName::cases,
         GpuSpanName::fill,
         GpuSpanName::cast,
-        GpuSpanName::face,
+        GpuSpanName::grow,
     ];
 
     /// The member a number names, or none for a number the set does not
@@ -54,7 +52,7 @@ impl GpuSpanName {
     }
 }
 
-pub const FRAME_KINDS: &[&str] = &["none", "unready", "held", "dropped", "plain", "standing", "cast", "still", "stood"];
+pub const FRAME_KINDS: &[&str] = &["none", "unready", "held", "dropped", "plain", "standing", "cast", "stood"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FrameKind {
@@ -65,13 +63,12 @@ pub enum FrameKind {
     plain = 4,
     standing = 5,
     cast = 6,
-    still = 7,
-    stood = 8,
+    stood = 7,
 }
 
 impl FrameKind {
     /// Every member, in the JSON's own order.
-    pub const ALL: [FrameKind; 9] = [
+    pub const ALL: [FrameKind; 8] = [
         FrameKind::none,
         FrameKind::unready,
         FrameKind::held,
@@ -79,7 +76,6 @@ impl FrameKind {
         FrameKind::plain,
         FrameKind::standing,
         FrameKind::cast,
-        FrameKind::still,
         FrameKind::stood,
     ];
 

@@ -1085,8 +1085,11 @@ pub struct WorldFrame {
     pub width: f64,
     pub height: f64,
     pub dpr: f64,
-    /// The turn, as the host measured it.
-    pub frame_ms: f64,
+    /// The display's refresh, as the host measures it from the animation frames it is handed,
+    /// and the interval it paces turns at, a whole number of refreshes (xpute host
+    /// sched/quantum.ts `Grant`): the frame's budget.
+    pub refresh_ms: f64,
+    pub paced_ms: f64,
     pub interactive: bool,
     pub credits: u32,
     /// The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and
@@ -1101,10 +1104,11 @@ impl WorldFrame {
             width: finite(f.at(0)?.get_number()?)?,
             height: finite(f.at(1)?.get_number()?)?,
             dpr: finite(f.at(2)?.get_number()?)?,
-            frame_ms: finite(f.at(3)?.get_number()?)?,
-            interactive: f.at(4)?.get_bool()?,
-            credits: integer::<u32>(f.at(5)?.get_number()?)?,
-            unix_ms: finite(f.at(6)?.get_number()?)?,
+            refresh_ms: finite(f.at(3)?.get_number()?)?,
+            paced_ms: finite(f.at(4)?.get_number()?)?,
+            interactive: f.at(5)?.get_bool()?,
+            credits: integer::<u32>(f.at(6)?.get_number()?)?,
+            unix_ms: finite(f.at(7)?.get_number()?)?,
         })
     }
 }

@@ -7,7 +7,7 @@
 use pxl_spec::block::decor::DecorMeta;
 use pxl_spec::space::coord::v3::V3;
 
-use crate::layer::object::store::EntryAt;
+use pxl_spec::bake::constant::EntryAt;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Instance {
@@ -22,14 +22,14 @@ pub struct Instance {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
     /// Grown by the ground, in the leaf cell it stands on.
-    Ground([i64; 3]),
+    Ground([i32; 3]),
     /// Placed, at its entry.
     Object(EntryAt),
 }
 
 impl Instance {
     /// The leaf cell the ground grew it in; none for a placed one.
-    pub fn grown_in(&self) -> Option<[i64; 3]> {
+    pub fn grown_in(&self) -> Option<[i32; 3]> {
         match self.source {
             Source::Ground(cell) => Some(cell),
             Source::Object(_) => None,

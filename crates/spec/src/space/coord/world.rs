@@ -67,15 +67,10 @@ pub const fn around(zoom: Zoom) -> i64 {
     1i64 << zoom
 }
 
-/// An X index of `z`'s cells as the world names it; every key goes through it.
-pub fn wrap_index(zoom: Zoom, x: i64) -> i64 {
-    let across = around(zoom);
-    (x + across / 2).rem_euclid(across) - across / 2
-}
-
-/// A cell at `z` named as `wrap_index` names its X.
-pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i64; 3]) -> [i64; 3] {
-    [wrap_index(zoom, x), y, h]
+/// A cell at `z` named as pxl-portable's `wrap_index` names its X, which
+/// every key goes through.
+pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i32; 3]) -> [i32; 3] {
+    [pxl_portable::wrap_index(zoom, x), y, h]
 }
 
 /// The copy of `x` nearest `about`: where a stored X stands for an eye at `about`.
@@ -95,12 +90,12 @@ pub fn nearest_box(b: &Aabb, about: f64) -> Aabb {
 
 /// A node's X moved by whole rounds to the round nearest `about`; as it is
 /// where `about` is not finite.
-pub fn node_near(zoom: Zoom, at: [i64; 3], about: f64) -> [i64; 3] {
+pub fn node_near(zoom: Zoom, at: [i32; 3], about: f64) -> [i32; 3] {
     if !about.is_finite() {
         return at;
     }
     let whole = cube(zoom, at);
     let x = (whole.min[0] + whole.max[0]) / 2.0;
-    let rounds = libm::rint((nearest(x, about) - x) / ROUND) as i64;
-    [at[0] + rounds * around(zoom), at[1], at[2]]
+    let rounds = libm::rint((nearest(x, about) - x) / ROUND) as i32;
+    [at[0] + rounds * (1 << zoom), at[1], at[2]]
 }

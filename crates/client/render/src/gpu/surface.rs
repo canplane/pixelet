@@ -21,26 +21,32 @@ pub struct Surface {
     pub px_w: u32,
     pub px_h: u32,
     pub dpr: f64,
-    /// The device pixels per CSS pixel the kernel has it drawn at.
+    /// The device pixels per CSS pixel the kernel has it drawn at (pxl-kernel
+    /// view/frame/resolution.rs): the display's, or under load a share of
+    /// them, the page scaling the buffer up.
     pub ratio: f64,
     pub configured: bool,
     pub width: u32,
     pub height: u32,
     pub wanted: (u32, u32),
     pub waited: u32,
-    /// The frame's depth, under what stage 3 draws.
+    /// The frame's depth, the world's and over it what moves on its own
+    /// (gpu/renderer.rs, stage 2).
     pub depth: u32,
     pub depth_view: u32,
-    /// The world image the frame is drawn over (gpu/renderer.rs, stage 2):
-    /// its colour, in the canvas's format, and its depth, each at the
-    /// frame's size and made with it.
-    pub world: u32,
-    pub world_view: u32,
-    pub world_depth: u32,
-    pub world_depth_view: u32,
+    /// The eye's rays as the cast leaves them, a drawn pixel each, made with
+    /// the depth: `ray::WORDS` layers of `r32uint`, a word of the ray's a
+    /// layer (pxl-portable `ray`).
+    pub rays: u32,
+    pub rays_view: u32,
 }
 
 impl Surface {
+    /// What it holds on the GPU, every one made again with its size.
+    pub fn targets(&self) -> [u32; 4] {
+        [self.depth_view, self.depth, self.rays_view, self.rays]
+    }
+
     pub fn buffer_px(&self) -> (u32, u32) {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);
         let dpr = if self.dpr > 0.0 { self.dpr } else { 1.0 };

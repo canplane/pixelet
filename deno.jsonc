@@ -39,7 +39,7 @@
     "clear:shelf": "sh -c '[ $# -gt 0 ] || set -- terrain place division; for k; do rm -rf \"out/$k\" \"out/$k.stage\" \"out/$k.publish\"; done' --",
 
     // What makes the repository's data, a binary each (script/tool.ts):
-    // `bake <terrain|place|division|earth|star|geoid>`, `download <pack|moon|earth>`.
+    // `bake <terrain|place|division|earth|star|geoid>`, `download <pack|moon|earth|star>`.
     // A tile bake takes the shards it is told (--shard; every one when none is).
     "bake": "./script/tool.ts bake",
     "download": "./script/tool.ts download",
@@ -117,7 +117,10 @@
     "vite": "npm:vite@^8.3.0",
     "@deno/vite-plugin": "npm:@deno/vite-plugin@^2.0.3",
 
-    "i18next": "npm:i18next@^26.4.2"
+    "i18next": "npm:i18next@^26.4.2",
+
+    // Dawn, the WebGPU Chrome runs, for the generated kernels' compile (script/portable-wgsl.ts).
+    "webgpu": "npm:webgpu@0.6.2"
   },
 
   "fmt": {

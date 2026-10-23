@@ -43,7 +43,6 @@ fn room() -> separation::Room {
         kind: vec![0; separation::MAX_LINES].leak(),
         form: vec![0; separation::MAX_LINES].leak(),
         clear: vec![0; separation::MAX_LINES].leak(),
-        boxes: vec![[0; 4]; separation::MAX_BOXES].leak(),
     }
 }
 
@@ -62,7 +61,8 @@ fn the_formats_write_and_read_what_the_record_holds() {
     let terrain = encode(&tile).unwrap();
     assert_eq!(format!("{:016x}", fnv(&terrain)), v.s("terrain.fnv"), "the tile's bytes");
     assert_eq!(decode(&terrain).unwrap(), tile, "a tile reads back as it was written");
-    // On the CPU its lines, but for what only a fold reads.
+    // On the CPU its lines, but for what only a bake reads: a fold's
+    // coarsest zooms and a grid sweep's boxes.
     let resident = decode_into(&terrain, room()).unwrap();
     let held = separation::Separation {
         coarsest: Default::default(),

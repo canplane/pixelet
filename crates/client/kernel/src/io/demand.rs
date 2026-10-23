@@ -41,10 +41,6 @@ impl Phases {
     pub fn iter(&self) -> impl Iterator<Item = (TaskPhaseName, f64)> + '_ {
         self.items[..self.len].iter().copied()
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
 }
 
 /// A stream of demands (spec `STREAM_NAMES`). An asset shares the
@@ -61,19 +57,6 @@ impl Stream {
             Stream::division => Some(BaseLayer::division),
             Stream::asset => None,
         }
-    }
-}
-
-/// `subject` is a tile's coordinate, or nothing for a stream of one.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct DemandKey {
-    pub stream: Stream,
-    pub subject: u64,
-}
-
-impl DemandKey {
-    pub fn new(stream: Stream, subject: u64) -> DemandKey {
-        DemandKey { stream, subject }
     }
 }
 

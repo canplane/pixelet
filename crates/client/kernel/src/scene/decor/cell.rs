@@ -3,11 +3,13 @@
 //! A block of instance lanes drawn by size: each instance a model, a sprite
 //! or nothing by the pixels it spans, decided per frame and rewriting only
 //! its index list (`present_block`). Clouds are drawn so; the GPU draws decor
-//! by the same tiers (scene/decor/drawn.rs).
+//! by the same tiers, one rule (pxl-portable scatter.rs `drawn::tier`).
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem::base::ptr_at;
+
+use pxl_portable::scatter::drawn;
 
 use crate::scene::decor::drawn::{decor_gone_px, decor_sprite_px};
 use crate::scene::decor::instance::{decor_groups, GroupLanes};
@@ -32,7 +34,8 @@ pub struct Shown {
 /// which cannot be, is left out.
 #[allow(clippy::too_many_arguments)]
 pub fn present_block(draw: &mut DrawList, b: &Shown, translation: [f32; 3], eye: V3, groups: impl Iterator<Item = (u32, (f64, [f64; 2]))>, opacity: f32, sprites: &mut Vec<u32>) {
-    let (model_px, sprite_px) = (decor_gone_px(), decor_sprite_px());
+    let (model_px, sprite_px) = (decor_gone_px() as f32, decor_sprite_px() as f32);
+    let tier = |px: f64| drawn::tier(px as f32, model_px, sprite_px);
     let [x0, y0] = b.corner;
     let [zlo, zhi] = b.heights.map(f64::from);
     let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
@@ -47,8 +50,8 @@ pub fn present_block(draw: &mut DrawList, b: &Shown, translation: [f32; 3], eye:
         let lane = lanes(offset, count);
         let first = at;
         sprites.clear();
-        let gone = extent * most / units_per_px_at(nearest) < sprite_px;
-        let modeled = extent * least / units_per_px_at(farthest) >= model_px;
+        let gone = tier(extent * most / units_per_px_at(nearest)) == drawn::GONE;
+        let modeled = tier(extent * least / units_per_px_at(farthest)) == drawn::MODEL;
         for i in 0..if gone { 0 } else { count as usize } {
             if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
@@ -61,12 +64,12 @@ pub fn present_block(draw: &mut DrawList, b: &Shown, translation: [f32; 3], eye:
             }
             let f = |l: usize| f32::from_bits(lanes_of[lane.f32_at(l, i)]) as f64;
             let d = v3::len(&[x0 + f(0) - eye[0], y0 + f(1) - eye[1], f(2) - eye[2]]).max(1e-3);
-            let px = extent * f(4) / units_per_px_at(d);
-            if px >= model_px {
+            let t = tier(extent * f(4) / units_per_px_at(d));
+            if t == drawn::MODEL {
                 changed |= list[at] != i as u32;
                 list[at] = i as u32;
                 at += 1;
-            } else if px >= sprite_px && opacity >= 1.0 {
+            } else if t == drawn::SPRITE && opacity >= 1.0 {
                 sprites.push(i as u32);
             }
         }

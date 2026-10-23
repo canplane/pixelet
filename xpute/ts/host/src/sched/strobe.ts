@@ -3,12 +3,21 @@
 /**
  * The host's clock for one guest: a turn runs on an animation frame only when
  * the host (`request`) or the guest's last falling edge asked for one, never on
- * a timer of the host's own.
+ * a timer of the host's own; and only on every `Quantum.paced()`-th
+ * refresh, the frames between it skipped whole (`turn`), so the turns land a
+ * whole number of refreshes apart (Android Swappy's frame pacing).
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { Doorbell } from "../ipc/doorbell.ts";
 import { type Grant, Quantum, type QuantumPolicy } from "./quantum.ts";
+
+/**
+ * The farthest a timer waits (HTML's timer delay is a signed 32-bit count of
+ * milliseconds; past it the timer fires at once). A wake past it waits this
+ * long and asks a turn, and the guest asks again for what is left.
+ */
+const TIMER_REACH_MS = 2 ** 31 - 1;
 
 export class Strobe {
   private readonly quantum: Quantum;
@@ -16,6 +25,8 @@ export class Strobe {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private timer_at = Infinity;
   private last = -1;
+  /** When the last animation frame was handed, run or skipped. */
+  private tick = -1;
   private running = false;
   private readonly run = (now: f64): void => this.turn(now);
 
@@ -33,6 +44,7 @@ export class Strobe {
   start(): void {
     this.running = true;
     this.last = performance.now();
+    this.tick = this.last;
     this.request();
   }
 
@@ -56,19 +68,26 @@ export class Strobe {
     if (!this.running) return;
     if (wake_ms === 0) return this.request();
     if (wake_ms < 0) return;
-    const at = performance.now() + wake_ms;
+    const wait_ms = Math.min(wake_ms, TIMER_REACH_MS);
+    const at = performance.now() + wait_ms;
     if (at >= this.timer_at) return;
     clearTimeout(this.timer);
     this.timer_at = at;
     this.timer = setTimeout(() => {
       this.timer_at = Infinity;
       this.request();
-    }, wake_ms);
+    }, wait_ms);
   }
 
   private turn(now: f64): void {
     this.frame = false;
     if (!this.running) return;
+    this.quantum.tick(now - this.tick);
+    this.tick = now;
+    // Paced: a frame nearer the last turn than the interval, less half a
+    // refresh for the frame's own jitter, is skipped, and the next asked.
+    const refresh_ms = this.quantum.refresh();
+    if (now - this.last < this.quantum.paced(refresh_ms) - refresh_ms / 2) return this.request();
     // Unclamped: how long a gap still counts as motion is the guest's call,
     // and a clamp here is where every frame worth reporting would land.
     const delta_s = Math.max(0, (now - this.last) / 1000);
