@@ -105,14 +105,6 @@ impl Figure {
         }
     }
 
-    fn set_ready(&self, ready: bool) {
-        let store = companion_load_store();
-        match self.variant.group {
-            Group::person => store.person_ready = ready,
-            Group::pet => store.pet_ready = ready,
-        }
-    }
-
     /// Placed at the target on creation; walking from the frame's origin would
     /// take far too long.
     fn acquire(&mut self, target: [f64; 2]) {
@@ -128,7 +120,6 @@ impl Figure {
         };
         self.held = Some(Held { actor, model });
         self.at = target;
-        self.set_ready(true);
     }
 
     fn release(&mut self) {
@@ -137,7 +128,6 @@ impl Figure {
                 k.scene.actors.remove_actor(&mut k.draw, held.actor);
             }
         }
-        self.set_ready(false);
     }
 
     /// `follows`: the target is followed as it moves, by a fix or by the keys,
@@ -405,16 +395,10 @@ fn drawn_floor(asked: &mut Asked<([f64; 2], f64, Zoom), f64>, at: [f64; 2], stan
     })
 }
 
-/// Whether the companion's models have loaded: a live, unpersisted signal
-/// for the loading toast. A fresh figure always starts unloaded.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct CompanionLoadStore {
-    pub person_ready: bool,
-    pub pet_ready: bool,
-}
-
-static STORE: Global<CompanionLoadStore> = Global::new();
-
-pub fn companion_load_store() -> &'static mut CompanionLoadStore {
-    STORE.get(CompanionLoadStore::default)
+/// Whether the person, then the pet, has loaded, for the loading toast: a
+/// figure holds its actor once its model and skin have arrived, and a fresh
+/// one holds none.
+pub fn companion_ready() -> [bool; 2] {
+    let c = companion();
+    [&c.person, &c.pet].map(|f| f.as_ref().is_some_and(|f| f.held.is_some()))
 }

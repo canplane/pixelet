@@ -22,7 +22,7 @@ use crate::control::sensor::device_orientation::{orientation_close, request_orie
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::reading::{device_location_store, device_orientation_store};
 use crate::layer::division::named;
-use crate::scene::character::companion::companion_load_store;
+use crate::scene::character::companion::companion_ready;
 use crate::scene::character::preview::{preview_rows, CASES_MAX};
 use crate::scene::stage::screen_drawn;
 use crate::setting::store::{settings_store, SettingKey};
@@ -57,7 +57,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let orientation = device_orientation_store();
     let camera = camera_state();
     let settings = settings_store();
-    let companion = companion_load_store();
+    let [person_ready, pet_ready] = companion_ready();
     let at = crate::control::camera::controller::focus();
     let center = at.map(|c| {
         let g = epsg4326::unproject(&c);
@@ -89,10 +89,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             has_location: location.location.is_some(),
             error: location.pose.error(),
         },
-        companion: CompanionState {
-            person_ready: companion.person_ready,
-            pet_ready: companion.pet_ready,
-        },
+        companion: CompanionState { person_ready, pet_ready },
         holding: HoldingState {
             tool: held.active_tool,
             cube: cube_id(held.object_cube),
