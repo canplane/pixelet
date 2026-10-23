@@ -8,7 +8,7 @@ use pxl_render::look::color::indicator;
 use pxl_spec::block::decor::Decor;
 use pxl_spec::block::object::{cube_id, cube_of, cube_rgb, Cube};
 use pxl_spec::block::DecorId;
-use pxl_spec::space::coord::q3;
+use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -20,8 +20,10 @@ use crate::decor::assets::decor_assets_for;
 use crate::layer::instance::Meta;
 use crate::layer::object::meta::user_decor_pick;
 use crate::layer::object::store::Block;
+use crate::query::changed::Asked;
 use crate::query::World;
 use crate::setting::store::settings_store;
+use xpute_guest::global::Global;
 
 /// What the pointer's tool would show where it is: nothing, a decor
 /// instance, or a box, drawn half transparent by the scene.
@@ -30,6 +32,10 @@ pub enum Ghost {
     Decor { at: V3, group: u32, rotation: f64, scale: f64 },
     Box { at: V3, size: f64, value: u32, rgb: u32, coplanar: bool },
 }
+
+/// The look of the ground the eraser would carve, of the hovered point:
+/// asked again only where the hover moved or a change touched its column.
+static CARVED: Global<Asked<Q3, Option<Cube>>> = Global::new();
 
 pub fn ghost() -> Ghost {
     let hover = hover();
@@ -49,10 +55,15 @@ pub fn ghost() -> Ghost {
     let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser) || hovered_object.is_some();
     let current_scale = units(if use_object_style { preview_zoom } else { GROUND.cell() });
 
+    let carved = CARVED.get(|| Asked::NONE);
+    // Looked at each frame turn, a hover not asked of this one too.
+    carved.kept();
     let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let cell = World::now().surface(h, LEAF_ZOOM).value().flatten().map_or(0, |s| s.block);
-            cube_of(u32::from(cell))
+            let (xy, cell) = ([h[0], h[1]].map(|v| q3::to_real(i64::from(v))), units(GROUND.cell()));
+            carved.of(*h, [xy.map(|v| v - cell), xy.map(|v| v + cell)], || {
+                cube_of(u32::from(World::now().surface(h, LEAF_ZOOM).value().flatten().map_or(0, |s| s.block)))
+            })
         }
         _ => None,
     };
