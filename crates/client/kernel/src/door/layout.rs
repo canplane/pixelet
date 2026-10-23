@@ -75,11 +75,11 @@ const SINGLE_BLOCKS: usize = 3;
 /// holds more.
 const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::scene::environment::cloud::BLOCKS_MAX + crate::scene::actor::ACTORS_MAX + crate::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
 
-pub const BLOCK_SLOTS: usize = pxl_render::gpu::renderer::block_slots(MAX_LIVE_BLOCKS);
+pub const BLOCK_SLOTS: usize = pxl_render::gpu::blocks::block_slots(MAX_LIVE_BLOCKS);
 
 const FIXED: [u32; 5] = [
     crate::layer::terrain::fixed::TERRAIN_BYTES,
-    pxl_render::gpu::renderer::blocks_bytes(BLOCK_SLOTS),
+    pxl_render::gpu::blocks::blocks_bytes(BLOCK_SLOTS),
     pxl_render::api_spec::stream::BYTES,
     crate::abi::host::stream::BYTES,
     crate::profiler::record::PROFILER_BYTES,

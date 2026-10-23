@@ -22,7 +22,7 @@ use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN
 use crate::frame::shader::words::DRAW_FLOATS;
 use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, bytes, release, word_bytes, Gpu};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::Read;
+use crate::gpu::read::Read;
 
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {

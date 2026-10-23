@@ -10,11 +10,11 @@ use crate::frame::shader::record::PIPELINE_IMPOSTOR_BAKE;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, Format, Gpu, Load};
+use crate::gpu::blocks::Blocks;
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::decor::{DecorPass, GROUPS};
 use crate::gpu::pass::model::{draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::Blocks;
 
 /// Impostors cover fewer pixels than the model tier's floor (twelve at the
 /// reference viewport), so this is several times any one's drawn size.

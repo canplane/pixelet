@@ -2,19 +2,18 @@
 
 //! Decor as instanced draws of each variant's model; the decor block is the
 //! instance buffer and its index list says which instances show. A variant's
-//! skin is its image's (gpu/renderer.rs `skin_group`).
+//! skin is its image's (gpu/pass/model.rs `skin_group`).
 
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::PIPELINE_DECOR_PREPASS;
-use crate::gpu::renderer::Image;
 
-use crate::gpu::api::Gpu;
+use crate::gpu::api::{Gpu, Image};
+use crate::gpu::blocks::{Blocks, Draws};
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::impostor::Extent;
-use crate::gpu::pass::model::{bind_mesh, draw_models, put_instances, DrawUniforms, ModelDraw, Stage, DRAW_BYTES};
+use crate::gpu::pass::model::{bind_mesh, draw_models, put_instances, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{skin_group, skin_made, Blocks, Draws};
 
 pub const GROUPS: usize = 64;
 
@@ -45,7 +44,7 @@ impl DecorPass {
     }
 
     /// None while its mesh or its skin's image lands; its skin's group made
-    /// here, as a frame prepares (gpu/renderer.rs `skin_group`).
+    /// here, as a frame prepares (gpu/pass/model.rs `skin_group`).
     pub(crate) fn model_of(&self, g: &Gpu, group: u32, blocks: &Blocks) -> Option<(u32, u32, u32, u32)> {
         self.model(group, blocks, |image| skin_group(g, self.lit.layouts[2], image))
     }

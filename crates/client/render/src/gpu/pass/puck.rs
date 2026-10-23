@@ -5,9 +5,9 @@
 use crate::frame::draw::{uniform_of, DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, Entry, Gpu};
 use crate::gpu::atmosphere::AIR_ENTRIES;
+use crate::gpu::blocks::{buffer_size, Blocks, Draws};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{buffer_size, Blocks, Draws};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
 

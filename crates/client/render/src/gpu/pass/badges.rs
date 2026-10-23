@@ -12,10 +12,10 @@ use crate::frame::shader::record::PIPELINE_BADGE_REGION;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Format, Gpu, Load, Stamp};
+use crate::gpu::blocks::{Blocks, Draws};
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{Blocks, Draws};
 use crate::gpu::sheet::shelf::{DrawSpec, Sheet, SlotSet};
 use crate::gpu::sheet::{Halo, SheetPainter, Sketch, SHEET_SCALE};
 use crate::gpu::text::{Font, TextOf};

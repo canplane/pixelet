@@ -23,10 +23,12 @@ use crate::frame::shader::words::{AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::Read;
-use crate::gpu::renderer::Upload;
+use crate::gpu::read::Read;
 use crate::look::atmosphere as model;
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_MOON_COLOR, ENV_SUN};
+
+/// Hands each waiting tile's layer and texels to the writer while it takes them.
+pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
 /// One past the last field: the device rounds the struct up to a 16-byte row.
 /// Offsets in floats into the struct.

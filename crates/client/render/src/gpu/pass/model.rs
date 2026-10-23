@@ -3,12 +3,64 @@
 //! What the model passes (decor, impostors, actors) share: group 0, per-draw
 //! uniform slots written once before the pass, and the draw loop.
 
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_guest::global::Global;
+
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::words::DRAW_FLOATS;
-use crate::gpu::api::{buffer_range_entry, buffer_usage, release, word_bytes, Entry, Gpu};
+use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes, Entry, Gpu, Image};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{frame_group, put_f32, put_u32, Scratch};
+use crate::gpu::put::{put_f32, put_u32, Scratch};
+
+fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: Entry, air: [Entry; AIR_ENTRIES]) -> u32 {
+    let mut e = vec![buffer_entry(0, frame), ao];
+    e.extend(air);
+    g.bind_group(layout, &e)
+}
+
+/// Each skin image's bind group, made the first time a frame prepares a draw
+/// of it, over one sampler: an image's texture is taken once (`Gpu::image`),
+/// so a skin one pass binds again, or another binds, is the group here. As
+/// many as the skins the asset table names, in the one layout a skin takes
+/// (record.rs `SKIN`), kept for the device's life.
+static SKINS: Global<Skins> = Global::new();
+
+#[derive(Default)]
+struct Skins {
+    sampler: u32,
+    /// An image and its group.
+    groups: Vec<(u32, u32)>,
+}
+
+/// A skin's bind group, made in `layout` where none is; none while its image
+/// lands. Only as a frame prepares, before its transaction (`frame_begin`): a
+/// group made in a frame that is dropped would be gone and still named here.
+pub fn skin_group(g: &Gpu, layout: u32, (image, file): Image) -> Option<u32> {
+    if let Some(group) = skin_made(image) {
+        return Some(group);
+    }
+    let skins = SKINS.get(Skins::default);
+    let texture = g.image(image, file)?;
+    if skins.sampler == 0 {
+        skins.sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::repeat, None, 1);
+    }
+    let view = g.view(texture, false, 0, 1, 0, 1);
+    let group = g.bind_group(layout, &[view_entry(0, view), sampler_entry(1, skins.sampler)]);
+    skins.groups.push((image, group));
+    Some(group)
+}
+
+/// A skin's bind group as a frame's draws bind it: the one a prepare made
+/// (`skin_group`), or none.
+pub fn skin_made(image: u32) -> Option<u32> {
+    SKINS.get(Skins::default).groups.iter().find(|&&(i, _)| i == image).map(|&(_, group)| group)
+}
+
+/// The device gone, its groups go with it.
+pub(crate) fn skins_lost() {
+    SKINS.set(Skins::default());
+}
 
 #[derive(Clone, Copy)]
 pub enum Stage {

@@ -6,11 +6,8 @@
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::ptr_at;
-use xpute_guest::mem::heap::{alloc, free};
 
 use crate::api_spec::surface_role;
 use crate::frame::draw::{
@@ -19,17 +16,18 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, PIPELINES, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_ARGS, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS, SHADER_JOINED,
-    SHADER_MISS, SHADER_SAMPLE, SHADER_WAYS, SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
+    FRAME_AT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_ARGS, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS, SHADER_JOINED, SHADER_MISS,
+    SHADER_SAMPLE, SHADER_WAYS, SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
 use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{
     buffer_entry, buffer_range_entry, buffer_usage, bytes, device, device_lost, frame_begin, frame_commit, gpu, pass_desc, release, room, sampler_entry, texture_usage, view_entry, word_bytes,
-    write_buffer_bytes, Device, Entry, Format, Gpu, Load, Stamp, DONE,
+    write_buffer_bytes, Device, Entry, Format, Gpu, Image, Load, Stamp, DONE, UNIFORM_ALIGN_MAX,
 };
-use crate::gpu::atmosphere::{Atmosphere, AIR_ENTRIES};
+use crate::gpu::atmosphere::{Atmosphere, Upload, AIR_ENTRIES};
+use crate::gpu::blocks::{blocks, Blocks, Draws};
 use crate::gpu::clouds::CloudPass;
 use crate::gpu::grown::{DecorFrame, Drawn, Grown, Grows};
 use crate::gpu::image_map::ImageMap;
@@ -37,10 +35,12 @@ use crate::gpu::layers::{Layers, Mips};
 use crate::gpu::pass::badges::BadgePass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
-use crate::gpu::pass::model::{frame_layout, DrawUniforms, FrameGroups, Stage};
+use crate::gpu::pass::model::{frame_layout, skins_lost, DrawUniforms, FrameGroups, Stage};
 use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::put::put_mat;
+use crate::gpu::read::Read;
 use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
@@ -135,9 +135,6 @@ pub struct EarthTiles<'a> {
     pub layers: &'a [u32],
     pub upload: &'a mut Upload,
 }
-
-/// Hands each waiting tile's layer and texels to the writer while it takes them.
-pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
 /// The ground's windows as the GPU holds them (pxl-spec-core `window`,
 /// `SQUARES` of them): the squares to hand it, and where their cells come
@@ -249,20 +246,6 @@ pub fn pixels_ms(spans: &[f64]) -> f64 {
     PER_PIXEL.iter().map(|&s| spans[s as usize]).sum()
 }
 
-pub fn put_f32(buf: &mut [u8], at: usize, v: f32) {
-    buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
-}
-
-pub fn put_u32(buf: &mut [u8], at: usize, v: u32) {
-    buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
-}
-
-pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
-    for (i, v) in m.iter().enumerate() {
-        out[at + i] = *v as f32;
-    }
-}
-
 /// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, taken in f64. Un-
 /// projecting two points in the shader kept a direction to only ~1e-3 rad,
 /// which the secant carried out to kilometers at the horizon: the clouds shook.
@@ -283,345 +266,6 @@ fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
     }
 }
 
-pub fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: Entry, air: [Entry; AIR_ENTRIES]) -> u32 {
-    let mut e = vec![buffer_entry(0, frame), ao];
-    e.extend(air);
-    g.bind_group(layout, &e)
-}
-
-/// An image file as its asker hands it: its name, the asker's own and the
-/// same for one file wherever it is handed, and its bytes, handed for as
-/// long as the image is wanted, so a device gone takes it again from them
-/// (`Gpu::image`).
-pub type Image = (u32, &'static [u8]);
-
-/// Each skin image's bind group, made the first time a frame prepares a draw
-/// of it, over one sampler: an image's texture is taken once (`Gpu::image`),
-/// so a skin one pass binds again, or another binds, is the group here. As
-/// many as the skins the asset table names, in the one layout a skin takes
-/// (record.rs `SKIN`), kept for the device's life.
-static SKINS: Global<Skins> = Global::new();
-
-#[derive(Default)]
-struct Skins {
-    sampler: u32,
-    /// An image and its group.
-    groups: Vec<(u32, u32)>,
-}
-
-/// A skin's bind group, made in `layout` where none is; none while its image
-/// lands. Only as a frame prepares, before its transaction (`frame_begin`): a
-/// group made in a frame that is dropped would be gone and still named here.
-pub fn skin_group(g: &Gpu, layout: u32, (image, file): Image) -> Option<u32> {
-    if let Some(group) = skin_made(image) {
-        return Some(group);
-    }
-    let skins = SKINS.get(Skins::default);
-    let texture = g.image(image, file)?;
-    if skins.sampler == 0 {
-        skins.sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::repeat, None, 1);
-    }
-    let view = g.view(texture, false, 0, 1, 0, 1);
-    let group = g.bind_group(layout, &[view_entry(0, view), sampler_entry(1, skins.sampler)]);
-    skins.groups.push((image, group));
-    Some(group)
-}
-
-/// A skin's bind group as a frame's draws bind it: the one a prepare made
-/// (`skin_group`), or none.
-pub fn skin_made(image: u32) -> Option<u32> {
-    SKINS.get(Skins::default).groups.iter().find(|&&(i, _)| i == image).map(|&(_, group)| group)
-}
-
-/// Records sorted by pipeline with a stable counting sort, so a pass walks
-/// only its own records.
-pub struct Draws<'a> {
-    records: &'a [[u32; DRAW_WORDS]],
-    order: &'a [u32],
-    starts: [u32; PIPELINES as usize + 1],
-}
-
-impl<'a> Draws<'a> {
-    fn sort(records: &'a [[u32; DRAW_WORDS]], order: &'a mut Vec<u32>) -> Draws<'a> {
-        let mut starts = [0u32; PIPELINES as usize + 1];
-        for d in records {
-            if let Some(n) = starts.get_mut(d[4] as usize + 1) {
-                *n += 1;
-            }
-        }
-        for p in 0..PIPELINES as usize {
-            starts[p + 1] += starts[p];
-        }
-        order.clear();
-        order.resize(starts[PIPELINES as usize] as usize, 0);
-        let mut next = starts;
-        for (i, d) in records.iter().enumerate() {
-            if let Some(at) = next.get_mut(d[4] as usize).filter(|_| d[4] < PIPELINES) {
-                order[*at as usize] = i as u32;
-                *at += 1;
-            }
-        }
-        Draws { records, order, starts }
-    }
-
-    pub fn of(&self, pipeline: u32) -> impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone + 'a {
-        let p = (pipeline as usize).min(PIPELINES as usize);
-        let end = if p < PIPELINES as usize { self.starts[p + 1] } else { self.starts[p] };
-        let records = self.records;
-        self.order[self.starts[p] as usize..end as usize].iter().map(move |&i| &records[i as usize])
-    }
-}
-
-/// Grown to the next power of two when a frame needs more, never shrunk.
-#[derive(Default)]
-pub struct Scratch {
-    at: usize,
-    bytes: u32,
-}
-
-impl Scratch {
-    pub fn take(&mut self, bytes: u32) -> &'static mut [u8] {
-        if bytes > self.bytes {
-            if self.bytes > 0 {
-                // SAFETY: the block this scratch held alone.
-                unsafe { free((self.at, self.bytes)) };
-            }
-            let size = bytes.next_power_of_two().max(4096);
-            (self.at, self.bytes) = alloc(size).or_bug(Errno::ENOMEM);
-        }
-        // SAFETY: a heap block this scratch holds alone, at least `bytes` long.
-        unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(self.at), bytes as usize) }
-    }
-
-    pub fn free(&mut self) {
-        if self.bytes > 0 {
-            // SAFETY: the block this scratch held alone.
-            unsafe { free((self.at, self.bytes)) };
-            self.bytes = 0;
-        }
-    }
-}
-
-/// Its block goes with it: the renderer is dropped whole when the GPU is lost.
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        self.free();
-    }
-}
-
-const EMPTY: u32 = 0;
-
-/// A power of two so a position wraps by masking, at least twice `live` so
-/// open addressing never fills past half.
-pub const fn block_slots(live: usize) -> usize {
-    (2 * live).next_power_of_two()
-}
-
-/// Blocks by the list's handle: open addressing in `.fixed.blocks`. The heap
-/// is the source and the device a copy, so a lost device is restored from the
-/// addresses.
-pub struct Blocks {
-    handle: &'static mut [u32],
-    at: &'static mut [u32],
-    len: &'static mut [u32],
-    vertex_cnt: &'static mut [u32],
-    index_cnt: &'static mut [u32],
-    buffer: &'static mut [u32],
-    group: &'static mut [u32],
-    count: u32,
-    bytes: u64,
-    missing: u32,
-}
-
-pub(crate) fn buffer_size(len: u32) -> u32 {
-    ((len + 3) & !3).max(4)
-}
-
-fn memory(at: u32, n: u32) -> &'static [u8] {
-    // SAFETY: a heap block the draw list named, live until its free is listed.
-    unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at as usize), n as usize) }
-}
-
-/// Handle, address, length, the two counts, buffer, group.
-const BLOCK_LANES: usize = 7;
-
-/// The table's lanes, then the draw list's (frame/draw.rs `lanes_bytes`),
-/// room for the most blocks live, half the slots.
-pub const fn blocks_bytes(slots: usize) -> u32 {
-    (BLOCK_LANES * slots * 4) as u32 + crate::frame::draw::lanes_bytes(slots / 2)
-}
-
-/// # Safety
-/// `at` must address `blocks_bytes(slots)`, 4-aligned and zeroed, the
-/// renderer's alone for as long as the module runs.
-pub unsafe fn set_blocks(at: u32, slots: usize) {
-    xpute_kit::ensure!(slots.is_power_of_two(), EINVAL, slots);
-    // SAFETY: the caller's range, one lane of `slots` words after another.
-    let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize + k * slots * 4), slots) };
-    BLOCKS.set(Blocks {
-        handle: lane(0),
-        at: lane(1),
-        len: lane(2),
-        vertex_cnt: lane(3),
-        index_cnt: lane(4),
-        buffer: lane(5),
-        group: lane(6),
-        count: 0,
-        bytes: 0,
-        missing: 0,
-    });
-    // SAFETY: the range's rest past the table, the lists' alone.
-    unsafe { crate::frame::draw::set_lanes(at + (BLOCK_LANES * slots * 4) as u32, slots / 2) };
-}
-
-fn home(handle: u32, slots: usize) -> usize {
-    (handle.wrapping_mul(0x9e37_79b1) >> (32 - slots.trailing_zeros())) as usize
-}
-
-impl Blocks {
-    fn lose(&mut self) {
-        self.buffer.fill(0);
-        self.group.fill(0);
-        self.missing = self.count;
-    }
-
-    /// As far as the turn's stream has room.
-    fn restore(&mut self, g: &Gpu) {
-        if self.missing == 0 {
-            return;
-        }
-        for i in 0..self.handle.len() {
-            if self.handle[i] != EMPTY && self.buffer[i] == 0 && !self.put(g, i) {
-                return;
-            }
-        }
-    }
-
-    /// False, the block still missing, where the turn's stream has no room.
-    fn put(&mut self, g: &Gpu, i: usize) -> bool {
-        if !room(write_buffer_bytes(memory(self.at[i], self.len[i] & !3))) {
-            return false;
-        }
-        let buffer = g.buffer(buffer_size(self.len[i]), buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        g.write_buffer(buffer, 0, memory(self.at[i], self.len[i] & !3));
-        self.buffer[i] = buffer;
-        self.group[i] = 0;
-        self.missing -= 1;
-        true
-    }
-
-    fn find(&self, handle: u32) -> Option<usize> {
-        if handle == EMPTY {
-            return None;
-        }
-        let mut i = home(handle, self.handle.len());
-        loop {
-            match self.handle[i] {
-                EMPTY => return None,
-                h if h == handle => return Some(i),
-                _ => i = (i + 1) & (self.handle.len() - 1),
-            }
-        }
-    }
-
-    /// None until the block is on the device.
-    pub fn get(&self, handle: u32) -> Option<(u32, u32, u32)> {
-        self.find(handle).filter(|&i| self.buffer[i] != 0).map(|i| (self.buffer[i], self.vertex_cnt[i], self.index_cnt[i]))
-    }
-
-    fn insert(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32, vertex_cnt: u32, index_cnt: u32) {
-        self.remove(handle);
-        // Slots are twice the most blocks the owners can hold, so this is that bound broken.
-        xpute_kit::ensure!((self.count as usize) < self.handle.len() / 2, ENOTRECOVERABLE, self.handle.len() / 2);
-        let mut i = home(handle, self.handle.len());
-        while self.handle[i] != EMPTY {
-            i = (i + 1) & (self.handle.len() - 1);
-        }
-        self.handle[i] = handle;
-        self.at[i] = at;
-        self.len[i] = len;
-        self.vertex_cnt[i] = vertex_cnt;
-        self.index_cnt[i] = index_cnt;
-        self.buffer[i] = 0;
-        self.group[i] = 0;
-        self.count += 1;
-        self.bytes += buffer_size(len) as u64;
-        self.missing += 1;
-        if let Some(g) = g {
-            self.put(g, i);
-        }
-    }
-
-    /// Where the turn's stream has no room, the buffer goes and the block is put
-    /// again whole once there is.
-    fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, from: u32, len: u32) {
-        let Some(i) = self.find(handle) else { return };
-        self.at[i] = at;
-        let (Some(g), buffer @ 1..) = (g, self.buffer[i]) else { return };
-        let bytes = len.min(self.len[i].saturating_sub(from)) & !3;
-        if room(write_buffer_bytes(memory(at + from, bytes))) {
-            g.write_buffer(buffer, from, memory(at + from, bytes));
-        } else {
-            release(self.group[i]);
-            release(buffer);
-            (self.buffer[i], self.group[i]) = (0, 0);
-            self.missing += 1;
-        }
-    }
-
-    fn remove(&mut self, handle: u32) {
-        let Some(mut i) = self.find(handle) else { return };
-        release(self.group[i]);
-        if self.buffer[i] == 0 {
-            self.missing = self.missing.saturating_sub(1);
-        }
-        release(self.buffer[i]);
-        self.count -= 1;
-        self.bytes -= buffer_size(self.len[i]) as u64;
-        // Backward shift: an entry past the hole moves into it unless its home lies
-        // between the hole and it, so no probe ever stops early.
-        loop {
-            let mut j = i;
-            loop {
-                j = (j + 1) & (self.handle.len() - 1);
-                if self.handle[j] == EMPTY {
-                    self.handle[i] = EMPTY;
-                    return;
-                }
-                let k = home(self.handle[j], self.handle.len());
-                let stays = if i <= j { i < k && k <= j } else { i < k || k <= j };
-                if !stays {
-                    self.handle[i] = self.handle[j];
-                    self.at[i] = self.at[j];
-                    self.len[i] = self.len[j];
-                    self.vertex_cnt[i] = self.vertex_cnt[j];
-                    self.index_cnt[i] = self.index_cnt[j];
-                    self.buffer[i] = self.buffer[j];
-                    self.group[i] = self.group[j];
-                    i = j;
-                    break;
-                }
-            }
-        }
-    }
-
-    /// For a draw binding it as a vertex buffer: the ghost's boxes are read through it (box.wgsl).
-    pub fn group(&mut self, g: &Gpu, handle: u32, layout: u32) -> Option<u32> {
-        let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
-        if self.group[i] == 0 {
-            let id = g.bind_group(layout, &[buffer_entry(0, self.buffer[i])]);
-            self.group[i] = id;
-        }
-        Some(self.group[i])
-    }
-}
-
-static BLOCKS: Global<Blocks> = Global::new();
-
-fn blocks() -> &'static mut Blocks {
-    BLOCKS.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
-}
-
 static RENDERER: Global<Option<Renderer>> = Global::new();
 
 /// Each light's step, the sun's first: the height it moves before the sky as
@@ -633,13 +277,9 @@ pub fn sky_steps() -> [Option<f32>; 2] {
 
 static REDRAW: Global<bool> = Global::new();
 
-/// WebGPU's default minUniformBufferOffsetAlignment: an adapter's limit is a
-/// power of two no larger, so a larger one is no device's.
-pub const UNIFORM_ALIGN_MAX: u32 = 256;
-
 pub fn gpu_lost() {
     RENDERER.set(None);
-    SKINS.set(Skins::default());
+    skins_lost();
     device_lost();
     blocks().lose();
     surfaces_lost();
@@ -903,63 +543,6 @@ struct CastBuffers {
     /// same: the rays and the decor grown over them stand, and nothing is
     /// cast.
     read: Read,
-}
-
-/// A stage's whole input as it last read it, byte for byte: what the stage
-/// makes is one function of it, so a frame that reads the same stands on
-/// what it made — the cast's rays and the decor grown over them (stage 1),
-/// the frame (stage 2). Each lane is read with its length, so no two
-/// sets read alike; what changed without words to read is marked so.
-#[derive(Default)]
-pub(crate) struct Read {
-    bytes: Vec<u8>,
-    at: usize,
-    same: bool,
-}
-
-impl Read {
-    pub(crate) fn begin(&mut self) {
-        (self.at, self.same) = (0, true);
-    }
-
-    /// Whether `lane` reads otherwise than it did at this place last time.
-    pub(crate) fn take(&mut self, lane: &[u8]) -> bool {
-        let end = self.at + lane.len();
-        let moved = self.bytes.get(self.at..end) != Some(lane);
-        if moved {
-            self.same = false;
-            if self.bytes.len() < end {
-                self.bytes.resize(end, 0);
-            }
-            self.bytes[self.at..end].copy_from_slice(lane);
-        }
-        self.at = end;
-        moved
-    }
-
-    /// Whether `lane`, with its length, moved: what its writer needs to
-    /// write again, and no more.
-    pub(crate) fn read<T: Copy>(&mut self, lane: &[T]) -> bool {
-        self.take(bytes(&[lane.len() as u32])) | self.take(bytes(lane))
-    }
-
-    /// What this frame changed of the stage's input that has no words, as
-    /// an image come or a table drawn.
-    pub(crate) fn mark(&mut self, changed: bool) {
-        self.same &= !changed;
-    }
-
-    /// Whether all of it read as the last time.
-    pub(crate) fn end(&mut self) -> bool {
-        let same = self.same && self.at == self.bytes.len();
-        self.bytes.truncate(self.at);
-        same
-    }
-
-    /// The rays no longer hold what was read: the next frame casts.
-    pub(crate) fn forget(&mut self) {
-        self.bytes.clear();
-    }
 }
 
 /// A square on the GPU, in bytes.

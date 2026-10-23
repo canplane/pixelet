@@ -5,13 +5,12 @@
 
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
-use crate::gpu::renderer::Image;
 
-use crate::gpu::api::{bytes, Gpu};
+use crate::gpu::api::{bytes, Gpu, Image};
 
-use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, DRAW_BYTES};
+use crate::gpu::blocks::Blocks;
+use crate::gpu::pass::model::{draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{skin_group, skin_made, Blocks};
 
 pub struct SkinnedPass {
     lit: Built,

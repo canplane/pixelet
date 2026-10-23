@@ -70,7 +70,7 @@ pub fn census_slot(pipeline: u32) -> usize {
 pub const REWRITE_WORDS: usize = 4;
 
 /// The uploads' and the frees' lanes in `.fixed.blocks` (pxl-render
-/// gpu/renderer.rs `set_blocks`), each twice, the one written and the one
+/// gpu/blocks.rs `set_blocks`), each twice, the one written and the one
 /// the renderer took: room for as many records as blocks live, since a
 /// turn's uploads become live blocks and its frees were.
 struct ListLanes {
