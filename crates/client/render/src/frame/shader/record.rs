@@ -99,14 +99,16 @@ pub const fn dynamic<const N: usize>(mut group: [u32; N], binding: u32) -> [u32;
 }
 
 /// Whether every entry of `a` is one of `b`'s: a pipeline over `a` takes a
-/// group laid out as `b`.
+/// group laid out as `b`. A storage buffer `a` only reads is one `b` lays
+/// out read-write, as WebGPU binds a read-write entry to a shader reading it.
 pub const fn within<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) -> bool {
     let mut k = 0;
     while k < N {
         let mut found = false;
         let mut j = 0;
         while j < M {
-            found |= a[k] == b[j] && a[k + 1] == b[j + 1] && a[k + 2] == b[j + 2];
+            let kind = a[k + 2] == b[j + 2] || (a[k + 2] == STORAGE && b[j + 2] == STORAGE_RW);
+            found |= a[k] == b[j] && a[k + 1] == b[j + 1] && kind;
             j += 3;
         }
         if !found {
