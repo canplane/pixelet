@@ -64,9 +64,6 @@ pub(crate) const EARTH_TILES: usize = 48;
 /// Bindings 8 through 18, and the air's volume at 22: eleven entries.
 pub const AIR_ENTRIES: usize = 11;
 
-/// The volume's maker's workgroup, a side across the screen, a column of
-/// froxels a thread (atmos_froxel.wgsl).
-const FROXEL_WORKGROUP: u32 = 8;
 /// What the volume's maker binds: the frame, the volume it writes, the
 /// air's words and the tables it marches through, and the sky's ray.
 const FROXEL_GROUP: [u32; 24] = [
@@ -322,8 +319,8 @@ impl Atmosphere {
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_pipeline(pass, self.froxel.pipeline);
         g.set_bind_group(pass, 0, self.froxel_group, &[]);
-        let groups = AIR_FROXELS.div_ceil(FROXEL_WORKGROUP);
-        g.dispatch(pass, groups, groups, 1);
+        // A column of froxels a workgroup (atmos_froxel.wgsl).
+        g.dispatch(pass, AIR_FROXELS, AIR_FROXELS, 1);
         g.end(pass);
         true
     }

@@ -35,11 +35,14 @@ fn seen_from_eye(world_pos: vec3f) -> Seen {
   let w = max(clip.w, 1e-6);
   let uv = vec2f(clip.x / w * 0.5 + 0.5, 0.5 - clip.y / w * 0.5);
   let to = world_pos - frame_camera_pos();
-  let d = length(to);
   // Past where the air ends along it, the air to there (`air_ground`).
-  let z = air_z(min(d, air_ground(to / max(d, 1e-6))));
-  let near = min(d / air_reach(0.5 / f32(AIR_FROXELS)), 1.0);
-  let air = air_before(uv, z);
+  let d = length(to);
+  let ground = air_ground(to / max(d, 1e-6));
+  let held = min(d, ground);
+  let near = min(held / min(air_reach(0.5 / f32(AIR_FROXELS)), ground), 1.0);
+  // Past the ground the volume holds a line, which may run out of range.
+  let line = air_before(uv, air_z(held));
+  let air = vec4f(max(line.rgb, vec3f(0.0)), clamp(line.a, 0.0, 1.0));
   var s: Seen;
   s.scattered = air.rgb * near;
   s.through = 1.0 - near * (1.0 - air.a);
@@ -117,7 +120,7 @@ fn beyond(dir: vec3f) -> vec3f {
   let octaves = log2(d / atmos_earth_reach());
   let n = frame_up();
   let face = earth_face(map_of(p), octaves);
-  let lit = EARTH_GAIN * face.rgb * surface_light(n, n, 1.0, seen.light) + city_shown(face.a, n);
+  let lit = EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);
   return seen.scattered + seen.through * clamp(octaves + 1.0, 0.0, 1.0) * lit;
 }
 

@@ -64,8 +64,8 @@ pub const SHADER_GROWN_MARK: u32 = 34;
 /// The eye's windows folded over their squares, generated with the cast
 /// from pxl-portable's `window::fold`: its one compute entry.
 pub const SHADER_JOINED: u32 = 35;
-/// The air's volume, a froxel a thread (atmos_froxel.wgsl): its one
-/// compute entry.
+/// The air's volume, a column of froxels a workgroup (atmos_froxel.wgsl):
+/// its one compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 36;
 /// Each handed square's ways as blocks in one pool (pxl-portable
 /// `ways::tree`), generated with the cast: a re-filled square's old blocks
