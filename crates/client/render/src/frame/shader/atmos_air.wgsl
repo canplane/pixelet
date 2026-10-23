@@ -11,30 +11,47 @@
 
 /* the air before a point */
 
-// The volume at `uv` across and `z` deep (`air_reach`): Hillaire 2020's
+// Column `c` of the volume `d` units from the eye, as deep as its own span
+// puts it (atmos_froxel.wgsl `column_span`): Hillaire 2020's
 // aerial-perspective volume, 32 a side and 32 deep, as Unreal's
-// SkyAtmosphere lays it out (frame/shader/words.rs `AIR_FROXELS`). Its
-// slices' texels stand at depths 0 to 1, the span's ends (atmos_froxel.wgsl).
-fn air_before(uv: vec2f, z: f32) -> vec4f {
+// SkyAtmosphere lays it out (frame/shader/words.rs `AIR_FROXELS`), its
+// slices' texels at depths 0 to 1 of the span and the span in the slice past
+// them.
+fn air_column(c: vec2u, d: f32) -> vec4f {
   let n = f32(AIR_FROXELS);
-  return textureSampleLevel(air_volume, atmos_sampler, vec3f(uv, (0.5 + z * (n - 1.0)) / n), 0.0);
+  let span = air_span_of(textureLoad(air_volume, vec3u(c, AIR_FROXELS), 0).xy);
+  let z = air_z(span, d);
+  return textureSampleLevel(air_volume, atmos_sampler, vec3f((vec2f(c) + 0.5) / n, (0.5 + z * (n - 1.0)) / (n + 1.0)), 0.0);
+}
+
+// The volume at `uv` across, `d` units from the eye: the four columns about
+// it, each read at that distance by its own span. Read at one depth in all
+// four, as one filtered sample would, a column whose span runs far past its
+// neighbour's — toward the horizon, where the sea's plane runs off — gave a
+// point the air of another distance, a line along the horizon.
+fn air_before(uv: vec2f, d: f32) -> vec4f {
+  let last = vec2f(f32(AIR_FROXELS - 1u));
+  let at = clamp(uv * f32(AIR_FROXELS) - 0.5, vec2f(0.0), last);
+  let c0 = vec2u(floor(at));
+  let c1 = vec2u(min(floor(at) + 1.0, last));
+  let w = at - floor(at);
+  let top = mix(air_column(c0, d), air_column(vec2u(c1.x, c0.y), d), w.x);
+  let bottom = mix(air_column(vec2u(c0.x, c1.y), d), air_column(c1, d), w.x);
+  return mix(top, bottom, w.y);
 }
 
 // The air before a point as the volume holds it at the point's place on the
-// screen and its depth along its own ray's span (`air_span`): what the eye's
-// view projects it to, so a point off the screen or behind the eye reads the
-// volume's nearest edge. A point past the span's end, under the sea or past
-// the air's ground, reads the air to the end. The lights at a point are the
-// point's own, read where it stands (atmos_view.wgsl `light_of`): they turn
-// with its height, and a froxel stands higher or lower than what is drawn in
-// it.
+// screen and its distance: what the eye's view projects it to, so a point
+// off the screen or behind the eye reads the volume's nearest edge. A point
+// past a column's span, under the sea or past the air's ground, reads the
+// air to its end. The lights at a point are the point's own, read where it
+// stands (atmos_view.wgsl `light_of`): they turn with its height, and a
+// froxel stands higher or lower than what is drawn in it.
 fn seen_from_eye(world_pos: vec3f) -> Seen {
   let clip = frame_view_proj() * vec4f(world_pos, 1.0);
   let w = max(clip.w, 1e-6);
   let uv = vec2f(clip.x / w * 0.5 + 0.5, 0.5 - clip.y / w * 0.5);
-  let to = world_pos - frame_camera_pos();
-  let d = length(to);
-  let air = air_before(uv, air_z(air_span(to / max(d, 1e-6)), d));
+  let air = air_before(uv, length(world_pos - frame_camera_pos()));
   var s: Seen;
   s.scattered = air.rgb;
   s.through = air.a;

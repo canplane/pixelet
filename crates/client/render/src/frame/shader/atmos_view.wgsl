@@ -112,10 +112,12 @@ fn air_ground(dir: vec3f) -> f32 {
 // farthest: from where the air begins that anything drawn may lie in — past
 // `air_near`, and past the air's top for an eye over it — to the sea's
 // plane, the world's z = 0, under which little is drawn; where the ray never
-// falls to it, the air's ground or its far edge (`air_ground`). Laid from the air's top to the sea, an eye high over the
-// world spends no slice on the space before the air or past the sea, which
-// had left the air a ray crosses a few slices tens of km thick and the sea
-// read between them, banded a slice at a time about the point under the eye.
+// falls to it, the air's ground or its far edge (`air_ground`). Laid from the
+// air's top to the sea, an eye high over the world spends no slice on the
+// space before the air or past the sea, which had left the air a ray crosses
+// a few slices tens of km thick and the sea read between them, banded a
+// slice at a time about the point under the eye. A column of the volume
+// takes its neighbours' too (atmos_froxel.wgsl `column_span`).
 fn air_span(dir: vec3f) -> vec2f {
   let r = camera_r();
   let mu = dot(frame_up(), dir);
@@ -125,20 +127,35 @@ fn air_span(dir: vec3f) -> vec2f {
   return vec2f(near, max(far, near * (1.0 + 1e-6) + 1e-6));
 }
 
+// A span as the volume holds it, in a 16-bit float a side: its ends' log2
+// past one, and one more so a 16-bit float holds it at full precision, which
+// keeps a span of metres and one of thousands of km alike to a percent.
+// Rounded here to the 10 bits of mantissa the texel keeps, so the column's
+// maker marches the span its reader reads and the froxels are read where
+// they were made.
+fn air_span_held(span: vec2f) -> vec2f {
+  let v = log2(span + 1.0) + 1.0;
+  return bitcast<vec2f>((bitcast<vec2u>(v) + vec2u(0x1000u)) & vec2u(0xffffe000u));
+}
+
+fn air_span_of(held: vec2f) -> vec2f {
+  return exp2(held - 1.0) - 1.0;
+}
+
 // How far from the eye a froxel `z` deep reaches along a ray whose slices lie
-// over `span` (`air_span`), in units: its depth cubed of the span. A slice's
-// reach grows with its depth, so the near view, where most of what is drawn
-// lies, takes most of the slices — from the ground looking out level, the
-// first ~4 m, the second ~116 m, the ninth ~21 km — and the last ends where
-// the span does, so what is drawn there, the sea from high, reads the march
-// to it whole (atmos_froxel.wgsl, atmos_air.wgsl).
+// over `span`, in units: its depth cubed of the span. A slice's reach grows
+// with its depth, so the near view, where most of what is drawn lies, takes
+// most of the slices — from the ground looking out level, the first ~4 m,
+// the second ~116 m, the ninth ~21 km — and the last ends where the span
+// does, so what is drawn there, the sea from high, reads the march to it
+// whole (atmos_froxel.wgsl, atmos_air.wgsl).
 fn air_reach(span: vec2f, z: f32) -> f32 {
   return span.x + (span.y - span.x) * z * z * z;
 }
 
 // `air_reach` the other way: how deep a point `d` units from the eye lies.
 fn air_z(span: vec2f, d: f32) -> f32 {
-  return pow(clamp((d - span.x) / (span.y - span.x), 0.0, 1.0), 1.0 / 3.0);
+  return pow(clamp((d - span.x) / max(span.y - span.x, 1e-6), 0.0, 1.0), 1.0 / 3.0);
 }
 
 // The march to a point, the volume's one maker (atmos_froxel.wgsl): what
