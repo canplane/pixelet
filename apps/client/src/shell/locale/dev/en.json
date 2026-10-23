@@ -9,7 +9,7 @@
     "debug": {
       "ray_steps": {
         "label": "Ray steps",
-        "description": "Colors each ray by the nodes the walk that found its block asked the world from its cell's start: blue few, red many, the same ramp on every screen. A pixel showing a sample's block counts that sample's walk."
+        "description": "Colors each pixel by the nodes its own ray walked from its cell's start: blue few, red many, the same ramp on every screen. Grey where it took a sample's block and walked nothing."
       }
     }
   },

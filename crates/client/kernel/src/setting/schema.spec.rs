@@ -172,7 +172,7 @@ pub enum SettingKey {
     gizmo = 13,
     person = 14,
     pet = 15,
-    /// Each ray's pixel coloured by the nodes the walk that found its block asked the world from its cell's start: its own, or the sample's whose block it shows, as the frame casts it; on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_rays.wgsl).
+    /// Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (crates/client/render/src/frame/shader/screen_rays.wgsl).
     ray_steps = 16,
 }
 

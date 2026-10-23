@@ -172,16 +172,14 @@ pub fn about(tan: [f32; 2], s: f32, [tx, ty]: [f32; 2]) -> [u32; 2] {
 /// corner, its roots — the block there, 1 where that node lacks, which a
 /// pixel entering it before any block takes as its own, and the axis the
 /// sample entered it across: a face its ray reached through air, so one a
-/// pixel may show only where it enters across the same; and the nodes its
-/// walk asked, which a pixel showing its block reports as its own steps.
+/// pixel may show only where it enters across the same.
 pub const SAMPLE_ZOOM: u32 = 0;
 pub const SAMPLE_CORNER: u32 = 1;
 pub const SAMPLE_ROOTS: u32 = 4;
 pub const SAMPLE_BLOCK: u32 = 7;
 pub const SAMPLE_LACKS: u32 = 9;
 pub const SAMPLE_AXIS: u32 = 10;
-pub const SAMPLE_VISITS: u32 = 11;
-pub const SAMPLE_WORDS: u32 = 12;
+pub const SAMPLE_WORDS: u32 = 11;
 pub const SAMPLE_NONE: u32 = u32::MAX;
 
 /// The beam rays' buffer, the cast's own for a frame, one binding: how

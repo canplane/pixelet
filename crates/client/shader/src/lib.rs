@@ -772,7 +772,6 @@ pub fn sample_cs(
     seen_put(beams, base + beam::SAMPLE_BLOCK, stop.block[0]);
     seen_put(beams, base + beam::SAMPLE_BLOCK + 1, stop.block[1]);
     seen_put(beams, base + beam::SAMPLE_AXIS, stop.axis);
-    seen_put(beams, base + beam::SAMPLE_VISITS, met.visits);
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
@@ -781,9 +780,8 @@ type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// Each pixel's ray: the nearest of the blocks the samples about it stopped
 /// at that it enters (pxl-spec-core `beam::about`, `cast::entry`), its
-/// words, the steps the sample's walk took its own; where it enters none,
-/// or a node a sample lacks at before it, the ray from its cell's start,
-/// reading the
+/// words, no step its own; where it enters none, or a node a sample lacks
+/// at before it, the ray from its cell's start, reading the
 /// observed pyramid alone (`Reading`), its binding read-only so no read of
 /// it is atomic: its words where every node it asked was kept, else the
 /// pixel listed in the beam rays' buffer for `miss_cs` (pxl-spec-core
@@ -809,9 +807,7 @@ pub fn cast_cs(
     let (ray, t, line) = started(eye, beams, beam::cell(tan, s, px), px);
     let (corners, n, about) = (beam::corners(tan, s), beam::samples(tan, s), beam::about(tan, s, px));
     let samples = beam::samples_at(corners[0] * corners[1]);
-    // The nearest block entered, at the reach where none is, and the nodes
-    // the sample that stopped on it asked.
-    let mut visits = 0;
+    // The nearest block entered, at the reach where none is.
     let mut hit = cast::Stop {
         t: ray.reach,
         axis: 0,
@@ -849,7 +845,6 @@ pub fn cast_cs(
                         at: 0u32,
                         block: [seen_at(beams, k + beam::SAMPLE_BLOCK), seen_at(beams, k + beam::SAMPLE_BLOCK + 1)],
                     };
-                    visits = seen_at(beams, k + beam::SAMPLE_VISITS);
                 }
             }
             i += 1;
@@ -858,7 +853,7 @@ pub fn cast_cs(
     }
     let steps = eye.origin.w != 0;
     if hit.t < ray.reach && hit.t < lack {
-        written(rays, id, word(&ray, Met { ends: Ends::Stop, stop: hit, visits }, steps));
+        written(rays, id, word(&ray, Met { ends: Ends::Stop, stop: hit, visits: 0 }, steps));
         return;
     }
     let met = resumed(&mut Reading { seen }, origin, &ray, detail, t, &line);

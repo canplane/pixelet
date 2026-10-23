@@ -44,6 +44,8 @@ fn through(frag: vec2f, size: vec2f) -> vec3f {
 // The steps a ray's colour runs up to, on a log scale, the same on every
 // screen so two compare.
 const STEPS_MOST: f32 = 1024.0;
+// A pixel that walked nothing, apart from the ramp's every colour.
+const STEPS_NONE: f32 = 0.5;
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -257,8 +259,9 @@ fn fs(v: VertexOut) -> FragOut {
     let t = select(bitcast<f32>(eye_word(EYE_REACH)), bitcast<f32>(c.y), met);
     let clip = frame_view_proj() * vec4f(d * t, 1.0);
     var o: FragOut;
-    // The nodes asked, the third word in this view.
-    o.color = vec4f(turbo(log2(1.0 + f32(c.z)) / log2(1.0 + STEPS_MOST)), 1.0);
+    // The nodes asked, the third word in this view; none where the pixel
+    // showed a sample's block and walked nothing, grey.
+    o.color = vec4f(select(turbo(log2(1.0 + f32(c.z)) / log2(1.0 + STEPS_MOST)), vec3f(STEPS_NONE), c.z == 0u), 1.0);
     o.depth = clip.z / clip.w;
     return o;
   }
