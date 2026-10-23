@@ -24,6 +24,7 @@ pub mod fill;
 pub mod grid;
 pub mod ground;
 pub mod lattice;
+pub mod observed;
 pub mod overwrite;
 pub mod ray;
 pub mod scatter;

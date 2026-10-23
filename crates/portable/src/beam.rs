@@ -77,17 +77,27 @@ pub fn cell(tan: [f32; 2], s: f32, [tx, ty]: [f32; 2]) -> [u32; 2] {
 
 /// What a beam ray leaves for the pixels about it, in words: how far it
 /// hands on (`handed`), f32 bits, then the node it stopped at — its zoom,
-/// its corner, its roots — then what was handed every node from the root to
-/// it, `AT_WORDS` each (`world::At::words`), its own at its zoom.
+/// its corner, its roots — then, for every node from the root to it, its
+/// entry in the observed pyramid (`observed`, `observed::NONE` where none
+/// keeps it) and what was handed it (`world::At::words`), `LINE_STEP` words
+/// a zoom, its own at its zoom.
 pub const LINE_T: u32 = 0;
 pub const LINE_ZOOM: u32 = 1;
 pub const LINE_CORNER: u32 = 2;
 pub const LINE_ROOTS: u32 = 5;
 pub const LINE_AT: u32 = 8;
-pub const LINE_WORDS: u32 = LINE_AT + crate::world::AT_WORDS * crate::cast::DEPTH as u32;
+pub const LINE_STEP: u32 = 1 + crate::world::AT_WORDS;
+pub const LINE_WORDS: u32 = LINE_AT + LINE_STEP * crate::cast::DEPTH as u32;
 
 /// What a cell hands its pixels, in words: where they start, f32 bits, and
 /// the corner whose line they resume from, as an index into the corners.
+/// The cells lie in the beam rays' buffer past their `corners` lines
+/// (`cells_at`), one binding for both.
 pub const CELL_T: u32 = 0;
 pub const CELL_CORNER: u32 = 1;
 pub const CELL_WORDS: u32 = 2;
+
+/// Where the cells start among the beam rays' words, past `corners` lines.
+pub const fn cells_at(corners: u32) -> u32 {
+    corners * LINE_WORDS
+}

@@ -26,6 +26,9 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_WAYS_FREED => "ways_freed_cs",
         SHADER_BEAM => "beam_cs",
         SHADER_CELLS => "cells_cs",
+        SHADER_MISS => "miss_cs",
+        SHADER_ARGS => "args_cs",
+        SHADER_FORGET => "forget_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }

@@ -82,7 +82,13 @@ pub const SHADER_WAYS_FREED: u32 = 40;
 /// each.
 pub const SHADER_BEAM: u32 = 41;
 pub const SHADER_CELLS: u32 = 42;
-pub const SHADERS: u32 = 43;
+/// The pixels the cast's reading walk missed, walked again writing the
+/// observed pyramid; the dispatch they run by; and the pyramid forgotten
+/// (pxl-portable `observed`): a compute entry each.
+pub const SHADER_MISS: u32 = 43;
+pub const SHADER_ARGS: u32 = 44;
+pub const SHADER_FORGET: u32 = 45;
+pub const SHADERS: u32 = 46;
 
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
@@ -335,4 +341,10 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["beam.gen"],
     // SHADER_CELLS
     &["cells.gen"],
+    // SHADER_MISS
+    &["miss.gen"],
+    // SHADER_ARGS
+    &["args.gen"],
+    // SHADER_FORGET
+    &["forget.gen"],
 ];

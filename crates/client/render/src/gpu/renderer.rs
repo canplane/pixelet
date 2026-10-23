@@ -19,8 +19,8 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
-    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_HEIGHTS, SHADER_JOINED, SHADER_WAYS,
-    SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
+    FRAME_AT, PIPELINES, PIPELINE_BLIT, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_ARGS, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS,
+    SHADER_JOINED, SHADER_MISS, SHADER_WAYS, SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
 use crate::frame::shader::words::{DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
@@ -49,6 +49,7 @@ use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_STARS, ENV_SUN_LIGHT
 use crate::mesh::paint::ground::look_words;
 use pxl_portable::beam;
 use pxl_portable::eye;
+use pxl_portable::observed;
 use pxl_portable::ray;
 use pxl_portable::scatter::GROUPS;
 use pxl_portable::ways;
@@ -816,15 +817,33 @@ const STACK_WORDS: u32 = ways::tree::POOL_BLOCKS;
 struct CastBuffers {
     built: Built,
     /// The camera grid's beam rays (`beam_cs`), where each cell's pixels
-    /// start off them (`cells_cs`), and their buffers, over the cast's
-    /// group (pxl-portable `beam`): a line a corner and a start a cell, for
-    /// `corners` of them, room for `beam_room` (doc/minutes/20261022-a-cell-casts-a-beam.md).
+    /// start off them (`cells_cs`), and their buffer, over the cast's
+    /// group (pxl-portable `beam`): a line a corner, then a start a cell,
+    /// for `corners` of them, room for `beam_room` (doc/minutes/20261022-a-cell-casts-a-beam.md).
     beam_built: Built,
     cells_built: Built,
     beams: u32,
-    cells: u32,
     corners: [u32; 2],
     beam_room: u32,
+    /// The observed pyramid (pxl-portable `observed`): its buffer, with room
+    /// for `seen_room` pixels' misses; the pixels the cast's reading walk
+    /// missed walked again (`miss_cs`) by the dispatch `args_cs` writes into
+    /// `args` over its own group; the pyramid forgotten (`forget_cs`) where
+    /// what the world's query reads changed since the last cast (`forget`),
+    /// as this frame's cast does (`forgets`). `frame` numbers the casts since
+    /// it was last forgotten, and `cuts` are the preview's cuts it was asked
+    /// with.
+    miss_built: Built,
+    args_built: Built,
+    forget_built: Built,
+    seen: u32,
+    seen_room: u32,
+    args: u32,
+    args_group: u32,
+    frame: u32,
+    forget: bool,
+    forgets: bool,
+    cuts: [u32; eye::CUTS],
     /// The eye's windows folded over their squares (`joined_cs`), over its
     /// group, the window buffer's rows past their slot table
     /// (`window::JOINED_AT`), written where the windows' slots moved
@@ -947,8 +966,12 @@ const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GR
 const _: () = assert!(same(compute::BOUND_GROUP, compute::WAYS_GROUP), "the levels' and the ways' passes share a group");
 const _: () = assert!(compute::WAYS_WORKGROUP[0] == pxl_portable::fill::SCAN_THREADS, "a square's columns are summed by one workgroup");
 const _: () = assert!(
-    within(compute::JOINED_GROUP, compute::CAST_GROUP) && within(compute::BEAM_GROUP, compute::CAST_GROUP) && within(compute::CELLS_GROUP, compute::CAST_GROUP),
-    "the fold and the beam bind the cast's group"
+    within(compute::JOINED_GROUP, compute::MISS_GROUP)
+        && within(compute::BEAM_GROUP, compute::MISS_GROUP)
+        && within(compute::CELLS_GROUP, compute::MISS_GROUP)
+        && within(compute::CAST_GROUP, compute::MISS_GROUP)
+        && within(compute::FORGET_GROUP, compute::MISS_GROUP),
+    "the fold, the beam, the cells, the reading cast and the forgetting bind the group the missed pixels' cast binds whole"
 );
 
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
@@ -1094,10 +1117,16 @@ impl RaysPass {
         if self.cast.is_some() {
             return;
         }
-        let built = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);
-        let beam_built = pipelines.build_compute(g, SHADER_BEAM, &compute::CAST_GROUP);
-        let cells_built = pipelines.build_compute(g, SHADER_CELLS, &compute::CAST_GROUP);
-        let joined_built = pipelines.build_compute(g, SHADER_JOINED, &compute::CAST_GROUP);
+        // One group for every kernel over the cast's world: the one the missed
+        // pixels' cast binds whole.
+        let group = &compute::MISS_GROUP;
+        let built = pipelines.build_compute(g, SHADER_CAST, group);
+        let beam_built = pipelines.build_compute(g, SHADER_BEAM, group);
+        let cells_built = pipelines.build_compute(g, SHADER_CELLS, group);
+        let joined_built = pipelines.build_compute(g, SHADER_JOINED, group);
+        let miss_built = pipelines.build_compute(g, SHADER_MISS, group);
+        let forget_built = pipelines.build_compute(g, SHADER_FORGET, group);
+        let args_built = pipelines.build_compute(g, SHADER_ARGS, &compute::ARGS_GROUP);
         let buffer = |size: u32, usage: u32| g.buffer(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let c = CastBuffers {
@@ -1105,9 +1134,19 @@ impl RaysPass {
             beam_built,
             cells_built,
             beams: 0,
-            cells: 0,
             corners: [0; 2],
             beam_room: 0,
+            miss_built,
+            args_built,
+            forget_built,
+            seen: 0,
+            seen_room: 0,
+            args: buffer(word_bytes(3), buffer_usage::STORAGE | buffer_usage::INDIRECT),
+            args_group: 0,
+            frame: 0,
+            forget: true,
+            forgets: false,
+            cuts: [0; eye::CUTS],
             joined_built,
             joined_read: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::MAP_READ | buffer_usage::COPY_DST),
             joined_mapping: Box::new(DONE),
@@ -1193,14 +1232,25 @@ impl RaysPass {
         c.corners = beam::corners(tan, s);
         let held = c.corners[0] * c.corners[1];
         if held > c.beam_room {
-            for b in [c.beams, c.cells] {
-                if b != 0 {
-                    release(b);
-                }
+            if c.beams != 0 {
+                release(c.beams);
             }
-            let bytes = |words: u32| word_bytes((held * words) as usize);
-            xpute_kit::ensure!(crate::frame::shader::floor::fits(bytes(beam::LINE_WORDS) as u64, true), ENOTRECOVERABLE, held);
-            (c.beams, c.cells, c.beam_room) = (g.buffer(bytes(beam::LINE_WORDS), buffer_usage::STORAGE), g.buffer(bytes(beam::CELL_WORDS), buffer_usage::STORAGE), held);
+            let size = word_bytes((beam::cells_at(held) + held * beam::CELL_WORDS) as usize);
+            xpute_kit::ensure!(crate::frame::shader::floor::fits(size as u64, true), ENOTRECOVERABLE, held);
+            (c.beams, c.beam_room) = (g.buffer(size, buffer_usage::STORAGE), held);
+        }
+        // The observed pyramid, with room for every pixel to miss, made again
+        // only where the pixels outgrow it, and so forgotten.
+        let pixels = c.size[0] * c.size[1];
+        if pixels > c.seen_room {
+            if c.seen != 0 {
+                release(c.seen);
+            }
+            let size = word_bytes((observed::LIST_AT + pixels) as usize);
+            xpute_kit::ensure!(crate::frame::shader::floor::fits(size as u64, true), ENOTRECOVERABLE, pixels);
+            (c.seen, c.seen_room, c.forget) = (g.buffer(size, buffer_usage::STORAGE | buffer_usage::COPY_DST), pixels, true);
+            release(c.args_group);
+            c.args_group = g.bind_group(c.args_built.layouts[0], &[buffer_entry(0, c.seen), buffer_entry(1, c.args)]);
         }
         let shards_grow = cast.shards.len() > c.shard_room;
         if shards_grow {
@@ -1225,7 +1275,8 @@ impl RaysPass {
             c.overwrites = g.buffer(word_bytes(2 * o.room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
             c.overwrite_revision = None;
         }
-        if c.overwrite_revision != Some(o.revision) {
+        let overwrites_moved = c.overwrite_revision != Some(o.revision);
+        if overwrites_moved {
             // Held at `since`: the blocks written after it alone, a record
             // each, where the stream has room for them all; else both lanes
             // whole, read where they live, two records however large.
@@ -1244,7 +1295,27 @@ impl RaysPass {
             }
             c.overwrite_revision = Some(o.revision);
         }
-        let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, pool, c.beams, c.cells];
+        // What the world's query reads moved: the windows, the squares the
+        // turn handed (their cells, looks and ways), the service area, what
+        // is placed, a preview's cuts. What the observed pyramid kept is
+        // forgotten; so it is once its frames would outrun a key's tag.
+        let cuts: [u32; eye::CUTS] = cast.eye[eye::CARVE..eye::CARVE + eye::CUTS].try_into().or_bug(Errno::ENOTRECOVERABLE);
+        c.forget |= window_moved || fresh != 0 || shards_moved || shards_grow || overwrites_moved || cuts != c.cuts || c.frame >= observed::FRAMES;
+        c.cuts = cuts;
+        c.forgets = self.kind == FrameKind::cast && c.forget;
+        if self.kind == FrameKind::cast {
+            // The head before the frame's dispatches: no tile taken and the
+            // first frame where it is forgotten, else the next frame; no
+            // pixel missed.
+            c.frame = if c.forgets { 1 } else { c.frame + 1 };
+            if c.forgets {
+                g.write_buffer(c.seen, 0, bytes(&[0u32, c.frame, 0, 0]));
+            } else {
+                g.write_buffer(c.seen, word_bytes(observed::FRAME as usize), bytes(&[c.frame, 0]));
+            }
+            c.forget = false;
+        }
+        let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, pool, c.beams, c.seen];
         if bound != c.bound {
             release(c.group);
             c.group = cast_group(g, &c.built, bound);
@@ -1427,8 +1498,18 @@ impl RaysPass {
             // The beam rays, a corner each; each cell's start off them; then
             // the pixels, each from its cell's: one pass, a dispatch each,
             // each reading what the one before wrote.
+            // The observed pyramid forgotten first where it is; then the
+            // beam rays writing it, a corner each; each cell's start off them;
+            // the pixels reading it, each from its cell's; and the pixels that
+            // missed again, writing it, by the dispatch counted off them. One
+            // pass, a dispatch each, each reading what the ones before wrote
+            // (pxl-portable `observed`).
             let pass = g.compute_pass(encoder, stamps[SPAN_CAST].pass());
             g.set_bind_group(pass, 0, c.group, &[]);
+            if c.forgets {
+                g.set_pipeline(pass, c.forget_built.pipeline);
+                g.dispatch(pass, observed::ENTRIES.div_ceil(compute::FORGET_WORKGROUP[0]), 1, 1);
+            }
             for (built, [x, y], w) in [
                 (&c.beam_built, c.corners, compute::BEAM_WORKGROUP),
                 (&c.cells_built, c.corners, compute::CELLS_WORKGROUP),
@@ -1437,6 +1518,12 @@ impl RaysPass {
                 g.set_pipeline(pass, built.pipeline);
                 g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
             }
+            g.set_pipeline(pass, c.args_built.pipeline);
+            g.set_bind_group(pass, 0, c.args_group, &[]);
+            g.dispatch(pass, 1, 1, 1);
+            g.set_pipeline(pass, c.miss_built.pipeline);
+            g.set_bind_group(pass, 0, c.group, &[]);
+            g.dispatch_indirect(pass, c.args, 0);
             g.end(pass);
         }
         if self.grows() {
@@ -1471,9 +1558,10 @@ impl RaysPass {
 /// The cast's group 0 over `bound`: the eye, the window and its fold
 /// (`joined_cs` writes it, the cast reads it), the tiles' frames, the
 /// surface's rays, the squares' looks, the service area's index, the
-/// overwrites, the ways' pool, the beam rays' lines and the cells' starts.
+/// overwrites, the ways' pool, the beam rays' lines and the cells' starts,
+/// and the observed pyramid.
 fn cast_group(g: &Gpu, built: &Built, bound: [u32; 10]) -> u32 {
-    let [eye, window, ground, rays, looks, shards, overwrites, pool, beams, cells] = bound;
+    let [eye, window, ground, rays, looks, shards, overwrites, pool, beams, seen] = bound;
     let entries = [
         buffer_entry(0, eye),
         buffer_entry(1, window),
@@ -1484,7 +1572,7 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 10]) -> u32 {
         buffer_entry(6, overwrites),
         buffer_entry(7, pool),
         buffer_entry(8, beams),
-        buffer_entry(9, cells),
+        buffer_entry(9, seen),
     ];
     g.bind_group(built.layouts[0], &entries)
 }

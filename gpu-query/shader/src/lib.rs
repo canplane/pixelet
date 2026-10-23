@@ -29,7 +29,7 @@ use pxl_portable::scatter::{self, drawn, Grounds, SQUARE_BLOCKS, SQUARE_GROWN};
 use pxl_portable::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_portable::window::Found;
 use pxl_portable::world::At;
-use pxl_portable::{at, beam, ray, world, LEAF_CELL};
+use pxl_portable::{at, beam, observed, ray, world, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec2, Vec4};
 use spirv_std::arch::IndexUnchecked;
 use spirv_std::memory::{Scope, Semantics};
@@ -293,7 +293,7 @@ impl Grounds for Growing<'_> {
 /// the ground's block is drawn by, a byte each (`ground::word`), or in the
 /// steps view the nodes its descent asked about; where it met nothing, the
 /// first two zero.
-fn word(ray: &cast::Ray, met: Met<At>, steps: bool) -> [u32; ray::WORDS as usize] {
+fn word<A: Copy>(ray: &cast::Ray, met: Met<A>, steps: bool) -> [u32; ray::WORDS as usize] {
     if met.ends != Ends::Stop {
         return [0, 0, met.visits];
     }
@@ -335,9 +335,175 @@ fn eye_tan(eye: &Eye) -> [f32; 2] {
     [eye.tan.x, eye.tan.y]
 }
 
+/// The observed pyramid's buffer (pxl-portable `observed`), bound as a
+/// runtime array, whose pointer a walk holds whole: a slice's would be a
+/// pointer and a length, which naga traces no atomic through.
+type Seen = spirv_std::RuntimeArray<u32>;
+
+/// Word `i` of the observed pyramid's buffer.
+fn seen_at(w: &Seen, i: u32) -> u32 {
+    // SAFETY: an entry's or the head's word, within the buffer.
+    unsafe { *w.index(i as usize) }
+}
+
+fn seen_put(w: &mut Seen, i: u32, v: u32) {
+    // SAFETY: as `seen_at`.
+    unsafe { *w.index_mut(i as usize) = v }
+}
+
+/// Word `i` read and written whole, where a walk may race another on it.
+fn seen_load(w: &mut Seen, i: u32) -> u32 {
+    // SAFETY: as `seen_at`.
+    unsafe { spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(w.index_mut(i as usize)) }
+}
+
+fn seen_store(w: &mut Seen, i: u32, v: u32) {
+    // SAFETY: as `seen_at`.
+    unsafe { spirv_std::arch::atomic_store::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(w.index_mut(i as usize), v) }
+}
+
+fn seen_add(w: &mut Seen, i: u32, v: u32) -> u32 {
+    // SAFETY: as `seen_at`.
+    unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(w.index_mut(i as usize), v) }
+}
+
+/// Word `i` set to `v` where it holds `was`; what it held.
+fn seen_swap(w: &mut Seen, i: u32, was: u32, v: u32) -> u32 {
+    // SAFETY: as `seen_at`.
+    unsafe { spirv_std::arch::atomic_compare_exchange::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }, { Semantics::NONE.bits() }>(w.index_mut(i as usize), v, was) }
+}
+
+/// The observed pyramid as a pixel's walk reads it, writing nothing
+/// (pxl-portable `observed`): a node it keeps at the zooms asked is its
+/// entry's answer; any other is a miss, which ends the walk as a lack would,
+/// its block `MISSED`, which no lack's is. A miss is told by the answer and
+/// not by a field: a walk's state that changes in its loop holds no pointer,
+/// which naga takes no struct holding.
+struct Reading<'a> {
+    seen: &'a Seen,
+}
+
+/// The block a miss ends a walk on.
+const MISSED: [u32; 2] = [observed::NONE, observed::NONE];
+
+impl Query for Reading<'_> {
+    type At = u32;
+
+    fn root(&mut self, node: [i32; 3]) -> u32 {
+        if observed::keeps(node) {
+            observed::octant(node)
+        } else {
+            observed::NONE
+        }
+    }
+
+    fn child(&mut self, parent: &u32, _: u32, node: [i32; 3]) -> u32 {
+        if *parent == observed::NONE {
+            return observed::NONE;
+        }
+        let c = seen_at(self.seen, observed::entry_at(*parent) + observed::W_CHILDREN);
+        if c == 0 {
+            observed::NONE
+        } else {
+            observed::child(c - 1, observed::octant(node))
+        }
+    }
+
+    fn node(&mut self, e: &mut u32, _: u32, _: [i32; 3], asked: [u32; 2], _: f32) -> In<[u32; 2]> {
+        if *e != observed::NONE {
+            let w = observed::entry_at(*e);
+            if observed::holds(seen_at(self.seen, w), asked) {
+                let kind = observed::kind_of(seen_at(self.seen, w + observed::W_KIND));
+                return In { kind, block: [seen_at(self.seen, w + observed::W_BLOCK), seen_at(self.seen, w + observed::W_BLOCK + 1)] };
+            }
+        }
+        In { kind: pxl_portable::answer::Kind::Lacks, block: MISSED }
+    }
+}
+
+/// Where a writing walk is: the node's entry, `observed::NONE` where none
+/// keeps it, and what was handed it.
+#[derive(Clone, Copy)]
+struct Writ {
+    entry: u32,
+    at: At,
+}
+
+/// The observed pyramid as a beam ray's walk, or a pixel's that missed,
+/// reads it: a node it keeps at the zooms asked, as its entry holds it,
+/// unless this pass is still writing it (`tag`); any other asked of the
+/// world's one query there and then, from what was handed it, and written.
+/// A node's children are taken a tile once, by whichever walk swaps it in
+/// first.
+struct Writing<'a, L> {
+    world: World<'a, L>,
+    seen: &'a mut Seen,
+    tag: u32,
+}
+
+impl<L: Looks> Writing<'_, L> {
+    /// The entry of `parent`'s child `oct`, its tile taken where it has
+    /// none, none where no tile is left.
+    fn tile(&mut self, parent: u32, oct: u32) -> u32 {
+        let w = observed::entry_at(parent) + observed::W_CHILDREN;
+        let c = seen_load(self.seen, w);
+        if c != 0 {
+            return observed::child(c - 1, oct);
+        }
+        let t = seen_add(self.seen, observed::NEXT_TILE, 1);
+        if t >= observed::TILES {
+            return observed::NONE;
+        }
+        let was = seen_swap(self.seen, w, 0, t + 1);
+        observed::child(if was == 0 { t } else { was - 1 }, oct)
+    }
+}
+
+impl<L: Looks> Query for Writing<'_, L> {
+    type At = Writ;
+
+    fn root(&mut self, node: [i32; 3]) -> Writ {
+        let entry = if observed::keeps(node) { observed::octant(node) } else { observed::NONE };
+        Writ { entry, at: Query::root(&mut self.world, node) }
+    }
+
+    fn child(&mut self, parent: &Writ, zoom: u32, node: [i32; 3]) -> Writ {
+        let entry = if parent.entry == observed::NONE { observed::NONE } else { self.tile(parent.entry, observed::octant(node)) };
+        Writ { entry, at: Query::child(&mut self.world, &parent.at, zoom, node) }
+    }
+
+    fn node(&mut self, n: &mut Writ, zoom: u32, c: [i32; 3], asked: [u32; 2], t0: f32) -> In<[u32; 2]> {
+        let w = observed::entry_at(n.entry);
+        if n.entry != observed::NONE {
+            let key = seen_load(self.seen, w);
+            if observed::holds(key, asked) && observed::tag_of(key) != self.tag {
+                let a = w + observed::W_AT;
+                n.at = At::of_words([seen_at(self.seen, a), seen_at(self.seen, a + 1), seen_at(self.seen, a + 2), seen_at(self.seen, a + 3), seen_at(self.seen, a + 4)]);
+                let kind = observed::kind_of(seen_at(self.seen, w + observed::W_KIND));
+                return In { kind, block: [seen_at(self.seen, w + observed::W_BLOCK), seen_at(self.seen, w + observed::W_BLOCK + 1)] };
+            }
+        }
+        let answer = Query::node(&mut self.world, &mut n.at, zoom, c, asked, t0);
+        if n.entry != observed::NONE {
+            seen_put(self.seen, w + observed::W_KIND, observed::kind_word(answer.kind));
+            seen_put(self.seen, w + observed::W_BLOCK, answer.block[0]);
+            seen_put(self.seen, w + observed::W_BLOCK + 1, answer.block[1]);
+            let words = n.at.words();
+            let a = w + observed::W_AT;
+            seen_put(self.seen, a, words[0]);
+            seen_put(self.seen, a + 1, words[1]);
+            seen_put(self.seen, a + 2, words[2]);
+            seen_put(self.seen, a + 3, words[3]);
+            seen_put(self.seen, a + 4, words[4]);
+            seen_store(self.seen, w, observed::key(self.tag, asked));
+        }
+        answer
+    }
+}
+
 /// The beam rays' lines (pxl-portable `beam::LINE_WORDS` a corner) as a
-/// walk resumes from one: what was handed each node of corner `base`'s line
-/// (`world::At::words`), its own at its zoom.
+/// walk resumes from one: the entry of each node of the line at `base`, and
+/// what was handed it (`world::At::words`), its own at its zoom.
 #[derive(Clone, Copy)]
 struct Beamed<'a>(&'a [u32], u32);
 
@@ -351,20 +517,56 @@ impl Beamed<'_> {
             roots: [at(w, k + beam::LINE_ROOTS) as i32, at(w, k + beam::LINE_ROOTS + 1) as i32, at(w, k + beam::LINE_ROOTS + 2) as i32],
         }
     }
+
+    /// The first word a zoom of the line holds.
+    fn step(self, zoom: u32) -> u32 {
+        self.1 + beam::LINE_AT + beam::LINE_STEP * zoom
+    }
 }
 
-impl cast::Over<At> for Beamed<'_> {
-    fn over(&self, zoom: u32) -> At {
-        let k = self.1 + beam::LINE_AT + world::AT_WORDS * zoom;
-        let w = self.0;
-        At::of_words([at(w, k), at(w, k + 1), at(w, k + 2), at(w, k + 3), at(w, k + 4)])
+impl cast::Over<u32> for Beamed<'_> {
+    fn over(&self, zoom: u32) -> u32 {
+        at(self.0, self.step(zoom))
+    }
+}
+
+impl cast::Over<Writ> for Beamed<'_> {
+    fn over(&self, zoom: u32) -> Writ {
+        let (w, k) = (self.0, self.step(zoom));
+        Writ {
+            entry: at(w, k),
+            at: At::of_words([at(w, k + 1), at(w, k + 2), at(w, k + 3), at(w, k + 4), at(w, k + 5)]),
+        }
+    }
+}
+
+/// Where a pixel of the `size` the rays are starts: its cell's least, the
+/// corner's line it resumes from, and its ray (pxl-portable `beam`).
+fn started<'a>(eye: &Eye, beams: &'a [u32], p: UVec3, size: UVec3) -> (cast::Ray, f32, Beamed<'a>) {
+    let ((_, detail), tan) = (eye_origin(eye), pixel_tan(eye, p, size));
+    let (screen, s) = (eye_tan(eye), beam::spacing(detail));
+    let corners = beam::corners(screen, s);
+    let c = beam::cell(screen, s, tan);
+    let cell = beam::cells_at(corners[0] * corners[1]) + (c[1] * corners[0] + c[0]) * beam::CELL_WORDS;
+    let t = f32::from_bits(at(beams, cell + beam::CELL_T));
+    (eye_ray(eye, tan), t, Beamed(beams, at(beams, cell + beam::CELL_CORNER) * beam::LINE_WORDS))
+}
+
+/// A ray's words written into the rays at pixel `p`.
+fn written(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
+    let mut k = 0;
+    while k < ray::WORDS {
+        // SAFETY: within the rays, bounded by their size where `p` was.
+        unsafe { rays.write(UVec3::new(p.x, p.y, k), w[k as usize]) };
+        k += 1;
     }
 }
 
 /// Each beam ray of the camera grid, a thread a corner (pxl-portable
 /// `beam::corners`): its walk from the world's root to the first block that
 /// fills or lacks, or the first split too narrow to share
-/// (`cast::Until::Beam`), and its line there, for the pixels about it.
+/// (`cast::Until::Beam`), through the observed pyramid writing what it asks
+/// (`Writing`), and its line there, for the pixels about it.
 #[spirv(compute(threads(8, 8, 1)))]
 #[allow(clippy::too_many_arguments)]
 pub fn beam_cs(
@@ -372,10 +574,12 @@ pub fn beam_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
     let window: &[IVec4] = window;
     let (origin, detail) = eye_origin(eye);
@@ -385,17 +589,18 @@ pub fn beam_cs(
         return;
     }
     let ray = eye_ray(eye, beam::corner(tan, s, [id.x, id.y]));
-    let mut world = World {
+    let tag = observed::tag(seen_at(seen, observed::FRAME), 0);
+    let world = World {
         window,
         ground,
-        looks: Unlooked(0),
+        looks,
         shards,
         overwrites,
         eye,
         pool: ways::tree::Read(pool),
     };
     let base = (id.y * corners[0] + id.x) * beam::LINE_WORDS;
-    let met = cast::rooted(&mut world, origin, &ray, detail, Until::Beam, &mut Leaving(beams, base));
+    let met = cast::rooted(&mut Writing { world, seen, tag }, origin, &ray, detail, Until::Beam, &mut Leaving(beams, base));
     put(beams, base + beam::LINE_T, beam::handed(met.stop.t, s).to_bits());
 }
 
@@ -404,8 +609,8 @@ pub fn beam_cs(
 /// reads it.
 struct Leaving<'a>(&'a mut [u32], u32);
 
-impl cast::Keep<At> for Leaving<'_> {
-    fn keep(&mut self, n: &cast::Node, live: At, stack: &[At; cast::DEPTH]) {
+impl cast::Keep<Writ> for Leaving<'_> {
+    fn keep(&mut self, n: &cast::Node, live: Writ, stack: &[Writ; cast::DEPTH]) {
         let base = self.1;
         let beams = &mut *self.0;
         put(beams, base + beam::LINE_ZOOM, n.zoom);
@@ -417,13 +622,15 @@ impl cast::Keep<At> for Leaving<'_> {
         put(beams, base + beam::LINE_ROOTS + 2, n.roots[2] as u32);
         let mut z = 0;
         while z <= n.zoom {
-            let w = if z == n.zoom { live } else { stack[z as usize] }.words();
-            let k = base + beam::LINE_AT + world::AT_WORDS * z;
-            put(beams, k, w[0]);
-            put(beams, k + 1, w[1]);
-            put(beams, k + 2, w[2]);
-            put(beams, k + 3, w[3]);
-            put(beams, k + 4, w[4]);
+            let held = if z == n.zoom { live } else { stack[z as usize] };
+            let w = held.at.words();
+            let k = base + beam::LINE_AT + beam::LINE_STEP * z;
+            put(beams, k, held.entry);
+            put(beams, k + 1, w[0]);
+            put(beams, k + 2, w[1]);
+            put(beams, k + 3, w[2]);
+            put(beams, k + 4, w[3]);
+            put(beams, k + 5, w[4]);
             z += 1;
         }
     }
@@ -432,13 +639,12 @@ impl cast::Keep<At> for Leaving<'_> {
 /// Where each cell's pixels start (pxl-portable `beam::CELL_WORDS`), a
 /// thread a cell, by its first corner: the least of the beam rays within
 /// `beam::window` cells of its corners, and that corner, whose line they
-/// resume from.
+/// resume from; past the lines in the beam rays' buffer (`beam::cells_at`).
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn cells_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] cells: &mut [u32],
 ) {
     let (_, detail) = eye_origin(eye);
     let (tan, s) = (eye_tan(eye), beam::spacing(detail));
@@ -463,43 +669,90 @@ pub fn cells_cs(
         }
         j += 1;
     }
-    let cell = (id.y * corners[0] + id.x) * beam::CELL_WORDS;
-    put(cells, cell + beam::CELL_T, least.to_bits());
-    put(cells, cell + beam::CELL_CORNER, from);
+    let cell = beam::cells_at(corners[0] * corners[1]) + (id.y * corners[0] + id.x) * beam::CELL_WORDS;
+    put(beams, cell + beam::CELL_T, least.to_bits());
+    put(beams, cell + beam::CELL_CORNER, from);
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
 /// pxl-portable `ray`): the cast writes them.
 type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
+/// Each pixel's ray from its cell's start, reading the observed pyramid
+/// alone (`Reading`): its words where every node it asked was kept, else
+/// the pixel listed for `miss_cs` (pxl-portable `observed::LIST_AT`).
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn cast_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+) {
+    let beams: &[u32] = beams;
+    let size: UVec3 = rays.query_size();
+    if id.x >= size.x || id.y >= size.y {
+        return;
+    }
+    let (origin, detail) = eye_origin(eye);
+    let (ray, t, line) = started(eye, beams, id, size);
+    let mut q = Reading { seen: &*seen };
+    // Resumed from the deepest node of its cell's line holding where it
+    // starts, or, where that lies in another root, from the root at it.
+    let (h, held) = line.node().over(cast::point_at(origin, &ray, t));
+    let h = cast::holding(origin, &ray, h, t);
+    let from = if held { (h, cast::Over::<u32>::over(&line, h.zoom), t) } else { (cast::Node::ROOT, q.root(cast::Node::ROOT.index(origin)), t) };
+    let met = cast::walk(&mut q, origin, &ray, detail, Until::Fills, from, &line, &mut ());
+    // Listed through the buffer as bound: naga's atomics trace no pointer a
+    // walk's state carries.
+    if met.ends == Ends::Lacks && met.stop.block[0] == MISSED[0] {
+        let k = seen_add(seen, observed::MISSES, 1);
+        seen_put(seen, observed::LIST_AT + k, id.x | id.y << 16);
+    } else {
+        written(rays, id, word(&ray, met, eye.origin.w != 0));
+    }
+}
+
+/// The dispatch `miss_cs` runs by, off how many pixels missed: a workgroup
+/// each `MISS_THREADS` of them (`dispatch_indirect`'s three words).
+#[spirv(compute(threads(1, 1, 1)))]
+pub fn args_cs(#[spirv(storage_buffer, descriptor_set = 0, binding = 0)] seen: &Seen, #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] args: &mut [u32]) {
+    put(args, 0, seen_at(seen, observed::MISSES).div_ceil(MISS_THREADS));
+    put(args, 1, 1);
+    put(args, 2, 1);
+}
+
+/// `miss_cs`'s threads a workgroup.
+const MISS_THREADS: u32 = 64;
+
+/// Each pixel `cast_cs` listed, its ray again from its cell's start,
+/// writing what it asks into the observed pyramid (`Writing`): a thread a
+/// pixel listed.
+#[spirv(compute(threads(64, 1, 1)))]
+#[allow(clippy::too_many_arguments)]
+pub fn miss_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] cells: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
-    let window: &[IVec4] = window;
-    let size: UVec3 = rays.query_size();
-    if id.x >= size.x || id.y >= size.y {
+    let (window, beams): (&[IVec4], &[u32]) = (window, beams);
+    if id.x >= seen_at(seen, observed::MISSES) {
         return;
     }
-    let ((origin, detail), tan) = (eye_origin(eye), pixel_tan(eye, id, size));
-    let ray = eye_ray(eye, tan);
-    let (screen, s) = (eye_tan(eye), beam::spacing(detail));
-    let corners = beam::corners(screen, s);
-    let c = beam::cell(screen, s, tan);
-    let cell = (c[1] * corners[0] + c[0]) * beam::CELL_WORDS;
-    let t = f32::from_bits(at(cells, cell + beam::CELL_T));
-    let line = Beamed(beams, at(cells, cell + beam::CELL_CORNER) * beam::LINE_WORDS);
-    let mut world = World {
+    let listed = seen_at(seen, observed::LIST_AT + id.x);
+    let p = UVec3::new(listed & 0xffff, listed >> 16, 0);
+    let (origin, detail) = eye_origin(eye);
+    let (ray, t, line) = started(eye, beams, p, rays.query_size());
+    let tag = observed::tag(seen_at(seen, observed::FRAME), 1);
+    let world = World {
         window,
         ground,
         looks,
@@ -508,19 +761,25 @@ pub fn cast_cs(
         eye,
         pool: ways::tree::Read(pool),
     };
-    // Resumed from the deepest node of its cell's line holding where it
-    // starts, or, where that lies in another root, from the root at it.
+    let mut q = Writing { world, seen, tag };
     let (h, held) = line.node().over(cast::point_at(origin, &ray, t));
     let h = cast::holding(origin, &ray, h, t);
-    let from = if held { (h, cast::Over::over(&line, h.zoom), t) } else { (cast::Node::ROOT, Query::root(&mut world, cast::Node::ROOT.index(origin)), t) };
-    let met = cast::walk(&mut world, origin, &ray, detail, Until::Fills, from, &line, &mut ());
-    let w = word(&ray, met, eye.origin.w != 0);
-    let mut k = 0;
-    while k < ray::WORDS {
-        // SAFETY: within the rays, just bounded by their size.
-        unsafe { rays.write(UVec3::new(id.x, id.y, k), w[k as usize]) };
-        k += 1;
+    let from = if held { (h, cast::Over::<Writ>::over(&line, h.zoom), t) } else { (cast::Node::ROOT, q.root(cast::Node::ROOT.index(origin)), t) };
+    let met = cast::walk(&mut q, origin, &ray, detail, Until::Fills, from, &line, &mut ());
+    written(rays, p, word(&ray, met, eye.origin.w != 0));
+}
+
+/// What the observed pyramid kept forgotten, a thread an entry: its key and
+/// its children's tile cleared, where what the world's query reads changed
+/// (pxl-portable `observed`).
+#[spirv(compute(threads(64, 1, 1)))]
+pub fn forget_cs(#[spirv(global_invocation_id)] id: UVec3, #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen) {
+    if id.x >= observed::ENTRIES {
+        return;
     }
+    let w = observed::entry_at(id.x);
+    seen_put(seen, w + observed::W_KEY, 0);
+    seen_put(seen, w + observed::W_CHILDREN, 0);
 }
 
 /// The eye's windows folded over their squares, a thread an entry
