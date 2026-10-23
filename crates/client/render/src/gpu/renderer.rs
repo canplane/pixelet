@@ -235,6 +235,18 @@ pub fn gpu_ms(spans: &[f64]) -> f64 {
     spans.iter().sum()
 }
 
+/// The passes drawn at the world's own pixels, whose cost goes with them:
+/// its depth prepass, its occlusion, its drawing and its cast. The air's
+/// tables, the fill and the decor's growth, the thumbnails, badges and debug
+/// cost what they cost at any resolution.
+const PER_PIXEL: [GpuSpanName; 4] = [GpuSpanName::prepass, GpuSpanName::ao, GpuSpanName::world, GpuSpanName::cast];
+
+/// A frame's GPU time in the passes drawn at the world's pixels (`PER_PIXEL`):
+/// what its drawn resolution can buy back.
+pub fn pixels_ms(spans: &[f64]) -> f64 {
+    PER_PIXEL.iter().map(|&s| spans[s as usize]).sum()
+}
+
 pub fn put_f32(buf: &mut [u8], at: usize, v: f32) {
     buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
 }

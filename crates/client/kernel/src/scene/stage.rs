@@ -165,7 +165,7 @@ pub fn stage_render(paced_ms: f64) {
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
     if stat.gpu_read {
-        crate::view::frame::resolution::load(pxl_render::gpu::renderer::gpu_ms(&stat.gpu_spans), stat.gpu_px, paced_ms);
+        crate::view::frame::resolution::load(pxl_render::gpu::renderer::pixels_ms(&stat.gpu_spans), stat.gpu_px, paced_ms);
     }
     set_host_frame(
         out.kind,
@@ -173,6 +173,7 @@ pub fn stage_render(paced_ms: f64) {
             read: f64::from(u8::from(stat.gpu_read)),
             spans: stat.gpu_spans,
             px: stat.gpu_px,
+            scale: crate::view::frame::resolution::scale_now(),
             census: stat.census,
         },
         DeviceSample {

@@ -21,7 +21,6 @@ import { fixed } from "@/shared/fixed.ts";
 const PID = 1;
 const TID_FRAMES = 1;
 const TID_LONG = 2;
-const TID_WORST = 3;
 const TID_TASK_BASE = 10;
 
 type Args = Record<string, f64 | string | null>;
@@ -45,7 +44,7 @@ function event(name: string, cat: string, ph: string, ts: f64, dur: f64 | null, 
 
 const threadName = (tid: u32, name: string) => event("thread_name", "__metadata", "M", 0, null, tid, { name });
 
-/** Shared by the counter track and the worst-frame spans, so they agree. */
+/** A frame's lanes as the counter track's arguments. */
 function frameArgs(f: Frame): Args {
   const args: Args = {};
   for (const { name } of LANES) {
@@ -66,7 +65,7 @@ function frameArgs(f: Frame): Args {
 }
 
 function profilerTraceJson(): string {
-  const { frames, tasks, worst } = profilerRingsRead();
+  const { frames, tasks } = profilerRingsRead();
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
@@ -101,21 +100,6 @@ function profilerTraceJson(): string {
       events.push(event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)));
       // The record is taken as the stage ends, and the tick ran just before it.
       events.push(event("tick", "frame", "X", ts - us(f.stage_ms + f.tick_ms), us(f.tick_ms), TID_FRAMES));
-    }
-  }
-
-  // ---- worst frames of the window ----
-  // Repeated as spans so a stall is found without scrubbing.
-  if (worst.length > 0) {
-    events.push(threadName(TID_WORST, "worst frames"));
-    for (const w of worst) {
-      const f = w.sample;
-      const args = frameArgs(f);
-      args.d_blocks = w.prev === null ? null : f.blocks - w.prev.blocks;
-      args.d_heap_used_bytes = w.prev === null ? null : f.heap_used_bytes - w.prev.heap_used_bytes;
-      // From where the frame turn began, over the interval it opened.
-      const began = f.t - (f.effects_ms + f.tick_ms + f.stage_ms);
-      events.push(event(`interval ${fixed(f.interval_ms, 0)}ms`, "worst", "X", us(began), us(f.interval_ms), TID_WORST, args));
     }
   }
 

@@ -5,7 +5,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { type Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
 import { copyText } from "@platform/save.ts";
 
-import { drawn, fieldText, type Frame, gpuMs, GROUPS, groupText, n1, pct, phaseText, tris, valueText } from "./lane.ts";
+import { drawn, type Frame, gpuMs, n1, pct, phaseText, tris, valueText } from "./lane.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
 import type { ProfilerReport, Spread, TaskRecord, TaskSummary } from "./view.ts";
 
@@ -59,37 +59,20 @@ function windowSection(r: ProfilerReport): string[] {
   const counted = (rows: { name: string; n: f64 }[]) => rows.filter((r) => r.n > 0).map((r) => `${r.name} ${r.n}`).join("  ") || "-";
 
   return [
-    `frames n=${f.n}  over ${n1(f.seconds)}s  moving ${f.moving}  still ${f.n - f.moving}   refresh ${n1(last.refresh_ms)} ms   paced ${n1(last.paced_ms)} ms   turns ${f.turns}`,
+    `frames n=${f.n}  over ${n1(f.seconds)}s  fps ${f.seconds > 0 ? n1(f.n / f.seconds) : "-"}  moving ${f.moving}  still ${f.n - f.moving}   refresh ${n1(last.refresh_ms)} ms   paced ${
+      n1(last.paced_ms)
+    } ms   scale ${n1(last.scale)}   turns ${f.turns}`,
     `  kinds   ${counted(f.kinds)}   wakes ${counted(f.wakes)}`,
     `  interval ${spread(f.interval)} ms   missed ${f.missed} (${pct(f.missed, f.moving)}% of moving frames)`,
     `  busy    ${spread(f.busy)} ms   (the interval's turns, rise to fall)`,
-    `  off-turn ${spread(f.off_turn)} ms   long ${f.long} (turns past their interval)`,
+    `  long    ${f.long} (turns past their interval)`,
     `  tick    ${spread(f.tick)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${f.phases.map((p) => `${p.name} ${n1(p.p95)}`).join("  ")}`,
-    `  tasks   ${spread(f.tasks)} ms   (the turns' tasks past the frame)`,
     f.gpu_read > 0 ? `  gpu     ${spread(f.gpu)} ms   (over the ${f.gpu_read} frames a read landed with)` : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms per frame, max)`,
-    `  by tag  ${f.census.map((t) => `${t.tag} ${round(t.draws)}/${tris(t.tris)}`).join("  ")}   (draws/tris a frame, mean)`,
     `  heap used Δ ${signedBytes(f.heap_used_delta_bytes)}   (the high-water mark)`,
-    // `live` counts a carved run whole, so it is committed, not held in slots.
-    `  heap    live ${pct(last.heap_live_bytes, last.heap_range_bytes)}% of the range   ${bytes(last.heap_live_bytes - last.heap_run_bytes)} of it whole pages   runs hold ${
-      pct(last.heap_slot_bytes, last.heap_run_bytes)
-    }% of themselves, the other ${bytes(last.heap_run_bytes - last.heap_slot_bytes)} what the carving costs`,
   ];
-}
-
-function lastSection(f: Frame): string[] {
-  return ["last frame", ...GROUPS.filter((g) => g !== "time").map((g) => `  ${g.padEnd(7)} ${groupText(g, f)}`)];
-}
-
-function sideSection(r: ProfilerReport): string[] {
-  const lines = [];
-  for (const [name, fields] of Object.entries(r.sections)) {
-    if (Object.values(fields).every((v) => v === 0)) continue;
-    lines.push(`  ${name.padEnd(7)} ${Object.entries(fields).map(([k, v]) => fieldText(k, v)).join("  ")}`);
-  }
-  return lines.length === 0 ? [] : ["state", ...lines];
 }
 
 function tasksSection(tasks: TaskSummary[]): string[] {
@@ -113,8 +96,6 @@ function tasksSection(tasks: TaskSummary[]): string[] {
 export function profilerReportText(r: ProfilerReport): string {
   const out = [`=== profiler @ t=${n1(r.t)}ms  build ${r.build.number} ${r.build.id} (${r.build.time}) ===`];
   out.push(...windowSection(r));
-  if (r.frames !== null) out.push(...lastSection(r.frames.last));
-  out.push(...sideSection(r));
   out.push(...tasksSection(r.tasks));
   out.push(`long frames n=${r.longs.length}${loafSupported() ? "" : " (LoAF unsupported; longtask only)"}`);
 

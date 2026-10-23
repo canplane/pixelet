@@ -83,8 +83,6 @@ pub struct Residency<L: Base> {
     /// tile (`moved_at`), which holds nothing.
     revision: u32,
     refused: u32,
-    admitted: u32,
-    evicted: u32,
 }
 
 /// What a layer's residency holds at once, from what it asks for. A layer
@@ -147,8 +145,6 @@ impl<L: Base> Default for Residency<L> {
             moved: Vec::new(),
             revision: 0,
             refused: 0,
-            admitted: 0,
-            evicted: 0,
         }
     }
 }
@@ -379,12 +375,7 @@ impl<L: Base> Residency<L> {
             self.refused += 1;
             return None;
         };
-        self.evicted = self.evicted.wrapping_add(1);
         self.remove(candidates[at])
-    }
-
-    pub fn churn(&self) -> [u32; 2] {
-        [self.admitted, self.evicted]
     }
 
     pub fn take_refusals(&mut self) -> u32 {
@@ -400,7 +391,6 @@ impl<L: Base> Residency<L> {
         let Some(record) = self.frame_for(p, victim) else { return Ok(()) };
         match receive(record) {
             Ok(tile) => {
-                self.admitted = self.admitted.wrapping_add(1);
                 self.put(p, tile, Some(record));
                 Ok(())
             }

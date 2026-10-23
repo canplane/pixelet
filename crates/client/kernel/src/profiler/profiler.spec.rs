@@ -60,7 +60,7 @@ pub mod LIMITS {
     pub const KEYS: &[&str] = &["REASONS", "STEP_SLOTS", "ZOOMS"];
 }
 
-/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (xpute host sched/quantum.ts `Grant`); a moving frame whose interval ran past `paced_ms` by half a refresh or more missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `gpu_read` is 1 where a GPU read landed with the frame, whose `gpu_spans` are then that read's, its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; and 0 where nothing was measured with it (no read landed, or the device keeps no timestamps), its spans and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `blocks` and `blocks_bytes` are the renderer's block table, `depth_bytes` its depth targets and `layers_bytes` its texture layers (pxl-render gpu/renderer.rs `FrameStat`), and the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names.
+/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (xpute host sched/quantum.ts `Grant`); a moving frame whose interval ran past `paced_ms` by half a refresh or more missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they leave of the interval, and what they ran past it, are read off the two (profiler/frame.rs `off_turn_ms`, `over_ms`). `effects_ms`, `tick_ms`, `stage_ms` and `tasks_ms` are their parts; what they leave of `busy_ms` is unmeasured. `gpu_read` is 1 where a GPU read landed with the frame, whose `gpu_spans` are then that read's, its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world is drawn at now (pxl-kernel view/frame/resolution.rs); and 0 where nothing was measured with it (no read landed, or the device keeps no timestamps), its spans and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `blocks` and `blocks_bytes` are the renderer's block table, `depth_bytes` its depth targets and `layers_bytes` its texture layers (pxl-render gpu/renderer.rs `FrameStat`), and the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const interval_ms: u32 = 1;
@@ -83,27 +83,28 @@ pub mod FRAME {
     pub const gpu_read: u32 = 22;
     pub const gpu_spans: u32 = 23;
     pub const gpu_px: u32 = 33;
-    pub const census: u32 = 34;
-    pub const blocks: u32 = 54;
-    pub const blocks_bytes: u32 = 55;
-    pub const depth_bytes: u32 = 56;
-    pub const layers_bytes: u32 = 57;
-    pub const gpu_objects: u32 = 58;
-    pub const zoom_tiles: u32 = 69;
-    pub const tiles_place: u32 = 93;
-    pub const heap_used_bytes: u32 = 94;
-    pub const heap_live_bytes: u32 = 95;
-    pub const heap_run_bytes: u32 = 96;
-    pub const heap_slot_bytes: u32 = 97;
-    pub const heap_range_bytes: u32 = 98;
-    pub const heap_largest_free_bytes: u32 = 99;
-    pub const heap_refusals: u32 = 100;
-    pub const ring_cq_peak: u32 = 101;
-    pub const ring_held_peak: u32 = 102;
-    pub const waiting: u32 = 103;
-    pub const out: u32 = 108;
-    pub const cap_terrain_refused: u32 = 113;
-    pub const WORDS: u32 = 114;
+    pub const scale: u32 = 34;
+    pub const census: u32 = 35;
+    pub const blocks: u32 = 55;
+    pub const blocks_bytes: u32 = 56;
+    pub const depth_bytes: u32 = 57;
+    pub const layers_bytes: u32 = 58;
+    pub const gpu_objects: u32 = 59;
+    pub const zoom_tiles: u32 = 70;
+    pub const tiles_place: u32 = 94;
+    pub const heap_used_bytes: u32 = 95;
+    pub const heap_live_bytes: u32 = 96;
+    pub const heap_run_bytes: u32 = 97;
+    pub const heap_slot_bytes: u32 = 98;
+    pub const heap_range_bytes: u32 = 99;
+    pub const heap_largest_free_bytes: u32 = 100;
+    pub const heap_refusals: u32 = 101;
+    pub const ring_cq_peak: u32 = 102;
+    pub const ring_held_peak: u32 = 103;
+    pub const waiting: u32 = 104;
+    pub const out: u32 = 109;
+    pub const cap_terrain_refused: u32 = 114;
+    pub const WORDS: u32 = 115;
     pub const KEYS: &[&str] = &[
         "t",
         "interval_ms",
@@ -126,6 +127,7 @@ pub mod FRAME {
         "gpu_read",
         "gpu_spans",
         "gpu_px",
+        "scale",
         "census",
         "blocks",
         "blocks_bytes",
@@ -155,7 +157,7 @@ pub mod FRAME_GROUPS {
     pub const time: &[&str] = &["t", "interval_ms", "refresh_ms", "paced_ms", "settled", "turns", "busy_ms", "budget_ms"];
     pub const turn: &[&str] = &["effects_ms", "tick_ms", "phases", "stage_ms", "tasks_ms", "worst_effect_ms", "worst_effect_name"];
     pub const frame: &[&str] = &["kind_name", "wake_name", "wake_in_ms"];
-    pub const gpu: &[&str] = &["gpu_read", "gpu_spans", "gpu_px", "census"];
+    pub const gpu: &[&str] = &["gpu_read", "gpu_spans", "gpu_px", "scale", "census"];
     pub const cap: &[&str] = &["cap_terrain_refused"];
     pub const requests: &[&str] = &["waiting", "out"];
     pub const tiles: &[&str] = &["zoom_tiles", "tiles_place"];
@@ -214,9 +216,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 114;
-    pub const prev: u32 = 115;
-    pub const WORDS: u32 = 229;
+    pub const has_prev: u32 = 115;
+    pub const prev: u32 = 116;
+    pub const WORDS: u32 = 231;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -289,7 +291,7 @@ pub mod SUMMARY {
         pub const heap_used_delta_bytes: u32 = 53;
         pub const census: u32 = 54;
         pub const last: u32 = 74;
-        pub const WORDS: u32 = 188;
+        pub const WORDS: u32 = 189;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -317,41 +319,14 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    /// The interval in progress, which no frame turn has closed yet: its turns and their time, rise to fall. A settled view's turns are here, if any run.
-    pub mod open {
-        pub const AT: u32 = 191;
-        pub const turns: u32 = 0;
-        pub const busy_ms: u32 = 1;
-        pub const WORDS: u32 = 2;
-        pub const KEYS: &[&str] = &["AT", "turns", "busy_ms", "WORDS"];
-    }
     pub mod tasks {
-        pub const AT: u32 = 193;
+        pub const AT: u32 = 192;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
-    /// Counts since the window began, its baseline taken off: a settled view moves none of them.
-    pub mod counters {
-        pub const AT: u32 = 313;
-        pub const sheet_repacks: u32 = 0;
-        pub const sheet_uploads: u32 = 1;
-        pub const terrain_admitted: u32 = 2;
-        pub const terrain_evicted: u32 = 3;
-        pub const WORDS: u32 = 4;
-        pub const KEYS: &[&str] = &["AT", "sheet_repacks", "sheet_uploads", "terrain_admitted", "terrain_evicted", "WORDS"];
-    }
-    pub mod sheet {
-        pub const AT: u32 = 317;
-        pub const size: u32 = 0;
-        pub const entries: u32 = 1;
-        pub const used_px: u32 = 2;
-        pub const initial: u32 = 3;
-        pub const WORDS: u32 = 4;
-        pub const KEYS: &[&str] = &["AT", "size", "entries", "used_px", "initial", "WORDS"];
-    }
     pub mod steps {
-        pub const AT: u32 = 321;
+        pub const AT: u32 = 312;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
@@ -359,7 +334,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at.
     pub mod view {
-        pub const AT: u32 = 482;
+        pub const AT: u32 = 473;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -394,8 +369,8 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 496;
-    pub const KEYS: &[&str] = &["rec", "frames", "open", "tasks", "counters", "sheet", "steps", "view", "WORDS"];
+    pub const WORDS: u32 = 487;
+    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "steps", "view", "WORDS"];
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words.

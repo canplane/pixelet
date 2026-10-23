@@ -270,12 +270,6 @@ fn land(l: &mut Profiler, s: FrameSample) {
     }
 }
 
-/// The interval in progress, which no frame turn has closed yet.
-pub fn profiler_open_interval() -> Option<&'static FrameSample> {
-    let l = profiler();
-    l.open.as_ref().filter(|_| l.recording)
-}
-
 fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {
     ring.partition_point(|rec| at(rec) < t)
 }

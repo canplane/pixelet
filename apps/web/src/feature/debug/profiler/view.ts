@@ -124,7 +124,6 @@ export interface ProfilerReport {
   t: f64;
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
-  sections: Record<"open" | "counters" | "sheet" | "view", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   tasks: TaskSummary[];
   recent: TaskRecord[];
@@ -222,11 +221,7 @@ export interface Gauge {
   /** The frames and tasks the rings hold, as RINGS counts them. */
   rec: { recording: boolean; elapsed_ms: f64; tasks: u32; frames: u32; truncated: boolean };
   frames: FrameSummary | null;
-  /** The interval in progress, which no frame turn has closed. */
-  open: { turns: f64; busy_ms: f64 };
   tasks: TaskSummary[];
-  counters: Record<string, f64>;
-  sheet: { size: u32; entries: u32; used_px: u32; initial: u32 };
   view: Record<string, f64>;
   longs: LongFrame[];
 }
@@ -247,10 +242,7 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
   return {
     rec: { recording: r.recording !== 0, elapsed_ms: r.elapsed_ms, tasks: tasks[1], frames: frames[1], truncated: r.truncated !== 0 },
     frames: frameSummary(s),
-    open: section(s, SUMMARY.open) as Gauge["open"],
     tasks: taskSummaries(s),
-    counters: section(s, SUMMARY.counters),
-    sheet: section(s, SUMMARY.sheet) as Gauge["sheet"],
     view: section(s, SUMMARY.view),
     longs: longFramesSince(performance.now() - windowMs),
   };
@@ -275,12 +267,6 @@ export function profilerReportRead(): ProfilerReport {
     t: performance.now(),
     build: { number: BUILD_NUMBER, id: BUILD_ID, time: BUILD_TIME },
     frames: frameSummary(s),
-    sections: {
-      open: section(s, SUMMARY.open),
-      counters: section(s, SUMMARY.counters),
-      sheet: section(s, SUMMARY.sheet),
-      view: section(s, SUMMARY.view),
-    },
     steps,
     tasks: taskSummaries(s),
     recent: tasksAt(tasks[0] + recentFrom * TASK.WORDS * WORD, tasks[1] - recentFrom),

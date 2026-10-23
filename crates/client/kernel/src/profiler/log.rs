@@ -6,7 +6,6 @@
 //! take the module down during the very fetch burst it was turned on to
 //! watch. Only frames that missed a vsync while moving or overran are kept.
 
-use crate::profiler::block::CountersBlock;
 use crate::profiler::frame::FrameSample;
 use crate::profiler::frame::{missed, overran};
 use crate::profiler::record::{drop_front, fixed_lane, profiler_recording_start, profiler_recording_stop, profiler_set_sink, Lane, ProfilerSink};
@@ -18,7 +17,6 @@ use xpute_guest::global::Global;
 pub(super) const PENDING: usize = 512;
 
 struct Log {
-    baseline: CountersBlock,
     logging: bool,
     tasks: &'static mut [TaskRow],
     tasks_len: usize,
@@ -30,7 +28,6 @@ static LOG: Global<Log> = Global::new();
 
 fn log() -> &'static mut Log {
     LOG.get(|| Log {
-        baseline: CountersBlock::default(),
         logging: false,
         tasks: &mut [],
         tasks_len: 0,
@@ -39,16 +36,11 @@ fn log() -> &'static mut Log {
     })
 }
 
-/// The counters as the window began, which its own are counted from.
-pub fn window_baseline() -> CountersBlock {
-    log().baseline
-}
-
 /// Called at WORLD_BOOT with the stored setting, before the first turn, so
 /// a profiler left on has the boot in its window.
-pub fn profiler_follow(on: bool, counters: CountersBlock) {
+pub fn profiler_follow(on: bool) {
     if on {
-        profiler_window_start(counters);
+        profiler_window_start();
     } else {
         profiler_set_logging(false);
         profiler_window_stop();
@@ -57,12 +49,10 @@ pub fn profiler_follow(on: bool, counters: CountersBlock) {
 
 /// Step timing starts here, not at boot: it is a clock read around every
 /// step of every tick, and only the report reads it.
-/// `counters` as they stand, the window's baseline.
-pub fn profiler_window_start(counters: CountersBlock) {
+pub fn profiler_window_start() {
     profiler_recording_start();
     tick_step_stats_reset();
     set_step_timing(true);
-    log().baseline = counters;
 }
 
 pub fn profiler_window_stop() {

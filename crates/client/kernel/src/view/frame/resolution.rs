@@ -6,14 +6,15 @@
 //! box whatever its size (pxl-render gpu/surface.rs), so the frame is upscaled
 //! within itself, never from the frames before: render resolution apart from
 //! display resolution where a screen outgrows its GPU (Unreal's screen
-//! percentage). Once a frame, where a GPU read landed, the frame's GPU time
-//! stands against its budget, the paced interval the host grants (xpute host
-//! sched/quantum.ts `Grant::paced_ms`): the scale moves by the square root of
-//! budget over that time, as what a frame costs goes mostly with its pixels,
-//! between `SCALE_MIN` and whole, and holds while that time is within
-//! `SCALE_BAND` of the budget. The read lags the frame it timed, so only a
-//! frame drawn at the size drawn now is judged, and none while a change waits
-//! to be drawn; a change asks for the frame that draws it.
+//! percentage). Once a frame, where a GPU read landed, the GPU time of its
+//! passes drawn at the world's pixels (pxl-render gpu/renderer.rs
+//! `pixels_ms`) stands against its budget, the paced interval the host grants
+//! (xpute host sched/quantum.ts `Grant::paced_ms`): the scale moves by the
+//! square root of budget over that time, as what those passes cost goes with
+//! their pixels, between `SCALE_MIN` and whole, and holds while that time is
+//! within `SCALE_BAND` of the budget. The read lags the frame it timed, so
+//! only a frame drawn at the size drawn now is judged, and none while a change
+//! waits to be drawn; a change asks for the frame that draws it.
 
 use crate::param;
 use pxl_render::api_spec::surface_role;
@@ -25,6 +26,11 @@ static SCALE: Global<f64> = Global::new();
 
 fn scale() -> &'static mut f64 {
     SCALE.get(|| 1.0)
+}
+
+/// The share of the display's pixels, each way, the world is drawn at now.
+pub fn scale_now() -> f64 {
+    *scale()
 }
 
 fn world() -> Option<&'static mut Surface> {
@@ -57,9 +63,10 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
     }
 }
 
-/// A GPU read landed: the frame's GPU time `gpu_ms` over the `gpu_px` pixels it drew,
-/// against the frame's budget `paced_ms`. A frame that cast nothing, has no
-/// budget, or was drawn at another size than now, judges nothing.
+/// A GPU read landed: `gpu_ms`, the time of its passes drawn at the world's
+/// `gpu_px` pixels, against the frame's budget `paced_ms`. A frame that cast
+/// nothing, has no budget, or was drawn at another size than now, judges
+/// nothing.
 pub fn load(gpu_ms: f64, gpu_px: f64, paced_ms: f64) {
     let Some(s) = world() else { return };
     if !(gpu_ms > 0.0 && gpu_px > 0.0 && paced_ms > 0.0) {

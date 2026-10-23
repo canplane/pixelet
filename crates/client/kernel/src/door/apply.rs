@@ -92,7 +92,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 },
             });
             settings_load(p.settings);
-            profiler_follow(settings_store().performance_overlay, crate::profiler::summary::counters());
+            profiler_follow(settings_store().performance_overlay);
             crate::layer::object::repository::open();
             // The shell holds the kernel's state from its first render on.
             applied(s)
@@ -290,7 +290,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let changed = settings_store().set_setting(p.key, p.value);
             refuse_unless(changed.is_some(), Errno::EINVAL)?;
             if changed == Some(true) && p.key == SettingKey::performance_overlay {
-                profiler_follow(p.value == 1, crate::profiler::summary::counters());
+                profiler_follow(p.value == 1);
             }
             applied(s)
         }
@@ -312,7 +312,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // panel off would record with nothing to show or stop it.
         Command::PROFILER_START => {
             refuse_unless(settings_store().performance_overlay, Errno::EPERM)?;
-            profiler_window_start(crate::profiler::summary::counters());
+            profiler_window_start();
             applied(s)
         }
         Command::PROFILER_STOP => {

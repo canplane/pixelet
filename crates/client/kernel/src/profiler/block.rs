@@ -87,17 +87,6 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     last => SUMMARY::frames::last,
 );
 
-/// The interval in progress: its turns and their time, which no frame turn
-/// has closed.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct OpenBlock {
-    pub turns: f64,
-    pub busy_ms: f64,
-}
-
-words!(OpenBlock, SUMMARY::open::WORDS, turns => SUMMARY::open::turns, busy_ms => SUMMARY::open::busy_ms);
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TaskBlock {
@@ -128,53 +117,6 @@ pub struct TasksBlock {
 }
 
 words!(TasksBlock, SUMMARY::tasks::WORDS, slots => SUMMARY::tasks::slots);
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct CountersBlock {
-    pub sheet_repacks: f64,
-    pub sheet_uploads: f64,
-    pub terrain_admitted: f64,
-    pub terrain_evicted: f64,
-}
-
-impl CountersBlock {
-    /// Word by word, so a counter added to the block is subtracted without being named here.
-    pub fn minus(mut self, b: &CountersBlock) -> CountersBlock {
-        let n = size_of::<CountersBlock>() / 8;
-        // SAFETY: `words!` below holds the block to plain f64s end to end.
-        let (a, b) = unsafe {
-            (
-                core::slice::from_raw_parts_mut((&raw mut self).cast::<f64>(), n),
-                core::slice::from_raw_parts(std::ptr::from_ref(b).cast::<f64>(), n),
-            )
-        };
-        for (x, y) in a.iter_mut().zip(b) {
-            *x -= y;
-        }
-        self
-    }
-}
-
-words!(CountersBlock, SUMMARY::counters::WORDS,
-    sheet_repacks => SUMMARY::counters::sheet_repacks,
-    sheet_uploads => SUMMARY::counters::sheet_uploads,
-    terrain_admitted => SUMMARY::counters::terrain_admitted,
-    terrain_evicted => SUMMARY::counters::terrain_evicted,
-);
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct SheetBlock {
-    pub size: f64,
-    pub entries: f64,
-    pub used_px: f64,
-    pub initial: f64,
-}
-
-words!(SheetBlock, SUMMARY::sheet::WORDS,
-    size => SUMMARY::sheet::size, entries => SUMMARY::sheet::entries, used_px => SUMMARY::sheet::used_px, initial => SUMMARY::sheet::initial,
-);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

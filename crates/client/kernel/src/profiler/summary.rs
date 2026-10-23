@@ -4,22 +4,17 @@
 //! place by the panel and the report so both agree. Sections go only through
 //! `put`; indexing lanes by hand let sections drift out of order (2026-09-23).
 
-use crate::billboard::sheet::billboard_sheet;
 use crate::control::camera::controller;
 use crate::io::failure::Outcome;
-use crate::layer::Base as _;
-use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
-use crate::profiler::block::{FramesBlock, OpenBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::profiler::block::{FramesBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::profiler::frame::FrameSample;
 use crate::profiler::frame::{long, missed, off_turn_ms, overran};
-use crate::profiler::log::window_baseline;
-use crate::profiler::record::{fixed_lane, profiler_frames_since, profiler_open_interval, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
+use crate::profiler::record::{fixed_lane, profiler_frames_since, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
 use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
 use crate::sched::tick::tick_step_stats;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -74,8 +69,6 @@ pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
     put(out, SUMMARY::rec::AT, &profiler_recording_state());
 
     put(out, SUMMARY::frames::AT, &frames(scratch, profiler_frames_since(since)));
-    let open = profiler_open_interval().map_or(OpenBlock::default(), |f| OpenBlock { turns: f.turns, busy_ms: f.busy_ms });
-    put(out, SUMMARY::open::AT, &open);
     put(out, SUMMARY::tasks::AT, &tasks(scratch, profiler_tasks_since(since)));
     side(out);
     out
@@ -177,20 +170,6 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
 }
 
 fn side(out: &mut [f64]) {
-    put(out, SUMMARY::counters::AT, &counters().minus(&window_baseline()));
-
-    let sheet = billboard_sheet().stats();
-    put(
-        out,
-        SUMMARY::sheet::AT,
-        &SheetBlock {
-            size: sheet.size as f64,
-            entries: sheet.entries as f64,
-            used_px: sheet.used_px as f64,
-            initial: pxl_render::gpu::sheet::shelf::INITIAL_SIZE as f64,
-        },
-    );
-
     // What the pointer meets as drawn, whether or not it could strike it there.
     let met = crate::control::interaction::pointed().map(|at| (at, crate::view::lens::tau())).and_then(|([x, y], tau)| {
         let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
@@ -243,17 +222,4 @@ fn side(out: &mut [f64]) {
         steps.count += 1.0;
     }
     put(out, SUMMARY::steps::AT, &steps);
-}
-
-/// The counters as they stand, from the billboard sheet and the terrain's
-/// residency, which the window counts from its baseline.
-pub fn counters() -> CountersBlock {
-    let sheet = billboard_sheet().stats();
-    let [admitted, evicted] = TerrainTile::residency().churn();
-    CountersBlock {
-        sheet_repacks: sheet.repacks as f64,
-        sheet_uploads: sheet.uploads as f64,
-        terrain_admitted: f64::from(admitted),
-        terrain_evicted: f64::from(evicted),
-    }
 }
