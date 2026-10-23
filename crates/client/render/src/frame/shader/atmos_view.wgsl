@@ -99,33 +99,46 @@ fn air_near() -> f32 {
   return max(atmos_camera_altitude() / atmos_km_per_u() - top, 0.0);
 }
 
-// How far from the eye a froxel `z` deep reaches, in units: from `air_near`,
-// its depth cubed of the rest of `air_far`. A slice's reach grows with its
-// depth, so the near view, where most of what is drawn lies, takes most of
-// the slices — from the ground, the first ~4 m, the second ~116 m, the ninth
-// ~21 km — and one volume reaches as far as the air (atmos_froxel.wgsl,
-// atmos_air.wgsl).
-fn air_reach(z: f32) -> f32 {
-  let n = air_near();
-  return n + (air_far() - n) * z * z * z;
-}
-
 // How far from the eye the air along `dir` ends, in units: where the march
 // stops, at the air's ground (`to_ground`, the sea's radius), past which a
-// point's air is the air to there; else the volume's whole reach. Every point
-// a position can name, under the sea to the world's floor too, reads the
-// air the march gives it: the volume holds it exactly at this depth
-// (atmos_froxel.wgsl), and a reader past it reads it there (atmos_air.wgsl).
+// point's air is the air to there; else the volume's whole reach.
 fn air_ground(dir: vec3f) -> f32 {
   let r = camera_r();
   let mu = dot(frame_up(), dir);
   return select(air_far(), to_ground(r, mu) / atmos_km_per_u(), meets_ground(r, mu));
 }
 
+// Where along `dir` the air's volume lays its slices, in units, nearest and
+// farthest: from where the air begins that anything drawn may lie in — past
+// `air_near`, and past the air's top for an eye over it — to the sea's
+// plane, the world's z = 0, under which little is drawn; where the ray never
+// falls to it, the air's ground or its far edge (`air_ground`). Laid from the air's top to the sea, an eye high over the
+// world spends no slice on the space before the air or past the sea, which
+// had left the air a ray crosses a few slices tens of km thick and the sea
+// read between them, banded a slice at a time about the point under the eye.
+fn air_span(dir: vec3f) -> vec2f {
+  let r = camera_r();
+  let mu = dot(frame_up(), dir);
+  let near = max(air_near(), to_sphere(r, mu, atmos_top_radius()) / atmos_km_per_u());
+  let sea = atmos_camera_altitude() / atmos_km_per_u() / max(-dir.z, 1e-6);
+  let far = select(air_ground(dir), min(sea, air_far()), dir.z < 0.0 && atmos_camera_altitude() > 0.0);
+  return vec2f(near, max(far, near * (1.0 + 1e-6) + 1e-6));
+}
+
+// How far from the eye a froxel `z` deep reaches along a ray whose slices lie
+// over `span` (`air_span`), in units: its depth cubed of the span. A slice's
+// reach grows with its depth, so the near view, where most of what is drawn
+// lies, takes most of the slices — from the ground looking out level, the
+// first ~4 m, the second ~116 m, the ninth ~21 km — and the last ends where
+// the span does, so what is drawn there, the sea from high, reads the march
+// to it whole (atmos_froxel.wgsl, atmos_air.wgsl).
+fn air_reach(span: vec2f, z: f32) -> f32 {
+  return span.x + (span.y - span.x) * z * z * z;
+}
+
 // `air_reach` the other way: how deep a point `d` units from the eye lies.
-fn air_z(d: f32) -> f32 {
-  let n = air_near();
-  return pow(clamp((d - n) / (air_far() - n), 1e-30, 1.0), 1.0 / 3.0);
+fn air_z(span: vec2f, d: f32) -> f32 {
+  return pow(clamp((d - span.x) / (span.y - span.x), 0.0, 1.0), 1.0 / 3.0);
 }
 
 // The march to a point, the volume's one maker (atmos_froxel.wgsl): what

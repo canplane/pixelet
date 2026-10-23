@@ -13,39 +13,31 @@
 
 // The volume at `uv` across and `z` deep (`air_reach`): Hillaire 2020's
 // aerial-perspective volume, 32 a side and 32 deep, as Unreal's
-// SkyAtmosphere lays it out (frame/shader/words.rs `AIR_FROXELS`).
+// SkyAtmosphere lays it out (frame/shader/words.rs `AIR_FROXELS`). Its
+// slices' texels stand at depths 0 to 1, the span's ends (atmos_froxel.wgsl).
 fn air_before(uv: vec2f, z: f32) -> vec4f {
   let n = f32(AIR_FROXELS);
-  let deep = clamp(z * n, 0.5, n - 0.5);
-  return textureSampleLevel(air_volume, atmos_sampler, vec3f(uv, deep / n), 0.0);
+  return textureSampleLevel(air_volume, atmos_sampler, vec3f(uv, (0.5 + z * (n - 1.0)) / n), 0.0);
 }
 
 // The air before a point as the volume holds it at the point's place on the
-// screen and its distance: what the eye's view projects it to, so a point
-// off the screen or behind the eye reads the volume's nearest edge.
-// Nearer than the first froxels' middle, the air there is faded to none at
-// the eye by the point's share of that distance (Hillaire 2020's own
-// handling short of the volume's first slice): what the air scatters and
-// dims grows with the length of air before a point, which that near is
-// all but straight. The lights at a point are the point's own, read where it
-// stands (atmos_view.wgsl `light_of`): they turn with its height, and a
-// froxel's middle stands higher or lower than what is drawn in it.
+// screen and its depth along its own ray's span (`air_span`): what the eye's
+// view projects it to, so a point off the screen or behind the eye reads the
+// volume's nearest edge. A point past the span's end, under the sea or past
+// the air's ground, reads the air to the end. The lights at a point are the
+// point's own, read where it stands (atmos_view.wgsl `light_of`): they turn
+// with its height, and a froxel stands higher or lower than what is drawn in
+// it.
 fn seen_from_eye(world_pos: vec3f) -> Seen {
   let clip = frame_view_proj() * vec4f(world_pos, 1.0);
   let w = max(clip.w, 1e-6);
   let uv = vec2f(clip.x / w * 0.5 + 0.5, 0.5 - clip.y / w * 0.5);
   let to = world_pos - frame_camera_pos();
-  // Past where the air ends along it, the air to there (`air_ground`).
   let d = length(to);
-  let ground = air_ground(to / max(d, 1e-6));
-  let held = min(d, ground);
-  let near = min(held / min(air_reach(0.5 / f32(AIR_FROXELS)), ground), 1.0);
-  // Past the ground the volume holds a line, which may run out of range.
-  let line = air_before(uv, air_z(held));
-  let air = vec4f(max(line.rgb, vec3f(0.0)), clamp(line.a, 0.0, 1.0));
+  let air = air_before(uv, air_z(air_span(to / max(d, 1e-6)), d));
   var s: Seen;
-  s.scattered = air.rgb * near;
-  s.through = 1.0 - near * (1.0 - air.a);
+  s.scattered = air.rgb;
+  s.through = air.a;
   s.light = light_of(world_pos);
   return s;
 }
