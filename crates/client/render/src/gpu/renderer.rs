@@ -1248,7 +1248,11 @@ impl RaysPass {
         // samples or the pixels outgrow it.
         let word = |k: usize| f32::from_bits(cast.eye[k]);
         let tan = [word(eye::TAN), word(eye::TAN + 1)];
-        let s = beam::spacing(pxl_portable::cast::Detail { tau: word(eye::TAU), range: [0; 2] });
+        let s = beam::spacing(pxl_portable::cast::Detail {
+            tau: word(eye::TAU),
+            range: [0; 2],
+            eye: [0.0; 3],
+        });
         (c.corners, c.cells, c.samples) = (beam::corners(tan, s), beam::span(tan, s), beam::samples(tan, s));
         let held = c.corners[0] * c.corners[1];
         let sampled = c.samples[0] * c.samples[1];

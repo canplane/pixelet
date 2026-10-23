@@ -473,7 +473,7 @@ fn footing_ray(cell: Zoom, g: [i32; 2]) -> ([i32; 3], crate::cast::Ray, crate::c
     let top = ((1i32 << (crate::HEIGHT_BITS - 1)) << FRAC_W) - 1;
     let o = [mid(g[0]), mid(g[1]), top];
     let ray = crate::cast::Ray::new([0.0, 0.0, -1.0], (1u32 << crate::HEIGHT_BITS) as f32);
-    (o, ray, crate::cast::Detail { tau: 1.0, range: [cell, cell] })
+    (o, ray, crate::cast::Detail { tau: 1.0, range: [cell, cell], eye: [0.0; 3] })
 }
 
 /// The value a block answer holds, without whether what is placed holds it

@@ -44,10 +44,15 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
 /// (`cell_at`), the distance scaled by `tau`, at least 1, held to `range`,
 /// asked of a distance squared (`at`). A
 /// stated zoom's cells wherever they are is a range of that zoom alone.
+/// The distance is the eye's, `eye` units from the walk's origin: none for
+/// the eye's own rays; for a ray from elsewhere, a ray toward the sun from
+/// what an eye's ray met, where the eye stands from it, so a node is asked
+/// at the zooms the eye's rays ask it (`reach`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
     pub tau: f32,
     pub range: [Zoom; 2],
+    pub eye: [f32; 3],
 }
 
 impl Detail {
@@ -405,9 +410,9 @@ pub struct Met<A> {
 /// entry holds them.
 pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 
-/// A node's farthest and nearest distances from the origin, squared, its
-/// planes `lo` and `hi` units from the origin on each axis: its corner
-/// farthest from the origin and its point nearest it.
+/// A node's farthest and nearest distances from the eye, squared, its
+/// planes `lo` and `hi` units from the eye on each axis: its corner
+/// farthest from the eye and its point nearest it.
 fn reach(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
     let near = [lesser(greater(lo[0], 0.0), hi[0]), lesser(greater(lo[1], 0.0), hi[1]), lesser(greater(lo[2], 0.0), hi[2])];
     let far = [greater(-lo[0], hi[0]), greater(-lo[1], hi[1]), greater(-lo[2], hi[2])];
@@ -519,7 +524,8 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
         if t1 > t0 {
-            let reach = reach(lo, hi);
+            let e = detail.eye;
+            let reach = reach([lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]], [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]]);
             let i = q.node(&mut at, n.zoom, n.index(o), asked(detail, reach), t0);
             visits += 1;
             let inside = lo[0] <= 0.0 && 0.0 < hi[0] && lo[1] <= 0.0 && 0.0 < hi[1] && lo[2] <= 0.0 && 0.0 < hi[2];

@@ -311,6 +311,7 @@ fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
         Detail {
             tau: eye.right_tau.w,
             range: [eye.range.x, eye.range.y],
+            eye: [0.0; 3],
         },
     )
 }
@@ -1682,6 +1683,7 @@ fn count_one(eye: &Eye, params: &[u32], rows: &[Decor], grown: &mut [u32], regio
     let detail = Detail {
         tau: eye.right_tau.w,
         range: [eye.range.x, eye.range.y],
+        eye: [0.0; 3],
     };
     // Its distance once, for the zoom it is drawn at and its size.
     let d2 = scatter::distance2(origin, corner);

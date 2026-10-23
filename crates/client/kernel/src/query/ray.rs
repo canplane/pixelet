@@ -39,7 +39,11 @@ pub fn asked() -> [Zoom; 2] {
 pub fn at_zoom(tile: Zoom) -> Detail {
     let [lo, hi] = asked();
     let z = GROUND.cell_zoom(tile).clamp(lo, hi);
-    Detail { tau: 1.0, range: [z, z] }
+    Detail {
+        tau: 1.0,
+        range: [z, z],
+        eye: [0.0; 3],
+    }
 }
 
 /// The camera grid's cells at each distance from the origin at `tau`
@@ -49,6 +53,7 @@ pub fn by_distance(tau: Tau) -> Detail {
     Detail {
         tau: tau.scale() as f32,
         range: asked(),
+        eye: [0.0; 3],
     }
 }
 
