@@ -87,10 +87,12 @@ fn shown() -> Shown {
         previews.1 += 1;
     }
     Shown {
-        // Shown once a frame went to the screen over a view whose tiles all answered.
+        // Shown once a frame went to the screen over a view whose tiles all
+        // show, if coarser: a finer tile asked for as the eye moves is not
+        // the area loading, and would flash its toast each time.
         status: match (crate::view::observation::eye(), screen_drawn()) {
             (None, _) => GroundStatus::Idle,
-            (Some(_), true) if TerrainTile::residency().answered() => GroundStatus::Success,
+            (Some(_), true) if TerrainTile::residency().shown() => GroundStatus::Success,
             _ => GroundStatus::Loading,
         },
         is_off_center: off_center().is_off_center,

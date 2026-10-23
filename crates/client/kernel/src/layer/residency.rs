@@ -340,7 +340,7 @@ impl<L: Base> Residency<L> {
     /// A frame for arriving `p`: its own, a free one, or a victim among frames
     /// held only as cache. None only for a tile no longer asked for, counted;
     /// for one asked for, none means the capacity bound is broken.
-    fn frame_for(&mut self, p: Tile, victim: impl FnOnce(&[Tile]) -> Option<usize>) -> Option<u32> {
+    fn frame_for(&mut self, p: Tile, victim: impl FnOnce(&mut dyn Iterator<Item = Tile>) -> Option<Tile>) -> Option<u32> {
         if self.framed(p) {
             return self.remove(p);
         }
@@ -348,15 +348,12 @@ impl<L: Base> Residency<L> {
             return Some(free);
         }
         let unasked = self.asked(p).is_none();
-        let mut candidates: Vec<Tile> = self.tiles.iter().filter(|(_, e)| e.framed() && e.ask.is_none()).map(|(&q, _)| q).collect();
-        // Sorted, so the policy sees the same list for the same state.
-        candidates.sort_unstable();
-        let Some(at) = victim(&candidates) else {
+        let Some(q) = victim(&mut self.tiles.iter().filter(|(_, e)| e.framed() && e.ask.is_none()).map(|(&q, _)| q)) else {
             xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
             self.refused += 1;
             return None;
         };
-        self.remove(candidates[at])
+        self.remove(q)
     }
 
     pub fn take_refusals(&mut self) -> u32 {
@@ -365,10 +362,11 @@ impl<L: Base> Residency<L> {
 
     /// The frame is emptied first, so a body that fails to decode leaves it free
     /// rather than another tile reading half-overwritten bytes.
-    /// `victim` picks which frame goes when one must, among the frames held
-    /// only as cache, so a policy changes what is held next and never what
-    /// is correct; none where none may.
-    pub fn admit<E>(&mut self, p: Tile, victim: impl FnOnce(&[Tile]) -> Option<usize>, receive: impl FnOnce(u32) -> Result<L, E>) -> Result<(), E> {
+    /// `victim` picks which frame goes when one must, among the tiles of the
+    /// frames held only as cache, so a policy changes what is held next and
+    /// never what is correct; none where none may. They come in no order the
+    /// state fixes, so a policy picks by a total one.
+    pub fn admit<E>(&mut self, p: Tile, victim: impl FnOnce(&mut dyn Iterator<Item = Tile>) -> Option<Tile>, receive: impl FnOnce(u32) -> Result<L, E>) -> Result<(), E> {
         let Some(record) = self.frame_for(p, victim) else { return Ok(()) };
         match receive(record) {
             Ok(tile) => {
@@ -398,9 +396,15 @@ impl<L: Base> Residency<L> {
         self.resident(p) || self.entry(p).is_some_and(|e| e.answered)
     }
 
-    /// Whether every tile asked for has its answer.
-    pub fn answered(&self) -> bool {
-        self.tiles.iter().filter(|(_, e)| e.ask.is_some()).all(|(&p, _)| self.has_answer(p))
+    /// Whether every tile asked for shows: its answer, or a resident tile
+    /// over it drawing it coarser (`drawn_from`), as a finer tile asked for
+    /// while the eye moves is.
+    pub fn shown(&self) -> bool {
+        let mut lines = Lines::default();
+        self.tiles
+            .iter()
+            .filter(|(_, e)| e.ask.is_some())
+            .all(|(&p, _)| self.has_answer(p) || self.seek(&mut lines, p).drawn.is_some())
     }
 
     pub fn answer_above(&mut self, p: Tile) {
