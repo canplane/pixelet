@@ -168,7 +168,7 @@ export const SETTINGS = {
     default: 5 as number,
     section: "character",
   },
-  /** Each ray's pixel coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_rays.wgsl). */
+  /** Each ray's pixel coloured by the nodes its descent asked the world from its cell's start, every pixel walking its own ray (a sample's block carries no steps), on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_rays.wgsl). */
   ray_steps: {
     key: 16 as number,
     kind: "toggle",

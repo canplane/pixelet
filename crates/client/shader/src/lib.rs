@@ -780,7 +780,8 @@ type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// Each pixel's ray: the nearest of the blocks the samples about it stopped
 /// at that it enters (pxl-spec-core `beam::about`, `cast::entry`), its
-/// words; where it enters none, or a node a sample lacks at before it, the
+/// words; where it enters none, or a node a sample lacks at before it, or
+/// the eye asks the rays' steps, which a sample's block does not carry, the
 /// ray from its cell's start, reading the
 /// observed pyramid alone (`Reading`), its binding read-only so no read of
 /// it is atomic: its words where every node it asked was kept, else the
@@ -851,8 +852,9 @@ pub fn cast_cs(
         }
         j += 1;
     }
-    if hit.t < ray.reach && hit.t < lack {
-        written(rays, id, word(&ray, Met { ends: Ends::Stop, stop: hit, visits: 0 }, eye.origin.w != 0));
+    let steps = eye.origin.w != 0;
+    if !steps && hit.t < ray.reach && hit.t < lack {
+        written(rays, id, word(&ray, Met { ends: Ends::Stop, stop: hit, visits: 0 }, false));
         return;
     }
     let met = resumed(&mut Reading { seen }, origin, &ray, detail, t, &line);
@@ -862,7 +864,7 @@ pub fn cast_cs(
         let k = seen_add(beams, beam::MISSES, 1);
         seen_put(beams, beam::list_at(corners[0] * corners[1], n[0] * n[1]) + k, id.x | id.y << 16);
     } else {
-        written(rays, id, word(&ray, met, eye.origin.w != 0));
+        written(rays, id, word(&ray, met, steps));
     }
 }
 

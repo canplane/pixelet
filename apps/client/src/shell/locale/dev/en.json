@@ -7,7 +7,10 @@
       }
     },
     "debug": {
-      "ray_steps": { "label": "Ray steps", "description": "Colors each ray by the nodes its descent asked the world: blue few, red many, the same ramp on every screen." }
+      "ray_steps": {
+        "label": "Ray steps",
+        "description": "Colors each ray by the nodes its descent asked the world from its cell's start: blue few, red many, the same ramp on every screen. Every pixel walks its own ray while it is on."
+      }
     }
   },
   "world": {
