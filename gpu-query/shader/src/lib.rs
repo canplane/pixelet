@@ -766,6 +766,7 @@ pub fn sample_cs(
     seen_put(beams, base + beam::SAMPLE_ROOTS + 2, stop.node.roots[2] as u32);
     seen_put(beams, base + beam::SAMPLE_BLOCK, stop.block[0]);
     seen_put(beams, base + beam::SAMPLE_BLOCK + 1, stop.block[1]);
+    seen_put(beams, base + beam::SAMPLE_AXIS, stop.axis);
 }
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
@@ -825,9 +826,13 @@ pub fn cast_cs(
                 };
                 let (enter, axis, enters) = cast::entry(origin, &ray, &node);
                 let lacks = seen_at(beams, k + beam::SAMPLE_LACKS) != 0;
+                // A block's face the pixel enters across another axis than its
+                // sample did lies under what the sample passed: not the
+                // pixel's first, so it is no candidate.
+                let exposed = axis == seen_at(beams, k + beam::SAMPLE_AXIS);
                 if enters && lacks && enter < lack {
                     lack = enter;
-                } else if enters && !lacks && enter < hit.t {
+                } else if enters && !lacks && exposed && enter < hit.t {
                     hit = cast::Stop {
                         t: enter,
                         axis,
