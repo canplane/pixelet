@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: c76a281275d6ff4ef0ae2044368784568a75fa20862e5ad1357d2bfca99deeff
+// Inputs: 34e36d6201e3ded9b18736d299d2725a195a5272c12b8a71e674cf7d2783f67a
 struct type_2 {
     member: array<u32>,
 }
@@ -14,24 +14,32 @@ var<storage> global: type_2;
 var<storage, read_write> global_1: type_2;
 
 fn function_() {
-    var phi_43_: u32;
+    var phi_45_: u32;
+    var phi_72_: u32;
 
-    let _e7 = arrayLength((&global_1.member));
-    let _e10 = global.member[2u];
-    let _e11 = (_e10 / 64u);
-    if ((_e10 % 64u) > 0u) {
-        phi_43_ = (_e11 + 1u);
+    let _e8 = arrayLength((&global_1.member));
+    let _e11 = global.member[2u];
+    let _e12 = (_e11 / 64u);
+    if ((_e11 % 64u) > 0u) {
+        phi_45_ = (_e12 + 1u);
     } else {
-        phi_43_ = _e11;
+        phi_45_ = _e12;
     }
-    let _e16 = phi_43_;
-    if (0u < _e7) {
-        global_1.member[0u] = _e16;
+    let _e17 = phi_45_;
+    if (0u < _e8) {
+        global_1.member[0u] = select(_e17, 65535u, (65535u < _e17));
     }
-    if (1u < _e7) {
-        global_1.member[1u] = 1u;
+    let _e23 = (_e17 / 65535u);
+    if ((_e17 % 65535u) > 0u) {
+        phi_72_ = (_e23 + 1u);
+    } else {
+        phi_72_ = _e23;
     }
-    if (2u < _e7) {
+    let _e28 = phi_72_;
+    if (1u < _e8) {
+        global_1.member[1u] = _e28;
+    }
+    if (2u < _e8) {
         global_1.member[2u] = 1u;
     }
     return;

@@ -829,10 +829,12 @@ struct CastBuffers {
     /// for `seen_room` pixels' misses; the pixels the cast's reading walk
     /// missed walked again (`miss_cs`) by the dispatch `args_cs` writes into
     /// `args` over its own group; the pyramid forgotten (`forget_cs`) where
-    /// what the world's query reads changed since the last cast (`forget`),
-    /// as this frame's cast does (`forgets`). `frame` numbers the casts since
-    /// it was last forgotten, and `cuts` are the preview's cuts it was asked
-    /// with.
+    /// what the world's query reads changed since the last cast: all of it
+    /// (`forget`), or the nodes over the eye's windows' slots that moved
+    /// (`moved`, a bit a slot, against the slots as `slots` last held them);
+    /// as this frame's cast does (`forgets`, pxl-portable
+    /// `observed::FORGETS`). `frame` numbers the casts since it was last
+    /// forgotten whole, and `cuts` are the preview's cuts it was asked with.
     miss_built: Built,
     args_built: Built,
     forget_built: Built,
@@ -842,7 +844,9 @@ struct CastBuffers {
     args_group: u32,
     frame: u32,
     forget: bool,
-    forgets: bool,
+    moved: [u32; observed::MOVED_WORDS as usize],
+    slots: Vec<i32>,
+    forgets: u32,
     cuts: [u32; eye::CUTS],
     /// The eye's windows folded over their squares (`joined_cs`), over its
     /// group, the window buffer's rows past their slot table
@@ -1145,7 +1149,9 @@ impl RaysPass {
             args_group: 0,
             frame: 0,
             forget: true,
-            forgets: false,
+            moved: [0; observed::MOVED_WORDS as usize],
+            slots: Vec::new(),
+            forgets: observed::FORGETS_NONE,
             cuts: [0; eye::CUTS],
             joined_built,
             joined_read: buffer(word_bytes(window::EYE_JOINED_WORDS as usize), buffer_usage::MAP_READ | buffer_usage::COPY_DST),
@@ -1300,20 +1306,47 @@ impl RaysPass {
         // is placed, a preview's cuts. What the observed pyramid kept is
         // forgotten; so it is once its frames would outrun a key's tag.
         let cuts: [u32; eye::CUTS] = cast.eye[eye::CARVE..eye::CARVE + eye::CUTS].try_into().or_bug(Errno::ENOTRECOVERABLE);
-        c.forget |= window_moved || fresh != 0 || shards_moved || shards_grow || overwrites_moved || cuts != c.cuts || c.frame >= observed::FRAMES;
+        c.forget |= shards_moved || shards_grow || overwrites_moved || cuts != c.cuts || c.frame >= observed::FRAMES;
         c.cuts = cuts;
-        c.forgets = self.kind == FrameKind::cast && c.forget;
-        if self.kind == FrameKind::cast {
-            // The head before the frame's dispatches: no tile taken and the
-            // first frame where it is forgotten, else the next frame; no
-            // pixel missed.
-            c.frame = if c.forgets { 1 } else { c.frame + 1 };
-            if c.forgets {
-                g.write_buffer(c.seen, 0, bytes(&[0u32, c.frame, 0, 0]));
-            } else {
-                g.write_buffer(c.seen, word_bytes(observed::FRAME as usize), bytes(&[c.frame, 0]));
+        // The eye's windows' slots that hold another square, or whose square
+        // the turn handed: what is over them is asked again.
+        let eye_rows = (window::EYE_WINDOWS * window::SLOTS) as usize;
+        if window_moved {
+            let rows = &cast.window[..4 * eye_rows];
+            for k in 0..eye_rows {
+                if c.slots.get(4 * k..4 * k + 4) != Some(&rows[4 * k..4 * k + 4]) {
+                    c.moved[k / 32] |= 1 << (k % 32);
+                }
             }
-            c.forget = false;
+            c.slots.clear();
+            c.slots.extend_from_slice(rows);
+        }
+        if let Some(gb) = self.ground.as_ref() {
+            for &s in &gb.handed[..fresh as usize] {
+                if (s as usize) < eye_rows {
+                    c.moved[s as usize / 32] |= 1 << (s % 32);
+                }
+            }
+        }
+        if self.kind == FrameKind::cast {
+            c.forgets = if c.forget {
+                observed::FORGETS_ALL
+            } else if c.moved.iter().any(|&m| m != 0) {
+                observed::FORGETS_MOVED
+            } else {
+                observed::FORGETS_NONE
+            };
+            // The head before the frame's dispatches: what it forgets and over
+            // which slots; forgotten whole, no tile taken and its first frame,
+            // else the next frame; no pixel missed.
+            let mut head = [0u32; observed::HEAD_WORDS as usize];
+            c.frame = if c.forgets == observed::FORGETS_ALL { 1 } else { c.frame + 1 };
+            head[observed::FRAME as usize] = c.frame;
+            head[observed::FORGETS as usize] = c.forgets;
+            head[observed::MOVED_AT as usize..].copy_from_slice(&c.moved);
+            let from = if c.forgets == observed::FORGETS_ALL { 0 } else { observed::FRAME as usize };
+            g.write_buffer(c.seen, word_bytes(from), bytes(&head[from..]));
+            (c.forget, c.moved) = (false, [0; observed::MOVED_WORDS as usize]);
         }
         let bound = [c.eye, c.window, ground, rays.0, looks, c.shards, c.overwrites, pool, c.beams, c.seen];
         if bound != c.bound {
@@ -1506,7 +1539,7 @@ impl RaysPass {
             // (pxl-portable `observed`).
             let pass = g.compute_pass(encoder, stamps[SPAN_CAST].pass());
             g.set_bind_group(pass, 0, c.group, &[]);
-            if c.forgets {
+            if c.forgets != observed::FORGETS_NONE {
                 g.set_pipeline(pass, c.forget_built.pipeline);
                 g.dispatch(pass, observed::ENTRIES.div_ceil(compute::FORGET_WORKGROUP[0]), 1, 1);
             }

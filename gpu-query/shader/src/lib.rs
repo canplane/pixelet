@@ -402,7 +402,7 @@ impl Query for Reading<'_> {
             return observed::NONE;
         }
         let c = seen_at(self.seen, observed::entry_at(*parent) + observed::W_CHILDREN);
-        if c == 0 {
+        if c == 0 || c == observed::CLAIMED {
             observed::NONE
         } else {
             observed::child(c - 1, observed::octant(node))
@@ -443,19 +443,29 @@ struct Writing<'a, L> {
 
 impl<L: Looks> Writing<'_, L> {
     /// The entry of `parent`'s child `oct`, its tile taken where it has
-    /// none, none where no tile is left.
+    /// none: claimed first by one compare-and-swap, so one walk of the many
+    /// that reach a node at once takes a tile, and the rest walk on under
+    /// it with none kept; none where no tile is left.
     fn tile(&mut self, parent: u32, oct: u32) -> u32 {
         let w = observed::entry_at(parent) + observed::W_CHILDREN;
         let c = seen_load(self.seen, w);
+        if c == observed::CLAIMED {
+            return observed::NONE;
+        }
         if c != 0 {
             return observed::child(c - 1, oct);
         }
+        let was = seen_swap(self.seen, w, 0, observed::CLAIMED);
+        if was != 0 {
+            return if was == observed::CLAIMED { observed::NONE } else { observed::child(was - 1, oct) };
+        }
         let t = seen_add(self.seen, observed::NEXT_TILE, 1);
         if t >= observed::TILES {
+            seen_store(self.seen, w, 0);
             return observed::NONE;
         }
-        let was = seen_swap(self.seen, w, 0, t + 1);
-        observed::child(if was == 0 { t } else { was - 1 }, oct)
+        seen_store(self.seen, w, t + 1);
+        observed::child(t, oct)
     }
 }
 
@@ -495,6 +505,9 @@ impl<L: Looks> Query for Writing<'_, L> {
             seen_put(self.seen, a + 2, words[2]);
             seen_put(self.seen, a + 3, words[3]);
             seen_put(self.seen, a + 4, words[4]);
+            seen_put(self.seen, w + observed::W_NODE, zoom);
+            seen_put(self.seen, w + observed::W_NODE + 1, c[0] as u32);
+            seen_put(self.seen, w + observed::W_NODE + 2, c[1] as u32);
             seen_store(self.seen, w, observed::key(self.tag, asked));
         }
         answer
@@ -714,16 +727,20 @@ pub fn cast_cs(
 }
 
 /// The dispatch `miss_cs` runs by, off how many pixels missed: a workgroup
-/// each `MISS_THREADS` of them (`dispatch_indirect`'s three words).
+/// each `MISS_THREADS` of them, in rows of `MISS_ROW` workgroups, as no
+/// dispatch is wider than WebGPU's floor of 65,535 a side
+/// (`dispatch_indirect`'s three words).
 #[spirv(compute(threads(1, 1, 1)))]
 pub fn args_cs(#[spirv(storage_buffer, descriptor_set = 0, binding = 0)] seen: &Seen, #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] args: &mut [u32]) {
-    put(args, 0, seen_at(seen, observed::MISSES).div_ceil(MISS_THREADS));
-    put(args, 1, 1);
+    let groups = seen_at(seen, observed::MISSES).div_ceil(MISS_THREADS);
+    put(args, 0, groups.min(MISS_ROW));
+    put(args, 1, groups.div_ceil(MISS_ROW));
     put(args, 2, 1);
 }
 
-/// `miss_cs`'s threads a workgroup.
+/// `miss_cs`'s threads a workgroup, and its workgroups a row.
 const MISS_THREADS: u32 = 64;
+const MISS_ROW: u32 = 65_535;
 
 /// Each pixel `cast_cs` listed, its ray again from its cell's start,
 /// writing what it asks into the observed pyramid (`Writing`): a thread a
@@ -744,10 +761,11 @@ pub fn miss_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
     let (window, beams): (&[IVec4], &[u32]) = (window, beams);
-    if id.x >= seen_at(seen, observed::MISSES) {
+    let k = id.y * MISS_ROW * MISS_THREADS + id.x;
+    if k >= seen_at(seen, observed::MISSES) {
         return;
     }
-    let listed = seen_at(seen, observed::LIST_AT + id.x);
+    let listed = seen_at(seen, observed::LIST_AT + k);
     let p = UVec3::new(listed & 0xffff, listed >> 16, 0);
     let (origin, detail) = eye_origin(eye);
     let (ray, t, line) = started(eye, beams, p, rays.query_size());
@@ -769,17 +787,35 @@ pub fn miss_cs(
     written(rays, p, word(&ray, met, eye.origin.w != 0));
 }
 
-/// What the observed pyramid kept forgotten, a thread an entry: its key and
-/// its children's tile cleared, where what the world's query reads changed
-/// (pxl-portable `observed`).
+/// What the observed pyramid kept forgotten, a thread an entry, where what
+/// the world's query reads changed (pxl-portable `observed::FORGETS`): every
+/// entry's key and its children's tile, or the key of each entry over a
+/// square that moved (`observed::forgets`), its children kept for the walk
+/// that asks it again.
 #[spirv(compute(threads(64, 1, 1)))]
 pub fn forget_cs(#[spirv(global_invocation_id)] id: UVec3, #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen) {
     if id.x >= observed::ENTRIES {
         return;
     }
     let w = observed::entry_at(id.x);
-    seen_put(seen, w + observed::W_KEY, 0);
-    seen_put(seen, w + observed::W_CHILDREN, 0);
+    if seen_at(seen, observed::FORGETS) == observed::FORGETS_ALL {
+        seen_put(seen, w + observed::W_KEY, 0);
+        seen_put(seen, w + observed::W_CHILDREN, 0);
+        return;
+    }
+    if seen_at(seen, w + observed::W_KEY) == 0 {
+        return;
+    }
+    let (zoom, x, y) = (seen_at(seen, w + observed::W_NODE), seen_at(seen, w + observed::W_NODE + 1) as i32, seen_at(seen, w + observed::W_NODE + 2) as i32);
+    let mut moved = [0; observed::MOVED_WORDS as usize];
+    let mut k = 0;
+    while k < observed::MOVED_WORDS {
+        moved[k as usize] = seen_at(seen, observed::MOVED_AT + k);
+        k += 1;
+    }
+    if observed::forgets(&moved, zoom, [x, y]) {
+        seen_put(seen, w + observed::W_KEY, 0);
+    }
 }
 
 /// The eye's windows folded over their squares, a thread an entry

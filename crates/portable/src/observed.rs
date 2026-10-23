@@ -14,28 +14,44 @@
 //! One buffer of words:
 //!
 //! - its head: the next free tile, the frame's number, the pixels that
-//!   missed (`HEAD_WORDS`);
+//!   missed, what is forgotten, and the eye's windows' slots that moved
+//!   (`HEAD_WORDS`);
 //! - the entries, the roots' and then the tiles' (`ENTRIES_AT`);
 //! - the pixels that missed, a word each (`LIST_AT`).
 //!
 //! An entry is its key, which says it is held — the walk that wrote it, by
 //! its frame and its pass (`tag`), and the zooms it was asked at — then the
 //! answer's kind and block, what was handed the node after it was asked
-//! (`world::At::words`), and its children's tile, taken once, by one
-//! compare-and-swap. A key is one word, so a reader that trusts it trusts
+//! (`world::At::words`), its children's tile, taken once, by one
+//! compare-and-swap, and the node, its zoom and its column (`forgets`). A key is one word, so a reader that trusts it trusts
 //! words no walk of its frame writes again: a walk writes an entry only
 //! where its key does not say what that walk asks.
 
 use crate::answer::Kind;
+use crate::window::{eye_cell, slot, ACROSS, EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
 use crate::world::AT_WORDS;
 use crate::Zoom;
 
-/// The head's words: the next free tile, the frame's number, and how many
-/// pixels missed.
+/// The head's words: the next free tile, the frame's number, how many
+/// pixels missed, what this frame forgets (`FORGETS_NONE`, `FORGETS_ALL`,
+/// `FORGETS_MOVED`), and a bit a slot of the eye's windows, a window's
+/// `SLOTS` bits in turn, set where the square it holds moved or was handed
+/// since the last cast.
 pub const NEXT_TILE: u32 = 0;
 pub const FRAME: u32 = 1;
 pub const MISSES: u32 = 2;
-pub const HEAD_WORDS: u32 = 4;
+pub const FORGETS: u32 = 3;
+pub const MOVED_AT: u32 = 4;
+pub const MOVED_WORDS: u32 = (EYE_WINDOWS * SLOTS).div_ceil(32);
+pub const HEAD_WORDS: u32 = MOVED_AT + MOVED_WORDS;
+
+/// What a frame forgets: nothing; everything, where what every node is
+/// asked of moved (the service area, what is placed, a preview's cuts) or
+/// the keys' frames ran out; the nodes over the squares that moved
+/// (`forgets`).
+pub const FORGETS_NONE: u32 = 0;
+pub const FORGETS_ALL: u32 = 1;
+pub const FORGETS_MOVED: u32 = 2;
 
 /// The roots' slots, by a root's index's parity on each axis (`keeps`).
 pub const ROOTS: u32 = 8;
@@ -46,7 +62,8 @@ pub const W_KIND: u32 = 1;
 pub const W_BLOCK: u32 = 2;
 pub const W_AT: u32 = 4;
 pub const W_CHILDREN: u32 = W_AT + AT_WORDS;
-pub const ENTRY_WORDS: u32 = W_CHILDREN + 1;
+pub const W_NODE: u32 = W_CHILDREN + 1;
+pub const ENTRY_WORDS: u32 = W_NODE + 3;
 
 /// The tiles: a compromise, room enough for many frames of the about 80
 /// thousand nodes a frame at E120 asks (cache/pool-probe.scratch.rs); past
@@ -58,6 +75,9 @@ pub const LIST_AT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
 
 /// No entry: a node no tile keeps.
 pub const NONE: u32 = u32::MAX;
+
+/// A children's word one walk has claimed and not yet given its tile.
+pub const CLAIMED: u32 = u32::MAX;
 
 /// The frames one clearing's keys tell apart (`tag`), before the next.
 pub const FRAMES: u32 = (1 << 19) - 1;
@@ -119,6 +139,63 @@ pub const fn kind_of(w: u32) -> Kind {
     } else {
         Kind::Lacks
     }
+}
+
+/// Whether the node of `zoom` at column `[x, y]` reads a square that moved,
+/// `moved` the moved slots' words (`MOVED_AT`), as a walk holds them, never
+/// a closure over the buffer, which rust-gpu reads wrongly: a node's answer reads
+/// the squares under it alone — its cells' and their windows' over them
+/// (`window::step`), a wider node's the block of squares its own size
+/// (`window::bounded`) — and what was handed it found its cells there, so a
+/// node no moved square lies under answers as it did. A node a window's
+/// whole side wide or wider reads every slot of the window.
+pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]) -> bool {
+    let mut w = 0;
+    while w < EYE_WINDOWS {
+        let c = eye_cell(w);
+        // The node's cells at the window's zoom, first and last, then its
+        // squares.
+        let (lo, hi) = if zoom <= c {
+            let s = c - zoom;
+            ([x << s, y << s], [((x + 1) << s) - 1, ((y + 1) << s) - 1])
+        } else {
+            let s = zoom - c;
+            ([x >> s, y >> s], [x >> s, y >> s])
+        };
+        let (q0, q1) = ([lo[0] >> SQUARE_SHIFT, lo[1] >> SQUARE_SHIFT], [hi[0] >> SQUARE_SHIFT, hi[1] >> SQUARE_SHIFT]);
+        // As wide as the window or wider, every slot; else each square.
+        let wide = q1[0] - q0[0] + 1 >= ACROSS as i32 || q1[1] - q0[1] + 1 >= ACROSS as i32;
+        if wide {
+            let mut k = 0;
+            while k < SLOTS {
+                if moved_in(moved, w, k) {
+                    return true;
+                }
+                k += 1;
+            }
+        } else {
+            let mut qy = q0[1];
+            while qy <= q1[1] {
+                let mut qx = q0[0];
+                while qx <= q1[0] {
+                    if moved_in(moved, w, slot([qx, qy])) {
+                        return true;
+                    }
+                    qx += 1;
+                }
+                qy += 1;
+            }
+        }
+        w += 1;
+    }
+    false
+}
+
+/// Whether slot `slot` of the eye's window `w` moved, among the moved
+/// slots' words.
+pub const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, slot: u32) -> bool {
+    let k = w * SLOTS + slot;
+    moved[(k / 32) as usize] & 1 << (k % 32) != 0
 }
 
 const _: () = assert!(crate::FINEST_ZOOM < 64, "a key holds a zoom in six bits");
