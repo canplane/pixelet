@@ -160,6 +160,12 @@ function buildStamp(): Plugin {
  * table is read once, as the server starts, so an enum declared since, or a
  * member added to one, is the same error, saying the server has to be
  * restarted.
+ *
+ * A file of the tree outside this root (xpute/ts) is one the Deno resolver
+ * hands back as a virtual module its loader has already emitted, every enum
+ * an object by then; such a file is read from its own path instead, as one
+ * inside the root is. A file that declares enums and reaches the transform
+ * without its declarations is a build error.
  */
 function constEnum(roots: string[], root: string): Plugin {
   type Members = Map<string, number | string>;
@@ -178,8 +184,10 @@ function constEnum(roots: string[], root: string): Plugin {
   // against the file itself, so that is what is kept.
   const sourceOf = (id: string) => {
     const plain = id.split("?")[0].split("#")[0];
-    return plain.slice(plain.lastIndexOf("::") + (plain.includes("::") ? 2 : 0)).replace(/^\0/, "").replace(/^file:\/\//, "");
+    const at = plain.lastIndexOf("::");
+    return path.resolve(at < 0 ? plain : plain.slice(at + 2).replace(/^file:\/\//, ""));
   };
+  const declares = (file: string) => table.exported.has(file) || table.local.has(file);
   const IMPORT = /import\s*(?:type\s+)?\{([^}]*)\}\s*from\s*(['"][^'"]+['"])\s*;?/g;
   const items = (clause: string) =>
     clause
@@ -195,10 +203,16 @@ function constEnum(roots: string[], root: string): Plugin {
     name: "const-enum",
     // Before the transpiler reaches the types: the declarations are still here.
     enforce: "pre",
+    async resolveId(id, importer, options) {
+      const resolved = await this.resolve(id, importer, { ...options, skipSelf: true });
+      if (resolved === null || !resolved.id.startsWith("\0deno::")) return null;
+      const file = sourceOf(resolved.id);
+      return /\.tsx?$/.test(file) && roots.some((r) => file.startsWith(r + path.sep)) ? file : null;
+    },
     transform(code, id) {
-      const file = sourceOf(id);
-      if (!/\.tsx?$/.test(file) || id.includes("node_modules")) return null;
-      const at = path.resolve(file);
+      const at = sourceOf(id);
+      if (!/\.tsx?$/.test(at) || id.includes("node_modules")) return null;
+      if (declares(at) && code.search(DECL) < 0) throw new Error(`const-enum: ${at} reached the bundler with its enums already emitted (${id})`);
       for (const [, isExported, name] of code.matchAll(DECL)) {
         if (!(isExported ? table.exported : table.local).get(at)?.has(name)) throw new Error(`${stale(`const enum ${name}`, restart)} (${id})`);
       }
