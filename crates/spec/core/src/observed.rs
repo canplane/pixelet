@@ -1,7 +1,6 @@
 // pxl-spec-core/observed.rs
 
-//! gpu-portable: the observed pyramid, as a GPU holds it
-//! (cache/design-node-pool.md until it is a record): the nodes the eye's
+//! gpu-portable: the observed pyramid, as a GPU holds it: the nodes the eye's
 //! rays asked about, each the world's one query's answer at the zooms it
 //! was asked at and what was handed it after, so a node is asked once, not
 //! once a ray. Present only where a ray asked; every node's parent present,
@@ -74,7 +73,7 @@ pub const W_NODE: u32 = W_CHILDREN + 1;
 pub const ENTRY_WORDS: u32 = W_NODE + 3;
 
 /// The tiles: a compromise, room enough for many frames of the about 80
-/// thousand nodes a frame at E120 asks (cache/pool-probe.scratch.rs); past
+/// thousand nodes a frame at E120 asks (a probe's count, not kept); past
 /// it a node is asked again each time, as no tile is left to keep it in.
 pub const TILES: u32 = 1 << 16;
 pub const ENTRIES: u32 = ROOTS + 8 * TILES;

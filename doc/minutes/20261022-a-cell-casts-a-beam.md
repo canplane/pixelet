@@ -172,7 +172,7 @@ the screen pass that paints it.
   (`cast::holding`).
 
 Counted on the CPU over the r12 tiles at E120, the canvas 2528 × 2226 and
-τ 1 (`cache/beam-probe.scratch.rs`, kept aside), every ray of the frame
+τ 1 (a probe, not kept), every ray of the frame
 walked both ways:
 
 |                                                |             |

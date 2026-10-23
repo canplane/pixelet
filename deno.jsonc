@@ -10,7 +10,7 @@
 
   // Vite's deps cache and the trees of generated or downloaded data are no workspace source;
   // xpute/ is its own workspace, reached through the import map below.
-  "exclude": ["xpute/", "**/.vite/", "**/dist/", "**/node_modules/", "out/", "cache/", "infra/geo/elevation/warped/"],
+  "exclude": ["xpute/", "**/.vite/", "**/dist/", "**/node_modules/", "out/", "infra/geo/elevation/warped/"],
 
   "tasks": {
     // Run here. Where the tiles come from, a bakery's three: `dev` has them
@@ -35,7 +35,7 @@
     "preview:shelf": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile --shelf ./out) & (deno task --cwd apps/web preview:shelf) & wait\"",
     // A purge by command, after a re-ingest or a bake change: the oven's cache
     // whole; the shelf's sets, each kind named or all three, with what is staged.
-    "clear:oven": "rm -rf cache/tile",
+    "clear:oven": "rm -rf out/oven",
     "clear:shelf": "sh -c '[ $# -gt 0 ] || set -- terrain place division; for k; do rm -rf \"out/$k\" \"out/$k.stage\" \"out/$k.publish\"; done' --",
 
     // What makes the repository's data, a binary each (script/tool.ts):

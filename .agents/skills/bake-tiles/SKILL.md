@@ -236,7 +236,7 @@ Only a change to **how the client reads a tile** — its format in
 `pxl-spec bake/` — bumps the kind's `FORMAT`.
 
 The local tile server shares one demand path across the terrain, place and division layers
-(`geo-bake/src/demand/`). `--cache` is the parent directory, default `cache/tile`;
+(`geo-bake/src/demand/`). `--cache` is the parent directory, default `out/oven`;
 each kind owns a directory under it. Concurrent requests join the
 same job, packets are written atomically, and responses carry zstd encoding.
 All three kinds share the server's `--workers` execution slots (default 4)
@@ -260,5 +260,5 @@ one folds the whole zoom under it on first request, and a tile a client
 asks for takes a worker before one a fold alone needs. Divisions' leaves are z12, so its top is as
 many zooms over them (`tile.rs` `top_over`).
 The common job limits apply to all of them.
-A tile is cached under `cache/tile/<kind>/` and kept across restarts. A
+A tile is cached under `out/oven/<kind>/` and kept across restarts. A
 re-ingest or a bake change is a purge by command: `deno task clear:oven`.

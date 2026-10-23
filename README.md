@@ -221,7 +221,7 @@ A crate's root holds its modules, the directories sorted by kind and the one-fil
 | leaves             | `setting` `model` `decor` `billboard` `param` `approach` |
 | beside             | `profiler`                                               |
 
-Two gitignored trees hold what the tree makes, each for one reader: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and `cache/` is what `dev:oven` bakes on demand, deleted at no cost. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
+One gitignored tree holds what the tree makes: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and under it `out/oven/` is what `dev:oven` bakes on demand, deleted at no cost. Scratch — logs, probes, diffs — goes in `tmp/`, which ignores itself, and is deleted when done. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 
 The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's host (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 

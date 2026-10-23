@@ -18,13 +18,13 @@ visit may compose the query whole.
 
 - **Visits are already log n.** At E120 (dpr 2, 8,129,352 rays) a ray
   visits 18 nodes on average. That is 1.46 × 10⁸ visits in a cast of about
-  105 ms (`out/walk-ab-log`, `45a52595a`).
+  105 ms (`45a52595a`; the log was not kept).
 - **A visit is heavy.**
   - On the M1 Max (4,096 lanes, about 1.3 GHz) that is about 3,800
     lane-cycles a visit.
   - The cast's walk loop compiles to 4,697 MSL lines: 3,135 statements and
-    44 buffer read sites a pass (`cache/lead-msl/walk.metal`, lines
-    1333–6029).
+    44 buffer read sites a pass (the walk's MSL, lines 1333–6029, not
+    kept).
   - A SIMD group runs every branch any of its lanes takes, so a visit costs
     about that whole body.
 - **The budget.**
@@ -217,11 +217,10 @@ The E120 eye's rays were walked on the CPU over the r12 tiles
 `cast::first_from` a ray, and `world::node`. The view was dpr 2,
 3652 × 2226 = 8,129,352 rays. Each visit's key was recorded: the node, the
 `near` the walk asks, and `far` at the node's farthest point from the eye.
-The log is `out/b-cost-log`, and the probe is kept aside in `cache/`
-(`b-cost-probe.patch`).
+Neither the log nor the probe was kept.
 
 - **The walk matches the GPU's.** A ray visits 18.00 nodes on average,
-  where the GPU's cast decodes 18.0 at E120 (`out/walk-ab-log`).
+  where the GPU's cast decodes 18.0 at E120 (the same walk log).
 - **The table is small.** A frame's 146,351,342 visits read 68,677
   distinct keys, so each key is visited about 2,100 times a frame.
   - The camera grid's cell spans about twelve drawn pixels
