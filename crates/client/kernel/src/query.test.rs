@@ -225,7 +225,9 @@ fn a_ray_from_over_the_world_meets_the_ground_where_its_line_does() {
         direction: [0.0, 0.0, -1.0],
         reach: 2.0 * high,
     };
-    let hit = access.first_hit(&over, at_zoom(LEAF_ZOOM)).value().flatten().unwrap();
+    let met = access.first_hit(&over, at_zoom(LEAF_ZOOM));
+    assert!(matches!(met, Answer::Exact(_)), "{met:?}");
+    let hit = met.value().flatten().unwrap();
     assert_eq!([hit.point[2], hit.t], [top, high - top], "{hit:?}");
 }
 
