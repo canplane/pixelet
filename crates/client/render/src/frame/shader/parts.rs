@@ -92,68 +92,31 @@ pub const SHADER_FORGET: u32 = 44;
 pub const SHADER_SAMPLE: u32 = 45;
 pub const SHADERS: u32 = 46;
 
+/// The air as the frame's shaders read it: its medium, its tables and the
+/// sky, the eye in it, the march through it, its light and the view
+/// through it, between a shader's own parts before and after.
+macro_rules! air {
+    [$($before:literal),*; $($after:literal),*] => {
+        &[$($before,)* "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_eye", "atmos_march", "atmos_light", "atmos_view", $($after),*]
+    };
+}
+
+/// What a lit draw reads before its own parts: the frame, the air and the
+/// volume before each point, the ground's light, the shading, the finish
+/// and the screen's occlusion.
+macro_rules! lit {
+    [$($own:literal),*] => {
+        air!["frame", "encode"; "atmos_air", "atmos_ground", "shade", "finish", "ao_map", $($own),*]
+    };
+}
+
 pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
-    &[
-        "frame",
-        "encode",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "shade",
-        "finish",
-        "ao_map",
-        "paint",
-        "box",
-    ],
+    lit!["paint", "box"],
     // SHADER_DECOR
-    &[
-        "frame",
-        "encode",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "shade",
-        "finish",
-        "ao_map",
-        "place",
-        "instances",
-        "decor",
-    ],
+    lit!["place", "instances", "decor"],
     // SHADER_SKINNED
-    &[
-        "frame",
-        "encode",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "shade",
-        "finish",
-        "ao_map",
-        "place",
-        "skinned",
-    ],
+    lit!["place", "skinned"],
     // SHADER_PUCK_ZONE
     &["frame", "encode", "finish", "puck", "puck_zone"],
     // SHADER_PUCK_BEACON
@@ -161,24 +124,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BADGE
     &["frame", "encode", "badge", "badge_sprite"],
     // SHADER_SKY
-    &[
-        "frame",
-        "encode",
-        "finish",
-        "dither",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "sky_words",
-        "sky",
-    ],
+    air!["frame", "encode", "finish", "dither"; "atmos_air", "atmos_ground", "sky_words", "sky"],
     // SHADER_DEBUG
     &["frame", "encode", "debug"],
     // SHADER_MIPS
@@ -228,49 +174,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_STARS
     &["frame", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "stars"],
     // SHADER_CLOUDS
-    &[
-        "frame",
-        "encode",
-        "finish",
-        "noise",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_ground",
-        "cloud_tile",
-        "cloud_field",
-        "sky_words",
-        "clouds",
-    ],
+    air!["frame", "encode", "finish", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "sky_words", "clouds"],
     // SHADER_CLOUD_FIELD
     &["noise", "cloud_tile", "atmos_pass", "cloud_bake"],
     // SHADER_SHEET
     &["sheet"],
     // SHADER_IMPOSTOR
-    &[
-        "frame",
-        "encode",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "shade",
-        "finish",
-        "ao_map",
-        "instances",
-        "impostor",
-    ],
+    lit!["instances", "impostor"],
     // SHADER_IMPOSTOR_BAKE
     &["impostor_bake"],
     // SHADER_ATMOS_IRRADIANCE
@@ -278,28 +188,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BADGE_REGION
     &["frame", "encode", "badge", "badge_region"],
     // SHADER_SCREEN_RAYS
-    &[
-        "frame",
-        "encode",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_sky",
-        "atmos_eye",
-        "atmos_march",
-        "atmos_light",
-        "atmos_view",
-        "atmos_air",
-        "atmos_ground",
-        "shade",
-        "finish",
-        "ao_map",
-        "lattice",
-        "ray",
-        "eye",
-        "paint",
-        "screen_rays",
-    ],
+    lit!["lattice", "ray", "eye", "paint", "screen_rays"],
     // SHADER_CAST
     &["cast.gen"],
     // SHADER_BOUND
