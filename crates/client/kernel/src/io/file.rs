@@ -55,11 +55,12 @@ pub const PATH_BYTES: usize = {
     most
 };
 
+/// `Load` is an asset's file, read as a model or an image as its attempt's
+/// subject says.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Owner {
     Fetch { key: u64, at_ms: f64 },
-    Model { key: u64 },
-    Image { key: u64 },
+    Load { key: u64 },
     Kept(Kept),
     Write,
 }
@@ -282,8 +283,7 @@ pub fn opened(fd: Fd, res: i32, detail: u32) {
     }
     match owner {
         Owner::Fetch { key, at_ms } => crate::io::fetch::opened(fd, key, at_ms, opened),
-        Owner::Model { key } => crate::io::load::model_opened(fd, key, opened),
-        Owner::Image { key } => crate::io::load::image_opened(fd, key, opened),
+        Owner::Load { key } => crate::io::load::opened(fd, key, opened),
         Owner::Kept(kept) => kept_opened(kept, fd, opened),
         Owner::Write => {}
     }

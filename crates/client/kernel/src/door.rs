@@ -268,8 +268,8 @@ fn post_shell(s: &mut State) {
     take_started(|credit, stream, subject| match stream.bake() {
         Some(_) => crate::io::fetch::start(credit, stream, subject),
         None => {
-            if let Some((kind, load)) = crate::io::load::of_subject(subject) {
-                crate::io::load::open_asset(credit, kind, load);
+            if let Some((_, load)) = crate::io::load::of_subject(subject) {
+                crate::io::load::open_asset(credit, load);
             }
         }
     });
