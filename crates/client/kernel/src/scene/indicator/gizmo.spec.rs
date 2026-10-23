@@ -51,20 +51,26 @@ pub mod coverage {
         pub const dashed: bool = false;
         pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
     }
-    pub mod coarser {
+    pub mod drawn_from_floor {
         pub const rgb: u32 = 0x00ffff;
         pub const alpha: f32 = 0.6;
         pub const dashed: bool = false;
         pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
     }
-    pub mod no_tile {
-        pub const rgb: u32 = 0xff0000;
+    pub mod unbuilt {
+        pub const rgb: u32 = 0xffff00;
         pub const alpha: f32 = 0.6;
         pub const dashed: bool = true;
         pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
     }
-    pub mod wanted {
-        pub const rgb: u32 = 0xffff00;
+    pub mod floor_only {
+        pub const rgb: u32 = 0xff00ff;
+        pub const alpha: f32 = 0.6;
+        pub const dashed: bool = true;
+        pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
+    }
+    pub mod no_tile {
+        pub const rgb: u32 = 0xff0000;
         pub const alpha: f32 = 0.6;
         pub const dashed: bool = true;
         pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
@@ -81,5 +87,5 @@ pub mod coverage {
         pub const dashed: bool = false;
         pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
     }
-    pub const KEYS: &[&str] = &["drawn", "coarser", "no_tile", "wanted", "tile", "shard"];
+    pub const KEYS: &[&str] = &["drawn", "drawn_from_floor", "unbuilt", "floor_only", "no_tile", "tile", "shard"];
 }

@@ -36,18 +36,23 @@ export const coverage = {
     alpha: 0.4 as number,
     dashed: false,
   },
-  coarser: {
+  drawn_from_floor: {
     rgb: 0x00ffff,
     alpha: 0.6 as number,
     dashed: false,
   },
-  no_tile: {
-    rgb: 0xff0000,
+  unbuilt: {
+    rgb: 0xffff00,
     alpha: 0.6 as number,
     dashed: true,
   },
-  wanted: {
-    rgb: 0xffff00,
+  floor_only: {
+    rgb: 0xff00ff,
+    alpha: 0.6 as number,
+    dashed: true,
+  },
+  no_tile: {
+    rgb: 0xff0000,
     alpha: 0.6 as number,
     dashed: true,
   },

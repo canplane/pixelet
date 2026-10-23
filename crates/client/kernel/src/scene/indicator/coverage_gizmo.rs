@@ -22,12 +22,10 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
-use pxl_spec_core::area::Shard;
-use pxl_spec_core::window::{self, Slot, EYE_WINDOWS, FIRST_CELL, SLOTS};
-use pxl_spec_core::LEAF_CELL;
+use pxl_spec_core::window::{self, Slot, EYE_WINDOWS, FIRST_CELL, SLOTS, SQUARE_SHIFT};
+use pxl_spec_core::{CHUNK_STEPS, LEAF_CELL};
 use xpute_guest::global::Global;
 
-use crate::io::source::Declared;
 use crate::kernel;
 use crate::layer::terrain::window::{eye_slots, tile_of};
 use crate::layer::Base as _;
@@ -36,22 +34,17 @@ use crate::scene::indicator::gizmo_spec;
 use crate::sched::edge::request_world_tick;
 use crate::view::frame::pose::view;
 use crate::view::lens::tau;
-use crate::view::observation::observation;
+use crate::view::observation::{observation, ByEye};
 
 /// What an edge marks. Its look and its rank are the spec's
 /// (`gizmo_spec::coverage`): a stretch takes the mark of highest rank over it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Mark {
-    /// Present: its cells filled from its own tile.
     Drawn,
-    /// Still to land, a coarser window's square present over it, which the
-    /// cast reads in its place (pxl-spec-core `window::step`).
-    Coarser,
-    /// Past the source: a tile over its own says its ground, so it never
-    /// lands and a coarser square stands in for good.
+    DrawnFromFloor,
+    Unbuilt,
+    FloorOnly,
     NoTile,
-    /// Still to land, nothing present over it.
-    Wanted,
     Tile,
     Shard,
 }
@@ -59,16 +52,17 @@ enum Mark {
 const MARKS: usize = gizmo_spec::coverage::KEYS.len();
 
 impl Mark {
-    const ALL: [Mark; MARKS] = [Mark::Drawn, Mark::Coarser, Mark::NoTile, Mark::Wanted, Mark::Tile, Mark::Shard];
+    const ALL: [Mark; MARKS] = [Mark::Drawn, Mark::DrawnFromFloor, Mark::Unbuilt, Mark::FloorOnly, Mark::NoTile, Mark::Tile, Mark::Shard];
 
     /// Its name in the spec, its color, opacity and dash.
     fn look(self) -> (&'static str, u32, f32, bool) {
         use gizmo_spec::coverage::*;
         match self {
             Mark::Drawn => ("drawn", drawn::rgb, drawn::alpha, drawn::dashed),
-            Mark::Coarser => ("coarser", coarser::rgb, coarser::alpha, coarser::dashed),
+            Mark::DrawnFromFloor => ("drawn_from_floor", drawn_from_floor::rgb, drawn_from_floor::alpha, drawn_from_floor::dashed),
+            Mark::Unbuilt => ("unbuilt", unbuilt::rgb, unbuilt::alpha, unbuilt::dashed),
+            Mark::FloorOnly => ("floor_only", floor_only::rgb, floor_only::alpha, floor_only::dashed),
             Mark::NoTile => ("no_tile", no_tile::rgb, no_tile::alpha, no_tile::dashed),
-            Mark::Wanted => ("wanted", wanted::rgb, wanted::alpha, wanted::dashed),
             Mark::Tile => ("tile", tile::rgb, tile::alpha, tile::dashed),
             Mark::Shard => ("shard", shard::rgb, shard::alpha, shard::dashed),
         }
@@ -111,16 +105,20 @@ struct Outline {
 
 #[derive(Default)]
 struct Coverage {
-    /// What is drawn, and about where; none while hidden.
-    drawn: Option<(Outline, V3)>,
-    /// The lines then the faces, kept so a step allocates nothing once warm.
-    lane: Vec<f32>,
+    /// About where what is drawn is laid; none while hidden.
+    drawn: Option<V3>,
+    /// The lines then the faces, and where the faces begin.
+    lane: (Vec<f32>, usize),
+    /// Those laid this step, kept so their buffer is reused.
+    next: (Vec<f32>, usize),
 }
 
 static COVERAGE: Global<Coverage> = Global::new();
 
-/// Laid again only where what it outlines or where it is laid about moved:
-/// a square landing moves its mark, and the ground under it with it.
+/// Laid each step, and handed on only where its lines or where they are
+/// laid about moved: a square landing moves its mark, and the ground under
+/// it with it. Before the frame's list begins (scene/stage.rs), so its lines
+/// and the origin they are drawn about are the same turn's.
 pub fn coverage_gizmo_step(show: bool) {
     let c = COVERAGE.get(Coverage::default);
     let Some((scene, draw)) = kernel().parts() else { return };
@@ -139,9 +137,6 @@ pub fn coverage_gizmo_step(show: bool) {
     let eye = view().at().eye;
     let about = [(eye[0] / span).floor() * span, (eye[1] / span).floor() * span, 0.0];
     let outline = outline(&o, tau(), top);
-    if c.drawn.as_ref().is_some_and(|(was, at)| *was == outline && *at == about) {
-        return;
-    }
     let mut lines = Lines::default();
     for &(n, mark) in &outline.squares {
         lines.piece(rect(n), mark);
@@ -152,11 +147,14 @@ pub fn coverage_gizmo_step(show: bool) {
     for &s in &outline.shards {
         lines.square(rect(s), Mark::Shard);
     }
-    c.lane.clear();
-    let faces = lines.lay(&mut c.lane, about, &World::now());
-    scene.coverage.set(draw, about, &c.lane, faces);
-    c.drawn = Some((outline, about));
-    request_world_tick();
+    c.next.0.clear();
+    c.next.1 = lines.lay(&mut c.next.0, about, &World::now());
+    if c.drawn != Some(about) || c.next != c.lane {
+        scene.coverage.set(draw, about, &c.next.0, c.next.1);
+        c.drawn = Some(about);
+        core::mem::swap(&mut c.next, &mut c.lane);
+        request_world_tick();
+    }
 }
 
 /// South-west corner and side, in units.
@@ -165,12 +163,17 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
     (q3::to_real(i64::from(base[0])), q3::to_real(i64::from(base[1])), units(zoom))
 }
 
-/// The eye's windows' squares where the eye reads them, finest first: a
-/// square where the zoom its nearest point asks (`Tau::cell_at`, about the
-/// eye's height, as a ray's descent asks) is its window's or finer, within
-/// the reach, and not wholly under the finer window's squares, which are
-/// read there instead; none coarser than the source's top, which nothing
-/// asks for.
+/// The goal, as 10-12's chunks cut the ground: each eye window's squares in
+/// pieces a chunk's cells a side (`CHUNK_STEPS`), finest first, a piece
+/// where the zoom its nearest point asks (`Tau::cell_at`, about the eye's
+/// height, as a ray's descent asks) is its window's or finer, within the
+/// reach, and not wholly under the finer window's pieces, which are read
+/// there instead; none coarser than the source's top, which nothing asks
+/// for. A piece is drawn where its square is present, or where a coarser
+/// window's square is, which the cast reads in its place (pxl-spec-core
+/// `window::step`): from the floor where that square's tile is the floor's
+/// alone. One not drawn is marked by its line: no tile on it, only the
+/// floor's, or a tile and its square not yet filled.
 fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
     let held: [Option<[Slot; SLOTS as usize]>; EYE_WINDOWS as usize] = core::array::from_fn(|w| eye_slots(window::eye_cell(w as u32)));
     let present = |cell: Zoom, q: [i32; 2]| held[(cell - FIRST_CELL) as usize].is_some_and(|s| s[window::slot(q) as usize].holds(q));
@@ -182,6 +185,17 @@ fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
         gx * gx + gy * gy + over * over
     };
     let residency = TerrainTile::residency();
+    // The floor's tiles are the top's no demand lines (layer/residency/floor.rs).
+    let mut lined: FnvHashSet<Tile> = FnvHashSet::default();
+    ByEye {
+        tau,
+        lattice: TerrainTile::LATTICE,
+        top,
+    }
+    .requirements(o, &mut |p| {
+        lined.insert(line_top(p, top));
+    });
+    let floor_only = |p: Tile| p.zoom <= top && !lined.contains(&p);
     let mut out = Outline::default();
     let mut read: FnvHashSet<Node2> = FnvHashSet::default();
     for cell in (FIRST_CELL..=LEAF_CELL).rev() {
@@ -190,36 +204,42 @@ fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
         }
         let Some(slots) = held[(cell - FIRST_CELL) as usize] else { continue };
         let zoom = window::squares_zoom(cell);
+        // Each square's pieces, a chunk's cells a side each, as 10-12's goal cut the ground.
+        let k = SQUARE_SHIFT - CHUNK_STEPS;
+        let pz = zoom + k;
         for slot in slots {
             let q = slot.square;
-            let r2 = near(rect((zoom, q)));
-            if r2 > o.reach * o.reach || tau.cell_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell {
-                continue;
-            }
-            read.insert((zoom, q));
-            let under = (0..4).all(|k| read.contains(&(zoom + 1, [2 * q[0] + (k & 1), 2 * q[1] + (k >> 1)])));
-            if under {
-                continue;
-            }
             let tile = tile_of(cell, q).0;
-            let mark = if present(cell, q) {
-                out.tiles.push(tile);
-                if zoom >= SHARD_ZOOM && !Shard::UNKNOWN.at(&Declared, (zoom, q)).past() {
-                    let s = zoom - SHARD_ZOOM;
-                    out.shards.push((SHARD_ZOOM, [q[0] >> s, q[1] >> s]));
+            // The square drawn in its place: its own, or the finest coarser one present.
+            let drawn = (FIRST_CELL..=cell).rev().map(|c| (c, [q[0] >> (cell - c), q[1] >> (cell - c)])).find(|&(c, at)| present(c, at));
+            for i in 0..1i32 << (2 * k) {
+                let p = [(q[0] << k) + (i & ((1 << k) - 1)), (q[1] << k) + (i >> k)];
+                let r2 = near(rect((pz, p)));
+                if r2 > o.reach * o.reach || tau.cell_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell {
+                    continue;
                 }
-                Mark::Drawn
-            } else {
-                let line = residency.line(tile);
-                if line.settled && line.source != Some(tile) {
-                    Mark::NoTile
-                } else if (FIRST_CELL..cell).any(|c| present(c, [q[0] >> (cell - c), q[1] >> (cell - c)])) {
-                    Mark::Coarser
-                } else {
-                    Mark::Wanted
+                read.insert((pz, p));
+                if (0..4).all(|c| read.contains(&(pz + 1, [2 * p[0] + (c & 1), 2 * p[1] + (c >> 1)]))) {
+                    continue;
                 }
-            };
-            out.squares.push(((zoom, q), mark));
+                let mark = match drawn {
+                    Some((c, at)) => {
+                        out.tiles.push(tile);
+                        let s = pz.saturating_sub(SHARD_ZOOM);
+                        out.shards.push((pz.min(SHARD_ZOOM), [p[0] >> s, p[1] >> s]));
+                        match c < cell && floor_only(tile_of(c, at).0) {
+                            true => Mark::DrawnFromFloor,
+                            false => Mark::Drawn,
+                        }
+                    }
+                    None => match residency.line(tile).drawn {
+                        None => Mark::NoTile,
+                        Some(s) if floor_only(s) => Mark::FloorOnly,
+                        Some(_) => Mark::Unbuilt,
+                    },
+                };
+                out.squares.push(((pz, p), mark));
+            }
         }
     }
     out.tiles.sort_unstable();
@@ -227,6 +247,13 @@ fn outline(o: &Observation, tau: Tau, top: Zoom) -> Outline {
     out.shards.sort_unstable();
     out.shards.dedup();
     out
+}
+
+fn line_top(mut p: Tile, top: Zoom) -> Tile {
+    while p.zoom > top {
+        p = p.parent();
+    }
+    p
 }
 
 /// Edges by the line they lie on, its axis (0 along x, 1 along y) and where

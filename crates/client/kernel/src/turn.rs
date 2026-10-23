@@ -28,7 +28,6 @@ use crate::layer::earth::Earth;
 use crate::profiler::report::{profiler_frame, FrameTurn};
 use crate::scene::character::companion::{companion_step, CompanionProps};
 use crate::scene::environment::environment_step;
-use crate::scene::indicator::coverage_gizmo::coverage_gizmo_step;
 use crate::scene::indicator::frame_gizmo::frame_gizmo_step;
 use crate::scene::indicator::location_puck::location_puck_step;
 use crate::scene::stage::{take_draw, visible_step};
@@ -91,7 +90,6 @@ fn world_gizmo_tick(_: &mut TickContext) {
     let show = settings_store().world_gizmo;
     let third_person = crate::control::camera::controller::dist() != 0.0;
     frame_gizmo_step(show && focus.is_some(), focus, third_person.then(crate::control::camera::controller::azimuth));
-    coverage_gizmo_step(show);
 }
 
 /// Each pyramid layer's tiles, from the live eye.

@@ -29,12 +29,13 @@ const FRAME: Record<keyof typeof frame, string> = {
 };
 
 const COVERAGE: Record<keyof typeof coverage, string> = {
-  drawn: "square drawn",
-  coarser: "square to land, coarser drawn",
-  no_tile: "square past the source",
-  wanted: "square to land, nothing drawn",
-  tile: "a drawn square's tile",
-  shard: "a drawn square's shard",
+  drawn: "drawn",
+  drawn_from_floor: "drawn from the floor's tile",
+  unbuilt: "goal, mesh not built",
+  floor_only: "goal, only the floor's tile",
+  no_tile: "goal, no tile on its line",
+  tile: "a drawn piece's tile",
+  shard: "a drawn piece's shard",
 };
 
 const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0")}`;
