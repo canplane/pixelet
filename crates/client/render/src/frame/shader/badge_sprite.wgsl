@@ -3,9 +3,9 @@
 // A billboard's sprite where the region nearest at its anchor is its own
 // (badge.wgsl); one whose anchor is off the screen is drawn.
 
-@group(1) @binding(2) var nearest: texture_2d<f32>;
-@group(2) @binding(0) var sheet: texture_2d<f32>;
-@group(2) @binding(1) var sheet_sampler: sampler;
+@group(2) @binding(1) var nearest: texture_2d<f32>;
+@group(3) @binding(0) var sheet: texture_2d<f32>;
+@group(3) @binding(1) var sheet_sampler: sampler;
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

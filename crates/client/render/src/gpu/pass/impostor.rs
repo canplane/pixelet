@@ -11,7 +11,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, Format, Gpu, Load};
 use crate::gpu::grown::Drawn;
-use crate::gpu::pass::decor::{block_group, uniform_group, DecorPass, GROUPS};
+use crate::gpu::pass::decor::{DecorPass, GROUPS};
 use crate::gpu::pass::model::{draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Blocks;
@@ -39,10 +39,6 @@ pub struct ImpostorPass {
     fit: [[f32; 4]; GROUPS],
     baked: [Option<Baked>; GROUPS],
     wanted: [Option<Baked>; GROUPS],
-    /// The GPU's decor's bind groups (gpu/grown.rs), each with the buffer it
-    /// binds: its regions' draw uniforms and its block.
-    grown_uniforms: (u32, u32),
-    grown_block: (u32, u32),
 }
 
 /// A little room around it so a filtered edge reads nothing past it.
@@ -85,8 +81,6 @@ impl ImpostorPass {
             fit: [[0.0; 4]; GROUPS],
             baked: [None; GROUPS],
             wanted: [None; GROUPS],
-            grown_uniforms: (0, 0),
-            grown_block: (0, 0),
         }
     }
 
@@ -97,7 +91,7 @@ impl ImpostorPass {
     }
 
     /// Whether a group was baked again.
-    pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &mut DecorPass, blocks: &Blocks) -> bool {
+    pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &DecorPass, blocks: &Blocks) -> bool {
         // The groups whose model or extent moved since baked, each once, and
         // whose model has landed: one still landing is due on a later frame,
         // and this one bakes, writes and submits nothing for it.
@@ -160,30 +154,23 @@ impl ImpostorPass {
         });
     }
 
-    /// The GPU's decor's bind groups, made again only where its buffers were.
-    pub fn prepare_grown(&mut self, g: &Gpu, grown: Option<Drawn>) {
-        let Some(d) = grown else { return };
-        self.grown_uniforms = uniform_group(g, self.grown_uniforms, d.uniforms, self.draw.layouts[1]);
-        self.grown_block = block_group(g, self.grown_block, d.block, self.draw.layouts[3]);
-    }
-
     /// The sprites the GPU grew, an indirect draw a group whose layer is
     /// drawn (pxl-spec-core `scatter::drawn`, a group's sprites its region
     /// `2·group + 1`).
     pub fn draw_grown(&self, g: &Gpu, pass: u32, grown: Option<Drawn>, groups: u32, (frame, bound): (u32, &mut u32)) {
-        let Some(d) = grown.filter(|_| self.grown_block.1 != 0) else { return };
+        let Some(d) = grown else { return };
         g.set_pipeline(pass, self.draw.pipeline);
         if *bound != frame {
             g.set_bind_group(pass, 0, frame, &[]);
             *bound = frame;
         }
         g.set_bind_group(pass, 2, self.group, &[]);
-        g.set_bind_group(pass, 3, self.grown_block.1, &[]);
+        g.set_bind_group(pass, 3, d.block_group, &[]);
         for group in 0..groups.min(GROUPS as u32) {
             if self.baked[group as usize].is_none() {
                 continue;
             }
-            g.set_bind_group(pass, 1, self.grown_uniforms.1, &[d.uniform_at(2 * group + 1)]);
+            g.set_bind_group(pass, 1, d.uniform_group, &[d.uniform_at(2 * group + 1)]);
             g.draw_indirect(pass, d.args, d.args_at(2 * group + 1));
         }
     }

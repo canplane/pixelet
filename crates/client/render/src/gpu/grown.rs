@@ -16,10 +16,11 @@ use pxl_spec_core::decor::{COUNTS, DECORS};
 use pxl_spec_core::eye;
 use pxl_spec_core::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
 
+use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::record::compute;
 use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE};
 use crate::frame::shader::words::DRAW_FLOATS;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, release, word_bytes, Gpu};
+use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, bytes, release, word_bytes, Gpu};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Read;
 
@@ -84,6 +85,12 @@ pub struct Grown {
     /// block, `drawn::LANES` lanes and the index list, `room` slots each.
     records: u32,
     block: u32,
+    /// The draws' bind groups over the uniforms, a region's at a dynamic
+    /// offset, and over the block, in the layouts the decor and impostor
+    /// draws share (record.rs `DRAW`, `BLOCK`): made with their buffers.
+    draw_layouts: [u32; 2],
+    uniform_group: u32,
+    block_group: u32,
     room: u32,
     /// The placed decor's records, as last handed.
     placed_count: u32,
@@ -131,6 +138,9 @@ impl Grown {
         // SAFETY: the rows are `repr(C)` words alone (pxl-spec-core decor.spec.rs), read while `table` lives.
         let words = unsafe { core::slice::from_raw_parts(table.as_ptr().cast::<u32>(), core::mem::size_of_val(&table) / 4) };
         g.write_buffer(rows, 0, bytes(words));
+        let drawn_by = pipelines.build(g, PIPELINE_DECOR, g.canvas());
+        let draw_layouts = [drawn_by.layouts[1], drawn_by.layouts[3]];
+        let uniforms = buffer(word_bytes((drawn::UNIFORM_WORDS * drawn::REGIONS) as usize), storage | buffer_usage::UNIFORM);
         Grown {
             mark: pipelines.build_compute(g, SHADER_GROWN_MARK, &compute::DECOR_MARK_GROUP),
             grow: pipelines.build_compute(g, SHADER_GROWN, &compute::DECOR_GROUP),
@@ -146,9 +156,12 @@ impl Grown {
             meshes: buffer(word_bytes(GROUPS as usize), storage),
             regions: buffer(word_bytes(2 * drawn::REGIONS as usize), storage),
             args: buffer(word_bytes((drawn::ARGS_WORDS * drawn::REGIONS) as usize), storage | buffer_usage::INDIRECT),
-            uniforms: buffer(word_bytes((drawn::UNIFORM_WORDS * drawn::REGIONS) as usize), storage | buffer_usage::UNIFORM),
+            uniforms,
             records: 0,
             block: 0,
+            draw_layouts,
+            uniform_group: g.bind_group(draw_layouts[0], &[buffer_range_entry(0, uniforms, 0, word_bytes(DRAW_FLOATS))]),
+            block_group: 0,
             room: 0,
             placed_count: 0,
             bound: [0; 7],
@@ -196,6 +209,8 @@ impl Grown {
             }
             release(records);
             release(block);
+            release(self.block_group);
+            self.block_group = g.bind_group(self.draw_layouts[1], &[buffer_entry(0, self.block)]);
             self.room = need;
             self.placed.forget();
         }
@@ -393,20 +408,20 @@ impl Grown {
     /// the regions' indirect args, and where the block is drawn.
     pub fn drawn(&self) -> Option<Drawn> {
         (self.on && self.block != 0).then_some(Drawn {
-            block: self.block,
+            block_group: self.block_group,
             args: self.args,
-            uniforms: self.uniforms,
+            uniform_group: self.uniform_group,
         })
     }
 }
 
-/// The decor block as the draws read it (`Grown::drawn`): the block, the
-/// regions' indirect args and their draw uniforms.
+/// The decor block as the draws read it (`Grown::drawn`): the block's
+/// group, the regions' indirect args and their draw uniforms' group.
 #[derive(Clone, Copy)]
 pub struct Drawn {
-    pub block: u32,
+    pub block_group: u32,
     pub args: u32,
-    pub uniforms: u32,
+    pub uniform_group: u32,
 }
 
 impl Drawn {

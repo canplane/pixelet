@@ -345,11 +345,18 @@ const fn and<const N: usize, const M: usize, const R: usize>(a: [[u32; 2]; N], b
 type Group = &'static [[u32; 2]];
 const FRAME: Group = &[[0, UNIFORM]];
 const BOX_GROUP: [[u32; 2]; 17] = and(LIT_FRAME, [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]]);
-const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &[[0, UNIFORM_DYNAMIC]], &SKIN, &[[0, STORAGE]]];
-/// A billboard set's uniform and instances, and what its pass reads at an
-/// anchor: the world's depth for the regions, the regions for the sprites.
-const BADGE_SPRITES: Group = &[[0, UNIFORM], [1, STORAGE], [2, TEXTURE_UNFILTERED]];
-const BADGE_REGIONS: Group = &[[0, UNIFORM], [1, STORAGE], [2, DEPTH]];
+/// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`),
+/// and its block: one layout each wherever a draw binds them, so a group
+/// one owner makes binds in every pipeline that names them (gpu/grown.rs).
+const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
+const BLOCK: [[u32; 2]; 1] = [[0, STORAGE]];
+
+const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &BLOCK];
+/// A billboard set's instances, and what its pass reads at an anchor: the
+/// world's depth for the regions, the regions for the sprites. Its uniform is
+/// a draw's (`DRAW`).
+const BADGE_SPRITES: Group = &[[0, STORAGE], [1, TEXTURE_UNFILTERED]];
+const BADGE_REGIONS: Group = &[[0, STORAGE], [1, DEPTH]];
 const SKY_GROUP: [[u32; 2]; 15] = and([[0, UNIFORM], [19, UNIFORM], [2, TEXTURE_ARRAY], [3, SAMPLER]], AIR);
 
 /// A pipeline's record before its groups' stages: its head, its lanes and
@@ -378,12 +385,8 @@ const fn plan_of(id: u32) -> Plan {
         // Back faces culled: drawn both sides, a closed body's inner faces fight its
         // outer ones at a distance and the character shimmers.
         PIPELINE_SKINNED => plan(lit(SHADER_SKINNED, CULL_BACK), &SKINNED_LANES, &MODEL_GROUPS),
-        PIPELINE_PUCK_ZONE => plan(blended(SHADER_PUCK_ZONE, CULL_NONE, 4, 1.0), &PUCK_ZONE_LANES, &[FRAME, &[[0, UNIFORM_DYNAMIC]], &[[0, STORAGE]]]),
-        PIPELINE_PUCK_BEACON => plan(
-            lit(SHADER_PUCK_BEACON, CULL_BACK),
-            &PUCK_BEACON_LANES,
-            &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &[[0, UNIFORM_DYNAMIC]]],
-        ),
+        PIPELINE_PUCK_ZONE => plan(blended(SHADER_PUCK_ZONE, CULL_NONE, 4, 1.0), &PUCK_ZONE_LANES, &[FRAME, &DRAW, &BLOCK]),
+        PIPELINE_PUCK_BEACON => plan(lit(SHADER_PUCK_BEACON, CULL_BACK), &PUCK_BEACON_LANES, &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &DRAW]),
         PIPELINE_BADGE => plan(
             Head {
                 topology: STRIP,
@@ -391,7 +394,7 @@ const fn plan_of(id: u32) -> Plan {
                 ..blended(SHADER_BADGE, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[FRAME, BADGE_SPRITES, &SKIN],
+            &[FRAME, &DRAW, BADGE_SPRITES, &SKIN],
         ),
         PIPELINE_BADGE_REGION => plan(
             Head {
@@ -402,7 +405,7 @@ const fn plan_of(id: u32) -> Plan {
                 ..blended(SHADER_BADGE_REGION, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[FRAME, BADGE_REGIONS],
+            &[FRAME, &DRAW, BADGE_REGIONS],
         ),
         // Against the gizmos' own faces, not the world's depth.
         PIPELINE_DEBUG => plan(
@@ -411,7 +414,7 @@ const fn plan_of(id: u32) -> Plan {
                 ..blended(SHADER_DEBUG, CULL_NONE, 0, 0.0)
             },
             &DEBUG_LANES,
-            &[FRAME, &[[0, UNIFORM]]],
+            &[FRAME, &DRAW],
         ),
         // Pushed back by their slope as a rasterizer's polygon offset is, so
         // the lines that bound a face stay in front of it.
@@ -424,7 +427,7 @@ const fn plan_of(id: u32) -> Plan {
                 ..depth_only(SHADER_DEBUG)
             },
             &DEBUG_FACE_LANES,
-            &[FRAME, &[[0, UNIFORM]]],
+            &[FRAME, &DRAW],
         ),
         PIPELINE_SCREEN_RAYS => plan(
             Head {
@@ -453,7 +456,7 @@ const fn plan_of(id: u32) -> Plan {
                 ..lit(SHADER_IMPOSTOR, CULL_NONE)
             },
             &[],
-            &[&LIT_FRAME, &[[0, UNIFORM_DYNAMIC]], &[[0, TEXTURE_ARRAY], [1, SAMPLER], [2, UNIFORM]], &[[0, STORAGE]]],
+            &[&LIT_FRAME, &DRAW, &[[0, TEXTURE_ARRAY], [1, SAMPLER], [2, UNIFORM]], &BLOCK],
         ),
         PIPELINE_IMPOSTOR_BAKE => plan(
             Head {
@@ -462,7 +465,7 @@ const fn plan_of(id: u32) -> Plan {
                 ..depth_only(SHADER_IMPOSTOR_BAKE)
             },
             &MODEL_LANES,
-            &[&[[0, UNIFORM_DYNAMIC]], &SKIN],
+            &[&DRAW, &SKIN],
         ),
         PIPELINE_SHEET => plan(
             Head {

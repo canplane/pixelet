@@ -6,6 +6,7 @@
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
@@ -36,7 +37,7 @@ use crate::gpu::layers::{Layers, Mips};
 use crate::gpu::pass::badges::BadgePass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
-use crate::gpu::pass::model::{frame_layout, FrameGroups, Stage};
+use crate::gpu::pass::model::{frame_layout, DrawUniforms, FrameGroups, Stage};
 use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -294,26 +295,34 @@ pub fn frame_group(g: &Gpu, layout: u32, frame: u32, ao: Entry, air: [Entry; AIR
 /// (`Gpu::image`).
 pub type Image = (u32, &'static [u8]);
 
-/// Each skin image as one texture's view, made the first time a skin binds it:
-/// an image's texture is taken once (`Gpu::image`), so
-/// a skin made again, or by another pass, binds what is here. As many as the
-/// skins the asset table names.
-static SKIN_VIEWS: Global<Vec<(u32, u32)>> = Global::new();
+/// Each skin image's bind group, made the first time a draw binds it, over
+/// one sampler: an image's texture is taken once (`Gpu::image`), so a skin
+/// one pass binds again, or another binds, is the group here. As many as the
+/// skins the asset table names, in the one layout a skin takes (record.rs
+/// `SKIN`), kept for the device's life.
+static SKINS: Global<Skins> = Global::new();
 
-fn skin_view(g: &Gpu, (image, file): Image) -> Option<u32> {
-    let views = SKIN_VIEWS.get(Vec::new);
-    if let Some(&(_, view)) = views.iter().find(|&&(i, _)| i == image) {
-        return Some(view);
-    }
-    let texture = g.image(image, file)?;
-    let view = g.view(texture, false, 0, 1, 0, 1);
-    views.push((image, view));
-    Some(view)
+#[derive(Default)]
+struct Skins {
+    sampler: u32,
+    /// An image, the layout and its group.
+    groups: Vec<(u32, u32, u32)>,
 }
 
-/// A skin's bind group; none while its image lands.
-pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: Image) -> Option<u32> {
-    Some(g.bind_group(layout, &[view_entry(0, skin_view(g, image)?), sampler_entry(1, sampler)]))
+/// A skin's bind group in `layout`; none while its image lands.
+pub fn skin_group(g: &Gpu, layout: u32, (image, file): Image) -> Option<u32> {
+    let skins = SKINS.get(Skins::default);
+    if let Some(&(_, _, group)) = skins.groups.iter().find(|&&(i, l, _)| i == image && l == layout) {
+        return Some(group);
+    }
+    let texture = g.image(image, file)?;
+    if skins.sampler == 0 {
+        skins.sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::repeat, None, 1);
+    }
+    let view = g.view(texture, false, 0, 1, 0, 1);
+    let group = g.bind_group(layout, &[view_entry(0, view), sampler_entry(1, skins.sampler)]);
+    skins.groups.push((image, layout, group));
+    Some(group)
 }
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
@@ -622,7 +631,7 @@ pub const UNIFORM_ALIGN_MAX: u32 = 256;
 
 pub fn gpu_lost() {
     RENDERER.set(None);
-    SKIN_VIEWS.set(Vec::new());
+    SKINS.set(Skins::default());
     device_lost();
     blocks().lose();
     surfaces_lost();
@@ -645,17 +654,16 @@ pub fn surface_closed(s: Surface) {
 /// their lines against those faces alone, so a gizmo hides gizmos and nothing
 /// of the world hides one.
 ///
-/// Each set takes its own translation, so a buffer and a group a set, grown
-/// to the most sets a frame has drawn.
+/// Each set takes its own translation, a draw's uniform a set.
 struct DebugPass {
     built: Built,
     faces: Built,
     frame_group: u32,
-    sets: Vec<(u32, u32)>,
+    uniforms: DrawUniforms,
 }
 
 impl DebugPass {
-    fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> DebugPass {
+    fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, align: u32) -> DebugPass {
         let built = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
         let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
         let frame_group = g.bind_group(built.layouts[0], &[buffer_entry(0, frame_buffer)]);
@@ -663,38 +671,33 @@ impl DebugPass {
             built,
             faces,
             frame_group,
-            sets: Vec::new(),
+            uniforms: DrawUniforms::new(16, align),
         }
     }
 
-    /// A set for each set of lines, made here so drawing makes nothing that
-    /// outlives its frame.
-    fn prepare(&mut self, g: &Gpu, draws: &Draws) {
-        while self.sets.len() < draws.of(PIPELINE_DEBUG).len() {
-            let buffer = g.buffer(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            let group = g.bind_group(self.built.layouts[1], &[buffer_entry(0, buffer)]);
-            self.sets.push((buffer, group));
-        }
+    /// Each set's uniform, its translation, written where the lists it is
+    /// made from `moved`.
+    fn prepare(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], moved: bool) {
+        let sets = draws.of(PIPELINE_DEBUG);
+        self.uniforms.write(g, self.built.layouts[1], sets.len() as u32, sets, moved, |buf, d| {
+            let u = uniform_of(uniforms, d);
+            buf[..16].copy_from_slice(bytes(&[u[0], u[1], u[2], 0.0]));
+        });
     }
 
     /// `depth` is the world's, which nothing reads after this.
     #[allow(clippy::too_many_arguments)]
-    /// Each set's uniform written where the lists it is made from `moved`.
-    fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, uniforms: &[f32], moved: bool, blocks: &Blocks, stamp: &mut Stamp) {
-        if draws.of(PIPELINE_DEBUG).len() == 0 {
+    fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, blocks: &Blocks, stamp: &mut Stamp) {
+        let Some(slots) = self.uniforms.slots().filter(|_| draws.of(PIPELINE_DEBUG).len() > 0) else {
             return;
-        }
-        // Each set held: its own uniform and bind group, its line vertices and its face vertices.
+        };
+        // Each set held: its uniform's slot, its line vertices and its face vertices.
         let sets = || {
             draws.of(PIPELINE_DEBUG).enumerate().filter_map(|(k, d)| {
                 let (block, _, _) = blocks.get(d[0])?;
                 (d[1] > 0).then_some((k, d, block, d[1], d[2]))
             })
         };
-        for (k, d, ..) in sets().filter(|_| moved) {
-            let u = uniform_of(uniforms, d);
-            g.write_buffer(self.sets[k].0, 0, bytes(&[u[0], u[1], u[2], 0.0]));
-        }
         // With no faces the lines' pass clears the depth itself.
         let faced = sets().any(|s| s.4 > 0);
         if faced {
@@ -702,7 +705,8 @@ impl DebugPass {
             g.set_pipeline(pass, self.faces.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
             for (k, _, block, lines, faces) in sets().filter(|s| s.4 > 0) {
-                g.set_bind_group(pass, 1, self.sets[k].1, &[]);
+                let (group, offset) = slots.at(k as u32);
+                g.set_bind_group(pass, 1, group, &[offset]);
                 g.set_vertex_buffer(pass, 0, block, lines * 28, faces * 12);
                 g.draw(pass, faces, 1, 0, 0);
             }
@@ -713,7 +717,8 @@ impl DebugPass {
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         for (k, _, block, lines, _) in sets() {
-            g.set_bind_group(pass, 1, self.sets[k].1, &[]);
+            let (group, offset) = slots.at(k as u32);
+            g.set_bind_group(pass, 1, group, &[offset]);
             g.set_vertex_buffer(pass, 0, block, 0, lines * 28);
             // A segment an instance: its two vertices, read as one.
             g.draw(pass, 6, lines / 2, 0, 0);
@@ -1734,8 +1739,8 @@ impl Renderer {
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
             puck: PuckPass::new(g, &mut pipelines, frame_buffer, air, device.align),
-            badges: BadgePass::new(g, &mut pipelines, frame_buffer),
-            debug: DebugPass::new(g, &mut pipelines, frame_buffer),
+            badges: BadgePass::new(g, &mut pipelines, frame_buffer, device.align),
+            debug: DebugPass::new(g, &mut pipelines, frame_buffer, device.align),
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
             ao_read: Read::default(),
@@ -1890,9 +1895,7 @@ impl Renderer {
         read.begin();
         self.decor.set_models(input.decor);
         self.impostor.set_models(input.decor.iter().map(|&(mesh, image, extent)| (mesh, image.map(|i| i.0), extent)));
-        for &(model, image) in input.skins {
-            self.skinned.set_skin(g, model, image);
-        }
+        self.skinned.set_skins(input.skins);
         read.read(input.skins);
         read.mark(self.layers.step(g, &self.mips, input.pack));
         read.mark(self.moon.step(g, &self.mips, input.moon));
@@ -1959,15 +1962,13 @@ impl Renderer {
         self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
         self.puck.prepare(g, &draws, uniforms, lists_moved, b);
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
-        self.debug.prepare(g, &draws);
+        self.debug.prepare(g, &draws, uniforms, lists_moved);
         let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
         self.screen.prepare(g, cast, &meshes, (world.rays_view, [world.width, world.height]));
         // The frame draws the decor grown, so it reads whether that is on:
         // decor turned off grows nothing and casts no ray again, yet the
         // frame stands without it.
         read.read(&[u32::from(self.screen.grown().is_some())]);
-        self.decor.prepare_grown(g, self.screen.grown());
-        self.impostor.prepare_grown(g, self.screen.grown());
         self.prepare_cases(g, &draws, uniforms, input.cases, lists_moved);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
@@ -1975,7 +1976,7 @@ impl Renderer {
         // What outlives the frame is drawn and submitted ahead of it: from here on
         // the frame only describes itself.
         let ahead = g.encoder();
-        let baked = self.impostor.bake(g, ahead, &mut self.decor, b);
+        let baked = self.impostor.bake(g, ahead, &self.decor, b);
         read.mark(baked);
         let gridded = self.screen.grids(g, ahead, &mut stamps[SPAN_FILL]);
         let folded = self.screen.fold(g, ahead, &mut stamps[SPAN_FILL]);
@@ -2049,7 +2050,7 @@ impl Renderer {
         self.decor.draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         g.end(pass);
         self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
-        self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, lists_moved, b, &mut stamps[SPAN_DEBUG]);
+        self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, b, &mut stamps[SPAN_DEBUG]);
         self.draw_cases(g, encoder, Self::cases(&draws, input.cases), uniforms, blocks_moved || tables || exposed, &mut stamps[SPAN_CASES]);
         let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
         let asked = g.submit_frame(encoder, written);
@@ -2115,7 +2116,7 @@ impl Renderer {
                 self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.ao, self.atmosphere.entries(), self.align));
             }
             let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
-            case.skinned.set_skin(g, model, image);
+            case.skinned.set_skins(&[(model, image)]);
             case.skinned.prepare(g, core::iter::once(own), uniforms, moved, blocks());
         }
     }

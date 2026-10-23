@@ -6,69 +6,38 @@
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::gpu::renderer::Image;
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{bytes, release, Gpu};
+use crate::gpu::api::{bytes, Gpu};
 
 use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{skin_group, Blocks};
 
-const SKINS: usize = 16;
-
-#[derive(Clone, Copy, Default)]
-struct Skin {
-    model: u32,
-    image: u32,
-    group: u32,
-    seq: u32,
-}
-
 pub struct SkinnedPass {
     lit: Built,
-    sampler: u32,
     uniforms: DrawUniforms,
-    skins: [Skin; SKINS],
-    seq: u32,
+    /// Each model's skin image, as the frame hands them.
+    skins: Vec<(u32, Image)>,
 }
 
 impl SkinnedPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> SkinnedPass {
-        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::repeat, None, 1);
         SkinnedPass {
             lit: pipelines.build(g, PIPELINE_SKINNED, g.canvas()),
-            sampler,
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
-            skins: [Skin::default(); SKINS],
-            seq: 0,
+            skins: Vec::new(),
         }
     }
 
-    /// One not yet arrived is asked for again next frame.
-    pub fn set_skin(&mut self, g: &Gpu, model: u32, image: Image) {
-        let at = self
-            .skins
-            .iter()
-            .position(|s| s.model == model && s.group != 0)
-            .or_else(|| self.skins.iter().position(|s| s.group == 0))
-            // Nothing says a model is gone, so a full table would leave new models
-            // untextured for good (the character preview walks more variants than slots).
-            // The least recently asked slot is taken.
-            .unwrap_or_else(|| self.skins.iter().enumerate().min_by_key(|(_, s)| s.seq).map_or(0, |(i, _)| i));
-        self.seq += 1;
-        let seq = self.seq;
-        let s = &mut self.skins[at];
-        if s.model == model && s.image == image.0 && s.group != 0 {
-            s.seq = seq;
-            return;
-        }
-        let Some(group) = skin_group(g, self.lit.layouts[2], self.sampler, image) else { return };
-        release(s.group);
-        *s = Skin { model, image: image.0, group, seq };
+    pub fn set_skins(&mut self, skins: &[(u32, Image)]) {
+        self.skins.clear();
+        self.skins.extend_from_slice(skins);
     }
 
-    fn skin_of(&self, model: u32) -> Option<u32> {
-        self.skins.iter().find(|s| s.model == model && s.group != 0).map(|s| s.group)
+    /// None while its image lands, and the actor is drawn on a later frame.
+    fn skin_of(&self, g: &Gpu, model: u32) -> Option<u32> {
+        let &(_, image) = self.skins.iter().find(|&&(m, _)| m == model)?;
+        skin_group(g, self.lit.layouts[2], image)
     }
 
     /// Every palette group the draws will bind is made here, so drawing makes
@@ -91,7 +60,7 @@ impl SkinnedPass {
         let palette_layout = self.lit.layouts[3];
         draw_models(g, pass, &self.lit, self.lit.pipeline, frame, slots, 0, draws, |d| {
             let (mesh, vertex_cnt, index_cnt) = blocks.get(d[0])?;
-            let skin = self.skin_of(d[2])?;
+            let skin = self.skin_of(g, d[2])?;
             Some(ModelDraw {
                 groups: [skin, blocks.group(g, d[1], palette_layout)?],
                 mesh: Some((mesh, vertex_cnt, index_cnt)),
@@ -101,10 +70,6 @@ impl SkinnedPass {
     }
 
     pub fn release(mut self) {
-        for s in self.skins {
-            release(s.group);
-        }
         self.uniforms.release();
-        release(self.sampler);
     }
 }

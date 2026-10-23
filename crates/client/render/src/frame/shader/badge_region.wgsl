@@ -3,7 +3,7 @@
 // Each billboard's region at its twin's depth, as its number in four bytes,
 // where the world leaves its anchor seen (badge.wgsl).
 
-@group(1) @binding(2) var world_depth: texture_depth_2d;
+@group(2) @binding(1) var world_depth: texture_depth_2d;
 
 struct RegionOut {
   @builtin(position) clip: vec4f,
