@@ -12,7 +12,8 @@ use xpute_kit::wire::xtp::PacketWriter;
 use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, Message, OrientationState, Snapshot, SourceVersion};
 use crate::control::camera::controller::{dist, focus, Motion};
-use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
+use crate::control::camera::input::dragging;
+use crate::control::camera::state::{camera_state, IntentPatch};
 use crate::control::interaction::holding;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::follow_mode::{following, set_following};
@@ -106,7 +107,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         },
         azimuth: camera.intent.azimuth,
         is_follow_mode: following(),
-        camera_busy: camera.camera_status != CameraStatus::Idle,
+        camera_busy: dragging(),
         zooming: crate::control::camera::controller::zooming(),
         over_badge: crate::door::over_badge(),
         settings: &values,
