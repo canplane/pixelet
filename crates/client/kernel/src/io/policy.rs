@@ -85,6 +85,9 @@ impl Serve for Policy {
     /// fixed by the key within a version.
     fn blame(&self, failure: Failure) -> Blame {
         match failure.errno {
+            // The heap refused a body room (io/fetch.rs): the object's bytes
+            // are fine, and room may be given back.
+            Errno::ENOMEM => Blame::Heap,
             // The browser says it is offline.
             Errno::ENETUNREACH => Blame::Network,
             // Any other status but 204 and 404, or no response while online. The

@@ -30,6 +30,7 @@ impl Serve for ByWhy {
         match failure.errno {
             Errno::ENETUNREACH => Blame::Network,
             Errno::EACCES => Blame::Server,
+            Errno::ENOMEM => Blame::Heap,
             _ => Blame::Object,
         }
     }
@@ -153,6 +154,39 @@ fn an_object_that_fails_is_dropped_and_holds_nothing_else_back() {
     l.declare(Stream::terrain, &[(3, ask(Why::Demand, 0.0))], 5_000.0);
     l.pump(5_000.0);
     assert_eq!(started(&mut l).len(), 1, "and the server is not held for it");
+}
+
+#[test]
+fn a_body_the_heap_refused_waits_for_a_release_not_a_clock() {
+    use crate::io::host::set_heap_stat;
+    use core::sync::atomic::{AtomicU32, Ordering};
+    use xpute_guest::mem::heap::HeapStat;
+    static RELEASES: AtomicU32 = AtomicU32::new(0);
+    let _g = crate::serial();
+    set_heap_stat(|| HeapStat {
+        releases: RELEASES.load(Ordering::Relaxed),
+        ..HeapStat::default()
+    });
+    let mut l = scheduler();
+    let want = [(1u64, ask(Why::Demand, 0.0))];
+    l.declare(Stream::terrain, &want, 0.0);
+    l.pump(0.0);
+    let key = started(&mut l)[0];
+    failed_with(&mut l, key, Errno::ENOMEM, 0.0);
+    for t in 0..5 {
+        l.declare(Stream::terrain, &want, t as f64 * 10_000.0);
+        l.pump(t as f64 * 10_000.0);
+        assert!(started(&mut l).is_empty(), "no time ends a heap's refusal");
+    }
+    let both = [want[0], (2, ask(Why::Demand, 0.0))];
+    l.declare(Stream::terrain, &both, 50_000.0);
+    l.pump(50_000.0);
+    assert_eq!(started(&mut l).len(), 1, "and the server is not held for it");
+    RELEASES.fetch_add(1, Ordering::Relaxed);
+    l.declare(Stream::terrain, &both, 50_000.0);
+    l.pump(50_000.0);
+    assert_eq!(started(&mut l).len(), 1, "asked again once the heap gives some back");
+    set_heap_stat(HeapStat::default);
 }
 
 #[test]

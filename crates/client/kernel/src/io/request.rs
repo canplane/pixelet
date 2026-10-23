@@ -5,9 +5,11 @@
 //! retry waits are the `Serve` policy's.
 //!
 //! An answer ends its want; a failure ends only its attempt. A failure of the
-//! object drops its want; one of the network or the server holds back every
-//! start, then lets one probe out until something answers, and the server's
-//! past its last wait gives the reads up. A running attempt is never preempted.
+//! object drops its want; a body the heap refused room holds its want until
+//! the heap gives some back; one of the network or the server holds back
+//! every start, then lets one probe out until something answers, and the
+//! server's past its last wait gives the reads up. A running attempt is never
+//! preempted.
 //!
 //! Invariants: no more attempts than credits and no want past its stream's
 //! bound; ties broken by stream then subject so the order is total; a free
@@ -19,6 +21,7 @@ use core::cmp::Ordering;
 use crate::asset::LOAD_FILES;
 use crate::io::demand::{Ask, Phases, Stream};
 use crate::io::failure::{Ended, Failure};
+use crate::io::host::Refused;
 use crate::io::policy::Policy;
 use crate::profiler::record::profiler_record;
 use crate::profiler::task::TaskRow;
@@ -58,6 +61,8 @@ pub trait Serve {
 pub enum Blame {
     /// The object's own: asking again brings the same.
     Object,
+    /// The heap's: no room for the body now, which only a release changes.
+    Heap,
     /// No way to the server: waited on, never given up.
     Network,
     /// The server's: counted toward giving up.
@@ -83,8 +88,7 @@ struct Wanted {
     ask: Ask,
     /// First wanted, kept across re-declarations so the profiler measures the real wait.
     enqueue_ms: f64,
-    /// Infinite once its object failed.
-    until_ms: f64,
+    wait: Wait,
 }
 
 impl Wanted {
@@ -92,8 +96,29 @@ impl Wanted {
         subject: 0,
         ask: Ask::PLAIN,
         enqueue_ms: 0.0,
-        until_ms: 0.0,
+        wait: Wait::Ready,
     };
+}
+
+/// What a want's own failure holds it back on; a hold on every start is the
+/// scheduler's (`held_until`).
+#[derive(Clone, Copy, Debug)]
+enum Wait {
+    Ready,
+    /// Its body was refused heap room: until the heap gives some back.
+    Heap(Refused),
+    /// Its object failed: for as long as it is wanted.
+    Object,
+}
+
+impl Wait {
+    fn ready(self) -> bool {
+        match self {
+            Wait::Ready => true,
+            Wait::Heap(refused) => refused.over(),
+            Wait::Object => false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -247,7 +272,7 @@ impl<S: Serve> RequestScheduler<S> {
                     subject,
                     ask,
                     enqueue_ms: at,
-                    until_ms: f64::NEG_INFINITY,
+                    wait: Wait::Ready,
                 },
             };
             xpute_kit::ensure!(n < bound, ENOTRECOVERABLE, stream as u32);
@@ -300,7 +325,7 @@ impl<S: Serve> RequestScheduler<S> {
         for s in Stream::ALL {
             let first = self.first(s);
             for (k, w) in self.run(s).iter().enumerate() {
-                if at >= w.until_ms && !self.attempting(s, w.subject) {
+                if w.wait.ready() && !self.attempting(s, w.subject) {
                     ready.push((self.placed(s, w), first + k));
                 }
             }
@@ -392,17 +417,13 @@ impl<S: Serve> RequestScheduler<S> {
 
     fn failed(&mut self, want: Option<usize>, failure: Failure, started_ms: f64, at: f64) {
         let seed = derive_seed_u64(self.strikes as u64, at.to_bits());
-        match self.serve.blame(failure) {
-            Blame::Object => {
-                // Still an answer from the server.
-                self.answered();
-                if let Some(i) = want {
-                    self.desired[i].until_ms = f64::INFINITY;
-                }
-            }
+        let wait = match self.serve.blame(failure) {
+            Blame::Object => Wait::Object,
+            Blame::Heap => Wait::Heap(Refused::now()),
             Blame::Network => {
                 self.failing = Some(failure.errno);
                 self.held_until = at + self.serve.backoff(1, seed).unwrap_or(0.0);
+                return;
             }
             Blame::Server => {
                 self.failing = Some(failure.errno);
@@ -415,7 +436,13 @@ impl<S: Serve> RequestScheduler<S> {
                     Some(wait) => self.held_until = at + wait,
                     None => self.given_up = true,
                 }
+                return;
             }
+        };
+        // Still an answer from the server.
+        self.answered();
+        if let Some(i) = want {
+            self.desired[i].wait = wait;
         }
     }
 
