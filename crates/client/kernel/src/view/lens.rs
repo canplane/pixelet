@@ -6,11 +6,11 @@
 //! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md, "What is
 //! drawn").
 
-use pxl_portable::eye;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::origin;
+use pxl_spec_core::{beam, eye};
 
 use crate::query::asked;
 use crate::view::frame::pose::view;
@@ -32,16 +32,15 @@ pub fn cell_there(distance: f64) -> f64 {
 /// cell is wider by as much. The screen plane stands `height / (2 · tan(fov /
 /// 2))` drawn pixels from the eye, so `n` of them span `2 · atan(n / 2 /
 /// that)`.
-/// Held by the view, worked out where its height, its field of view or its
-/// surface's ratio change (`tau_of`).
+/// Held by the view, worked out where its height or its surface's ratio
+/// change (`tau_of`).
 pub fn tau() -> Tau {
     view().tau
 }
 
-/// `tau` of a view `height` CSS pixels tall at `fov` degrees, drawn at
-/// `ratio`.
-pub fn tau_of(height: f64, fov: f64, ratio: f64) -> Tau {
-    let tan_up = libm::tan(fov.to_radians() / 2.0);
+/// `tau` of a view `height` CSS pixels tall, drawn at `ratio`.
+pub fn tau_of(height: f64, ratio: f64) -> Tau {
+    let tan_up = libm::tan(crate::param::FOV.to_radians() / 2.0);
     let half = target_cell_px() * tan_up / (height * ratio);
     Tau::of((2.0 * libm::atan(half) * SPLIT).max(1.0))
 }
@@ -70,12 +69,13 @@ impl Lens {
     }
 }
 
-/// What a GPU's cast of the screen's rays reads of the eye (pxl-portable
-/// `eye`, gpu-query-shader `Eye`): its Q3 position as a ray's origin, over
+/// What a GPU's cast of the screen's rays reads of the eye (pxl-spec-core
+/// `eye`, pxl-shader `Eye`): its Q3 position as a ray's origin, over
 /// the world where it stands there (pxl-spec `world::origin`), and whether each ray
 /// reports the nodes its descent asked, not what it met; the unit forward
 /// and the reach; the unit right and τ; the unit up; the tangents of the
-/// screen's half-angles across and up and the zooms a block is asked at. A
+/// screen's half-angles across and up and the zooms a block is asked at;
+/// the camera grid the cast lays over the screen off them, once. A
 /// ray a drawn pixel, through its middle. The cuts are the scene's. None
 /// without a screen.
 pub fn gpu_cast(o: &Observation, tau: Tau, steps: bool, words: &mut [u32; eye::WORDS]) -> Option<()> {
@@ -92,6 +92,9 @@ pub fn gpu_cast(o: &Observation, tau: Tau, steps: bool, words: &mut [u32; eye::W
     put(eye::UP, &lens.up.map(w));
     put(eye::TAN, &lens.tan.map(w));
     put(eye::RANGE, &asked());
+    // The grid off the very f32s the words above hold, so every reader's is
+    // this one (pxl-spec-core `beam::Grid`).
+    put(eye::GRID, &beam::Grid::of(lens.tan.map(|t| t as f32), tau.scale() as f32).words());
     Some(())
 }
 

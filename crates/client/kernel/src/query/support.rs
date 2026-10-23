@@ -2,12 +2,17 @@
 
 //! Where something stands: the support, floor and ceiling over a point,
 //! climbing as a walker would. A walker is a cell wide, so each is asked of
-//! a ray straight up or down through the point's cell at the walker's cells
-//! (`Upright`), the ray every reader casts (`World::along`): the first block
-//! that fills, or out of what fills the first that does not.
+//! the point's cell as its columns at the finest zoom anything is placed at
+//! in it, a ray straight up or down through each (`Upright`), the ray every
+//! reader casts (`World::along`): the first block that fills, or out of what
+//! fills the first that does not, in any of them. So a walker stands on
+//! what is placed as it is held, whatever its size; a cell with nothing
+//! placed finer than it is one column, one ray.
 
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{REACH, ROUND};
 use pxl_spec::space::coord::zoom::{units, Zoom};
@@ -23,6 +28,7 @@ use super::surface::Surface;
 use super::world::World;
 use crate::layer::*;
 use pxl_spec::space::layer::tile::Tile;
+use pxl_spec_core::cast::Detail;
 
 /// The center's height over a floor whose top is `top`: half a cell up, as a
 /// cell's center stands over its ground.
@@ -35,19 +41,21 @@ pub fn under(z: f64) -> f64 {
     z - units(GROUND.cell()) / 2.0
 }
 
-/// The tile zoom the camera grid at `tau` draws the ground at, at `at` seen
-/// from `eye`.
-fn seen_zoom(at: &Q3, eye: &Q3, tau: Tau) -> Zoom {
-    let [a, e] = [at, eye].map(|p| [i64::from(p[0]), i64::from(p[1]), i64::from(p[2])].map(q3::to_real));
-    let d = [wrap(a[0] - e[0], -ROUND / 2.0, ROUND / 2.0), a[1] - e[1], a[2] - e[2]];
-    GROUND.z_at(tau, d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).min(LEAF_ZOOM)
+/// The cell zoom the eye's rays draw at `at`: the camera grid's rule at its
+/// distance (`Tau::cell_at`), no finer than the ground's cells and, once the
+/// source declares its top, no coarser than a tile draws.
+pub fn cell_at(eye: V3, tau: Tau, at: V3) -> Zoom {
+    let v = v3::sub(&at, &eye);
+    let cell = tau.cell_at(v3::dot(&v, &v)).min(GROUND.cell());
+    TerrainTile::top().map_or(cell, |top| cell.max(GROUND.grid_zoom(top)))
 }
 
 /// Whether a walker at `at`, seen from `eye`, walks: the camera grid at the
-/// criterion's own τ draws the ground there at its own cells. Else the world
-/// is a map to it (`step_slide`).
+/// criterion's own τ draws the ground there at its own cells (`cell_at`),
+/// X the short way round. Else the world is a map to it (`step_slide`).
 pub fn walks(at: &Q3, eye: &Q3) -> bool {
-    seen_zoom(at, eye, Tau::FINEST) == LEAF_ZOOM
+    let (a, e) = (q3::unpack(at), q3::unpack(eye));
+    cell_at(e, Tau::FINEST, [world::nearest(a[0], e[0]), a[1], a[2]]) == GROUND.cell()
 }
 
 /// A point's place on the ground, in units.
@@ -56,69 +64,108 @@ fn xy(at: &Q3) -> [f64; 2] {
 }
 
 /// What a walker meets straight up and down the cell over `xy` at the tile
-/// zoom `zoom`'s cells, each asked of a ray through the cell's middle, and
-/// the first tile an answer lacked.
+/// zoom `zoom`'s cells, asked of its columns at the finest zoom anything is
+/// placed at in it, `across` a side, a ray through each one's middle at that
+/// zoom; and the first tile an answer lacked.
 struct Upright<'w, 'a> {
     world: &'w World<'a>,
-    at: [f64; 2],
-    zoom: Zoom,
+    corner: [f64; 2],
+    side: f64,
+    across: u32,
+    detail: Detail,
     lack: Option<Tile>,
+    zoom: Zoom,
 }
 
 impl<'w, 'a> Upright<'w, 'a> {
     fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom) -> Upright<'w, 'a> {
-        let side = units(GROUND.cell_zoom(zoom));
+        let cell = GROUND.cell_zoom(zoom);
+        let side = units(cell);
+        let corner = xy.map(|v| libm::floor(v / side) * side);
+        let column = Aabb {
+            min: [corner[0], corner[1], REACH.min[2]],
+            max: [corner[0] + side, corner[1] + side, REACH.max[2]],
+        };
+        let finer = world.finest_in(&column).map_or(0, |z| z.saturating_sub(cell));
         Upright {
             world,
-            at: xy.map(|v| (libm::floor(v / side) + 0.5) * side),
-            zoom,
+            corner,
+            side: side / f64::from(1u32 << finer),
+            across: 1 << finer,
+            detail: at_zoom(zoom + finer),
             lack: None,
+            zoom,
         }
     }
 
-    /// The box of the first block the ray from the height `z` to the height
-    /// `to`, up or down, stops at (`until`).
-    fn ray(&mut self, z: f64, to: f64, until: Until) -> Option<Aabb> {
+    /// The box of the first block each column's ray from the height `z` to
+    /// the height `to`, up or down, stops at (`until`).
+    fn rays(&mut self, z: f64, to: f64, until: Until) -> impl Iterator<Item = Aabb> + use<'_, 'w, 'a> {
+        (0..self.across * self.across).filter_map(move |k| self.met(k, z, to, until).value().flatten())
+    }
+
+    /// Column `k`'s ray, with what the world held of the way: a ray that
+    /// meets nothing before a lack tells nothing past it.
+    fn met(&mut self, k: u32, z: f64, to: f64, until: Until) -> Answer<Option<Aabb>> {
+        let middle = |i: u32, c: f64| c + (f64::from(i) + 0.5) * self.side;
         let ray = Ray {
-            origin: [self.at[0], self.at[1], z],
+            origin: [middle(k % self.across, self.corner[0]), middle(k / self.across, self.corner[1]), z],
             direction: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             reach: (to - z).abs(),
         };
-        let (answer, _) = self.world.along(&ray, at_zoom(self.zoom), until, None);
+        let (answer, _) = self.world.along(&ray, self.detail, until, None);
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
-        answer.value().flatten().map(|h| h.cube)
+        answer.map(|h| h.map(|h| h.cube))
     }
 
-    /// The top of what fills at the height `z`: the bottom of the first block
-    /// that does not fill from `z` up, `z` where its own does not.
-    fn lift(&mut self, z: f64) -> f64 {
-        self.ray(z, REACH.max[2], Until::Air).map_or(REACH.max[2], |b| b.min[2].max(z))
+    /// The top of what fills at the height `z` in any column: out of each
+    /// one's fill in turn, until none fills where the walker stands. A
+    /// column's fill tops at the bottom of its first block that does not
+    /// fill from `z` up, `z` where its own does not; filled to the reach's
+    /// top only where the world holds it so: a way into tiles not held fills
+    /// nothing, as what a zoom does not hold is absent there.
+    fn lift(&mut self, mut z: f64) -> f64 {
+        loop {
+            let top = (0..self.across * self.across)
+                .map(|k| match self.met(k, z, REACH.max[2], Until::Air) {
+                    Answer::Exact(None) => REACH.max[2],
+                    Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) => b.min[2].max(z),
+                    Answer::Coarser(None, _) | Answer::Nothing(_) => z,
+                })
+                .fold(z, f64::max);
+            if top == z {
+                return z;
+            }
+            z = top;
+        }
     }
 
-    /// The top of the highest solid under `z`, over the reach's floor: the
-    /// ray down from `z`, which starts in the block over it.
+    /// The top of the highest solid under `z` in any column, over the
+    /// reach's floor: the rays down from `z`, which start in the block over
+    /// it.
     fn below(&mut self, z: f64) -> Option<f64> {
-        self.ray(z, REACH.min[2], Until::Fills).map(|b| b.max[2]).filter(|&t| t > REACH.min[2])
+        self.rays(z, REACH.min[2], Until::Fills).map(|b| b.max[2]).filter(|&t| t > REACH.min[2]).reduce(f64::max)
     }
 
-    /// The bottom of the lowest solid over `z` and under `to`: the ray up
-    /// from `z`, which starts in the block at `z` and so meets none at it.
+    /// The bottom of the lowest solid over `z` and under `to` in any column:
+    /// the rays up from `z`, which start in the block at `z` and so meet
+    /// none at it.
     fn above(&mut self, z: f64, to: f64) -> Option<f64> {
-        self.ray(z, to, Until::Fills).map(|b| b.min[2]).filter(|&b| b < to)
+        self.rays(z, to, Until::Fills).map(|b| b.min[2]).filter(|&b| b < to).reduce(f64::min)
     }
 
-    /// The top of the highest solid, within the reach.
+    /// The top of the highest solid in any column, within the reach.
     fn highest(&mut self) -> Option<f64> {
-        self.ray(REACH.max[2], REACH.min[2], Until::Fills).map(|b| b.max[2].min(REACH.max[2]))
+        self.rays(REACH.max[2], REACH.min[2], Until::Fills).map(|b| b.max[2].min(REACH.max[2])).reduce(f64::max)
     }
 
     /// The cell's ground's top, in units.
     fn surface(&mut self) -> Option<f64> {
         let cell = GROUND.cell_zoom(self.zoom);
         let side = units(cell);
-        let answer = self.world.surface_of(cell, self.at.map(|v| libm::floor(v / side) as i32));
+        let answer = self.world.surface_of(cell, self.corner.map(|v| libm::floor((v + side / 2.0) / side) as i32));
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
@@ -143,7 +190,7 @@ impl<'a> World<'a> {
     }
 
     /// What is in the leaf block at `at`, as the cast draws it: its value
-    /// (pxl-portable `world::node`'s), void where none.
+    /// (pxl-spec-core `world::node`'s), void where none.
     pub fn block_of(&self, at: &Q3) -> Answer<u32> {
         let side = units(GROUND.cell());
         let p = [i64::from(at[0]), i64::from(at[1]), i64::from(at[2])].map(q3::to_real);

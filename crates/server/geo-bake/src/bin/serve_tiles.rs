@@ -222,7 +222,7 @@ fn run() -> Result<(), String> {
     let mut host = "127.0.0.1".to_string();
     let mut asset_dir = PathBuf::from("./out/asset");
     let mut workers: usize = 4;
-    let mut cache = PathBuf::from("./cache/tile");
+    let mut cache = PathBuf::from("./out/oven");
     // Zooms folded over the leaves: a cold tile at the top bakes 4^folds leaves.
     let mut folds: Zoom = 2;
     let mut shelf: Option<PathBuf> = None;

@@ -51,10 +51,8 @@ pub struct Bracket {
 }
 
 struct State {
-    /// Hash of the last posted UI snapshot; one is posted only when it changed.
-    snapshot: u64,
-    /// Console rows were handed over, to be let go next turn.
-    profiler_taken: bool,
+    /// The UI snapshot last posted; one is posted only where it moved.
+    sent: crate::shell::Sent,
 }
 
 static DOOR: Global<Door> = Global::new();
@@ -82,7 +80,7 @@ fn ring_address(ring: &Ring) -> u32 {
 static STATE: Global<State> = Global::new();
 
 fn state() -> &'static mut State {
-    STATE.get(|| State { snapshot: 0, profiler_taken: false })
+    STATE.get(|| State { sent: Default::default() })
 }
 
 /// xpute's three (two rings and the quantum) count as five entries, plus the
@@ -110,7 +108,7 @@ fn host_attached(s: &mut State) {
     }
     crate::shell::sensors_close();
     crate::io::text::text_forget();
-    s.snapshot = 0;
+    s.sent = Default::default();
 }
 
 /// First turn: lays out memory and writes the directory at DIRECTORY_AT.
@@ -174,7 +172,7 @@ fn lay_out(b: &Bracket) -> u32 {
     // renderer's or the host's alone.
     unsafe {
         crate::io::host::set_host_stream(fixed_at(layout::Fixed::Host));
-        pxl_render::gpu::renderer::set_blocks(fixed_at(layout::Fixed::Blocks), layout::BLOCK_SLOTS);
+        pxl_render::gpu::blocks::set_blocks(fixed_at(layout::Fixed::Blocks), layout::BLOCK_SLOTS);
         pxl_render::gpu::api::install(fixed_at(layout::Fixed::Gpu))
     }
 }
@@ -188,9 +186,6 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
         boot(&bracket());
     }
     let s = state();
-    if core::mem::take(&mut s.profiler_taken) {
-        crate::profiler::log::profiler_log_clear();
-    }
     let rise = now();
     crate::io::host::host_rise();
     crate::sched::edge::world_edge().rise(quota_ms);
@@ -245,19 +240,15 @@ fn post_shell(s: &mut State) {
             OrientationCommand::Remove => sensor(Command::SENSOR_STOP, Sensor::Orientation),
         }
     }
-    let buf = SNAPSHOT.get(Vec::new);
-    let len = loop {
-        if let Some(len) = crate::shell::ui_snapshot(buf) {
-            break len;
-        }
-        let room = (buf.len() * 2).max(xpute_guest::mem::section::PAGE_BYTES as usize);
-        buf.resize(room, 0);
-    };
-    let mut h = fnv::FnvHasher::default();
-    std::hash::Hasher::write(&mut h, &buf[..len as usize]);
-    let hash = std::hash::Hasher::finish(&h);
-    if hash != s.snapshot {
-        s.snapshot = hash;
+    if let Some(shown) = s.sent.moved() {
+        let buf = SNAPSHOT.get(Vec::new);
+        let len = loop {
+            if let Some(len) = crate::shell::ui_snapshot(&shown, buf) {
+                break len;
+            }
+            let room = (buf.len() * 2).max(xpute_guest::mem::section::PAGE_BYTES as usize);
+            buf.resize(room, 0);
+        };
         let signal = WorldSnapshotSignal {
             at: off_of_slice(&raw const buf[..]) as u32,
             len,
@@ -268,8 +259,8 @@ fn post_shell(s: &mut State) {
     take_started(|credit, stream, subject| match stream.bake() {
         Some(_) => crate::io::fetch::start(credit, stream, subject),
         None => {
-            if let Some((kind, load)) = crate::io::load::of_subject(subject) {
-                crate::io::load::open_asset(credit, kind, load);
+            if let Some((_, load)) = crate::io::load::of_subject(subject) {
+                crate::io::load::open_asset(credit, load);
             }
         }
     });

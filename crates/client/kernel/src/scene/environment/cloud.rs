@@ -9,7 +9,6 @@
 
 use fnv::FnvHashMap;
 
-use pxl_portable::scatter::drawn;
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::look::cloud::{drift, lattice_hash, shown, CUMULUS_KM, WIND};
@@ -18,15 +17,16 @@ use pxl_spec::asset::ingested::Asset;
 use pxl_spec::block::decor::DECORS;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
+use pxl_spec_core::scatter::drawn;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::frame_budget::FrameBudget;
 
 use crate::asset::Load;
-use crate::io::load::{load_failed, load_gltf, load_image};
+use crate::io::load::load_image;
 use crate::kernel;
-use crate::model::asset::register_model;
+use crate::model::asset::model_of;
 use crate::scene::decor::cell::{present_block, Shown};
 use crate::scene::decor::drawn::{decor_gone_px, decor_sprite_px, sprite_reach};
 use crate::scene::decor::instance::{decor_groups, GroupLanes};
@@ -104,7 +104,7 @@ fn clouds() -> &'static mut Clouds {
 }
 
 /// Each variant's draw group: its mesh, 0 while it loads, its skin and its extent.
-pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<pxl_render::gpu::renderer::Image>, [f32; 3])> {
+pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<pxl_render::gpu::api::Image>, [f32; 3])> {
     let models = crate::model::models();
     let skin = load_image(Load::Asset(SKIN));
     clouds().models.iter().zip(VARIANTS).enumerate().map(move |(k, (m, asset))| {
@@ -126,11 +126,12 @@ fn layer_u() -> f64 {
     CUMULUS_KM / km_per_u()
 }
 
-/// How long the wind takes to carry the clouds a camera cell at the nearest
-/// drawn, in seconds (`cell_there`): what drifts less is not seen to move.
-/// Infinite while none is drawn.
+/// How long the wind takes to carry the clouds a pixel at the nearest drawn,
+/// in seconds (`units_per_px_at`): what drifts less is not seen to move. A
+/// camera cell's step, a dozen pixels at once, was seen as the clouds
+/// stopping and jumping. Infinite while none is drawn.
 pub fn drift_step_s() -> f64 {
-    crate::view::lens::cell_there(clouds().seen) / libm::hypot(WIND[0], WIND[1])
+    units_per_px_at(clouds().seen) / libm::hypot(WIND[0], WIND[1])
 }
 
 /// How much of the clouds shows: none where the setting is off, and fading
@@ -148,8 +149,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     let c = clouds();
     c.seen = f64::INFINITY;
     for (slot, asset) in c.models.iter_mut().zip(VARIANTS) {
-        if slot.is_none() && !load_failed(Load::Asset(asset)) {
-            *slot = load_gltf(Load::Asset(asset)).and_then(|gltf| register_model(&gltf, None)).map(|h| h.model);
+        if slot.is_none() {
+            *slot = model_of(asset, None).map(|h| h.model);
         }
     }
     let Some(eye) = eye() else { return };

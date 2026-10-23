@@ -6,8 +6,7 @@
 
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{release, texture_usage, Format, Gpu};
-use crate::gpu::renderer::Image;
+use crate::gpu::api::{release, texture_usage, Format, Gpu, Image};
 
 use crate::gpu::layers::{mip_levels, Mips};
 

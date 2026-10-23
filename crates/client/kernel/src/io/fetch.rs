@@ -18,6 +18,7 @@ use xpute_kit::status::errno::Errno;
 use crate::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::io::failure::{Ended, Failure};
 use crate::io::file::{self, Opened, Owner, Path};
+use crate::io::host::Refused;
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::io::source;
 use crate::param::MAX_CREDITS;
@@ -76,6 +77,8 @@ enum Got {
     Read(Option<Block>),
     Absent,
     Failed(Failure),
+    /// The heap refused the body room, as its release count was then.
+    Refused(Refused),
 }
 
 struct Arrival {
@@ -142,7 +145,7 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
                     unsafe { file::read(fd, core::slice::from_raw_parts_mut(ptr_at::<u8>(block.0), n as usize)) };
                     Got::Read(Some(block))
                 }
-                None => Got::Failed(Errno::ENOMEM.into()),
+                None => Got::Refused(Refused::now()),
             };
             file::close(fd);
             got
@@ -195,6 +198,7 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         // Only an absence says there is none; an empty read is not an object.
         Got::Read(None) => Failure::from(Errno::EBADMSG),
         Got::Failed(fail) => fail,
+        Got::Refused(refused) => return settle(key, Ended::Refused(refused), Some(phases)),
     };
     settle(key, Ended::Failed(fail), Some(phases));
 }

@@ -10,7 +10,7 @@
   },
 
   "tasks": {
-    // The guest's module, from crates/, into src/kernel/guest.wasm. Every
+    // The guest's module, from crates/, into src/guest.wasm. Every
     // task that loads it depends on this, so it is never stale or missing.
     "build:wasm": "deno run -A script/build-wasm.ts",
     // The same module in its published shape — without the dev-only settings
@@ -37,6 +37,8 @@
       "dependencies": ["build:wasm:published"]
     },
 
+    // A catalog entry is a number, an id and a name in every locale; the first
+    // two are written from the JSON under spec/, the last is people's.
     // Guards the artifact, not the source: a dev surface can be gated
     // correctly and still leave its strings in the bundle. Runs between build
     // and publish so a leak stops the deploy rather than being noticed on the
@@ -46,13 +48,7 @@
     // npx, since it wants a newer Node than a system may have.
     "deploy": "deno run -A script/deploy.ts",
 
-    // A catalog entry is a number, an id and a name in every locale; the first
-    // two are written from the JSON under spec/, the last is people's.
-    "check": "deno check src/main.tsx cloudflare-worker/index.ts",
-    // Pure-logic modules: none of them touches the DOM or the GPU, so plain
-    // `deno test` works with no browser harness, over the module built for
-    // it. What needs a canvas is verified live.
-    "test": "deno test -A src"
+    "check": "deno check src/main.tsx cloudflare-worker/index.ts"
   },
 
   "compilerOptions": {
@@ -61,7 +57,7 @@
     "jsxImportSource": "react",
 
     "types": [
-      "./@types/index.d.ts",
+      "../client/@types/index.d.ts",
 
       "npm:vite/client",
       "npm:@webgpu/types@^0.1.69",
@@ -72,31 +68,20 @@
 
   "imports": {
     "@/": "./src/",
-    // What differs by platform, behind one name: the web's here, and a
-    // native build maps the same prefix to its own directory.
-    "@platform/": "./src/platform/web/",
+    "@pxl/client/": "../client/src/",
 
     // build tools
+    "vite": "npm:vite@^8.3.0",
+    "@deno/vite-plugin": "npm:@deno/vite-plugin@^2.0.3",
     "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^6.1.1",
 
-    // react core
     "react": "npm:react@19.2.3",
     "react-dom": "npm:react-dom@19.2.3",
-    "react-router-dom": "npm:react-router-dom@^7.18.4",
     // The shell is written, and type-checked, against React Native's own
     // API; on the web vite.config.ts bundles react-native-web in its place,
     // which renders the same primitives as the DOM.
     "react-native": "npm:react-native@0.86.3",
     "react-native-web": "npm:react-native-web@^0.21.2",
-
-    // state management
-    "zustand": "npm:zustand@^5.0.15",
-
-    // icons
-    "phosphor-react-native": "npm:phosphor-react-native@^3.0.6",
-    "react-native-svg": "npm:react-native-svg@15.15.4",
-
-    // internationalization
-    "react-i18next": "npm:react-i18next@^17.0.14"
+    "zustand": "npm:zustand@^5.0.15"
   }
 }

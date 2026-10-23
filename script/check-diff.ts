@@ -101,7 +101,7 @@ const cargo = (name: string) => {
   for (const argv of rust(name)) runs.push({ label: `${name}: ${argv.slice(0, 2).join(" ")}`, argv });
 };
 const xpute = under("xpute/ts/");
-const web = xpute || under("apps/web/");
+const web = xpute || under("apps/web/") || under("apps/client/");
 
 // What ships.
 if (web) task("check:web");

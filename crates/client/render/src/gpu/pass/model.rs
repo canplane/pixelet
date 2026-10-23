@@ -3,15 +3,72 @@
 //! What the model passes (decor, impostors, actors) share: group 0, per-draw
 //! uniform slots written once before the pass, and the draw loop.
 
+use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_guest::global::Global;
+
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
-use crate::gpu::api::{buffer_range_entry, buffer_usage, release, Entry, Gpu};
+use crate::frame::shader::words::DRAW_FLOATS;
+use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes, Entry, Gpu, Image};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{frame_group, put_f32, put_u32, Scratch};
+use crate::gpu::put::{put_f32, put_u32, Scratch};
 
+fn frame_group(g: &Gpu, layout: u32, frame: u32, shadow: [Entry; 2], ao: Entry, air: [Entry; AIR_ENTRIES]) -> u32 {
+    let mut e = vec![buffer_entry(0, frame), shadow[0], shadow[1], ao];
+    e.extend(air);
+    g.bind_group(layout, &e)
+}
+
+/// Each skin image's bind group, made the first time a frame prepares a draw
+/// of it, over one sampler: an image's texture is taken once (`Gpu::image`),
+/// so a skin one pass binds again, or another binds, is the group here. As
+/// many as the skins the asset table names, in the one layout a skin takes
+/// (record.rs `SKIN`), kept for the device's life.
+static SKINS: Global<Skins> = Global::new();
+
+#[derive(Default)]
+struct Skins {
+    sampler: u32,
+    /// An image and its group.
+    groups: Vec<(u32, u32)>,
+}
+
+/// A skin's bind group, made in `layout` where none is; none while its image
+/// lands. Only as a frame prepares, before its transaction (`frame_begin`): a
+/// group made in a frame that is dropped would be gone and still named here.
+pub fn skin_group(g: &Gpu, layout: u32, (image, file): Image) -> Option<u32> {
+    if let Some(group) = skin_made(image) {
+        return Some(group);
+    }
+    let skins = SKINS.get(Skins::default);
+    let texture = g.image(image, file)?;
+    if skins.sampler == 0 {
+        skins.sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::repeat, None, 1);
+    }
+    let view = g.view(texture, false, 0, 1, 0, 1);
+    let group = g.bind_group(layout, &[view_entry(0, view), sampler_entry(1, skins.sampler)]);
+    skins.groups.push((image, group));
+    Some(group)
+}
+
+/// A skin's bind group as a frame's draws bind it: the one a prepare made
+/// (`skin_group`), or none.
+pub fn skin_made(image: u32) -> Option<u32> {
+    SKINS.get(Skins::default).groups.iter().find(|&&(i, _)| i == image).map(|&(_, group)| group)
+}
+
+/// The device gone, its groups go with it.
+pub(crate) fn skins_lost() {
+    SKINS.set(Skins::default());
+}
+
+/// Which of a model's pipelines draws it: lit into the world's image, its
+/// depth from the sun into the shadow map, or its depth from the eye for
+/// the screen's occlusion.
 #[derive(Clone, Copy)]
 pub enum Stage {
     Lit,
+    Depth,
     Prepass,
 }
 
@@ -22,27 +79,30 @@ pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
 
 /// Group 0 as the world image's models read it, the occlusion its map, and
 /// as what is drawn over the image reads it (`over`): open, as the map is of
-/// the image beneath, which the occlusion was found over without it.
+/// the image beneath, which the occlusion was found over without it. Both
+/// read the sun's shadow map `shadow`.
 pub struct FrameGroups {
     pub frame: u32,
     pub over: u32,
     layout: u32,
+    shadow: [Entry; 2],
     air: [Entry; AIR_ENTRIES],
 }
 
 impl FrameGroups {
-    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, [ao, open]: [Entry; 2], air: [Entry; AIR_ENTRIES]) -> FrameGroups {
+    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, shadow: [Entry; 2], [ao, open]: [Entry; 2], air: [Entry; AIR_ENTRIES]) -> FrameGroups {
         FrameGroups {
-            frame: frame_group(g, layout, frame_buffer, ao, air),
-            over: frame_group(g, layout, frame_buffer, open, air),
+            frame: frame_group(g, layout, frame_buffer, shadow, ao, air),
+            over: frame_group(g, layout, frame_buffer, shadow, open, air),
             layout,
+            shadow,
             air,
         }
     }
 
     pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, ao: [Entry; 2]) {
         self.release();
-        *self = FrameGroups::new(g, self.layout, frame_buffer, ao, self.air);
+        *self = FrameGroups::new(g, self.layout, frame_buffer, self.shadow, ao, self.air);
     }
 
     pub fn release(&self) {
@@ -52,8 +112,8 @@ impl FrameGroups {
 }
 
 pub struct DrawUniforms {
-    /// Rounded up to the device's offset alignment.
     bytes: u32,
+    /// `bytes` rounded up to the device's offset alignment.
     stride: u32,
     buffer: u32,
     capacity: u32,
@@ -77,7 +137,7 @@ impl DrawUniforms {
     pub fn new(bytes: u32, align: u32) -> DrawUniforms {
         DrawUniforms {
             bytes,
-            stride: bytes.max(align),
+            stride: bytes.next_multiple_of(align),
             buffer: 0,
             capacity: 0,
             group: 0,
@@ -126,7 +186,14 @@ impl DrawUniforms {
     }
 }
 
-/// `third` is decor's padding or the impostor's sprite layer.
+/// A draw's uniform, a slot of `DrawUniforms` each: what every model pass
+/// writes and its shader reads (frame/shader/words.rs `DRAW_FLOATS`).
+pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
+
+/// A decor draw's uniform as instances.wgsl's `Draw` reads it, for the
+/// model tier and the impostors both: translation, first lane word,
+/// stride, opacity, `third`, index list's first word. `third` is decor's
+/// padding or the impostor's sprite layer.
 pub fn put_instances(buf: &mut [u8], u: &[f32], third: u32) {
     put_f32(buf, 0, u[0]);
     put_f32(buf, 4, u[1]);

@@ -1,6 +1,6 @@
 // The air as the frame shows it: before each point, read off the air's
 // volume (gpu/atmosphere.rs `froxel`), which the march to its froxels made
-// (atmos_froxel.wgsl, atmos_view.wgsl `seen_at`); and the sky, and the land
+// (atmos_froxel.wgsl, atmos_view.wgsl `air_held`); and the sky, and the land
 // past the terrain, seen through it.
 
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
@@ -11,41 +11,51 @@
 
 /* the air before a point */
 
-// The froxels a side and deep: Hillaire 2020's aerial-perspective volume, 32
-// a side and 32 deep, as Unreal's SkyAtmosphere lays it out (frame/shader/words.rs
-// `AIR_FROXELS`); the volume holds four of these deep, one a term.
-const AIR_TERMS: f32 = 4.0;
-
-// Term `k` of the volume at `uv` across and `z` deep, its depth's share
-// cubed of `air_far` (`air_depth`), filtered within the term's own froxels.
-fn air_term(uv: vec2f, z: f32, k: f32) -> vec4f {
+// Column `c` of the volume `d` units from the eye, as deep as its own span
+// puts it (atmos_froxel.wgsl `column_span`): Hillaire 2020's
+// aerial-perspective volume, 32 a side and 32 deep, as Unreal's
+// SkyAtmosphere lays it out (frame/shader/words.rs `AIR_FROXELS`), its
+// slices' texels at depths 0 to 1 of the span and the span in the slice past
+// them.
+fn air_column(c: vec2u, d: f32) -> vec4f {
   let n = f32(AIR_FROXELS);
-  let deep = clamp(z * n, 0.5, n - 0.5);
-  return textureSampleLevel(air_volume, atmos_sampler, vec3f(uv, (k * n + deep) / (AIR_TERMS * n)), 0.0);
+  let span = air_span_of(textureLoad(air_volume, vec3u(c, AIR_FROXELS), 0).xy);
+  let z = air_z(span, d);
+  return textureSampleLevel(air_volume, atmos_sampler, vec3f((vec2f(c) + 0.5) / n, (0.5 + z * (n - 1.0)) / (n + 1.0)), 0.0);
+}
+
+// The volume at `uv` across, `d` units from the eye: the four columns about
+// it, each read at that distance by its own span. Read at one depth in all
+// four, as one filtered sample would, a column whose span runs far past its
+// neighbour's — toward the horizon, where the sea's plane runs off — gave a
+// point the air of another distance, a line along the horizon.
+fn air_before(uv: vec2f, d: f32) -> vec4f {
+  let last = vec2f(f32(AIR_FROXELS - 1u));
+  let at = clamp(uv * f32(AIR_FROXELS) - 0.5, vec2f(0.0), last);
+  let c0 = vec2u(floor(at));
+  let c1 = vec2u(min(floor(at) + 1.0, last));
+  let w = at - floor(at);
+  let top = mix(air_column(c0, d), air_column(vec2u(c1.x, c0.y), d), w.x);
+  let bottom = mix(air_column(vec2u(c0.x, c1.y), d), air_column(c1, d), w.x);
+  return mix(top, bottom, w.y);
 }
 
 // The air before a point as the volume holds it at the point's place on the
 // screen and its distance: what the eye's view projects it to, so a point
-// off the screen or behind the eye reads the volume's nearest edge.
-// Nearer than the first froxels' middle, the air there is faded to none at
-// the eye by the point's share of that distance (Hillaire 2020's own
-// handling short of the volume's first slice): what the air scatters and
-// dims grows with the length of air before a point, which that near is
-// all but straight. The lights at a point are not the air's length, and
-// are read as they are.
+// off the screen or behind the eye reads the volume's nearest edge. A point
+// past a column's span, under the sea or past the air's ground, reads the
+// air to its end. The lights at a point are the point's own, read where it
+// stands (atmos_view.wgsl `light_of`): they turn with its height, and a
+// froxel stands higher or lower than what is drawn in it.
 fn seen_from_eye(world_pos: vec3f) -> Seen {
   let clip = frame_view_proj() * vec4f(world_pos, 1.0);
   let w = max(clip.w, 1e-6);
   let uv = vec2f(clip.x / w * 0.5 + 0.5, 0.5 - clip.y / w * 0.5);
-  let share = clamp(length(world_pos - frame_camera_pos()) / air_far(), 0.0, 1.0);
-  // `air_depth` the other way.
-  let z = pow(max(share, 1e-30), 1.0 / 3.0);
-  let near = min(share / air_depth(0.5 / f32(AIR_FROXELS)), 1.0);
-  let air = air_term(uv, z, 0.0);
+  let air = air_before(uv, length(world_pos - frame_camera_pos()));
   var s: Seen;
-  s.scattered = air.rgb * near;
-  s.through = 1.0 - near * (1.0 - air.a);
-  s.light = Light(air_term(uv, z, 1.0).rgb, air_term(uv, z, 2.0).rgb, air_term(uv, z, 3.0).rgb);
+  s.scattered = air.rgb;
+  s.through = air.a;
+  s.light = light_of(world_pos);
   return s;
 }
 
@@ -113,7 +123,7 @@ fn beyond(dir: vec3f) -> vec3f {
     }
     return sky;
   }
-  let d = land_below_km() / atmos_km_per_u() / -dir.z;
+  let d = to_land(dir);
   let p = dir * d;
   let seen = seen_from_eye(p);
   let octaves = log2(d / atmos_earth_reach());

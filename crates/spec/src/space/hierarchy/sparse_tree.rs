@@ -13,7 +13,7 @@
 //! block is no reader's until it is allocated again.
 
 use super::tree::{children, slot_of};
-use pxl_portable::overwrite::BRANCH;
+use pxl_spec_core::overwrite::BRANCH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slot<T> {

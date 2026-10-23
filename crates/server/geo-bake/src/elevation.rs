@@ -159,7 +159,7 @@ impl Raster {
     }
 
     /// Leaf `tile`'s padded grid of heights, in leaf cells at its scale
-    /// (pxl-portable `cells_of_m`, pxl-spec `Frame::per_m`).
+    /// (pxl-spec-core `cells_of_m`, pxl-spec `Frame::per_m`).
     pub fn tile_grid(&self, client: &mut Client, tile: [i32; 2]) -> Result<Vec<i16>, postgres::Error> {
         let tile_bbox = get_tile_bbox(LEAF_ZOOM, tile);
         let per_m = Frame::of(Tile::new(LEAF_ZOOM, tile)).per_m();
@@ -247,7 +247,7 @@ impl Raster {
                 // PostgreSQL rounds half to even. No data is 0, the source's
                 // sea: a shard's apron covers every pad, so none lacks a shard.
                 if let Some(v) = source.sample(px, py) {
-                    grid[ele_index(c as u32, (span - 1 - r) as u32)] = pxl_portable::cells_of_m(v, per_m) as i16;
+                    grid[ele_index(c as u32, (span - 1 - r) as u32)] = pxl_spec_core::cells_of_m(v, per_m) as i16;
                 }
             }
         }

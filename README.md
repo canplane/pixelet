@@ -86,7 +86,7 @@ deno task dev:oven
 | `deno task preview:{oven,shelf}` | The production bundle over `dev:oven`'s or `dev:shelf`'s servers                                                                                                                                                                                                  |
 | `deno task clear:oven`           | Empty `dev:oven`'s cache, after a re-ingest or a bake change                                                                                                                                                                                                      |
 | `deno task clear:shelf [kind…]`  | Delete the named kinds' sets under `./out` (all three when none), to bake them from nothing                                                                                                                                                                       |
-| `deno task build:wasm`           | Build the guest module into `apps/web/src/kernel/guest.wasm`                                                                                                                                                                                                      |
+| `deno task build:wasm`           | Build the guest module into `apps/web/src/guest.wasm`                                                                                                                                                                                                             |
 | `deno task dev:native`           | Metro, for the device app                                                                                                                                                                                                                                         |
 | `deno task bake <kind> [args…]`  | Make a kind's data (`script/tool.ts`): `terrain`, `place`, `division` from db-geo into `./out/<kind>/`; `earth` from `infra/earth/` into `./out/earth/`; `star` into the renderer's `bright-stars.bin`; `geoid <egm2008-5.pgm>` into `spec/spec/space/geoid.json` |
 | `deno task download <what>`      | Fetch a source a tool reads: `pack`, the texture pack's; `moon`; `earth`                                                                                                                                                                                          |
@@ -154,19 +154,17 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 ```
 .
 ├── apps/
-│   ├── web/                  # The shell, and the Cloudflare Worker that serves it (cloudflare-worker/)
+│   ├── client/               # The shell and its end of the kernel, which both apps bundle
 │   │   └── src/
-│   │       ├── kernel/       #   the kernel's host: abi, control, io, mem, render, turn; the shell's end
-│   │       ├── platform/web/ #   what differs on a page, behind @platform/
-│   │       ├── app/ page/    #   the frame, the router, the pages
-│   │       ├── feature/      #   a screen's own pieces
+│   │       ├── bracket.tsx   #   what the client asks of the place it runs in
+│   │       ├── kernel/       #   the shell's end of the kernel: abi, boot, control, io, mem, render, turn
+│   │       ├── shell/        #   the UI: frame, world, settings, search, debug, ui kit (pill.ios.tsx beside pill.tsx), locale
 │   │       ├── catalog/      #   the data screens show (cells, assets)
-│   │       ├── locale/       #   i18n catalogs, dev-only ones apart
-│   │       ├── config/       #   deployment config and routes
-│   │       └── shared/       #   shared UI kit and browser helpers
-│   └── native/               # The same shell on a device, through Expo and Metro
-│       ├── src/platform/     #   what differs on a device, behind @platform/
-│       └── modules/platform/ #   its native half: one module, the view, the linked kernel
+│   │       └── config/       #   deployment config and routes
+│   ├── web/                  # The page's bracket: the browser's APIs, the guest module, the Cloudflare Worker
+│   └── native/               # The device's bracket, through Expo and Metro
+│       ├── src/              #   what the app gives the client, through its native module
+│       └── modules/platform/ #   its native half: one module, the views, the linked kernel
 ├── crates/                   # The Rust workspace, grouped by where a crate runs
 │   ├── spec/                 #   pxl-spec: the model every crate shares
 │   ├── client/               #   what the client runs
@@ -192,7 +190,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
                               #   record (archive/ those retired), experiment/ measurements
 ```
 
-**What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the servers, the bakes and the asset ingest compile the model, so they are crates; the Overture and elevation ingests put a provider's data into Postgres sharing nothing with the model, so they are scripts under `infra/geo/`. The host and the shell are TypeScript because neither decides anything about the world; what they need of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is generated from.
+**What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the servers, the bakes and the asset ingest compile the model, so they are crates; the Overture and elevation ingests put a provider's data into Postgres sharing nothing with the model, so they are scripts under `infra/geo/`. The host and the shell are TypeScript because neither decides anything about the world; what they need of the model — catalogs, ABI enums, routes — is generated into `apps/client/src/**/*.spec.ts` from the same JSON the Rust is generated from.
 
 | Crate / package | What it is                                                                                                                                       |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -201,8 +199,9 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                            |
 | `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                       |
 | `pxl-native`    | The guest on a device: a static library that runs every call on a thread of its own and exports `pxl_interrupt` through the C ABI.               |
-| `apps/web`      | The kernel's host and its shell, both apps'; and the Cloudflare Worker that serves it all.                                                       |
-| `apps/native`   | The device app: the same host and shell run by Metro, what only a device does, and the native module that links the kernel.                      |
+| `apps/client`   | The shell and its end of the kernel, which both apps bundle and hand what their place gives (`src/bracket.tsx`).                                 |
+| `apps/web`      | The page's bracket: what a browser tab gives the client, the guest module it instantiates, and the Cloudflare Worker that serves it all.         |
+| `apps/native`   | The device's bracket: what the app gives the client through its native module, which links the kernel.                                           |
 | `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                                      |
 | `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                         |
 | `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                                       |
@@ -221,9 +220,9 @@ A crate's root holds its modules, the directories sorted by kind and the one-fil
 | leaves             | `setting` `model` `decor` `billboard` `param` `approach` |
 | beside             | `profiler`                                               |
 
-Two gitignored trees hold what the tree makes, each for one reader: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and `cache/` is what `dev:oven` bakes on demand, deleted at no cost. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
+One gitignored tree holds what the tree makes: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and under it `out/oven/` is what `dev:oven` bakes on demand, deleted at no cost. Scratch — logs, probes, diffs — goes in `tmp/`, which ignores itself, and is deleted when done. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 
-The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's host (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
+The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's host (`apps/client/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
 ---
 

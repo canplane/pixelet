@@ -9,22 +9,18 @@ use pxl_spec::asset::star::{self, RECORD_BYTES};
 use pxl_spec::space::coord::mat4::Mat4;
 
 use crate::frame::shader::record::PIPELINE_STARS;
+use crate::frame::shader::words::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
 use crate::frame::shader::words::STARS_FLOATS;
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, word_bytes, Entry, Gpu};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::put_mat;
-use crate::look::environment::{ENV_MOON_LIGHT, ENV_SKY, ENV_STARS};
+use crate::gpu::put::put_mat;
+use crate::look::environment::{ENV_SKY, ENV_STARS};
 
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-stars.bin");
 /// Direction and flux, then color and padding.
 const STAR_FLOATS: usize = 8;
-
-pub(crate) const SKY: usize = 16;
-pub(crate) const DENSITY: usize = 35;
-pub(crate) const INTENSITY: usize = 36;
-pub(crate) const MOON: usize = 40;
 
 const SHOWN: f32 = 0.001;
 
@@ -70,12 +66,11 @@ impl StarPass {
         if u[INTENSITY] <= SHOWN {
             return;
         }
-        put_mat(u, 0, view_proj);
+        put_mat(u, VIEW_PROJ, view_proj);
         u[SKY..SKY + 12].copy_from_slice(&env[ENV_STARS..ENV_STARS + 12]);
         u[SKY + 12..SKY + 16].copy_from_slice(&[0.0, 0.0, 0.0, 1.0]);
         let css = stage_lane()[STAGE_AT::VIEWPORT];
         u[DENSITY] = if css > 0.0 { (width as f64 / css) as f32 } else { 1.0 };
-        u[MOON..MOON + 3].copy_from_slice(&env[ENV_MOON_LIGHT..ENV_MOON_LIGHT + 3]);
     }
 
     /// `words` written, where the frame's read found them moved.

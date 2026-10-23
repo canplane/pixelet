@@ -21,7 +21,7 @@
 //   ./script/publish.ts serve <kind> <version>
 //   ./script/publish.ts override <shard> <kind> <version|->
 
-import { tileObject } from "../apps/web/src/config/route.spec.ts";
+import { tileObject } from "../apps/client/src/config/route.spec.ts";
 
 const BUCKET = "pixelet-tiles";
 const KINDS = ["terrain", "place", "division", "earth"];

@@ -24,7 +24,7 @@ fn badge_proj() -> mat4x4f { return mat4x4f(badge_words[4], badge_words[5], badg
 fn badge_translation() -> vec3f { return badge_words[8].xyz; }
 fn badge_px_k() -> f32 { return badge_words[8].w; }
 
-@group(1) @binding(1) var<storage, read> instances: array<f32>;
+@group(2) @binding(0) var<storage, read> instances: array<f32>;
 
 // A billboard's number, never 0, which is no region.
 fn badge_number(ii: u32) -> u32 {

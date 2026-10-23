@@ -12,8 +12,7 @@
     "companion",
     "preview",
     "demand",
-    "scene",
-    "world_gizmo"
+    "scene"
   ],
   "EFFECT_NAMES": [
     "navigation",
@@ -21,7 +20,6 @@
     "orientation",
     "follow",
     "destination",
-    "view",
     "decor",
     "objects",
     "edit",

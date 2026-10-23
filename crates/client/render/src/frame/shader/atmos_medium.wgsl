@@ -1,75 +1,8 @@
 // The atmosphere as a medium. Distances are km; a point is (r, mu) as Bruneton writes them.
 
-struct Atmosphere {
-  rayleigh_scattering: vec3f,
-  bottom_radius: f32,
-  ozone_absorption: vec3f,
-  top_radius: f32,
-  // Free.
-  white_free: vec3f,
-  rayleigh_scale_height: f32,
-  sun_dir: vec3f,
-  mie_scattering: f32,
-  camera_altitude: f32,
-  km_per_u: f32,
-  mie_extinction: f32,
-  mie_scale_height: f32,
-  mie_g: f32,
-  ozone_center: f32,
-  ozone_half_width: f32,
-  ground_albedo: f32,
-  sun_angular_radius: f32,
-  exposure: f32,
-  night_stops: f32,
-  shown_fall: f32,
-  moon_dir: vec3f,
-  moon_light: f32,
-  // Free (32 to 35).
-  free: vec4f,
-  // Lights the ground, never drawn: drawn, the sky went pale blue.
-  night_sky: vec3f,
-  // The Earth's face under the eye: at sea level the terrain floated on it.
-  land_altitude_km: f32,
-  // A lit city's radiance where the picture holds all of it.
-  city_light: vec3f,
-  // In units.
-  earth_reach: f32,
-  // The south-west tile, tiles across the window and around the world; then a
-  // tile's layer plus one in four bits, row by row, zero for the global picture.
-  earth_window: vec4i,
-  earth_tiles: vec4u,
-};
-
-// Field by field, never as a struct: a struct lost Safari's WebGPU its GPU process.
+// Its words' fields and accessors are frame/shader/words.rs `atmos`'s, which
+// build.rs writes here.
 @group(0) @binding(8) var<uniform> atmos_words: array<vec4f, ATMOS_VEC4S>;
-
-fn atmos_rayleigh_scattering() -> vec3f { return atmos_words[0].xyz; }
-fn atmos_bottom_radius() -> f32 { return atmos_words[0].w; }
-fn atmos_ozone_absorption() -> vec3f { return atmos_words[1].xyz; }
-fn atmos_top_radius() -> f32 { return atmos_words[1].w; }
-fn atmos_rayleigh_scale_height() -> f32 { return atmos_words[2].w; }
-fn atmos_sun_dir() -> vec3f { return atmos_words[3].xyz; }
-fn atmos_mie_scattering() -> f32 { return atmos_words[3].w; }
-fn atmos_camera_altitude() -> f32 { return atmos_words[4].x; }
-fn atmos_km_per_u() -> f32 { return atmos_words[4].y; }
-fn atmos_mie_extinction() -> f32 { return atmos_words[4].z; }
-fn atmos_mie_scale_height() -> f32 { return atmos_words[4].w; }
-fn atmos_mie_g() -> f32 { return atmos_words[5].x; }
-fn atmos_ozone_center() -> f32 { return atmos_words[5].y; }
-fn atmos_ozone_half_width() -> f32 { return atmos_words[5].z; }
-fn atmos_ground_albedo() -> f32 { return atmos_words[5].w; }
-fn atmos_sun_angular_radius() -> f32 { return atmos_words[6].x; }
-fn atmos_exposure() -> f32 { return atmos_words[6].y; }
-fn atmos_night_stops() -> f32 { return atmos_words[6].z; }
-fn atmos_shown_fall() -> f32 { return atmos_words[6].w; }
-fn atmos_moon_dir() -> vec3f { return atmos_words[7].xyz; }
-fn atmos_moon_light() -> f32 { return atmos_words[7].w; }
-fn atmos_night_sky() -> vec3f { return atmos_words[9].xyz; }
-fn atmos_land_altitude_km() -> f32 { return atmos_words[9].w; }
-fn atmos_city_light() -> vec3f { return atmos_words[10].xyz; }
-fn atmos_earth_reach() -> f32 { return atmos_words[10].w; }
-fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[11]); }
-fn atmos_earth_tiles() -> vec4u { return bitcast<vec4u>(atmos_words[12]); }
 
 
 /* the medium */
@@ -159,6 +92,12 @@ fn land_below_km() -> f32 {
 // is up.
 fn falls_to_land(dir: vec3f) -> bool {
   return dir.z < 0.0 && land_below_km() > 0.0;
+}
+
+// How far from the eye a ray along `dir` that falls to the land meets it, in
+// units (`falls_to_land`).
+fn to_land(dir: vec3f) -> f32 {
+  return land_below_km() / atmos_km_per_u() / -dir.z;
 }
 
 fn land_radius() -> f32 {

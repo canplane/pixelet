@@ -1,6 +1,6 @@
 // pxl-spec/bake/way.rs
 
-//! A way covers the cells along its line by pxl-portable ways.rs's rule
+//! A way covers the cells along its line by pxl-spec-core ways.rs's rule
 //! (`covers`, `reach`), on the ground and on a deck alike. An approach's look is laid into a leaf's cells (`lay`), so every zoom
 //! folds it as the ground's; its embankment or cutting stays a line.
 

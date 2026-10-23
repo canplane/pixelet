@@ -3,13 +3,13 @@
 //! A block of instance lanes drawn by size: each instance a model, a sprite
 //! or nothing by the pixels it spans, decided per frame and rewriting only
 //! its index list (`present_block`). Clouds are drawn so; the GPU draws decor
-//! by the same tiers, one rule (pxl-portable scatter.rs `drawn::tier`).
+//! by the same tiers, one rule (pxl-spec-core scatter.rs `drawn::tier`).
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem::base::ptr_at;
 
-use pxl_portable::scatter::drawn;
+use pxl_spec_core::scatter::drawn;
 
 use crate::scene::decor::drawn::{decor_gone_px, decor_sprite_px};
 use crate::scene::decor::instance::{decor_groups, GroupLanes};

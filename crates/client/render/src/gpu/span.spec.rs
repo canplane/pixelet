@@ -14,7 +14,7 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
-pub const GPU_SPAN_NAMES: &[&str] = &["air", "prepass", "ao", "world", "badges", "debug", "cases", "fill", "cast", "grow"];
+pub const GPU_SPAN_NAMES: &[&str] = &["air", "prepass", "ao", "world", "badges", "debug", "cases", "fill", "cast", "grow", "shadow"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -28,11 +28,12 @@ pub enum GpuSpanName {
     fill = 7,
     cast = 8,
     grow = 9,
+    shadow = 10,
 }
 
 impl GpuSpanName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [GpuSpanName; 10] = [
+    pub const ALL: [GpuSpanName; 11] = [
         GpuSpanName::air,
         GpuSpanName::prepass,
         GpuSpanName::ao,
@@ -43,6 +44,7 @@ impl GpuSpanName {
         GpuSpanName::fill,
         GpuSpanName::cast,
         GpuSpanName::grow,
+        GpuSpanName::shadow,
     ];
 
     /// The member a number names, or none for a number the set does not

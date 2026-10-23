@@ -38,8 +38,10 @@ For each finding, say before touching it:
 
 A finding where nothing disappears is worth little and is left. Prefer the
 deletion that makes the problem impossible to the machinery that manages it.
-Rank what is left by the order in "The main axis", and say plainly where the
-first fix you thought of is not the smallest state space.
+Rank what is left by what it removes: a second representation of one fact
+first, then a second owner of one, then a state handled rather than removed;
+and say plainly where the first fix you thought of is not the smallest state
+space.
 
 ## 3. Agree
 

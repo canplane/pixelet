@@ -12,21 +12,11 @@ pub fn damp_alpha(k: f64, delta: f64) -> f64 {
     1.0 - libm::exp(-k * delta)
 }
 
-/// Whether it is still on its way.
-pub fn approach_scalar(current: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64, bool) {
-    let next = current + (target - current) * damp_alpha(k, delta);
-    if (target - next).abs() < eps {
-        (target, false)
-    } else {
-        (next, true)
-    }
-}
-
 /// The short way round, in [-π, π).
 pub fn approach_angle(current: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64, bool) {
     let pi = core::f64::consts::PI;
     let left = wrap(target - current, -pi, pi);
-    let (moved, moving) = approach_scalar(0.0, left, k, delta, eps);
+    let ([moved], moving) = approach_vec([0.0], [left], k, delta, eps);
     (wrap(current + moved, -pi, pi), moving)
 }
 

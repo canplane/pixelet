@@ -98,6 +98,6 @@ export class Strobe {
     this.submit(grant, delta_s);
     const t0 = performance.now();
     const wake_ms = this.doorbell.ring(grant.quota_ms);
-    this.quantum.observe(delta_s, performance.now() - t0, grant, wake_ms);
+    this.quantum.observe(performance.now() - t0, grant, wake_ms);
   }
 }

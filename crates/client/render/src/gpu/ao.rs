@@ -12,7 +12,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, Stamp};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::put_mat;
+use crate::gpu::put::put_mat;
 
 /// proj, inv_proj, half, padding.
 const HALF: usize = 32;

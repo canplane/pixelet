@@ -12,7 +12,7 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_kit::math::scalar::clamp;
 
-use crate::approach::{approach_angle, approach_scalar, approach_vec};
+use crate::approach::{approach_angle, approach_vec};
 use crate::control::camera::controller::{camera, focus, focus_world, look_dir, look_domain, set_eye_world};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::state::{camera_state, Intent, IntentPatch};
@@ -21,7 +21,6 @@ use crate::param::DOLLY_GAIN;
 use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::param::{MAX_DIST, MIN_DIST};
 use crate::setting::store::{settings_store, OrbitObstacleMode};
-use crate::view::frame::pose::view_compose;
 use terrain_gate::{allowed_view, climb_polar};
 use xpute_guest::global::Global;
 
@@ -105,22 +104,6 @@ pub fn zoom_to(dist: f64) -> f64 {
     .dist
 }
 
-/// The drawn orbit put at what the controls hold, at once, as a view set
-/// outright asks (shell.rs `set_view`); the eye moves with it where the
-/// focus stands, else when the focus is put. The climb still bounds the
-/// drawn look each frame (`turn`).
-pub(crate) fn put_view() {
-    let vs = camera_state().intent;
-    // The focus first: it is read off the eye by the orbit as it stood.
-    let center = focus_world();
-    let (o, cam) = (orbit(), camera());
-    o.dist = clamp(vs.dist, MIN_DIST, MAX_DIST);
-    (cam.polar, cam.azimuth) = look_domain(vs.polar, vs.azimuth);
-    if let Some(center) = center {
-        set_eye_world(&v3::add(&center, &orbit_eye_offset(o.dist, cam.polar, cam.azimuth)));
-    }
-}
-
 pub(crate) fn target_center() -> Option<Q3> {
     orbit().to.or_else(focus)
 }
@@ -145,7 +128,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     let to = target(&mut o.to, drawn_center);
     let (center, mut moving) = approach_vec(drawn_center, to, POS_DAMP, delta, CENTER_EPS);
 
-    let (dist, m) = approach_scalar(o.dist, vs.dist, CAM_DAMP, delta, DIST_EPS);
+    let ([dist], m) = approach_vec([o.dist], [vs.dist], CAM_DAMP, delta, DIST_EPS);
     o.dist = clamp(dist, MIN_DIST, MAX_DIST);
     moving |= m;
 
@@ -160,7 +143,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         (true, false) => CLIMB_RELAX_DAMP,
         (false, _) => CAM_DAMP,
     };
-    let (polar, m) = approach_scalar(cam.polar, polar, rate, delta, POLAR_EPS);
+    let ([polar], m) = approach_vec([cam.polar], [polar], rate, delta, POLAR_EPS);
     moving |= m;
     let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, AZIMUTH_EPS);
     moving |= m;
@@ -171,6 +154,5 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
         set_eye_world(&v3::add(&center, &e));
     }
-    view_compose(crate::control::camera::controller::pose());
     Some(moving)
 }

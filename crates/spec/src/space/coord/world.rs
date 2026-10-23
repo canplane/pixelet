@@ -16,7 +16,7 @@ use super::zoom::{cube, units, Zoom};
 /// - Y, 24: the Mercator plane is a square;
 /// - Z, 16: ±2^15 units of height, as the terrain stores a height, an `i16`
 ///   in ground cells, a ground cell a unit (`bake/constant.rs`).
-pub const EXTENT: [u32; 3] = [pxl_portable::UNIT_ZOOM, pxl_portable::UNIT_ZOOM, pxl_portable::HEIGHT_BITS];
+pub const EXTENT: [u32; 3] = [pxl_spec_core::UNIT_ZOOM, pxl_spec_core::UNIT_ZOOM, pxl_spec_core::HEIGHT_BITS];
 
 const _: () = assert!(
     EXTENT[0] + FRAC_W == i32::BITS && EXTENT[1] + FRAC_W == i32::BITS && EXTENT[2] + FRAC_W <= i32::BITS,
@@ -77,10 +77,10 @@ pub const fn around(zoom: Zoom) -> i64 {
     1i64 << zoom
 }
 
-/// A cell at `z` named as pxl-portable's `wrap_index` names its X, which
+/// A cell at `z` named as pxl-spec-core's `wrap_index` names its X, which
 /// every key goes through.
 pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i32; 3]) -> [i32; 3] {
-    [pxl_portable::wrap_index(zoom, x), y, h]
+    [pxl_spec_core::wrap_index(zoom, x), y, h]
 }
 
 /// The copy of `x` nearest `about`: where a stored X stands for an eye at `about`.

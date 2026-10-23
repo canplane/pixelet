@@ -21,18 +21,11 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::demand::reach_tiles;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::io::demand::{Ask, Why};
+use crate::io::demand::Ask;
 use crate::layer::{Asks, Base};
 
 /// Only the eye. Another point observer would add its own misses.
 const OBSERVERS: u32 = 1;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Hold {
-    Hard,
-    Demand,
-    Cache,
-}
 
 /// No frame for an empty tile, whose body is its own. One asked for again
 /// (`again`) is read meanwhile and fetched once more.
@@ -59,6 +52,11 @@ impl<L> Entry<L> {
     fn idle(&self) -> bool {
         self.held.is_none() && self.ask.is_none()
     }
+
+    /// Held in a frame of its own, not as an empty tile.
+    fn framed(&self) -> bool {
+        self.held.as_ref().is_some_and(|h| h.frame.is_some())
+    }
 }
 
 pub struct Residency<L: Base> {
@@ -83,8 +81,6 @@ pub struct Residency<L: Base> {
     /// tile (`moved_at`), which holds nothing.
     revision: u32,
     refused: u32,
-    admitted: u32,
-    evicted: u32,
 }
 
 /// What a layer's residency holds at once, from what it asks for. A layer
@@ -147,8 +143,6 @@ impl<L: Base> Default for Residency<L> {
             moved: Vec::new(),
             revision: 0,
             refused: 0,
-            admitted: 0,
-            evicted: 0,
         }
     }
 }
@@ -219,10 +213,6 @@ impl<L: Base> Residency<L> {
         })
     }
 
-    fn held_as(&self, p: Tile) -> Option<&Held<L>> {
-        self.entry(p)?.held.as_ref()
-    }
-
     /// Held and asked for: what a reader may read.
     fn readable(&self, p: Tile) -> Option<&Held<L>> {
         self.entry(p).filter(|e| e.ask.is_some())?.held.as_ref()
@@ -235,7 +225,7 @@ impl<L: Base> Residency<L> {
 
     /// Held in a frame of its own, not as an empty tile.
     fn framed(&self, p: Tile) -> bool {
-        self.held_as(p).is_some_and(|h| h.frame.is_some())
+        self.entry(p).is_some_and(Entry::framed)
     }
 
     /// The frame a held tile is in; none for an empty one.
@@ -298,10 +288,6 @@ impl<L: Base> Residency<L> {
         }
     }
 
-    pub fn settled(&self, p: Tile) -> bool {
-        self.line(p).settled
-    }
-
     /// The finest resident tile on `p`'s line: the miss's answer.
     pub fn drawn_from(&self, p: Tile) -> Option<Tile> {
         self.line(p).drawn
@@ -351,40 +337,23 @@ impl<L: Base> Residency<L> {
         self.entry(p)?.ask
     }
 
-    fn hold(&self, p: Tile) -> Hold {
-        let Some(e) = self.entry(p) else { return Hold::Cache };
-        match e.ask.map(|a| a.why) {
-            Some(Why::Floor | Why::Destination | Why::Ancestor) => Hold::Hard,
-            Some(Why::Demand) => Hold::Demand,
-            None => Hold::Cache,
-        }
-    }
-
     /// A frame for arriving `p`: its own, a free one, or a victim among frames
     /// held only as cache. None only for a tile no longer asked for, counted;
     /// for one asked for, none means the capacity bound is broken.
-    fn frame_for(&mut self, p: Tile, victim: impl FnOnce(&[Tile]) -> Option<usize>) -> Option<u32> {
+    fn frame_for(&mut self, p: Tile, victim: impl FnOnce(&mut dyn Iterator<Item = Tile>) -> Option<Tile>) -> Option<u32> {
         if self.framed(p) {
             return self.remove(p);
         }
         if let Some(free) = self.free.pop() {
             return Some(free);
         }
-        let unasked = self.hold(p) == Hold::Cache;
-        let mut candidates: Vec<Tile> = self.tiles.iter().filter(|&(&q, _)| self.framed(q) && self.hold(q) == Hold::Cache).map(|(&q, _)| q).collect();
-        // Sorted, so the policy sees the same list for the same state.
-        candidates.sort_unstable();
-        let Some(at) = victim(&candidates) else {
+        let unasked = self.asked(p).is_none();
+        let Some(q) = victim(&mut self.tiles.iter().filter(|(_, e)| e.framed() && e.ask.is_none()).map(|(&q, _)| q)) else {
             xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
             self.refused += 1;
             return None;
         };
-        self.evicted = self.evicted.wrapping_add(1);
-        self.remove(candidates[at])
-    }
-
-    pub fn churn(&self) -> [u32; 2] {
-        [self.admitted, self.evicted]
+        self.remove(q)
     }
 
     pub fn take_refusals(&mut self) -> u32 {
@@ -393,14 +362,14 @@ impl<L: Base> Residency<L> {
 
     /// The frame is emptied first, so a body that fails to decode leaves it free
     /// rather than another tile reading half-overwritten bytes.
-    /// `victim` picks which frame goes when one must, among the frames held
-    /// only as cache, so a policy changes what is held next and never what
-    /// is correct; none where none may.
-    pub fn admit<E>(&mut self, p: Tile, victim: impl FnOnce(&[Tile]) -> Option<usize>, receive: impl FnOnce(u32) -> Result<L, E>) -> Result<(), E> {
+    /// `victim` picks which frame goes when one must, among the tiles of the
+    /// frames held only as cache, so a policy changes what is held next and
+    /// never what is correct; none where none may. They come in no order the
+    /// state fixes, so a policy picks by a total one.
+    pub fn admit<E>(&mut self, p: Tile, victim: impl FnOnce(&mut dyn Iterator<Item = Tile>) -> Option<Tile>, receive: impl FnOnce(u32) -> Result<L, E>) -> Result<(), E> {
         let Some(record) = self.frame_for(p, victim) else { return Ok(()) };
         match receive(record) {
             Ok(tile) => {
-                self.admitted = self.admitted.wrapping_add(1);
                 self.put(p, tile, Some(record));
                 Ok(())
             }
@@ -425,6 +394,17 @@ impl<L: Base> Residency<L> {
     /// Held, or answered by the tile over it: nothing more will come for it.
     pub fn has_answer(&self, p: Tile) -> bool {
         self.resident(p) || self.entry(p).is_some_and(|e| e.answered)
+    }
+
+    /// Whether every tile asked for shows: its answer, or a resident tile
+    /// over it drawing it coarser (`drawn_from`), as a finer tile asked for
+    /// while the eye moves is.
+    pub fn shown(&self) -> bool {
+        let mut lines = Lines::default();
+        self.tiles
+            .iter()
+            .filter(|(_, e)| e.ask.is_some())
+            .all(|(&p, _)| self.has_answer(p) || self.seek(&mut lines, p).drawn.is_some())
     }
 
     pub fn answer_above(&mut self, p: Tile) {

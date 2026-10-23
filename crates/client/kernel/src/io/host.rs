@@ -170,3 +170,20 @@ pub fn last_words(stop: Stop<'_>) {
 pub fn heap_stat() -> HeapStat {
     (HEAP.get(|| no_heap))()
 }
+
+/// A request the heap refused, as the heap's release count then: it waits
+/// until the heap gives some room back, never on a clock, since only a
+/// release can change the answer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Refused(u32);
+
+impl Refused {
+    pub fn now() -> Refused {
+        Refused(heap_stat().releases)
+    }
+
+    /// Whether the heap has given room back since, so asking again may be served.
+    pub fn over(self) -> bool {
+        heap_stat().releases != self.0
+    }
+}

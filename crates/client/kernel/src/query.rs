@@ -16,6 +16,7 @@ pub mod changed;
 mod decor;
 mod limit;
 mod node;
+mod place;
 mod placed;
 mod ray;
 mod scatter;
@@ -23,9 +24,9 @@ mod support;
 mod surface;
 mod world;
 
-pub use ray::{asked, at_zoom, by_distance, Hit, Ray, Struck};
-pub use support::{over, under, walks};
-pub use world::World;
+pub use ray::{asked, at_zoom, by_distance, held, Hit, Ray, Struck};
+pub use support::{cell_at, over, under, walks};
+pub use world::{Walked, World};
 
 #[cfg(test)]
 #[path = "query.test.rs"]

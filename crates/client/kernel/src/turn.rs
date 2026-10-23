@@ -28,12 +28,10 @@ use crate::layer::earth::Earth;
 use crate::profiler::report::{profiler_frame, FrameTurn};
 use crate::scene::character::companion::{companion_step, CompanionProps};
 use crate::scene::environment::environment_step;
-use crate::scene::indicator::frame_gizmo::frame_gizmo_step;
 use crate::scene::indicator::location_puck::location_puck_step;
 use crate::scene::stage::{take_draw, visible_step};
 use crate::sched::edge::{request_world_tick, world_edge};
 use crate::sched::tick::{on_tick, run_tick, TickContext, TickState};
-use crate::setting::store::settings_store;
 use crate::view::demand::Observed as _;
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::clock::now;
@@ -60,7 +58,7 @@ fn companion_props() -> Option<CompanionProps> {
         center: [center[0], center[1]],
         floor: crate::scene::character::companion::focus_floor(goal, [center[0], center[1]], || crate::control::navigation::support::floor_seen(&goal)),
         azimuth: crate::control::camera::controller::azimuth(),
-        dragging: crate::control::camera::state::camera_state().camera_status == crate::control::camera::state::CameraStatus::Drag,
+        dragging: crate::control::camera::input::dragging(),
         steered: crate::control::camera::input::steering(),
         following: crate::control::navigation::follow_mode::following(),
         eye,
@@ -74,7 +72,7 @@ fn ghost_step() {
     let changed = kernel().parts().map(|(scene, draw)| match ghost() {
         Ghost::None => scene.ghost.clear(draw),
         Ghost::Decor { at, group, rotation, scale } => scene.ghost.set_decor(draw, at, group, rotation as f32, scale as f32),
-        Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(draw, at, size, value, rgb, coplanar),
+        Ghost::Box { at, size, value, rgb } => scene.ghost.set_box(draw, at, size, value, rgb),
     });
     if changed == Some(true) {
         request_world_tick();
@@ -85,20 +83,13 @@ fn companion_tick(ctx: &mut TickContext) {
     companion_step(ctx, companion_props());
 }
 
-fn world_gizmo_tick(_: &mut TickContext) {
-    let focus = crate::control::camera::controller::focus();
-    let show = settings_store().world_gizmo && focus.is_some();
-    let third_person = crate::control::camera::controller::dist() != 0.0;
-    frame_gizmo_step(show, focus, third_person.then(crate::control::camera::controller::azimuth));
-}
-
 /// Each pyramid layer's tiles, from the live eye.
 fn demand_tick(_: &mut TickContext) {
     // The ground's windows where their centres now stand, before what arrives fills them.
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
     let pinned = crate::layer::terrain::window::step(
         [
-            crate::view::observation::observation().map(|o| [o.eye[0], o.eye[1]]),
+            crate::view::observation::eye().map(|e| [e[0], e[1]]),
             crate::control::camera::controller::focus().map(at),
             crate::control::navigation::destination::pending().map(at),
         ],
@@ -124,6 +115,14 @@ fn camera_input_tick(_: &mut TickContext) {
     camera_input_step(crate::view::lens::tau());
 }
 
+/// The camera's last writer, then the view composed where it stands: after
+/// every writer of the pose (the door's events, the turn's effects, the
+/// controllers), before the phases that observe it.
+fn camera_tick(ctx: &mut TickContext) {
+    crate::control::camera::controller::camera_step(ctx);
+    crate::view::frame::pose::view_compose(crate::control::camera::controller::pose());
+}
+
 fn environment_tick(_: &mut TickContext) {
     environment_step();
 }
@@ -133,14 +132,13 @@ fn environment_tick(_: &mut TickContext) {
 pub fn boot() {
     on_tick(Phase::interaction, crate::control::camera::controller::controller_step, StepName::controller as u32);
     on_tick(Phase::interaction, camera_input_tick, StepName::input as u32);
-    on_tick(Phase::interaction, crate::control::camera::controller::camera_step, StepName::camera as u32);
+    on_tick(Phase::interaction, camera_tick, StepName::camera as u32);
     // After the view has moved, so the environment sees this tick's camera.
     on_tick(Phase::interaction, environment_tick, StepName::environment as u32);
     on_tick(Phase::interaction, companion_tick, StepName::companion as u32);
     on_tick(Phase::interaction, crate::scene::character::preview::preview_step, StepName::preview as u32);
     on_tick(Phase::visible, demand_tick, StepName::demand as u32);
     on_tick(Phase::visible, visible_step, StepName::scene as u32);
-    on_tick(Phase::cosmetic, world_gizmo_tick, StepName::world_gizmo as u32);
     world_tasks();
 }
 
@@ -193,8 +191,6 @@ pub fn world_turn() -> f64 {
         crate::control::navigation::support::support_step();
         crate::control::navigation::destination::destination_step()
     });
-    // After every writer of the focus, before anything observes the view.
-    effect!(worst, view, crate::view::frame::pose::view_compose(crate::control::camera::controller::pose()));
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, objects, crate::layer::object::repository::step());
     effect!(worst, edit, {
@@ -309,8 +305,8 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     text_rise();
     let effects_ms = world_turn();
     let state = TICK_STATE.get(TickState::default);
-    state.width = width;
-    state.height = height;
+    // Before the tick, so every step and the draw see the screen it is drawn on.
+    crate::view::frame::pose::view_resize(width, height, crate::view::frame::resolution::display_ratio());
     state.dpr = dpr;
     // Step by at most MAX_STEP_S, or a pause makes a character cross a wall or
     // a damped camera overshoot. The raw gap is still recorded, or every bad
@@ -323,7 +319,11 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let after_tick = now();
     pump();
     crate::scene::stage::stage_write();
-    crate::scene::stage::stage_render(paced_ms);
+    crate::scene::stage::stage_render(crate::view::frame::resolution::Pace {
+        paced_ms,
+        gap_ms: delta * 1000.0,
+        moving: interactive,
+    });
     let done = now();
     profiler_frame(FrameTurn {
         tick: report,

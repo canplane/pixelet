@@ -7,14 +7,13 @@
 //! Without the mip chain the far ground crawls as the camera moves.
 
 use crate::frame::shader::words::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
-use crate::gpu::renderer::Image;
 use pxl_spec::asset::ingested::{CubeFace, PACK};
 use pxl_spec::asset::{shipped_texture_tile, TileOrigin};
 
 use crate::frame::shader::record::PIPELINE_MIPS;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, Format, Gpu, Load};
+use crate::gpu::api::{buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, Format, Gpu, Image, Load};
 use crate::gpu::pipeline::Pipelines;
 use crate::mesh::paint::palette::{palette, LAYERS};
 
@@ -91,7 +90,7 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
             // A block wears what the pack ships for it: a side or a bottom of its
             // own where it has one, its top's image on every face where it has
             // not, as a cube_all. The dirt under a face is its own block, the
-            // stratum under it (pxl-portable ground.rs `Cell::block`), never a side.
+            // stratum under it (pxl-spec-core ground.rs `Cell::block`), never a side.
             let top = shipped_texture_tile(cube, CubeFace::Top);
             let side = shipped_texture_tile(cube, CubeFace::Side).or(top);
             let bottom = shipped_texture_tile(cube, CubeFace::Bottom).or(top);

@@ -59,6 +59,14 @@ pub trait Base: Clone + 'static {
     /// the ground stops.
     const TOP: Option<Zoom> = None;
 
+    /// The coarsest zoom it is asked for and drawn at: its own source's
+    /// (`TOP`) or else the ground's declared one, never coarser than the
+    /// coarsest tile its lattice is kept in (`Lattice::top`); none until the
+    /// source is declared.
+    fn top() -> Option<Zoom> {
+        Self::TOP.or(crate::io::source::top()).map(|t| t.max(Self::LATTICE.top()))
+    }
+
     /// The most tiles a reader that takes no coarser answer pins apart from
     /// the view and a destination's line (pxl-kernel view/demand.rs `step`).
     const PINNED: u32 = 0;

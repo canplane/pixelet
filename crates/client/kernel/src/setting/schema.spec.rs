@@ -77,6 +77,11 @@ impl OrbitObstacleMode {
 /// Where the ambient occlusion comes from.
 ///
 ///   off    — none.
+///   corner — the screen pass's own: the floor along a cube and the inside
+///            of a corner, where a neighbouring pixel's face rises in front
+///            of the pixel's own plane within a block or two of it
+///            (crates/client/render/src/frame/shader/screen_rays.wgsl).
+///            A few taps of the rays a pixel, behind a uniform.
 ///   screen — N8AO
 ///            (crates/client/render/src/gpu/ao.rs): the world's depth drawn
 ///            once more, the occlusion sampled from it at half resolution,
@@ -86,15 +91,41 @@ impl OrbitObstacleMode {
 #[repr(u32)]
 pub enum AoMode {
     off = 0,
-    screen = 1,
+    corner = 1,
+    screen = 2,
 }
 
 impl AoMode {
-    pub const ALL: [AoMode; 2] = [AoMode::off, AoMode::screen];
+    pub const ALL: [AoMode; 3] = [AoMode::off, AoMode::corner, AoMode::screen];
 
     /// The option an index names, or none for an index past the list.
     pub fn of(index: u32) -> Option<AoMode> {
         AoMode::ALL.get(index as usize).copied()
+    }
+}
+
+/// How many device pixels the world is drawn at to a CSS pixel.
+///
+///   auto  — the display's, stepped down to a share of it while moving
+///           frames run over their budget — the display's interval, no
+///           tighter than a sixtieth of a second — and back up once they
+///           have room (crates/client/kernel/src/view/frame/resolution.rs).
+///   fixed — the display's, whatever the frames cost.
+///   low   — one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ResolutionMode {
+    auto = 0,
+    fixed = 1,
+    low = 2,
+}
+
+impl ResolutionMode {
+    pub const ALL: [ResolutionMode; 3] = [ResolutionMode::auto, ResolutionMode::fixed, ResolutionMode::low];
+
+    /// The option an index names, or none for an index past the list.
+    pub fn of(index: u32) -> Option<ResolutionMode> {
+        ResolutionMode::ALL.get(index as usize).copied()
     }
 }
 
@@ -154,22 +185,35 @@ pub enum SettingKey {
     edge_shade = 8,
     /// A uniform on an already-compiled shader term; not a pass.
     rim_light = 9,
-    /// screen, N8AO's screen-space pass, or none. AO_MODES says each.
+    /// corner, the occlusion a voxel world reads off its own cubes' faces;
+    /// screen, N8AO's screen-space pass, the costliest of the three. AO_MODES
+    /// says each.
     ao = 10,
+    /// The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world
+    /// cast once more from the sun, a ray a texel through the world's query at
+    /// the zooms the eye's rays ask (pxl-shader `sun_cs`), decor and the
+    /// actors drawn into it depth only, and a 3x3 compare per fragment; 16 MB
+    /// of map.
+    shadows = 11,
+    /// The pixels the world is filled at, the GPU's largest cost: two to a
+    /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
+    resolution = 12,
     /// Where the camera and the pointer are, read live (profiler/summary.rs, its view section).
-    view_overlay = 11,
-    /// The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
-    performance_overlay = 12,
-    /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs).
-    world_gizmo = 13,
-    person = 14,
-    pet = 15,
-    /// Each ray's pixel coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_rays.wgsl).
-    ray_steps = 16,
+    view = 13,
+    /// The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`).
+    profiler = 14,
+    /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (scene/indicator/coverage_gizmo.rs).
+    world_gizmo = 15,
+    /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the blocks the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (scene/indicator/camera_gizmo.rs).
+    camera_gizmo = 16,
+    person = 17,
+    pet = 18,
+    /// Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (crates/client/render/src/frame/shader/screen_rays.wgsl).
+    ray_steps = 19,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 17] = [
+    pub const ALL: [SettingKey; 20] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -181,9 +225,12 @@ impl SettingKey {
         SettingKey::edge_shade,
         SettingKey::rim_light,
         SettingKey::ao,
-        SettingKey::view_overlay,
-        SettingKey::performance_overlay,
+        SettingKey::shadows,
+        SettingKey::resolution,
+        SettingKey::view,
+        SettingKey::profiler,
         SettingKey::world_gizmo,
+        SettingKey::camera_gizmo,
         SettingKey::person,
         SettingKey::pet,
         SettingKey::ray_steps,
@@ -207,9 +254,12 @@ impl SettingKey {
             SettingKey::edge_shade => SettingKind::Toggle,
             SettingKey::rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
-            SettingKey::view_overlay => SettingKind::Toggle,
-            SettingKey::performance_overlay => SettingKind::Toggle,
+            SettingKey::shadows => SettingKind::Toggle,
+            SettingKey::resolution => SettingKind::Choice,
+            SettingKey::view => SettingKind::Toggle,
+            SettingKey::profiler => SettingKind::Toggle,
             SettingKey::world_gizmo => SettingKind::Toggle,
+            SettingKey::camera_gizmo => SettingKind::Toggle,
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
             SettingKey::ray_steps => SettingKind::Toggle,
@@ -230,9 +280,12 @@ impl SettingKey {
             SettingKey::edge_shade => "edge_shade",
             SettingKey::rim_light => "rim_light",
             SettingKey::ao => "ao",
-            SettingKey::view_overlay => "view_overlay",
-            SettingKey::performance_overlay => "performance_overlay",
+            SettingKey::shadows => "shadows",
+            SettingKey::resolution => "resolution",
+            SettingKey::view => "view",
+            SettingKey::profiler => "profiler",
             SettingKey::world_gizmo => "world_gizmo",
+            SettingKey::camera_gizmo => "camera_gizmo",
             SettingKey::person => "person",
             SettingKey::pet => "pet",
             SettingKey::ray_steps => "ray_steps",
@@ -244,14 +297,15 @@ impl SettingKey {
         match self {
             SettingKey::camera_mode => &["orbit", "free"],
             SettingKey::orbit_obstacle => &["through", "stop", "climb"],
-            SettingKey::ao => &["off", "screen"],
+            SettingKey::ao => &["off", "corner", "screen"],
+            SettingKey::resolution => &["auto", "fixed", "low"],
             _ => &[],
         }
     }
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::surface_follow | SettingKey::ray_steps)
+        matches!(self, SettingKey::surface_follow | SettingKey::camera_gizmo | SettingKey::ray_steps)
     }
 
     /// A choice's option a development build only offers.
@@ -277,9 +331,12 @@ pub struct Settings {
     pub edge_shade: bool,
     pub rim_light: bool,
     pub ao: AoMode,
-    pub view_overlay: bool,
-    pub performance_overlay: bool,
+    pub shadows: bool,
+    pub resolution: ResolutionMode,
+    pub view: bool,
+    pub profiler: bool,
     pub world_gizmo: bool,
+    pub camera_gizmo: bool,
     pub person: u8,
     pub pet: u8,
     pub ray_steps: bool,
@@ -298,10 +355,13 @@ impl Settings {
         orbit_obstacle: OrbitObstacleMode::climb,
         edge_shade: true,
         rim_light: true,
-        ao: AoMode::off,
-        view_overlay: false,
-        performance_overlay: false,
+        ao: AoMode::corner,
+        shadows: false,
+        resolution: ResolutionMode::auto,
+        view: false,
+        profiler: false,
         world_gizmo: false,
+        camera_gizmo: false,
         person: 1,
         pet: 5,
         ray_steps: false,
@@ -322,9 +382,12 @@ impl Settings {
             SettingKey::edge_shade => self.edge_shade as u32,
             SettingKey::rim_light => self.rim_light as u32,
             SettingKey::ao => self.ao as u32,
-            SettingKey::view_overlay => self.view_overlay as u32,
-            SettingKey::performance_overlay => self.performance_overlay as u32,
+            SettingKey::shadows => self.shadows as u32,
+            SettingKey::resolution => self.resolution as u32,
+            SettingKey::view => self.view as u32,
+            SettingKey::profiler => self.profiler as u32,
             SettingKey::world_gizmo => self.world_gizmo as u32,
+            SettingKey::camera_gizmo => self.camera_gizmo as u32,
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
             SettingKey::ray_steps => self.ray_steps as u32,
@@ -355,9 +418,15 @@ impl Settings {
                 Some(o) => self.ao = o,
                 None => return false,
             },
-            SettingKey::view_overlay if value <= 1 => self.view_overlay = value == 1,
-            SettingKey::performance_overlay if value <= 1 => self.performance_overlay = value == 1,
+            SettingKey::shadows if value <= 1 => self.shadows = value == 1,
+            SettingKey::resolution => match ResolutionMode::of(value) {
+                Some(o) => self.resolution = o,
+                None => return false,
+            },
+            SettingKey::view if value <= 1 => self.view = value == 1,
+            SettingKey::profiler if value <= 1 => self.profiler = value == 1,
             SettingKey::world_gizmo if value <= 1 => self.world_gizmo = value == 1,
+            SettingKey::camera_gizmo if value <= 1 => self.camera_gizmo = value == 1,
             SettingKey::person => match u8::try_from(value) {
                 Ok(n) => self.person = n,
                 Err(_) => return false,

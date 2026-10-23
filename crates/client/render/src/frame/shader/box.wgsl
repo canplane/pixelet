@@ -138,21 +138,21 @@ fn box_vertex(v: u32, words: BoxWords) -> VertexOut {
 // How much the box's own edges darken a point of its face: a lone box's
 // every edge is its silhouette, the nearer of the two edges of the face
 // that run through the point's axes. `pixel` is the units one of the
-// surface's pixels spans along each axis: an edge is a line of the same
-// pixels whatever the box's size or distance.
+// surface's pixels spans along each axis: an edge is the blocks' line, of
+// one width in units whatever the box's size (`line_at`).
 fn outline(local_pos: vec3f, box_scale: vec3f, pixel: vec3f, normal: vec3f) -> f32 {
   if (frame_edge_strength() <= 0.0) {
     return 0.0;
   }
-  let to_edge = (0.5 - abs(local_pos)) * box_scale / max(pixel, vec3f(1e-9));
-  var d = min(to_edge.x, to_edge.z);
+  let to_edge = (0.5 - abs(local_pos)) * box_scale;
+  let p = max(pixel, vec3f(1e-9));
+  var a = vec2u(0u, 2u);
   if (abs(normal.z) > 0.5) {
-    d = min(to_edge.x, to_edge.y);
+    a = vec2u(0u, 1u);
   } else if (abs(normal.x) > 0.5) {
-    d = min(to_edge.y, to_edge.z);
+    a = vec2u(1u, 2u);
   }
-  let t = 1.0 - smoothstep(0.0, frame_edge_width(), d);
-  return t * t;
+  return max(line_at(to_edge[a.x], p[a.x]), line_at(to_edge[a.y], p[a.y]));
 }
 
 @fragment
@@ -168,7 +168,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     i.box_uv,
     dpdx(i.box_uv),
     dpdy(i.box_uv),
-    screen_open(i.clip.xy),
+    vec3f(screen_open(i.clip.xy)),
     Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)),
   );
   return vec4f(finish(paint(s), i.clip.xy), i.opacity);

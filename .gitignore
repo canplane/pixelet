@@ -184,17 +184,14 @@ vite.config.ts.timestamp-*
 /crates/target
 
 # The guest's module, built from crates/ by apps/web/script/build-wasm.ts
-apps/web/src/kernel/guest.wasm
-apps/web/src/kernel/guest.paths.json
+apps/web/src/guest.wasm
+apps/web/src/guest.paths.json
 
-# The last build number this checkout published (apps/web/script/deploy.ts)
-apps/web/.build_number
+# The last build number this checkout saw (script/build-log.ts), which a dev build of either app is labeled from
+apps/client/.build_number
 
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk
-
-# dev:oven's demand bakes.
-cache/
 
 # What a tool fetches for itself from where it surely stays, fetched again by running it.
 asset/raw/sky/

@@ -56,8 +56,7 @@ does not authorize materializing its unobserved interior.
 
 **Determinism.** Given the same world snapshot, observer, camera grid, and
 zoom, observation and the resulting geometry are identical regardless of
-traversal order, build order, scheduling, or previous observations. Cached
-results may be reused, but must not change the final result.
+traversal order, build order or scheduling.
 
 What goes is every rule about what made the air; what stays is the descent
 that finds the first block. A ray is not walked block by block: it descends

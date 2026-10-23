@@ -4,7 +4,7 @@
 //! itself, which what stands in the world (decor, places) is gathered by
 //! (view/observation.rs `cubes`). Never fetched or held; only its address
 //! exists. It names only the grid's cells: which of a layer's tiles holds
-//! them is its lattice's (`Lattice::read_tile`).
+//! them is its lattice's (pxl-spec layer/lattice.rs `Cells::read_tile`).
 
 use pxl_spec::space::camera::grid::CHUNK_STEPS;
 use pxl_spec::space::coord::aabb::Aabb;

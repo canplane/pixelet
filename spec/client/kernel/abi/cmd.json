@@ -328,20 +328,12 @@
           "value": 2
         },
         {
-          "name": "LOG",
+          "name": "READ",
           "value": 3
         },
         {
-          "name": "READ",
-          "value": 4
-        },
-        {
-          "name": "TAKE",
-          "value": 5
-        },
-        {
           "name": "RINGS",
-          "value": 6
+          "value": 4
         }
       ]
     },
@@ -595,7 +587,7 @@
         "The kernel decides which message a state calls for and carries the number.",
         "It never carries the words: a string that exists to be read has no reason",
         "to sit in the kernel's memory, and the shell has the locale files already",
-        "(apps/web/src/locale) — the same split `strerror` is on the other side of.",
+        "(apps/client/src/locale) — the same split `strerror` is on the other side of.",
         "",
         "The number is the name here. A band is what a message is about, and a",
         "message keeps its number for as long as anything can be holding one: an",
@@ -1217,32 +1209,6 @@
           ]
         },
         {
-          "name": "INPUT_VIEW",
-          "value": 4357,
-          "$doc": [
-            "Where the camera stands, set outright rather than driven: what the kernel's own",
-            "test puts a view at, and what an A/B reads two builds at the same view with",
-            "(a development page's `?eye=`, feature/debug/eye.ts)."
-          ],
-          "packet": [
-            {
-              "name": "dist",
-              "type": "f64",
-              "optional": true
-            },
-            {
-              "name": "polar",
-              "type": "f64",
-              "optional": true
-            },
-            {
-              "name": "azimuth",
-              "type": "f64",
-              "optional": true
-            }
-          ]
-        },
-        {
           "name": "INPUT_COMPASS_RESET",
           "value": 4359,
           "$doc": [
@@ -1351,21 +1317,8 @@
           ]
         },
         {
-          "name": "PROFILER_LOG",
-          "value": 6403,
-          "$doc": [
-            "The console stream on or off."
-          ],
-          "packet": [
-            {
-              "name": "on",
-              "type": "bool"
-            }
-          ]
-        },
-        {
           "name": "PROFILER_READ",
-          "value": 6404,
+          "value": 6403,
           "$doc": [
             "The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)",
             "over the last `window_ms`, the whole recording where it is absent, good until the next turn. A",
@@ -1380,15 +1333,8 @@
           ]
         },
         {
-          "name": "PROFILER_TAKE",
-          "value": 6405,
-          "$doc": [
-            "The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn."
-          ]
-        },
-        {
           "name": "PROFILER_RINGS",
-          "value": 6406,
+          "value": 6404,
           "$doc": [
             "The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn."
           ]

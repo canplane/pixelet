@@ -30,6 +30,8 @@ pub struct GpuSample {
     pub read: f64,
     pub spans: [f64; GPU_SPANS],
     pub px: f64,
+    /// The share of the display's pixels, each way, the world was drawn at.
+    pub scale: f64,
     /// Every draw by its pipeline: the frame's draws and triangles are its sums.
     pub census: DrawCensus,
 }
@@ -145,7 +147,7 @@ words!(FrameSample, FRAME::WORDS,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     worst_effect_ms => FRAME::worst_effect_ms, worst_effect_name => FRAME::worst_effect_name,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
-    gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.px => FRAME::gpu_px,
+    gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
     gpu.census => FRAME::census,
     device.blocks => FRAME::blocks, device.blocks_bytes => FRAME::blocks_bytes,
     device.depth_bytes => FRAME::depth_bytes, device.layers_bytes => FRAME::layers_bytes, device.objects => FRAME::gpu_objects,
@@ -183,12 +185,8 @@ pub fn overran(f: &FrameSample) -> bool {
     f.tick_ms > f.budget_ms + crate::sched::tick::HARD_SLACK_MS
 }
 
-/// What the interval's turns left of it, and what they ran past it: one of
-/// the two 0, read off the interval and the turns rather than kept beside them.
-pub fn off_turn_ms(f: &FrameSample) -> f64 {
-    (f.interval_ms - f.busy_ms).max(0.0)
-}
-
+/// What the interval's turns ran past it, read off the interval and the
+/// turns rather than kept beside them.
 pub fn over_ms(f: &FrameSample) -> f64 {
     (f.busy_ms - f.interval_ms).max(0.0)
 }

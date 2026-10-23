@@ -22,8 +22,21 @@
     "$doc": [
       "The sheet's sections, in the order they are shown. `character` is not a",
       "section of the sheet at all — its two settings are picked from the",
-      "drawer's Character tab (feature/character/picker.tsx), and `world`'s from the",
+      "drawer's Character tab (shell/character/picker.tsx), and `world`'s from the",
       "buttons floating over the world (feature/world/ui/control/)."
+    ]
+  },
+  "RESOLUTION_MODES": {
+    "$value": ["auto", "fixed", "low"],
+    "$doc": [
+      "How many device pixels the world is drawn at to a CSS pixel.",
+      "",
+      "  auto  — the display's, stepped down to a share of it while moving",
+      "          frames run over their budget — the display's interval, no",
+      "          tighter than a sixtieth of a second — and back up once they",
+      "          have room (crates/client/kernel/src/view/frame/resolution.rs).",
+      "  fixed — the display's, whatever the frames cost.",
+      "  low   — one."
     ]
   },
   "CAMERA_MODES": {
@@ -54,11 +67,16 @@
     ]
   },
   "AO_MODES": {
-    "$value": ["off", "screen"],
+    "$value": ["off", "corner", "screen"],
     "$doc": [
       "Where the ambient occlusion comes from.",
       "",
       "  off    — none.",
+      "  corner — the screen pass's own: the floor along a cube and the inside",
+      "           of a corner, where a neighbouring pixel's face rises in front",
+      "           of the pixel's own plane within a block or two of it",
+      "           (crates/client/render/src/frame/shader/screen_rays.wgsl).",
+      "           A few taps of the rays a pixel, behind a uniform.",
       "  screen — N8AO",
       "           (crates/client/render/src/gpu/ao.rs): the world's depth drawn",
       "           once more, the occlusion sampled from it at half resolution,",
@@ -177,39 +195,73 @@
     },
     "ao": {
       "$doc": [
-        "screen, N8AO's screen-space pass, or none. AO_MODES says each."
+        "corner, the occlusion a voxel world reads off its own cubes' faces;",
+        "screen, N8AO's screen-space pass, the costliest of the three. AO_MODES",
+        "says each."
       ],
       "kind": "choice",
-      "default": "off",
+      "default": "corner",
       "options": "AO_MODES",
-      "costs": ["", "high"],
+      "costs": ["", "low", "high"],
       "section": "lighting"
     },
-    "view_overlay": {
+    "shadows": {
+      "$doc": [
+        "The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world",
+        "cast once more from the sun, a ray a texel through the world's query at",
+        "the zooms the eye's rays ask (pxl-shader `sun_cs`), decor and the",
+        "actors drawn into it depth only, and a 3x3 compare per fragment; 16 MB",
+        "of map."
+      ],
+      "kind": "toggle",
+      "default": false,
+      "cost": "high",
+      "section": "lighting"
+    },
+    "resolution": {
+      "$doc": [
+        "The pixels the world is filled at, the GPU's largest cost: two to a",
+        "CSS pixel is four times the fragments of one. RESOLUTION_MODES says each."
+      ],
+      "kind": "choice",
+      "default": "auto",
+      "options": "RESOLUTION_MODES",
+      "section": "display"
+    },
+    "view": {
       "$doc": ["Where the camera and the pointer are, read live (profiler/summary.rs, its view section)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"
     },
-    "performance_overlay": {
-      "$doc": ["The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`)."],
+    "profiler": {
+      "$doc": ["The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"
     },
     "world_gizmo": {
       "$doc": [
-        "Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs)."
+        "Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (scene/indicator/coverage_gizmo.rs)."
       ],
       "kind": "toggle",
       "default": false,
       "section": "debug"
     },
+    "camera_gizmo": {
+      "$doc": [
+        "The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the blocks the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (scene/indicator/camera_gizmo.rs)."
+      ],
+      "kind": "toggle",
+      "default": false,
+      "section": "debug",
+      "dev": true
+    },
     "person": { "kind": "index", "default": { "$value": 1, "$type": "u8", "$doc": ["female-2, by its number in variant.json's person keys."] }, "section": "character" },
     "pet": { "kind": "index", "default": { "$value": 5, "$type": "u8", "$doc": ["chick, by its number in variant.json's pet keys."] }, "section": "character" },
     "ray_steps": {
       "$doc": [
-        "Each ray's pixel coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_rays.wgsl)."
+        "Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (crates/client/render/src/frame/shader/screen_rays.wgsl)."
       ],
       "kind": "toggle",
       "default": false,

@@ -29,7 +29,7 @@
 resolver = "2"
 members = [
   "spec",
-  "portable",
+  "spec/core",
   "client/render",
   "client/kernel",
   "client-bracket/wasm",

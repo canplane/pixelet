@@ -10,10 +10,9 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::layer::object::store::Entry;
-use crate::query::{at_zoom, Hit, Ray, Struck, World};
+use crate::query::{held, Hit, Ray, Struck, World};
 use crate::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::aabb::Aabb;
 
@@ -21,7 +20,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 const PICK_REACH_U: f64 = 32.0;
 
 // Above the 1/256-grid round trip's error (±1/512 u), below the gap between
-// any two OBJECT_SIZES tiers (the finest's side).
+// any two object tiers (the finest's side).
 const SAME_EXTENT_EPS: f64 = units(OBJECT_FINEST) / 16.0;
 
 /// The octree only stores a `size` object on these lines; any other corner
@@ -84,24 +83,18 @@ pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct PickResult {
-    pub hit: Hit,
-}
-
 /// In the root frame, from the eye.
 /// Decor is struck where the frame drawing at `drawn` holds it. The world
 /// asked is the stored one (`World::now`), not as the eraser's preview draws
 /// it: what to erase is what is stored.
-pub fn ray_pick(origin: V3, direction: V3, drawn: Tau) -> Option<PickResult> {
+pub fn ray_pick(origin: V3, direction: V3, drawn: Tau) -> Option<Hit> {
     let ray = Ray {
         origin,
         direction,
         reach: PICK_REACH_U,
     };
     // A coarser tile's answer is a summary, not what is held.
-    let hit = World::now().striking_decor(drawn).first_hit(&ray, at_zoom(LEAF_ZOOM)).exact().flatten()?;
-    Some(PickResult { hit })
+    World::now().striking_decor(drawn).first_hit(&ray, held()).exact().flatten()
 }
 
 #[cfg(test)]

@@ -10,9 +10,9 @@ use crate::space::coord::zoom::{units, Zoom};
 /// spans at least one cell from any direction, so a zoom's block is drawn
 /// from half `SPLIT` of its sides away out to `SPLIT` of them. Pixels are a screen's, derived from it
 /// (`target_cell_px`). One cell of the grid is one thing drawn; what lies
-/// inside it is its layer's to fold (pxl-portable, which a GPU's cast sizes
+/// inside it is its layer's to fold (pxl-spec-core, which a GPU's cast sizes
 /// its cells by too).
-pub const SPLIT: f64 = pxl_portable::grid::SPLIT as f64;
+pub const SPLIT: f64 = pxl_spec_core::grid::SPLIT as f64;
 
 /// The view `SPLIT` is stated at: 1080 CSS px high, drawn at
 /// `RATIO_MAX`, and 50° across it.
@@ -25,8 +25,8 @@ pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
     viewport_h / (2.0 * libm::tan((fov_deg * core::f64::consts::PI) / 360.0))
 }
 
-/// Drawn pixels per CSS pixel at most (pxl-portable `grid::RATIO_MAX`).
-pub const RATIO_MAX: f64 = pxl_portable::grid::RATIO_MAX as f64;
+/// Drawn pixels per CSS pixel at most (pxl-spec-core `grid::RATIO_MAX`).
+pub const RATIO_MAX: f64 = pxl_spec_core::grid::RATIO_MAX as f64;
 
 /// The drawn pixels a camera grid's cell spans, at the reference view: about
 /// twelve, at every ratio. A block drawn for it spans that to twice that.
@@ -68,14 +68,14 @@ impl Tau {
     /// the finest whose side spans one of the grid's cells there, `r / SPLIT`.
     /// A block drawn whole, all its faces, is at least its side wide from any
     /// direction, so the face a ray meets does not enter. Finer than the
-    /// ground's near the eye, held to what a zoom can name: pxl-portable's, the
+    /// ground's near the eye, held to what a zoom can name: pxl-spec-core's, the
     /// one rule the CPU and a GPU's cast size by, of the one input, a square;
     /// the distance as τ scales it.
     pub fn cell_at(self, r2: f64) -> Zoom {
-        pxl_portable::grid::cell_at((r2 * (self.0 * self.0)) as f32)
+        pxl_spec_core::grid::cell_at((r2 * (self.0 * self.0)) as f32)
     }
 }
 
 /// A chunk, what is built and drawn as one, is 2^CHUNK_STEPS of the camera
 /// grid's cells a side: its zoom is its cells' less this.
-pub use pxl_portable::CHUNK_STEPS;
+pub use pxl_spec_core::CHUNK_STEPS;

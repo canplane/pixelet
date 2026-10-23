@@ -11,9 +11,14 @@ use fnv::FnvHashMap;
 
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
 use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
+use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::coord::mat4;
+use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 
+use crate::asset::Load;
+use crate::io::host::Refused;
+use crate::io::load::load_gltf;
 use crate::laid;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -25,9 +30,46 @@ pub struct ModelHandle {
 
 const IDENTITY: [f32; 16] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
 
+/// A model as registered, or as the heap refused it room.
+type Registration = Result<ModelHandle, Refused>;
+
+/// Each asset by the height it was asked at, its bits.
+static REGISTERED: Global<Vec<(Asset, Option<u64>, Registration)>> = Global::new();
+
+/// `asset` registered `height_u` units tall, or at its own size when None,
+/// once. None while it loads, and while the heap refuses it room: a refusal
+/// is a wait, not a failure, asked again once the heap gives some back.
+pub fn model_of(asset: Asset, height_u: Option<f64>) -> Option<ModelHandle> {
+    let key = height_u.map(f64::to_bits);
+    let registered = REGISTERED.get(Vec::new);
+    let at = registered.iter().position(|(a, h, _)| *a == asset && *h == key);
+    match at.map(|at| &registered[at].2) {
+        Some(Ok(handle)) => return Some(handle.clone()),
+        Some(Err(refused)) if !refused.over() => return None,
+        _ => {}
+    }
+    let gltf = load_gltf(Load::Asset(asset))?;
+    let entry = register_model(&gltf, height_u).ok_or_else(Refused::now);
+    match at {
+        Some(at) => registered[at].2 = entry.clone(),
+        None => registered.push((asset, key, entry.clone())),
+    }
+    entry.ok()
+}
+
+/// Whether `model_of` refused `asset` at `height_u` and the heap has given
+/// room back since, so asking again may be served.
+pub fn model_refusal_over(asset: Asset, height_u: Option<f64>) -> bool {
+    let key = height_u.map(f64::to_bits);
+    REGISTERED
+        .get(Vec::new)
+        .iter()
+        .any(|(a, h, entry)| *a == asset && *h == key && entry.as_ref().is_err_and(|refused| refused.over()))
+}
+
 /// At its own size when `height_u` is None; None when it has no mesh or the
 /// heap refused.
-pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
+fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
     let order = scene_nodes(gltf);
     let worlds = world_matrices(gltf);
     let skinned = !gltf.skins.is_empty() && order.iter().any(|&n| gltf.nodes[n as usize].skin >= 0 && gltf.nodes[n as usize].mesh >= 0);

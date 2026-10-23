@@ -7,7 +7,6 @@
 //! no served shard is over or under is never asked for, and a tile is opened
 //! under the version that serves it, which the client does not read.
 
-use pxl_portable::area::{self, Area};
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{is_version, key, sharded};
 use pxl_spec::space::coord::world;
@@ -15,6 +14,7 @@ use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec_core::area::{self, Area};
 use xpute_guest::global::Global;
 use xpute_kit::codec::json::{read_json, JsonType, JsonValue};
 use xpute_kit::status::bug::OrBug;
@@ -32,7 +32,7 @@ struct Source {
     top_zoom: Zoom,
     version: [String; BaseLayer::ALL.len()],
     shard: Vec<Shard>,
-    /// The area at `SHARD_ZOOM` (pxl-portable `area::Area`): every cell's
+    /// The area at `SHARD_ZOOM` (pxl-spec-core `area::Area`): every cell's
     /// nine by its key (`area::shard_key`), none beside no served one.
     nine: Vec<u16>,
     /// The pyramid's nodes from zoom 0 to `SHARD_ZOOM`, each where its zoom
@@ -97,7 +97,7 @@ pub fn past_at([x, y]: [f64; 2]) -> bool {
     area::past(&Declared, leaf)
 }
 
-/// The service area as pxl-portable's rules read it: the declared source's
+/// The service area as pxl-spec-core's rules read it: the declared source's
 /// shards, and no end before one is declared.
 pub struct Declared;
 
@@ -209,7 +209,7 @@ fn parse(text: &str) -> Option<Source> {
     let mut nine = vec![0u16; cells];
     for &[x, y] in &covered {
         for k in 0..9 {
-            let n = [pxl_portable::wrap_index(SHARD_ZOOM, x + k % 3 - 1), y + k / 3 - 1];
+            let n = [pxl_spec_core::wrap_index(SHARD_ZOOM, x + k % 3 - 1), y + k / 3 - 1];
             let key = area::shard_key(n);
             if key != area::NO_KEY {
                 nine[key as usize] = area::nine(serves, n) as u16;

@@ -14,7 +14,7 @@ fn zoom_at(r: f64) -> i32 {
 }
 
 /// The distance just short of `r` as the rule reads a distance: the f32
-/// before it (pxl-portable `grid::cell_at`).
+/// before it (pxl-spec-core `grid::cell_at`).
 fn short_of(r: f64) -> f64 {
     f64::from(f32::from_bits((r as f32).to_bits() - 1))
 }

@@ -129,9 +129,10 @@ impl EnvironmentDraw {
     /// the sky as drawn moves one display level (pxl-render `sky_steps`, its
     /// views' own slopes), at the rate the sun's or the moon's height moves;
     /// a light with no step landed yet asks none, its view's first slope
-    /// landing waking the turn. The clouds' is the wind carrying them a camera
-    /// cell at the nearest (`cloud::drift_step_s`). Between steps their words
-    /// stand.
+    /// landing waking the turn. The clouds' is the wind carrying them a pixel
+    /// at the nearest (`cloud::drift_step_s`). Between steps their words
+    /// stand. A clock set back before where a light last stepped steps it
+    /// there at once.
     pub fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
         let at = self.observed();
@@ -146,12 +147,12 @@ impl EnvironmentDraw {
         };
         let clouds_next = |at: f64| at + cloud::drift_step_s() * 1000.0;
         let mut next = sky_next(self.sky_at);
-        if !self.started || unix_ms >= next {
+        if !self.started || unix_ms >= next || unix_ms < self.sky_at {
             (self.days, self.sky_at) = (j2000_days(unix_ms), unix_ms);
             next = sky_next(self.sky_at);
             self.aim();
         }
-        if !self.started || unix_ms >= clouds_next(self.clouds_at) {
+        if !self.started || unix_ms >= clouds_next(self.clouds_at) || unix_ms < self.clouds_at {
             (self.time, self.clouds_at) = ((unix_ms - first) / 1000.0, unix_ms);
         }
         (next.min(clouds_next(self.clouds_at)) - unix_ms).max(0.0)

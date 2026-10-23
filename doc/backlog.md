@@ -19,15 +19,15 @@ Nothing now.
 ## P2
 
 - **A query language over what is drawn, for an agent to read.** An agent
-  debugging the view reads the performance overlay off a screenshot: small
+  debugging the view reads the profiler panel off a screenshot: small
   text misread, past frames gone, and a hole's cause guessed from its color
   (the bedrock folded black under far faces, 2026-10-12). A query asked of
   the running kernel and answered as text — what a screen point draws (its
   lane cell, the block's zoom and node, the tile window it was read from,
   its bound, the column's blocks), the drawn blocks matching a condition —
   would let it read the state instead. The AI DSL experiment could start here. First see what
-  the overlay's report already gives
-  (`apps/web/src/feature/debug/profiler/report.ts`).
+  the profiler's report already gives
+  (`apps/client/src/shell/debug/profiler/report.ts`).
 
 ## Parked, with the reason on file
 

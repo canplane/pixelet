@@ -3,7 +3,7 @@
 //! What the page's UI reads of the kernel (a Snapshot packet, handed over
 //! only when changed) and the commands it applies to the stores.
 
-use crate::view::demand::Observed as _;
+use crate::layer::Base as _;
 use pxl_spec::block::object::{cube_id, decor_num_id};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -12,29 +12,31 @@ use xpute_kit::wire::xtp::PacketWriter;
 use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, Message, OrientationState, Snapshot, SourceVersion};
 use crate::control::camera::controller::{dist, focus, Motion};
-use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
-use crate::control::interaction::holding;
+use crate::control::camera::input::dragging;
+use crate::control::camera::state::camera_state;
+use crate::control::interaction::{holding, Holding};
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::follow_mode::{following, set_following};
 use crate::control::navigation::off_center::off_center;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
-use crate::control::sensor::reading::{device_location_store, device_orientation_store};
-use crate::layer::division::named;
-use crate::scene::character::companion::companion_load_store;
+use crate::control::sensor::reading::{device_location_store, device_orientation_store, Pose};
+use crate::layer::division::{named, naming};
+use crate::scene::character::companion::companion_ready;
 use crate::scene::character::preview::{preview_rows, CASES_MAX};
 use crate::scene::stage::screen_drawn;
 use crate::setting::store::{settings_store, SettingKey};
 use crate::turn::world_platform;
 use crate::view::frame::pose::units_per_px_at;
 use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::status::errno::Errno;
 
 /// The focus's division and each above it, broad to narrow. Every language
 /// is sent, so switching language re-reads rather than refetches.
-fn division_parts(at: Option<Q3>, each: &mut dyn FnMut(&DivisionPart<'_>)) {
+fn division_parts(at: Option<(Tile, u32)>, each: &mut dyn FnMut(&DivisionPart<'_>)) {
     let Some(at) = at else { return };
-    named(&at, |part| {
+    named(at, |part| {
         let names = |each: &mut dyn FnMut(&LangName<'_>)| {
             for (lang, name) in &part.names {
                 each(&LangName { lang, name });
@@ -50,70 +52,138 @@ fn division_parts(at: Option<Q3>, each: &mut dyn FnMut(&DivisionPart<'_>)) {
     });
 }
 
-/// None where it does not fit.
-pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
-    let location = device_location_store();
-    let orientation = device_orientation_store();
-    let camera = camera_state();
-    let settings = settings_store();
-    let companion = companion_load_store();
-    let at = crate::control::camera::controller::focus();
-    let center = at.map(|c| {
-        let g = epsg4326::unproject(&c);
-        LonLat { lon: g[0], lat: g[1] }
-    });
-    let values = SettingKey::ALL.map(|key| settings.get(key));
-    let held = holding();
-    let (waiting, words) = crate::control::interaction::edit::marker_waiting();
-    let mut previews = [0u32; CASES_MAX];
-    let mut preview_cnt = 0;
-    for (slot, (surface, _, _)) in previews.iter_mut().zip(preview_rows()) {
+/// What the snapshot is made of, read off its owners: where the names are
+/// read (`division::naming`) rather than the names, and the waiting
+/// marker's words aside (`Sent`).
+#[derive(Clone, Copy, PartialEq)]
+pub struct Shown {
+    status: GroundStatus,
+    is_off_center: bool,
+    focus: Option<Q3>,
+    location: (Pose, bool),
+    companion: [bool; 2],
+    holding: Holding,
+    marker: bool,
+    orientation: Pose,
+    azimuth: f64,
+    is_follow_mode: bool,
+    camera_busy: bool,
+    zooming: bool,
+    over_badge: bool,
+    settings: [u32; SettingKey::ALL.len()],
+    m_per_px: f64,
+    division: Option<(Tile, u32)>,
+    previews: ([u32; CASES_MAX], usize),
+    stall: Option<Message>,
+    declared: bool,
+}
+
+fn shown() -> Shown {
+    let (location, settings) = (device_location_store(), settings_store());
+    let focus = crate::control::camera::controller::focus();
+    let mut previews = ([0u32; CASES_MAX], 0);
+    for (slot, (surface, _, _)) in previews.0.iter_mut().zip(preview_rows()) {
         *slot = surface;
-        preview_cnt += 1;
+        previews.1 += 1;
     }
+    Shown {
+        // Shown once a frame went to the screen over a view whose tiles all
+        // show, if coarser: a finer tile asked for as the eye moves is not
+        // the area loading, and would flash its toast each time.
+        status: match (crate::view::observation::eye(), screen_drawn()) {
+            (None, _) => GroundStatus::Idle,
+            (Some(_), true) if TerrainTile::residency().shown() => GroundStatus::Success,
+            _ => GroundStatus::Loading,
+        },
+        is_off_center: off_center().is_off_center,
+        focus,
+        location: (location.pose, location.location.is_some()),
+        companion: companion_ready(),
+        holding: holding(),
+        marker: crate::control::interaction::edit::marker_waiting().0,
+        orientation: device_orientation_store().pose,
+        azimuth: camera_state().intent.azimuth,
+        is_follow_mode: following(),
+        camera_busy: dragging(),
+        zooming: crate::control::camera::controller::zooming(),
+        over_badge: crate::door::over_badge(),
+        settings: SettingKey::ALL.map(|key| settings.get(key)),
+        m_per_px: m_per_px(),
+        division: focus.and_then(|at| naming(&at)),
+        previews,
+        stall: stall(),
+        declared: crate::io::source::top().is_some(),
+    }
+}
+
+/// The snapshot last sent, which a new one is sent only where it moved
+/// from: its makings and the waiting marker's words.
+#[derive(Default)]
+pub struct Sent {
+    shown: Option<Shown>,
+    words: String,
+}
+
+impl Sent {
+    /// What the snapshot is made of now, where it moved since it was last
+    /// sent; taken as sent.
+    pub fn moved(&mut self) -> Option<Shown> {
+        let (now, (_, words)) = (shown(), crate::control::interaction::edit::marker_waiting());
+        if self.shown == Some(now) && self.words == words {
+            return None;
+        }
+        self.shown = Some(now);
+        self.words.clear();
+        self.words.push_str(words);
+        Some(now)
+    }
+}
+
+/// The snapshot made of `shown` into `out`; none where it does not fit.
+pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
+    let (_, words) = crate::control::interaction::edit::marker_waiting();
+    let held = shown.holding;
     let snapshot = Snapshot {
         focus: FocusState {
-            // Shown once a frame went to the screen over a view whose tiles all answered.
-            status: match (crate::view::observation::eye(), screen_drawn()) {
-                (None, _) => GroundStatus::Idle,
-                (Some(_), true) if TerrainTile::demand().answered() => GroundStatus::Success,
-                _ => GroundStatus::Loading,
-            },
-            is_off_center: off_center().is_off_center,
-            center,
-            outside: at.is_some_and(|c| crate::io::source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))),
+            status: shown.status,
+            is_off_center: shown.is_off_center,
+            center: shown.focus.map(|c| {
+                let g = epsg4326::unproject(&c);
+                LonLat { lon: g[0], lat: g[1] }
+            }),
+            outside: shown.focus.is_some_and(|c| crate::io::source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))),
         },
         location: LocationState {
-            status: location.pose.status(),
-            has_location: location.location.is_some(),
-            error: location.pose.error(),
+            status: shown.location.0.status(),
+            has_location: shown.location.1,
+            error: shown.location.0.error(),
         },
         companion: CompanionState {
-            person_ready: companion.person_ready,
-            pet_ready: companion.pet_ready,
+            person_ready: shown.companion[0],
+            pet_ready: shown.companion[1],
         },
         holding: HoldingState {
             tool: held.active_tool,
             cube: cube_id(held.object_cube),
             decor: decor_num_id(held.decor_id),
             tier: held.object_tier,
-            marker: waiting,
+            marker: shown.marker,
             words: &words,
         },
         orientation: OrientationState {
-            status: orientation.pose.status(),
-            error: orientation.pose.error(),
+            status: shown.orientation.status(),
+            error: shown.orientation.error(),
         },
-        azimuth: camera.intent.azimuth,
-        is_follow_mode: following(),
-        camera_busy: camera.camera_status != CameraStatus::Idle,
-        zooming: crate::control::camera::controller::zooming(),
-        over_badge: crate::door::over_badge(),
-        settings: &values,
-        m_per_px: m_per_px(),
-        division: &|each| division_parts(at, each),
-        previews: &previews[..preview_cnt],
-        stall: stall(),
+        azimuth: shown.azimuth,
+        is_follow_mode: shown.is_follow_mode,
+        camera_busy: shown.camera_busy,
+        zooming: shown.zooming,
+        over_badge: shown.over_badge,
+        settings: &shown.settings,
+        m_per_px: shown.m_per_px,
+        division: &|each| division_parts(shown.division, each),
+        previews: &shown.previews.0[..shown.previews.1],
+        stall: shown.stall,
         source: &|each| {
             crate::io::source::versions(&mut |kind, version| {
                 each(&SourceVersion {
@@ -157,18 +227,6 @@ pub fn tracking_action(tracking: Tracking) {
 pub fn go_to_degrees(lon: f64, lat: f64) {
     crate::control::navigation::destination::go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
     crate::control::camera::controller::come_in_to_default();
-}
-
-/// Set outright, for kernel tests and A/B comparisons at the same view: the
-/// controls take what is asked and the drawn orbit stands there at once, as
-/// a place asked for is put (`Motion::Snap`), so the view is reached with no
-/// step taken, the clock standing or not.
-pub fn set_view(dist: Option<f64>, polar: Option<f64>, azimuth: Option<f64>) {
-    let c = camera_state();
-    c.commit_intent(c.merged(IntentPatch { dist, azimuth, polar }));
-    if crate::control::camera::controller::active() == crate::control::camera::controller::Active::Orbit {
-        crate::control::camera::orbit::put_view();
-    }
 }
 
 /// The compass is asked for where it is used (`tracking_action`).

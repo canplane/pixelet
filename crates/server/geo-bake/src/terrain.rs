@@ -8,8 +8,6 @@ pub mod pool;
 pub mod repository;
 pub mod source;
 
-use pxl_portable::ways::SPANS;
-use pxl_portable::window::{RUNS_SQUARE, SQUARE};
 use pxl_spec::bake::fold::fold_terrain;
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::{self, TerrainTile};
@@ -17,6 +15,8 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
+use pxl_spec_core::ways::SPANS;
+use pxl_spec_core::window::{RUNS_SQUARE, SQUARE};
 
 /// The ground cell's side: what the raster, the separation's lines and a height count in.
 pub const CELL_U: f64 = units(GROUND.cell());

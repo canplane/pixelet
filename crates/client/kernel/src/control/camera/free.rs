@@ -6,13 +6,12 @@
 
 use pxl_spec::space::coord::q3::Q3;
 
-use crate::approach::{approach_angle, approach_scalar, approach_vec};
+use crate::approach::{approach_angle, approach_vec};
 use crate::control::camera::controller::look_domain;
 use crate::control::camera::controller::{camera, eye_world, focus, set_eye_world};
 use crate::control::camera::state::camera_state;
 use crate::control::navigation::support::target;
 use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
-use crate::view::frame::pose::view_compose;
 use xpute_guest::global::Global;
 
 /// Canonical, so it holds still as the eye goes round the world. None until first put.
@@ -51,11 +50,10 @@ pub(crate) fn turn(delta: f64) -> bool {
     }
     let vs = camera_state().intent;
     let cam = camera();
-    let (polar, m) = approach_scalar(cam.polar, vs.polar, CAM_DAMP, delta, LOOK_EPS);
+    let ([polar], m) = approach_vec([cam.polar], [vs.polar], CAM_DAMP, delta, LOOK_EPS);
     moving |= m;
     let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, LOOK_EPS);
     moving |= m;
     (cam.polar, cam.azimuth) = look_domain(polar, azimuth);
-    view_compose(crate::control::camera::controller::pose());
     moving
 }

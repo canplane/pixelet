@@ -13,14 +13,14 @@ use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::bake::constant::EntryAt;
 
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, LABEL_ZOOM, TEXT};
-use pxl_spec::bake::tile::place::{symbol_of, PlaceTile, Placed};
+use pxl_spec::bake::tile::place::symbol_of;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::billboard::chat::line_said;
 use crate::billboard::sheet::billboard_sheet;
 use crate::io::text::{text_lines, text_width};
-use crate::layer::Base;
+use crate::query::World;
 use pxl_render::gpu::pass::badges::{badge_width, bubble_size, point_size, BADGE_FONT, BUBBLE_FONT, BUBBLE_TEXT_W, POINT_FONT};
 use pxl_render::gpu::sheet::shelf::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::sheet::SHEET_SCALE;
@@ -57,12 +57,6 @@ pub enum Label {
 }
 
 impl Label {
-    /// Gone once that tile has: another tile's index names another place.
-    fn place(tile: Tile, place: u32) -> Option<Placed<'static>> {
-        let placed = PlaceTile::residency().get(tile)?;
-        (place < placed.len()).then(|| placed.get(place))
-    }
-
     /// As it shows where the camera grid's cell is at `cell_zoom`, if it
     /// does: a place at Carto's zoom there, from the zoom it is shown from,
     /// as a dot or its icon by its category's zooms, named from its
@@ -73,7 +67,7 @@ impl Label {
             Label::Marker { .. } | Label::Count { .. } | Label::Chat { .. } => marker_shows(cell_zoom).then_some(self),
             Label::Place { tile, place, .. } => {
                 let zoom = carto_zoom(cell_zoom);
-                let h = Label::place(tile, place)?;
+                let h = World::now().place(tile, place)?;
                 let k = usize::from(h.place.category.checked_sub(1)?);
                 let from = |z: u8| z != 0 && zoom >= i32::from(z);
                 let (icon, dot) = (from(ICON_ZOOM[k]), from(DOT_ZOOM[k]));
@@ -110,7 +104,7 @@ impl Label {
                 shown
             }
             Label::Count { n, .. } => n.to_string(),
-            Label::Place { tile, place, look, .. } if look.named => Label::place(tile, place).map(|h| h.place.name.to_string()).unwrap_or_default(),
+            Label::Place { tile, place, look, .. } if look.named => World::now().place(tile, place).map(|h| h.place.name.to_string()).unwrap_or_default(),
             Label::Place { .. } => String::new(),
             Label::Chat { said } => line_said(said).unwrap_or_default(),
         }
@@ -211,7 +205,7 @@ pub fn slot(label: Label) -> i32 {
                 Label::Count { .. } => DrawSpec::Count { label: label.text(), logical_w: w },
                 Label::Chat { .. } => DrawSpec::Bubble { lines: b.lines.clone(), box_w: w },
                 Label::Place { tile, place, look, .. } => {
-                    let category = Label::place(tile, place).map_or(0, |h| h.place.category);
+                    let category = World::now().place(tile, place).map_or(0, |h| h.place.category);
                     let k = usize::from(category.saturating_sub(1));
                     DrawSpec::Point {
                         lines: b.lines.clone(),

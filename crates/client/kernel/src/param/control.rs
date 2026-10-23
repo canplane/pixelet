@@ -44,10 +44,12 @@ pub const AXIS_LOCK_THRESHOLD_PX: f64 = 12.0;
 /// Real pointers jitter a pixel or two on a still click; gating taps on any
 /// movement swallowed them.
 pub const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
-/// A held movement key pans this many cells at the focus a second, a cell
-/// the distance there over SPLIT (`controller::pan_cells`): a product
-/// number, a wide view crossed in about two seconds at any distance.
-pub const KEY_PAN_CELLS_PER_S: f64 = 50.0;
+/// A held movement key pans this share of the distance to the focus a
+/// second (`controller::pan_across`): a product number, a wide view crossed
+/// in about two seconds at any distance, 10-12's fifty camera-grid cells of
+/// 96 a distance. Not the grid's cells, whose count a distance moves with
+/// how finely the world is drawn and not with how fast a view should pan.
+pub const KEY_PAN_PER_S: f64 = 50.0 / 96.0;
 
 // ---- smoothing ----
 

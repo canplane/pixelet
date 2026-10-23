@@ -33,9 +33,9 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::terrain::CELL_U;
-use pxl_portable::ways;
 use pxl_spec::bake::separation::{footprint as line_reach, Form, STACKED_DECK_HEADROOM_M};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer};
+use pxl_spec_core::ways;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId, Segment};
@@ -83,7 +83,7 @@ const RAIL_INTERIOR_HEIGHT_M: f64 = 4.0;
 /// A block, as a length: what Arnis adds or takes by one.
 const BLOCK_M: f64 = 1.0;
 
-/// The tile's scale: Arnis's metres in leaf cells (pxl-portable
+/// The tile's scale: Arnis's metres in leaf cells (pxl-spec-core
 /// `cells_of_m`), at the tile's `Frame::per_m`.
 #[derive(Clone, Copy)]
 struct Units {
@@ -92,7 +92,7 @@ struct Units {
 
 impl Units {
     fn c(self, m: f64) -> i32 {
-        pxl_portable::cells_of_m(m as f32, self.per_m)
+        pxl_spec_core::cells_of_m(m as f32, self.per_m)
     }
 }
 
@@ -409,7 +409,7 @@ fn effective_layer(r: &Run) -> i64 {
 }
 
 /// The cells about one whose centers lie within `reach` cells of its own, as
-/// a way covers them (pxl-portable `covers`, here its distance to its own).
+/// a way covers them (pxl-spec-core `covers`, here its distance to its own).
 fn within(reach: f32) -> Vec<[i64; 2]> {
     let r = libm::ceilf(reach) as i64;
     (-r..=r)
@@ -428,7 +428,7 @@ fn way_width(row: &Segment) -> f64 {
 struct Obstacle {
     a: [f64; 2],
     b: [f64; 2],
-    /// In cells: what it covers is as the client's way covers (pxl-portable `covers`).
+    /// In cells: what it covers is as the client's way covers (pxl-spec-core `covers`).
     width: f32,
     headroom: i32,
     nodes: Vec<End>,
@@ -595,7 +595,7 @@ fn side_by_side(a: &Run, b: &Run, units: Units) -> bool {
         return false;
     }
     let same = effective_layer(a) == effective_layer(b);
-    // their edges meet where each way's cover ends (pxl-portable `reach`)
+    // their edges meet where each way's cover ends (pxl-spec-core `reach`)
     let reach = |r: &Run| f64::from(ways::reach((r.width_u / CELL_U) as f32));
     let touching = reach(a) + reach(b) + f64::from(units.c(SIDE_DECK_EDGE_GAP_M));
     let max = if same { touching.max(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M))) } else { touching };

@@ -11,8 +11,6 @@ use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TickState {
-    pub width: f64,
-    pub height: f64,
     pub dpr: f64,
     /// Behind the wall clock by what pauses cost (MAX_STEP_S).
     pub elapsed_s: f64,

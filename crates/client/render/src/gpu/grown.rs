@@ -1,6 +1,6 @@
 // pxl-render/gpu/grown.rs
 
-//! The decor the GPU grows and draws (pxl-portable `scatter`): what the
+//! The decor the GPU grows and draws (pxl-spec-core `scatter`): what the
 //! ground grows in the eye's windows over the cast's world (`decor_cs`),
 //! placed decor handed as records beside it — grown again only in the eye
 //! slots what it reads changed in (`decor_mark_cs`, `Grows`), the records
@@ -12,33 +12,35 @@
 //! (`decor_place_cs`). The CPU hands what only it knows and never reads
 //! what is grown.
 
-use pxl_portable::decor::{COUNTS, DECORS};
-use pxl_portable::eye;
-use pxl_portable::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
+use pxl_spec_core::decor::{COUNTS, DECORS};
+use pxl_spec_core::eye;
+use pxl_spec_core::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
 
+use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::record::compute;
 use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE};
 use crate::frame::shader::words::DRAW_FLOATS;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, release, word_bytes, Gpu};
+use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, bytes, release, word_bytes, Gpu};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::Read;
+use crate::gpu::read::Read;
 
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {
     /// Per kind, the window zooms it is grown at, a bit each over the first
     /// window's (`decor_cs`).
     pub shown: &'a [u32],
-    /// pxl-portable `scatter::drawn`'s frame words, `PARAM_WORDS` of them.
+    /// pxl-spec-core `scatter::drawn`'s frame words, `PARAM_WORDS` of them.
     pub params: &'a [u32],
     /// Placed decor, a record each as `decor_cs` writes one: its kind,
-    /// variant and turn, then its box's min corner in leaf cells; read where
+    /// variant and turn, then its box's min corner in leaf cells, its base
+    /// sunk under it by none, as it stands where it is placed; read where
     /// it lies, unwritten until the page replays the turn.
-    pub placed: &'a [[u32; 4]],
+    pub placed: &'a [[u32; scatter::GROWN_WORDS as usize]],
     /// The anchor the lanes are about, less the frame's eye: where the decor
     /// block is drawn.
     pub translation: [f32; 3],
     /// What overwrites wrote since the last frame, `scatter::EDITS` boxes
-    /// of leaf cells at most (pxl-portable `scatter::meets`): the slots
+    /// of leaf cells at most (pxl-spec-core `scatter::meets`): the slots
     /// whose decor they reach grow again.
     pub edits: &'a [[i32; 4]],
 }
@@ -55,7 +57,7 @@ pub struct Grows<'a> {
     pub window: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
     pub filled: u32,
-    /// The eye as the cast's (pxl-portable `eye`), of which the count pass
+    /// The eye as the cast's (pxl-spec-core `eye`), of which the count pass
     /// reads its place and the zooms it asks (`ORIGIN`, `TAU`, `RANGE`).
     pub eye: &'a [u32; eye::WORDS],
 }
@@ -84,6 +86,12 @@ pub struct Grown {
     /// block, `drawn::LANES` lanes and the index list, `room` slots each.
     records: u32,
     block: u32,
+    /// The draws' bind groups over the uniforms, a region's at a dynamic
+    /// offset, and over the block, in the layouts the decor and impostor
+    /// draws share (record.rs `DRAW`, `BLOCK`): made with their buffers.
+    draw_layouts: [u32; 2],
+    uniform_group: u32,
+    block_group: u32,
     room: u32,
     /// The placed decor's records, as last handed.
     placed_count: u32,
@@ -128,9 +136,12 @@ impl Grown {
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let rows = buffer(core::mem::size_of_val(&DECORS) as u32, storage);
         let table = DECORS;
-        // SAFETY: the rows are `repr(C)` words alone (pxl-portable decor.spec.rs), read while `table` lives.
+        // SAFETY: the rows are `repr(C)` words alone (pxl-spec-core decor.spec.rs), read while `table` lives.
         let words = unsafe { core::slice::from_raw_parts(table.as_ptr().cast::<u32>(), core::mem::size_of_val(&table) / 4) };
         g.write_buffer(rows, 0, bytes(words));
+        let drawn_by = pipelines.build(g, PIPELINE_DECOR, g.canvas());
+        let draw_layouts = [drawn_by.layouts[1], drawn_by.layouts[3]];
+        let uniforms = buffer(word_bytes((drawn::UNIFORM_WORDS * drawn::REGIONS) as usize), storage | buffer_usage::UNIFORM);
         Grown {
             mark: pipelines.build_compute(g, SHADER_GROWN_MARK, &compute::DECOR_MARK_GROUP),
             grow: pipelines.build_compute(g, SHADER_GROWN, &compute::DECOR_GROUP),
@@ -146,9 +157,12 @@ impl Grown {
             meshes: buffer(word_bytes(GROUPS as usize), storage),
             regions: buffer(word_bytes(2 * drawn::REGIONS as usize), storage),
             args: buffer(word_bytes((drawn::ARGS_WORDS * drawn::REGIONS) as usize), storage | buffer_usage::INDIRECT),
-            uniforms: buffer(word_bytes((drawn::UNIFORM_WORDS * drawn::REGIONS) as usize), storage | buffer_usage::UNIFORM),
+            uniforms,
             records: 0,
             block: 0,
+            draw_layouts,
+            uniform_group: g.bind_group(draw_layouts[0], &[buffer_range_entry(0, uniforms, 0, word_bytes(DRAW_FLOATS))]),
+            block_group: 0,
             room: 0,
             placed_count: 0,
             bound: [0; 7],
@@ -167,21 +181,12 @@ impl Grown {
         }
     }
 
-    /// The frame's decor handed over, none where decor is off, and what its
-    /// growth reads (`grows`); `meshes` each group's index count, none while
-    /// its model loads. Grouped again where `world` is not the one its
-    /// groups bind or the records' room grew, so a frame without decor
-    /// misses no change.
-    pub fn prepare(&mut self, g: &Gpu, frame: Option<DecorFrame>, grows: Grows, meshes: &[u32; GROUPS as usize], world: World) {
-        self.on = frame.is_some();
-        let Some(f) = frame else {
-            // Nothing grows while decor is off, and what moved meanwhile is
-            // not marked: the slots' records were not kept, so the next frame
-            // with decor grows every one.
-            self.stale = true;
-            self.counted.forget();
-            return;
-        };
+    /// The frame's decor handed over and what its growth reads (`grows`);
+    /// `meshes` each group's index count, none while its model loads.
+    /// Grouped again where `world` is not the one its groups bind or the
+    /// records' room grew, so a frame without a cast misses no change.
+    pub fn prepare(&mut self, g: &Gpu, f: DecorFrame, grows: Grows, meshes: &[u32; GROUPS as usize], world: World) {
+        self.on = true;
         let need = scatter::SLOT_RECORDS + (f.placed.len() as u32).next_power_of_two().max(64);
         let grew = need > self.room;
         if grew {
@@ -196,6 +201,8 @@ impl Grown {
             }
             release(records);
             release(block);
+            release(self.block_group);
+            self.block_group = g.bind_group(self.draw_layouts[1], &[buffer_entry(0, self.block)]);
             self.room = need;
             self.placed.forget();
         }
@@ -208,7 +215,10 @@ impl Grown {
         s.begin();
         s.read(f.shown);
         if !s.end() {
+            // What each slot grew was grown at the zooms it was shown at:
+            // every slot grows again.
             g.write_buffer(self.shown, 0, bytes(f.shown));
+            self.stale = true;
         }
         // The boxes the slots they meet grow again in: the edits, and each
         // cut that moved as it was and as it is, held with any a frame not
@@ -374,7 +384,7 @@ impl Grown {
             return;
         }
         // A workgroup a slot, reading the records its head holds, then the
-        // placed decor's a workgroup's lanes each (gpu-query-shader
+        // placed decor's a workgroup's lanes each (pxl-shader
         // `records`): the records held, not the room.
         let records = |w: [u32; 3]| scatter::EYE_SLOTS + self.placed_count.div_ceil(w[0]);
         let passes = [
@@ -393,20 +403,20 @@ impl Grown {
     /// the regions' indirect args, and where the block is drawn.
     pub fn drawn(&self) -> Option<Drawn> {
         (self.on && self.block != 0).then_some(Drawn {
-            block: self.block,
+            block_group: self.block_group,
             args: self.args,
-            uniforms: self.uniforms,
+            uniform_group: self.uniform_group,
         })
     }
 }
 
-/// The decor block as the draws read it (`Grown::drawn`): the block, the
-/// regions' indirect args and their draw uniforms.
+/// The decor block as the draws read it (`Grown::drawn`): the block's
+/// group, the regions' indirect args and their draw uniforms' group.
 #[derive(Clone, Copy)]
 pub struct Drawn {
-    pub block: u32,
+    pub block_group: u32,
     pub args: u32,
-    pub uniforms: u32,
+    pub uniform_group: u32,
 }
 
 impl Drawn {

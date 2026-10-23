@@ -77,7 +77,7 @@
       "size": {
         "$value": 0.25,
         "$doc": [
-          "World units tall — a quarter cell, the step OBJECT_SIZES also takes."
+          "World units tall — a quarter cell, the step the object tiers also take."
         ]
       },
       "keys": {

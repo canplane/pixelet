@@ -3,13 +3,15 @@
 //! Where the ground's answers moved since the frame turn before: the ground
 //! tiles whose answer moved (their identities, which fix their contents) and
 //! where the objects were written. A reader that stands on what it asked
-//! asks again only where one of them touches the columns it read, so a
-//! change stops at the ground it touches.
+//! asks again only where one of them touches the columns it read, which its
+//! queries report (`Columns`), so a change stops at the ground it touches.
 
 use crate::layer::Base as _;
+use core::cell::Cell;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::world::{nearest_box, REACH};
+use pxl_spec::space::coord::world::{nearest, nearest_box, REACH};
+use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 
@@ -55,6 +57,34 @@ pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {
     let c = changed();
     let mut regions = c.ground.iter().chain(layer).map(|t| t.region()).chain(c.written.iter().copied());
     regions.any(|r| nearest_box(&r, about).shares(columns))
+}
+
+/// The columns a reader's queries read, their corners in units, X on the
+/// lap of the first: each ray the cells it passes at the coarsest zoom it
+/// is answered at, each surface and footing its cell (`World::reading`).
+#[derive(Default)]
+pub struct Columns(Cell<Option<[[f64; 2]; 2]>>);
+
+impl Columns {
+    /// The cells of `zoom` the box from `a` to `b` lies in, read.
+    pub(super) fn read(&self, a: [f64; 2], b: [f64; 2], zoom: Zoom) {
+        let side = units(zoom);
+        let [lo, hi] = [[0, 1].map(|k| a[k].min(b[k])), [0, 1].map(|k| a[k].max(b[k]))];
+        let cells = [lo.map(|v| libm::floor(v / side) * side), hi.map(|v| (libm::floor(v / side) + 1.0) * side)];
+        let joined = match self.0.get() {
+            None => cells,
+            Some(c) => {
+                let dx = nearest(cells[0][0], c[0][0]) - cells[0][0];
+                [[c[0][0].min(cells[0][0] + dx), c[0][1].min(cells[0][1])], [c[1][0].max(cells[1][0] + dx), c[1][1].max(cells[1][1])]]
+            }
+        };
+        self.0.set(Some(joined));
+    }
+
+    /// None where nothing was read.
+    pub fn get(&self) -> Option<[[f64; 2]; 2]> {
+        self.0.get()
+    }
 }
 
 /// What a step asked the world, kept with what it asked it of and the

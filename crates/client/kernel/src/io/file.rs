@@ -12,7 +12,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use crate::abi::host::{root, OBJECTS_PATH, SETTINGS_PATH};
 use crate::asset::LOADS;
 use crate::io::failure::Failure;
-use crate::io::host::{answered, heap_stat, sys, turn};
+use crate::io::host::{answered, sys, turn, Refused};
 use crate::io::request::Credit;
 use crate::mem::spec::MIN_HEAP_BYTES;
 use crate::param::MAX_CREDITS;
@@ -55,11 +55,12 @@ pub const PATH_BYTES: usize = {
     most
 };
 
+/// `Load` is an asset's file, read as a model or an image as its attempt's
+/// subject says.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Owner {
     Fetch { key: u64, at_ms: f64 },
-    Model { key: u64 },
-    Image { key: u64 },
+    Load { key: u64 },
     Kept(Kept),
     Write,
 }
@@ -97,9 +98,7 @@ pub enum KeptFile {
 enum KeptRead {
     /// The heap refused its room: opened again after the heap gives some
     /// back, never taken for a file that held nothing. No descriptor is kept.
-    Refused {
-        releases: u32,
-    },
+    Refused(Refused),
     /// Filled from the turn after `asked`.
     Reading {
         bytes: Vec<u8>,
@@ -117,33 +116,23 @@ fn kept_read(kept: Kept, read: KeptRead) {
     request_world_tick();
 }
 
-fn read_kept(kept: Kept, fd: Fd, bytes: usize) {
-    let mut held = Vec::new();
-    if held.try_reserve_exact(bytes).is_err() {
-        close(fd);
-        kept_read(kept, KeptRead::Refused { releases: heap_stat().releases });
-        return;
-    }
-    held.resize(bytes, 0);
-    // SAFETY: `held` moves into KEPT, its heap buffer with it, and is taken
-    // no sooner than the turn after this one.
-    unsafe { read(fd, &mut held) };
-    close(fd);
-    kept_read(kept, KeptRead::Reading { bytes: held, asked: turn() });
-}
-
 fn kept_opened(kept: Kept, fd: Fd, opened: Opened) {
-    let file = match opened {
+    let read = match opened {
         Opened::Bytes(0) => {
             close(fd);
-            KeptFile::None
+            KeptRead::Read(KeptFile::None)
         }
-        Opened::Bytes(n) => return read_kept(kept, fd, n as usize),
+        // SAFETY: the bytes move into KEPT, their heap buffer with them, and
+        // are taken no sooner than the turn after this one.
+        Opened::Bytes(n) => match unsafe { read_whole(fd, n) } {
+            Ok(bytes) => KeptRead::Reading { bytes, asked: turn() },
+            Err(refused) => KeptRead::Refused(refused),
+        },
         // Only its absence says nothing was kept.
-        Opened::Absent => KeptFile::None,
-        Opened::Failed { .. } => KeptFile::Unreadable,
+        Opened::Absent => KeptRead::Read(KeptFile::None),
+        Opened::Failed { .. } => KeptRead::Read(KeptFile::Unreadable),
     };
-    kept_read(kept, KeptRead::Read(file));
+    kept_read(kept, read);
 }
 
 /// What a kept file held, once it is read whole; None until then.
@@ -151,8 +140,8 @@ pub fn take_kept(kept: Kept) -> Option<KeptFile> {
     let all = KEPT.get(Vec::new);
     let at = all.iter().position(|(k, _)| *k == kept)?;
     match &all[at].1 {
-        &KeptRead::Refused { releases } => {
-            if heap_stat().releases != releases {
+        &KeptRead::Refused(refused) => {
+            if refused.over() {
                 all.remove(at);
                 open_kept(kept);
             }
@@ -162,7 +151,7 @@ pub fn take_kept(kept: Kept) -> Option<KeptFile> {
         _ => match all.remove(at).1 {
             KeptRead::Reading { bytes, .. } => Some(KeptFile::Bytes(bytes)),
             KeptRead::Read(file) => Some(file),
-            KeptRead::Refused { .. } => None,
+            KeptRead::Refused(_) => None,
         },
     }
 }
@@ -176,6 +165,26 @@ pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
         // SAFETY: the caller's.
         unsafe { sys.read(fd, dst) };
     }
+}
+
+/// An opened file of `bytes`, read whole and closed: one owner, so every
+/// file read whole waits on a refusal alike. Where the heap refuses its room
+/// the read is the owner's to ask again once `Refused::over`; no descriptor
+/// is kept meanwhile.
+///
+/// # Safety
+/// The bytes are filled from the next turn on: as `read`, they are neither
+/// read nor dropped before then.
+pub unsafe fn read_whole(fd: Fd, bytes: u32) -> Result<Vec<u8>, Refused> {
+    let mut held = Vec::new();
+    let room = held.try_reserve_exact(bytes as usize);
+    if room.is_ok() {
+        held.resize(bytes as usize, 0);
+        // SAFETY: the caller's.
+        unsafe { read(fd, &mut held) };
+    }
+    close(fd);
+    room.map(|()| held).map_err(|_| Refused::now())
 }
 
 pub fn close(fd: Fd) {
@@ -274,8 +283,7 @@ pub fn opened(fd: Fd, res: i32, detail: u32) {
     }
     match owner {
         Owner::Fetch { key, at_ms } => crate::io::fetch::opened(fd, key, at_ms, opened),
-        Owner::Model { key } => crate::io::load::model_opened(fd, key, opened),
-        Owner::Image { key } => crate::io::load::image_opened(fd, key, opened),
+        Owner::Load { key } => crate::io::load::opened(fd, key, opened),
         Owner::Kept(kept) => kept_opened(kept, fd, opened),
         Owner::Write => {}
     }

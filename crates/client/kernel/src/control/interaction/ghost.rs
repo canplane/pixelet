@@ -20,16 +20,22 @@ use crate::decor::assets::decor_assets_for;
 use crate::layer::instance::Meta;
 use crate::layer::object::meta::user_decor_pick;
 use crate::layer::object::store::Block;
+use crate::query::changed::Asked;
 use crate::query::World;
 use crate::setting::store::settings_store;
+use xpute_guest::global::Global;
 
 /// What the pointer's tool would show where it is: nothing, a decor
 /// instance, or a box, drawn half transparent by the scene.
 pub enum Ghost {
     None,
     Decor { at: V3, group: u32, rotation: f64, scale: f64 },
-    Box { at: V3, size: f64, value: u32, rgb: u32, coplanar: bool },
+    Box { at: V3, size: f64, value: u32, rgb: u32 },
 }
+
+/// The look of the ground the eraser would carve, of the hovered point:
+/// asked again only where the hover moved or a change touched its column.
+static CARVED: Global<Asked<Q3, Option<Cube>>> = Global::new();
 
 pub fn ghost() -> Ghost {
     let hover = hover();
@@ -39,7 +45,7 @@ pub fn ghost() -> Ghost {
     let active_tool = ui.active_tool;
     let Pending {
         object: hovered_object,
-        size: preview_size,
+        zoom: preview_zoom,
         digging: digging_terrain,
         blocked,
         ..
@@ -47,12 +53,17 @@ pub fn ghost() -> Ghost {
     let textures = settings.textures;
 
     let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser) || hovered_object.is_some();
-    let current_scale = if use_object_style { preview_size } else { units(GROUND.cell()) };
+    let current_scale = units(if use_object_style { preview_zoom } else { GROUND.cell() });
 
+    let carved = CARVED.get(|| Asked::NONE);
+    // Looked at each frame turn, a hover not asked of this one too.
+    carved.kept();
     let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let cell = World::now().surface(h, LEAF_ZOOM).value().flatten().map_or(0, |s| s.block);
-            cube_of(u32::from(cell))
+            let (xy, cell) = ([h[0], h[1]].map(|v| q3::to_real(i64::from(v))), units(GROUND.cell()));
+            carved.of(*h, [xy.map(|v| v - cell), xy.map(|v| v + cell)], || {
+                cube_of(u32::from(World::now().surface(h, LEAF_ZOOM).value().flatten().map_or(0, |s| s.block)))
+            })
         }
         _ => None,
     };
@@ -80,7 +91,7 @@ pub fn ghost() -> Ghost {
     // Placing back an erased scattered decor restores that instance; the ghost
     // shows it.
     let restored = match (active_tool, &hovered) {
-        (ActiveTool::Decor, Some(h)) => restores_scattered(h, units(Decor::of(ui.decor_id).row.cell_zoom()), ui.decor_id),
+        (ActiveTool::Decor, Some(h)) => restores_scattered(h, ui.decor_id),
         _ => None,
     };
     // Where it would stand, and what it would carry.
@@ -91,7 +102,7 @@ pub fn ghost() -> Ghost {
         }
         (Some(b), Some(c), None) => {
             let (variant, turn) = user_decor_pick(&c, b);
-            Some(b.stand(real(&c), variant, turn, 1.0))
+            Some(b.stand(q3::unpack(&c), variant, turn, 1.0))
         }
         _ => None,
     };
@@ -104,10 +115,6 @@ pub fn ghost() -> Ghost {
 
     let swatch = cube.and_then(cube_rgb);
     let fallback = if active_tool == ActiveTool::Eraser { indicator::ERASE } else { indicator::ACTION };
-
-    // A carve no longer needs the coplanar bias: its voxel is gone from the mesh
-    // while the cursor is on it.
-    let coplanar_with_terrain = !use_object_style;
 
     let scattered_ghost = hover.scattered.filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser)).and_then(|s| {
         let (Meta::Decor(m), decor) = (s.meta, Decor::of(DecorId::of(s.id)?));
@@ -122,7 +129,7 @@ pub fn ghost() -> Ghost {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {
             let [x, y, z] = crate::view::frame::coord::to_world(&h);
-            let c = real(&h);
+            let c = q3::unpack(&h);
             match (decor, decor_pick) {
                 // Its stand, moved as the hover is into the world's frame.
                 (Some(decor), Some((at, m))) if is_decor_ghost => Ghost::Decor {
@@ -139,15 +146,9 @@ pub fn ghost() -> Ghost {
                         _ => 0,
                     },
                     rgb: swatch.unwrap_or(fallback),
-                    coplanar: coplanar_with_terrain,
                 },
             }
         }
         _ => Ghost::None,
     }
-}
-
-/// `p` in units, in the canonical frame.
-fn real(p: &Q3) -> V3 {
-    [q3::to_real(i64::from(p[0])), q3::to_real(i64::from(p[1])), q3::to_real(i64::from(p[2]))]
 }

@@ -7,6 +7,8 @@ const ZONE_BORDER_WIDTH: f32 = 0.04;
 
 struct VertexIn {
   @builtin(instance_index) i: u32,
+  // Four a face, in the box's order (gpu/pass/puck.rs `box_lanes`).
+  @builtin(vertex_index) corner: u32,
   @location(0) position: vec3f,
   @location(1) uv: vec2f,
 };
@@ -18,10 +20,14 @@ struct VertexOut {
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-  let k = v.i * 7u;
+  let k = v.i * 8u;
   let center = vec3f(zone[k], zone[k + 1u], zone[k + 2u]);
+  // Only the faces open to the air: one the ground buries stays unseen
+  // behind it rather than fight it along the edges it meets. A shut face's
+  // corners meet at one point outside the view, which draws nothing.
+  let open = ((u32(zone[k + 7u]) >> (v.corner / 4u)) & 1u) != 0u;
   var o: VertexOut;
-  o.clip = frame_view_proj() * vec4f(v.position + center + draw_translation(), 1.0);
+  o.clip = select(vec4f(2.0, 2.0, 2.0, 1.0), frame_view_proj() * vec4f(v.position + center + draw_translation(), 1.0), open);
   o.uv = v.uv;
   o.borders = vec4f(zone[k + 3u], zone[k + 4u], zone[k + 5u], zone[k + 6u]);
   return o;

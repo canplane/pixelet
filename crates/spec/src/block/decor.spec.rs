@@ -11,7 +11,7 @@
 // grows it on its own. A kind's `seed` names its scatter, so changing it
 // reshuffles every one the ground grows; `density` is its mean candidates per
 // cell at the cell's zoom, the intensity of the Poisson process that scatters
-// it (pxl-portable scatter.rs); `on` the looks it may stand on; `orientation`
+// it (pxl-spec-core scatter.rs); `on` the looks it may stand on; `orientation`
 // a random heading, or along the road or rail its cell lies on. A variant's
 // skin is its pack's colormap, kept outside the glb.
 //
@@ -61,7 +61,7 @@ impl DecorId {
 }
 
 /// How it grows, one row with the GPU's.
-pub use pxl_portable::decor::Orientation;
+pub use pxl_spec_core::decor::Orientation;
 
 /// A model and its pack's colormap.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,12 +71,12 @@ pub struct Variant {
 }
 
 /// A decor: its id, its row (how the ground grows it and the boxes its
-/// variants claim, pxl-portable decor.spec.rs) and its variants' models, in
+/// variants claim, pxl-spec-core decor.spec.rs) and its variants' models, in
 /// the row's order.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Decor {
     pub id: DecorId,
-    pub row: &'static pxl_portable::decor::Decor,
+    pub row: &'static pxl_spec_core::decor::Decor,
     pub variants: &'static [Variant],
 }
 
@@ -95,7 +95,7 @@ pub const DECORS: [Decor; 4] = [
     // at 1u spacing.
     Decor {
         id: DecorId::tree,
-        row: &pxl_portable::decor::DECORS[0],
+        row: &pxl_spec_core::decor::DECORS[0],
         variants: &[
             Variant {
                 model: crate::asset::ingested::Asset::decor_kenney_fantasy_town_tree_glb,
@@ -140,7 +140,7 @@ pub const DECORS: [Decor; 4] = [
     // a quarter of 0.015 after boats covered the water.
     Decor {
         id: DecorId::boat,
-        row: &pxl_portable::decor::DECORS[1],
+        row: &pxl_spec_core::decor::DECORS[1],
         variants: &[
             Variant {
                 model: crate::asset::ingested::Asset::decor_kenney_watercraft_pack_boat_row_small_glb,
@@ -166,7 +166,7 @@ pub const DECORS: [Decor; 4] = [
     // of cells reads as gridlock.
     Decor {
         id: DecorId::car,
-        row: &pxl_portable::decor::DECORS[2],
+        row: &pxl_spec_core::decor::DECORS[2],
         variants: &[
             Variant {
                 model: crate::asset::ingested::Asset::decor_kenney_car_kit_sedan_glb,
@@ -195,7 +195,7 @@ pub const DECORS: [Decor; 4] = [
     // trains should read as occasional.
     Decor {
         id: DecorId::train,
-        row: &pxl_portable::decor::DECORS[3],
+        row: &pxl_spec_core::decor::DECORS[3],
         variants: &[
             Variant {
                 model: crate::asset::ingested::Asset::decor_kenney_train_kit_train_locomotive_a_glb,

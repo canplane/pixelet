@@ -4,16 +4,15 @@ import { defineConfig, type HmrContext, loadEnv, type Plugin, type ProxyOptions,
 import deno from "@deno/vite-plugin";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import process from "node:process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 
-import { DEV_PROXY_ROUTES } from "./src/config/route.ts";
-
-const { DECL, readEnums, enumAt, literal, stale } = createRequire(import.meta.url)("./script/const-enum.cjs");
+import { DEV_PROXY_ROUTES } from "../client/src/config/route.ts";
+import { DECL, enumAt, literal, type Members, readEnums, stale } from "../client/script/const-enum.ts";
+import { mapped } from "../client/script/import-map.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,14 +47,14 @@ function buildId(): string {
  * that build whatever it was built from, so the source says so itself rather
  * than a sign meaning "after"; before any number is cached, the id alone.
  * The count lives in the bucket and is taken by the gate job
- * (script/build-counter.ts); .build_number is only this checkout's cache of
+ * (script/build-counter.ts); apps/client/.build_number is only this checkout's cache of
  * it, written by any read of `./script/build-log.ts`.
  */
 function buildNumber(id: string): string {
   const official = process.env.PXL_BUILD_NUMBER;
   if (official) return `#${official}`;
   try {
-    const last = readFileSync(path.join(__dirname, ".build_number"), "utf8").trim();
+    const last = readFileSync(path.join(__dirname, "..", "client", ".build_number"), "utf8").trim();
     return /^\d+$/.test(last) ? `#${last}-${id}` : id;
   } catch {
     return id;
@@ -76,9 +75,9 @@ function buildNumber(id: string): string {
  * does mean the bundle hash changes on every build even when no source
  * did; that is the cost of it being accurate, chosen over the commit date.
  * UTC: it is formatted for the reader's own timezone where it is shown
- * (feature/setting/section/about.tsx).
+ * (shell/setting/section/about.tsx).
  */
-/** The other half of `platform/web/remote-console.ts`: what a device posts to
+/** The other half of `src/remote-console.ts`: what a device posts to
  * `/__console` is printed where this server's own output goes, so a phone or a
  * tablet on a tunnel can be read without attaching a debugger to it. Dev only
  * — a plugin's `configureServer` never runs for a build. */
@@ -152,7 +151,7 @@ function buildStamp(): Plugin {
  * as the type syntax it is, which leaves every importer bound to an export
  * that no longer exists.
  *
- * The table is script/const-enum.cjs's, shared with the device's Babel pass,
+ * The table is apps/client/script/const-enum.ts's, shared with the device's Babel pass,
  * and it refuses an enum it cannot inline rather than leave one. Here each
  * use is replaced by its value — a file's own enums in that file only — and
  * the declarations struck. An access left behind after a declaration went
@@ -160,13 +159,18 @@ function buildStamp(): Plugin {
  * table is read once, as the server starts, so an enum declared since, or a
  * member added to one, is the same error, saying the server has to be
  * restarted.
+ *
+ * A file of the tree outside this root (xpute/ts) is one the Deno resolver
+ * hands back as a virtual module its loader has already emitted, every enum
+ * an object by then; such a file is read from its own path instead, as one
+ * inside the root is. A file that declares enums and reaches the transform
+ * without its declarations is a build error.
  */
-function constEnum(roots: string[], root: string): Plugin {
-  type Members = Map<string, number | string>;
-  const table = readEnums(roots) as { exported: Map<string, Map<string, Members>>; local: Map<string, Map<string, Members>> };
+function constEnum(roots: string[]): Plugin {
+  const table = readEnums(roots);
   const restart = "restart the dev server";
 
-  // An id can carry a query or a hash — `?worker`, and the `#deno` the Deno
+  // An id can carry a query or a hash — `?url`, and the `#deno` the Deno
   // resolver appends to the virtual id it hands back — and either one hides
   // the extension from a `$`-anchored test. Missing a module that way is
   // silent and asymmetric: the file holding the declaration is reached under
@@ -178,8 +182,10 @@ function constEnum(roots: string[], root: string): Plugin {
   // against the file itself, so that is what is kept.
   const sourceOf = (id: string) => {
     const plain = id.split("?")[0].split("#")[0];
-    return plain.slice(plain.lastIndexOf("::") + (plain.includes("::") ? 2 : 0)).replace(/^\0/, "").replace(/^file:\/\//, "");
+    const at = plain.lastIndexOf("::");
+    return path.resolve(at < 0 ? plain : plain.slice(at + 2).replace(/^file:\/\//, ""));
   };
+  const declares = (file: string) => table.exported.has(file) || table.local.has(file);
   const IMPORT = /import\s*(?:type\s+)?\{([^}]*)\}\s*from\s*(['"][^'"]+['"])\s*;?/g;
   const items = (clause: string) =>
     clause
@@ -195,10 +201,16 @@ function constEnum(roots: string[], root: string): Plugin {
     name: "const-enum",
     // Before the transpiler reaches the types: the declarations are still here.
     enforce: "pre",
+    async resolveId(id, importer, options) {
+      const resolved = await this.resolve(id, importer, { ...options, skipSelf: true });
+      if (resolved === null || !resolved.id.startsWith("\0deno::")) return null;
+      const file = sourceOf(resolved.id);
+      return /\.tsx?$/.test(file) && roots.some((r) => file.startsWith(r + path.sep)) ? file : null;
+    },
     transform(code, id) {
-      const file = sourceOf(id);
-      if (!/\.tsx?$/.test(file) || id.includes("node_modules")) return null;
-      const at = path.resolve(file);
+      const at = sourceOf(id);
+      if (!/\.tsx?$/.test(at) || id.includes("node_modules")) return null;
+      if (declares(at) && code.search(DECL) < 0) throw new Error(`const-enum: ${at} reached the bundler with its enums already emitted (${id})`);
       for (const [, isExported, name] of code.matchAll(DECL)) {
         if (!(isExported ? table.exported : table.local).get(at)?.has(name)) throw new Error(`${stale(`const enum ${name}`, restart)} (${id})`);
       }
@@ -209,7 +221,7 @@ function constEnum(roots: string[], root: string): Plugin {
       const imported = new Set<string>();
       for (const [, clause, from] of code.matchAll(IMPORT)) {
         for (const { orig, local } of items(clause)) {
-          const members = enumAt(table, root, at, from.slice(1, -1), orig) as Members | null;
+          const members = enumAt(table, at, from.slice(1, -1), orig);
           if (members) {
             bound.set(local, members);
             imported.add(local);
@@ -224,7 +236,7 @@ function constEnum(roots: string[], root: string): Plugin {
         // read before SENSOR_ENABLE became SENSOR_ENABLE_LOCATION — would
         // otherwise leave `7444_LOCATION` for the parser instead of a name
         // the stale check below can say.
-        out = out.replace(new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"), (whole, key: string) => (members.has(key) ? literal(members.get(key)) : whole));
+        out = out.replace(new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"), (whole, key: string) => (members.has(key) ? literal(members.get(key)!) : whole));
         struck.push(name);
       }
       if (!struck.length) return null;
@@ -257,8 +269,9 @@ const remoteOriginDefault = "https://plei.me";
 
 // anti-HMR. The shell's kernel glue is here too: its modules hold the one
 // kernel's memory and device, and a hot-swapped copy ran beside them — a
-// second device beside the renderer's objects on the first.
-const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
+// second device beside the renderer's objects on the first. The built module
+// is the page's own, beside the guest.ts that opens it.
+const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/apps/client/src/kernel/", "/apps/client/src/catalog/", "/apps/web/src/guest."];
 
 // One reload for a change that reaches both sides: while the kernel builds, a
 // core change waits for it, so the page never runs the shell generated from a
@@ -298,14 +311,15 @@ function fullReloadOnCoreChange() {
     enforce: "pre" as const,
 
     // Vite's watcher covers `root`, which here is apps/web: without this,
-    // nothing under xpute/ts/ is watched, handleHotUpdate below never runs
-    // for a core file, and the server keeps serving the transform it cached
-    // at first import — a core edit does nothing, and a browser reload does
-    // not help because the staleness is on the server.
+    // nothing under xpute/ts/ or apps/client/ is watched, handleHotUpdate
+    // below never runs for a core file, and the server keeps serving the
+    // transform it cached at first import — a core edit does nothing, and a
+    // browser reload does not help because the staleness is on the server.
     configureServer(server) {
       for (const pat of corePathIncludes) {
         server.watcher.add(path.resolve(__dirname, "..", "..", pat.replace(/^\/|\/$/g, "")));
       }
+      server.watcher.add(path.resolve(__dirname, "..", "client", "src"));
     },
 
     handleHotUpdate(ctx: HmrContext) {
@@ -340,13 +354,31 @@ function fullReloadOnCoreChange() {
 
 // The kernel's module, built again when what it is built from changes. It is
 // built once as the server starts (deno.jsonc `dev`'s dependency), and the
-// page reloads when the module under src/kernel/ is replaced
+// page reloads when src/guest.wasm is replaced
 // (fullReloadOnCoreChange), so a Rust edit otherwise waited for a hand-run
 // build or a restart of everything. Every change under crates/ asks, outside
 // cargo's own target/: cargo knows which of them the module is built from, and
 // build-wasm writes nothing when it is not one of them. One build at a time; a
 // change during one asks for one more after it, which covers every change it
 // missed.
+/**
+ * The tree's own prefixes, as the importing file's import map gives them
+ * (apps/client/script/import-map.ts), the reader Metro resolves through too.
+ * A file's platform variants (pill.ios.tsx beside pill.tsx) are a device's;
+ * the page takes the default every import names.
+ */
+function importMaps(): Plugin {
+  return {
+    name: "pxl-import-maps",
+    enforce: "pre",
+    resolveId(id, importer) {
+      if (!importer || importer.startsWith("\0")) return null;
+      const hit = mapped(importer, id);
+      return hit ? this.resolve(hit.path, importer, { skipSelf: true }) : null;
+    },
+  };
+}
+
 function rebuildKernelOnRustChange(): Plugin {
   return {
     name: "rebuild-kernel",
@@ -449,7 +481,8 @@ export default defineConfig(({ mode }) => {
     plugins: [
       buildStamp(),
       remoteConsole(),
-      constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "xpute", "ts")], path.resolve(__dirname, "..", "..")),
+      constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "client", "src"), path.resolve(__dirname, "..", "..", "xpute", "ts")]),
+      importMaps(),
       deno(),
       react(),
 
@@ -461,7 +494,6 @@ export default defineConfig(({ mode }) => {
 
     resolve: {
       alias: [
-        { find: "@", replacement: path.resolve(__dirname, "src") },
         // The shell imports React Native's API, which deno.jsonc resolves to
         // React Native itself for the type-check; a web bundle takes the
         // same names from react-native-web. Exact, so a package under
@@ -484,15 +516,6 @@ export default defineConfig(({ mode }) => {
     },
     optimizeDeps: {
       rolldownOptions: { resolve: { extensions: [".web.mjs", ".web.js", ".web.ts", ".web.tsx", ".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"] } },
-    },
-
-    // A worker is bundled by its own Rollup pass, which gets none of the
-    // plugins above: without the deno resolver there, a worker's first
-    // `@xpute/` import does not resolve and the build stops. ES modules,
-    // for a worker spawned with `type: "module"`.
-    worker: {
-      format: "es",
-      plugins: () => [deno()],
     },
 
     // .glb is not in Vite's default asset extensions: without this each

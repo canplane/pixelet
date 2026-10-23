@@ -1,7 +1,7 @@
 // pxl-geo-bake/terrain/pool.rs
 
 //! Whether a set's ways' trees fit the client's pool wherever the eye is
-//! (pxl-portable `ways::tree::POOL_BLOCKS`): a fact of the set, not of a
+//! (pxl-spec-core `ways::tree::POOL_BLOCKS`): a fact of the set, not of a
 //! tile, as a window is a fixed grid of squares about the eye laid at any
 //! square, across tiles. Each square's tree is built as a GPU builds it
 //! (pxl-spec `terrain::square_blocks`); each window's most is the most any
@@ -11,12 +11,12 @@
 use std::collections::BTreeMap;
 
 use fnv::FnvHashMap;
-use pxl_portable::ways::tree::{POOL_BLOCKS, SCRATCH_WORDS, SQUARE_BLOCKS};
-use pxl_portable::window::{ACROSS, HANDED_WORDS, SQUARE, SQUARE_WORDS, WAYS_SQUARE_SEGMENTS};
 use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::Tile;
+use pxl_spec_core::ways::tree::{POOL_BLOCKS, SCRATCH_WORDS, SQUARE_BLOCKS};
+use pxl_spec_core::window::{ACROSS, HANDED_WORDS, SQUARE, SQUARE_WORDS, WAYS_SQUARE_SEGMENTS};
 
 use crate::pyramid::Staged;
 
