@@ -243,6 +243,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_ground",
         "cloud_tile",
         "cloud_field",
+        "sky_words",
         "clouds",
     ],
     // SHADER_CLOUD_FIELD

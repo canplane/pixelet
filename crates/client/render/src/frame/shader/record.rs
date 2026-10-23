@@ -257,25 +257,7 @@ const LIT_FRAME: [[u32; 2]; 13] = {
     [[0, UNIFORM], [7, TEXTURE], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9], AIR[10]]
 };
 /// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
-const CLOUD_GROUP: [[u32; 2]; 15] = {
-    [
-        [0, UNIFORM],
-        [1, UNIFORM],
-        [2, TEXTURE],
-        [3, SAMPLER],
-        AIR[0],
-        AIR[1],
-        AIR[2],
-        AIR[3],
-        AIR[4],
-        AIR[5],
-        AIR[6],
-        AIR[7],
-        AIR[8],
-        AIR[9],
-        AIR[10],
-    ]
-};
+const CLOUD_GROUP: [[u32; 2]; 16] = and([[0, UNIFORM], [19, UNIFORM], [1, UNIFORM], [2, TEXTURE], [3, SAMPLER]], AIR);
 const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 
 /// The lit pass's frame, occlusion, air and layers, all read where

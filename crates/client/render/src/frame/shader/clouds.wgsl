@@ -4,15 +4,22 @@
 // from below they fill only the sky, from above they cover everything, so a
 // peak above a sheet is wrong either way.
 
+// A ray is the sky's (sky_words.wgsl `sky_ray`).
 struct Clouds {
-  ray: mat3x3f,
-  // The field's lattice unit the eye is over and its share of one; the
-  // lattice's units around; the cells the wind has moved it under the map
+  // Faded over the upper half of the climb to where the clouds are gone
+  // (look/cloud.rs `shown`).
+  shown: f32,
+  // How far the eye observes, in km: past it no sheet is drawn.
+  reach: f32,
+  // The lattice's units around; the cells the wind has moved it under the
+  // map; the field's lattice unit the eye is over and its share of one
   // (gpu/clouds.rs `field`).
+  count: u32,
+  free: f32,
+  drift: vec2f,
   base: vec2u,
   frac: vec2f,
-  count: u32,
-  drift: vec2f,
+  free2: vec2f,
 };
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
@@ -21,15 +28,12 @@ struct Clouds {
 @group(0) @binding(2) var cloud_tile: texture_2d<f32>;
 @group(0) @binding(3) var cloud_tile_sampler: sampler;
 
-fn clouds_ray() -> mat3x3f { return mat3x3f(clouds_words[0].xyz, clouds_words[1].xyz, clouds_words[2].xyz); }
-// Faded over the upper half of the climb to where the clouds are gone (look/cloud.rs `shown`).
-fn clouds_shown() -> f32 { return clouds_words[0].w; }
-fn clouds_base() -> vec2u { return bitcast<vec2u>(clouds_words[3].xy); }
-fn clouds_frac() -> vec2f { return clouds_words[3].zw; }
-fn clouds_count() -> u32 { return bitcast<u32>(clouds_words[4].x); }
-fn clouds_drift() -> vec2f { return clouds_words[4].zw; }
-// How far the eye observes, in km: past it no sheet is drawn.
-fn clouds_reach() -> f32 { return clouds_words[4].y; }
+fn clouds_shown() -> f32 { return clouds_words[0].x; }
+fn clouds_reach() -> f32 { return clouds_words[0].y; }
+fn clouds_count() -> u32 { return bitcast<u32>(clouds_words[0].z); }
+fn clouds_drift() -> vec2f { return clouds_words[1].xy; }
+fn clouds_base() -> vec2u { return bitcast<vec2u>(clouds_words[1].zw); }
+fn clouds_frac() -> vec2f { return clouds_words[2].xy; }
 
 // The lattice's footprint where `dir` is `t` km on, before any branch takes a derivative.
 fn footprint_at(dir: vec3f, t: f32) -> f32 {
@@ -98,7 +102,7 @@ fn sheet(s: Sheet, dir: vec3f, t: f32, footprint: f32, reach: f32) -> Layer {
 
 @fragment
 fn fs(v: CloudOut) -> @location(0) vec4f {
-  let dir = normalize(clouds_ray() * vec3f(v.ndc, 1.0));
+  let dir = normalize(sky_ray() * vec3f(v.ndc, 1.0));
   let mu = dot(dir, frame_up());
   let reach = clouds_reach();
   let alto_t = sheet_t(mu, ALTOCUMULUS.km);

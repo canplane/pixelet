@@ -14,8 +14,8 @@ pub const FRAME_FLOATS: usize = 32;
 pub const SKY_FLOATS: usize = 16;
 /// The air's (atmos_medium.wgsl, gpu/atmosphere.rs).
 pub const ATMOS_FLOATS: usize = 52;
-/// The cloud sheets' (clouds.wgsl, gpu/clouds.rs).
-pub const CLOUDS_FLOATS: usize = 20;
+/// The cloud sheets' (clouds.wgsl, gpu/clouds.rs); their ray is the sky's.
+pub const CLOUDS_FLOATS: usize = 12;
 /// The stars' (stars.wgsl, gpu/stars.rs).
 pub const STARS_FLOATS: usize = 36;
 /// The screen's occlusion's (ao_view.wgsl, gpu/ao.rs).

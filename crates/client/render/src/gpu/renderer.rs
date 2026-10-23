@@ -249,13 +249,10 @@ pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
     }
 }
 
-/// The ray's words `put_ray` writes: its three columns, a vec4 each.
-pub(crate) const RAY_FLOATS: usize = 12;
-
 /// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, taken in f64. Un-
 /// projecting two points in the shader kept a direction to only ~1e-3 rad,
 /// which the secant carried out to kilometers at the horizon: the clouds shook.
-pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
+fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
     let mut inv = mat4::new();
     mat4::invert(&mut inv, view_proj);
     let point = |x: f64, y: f64| -> V3 {
@@ -1700,7 +1697,7 @@ impl Renderer {
         let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer, sky_buffer);
         let air = atmosphere.entries();
         let stars = StarPass::new(g, &mut pipelines, frame_buffer, air);
-        let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
+        let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, sky_buffer, air);
         let mips = Mips::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let layers = Layers::new(g);
         let sky_built = pipelines.build(g, PIPELINE_SKY, g.canvas());
@@ -1800,8 +1797,7 @@ impl Renderer {
         let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
         let eye = [0.0; 3];
         put_ray(&mut self.sky, 0, &m, &eye);
-        self.clouds
-            .lay_out(&self.sky[..RAY_FLOATS], [eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS], reach * env[ENV_AIR + 1]);
+        self.clouds.lay_out([eye_world[0], eye_world[1]], env, s[STAGE_AT::CLOUDS], reach * env[ENV_AIR + 1]);
         self.stars.lay_out(&m, env, width);
         self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
         self.sky[SKY_MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
