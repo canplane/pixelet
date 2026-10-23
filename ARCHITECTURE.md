@@ -138,7 +138,7 @@ A version is never changed once written, so a tile never changes under its key (
 
 A block drawn coarser than a leaf's cell is what its zoom holds, not a summary made for drawing (`pxl-spec space/layer/lattice.rs` `Lattice::fold`): the ground's cell of a coarse tile stands at its own folded height, a whole cube, its look the majority of the looks it folds ([doc/minutes/20261005-the-ground-is-a-carto-palette.md](./doc/minutes/20261005-the-ground-is-a-carto-palette.md)); what is placed folds to the kind most of its fill is, a whole cube where half or more is filled and nothing where less is (`pxl-spec-core overwrite.rs` `value`). Heights are units at every zoom, so no ground is ever a cell part full.
 
-Flat ground at a distance therefore reads as separated cubes rather than a sheet — the cost of a rule that treats every axis alike, taken over rules where orientation would decide whether a thing exists. What is folded is a summary, not what is held: nothing in a folded cell is struck, hidden or cut by a preview (`control/interaction.rs` `folded_at`, the camera grid's zoom at the struck point by `query/support.rs` `cell_at`), and nothing in one is pointed at.
+Flat ground at a distance therefore reads as separated cubes rather than a sheet — the cost of a rule that treats every axis alike, taken over rules where orientation would decide whether a thing exists. What is folded is a summary, not what is held: nothing in a folded cell is struck, hidden or cut by a preview (`control/interaction.rs` `Picked`, the zoom the eye's rays draw at the struck point by `query/ray.rs` `by_distance`), and nothing in one is pointed at.
 
 ## Each concern's bound
 

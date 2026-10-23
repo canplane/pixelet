@@ -326,7 +326,9 @@ pub mod SUMMARY {
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
-    /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at.
+    /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist`, `hover_x`..`hover_z` and `place_x`..`place_z` in units, `center_z` and `hover_alt` in metres, a zoom as its number, and NaN where there is none.
+    /// The hover is what the pointer meets as drawn, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel query/ray.rs `by_distance`).
+    /// The pick is what the tool held strikes there (pxl-kernel control/interaction.rs `picked`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (control/interaction/collision.rs `is_placement_blocked`).
     pub mod view {
         pub const AT: u32 = 447;
         pub const dist: u32 = 0;
@@ -342,8 +344,17 @@ pub mod SUMMARY {
         pub const hover_lon: u32 = 10;
         pub const hover_lat: u32 = 11;
         pub const hover_alt: u32 = 12;
-        pub const cell_want: u32 = 13;
-        pub const WORDS: u32 = 14;
+        pub const cell: u32 = 13;
+        pub const struck: u32 = 14;
+        pub const held: u32 = 15;
+        pub const drawn: u32 = 16;
+        pub const folded: u32 = 17;
+        pub const place_x: u32 = 18;
+        pub const place_y: u32 = 19;
+        pub const place_z: u32 = 20;
+        pub const place_zoom: u32 = 21;
+        pub const blocked: u32 = 22;
+        pub const WORDS: u32 = 23;
         pub const KEYS: &[&str] = &[
             "AT",
             "dist",
@@ -359,11 +370,20 @@ pub mod SUMMARY {
             "hover_lon",
             "hover_lat",
             "hover_alt",
-            "cell_want",
+            "cell",
+            "struck",
+            "held",
+            "drawn",
+            "folded",
+            "place_x",
+            "place_y",
+            "place_z",
+            "place_zoom",
+            "blocked",
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 461;
+    pub const WORDS: u32 = 470;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "steps", "view", "WORDS"];
 }
 

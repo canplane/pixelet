@@ -26,7 +26,7 @@ use crate::layer::object::store::Entry;
 use crate::query::{Hit, World};
 use crate::view::frame::pose::ray_of;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units};
+use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units, Zoom};
 use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -122,28 +122,52 @@ fn resolve_struck(hit: &Hit) -> Option<Struck> {
     }
 }
 
+/// What the hover's pick met, and the cell zoom the eye's rays draw where
+/// it struck, by the rule they are cast by (query/ray.rs `by_distance`),
+/// which near the eye is finer than the ground's cells, as what is placed
+/// may be; none without an eye.
+pub(crate) struct Picked {
+    pub hit: Hit,
+    pub drawn: Option<Zoom>,
+}
+
+impl Picked {
+    /// The zoom of the box struck.
+    pub fn held(&self) -> Zoom {
+        of_side(self.hit.cube.extent()[0])
+    }
+
+    /// Whether the rays draw coarser there than the box struck: a summary,
+    /// not what is held, so nothing in it is struck.
+    pub fn folded(&self) -> bool {
+        self.drawn.is_some_and(|z| z < self.held())
+    }
+}
+
+/// What the hover picks at `ndc_x`, `ndc_y` on the world drawn at `drawn`,
+/// from the pose as the camera holds it now, which a door event or a
+/// controller may have moved since the turn composed the view.
+pub(crate) fn picked(ndc_x: f64, ndc_y: f64, drawn: Tau) -> Option<Picked> {
+    let pose = crate::control::camera::controller::pose()?;
+    let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
+    ray_of(pose, ndc_x, ndc_y, &mut origin, &mut direction);
+    let hit = ray_pick(origin, direction, drawn)?;
+    let drawn = crate::view::observation::eye().map(|eye| {
+        let v = v3::sub(&hit.cube.center(), &eye);
+        crate::query::by_distance(drawn).at(v3::dot(&v, &v) as f32)
+    });
+    Some(Picked { hit, drawn })
+}
+
 /// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.
 pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     let ui = interaction().holding;
     interaction().pointed = Some([ndc_x, ndc_y]);
-    // The pose as the camera holds it now, which a door event or a
-    // controller may have moved since the turn composed the view.
-    let mut origin = [0.0; 3];
-    let mut direction = [0.0; 3];
-    let pose = crate::control::camera::controller::pose();
-    if let Some(pose) = pose {
-        ray_of(pose, ndc_x, ndc_y, &mut origin, &mut direction);
-    }
-    let Some(hit) = pose.and_then(|_| ray_pick(origin, direction, drawn)) else {
-        interaction().hover = Hover::default();
-        return;
-    };
     let hover = &mut interaction().hover;
-    // A folded cell is a summary, not what is held: nothing in it is struck.
-    if folded_at(&hit, drawn) {
+    let Some(Picked { hit, .. }) = picked(ndc_x, ndc_y, drawn).filter(|p| !p.folded()) else {
         *hover = Hover::default();
         return;
-    }
+    };
 
     if let Some(tool) = PlacementTool::of(&ui) {
         hover.object_at = None;
@@ -183,18 +207,6 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         return;
     }
     hover.coord = Some(corner);
-}
-
-/// Whether what `hit` struck is drawn folded: the eye's rays draw cells
-/// coarser than the box struck where it is, by the rule they are cast by
-/// (query/ray.rs `by_distance`), which near the eye is finer than the
-/// ground's cells, as what is placed may be.
-fn folded_at(hit: &Hit, drawn: Tau) -> bool {
-    let held = of_side(hit.cube.extent()[0]);
-    crate::view::observation::eye().is_some_and(|eye| {
-        let v = v3::sub(&hit.cube.center(), &eye);
-        crate::query::by_distance(drawn).at(v3::dot(&v, &v) as f32) < held
-    })
 }
 
 /// A tap at `ndc_x`, `ndc_y` with the tool held, on the world drawn at `drawn`.

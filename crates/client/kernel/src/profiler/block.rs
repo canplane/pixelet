@@ -131,7 +131,16 @@ pub struct ViewBlock {
     pub hover_lon: f64,
     pub hover_lat: f64,
     pub hover_alt: f64,
-    pub cell_want: f64,
+    pub cell: f64,
+    pub struck: f64,
+    pub held: f64,
+    pub drawn: f64,
+    pub folded: f64,
+    pub place_x: f64,
+    pub place_y: f64,
+    pub place_z: f64,
+    pub place_zoom: f64,
+    pub blocked: f64,
 }
 
 words!(ViewBlock, SUMMARY::view::WORDS,
@@ -139,7 +148,9 @@ words!(ViewBlock, SUMMARY::view::WORDS,
     center_lon => SUMMARY::view::center_lon, center_lat => SUMMARY::view::center_lat, center_z => SUMMARY::view::center_z,
     hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
     hover_lon => SUMMARY::view::hover_lon, hover_lat => SUMMARY::view::hover_lat, hover_alt => SUMMARY::view::hover_alt,
-    cell_want => SUMMARY::view::cell_want,
+    cell => SUMMARY::view::cell, struck => SUMMARY::view::struck, held => SUMMARY::view::held, drawn => SUMMARY::view::drawn,
+    folded => SUMMARY::view::folded, place_x => SUMMARY::view::place_x, place_y => SUMMARY::view::place_y, place_z => SUMMARY::view::place_z,
+    place_zoom => SUMMARY::view::place_zoom, blocked => SUMMARY::view::blocked,
 );
 
 #[repr(C)]

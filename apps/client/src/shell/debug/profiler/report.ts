@@ -11,7 +11,7 @@ import { fps, type ProfilerReport, type Spread, type TaskRecord, type TaskSummar
 import { fixed } from "@/shell/fixed.ts";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
-/** A count of bytes as the one MB the figures are shown in, signed. */
+/** A count of bytes in the one unit the figures are shown in, signed. */
 const signedBytes = (b: number) => `${b >= 0 ? "+" : ""}${valueText("_bytes", b)}`;
 const bytes = (b: number) => valueText("_bytes", b);
 /** Where the interval's turns ended: before it, by the time left, or past it,
@@ -117,7 +117,7 @@ export function profilerReportText(r: ProfilerReport): string {
 
 export async function profilerReportCopy(text: string): Promise<string> {
   console.log(text);
-  const kb = `${Math.max(1, round(text.length / 1024))} KB`;
+  const kb = `${Math.max(1, round(text.length / 1024))} KiB`;
   let said: string;
   try {
     await copyText(text);

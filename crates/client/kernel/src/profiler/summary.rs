@@ -167,8 +167,12 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
 }
 
 fn side(out: &mut [f64]) {
-    // What the pointer meets as drawn, whether or not it could strike it there.
-    let met = crate::control::interaction::pointed().map(|at| (at, crate::view::lens::tau())).and_then(|([x, y], tau)| {
+    use crate::control::interaction::{self, collision};
+    let tau = crate::view::lens::tau();
+    let pointed = interaction::pointed();
+    // What the pointer meets as drawn, whatever the tool could strike there,
+    // and the zoom the rays draw it at.
+    let met = pointed.and_then(|[x, y]| {
         let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
         let pose = crate::view::frame::pose::view();
         crate::view::frame::pose::ray_of(pose.at(), x, y, &mut origin, &mut direction);
@@ -177,11 +181,22 @@ fn side(out: &mut [f64]) {
             direction,
             reach: crate::view::observation::eye_reach().unwrap_or(0.0),
         };
-        let hit = crate::query::World::now().first_hit(&ray, crate::query::by_distance(tau)).value().flatten()?;
-        // The grid's cell there is the distance's (`Tau::cell_at`), as the camera grid is cut.
-        Some((crate::view::frame::coord::world_to_canonical(&hit.point), tau.cell_at(hit.t * hit.t)))
+        let detail = crate::query::by_distance(tau);
+        let hit = crate::query::World::now().first_hit(&ray, detail).value().flatten()?;
+        Some((crate::view::frame::coord::world_to_canonical(&hit.point), detail.at((hit.t * hit.t) as f32)))
     });
-    let (hover, cell_want) = (met.map(|m| m.0), met.map(|m| m.1));
+    let (hover, cell) = (met.map(|m| m.0), met.map(|m| m.1));
+    // What the tool held strikes there, as the hover picks it.
+    let picked = pointed.and_then(|[x, y]| interaction::picked(x, y, tau));
+    let struck = picked.as_ref().map_or(f64::NAN, |p| match p.hit.struck {
+        crate::query::Struck::Ground => 0.0,
+        crate::query::Struck::Object(_) => 1.0,
+        crate::query::Struck::Objects => 2.0,
+        crate::query::Struck::Decor(_) => 3.0,
+    });
+    let tool = collision::PlacementTool::of(&interaction::holding());
+    let place = interaction::hover().coord.filter(|_| tool.is_some());
+    let [place_x, place_y, place_z] = place.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
     let [center_lon, center_lat, center_z] = controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
@@ -203,7 +218,16 @@ fn side(out: &mut [f64]) {
             hover_lon,
             hover_lat,
             hover_alt,
-            cell_want: zoom(cell_want),
+            cell: zoom(cell),
+            struck,
+            held: zoom(picked.as_ref().map(|p| p.held())),
+            drawn: zoom(picked.as_ref().and_then(|p| p.drawn)),
+            folded: picked.as_ref().map_or(f64::NAN, |p| f64::from(u8::from(p.folded()))),
+            place_x,
+            place_y,
+            place_z,
+            place_zoom: zoom(tool.map(|t| t.zoom())),
+            blocked: tool.zip(place).map_or(f64::NAN, |(t, p)| f64::from(u8::from(collision::is_placement_blocked(t, &p)))),
         },
     );
 

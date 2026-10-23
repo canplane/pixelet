@@ -18,8 +18,8 @@ import { op } from "@xpute/gpu/api.spec.ts";
 import { STREAM_NAMES } from "@/kernel/io/demand.spec.ts";
 import { fixed } from "@/shell/fixed.ts";
 
-/** The one megabyte every figure in bytes is shown in. */
-export const MB = 1048576;
+/** The one unit every figure in bytes is shown in: a mebibyte. */
+const MIB = 1048576;
 
 type ListLane = "phases" | "gpu_spans" | "census" | "zoom_tiles" | "gpu_objects" | "waiting" | "out";
 type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
@@ -88,8 +88,8 @@ const NAME_TABLES: Record<string, readonly string[]> = { worst_effect_name: EFFE
 
 export function valueText(name: string, v: f64): string {
   if (name.endsWith("_name")) return NAME_TABLES[name]?.[v] ?? "-";
-  if (name.endsWith("_ms")) return `${n1(v)}ms`;
-  if (name.endsWith("_bytes")) return `${+fixed(v / MB, 1)}MB`;
-  if (name.endsWith("_px")) return `${fixed(v / 1e6, 1)}Mpx`;
+  if (name.endsWith("_ms")) return `${n1(v)} ms`;
+  if (name.endsWith("_bytes")) return `${+fixed(v / MIB, 1)} MiB`;
+  if (name.endsWith("_px")) return `${fixed(v / 1e6, 1)} Mpx`;
   return Number.isInteger(v) ? String(v) : n1(v);
 }

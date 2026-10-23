@@ -186,7 +186,9 @@ export const SUMMARY = {
     slots: 1 as number,
     WORDS: 161 as number,
   },
-  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at. */
+  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist`, `hover_x`..`hover_z` and `place_x`..`place_z` in units, `center_z` and `hover_alt` in metres, a zoom as its number, and NaN where there is none.
+   * The hover is what the pointer meets as drawn, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel query/ray.rs `by_distance`).
+   * The pick is what the tool held strikes there (pxl-kernel control/interaction.rs `picked`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (control/interaction/collision.rs `is_placement_blocked`). */
   view: {
     AT: 447 as number,
     dist: 0 as number,
@@ -202,10 +204,19 @@ export const SUMMARY = {
     hover_lon: 10 as number,
     hover_lat: 11 as number,
     hover_alt: 12 as number,
-    cell_want: 13 as number,
-    WORDS: 14 as number,
+    cell: 13 as number,
+    struck: 14 as number,
+    held: 15 as number,
+    drawn: 16 as number,
+    folded: 17 as number,
+    place_x: 18 as number,
+    place_y: 19 as number,
+    place_z: 20 as number,
+    place_zoom: 21 as number,
+    blocked: 22 as number,
+    WORDS: 23 as number,
   },
-  WORDS: 461 as number,
+  WORDS: 470 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words. */

@@ -49,7 +49,7 @@ pub fn at_zoom(tile: Zoom) -> Detail {
 /// What is held, as finely as it is held: the ground at its cells, which
 /// answer alike asked finer, and what is placed at its own. Where the eye
 /// draws it coarser is the asker's to judge by `by_distance`
-/// (control/interaction.rs `folded_at`).
+/// (control/interaction.rs `Picked`).
 pub fn held() -> Detail {
     let [_, finest] = asked();
     Detail {

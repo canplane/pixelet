@@ -43,22 +43,37 @@ const or = (x: number) => (Number.isNaN(x) ? "-" : n1(x));
 const geo = (lat: number, lon: number) => (Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`);
 const metres = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
-/** Live: where the camera and the pointer are now, not over the window. */
+/** What the pick met, by the kernel's code (profiler.json `SUMMARY.view`). */
+const STRUCK = ["ground", "cube", "cubes, folded", "decor"];
+
+const units3 = (x: number, y: number, z: number) => (Number.isNaN(x) ? "-" : `${Math.floor(x)}, ${Math.floor(y)}, ${Math.floor(z)}`);
+
+/**
+ * Live: where the camera and the pointer are now, not over the window. The
+ * pointer twice: what it meets as drawn, and what the tool held strikes
+ * there, so a hover that takes nothing shows where the two part.
+ */
 export function ProfilerView({ v }: { v: Gauge["view"] }) {
-  const hovering = !Number.isNaN(v.hover_x);
+  const picked = !Number.isNaN(v.struck);
+  const folded = v.folded === 1;
   return (
     <>
       <Head>Camera</Head>
-      <Row k="distance" v={`${n1(v.dist)} u`} />
+      <Row k="distance" v={`${n1(v.dist)} units`} />
       <Row k="polar/azimuth" v={`${n1(deg(v.polar))}°/${n1(deg(v.azimuth))}°`} />
       <Row k="τ" v={or(v.tau)} />
-      <Row k="center" v={geo(v.center_lat, v.center_lon)} />
+      <Row k="center lat/lon" v={geo(v.center_lat, v.center_lon)} />
       <Row k="center altitude" v={metres(v.center_z)} />
-      <Head>Pointer</Head>
-      <Row k="hover (u)" v={hovering ? `${Math.floor(v.hover_x)}, ${Math.floor(v.hover_y)}, ${Math.floor(v.hover_z)}` : "-"} />
-      <Row k="hover" v={geo(v.hover_lat, v.hover_lon)} />
-      <Row k="hover altitude" v={metres(v.hover_alt)} />
-      <Row k="cell" v={hovering ? zoomName(v.cell_want) : "-"} />
+      <Head>Under the pointer, as drawn</Head>
+      <Row k="x/y/z (units)" v={units3(v.hover_x, v.hover_y, v.hover_z)} />
+      <Row k="lat/lon" v={geo(v.hover_lat, v.hover_lon)} />
+      <Row k="altitude" v={metres(v.hover_alt)} />
+      <Row k="drawn at" v={zoomName(v.cell)} />
+      <Head>What the tool strikes</Head>
+      <Row k="struck" v={picked ? (STRUCK[v.struck] ?? "-") : Number.isNaN(v.hover_x) ? "-" : "nothing in reach"} />
+      <Row k="held/drawn at" v={picked ? `${zoomName(v.held)}/${zoomName(v.drawn)}${folded ? " folded" : ""}` : "-"} warn={folded} />
+      <Row k="places at x/y/z (units)" v={units3(v.place_x, v.place_y, v.place_z)} />
+      <Row k="places a cube of" v={Number.isNaN(v.place_zoom) ? "-" : `${zoomName(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`} warn={v.blocked === 1} />
     </>
   );
 }
