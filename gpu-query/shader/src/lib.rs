@@ -783,8 +783,11 @@ pub fn cast_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &Seen,
+    // Read-write as the group lays it out, which WebGPU holds a shader's
+    // own access to; no atomic touches it here, so its reads stay plain.
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
+    let seen: &Seen = seen;
     let size: UVec3 = rays.query_size();
     if id.x >= size.x || id.y >= size.y {
         return;

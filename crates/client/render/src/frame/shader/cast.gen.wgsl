@@ -3,7 +3,7 @@
 // Source: crates/portable (pxl-portable) over xpute/rust/kit/src/math/rng.rs,
 // through gpu-query/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in gpu-query/builder.
-// Inputs: b2db50cdff00e714bf651e87264a6275219e768502ad617164dfe5f84dfd4666
+// Inputs: 1d33204605a37e7fd5a5d81c57dbf5b8ba66c2eecaca8a1105a2d3e5ec88b705
 struct type_4 {
     member: array<u32>,
 }
@@ -68,9 +68,9 @@ var<private> global: vec3<u32>;
 var<uniform> global_1: type_20;
 @group(0) @binding(8)
 var<storage, read_write> global_2: type_42;
-var<private> global_3: type_26 = type_26(array<u32, 3>(0u, 0u, 0u), 0u, array<i32, 3>(0i, 0i, 0i));
 @group(0) @binding(9)
-var<storage> global_4: type_4;
+var<storage, read_write> global_3: type_4;
+var<private> global_4: type_26 = type_26(array<u32, 3>(0u, 0u, 0u), 0u, array<i32, 3>(0i, 0i, 0i));
 @group(0) @binding(3)
 var global_5: texture_storage_2d_array<r32uint,read_write>;
 
@@ -1249,10 +1249,10 @@ fn function_() {
                             let _e1294 = atomicLoad((&global_2.member[((_e368 + 9u) + (6u * _e1290))]));
                             phi_1811_ = type_39(type_26(array<u32, 3>(_e1159, _e1161, _e1163), _e1167, array<i32, 3>(_e780, _e784, _e788)), _e1294, _e301);
                         } else {
-                            let _e1176 = global_3.member_1;
-                            let _e1179 = global_3.member_2[0u];
-                            let _e1183 = global_3.member[0u];
-                            let _e1184 = global_3.member_1;
+                            let _e1176 = global_4.member_1;
+                            let _e1179 = global_4.member_2[0u];
+                            let _e1183 = global_4.member[0u];
+                            let _e1184 = global_4.member_1;
                             if (_e1184 >= 32u) {
                                 phi_5289_ = 0u;
                             } else {
@@ -1272,9 +1272,9 @@ fn function_() {
                                 phi_1787_ = ((bitcast<i32>((_e1191 + _e1198)) << bitcast<u32>(_e1203)) >> bitcast<u32>(_e1203));
                             }
                             let _e1209 = phi_1787_;
-                            let _e1212 = global_3.member_2[1u];
-                            let _e1216 = global_3.member[1u];
-                            let _e1217 = global_3.member_1;
+                            let _e1212 = global_4.member_2[1u];
+                            let _e1216 = global_4.member[1u];
+                            let _e1217 = global_4.member_1;
                             if (_e1217 >= 32u) {
                                 phi_5309_ = 0u;
                             } else {
@@ -1288,9 +1288,9 @@ fn function_() {
                             }
                             let _e1231 = phi_5317_;
                             let _e1233 = bitcast<i32>((_e1224 + _e1231));
-                            let _e1236 = global_3.member_2[2u];
-                            let _e1240 = global_3.member[2u];
-                            let _e1241 = global_3.member_1;
+                            let _e1236 = global_4.member_2[2u];
+                            let _e1240 = global_4.member[2u];
+                            let _e1241 = global_4.member_1;
                             if (_e1241 >= 32u) {
                                 phi_5329_ = 0u;
                             } else {
@@ -1642,7 +1642,7 @@ fn function_() {
                                 let _e1678 = phi_2043_;
                                 if (_e1364 != 4294967295u) {
                                     let _e1680 = (_e1364 * 13u);
-                                    let _e1684 = global_4.member[(27u + _e1680)];
+                                    let _e1684 = global_3.member[(27u + _e1680)];
                                     if (_e1684 == 0u) {
                                         phi_6034_ = bool();
                                         phi_6035_ = true;
@@ -1661,15 +1661,15 @@ fn function_() {
                                     let _e1699 = phi_6035_;
                                     let _e1700 = select(_e1697, false, _e1699);
                                     if _e1700 {
-                                        let _e1704 = global_4.member[(_e1680 + 28u)];
+                                        let _e1704 = global_3.member[(_e1680 + 28u)];
                                         if (_e1704 == 0u) {
                                             phi_6051_ = 0u;
                                         } else {
                                             phi_6051_ = select(2u, 1u, (_e1704 == 1u));
                                         }
                                         let _e1709 = phi_6051_;
-                                        let _e1713 = global_4.member[(_e1680 + 29u)];
-                                        let _e1717 = global_4.member[(_e1680 + 30u)];
+                                        let _e1713 = global_3.member[(_e1680 + 29u)];
+                                        let _e1717 = global_3.member[(_e1680 + 30u)];
                                         phi_2069_ = type_31(_e1709, array<u32, 2>(_e1713, _e1717));
                                     } else {
                                         phi_2069_ = type_31();
@@ -2349,7 +2349,7 @@ fn function_() {
                                 if (_e2259 == 4294967295u) {
                                     phi_2712_ = 4294967295u;
                                 } else {
-                                    let _e2330 = global_4.member[((_e2259 * 13u) + 36u)];
+                                    let _e2330 = global_3.member[((_e2259 * 13u) + 36u)];
                                     if (_e2330 == 0u) {
                                         phi_2706_ = u32();
                                         phi_2707_ = true;
