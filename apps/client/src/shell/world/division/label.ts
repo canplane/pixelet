@@ -14,7 +14,7 @@ export interface NamePart extends DivisionPart {
   area: boolean;
 }
 
-// Languages that write addresses broad-to-narrow ("강남구 역삼1동").
+// Languages that write addresses broad-to-narrow, the region before the street.
 const BROAD_TO_NARROW_LANGS = new Set(["ko", "ja", "zh"]);
 
 /** Overture's neighborhoods, below a locality. */

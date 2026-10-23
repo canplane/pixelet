@@ -107,14 +107,18 @@ pub fn joined(a: Bounds, b: Bounds) -> Bounds {
     [[a[0][0].min(b[0][0]), a[0][1].max(b[0][1])], [a[1][0].min(b[1][0]), a[1][1].max(b[1][1])]]
 }
 
+/// The bits a look takes in a cell's word, four to the word.
+pub const LOOK_BITS: u32 = 8;
+
 /// A cell's word's four looks, `dx + 2·dy`.
 pub fn looks(word: u32) -> [u32; 4] {
-    [word & 0xff, word >> 8 & 0xff, word >> 16 & 0xff, word >> 24]
+    let m = (1 << LOOK_BITS) - 1;
+    [word & m, word >> LOOK_BITS & m, word >> (2 * LOOK_BITS) & m, word >> (3 * LOOK_BITS)]
 }
 
 /// Four looks as a cell's word.
 pub fn word([a, b, c, d]: [u32; 4]) -> u32 {
-    a | b << 8 | c << 16 | d << 24
+    a | b << LOOK_BITS | c << (2 * LOOK_BITS) | d << (3 * LOOK_BITS)
 }
 
 /// A cell's own look at `cell`: the majority of the four it folds, as the

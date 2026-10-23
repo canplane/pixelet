@@ -582,10 +582,8 @@ struct CastBuffers {
 
 /// The nodes the world's query answers otherwise this frame, as the sun's
 /// cast binds them (pxl-spec-core `sun::MOVED_WORDS`): their count, then
-/// each X, Y, its zoom and whether it is a preview's cut, whose top the
-/// cast bounds by nothing (pxl-shader `moved_top`); past `sun::MOVED`, or a
-/// slot with no square held before, `whole`, and the world is cast again
-/// whole.
+/// each X, Y and its zoom; past `sun::MOVED`, or a slot with no square held
+/// before, `whole`, and the world is cast again whole.
 struct Nodes {
     words: [u32; sun::MOVED_WORDS],
     len: usize,
@@ -599,10 +597,9 @@ impl Default for Nodes {
 }
 
 impl Nodes {
-    fn push(&mut self, [x, y]: [i32; 2], zoom: u32, cut: bool) {
-        let node = [x as u32, y as u32, zoom, u32::from(cut)];
-        if let Some(k) = (0..self.len).find(|k| self.words[4 + 4 * k..7 + 4 * k] == node[..3]) {
-            self.words[7 + 4 * k] |= node[3];
+    fn push(&mut self, [x, y]: [i32; 2], zoom: u32) {
+        let node = [x as u32, y as u32, zoom, 0];
+        if (0..self.len).any(|k| self.words[4 + 4 * k..8 + 4 * k] == node) {
             return;
         }
         if self.len == sun::MOVED {
@@ -995,7 +992,7 @@ impl RaysPass {
             if was != is {
                 for cut in [was, is] {
                     if cut[3] != eye::NO_CUT {
-                        nodes.push([cut[0] as i32, cut[1] as i32], cut[3], true);
+                        nodes.push([cut[0] as i32, cut[1] as i32], cut[3]);
                     }
                 }
             }
@@ -1011,10 +1008,10 @@ impl RaysPass {
                 if was != Some(row) {
                     c.moved[k / 32] |= 1 << (k % 32);
                     match was {
-                        Some(was) => nodes.push(square(was, k).0, square(was, k).1, false),
+                        Some(was) => nodes.push(square(was, k).0, square(was, k).1),
                         None => nodes.whole = true,
                     }
-                    nodes.push(square(row, k).0, square(row, k).1, false);
+                    nodes.push(square(row, k).0, square(row, k).1);
                 }
             }
             c.slots.clear();
@@ -1026,7 +1023,7 @@ impl RaysPass {
                 if k < eye_rows {
                     c.moved[k / 32] |= 1 << (k % 32);
                     let (at, zoom) = square(&cast.window[4 * k..4 * k + 4], k);
-                    nodes.push(at, zoom, false);
+                    nodes.push(at, zoom);
                 }
             }
         }
@@ -1065,12 +1062,6 @@ impl RaysPass {
             c.sun_kept = Some(sun::CORNER.map(|k| cast.eye[eye::SUN + k] as i32));
             let len = if whole { 0 } else { nodes.len };
             nodes.words[0] = len as u32;
-            // The coarsest zoom any ray of the map asks, at the box's
-            // farthest corner: what a moved node's top is rounded at
-            // (pxl-shader `moved_top`).
-            let words: &[u32; eye::SUN_WORDS] = cast.eye[eye::SUN..eye::SUN + eye::SUN_WORDS].try_into().or_bug(Errno::ENOTRECOVERABLE);
-            let detail = pxl_spec_core::cast::Detail { tau: f32::from_bits(cast.eye[eye::TAU]), range: [cast.eye[eye::RANGE], cast.eye[eye::RANGE + 1]], eye: [0.0; 3] };
-            nodes.words[1] = detail.at(sun::Sun::of_words(words).farthest(shadow::SIZE));
             g.write_buffer(c.sun_moved, 0, bytes(&nodes.words[..4 + 4 * len]));
             g.write_buffer(c.sun_list, 0, bytes(&sun::LIST_EMPTY));
         }
@@ -1410,7 +1401,7 @@ fn sun_groups(g: &Gpu, [mark, walk]: [&Built; 2], bound: [u32; 7], moved: u32, l
         (12, buffer_entry(12, list)),
     ];
     // Each the entries its layout declares (build.rs `compute`): the mark
-    // reads the world only where a moved node's top is bounded.
+    // reads the clipmap and the nodes moved alone.
     let of = |declared: &[u32]| entries.iter().filter(|(b, _)| declared.chunks(3).any(|d| d[0] == *b)).map(|&(_, e)| e).collect::<Vec<_>>();
     [g.bind_group(mark.layouts[0], &of(&compute::SUN_MARK_GROUP)), g.bind_group(walk.layouts[0], &of(&compute::SUN_GROUP))]
 }

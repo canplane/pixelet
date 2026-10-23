@@ -237,10 +237,10 @@ impl<'a> World<'a> {
     }
 
     /// The footing down column `g` at `cell` (pxl-spec-core
-    /// `scatter::footing`): the block met and its top as drawn, where the
+    /// `scatter::footing`): the top of the block met as drawn, where the
     /// world holds the column as its tiles say; none where nothing fills or
     /// a tile under the ray is lacked or only a coarser one stands in.
-    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<(u32, (i32, f32))> {
+    pub(super) fn footing(&self, cell: Zoom, g: [i32; 2]) -> Option<(i32, f32)> {
         let mut walker = Walker {
             world: self,
             lack: None,
@@ -251,8 +251,8 @@ impl<'a> World<'a> {
         let side = units(cell);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell);
-        let (block, top, met) = pxl_spec_core::scatter::footing(&mut walker, cell, g);
-        (met && walker.lack.is_none()).then_some((block, top))
+        let (top, met) = pxl_spec_core::scatter::footing(&mut walker, cell, g);
+        (met && walker.lack.is_none()).then_some(top)
     }
 
     /// Where the descent from `q`, the ray's origin as a position names it,
@@ -276,15 +276,14 @@ impl<'a> World<'a> {
             false => Struck::Ground,
         };
         // A block kept short of its cube is the box it is drawn as, about
-        // its cube's center, its top where decor stands too (pxl-spec-core
-        // `cast::top`).
-        let rise = f64::from(cast::top(q, &n, s.block[0]).1);
+        // its cube's center (pxl-spec-core `cast::kept_bounds`).
+        let (lo, hi) = cast::kept_bounds(([0.0; 3], [1.0; 3]), s.block[0]);
         let t = f64::from(s.t);
         Hit {
             t,
             point: ray.at(t),
             normal,
-            cube: Aabb { min: min.map(|v| v + side * (1.0 - rise)), max: min.map(|v| v + side * rise) },
+            cube: Aabb { min: std::array::from_fn(|k| min[k] + side * f64::from(lo[k])), max: std::array::from_fn(|k| min[k] + side * f64::from(hi[k])) },
             struck,
         }
     }

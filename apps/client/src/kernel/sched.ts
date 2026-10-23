@@ -55,9 +55,9 @@ export let strobe: Strobe;
 export function start_sched(): void {
   strobe = new Strobe(GUEST_DOORBELL, directory(GUEST.buffer).quantum(), (grant) => {
     if (driver === null) return;
-    const { width: w, height: h, dpr } = driver();
+    const { width: w, height: h } = driver();
     const width = Math.max(1, w);
     const height = Math.max(1, h);
-    GUEST_DOORBELL.send(0, Command.WORLD_FRAME, encode_world_frame(GUEST_DOORBELL, width, height, dpr, grant.refresh_ms, grant.paced_ms, grant.interactive, NET_CREDITS, Date.now()));
+    GUEST_DOORBELL.send(0, Command.WORLD_FRAME, encode_world_frame(GUEST_DOORBELL, width, height, grant.refresh_ms, grant.paced_ms, grant.interactive, NET_CREDITS, Date.now()));
   }, (run) => requestAnimationFrame(run));
 }

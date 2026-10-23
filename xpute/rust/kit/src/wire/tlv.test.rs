@@ -32,7 +32,7 @@ fn tlv_computes_what_the_typescript_computes() {
     let mut w = TlvWriter::new(4);
     w.u8(200).unwrap().i8(-3).unwrap().u16(65535).unwrap().i16(-2).unwrap().u32(4000000000).unwrap().i32(-7).unwrap();
     w.u64(1 << 63).unwrap().i64(-(1 << 40)).unwrap().f32(0.25).unwrap().f64(-1.5).unwrap().bool(true).unwrap();
-    w.str("한글").unwrap().bytes(&[9, 8, 7]).unwrap();
+    w.str("€€").unwrap().bytes(&[9, 8, 7]).unwrap();
     w.write_all(&[
         TlvValue::Bool(true),
         TlvValue::I32(5),

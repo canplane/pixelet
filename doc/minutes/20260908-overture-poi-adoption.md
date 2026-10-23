@@ -70,8 +70,8 @@ table for the identical boxes:
 
 Consistent ~5x density in both a dense core and a suburban area, not just
 one lucky spot — and the names sampled from both are real, plausible
-Korean business names (진흥종합상가, 크린토피아 강남진흥점, 일인자감자탕,
-BBQ치킨, ...), not junk/duplicate noise. This directly overturns an earlier
+Korean business names (a shopping arcade, a laundry chain's branch, a stew
+restaurant, a chicken chain, ...), not junk/duplicate noise. This directly overturns an earlier
 guess in this same conversation that Overture's Korea coverage would
 inherit OSM Korea's known weakness — that guess assumed Places was
 OSM-derived like Overture's other themes; it isn't, and the measurement
@@ -201,8 +201,8 @@ deliberately parked, unaffected by today's build.
 
 ### Follow-up, same day: reverse geocoding's real granularity gap
 
-Investigating why "서울특별시 종로구 사직동" (3 levels) and "경기도 성남시
-분당구" (stuck at 2, missing the dong) looked inconsistent surfaced two
+Investigating why "Seoul, Jongno-gu, Sajik-dong" (3 levels) and "Gyeonggi-do,
+Seongnam-si, Bundang-gu" (stuck at 2, missing the dong) looked inconsistent surfaced two
 separate real issues, both fixed:
 
 1. **`region` was filtered out at ingestion** (`KEEP_SUBTYPES` originally
@@ -217,20 +217,20 @@ separate real issues, both fixed:
    own representative point, present even with no boundary mapped).
    Checked nationwide: 21,596 `division`-point rows carry subtype
    `locality` vs. only 3,600 `division_area` polygons at that subtype —
-   most of Korea's named localities (백현동/수내동 in Bundang/Pangyo,
+   most of Korea's named localities (Baekhyeon-dong/Sunae-dong in Bundang/Pangyo,
    confirmed by name) have NO mapped polygon at all, only a point. Point-
    in-polygon reverse geocoding structurally can't find these. Fixed by
    ingesting `division` points too (`overture_division_points`) and, when
    no fine-subtype polygon covers a point, looking up the nearest division
    point _inside_ whatever coarser polygon was already matched (not a bare
    radius — avoids leaking across a real boundary) and appending it as an
-   extra, finer part marked `approx: true`. Confirmed live: 삼평동/백현동-
-   area pages now resolve to a real 4-level "경기도 성남시 분당구 X동"
-   label instead of stopping at 분당구.
+   extra, finer part marked `approx: true`. Confirmed live: Sampyeong-dong/
+   Baekhyeon-dong area pages now resolve to a real 4-level "Gyeonggi-do,
+   Seongnam-si, Bundang-gu, X-dong" label instead of stopping at Bundang-gu.
 
    Known imprecision, not fixed: this can also surface a _parallel_ naming
-   variant rather than a genuine finer level — e.g. Jongno's 사직동
-   (행정동) got 신문로2가 (a 법정동 covering roughly the same area, not a
+   variant rather than a genuine finer level — e.g. Jongno's Sajik-dong
+   (an administrative dong) got Sinmunno 2-ga (a legal dong covering roughly the same area, not a
    sub-district of it) appended alongside it. Overture's schema doesn't
    distinguish "genuinely nested subdivision" from "alternate naming
    system for the same area," so this can't be resolved without a data

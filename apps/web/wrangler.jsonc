@@ -8,8 +8,10 @@
   // origin, no CORS — is in doc/minutes/20260816-deployment-hosting.md.
   "name": "pixelet",
   "main": "cloudflare-worker/index.ts",
-  // The client, by the name the import maps give it: wrangler's bundler reads no import map.
-  "alias": { "@pxl/client": "../client/src" },
+  // The client's one file the Worker reads, by the name the import maps give
+  // it: wrangler's bundler reads no import map, and its alias matches a whole
+  // specifier, not a prefix.
+  "alias": { "@pxl/client/config/published.spec.ts": "../client/src/config/published.spec.ts" },
 
   // The demo answers on its own hostname, not on *.workers.dev. That is not
   // cosmetic: WAF and rate-limiting rules attach to a zone, and a workers.dev

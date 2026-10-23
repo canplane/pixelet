@@ -33,10 +33,20 @@ pub struct In<B> {
 /// What no block fills: void, no looks.
 pub const AIR: [u32; 2] = [sentinel::void as u32, 0];
 
+/// The bits a block's value takes at the foot of its word.
+pub const VALUE_BITS: u32 = 16;
+
 /// A block's word where what is placed answered it, over its value: the
 /// source control tells an edit by (`placed`), which nothing drawn reads.
 /// Over it, the share of its cube the block keeps (`KEPT_SHIFT`).
-pub const PLACED_BLOCK: u32 = 1 << 16;
+pub const PLACED_BLOCK: u32 = 1 << VALUE_BITS;
+
+/// A block's value, without whether what is placed holds it
+/// (`PLACED_BLOCK`) or what of its cube it keeps: a look reads the same
+/// whichever layer holds it.
+pub const fn value(block: u32) -> u32 {
+    block & (PLACED_BLOCK - 1)
+}
 
 /// A bound as a word, its lowest in the low half and its highest in the
 /// high, each an i16: a level's entry (`ground::Bounds`) and a split's slab
@@ -93,7 +103,7 @@ const _: () = assert!(
 /// source holds it. What is placed answers a voxel alone
 /// (`overwrite::value`), so no decor or marker is among them.
 pub fn fills(value: u32) -> bool {
-    let v = value & (PLACED_BLOCK - 1);
+    let v = self::value(value);
     v != sentinel::void as u32 && v != object::air as u32
 }
 

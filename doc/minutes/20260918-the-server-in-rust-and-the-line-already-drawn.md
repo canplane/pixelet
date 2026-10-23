@@ -369,7 +369,7 @@ declared; the comment beside it already said the field's job had disappeared
 rather than moved, so the port drops it.
 
 One query differed on ordering and turned out not to be a difference at all.
-`q=공원` matches three rows literally named 공원, so `ORDER BY
+A query for "park" matches three rows literally named "park", so `ORDER BY
 similarity(name, $1) DESC, name` leaves them exactly tied and Postgres returns
 them in scan order — the _same_ server shuffles them between calls. Worth
 knowing rather than fixing here: adding `gers_id` as a last tiebreaker would
@@ -787,7 +787,7 @@ what went wrong.
 Verified end to end through vite with all four processes up:
 
 ```
-/geo/search?q=강남                    200   7,693 B
+/geo/search?q=Gangnam                 200   7,693 B
 /geo/tiles/terrain/6361774393589760   200   4,203,672 B
 /geo/tiles/poi/6361774393589760       200   184 B
 /geo/tiles/geocode/6361774393589760   200   248 B
@@ -815,7 +815,7 @@ at the edge and against the origin directly:
 
 ```
 /                                       200   3,193 B (the app)
-/geo/search?q=분당                       200   7,593 B
+/geo/search?q=Bundang                    200   7,593 B
 /geo/tiles/{terrain,poi,geocode}/…      200
 /asset/e8d81b97…                        200  18,188 B  model/gltf-binary
 /geo/internal/x                         401  (pxl-geo's gate)

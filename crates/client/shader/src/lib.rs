@@ -287,7 +287,7 @@ impl Grounds for Growing<'_> {
 
     /// The world's ray down the column, the cast's own descent
     /// (pxl-spec-core `scatter::footing`).
-    fn footing(&mut self, cell: u32, g: [i32; 2]) -> (u32, (i32, f32), bool) {
+    fn footing(&mut self, cell: u32, g: [i32; 2]) -> ((i32, f32), bool) {
         scatter::footing(&mut self.world, cell, g)
     }
 
@@ -387,11 +387,11 @@ const _: () = assert!(eye::GRID_WORDS == 16, "`grid` reads the grid's four vec4s
 /// pointer and a length, which naga traces no atomic through.
 type Seen = spirv_std::RuntimeArray<u32>;
 
-/// The beam rays' buffer (pxl-spec-core `beam`): the lines, the cells'
-/// starts and the pixels the cast missed, appended by one atomic add, so
-/// a runtime array as `Seen` is. The pixels' cast reads the pyramid alone
-/// and appends to this, so the pyramid's binding stays read-only there and
-/// naga types no word of it atomic in the walk's loop.
+/// The beam rays' buffer, the cast's own for a frame (pxl-spec-core
+/// `beam`): the lines, a corner each, the cells' starts and the samples'
+/// stops, as the frame's `Grid` lays them (`Grid::size`), a runtime array
+/// as `Seen` is. A pixel's own ray words say whether it missed
+/// (`ray::MISS`), so nothing here is a pixel's.
 type Beams = spirv_std::RuntimeArray<u32>;
 
 /// Word `i` of the observed pyramid's buffer.
@@ -939,17 +939,14 @@ pub fn cast_cs(
 type SunWords = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// The nodes the world's query answers otherwise than when the sun's map
-/// was last cast (pxl-spec-core `sun::MOVED_WORDS`): how many and the
-/// coarsest zoom the eye asks within the light box (`Sun::farthest`), then
-/// each X, Y, its zoom, and 1 for a preview's cut, whose top bounds
-/// nothing (`moved_top`), else 0.
+/// was last cast (pxl-spec-core `sun::MOVED_WORDS`): how many, then each X,
+/// Y and its zoom.
 #[repr(C)]
 pub struct SunMoved {
     pub len: UVec4,
     pub at: [IVec4; pxl_spec_core::sun::MOVED],
 }
 const _: () = assert!(core::mem::size_of::<SunMoved>() == at_word(pxl_spec_core::sun::MOVED_WORDS));
-const MOVED: usize = pxl_spec_core::sun::MOVED;
 
 /// The sun's cast off the eye's words (pxl-spec-core `sun::Sun::words`).
 fn sun_of(eye: &Eye) -> pxl_spec_core::sun::Sun {
@@ -969,10 +966,9 @@ fn sun_of(eye: &Eye) -> pxl_spec_core::sun::Sun {
 
 /// Slot `slot` of the clipmap `size` a side: its texel's ray, from where
 /// and at what zooms, and whether it walks again, where its world texel
-/// was not held, the eye asks its stop at another zoom, or its ray passes
-/// over a node moved where it may meet what the node holds now, `tops`
-/// how high that reaches (`moved_top`, pxl-spec-core `sun::below`).
-fn sun_slot(eye: &Eye, sun: &SunWords, moved: &SunMoved, tops: &[i32; MOVED], size: u32, slot: UVec3) -> (bool, [i32; 3], cast::Ray, Detail) {
+/// was not held, the eye asks its stop at another zoom, or its ray to its
+/// stop passes over a node moved (pxl-spec-core `sun::over`).
+fn sun_slot(eye: &Eye, sun: &SunWords, moved: &SunMoved, size: u32, slot: UVec3) -> (bool, [i32; 3], cast::Ray, Detail) {
     let s = sun_of(eye);
     let p = s.texel(size, [slot.x, slot.y]);
     let (origin, mut detail) = eye_origin(eye);
@@ -983,13 +979,10 @@ fn sun_slot(eye: &Eye, sun: &SunWords, moved: &SunMoved, tops: &[i32; MOVED], si
         let held: u32 = sun.read(slot);
         if s.stands(detail, held) {
             let t = pxl_spec_core::sun::depth_of(held) * s.reach;
-            let lacked = pxl_spec_core::sun::Held::NONE.with(held).lacked;
             let mut k = 0;
             while k < moved.len.x {
                 let n = moved.at[k as usize];
-                let top = if lacked { pxl_spec_core::sun::NO_TOP } else { tops[k as usize] };
-                let from = pxl_spec_core::sun::below(o[2], 0.0, s.dir[2], top, t - s.pushed());
-                if pxl_spec_core::sun::over_any(o, [[0.0; 2]; 2], s.dir, [from, t], [n.x, n.y], n.z as u32) {
+                if pxl_spec_core::sun::over(o, s.dir, t, [n.x, n.y], n.z as u32) {
                     break;
                 }
                 k += 1;
@@ -998,43 +991,6 @@ fn sun_slot(eye: &Eye, sun: &SunWords, moved: &SunMoved, tops: &[i32; MOVED], si
         }
     }
     (walks, o, ray, detail)
-}
-
-/// How high what moved node `n` holds now may reach, as a Q3 z: the
-/// ground's and the ways' bound over it at every zoom the eye asks within
-/// the light box, from `far` (`SunMoved`) to its finest
-/// (`window::bound_over`), no lower than the sea, rounded up as each of
-/// those zooms' blocks round it (`ground::slab`); none (`sun::NO_TOP`) for
-/// a preview's cut, or where no window holds it.
-fn moved_top<L: Looks>(world: &World<'_, L>, eye: &Eye, far: u32, n: IVec4) -> i32 {
-    if n.w != 0 {
-        return pxl_spec_core::sun::NO_TOP;
-    }
-    let zoom = n.z as u32;
-    let near = eye.range.y;
-    let far = if far < near { far } else { near };
-    let first = ground::coarsest(zoom, far);
-    let cells = [if first > near { near } else { first }, near];
-    let mut place = Found::NONE;
-    let (b, _, here) = window::bound_over(world, &mut place, cells, (zoom, [n.x, n.y]));
-    if !here {
-        return pxl_spec_core::sun::NO_TOP;
-    }
-    let hi = if b[0][1] > b[1][1] { b[0][1] } else { b[1][1] };
-    let hi = if hi > pxl_spec_core::SEA_LEVEL { hi } else { pxl_spec_core::SEA_LEVEL };
-    let over = ground::slab(pxl_spec_core::area::Shard::UNKNOWN, (zoom, [n.x, n.y, 0]), [b[0][0], hi], [far, near], false)[1];
-    pxl_spec_core::sun::top_of(if over > hi { over } else { hi })
-}
-
-/// Each moved node's top (`moved_top`), a lane a node, into the
-/// workgroup's `tops` every lane reads past the barrier.
-fn moved_tops<L: Looks>(world: &World<'_, L>, eye: &Eye, moved: &SunMoved, lane: u32, tops: &mut [i32; MOVED]) {
-    if lane < moved.len.x && lane < MOVED as u32 {
-        // SAFETY: both bounded by `MOVED` just above, and unchecked so no
-        // lane leaves before the barrier, which they all reach.
-        unsafe { *tops.index_unchecked_mut(lane as usize) = moved_top(world, eye, moved.len.y, *moved.at.index_unchecked(lane as usize)) };
-    }
-    spirv_std::arch::workgroup_memory_barrier_with_group_sync();
 }
 
 /// The sun's clipmap's tiles a slot of which may walk again, listed
@@ -1050,28 +1006,11 @@ fn moved_tops<L: Looks>(world: &World<'_, L>, eye: &Eye, moved: &SunMoved, lane:
 #[allow(clippy::too_many_arguments)]
 pub fn sun_mark_cs(
     #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(local_invocation_index)] lane: u32,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &SunMoved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
-    #[spirv(workgroup)] tops: &mut [i32; MOVED],
 ) {
-    let world = World {
-        window,
-        ground,
-        looks: Unlooked(0),
-        shards,
-        overwrites,
-        eye,
-        pool: ways::tree::Read(pool),
-    };
-    moved_tops(&world, eye, moved, lane, tops);
     let size: UVec3 = sun.query_size();
     let t = pxl_spec_core::sun::TILE;
     let across = size.x / t;
@@ -1095,18 +1034,13 @@ pub fn sun_mark_cs(
         let (origin, detail) = eye_origin(eye);
         walks = !s.tile_stands(detail, p, held);
         if !walks && moved.len.x != 0 {
-            // Its rays as one: the lowest start, the nearest stop and the
-            // deepest reach (pxl-spec-core `sun::below`).
+            // Its rays as one, to the deepest stop.
             let (o, off) = s.tile_rays(origin, p);
-            let share = s.reach / pxl_spec_core::sun::DEPTH_ONE as f32;
-            let (reach, near) = (held.reach as f32 * share, held.near as f32 * share - s.pushed());
-            let drop = s.tile_drop();
+            let reach = held.reach as f32 * s.reach / pxl_spec_core::sun::DEPTH_ONE as f32;
             let mut n = 0;
             while n < moved.len.x {
                 let m = moved.at[n as usize];
-                let top = if held.lacked { pxl_spec_core::sun::NO_TOP } else { tops[n as usize] };
-                let from = pxl_spec_core::sun::below(o[2], drop, s.dir[2], top, near);
-                if pxl_spec_core::sun::over_any(o, off, s.dir, [from, reach], [m.x, m.y], m.z as u32) {
+                if pxl_spec_core::sun::over_any(o, off, s.dir, reach, [m.x, m.y], m.z as u32) {
                     break;
                 }
                 n += 1;
@@ -1145,7 +1079,6 @@ pub fn sun_cs(
     #[spirv(descriptor_set = 0, binding = 10)] sun: &SunWords,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &SunMoved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &[u32],
-    #[spirv(workgroup)] tops: &mut [i32; MOVED],
 ) {
     let window: &[IVec4] = window;
     let mut world = World {
@@ -1158,8 +1091,6 @@ pub fn sun_cs(
         pool: ways::tree::Read(pool),
     };
     let t = pxl_spec_core::sun::TILE;
-    // Before any lane leaves: the barrier is every lane's.
-    moved_tops(&world, eye, moved, lane.y * t + lane.x, tops);
     let size: UVec3 = sun.query_size();
     let k = group.y * pxl_spec_core::sun::LIST_ACROSS + group.x;
     if k >= at(list, pxl_spec_core::sun::LIST_COUNT as u32) {
@@ -1170,14 +1101,14 @@ pub fn sun_cs(
     if slot.x >= size.x || slot.y >= size.y {
         return;
     }
-    let (walks, o, ray, detail) = sun_slot(eye, sun, moved, tops, size.x, slot);
+    let (walks, o, ray, detail) = sun_slot(eye, sun, moved, size.x, slot);
     if !walks {
         return;
     }
     let s = sun_of(eye);
     let met = cast::first(&mut world, o, &ray, detail, Until::Fills);
     // SAFETY: within the map, bounded by its size above.
-    unsafe { sun.write(slot, s.word_of(detail, &met)) };
+    unsafe { sun.write(slot, s.word(detail, pxl_spec_core::sun::depth(&s, &met))) };
 }
 
 /// Each pixel `cast_cs` marked missed, its ray again from its cell's

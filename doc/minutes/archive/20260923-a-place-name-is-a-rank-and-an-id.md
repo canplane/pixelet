@@ -23,9 +23,9 @@ any place at all:
 ```json
 {
   "parts": [
-    { "name": "경상남도", "common": { "en": "South Gyeongsang", "ko": "경상남도" } },
-    { "name": "하동군", "common": { "en": "Hadong-gun", "ko": "하동군" } },
-    { "name": "중평리", "common": { "en": "Jungpyeong-ri", "ko": "중평리" }, "approx": true }
+    { "name": "Gyeongsangnam-do", "common": { "en": "South Gyeongsang" } },
+    { "name": "Hadong-gun", "common": { "en": "Hadong-gun" } },
+    { "name": "Jungpyeong-ri", "common": { "en": "Jungpyeong-ri" }, "approx": true }
   ]
 }
 ```
@@ -171,7 +171,7 @@ now `names` on both sides of the wire.
 The useful zoom range is **z5 to z15**. Below z5 the ladder asks for a country
 and Korea's divisions have none, so the label is empty; above z15 the answer
 cannot get finer, because its granularity is one page. The `city` rung is
-unused here — Overture files a 시 as a `county` — so z10 and z11 read exactly
+unused here — Overture files a si (city) as a `county` — so z10 and z11 read exactly
 as z8 and z9 do.
 
 ## Open

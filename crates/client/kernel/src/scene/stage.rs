@@ -211,7 +211,9 @@ pub fn take_draw() -> bool {
     core::mem::take(&mut pass().draw)
 }
 
-pub fn visible_step(ctx: &mut TickContext) {
+/// The scene's turn, `focus` and `heading` the camera's as the turn hands
+/// them (pxl-kernel turn.rs `scene_tick`), for the world gizmo.
+pub fn visible_step(ctx: &mut TickContext, focus: Option<pxl_spec::space::coord::q3::Q3>, heading: Option<f64>) {
     let c = pass();
     let v = view();
 
@@ -230,9 +232,7 @@ pub fn visible_step(ctx: &mut TickContext) {
     // went up under the last origin, and every rebuild flung the lines by how
     // far it moved.
     let show = settings_store().world_gizmo;
-    let focus = crate::control::camera::controller::focus();
-    let third_person = crate::control::camera::controller::dist() != 0.0;
-    frame_gizmo_step(show && focus.is_some(), focus, third_person.then(crate::control::camera::controller::azimuth));
+    frame_gizmo_step(show, focus, heading);
     coverage_gizmo_step(show);
     let draw = laid().is_some_and(|k| {
         let models = crate::model::models();

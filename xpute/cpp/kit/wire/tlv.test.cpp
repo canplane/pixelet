@@ -66,7 +66,7 @@ XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
         0.25f,
         -1.5,
         true,
-        tlv::Str{"한글"},
+        tlv::Str{"€€"},
         tlv::Bytes{three},
         true,
         std::int32_t{5},

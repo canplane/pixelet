@@ -30,7 +30,7 @@ fn a_tile_comes_back_as_it_went() {
     let tile = PlaceTile::leaf(
         leaf(),
         [
-            (point(1, 2), called("서울역", "train_station", "3")),
+            (point(1, 2), called("Zürich HB", "train_station", "3")),
             (point(40, 7), called("Cafe", "cafe", "9")),
             (point(41, 7), called("", "hospital", "4")),
         ],

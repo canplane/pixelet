@@ -290,13 +290,6 @@ pub const SAMPLE_FACES: u32 = SAMPLE_AXIS + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_FACES + 1;
 pub const SAMPLE_NONE: u32 = u32::MAX;
 
-/// The beam rays' buffer, the cast's own for a frame, one binding: the
-/// lines, a corner each (`Grid::line`), the cells' starts
-/// (`Grid::cell_at`) and the samples' stops (`Grid::sample_at`), as the
-/// frame's `Grid` lays them (`Grid::size`). A pixel's own ray words say
-/// whether it missed (`ray::MISS`), so nothing here is a pixel's.
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
