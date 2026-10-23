@@ -608,9 +608,11 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// Whether decor `d2` from the eye, its distance squared (`distance2`), is
 /// drawn at `cell`: the zoom the rays ask at its distance (`Detail::at`),
 /// so each decor is drawn at one zoom, where the rays draw the ground
-/// about it.
+/// about it. The ground's decor grows no finer than a leaf cell's window
+/// (`shown`'s zooms), so where the rays ask finer, for what is placed
+/// finer, it is drawn at the leaf cell's.
 pub fn drawn_at(detail: Detail, d2: f32, cell: Zoom) -> bool {
-    detail.at(d2) == cell
+    detail.at(d2).min(LEAF_CELL) == cell
 }
 
 /// Placed decor's tag (`node_seed`).
