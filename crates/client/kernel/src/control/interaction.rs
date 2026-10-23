@@ -131,11 +131,10 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
 
     let ui = interaction().holding;
     interaction().pointed = Some([ndc_x, ndc_y]);
-    let Some(pick) = ray_pick(origin, direction, drawn) else {
+    let Some(hit) = ray_pick(origin, direction, drawn) else {
         interaction().hover = Hover::default();
         return;
     };
-    let hit = pick.hit;
     let hover = &mut interaction().hover;
     // A folded cell is a summary, not what is held: nothing in it is struck.
     if folded_at(&hit, drawn) {

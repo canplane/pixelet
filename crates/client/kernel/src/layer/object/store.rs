@@ -201,10 +201,6 @@ impl Write {
             ext: None,
         }
     }
-
-    pub fn carrying(self, ext: Ext) -> Write {
-        Write { ext: Some(ext), ..self }
-    }
 }
 
 /// The placed objects: one tree of leaves, each branch its children folded,

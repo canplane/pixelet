@@ -84,24 +84,18 @@ pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct PickResult {
-    pub hit: Hit,
-}
-
 /// In the root frame, from the eye.
 /// Decor is struck where the frame drawing at `drawn` holds it. The world
 /// asked is the stored one (`World::now`), not as the eraser's preview draws
 /// it: what to erase is what is stored.
-pub fn ray_pick(origin: V3, direction: V3, drawn: Tau) -> Option<PickResult> {
+pub fn ray_pick(origin: V3, direction: V3, drawn: Tau) -> Option<Hit> {
     let ray = Ray {
         origin,
         direction,
         reach: PICK_REACH_U,
     };
     // A coarser tile's answer is a summary, not what is held.
-    let hit = World::now().striking_decor(drawn).first_hit(&ray, at_zoom(LEAF_ZOOM)).exact().flatten()?;
-    Some(PickResult { hit })
+    World::now().striking_decor(drawn).first_hit(&ray, at_zoom(LEAF_ZOOM)).exact().flatten()
 }
 
 #[cfg(test)]

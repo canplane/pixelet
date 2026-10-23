@@ -29,7 +29,7 @@ pub struct ViewPose {
     pub azimuth: f64,
 }
 
-pub fn pose(view: Intent) -> Option<ViewPose> {
+fn pose(view: Intent) -> Option<ViewPose> {
     Some(ViewPose {
         target: crate::control::camera::controller::focus_world()?,
         dist: view.dist,
@@ -82,7 +82,7 @@ const STEP_SAMPLES: u32 = 16;
 
 /// A step may not end deeper in the ground than it started. A blanket
 /// exemption for an already-blocked start once opened the gate for good.
-pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
+fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     // Checked first so the setting skips the floor's walk.
     match settings_store().orbit_obstacle {
         OrbitObstacleMode::through => return *to,
