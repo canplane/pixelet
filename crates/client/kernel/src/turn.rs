@@ -248,7 +248,11 @@ pub struct HostFrame {
     pub height: f64,
     pub dpr: f64,
     pub delta: f64,
-    pub frame_ms: f64,
+    /// The display's refresh, and the interval the host paces turns at, a
+    /// whole number of refreshes: the frame's budget (xpute host
+    /// sched/quantum.ts `Grant`).
+    pub refresh_ms: f64,
+    pub paced_ms: f64,
     pub interactive: bool,
     pub credits: u32,
 }
@@ -282,9 +286,9 @@ async fn frame_task() {
         notified(frames).await;
         let Some(host) = FRAME.get(|| None).take() else { continue };
         let edge = world_edge();
-        let frame_ms = host.frame_ms;
+        let paced_ms = host.paced_ms;
         world_frame(host, edge.quota_ms(), edge.edge_at());
-        crate::sched::edge::tasks_after_frame(frame_ms);
+        crate::sched::edge::tasks_after_frame(paced_ms);
         DRAWN.set(true);
     }
 }
@@ -295,7 +299,8 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
         height,
         dpr,
         delta,
-        frame_ms,
+        refresh_ms,
+        paced_ms,
         interactive,
         credits,
     } = host;
@@ -313,18 +318,18 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let step = delta.min(MAX_STEP_S);
     state.gap_s = delta;
     state.elapsed_s += step;
-    state.frame_ms = frame_ms;
     state.interactive = interactive;
     let report = run_tick(state, step, quota_ms, edge_at);
     let after_tick = now();
     pump();
     crate::scene::stage::stage_write();
-    crate::scene::stage::stage_render(frame_ms);
+    crate::scene::stage::stage_render(paced_ms);
     let done = now();
     profiler_frame(FrameTurn {
         tick: report,
         interval_ms: delta * 1000.0,
-        display_ms: frame_ms,
+        refresh_ms,
+        paced_ms,
         settled: !interactive,
         effects_ms,
         stage_ms: done - after_tick,

@@ -856,11 +856,17 @@
               "type": "f64"
             },
             {
-              "name": "frame_ms",
+              "name": "refresh_ms",
               "type": "f64",
               "$doc": [
-                "The turn, as the host measured it."
+                "The display's refresh, as the host measures it from the animation frames it is handed,",
+                "and the interval it paces turns at, a whole number of refreshes (xpute host",
+                "sched/quantum.ts `Grant`): the frame's budget."
               ]
+            },
+            {
+              "name": "paced_ms",
+              "type": "f64"
             },
             {
               "name": "interactive",

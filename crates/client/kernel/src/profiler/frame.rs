@@ -92,7 +92,11 @@ pub struct FrameSample {
     /// The host's interval from this frame to the next, which the turns in
     /// it filled: not the world's step, which stops at MAX_STEP_S.
     pub interval_ms: f64,
-    pub display_ms: f64,
+    /// The display's refresh, and the interval the host paced this frame at,
+    /// a whole number of refreshes, as the host granted them (xpute host
+    /// sched/quantum.ts `Grant`).
+    pub refresh_ms: f64,
+    pub paced_ms: f64,
     /// 1 where the host settled the interval, not interactive, as it says
     /// with the frame that closes it: written once, as the interval lands.
     pub settled: f64,
@@ -134,7 +138,7 @@ pub struct WorstFrame {
 }
 
 words!(FrameSample, FRAME::WORDS,
-    t => FRAME::t, interval_ms => FRAME::interval_ms, display_ms => FRAME::display_ms, settled => FRAME::settled,
+    t => FRAME::t, interval_ms => FRAME::interval_ms, refresh_ms => FRAME::refresh_ms, paced_ms => FRAME::paced_ms, settled => FRAME::settled,
     turns => FRAME::turns, busy_ms => FRAME::busy_ms, budget_ms => FRAME::budget_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     worst_effect_ms => FRAME::worst_effect_ms, worst_effect_name => FRAME::worst_effect_name,
@@ -163,12 +167,13 @@ const _: () = assert!(
     "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
 );
 
-const MISSED_INTERVALS: f64 = 1.5;
-
-/// A frame that dropped a vsync while moving. Still frames take a larger
-/// budget on purpose, and a repeated image is no visible stutter.
+/// A frame that dropped a vsync while moving: its interval ran past the
+/// paced one by half a refresh or more, so the next frame landed a refresh
+/// late at least — the host's own test (xpute host sched/quantum.ts
+/// `observe`). Still frames take a larger budget on purpose, and a repeated
+/// image is no visible stutter.
 pub fn missed(f: &FrameSample) -> bool {
-    f.settled == 0.0 && f.interval_ms > f.display_ms * MISSED_INTERVALS
+    f.settled == 0.0 && f.interval_ms > f.paced_ms + f.refresh_ms / 2.0
 }
 
 /// Past even the hard ceiling: one step too big for the forward-progress waiver.

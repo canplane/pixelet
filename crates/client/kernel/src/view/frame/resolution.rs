@@ -8,7 +8,7 @@
 //! display resolution where a screen outgrows its GPU (Unreal's screen
 //! percentage). Once a frame, where a GPU read landed, the cast's time stands
 //! against the frame's budget, the paced interval the host grants (xpute host
-//! sched/quantum.ts `Grant::frame_ms`): the scale moves by the square root of
+//! sched/quantum.ts `Grant::paced_ms`): the scale moves by the square root of
 //! budget over cast, as the cast's cost goes with its rays, between
 //! `SCALE_MIN` and whole, and holds while the cast is within `SCALE_BAND` of
 //! the budget. The read lags the frame it timed, so its time is taken per ray
@@ -50,16 +50,16 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
 }
 
 /// A GPU read landed: the cast's `cast_ms` over the `cast_px` rays it cast,
-/// against the frame's budget `frame_ms`. A frame that cast nothing, or has
+/// against the frame's budget `paced_ms`. A frame that cast nothing, or has
 /// no budget, judges nothing.
-pub fn load(cast_ms: f64, cast_px: f64, frame_ms: f64) {
+pub fn load(cast_ms: f64, cast_px: f64, paced_ms: f64) {
     let Some(s) = world() else { return };
-    if !(cast_ms > 0.0 && cast_px > 0.0 && frame_ms > 0.0) {
+    if !(cast_ms > 0.0 && cast_px > 0.0 && paced_ms > 0.0) {
         return;
     }
     let (w, h) = s.buffer_px();
     let now_ms = cast_ms * (f64::from(w) * f64::from(h)) / cast_px;
-    let ratio = frame_ms / now_ms;
+    let ratio = paced_ms / now_ms;
     if (ratio - 1.0).abs() <= param::SCALE_BAND {
         return;
     }

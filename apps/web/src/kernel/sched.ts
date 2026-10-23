@@ -67,6 +67,6 @@ export function start_sched(): void {
     const width = Math.max(1, w);
     const height = Math.max(1, h);
     const unix_ms = clock();
-    GUEST_DOORBELL.send(0, Command.WORLD_FRAME, encode_world_frame(GUEST_DOORBELL, width, height, dpr, grant.frame_ms, grant.interactive, NET_CREDITS, unix_ms));
+    GUEST_DOORBELL.send(0, Command.WORLD_FRAME, encode_world_frame(GUEST_DOORBELL, width, height, dpr, grant.refresh_ms, grant.paced_ms, grant.interactive, NET_CREDITS, unix_ms));
   }, (run) => requestAnimationFrame(run));
 }

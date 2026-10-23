@@ -64,7 +64,10 @@ pub struct FrameTurn {
     /// The host's gap that ended at this frame, which closes the interval
     /// before it, and whether the host settled it, as it says with this frame.
     pub interval_ms: f64,
-    pub display_ms: f64,
+    /// The display's refresh and the interval the host paced this frame at
+    /// (turn.rs `HostFrame`).
+    pub refresh_ms: f64,
+    pub paced_ms: f64,
     pub settled: bool,
     pub effects_ms: f64,
     pub stage_ms: f64,
@@ -90,7 +93,8 @@ pub fn profiler_frame(t: FrameTurn) {
     let counts = Stream::ALL.map(stream_counts);
     let record = FrameSample {
         t: now(),
-        display_ms: t.display_ms,
+        refresh_ms: t.refresh_ms,
+        paced_ms: t.paced_ms,
         budget_ms: t.tick.budget_ms,
         effects_ms: t.effects_ms,
         tick_ms: t.tick.total_ms,

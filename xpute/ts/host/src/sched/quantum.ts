@@ -39,8 +39,9 @@ export interface QuantumPolicy {
 
 export interface Grant {
   quota_ms: f64;
-  /** The paced interval: the refresh times the divisor. */
-  frame_ms: f64;
+  /** The display's refresh, and the interval turns are paced at: the refresh times the divisor. */
+  refresh_ms: f64;
+  paced_ms: f64;
   interactive: boolean;
 }
 
@@ -80,8 +81,8 @@ export class Quantum {
   }
 
   /** The interval turns are paced at: a whole number of refreshes. */
-  interval(): f64 {
-    return this.divisor * this.refresh();
+  paced(refresh_ms: f64): f64 {
+    return this.divisor * refresh_ms;
   }
 
   /** `wake_ms`: 0 for the next frame, NO_WAKE for none. */
@@ -89,8 +90,7 @@ export class Quantum {
     const gap_ms = delta_s * 1000;
     const interactive = grant.interactive;
     if (interactive && this.prev_interactive && gap_ms <= MAX_FRAME_GAP_MS) {
-      const refresh = this.refresh();
-      if (gap_ms > grant.frame_ms + refresh / 2) {
+      if (gap_ms > grant.paced_ms + grant.refresh_ms / 2) {
         // A vsync missed: paced over one more refresh, at once.
         this.above = Math.min(MAX_DIVISOR, this.divisor + 1);
         this.divisor = this.above;
@@ -108,10 +108,11 @@ export class Quantum {
   }
 
   grant(now: f64): Grant {
-    const frame = this.interval();
+    const refresh_ms = this.refresh();
+    const paced_ms = this.paced(refresh_ms);
     const p = this.policy;
     const interactive = now - this.input_at < p.settle_ms || this.asked_next;
     const frames = interactive ? 1 : p.batch_frames;
-    return { quota_ms: Math.max(0, frame * frames * (1 - p.margin_share) - this.overrun_ms), frame_ms: frame, interactive };
+    return { quota_ms: Math.max(0, paced_ms * frames * (1 - p.margin_share) - this.overrun_ms), refresh_ms, paced_ms, interactive };
   }
 }

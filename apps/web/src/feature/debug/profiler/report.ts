@@ -57,7 +57,7 @@ function windowSection(r: ProfilerReport): string[] {
   const counted = (rows: { name: string; n: f64 }[]) => rows.filter((r) => r.n > 0).map((r) => `${r.name} ${r.n}`).join("  ") || "-";
 
   return [
-    `frames n=${f.n}  over ${n1(f.seconds)}s  moving ${f.moving}  still ${f.n - f.moving}   display ${n1(last.display_ms)} ms   turns ${f.turns}`,
+    `frames n=${f.n}  over ${n1(f.seconds)}s  moving ${f.moving}  still ${f.n - f.moving}   refresh ${n1(last.refresh_ms)} ms   paced ${n1(last.paced_ms)} ms   turns ${f.turns}`,
     `  kinds   ${counted(f.kinds)}   wakes ${counted(f.wakes)}`,
     `  interval ${spread(f.interval)} ms   missed ${f.missed} (${pct(f.missed, f.moving)}% of moving frames)`,
     `  busy    ${spread(f.busy)} ms   (the interval's turns, rise to fall)`,

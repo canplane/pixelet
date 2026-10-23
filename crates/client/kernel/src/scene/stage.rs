@@ -82,9 +82,9 @@ pub fn stage_write() {
     s[STAGE_AT::CLOUDS] = crate::scene::environment::cloud::clouds_shown();
 }
 
-/// `frame_ms` is the frame's budget, the interval the host paces turns at,
+/// `paced_ms` is the frame's budget, the interval the host paces turns at,
 /// which the world's drawn resolution is judged against.
-pub fn stage_render(frame_ms: f64) {
+pub fn stage_render(paced_ms: f64) {
     // Nothing is drawn before the floor: its arrival asks for the next turn.
     if load_image(EARTH).is_none() {
         return;
@@ -169,7 +169,7 @@ pub fn stage_render(frame_ms: f64) {
     };
     DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
     if stat.gpu_read {
-        crate::view::frame::resolution::load(stat.gpu_spans[GpuSpanName::cast as usize], stat.gpu_px, frame_ms);
+        crate::view::frame::resolution::load(stat.gpu_spans[GpuSpanName::cast as usize], stat.gpu_px, paced_ms);
     }
     set_host_frame(
         out.kind,
