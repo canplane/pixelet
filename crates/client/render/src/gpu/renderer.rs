@@ -1716,7 +1716,7 @@ impl Renderer {
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
-            puck: PuckPass::new(g, &mut pipelines, frame_buffer, air),
+            puck: PuckPass::new(g, &mut pipelines, frame_buffer, air, device.align),
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer),
             screen: RaysPass::new(g, &mut pipelines),
@@ -1939,7 +1939,7 @@ impl Renderer {
         self.decor.prepare(g, &draws, uniforms, lists_moved, b);
         self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
         self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
-        self.puck.prepare_zone(g, &draws, b);
+        self.puck.prepare(g, &draws, uniforms, lists_moved, b);
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
         let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
@@ -2023,8 +2023,8 @@ impl Renderer {
         self.decor.draw(g, pass, &draws, b, (over.0, &mut *over.1));
         self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, over);
         self.clouds.draw(g, pass);
-        self.puck.draw_beacon(g, pass, &draws, uniforms, lists_moved);
-        self.puck.draw_zone(g, pass, &draws, uniforms, lists_moved, b);
+        self.puck.draw_beacon(g, pass, &draws);
+        self.puck.draw_zone(g, pass, &draws, b);
         self.draw_boxes(g, pass, &draws, PIPELINE_GHOST_BOX, self.ghost[0].pipeline);
         self.draw_boxes(g, pass, &draws, PIPELINE_GHOST_BOX_COPLANAR, self.ghost[1].pipeline);
         let mut bound = 0;

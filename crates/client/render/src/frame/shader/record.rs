@@ -378,8 +378,12 @@ const fn plan_of(id: u32) -> Plan {
         // Back faces culled: drawn both sides, a closed body's inner faces fight its
         // outer ones at a distance and the character shimmers.
         PIPELINE_SKINNED => plan(lit(SHADER_SKINNED, CULL_BACK), &SKINNED_LANES, &MODEL_GROUPS),
-        PIPELINE_PUCK_ZONE => plan(blended(SHADER_PUCK_ZONE, CULL_NONE, 4, 1.0), &PUCK_ZONE_LANES, &[FRAME, &[[0, UNIFORM]], &[[0, STORAGE]]]),
-        PIPELINE_PUCK_BEACON => plan(lit(SHADER_PUCK_BEACON, CULL_BACK), &PUCK_BEACON_LANES, &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &[[0, UNIFORM]]]),
+        PIPELINE_PUCK_ZONE => plan(blended(SHADER_PUCK_ZONE, CULL_NONE, 4, 1.0), &PUCK_ZONE_LANES, &[FRAME, &[[0, UNIFORM_DYNAMIC]], &[[0, STORAGE]]]),
+        PIPELINE_PUCK_BEACON => plan(
+            lit(SHADER_PUCK_BEACON, CULL_BACK),
+            &PUCK_BEACON_LANES,
+            &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &[[0, UNIFORM_DYNAMIC]]],
+        ),
         PIPELINE_BADGE => plan(
             Head {
                 topology: STRIP,
