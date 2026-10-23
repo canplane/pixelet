@@ -29,16 +29,26 @@ const fn lane(count: usize, size: usize) -> u32 {
 }
 
 /// The separation's lanes, a plane each in order: line starts, points, tops,
-/// width, kind, form, clear.
-pub const SEPARATION_LANE_BYTES: [u32; 7] = [
-    lane(MAX_LINES + 1, 4),
-    lane(MAX_POINTS, 4),
-    lane(MAX_POINTS, 2),
-    lane(MAX_LINES, 1),
-    lane(MAX_LINES, 1),
-    lane(MAX_LINES, 1),
-    lane(MAX_LINES, 1),
-];
+/// width, kind, form, clear; each its length and its element's bytes, which
+/// pxl-spec `separation::Room` is laid on (layer/terrain/tile.rs `room_of`).
+pub const SEPARATION_LANES: [(usize, usize); 7] = [(MAX_LINES + 1, 4), (MAX_POINTS, 4), (MAX_POINTS, 2), (MAX_LINES, 1), (MAX_LINES, 1), (MAX_LINES, 1), (MAX_LINES, 1)];
+
+/// Separation lane `k`'s bytes in a record.
+const fn separation_lane_bytes(k: usize) -> u32 {
+    let (count, size) = SEPARATION_LANES[k];
+    lane(count, size)
+}
+
+/// Where separation lane `k`'s plane starts; past the last, where the planes end.
+const fn separation_plane(k: usize) -> u32 {
+    let mut at = 0;
+    let mut j = 0;
+    while j < k {
+        at += FRAMES * separation_lane_bytes(j);
+        j += 1;
+    }
+    at
+}
 
 const fn sum(lanes: &[u32]) -> u32 {
     let mut sum = 0;
@@ -50,7 +60,7 @@ const fn sum(lanes: &[u32]) -> u32 {
     sum
 }
 
-pub const SEPARATION_BYTES: u32 = FRAMES * sum(&SEPARATION_LANE_BYTES);
+pub const SEPARATION_BYTES: u32 = separation_plane(SEPARATION_LANES.len());
 
 /// One square's cells as the GPU drew them, read back whole: its columns,
 /// a word a cell (its ground's top), then its levels, its cells as laid and
@@ -86,14 +96,10 @@ const FILL_AT: u32 = pool_off() + POOL_BYTES;
 
 pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_LANE_BYTES);
 
-pub const fn separation_off(record: u32, lane: usize) -> u32 {
-    let mut plane = 0;
-    let mut k = 0;
-    while k < lane {
-        plane += FRAMES * SEPARATION_LANE_BYTES[k];
-        k += 1;
-    }
-    plane + record * SEPARATION_LANE_BYTES[lane]
+/// Record `record`'s separation lane `k`: where it starts, and its bytes.
+pub const fn separation_lane(record: u32, k: usize) -> (u32, u32) {
+    let bytes = separation_lane_bytes(k);
+    (separation_plane(k) + record * bytes, bytes)
 }
 
 pub const fn cells_off(square: u32) -> u32 {
