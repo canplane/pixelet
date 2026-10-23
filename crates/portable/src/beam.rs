@@ -38,41 +38,68 @@ pub fn handed(t: f32, s: f32) -> f32 {
     t * (1.0 - margin(s))
 }
 
-/// The cells about a pixel's own, a side, whose corners a pixel's start is
-/// the least of: as far as a cube a beam ray must cross reaches from its
-/// centre, `√6 · s` as an angle with the margin, stretched by the screen's
-/// slope out to its corner, `tan` its half-angles' tangents, plus the
+/// The screen's cells across and up, `tan` its half-angles' tangents: as
+/// many as span it from its left and top.
+pub fn span(tan: [f32; 2], s: f32) -> [u32; 2] {
+    [libm::ceilf(2.0 * tan[0] / s) as u32, libm::ceilf(2.0 * tan[1] / s) as u32]
+}
+
+/// The cells about a pixel at the screen's tangents `at`, a side, whose
+/// corners its start is the least of: as far as a cube a beam ray must
+/// cross reaches from its centre, `√6 · s` as an angle with the margin,
+/// stretched by the screen's slope there out to that reach, plus the
 /// distance from that centre to the corner nearest it.
-pub fn window(tan: [f32; 2], s: f32) -> u32 {
+pub fn window(at: [f32; 2], s: f32) -> u32 {
     let reach = libm::sqrtf(6.0) * s / (1.0 - libm::sqrtf(6.0) * s) * 1.01;
-    let edge = libm::sqrtf(tan[0] * tan[0] + tan[1] * tan[1]);
+    let edge = libm::sqrtf(at[0] * at[0] + at[1] * at[1]);
     let r = libm::tanf(reach);
-    let past = (edge + r) / (1.0 - edge * r);
-    let stretch = 1.0 + past * past;
+    let beyond = (edge + r) / (1.0 - edge * r);
+    let stretch = 1.0 + beyond * beyond;
     libm::ceilf(core::f32::consts::FRAC_1_SQRT_2 + reach * stretch / s) as u32
 }
 
-/// The grid's corners across and up, `tan` the screen's half-angles'
-/// tangents: as many as span the screen, and `window` more on each side, so
-/// every corner a pixel's start reads is cast.
+/// The window of the screen's cell `[x, y]`, from its left and top: at the
+/// corner of it farthest from the screen's axis, as far as any pixel of it
+/// lies, since the slope grows outward.
+pub fn cell_window(tan: [f32; 2], s: f32, [x, y]: [u32; 2]) -> u32 {
+    let far = |t: f32, x: u32| libm::fabsf(-t + x as f32 * s).max(libm::fabsf(-t + (x + 1) as f32 * s));
+    window([far(tan[0], x), far(tan[1], y)], s)
+}
+
+/// The corners past the screen on each side: the widest window of its
+/// cells, the last's, whose far corner lies past the screen by under a
+/// cell where the cells do not divide it.
+pub fn past(tan: [f32; 2], s: f32) -> u32 {
+    let n = span(tan, s);
+    cell_window(tan, s, [n[0] - 1, n[1] - 1])
+}
+
+/// The grid's corners across and up: as many as span the screen, and
+/// `past` more on each side, so every corner a cell's window reads is cast.
 pub fn corners(tan: [f32; 2], s: f32) -> [u32; 2] {
-    let k = 2 * window(tan, s);
-    [libm::ceilf(2.0 * tan[0] / s) as u32 + 1 + k, libm::ceilf(2.0 * tan[1] / s) as u32 + 1 + k]
+    let (n, k) = (span(tan, s), 2 * past(tan, s));
+    [n[0] + 1 + k, n[1] + 1 + k]
 }
 
 /// The tangents across and up of corner `[i, j]`, from the screen's left
-/// and top past its `window`.
+/// and top `past` the window.
 pub fn corner(tan: [f32; 2], s: f32, [i, j]: [u32; 2]) -> [f32; 2] {
-    let k = window(tan, s) as f32;
+    let k = past(tan, s) as f32;
     [-tan[0] + (i as f32 - k) * s, tan[1] - (j as f32 - k) * s]
+}
+
+/// The first corner of the screen's cell `[x, y]`, from its left and top
+/// `past` the window.
+pub fn first(tan: [f32; 2], s: f32, [x, y]: [u32; 2]) -> [u32; 2] {
+    let k = past(tan, s);
+    [x + k, y + k]
 }
 
 /// The cell, by its first corner, holding the screen's point at the
 /// tangents `[tx, ty]`.
 pub fn cell(tan: [f32; 2], s: f32, [tx, ty]: [f32; 2]) -> [u32; 2] {
-    let k = window(tan, s);
-    let at = |v: f32| libm::floorf(v / s) as i32;
-    [(at(tx + tan[0]).max(0) as u32) + k, (at(tan[1] - ty).max(0) as u32) + k]
+    let at = |v: f32| libm::floorf(v / s).max(0.0) as u32;
+    first(tan, s, [at(tx + tan[0]), at(tan[1] - ty)])
 }
 
 /// What a beam ray leaves for the pixels about it, in words: how far it

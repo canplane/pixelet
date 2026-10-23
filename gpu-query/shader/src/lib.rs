@@ -660,9 +660,11 @@ impl cast::Keep<Writ> for Leaving<'_> {
 }
 
 /// Where each cell's pixels start (pxl-portable `beam::CELL_WORDS`), a
-/// thread a cell, by its first corner: the least of the beam rays within
-/// `beam::window` cells of its corners, and that corner, whose line they
-/// resume from; past the lines in the beam rays' buffer (`beam::cells_at`).
+/// thread a cell of the screen (`beam::span`): the least of the beam rays
+/// within its own window of its corners (`beam::cell_window`), every one
+/// cast since the widest window is `beam::past`, and that corner, whose
+/// line they resume from; past the lines in the beam rays' buffer
+/// (`beam::cells_at`).
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn cells_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -671,19 +673,20 @@ pub fn cells_cs(
 ) {
     let (_, detail) = eye_origin(eye);
     let (tan, s) = (eye_tan(eye), beam::spacing(detail));
-    let (corners, k) = (beam::corners(tan, s), beam::window(tan, s) as i32);
-    if id.x + 1 >= corners[0] || id.y + 1 >= corners[1] {
+    let n = beam::span(tan, s);
+    if id.x >= n[0] || id.y >= n[1] {
         return;
     }
-    let held = |v: i32, n: u32| if v < 0 { 0 } else if v >= n as i32 { n - 1 } else { v as u32 };
+    let (corners, k) = (beam::corners(tan, s), beam::cell_window(tan, s, [id.x, id.y]));
+    let [x, y] = beam::first(tan, s, [id.x, id.y]);
     let t_of = |c: u32| f32::from_bits(seen_at(beams, beam::LINES_AT + c * beam::LINE_WORDS + beam::LINE_T));
-    let first = held(id.y as i32 - k, corners[1]) * corners[0] + held(id.x as i32 - k, corners[0]);
+    let first = (y - k) * corners[0] + (x - k);
     let (mut least, mut from) = (t_of(first), first);
-    let mut j = id.y as i32 - k;
-    while j <= id.y as i32 + 1 + k {
-        let mut i = id.x as i32 - k;
-        while i <= id.x as i32 + 1 + k {
-            let c = held(j, corners[1]) * corners[0] + held(i, corners[0]);
+    let mut j = y - k;
+    while j <= y + 1 + k {
+        let mut i = x - k;
+        while i <= x + 1 + k {
+            let c = j * corners[0] + i;
             let t = t_of(c);
             if t < least {
                 (least, from) = (t, c);
@@ -692,7 +695,7 @@ pub fn cells_cs(
         }
         j += 1;
     }
-    let cell = beam::cells_at(corners[0] * corners[1]) + (id.y * corners[0] + id.x) * beam::CELL_WORDS;
+    let cell = beam::cells_at(corners[0] * corners[1]) + (y * corners[0] + x) * beam::CELL_WORDS;
     seen_put(beams, cell + beam::CELL_T, least.to_bits());
     seen_put(beams, cell + beam::CELL_CORNER, from);
 }

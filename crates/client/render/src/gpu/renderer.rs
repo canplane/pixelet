@@ -816,15 +816,17 @@ const STACK_WORDS: u32 = ways::tree::POOL_BLOCKS;
 struct CastBuffers {
     built: Built,
     /// The camera grid's beam rays (`beam_cs`), where each cell's pixels
-    /// start off them (`cells_cs`), and their buffer, over the cast's
-    /// group (pxl-portable `beam`): how many pixels missed, a line a
-    /// corner, a start a cell, for `corners` of them, then the pixels that
-    /// missed, a word each; room for `beam_room` corners and pixels
+    /// start off them (`cells_cs`, a thread a cell of the screen, `cells`),
+    /// and their buffer, over the cast's group (pxl-portable `beam`): how
+    /// many pixels missed, a line a corner, a start a cell, for `corners`
+    /// of them, then the pixels that missed, a word each; room for
+    /// `beam_room` corners and pixels
     /// (doc/minutes/20261022-a-cell-casts-a-beam.md).
     beam_built: Built,
     cells_built: Built,
     beams: u32,
     corners: [u32; 2],
+    cells: [u32; 2],
     beam_room: [u32; 2],
     /// The observed pyramid (pxl-portable `observed`): its buffer, no
     /// pixel's; the pixels the cast's reading walk missed walked again
@@ -1139,6 +1141,7 @@ impl RaysPass {
             cells_built,
             beams: 0,
             corners: [0; 2],
+            cells: [0; 2],
             beam_room: [0; 2],
             miss_built,
             args_built,
@@ -1235,7 +1238,7 @@ impl RaysPass {
         let word = |k: usize| f32::from_bits(cast.eye[k]);
         let tan = [word(eye::TAN), word(eye::TAN + 1)];
         let s = beam::spacing(pxl_portable::cast::Detail { tau: word(eye::TAU), range: [0; 2] });
-        c.corners = beam::corners(tan, s);
+        (c.corners, c.cells) = (beam::corners(tan, s), beam::span(tan, s));
         let held = c.corners[0] * c.corners[1];
         let pixels = c.size[0] * c.size[1];
         if held > c.beam_room[0] || pixels > c.beam_room[1] {
@@ -1537,7 +1540,7 @@ impl RaysPass {
             }
             for (built, [x, y], w) in [
                 (&c.beam_built, c.corners, compute::BEAM_WORKGROUP),
-                (&c.cells_built, c.corners, compute::CELLS_WORKGROUP),
+                (&c.cells_built, c.cells, compute::CELLS_WORKGROUP),
                 (&c.built, c.size, compute::CAST_WORKGROUP),
             ] {
                 g.set_pipeline(pass, built.pipeline);
