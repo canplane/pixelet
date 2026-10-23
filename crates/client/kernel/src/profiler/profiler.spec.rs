@@ -386,13 +386,3 @@ pub mod RINGS {
     pub const WORDS: u32 = 6;
     pub const KEYS: &[&str] = &["frames_at", "frames_count", "tasks_at", "tasks_count", "worst_at", "worst_count", "WORDS"];
 }
-
-/// What PROFILER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take.
-pub mod LOG {
-    pub const frames_at: u32 = 0;
-    pub const frames_count: u32 = 1;
-    pub const tasks_at: u32 = 2;
-    pub const tasks_count: u32 = 3;
-    pub const WORDS: u32 = 4;
-    pub const KEYS: &[&str] = &["frames_at", "frames_count", "tasks_at", "tasks_count", "WORDS"];
-}

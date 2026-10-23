@@ -24,7 +24,6 @@ const WINDOW_MS = 60_000;
 const LIMIT = 1_024;
 
 const ring: LongFrame[] = [];
-let sink: ((l: LongFrame) => void) | null = null;
 
 function land(l: LongFrame): void {
   const cutoff = l.t - WINDOW_MS;
@@ -33,7 +32,6 @@ function land(l: LongFrame): void {
   if (drop > 0) ring.splice(0, drop);
   if (ring.length === LIMIT) ring.shift();
   ring.push(l);
-  sink?.(l);
 }
 
 /** Filtered, not searched: two observers feed the ring out of order. */
@@ -43,10 +41,6 @@ export function longFramesSince(t: f64): LongFrame[] {
 
 export function longFramesClear(): void {
   ring.length = 0;
-}
-
-export function setLongFrameSink(to: ((l: LongFrame) => void) | null): void {
-  sink = to;
 }
 
 function supports(type: string): boolean {

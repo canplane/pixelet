@@ -166,7 +166,7 @@ pub enum SettingKey {
     ao = 10,
     /// Where the camera and the pointer are, read live (profiler/summary.rs, its view section).
     view_overlay = 11,
-    /// The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
+    /// The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`).
     performance_overlay = 12,
     /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs).
     world_gizmo = 13,

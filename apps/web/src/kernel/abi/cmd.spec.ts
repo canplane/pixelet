@@ -115,10 +115,8 @@ export const enum PreviewMinor {
 export const enum ProfilerMinor {
   START = 0x01,
   STOP = 0x02,
-  LOG = 0x03,
-  READ = 0x04,
-  TAKE = 0x05,
-  RINGS = 0x06,
+  READ = 0x03,
+  RINGS = 0x04,
 }
 
 /** Where a pointer event is in its gesture. */
@@ -330,16 +328,12 @@ export const enum Command {
   PROFILER_START = 0x1901,
   /** The window frozen, so what is exported holds still. */
   PROFILER_STOP = 0x1902,
-  /** The console stream on or off. */
-  PROFILER_LOG = 0x1903,
   /** The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)
    * over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
    * number past the door is finite, so no window is infinite. */
-  PROFILER_READ = 0x1904,
-  /** The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn. */
-  PROFILER_TAKE = 0x1905,
+  PROFILER_READ = 0x1903,
   /** The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn. */
-  PROFILER_RINGS = 0x1906,
+  PROFILER_RINGS = 0x1904,
   /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
    * block the kernel holds, valid until the next snapshot. */
   WORLD_SNAPSHOT = 0x1004,
@@ -676,11 +670,6 @@ export function encode_input_go_to(to: PacketRoom, lon: f64, lat: f64): PacketWr
 /** Command.INPUT_POSE's packet, written in place into `to`. */
 export function encode_input_pose(to: PacketRoom, x: f64, y: f64, z: f64, qx: f64, qy: f64, qz: f64, qw: f64): PacketWriter {
   return to.writer(7).f64(x).f64(y).f64(z).f64(qx).f64(qy).f64(qz).f64(qw);
-}
-
-/** Command.PROFILER_LOG's packet, written in place into `to`. */
-export function encode_profiler_log(to: PacketRoom, on: boolean): PacketWriter {
-  return to.writer(1).bool(on);
 }
 
 /** Command.PROFILER_READ's packet, written in place into `to`. */

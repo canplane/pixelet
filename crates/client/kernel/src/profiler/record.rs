@@ -14,7 +14,6 @@ use xpute_guest::mem::section::span_of;
 use crate::mem::fixed::{lane, Held};
 use crate::profiler::block::RecBlock;
 use crate::profiler::frame::{FrameSample, RingSample, WorstFrame};
-use crate::profiler::log::PENDING;
 use crate::profiler::task::TaskRow;
 
 /// `.fixed.profiler`, handed in at boot.
@@ -67,17 +66,13 @@ pub(crate) enum Lane {
     Frames,
     Worst,
     Scratch,
-    LogTasks,
-    LogFrames,
 }
 
-const LANES: [u32; 6] = [
+const LANES: [u32; 4] = [
     (TASK_LIMIT * size_of::<TaskRow>()) as u32,
     (FRAME_LIMIT * size_of::<FrameSample>()) as u32,
     (WORST_CAP * size_of::<WorstFrame>()) as u32,
     (SPREAD_LIMIT * size_of::<f64>()) as u32,
-    (PENDING * size_of::<TaskRow>()) as u32,
-    (PENDING * size_of::<FrameSample>()) as u32,
 ];
 
 const LANE_ALIGN: u32 = 64;
@@ -90,12 +85,6 @@ pub(crate) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
     unsafe { lane(RANGE.get().nth(&LANES, LANE_ALIGN, which as usize), 0, cap) }
 }
 
-#[derive(Clone, Copy, Default)]
-pub struct ProfilerSink {
-    pub task: Option<fn(&TaskRow)>,
-    pub frame: Option<fn(&FrameSample)>,
-}
-
 struct Profiler {
     task_ring: &'static mut [TaskRow],
     task_len: usize,
@@ -104,8 +93,7 @@ struct Profiler {
     task_head: usize,
     frame_head: usize,
     truncated: bool,
-    sink: ProfilerSink,
-    /// Off until asked, so a client without the dev overlay writes nothing.
+    /// Off until asked, so a client without the profiler on writes nothing.
     /// Stopping freezes the data for a stable export.
     recording: bool,
     started_at: f64,
@@ -132,7 +120,6 @@ fn profiler() -> &'static mut Profiler {
         task_head: 0,
         frame_head: 0,
         truncated: false,
-        sink: ProfilerSink::default(),
         recording: false,
         started_at: now(),
         stopped_at: None,
@@ -142,10 +129,6 @@ fn profiler() -> &'static mut Profiler {
         open: None,
         frame_task_ms: 0.0,
     })
-}
-
-pub fn profiler_set_sink(sink: Option<ProfilerSink>) {
-    profiler().sink = sink.unwrap_or_default();
 }
 
 pub fn profiler_recording() -> bool {
@@ -189,9 +172,6 @@ pub fn profiler_record(row: impl FnOnce() -> TaskRow) {
         return;
     }
     let row = row();
-    if let Some(task) = l.sink.task {
-        task(&row);
-    }
     if l.task_ring.is_empty() {
         l.task_ring = fixed_lane(Lane::Tasks, TASK_LIMIT);
     }
@@ -257,9 +237,6 @@ fn land(l: &mut Profiler, s: FrameSample) {
         l.worst_len = kept + 1;
     }
 
-    if let Some(frame) = l.sink.frame {
-        frame(&s);
-    }
     if l.frame_ring.is_empty() {
         l.frame_ring = fixed_lane(Lane::Frames, FRAME_LIMIT);
     }

@@ -225,12 +225,3 @@ export const RINGS = {
   worst_count: 5 as number,
   WORDS: 6 as number,
 } as const;
-
-/** What PROFILER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take. */
-export const LOG = {
-  frames_at: 0 as number,
-  frames_count: 1 as number,
-  tasks_at: 2 as number,
-  tasks_count: 3 as number,
-  WORDS: 4 as number,
-} as const;

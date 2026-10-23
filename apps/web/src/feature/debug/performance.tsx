@@ -14,7 +14,6 @@ import { alpha, color, disabledContent } from "@/shared/ui/theme.ts";
 import { gauge, ProfilerGauge, ProfilerRec } from "./profiler/gauge.tsx";
 import { Fold, HINT_INK } from "./fold.tsx";
 import { n1 } from "./profiler/lane.ts";
-import { profilerLog } from "./profiler/log.ts";
 import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
 import { fps, type Gauge, profilerGaugeRead, profilerReportRead } from "./profiler/view.ts";
 import { installLongFrameObservers, longFramesClear } from "./profiler/long-frame.ts";
@@ -124,7 +123,6 @@ export function PerformanceOverlay() {
     // buffered since load, so a panel on from boot has the boot's frames.
     longFramesClear();
     installLongFrameObservers();
-    return () => profilerLog(false);
   }, [show]);
 
   if (!show) return null;

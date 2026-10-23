@@ -142,7 +142,7 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
+  /** The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`). */
   performance_overlay: {
     key: 12 as number,
     kind: "toggle",
@@ -294,7 +294,7 @@ export const SETTINGS_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
+  /** The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`). */
   performance_overlay: {
     key: 12 as number,
     kind: "toggle",

@@ -48,7 +48,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     use crate::control::camera::input::{camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel};
     use crate::control::interaction::{hold, holding};
     use crate::control::sensor::{device_orientation, geolocation};
-    use crate::profiler::log::{profiler_follow, profiler_set_logging, profiler_window_start, profiler_window_stop};
+    use crate::profiler::window::{profiler_follow, profiler_window_start, profiler_window_stop};
     use crate::sched::edge::request_world_tick;
     use crate::setting::store::{settings_load, settings_store, SettingKey};
     use crate::shell as ui;
@@ -314,15 +314,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             profiler_window_stop();
             applied(s)
         }
-        Command::PROFILER_LOG => {
-            let on = abi::ProfilerLog::read(packet(pkt)?)?.on;
-            refuse_unless(!on || settings_store().performance_overlay, Errno::EPERM)?;
-            profiler_set_logging(on);
-            applied(s)
-        }
         // Memory is at most 1 GiB, so an address fits an i32.
         Command::PROFILER_READ => Ok(Some(profiler_read(abi::ProfilerRead::read(packet(pkt)?)?.window_ms) as i32)),
-        Command::PROFILER_TAKE => Ok(Some(profiler_take(s) as i32)),
         Command::PROFILER_RINGS => Ok(Some(profiler_rings() as i32)),
         Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP => Ok(None),
     }
@@ -375,22 +368,6 @@ fn profiler_rings() -> u32 {
     w[RINGS::tasks_count as usize] = tasks.len() as u32;
     w[RINGS::worst_at as usize] = off_of_slice(&raw const *worst) as u32;
     w[RINGS::worst_count as usize] = worst.len() as u32;
-    off_of(w.as_ptr()) as u32
-}
-
-/// The address of LOG's words: rows the live stream kept since the last
-/// take, let go next turn.
-fn profiler_take(s: &mut State) -> u32 {
-    use crate::profiler::spec::LOG;
-    // On the heap, as READ's words are.
-    static WORDS: xpute_guest::global::Global<Box<[u32; LOG::WORDS as usize]>> = xpute_guest::global::Global::new();
-    let (tasks, frames) = crate::profiler::log::profiler_log_rows();
-    let w = WORDS.get(|| Box::new([0; LOG::WORDS as usize]));
-    w[LOG::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
-    w[LOG::tasks_count as usize] = tasks.len() as u32;
-    w[LOG::frames_at as usize] = off_of_slice(&raw const *frames) as u32;
-    w[LOG::frames_count as usize] = frames.len() as u32;
-    s.profiler_taken = true;
     off_of(w.as_ptr()) as u32
 }
 

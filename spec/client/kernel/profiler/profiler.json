@@ -299,16 +299,5 @@
     "tasks_count": 1,
     "worst_at": 1,
     "worst_count": 1
-  },
-  "LOG": {
-    "$type": "u32",
-    "$packed": true,
-    "$doc": [
-      "What PROFILER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take."
-    ],
-    "frames_at": 1,
-    "frames_count": 1,
-    "tasks_at": 1,
-    "tasks_count": 1
   }
 }

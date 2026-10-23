@@ -328,20 +328,12 @@
           "value": 2
         },
         {
-          "name": "LOG",
+          "name": "READ",
           "value": 3
         },
         {
-          "name": "READ",
-          "value": 4
-        },
-        {
-          "name": "TAKE",
-          "value": 5
-        },
-        {
           "name": "RINGS",
-          "value": 6
+          "value": 4
         }
       ]
     },
@@ -1325,21 +1317,8 @@
           ]
         },
         {
-          "name": "PROFILER_LOG",
-          "value": 6403,
-          "$doc": [
-            "The console stream on or off."
-          ],
-          "packet": [
-            {
-              "name": "on",
-              "type": "bool"
-            }
-          ]
-        },
-        {
           "name": "PROFILER_READ",
-          "value": 6404,
+          "value": 6403,
           "$doc": [
             "The profiler's summary where it lies: the reply is the address of READ's words (profiler.json)",
             "over the last `window_ms`, the whole recording where it is absent, good until the next turn. A",
@@ -1354,15 +1333,8 @@
           ]
         },
         {
-          "name": "PROFILER_TAKE",
-          "value": 6405,
-          "$doc": [
-            "The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn."
-          ]
-        },
-        {
           "name": "PROFILER_RINGS",
-          "value": 6406,
+          "value": 6404,
           "$doc": [
             "The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn."
           ]

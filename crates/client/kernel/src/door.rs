@@ -53,8 +53,6 @@ pub struct Bracket {
 struct State {
     /// Hash of the last posted UI snapshot; one is posted only when it changed.
     snapshot: u64,
-    /// Console rows were handed over, to be let go next turn.
-    profiler_taken: bool,
 }
 
 static DOOR: Global<Door> = Global::new();
@@ -82,7 +80,7 @@ fn ring_address(ring: &Ring) -> u32 {
 static STATE: Global<State> = Global::new();
 
 fn state() -> &'static mut State {
-    STATE.get(|| State { snapshot: 0, profiler_taken: false })
+    STATE.get(|| State { snapshot: 0 })
 }
 
 /// xpute's three (two rings and the quantum) count as five entries, plus the
@@ -188,9 +186,6 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
         boot(&bracket());
     }
     let s = state();
-    if core::mem::take(&mut s.profiler_taken) {
-        crate::profiler::log::profiler_log_clear();
-    }
     let rise = now();
     crate::io::host::host_rise();
     crate::sched::edge::world_edge().rise(quota_ms);

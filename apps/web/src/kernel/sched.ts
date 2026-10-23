@@ -52,21 +52,12 @@ const NET_CREDITS = 6;
 
 export let strobe: Strobe;
 
-/** The page's one clock, in Unix milliseconds (WORLD_FRAME `unix_ms`). */
-let clock: () => f64 = () => Date.now();
-
-/** Replaces the clock: the next frame's time, and every one after, is its. */
-export function set_clock(c: () => f64): void {
-  clock = c;
-}
-
 export function start_sched(): void {
   strobe = new Strobe(GUEST_DOORBELL, directory(GUEST.buffer).quantum(), (grant) => {
     if (driver === null) return;
     const { width: w, height: h, dpr } = driver();
     const width = Math.max(1, w);
     const height = Math.max(1, h);
-    const unix_ms = clock();
-    GUEST_DOORBELL.send(0, Command.WORLD_FRAME, encode_world_frame(GUEST_DOORBELL, width, height, dpr, grant.refresh_ms, grant.paced_ms, grant.interactive, NET_CREDITS, unix_ms));
+    GUEST_DOORBELL.send(0, Command.WORLD_FRAME, encode_world_frame(GUEST_DOORBELL, width, height, dpr, grant.refresh_ms, grant.paced_ms, grant.interactive, NET_CREDITS, Date.now()));
   }, (run) => requestAnimationFrame(run));
 }
