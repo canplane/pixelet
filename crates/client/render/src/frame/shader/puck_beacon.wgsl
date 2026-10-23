@@ -22,8 +22,8 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let n = normalize(i.normal);
   // Each light through the air over the land it stands on.
   let r = land_radius();
-  let sun = frame_sun_color() * atmos_white() * sun_transmittance(r, frame_sun_dir().z);
-  let other = frame_other_color() * atmos_white() * sun_transmittance(r, frame_other_dir().z);
-  let lit = color * (sun * max(dot(n, frame_sun_dir()), 0.0) + other * max(dot(n, frame_other_dir()), 0.0)) / PI * 0.2;
+  let sun = atmos_white() * sun_transmittance(r, atmos_sun_dir().z);
+  let other = atmos_moon_color() * atmos_white() * sun_transmittance(r, atmos_moon_dir().z);
+  let lit = color * (sun * max(dot(n, atmos_sun_dir()), 0.0) + other * max(dot(n, atmos_moon_dir()), 0.0)) / PI * 0.2;
   return vec4f(finish(lit + color * glow, i.clip.xy), 1.0);
 }

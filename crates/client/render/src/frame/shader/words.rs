@@ -8,7 +8,7 @@
 /// reads past it.
 pub const DRAW_FLOATS: usize = 8;
 /// The frame's (frame.wgsl, record.rs `FRAME_AT`).
-pub const FRAME_FLOATS: usize = 48;
+pub const FRAME_FLOATS: usize = 32;
 /// The sky's: the ray, the celestial pole, and whether the Moon's face has
 /// arrived (sky_words.wgsl).
 pub const SKY_FLOATS: usize = 16;
@@ -17,7 +17,7 @@ pub const ATMOS_FLOATS: usize = 52;
 /// The cloud sheets' (clouds.wgsl, gpu/clouds.rs).
 pub const CLOUDS_FLOATS: usize = 20;
 /// The stars' (stars.wgsl, gpu/stars.rs).
-pub const STARS_FLOATS: usize = 44;
+pub const STARS_FLOATS: usize = 36;
 /// The screen's occlusion's (ao_view.wgsl, gpu/ao.rs).
 pub const AO_FLOATS: usize = 36;
 

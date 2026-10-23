@@ -26,7 +26,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Read;
 use crate::gpu::renderer::Upload;
 use crate::look::atmosphere as model;
-use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_SUN_LIGHT};
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_MOON_COLOR, ENV_SUN};
 
 /// One past the last field: the device rounds the struct up to a 16-byte row.
 /// Offsets in floats into the struct.
@@ -52,7 +52,8 @@ pub(crate) const NIGHT_STOPS: usize = 26;
 pub(crate) const SHOWN_FALL: usize = 27;
 pub(crate) const MOON_DIR: usize = 28;
 pub(crate) const MOON_LIGHT: usize = 31;
-// 32 to 35 free.
+pub(crate) const MOON_COLOR: usize = 32;
+// 35 free.
 pub(crate) const NIGHT_SKY: usize = 36;
 pub(crate) const LAND_ALTITUDE: usize = 39;
 pub(crate) const CITY_LIGHT: usize = 40;
@@ -369,11 +370,12 @@ impl Atmosphere {
     /// Every light's and ray's height is measured up the world's z, straight
     /// up where the eye stands.
     pub fn lay_out(&mut self, g: &Gpu, env: &[f32]) {
-        let (sun, moon) = (&env[ENV_SUN_LIGHT..ENV_SUN_LIGHT + 3], &env[ENV_MOON_LIGHT..ENV_MOON_LIGHT + 4]);
+        let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
         let altitude_km = env[ENV_AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
         self.words[MOON_DIR..MOON_DIR + 3].copy_from_slice(&moon[..3]);
         self.words[MOON_LIGHT] = moon[3];
+        self.words[MOON_COLOR..MOON_COLOR + 3].copy_from_slice(&env[ENV_MOON_COLOR..ENV_MOON_COLOR + 3]);
         self.words[CAMERA_ALTITUDE] = altitude_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
         self.words[LAND_ALTITUDE] = env[ENV_AIR + 3];

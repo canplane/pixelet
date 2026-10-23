@@ -44,7 +44,7 @@ use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
-use crate::look::environment::{ENV_AIR, ENV_MOON_LIGHT, ENV_STARS, ENV_SUN_LIGHT, LIGHT_COLOR};
+use crate::look::environment::{ENV_AIR, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
 use pxl_portable::beam;
 use pxl_portable::eye;
@@ -61,18 +61,14 @@ use xpute_kit::status::errno::Errno;
 pub(crate) const VIEW_PROJ: usize = FRAME_AT[0];
 const CAMERA_POS: usize = FRAME_AT[1];
 const EDGE_STRENGTH: usize = FRAME_AT[2];
-const SUN_DIR: usize = FRAME_AT[3];
-const LOW_SPEC: usize = FRAME_AT[4];
-const SUN_COLOR: usize = FRAME_AT[5];
-const EDGE_WIDTH: usize = FRAME_AT[6];
-const OTHER_DIR: usize = FRAME_AT[7];
-const RIM_INTENSITY: usize = FRAME_AT[8];
-const OTHER_COLOR: usize = FRAME_AT[9];
-const VIGNETTE: usize = FRAME_AT[10];
-const VIEWPORT: usize = FRAME_AT[11];
-const SCREEN_AO: usize = FRAME_AT[12];
-const MAP: usize = FRAME_AT[13];
-const CELL: usize = FRAME_AT[14];
+const VIEWPORT: usize = FRAME_AT[3];
+const SCREEN_AO: usize = FRAME_AT[4];
+const VIGNETTE: usize = FRAME_AT[5];
+const MAP: usize = FRAME_AT[6];
+const CELL: usize = FRAME_AT[7];
+const LOW_SPEC: usize = FRAME_AT[8];
+const EDGE_WIDTH: usize = FRAME_AT[9];
+const RIM_INTENSITY: usize = FRAME_AT[10];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_POLE: usize = 12;
@@ -1814,10 +1810,6 @@ impl Renderer {
         }
         u[EDGE_STRENGTH] = s[STAGE_AT::EDGE_STRENGTH] as f32;
         u[CELL] = s[STAGE_AT::LOD_CELL] as f32;
-        for (dir, color, at) in [(SUN_DIR, SUN_COLOR, ENV_SUN_LIGHT), (OTHER_DIR, OTHER_COLOR, ENV_MOON_LIGHT)] {
-            u[dir..dir + 3].copy_from_slice(&env[at..at + 3]);
-            u[color..color + 3].copy_from_slice(&env[at + LIGHT_COLOR..at + LIGHT_COLOR + 3]);
-        }
         u[LOW_SPEC] = s[STAGE_AT::LOW_SPEC] as f32;
         u[EDGE_WIDTH] = s[STAGE_AT::EDGE_WIDTH] as f32;
         u[RIM_INTENSITY] = s[STAGE_AT::RIM_INTENSITY] as f32;
