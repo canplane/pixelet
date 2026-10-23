@@ -10,23 +10,23 @@ use super::q3::{FRAC_W, Q3};
 use super::world;
 use xpute_kit::math::scalar::round;
 
-pub use pxl_portable::Zoom;
+pub use pxl_spec_core::Zoom;
 
 /// A unit's: 1u is a z24 cell's side.
-pub use pxl_portable::UNIT_ZOOM;
+pub use pxl_spec_core::UNIT_ZOOM;
 
 /// The coarsest cube: a tile here is as wide as the world is tall, so the
 /// pyramid is alike on every axis from here finer, and 3D begins. A tile of
 /// it with the world's whole height over it is a **shard**, the unit the world's data
 /// is ingested, baked and kept in; what is ingested of one is it and its
 /// apron.
-pub use pxl_portable::SHARD_ZOOM;
+pub use pxl_spec_core::SHARD_ZOOM;
 
 /// Where Z takes its first digit: the cubes under a shard, its 3D roots.
 pub const CUBE_ZOOM: Zoom = SHARD_ZOOM + 1;
 
 /// The finest a point resolves: a fraction's step.
-pub use pxl_portable::FINEST_ZOOM;
+pub use pxl_spec_core::FINEST_ZOOM;
 
 /// log2 of `z`'s side in units: negative where finer than a unit.
 pub const fn shamt(zoom: Zoom) -> i32 {
@@ -44,7 +44,7 @@ pub const fn units(zoom: Zoom) -> f64 {
 }
 
 /// How many `inner` cells stand across one `outer`, which is no finer.
-pub use pxl_portable::count;
+pub use pxl_spec_core::count;
 
 /// The zoom whose side is `units`, a power of two.
 pub fn of_side(units: f64) -> Zoom {

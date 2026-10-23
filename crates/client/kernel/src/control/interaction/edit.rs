@@ -9,7 +9,6 @@ use crate::layer::object::ext::Ext;
 use crate::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
 use crate::layer::object::size::MARKER_SIZE;
 use crate::layer::object::store::Block;
-use pxl_portable::answer::PLACED_BLOCK;
 use pxl_spec::block::ext::MARKER_TEXT_CHARS;
 use pxl_spec::block::object::{cube_id, decor_num_id, Cube};
 use pxl_spec::block::object::{object_value_is_marker, MARKER};
@@ -19,6 +18,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec_core::answer::PLACED_BLOCK;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
@@ -176,7 +176,7 @@ pub fn remove(at: EntryAt) {
     // Only the resident finest leaf can say what fills the cube without it, as
     // `place_value_is_redundant` asks; elsewhere it is emptied as asked.
     let id = match world.previewing(Some(at), None).block_of(&middle(at)).exact() {
-        Some(v) if v != VOID && !pxl_portable::answer::placed(v) => AIR,
+        Some(v) if v != VOID && !pxl_spec_core::answer::placed(v) => AIR,
         None => AIR,
         Some(_) => VOID,
     };

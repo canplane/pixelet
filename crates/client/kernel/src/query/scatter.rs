@@ -6,21 +6,21 @@
 //! is read and whichever layer holds what it stands on. It reads no tile:
 //! where it stands is its column's footing, the world's ray down it
 //! (`World::footing`), and which way it faces and whether it grows the
-//! world's blocks about it (pxl-portable `scatter::stand`, `grows`).
+//! world's blocks about it (pxl-spec-core `scatter::stand`, `grows`).
 
-use pxl_portable::overwrite;
-use pxl_portable::scatter::{self as portable, Grounds, Grown};
 use pxl_spec::block::cube::sentinel;
 use pxl_spec::block::decor::Decor;
 use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec_core::overwrite;
+use pxl_spec_core::scatter::{self as core_scatter, Grounds, Grown};
 
 use super::world::World;
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::store;
 
-/// The world as decor's growth asks it on the CPU (pxl-portable
+/// The world as decor's growth asks it on the CPU (pxl-spec-core
 /// `Grounds`): the world's one query and its ray, and what is placed.
 pub(super) struct Asked<'a, 'w> {
     world: &'a World<'w>,
@@ -43,8 +43,8 @@ impl overwrite::Lanes for Asked<'_, '_> {
 }
 
 impl Grounds for Asked<'_, '_> {
-    fn rows(&self) -> &[pxl_portable::decor::Decor] {
-        &pxl_portable::decor::DECORS
+    fn rows(&self) -> &[pxl_spec_core::decor::Decor] {
+        &pxl_spec_core::decor::DECORS
     }
 
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (u32, i32, bool) {
@@ -62,7 +62,7 @@ impl Grounds for Asked<'_, '_> {
 /// by cell, which a region grows the same (pxl-spec procedural.test.rs).
 pub(super) fn grown_at(asked: &mut Asked, decor: &Decor, cell: [i32; 2]) -> Option<Instance> {
     let candidate = scatter_at(decor.row, cell)?;
-    let (g, here) = portable::stand(asked, decor.row, GROUND.cell(), &candidate);
+    let (g, here) = core_scatter::stand(asked, decor.row, GROUND.cell(), &candidate);
     here.then(|| instance(decor, &g))
 }
 
@@ -79,7 +79,7 @@ pub fn instance(decor: &Decor, g: &Grown) -> Instance {
     }
 }
 
-/// An instance the ground grows as portable's evaluation takes it back.
+/// An instance the ground grows as pxl-spec-core's evaluation takes it back.
 pub fn grown_of(i: &Instance) -> Option<Grown> {
     let (Source::Ground([x, y, z]), Meta::Decor(m)) = (i.source, i.meta) else { return None };
     Some(Grown {

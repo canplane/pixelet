@@ -9,7 +9,6 @@
 
 use fnv::FnvHashMap;
 
-use pxl_portable::scatter::drawn;
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::look::cloud::{drift, lattice_hash, shown, CUMULUS_KM, WIND};
@@ -18,6 +17,7 @@ use pxl_spec::asset::ingested::Asset;
 use pxl_spec::block::decor::DECORS;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
+use pxl_spec_core::scatter::drawn;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};

@@ -17,7 +17,7 @@ fnv.workspace = true
 libm.workspace = true
 pxl-geo-spec = { path = "../geo-spec" }
 pxl-spec = { path = "../../spec", features = ["serde"] }
-pxl-portable = { path = "../../portable" }
+pxl-spec-core = { path = "../../spec/core" }
 xpute-kit = { path = "../../../xpute/rust/kit" }
 # Blocking: the pack and rasterize are `Rc`-backed, so a page is one non-`Send`
 # call, and each worker is a thread with its own connection.

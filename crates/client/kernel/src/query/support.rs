@@ -143,7 +143,7 @@ impl<'a> World<'a> {
     }
 
     /// What is in the leaf block at `at`, as the cast draws it: its value
-    /// (pxl-portable `world::node`'s), void where none.
+    /// (pxl-spec-core `world::node`'s), void where none.
     pub fn block_of(&self, at: &Q3) -> Answer<u32> {
         let side = units(GROUND.cell());
         let p = [i64::from(at[0]), i64::from(at[1]), i64::from(at[2])].map(q3::to_real);

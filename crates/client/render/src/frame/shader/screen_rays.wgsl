@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/screen_rays.wgsl
 
-// The eye's rays (pxl-portable `ray`), a drawn pixel each: each pixel
+// The eye's rays (pxl-spec-core `ray`), a drawn pixel each: each pixel
 // the face its ray entered, painted by paint.wgsl's `paint`, as the ghost's
 // boxes are. A pixel whose ray met nothing is left to the sky. Where a
 // cube's edge meets the air, and where its corners close in, is read off
@@ -16,7 +16,7 @@
 // linear light (`mesh/paint/ground.rs` `look_words`), by value whichever
 // source holds it.
 @group(0) @binding(20) var<storage, read> looks: array<vec4u>;
-// The eye the rays left (pxl-portable `eye`): its Q3 steps (`EYE_ORIGIN`),
+// The eye the rays left (pxl-spec-core `eye`): its Q3 steps (`EYE_ORIGIN`),
 // FRAC_W bits a unit and wrapping, a block's place on the lattice read off
 // their low bits; whether a ray reports its steps (`EYE_STEPS`); its reach;
 // and the axes and tangents each ray's direction is formed of.
@@ -31,7 +31,7 @@ fn eye_vec3(k: u32) -> vec3f {
 }
 
 // The ray through the pixel at `frag`, its middle, as the cast formed it
-// (gpu-query-shader `pixel_ray`): pxl-portable cast.rs `through`'s mirror,
+// (pxl-shader `pixel_ray`): pxl-spec-core cast.rs `through`'s mirror,
 // off the eye's own words, so the t a ray left is laid along the very
 // direction it was cast in.
 fn through(frag: vec2f, size: vec2f) -> vec3f {

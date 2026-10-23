@@ -19,7 +19,7 @@ use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::division::Subtype;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_portable::ground::majority;
+use pxl_spec_core::ground::majority;
 
 /// The finest tile Overture makes of its divisions (overture-tiles
 /// `profiles/Divisions.java`, `MAXZOOM`): finer views read it.

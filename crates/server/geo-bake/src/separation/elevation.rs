@@ -8,11 +8,11 @@
 use fnv::FnvHashMap;
 
 use crate::terrain::CELL_U;
-use pxl_portable::ground::bicubic;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg3857::u_from_mer;
 use pxl_spec::space::coord::zoom::index_of;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec_core::ground::bicubic;
 
 /// Heights at points from the tiles' elevations, in cells, as the client's
 /// `ground_ele_at` reads the elevation; a point's tile must be held.

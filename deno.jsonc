@@ -119,7 +119,7 @@
 
     "i18next": "npm:i18next@^26.4.2",
 
-    // Dawn, the WebGPU Chrome runs, for the generated kernels' compile (script/portable-wgsl.ts).
+    // Dawn, the WebGPU Chrome runs, for the generated kernels' compile (script/shader-wgsl.ts).
     "webgpu": "npm:webgpu@0.6.2"
   },
 

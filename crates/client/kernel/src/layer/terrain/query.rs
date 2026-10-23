@@ -7,14 +7,14 @@
 //! A column's ways are its square's tree the GPU built, its blocks read
 //! back into the pool's mirror (layer/terrain/window.rs `pool`).
 
-use pxl_portable::area::Shard;
-use pxl_portable::ground::{Bounds, Cell};
-use pxl_portable::window::{self as cells, Found};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, Tile};
+use pxl_spec_core::area::Shard;
+use pxl_spec_core::ground::{Bounds, Cell};
+use pxl_spec_core::window::{self as cells, Found};
 
 use crate::io::source;
 use crate::layer::residency::{Line, Lines, Residency};
@@ -25,17 +25,17 @@ use pxl_spec::space::coord::aabb::Aabb;
 
 impl Residency<TerrainTile> {
     /// The lowest and highest the ground holds over the column `node`'s own
-    /// cells, in leaf cells, and the ways apart (pxl-portable
+    /// cells, in leaf cells, and the ways apart (pxl-spec-core
     /// `ground::Bounds`): the bounds over the cells of `line`'s tile, off
     /// the finest window holding them, one look-up whatever the node's size
     /// (`relief`). A coarser window standing in holds its own cells, which
     /// its bound holds, and names the tile lacked; where no window holds it,
     /// the lack, never nothing. Past the service area no window holds
     /// anything: a reader asks that first, the descent of its shard
-    /// (pxl-portable `area::Shard`). `place` is where a node over it found
+    /// (pxl-spec-core `area::Shard`). `place` is where a node over it found
     /// its cells, or `Found::NONE`, and becomes where its own are
-    /// (pxl-portable `window::step`). Its cells are read at `cell` as the
-    /// GPU reads them (pxl-portable `window::bound_over`); `line` names the
+    /// (pxl-spec-core `window::step`). Its cells are read at `cell` as the
+    /// GPU reads them (pxl-spec-core `window::bound_over`); `line` names the
     /// tile and says whether the window read is its ground's own.
     pub fn relief(&self, line: &Line, place: &mut Found, node: Node<2>, zooms: [Zoom; 2]) -> Answer<Bounds> {
         let (r, from, here) = cells::bound_over(&Windowed, place, zooms, node);
@@ -43,7 +43,7 @@ impl Residency<TerrainTile> {
     }
 
     /// The column `c` at `zoom` off the windows, the area's edge laid on
-    /// it, as the GPU reads it (pxl-portable `window::ground`), stepped from
+    /// it, as the GPU reads it (pxl-spec-core `window::ground`), stepped from
     /// `place`: exact where `line`
     /// says the ground at the window it was read off or coarser, else
     /// coarser, naming its tile (`held`); where no window holds it, the
@@ -142,7 +142,7 @@ impl Query for Residency<TerrainTile> {
     /// ground's and the ways' joined, down to a cell at `cell` under its
     /// lowest, within the node. A node past the service area, no look in
     /// it, holds nothing: known before any of its ground arrives, a shard or
-    /// finer, as every reader knows it (pxl-portable `area::Shard`); a
+    /// finer, as every reader knows it (pxl-spec-core `area::Shard`); a
     /// coarser node may straddle the area's edge and is read.
     fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Aabb>> {
         let node = (zoom, [at[0], at[1]]);

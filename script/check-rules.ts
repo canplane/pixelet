@@ -10,7 +10,7 @@
 
 import { dirname, fromFileUrl, join, normalize } from "@std/path";
 
-import { GENERATED, INPUTS, inputsDigest } from "./portable-wgsl.ts";
+import { GENERATED, INPUTS, inputsDigest } from "./shader-wgsl.ts";
 
 const root = dirname(dirname(fromFileUrl(import.meta.url)));
 
@@ -180,7 +180,7 @@ for (const f of files) {
 // rounds otherwise, or a floor of a half added, is refused in pixelet's code
 // and xpute's; xpute's scalar keeps its named variants, round_half_up and
 // round_half_away, as options a library offers.
-const ROUNDING_ROOTS = ["crates/", "apps/", "gpu-query/", "xpute/"];
+const ROUNDING_ROOTS = ["crates/", "apps/", "crates/client/shader/", "xpute/"];
 const ROUNDING_NAMED = [
   "xpute/rust/kit/src/math/scalar.rs",
   "xpute/rust/kit/src/math/scalar.test.rs",
@@ -212,11 +212,11 @@ for (const f of files) {
 }
 
 // A generated shader names the digest of the sources it was made from
-// (portable-wgsl.ts `inputsDigest`); one the tree has moved past is stale.
+// (shader-wgsl.ts `inputsDigest`); one the tree has moved past is stale.
 const digest = await inputsDigest(root);
 for (const f of GENERATED) {
   const made = read(f)?.split("\n").find((l) => l.startsWith(INPUTS))?.slice(INPUTS.length);
-  if (made !== digest) problems.push(`${f}: stale against pxl-portable's sources; run script/portable-wgsl.ts`);
+  if (made !== digest) problems.push(`${f}: stale against pxl-spec-core's sources; run script/shader-wgsl.ts`);
 }
 
 if (problems.length) {

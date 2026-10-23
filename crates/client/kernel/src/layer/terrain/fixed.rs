@@ -9,14 +9,14 @@
 //! CPU's mirror of the GPU's ways' pool, once; then the room a fill works
 //! in, once.
 
-use pxl_portable::ways::tree::{POOL_BLOCKS, RECORDS_BYTES};
-use pxl_portable::window::{BACK_WORDS, EYE_JOINED_WORDS, LINES_WORDS, READS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::LOOK_LANE;
+use pxl_spec_core::ways::tree::{POOL_BLOCKS, RECORDS_BYTES};
+use pxl_spec_core::window::{BACK_WORDS, EYE_JOINED_WORDS, LINES_WORDS, READS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
 
 use crate::layer::residency::Residency;
-use pxl_portable::window::SQUARES;
 use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_spec_core::window::SQUARES;
 
 /// `.fixed.terrain`, handed in at boot.
 pub static RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
@@ -64,21 +64,21 @@ pub const SEPARATION_BYTES: u32 = separation_plane(SEPARATION_LANES.len());
 
 /// One square's cells as the GPU drew them, read back whole: its columns,
 /// a word a cell (its ground's top), then its levels, its cells as laid and
-/// its ways' tree's root (pxl-portable `window::BACK_WORDS`).
+/// its ways' tree's root (pxl-spec-core `window::BACK_WORDS`).
 pub const CELLS_BYTES: u32 = BACK_WORDS * 4;
 pub const CELLS_LANE_BYTES: u32 = lane(CELLS_BYTES as usize, 1);
 
-/// The eye's windows' levels over their squares (pxl-portable
+/// The eye's windows' levels over their squares (pxl-spec-core
 /// `window::fold`), read back as the GPU folded them (pxl-render
 /// `GroundSquares::joined`).
 pub const JOINED_BYTES: u32 = lane(EYE_JOINED_WORDS as usize, 4);
 
-/// A landing square's ways' records (pxl-portable `ways::tree::RECORDS_WORDS`),
+/// A landing square's ways' records (pxl-spec-core `ways::tree::RECORDS_WORDS`),
 /// a room a read-back, read once it lands into the pool's mirror.
 pub const RECORDS_ROOM_BYTES: u32 = READS * RECORDS_BYTES;
 
 /// The GPU's ways' pool as the CPU mirrors it, block for block at the same
-/// slots (pxl-portable `ways::tree::Read`): its heap words, then its data.
+/// slots (pxl-spec-core `ways::tree::Read`): its heap words, then its data.
 pub const POOL_BYTES: u32 = lane(16 * POOL_BLOCKS as usize, 4);
 
 /// The room a fill works in (window.rs `fill`), a lane each in order: a

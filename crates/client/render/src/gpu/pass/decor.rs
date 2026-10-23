@@ -164,7 +164,7 @@ impl DecorPass {
     }
 
     /// The models the GPU grew, an indirect draw a group whose model is held
-    /// (pxl-portable `scatter::drawn`, a group's models its region `2·group`).
+    /// (pxl-spec-core `scatter::drawn`, a group's models its region `2·group`).
     pub fn draw_grown(&mut self, g: &Gpu, pass: u32, grown: Option<Drawn>, blocks: &Blocks, stage: Stage, (frame, bound): (u32, &mut u32)) {
         let Some(d) = grown.filter(|_| self.grown_block.1 != 0) else { return };
         let pipeline = match stage {
@@ -178,7 +178,7 @@ impl DecorPass {
         }
         g.set_bind_group(pass, 3, self.grown_block.1, &[]);
         let mut mesh_bound = 0;
-        for group in 0..pxl_portable::scatter::GROUPS {
+        for group in 0..pxl_spec_core::scatter::GROUPS {
             let Some((model, vertex_cnt, index_cnt, skin)) = self.model_of(g, group, blocks) else { continue };
             g.set_bind_group(pass, 1, self.grown_uniforms.1, &[d.uniform_at(2 * group)]);
             g.set_bind_group(pass, 2, skin, &[]);

@@ -29,10 +29,10 @@ use crate::layer::object::meta::placed;
 use crate::layer::object::store::tree_key;
 use crate::layer::residency::Line;
 use crate::model::registry::Models;
-use pxl_portable::area::{self, Shard};
-use pxl_portable::cast;
-use pxl_portable::overwrite::{self, Held};
-use pxl_portable::window::Found;
+use pxl_spec_core::area::{self, Shard};
+use pxl_spec_core::cast;
+use pxl_spec_core::overwrite::{self, Held};
+use pxl_spec_core::window::Found;
 
 /// How decor is struck: against its models, where the frame drawing at `tau` holds it.
 #[derive(Clone, Copy)]
@@ -87,7 +87,7 @@ fn finest(fits: impl Fn(f64) -> bool) -> Zoom {
 
 /// What is placed in the 27 nodes about the node a striking walk is at, at
 /// each zoom it went through: the objects' tree's cursors there
-/// (pxl-portable `overwrite::Held`), each zoom's the children of the zoom
+/// (pxl-spec-core `overwrite::Held`), each zoom's the children of the zoom
 /// over's, as a node's neighbours are its parent's neighbours' children
 /// (Samet 1989, neighbour finding). A walk enters a node through its
 /// parent, so each zoom's is stepped from the one over in 27 `child` reads,
@@ -150,7 +150,7 @@ impl Around {
 
     /// The 3 × 3 columns about `(zoom, c)` read at its tile's cells: each
     /// column's line off its parent column's (`line_under`), its cells found
-    /// from where its parent column's were (pxl-portable `window::step`),
+    /// from where its parent column's were (pxl-spec-core `window::step`),
     /// and its relief's highest, read once for every node under it. A walk
     /// enters a node through its parent, so each zoom's is stepped from the
     /// one over's, never walked from the top.
@@ -225,11 +225,11 @@ impl Around {
 
 impl<'a> World<'a> {
     /// Whether the ground grows `i`, a candidate of `decor` standing at the
-    /// leaves' cells, as the frame drawing them draws it (pxl-portable
+    /// leaves' cells, as the frame drawing them draws it (pxl-spec-core
     /// `grows`): its box void, what is under it a look it grows on, and no
     /// placed decor claiming its room.
     pub fn grows(&self, decor: &Decor, i: &Instance) -> bool {
-        grown_of(i).is_some_and(|g| pxl_portable::scatter::grows(&mut Asked::new(self), decor.row, GROUND.cell(), &g))
+        grown_of(i).is_some_and(|g| pxl_spec_core::scatter::grows(&mut Asked::new(self), decor.row, GROUND.cell(), &g))
     }
 
     /// What the ground stands on the leaf `cell`, each decor's, handed to

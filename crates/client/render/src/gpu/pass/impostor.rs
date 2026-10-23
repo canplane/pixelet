@@ -168,7 +168,7 @@ impl ImpostorPass {
     }
 
     /// The sprites the GPU grew, an indirect draw a group whose layer is
-    /// drawn (pxl-portable `scatter::drawn`, a group's sprites its region
+    /// drawn (pxl-spec-core `scatter::drawn`, a group's sprites its region
     /// `2·group + 1`).
     pub fn draw_grown(&self, g: &Gpu, pass: u32, grown: Option<Drawn>, groups: u32, (frame, bound): (u32, &mut u32)) {
         let Some(d) = grown.filter(|_| self.grown_block.1 != 0) else { return };

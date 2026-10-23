@@ -1,6 +1,6 @@
 // pxl-render/gpu/grown.rs
 
-//! The decor the GPU grows and draws (pxl-portable `scatter`): what the
+//! The decor the GPU grows and draws (pxl-spec-core `scatter`): what the
 //! ground grows in the eye's windows over the cast's world (`decor_cs`),
 //! placed decor handed as records beside it — grown again only in the eye
 //! slots what it reads changed in (`decor_mark_cs`, `Grows`), the records
@@ -12,9 +12,9 @@
 //! (`decor_place_cs`). The CPU hands what only it knows and never reads
 //! what is grown.
 
-use pxl_portable::decor::{COUNTS, DECORS};
-use pxl_portable::eye;
-use pxl_portable::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
+use pxl_spec_core::decor::{COUNTS, DECORS};
+use pxl_spec_core::eye;
+use pxl_spec_core::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
 
 use crate::frame::shader::record::compute;
 use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE};
@@ -28,7 +28,7 @@ pub struct DecorFrame<'a> {
     /// Per kind, the window zooms it is grown at, a bit each over the first
     /// window's (`decor_cs`).
     pub shown: &'a [u32],
-    /// pxl-portable `scatter::drawn`'s frame words, `PARAM_WORDS` of them.
+    /// pxl-spec-core `scatter::drawn`'s frame words, `PARAM_WORDS` of them.
     pub params: &'a [u32],
     /// Placed decor, a record each as `decor_cs` writes one: its kind,
     /// variant and turn, then its box's min corner in leaf cells; read where
@@ -38,7 +38,7 @@ pub struct DecorFrame<'a> {
     /// block is drawn.
     pub translation: [f32; 3],
     /// What overwrites wrote since the last frame, `scatter::EDITS` boxes
-    /// of leaf cells at most (pxl-portable `scatter::meets`): the slots
+    /// of leaf cells at most (pxl-spec-core `scatter::meets`): the slots
     /// whose decor they reach grow again.
     pub edits: &'a [[i32; 4]],
 }
@@ -55,7 +55,7 @@ pub struct Grows<'a> {
     pub window: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
     pub filled: u32,
-    /// The eye as the cast's (pxl-portable `eye`), of which the count pass
+    /// The eye as the cast's (pxl-spec-core `eye`), of which the count pass
     /// reads its place and the zooms it asks (`ORIGIN`, `TAU`, `RANGE`).
     pub eye: &'a [u32; eye::WORDS],
 }
@@ -128,7 +128,7 @@ impl Grown {
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let rows = buffer(core::mem::size_of_val(&DECORS) as u32, storage);
         let table = DECORS;
-        // SAFETY: the rows are `repr(C)` words alone (pxl-portable decor.spec.rs), read while `table` lives.
+        // SAFETY: the rows are `repr(C)` words alone (pxl-spec-core decor.spec.rs), read while `table` lives.
         let words = unsafe { core::slice::from_raw_parts(table.as_ptr().cast::<u32>(), core::mem::size_of_val(&table) / 4) };
         g.write_buffer(rows, 0, bytes(words));
         Grown {
@@ -374,7 +374,7 @@ impl Grown {
             return;
         }
         // A workgroup a slot, reading the records its head holds, then the
-        // placed decor's a workgroup's lanes each (gpu-query-shader
+        // placed decor's a workgroup's lanes each (pxl-shader
         // `records`): the records held, not the room.
         let records = |w: [u32; 3]| scatter::EYE_SLOTS + self.placed_count.div_ceil(w[0]);
         let passes = [

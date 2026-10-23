@@ -15,7 +15,7 @@
 // words are frame/shader/words.rs's.
 
 // A face's outward normal by its number, 2·axis plus one down the axis, the
-// order of a ray's face (pxl-portable ray.rs).
+// order of a ray's face (pxl-spec-core ray.rs).
 const FACE_NORMAL = array<vec3f, 6>(
   vec3f(1.0, 0.0, 0.0), vec3f(-1.0, 0.0, 0.0),
   vec3f(0.0, 1.0, 0.0), vec3f(0.0, -1.0, 0.0),

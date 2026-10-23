@@ -28,24 +28,24 @@ fn main() {
         std::fs::write(out.join(name), shipped).expect("the stripped shader");
     }
     // A unit's zoom, a unit's fraction bits in Q3 and the ground's cell, from
-    // pxl-portable, where the cast reads them: a ray is painted by its
+    // pxl-spec-core, where the cast reads them: a ray is painted by its
     // block's zoom against these, its block placed off the eye's Q3 steps.
     let lattice = format!(
         "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\n",
-        pxl_portable::UNIT_ZOOM,
-        pxl_portable::FRAC_W,
-        pxl_portable::lattice::GROUND.cell()
+        pxl_spec_core::UNIT_ZOOM,
+        pxl_spec_core::FRAC_W,
+        pxl_spec_core::lattice::GROUND.cell()
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
-    // A ray's first word, its fields as the cast writes them (pxl-portable
+    // A ray's first word, its fields as the cast writes them (pxl-spec-core
     // ray.rs), and each field read as the cast reads it.
-    use pxl_portable::ray::*;
+    use pxl_spec_core::ray::*;
     let field = |name: &str, shift: u32, bits: u32| format!("fn ray_{name}(w: u32) -> u32 {{ return (w >> {shift}u) & {}u; }}\n", (1u32 << bits) - 1);
     let ray = [field("value", 0, VALUE_BITS), field("face", FACE_SHIFT, FACE_BITS), field("zoom", ZOOM_SHIFT, ZOOM_BITS)];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
-    // The eye's words the screen pass reads (pxl-portable eye.rs), each its
+    // The eye's words the screen pass reads (pxl-spec-core eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.
-    use pxl_portable::eye::{FORWARD, ORIGIN, REACH, RIGHT, STEPS, TAN, UP};
+    use pxl_spec_core::eye::{FORWARD, ORIGIN, REACH, RIGHT, STEPS, TAN, UP};
     let last = (ORIGIN + 2).max(STEPS).max(REACH).max(FORWARD + 2).max(RIGHT + 2).max(UP + 2).max(TAN + 1);
     let eye = format!(
         "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_STEPS: u32 = {STEPS}u;\nconst EYE_REACH: u32 = {REACH}u;\nconst EYE_FORWARD: u32 = {FORWARD}u;\nconst EYE_RIGHT: u32 = {RIGHT}u;\nconst EYE_UP: u32 = {UP}u;\nconst EYE_TAN: u32 = {TAN}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
@@ -146,8 +146,8 @@ fn words() -> String {
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
-        // Q3's Z, the world's height about sea level (pxl-portable).
-        format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_portable::HEIGHT_BITS),
+        // Q3's Z, the world's height about sea level (pxl-spec-core).
+        format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_spec_core::HEIGHT_BITS),
     ]
     .concat()
 }

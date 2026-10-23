@@ -5,9 +5,9 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
-use pxl_portable::wrap_index;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
+use pxl_spec_core::wrap_index;
 
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};

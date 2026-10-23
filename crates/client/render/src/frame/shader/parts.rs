@@ -32,42 +32,42 @@ pub const SHADER_IMPOSTOR: u32 = 21;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
 pub const SHADER_BADGE_REGION: u32 = 24;
-/// The eye's rays drawn at their pixels (pxl-portable ray.rs).
+/// The eye's rays drawn at their pixels (pxl-spec-core ray.rs).
 pub const SHADER_SCREEN_RAYS: u32 = 25;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
-/// pxl-portable's descent (script/portable-wgsl.ts): its one compute entry.
+/// pxl-spec-core's descent (script/shader-wgsl.ts): its one compute entry.
 pub const SHADER_CAST: u32 = 26;
 /// Each newly held square's levels over its columns, a level a dispatch,
-/// generated with the cast from pxl-portable's `fill::level` and
+/// generated with the cast from pxl-spec-core's `fill::level` and
 /// `window::join`: its one compute entry.
 pub const SHADER_BOUND: u32 = 27;
 /// Each newly held square's columns' ground tops off its samples,
-/// generated with the cast from pxl-portable's `ground::height`: its one
+/// generated with the cast from pxl-spec-core's `ground::height`: its one
 /// compute entry.
 pub const SHADER_HEIGHTS: u32 = 28;
 /// The decor the ground grows in the eye's windows, generated with the cast
-/// from pxl-portable's `scatter`: its one compute entry.
+/// from pxl-spec-core's `scatter`: its one compute entry.
 pub const SHADER_GROWN: u32 = 29;
 /// What `SHADER_GROWN` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
-/// args; each drawn into the decor block: pxl-portable `scatter::drawn`.
+/// args; each drawn into the decor block: pxl-spec-core `scatter::drawn`.
 pub const SHADER_GROWN_COUNT: u32 = 30;
 pub const SHADER_GROWN_ARGS: u32 = 31;
 pub const SHADER_GROWN_PLACE: u32 = 32;
 /// Each newly held terrain frame's ways, its columns' runs along z off its
-/// lines, generated with the cast from pxl-portable's `ways`: its one
+/// lines, generated with the cast from pxl-spec-core's `ways`: its one
 /// compute entry.
 pub const SHADER_WAYS: u32 = 33;
 /// Which eye slots' decor grows again this frame, listed for
 /// `SHADER_GROWN`'s dispatch: its one compute entry.
 pub const SHADER_GROWN_MARK: u32 = 34;
 /// The eye's windows folded over their squares, generated with the cast
-/// from pxl-portable's `window::fold`: its one compute entry.
+/// from pxl-spec-core's `window::fold`: its one compute entry.
 pub const SHADER_JOINED: u32 = 35;
 /// The air's volume, a column of froxels a workgroup (atmos_froxel.wgsl):
 /// its one compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 36;
-/// Each handed square's ways as blocks in one pool (pxl-portable
+/// Each handed square's ways as blocks in one pool (pxl-spec-core
 /// `ways::tree`), generated with the cast: a re-filled square's old blocks
 /// given back, its tree built off the pool's stack, the blocks its build
 /// gave back pushed after: a compute entry each.
@@ -75,19 +75,19 @@ pub const SHADER_WAYS_FREE: u32 = 37;
 pub const SHADER_WAYS_TREE: u32 = 38;
 pub const SHADER_WAYS_FREED: u32 = 39;
 /// The camera grid's beam rays, a thread a corner, and where each cell's
-/// pixels start off them, generated with the cast from pxl-portable's
+/// pixels start off them, generated with the cast from pxl-spec-core's
 /// `beam` (doc/minutes/20261022-a-cell-casts-a-beam.md): a compute entry
 /// each.
 pub const SHADER_BEAM: u32 = 40;
 pub const SHADER_CELLS: u32 = 41;
 /// The pixels the cast's reading walk missed, walked again writing the
 /// observed pyramid; the dispatch they run by; and the pyramid forgotten
-/// (pxl-portable `observed`): a compute entry each.
+/// (pxl-spec-core `observed`): a compute entry each.
 pub const SHADER_MISS: u32 = 42;
 pub const SHADER_ARGS: u32 = 43;
 pub const SHADER_FORGET: u32 = 44;
 /// The samples, a thread each, resumed from their cells' starts and walked
-/// to the blocks the pixels about them take (pxl-portable `beam::samples`):
+/// to the blocks the pixels about them take (pxl-spec-core `beam::samples`):
 /// a compute entry.
 pub const SHADER_SAMPLE: u32 = 45;
 pub const SHADERS: u32 = 46;

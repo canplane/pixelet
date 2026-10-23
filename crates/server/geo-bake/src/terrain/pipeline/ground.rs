@@ -5,11 +5,11 @@
 //! `u32`.
 
 use crate::terrain::CELL_U;
-use pxl_portable::lattice::CELL_CENTER;
-use pxl_portable::ways;
 use pxl_spec::bake::tile::terrain::{Ground, GroundId};
 use pxl_spec::block::cube::ground;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
+use pxl_spec_core::lattice::CELL_CENTER;
+use pxl_spec_core::ways;
 
 use crate::terrain::pipeline::feature::{Feature, Layer, P};
 
@@ -114,7 +114,7 @@ pub(crate) fn render_polygon<T: Copy>(points: &[P], value: T, cells: &mut [T], h
     }
 }
 
-/// Every cell whose center the way covers along a segment (pxl-portable
+/// Every cell whose center the way covers along a segment (pxl-spec-core
 /// ways.rs `on_way`, the rule a column is crossed by), its line cut square
 /// where `cut` says at its first and last.
 fn render_linear_feat(points: &[P], value: GroundId, cells: &mut [GroundId], width_cell: f64, cut: [bool; 2], mask: Sea) {

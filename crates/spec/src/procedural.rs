@@ -1,7 +1,7 @@
 // pxl-spec/procedural.rs
 
 //! What the client makes and the bake never stores: scattered decor, and
-//! where a tile's bridge piers stand (pxl-portable ways.rs). Pure functions
+//! where a tile's bridge piers stand (pxl-spec-core ways.rs). Pure functions
 //! of the world and a seed, so every reader agrees.
 
 use crate::space::coord::adapter::epsg3857::u_per_m;
@@ -9,14 +9,14 @@ use crate::space::coord::zoom::units;
 use crate::space::layer::lattice::TILE_CELLS;
 use crate::space::layer::tile::Tile;
 
-/// A node's seed and the caves, one source with the GPU's (pxl-portable).
-pub use pxl_portable::caves::{node_seed, Cave, CAVE_COARSEST};
-use pxl_portable::ways::{Stations, INTERVAL_M};
-use pxl_portable::LEAF_CELL;
+/// A node's seed and the caves, one source with the GPU's (pxl-spec-core).
+pub use pxl_spec_core::caves::{node_seed, Cave, CAVE_COARSEST};
+use pxl_spec_core::ways::{Stations, INTERVAL_M};
+use pxl_spec_core::LEAF_CELL;
 
-// ---- scatter: portable's, for the CPU's readers of one cell ----
+// ---- scatter: pxl-spec-core's, for the CPU's readers of one cell ----
 
-pub use pxl_portable::scatter::{before, each_candidate, meet, scatter_at, side_of, Candidate, ALIGN_NEIGHBOR_RADIUS};
+pub use pxl_spec_core::scatter::{before, each_candidate, meet, scatter_at, side_of, Candidate, ALIGN_NEIGHBOR_RADIUS};
 
 // ---- piers ----
 
@@ -38,12 +38,12 @@ impl Frame {
 
     /// Leaf cells a ground metre over the tile, of height as of breadth: the
     /// scale where its south-west corner lies, one value a tile
-    /// (pxl-portable `cells_of_m`).
+    /// (pxl-spec-core `cells_of_m`).
     pub fn per_m(self) -> f32 {
         (u_per_m(self.corner[1]) / units(LEAF_CELL)) as f32
     }
 
-    /// Where its piers may stand, in its cells (pxl-portable ways.rs
+    /// Where its piers may stand, in its cells (pxl-spec-core ways.rs
     /// `Stations`): each beam's lattice of stations, at its spacing in
     /// ground metres where the tile lies, and where its corner falls in it;
     /// and the leaf cells its cell spans.

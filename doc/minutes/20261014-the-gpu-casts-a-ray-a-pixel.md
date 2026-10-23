@@ -37,7 +37,7 @@ of 20261012.
 
 ## The structure
 
-**One source, two compilers.** `pxl-portable` (`crates/portable`,
+**One source, two compilers.** `pxl-spec-core` (`crates/spec/core`,
 `#![no_std]`, `gpu-portable` in its header) holds what the CPU and the GPU
 both compute:
 
@@ -49,7 +49,7 @@ both compute:
 - the ray's descent (`cast::first`, generic over `Query`).
 
 pxl-spec re-exports it. rust-gpu compiles the same crate to WGSL
-(`script/portable-wgsl.ts`, in a Linux container), and the generated
+(`script/shader-wgsl.ts`, in a Linux container), and the generated
 `crates/client/render/src/frame/shader/cast.gen.wgsl` is checked in. `--check`
 says whether it is current, so no everyday build needs rust-gpu.
 

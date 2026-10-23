@@ -11,11 +11,11 @@ pub mod source;
 pub mod way;
 
 use postgres::Client;
-use pxl_portable::ways;
 use pxl_spec::bake::separation::Form;
 use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, G3857};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec_core::ways;
 
 use crate::terrain::repository::TerrainRepository;
 use crate::terrain::CELL_U;
@@ -45,7 +45,7 @@ pub struct Line {
     pub clear: u8,
 }
 
-/// Each point's coarsest zoom (pxl-portable `ways::coarsest`) on the line
+/// Each point's coarsest zoom (pxl-spec-core `ways::coarsest`) on the line
 /// through `points`, its XY in DB coordinates and its height in leaf cells:
 /// its effective area on the line, in leaf cells² — Visvalingam–Whyatt, as
 /// TopoJSON's presimplify and mapshaper weigh a point: the triangle it makes

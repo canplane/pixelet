@@ -32,7 +32,7 @@ visit may compose the query whole.
     about 435 lane-cycles a visit.
   - The gap is the 9× still needed, and it is all in the weight of a visit.
 - **Why a visit is heavy.** At every visit `world::node`
-  (`crates/portable/src/world.rs`) composes the world again from its
+  (`crates/spec/core/src/world.rs`) composes the world again from its
   sources:
   - what is placed;
   - the ground over the zooms asked (`window::bound_over`), its held

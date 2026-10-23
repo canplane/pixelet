@@ -63,7 +63,7 @@ pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 27;
 pub const PIPELINE_BADGE_REGION: u32 = 28;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 29;
-/// The eye's rays, opaque at their depth (pxl-portable ray.rs).
+/// The eye's rays, opaque at their depth (pxl-spec-core ray.rs).
 pub const PIPELINE_SCREEN_RAYS: u32 = 30;
 pub const PIPELINES: u32 = 31;
 

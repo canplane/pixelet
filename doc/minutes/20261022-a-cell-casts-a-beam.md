@@ -136,11 +136,11 @@ the threads ran in, so the image is a function of the world and the eye
 
 ## What changes
 
-- **pxl-portable `cast`:** a beam stop rule beside `Until::Fills` and
+- **pxl-spec-core `cast`:** a beam stop rule beside `Until::Fills` and
   `Until::Air`; a walk that starts from a line's node at a distance, its
   stack read from the line, which every eye's ray takes and a walk from the
   root is the case of.
-- **gpu-query shader:** a pass a corner for the beam rays, a pass a cell
+- **pxl-shader:** a pass a corner for the beam rays, a pass a cell
   for the window, and the cast a pixel from its cell's start.
 - **The renderer:** the beam's buffer, its lines and the cells' starts, and
   the three passes in order.
@@ -191,7 +191,7 @@ cast against the same tree casting every pixel from the root: 51 pixels of
 5,627,328 differ at E120, 56 at W120, 20 at E600, each alone, and where
 looked at, a tree's trunk standing where the ground meets it. The CPU's
 walks agree on every ray, so these are the GPU's f32, which is not strictly
-IEEE (pxl-portable `cast`, its module note): two ways to one block can part
+IEEE (pxl-spec-core `cast`, its module note): two ways to one block can part
 in the last bit where a ray grazes an edge. A comparison, not a proof.
 
 Not yet known: what a frame's cast costs, and how that follows the window,

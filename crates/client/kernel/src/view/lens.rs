@@ -6,11 +6,11 @@
 //! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md, "What is
 //! drawn").
 
-use pxl_portable::eye;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::origin;
+use pxl_spec_core::eye;
 
 use crate::query::asked;
 use crate::view::frame::pose::view;
@@ -69,8 +69,8 @@ impl Lens {
     }
 }
 
-/// What a GPU's cast of the screen's rays reads of the eye (pxl-portable
-/// `eye`, gpu-query-shader `Eye`): its Q3 position as a ray's origin, over
+/// What a GPU's cast of the screen's rays reads of the eye (pxl-spec-core
+/// `eye`, pxl-shader `Eye`): its Q3 position as a ray's origin, over
 /// the world where it stands there (pxl-spec `world::origin`), and whether each ray
 /// reports the nodes its descent asked, not what it met; the unit forward
 /// and the reach; the unit right and τ; the unit up; the tangents of the

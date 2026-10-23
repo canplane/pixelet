@@ -1,0 +1,436 @@
+// pxl-spec-core/fill.rs
+
+//! gpu-portable: a square's fill, a thread at a time, off its record in the
+//! frame's fresh list (`window::HANDED_WORDS`, its words, looks, samples and
+//! lines) into the buffer its words lie in from `base`
+//! (`window::SQUARE_WORDS`): each column's ground
+//! top off its tile's samples and its cell as laid (`heights`), its ways'
+//! runs off its lines into its scratch, the frame's (`window::FIRSTS_AT`),
+//! in three passes (`ways`, a workgroup's scan between them,
+//! `stretch_runs` and `scanned`), and its levels, level 0 each column's own
+//! (`level`), and its ways' tree off the runs (`ways::tree`). A GPU runs
+//! each pass a thread a column or entry
+//! (pxl-shader `heights_cs`, `ways_cs`, `bound_cs`); a bake runs its
+//! columns' passes in order over one square (`square`), so the runs it
+//! sizes a tile's room by are the ones a GPU writes.
+
+use crate::area::Shard;
+use crate::window::{
+    self, column_top, handed_at, Squares, COLUMNS_AT, ELE_AT, FIRSTS_AT, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_SQUARE, FRESH_WORDS, LAID_AT, LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT,
+    LOOKS_AT, RUNS_AT, RUNS_SQUARE, SQUARE, SQUARE_CELLS, SQUARE_WORDS,
+};
+use crate::{at, ground, ways, Zoom};
+
+/// Word `i` of `s` set to `v`, as `at` reads: totally, none past it, so no
+/// store aborts.
+pub fn put(s: &mut [u32], i: u32, v: u32) {
+    if (i as usize) < s.len() {
+        // SAFETY: just bounded by the slice's own length.
+        unsafe { *s.get_unchecked_mut(i as usize) = v };
+    }
+}
+
+/// Column word `i` off the square at `base` (`window::COLUMN_WORDS`).
+pub fn column_of(ground: &[u32], base: u32, i: u32) -> u32 {
+    at(ground, base + COLUMNS_AT + i)
+}
+
+/// Entry `at` of level `j` off the square at `base`, its two bound words
+/// (`window::LEVEL_ENTRY_WORDS`).
+pub fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
+    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * window::level_index(j, [x, y]);
+    [at(ground, e) as i32, at(ground, e + 1) as i32]
+}
+
+/// Cell `i` as laid off the square at `base` (`window::LAID_WORDS`).
+pub fn laid_of(ground: &[u32], base: u32, i: u32) -> u32 {
+    window::laid_at(at(ground, base + LAID_AT + i / 2), i)
+}
+
+/// The samples handed in the record at `rec` of a fresh list (`ELE_AT`),
+/// two a word, low first, each its half's sign carried up:
+/// `ground::height`'s.
+fn samples(fresh: &[u32], rec: u32) -> impl Fn(usize) -> i32 + '_ {
+    move |i: usize| ((at(fresh, rec + ELE_AT + i as u32 / 2) >> (16 * (i as u32 % 2))) << 16) as i32 >> 16
+}
+
+/// The handed square `k` of a fresh list: its record's first word, its
+/// square's first, where it lies in its tile and its cells' zoom.
+fn handed(fresh: &[u32], k: u32) -> (u32, u32, [u32; 2], Zoom) {
+    let rec = handed_at(k);
+    (
+        rec,
+        at(fresh, rec + FRESH_SQUARE) * SQUARE_WORDS,
+        window::place_of(at(fresh, rec + FRESH_PLACE)),
+        at(fresh, rec + FRESH_CELL),
+    )
+}
+
+/// A square being filled, on its own: what `level` folds.
+pub struct Fresh<'a> {
+    pub ground: &'a [u32],
+    pub base: u32,
+}
+
+impl Squares for Fresh<'_> {
+    fn present(&self, _: u32, _: [i32; 2]) -> (u32, bool) {
+        (0, true)
+    }
+    /// A square on its own is no window's.
+    fn square(&self, _: u32, _: u32) -> ([i32; 2], bool) {
+        ([0; 2], false)
+    }
+    fn joined(&self, _: u32, _: u32) -> [u32; window::JOINED_WORDS as usize] {
+        [0; window::JOINED_WORDS as usize]
+    }
+    fn origin(&self, _: u32) -> ([i32; 2], bool) {
+        ([0; 2], false)
+    }
+    /// Its own look four times: what `level` folds reads no look.
+    fn look(&self, _: u32, _: u32, i: u32) -> u32 {
+        ground::word([laid_of(self.ground, self.base, i) & 0xff; 4])
+    }
+    fn column(&self, _: u32, _: u32, i: u32) -> u32 {
+        column_of(self.ground, self.base, i)
+    }
+    fn level(&self, _: u32, _: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        level_of(self.ground, self.base, j, at)
+    }
+    fn laid(&self, _: u32, _: u32, i: u32) -> u32 {
+        laid_of(self.ground, self.base, i)
+    }
+    fn root(&self, _: u32, _: u32) -> u32 {
+        at(self.ground, self.base + window::ROOT_AT)
+    }
+}
+
+/// A handed square's runs in its scratch from `at` (`window::FIRSTS_AT`,
+/// `window::RUNS_AT`), as its fill wrote them.
+pub struct Scratch<'a> {
+    pub words: &'a [u32],
+    pub at: u32,
+}
+
+impl ways::tree::Runs for Scratch<'_> {
+    fn column(&self, i: u32) -> [u32; 2] {
+        [at(self.words, self.at + FIRSTS_AT + i), at(self.words, self.at + FIRSTS_AT + i + 1)]
+    }
+    fn run(&self, r: u32) -> u32 {
+        at(self.words, self.at + RUNS_AT + r)
+    }
+}
+
+/// Where the square a frame hands `k`-th has its scratch
+/// (`ways::tree::SCRATCH_WORDS` each).
+pub const fn scratch_at(k: u32) -> u32 {
+    k * ways::tree::SCRATCH_WORDS
+}
+
+/// The square handed `k`-th in `fresh` as its ways' tree is of: its cells'
+/// zoom and its index, its first cell's over its side (`ways::tree::Of`).
+pub fn of(fresh: &[u32], k: u32) -> ways::tree::Of {
+    let rec = handed_at(k);
+    let first = [at(fresh, rec + FRESH_FIRST) as i32, at(fresh, rec + FRESH_FIRST + 1) as i32];
+    ways::tree::Of {
+        cell: at(fresh, rec + FRESH_CELL),
+        at: [first[0] >> window::SQUARE_SHIFT, first[1] >> window::SQUARE_SHIFT],
+    }
+}
+
+/// A square being filled, as the ways' rule reads it (`window::Square`):
+/// its laid cells in its lane, its lines and samples in its record, and
+/// where it is as handed (`window::FRESH_WORDS`).
+struct Filling<'a> {
+    ground: &'a [u32],
+    base: u32,
+    fresh: &'a [u32],
+    rec: u32,
+    cell: u32,
+    place: [u32; 2],
+}
+
+impl window::Square for Filling<'_> {
+    fn cell(&self) -> u32 {
+        self.cell
+    }
+    fn place(&self) -> [u32; 2] {
+        self.place
+    }
+    fn line(&self, k: u32) -> u32 {
+        at(self.fresh, self.rec + LINES_AT + k)
+    }
+    fn laid(&self, i: u32) -> u32 {
+        laid_of(self.ground, self.base, i)
+    }
+    /// A column of the square's own as `heights` wrote it (`column_top`),
+    /// read and not drawn again; the ring about it, which no column word
+    /// holds, off its tile's samples as `heights` draws a cell
+    /// (`ground::height`).
+    fn height(&self, c: [i32; 2]) -> i32 {
+        let side = SQUARE as i32;
+        if c[0] >= 0 && c[1] >= 0 && c[0] < side && c[1] < side {
+            return column_top(column_of(self.ground, self.base, window::index_of([c[0] as u32, c[1] as u32])));
+        }
+        let first = [(self.place[0] * SQUARE) as i32, (self.place[1] * SQUARE) as i32];
+        ground::height(samples(self.fresh, self.rec), [first[0] + c[0], first[1] + c[1]])
+    }
+}
+
+/// Column `[x, y]` of the square a frame hands `k`-th in `fresh`: its
+/// ground's top (`ground::height`) off its tile's samples, a gone cell's
+/// (its own look `UNKNOWN`, past the area) the Earth's at sea level, so it
+/// reads as the Earth (`area::laid`); its runs' first the ways' to write
+/// (`ways`); and, a column of an even `x`, its cell and
+/// the next as laid, the word they share (`window::LAID_WORDS`), so each
+/// word has one writer: its own look off its four at the square's zoom
+/// (`ground::own`), and at a leaf's cells or finer, which of the leaf
+/// cells about its own are past the area (`area::gone_ring`), off the
+/// square's shard.
+pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
+    let (rec, base, place, cell) = handed(fresh, k);
+    let (first, shard) = (
+        [at(fresh, rec + FRESH_FIRST) as i32, at(fresh, rec + FRESH_FIRST + 1) as i32],
+        Shard::of_word(at(fresh, rec + FRESH_SHARD)),
+    );
+    let i = window::index_of([x, y]);
+    let own = ground::own(at(fresh, rec + LOOKS_AT + i), cell);
+    let top = if own == ground::UNKNOWN {
+        crate::SEA_LEVEL
+    } else {
+        ground::height(samples(fresh, rec), [(place[0] * SQUARE + x) as i32, (place[1] * SQUARE + y) as i32])
+    };
+    put(ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
+    if x % 2 == 1 {
+        return;
+    }
+    // The leaf cells gone about each: finer than the leaves, the pair lies
+    // in one leaf cell, whose ring is both's.
+    let gone = |k: u32| {
+        let b = [crate::wrap_index(cell, first[0] + (x + k) as i32), first[1] + y as i32];
+        let s = cell - crate::LEAF_CELL;
+        crate::area::gone_ring(shard, (cell, b), [b[0] >> s, b[1] >> s])
+    };
+    let gone0 = if cell >= crate::LEAF_CELL { gone(0) } else { 0 };
+    let gone1 = if cell == crate::LEAF_CELL { gone(1) } else { gone0 };
+    let next = ground::own(at(fresh, rec + LOOKS_AT + i + 1), cell);
+    put(ground, base + LAID_AT + i / 2, window::laid_half(own, gone0) | window::laid_half(next, gone1) << 16);
+}
+
+/// Cell `[x, y]`'s four looks of the square a frame hands `k`-th in
+/// `fresh`, as handed (`LOOKS_AT`), into `looks`, a word a cell,
+/// `SQUARE_CELLS` a square in the squares' order: what a ray's hit is
+/// drawn by (`ground::Cell::four`), the one read of them past the fill.
+pub fn look(looks: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
+    let rec = window::handed_at(k);
+    let i = window::index_of([x, y]);
+    put(looks, at(fresh, rec + FRESH_SQUARE) * SQUARE_CELLS + i, at(fresh, rec + LOOKS_AT + i));
+}
+
+/// The ways of the square a frame hands `k`-th in `fresh`, for column `i`,
+/// into its scratch in `scratch` (`scratch_at`): unless `write`, its runs
+/// counted into its first; where `write`, once each column's first is
+/// where its runs begin (`scanned`), its runs written from it — each off
+/// its spans and those beside it (`ways::around`) read along z
+/// (`ways::runs`). A column's spans, `u32::MAX` where its or those beside
+/// it do not fit `ways::SPANS`; 0 for the rest.
+pub fn ways(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, write: bool, i: u32) -> u32 {
+    let (rec, base, place, cell) = handed(fresh, k);
+    let firsts = scratch_at(k) + FIRSTS_AT;
+    if i >= SQUARE_CELLS {
+        return 0;
+    }
+    let (around, fits) = {
+        let filling = Filling {
+            ground,
+            base,
+            fresh,
+            rec,
+            cell,
+            place,
+        };
+        let [x, y] = window::of_index(i);
+        crate::ways::around(&filling, [x as i32, y as i32])
+    };
+    let (from, room) = if write { (at(scratch, firsts + i), RUNS_SQUARE) } else { (0, 0) };
+    let n = put_runs(scratch, scratch_at(k), &around, cell, from, room);
+    if !write {
+        put(scratch, firsts + i, n);
+    }
+    if fits {
+        around.spans[0].n
+    } else {
+        u32::MAX
+    }
+}
+
+/// The threads that sum a square's columns' counts into their firsts, a
+/// workgroup (pxl-shader `ways_cs`), each over a stretch of the
+/// columns in their order.
+pub const SCAN_THREADS: u32 = 64;
+const STRETCH: u32 = SQUARE_CELLS / SCAN_THREADS;
+
+/// Thread `t`'s stretch of the square handed `k`-th: its columns' runs, as
+/// counted into their firsts in its scratch (`ways`), summed.
+pub fn stretch_runs(scratch: &[u32], k: u32, t: u32) -> u32 {
+    let firsts = scratch_at(k) + FIRSTS_AT + t * STRETCH;
+    let (mut n, mut k) = (0, 0);
+    while k < STRETCH {
+        (n, k) = (n + at(scratch, firsts + k), k + 1);
+    }
+    n
+}
+
+/// Thread `t`'s stretch of the square handed `k`-th, its columns' firsts
+/// in its scratch written where their runs begin, `before` the runs of the
+/// stretches before it (an exclusive scan of `stretch_runs` over the
+/// threads, Blelloch 1990): each column's the runs before it; the last
+/// thread's, the square's count past them (`window::FIRSTS_AT`).
+pub fn scanned(scratch: &mut [u32], k: u32, t: u32, before: u32) {
+    let firsts = scratch_at(k) + FIRSTS_AT;
+    let (mut n, mut k) = (before, t * STRETCH);
+    while k < (t + 1) * STRETCH {
+        let count = at(scratch, firsts + k);
+        put(scratch, firsts + k, n);
+        (n, k) = (n + count, k + 1);
+    }
+    if t + 1 == SCAN_THREADS {
+        put(scratch, firsts + SQUARE_CELLS, n);
+    }
+}
+
+const _: () = assert!(STRETCH * SCAN_THREADS == SQUARE_CELLS, "the stretches cover the columns");
+
+/// A column's runs off its spans and those beside it (`ways::runs`) into
+/// the scratch at `scratch`'s runs from `first`, as far as `room`; how
+/// many there are.
+fn put_runs(words: &mut [u32], scratch: u32, around: &ways::Around, cell: u32, first: u32, room: u32) -> u32 {
+    ways::runs(around, cell, move |k, w| {
+        if first + k < room {
+            put(words, scratch + RUNS_AT + first + k, w);
+        }
+    })
+}
+
+/// Entry `[x, y]` of level `j` of the square at `base`, its cells at `cell`:
+/// level 0 column `[x, y]`'s own — its ground's top, and the leaf cells
+/// its runs write, as its fill wrote them (`runs`; `ground::Bounds`); a
+/// higher one over the level under it,
+/// written before (`window::join`). A bore's air counts, as the ways write
+/// it: the blocks of the square's ways tree lie in the bound
+/// (`ways::tree`), and a node it splits more holds only air or void there,
+/// a bore lying under its column's face.
+pub fn level(ground: &mut [u32], base: u32, runs: &impl ways::tree::Runs, cell: Zoom, j: u32, at: [u32; 2]) {
+    let w = if j == 0 {
+        let i = window::index_of(at);
+        let [mut r, to] = runs.column(i);
+        let (top, s) = (column_top(column_of(ground, base, i)), 1i32 << (crate::LEAF_CELL - cell));
+        let [mut lo, mut hi] = ground::EMPTY;
+        while r + 1 < to {
+            let (z, value) = ways::run_of(runs.run(r));
+            if value != ways::NOTHING {
+                let end = ways::run_of(runs.run(r + 1)).0;
+                (lo, hi) = (lo.min(z * s), hi.max(end * s));
+            }
+            r += 1;
+        }
+        ground::bounds_word([[top, top], [lo, hi]])
+    } else {
+        let under: &[u32] = ground;
+        window::join(&Fresh { ground: under, base }, 0, 0, j, at)
+    };
+    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * window::level_index(j, at);
+    put(ground, e, w[0] as u32);
+    put(ground, e + 1, w[1] as u32);
+}
+
+/// A square filled whole, its passes in a GPU's order (pxl-render
+/// gpu/renderer.rs `grids`): `fresh` its record (`window::HANDED_WORDS`),
+/// its looks, samples and lines as handed, its words laid here; `lane` its
+/// words, and `scratch` its scratch (`ways::tree::SCRATCH_WORDS`); its cells
+/// at `cell`, lying at `place` in its tile, its first cell `first`; its
+/// columns, its runs and levels; inside the area, so no wall cuts its ways
+/// and the runs are the most a client's fill writes. The runs its ways read
+/// as, and the most spans a column makes (`u32::MAX` past `ways::SPANS`);
+/// its ways' tree is built off them after (`tree`).
+pub fn square(fresh: &mut [u32], lane: &mut [u32], scratch: &mut [u32], place: [u32; 2], cell: Zoom, first: [i32; 2]) -> [u32; 2] {
+    fresh[..FRESH_WORDS as usize].copy_from_slice(&window::fresh(0, window::place_word(place), cell, first, Shard::INSIDE));
+    let fresh: &[u32] = fresh;
+    for y in 0..SQUARE {
+        for x in 0..SQUARE {
+            heights(lane, fresh, 0, [x, y]);
+        }
+    }
+    let mut most = 0;
+    for i in 0..SQUARE_CELLS {
+        most = most.max(ways(lane, fresh, scratch, 0, false, i));
+    }
+    let mut before = 0;
+    for t in 0..SCAN_THREADS {
+        let n = stretch_runs(scratch, 0, t);
+        scanned(scratch, 0, t, before);
+        before += n;
+    }
+    for i in 0..SQUARE_CELLS {
+        ways(lane, fresh, scratch, 0, true, i);
+    }
+    let runs = Scratch { words: scratch, at: 0 };
+    for j in 0..=window::LEVELS {
+        let side = SQUARE >> j;
+        for k in 0..side * side {
+            level(lane, 0, &runs, cell, j, [k % side, k / side]);
+        }
+    }
+    [at(scratch, FIRSTS_AT + SQUARE_CELLS), most]
+}
+
+/// The square `of`, filled into `lane` and its runs into `scratch`
+/// (`square`), its ways' tree built
+/// into `pool`, its heap words then its data words, a level at a time as a
+/// GPU's workgroup builds it (pxl-shader `ways_tree_cs`,
+/// `ways::tree`), its blocks taken in order from block `from`, its root's,
+/// block 0 being none's: the blocks it took, and those it holds once
+/// folded; `u32::MAX` both where `pool` has too few or it takes more than
+/// `ways::tree::SQUARE_BLOCKS`.
+pub fn tree(lane: &[u32], scratch: &[u32], of: ways::tree::Of, pool: &mut [u32], from: u32) -> [u32; 2] {
+    use ways::tree::{self as t, Lane};
+    let (square, runs) = (Fresh { ground: lane, base: 0 }, Scratch { words: scratch, at: 0 });
+    let room = pool.len() as u32 / 16;
+    let mut p = Lane(pool);
+    t::root(&mut p, of, 8 * from);
+    // Each level's candidates, the blocks the level over it took.
+    let mut levels = [[0u32; 2]; crate::LEAF_CELL as usize + 1];
+    let (mut b, mut n, mut taken) = (8 * from, 8, 1);
+    let mut zoom = 0;
+    while zoom < of.cell {
+        levels[zoom as usize] = [b, n];
+        let flagged = (b..b + n).filter(|&s| t::flag(&p, &square, 0, of, zoom, s)).count() as u32;
+        if room < from + taken || !t::fits(room - from - taken, taken, flagged) {
+            return [u32::MAX; 2];
+        }
+        let next = 8 * (from + taken);
+        let mut k = 0;
+        for s in b..b + n {
+            if t::flag(&p, &square, 0, of, zoom, s) {
+                t::branch(&mut p, of, zoom, s, next + 8 * k);
+                k += 1;
+            } else {
+                t::empty(&mut p, s);
+            }
+        }
+        (b, n, taken, zoom) = (next, 8 * flagged, taken + flagged, zoom + 1);
+    }
+    for s in b..b + n {
+        t::leaf(&mut p, &runs, of, s);
+    }
+    let mut freed = 0;
+    while zoom > 0 {
+        zoom -= 1;
+        let [b, n] = levels[zoom as usize];
+        for s in b..b + n {
+            if t::under(&p, s) != t::NONE && t::fold(&mut p, zoom, s) != t::NONE {
+                freed += 1;
+            }
+        }
+    }
+    [taken, taken - freed]
+}

@@ -29,9 +29,9 @@ use xpute_kit::status::errno::Errno;
 use crate::layer::object::ext::{Ext, Pools, NONE};
 use crate::layer::{Answer, Query};
 use crate::sched::edge::request_world_tick;
-use pxl_portable::overwrite::{self, path, Held};
 use pxl_spec::block::ext::class_of;
 use pxl_spec::block::volume::fold;
+use pxl_spec_core::overwrite::{self, path, Held};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Block {
@@ -134,7 +134,7 @@ impl Leaf {
         }
     }
 
-    /// Its word in the tree (pxl-portable `overwrite::leaf_word`).
+    /// Its word in the tree (pxl-spec-core `overwrite::leaf_word`).
     pub(super) const fn word(self) -> u32 {
         overwrite::leaf_word(self.id as u32, self.ext as u32)
     }
@@ -149,7 +149,7 @@ const fn depth(zoom: Zoom) -> u32 {
     zoom + 1
 }
 
-/// The tree's lanes as pxl-portable `overwrite` reads them, the CPU as a GPU.
+/// The tree's lanes as pxl-spec-core `overwrite` reads them, the CPU as a GPU.
 pub struct Lanes<'a>(&'a Tree);
 
 impl overwrite::Lanes for Lanes<'_> {
@@ -483,7 +483,7 @@ impl Cells<'_> {
 }
 
 impl Query for Store {
-    /// What a cube holds, its parent's handed down (pxl-portable `overwrite`);
+    /// What a cube holds, its parent's handed down (pxl-spec-core `overwrite`);
     /// a node over the ground's two axes is read under it.
     type Cursor = Held;
 

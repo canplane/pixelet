@@ -8,8 +8,8 @@ use crate::space::layer::lattice::GROUND;
 // resample and the bake's bicubic, and stored as i16 ground cells.
 const _: () = assert!(EXTENT[2] == i16::BITS && GROUND.cell() == UNIT_ZOOM, "a height in i16 ground cells is the world's height");
 /// A leaf's elevation samples and their padding, which the bake draws its
-/// cells' heights off (pxl-portable).
-pub use pxl_portable::ground::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+/// cells' heights off (pxl-spec-core).
+pub use pxl_spec_core::ground::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 
 pub use super::object::OBJECT_TIERS;
 

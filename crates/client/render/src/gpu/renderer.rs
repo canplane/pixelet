@@ -46,15 +46,15 @@ use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURN
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
-use pxl_portable::beam;
-use pxl_portable::eye;
-use pxl_portable::observed;
-use pxl_portable::ray;
-use pxl_portable::scatter::GROUPS;
-use pxl_portable::ways;
-use pxl_portable::window::{self, CellsBack, FreshSquare, BACK_WORDS, COLUMNS_AT, ELE_AT, HANDED, HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::world;
+use pxl_spec_core::beam;
+use pxl_spec_core::eye;
+use pxl_spec_core::observed;
+use pxl_spec_core::ray;
+use pxl_spec_core::scatter::GROUPS;
+use pxl_spec_core::ways;
+use pxl_spec_core::window::{self, CellsBack, FreshSquare, BACK_WORDS, COLUMNS_AT, ELE_AT, HANDED, HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -121,7 +121,7 @@ pub struct FrameInput<'a> {
 }
 
 /// The buffers squares' cells come back through: what a frame hands, a
-/// mapping still out a frame more (pxl-portable `window::HANDED`).
+/// mapping still out a frame more (pxl-spec-core `window::HANDED`).
 const READS: usize = window::READS as usize;
 /// A buffer of them carrying no square.
 const FREE: u32 = u32::MAX;
@@ -138,7 +138,7 @@ pub struct EarthTiles<'a> {
 /// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
-/// The ground's windows as the GPU holds them (pxl-portable `window`,
+/// The ground's windows as the GPU holds them (pxl-spec-core `window`,
 /// `SQUARES` of them): the squares to hand it, and where their cells come
 /// back.
 pub struct GroundSquares<'a> {
@@ -148,12 +148,12 @@ pub struct GroundSquares<'a> {
     /// (`CellsBack::ticket`).
     pub landed: &'a mut CellsLanded,
     /// Where the eye's windows folded over their squares come back to in
-    /// the module's memory (`joined_cs`; pxl-portable
+    /// the module's memory (`joined_cs`; pxl-spec-core
     /// `window::EYE_JOINED_WORDS`).
     pub joined: u32,
     /// Where each read's records come back to in the module's memory, read
     /// `k`'s at `records + k · ways::tree::RECORDS_BYTES`: the blocks its
-    /// square's ways' tree holds (gpu-query-shader `ways_tree_cs`).
+    /// square's ways' tree holds (pxl-shader `ways_tree_cs`).
     pub records: u32,
 }
 
@@ -166,13 +166,13 @@ pub type CellsLanded = dyn FnMut(u32, u32, u32);
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
 /// GPU holds them, and what is placed.
 pub struct Cast<'a> {
-    /// The eye (pxl-portable `eye`; pxl-kernel view/lens.rs `gpu_cast`,
+    /// The eye (pxl-spec-core `eye`; pxl-kernel view/lens.rs `gpu_cast`,
     /// scene/cast.rs `eye`).
     pub eye: [u32; eye::WORDS],
     /// Per window of the eye's, from the top's, a row a slot: the square it
     /// holds, X and Y, and whether it is present, and a spare.
     pub window: &'a [i32],
-    /// The service area's index (pxl-portable `area::Area`), its keys four a
+    /// The service area's index (pxl-spec-core `area::Area`), its keys four a
     /// row (pxl-kernel scene/cast.rs `shards`); read where it lies,
     /// unwritten until the page replays the turn.
     pub shards: &'a [[i32; 4]],
@@ -723,7 +723,7 @@ impl DebugPass {
 }
 
 /// The eye's rays, each drawn at its own pixel where it met a face, painted
-/// by paint.wgsl's `paint` (pxl-portable ray.rs), from the world surface's
+/// by paint.wgsl's `paint` (pxl-spec-core ray.rs), from the world surface's
 /// `rays` the GPU's cast leaves (`Cast`).
 struct RaysPass {
     built: Built,
@@ -748,7 +748,7 @@ struct RaysPass {
 struct GroundBuffers {
     /// Per square of the windows, its columns, levels, runs and cells as
     /// laid, which `heights_cs`, `ways_cs` and `bound_cs` write in the turn
-    /// it is handed (pxl-portable `window::SQUARE_WORDS`).
+    /// it is handed (pxl-spec-core `window::SQUARE_WORDS`).
     ground: u32,
     /// Per square, its cells' four looks (`LOOKS_BYTES`).
     looks: u32,
@@ -792,7 +792,7 @@ struct GroundBuffers {
     ways_built: Built,
     ways_group: u32,
     /// A re-filled square's old ways' tree given back, its new one built,
-    /// the blocks the build gave back pushed (pxl-portable `ways::tree`):
+    /// the blocks the build gave back pushed (pxl-spec-core `ways::tree`):
     /// each pass and its group, over the ways' pool, heap words then data
     /// words (`POOL_BYTES`), its free stack, the count taken then the ids,
     /// block 0 never among them (`STACK_WORDS`), and each handed square's scratch
@@ -812,7 +812,7 @@ const _: () = assert!(
     "POOL_BYTES: the ways' pool binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 /// Its free stack: the count taken, then every block's id but block 0's,
-/// every block free but block 0 as WebGPU makes it, zeroed (gpu-query
+/// every block free but block 0 as WebGPU makes it, zeroed (pxl-shader
 /// shader `TAKEN`, `id`), so nothing is written to start it.
 const STACK_WORDS: u32 = ways::tree::POOL_BLOCKS;
 
@@ -823,7 +823,7 @@ struct CastBuffers {
     /// start off them (`cells_cs`, a thread a cell of the screen, `cells`),
     /// the samples walked from those starts (`sample_cs`, a thread a
     /// sample, `samples`), and their buffer, over the cast's group
-    /// (pxl-portable `beam`): how many pixels missed, a line a corner, a
+    /// (pxl-spec-core `beam`): how many pixels missed, a line a corner, a
     /// start a cell, for `corners` of them, a stop a sample, then the pixels
     /// that missed, a word each; room for `beam_room` corners, samples and
     /// pixels (doc/minutes/20261022-a-cell-casts-a-beam.md).
@@ -835,14 +835,14 @@ struct CastBuffers {
     cells: [u32; 2],
     samples: [u32; 2],
     beam_room: [u32; 3],
-    /// The observed pyramid (pxl-portable `observed`): its buffer, no
+    /// The observed pyramid (pxl-spec-core `observed`): its buffer, no
     /// pixel's; the pixels the cast's reading walk missed walked again
     /// (`miss_cs`) by the dispatch `args_cs` writes into `args` over its own
     /// group, off the beam rays' buffer; the pyramid forgotten (`forget_cs`) where
     /// what the world's query reads changed since the last cast: all of it
     /// (`forget`), or the nodes over the eye's windows' slots that moved
     /// (`moved`, a bit a slot, against the slots as `slots` last held them);
-    /// as this frame's cast does (`forgets`, pxl-portable
+    /// as this frame's cast does (`forgets`, pxl-spec-core
     /// `observed::FORGETS`). `frame` numbers the casts since it was last
     /// forgotten whole, and `cuts` are the preview's cuts it was asked with.
     miss_built: Built,
@@ -962,7 +962,7 @@ const _: () = assert!(
 
 /// The windows' squares' cells' four looks, a word a cell in the squares'
 /// order: written by the fill off each handed square (`heights_cs`), read
-/// by the cast at a hit (gpu-query-shader `World`'s `Looks`). Their own
+/// by the cast at a hit (pxl-shader `World`'s `Looks`). Their own
 /// buffer, as the squares' binding has no room for them.
 const LOOKS_BYTES: u64 = SQUARES as u64 * SQUARE_CELLS as u64 * 4;
 const _: () = assert!(
@@ -977,7 +977,7 @@ const _: () = assert!(
 /// binds all of theirs.
 const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
 const _: () = assert!(same(compute::BOUND_GROUP, compute::WAYS_GROUP), "the levels' and the ways' passes share a group");
-const _: () = assert!(compute::WAYS_WORKGROUP[0] == pxl_portable::fill::SCAN_THREADS, "a square's columns are summed by one workgroup");
+const _: () = assert!(compute::WAYS_WORKGROUP[0] == pxl_spec_core::fill::SCAN_THREADS, "a square's columns are summed by one workgroup");
 const _: () = assert!(
     within(compute::JOINED_GROUP, compute::MISS_GROUP)
         && within(compute::BEAM_GROUP, compute::MISS_GROUP)
@@ -1248,7 +1248,7 @@ impl RaysPass {
         // samples or the pixels outgrow it.
         let word = |k: usize| f32::from_bits(cast.eye[k]);
         let tan = [word(eye::TAN), word(eye::TAN + 1)];
-        let s = beam::spacing(pxl_portable::cast::Detail {
+        let s = beam::spacing(pxl_spec_core::cast::Detail {
             tau: word(eye::TAU),
             range: [0; 2],
             eye: [0.0; 3],
@@ -1347,7 +1347,7 @@ impl RaysPass {
             };
             // The head before the frame's dispatches: what it forgets and over
             // which slots; forgotten whole, no tile taken and its first frame,
-            // else the next frame. No pixel missed yet (pxl-portable
+            // else the next frame. No pixel missed yet (pxl-spec-core
             // `beam::MISSES`).
             g.write_buffer(c.beams, word_bytes(beam::MISSES as usize), bytes(&[0u32]));
             let mut head = [0u32; observed::HEAD_WORDS as usize];
@@ -1389,7 +1389,7 @@ impl RaysPass {
         let Some(c) = self.ground.as_mut().filter(|c| c.fresh_len != 0) else { return false };
         let pass = g.compute_pass(encoder, stamp.pass());
         // A re-filled square's old ways' blocks given back, off its root word
-        // before its build writes another (pxl-portable `ways::tree`).
+        // before its build writes another (pxl-spec-core `ways::tree`).
         g.set_pipeline(pass, c.free_built.pipeline);
         g.set_bind_group(pass, 0, c.free_group, &[]);
         g.dispatch(pass, 1, 1, c.fresh_len);
@@ -1398,7 +1398,7 @@ impl RaysPass {
         let w = compute::HEIGHTS_WORKGROUP;
         g.dispatch(pass, SQUARE.div_ceil(w[0]), SQUARE.div_ceil(w[1]), c.fresh_len);
         // A column a thread, over the tops just drawn: the columns' runs
-        // counted, summed a square a workgroup (pxl-portable
+        // counted, summed a square a workgroup (pxl-spec-core
         // `fill::SCAN_THREADS`), written, before the levels fold them.
         g.set_pipeline(pass, c.ways_built.pipeline);
         for k in 0..3 {
@@ -1545,7 +1545,7 @@ impl RaysPass {
             // off the samples about them, or reading it from their cell's
             // start; and the pixels that missed again, writing it, by the
             // dispatch counted off them. One pass, a dispatch each, each
-            // reading what the ones before wrote (pxl-portable `observed`).
+            // reading what the ones before wrote (pxl-spec-core `observed`).
             let pass = g.compute_pass(encoder, stamps[SPAN_CAST].pass());
             g.set_bind_group(pass, 0, c.group, &[]);
             if c.forgets != observed::FORGETS_NONE {

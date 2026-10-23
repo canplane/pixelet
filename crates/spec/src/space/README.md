@@ -129,7 +129,7 @@ measures its own step against the same cell zoom
 Every tree in this world is dyadic. A node's parent is its coordinate
 halved and its children are the 2^D under it (`hierarchy/tree.rs`), its size is a
 zoom, a cube at a zoom is one box (`coord/zoom.rs` `cube`), and a ray crosses a
-box by one slab test (pxl-portable `cast.rs` `slab`). That much is one law,
+box by one slab test (pxl-spec-core `cast.rs` `slab`). That much is one law,
 written once. What a node holds, whether it is resident, how it is stored
 and how a reader walks it are each tree's own, and follow from what it
 represents:
@@ -137,7 +137,7 @@ represents:
 |                                                     | axes | resident                                                                           | a node holds                                                    | stored                                                                                                                                      | walked                                                          |
 | --------------------------------------------------- | ---- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | the pyramid (`layer/tile.rs`)                       | 2    | resident by tile: one can be missing                                               | a layer's fold of all under it                                  | a record a tile                                                                                                                             | from a point, up to the nearest resident tile                   |
-| a window's bound (pxl-portable window.rs `bounded`) | 2    | with its square, while a window about the eye, the focus or a destination holds it | the lowest and highest drawn under a cell, the ways' included   | made by the GPU from a square's cells and its ways, a level a zoom to the square whole, and read back; squares joined to the window's width | a coarse cell passed whole where a ray is above it              |
+| a window's bound (pxl-spec-core window.rs `bounded`) | 2    | with its square, while a window about the eye, the focus or a destination holds it | the lowest and highest drawn under a cell, the ways' included   | made by the GPU from a square's cells and its ways, a level a zoom to the square whole, and read back; squares joined to the window's width | a coarse cell passed whole where a ray is above it              |
 | the objects (pxl-kernel object/store.rs)            | 3    | whole                                                                              | its leaf's value, or the majority of its eight, read when asked | the leaves alone, one tree a column (`hierarchy/sparse_tree.rs`)                                                                            | down a cube's key range, by a box, or along a ray nearest first |
 
 The pyramid is a tree across zooms: every tile holds a summary of the

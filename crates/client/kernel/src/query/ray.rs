@@ -2,7 +2,7 @@
 
 //! The first block a ray meets, at the zoom its distance asks
 //! (doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md): the
-//! descent is pxl-portable's (`cast::first`), the one a GPU's cast runs too,
+//! descent is pxl-spec-core's (`cast::first`), the one a GPU's cast runs too,
 //! and the world answers it here from everything it holds, each node handed
 //! what its parent found (`Walker`). What only the CPU answers, decor,
 //! rides on that answer.
@@ -13,9 +13,6 @@ use super::world::World;
 use crate::layer::instance::{Instance, Source};
 use crate::layer::residency::Lines;
 use crate::layer::Answer;
-use pxl_portable::answer::{self, In, Kind};
-pub(super) use pxl_portable::cast::Until;
-use pxl_portable::cast::{self, Detail, Ends, Query};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::camera::grid::Tau;
@@ -26,6 +23,9 @@ use pxl_spec::space::coord::world::{origin, wrap_cell};
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
+use pxl_spec_core::answer::{self, In, Kind};
+pub(super) use pxl_spec_core::cast::Until;
+use pxl_spec_core::cast::{self, Detail, Ends, Query};
 
 /// The zooms a block is asked at: no coarser than a tile draws and no finer
 /// than what is placed is held.
@@ -34,7 +34,7 @@ pub fn asked() -> [Zoom; 2] {
 }
 
 /// The cells of tiles at the zoom `tile` wherever they are, as the descent
-/// reads a level of detail (pxl-portable `cast::Detail`): a range of that
+/// reads a level of detail (pxl-spec-core `cast::Detail`): a range of that
 /// zoom's cells alone, held to the zooms a block is asked at (`asked`).
 pub fn at_zoom(tile: Zoom) -> Detail {
     let [lo, hi] = asked();
@@ -197,7 +197,7 @@ impl<'a> World<'a> {
     }
 
     /// The first block along `ray` that `until` stops at, at the zoom `detail`
-    /// asks where it meets it (pxl-portable `cast::first`), from the ray's
+    /// asks where it meets it (pxl-spec-core `cast::first`), from the ray's
     /// origin, over the world where it stands there (pxl-spec `world::origin`).
     pub(super) fn along(&self, ray: &Ray, detail: Detail, until: Until, strike: Option<Strike<'a>>) -> (Answer<Option<Hit>>, Option<Strike<'a>>) {
         let mut walker = Walker {
@@ -221,7 +221,7 @@ impl<'a> World<'a> {
         (answer, walker.strike.map(|(_, s)| s))
     }
 
-    /// The footing down column `g` at `cell` (pxl-portable
+    /// The footing down column `g` at `cell` (pxl-spec-core
     /// `scatter::footing`): the block met and the block over it, where the
     /// world holds the column as its tiles say; none where nothing fills or
     /// a tile under the ray is lacked or only a coarser one stands in.
@@ -233,7 +233,7 @@ impl<'a> World<'a> {
             strike: None,
             lines: Lines::default(),
         };
-        let (block, top, met) = pxl_portable::scatter::footing(&mut walker, cell, g);
+        let (block, top, met) = pxl_spec_core::scatter::footing(&mut walker, cell, g);
         (met && walker.lack.is_none()).then_some((block, top))
     }
 

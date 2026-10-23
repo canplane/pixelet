@@ -3,23 +3,23 @@
 //! The ground's cells as the kernel holds them: a window a zoom about each
 //! centre a reader declares — the eye, the focus where walking and editing
 //! happen, a destination being gone to — each as deep as its reader reads
-//! (pxl-portable `window`). A square is filled from its tile as it lands:
+//! (pxl-spec-core `window`). A square is filled from its tile as it lands:
 //! its four looks and its tile's samples handed to the GPU, which draws and
 //! lays its cells; they come back into `.fixed.terrain`, and the
 //! square is present from then on (`landed`). Nothing of a tile is kept for a square
 //! still to come: one that enters asks its tile again (`Residency::again`),
 //! which the browser's cache answers.
 
-use pxl_portable::area::{Area, Shard};
-use pxl_portable::ground::word;
-use pxl_portable::ways;
-use pxl_portable::window::{self, CellsBack, FreshSquare, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
-use pxl_portable::wrap_index;
-use pxl_portable::LEAF_CELL;
 use pxl_spec::bake::tile::terrain::{handed, square_lines, GroundId, TerrainTile, ELE_LANE, LOOK_LANE};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
+use pxl_spec_core::area::{Area, Shard};
+use pxl_spec_core::ground::word;
+use pxl_spec_core::ways;
+use pxl_spec_core::window::{self, CellsBack, FreshSquare, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
+use pxl_spec_core::wrap_index;
+use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::off_of_slice;
 use xpute_kit::collection::list::List;
@@ -65,7 +65,7 @@ fn windows_at(cell: Zoom) -> [Option<u32>; 3] {
 }
 
 /// What a slot holds, a row of the table the GPU's cast reads
-/// (gpu-query-shader `World::present`): the square its window wants there,
+/// (pxl-shader `World::present`): the square its window wants there,
 /// whether its cells are present, and the fill they are on their way from
 /// (0 where none is). Neither: wanted, its tile not yet handed it.
 #[repr(C)]
@@ -99,7 +99,7 @@ struct Windows {
     windows: [Window; WINDOWS as usize],
     /// Every window's slots, then each window's first square, a row shaped
     /// as a slot's, its square the first and present while it is laid out,
-    /// none while its centre is not (pxl-portable `window::ORIGIN_AT`): the
+    /// none while its centre is not (pxl-spec-core `window::ORIGIN_AT`): the
     /// GPU's table as it is (`table`).
     slots: [Slot; (SQUARES + WINDOWS) as usize],
     /// The device the slots' squares were handed to (`device_generation`):
@@ -170,13 +170,13 @@ fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
 pub(crate) struct Planes {
     pub cells: &'static mut [u8],
     /// The eye's windows' levels over their squares, as the GPU folded them
-    /// and the renderer reads them back (pxl-portable `window::fold`).
+    /// and the renderer reads them back (pxl-spec-core `window::fold`).
     pub joined: &'static mut [u32],
     /// A landing square's ways' records, a room a read-back
-    /// (pxl-portable `ways::tree::RECORDS_BYTES` apart).
+    /// (pxl-spec-core `ways::tree::RECORDS_BYTES` apart).
     pub records: &'static mut [u32],
     /// The GPU's ways' pool as the CPU mirrors it, each landing square's
-    /// blocks laid at their slots (pxl-portable `ways::tree::lay`).
+    /// blocks laid at their slots (pxl-spec-core `ways::tree::lay`).
     pub pool: &'static mut [u32],
 }
 
@@ -214,7 +214,7 @@ pub fn records_lane() -> u32 {
 
 /// The GPU's ways' pool as the CPU mirrors it, the landed squares' blocks
 /// at the GPU's slots, which a cursor reads as the cast reads the GPU's
-/// (pxl-portable `ways::tree`).
+/// (pxl-spec-core `ways::tree`).
 pub fn pool() -> ways::tree::Read<'static> {
     ways::tree::Read(planes().pool)
 }
@@ -331,7 +331,7 @@ pub fn landed(s: u32, ticket: u32, k: u32) {
 
 /// The squares this turn hands, nearest first, as many as a frame's fill
 /// takes: the eye's windows coarsest first, since a reader of a square
-/// absent reads the coarser window's (pxl-portable `window::step`), then the
+/// absent reads the coarser window's (pxl-spec-core `window::step`), then the
 /// focus's and a destination's; in a window by how far its square lies from
 /// the centre. Only a square whose tile can hand it now: one waiting on its
 /// tile does not hold a place another could take.
@@ -395,8 +395,8 @@ pub fn pinned() -> &'static [Tile] {
 }
 
 /// The windows' slots and their first squares, as the GPU's cast reads
-/// them (gpu-query-shader `World::present`, `World::origin`): a row a slot
-/// (`Slot`), then a row a window (pxl-portable `window::ORIGIN_AT`).
+/// them (pxl-shader `World::present`, `World::origin`): a row a slot
+/// (`Slot`), then a row a window (pxl-spec-core `window::ORIGIN_AT`).
 pub fn table() -> &'static [i32] {
     let rows = &windows().slots[..];
     // SAFETY: a slot is four plain words in order (`Slot`), so the slots are
@@ -518,11 +518,11 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
     rest(w)
 }
 
-/// The windows as the CPU holds them, for pxl-portable's one reading of a
+/// The windows as the CPU holds them, for pxl-spec-core's one reading of a
 /// cell (`window::step`, `window::bound_over`): each square's columns,
 /// levels and ways' tree's root as the GPU drew and folded them, read back
 /// (its tree's blocks in the pool's mirror, `pool`); and
-/// the service area they end at (pxl-portable `area::Area`).
+/// the service area they end at (pxl-spec-core `area::Area`).
 #[derive(Clone, Copy)]
 pub struct Windowed;
 
@@ -566,7 +566,7 @@ impl Squares for Windowed {
     }
 
     /// As the GPU folded it, read back a frame or more later: an entry for
-    /// a block no longer held names another, and reads none (pxl-portable
+    /// a block no longer held names another, and reads none (pxl-spec-core
     /// `window::unfold`).
     fn joined(&self, cell: Zoom, e: u32) -> [u32; window::JOINED_WORDS as usize] {
         let at = (((cell - FIRST_CELL) * window::JOINED_ENTRIES + e) * window::JOINED_WORDS) as usize;

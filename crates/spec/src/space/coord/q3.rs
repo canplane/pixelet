@@ -10,9 +10,9 @@ use super::v3::V3;
 
 pub type Q3 = [i32; 3];
 
-/// The fraction's bits: a unit is 256 steps (pxl-portable, which a GPU's
+/// The fraction's bits: a unit is 256 steps (pxl-spec-core, which a GPU's
 /// cast reads a position by too).
-pub use pxl_portable::FRAC_W;
+pub use pxl_spec_core::FRAC_W;
 pub const ONE: i64 = 1 << FRAC_W;
 
 /// Steps as units.
