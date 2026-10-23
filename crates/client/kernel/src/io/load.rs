@@ -4,11 +4,13 @@
 //! at most once. An asset is a want in the request scheduler like a tile, sharing
 //! its credits, and stays wanted until it arrives.
 //!
-//! A read that did not arrive is retried; bytes that do not parse are final,
-//! since asking again returns the same bytes. An image is its file's bytes,
-//! kept for as long as the kernel runs and handed to the renderer under the
-//! asset's number, which makes its texture on whatever device there is
-//! (pxl-render `Gpu::image`): io is transport, and the device the renderer's.
+//! A read that did not arrive is retried, and one the heap refused room for
+//! is asked again once the heap gives some back; bytes that do not parse are
+//! final, since asking again returns the same bytes. An image is its file's
+//! bytes, kept for as long as the kernel runs and handed to the renderer
+//! under the asset's number, which makes its texture on whatever device
+//! there is (pxl-render `Gpu::image`): io is transport, and the device the
+//! renderer's.
 
 use std::rc::Rc;
 
@@ -20,6 +22,7 @@ use crate::asset::{Load, LoadKind, LOADS};
 use crate::io::demand::Ask;
 use crate::io::failure::Ended;
 use crate::io::file::{self, Opened, Owner, Path};
+use crate::io::host::Refused;
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::io::source;
 use crate::sched::edge::{request_world_tick, world_edge};
@@ -38,6 +41,9 @@ enum Entry<T> {
     Pending,
     /// Its file in its arrival's task, being read.
     Arrived,
+    /// The heap refused its bytes room: a wait, not a failure, so it is
+    /// pending again once the heap gives some back (`load_wants`).
+    Refused(Refused),
     Ready(T),
     Failed,
 }
@@ -112,16 +118,27 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
             if load == Load::Sphere && source::top().is_none() {
                 continue;
             }
-            let pending = match kind {
-                LoadKind::Gltf => matches!(l.gltf[n], Some(Entry::Pending)),
-                LoadKind::Image => matches!(l.image[n], Some(Entry::Pending)),
+            let wanted = match kind {
+                LoadKind::Gltf => pending(&mut l.gltf[n]),
+                LoadKind::Image => pending(&mut l.image[n]),
             };
-            if pending {
+            if wanted {
                 l.wants.push((subject_of(kind, load), Ask::PLAIN));
             }
         }
     }
     &l.wants
+}
+
+/// Whether a load is wanted: pending, or refused by a heap that has since
+/// given room back.
+fn pending<T>(entry: &mut Option<Entry<T>>) -> bool {
+    if let Some(Entry::Refused(refused)) = entry {
+        if refused.over() {
+            *entry = Some(Entry::Pending);
+        }
+    }
+    matches!(entry, Some(Entry::Pending))
 }
 
 /// The credit ends when the host reports; parsing afterwards does not hold it.
@@ -222,19 +239,17 @@ fn arrive(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
 /// texture.
 async fn arrival(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
     yield_if_spent(world_edge).await;
-    let mut buf = Vec::new();
-    if buf.try_reserve_exact(bytes as usize).is_err() {
-        file::close(fd);
-        match kind {
-            LoadKind::Gltf => loader().gltf[n] = Some(Entry::Failed),
-            LoadKind::Image => loader().image[n] = Some(Entry::Failed),
-        }
-        return;
-    }
-    buf.resize(bytes as usize, 0);
     // SAFETY: `buf` is held across the turn the host fills it in.
-    unsafe { file::read(fd, &mut buf) };
-    file::close(fd);
+    let buf = match unsafe { file::read_whole(fd, bytes) } {
+        Ok(buf) => buf,
+        Err(refused) => {
+            match kind {
+                LoadKind::Gltf => loader().gltf[n] = Some(Entry::Refused(refused)),
+                LoadKind::Image => loader().image[n] = Some(Entry::Refused(refused)),
+            }
+            return;
+        }
+    };
     // In once the host has run the turn's records.
     next_turn(world_edge).await;
     if kind == LoadKind::Image {

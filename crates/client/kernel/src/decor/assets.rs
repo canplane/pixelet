@@ -8,7 +8,7 @@ use pxl_spec::asset::ingested::Asset;
 use xpute_guest::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::asset::Load;
-use crate::io::host::heap_stat;
+use crate::io::host::Refused;
 use crate::io::load::{load_failed, load_gltf, load_image, take_settled};
 use crate::model::asset::register_model;
 use crate::sched::edge::{request_world_tick, world_edge};
@@ -33,9 +33,9 @@ impl DecorAssets {
 struct Store {
     /// In `DECORS` order, written in place as assets arrive.
     entries: [DecorAssets; 4],
-    /// The heap's release count when it last refused a model: not retried until
-    /// a block is given back.
-    refused: Option<u32>,
+    /// The heap's last refusal of a model: not retried until a block is
+    /// given back.
+    refused: Option<Refused>,
 }
 
 static STORE: Global<Store> = Global::new();
@@ -79,7 +79,7 @@ pub fn decor_assets_wanted() {
     if take_settled() {
         wanted().notify();
     }
-    if s.refused.is_some_and(|r| r != heap_stat().releases) {
+    if s.refused.is_some_and(Refused::over) {
         s.refused = None;
         wanted().notify();
     }
@@ -100,7 +100,7 @@ pub async fn decor_asset_task() {
                         match register_model(&gltf, None) {
                             Some(handle) => settle(&mut s.entries, variant.model, handle.model),
                             None => {
-                                refused.get_or_insert(heap_stat().releases);
+                                refused.get_or_insert_with(Refused::now);
                             }
                         }
                     }
