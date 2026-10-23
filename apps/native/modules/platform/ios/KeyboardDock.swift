@@ -5,7 +5,7 @@ import UIKit
 
 /// A view that stands on the keyboard (apps/client/src/shell/ui/above-keyboard.native.tsx).
 /// Its layout is the shell's, where it rests with no keyboard up, `rest` off
-/// the bottom edge (shared/ui/bottom-rest.ts). While a keyboard is up, the
+/// the bottom edge (apps/client/src/shell/ui/bottom-rest.ts). While a keyboard is up, the
 /// view is lifted to stand `clearance` above it, in the animation the
 /// keyboard's own change runs in — its duration and its curve,
 /// the keyboard's private one among them — so the view and the keys move as

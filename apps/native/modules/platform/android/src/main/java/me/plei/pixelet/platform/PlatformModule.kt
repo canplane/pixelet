@@ -109,7 +109,7 @@ class PlatformModule : Module() {
     /** How much of the screen's bottom inset takes a touch, in
      * density-independent pixels: the navigation buttons' bar, or none with
      * gesture navigation, whose handle only takes a swipe. What the shell
-     * rests its bottom chrome clear of (shared/ui/bottom-rest.ts). */
+     * rests its bottom chrome clear of (apps/client/src/shell/ui/bottom-rest.ts). */
     Function("tappableBottom") {
       val view = appContext.currentActivity?.window?.decorView ?: return@Function 0.0
       val insets = ViewCompat.getRootWindowInsets(view) ?: return@Function 0.0

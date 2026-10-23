@@ -69,14 +69,13 @@ export function readEnums(roots: string[]): Table {
 }
 
 /** Where `spec`, imported from `from`, is: relative, or through the import
- * maps as `from`'s own package reads them (import-map.ts). `@platform/` is
- * the bundling app's, and holds no enum the shell imports. */
+ * maps as `from`'s own package reads them (import-map.ts). */
 function fileOf(from: string, spec: string): string | null {
   let base: string | null = null;
   if (spec.startsWith(".")) base = path.resolve(path.dirname(from), spec);
   else {
     const hit = mapped(from, spec);
-    if (hit && hit.prefix !== "@platform/") base = hit.path;
+    if (hit) base = hit.path;
   }
   if (base === null) return null;
   for (const at of [base, base + ".ts", base + ".tsx", path.join(base, "index.ts")]) {
