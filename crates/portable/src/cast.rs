@@ -569,13 +569,7 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                 // Where the walk ends, its stop, made there and nowhere else:
                 // where the ray enters the node (`entered`).
                 let (t, axis) = entered(ray, [x.0, y.0, z.0]);
-                let stop = Stop {
-                    t,
-                    axis,
-                    node: n,
-                    at,
-                    block: i.block,
-                };
+                let stop = Stop { t, axis, node: n, at, block: i.block };
                 keep.keep(&n, at, &stack);
                 return Met { ends, stop, visits };
             }
