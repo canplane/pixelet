@@ -256,7 +256,7 @@ Decor is grown and drawn on the GPU each frame, a thread a candidate, never stor
 
 **Marks** are the places and markers, gathered over the eye's cubes. Each stands at a cell's center, at the height of the surface drawn there.
 
-A place is the place layer's mark (`scene/place.rs`). Each cube in view reads its place tiles and shows what Carto shows at the zoom drawn there: a dot or an icon, named from its kind's label zoom (`billboard/badge.rs`). A place stands on what a ray down its cell meets first, and where nothing is drawn there is no place. A tap on one is the place's before the ground's.
+A place is the place layer's mark (`scene/place.rs`). Each cube in view reads its place tiles and shows what Carto shows at the zoom drawn there: a dot or an icon, named from its kind's label zoom (`scene/place.rs` `point_of`). A place stands on what a ray down its cell meets first, and where nothing is drawn there is no place. A tap on one is the place's before the ground's.
 
 ---
 
@@ -371,11 +371,11 @@ Above it, altocumulus and cirrus are planes read where a ray meets them (`frame/
 
 A badge stands at a cell's center and is drawn flat to the camera; its records come from the view (Marks).
 
-Badges are one instanced quad (`billboard/field.rs`) over one texture packed shelf by shelf, the **badge sheet** (`pxl-render gpu/sheet/shelf.rs`). The pass (`frame/shader/badge.wgsl`) tests several points of each badge against the world's depth and drops the badge when most are hidden. It writes depth from an upright twin of the quad, so badges sort against the world along its up. Chat bubbles share the pass.
+Badges are one instanced quad (`billboard/field.rs`) over one texture packed shelf by shelf, the **badge sheet** (`pxl-render gpu/sheet/shelf.rs`). The pass (`frame/shader/badge.wgsl`) tests several points of each badge against the world's depth and drops the badge when most are hidden. It writes depth from an upright twin of the quad, so badges sort against the world along its up. Chat bubbles share the pass, each hung over its speaker's head and shown by its own rule (`billboard/chat.rs` `hangs`).
 
-A sheet entry is drawn on the GPU only when what it shows changes (`gpu/sheet.rs`): its shapes as signed distances, its text as lines the platform drew. Asking the platform a line at a time leaves shaping, bidirectional text and emoji to each platform's own engine ([text by the line](./doc/minutes/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
+A sheet entry is found by what it paints, never by who shows it: equal words, colors and look share one slot, let go once nothing shown or waiting uses it (`billboard/badge.rs`). What shows it is named apart, by its holder's key, which a tap and the old drawing kept until the new one is painted go by (`scene/place.rs` `Key`). An entry is drawn on the GPU only when what it shows changes (`gpu/sheet.rs`): its shapes as signed distances, its text as lines the platform drew. Asking the platform a line at a time leaves shaping, bidirectional text and emoji to each platform's own engine ([text by the line](./doc/minutes/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
 
-Markers people put up are an object kind drawn by the same pass, whether or not places are on. Where several share a cell, the cell shows their count, counted afresh each time the cube is read. Unlike places, markers are one kind, so their number means something. All markers share one text until each keeps its own ([doc/backlog.md](./doc/backlog.md)).
+Markers people put up are an object kind drawn by the same pass, whether or not places are on. Where several share a cell, the cell shows their count on a marker's pill in its colors turned over, counted afresh each time the cube is read (`spec/spec/block/marker.json`). Unlike places, markers are one kind, so their number means something. All markers share one text until each keeps its own ([doc/backlog.md](./doc/backlog.md)).
 
 ---
 
