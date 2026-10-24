@@ -95,7 +95,7 @@ impl Serve for Policy {
             Errno::EACCES | Errno::EIO => Blame::Server,
             // ENXIO: 404, a key that names nothing. EBADMSG: a body empty, still
             // packed in an encoding this browser does not undo, or not decoding.
-            // EFBIG: larger than the heap takes.
+            // EFBIG: larger than the heap takes, or than its kind's packet can be.
             _ => Blame::Object,
         }
     }

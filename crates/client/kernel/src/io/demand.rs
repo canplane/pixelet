@@ -49,13 +49,24 @@ pub use crate::io::spec::StreamName as Stream;
 
 impl Stream {
     /// An asset belongs to no bake and is asked for by its own command.
-    pub fn bake(self) -> Option<BaseLayer> {
+    pub const fn bake(self) -> Option<BaseLayer> {
         match self {
             Stream::terrain => Some(BaseLayer::terrain),
             Stream::place => Some(BaseLayer::place),
             Stream::earth => Some(BaseLayer::earth),
             Stream::division => Some(BaseLayer::division),
             Stream::asset => None,
+        }
+    }
+
+    /// The most bytes a body of its takes, its kind's packet at its longest
+    /// (pxl-spec `bake::tile::max_packet_bytes`): one past it is refused
+    /// before the heap is asked (io/fetch.rs `opened`). None for an asset,
+    /// which the heap alone bounds.
+    pub const fn max_body(self) -> Option<u32> {
+        match self.bake() {
+            Some(layer) => Some(pxl_spec::bake::tile::max_packet_bytes(layer) as u32),
+            None => None,
         }
     }
 }

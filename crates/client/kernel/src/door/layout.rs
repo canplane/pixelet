@@ -101,6 +101,40 @@ const _: () = assert!(
     "the phone's memory does not hold the module's front, the fixed ranges and the heap they are budgeted against"
 );
 
+/// A body its kind's packet at its longest, in the block the buddy gives it,
+/// a power of two.
+const fn body_block(stream: crate::io::demand::Stream) -> u64 {
+    match stream.max_body() {
+        Some(max) => max.next_power_of_two() as u64,
+        None => 0,
+    }
+}
+
+/// The heap's bounded flows at their worst: every terrain frame's packet
+/// kept for its windows (layer/terrain/tile.rs `kept`), every Earth frame's
+/// for its texels (layer/earth.rs), and a body on every credit, of the
+/// longest kind. The rest of the heap is workspace, which asks first.
+const HEAP_FLOWS_BYTES: u64 = {
+    use crate::io::demand::Stream;
+    use crate::layer::residency::Residency;
+    let kept =
+        Residency::<pxl_spec::bake::tile::terrain::TerrainTile>::FRAMES as u64 * body_block(Stream::terrain) + Residency::<crate::layer::earth::Earth>::FRAMES as u64 * body_block(Stream::earth);
+    let mut longest = 0;
+    let mut k = 0;
+    while k < Stream::ALL.len() {
+        if body_block(Stream::ALL[k]) > longest {
+            longest = body_block(Stream::ALL[k]);
+        }
+        k += 1;
+    }
+    kept + crate::param::MAX_CREDITS as u64 * longest
+};
+
+const _: () = assert!(
+    HEAP_FLOWS_BYTES <= MIN_HEAP_BYTES as u64,
+    "the heap's bounded flows at their worst do not fit the heap a phone is guaranteed"
+);
+
 /// A pure function of the linker's answer: the global allocator asks for
 /// its first block before anything has laid the memory out.
 pub fn heap_at(data_end: u32) -> u32 {

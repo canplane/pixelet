@@ -142,6 +142,11 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
             file::close(fd);
             Got::Read(None)
         }
+        // Longer than its kind's packet can be: what the heap budgets a body at.
+        Opened::Bytes(n) if attempt_of(key).and_then(|(stream, _)| stream.max_body()).is_some_and(|max| n > max) => {
+            file::close(fd);
+            Got::Failed(Failure::from(Errno::EFBIG))
+        }
         Opened::Bytes(n) => {
             let got = match alloc(n) {
                 Some(block) => {

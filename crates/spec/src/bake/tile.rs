@@ -5,13 +5,50 @@
 //! are tiles.
 
 use xpute_kit::status::error::MarshalError;
+use xpute_kit::wire::xtp::{HDR_SZ, WORD_SZ};
 
 use crate::bake::malformed;
+use crate::bake::published::BaseLayer;
 
 pub mod division;
 pub mod earth;
 pub mod place;
 pub mod terrain;
+
+/// The bytes an XTP packet's parts take (xpute-kit wire/xtp encode.rs
+/// `PacketWriter`), from which a kind bounds its packet by its lanes: the
+/// header; a branch's length word and a word a child; a sequence's length
+/// word and its payload to the word; a scalar, with the padding before what
+/// follows it, a word at most.
+pub mod packet {
+    use super::{HDR_SZ, WORD_SZ};
+
+    const WORD: usize = WORD_SZ as usize;
+
+    pub const HEADER: usize = HDR_SZ as usize;
+
+    pub const SCALAR: usize = WORD;
+
+    pub const fn branch(children: usize) -> usize {
+        WORD * (1 + children)
+    }
+
+    pub const fn seq(bytes: usize) -> usize {
+        WORD + bytes.next_multiple_of(WORD)
+    }
+}
+
+/// The most bytes a packet of `layer` takes: what a client may hold one
+/// in, and refuses one past. Terrain's and the Earth's follow from their
+/// lanes; places' and divisions' are a room their bake refuses a tile past.
+pub const fn max_packet_bytes(layer: BaseLayer) -> usize {
+    match layer {
+        BaseLayer::terrain => terrain::MAX_PACKET_BYTES,
+        BaseLayer::place => place::MAX_PACKET_BYTES,
+        BaseLayer::division => division::MAX_PACKET_BYTES,
+        BaseLayer::earth => earth::PACKET_BYTES,
+    }
+}
 
 /// Which of a tile and its four children are tiles of their own, the rest
 /// said whole by the tile (terrain's zero tile, places's uncrowded ground):

@@ -25,6 +25,16 @@ pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 /// side, as a window's square lays its lines by them (`square_lines`).
 pub use pxl_spec_core::window::{WAYS_ACROSS, WAYS_SHIFT};
 
+/// The most a packet takes: every lane at its longest, a look a cell four
+/// and the separation at a record's room (`separation::MAX_LINES`,
+/// `MAX_POINTS`), as `encode` lays them.
+pub const MAX_PACKET_BYTES: usize = {
+    use super::packet::{branch, seq, HEADER, SCALAR};
+    use crate::bake::separation::{MAX_LINES, MAX_POINTS};
+    let separation = branch(8) + seq((MAX_LINES + 1) * 4) + seq(MAX_POINTS * 4) + seq(MAX_POINTS * 2) + 4 * seq(MAX_LINES) + seq(MAX_POINTS);
+    HEADER + branch(4) + seq(ELE_LANE * 2) + seq(LOOK_LANE) + SCALAR + separation
+};
+
 /// The most entries a window's square holds of the ways (pxl-spec-core
 /// `window::WAYS_SQUARE_SEGMENTS`); a tile past it fails its bake
 /// (`ways_fit`).

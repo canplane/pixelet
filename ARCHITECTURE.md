@@ -452,7 +452,7 @@ A run that does not succeed has **ended**, either aborted or failed with an errn
 
 A broken invariant is a **bug**, and it ends the module. `bug!` reports the errno and place to the host (`host_bug`). On a device the process dies with the kernel, so its last words say why, as numbers. In a page the host outlives the kernel, and the shell shows a blue screen with the errno and place as its stop code (`apps/client/src/shell/halt.tsx` `BlueScreen`). It does the same when the GPU is lost for good or reads are given up.
 
-Memory pressure is neither. Must-fit state is sized from a bound the structure proves. A bounded flow is full by its owner's policy. A workspace asks first, and waits when refused.
+Memory pressure is neither. Must-fit state is sized from a bound the structure proves. A bounded flow is full by its owner's policy, and the flows at their worst together are checked at compile time against the heap a phone is guaranteed (`door/layout.rs` `HEAP_FLOWS_BYTES`): a body is at most its kind's packet (pxl-spec `bake::tile::max_packet_bytes`), and one longer is refused before the heap is asked. A workspace asks first, and waits when refused.
 
 ## The turn
 

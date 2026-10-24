@@ -63,6 +63,27 @@ fn the_formats_write_and_read_what_the_record_holds() {
     assert_eq!(resident.occupancy, tile.occupancy);
 }
 
+/// A tile at every lane's longest is as long as `MAX_PACKET_BYTES` says.
+#[test]
+fn a_tile_at_its_room_is_the_most_a_packet_takes() {
+    use separation::{MAX_LINES, MAX_POINTS};
+    let starts: Vec<u32> = (0..=MAX_LINES).map(|d| (d * MAX_POINTS / MAX_LINES) as u32).collect();
+    let full = Separation {
+        starts: starts.into(),
+        points: vec![[0; 2]; MAX_POINTS].into(),
+        tops: vec![0; MAX_POINTS].into(),
+        width: vec![1; MAX_LINES].into(),
+        kind: vec![0; MAX_LINES].into(),
+        form: vec![0; MAX_LINES].into(),
+        clear: vec![0; MAX_LINES].into(),
+        coarsest: vec![0; MAX_POINTS].into(),
+    };
+    let tile = TerrainTile { separation: full, ..tile(7) };
+    assert_eq!(encode(&tile).unwrap().len(), MAX_PACKET_BYTES);
+    let earth = crate::bake::tile::earth::encode(&vec![0; crate::bake::tile::earth::EARTH_BYTES]).unwrap();
+    assert_eq!(earth.len(), crate::bake::tile::earth::PACKET_BYTES, "and an Earth tile is as long as its texels say");
+}
+
 #[test]
 fn a_packet_that_is_not_a_tile_is_refused() {
     let v = Golden::load(GOLDEN);

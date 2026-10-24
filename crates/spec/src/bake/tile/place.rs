@@ -75,6 +75,10 @@ pub const PLACE_FIRST: Zoom = {
 // A place stands at its ground leaf cell, an offset in the tile a half-word a lane.
 const _: () = assert!(GROUND.cell() - PLACE_FIRST <= 16, "a tile's ground leaf cells no longer fit a half-word a lane");
 
+/// The most a packet takes, a tile past it failing its bake (`encode`): the
+/// set baked 2026-10-17 holds at most 107 KiB.
+pub const MAX_PACKET_BYTES: usize = 1 << 20;
+
 /// The longest name a tile holds, in code points; a longer one is cut to end
 /// in an ellipsis. At 32, 99% of the places Overture names in Korea are whole
 /// (their names' 99th percentile, measured 2026-09-25).
@@ -290,7 +294,13 @@ pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, MarshalError> {
             .strs(Some(&names))
             .u8(Some(tile.occupancy.bits()));
     }));
-    encoder().encode(&t, TreeEncoderOptions::default())
+    encoder().encode(
+        &t,
+        TreeEncoderOptions {
+            max_cap: Some(MAX_PACKET_BYTES as u32),
+            ..TreeEncoderOptions::default()
+        },
+    )
 }
 
 pub fn decode(bytes: &[u8]) -> Result<PlaceTile, MarshalError> {

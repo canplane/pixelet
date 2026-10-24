@@ -112,8 +112,13 @@
       "constants), so a terrain grown past a phone fails to build; and at boot",
       "against where it actually started and what the device actually gave.",
       "",
-      "256 MiB with the terrain at 60.30 leaves the phone 392.62 in practice, so",
-      "there are 136 MiB of headroom over the guarantee."
+      "256 MiB, with the fixed ranges at 175.29 (the terrain's 157.75 of them) and",
+      "the module's data ending at 34.5, leaves the phone 302.2 in practice, so",
+      "there are 46 MiB of headroom over the guarantee (2026-10-24).",
+      "",
+      "The heap's bounded flows at their worst are checked against it at compile",
+      "time too (door/layout.rs `HEAP_FLOWS_BYTES`): every kept terrain and Earth",
+      "packet and a body on every credit, each in its buddy block, 224 MiB."
     ]
   },
 
