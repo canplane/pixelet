@@ -38,5 +38,5 @@ fn main() {
     println!("cargo:rustc-link-arg=--global-base={GLOBAL_BASE}");
     println!("cargo:rustc-link-arg=--initial-memory={MIN_MEMORY_BYTES}");
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=../kernel/src/mem/mem.spec.rs");
+    println!("cargo:rerun-if-changed=../../client/kernel/src/mem/mem.spec.rs");
 }
