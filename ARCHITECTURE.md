@@ -442,7 +442,7 @@ Only the host knows a file's address and protocol (`io/file.rs`). The type says 
 
 Each descriptor has an owner, and an answer reaches only that owner.
 
-The world's reads fetch tiles by their bake and name (`io/fetch.rs` `DemandName`). An absent tile is an answer with no body, and its owner decides what it means: no ground tile means the parent's ground stands. An empty read is an error (`EBADMSG`). A body is a heap block, which the command that decodes it releases unless a store keeps it.
+The world's reads fetch tiles by their bake and name (`io/fetch.rs` `DemandName`). An absent tile is an answer with no body, and its owner decides what it means: no ground tile means the parent's ground stands. An empty read is an error (`EBADMSG`). A body is a heap block, which the command that decodes it releases unless a store keeps it; terrain's and the Earth's, whose packets run just past a mebibyte, are slots of their longest packet's pages, seven to a run the heap gives, rather than the buddy's block of twice that (`io/body.rs`).
 
 How many reads are out at once is bounded by **credits**, which pixelet's end sends with each frame, a constant 6 (`sched.ts` `NET_CREDITS`), and the kernel takes at most 16 of (`param::MAX_CREDITS`). One **request scheduler** spends them (`io/request.rs`). It promises that a camera that has just moved can always state its demand, however much old work is still draining.
 

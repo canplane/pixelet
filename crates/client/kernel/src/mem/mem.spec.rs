@@ -90,7 +90,9 @@ pub const GLOBAL_BASE: u32 = 33554432;
 ///
 /// The heap's bounded flows at their worst are checked against it at compile
 /// time too (door/layout.rs `HEAP_FLOWS_BYTES`): every kept terrain and Earth
-/// packet and a body on every credit, each in its buddy block, 224 MiB.
+/// packet in a slot of its longest packet's pages, seven to an 8 MiB run
+/// (io/body.rs), and a body on every credit, a slot or the buddy's block for
+/// a division's, 160 MiB.
 pub const MIN_HEAP_BYTES: u32 = 268435456;
 
 /// What a device's memory is counted in: a reservation is a whole number of

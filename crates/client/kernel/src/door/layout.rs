@@ -102,24 +102,29 @@ const _: () = assert!(
     "the phone's memory does not hold the module's front, the fixed ranges and the heap they are budgeted against"
 );
 
-/// A body its kind's packet at its longest, in the block the buddy gives it,
-/// a power of two.
+/// A body its kind's packet at its longest, in the block the buddy gives
+/// it, a power of two; none for a kind whose bodies take slots.
 const fn body_block(stream: crate::io::demand::Stream) -> u64 {
     match stream.max_body() {
+        Some(_) if crate::io::body::slotted(stream) => 0,
         Some(max) => max.next_power_of_two() as u64,
         None => 0,
     }
 }
 
 /// The heap's bounded flows at their worst: every terrain frame's packet
-/// kept for its windows (layer/terrain/tile.rs `kept`), every Earth frame's
-/// for its texels (layer/earth.rs), and a body on every credit, of the
-/// longest kind. The rest of the heap is workspace, which asks first.
+/// kept for its windows (layer/terrain/tile.rs `kept`) and every Earth
+/// frame's for its texels (layer/earth.rs), each in a slot (io/body.rs),
+/// and a body on every credit, in a slot too or in the buddy's block for
+/// the longest other kind, at whichever split costs most. The rest of the
+/// heap is workspace, which asks first.
 const HEAP_FLOWS_BYTES: u64 = {
+    use crate::io::body::{slots_bytes, slotted};
     use crate::io::demand::Stream;
     use crate::layer::residency::Residency;
-    let kept =
-        Residency::<pxl_spec::bake::tile::terrain::TerrainTile>::FRAMES as u64 * body_block(Stream::terrain) + Residency::<crate::layer::earth::Earth>::FRAMES as u64 * body_block(Stream::earth);
+    use crate::param::MAX_CREDITS;
+    assert!(slotted(Stream::terrain) && slotted(Stream::earth), "the kept packets are counted as slots");
+    let kept = Residency::<pxl_spec::bake::tile::terrain::TerrainTile>::FRAMES + Residency::<crate::layer::earth::Earth>::FRAMES;
     let mut longest = 0;
     let mut k = 0;
     while k < Stream::ALL.len() {
@@ -128,7 +133,16 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    kept + crate::param::MAX_CREDITS as u64 * longest
+    let mut worst = 0;
+    let mut in_slots = 0;
+    while in_slots <= MAX_CREDITS {
+        let bytes = slots_bytes(kept + in_slots) + (MAX_CREDITS - in_slots) as u64 * longest;
+        if bytes > worst {
+            worst = bytes;
+        }
+        in_slots += 1;
+    }
+    worst
 };
 
 const _: () = assert!(

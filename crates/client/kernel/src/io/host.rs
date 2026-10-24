@@ -171,19 +171,23 @@ pub fn heap_stat() -> HeapStat {
     (HEAP.get(|| no_heap))()
 }
 
-/// A request the heap refused, as the heap's release count then: it waits
-/// until the heap gives some room back, never on a clock, since only a
-/// release can change the answer.
+/// A request the heap refused, as the heap's and the body slots' release
+/// counts then (`io/body.rs`): it waits until either gives some room back,
+/// never on a clock, since only a release can change the answer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Refused(u32);
 
 impl Refused {
     pub fn now() -> Refused {
-        Refused(heap_stat().releases)
+        Refused(released())
     }
 
-    /// Whether the heap has given room back since, so asking again may be served.
+    /// Whether room has been given back since, so asking again may be served.
     pub fn over(self) -> bool {
-        heap_stat().releases != self.0
+        released() != self.0
     }
+}
+
+fn released() -> u32 {
+    heap_stat().releases.wrapping_add(crate::io::body::releases())
 }

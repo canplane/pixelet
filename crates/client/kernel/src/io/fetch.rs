@@ -3,18 +3,19 @@
 //! The world's reads. The kernel names an object (its bake, the version the
 //! source serves it under and its name, `DemandName`) and opens it as a file; the host
 //! alone knows the address and protocol. What an absent object means is decided here per stream.
-//! Every body is a heap block released in the command that decodes it,
-//! unless a store keeps it.
+//! Every body is a block (`io/body.rs`) released in the command that
+//! decodes it, unless a store keeps it.
 
 use core::fmt;
 
 use xpute_guest::ipc::sys::Fd;
 use xpute_guest::mem::base::ptr_at;
-use xpute_guest::mem::heap::{alloc, free, Block};
+use xpute_guest::mem::heap::Block;
 use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 
+use crate::io::body;
 use crate::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::io::failure::{Ended, Failure};
 use crate::io::file::{self, Opened, Owner, Path};
@@ -62,7 +63,7 @@ pub fn cancel(key: u64) -> bool {
 pub fn release(block: Option<Block>) {
     if let Some(block) = block {
         // SAFETY: a body's block, acquired by `opened` and released once.
-        unsafe { free(block) };
+        unsafe { body::give(block) };
     }
 }
 
@@ -135,6 +136,7 @@ fn arrivals() -> &'static mut Notify {
 /// `detail` is only printed by the profiler; nothing branches on it, which
 /// keeps the protocol out of here.
 pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
+    let stream = attempt_of(key).map(|(stream, _)| stream);
     let got = match opened {
         Opened::Absent => Got::Absent,
         failed @ Opened::Failed { .. } => Got::Failed(failed.failure()),
@@ -143,12 +145,12 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
             Got::Read(None)
         }
         // Longer than its kind's packet can be: what the heap budgets a body at.
-        Opened::Bytes(n) if attempt_of(key).and_then(|(stream, _)| stream.max_body()).is_some_and(|max| n > max) => {
+        Opened::Bytes(n) if stream.and_then(Stream::max_body).is_some_and(|max| n > max) => {
             file::close(fd);
             Got::Failed(Failure::from(Errno::EFBIG))
         }
         Opened::Bytes(n) => {
-            let got = match alloc(n) {
+            let got = match body::take(stream, n) {
                 Some(block) => {
                     // SAFETY: a block just acquired, `n` long, and no one else's;
                     // the arrival holds it until `fetch_task` waits out the turn.
