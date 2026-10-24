@@ -1,8 +1,8 @@
 #!/usr/bin/env -S deno run -A
 // Takes the next official build number off the counter and prints it. The
 // counter is one object in the bucket, so no history rewrite renumbers it,
-// and it is never reset. The take is read-add-write; the gate's concurrency
-// group (.github/workflows/check-and-deploy.yml) keeps two runs apart.
+// and it is never reset. The take is read-add-write; the number job's
+// concurrency group (.github/workflows/check-and-deploy.yml) keeps two runs apart.
 //
 //   ./script/build-counter.ts
 

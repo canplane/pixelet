@@ -46,7 +46,7 @@ function buildId(): string {
  * one actually is — where it did not. A build with no number from CI is not
  * that build whatever it was built from, so the source says so itself rather
  * than a sign meaning "after"; before any number is cached, the id alone.
- * The count lives in the bucket and is taken by the gate job
+ * The count lives in the bucket and is taken by CI's number job
  * (script/build-counter.ts); apps/client/.build_number is only this checkout's cache of
  * it, written by any read of `./script/build-log.ts`.
  */

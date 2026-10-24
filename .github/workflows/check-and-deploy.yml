@@ -1,8 +1,8 @@
 # The gate a push to deploy runs, and what it publishes once it passes.
 #
 # One workflow rather than two, so that a deploy cannot start against a commit
-# the gate never saw: `deploy-web` and `deploy-server` are jobs that need
-# `gate`, not a separate workflow reacting to its outcome. A `workflow_run`
+# the gate never saw: `deploy-web` and `deploy-server` are jobs downstream
+# of `gate`, not a separate workflow reacting to its outcome. A `workflow_run`
 # trigger would read its own definition from the default branch and lose the
 # push's context, which is a subtlety worth not owning.
 #
@@ -61,7 +61,7 @@ on:
   workflow_dispatch: {}
 
 # A pull request's run is superseded by its next commit and may be canceled.
-# A run on deploy may not: the gate takes a build number, and one killed between
+# A run on deploy may not: it takes a build number, and one killed between
 # taking it and publishing would burn it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -88,17 +88,8 @@ env:
 
 jobs:
   gate:
-    name: check what ships
+    name: check and test
     runs-on: ubuntu-latest
-    # One holder of the counter at a time, across every ref and trigger: the
-    # take is read-add-write and two runs holding it together would take the
-    # same number. deploy-web is in the same group, so a deploy push queues
-    # behind the one in front of it.
-    concurrency:
-      group: build-counter
-      cancel-in-progress: false
-    outputs:
-      build_number: ${{ steps.number.outputs.value }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -126,25 +117,80 @@ jobs:
           cache: rust
           binaryen-version: ${{ env.BINARYEN_VERSION }}
 
-      # deno.jsonc check:ship over the whole commit, and what it guarantees is
-      # only this: the web entry and the Worker type-check (deno check, no
-      # lint); the shipped crates — the kernel's for wasm, the two servers' —
-      # pass clippy with warnings denied; the generated files match spec/.
-      # Nothing of behavior, nor of what does not ship (the bakes, the tools,
-      # the device app). It checks the commit itself, where a check in the
-      # shared working tree sees whatever else is uncommitted there.
+      # The rules a machine decides (script/check-rules.ts), first because
+      # they take a second: among them that each generated shader was made
+      # from the sources the commit holds.
+      - name: Hold the rules
+        run: deno task check:rules
+
+      # deno.jsonc check:ship over the whole commit: the web entry, the
+      # Worker and the scripts a deploy runs type-check (deno check, no
+      # lint); the shipped crates — the kernel's for wasm, the two servers'
+      # — pass clippy with warnings denied; the generated files match spec/;
+      # and the bundle builds, with the Worker bundled beside it as a deploy
+      # bundles it. Not what does not ship (the bakes, the tools, the device
+      # app). It checks the commit itself, where a check in the shared
+      # working tree sees whatever else is uncommitted there.
+      #
+      # On deploy the bundle built here is the one published, and its
+      # number is taken only once this job passes, so it is built with a
+      # stamp where the number goes, which deploy-web writes the number over
+      # (apps/web/script/deploy.ts STAMP).
       - name: Check what ships
+        env:
+          PXL_BUILD_NUMBER: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/deploy' && '__PXL_BUILD_NUMBER__' || '' }}
         run: deno task check:ship
 
-      # Every build of deploy is numbered, shipped or not — a build lab's count.
-      # A push of prose alone never reaches here and takes no number (see the
-      # trigger), so the count is of builds and not of pushes. After the gate
-      # rather than before it, so that a push that never compiled does not
-      # consume one; a push that passed and then failed to deploy does, and
-      # that number is simply never published.
+      # Every workspace's tests (deno.jsonc test): the client's, xpute's —
+      # its C++ guest built for wasm among them — and the crates'.
+      - name: Test
+        run: deno task test
+
+      # The bundle and its module's panic paths, for deploy-web to publish
+      # and keep as they were built here.
+      - name: Keep the bundle
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deploy'
+        uses: actions/upload-artifact@v7
+        with:
+          name: web
+          path: |
+            apps/web/dist/
+            apps/web/src/guest.paths.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # Every build of deploy is numbered, shipped or not — a build lab's count.
+  # A push of prose alone never reaches here and takes no number (see the
+  # trigger), so the count is of builds and not of pushes. After the gate
+  # rather than before it, so that a push that never compiled does not
+  # consume one; a push that passed and then failed to deploy does, and that
+  # number is simply never published.
+  number:
+    name: take the next build number
+    needs: gate
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deploy'
+    runs-on: ubuntu-latest
+    # One holder of the counter at a time: the take is read-add-write and
+    # two runs holding it together would take the same number. Only deploy's
+    # runs reach this job, so a pull request's gate never joins the group
+    # and cannot cancel one waiting in it. deploy-web is in the same group,
+    # so a deploy push queues behind the one in front of it.
+    concurrency:
+      group: build-counter
+      cancel-in-progress: false
+    outputs:
+      build_number: ${{ steps.number.outputs.value }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version-file: .tool-versions
+
       - name: Take the next build number
         id: number
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deploy'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -161,14 +207,14 @@ jobs:
     #
     # A failed server deploy now keeps the client back too, which is the
     # failure worth having: nothing goes out ahead of what it talks to.
-    needs: [gate, deploy-server]
+    needs: [number, deploy-server]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deploy'
     runs-on: ubuntu-latest
     # What landed: the last step says whether it worked, because a job that
     # fails still carries its earlier steps' outputs and the build log believed one.
     outputs:
       published: ${{ steps.landed.outputs.yes }}
-    # The gate's group, so that a run cannot publish while the next one is
+    # The number's group, so that a run cannot publish while the next one is
     # already taking its number: the bucket's counter and what is live on
     # plei.me move together.
     concurrency:
@@ -183,22 +229,22 @@ jobs:
         with:
           deno-version-file: .tool-versions
 
-      # Its own cargo cache: the module and what builds it, not the gate's
-      # whole target directory.
-      - uses: ./.github/actions/toolchain
+      # What the gate built and checked, so nothing is built here.
+      - uses: actions/download-artifact@v8
         with:
-          cache: rust-publish
-          binaryen-version: ${{ env.BINARYEN_VERSION }}
+          name: web
+          path: apps/web
 
-      # Builds under the number the gate took, runs the bundle guard and
-      # publishes. apps/web/script/deploy.ts is the same script a hand deploy
-      # runs; a hand deploy just has no number to give it.
+      # Writes the number the gate could not know over its stamp, keeps the
+      # panic paths and publishes. apps/web/script/deploy.ts is the same
+      # script a hand deploy runs; a hand deploy builds instead and has no
+      # number to give it.
       - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PXL_BUILD_NUMBER: ${{ needs.gate.outputs.build_number }}
-        run: deno task deploy
+          PXL_BUILD_NUMBER: ${{ needs.number.outputs.build_number }}
+        run: deno task deploy --prebuilt
 
       # Last, so a failure anywhere above leaves it unset.
       - id: landed
@@ -206,7 +252,7 @@ jobs:
 
   deploy-server:
     name: rebuild the servers on the VM
-    needs: gate
+    needs: number
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deploy'
     runs-on: ubuntu-latest
     # As deploy-web: what landed.
@@ -216,10 +262,14 @@ jobs:
       group: deploy-server
       cancel-in-progress: false
     steps:
+      # The one file it sends; the VM builds from its own clone.
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
+          sparse-checkout: infra/prod/deploy.sh
+          sparse-checkout-cone-mode: false
 
+      # infra/prod/deploy.sh on the VM, the script a hand deploy runs too.
       - name: Rebuild and restart the stack
         env:
           VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
@@ -241,49 +291,7 @@ jobs:
             echo "::warning::VM_KNOWN_HOSTS is not set — the host key is being accepted unverified"
             ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           fi
-          # --force-recreate because the Caddyfile is a bind mount, read once
-          # at start: an `up --build` alone leaves a stale relay behind a fresh
-          # server, which on 09-18 looked like /api/* answering 404 from the
-          # wrong process rather than like a failure.
-          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$VM_USER@$VM_HOST" bash -eu -s -- "$SHA" <<'REMOTE'
-            sha="$1"
-            cd /opt/pixelet
-            # reset rather than pull: the VM is a deploy target and nothing is
-            # authored on it. infra/prod/.env is gitignored and survives this.
-            # The refspec spelled out: a clone made before deploy existed, or
-            # made single-branch, has no remote-tracking ref for it to update.
-            git fetch --prune origin +refs/heads/deploy:refs/remotes/origin/deploy
-            # The commit this run was started for, so the VM's half of a build
-            # is the half the runner published rather than whatever deploy has
-            # reached by the time the ssh lands. A rewritten history can leave
-            # that commit unreachable here, and a deploy that refused over it
-            # would leave production on the old code for something this project
-            # does on purpose — so it says so and takes the tip instead.
-            git fetch origin "$sha" 2>/dev/null || true
-            if git cat-file -e "${sha}^{commit}" 2>/dev/null; then
-              git reset --hard "$sha"
-            else
-              echo "::warning::$sha is unreachable on the VM; the servers are built from origin/deploy instead"
-              git reset --hard origin/deploy
-            fi
-            cd infra/prod
-            # The disk's bounds are the tree's: a changed one is installed
-            # before the stack is recreated under it.
-            # Validated first: a config dockerd refuses would leave every
-            # container stopped.
-            if [ -f etc/daemon.json ] && ! cmp -s etc/daemon.json /etc/docker/daemon.json; then
-              dockerd --validate --config-file etc/daemon.json
-              install -m 644 etc/daemon.json /etc/docker/daemon.json
-              systemctl restart docker
-            fi
-            if [ -f etc/journald.conf ] && ! cmp -s etc/journald.conf /etc/systemd/journald.conf.d/pixelet.conf; then
-              install -D -m 644 etc/journald.conf /etc/systemd/journald.conf.d/pixelet.conf
-              systemctl restart systemd-journald
-            fi
-            docker compose up -d --build --force-recreate
-            docker image prune -f
-            docker compose ps
-          REMOTE
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$VM_USER@$VM_HOST" bash -eu -s -- "$SHA" < infra/prod/deploy.sh
 
       # Last, so a failure anywhere above leaves it unset.
       - id: landed
@@ -329,10 +337,10 @@ jobs:
   # through — it reports a missing record and takes nothing back.
   record:
     name: record what this build carried
-    needs: [gate, deploy-web, deploy-server, smoke]
-    # `!failure()` deliberately absent where the smoke has it: one half failing
-    # does not unpublish the other, and a build that reached the edge and not
-    # the VM is exactly the one worth having a line about. It waits for the
+    needs: [number, deploy-web, deploy-server, smoke]
+    # Not `!failure()`: one half failing does not unpublish the other, and a
+    # build that reached the edge and not the VM is exactly the one worth
+    # having a line about. It waits for the
     # smoke so the line can say what the smoke found, and records whatever it
     # found — a build that went out and failed the smoke is still a build that
     # went out, and the one most worth finding in the log later.
@@ -362,7 +370,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          ./script/build-log.ts --record "${{ needs.gate.outputs.build_number }}" \
+          ./script/build-log.ts --record "${{ needs.number.outputs.build_number }}" \
             ${{ needs.deploy-web.outputs.published == 'true' && '--web' || '' }} \
             ${{ needs.deploy-server.outputs.rebuilt == 'true' && '--server' || '' }} \
             --smoke "${{ needs.smoke.result }}"
