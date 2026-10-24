@@ -102,8 +102,9 @@ export function geolocationStart(): void {
     const subscription = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
       (pos) => {
-        const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-        kernel_position(longitude, latitude, altitude, known(accuracy), known(heading));
+        const { latitude, longitude, altitude, altitudeAccuracy, accuracy, heading } = pos.coords;
+        // An altitude with no accuracy is none measured.
+        kernel_position(longitude, latitude, known(altitudeAccuracy) === null ? null : altitude, known(accuracy), known(heading));
       },
       // Android's watch never ends on its own (expo's watch callbacks leave
       // onLocationError empty, and the fused provider keeps the request);
