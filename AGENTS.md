@@ -9,6 +9,11 @@
   a loose phrase. Borrow a known term only where the code has its defining
   properties, else use the project's own; an outside term is a borrowed
   structure, said once, never an identity.
+- Folders and files are singular, for what each one is; plural only where
+  the ecosystem names a collection of independent units (`crates/`, `apps/`,
+  `packages/`) or the word has no singular in its sense (`minutes/`).
+- Systemic modules take their conventional abbreviation (`io`, `mem`, `abi`);
+  domain modules take the full word (`scene`, `control`, `query`).
 - xpute's words are host, guest and their contract; kernel, shell and pixelet
   appear nowhere under `xpute/`. pixelet's host is `apps/client/src/host/`
   plus a platform bracket, and the kernel is its guest.
