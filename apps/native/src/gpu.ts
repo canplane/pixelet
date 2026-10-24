@@ -1,8 +1,8 @@
 // @pxl/native/gpu.ts
 
-import { Command } from "@pxl/client/vmm/abi/cmd.spec.ts";
-import { request_frame, send_next } from "@pxl/client/vmm/sched.ts";
-import { Gpu, setGpu } from "@pxl/client/vmm/gpu.ts";
+import { Command } from "@pxl/client/host/abi/cmd.spec.ts";
+import { request_frame, send_next } from "@pxl/client/host/sched.ts";
+import { Gpu, setGpu } from "@pxl/client/host/gpu.ts";
 import { PLATFORM } from "./module.ts";
 
 export function gpuBoot(): void {

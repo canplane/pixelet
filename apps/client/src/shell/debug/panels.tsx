@@ -5,7 +5,7 @@
 
 import type { ComponentType } from "react";
 
-import { useKernel } from "@/vmm/shell.ts";
+import { useKernel } from "@/host/shell.ts";
 import { type SettingName, SETTINGS, settingsIn } from "@/shell/setting/schema.ts";
 import { Fold } from "./fold.tsx";
 import { GizmoLegend } from "./gizmo-legend.tsx";

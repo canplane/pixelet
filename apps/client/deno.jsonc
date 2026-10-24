@@ -1,5 +1,5 @@
 {
-  // @pxl/client: the shell and the VMM, the same files on a
+  // @pxl/client: the shell and the host, the same files on a
   // page and on a device. Each app is a bracket: it bundles this and hands
   // in what its place gives (src/bracket.tsx).
 

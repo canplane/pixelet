@@ -38,7 +38,7 @@ The world lives in one Rust **kernel** (`pxl-kernel`, drawing through `pxl-rende
 
 What the host is made of depends on where the kernel runs, and a **bracket** plugs it in there. In a browser tab, `pxl-wasm` makes the kernel one WebAssembly module, and the page (`apps/web`) instantiates it and runs its GPU calls on the browser's WebGPU. On a device, `pxl-native` links the kernel into the app as a library that runs its own GPU calls on wgpu, and the app (`apps/native`) reaches it through one native module. Each app hands the rest of what its place gives — storage, text, the network, the sensors, the surfaces drawn into — to the client once, at its entry (`apps/client/src/bracket.tsx`).
 
-The **client** (`apps/client`) is the same TypeScript in both: the VMM (`src/vmm/`), which boots the kernel, submits each turn's frame and answers its reads, and the **shell** (`src/shell/`), the UI, which decides nothing about the world and changes it only by commands the kernel applies.
+The **client** (`apps/client`) is the same TypeScript in both: the host (`src/host/`), which boots the kernel, submits each turn's frame and answers its reads, and the **shell** (`src/shell/`), the UI, which decides nothing about the world and changes it only by commands the kernel applies.
 
 Almost nothing is computed at request time. Tiles and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a tile under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked. [ARCHITECTURE.md](./ARCHITECTURE.md) follows the kernel part by part.
 
@@ -155,7 +155,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 │   ├── client/               # The client, which both apps bundle
 │   │   └── src/
 │   │       ├── bracket.tsx   #   what the client asks of the place it runs in
-│   │       ├── vmm/          #   the VMM, which runs the kernel: abi, boot, control, io, mem, render, turn
+│   │       ├── host/         #   the host, which runs the kernel: abi, boot, control, io, mem, render, turn
 │   │       ├── shell/        #   the UI: frame, world, settings, search, debug, ui kit (pill.ios.tsx beside pill.tsx), locale
 │   │       ├── catalog/      #   the data screens show (cells, assets)
 │   │       └── config/       #   deployment config and routes
@@ -201,7 +201,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | `pxl-shader`    | `pxl-spec-core` as the GPU's compute entries, built to WGSL through rust-gpu by `script/shader-wgsl.ts` and checked in beside the renderer's shaders.                    |
 | `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                                               |
 | `pxl-native`    | The guest on a device: a static library behind one C header (`include/pxl_native.h`), which runs every call on a thread of its own.                                      |
-| `apps/client`   | The client, the same in both apps: the VMM and the shell, handed what its place gives (`src/bracket.tsx`).                                                               |
+| `apps/client`   | The client, the same in both apps: the host and the shell, handed what its place gives (`src/bracket.tsx`).                                                              |
 | `apps/web`      | The page's bracket: what a browser tab gives the client, the guest module it instantiates, and the Cloudflare Worker that serves it all.                                 |
 | `apps/native`   | The device's bracket: what the app gives the client through its native module, which links the kernel.                                                                   |
 | `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                                                              |
@@ -224,7 +224,7 @@ A crate's root holds its modules, the directories sorted by kind and the one-fil
 
 One gitignored tree holds what the tree makes: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and under it `out/oven/` is what `dev:oven` bakes on demand, deleted at no cost. Scratch — logs, probes, diffs — goes in `tmp/`, which ignores itself, and is deleted when done. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 
-The casing in the tree is not mixed by accident. Rust, the xpute packages and the VMM (`apps/client/src/vmm/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The shell, the brackets' TypeScript and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
+The casing in the tree is not mixed by accident. Rust, the xpute packages and the host (`apps/client/src/host/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The shell, the brackets' TypeScript and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
 ---
 

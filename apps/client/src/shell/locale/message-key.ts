@@ -2,7 +2,7 @@
 
 /** The locale key a kernel message number reads as: `strerror` to its `errno`. */
 
-import { Message } from "@/vmm/abi/cmd.spec.ts";
+import { Message } from "@/host/abi/cmd.spec.ts";
 
 export function messageKey(message: Message): string {
   switch (message) {

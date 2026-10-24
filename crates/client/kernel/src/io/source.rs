@@ -5,8 +5,8 @@
 //! answer in its shape. It says the zoom the floor is held at, the
 //! shards served and the format each kind is in: a tile no served shard is
 //! over or under is never asked for. The versions it names are the
-//! VMM's, which reads a tile under the one that serves it
-//! (apps/client/src/vmm/io/source.ts).
+//! host's, which reads a tile under the one that serves it
+//! (apps/client/src/host/io/source.ts).
 
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{key, sharded};

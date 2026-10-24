@@ -3,7 +3,7 @@
 /** The guest linked into the app, reached through the native module: a memory buffer and a doorbell, as a page gets. */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import type { Guest } from "@pxl/client/vmm/module.ts";
+import type { Guest } from "@pxl/client/host/module.ts";
 import { PLATFORM } from "./module.ts";
 
 export function openGuest(): Promise<Guest> {

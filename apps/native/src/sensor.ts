@@ -10,8 +10,8 @@
 import { AppState } from "react-native";
 import * as Location from "expo-horizon-location";
 
-import { GeolocationErrorCode, PermissionAnswer, Sensor } from "@pxl/client/vmm/abi/cmd.spec.ts";
-import { kernel_orientation, kernel_orientation_lost, kernel_permission, kernel_position, kernel_position_error } from "@pxl/client/vmm/control/sensor.ts";
+import { GeolocationErrorCode, PermissionAnswer, Sensor } from "@pxl/client/host/abi/cmd.spec.ts";
+import { kernel_orientation, kernel_orientation_lost, kernel_permission, kernel_position, kernel_position_error } from "@pxl/client/host/control/sensor.ts";
 import { PLATFORM } from "./module.ts";
 
 export function geolocationSupported(): boolean {

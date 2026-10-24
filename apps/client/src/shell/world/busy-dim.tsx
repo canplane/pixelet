@@ -5,7 +5,7 @@ import type { StyleProp, ViewStyle } from "react-native";
 
 import { HANDHELD } from "@/bracket.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
-import { useKernel } from "@/vmm/shell.ts";
+import { useKernel } from "@/host/shell.ts";
 import { Dim } from "@/shell/ui/motion/veil.ts";
 import { DIM } from "@/shell/ui/motion/transition.ts";
 import { touches } from "@/shell/ui/touch.ts";

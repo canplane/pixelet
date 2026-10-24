@@ -12,7 +12,7 @@
 //   crates/client/kernel/src/mem/section.rs   the map — the fixed ranges and the heap
 //   crates/client/kernel/src/door/layout.rs   the front — the rings and the directory
 //   crates/client-bracket/wasm/build.rs               the linker flags for the module
-//   apps/client/src/vmm/mem.ts                 the reservation the host makes in a tab
+//   apps/client/src/host/mem.ts               the reservation the host makes in a tab
 //   crates/client-bracket/native/src/memory.rs the region a device is given
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON

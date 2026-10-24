@@ -4,11 +4,11 @@ use pxl_spec::route::TILE_SPHERE;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::codec::json::read_json;
 
-/// The VMM names a tile by its subject as the kernel once
+/// The host names a tile by its subject as the kernel once
 /// named it itself,
 /// recorded in this fixture, which its test reads too (object.test.ts):
 /// each name there is its subject's, as pxl-spec writes it.
-const FIXTURE: &str = include_str!("../../../../../apps/client/src/vmm/io/object.fixture.json");
+const FIXTURE: &str = include_str!("../../../../../apps/client/src/host/io/object.fixture.json");
 
 #[test]
 fn the_host_s_fixture_names_each_tile_as_pxl_spec_does() {

@@ -7,8 +7,8 @@
 //! Every file is a root's object by number (host.json `root`): a tile by its
 //! subject, an asset by its load, a kept file by its slot. The number is the
 //! path's one name, in decimal; what it is and where, a version, a URL or a
-//! storage key, is what the VMM (apps/client/src/vmm/) binds the root to,
-//! xpute's hypervisor carrying the open there.
+//! storage key, is what the host (apps/client/src/host/) binds the root to,
+//! `@xpute/host` carrying the open there.
 
 use xpute_guest::ipc::file::Files;
 use xpute_guest::ipc::sys::Fd;

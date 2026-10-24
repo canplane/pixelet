@@ -4,8 +4,8 @@ import { StyleSheet, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
-import { DevicePoseStatus } from "@/vmm/abi/cmd.spec.ts";
-import { useKernel } from "@/vmm/shell.ts";
+import { DevicePoseStatus } from "@/host/abi/cmd.spec.ts";
+import { useKernel } from "@/host/shell.ts";
 
 import { HANDHELD } from "@/bracket.tsx";
 import type { GlyphName } from "@/shell/ui/icon.tsx";

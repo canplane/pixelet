@@ -5,8 +5,8 @@
  * behind a prompt that must be raised inside the gesture.
  */
 
-import { GeolocationErrorCode, PermissionAnswer, Sensor } from "@pxl/client/vmm/abi/cmd.spec.ts";
-import { kernel_orientation, kernel_permission, kernel_position, kernel_position_error } from "@pxl/client/vmm/control/sensor.ts";
+import { GeolocationErrorCode, PermissionAnswer, Sensor } from "@pxl/client/host/abi/cmd.spec.ts";
+import { kernel_orientation, kernel_permission, kernel_position, kernel_position_error } from "@pxl/client/host/control/sensor.ts";
 
 interface IosOrientationEvent extends DeviceOrientationEvent {
   webkitCompassHeading?: number;
