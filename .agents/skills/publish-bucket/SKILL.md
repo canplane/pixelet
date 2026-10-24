@@ -104,24 +104,20 @@ aws s3api head-object --bucket pixelet-tiles --key asset/<sha256>.<ext> --profil
 
 ## Verify what is served
 
-The bucket can be right while the serving path is not, so check the served
-bytes:
+The bucket can be right while the serving path is not. The smoke checks the
+served bytes, and CI runs it after every deploy; run it by hand after a
+publish, which is not a deploy:
 
 ```bash
-U=https://plei.me/tile/terrain/<version>/<name>
-curl -s -H "Accept-Encoding: zstd" -D - -o /dev/null "$U"                  # expect content-encoding: zstd
-curl -s -H "Accept-Encoding: zstd" "$U" | zstd -dcq | head -c 2 | xxd -p   # expect 5854 (XT)
+deno task smoke https://plei.me
 ```
 
-- A body that does not decode to `5854` was encoded a second time: the Worker's
-  `Response` lost `encodeBody: "manual"` (`serve`).
-- **Request each tile twice.** A cached hit leaves by its own path
-  (`STORED_ENCODING`): compare both against the stored size, and check
-  `cf-cache-status` that the second one hit.
-- An unbaked ocean tile answers **204** with no body. `index.html` instead means
-  `run_worker_first` is missing, and the client would decode HTML as terrain.
-- An asset answers `model/gltf-binary` or `image/png` with no
-  `content-encoding`.
+It fails on a tile packed twice (the Worker's `Response` lost
+`encodeBody: "manual"`, `serve`), on a second ask off the edge cache that
+differs from the first (`STORED_ENCODING`), on an unbaked page answered with
+anything but an empty 204 (HTML means `run_worker_first` is missing), and on
+an asset with the wrong type or a `content-encoding`. It only warns when the
+second ask did not hit the cache, which leaves that path unchecked.
 
 ## Purging the edge cache
 
