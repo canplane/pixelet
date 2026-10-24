@@ -302,9 +302,14 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     // let go are freed, so it is painted at render. Where the sheet has no
     // room for it, the hold is let go: the instance shows the new label,
     // which waits, and the next run frees the old one's slot and asks again.
+    // One whose words are not laid out yet stays held and asks nothing: it
+    // asks the turn its words come (`badge::coming`).
     let mut refused = false;
     for &i in &p.kept {
         let Ok(k) = p.pending.binary_search_by_key(&i, |w| w.0) else { continue };
+        if badge::size(&p.pending[k].1).is_none() {
+            continue;
+        }
         if badge::slot(&p.pending[k].1) == NO_SLOT {
             labeled[i as usize].label = p.pending[k].1.clone();
             refused = true;
