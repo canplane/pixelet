@@ -127,12 +127,10 @@ pub fn size(label: &Label) -> Option<[f64; 3]> {
     Some(size)
 }
 
-/// Whether the label is laid out and painted, so drawing it shows its words.
+/// Whether the label is laid out and painted, so drawing it shows its
+/// words. It asks the sheet for no slot, which `slot` does.
 pub fn ready(label: &Label) -> bool {
-    size(label).is_some() && {
-        let slot = slot(label);
-        slot != NO_SLOT && billboard_sheet().painted(slot as u32)
-    }
+    size(label).is_some() && badges().get(label).is_some_and(|b| b.slot != NO_SLOT && billboard_sheet().painted(b.slot as u32))
 }
 
 /// Its label was measured first.

@@ -71,8 +71,9 @@ struct Placement {
     labeled: Vec<Instance>,
     /// Last turn's `labeled`, its buffer reused.
     spare: Vec<Instance>,
-    /// Labels not ready yet, kept to become so.
-    pending: Vec<Label>,
+    /// Labels not ready yet, kept to become so, each by the index in
+    /// `labeled` of the instance showing its old drawing meanwhile.
+    pending: Vec<(u32, Label)>,
     /// What was drawn last by its holder's key, and the labels the badges
     /// keep: made each run, their room kept.
     before: FnvHashMap<Key, Label>,
@@ -293,12 +294,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     // tiebreak).
     for s in shown {
         let (label, region) = s.label.spaced(spacing);
-        let label = match before.get(&s.key) {
-            Some(before) if *before != label && !badge::ready(&label) => {
-                p.pending.push(label);
-                before.clone()
-            }
-            _ => label,
+        let (label, held) = match before.get(&s.key) {
+            Some(before) if *before != label && !badge::ready(&label) => (before.clone(), Some(label)),
+            _ => (label, None),
         };
         // Its words are laid out by a later turn.
         let Some([width, height, anchor]) = badge::size(&label) else {
@@ -306,23 +304,37 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
             continue;
         };
         let local = crate::view::frame::coord::to_world(&s.stands);
+        p.pending.extend(held.map(|held| (labeled.len() as u32, held)));
         p.batch.push(local[0], local[1], local[2], [width, height, region], anchor, labeled.len() as f64);
         labeled.push(Instance { label, ..s });
     }
     // The line's slot is kept while it is said, wherever its speaker is.
     p.keep.clear();
-    p.keep.extend(labeled.iter().map(|s| s.label.clone()).chain(p.pending.iter().cloned()).chain(line));
+    p.keep.extend(labeled.iter().map(|s| s.label.clone()).chain(p.pending.iter().map(|w| w.1.clone())).chain(line));
     let freed = badge::retain(&p.keep);
+    (p.pins, p.places) = (pins, read_places);
+    select_visible_billboards(&mut p.batch, &mut p.kept);
+    // A label held for an instance seen asks its slot now, after the slots
+    // let go are freed, so it is painted at render. Where the sheet has no
+    // room for it, the hold is let go: the instance shows the new label,
+    // which waits, and the next run frees the old one's slot and asks again.
+    let mut refused = false;
+    for &i in &p.kept {
+        let Ok(k) = p.pending.binary_search_by_key(&i, |w| w.0) else { continue };
+        if badge::slot(&p.pending[k].1) == NO_SLOT {
+            labeled[i as usize].label = p.pending[k].1.clone();
+            refused = true;
+        }
+    }
     // Painted at render, or laid out by the host, neither of which asks a
     // turn: one looks again, while a label is on its way (`badge::coming`),
-    // or once a slot let go may make room for one that had none.
-    let pending = p.pending.iter().any(badge::coming) || freed && !p.pending.is_empty();
-    p.waiting = pending || unlaid || unread > 0;
+    // once a slot let go may make room for one that had none, or once a
+    // hold let go frees the old slot.
+    let pending = p.pending.iter().any(|w| badge::coming(&w.1)) || freed && !p.pending.is_empty();
+    p.waiting = pending || refused || unlaid || unread > 0;
     if p.waiting {
         crate::sched::edge::request_world_tick();
     }
-    (p.pins, p.places) = (pins, read_places);
-    select_visible_billboards(&mut p.batch, &mut p.kept);
     p.drawn.clear();
     for &i in &p.kept {
         if badge::slot(&labeled[i as usize].label) == NO_SLOT {
