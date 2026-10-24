@@ -2,8 +2,8 @@
 
 /**
  * The kernel's system calls as its host answers them: xpute's, plus text
- * layout and image decode. All run between turns, so what they write is in
- * place by the time the kernel reads it.
+ * layout and raster. All run between turns, so what they write is in place
+ * by the time the kernel reads it.
  */
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
