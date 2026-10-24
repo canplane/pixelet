@@ -1,0 +1,2 @@
+# rust-gpu output (script/shader-wgsl.ts): kept out of the language stats.
+*.gen.wgsl linguist-generated=true
