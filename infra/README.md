@@ -167,7 +167,7 @@ The bucket, `pixelet-tiles`, holds everything the client fetches that is not the
 | `earth/<version>/`      | packed earth tile; `sphere`, its picture whole  | name, 4                  | immutable; a re-bake is a new version                            |
 | `asset/`                | glb, png, webp — not packed                     | the SHA-256 of its bytes | immutable by construction; unreferenced keys deleted whenever    |
 | `source`                | the source's declaration, JSON                  | fixed name               | mutable; written by `publish`, `no-cache`, revalidated each boot |
-| `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's gate, never by hand           |
+| `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's number job, never by hand     |
 | `_meta/build-log.jsonl` | a line a published build                        | fixed name               | appended by CI's `record` (`script/build-log.ts`)                |
 | `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number             | written by `deno task deploy` under a build number; never served |
 
@@ -182,16 +182,17 @@ like the app loading, not like a missing route. Locally `deno task dev:oven`
 runs pxl-geo on 3000, the tile server on 3001 and pxl-api on 3002, and the
 dev proxy splits on the same roots.
 
-**Deploying the client** is CI's (§5); by hand it is the script CI runs,
-building here rather than taking the gate's bundle. What CI waits on first
-is not run for you: the gate's checks and tests pass over the commit, and the
-servers it talks to are already deployed (§3), since a new client against an
-old server is the direction that breaks. A hand deploy takes no number and
-goes out unnumbered.
+**Deploying the client** is CI's (§5); by hand it is the script CI runs.
+Neither checks or tests anything, so first `deno task check` and
+`deno task test` pass over the commit
+([the deploy skill](../.agents/skills/deploy/SKILL.md)), and the servers it
+talks to are already deployed (§3), since a new client against an old server
+is the direction that breaks. A hand deploy takes no number and goes out
+unnumbered.
 
 ```sh
 wrangler login           # once a machine
-deno task check:ship && deno task test
+deno task check && deno task test
 deno task deploy         # build, publish
 deno task smoke https://plei.me
 ```
@@ -205,27 +206,28 @@ skill's "Verify what is served".
 
 ## 5. CI/CD
 
-`.github/workflows/check-and-deploy.yml` runs on a push to `deploy` and on
-pull requests, never on main: main carries work between machines, compiling
-or not. A push or pull request that changes only markdown runs nothing, and
-`gh workflow run` against any other ref runs the gate alone. **Publishing is
-`git push origin main:deploy`**, forced once main has been rewritten. Why
-each job is as it is lives in the workflow's comments.
+`.github/workflows/deploy.yml` runs on a push to `deploy` and on a dispatch,
+never on main: main carries work between machines, compiling or not. A push
+that changes only markdown runs nothing, and a dispatch against any other ref
+does nothing. **Publishing is `git push origin main:deploy`**, forced once
+main has been rewritten, after `deno task check` and `deno task test` pass
+here: CI checks and tests nothing
+([the deploy skill](../.agents/skills/deploy/SKILL.md)). Why each job is as
+it is lives in the workflow's comments.
 
-| Job             | When                  | What                                                                                                                                                                                                                                                                       |
-| :-------------- | :-------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gate`          | every run             | `check:rules`, then `check:ship` over the whole commit: the shipped TypeScript and the deploy's scripts type-check, the shipped crates pass clippy, the generated files match `spec/`, the bundle and the Worker build; then `deno task test`; on deploy, keeps the bundle |
-| `number`        | gate green, on deploy | takes a build number                                                                                                                                                                                                                                                       |
-| `deploy-server` | after `number`        | ssh, `infra/prod/deploy.sh`: reset to the run's commit, `docker compose up -d --build --force-recreate`                                                                                                                                                                    |
-| `deploy-web`    | after `deploy-server` | `deno task deploy --prebuilt`: the gate's bundle under the build number                                                                                                                                                                                                    |
-| `smoke`         | after both deployed   | `deno task smoke https://plei.me`                                                                                                                                                                                                                                          |
-| `record`        | after either deployed | appends the build to the log                                                                                                                                                                                                                                               |
+| Job             | When                  | What                                                                                                    |
+| :-------------- | :-------------------- | :------------------------------------------------------------------------------------------------------ |
+| `number`        | every push to deploy  | takes a build number                                                                                    |
+| `deploy-server` | after `number`        | ssh, `infra/prod/deploy.sh`: reset to the run's commit, `docker compose up -d --build --force-recreate` |
+| `deploy-web`    | after `deploy-server` | `deno task deploy` under the build number: builds, keeps the panic paths, publishes                     |
+| `smoke`         | after both deployed   | `deno task smoke https://plei.me`                                                                       |
+| `record`        | after either deployed | appends the build to the log                                                                            |
 
 A deploy is whole: the client and the servers go out from the one commit,
 every time, so they never run different ones. The servers go first because an
 old client against a new server is safe and the reverse is not.
 
-Every build of `deploy` that passes the gate takes a number from a counter in
+Every build of `deploy` takes a number from a counter in
 the bucket, never reset; a published one is a line in `_meta/build-log.jsonl`
 with the subjects of the commits it carried, since main's shas do not
 survive its rewrites. `./script/build-log.ts` reads it, newest first, and

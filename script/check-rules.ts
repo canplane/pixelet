@@ -98,7 +98,7 @@ function exists(path: string, from: string): boolean {
   if (head === "@xpute") return suffixes.has(`xpute/ts/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir && (suffixes.has(`${dir}src/${tail}`) || suffixes.has(`${dir}${tail}`))) return true;
-  // By what git ignores, not disk: CI runs this before any build.
+  // By what git ignores, not disk: a fresh checkout runs this before any build.
   return [join(dirname(from), path), path, `apps/client/src/${path}`, `apps/web/src/${path}`].some((p) => {
     try {
       if (Deno.statSync(join(root, p)).isFile) return true;
