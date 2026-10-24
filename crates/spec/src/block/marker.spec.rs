@@ -17,9 +17,10 @@
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
 /// The coarsest chunk that draws a marker: z14, where OpenMapTiles' `poi`
-/// layer holds every point (layers/poi/poi.yaml). What someone puts up, and
-/// what someone says, the bubble over their character, judged by the chunk
-/// drawing where its speaker stands (pxl-kernel scene/place.rs).
+/// layer holds every point (layers/poi/poi.yaml): what someone puts up, by
+/// the chunk it is read from (pxl-kernel scene/place.rs). A chat line's
+/// bubble, which no chunk holds, shows from the same, judged at the camera
+/// grid's cell where its speaker stands (pxl-kernel billboard/chat.rs).
 pub const MARKER_SHOWN_FROM: u8 = 14;
 
 /// A marker's cell on the camera grid, in zooms: −1 spans two of the grid's

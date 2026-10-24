@@ -4,8 +4,9 @@
 //! draws it at the zoom of Carto's the view is at where it stands, read from
 //! the tile that says its ground at that zoom; a marker someone put up, near
 //! enough, or where more than one stands in a marker's cell (`marker_cell`),
-//! their count at the cell's middle; a line said, over its speaker's head
-//! (`billboard/chat.rs`), judged as a marker is. A place stands at its ground
+//! their count at the cell's middle; a line said, in its speaker's frame
+//! over its head, where its own rule shows it (`billboard/chat.rs`
+//! `hangs`). A place stands at its ground
 //! leaf cell's center on the surface a ray down meets first, a marker at its
 //! own cell's.
 
@@ -14,7 +15,7 @@ use selection::select_visible_billboards;
 
 use crate::billboard::badge::{self, Label};
 use crate::billboard::batch::BillboardBatch;
-use crate::billboard::chat::{shown_line, speaker};
+use crate::billboard::chat::{hangs, shown_line};
 use crate::billboard::field::{billboard_instance, BillboardSet};
 use crate::chunk::Chunk;
 use crate::layer::object::preview::draft;
@@ -90,7 +91,7 @@ struct Placement {
 /// Everything `step` reads, by value, as the demand's `Seen` is: the eye and
 /// its view (the observation holds its frustum), the grid's τ, the places
 /// setting, the spacing names wrap to, the marker being written and the
-/// chat's line and its speaker. A new input goes here or the step never sees
+/// chat's line and where it hangs. A new input goes here or the step never sees
 /// it change.
 #[derive(Clone, PartialEq)]
 struct Seen {
@@ -100,13 +101,14 @@ struct Seen {
     spacing: f64,
     drafted: Option<(EntryAt, Label, Q3)>,
     line: Option<Label>,
-    speaker: Option<(Q3, Q3)>,
+    hangs: Option<Q3>,
 }
 
 /// The name a holder calls what it shows by, from one run to the next, and
 /// none of what is painted (`badge.rs`): a marker by its entry, the markers
 /// of a marker's cell by the cell, a place by its tile and its index there,
-/// the chat's line by its speaker, who is one.
+/// the chat's line by its speaker, the frame it hangs in, of which there is
+/// one.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Key {
     Pin(EntryAt),
@@ -281,7 +283,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         spacing: spacing_px(),
         drafted,
         line: shown_line(),
-        speaker: speaker(),
+        hangs: hangs(o.eye, tau),
     };
     if !p.waiting && !p.moved && p.last.as_ref() == Some(&seen) {
         return;
@@ -352,13 +354,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let mut labeled = core::mem::take(&mut p.spare);
     labeled.clear();
     p.pending.clear();
-    // The line is its speaker's, judged where it stands, as a marker by the chunk drawing it there.
+    // The line hangs in its speaker's frame, where its own rule shows it.
     let line = seen.line.clone();
-    let said = line
-        .clone()
-        .zip(seen.speaker)
-        .filter(|&(_, (feet, _))| marker_shows(crate::query::cell_at(o.eye, tau, crate::view::frame::coord::to_world(&feet))))
-        .map(|(label, (_, over))| (Key::Line, label, over));
+    let said = line.clone().zip(seen.hangs).map(|(label, over)| (Key::Line, label, over));
     let is_drafted = |key: &Key| matches!(key, Key::Pin(at) if Some(*at) == draft.map(|d| d.at));
     // A cell's markers but the waiting one: one is itself, more their count.
     let shown = found.chunk_by(|a, b| a.cell().is_some() && a.cell() == b.cell()).filter_map(|run| {
