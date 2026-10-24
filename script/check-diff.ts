@@ -1,6 +1,7 @@
 #!/usr/bin/env -S deno run -A
-// `deno task check`, narrowed to the working tree's changes: a crate when it
-// or a dependency changed, TypeScript by what imports what.
+// `deno task check` and `deno task test`, narrowed to the working tree's
+// changes: a crate when it or a dependency changed, TypeScript by what
+// imports what. One selection drives both.
 //
 //   deno run -A script/check-diff.ts
 
@@ -82,6 +83,10 @@ function rust(name: string): string[][] {
           any = true;
         }
         i++;
+      } else if (args[i] === "--features" && args[i + 1]?.includes("/")) {
+        // A selected package's feature, which goes when the package does.
+        if (touched.has(args[i + 1].split("/")[0])) kept.push(args[i], args[i + 1]);
+        i++;
       } else if (args[i] === "--all") {
         for (const name of touched) if (members.has(name)) kept.push("-p", name);
         any = kept.includes("-p");
@@ -100,23 +105,33 @@ const task = (name: string) => runs.push({ label: name, argv: ["deno", "task", n
 const cargo = (name: string) => {
   for (const argv of rust(name)) runs.push({ label: `${name}: ${argv.slice(0, 2).join(" ")}`, argv });
 };
-const xpute = under("xpute/ts/");
-const web = xpute || under("apps/web/") || under("apps/client/");
+// apps/client imports xpute's TypeScript, and apps/web both.
+const xpute = under("xpute/");
+const client = under("apps/client/") || under("xpute/ts/");
+const web = client || under("apps/web/");
 
 // What ships.
 if (web) task("check:web");
+if (under("script/") || under("apps/web/script/")) task("check:script");
 cargo("check:rust");
 if (under("spec/") || changed.some((path) => path.includes(".spec.")) || touched.has("pxl-tool")) task("check:spec");
+if (web || touched.has("pxl-wasm")) runs.push({ label: "check:build", argv: ["deno", "task", "--cwd", "apps/web", "check:build"] });
 
 // The rest of `check`.
 const formatted = present.filter((path) => /\.(ts|tsx|js|json|jsonc|md)$/.test(path));
 if (formatted.length) runs.push({ label: "check:fmt", argv: ["deno", "fmt", "--check", ...formatted] });
 cargo("check:fmt");
 task("check:rules");
+task("lint");
 if (web || under("apps/native/")) runs.push({ label: "check:native", argv: ["deno", "check", "apps/native/src"] });
 cargo("check:native");
 cargo("check:host");
 if (xpute) task("check:xpute");
+
+// The tests of what the same selection reached.
+if (client) task("test:client");
+if (xpute) task("test:xpute");
+cargo("test:rust");
 
 console.log(`check-diff: ${changed.length} changed file(s); crates ${[...touched].join(", ") || "none"}`);
 for (const { label, argv } of runs) {

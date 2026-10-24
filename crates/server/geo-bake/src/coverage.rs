@@ -9,9 +9,9 @@ use std::sync::LazyLock;
 
 use postgres::{Client, NoTls};
 use pxl_geo_spec::table::CATALOG;
-use pxl_spec::space::coord::zoom::{count, shamt, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{count, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
-use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
+use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of, region};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
@@ -47,19 +47,14 @@ pub struct Node {
 }
 
 impl Node {
-    /// The node's corner nearest the lanes' least, in units.
-    pub fn base(self) -> [i32; 2] {
-        first_descendant_of(self.at, shamt(self.zoom) as u32)
-    }
-
     pub fn name(self) -> String {
         morton::name::<2>(key_of(self.zoom, self.at))
     }
 
     /// `[minx, miny, maxx, maxy]` in units, the maximum exclusive.
     pub fn rect(self) -> [f64; 4] {
-        let ([x, y], side) = (self.base().map(|v| v as f64), units(self.zoom));
-        [x, y, x + side, y + side]
+        let b = region((self.zoom, self.at));
+        [b.min[0], b.min[1], b.max[0], b.max[1]]
     }
 
     /// Its tiles at `zoom`, at or under it.

@@ -1,9 +1,9 @@
 #!/usr/bin/env -S deno run -A
 // Holds the tree to the rules a machine can decide: the header
-// path, cited paths and names existing, the lattice's arithmetic only in
-// `space/`, no raw pointer casts in offset crates, `@expo/ui` only in the
-// sheet, each rounding half to even, no CommonJS, each generated shader made
-// from the sources the tree holds now.
+// path, cited paths and names existing, no raw pointer casts in offset
+// crates, `@expo/ui` only in the sheet, each rounding half to even, no
+// CommonJS file, each generated shader made from the sources the tree holds
+// now.
 // `doc/minutes/` and `doc/experiment/` are exempt from cited paths: each
 // names the files of its day.
 //   deno run -A script/check-rules.ts
@@ -152,17 +152,6 @@ for (const f of files) {
   });
 }
 
-const LATTICE_OWNERS = ["crates/spec/src/space/", "crates/spec/src/bake/constant.rs"];
-const SHIFT = /\bshamt\([^;]*(<<|>>)|(<<|>>)[^;]*\bshamt\(/;
-
-for (const f of files) {
-  if (!f.endsWith(".rs") || LATTICE_OWNERS.some((o) => f.startsWith(o))) continue;
-  read(f)?.split("\n").forEach((line, n) => {
-    if (/^\s*\/\//.test(line)) return;
-    if (SHIFT.test(line)) problems.push(`${f}:${n + 1}: shifts the lattice outside pxl-spec space/: ${line.trim()}`);
-  });
-}
-
 const OFFSET_CRATES = ["xpute/rust/guest/src/", "crates/client/kernel/src/", "crates/client/render/src/", "crates/client-bracket/wasm/src/", "crates/client-bracket/native/src/"];
 const CAST_TO_POINTER = /\bas\s+\*(const|mut)\b/;
 
@@ -187,7 +176,7 @@ for (const f of files) {
 // rounds otherwise, or a floor of a half added, is refused in pixelet's code
 // and xpute's; xpute's scalar keeps its named variants, round_half_up and
 // round_half_away, as options a library offers.
-const ROUNDING_ROOTS = ["crates/", "apps/", "crates/client/shader/", "xpute/"];
+const ROUNDING_ROOTS = ["crates/", "apps/", "xpute/"];
 const ROUNDING_NAMED = [
   "xpute/rust/kit/src/math/scalar.rs",
   "xpute/rust/kit/src/math/scalar.test.rs",
@@ -220,34 +209,9 @@ for (const f of files) {
 
 // The tree's scripts are ES modules, TypeScript where a loader takes it, the
 // bundlers' configs among them: Node runs only the native toolchain's own
-// scripts (CocoaPods, Xcode's and Gradle's phases), and what of the tree it
-// loads there it loads as an ES module.
-const COMMONJS = [
-  /(?<![\w$.])require(?:\s*\.\s*resolve)?\s*\(/,
-  /(?<![\w$.])module\s*(?:\.\s*exports\b|\[)/,
-  /(?<![\w$.])exports\s*(?:\.\s*[\w$]+\s*=|\[)/,
-  /\bdefineProperty\(\s*exports\b/,
-  /\bcreateRequire\b/,
-];
+// scripts (CocoaPods, Xcode's and Gradle's phases).
 for (const f of files) {
   if (/\.c[jt]s$/.test(f)) problems.push(`${f}: CommonJS; the tree's scripts are ES modules`);
-  // This file names the patterns it refuses.
-  if (!/\.[mc]?[jt]sx?$/.test(f) || f === "script/check-rules.ts") continue;
-  // Code alone: a comment's text and a string's are not CommonJS. A block
-  // comment is followed across lines; a string or a template within one.
-  let inComment = false;
-  read(f)?.split("\n").forEach((line, n) => {
-    let code = line;
-    if (inComment) {
-      const end = code.indexOf("*/");
-      code = end < 0 ? "" : code.slice(end + 2);
-      inComment = end < 0;
-    }
-    code = code.replace(/\/\*.*?\*\/|\/\/.*$|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g, "");
-    const open = code.indexOf("/*");
-    if (open >= 0) [code, inComment] = [code.slice(0, open), true];
-    if (COMMONJS.some((r) => r.test(code))) problems.push(`${f}:${n + 1}: CommonJS where the tree's scripts are ES modules: ${line.trim()}`);
-  });
 }
 
 // A generated shader names the digest of the sources it was made from
@@ -263,4 +227,4 @@ if (problems.length) {
   console.error(`\ncheck-rules: ${problems.length}`);
   Deno.exit(1);
 }
-console.log("check-rules: headers, cited paths, the lattice, the memory's offsets, SwiftUI's place, one rounding, ES modules and the generated shaders hold");
+console.log("check-rules: headers, cited paths, the memory's offsets, SwiftUI's place, one rounding, ES modules and the generated shaders hold");

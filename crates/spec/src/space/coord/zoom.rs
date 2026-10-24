@@ -28,8 +28,9 @@ pub const CUBE_ZOOM: Zoom = SHARD_ZOOM + 1;
 /// The finest a point resolves: a fraction's step.
 pub use pxl_spec_core::FINEST_ZOOM;
 
-/// log2 of `z`'s side in units: negative where finer than a unit.
-pub const fn shamt(zoom: Zoom) -> i32 {
+/// log2 of `z`'s side in units: negative where finer than a unit. `space/`'s
+/// alone: the lattice is shifted here and nowhere else.
+pub(in crate::space) const fn shamt(zoom: Zoom) -> i32 {
     UNIT_ZOOM as i32 - zoom as i32
 }
 

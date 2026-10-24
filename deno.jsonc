@@ -54,28 +54,33 @@
     "build:wasm": "deno task --cwd apps/web build:wasm",
 
     // `check` is everything; `check:ship` is what a deploy waits on — what it
-    // ships compiles, lints and is what its JSON writes. Style, the device,
-    // the bakes, the tests' own code and xpute's checks are local.
+    // ships type-checks, lints, builds (the client's bundle and the Worker's,
+    // as a deploy makes them) and is what its JSON writes, and the scripts a
+    // deploy runs type-check. Style, the device, the bakes, the tests' own
+    // code and xpute's checks are local.
     "check": "deno task check:style && deno task check:ship && deno task check:native && deno task check:host && deno task check:xpute",
-    "check:ship": "deno task check:web && deno task check:rust && deno task check:spec",
+    "check:ship": "deno task check:web && deno task check:script && deno task check:rust && deno task check:spec && deno task --cwd apps/web check:build",
     "check:style": "deno task check:fmt && deno task check:rules && deno task lint",
     "check:diff": "./script/check-diff.ts",
     "check:fmt": "deno fmt --check && cargo fmt --manifest-path crates/Cargo.toml --all --check",
     "check:web": "deno task --cwd apps/web check",
+    // The tree's own scripts, which `deno run` runs unchecked.
+    "check:script": "deno check script/*.ts apps/web/script/*.ts",
     // check:web never reaches the device's own modules.
     "check:native": "deno check apps/native/src && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings",
     "check:xpute": "deno task --cwd xpute check",
-    // What ships: the kernel's module in both builds, and the servers.
-    "check:rust": "cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-api -- -D warnings",
-    // What runs here alone: the tests' code, the bakes and the tools.
-    "check:host": "cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings",
+    // What ships: the kernel's module in both builds, and the servers with their tests' code.
+    "check:rust": "cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-api -- -D warnings",
+    // What runs here alone: the tests' code, the bakes (the tile server's
+    // feature with them, which only adds) and the tools.
+    "check:host": "cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-spec -p pxl-spec-core -p pxl-render -p pxl-kernel -p pxl-geo-bake -p pxl-tool --features pxl-geo-bake/serve -- -D warnings",
     "check:rules": "./script/check-rules.ts",
     "check:spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec",
     "test": "deno task test:client && deno task test:xpute && deno task test:rust",
     "test:client": "deno task --cwd apps/client test",
     "test:xpute": "deno task --cwd xpute test",
     // pxl-tool holds every model to the committed table, which has been wrong by hand before.
-    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
+    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p pxl-spec -p pxl-spec-core -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
     "lint": "deno lint",
     "fmt": "deno fmt",
 
