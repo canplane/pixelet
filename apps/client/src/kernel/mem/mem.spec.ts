@@ -19,24 +19,30 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 
 /** Messages the submission ring holds, and so payloads: one a slot
  * (doc/minutes/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
- * the ring checks, since a position is taken modulo it by masking. */
-export const SUBMISSION_CAPACITY: u32 = 2048 as number;
+ * the ring checks, since a position is taken modulo it by masking.
+ *
+ * Sized to what a turn is sent, not to a burst: a full ring loses nothing, since
+ * the shell rings with no quota until there is room (xpute-host ipc/doorbell.ts
+ * `writer`, `submit`). And small because every slot ends up resident: a
+ * position only grows, so each slot is written in turn, and a slot is a page
+ * since a WORLD_SOURCE's or a CHAT_SEND's packet can come near one. */
+export const SUBMISSION_CAPACITY: u32 = 512 as number;
 
 /** Messages the completion ring holds: everything one turn leaves, since the
- * shell reads it dry before it rings again, and a turn that leaves more is a
- * fault in this number. Wider than the submission ring, since a turn answers
- * what it was sent and raises its own signals besides; twice is the present
- * sizing, giving the two the same room, and not a bound derived from either.
- * Nothing is overrun if it is wrong: a command whose signals and reply would
- * not fit waits for the next turn (xpute-guest ipc/door.rs). A power of
- * two, as the submission ring's. */
-export const COMPLETION_CAPACITY: u32 = 4096 as number;
+ * shell reads it dry before it rings again. A turn leaves at most a reply to
+ * each command it applies and its own signals after the drain (door.rs
+ * `SIGNALS`), so a ring of the submission ring's capacity plus the door's
+ * reserve, `SIGNALS` + 1, never stops a drain partway; twice is the present
+ * sizing, a power of two past that. Nothing is overrun if it is short: a
+ * command whose signals and reply would not fit waits for the next turn
+ * (xpute-guest ipc/door.rs). A power of two, as the submission ring's. */
+export const COMPLETION_CAPACITY: u32 = 1024 as number;
 
 /** Where the kernel's directory is (xpute-guest ipc/directory.rs): the page under
  * GLOBAL_BASE, past the rings' payloads. At an address both sides are built with
  * rather than one the module hands out, so the shell finds it with no call but the
  * first turn's, which lays the memory out and writes it. */
-export const DIRECTORY_AT: u32 = 33550336 as number;
+export const DIRECTORY_AT: u32 = 8384512 as number;
 
 /** What a device's memory is counted in: a reservation is a whole number of
  * these and the bytes past the last one are left out. */

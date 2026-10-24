@@ -538,15 +538,15 @@ The client's state is xpute's [core memory](./xpute/ARCHITECTURE.md#the-core-mem
 address      range               bytes                  placed by
 ──────────────────────────────────────────────────────────────────────
 0            .stack              1 MiB                  wasm-ld
-1 MiB        .ring.desc          36 KiB + 68 KiB        mem.json
-2 MiB        .ring.slot          8 MiB + 16 MiB         mem.json
-32 MiB−4KiB  the directory       4 KiB                  mem.json
-32 MiB       .rodata .data .bss  ~2.5 MiB               wasm-ld
+1 MiB        .ring.desc          12 KiB + 20 KiB        mem.json
+1.5 MiB      .ring.slot          2 MiB + 4 MiB          mem.json
+8 MiB−4KiB   the directory       4 KiB                  mem.json
+8 MiB        .rodata .data .bss  ~2.5 MiB               wasm-ld
 D            .fixed              each owner's range     door/layout.rs
 D + .fixed   .heap               the rest               the allocator
 end          PHONE_BYTES or DESKTOP_BYTES
 ──────────────────────────────────────────────────────────────────────
-             D: __data_end rounded up to a page, about 34.5 MiB;
+             D: __data_end rounded up to a page, about 10.5 MiB;
                 GLOBAL_BASE on a device
              sizes as mem.json sets them
 ```

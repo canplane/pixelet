@@ -38,30 +38,36 @@ pub const STACK_BYTES: u32 = 1048576;
 /// Messages the submission ring holds, and so payloads: one a slot
 /// (doc/minutes/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
 /// the ring checks, since a position is taken modulo it by masking.
-pub const SUBMISSION_CAPACITY: u32 = 2048;
+///
+/// Sized to what a turn is sent, not to a burst: a full ring loses nothing, since
+/// the shell rings with no quota until there is room (xpute-host ipc/doorbell.ts
+/// `writer`, `submit`). And small because every slot ends up resident: a
+/// position only grows, so each slot is written in turn, and a slot is a page
+/// since a WORLD_SOURCE's or a CHAT_SEND's packet can come near one.
+pub const SUBMISSION_CAPACITY: u32 = 512;
 
 /// Messages the completion ring holds: everything one turn leaves, since the
-/// shell reads it dry before it rings again, and a turn that leaves more is a
-/// fault in this number. Wider than the submission ring, since a turn answers
-/// what it was sent and raises its own signals besides; twice is the present
-/// sizing, giving the two the same room, and not a bound derived from either.
-/// Nothing is overrun if it is wrong: a command whose signals and reply would
-/// not fit waits for the next turn (xpute-guest ipc/door.rs). A power of
-/// two, as the submission ring's.
-pub const COMPLETION_CAPACITY: u32 = 4096;
+/// shell reads it dry before it rings again. A turn leaves at most a reply to
+/// each command it applies and its own signals after the drain (door.rs
+/// `SIGNALS`), so a ring of the submission ring's capacity plus the door's
+/// reserve, `SIGNALS` + 1, never stops a drain partway; twice is the present
+/// sizing, a power of two past that. Nothing is overrun if it is short: a
+/// command whose signals and reply would not fit waits for the next turn
+/// (xpute-guest ipc/door.rs). A power of two, as the submission ring's.
+pub const COMPLETION_CAPACITY: u32 = 1024;
 
 /// Where the rings' descriptors begin: the first page past the stack.
 pub const RING_DESC_AT: u32 = 1048576;
 
 /// Where the rings' payloads begin. Past the descriptors with room to spare, so
 /// that a ring deepened does not move the payloads of the ring before it.
-pub const RING_SLOT_AT: u32 = 2097152;
+pub const RING_SLOT_AT: u32 = 1572864;
 
 /// Where the kernel's directory is (xpute-guest ipc/directory.rs): the page under
 /// GLOBAL_BASE, past the rings' payloads. At an address both sides are built with
 /// rather than one the module hands out, so the shell finds it with no call but the
 /// first turn's, which lays the memory out and writes it.
-pub const DIRECTORY_AT: u32 = 33550336;
+pub const DIRECTORY_AT: u32 = 8384512;
 
 /// Where the linker may start placing `.rodata`, `.data` and `.bss` — passed to
 /// wasm-ld as `--global-base`, which is the only way to keep it out of the range
@@ -70,7 +76,7 @@ pub const DIRECTORY_AT: u32 = 33550336;
 /// A round number rather than wherever the rings happen to end, so the two
 /// ranges grow without moving each other: the rings have everything below it and
 /// the module's own data everything above.
-pub const GLOBAL_BASE: u32 = 33554432;
+pub const GLOBAL_BASE: u32 = 8388608;
 
 /// The heap a phone is guaranteed, and so what everything in front of it is
 /// checked against: the stack, the rings, the module's data and the fixed
@@ -85,8 +91,8 @@ pub const GLOBAL_BASE: u32 = 33554432;
 /// against where it actually started and what the device actually gave.
 ///
 /// 256 MiB, with the fixed ranges at 175.29 (the terrain's 157.75 of them) and
-/// the module's data ending at 34.5, leaves the phone 302.2 in practice, so
-/// there are 46 MiB of headroom over the guarantee (2026-10-24).
+/// the module's data ending at 10.5, leaves the phone 326.2 in practice, so
+/// there are 70 MiB of headroom over the guarantee (2026-10-24).
 ///
 /// The heap's bounded flows at their worst are checked against it at compile
 /// time too (door/layout.rs `HEAP_FLOWS_BYTES`): every kept terrain and Earth

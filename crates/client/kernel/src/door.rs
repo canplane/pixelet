@@ -71,6 +71,15 @@ fn door() -> &'static Door {
 /// raises nothing itself, so the door's reserve past this is its reply.
 const SIGNALS: u32 = Sensor::ALL.len() as u32 + 1;
 
+// The shell reads the completion ring dry before it rings, so a ring with
+// room for a reply to every submission and the door's reserve past the last
+// (`Door::init`, SIGNALS + 1) never stops a drain partway (mem.json
+// COMPLETION_CAPACITY).
+const _: () = assert!(
+    DOOR_LAYOUT.submission.capacity + SIGNALS < DOOR_LAYOUT.completion.capacity,
+    "a full submission ring's replies and the turn's signals do not fit the completion ring"
+);
+
 fn raise(cmd: Command, count: u32, f: impl Fn(&mut PacketWriter)) {
     door().raise(cmd as u32, count, f);
 }
