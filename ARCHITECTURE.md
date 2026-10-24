@@ -422,7 +422,17 @@ What the host tells of itself comes with its commands: whether the build is a de
 
 This section is how a read is named, answered and paced.
 
-A read is a file in xpute's sense: the kernel names an object, and only the host knows its address and protocol (`io/file.rs`). The type says which of three answers came back:
+A read is a file in xpute's sense, reached as Plan 9 reaches one ([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)): the kernel names a root by its number and a path below it, and the host binds each root to wherever its files lie (`apps/client/src/kernel/boot.ts`, `bind_root`). The roots are `spec/client/kernel/abi/host.json` `root`'s:
+
+| Root                  | The kernel's path                                                     | What the host binds it to                     |
+| --------------------- | --------------------------------------------------------------------- | --------------------------------------------- |
+| each bake, by kind    | the version its source declares there, then the tile's name           | the edge's `/tile/<kind>/…`                   |
+| `ASSET`               | a load's number, in decimal                                           | the shipped asset that number is, by its hash |
+| `STORAGE`             | a kept slot's number, in decimal (`kept`)                             | the platform's storage, under a key it picks  |
+
+So the kernel names no URL, no storage key and no platform: a path is numbers, or data the kernel was given (a version out of the source's declaration). Where a file lies, what key or address it has, and what to do with one the kernel refuses are the host's. A kept file starts with its slot's `format`, which the kernel checks as a driver checks a superblock, and a file of another format is refused and never written over; the shell sets it aside and plugs in an empty slot (`apps/client/src/kernel/io/kept.ts`).
+
+Only the host knows a file's address and protocol (`io/file.rs`). The type says which of three answers came back:
 
 | `Opened`             | What it means                        | The descriptor |
 | -------------------- | ------------------------------------ | -------------- |
