@@ -6,17 +6,24 @@ already does is cited, and where it does not.
 ## The structure
 
 - An **asset** is anything in the content library, as an engine's are: a
-  definition (a cube's look, a decor's variants, a marker's design, a cloud,
-  a character or a pet) and the shipped files a definition references (a
-  glb, a png, the texture pack), as a prefab references a mesh. The catalog
-  (`spec/`) is where assets are declared. An **asset id** is what today's
-  `spec/spec/block/id.json` calls a block's id: its kind over its shape. A
-  **marker** is any asset drawn flat to the camera from a design on the
-  sheet: a pin, a place, a chat line's bubble, each its own design. What it is
-  (how it is drawn, what it occupies, what it is at a coarser zoom) is its
-  own metadata.
+  definition (a cube's look, a decor's variants, a marker's design, an
+  actor, a cloud) and the shipped files a definition references (a glb, a
+  png, the texture pack), as a prefab references a mesh. The catalog
+  (`spec/`) is where assets are declared.
+- An asset's **kind** is one of five: **cube**, **decor**, **marker**,
+  **actor** and **sky**. An **asset id** is its kind over its shape, as
+  today's `spec/spec/block/id.json` calls a block's id. These are the
+  internal names; what the UI shows them as is the locale's (the drawer's
+  "Character" is the actor kind).
+  - A **marker** is any asset drawn flat to the camera from a design on the
+    sheet: a pin, a place, a chat line's bubble, each its own design.
+  - An **actor** is a person or a pet: a model with clips.
+  - **Sky** is what hangs in the sky: the clouds, the Moon's picture.
+- What an asset is (how it is drawn, what it occupies, what it is at a
+  coarser zoom) is its own metadata.
 - A **frame** is a coordinate system, which may move: the world's grid, a
-  character, the pointer, the wind's field, a preview's case.
+  person, a pet, the pointer, the wind's field, a preview's case, the
+  device's fix.
 - An **instance** is an asset in a frame at a pose, with what is its own
   alone: a clip's time, a joint palette. A **block** is an instance standing
   in a cell of the world's grid, and nothing else is: a cloud claims no
@@ -26,12 +33,12 @@ already does is cited, and where it does not.
   part of what the asset is; an asset's painted or uploaded form is found by
   its content.
 - **A holder treats every child alike.** It asks each the same questions —
-  drawn at this pose, what it occupies, what it is at this zoom — and the
-  answers are the child's. Whether a child is a cube, a decor or a marker is
-  the child's to know, as a directory need not know whether an entry is a
-  link, a regular file or a pipe.
+  drawn at this pose, what it occupies, what it is at this zoom, where a tap
+  goes — and the answers are the child's. Whether a child is a cube, a decor
+  or a marker is the child's to know, as a directory need not know whether
+  an entry is a link, a regular file or a pipe.
 
-So a character is a frame the walk moves, and its model and its chat line
+So a person is a frame the walk moves, and their model and their chat line
 are two assets in it: neither is anchored to the other.
 
 Alike means one interface, not one behaviour. How a kind is drawn is its
@@ -49,12 +56,15 @@ wants.
   `draw_instances`).
 - **Models** are registered once and played by the actors and stood by decor
   alike (`model.rs`).
-- **The cumulus** is decor drawn on the wind's moving field and held as decor
-  is not (`scene/environment/cloud.rs`).
+- **The cumulus** is drawn on the wind's moving field and held as decor is
+  not (`scene/environment/cloud.rs`).
 - **The ghost** is a cube's look or a decor's model in the pointer's frame
   (`scene/indicator/ghost.rs`).
-- **A preview's case** draws a character into its own canvas
+- **A preview's case** draws an actor into its own canvas
   (`scene/character/preview.rs`).
+- **The socket.** The kernel opens an asset on the `ASSET` root by a number
+  (`io/load.rs`), and the host's backend reads the bytes that number is
+  (`apps/client/src/host/io/asset.ts` `read_asset`).
 
 ## Where it does not
 
@@ -76,33 +86,42 @@ wants.
    point over its person's head and hands it over (`scene/character/
    companion.rs` `speak_from`). The person, the pet and the line each carry a
    world position the companion works out.
-3. **A preview's case registers its model again** at one unit tall
+3. **An actor's instances are in one shared table**, `scene/actor.rs`
+   `Actors`, sized by its users' bounds (`ACTORS_MAX`, `CASES_MAX`), beside
+   `scene/character/`. Playing clips is the actor kind's behaviour, and a
+   clip's time and palette are an instance's, held by its frame.
+4. **A preview's case registers its model again** at one unit tall
    (`scene/character/preview.rs`): a scale, which is an instance's pose,
    made a second asset.
-4. **The clouds are declared nowhere.** Their three models and their skin
+5. **The clouds are declared nowhere.** Their three models and their skin
    are written in the kernel (`scene/environment/cloud.rs` `VARIANTS`,
-   `SKIN`), with no id and no catalog entry, though they are drawn as decor
-   is. And the file table, `pxl-spec asset/ingested.spec.rs` `Asset`, holds
-   the word asset for files alone.
-5. **The kernel knows which assets exist.** The socket is already there:
-   the kernel opens an asset on the `ASSET` root by a number
-   (`io/load.rs`), and the host's backend reads the bytes that number is
-   (`apps/client/src/host/io/asset.ts` `read_asset`). But the number is an
-   index into the file table compiled into the kernel (`Asset`, 163 files),
-   and what each file is for is compiled in beside it:
-   - the characters and pets: `spec/client/kernel/model/variant.json`,
-     paired to files in `scene/character/variant.rs`, apart from the block
-     catalog;
+   `SKIN`), with no id and no catalog entry, and drawn with decor's draw
+   groups and its by-size draw (`scene/decor/cell.rs`, which only the clouds
+   use). They are the sky kind's.
+6. **The kernel knows which assets exist.** The number the socket takes is
+   an index into the file table compiled into the kernel (`pxl-spec
+   asset/ingested.spec.rs` `Asset`, 163 files, which also holds the word
+   asset for files alone), and what each file is for is compiled in beside
+   it:
+   - the actors: `spec/client/kernel/model/variant.json`, paired to files
+     in `scene/character/variant.rs`, apart from the block catalog, and
+     named for its entries rather than its subject;
    - the decors: `spec/spec/block/decor.json`;
    - the clouds: written in the kernel.
 
    The texture pack is one past the table's end (`asset.rs` `Load::Pack`,
    and `load === KEYS.length` on the host's side). The table's counts size
    the memory at build time (`door/layout.rs`).
-6. **Control asks by kind** where it asks what a block occupies or hides:
+7. **Control asks by kind** where it asks what a block occupies or hides:
    `control/interaction/collision.rs` (markers), `edit.rs` (`hide_in`), and
-   `ghost.rs` (`Ghost::Box` or `Ghost::Decor`). Whether each is a question the
-   child should answer is open.
+   `ghost.rs` (`Ghost::Box` or `Ghost::Decor`), and `turn.rs` turns each
+   `Ghost` into a call of its own. Whether each is a question the child
+   should answer is open.
+8. **The top sums its owners' bounds by name** (`door/layout.rs`
+   `MODELS_MAX`, `SINGLE_BLOCKS`). `SINGLE_BLOCKS` is 4 for five owners — the
+   ghost, the puck, two debug line sets (`scene.rs` `debug`, `coverage`) and
+   the billboards — and the doubling in render's `blocks.rs` `block_slots`
+   hides it.
 
 ## What it asks, in order
 
@@ -115,9 +134,10 @@ wants.
      kind in `block/marker.json` beside `MARKER_SCALE_STEPS`, whose cell it
      already is.
    - `Label::Count`, `DrawSpec::Count`, `count_pill` and `Thing::Count` go.
-2. **Frames.** A character is a frame, with its model and its line, a
-   marker, instances in it. Whether the line shows is the frame's to say,
-   not the world grid's chunks'.
+2. **Frames.** A person and a pet are each a frame, holding its actor's
+   instance; the person's holds their line, a marker. Whether the line shows
+   is the frame's to say, not the world grid's chunks'. The `Actors` table
+   goes, and each frame declares its own bounds.
 3. **A preview's case** draws the one registered model, scaled by its
    instance.
 4. **Control's questions by kind**, wherever one is better put as the child's
@@ -126,9 +146,11 @@ wants.
    - The kernel reads the catalog through the socket at boot: every asset's
      id, its kind, and the ids of the files it references. It then asks for
      those files by id.
+   - `id.json`'s `KIND` takes the actor and the sky; `variant.json` becomes
+     `actor.json` in the one catalog, and the clouds are declared there.
    - The texture pack is the file the cube kind's definition references.
-     The characters, the pets, the clouds and the decors' models are
-     references like any other.
+     The actors, the clouds and the decors' models are references like any
+     other.
    - The kernel keeps only each kind's behaviour: painting a cube, striking
      a decor, playing an actor's clips, a marker's designs. It knows no
      asset by name.
@@ -136,9 +158,31 @@ wants.
      (ARCHITECTURE.md, "Catalogs and assets"), and the memory's bounds are
      then sized at boot, once the catalog is read.
 
-## What stays
+## The kernel's folders
 
-- The world's grid is the world's frame. The object store keeps its
-  instances by position, and the query reads them unchanged.
-- Each kind's way of being drawn is its own: the rays for the world's cubes,
-  the GPU's decor for what the ground grows and what is placed.
+Bottom to top, with no edge pointing up.
+
+| Height                  | What                                                                                                                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| below io and sched      | `mem`, `param`; the draw list and `laid()`, out of the crate root's `Kernel`; io's host spec, out of `abi/`                                                                                                                                    |
+| `sched`, `io`           | the loads by file id, and the catalog read at boot (`io/catalog`); the in-flight cap in `param`, so sched reads no asset                                                                                                                       |
+| `setting`, `layer`      | unchanged                                                                                                                                                                                                                                      |
+| `asset/`                | each kind's behaviour, behind one interface (`asset.rs`): `model/` (a file type: meshes, joints), `cube/`, `decor/` (the strike), `marker/` (designs, the sheet, measuring), `actor/` (clips, the palette), `sky/` (the by-size draw)          |
+| `query`, `view`         | query may name decor's strike and the models; view names no asset                                                                                                                                                                              |
+| `scene/`                | frames and their instances, behind one interface (`scene.rs`): `world/` (the cast, the GPU's decor, the pins and places), `person/`, `pet/`, `pointer/`, `wind/`, `fix/`, `case/`; and what is no frame: `stage`, `sky`'s evaluation, `debug/` |
+| `control`               | may name query, view and the asset interface, never scene                                                                                                                                                                                      |
+| `turn`, `door`, `shell` | name scene's interface; each owner declares its own bounds                                                                                                                                                                                     |
+
+## Open
+
+- **The world's rule stays compiled.** The cube value space, the ground's
+  scatter of decor and a decor's claimed box are compiled for the GPU too
+  (`pxl-spec-core cube.spec.rs`, `decor.spec.rs`; ARCHITECTURE.md's "one
+  source compiled for the CPU and, through rust-gpu, for the GPU"), and the
+  bakes compile `cube.json`. What the socket carries is the kinds and the
+  files they reference, unless that half becomes buffers uploaded at boot.
+- **Bounds at boot.** `.fixed`'s block slots and render's draw groups are
+  sized at build time today; whether they can be laid after the catalog is
+  read is to be checked against `mem/section.rs`.
+- **The spec tree.** `spec/spec/block/` holds the one catalog; whether it
+  becomes `spec/spec/asset/`, and what the file table is named then.
