@@ -211,9 +211,6 @@ pub fn world_turn() -> f64 {
     // device_coord is not gated like focus: the puck keeps its last coordinate across a transient none.
     effect!(worst, puck, location_puck_step(off_center().device_coord));
     effect!(worst, settings, crate::setting::store::settings_keep_step());
-    // After every producer has spoken, including assets asked for during the turn.
-    effect!(worst, assets, crate::io::request::declare(crate::io::demand::Stream::asset, crate::io::load::load_wants()));
-    effect!(worst, pump, pump());
     *WORST_EFFECT.get(|| (0.0, None)) = worst;
     now() - at
 }
@@ -309,6 +306,9 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let step = delta.min(MAX_STEP_S);
     let report = run_tick(step, quota_ms, edge_at);
     let after_tick = now();
+    // The turn's one pump, after every producer has spoken: the effects, the
+    // tick's tile streams (`demand_tick`), and the assets asked for by either.
+    crate::io::request::declare(crate::io::demand::Stream::asset, crate::io::load::load_wants());
     pump();
     crate::scene::stage::stage_write();
     crate::scene::stage::stage_render(crate::view::frame::resolution::Pace {

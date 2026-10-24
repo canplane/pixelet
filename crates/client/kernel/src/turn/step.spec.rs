@@ -48,7 +48,7 @@ impl StepName {
     }
 }
 
-pub const EFFECT_NAMES: usize = 13;
+pub const EFFECT_NAMES: usize = 11;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum EffectName {
@@ -63,13 +63,11 @@ pub enum EffectName {
     hover = 8,
     puck = 9,
     settings = 10,
-    assets = 11,
-    pump = 12,
 }
 
 impl EffectName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [EffectName; 13] = [
+    pub const ALL: [EffectName; 11] = [
         EffectName::navigation,
         EffectName::bootstrap,
         EffectName::orientation,
@@ -81,8 +79,6 @@ impl EffectName {
         EffectName::hover,
         EffectName::puck,
         EffectName::settings,
-        EffectName::assets,
-        EffectName::pump,
     ];
 
     /// The member a number names, or none for a number the set does not
