@@ -141,6 +141,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
     device: null,
     heap: f !== null && <Row k="heap used change" v={`${f.heap_used_delta_bytes >= 0 ? "+" : ""}${bytes(f.heap_used_delta_bytes)}`} />,
     ring: null,
+    body: null,
   };
 
   return (
