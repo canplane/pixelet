@@ -1,0 +1,4 @@
+# What is generated from spec/, kept out of the language stats.
+*.spec.rs linguist-generated=true
+*.spec.ts linguist-generated=true
+*.spec.hpp linguist-generated=true
