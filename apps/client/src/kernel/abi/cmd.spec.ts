@@ -49,6 +49,7 @@ export const enum WorldMinor {
   VISIBILITY = 0x03,
   SNAPSHOT = 0x04,
   SOURCE = 0x05,
+  KEPT_EMPTIED = 0x06,
 }
 
 /** The input's verbs: the canvas, the pointer, the camera controls. */
@@ -268,6 +269,9 @@ export const enum Command {
    * comes nothing is observed: the floor is held at the zoom it names, and no tile is
    * asked for that no shard it serves is over or under (pxl-kernel io/source.rs). */
   WORLD_SOURCE = 0x1005,
+  /** A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
+   * set aside by the host: the kernel reads it again, and writes it from then on. */
+  WORLD_KEPT_EMPTIED = 0x1006,
   /** A permission as the shell's prompt or the browser's change reported it. */
   SENSOR_PERMISSION = 0x1206,
   /** The canvas's client rect. */
@@ -374,6 +378,9 @@ export interface Snapshot {
   division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
+  /** The kept slots (host.json's `kept`) whose file is not of the slot's format: the kernel
+   * read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says the slot is empty. */
+  kept_refused: u32[];
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say. */
   stall: Message | null;
   /** Each kind's version as the tile source declared it: a published one, or a dev
@@ -397,8 +404,9 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     m_per_px: b.at(11).get<f64>(),
     division: list(b.at_branch(12), read_division_part),
     previews: Array.from(b.at(13).get<U32Array>()),
-    stall: b.at(14).get<Message | null>(),
-    source: list(b.at_branch(15), read_source_version),
+    kept_refused: Array.from(b.at(14).get<U32Array>()),
+    stall: b.at(15).get<Message | null>(),
+    source: list(b.at_branch(16), read_source_version),
   };
 }
 
@@ -546,7 +554,7 @@ export function encode_sensor_error(to: PacketRoom, code: GeolocationErrorCode):
  * @param development A development build, which offers the settings schema.json marks `dev`.
  * @param orientation_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
  * @param orientation_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ORIENTATION_LOST).
- * @param settings What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file (host.json's SETTINGS_PATH), handed over unread as a process is handed its environment, which the kernel reads and from then on writes itself. */
+ * @param settings What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file (host.json's `kept.SETTINGS`), handed over unread as a process is handed its environment, which the kernel reads and from then on writes itself. */
 export function encode_world_boot(
   to: PacketRoom,
   development: boolean,
@@ -578,6 +586,13 @@ export function encode_world_visibility(to: PacketRoom, visible: boolean): Packe
  * @param source The declaration as the source serves it, handed over unread. */
 export function encode_world_source(to: PacketRoom, source: string): PacketWriter {
   return to.writer(1).str(source);
+}
+
+/** Command.WORLD_KEPT_EMPTIED's packet, written in place into `to`.
+ *
+ * @param slot host.json's `kept`. */
+export function encode_world_kept_emptied(to: PacketRoom, slot: u32): PacketWriter {
+  return to.writer(1).u32(slot);
 }
 
 /** Command.SENSOR_PERMISSION's packet, written in place into `to`. */

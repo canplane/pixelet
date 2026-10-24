@@ -9,7 +9,7 @@ import { textStyle } from "@/shell/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/config/deploy.ts";
 import type { Snapshot } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/snapshot.ts";
-import { OBJECTS_PATH } from "@/kernel/abi/host.spec.ts";
+import { format } from "@/kernel/abi/host.spec.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
 
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
@@ -25,9 +25,9 @@ function bakeLines(source: Snapshot["source"]): string[] {
   return source.map((s) => `${s.kind}/${s.version}`);
 }
 
-/** The objects one has placed, kept on the device: their store's format. */
+/** The objects one has placed, kept on the device: the format this build reads them in. */
 function objectLabel(): string {
-  return OBJECTS_PATH;
+  return `objects · format ${format.OBJECTS}`;
 }
 
 /** UTC: a stamp in the viewer's zone said different things on two phones. */

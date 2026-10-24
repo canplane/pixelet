@@ -14,7 +14,9 @@ import { text_of } from "@xpute/host/ipc/stream.ts";
 import { Command as XputeCommand, encode_sys_opened } from "@xpute/host/abi/cmd.spec.ts";
 import { FileError, Sys } from "@xpute/host/ipc/sys.ts";
 
-import { OBJECTS_PATH, op, root, SETTINGS_PATH } from "@/kernel/abi/host.spec.ts";
+import { op, root } from "@/kernel/abi/host.spec.ts";
+import { Command, encode_world_kept_emptied } from "@/kernel/abi/cmd.spec.ts";
+import { follow_refused, kept_key, migrate, type Storage } from "@/kernel/io/kept.ts";
 import { GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { send_next } from "@/kernel/sched.ts";
 import { storageGet, storageSet } from "@/bracket.tsx";
@@ -96,21 +98,32 @@ function program(code: u32, w: U32Array, a: u32): void {
 
 type Open = (path: string, signal: AbortSignal) => U8Array | Promise<U8Array>;
 
-/** STORAGE's files, each kept under its path, so a path's version is its key's. */
-const STORAGE_PATHS: readonly string[] = [SETTINGS_PATH, OBJECTS_PATH];
+const STORAGE: Storage = { get: storageGet, set: storageSet };
 
+/** STORAGE's files: a path is a kept slot's number in decimal, under the key kept.ts gives it. */
 function storage_key(path: string): string {
-  if (!STORAGE_PATHS.includes(path)) throw new FileError(Errno.ENOENT);
-  return `pxl:${path.replaceAll("/", ":")}`;
+  const key = /^\d+$/.test(path) ? kept_key(Number(path)) : undefined;
+  if (key === undefined) throw new FileError(Errno.ENOENT);
+  return key;
 }
 
-/** A STORAGE file's text, or null where none is kept. */
-export function read_storage(path: string): string | null {
-  return storageGet(storage_key(path));
+/** A kept slot's text, or null where none is kept. */
+export function read_kept(slot: u32): string | null {
+  return storageGet(storage_key(String(slot)));
+}
+
+/** Before the kernel reads a slot: what was kept before the slots carried over, once. */
+export function migrate_kept(): void {
+  migrate(STORAGE);
+}
+
+/** The snapshot's refused slots, each set aside and emptied, the kernel told. */
+export function kept_refused(slots: readonly u32[]): void {
+  follow_refused(slots, STORAGE, (slot) => send_next(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(GUEST_DOORBELL, slot)));
 }
 
 const ROOTS = new Map<u32, Open>([[root.STORAGE, (path) => {
-  const value = read_storage(path);
+  const value = storageGet(storage_key(path));
   if (value === null) throw new FileError(Errno.ENOENT);
   return te.encode(value);
 }]]);

@@ -118,6 +118,10 @@
         {
           "name": "SOURCE",
           "value": 5
+        },
+        {
+          "name": "KEPT_EMPTIED",
+          "value": 6
         }
       ]
     },
@@ -817,7 +821,7 @@
               "type": "str",
               "$doc": [
                 "What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file",
-                "(host.json's SETTINGS_PATH), handed over unread as a process is handed its environment,",
+                "(host.json's `kept.SETTINGS`), handed over unread as a process is handed its environment,",
                 "which the kernel reads and from then on writes itself."
               ]
             }
@@ -903,6 +907,23 @@
               "type": "str",
               "$doc": [
                 "The declaration as the source serves it, handed over unread."
+              ]
+            }
+          ]
+        },
+        {
+          "name": "WORLD_KEPT_EMPTIED",
+          "value": 4102,
+          "$doc": [
+            "A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held",
+            "set aside by the host: the kernel reads it again, and writes it from then on."
+          ],
+          "packet": [
+            {
+              "name": "slot",
+              "type": "u32",
+              "$doc": [
+                "host.json's `kept`."
               ]
             }
           ]
@@ -1442,6 +1463,15 @@
           "list": true,
           "$doc": [
             "The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here."
+          ]
+        },
+        {
+          "name": "kept_refused",
+          "type": "u32",
+          "list": true,
+          "$doc": [
+            "The kept slots (host.json's `kept`) whose file is not of the slot's format: the kernel",
+            "read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says the slot is empty."
           ]
         },
         {

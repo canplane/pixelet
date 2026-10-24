@@ -86,7 +86,7 @@ Heights are made on the GPU and read back, never sent (`pxl-spec-core ground.rs`
 
 **Objects** are client-local. Their store is one sparse tree, each leaf a catalog value at its node and each branch its eight children folded (`pxl-kernel layer/object/store.rs`). A write splits leaves only on its path, joins eight equal leaves into one, and folds its path again. So one picture has one tree. A leaf of `AIR` erases what a lower layer would show.
 
-A leaf may carry an **extension**, such as a marker's words, kept in a pool per **class** of ids (`pxl-spec block/ext.rs` `class_of`). It is placed and erased with its leaf, which is never joined or split. The store persists under a key that carries its layout's version.
+A leaf may carry an **extension**, such as a marker's words, kept in a pool per **class** of ids (`pxl-spec block/ext.rs` `class_of`). It is placed and erased with its leaf, which is never joined or split. The store persists in a kept slot whose format byte is its layout's version (`host.json` `format`).
 
 **Places** are tiles named like the ground tiles under them, each holding what Carto draws there at that web map zoom (`pxl-spec bake/tile/place.rs`). What Carto draws for each Overture category is one table from its rules (`spec/spec/bake/place_theme.json`). A cell one icon wide keeps one place, so each place carries the zoom it shows from, and a parent is its children with what shows from its zoom on (doc/minutes/20261009-places-follow-carto.md). Places are a setting.
 
@@ -442,7 +442,7 @@ A **serve policy** ranks the wants (`io/policy.rs`). Terrain comes first, then t
 
 Models and textures spend the same credits (`io/load.rs`). Each is fetched and parsed at most once, retried if it did not arrive and final if it does not parse. An image's file is read into the heap and handed to the renderer, which copies it into a texture through the GPU stream (`COPY_EXTERNAL_IMAGE`, the host decoding it); once the texture lands the file goes, and a device lost reads it again (`images_lost`).
 
-The settings and the placed objects are kept on the device (`KeptFile`). A kept file the kernel cannot read is never written over. Text is asked of the platform a line at a time, widths then pixels (`io/text.rs`).
+The settings and the placed objects are kept on the device, each in a slot the kernel opens by its number (`host.json` `kept`, `io/file.rs` `Kept`). A kept file begins with its slot's format byte; the kernel refuses one of another format, as a driver refuses a superblock it does not know, and names it in the snapshot. A kept file the kernel cannot read is never written over. Which storage key a slot is, and what becomes of a refused file, are the host's: it sets the file aside under a key of its own, empties the slot and says so (`WORLD_KEPT_EMPTIED`), and carries over what was kept before the slots, once (`apps/client/src/kernel/io/kept.ts`). Text is asked of the platform a line at a time, widths then pixels (`io/text.rs`).
 
 ## When something goes wrong
 
@@ -514,7 +514,7 @@ The shell reads the kernel through one **snapshot**, replaced whole after a turn
 - the focus, whether the view shows ground there yet, and whether it has wandered from the device or past the service area;
 - the state of the device's location and heading, the camera's azimuth, whether it follows the device, and whether it is dragged or zooming;
 - the companion's readiness, the tool held and a marker waiting for its words, the display cases, and the settings by their numbers;
-- the meters a pixel spans at the focus, the divisions it is in, whether the pointer is over a badge, a server's stall, and the version each source serves.
+- the meters a pixel spans at the focus, the divisions it is in, whether the pointer is over a badge, the kept slots it refused, a server's stall, and the version each source serves.
 
 What is rounded or timed for presentation, such as a scale bar's length or a toast, is the shell's.
 
@@ -633,7 +633,7 @@ A version reaches the client through one private bucket that only the Worker rea
 
 Everything a build ships is decided at build time, as JSON under `spec/`, from the commands and catalogs to the settings schema and the published versions. `pxl-tool` writes a Rust module from each file, and a TypeScript one where the shell reads it; `check:spec` fails when the tree disagrees.
 
-A catalog is never sent, because both sides compile it. Where bytes cross, as a tile or a saved blob, the layout is the model's and the version is in the path or the storage key.
+A catalog is never sent, because both sides compile it. Where bytes cross, as a tile or a saved blob, the layout is the model's, and the version is in a tile's path or a kept file's format byte.
 
 - **Cubes and decors** are numbers in `spec/spec/block/`, and the object store writes the number.
 - **Models** are named by a path under `asset/content/` in the catalog that uses them.

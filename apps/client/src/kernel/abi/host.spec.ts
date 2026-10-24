@@ -31,16 +31,27 @@ export const op = {
  * bake, numbered by its kind (pxl-spec bake/published.spec.rs), and a path is an object's
  * name in it. */
 export const root = {
-  /** The platform's storage; a path is the kernel's name for a file it keeps (`SETTINGS_PATH`, `OBJECTS_PATH`). */
+  /** The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice. */
   STORAGE: 256 as number,
   /** The shipped assets; a path is a load's number in decimal (io/load.rs). */
   ASSET: 257 as number,
 } as const;
 
-/** The settings' file below STORAGE. */
-export const SETTINGS_PATH = "settings";
+/** The files the kernel keeps below STORAGE, by slot. What a slot holds is its
+ * owner's, written whole, its slot's `format` first (pxl-kernel io/file.rs). */
+export const kept = {
+  /** The settings' overrides (setting/store.rs). */
+  SETTINGS: 0 as number,
+  /** The placed objects (layer/object/repository.rs). */
+  OBJECTS: 1 as number,
+} as const;
 
-/** The placed objects' file below STORAGE. It carries the encoding's version: a blob of
- * an older one is not read, so bump it whenever a change makes an older entry mean
- * something other than it meant when it was written (layer/object/store.rs). */
-export const OBJECTS_PATH = "object/v15";
+/** Each slot's format, the first byte of what it holds. The kernel reads a file of its
+ * slot's format and refuses any other, reading none of it and never writing over it, as
+ * a driver refuses a volume whose superblock it does not know; what to do with the file
+ * is the host's. Bump one whenever a change makes an older file mean something other
+ * than it meant when it was written. */
+export const format = {
+  SETTINGS: 1 as number,
+  OBJECTS: 15 as number,
+} as const;

@@ -21,6 +21,7 @@ const INITIAL: Snapshot = {
   m_per_px: 0,
   division: [],
   previews: [],
+  kept_refused: [],
   stall: null,
   source: [],
 };

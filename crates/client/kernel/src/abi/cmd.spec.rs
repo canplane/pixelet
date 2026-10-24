@@ -78,10 +78,18 @@ pub enum WorldMinor {
     VISIBILITY = 0x03,
     SNAPSHOT = 0x04,
     SOURCE = 0x05,
+    KEPT_EMPTIED = 0x06,
 }
 
 impl WorldMinor {
-    pub const ALL: [WorldMinor; 5] = [WorldMinor::BOOT, WorldMinor::FRAME, WorldMinor::VISIBILITY, WorldMinor::SNAPSHOT, WorldMinor::SOURCE];
+    pub const ALL: [WorldMinor; 6] = [
+        WorldMinor::BOOT,
+        WorldMinor::FRAME,
+        WorldMinor::VISIBILITY,
+        WorldMinor::SNAPSHOT,
+        WorldMinor::SOURCE,
+        WorldMinor::KEPT_EMPTIED,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<WorldMinor> {
@@ -551,6 +559,9 @@ pub enum Command {
     /// comes nothing is observed: the floor is held at the zoom it names, and no tile is
     /// asked for that no shard it serves is over or under (pxl-kernel io/source.rs).
     WORLD_SOURCE = 0x1005,
+    /// A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
+    /// set aside by the host: the kernel reads it again, and writes it from then on.
+    WORLD_KEPT_EMPTIED = 0x1006,
     /// A permission as the shell's prompt or the browser's change reported it.
     SENSOR_PERMISSION = 0x1206,
     /// The canvas's client rect.
@@ -622,7 +633,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 40] = [
+    pub const ALL: [Command; 41] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::SENSOR_POSITION,
@@ -633,6 +644,7 @@ impl Command {
         Command::WORLD_FRAME,
         Command::WORLD_VISIBILITY,
         Command::WORLD_SOURCE,
+        Command::WORLD_KEPT_EMPTIED,
         Command::SENSOR_PERMISSION,
         Command::INPUT_RECT,
         Command::INPUT_POINTER,
@@ -695,6 +707,9 @@ pub struct Snapshot<'a> {
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
+    /// The kept slots (host.json's `kept`) whose file is not of the slot's format: the kernel
+    /// read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says the slot is empty.
+    pub kept_refused: &'a [u32],
     /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say.
     pub stall: Option<Message>,
     /// Each kind's version as the tile source declared it: a published one, or a dev
@@ -704,7 +719,7 @@ pub struct Snapshot<'a> {
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 16;
+    pub const FIELDS: u32 = 17;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(FocusState::FIELDS, |w| self.focus.write(w));
@@ -727,6 +742,7 @@ impl Snapshot<'_> {
             })
         });
         w.u32_array(Some(self.previews));
+        w.u32_array(Some(self.kept_refused));
         w.u32(self.stall.map(|m| m as u32));
         let mut n = 0;
         (self.source)(&mut |_| n += 1);
@@ -1039,7 +1055,7 @@ pub struct WorldBoot<'a> {
     /// reports a failure itself (SENSOR_ORIENTATION_LOST).
     pub orientation_silence_is_loss: bool,
     /// What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
-    /// (host.json's SETTINGS_PATH), handed over unread as a process is handed its environment,
+    /// (host.json's `kept.SETTINGS`), handed over unread as a process is handed its environment,
     /// which the kernel reads and from then on writes itself.
     pub settings: &'a str,
 }
@@ -1115,6 +1131,22 @@ impl<'a> WorldSource<'a> {
     pub fn read(pkt: &'a [u8]) -> Result<WorldSource<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(WorldSource { source: f.at(0)?.get_str_ref()? })
+    }
+}
+
+/// Command::WORLD_KEPT_EMPTIED's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct WorldKeptEmptied {
+    /// host.json's `kept`.
+    pub slot: u32,
+}
+
+impl WorldKeptEmptied {
+    pub fn read(pkt: &[u8]) -> Result<WorldKeptEmptied, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(WorldKeptEmptied {
+            slot: integer::<u32>(f.at(0)?.get_number()?)?,
+        })
     }
 }
 

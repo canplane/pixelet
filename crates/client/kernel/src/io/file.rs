@@ -9,7 +9,10 @@ use xpute_guest::ipc::sys::Fd;
 
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-use crate::abi::host::{root, OBJECTS_PATH, SETTINGS_PATH};
+use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64;
+use base64::Engine;
+
+use crate::abi::host::{format, kept, root};
 use crate::asset::LOADS;
 use crate::io::failure::Failure;
 use crate::io::host::{answered, sys, turn, Refused};
@@ -21,8 +24,16 @@ use pxl_spec::bake::source::VERSION_BYTES;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
-/// A file the kernel keeps in storage. Storage is opened and written only by
-/// one of these, so what a turn can record there follows from how many.
+/// A file the kernel keeps in storage, by its slot (host.json `kept`).
+/// Storage is opened and written only by one of these, so what a turn can
+/// record there follows from how many.
+///
+/// A kept file is its slot's format byte (host.json `format`), then what its
+/// owner keeps, the whole in base64 as storage keeps text. One of another
+/// format, or not base64, is refused: read as nothing and never written over,
+/// and named to the host (`refused`), whose it is to set the file aside and
+/// empty the slot (`emptied`). Which storage a slot is, and what an older
+/// file becomes, the kernel never says.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kept {
     Settings,
@@ -33,23 +44,40 @@ impl Kept {
     /// In declaration order, as `KEPT` is indexed by `kept as usize`.
     pub const ALL: [Kept; 2] = [Kept::Settings, Kept::Objects];
 
-    pub const fn path(self) -> &'static str {
+    /// Its path below STORAGE is this in decimal.
+    pub const fn slot(self) -> u32 {
         match self {
-            Kept::Settings => SETTINGS_PATH,
-            Kept::Objects => OBJECTS_PATH,
+            Kept::Settings => kept::SETTINGS,
+            Kept::Objects => kept::OBJECTS,
         }
+    }
+
+    pub const fn format(self) -> u8 {
+        match self {
+            Kept::Settings => format::SETTINGS,
+            Kept::Objects => format::OBJECTS,
+        }
+    }
+
+    pub fn of_slot(slot: u32) -> Option<Kept> {
+        Kept::ALL.into_iter().find(|k| k.slot() == slot)
+    }
+
+    fn path(self) -> Path {
+        Path::of(|p| core::fmt::Write::write_fmt(p, format_args!("{}", self.slot())))
     }
 }
 
 /// The longest name the kernel opens: a leaf's name, a digit a zoom, under
-/// its version, an asset's number or a kept file's path. A longer one is a bug, so the host
+/// its version, an asset's number or a kept slot's. A longer one is a bug, so the host
 /// stream's reserve can count on it.
 pub const PATH_BYTES: usize = {
     let mut most = VERSION_BYTES + 1 + LEAF_ZOOM as usize;
     let names = [LOADS.ilog10() as usize + 1];
     let mut i = 0;
     while i < names.len() + Kept::ALL.len() {
-        let len = if i < names.len() { names[i] } else { Kept::ALL[i - names.len()].path().len() };
+        // `| 1`: slot 0 is one digit, as 1 is.
+        let len = if i < names.len() { names[i] } else { (Kept::ALL[i - names.len()].slot() | 1).ilog10() as usize + 1 };
         most = if len > most { len } else { most };
         i += 1;
     }
@@ -83,17 +111,65 @@ pub fn open(_: Credit, root: u32, path: &str, owner: Owner) -> Option<Fd> {
 
 /// Opens a kept file to be read whole; what it held is taken with `take_kept`.
 pub fn open_kept(kept: Kept) -> Option<Fd> {
-    Some(files().open(sys()?, root::STORAGE, kept.path(), Owner::Kept(kept)))
+    Some(files().open(sys()?, root::STORAGE, kept.path().as_str(), Owner::Kept(kept)))
 }
 
 /// What a kept file held.
 pub enum KeptFile {
     /// None was kept, or it was empty.
     None,
+    /// What its owner kept, past the format byte.
     Bytes(Vec<u8>),
     /// There, and not readable here: larger than any heap a device is given,
-    /// or an error other than its absence. It must not be written over.
+    /// an error other than its absence, or refused (`refused`). It must not
+    /// be written over.
     Unreadable,
+}
+
+/// The slots refused since they were last emptied, by `Kept`.
+static REFUSED: Global<[bool; Kept::ALL.len()]> = Global::new();
+
+fn refusals() -> &'static mut [bool; Kept::ALL.len()] {
+    REFUSED.get(|| [false; Kept::ALL.len()])
+}
+
+/// Its file is not of its slot's format: none of it was read, and nothing
+/// is written over it until the host empties the slot.
+pub fn refused(kept: Kept) -> bool {
+    refusals()[kept as usize]
+}
+
+/// The host set a refused slot's file aside and emptied it: its owner may
+/// open it again and write it.
+pub fn emptied(kept: Kept) {
+    refusals()[kept as usize] = false;
+}
+
+/// A kept file as storage held it, `text`: its owner's bytes where it is of
+/// its slot's format, refused where it is anything else.
+pub fn kept_of(kept: Kept, text: &[u8]) -> KeptFile {
+    if text.is_empty() {
+        return KeptFile::None;
+    }
+    match BASE64.decode(text) {
+        Ok(mut bytes) if bytes.first() == Some(&kept.format()) => {
+            bytes.remove(0);
+            KeptFile::Bytes(bytes)
+        }
+        _ => {
+            refusals()[kept as usize] = true;
+            request_world_tick();
+            KeptFile::Unreadable
+        }
+    }
+}
+
+/// The file `kept` holds `bytes`, sealed with its slot's format.
+fn sealed(kept: Kept, bytes: &[u8]) -> Vec<u8> {
+    let mut whole = Vec::with_capacity(1 + bytes.len());
+    whole.push(kept.format());
+    whole.extend_from_slice(bytes);
+    BASE64.encode(whole).into_bytes()
 }
 
 enum KeptRead {
@@ -160,7 +236,7 @@ pub fn take_kept(kept: Kept) -> Option<KeptFile> {
         }
         KeptRead::Reading { asked, .. } if turn() <= *asked => None,
         _ => match slot.take()? {
-            KeptRead::Reading { bytes, .. } => Some(KeptFile::Bytes(bytes)),
+            KeptRead::Reading { bytes, .. } => Some(kept_of(kept, &bytes)),
             KeptRead::Read(file) => Some(file),
             KeptRead::Refused(_) => None,
         },
@@ -244,9 +320,13 @@ pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
     files().held_for(owner)
 }
 
-pub fn write_kept(kept: Kept, bytes: Vec<u8>) {
+/// Writes `bytes` whole as what `kept` holds; a refused slot is not written.
+pub fn write_kept(kept: Kept, bytes: &[u8]) {
+    if refused(kept) {
+        return;
+    }
     if let Some(sys) = sys() {
-        files().write_whole(sys, root::STORAGE, kept.path(), bytes, Owner::Write);
+        files().write_whole(sys, root::STORAGE, kept.path().as_str(), sealed(kept, bytes), Owner::Write);
     }
 }
 
@@ -299,3 +379,7 @@ pub fn opened(fd: Fd, res: i32, detail: u32) {
         Owner::Write => {}
     }
 }
+
+#[cfg(test)]
+#[path = "file.test.rs"]
+mod test;

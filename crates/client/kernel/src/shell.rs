@@ -21,6 +21,7 @@ use crate::control::navigation::off_center::off_center;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::reading::{device_location_store, device_orientation_store, Pose};
+use crate::io::file::{self, Kept};
 use crate::layer::division::{named, naming};
 use crate::scene::character::companion::companion_ready;
 use crate::scene::character::preview::{preview_rows, CASES_MAX};
@@ -77,6 +78,8 @@ pub struct Shown {
     previews: ([u32; CASES_MAX], usize),
     stall: Option<Message>,
     declared: bool,
+    /// The refused kept slots, the first `.1` of them.
+    kept_refused: ([u32; Kept::ALL.len()], usize),
 }
 
 fn shown() -> Shown {
@@ -120,6 +123,14 @@ fn shown() -> Shown {
         previews,
         stall: stall(),
         declared: crate::io::source::top().is_some(),
+        kept_refused: {
+            let mut refused = ([0; Kept::ALL.len()], 0);
+            for kept in Kept::ALL.into_iter().filter(|&k| file::refused(k)) {
+                refused.0[refused.1] = kept.slot();
+                refused.1 += 1;
+            }
+            refused
+        },
     }
 }
 
@@ -190,6 +201,7 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
         m_per_px: shown.m_per_px,
         division: &|each| division_parts(shown.division, each),
         previews: &shown.previews.0[..shown.previews.1],
+        kept_refused: &shown.kept_refused.0[..shown.kept_refused.1],
         stall: shown.stall,
         source: &|each| {
             crate::io::source::versions(&mut |kind, version| {

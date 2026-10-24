@@ -5,7 +5,6 @@
 //! write is sent, each `<key, id>`. How they are kept is this file's alone;
 //! for now every leaf is in the page's storage, all asked for at once.
 
-use base64::Engine;
 use pxl_spec::space::hierarchy::morton::key_of;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -36,10 +35,11 @@ fn store_state() -> &'static mut State {
 // Kept as one blob of every leaf as the write that made it, `<key, id, ext>`:
 // [key_hi u64[], key_lo u64[], id u32[]], then a class's records, each its
 // leaf's row and its fields as lanes: a marker's words [row u32[], text strs].
-// The layout's version is in the storage key; a blob of another layout is
+// The layout's version is its kept slot's format (host.json `format.OBJECTS`),
+// checked as the slot is read (io/file.rs `Kept`); a blob of another layout is
 // never read.
 
-fn encode() -> Result<String, MarshalError> {
+fn encode() -> Result<Vec<u8>, MarshalError> {
     let (mut hi, mut lo, mut id) = (Vec::new(), Vec::new(), Vec::new());
     let (mut text_rows, mut texts) = (Vec::new(), Vec::new());
     let objects = objects();
@@ -61,19 +61,17 @@ fn encode() -> Result<String, MarshalError> {
     tree.branch(Some(&mut |b| {
         b.u64_array(Some(&hi)).u64_array(Some(&lo)).u32_array(Some(&id)).u32_array(Some(&text_rows)).strs(Some(&texts));
     }));
-    let pkt = encoder().encode(
+    encoder().encode(
         &tree,
         TreeEncoderOptions {
             init_cap: Some(1 << 14),
             max_cap: None,
         },
-    )?;
-    Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&pkt))
+    )
 }
 
-fn decode(blob: &str) -> Result<(), MarshalError> {
-    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(blob).map_err(|_| MarshalError::new(Errno::EINVAL))?;
-    let root = TreeReader::new(&bytes)?.read_branch()?;
+fn decode(bytes: &[u8]) -> Result<(), MarshalError> {
+    let root = TreeReader::new(bytes)?.read_branch()?;
     let (hi, lo, id) = (root.at(0)?.get_array::<u64>()?, root.at(1)?.get_array::<u64>()?, root.at(2)?.get_array::<u32>()?);
     let (text_rows, texts) = (root.at(3)?.get_array::<u32>()?, root.at(4)?.get_strs()?);
     if hi.len() != lo.len() || hi.len() != id.len() || text_rows.len() != texts.len() as usize {
@@ -101,13 +99,15 @@ pub fn open() {
     file::open_kept(Kept::Objects);
 }
 
-fn keep(blob: String) {
-    file::write_kept(Kept::Objects, blob.into_bytes());
+fn keep(blob: Vec<u8>) {
+    file::write_kept(Kept::Objects, &blob);
 }
 
 /// A missing blob starts the world empty. One that cannot be read or decoded
 /// here — too large, an error, a layout this build does not know — leaves the
-/// world unsaved this session, so it is never written over.
+/// world unsaved this session, so it is never written over; where its slot
+/// was refused (io/file.rs `refused`), until the host empties it and the
+/// slot is opened again.
 fn loaded() {
     let st = store_state();
     if st.loaded {
@@ -121,7 +121,7 @@ fn loaded() {
         }
         Some(KeptFile::Bytes(blob)) => blob,
     };
-    if core::str::from_utf8(&blob).map_or(true, |raw| decode(raw).is_err()) {
+    if decode(&blob).is_err() {
         // What decoded before the failure was already read; the blob stays unsaved over.
         let regions = objects().clear();
         if !regions.is_empty() {

@@ -46,23 +46,38 @@
     ],
     "STORAGE": {
       "$value": 256,
-      "$doc": ["The platform's storage; a path is the kernel's name for a file it keeps (`SETTINGS_PATH`, `OBJECTS_PATH`)."]
+      "$doc": ["The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice."]
     },
     "ASSET": {
       "$value": 257,
       "$doc": ["The shipped assets; a path is a load's number in decimal (io/load.rs)."]
     }
   },
-  "SETTINGS_PATH": {
-    "$doc": ["The settings' file below STORAGE."],
-    "$value": "settings"
-  },
-  "OBJECTS_PATH": {
+  "kept": {
+    "$type": "u32",
     "$doc": [
-      "The placed objects' file below STORAGE. It carries the encoding's version: a blob of",
-      "an older one is not read, so bump it whenever a change makes an older entry mean",
-      "something other than it meant when it was written (layer/object/store.rs)."
+      "The files the kernel keeps below STORAGE, by slot. What a slot holds is its",
+      "owner's, written whole, its slot's `format` first (pxl-kernel io/file.rs)."
     ],
-    "$value": "object/v15"
+    "SETTINGS": {
+      "$value": 0,
+      "$doc": ["The settings' overrides (setting/store.rs)."]
+    },
+    "OBJECTS": {
+      "$value": 1,
+      "$doc": ["The placed objects (layer/object/repository.rs)."]
+    }
+  },
+  "format": {
+    "$type": "u8",
+    "$doc": [
+      "Each slot's format, the first byte of what it holds. The kernel reads a file of its",
+      "slot's format and refuses any other, reading none of it and never writing over it, as",
+      "a driver refuses a volume whose superblock it does not know; what to do with the file",
+      "is the host's. Bump one whenever a change makes an older file mean something other",
+      "than it meant when it was written."
+    ],
+    "SETTINGS": 1,
+    "OBJECTS": 15
   }
 }

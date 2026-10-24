@@ -2,13 +2,13 @@
 
 use super::*;
 
-fn kept_of(pairs: &[(u32, u32)]) -> String {
-    let mut bytes = vec![FORMAT];
+fn kept_of(pairs: &[(u32, u32)]) -> Vec<u8> {
+    let mut bytes = Vec::new();
     for &(number, value) in pairs {
         leb(&mut bytes, number);
         leb(&mut bytes, value);
     }
-    BASE64.encode(bytes)
+    bytes
 }
 
 /// The stored form is a contract with storage, which outlives a build.
@@ -23,9 +23,9 @@ fn what_is_kept_reads_back_and_a_default_is_not_kept() {
     let kept = s.kept();
     let back = read_kept(&kept);
     for key in SettingKey::ALL {
-        assert_eq!(back.get(key), s.get(key), "{key:?} read back from {kept}");
+        assert_eq!(back.get(key), s.get(key), "{key:?} read back from {kept:?}");
     }
-    assert_eq!(Settings::DEFAULT.kept(), kept_of(&[]), "the defaults keep nothing");
+    assert!(Settings::DEFAULT.kept().is_empty(), "the defaults keep nothing");
 }
 
 #[test]
@@ -43,15 +43,13 @@ fn what_the_schema_does_not_hold_is_left_at_the_default() {
         kept_of(&[(SettingKey::ao as u32, 99)]),
         kept_of(&[(SettingKey::tilt_lock as u32, 2)]),
         kept_of(&[(unknown, 1)]),
-        "not base64!".to_string(),
-        r#"{"ao":"screen"}"#.to_string(),
-        String::new(),
-        // The pairs in a format this build does not read.
-        BASE64.encode([FORMAT + 1, SettingKey::tilt_lock as u8, 1 - Settings::DEFAULT.get(SettingKey::tilt_lock) as u8]),
+        // A pair cut short.
+        vec![SettingKey::tilt_lock as u8],
+        vec![0x80],
     ] {
         let back = read_kept(&kept);
         for key in SettingKey::ALL {
-            assert_eq!(back.get(key), Settings::DEFAULT.get(key), "{kept}");
+            assert_eq!(back.get(key), Settings::DEFAULT.get(key), "{kept:?}");
         }
     }
 }
@@ -62,4 +60,22 @@ fn a_pair_past_one_the_schema_does_not_hold_still_reads() {
     let back = read_kept(&kept_of(&[(SettingKey::SLOTS as u32 + 1000, 1), (SettingKey::ao as u32, 99), (SettingKey::tilt_lock as u32, tilt)]));
     assert_eq!(back.get(SettingKey::tilt_lock), tilt);
     assert_eq!(back.get(SettingKey::ao), Settings::DEFAULT.get(SettingKey::ao));
+}
+
+/// The JSON by name the slot held before is not of its format: the settings
+/// start at the defaults, and nothing is written over it until it is emptied.
+#[test]
+fn a_slot_of_another_format_is_refused_and_held_unwritten() {
+    let _g = crate::serial();
+    file::emptied(Kept::Settings);
+    settings_load(r#"{"ao":"screen"}"#);
+    assert_eq!(*settings_store(), Settings::DEFAULT);
+    assert!(file::refused(Kept::Settings));
+    let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
+    assert_eq!(settings_store().set_setting(SettingKey::tilt_lock, tilt), Some(true));
+    settings_keep_step();
+    assert!(*UNKEPT.get(|| false), "a refused slot's change waits for it to be emptied");
+    file::emptied(Kept::Settings);
+    settings_keep_step();
+    assert!(!*UNKEPT.get(|| false));
 }

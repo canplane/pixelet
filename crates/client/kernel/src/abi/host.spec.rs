@@ -39,16 +39,27 @@ pub mod op {
 /// bake, numbered by its kind (pxl-spec bake/published.spec.rs), and a path is an object's
 /// name in it.
 pub mod root {
-    /// The platform's storage; a path is the kernel's name for a file it keeps (`SETTINGS_PATH`, `OBJECTS_PATH`).
+    /// The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice.
     pub const STORAGE: u32 = 256;
     /// The shipped assets; a path is a load's number in decimal (io/load.rs).
     pub const ASSET: u32 = 257;
 }
 
-/// The settings' file below STORAGE.
-pub const SETTINGS_PATH: &str = "settings";
+/// The files the kernel keeps below STORAGE, by slot. What a slot holds is its
+/// owner's, written whole, its slot's `format` first (pxl-kernel io/file.rs).
+pub mod kept {
+    /// The settings' overrides (setting/store.rs).
+    pub const SETTINGS: u32 = 0;
+    /// The placed objects (layer/object/repository.rs).
+    pub const OBJECTS: u32 = 1;
+}
 
-/// The placed objects' file below STORAGE. It carries the encoding's version: a blob of
-/// an older one is not read, so bump it whenever a change makes an older entry mean
-/// something other than it meant when it was written (layer/object/store.rs).
-pub const OBJECTS_PATH: &str = "object/v15";
+/// Each slot's format, the first byte of what it holds. The kernel reads a file of its
+/// slot's format and refuses any other, reading none of it and never writing over it, as
+/// a driver refuses a volume whose superblock it does not know; what to do with the file
+/// is the host's. Bump one whenever a change makes an older file mean something other
+/// than it meant when it was written.
+pub mod format {
+    pub const SETTINGS: u8 = 1;
+    pub const OBJECTS: u8 = 15;
+}

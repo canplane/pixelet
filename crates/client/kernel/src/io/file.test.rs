@@ -1,0 +1,51 @@
+// pxl-kernel/io/file.test.rs
+
+use super::*;
+
+fn read(kept: Kept, text: &[u8]) -> Option<Vec<u8>> {
+    match kept_of(kept, text) {
+        KeptFile::Bytes(bytes) => Some(bytes),
+        KeptFile::None | KeptFile::Unreadable => None,
+    }
+}
+
+/// What an owner keeps reads back as it wrote it, its slot's format first.
+#[test]
+fn a_kept_file_is_its_format_then_its_owner_s_bytes() {
+    let _g = crate::serial();
+    for kept in Kept::ALL {
+        emptied(kept);
+        let text = sealed(kept, &[7, 0, 255]);
+        assert_eq!(BASE64.decode(&text).ok().and_then(|b| b.first().copied()), Some(kept.format()));
+        assert_eq!(read(kept, &text), Some(vec![7, 0, 255]));
+        assert_eq!(read(kept, &sealed(kept, &[])), Some(vec![]));
+        assert!(matches!(kept_of(kept, b""), KeptFile::None));
+        assert!(!refused(kept));
+    }
+}
+
+/// Another format, a file not base64, or the objects' blob as it was kept
+/// before it carried its format, is refused until the slot is emptied.
+#[test]
+fn a_file_of_another_format_is_refused_until_emptied() {
+    let _g = crate::serial();
+    let foreign = BASE64.encode([format::OBJECTS.wrapping_add(1), 1, 2]).into_bytes();
+    // An XTP packet begins "XTP\0": what the objects kept, alone, before.
+    let unformatted = BASE64.encode(b"XTP\0\0\0\0\0").into_bytes();
+    for text in [foreign, unformatted, br#"{"ao":"screen"}"#.to_vec()] {
+        emptied(Kept::Objects);
+        assert!(matches!(kept_of(Kept::Objects, &text), KeptFile::Unreadable));
+        assert!(refused(Kept::Objects) && !refused(Kept::Settings));
+    }
+    emptied(Kept::Objects);
+    assert!(!refused(Kept::Objects));
+}
+
+#[test]
+fn a_slot_s_path_is_its_number_and_fits() {
+    for kept in Kept::ALL {
+        assert_eq!(kept.path().as_str(), kept.slot().to_string());
+        assert!(kept.path().as_str().len() <= PATH_BYTES);
+        assert_eq!(Kept::of_slot(kept.slot()), Some(kept));
+    }
+}

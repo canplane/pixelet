@@ -21,15 +21,15 @@ import {
 } from "@/bracket.tsx";
 import { declare_source } from "@/kernel/io/source.ts";
 import { read_asset, read_object } from "@/kernel/io/read.ts";
-import { bind_root, read_storage } from "@/kernel/host.ts";
+import { bind_root, kept_refused, migrate_kept, read_kept } from "@/kernel/host.ts";
 import { BASE_LAYERS } from "@/config/published.spec.ts";
 import { GUEST, GUEST_DOORBELL, load_guest } from "@/kernel/mem.ts";
-import { root, SETTINGS_PATH } from "@/kernel/abi/host.spec.ts";
+import { kept, root } from "@/kernel/abi/host.spec.ts";
 import { bytes_at } from "@/kernel/module.ts";
 import { gpuBoot } from "@/bracket.tsx";
 import { onlineWatch } from "@/bracket.tsx";
 import { start_sched, strobe } from "@/kernel/sched.ts";
-import { set_snapshot } from "@/kernel/snapshot.ts";
+import { kernel_snapshot, set_snapshot } from "@/kernel/snapshot.ts";
 
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   switch (cmd) {
@@ -37,6 +37,7 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
       // Too large for a ring frame; valid until the kernel writes the next, a turn away.
       const { at, len } = read_world_snapshot(f!);
       set_snapshot(bytes_at(GUEST.buffer, at, len));
+      kept_refused(kernel_snapshot().kept_refused);
       return;
     }
     case Command.SENSOR_START:
@@ -72,9 +73,10 @@ export async function boot_kernel(): Promise<void> {
       orientationSilenceIsLoss(),
       settings,
     );
+  migrate_kept();
   // Storage is the user's to edit: kept settings too large to send are no
   // settings, and the kernel starts from the defaults, written over them.
-  let pkt = boot(read_storage(SETTINGS_PATH) ?? "");
+  let pkt = boot(read_kept(kept.SETTINGS) ?? "");
   if (!GUEST_DOORBELL.fits(pkt)) pkt = boot("");
   const booted = GUEST_DOORBELL.call(Command.WORLD_BOOT, pkt, (result) => result);
   if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);

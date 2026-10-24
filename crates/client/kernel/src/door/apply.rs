@@ -102,6 +102,18 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             refuse_unless(crate::io::source::declare(p.source).is_ok(), Errno::EINVAL)?;
             Ok(Some(0))
         }
+        Command::WORLD_KEPT_EMPTIED => {
+            use crate::io::file::{self, Kept};
+            let p = abi::WorldKeptEmptied::read(packet(pkt)?)?;
+            let kept = or_refuse(Kept::of_slot(p.slot).filter(|&k| file::refused(k)), Errno::EINVAL)?;
+            file::emptied(kept);
+            // The settings write what they hold from the next keep on; the
+            // objects are read again, empty, and saved from then on.
+            if kept == Kept::Objects {
+                crate::layer::object::repository::open();
+            }
+            Ok(Some(0))
+        }
         Command::INPUT_RECT => {
             let p = abi::InputRect::read(packet(pkt)?)?;
             refuse_unless(p.width >= 0.0 && p.height >= 0.0, Errno::EINVAL)?;
