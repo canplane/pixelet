@@ -4,7 +4,8 @@
 // served, and each version holds its own manifest beside its tiles, its format
 // and shards. A publish reads both out of the bucket, makes the declaration
 // of them (pxl-geo-bake bin/declare_source.rs, refusing what a client would)
-// and uploads it; nothing in the tree changes, so nothing is built or deployed.
+// and uploads it; nothing in the tree changes, so nothing is deployed, and
+// the one thing built is that declaring tool.
 //
 // `upload <kind>` uploads `out/<kind>.publish/` as a new version, named
 // `v<format>.<UTC day>.<n>`, n past every version of that format and day the

@@ -15,9 +15,9 @@ import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT, 
 /** A land page in Bundang: the zoom-15 tile's name. */
 const PAGE = "010332102130223";
 
-/** PAGE's divisions page at the pyramid's top, z5: its first five digits,
- * the one a reader asks for first. Written out, since computing it would copy
- * pxl-spec's arithmetic into TypeScript. */
+/** PAGE's divisions page at z5, its first five digits: one zoom under the
+ * pyramid's top (pxl-spec-core lib.rs `TOP_ZOOM`). Written out, since
+ * computing it would copy pxl-spec's arithmetic into TypeScript. */
 const DIVISION_TOP = "01033";
 
 const ASSET_KEY = Object.values(INGESTED)[0].key;

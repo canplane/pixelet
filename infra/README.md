@@ -90,10 +90,16 @@ db-geo holds only what search reads: `overture_places`,
 
    CI's deploy user is root, which installing them needs.
 
-A CI deploy updates the stack after that (§5). By hand it is the same steps
-in `/opt/pixelet`: `git reset --hard` to the commit, install a changed
-`infra/prod/etc/` file and restart what reads it, then in `infra/prod`
-`docker compose up -d --build --force-recreate` and `docker image prune -f`.
+A CI deploy updates the stack after that (§5) with `infra/prod/deploy.sh`,
+sent from a checkout and run on the VM: `git reset --hard` to the commit,
+install a changed `infra/prod/etc/` file and restart what reads it, then in
+`infra/prod` `docker compose up -d --build --force-recreate` and
+`docker image prune -f`. By hand it is the same script, for a commit `deploy`
+already holds, since the VM fetches it from there:
+
+```sh
+ssh root@$(hcloud server ip pixelet-prod) bash -eu -s -- "$(git rev-parse origin/deploy)" < infra/prod/deploy.sh
+```
 
 ### Copying the search tables
 
@@ -176,10 +182,16 @@ like the app loading, not like a missing route. Locally `deno task dev:oven`
 runs pxl-geo on 3000, the tile server on 3001 and pxl-api on 3002, and the
 dev proxy splits on the same roots.
 
-**Deploying the client** is CI's (§5); by hand, the same command it runs:
+**Deploying the client** is CI's (§5); by hand it is the script CI runs,
+building here rather than taking the gate's bundle. What CI waits on first
+is not run for you: the gate's checks and tests pass over the commit, and the
+servers it talks to are already deployed (§3), since a new client against an
+old server is the direction that breaks. A hand deploy takes no number and
+goes out unnumbered.
 
 ```sh
 wrangler login           # once a machine
+deno task check:ship && deno task test
 deno task deploy         # build, publish
 deno task smoke https://plei.me
 ```
@@ -195,16 +207,19 @@ skill's "Verify what is served".
 
 `.github/workflows/check-and-deploy.yml` runs on a push to `deploy` and on
 pull requests, never on main: main carries work between machines, compiling
-or not. **Publishing is `git push origin main:deploy`**, forced once main has
-been rewritten. Why each job is as it is lives in the workflow's comments.
+or not. A push or pull request that changes only markdown runs nothing, and
+`gh workflow run` against any other ref runs the gate alone. **Publishing is
+`git push origin main:deploy`**, forced once main has been rewritten. Why
+each job is as it is lives in the workflow's comments.
 
-| Job             | When                  | What                                                                                                                                                                                            |
-| :-------------- | :-------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gate`          | always                | `check:ship` over the whole commit: the shipped TypeScript type-checks, the shipped crates pass clippy, the generated files match `spec/`; nothing of behavior; on deploy, takes a build number |
-| `deploy-server` | gate green            | ssh, reset to the run's commit, `docker compose up -d --build --force-recreate`                                                                                                                 |
-| `deploy-web`    | after `deploy-server` | `deno task deploy` under the build number                                                                                                                                                       |
-| `smoke`         | after both deployed   | `deno task smoke https://plei.me`                                                                                                                                                               |
-| `record`        | after either deployed | appends the build to the log                                                                                                                                                                    |
+| Job             | When                  | What                                                                                                                                                                                                                                                                       |
+| :-------------- | :-------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gate`          | every run             | `check:rules`, then `check:ship` over the whole commit: the shipped TypeScript and the deploy's scripts type-check, the shipped crates pass clippy, the generated files match `spec/`, the bundle and the Worker build; then `deno task test`; on deploy, keeps the bundle |
+| `number`        | gate green, on deploy | takes a build number                                                                                                                                                                                                                                                       |
+| `deploy-server` | after `number`        | ssh, `infra/prod/deploy.sh`: reset to the run's commit, `docker compose up -d --build --force-recreate`                                                                                                                                                                    |
+| `deploy-web`    | after `deploy-server` | `deno task deploy --prebuilt`: the gate's bundle under the build number                                                                                                                                                                                                    |
+| `smoke`         | after both deployed   | `deno task smoke https://plei.me`                                                                                                                                                                                                                                          |
+| `record`        | after either deployed | appends the build to the log                                                                                                                                                                                                                                               |
 
 A deploy is whole: the client and the servers go out from the one commit,
 every time, so they never run different ones. The servers go first because an
