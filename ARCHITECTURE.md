@@ -6,7 +6,7 @@ No reader asks block by block. It descends (`pxl-spec-core cast.rs` `first`), pa
 
 How finely the world is drawn is the other half, and it is one rule too: the view is a grid of angular cells about the eye, and a block is drawn at the zoom whose block spans at least a cell at its distance (`pxl-spec-core grid.rs` `cell_at`). What a zoom folds away is not there at that zoom, to draw, to walk on or to miss, and nothing finer is fetched to keep it.
 
-A kind of thing is drawn wholly on one side. The GPU's rays find the world's blocks, and the GPU grows the decor the ground grows, each where it is drawn. Everything else the kernel decides to draw, it lists: what a player placed, the actors, the puck, the ghosts, the badges. The renderer draws the list and decides nothing but color. Control is headless: the walk, the pointer and the camera's clearance ask the same query on the CPU and draw nothing.
+A kind of thing is drawn wholly on one side. The GPU's rays find the world's blocks, a player's cubes among them, and the GPU grows the ground's decor and draws it with a player's, which the kernel hands it as records, each where it is drawn. Everything else the kernel decides to draw, it lists: the actors, the cumulus, the puck, the ghosts, the badges. The renderer draws the list and decides nothing but color. Control is headless: the walk, the pointer and the camera's clearance ask the same query on the CPU and draw nothing.
 
 pixelet is an application over [xpute](./xpute/ARCHITECTURE.md): a Rust kernel that runs as xpute's guest, the TypeScript around it, and Rust servers and bakes that share the kernel's model. The memory, the rings and the turn are xpute's and described there; this document is what pixelet builds on them.
 
@@ -277,7 +277,7 @@ Every number a person would tune, such as τ's target, the screen's cells and de
 
 # Drawing
 
-This part turns the eye's rays and the kernel's list into a frame: the GPU draws the world from the rays, the kernel lists everything else, and the renderer executes both and decides nothing.
+This part turns the eye's rays and the kernel's list into a frame: the GPU draws the world from the rays and the decor it grows and is handed, the kernel lists everything else, and the renderer executes both and decides nothing but color.
 
 ## A ray a pixel
 
@@ -322,7 +322,7 @@ A receiver compares nine taps, each moved by its own plane's slope (`shadow.wgsl
 
 ## The frame
 
-Each turn ends with a **draw list** (`pxl-render frame/draw.rs`): entries tagged by the pipeline that draws them, each with its block and uniform. It holds decor (instanced, or as an **impostor** sprite where a model is drawn too small to be worth it), the actors, the location puck, an edit's ghosts, the badges and the debug lines. The rays are not in it; they are the cast.
+Each turn ends with a **draw list** (`pxl-render frame/draw.rs`): entries tagged by the pipeline that draws them, each with its block and uniform. It holds the cumulus (instanced as decor is, or as an **impostor** sprite where a model is drawn too small to be worth it), the actors, the location puck, an edit's ghosts, the badges and the debug lines. The rays and the GPU's decor are not in it; they are the cast and the grown decor (`gpu/grown.rs`).
 
 The kernel writes the frame's uniforms into one lane of doubles (`frame/stage.rs`) and calls the renderer (`gpu/renderer.rs` `render_frame`) with the list, the models, the badges' images, the earth's tiles, the windows' squares and the cast. It draws every open surface, the world and the character picker's display case, and reports the cost and whether it wants another turn.
 
@@ -333,7 +333,7 @@ ahead       impostor sheets, fresh tiles, the atmosphere's tables,
             the air's volume
 cast        the screen's rays; the sun's map; the occlusion prepass
 world pass  grown decor → rays at their depth → grown impostors
-            → sky and stars at the far plane → listed actors, decor,
+            → sky and stars at the far plane → listed actors,
             cumulus, impostors → high cloud planes → puck, ghosts
 over        badges → debug lines → display cases
 ```
