@@ -30,6 +30,7 @@ pub enum Kept {
 }
 
 impl Kept {
+    /// In declaration order, as `KEPT` is indexed by `kept as usize`.
     pub const ALL: [Kept; 2] = [Kept::Settings, Kept::Objects];
 
     pub const fn path(self) -> &'static str {
@@ -107,12 +108,23 @@ enum KeptRead {
     Read(KeptFile),
 }
 
-static KEPT: Global<Vec<(Kept, KeptRead)>> = Global::new();
+const _: () = {
+    let mut i = 0;
+    while i < Kept::ALL.len() {
+        assert!(Kept::ALL[i] as usize == i);
+        i += 1;
+    }
+};
+
+/// Each kept file's read, at its `Kept`; none where none is waiting.
+static KEPT: Global<[Option<KeptRead>; Kept::ALL.len()]> = Global::new();
+
+fn kept_slot(kept: Kept) -> &'static mut Option<KeptRead> {
+    &mut KEPT.get(|| [const { None }; Kept::ALL.len()])[kept as usize]
+}
 
 fn kept_read(kept: Kept, read: KeptRead) {
-    let all = KEPT.get(Vec::new);
-    all.retain(|(k, _)| *k != kept);
-    all.push((kept, read));
+    *kept_slot(kept) = Some(read);
     request_world_tick();
 }
 
@@ -137,18 +149,17 @@ fn kept_opened(kept: Kept, fd: Fd, opened: Opened) {
 
 /// What a kept file held, once it is read whole; None until then.
 pub fn take_kept(kept: Kept) -> Option<KeptFile> {
-    let all = KEPT.get(Vec::new);
-    let at = all.iter().position(|(k, _)| *k == kept)?;
-    match &all[at].1 {
+    let slot = kept_slot(kept);
+    match slot.as_ref()? {
         &KeptRead::Refused(refused) => {
             if refused.over() {
-                all.remove(at);
+                *slot = None;
                 open_kept(kept);
             }
             None
         }
         KeptRead::Reading { asked, .. } if turn() <= *asked => None,
-        _ => match all.remove(at).1 {
+        _ => match slot.take()? {
             KeptRead::Reading { bytes, .. } => Some(KeptFile::Bytes(bytes)),
             KeptRead::Read(file) => Some(file),
             KeptRead::Refused(_) => None,
