@@ -1,4 +1,4 @@
-// @xpute/hypervisor/ipc/ring.ts
+// @xpute/host/ipc/ring.ts
 
 /** A ring of frames, laid out by spec/ipc/ring.json. */
 

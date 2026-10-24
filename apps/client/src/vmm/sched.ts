@@ -6,7 +6,7 @@
  */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
-import { Strobe } from "@xpute/hypervisor/sched/strobe.ts";
+import { Strobe } from "@xpute/host/sched/strobe.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { Command, encode_world_frame } from "@/vmm/abi/cmd.spec.ts";
 import { GUEST, GUEST_DOORBELL } from "@/vmm/mem.ts";

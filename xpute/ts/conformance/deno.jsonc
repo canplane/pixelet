@@ -3,7 +3,7 @@
   // member at all — everything this package needs is said once at the root.
   //
   // What the package is called is `@xpute/conformance/`, and it is called
-  // that by the import maps, as `@xpute/kit/` and `@xpute/hypervisor/` are.
+  // that by the import maps, as `@xpute/kit/` and `@xpute/host/` are.
   // Nothing imports it: it is the host that runs the traces against every
   // guest, and a test is all it holds.
 }

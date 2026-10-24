@@ -1,10 +1,10 @@
 # Architecture — xpute
 
-[xpute](./README.md) runs one program inside another and gives it resources rather than abstractions. The outer program, the **host**, owns the platform: the clock, the memory, whatever reaches outside. The inner one, the **guest**, owns none of it. The host's end of xpute is **the hypervisor** (`ts/hypervisor`), as KVM is: it allocates and routes, and names nothing of what the guest computes. It grants a fixed memory once and a quota of time on every turn, its entry and exit; it gives the rings and the doorbell that rings them, a virtqueue and its kick; and it hands what the guest asks of the outside to the program — every file call to the program's one `SysHost.open`, which dispatches by root, and a GPU call to a device. Over those grants the guest builds what it needs — an allocator, a scheduler, tables of what it holds — and the policy each runs by.
+[xpute](./README.md) runs one program inside another and gives it resources rather than abstractions. The outer program, the **host**, owns the platform: the clock, the memory, whatever reaches outside. The inner one, the **guest**, owns none of it. The host grants a fixed memory once and a quota of time on every turn, and hands what the guest asks of the outside to the program: every file call to the program's one `SysHost.open`, which dispatches by root, and a GPU call to a device. Over those grants the guest builds what it needs — an allocator, a scheduler, tables of what it holds — and the policy each runs by.
 
-That split is an exokernel's with its library operating system, not an operating system's with a process: the host grants a real region and a real quota, and nothing is virtualized. Unlike an exokernel, nothing enforces the grant. A guest can spend a whole quota inside one function, and the host cannot take the turn back until it returns.
+The host/guest split follows the exokernel/library-OS division, not an operating system's with a process: the host grants resources, a real region and a real quota, and the guest builds its own abstractions over them; nothing is virtualized. xpute does not enforce those grants. A guest can spend a whole quota inside one function, and the host cannot take the turn back until it returns.
 
-xpute comes in two layers. `kit` is generic code — collections, codecs, a wire format, an errno table, scalar math — that any program can link and call. `guest` and `hypervisor` are the arrangement itself, one end each, written against `kit`, which knows nothing of them. Neither layer knows what a guest computes, which is what lets the arrangement carry to the next program.
+xpute comes in two layers. `kit` is generic code — collections, codecs, a wire format, an errno table, scalar math — that any program can link and call. `guest` and `host` are the arrangement itself, one end each, written against `kit`, which knows nothing of them. Neither layer knows what a guest computes, which is what lets the arrangement carry to the next program.
 
 Three things cross between the ends and nothing else does: one memory they share, one call in, one number out. The sections follow from that:
 
@@ -138,8 +138,8 @@ On the host side, the **strobe** (`sched/strobe.ts`) decides when a turn of work
 The strobe's are not the only rings. The doorbell rings with no quota to make room in a full submission ring, to wait for a call's reply and to send a `cmd`, and whatever holds the doorbell may ring it too. Those turns are outside what the quantum observes.
 
 ```text
-hypervisor · TypeScript                    guest
-───────────────────────                    ─────
+host · TypeScript                          guest
+─────────────────                          ─────
 
 strobe   a frame, and only when one
          was asked for
@@ -181,13 +181,13 @@ one 32-bit handle
                has, and cannot name whatever took the slot next
 ```
 
-Every table is fixed at N slots, the one over what another side keeps (`HandleTable`) and the one over values a side keeps itself (`Slots`) alike. Slot 0 is never handed out, so 0 means "none". Handles are in `guest` and `hypervisor` rather than `kit`, because a handle is one side of a boundary, not a container.
+Every table is fixed at N slots, the one over what another side keeps (`HandleTable`) and the one over values a side keeps itself (`Slots`) alike. Slot 0 is never handed out, so 0 means "none". Handles are in `guest` and `host` rather than `kit`, because a handle is one side of a boundary, not a container.
 
 ---
 
 ## I/O, by asking
 
-A guest cannot do I/O, because the host owns the connections, the way an operating system owns its devices. So the guest asks, in what its turn leaves, and the hypervisor hands the ask to the program and brings back what came of it — in a message, or into memory the request named. It does not route by root: every file call goes to the program's one `SysHost.open`, and the program dispatches by root to whatever it bound there. What a file is, where it lies and how it is fetched are the binding's; the hypervisor only carries the call.
+A guest cannot do I/O, because the host owns the connections, the way an operating system owns its devices. So the guest asks, in what its turn leaves, and xpute's host end hands the ask to the program and brings back what came of it — in a message, or into memory the request named. It does not route by root: every file call goes to the program's one `SysHost.open`, and the program dispatches by root to whatever it bound there. What a file is, where it lies and how it is fetched are the binding's; xpute only carries the call.
 
 How much may be out at once, and which want goes first, xpute does not say: ordering demands needs to know what the program is for. A program that wants a bound passes one in its own messages.
 
@@ -256,10 +256,10 @@ The implementations do not all stand in the same relation, and which relation de
 
 - **`kit` is symmetric.** Rust (`rust/kit`), TypeScript (`ts/kit`) and C++ (`cpp/kit`) implement the same kit, held to each other by the golden records wherever bytes must match. TypeScript's has no `alloc`, since it has no linear heap of its own, and no `bug`, since a thrown error carries its stack.
 - **The two ends face each other.** A host end and a guest end owe each other the contract and its formats, not matching module lists; a module with nothing facing it is not a gap.
-- **Guest ends are symmetric with each other.** Rust (`rust/guest`) and C++ (`cpp/guest`) are the same end, either plugged into any host, so what one gives a program the other gives too. The host's end, the hypervisor, is TypeScript (`ts/hypervisor`).
+- **Guest ends are symmetric with each other.** Rust (`rust/guest`) and C++ (`cpp/guest`) are the same end, either plugged into any host, so what one gives a program the other gives too. The host end is TypeScript (`ts/host`).
 - **The GPU's calls follow the same split.** Each guest language writes them (`rust/gpu`, `cpp/gpu`). The hosts run them in TypeScript on WebGPU (`ts/gpu`), and in Rust on wgpu behind the `host` feature.
 
-`kit` asks nothing of a program: link it and call it. `guest` and `hypervisor` ask it to run xpute's way — memory granted once, work in turns, I/O by asking.
+`kit` asks nothing of a program: link it and call it. `guest` and `host` ask it to run xpute's way — memory granted once, work in turns, I/O by asking.
 
 C++ is an implementation beside the Rust, not a port of it: written from the contract and the formats, built by the platform's compiler (`script/cpp.ts`), and held by the same records and traces. That is its point — what guests agree on is what the boundary shows, not what one was copied from. Where it differs, the language is why:
 
@@ -294,7 +294,6 @@ What xpute took from work before it, or found it had arrived at. A link is given
 | Precedent                                                   | Where                            | What is taken                                                                  |
 | ----------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
 | The exokernel and its library operating system              | the arrangement                  | The host grants real resources; the guest keeps its own abstractions over them |
-| KVM                                                         | `ts/hypervisor`                  | Its name; it grants and enters, and hands each call out to the program         |
 | Aegis                                                       | `sched/quantum`                  | The quota as a cooperative counterpart of the exokernel's CPU slice            |
 | Android Swappy's frame pacing                               | `sched/quantum`, `sched/strobe`  | Turns a whole number of refreshes apart                                        |
 | "core" for main memory, as in a core dump                   | the core memory                  | Its name                                                                       |

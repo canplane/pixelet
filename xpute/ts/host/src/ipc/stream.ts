@@ -1,4 +1,4 @@
-// @xpute/hypervisor/ipc/stream.ts
+// @xpute/host/ipc/stream.ts
 
 /**
  * A turn's calls from guest to host (rust/guest/src/ipc/stream.rs),

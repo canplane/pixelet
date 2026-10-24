@@ -1,7 +1,7 @@
 # The directory's traces (ARCHITECTURE.md, the contract's rule 0). Every trace's host reads a guest's
 # directory before anything else and refuses one whose head is not xpute's or that names a key twice; what
 # is here is what it must then find. That a host passes over a key it does not know is the host's side of the
-# rule, held by ts/hypervisor/src/ipc/directory.test.ts. No offset is written here: where the
+# rule, held by ts/host/src/ipc/directory.test.ts. No offset is written here: where the
 # directory is, both ends are built with, and where it points is the guest's own.
 scenarios	C0.boot
 #

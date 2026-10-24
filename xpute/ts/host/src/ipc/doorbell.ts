@@ -1,4 +1,4 @@
-// @xpute/hypervisor/ipc/doorbell.ts
+// @xpute/host/ipc/doorbell.ts
 
 /**
  * The host's end of a guest's rings. One ring of the doorbell is one turn

@@ -1,4 +1,4 @@
-// @xpute/hypervisor/ipc/frame.ts
+// @xpute/host/ipc/frame.ts
 
 /** A message's four words, laid out by spec/ipc/frame.json. */
 

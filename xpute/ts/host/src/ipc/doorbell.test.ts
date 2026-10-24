@@ -1,4 +1,4 @@
-// @xpute/hypervisor/ipc/doorbell.test.ts
+// @xpute/host/ipc/doorbell.test.ts
 
 import { assertEquals, assertThrows } from "@std/assert";
 

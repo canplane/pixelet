@@ -1,4 +1,4 @@
-// @xpute/hypervisor/sched/strobe.ts
+// @xpute/host/sched/strobe.ts
 
 /**
  * The host's clock for one guest: a turn runs on an animation frame only when

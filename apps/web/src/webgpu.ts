@@ -8,7 +8,7 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { handle_slot } from "@xpute/hypervisor/abi/handle.ts";
+import { handle_slot } from "@xpute/host/abi/handle.ts";
 import { GpuHost } from "@xpute/gpu/host.ts";
 
 import { DEV_BUNDLE } from "@pxl/client/config/bundle.ts";

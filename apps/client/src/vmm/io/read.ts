@@ -10,7 +10,7 @@
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/hypervisor/ipc/sys.ts";
+import { FileError } from "@xpute/host/ipc/sys.ts";
 import { INGESTED, PACK } from "@/catalog/asset/ingested.spec.ts";
 import { BASE_LAYERS } from "@/config/published.spec.ts";
 import { assetUrl, tileUrl } from "@/config/route.ts";

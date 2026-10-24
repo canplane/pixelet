@@ -40,7 +40,7 @@ pub const STACK_BYTES: u32 = 1048576;
 /// the ring checks, since a position is taken modulo it by masking.
 ///
 /// Sized to what a turn is sent, not to a burst: a full ring loses nothing, since
-/// the shell rings with no quota until there is room (@xpute/hypervisor/ipc/doorbell.ts
+/// the shell rings with no quota until there is room (@xpute/host/ipc/doorbell.ts
 /// `writer`, `submit`). And small because every slot ends up resident: a
 /// position only grows, so each slot is written in turn, and a slot is a page
 /// since a WORLD_SOURCE's or a CHAT_SEND's packet can come near one.

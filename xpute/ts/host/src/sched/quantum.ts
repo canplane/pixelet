@@ -1,4 +1,4 @@
-// @xpute/hypervisor/sched/quantum.ts
+// @xpute/host/sched/quantum.ts
 
 /**
  * The host's grant for a guest's turn. A turn may overrun its quota, and the

@@ -1,4 +1,4 @@
-// @xpute/hypervisor/ipc/sys.ts
+// @xpute/host/ipc/sys.ts
 
 /**
  * The host's end of a guest's system calls (rust/guest/src/ipc/sys.rs):

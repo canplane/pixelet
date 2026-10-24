@@ -1,4 +1,4 @@
-// @xpute/hypervisor/ipc/ring.test.ts
+// @xpute/host/ipc/ring.test.ts
 
 import { assert, assertEquals, assertThrows } from "@std/assert";
 
