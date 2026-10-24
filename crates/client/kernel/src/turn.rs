@@ -71,8 +71,18 @@ fn ghost_step() {
     use crate::control::interaction::ghost::{ghost, Ghost};
     let changed = kernel().parts().map(|(scene, draw)| match ghost() {
         Ghost::None => scene.ghost.clear(draw),
-        Ghost::Decor { at, group, rotation, scale } => scene.ghost.set_decor(draw, at, group, rotation as f32, scale as f32),
-        Ghost::Box { at, size, value, rgb } => scene.ghost.set_box(draw, at, size, value, rgb),
+        Ghost::Decor {
+            at,
+            decor,
+            variant,
+            rotation,
+            scale,
+            stand_in,
+        } => {
+            let stand_in = stand_in.map(|b| (b.at, b.size, b.cube, b.erase));
+            scene.ghost.set_decor(draw, at, decor, variant, rotation as f32, scale as f32, stand_in)
+        }
+        Ghost::Box(b) => scene.ghost.set_box(draw, b.at, b.size, b.cube, b.erase),
     });
     if changed == Some(true) {
         request_world_tick();

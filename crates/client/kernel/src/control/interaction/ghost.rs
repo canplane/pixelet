@@ -2,11 +2,11 @@
 
 //! The ghost the tool held shows under the pointer: the decor a placement
 //! would stand or bring back, the box it would fill or carve, or what the
-//! eraser is over.
+//! eraser is over. What it looks like, its color, its texture and what stands
+//! in for a decor not yet loaded, is the scene's (`scene/indicator/hover_cursor.rs`).
 
-use pxl_render::look::color::indicator;
 use pxl_spec::block::decor::Decor;
-use pxl_spec::block::object::{cube_id, cube_of, cube_rgb, Cube};
+use pxl_spec::block::object::{cube_of, Cube};
 use pxl_spec::block::DecorId;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
@@ -16,21 +16,40 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::control::interaction::edit::{pending, restores_scattered, Pending};
 use crate::control::interaction::{holding, hover, ActiveTool};
-use crate::decor::assets::decor_assets_for;
 use crate::layer::instance::Meta;
 use crate::layer::object::meta::user_decor_pick;
 use crate::layer::object::store::Block;
 use crate::query::changed::Asked;
 use crate::query::World;
-use crate::setting::store::settings_store;
 use xpute_guest::global::Global;
 
 /// What the pointer's tool would show where it is: nothing, a decor
 /// instance, or a box, drawn half transparent by the scene.
 pub enum Ghost {
     None,
-    Decor { at: V3, group: u32, rotation: f64, scale: f64 },
-    Box { at: V3, size: f64, value: u32, rgb: u32 },
+    /// `decor`'s `variant`, its base at `at` in the world's frame. `stand_in`
+    /// is the box a placement would show in its place, none for an instance
+    /// the world already holds.
+    Decor {
+        at: V3,
+        decor: &'static Decor,
+        variant: u32,
+        rotation: f64,
+        scale: f64,
+        stand_in: Option<GhostBox>,
+    },
+    Box(GhostBox),
+}
+
+/// A box the tool would fill or carve: its corner in the world's frame, its
+/// edge, the cube it would be or carve (none where there is no one cube), and
+/// whether the eraser holds it.
+#[derive(Clone, Copy)]
+pub struct GhostBox {
+    pub at: V3,
+    pub size: f64,
+    pub cube: Option<Cube>,
+    pub erase: bool,
 }
 
 /// The look of the ground the eraser would carve, of the hovered point:
@@ -40,7 +59,6 @@ static CARVED: Global<Asked<Q3, Option<Cube>>> = Global::new();
 pub fn ghost() -> Ghost {
     let hover = hover();
     let ui = holding();
-    let settings = settings_store();
     let hovered = hover.coord;
     let active_tool = ui.active_tool;
     let Pending {
@@ -50,7 +68,6 @@ pub fn ghost() -> Ghost {
         blocked,
         ..
     } = pending();
-    let textures = settings.textures;
 
     let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser) || hovered_object.is_some();
     let current_scale = units(if use_object_style { preview_zoom } else { GROUND.cell() });
@@ -81,7 +98,6 @@ pub fn ghost() -> Ghost {
         _ => None,
     };
     let decor = decor_id.map(Decor::of);
-    let decor_assets = decor.and_then(decor_assets_for);
 
     let decor_corner = match (active_tool, &hovered_object) {
         (ActiveTool::Decor, _) => hovered,
@@ -106,23 +122,16 @@ pub fn ghost() -> Ghost {
         }
         _ => None,
     };
-    // An untextured white silhouette reads as a glitch, so the box ghost stands
-    // in until model and skin both arrive.
-    let is_decor_ghost = match (decor_assets, decor_pick) {
-        (Some(a), Some((_, m))) => a.models.get(m.variant as usize).is_some_and(Option::is_some) && a.skin(m.variant as usize).is_some(),
-        _ => false,
-    };
-
-    let swatch = cube.and_then(cube_rgb);
-    let fallback = if active_tool == ActiveTool::Eraser { indicator::ERASE } else { indicator::ACTION };
-
+    let erase = active_tool == ActiveTool::Eraser;
     let scattered_ghost = hover.scattered.filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser)).and_then(|s| {
         let (Meta::Decor(m), decor) = (s.meta, Decor::of(DecorId::of(s.id)?));
         Some(Ghost::Decor {
             at: s.at,
-            group: decor.first_group() + m.variant,
+            decor,
+            variant: m.variant,
             rotation: m.spin(),
             scale: m.scale,
+            stand_in: None,
         })
     });
     match (scattered_ghost, hovered, blocked) {
@@ -130,23 +139,23 @@ pub fn ghost() -> Ghost {
         (None, Some(h), false) => {
             let [x, y, z] = crate::view::frame::coord::to_world(&h);
             let c = q3::unpack(&h);
+            let box_ghost = GhostBox {
+                at: [x, y, z],
+                size: current_scale,
+                cube,
+                erase,
+            };
             match (decor, decor_pick) {
                 // Its stand, moved as the hover is into the world's frame.
-                (Some(decor), Some((at, m))) if is_decor_ghost => Ghost::Decor {
+                (Some(decor), Some((at, m))) => Ghost::Decor {
                     at: [at[0] - c[0] + x, at[1] - c[1] + y, z],
-                    group: decor.first_group() + m.variant,
+                    decor,
+                    variant: m.variant,
                     rotation: m.spin(),
                     scale: m.scale,
+                    stand_in: Some(box_ghost),
                 },
-                _ => Ghost::Box {
-                    at: [x, y, z],
-                    size: current_scale,
-                    value: match (cube, textures) {
-                        (Some(cube), true) => cube_id(cube),
-                        _ => 0,
-                    },
-                    rgb: swatch.unwrap_or(fallback),
-                },
+                _ => Ghost::Box(box_ghost),
             }
         }
         _ => Ghost::None,
