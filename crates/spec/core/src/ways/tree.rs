@@ -127,15 +127,56 @@ pub const SQUARE_BLOCKS: u32 = 24_067;
 /// No slot: a fold that gives no block back.
 pub const NONE: u32 = u32::MAX;
 
-/// A handed square's scratch past its runs (`window::TREE_AT`), a frame's: the blocks its
-/// build gave back, their count first, for the pushes after it
-/// (pxl-shader `ways_freed_cs`); then the blocks its tree holds,
-/// their count first, a record each, its block's id and its eight heap and
-/// eight data words, which the read-back carries to the CPU's mirror.
+/// A handed square's scratch past its runs (`window::TREE_AT`), a frame's,
+/// for a tree of `blocks` at most: the blocks its build gave back, their
+/// count first, for the pushes after it (pxl-shader `ways_freed_cs`); then
+/// the blocks its tree holds from `records_at`, their count first, a
+/// record each, its block's id and its eight heap and eight data words,
+/// which the read-back carries to the CPU's mirror. A build takes no more
+/// than its scratch holds (`cramped`), so neither runs past its room. The
+/// renderer starts it small and grows it (pxl-render gpu/renderer.rs
+/// `GroundBuffers::grow_scratch`), every square's alike, so a frame's
+/// scratch is `window::HANDED` of them and each square's length is a
+/// `HANDED`th of its buffer's (pxl-spec-core fill.rs `scratch_at`); at
+/// `SQUARE_BLOCKS` it is `SCRATCH_WORDS`.
 pub const FREED_AT: u32 = crate::window::TREE_AT;
-pub const RECORDS_AT: u32 = FREED_AT + 1 + SQUARE_BLOCKS;
 pub const RECORD_WORDS: u32 = 17;
-pub const SCRATCH_WORDS: u32 = RECORDS_AT + 1 + SQUARE_BLOCKS * RECORD_WORDS;
+
+/// A square's scratch for a tree of `blocks` at most, in words.
+pub const fn scratch_words(blocks: u32) -> u32 {
+    FREED_AT + 2 + blocks * (1 + RECORD_WORDS)
+}
+
+/// The blocks a square's scratch of `words` holds a tree of, no more than
+/// `SQUARE_BLOCKS`: `scratch_words`'s inverse, none where it holds none.
+pub const fn scratch_blocks(words: u32) -> u32 {
+    if words < FREED_AT + 2 {
+        return 0;
+    }
+    let blocks = (words - FREED_AT - 2) / (1 + RECORD_WORDS);
+    if blocks < SQUARE_BLOCKS {
+        blocks
+    } else {
+        SQUARE_BLOCKS
+    }
+}
+
+/// Where a square's records begin in its scratch for a tree of `blocks`.
+pub const fn records_at(blocks: u32) -> u32 {
+    FREED_AT + 1 + blocks
+}
+
+/// A square's scratch at its most, a tree of `SQUARE_BLOCKS`: what a bake
+/// or a test fills one square in.
+pub const SCRATCH_WORDS: u32 = scratch_words(SQUARE_BLOCKS);
+
+/// A build's records' count where its tree would take more blocks than its
+/// scratch holds (`cramped`), short of the square's own most: no record
+/// kept and its root word 0, which the renderer reads as the scratch's to
+/// grow, as a count of none is the pool's, and `NONE` the square's own
+/// most (pxl-render gpu/renderer.rs `Short`). Past any count of a square's.
+pub const CRAMPED: u32 = NONE - 1;
+const _: () = assert!(CRAMPED > SQUARE_BLOCKS, "no count of records is the mark");
 
 /// A candidate's word: its X and Y under the square, `SQUARE_SHIFT` bits
 /// each, none coarser than the square; whether it is off the square, a
@@ -228,6 +269,16 @@ pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
 /// pool's growth answers (pxl-shader `ways_tree_cs`).
 pub fn past(taken: u32, flagged: u32) -> bool {
     flagged > SQUARE_BLOCKS - taken
+}
+
+/// Whether a level's `flagged` blocks take a square that has taken `taken`
+/// past the `blocks` its scratch holds (`scratch_blocks`), whose freed
+/// blocks and records each have room for so many: not taken, its build
+/// keeping `CRAMPED` for its records' count, which the scratch's growth
+/// answers (pxl-shader `ways_tree_cs`). Asked after `past`, so it marks
+/// only what a larger scratch holds.
+pub fn cramped(blocks: u32, taken: u32, flagged: u32) -> bool {
+    taken + flagged > blocks
 }
 
 /// The flagged candidate at `slot`, a node of `zoom`, a branch whose
@@ -332,9 +383,11 @@ pub fn under(pool: &impl Pool, slot: u32) -> u32 {
     }
 }
 
-/// A square's records as the read-back carries them: its scratch from
-/// `RECORDS_AT` on, their count, then a block its tree holds each.
-pub const RECORDS_WORDS: u32 = SCRATCH_WORDS - RECORDS_AT;
+/// A square's records at their most as the read-back carries them: its
+/// scratch from `records_at` on, their count, then a block its tree holds
+/// each.
+pub const RECORDS_WORDS: u32 = 1 + SQUARE_BLOCKS * RECORD_WORDS;
+const _: () = assert!(RECORDS_WORDS == SCRATCH_WORDS - records_at(SQUARE_BLOCKS), "the records end the scratch");
 
 /// A square's records in bytes at their most: the most a read-back
 /// copies off its scratch, which copies what its room holds
@@ -369,5 +422,34 @@ pub fn read(value: u32) -> u32 {
         super::AIR
     } else {
         value
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_scratch_holds_the_blocks_it_is_made_for() {
+        // At a square's most, the layout it had before it grew: its runs,
+        // its freed blocks' count and ids, its records' count and records.
+        assert_eq!(SCRATCH_WORDS, crate::window::TREE_AT + 1 + SQUARE_BLOCKS + 1 + SQUARE_BLOCKS * RECORD_WORDS);
+        for blocks in [1, 539, 1078, SQUARE_BLOCKS] {
+            assert_eq!(scratch_blocks(scratch_words(blocks)), blocks);
+            // A word short holds a block fewer.
+            assert_eq!(scratch_blocks(scratch_words(blocks) - 1), blocks - 1);
+            // Its records end it.
+            assert_eq!(records_at(blocks) + 1 + blocks * RECORD_WORDS, scratch_words(blocks));
+        }
+        assert_eq!(scratch_blocks(scratch_words(SQUARE_BLOCKS) + 1000), SQUARE_BLOCKS);
+        assert_eq!(scratch_blocks(FREED_AT + 1), 0);
+    }
+
+    #[test]
+    fn a_build_is_cramped_past_its_scratch_only() {
+        assert!(!cramped(8, 1, 7));
+        assert!(cramped(8, 1, 8));
+        // Past the square's most is `past`'s, asked first.
+        assert!(past(1, SQUARE_BLOCKS));
     }
 }

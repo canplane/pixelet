@@ -145,6 +145,7 @@ pub fn stage_render(pace: crate::view::frame::resolution::Pace) {
             landed: &mut terrain_landed,
             joined: crate::layer::terrain::window::joined_lane(),
             pool: [crate::param::WAYS_POOL_FIRST_BYTES, crate::param::WAYS_POOL_BYTES].map(|b| b / (4 * pxl_spec_core::ways::tree::BLOCK_WORDS)),
+            scratch: [crate::param::WAYS_SCRATCH_FIRST_BYTES, crate::param::WAYS_SCRATCH_BYTES].map(|b| pxl_spec_core::ways::tree::scratch_blocks(b / (4 * pxl_spec_core::window::HANDED))),
             records: crate::param::WAYS_RECORDS_FIRST_BYTES,
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {

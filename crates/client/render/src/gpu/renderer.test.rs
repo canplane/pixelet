@@ -13,3 +13,20 @@ fn a_build_that_ran_out_is_judged_by_the_pool_it_was_built_in() {
     // The pool at its most ran out: refused.
     assert_eq!(ran_out(64, 64, 64), RanOut::Refused);
 }
+
+#[test]
+fn a_build_that_ran_out_says_of_what() {
+    // None counted is the pool's; `CRAMPED` the scratch's.
+    assert_eq!(short_of(0), Some(Short::Pool));
+    assert_eq!(short_of(ways::tree::CRAMPED), Some(Short::Scratch));
+    // A tree built, or past the square's own most, grows neither.
+    assert_eq!(short_of(1), None);
+    assert_eq!(short_of(ways::tree::SQUARE_BLOCKS), None);
+    assert_eq!(short_of(ways::tree::NONE), None);
+}
+
+#[test]
+fn a_scratch_at_its_most_is_as_it_was() {
+    // 15.54 MiB, `HANDED` squares of `SCRATCH_WORDS`.
+    assert_eq!(scratch_bytes(ways::tree::SQUARE_BLOCKS), HANDED * ways::tree::SCRATCH_WORDS * 4);
+}

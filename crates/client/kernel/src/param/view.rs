@@ -96,3 +96,29 @@ const _: () = assert!(WAYS_POOL_FIRST_BYTES <= WAYS_POOL_BYTES && WAYS_POOL_FIRS
 /// most, `ways::tree::RECORDS_BYTES`: the GPU's read buffers and their
 /// rooms on the heap together, `window::READS` of each.
 pub const WAYS_RECORDS_FIRST_BYTES: u32 = 16 << 10;
+
+/// The most the handed squares' scratch takes on the GPU, 15.54 MiB:
+/// `window::HANDED` squares' each for a tree of `ways::tree::SQUARE_BLOCKS`,
+/// the bake's bound on a square's, so at this no square of a baked set is
+/// refused for it (pxl-render gpu/renderer.rs `GroundBuffers::grow_scratch`).
+/// Less refuses a dense square its ways' tree, left absent to the coarser
+/// window (layer/terrain/window.rs `REFUSED`), as the pool's cap does. The
+/// GPU's alone: its records are copied out in the frame they are built,
+/// into each read's room (`WAYS_RECORDS_FIRST_BYTES`).
+pub const WAYS_SCRATCH_BYTES: u32 = pxl_spec_core::window::HANDED * pxl_spec_core::ways::tree::SCRATCH_WORDS * 4;
+
+/// The handed squares' scratch at first, 1 MiB, 539 blocks a square: its
+/// runs, two thirds of a MiB for the nine, are a square's most whatever it
+/// holds, and the rest a tree of 539 blocks, more than a read's first room
+/// holds records of (240). It doubles each time a build outgrows it, the
+/// square filled again a turn later, so a square at the bake's bound
+/// reaches it in six. Not yet measured against a dense view.
+pub const WAYS_SCRATCH_FIRST_BYTES: u32 = 1 << 20;
+const _: () = {
+    use pxl_spec_core::{ways::tree, window::HANDED};
+    let least = HANDED * tree::scratch_words(1) * 4;
+    assert!(
+        WAYS_SCRATCH_BYTES <= HANDED * tree::SCRATCH_WORDS * 4 && WAYS_SCRATCH_FIRST_BYTES <= WAYS_SCRATCH_BYTES && WAYS_SCRATCH_FIRST_BYTES >= least,
+        "the scratch's cap is no more than a square's most, its first no more than its cap, nor less than a block a square"
+    );
+};

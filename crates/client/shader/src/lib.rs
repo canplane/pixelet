@@ -1299,7 +1299,7 @@ pub fn bound_cs(
     let base = square_at(at(fresh, rec + window::FRESH_SQUARE));
     let runs = fill::Scratch {
         words: &*scratch,
-        at: fill::scratch_at(id.z),
+        at: fill::scratch_at(scratch, id.z),
     };
     fill::level(ground, base, &runs, at(fresh, rec + window::FRESH_CELL), j, [id.x, id.y]);
 }
@@ -1489,13 +1489,13 @@ fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
     (if ok { 1 + gone } else { 0 }, ok)
 }
 
-use tree::{FREED_AT, RECORDS_AT, RECORD_WORDS};
+use tree::{FREED_AT, RECORD_WORDS};
 
 /// Block `first / 8`'s record, its id and its sixteen words, the next of
-/// the scratch at `at`.
-fn record(scratch: &mut [u32], at: u32, pool: &impl Pool, first: u32) {
-    let r = add(scratch, at + RECORDS_AT, 1);
-    let w = at + RECORDS_AT + 1 + r * RECORD_WORDS;
+/// the records at `records` in the scratch (`tree::records_at`).
+fn record(scratch: &mut [u32], records: u32, pool: &impl Pool, first: u32) {
+    let r = add(scratch, records, 1);
+    let w = records + 1 + r * RECORD_WORDS;
     put(scratch, w, first / 8);
     // Off the pool word by word, as `tree::lay` reads them, no array
     // between: a runtime index into one is a bounds check, whose panic's
@@ -1566,8 +1566,9 @@ pub fn ways_free_cs(
 /// cells each a leaf off its column's runs; then up, each branch folded,
 /// one of eight equal leaves written as that leaf and its block given back
 /// (`ways_freed_cs` pushes them), every block it holds kept as a record for
-/// the read-back. Its root word last; none where the pool ran out, the
-/// blocks it took given back. A level's numbers are what every lane reads
+/// the read-back. Its root word last; none where the pool or its scratch
+/// ran out, the blocks it took given back, and its records' count saying
+/// which (`tree::CRAMPED`). A level's numbers are what every lane reads
 /// alike (`shared`), the loops' bounds.
 #[spirv(compute(threads(64, 1, 1)))]
 #[allow(clippy::too_many_arguments)]
@@ -1585,7 +1586,11 @@ pub fn ways_tree_cs(
     let (k, t, lanes) = (group.z, lane.x, fill::SCAN_THREADS);
     let of = fill::of(fresh, k);
     let base = square_at(at(fresh, window::handed_at(k) + window::FRESH_SQUARE));
-    let mine = fill::scratch_at(k);
+    let mine = fill::scratch_at(scratch, k);
+    // The blocks a square's scratch holds, every square's alike, and where
+    // its records begin (`tree::scratch_words`).
+    let room = tree::scratch_blocks(scratch.len() as u32 / window::HANDED);
+    let records = mine + tree::records_at(room);
     let mut pool = tree::Lane(pool);
     // A level's candidate `c`: slot `c % 8` of the block whose id is the
     // level's `c / 8`-th off the stack, from where its ids begin.
@@ -1593,13 +1598,15 @@ pub fn ways_tree_cs(
     // levels[2j], levels[2j + 1]: level j's first id on the stack and its
     // candidates; the last three words, the blocks the square has taken, its
     // cells' zoom and whether the pool held every level so far (`HELD`), or
-    // the level the square took past its own most (`PAST`).
+    // the level the square took past its own most (`PAST`), or past what its
+    // scratch holds (`SHORT`).
     let (taken, cells, held) = (lanes - 3, lanes - 2, lanes - 1);
     const HELD: u32 = 1;
     const PAST: u32 = 2;
+    const SHORT: u32 = 3;
     if t == 0 {
         put(scratch, mine + FREED_AT, 0);
-        put(scratch, mine + RECORDS_AT, 0);
+        put(scratch, records, 0);
         let (from, ok) = pop(stack, 0, 1);
         set_shared(levels, t, taken, 1);
         if ok {
@@ -1631,12 +1638,20 @@ pub fn ways_tree_cs(
         }
         if t == 0 {
             let had = lane_word(levels, taken);
-            let (next, fits) = pop(stack, had, flagged);
+            // Past the square's most, or past its scratch, none is taken:
+            // the pool is asked only of what the scratch holds.
+            let short = if tree::past(had, flagged) {
+                PAST
+            } else if tree::cramped(room, had, flagged) {
+                SHORT
+            } else {
+                0
+            };
+            let (next, fits) = if short == 0 { pop(stack, had, flagged) } else { (0, false) };
             set_shared(levels, t, taken, had + flagged);
             set_shared(levels, t, 2 * j + 2, next);
             set_shared(levels, t, 2 * j + 3, 8 * flagged);
-            let past = !fits && tree::past(had, flagged);
-            set_shared(levels, t, held, if fits { HELD } else if past { PAST } else { 0 });
+            set_shared(levels, t, held, if fits { HELD } else { short });
         }
         ok = shared(levels, held) == HELD;
         let next = shared(levels, 2 * j + 2);
@@ -1656,7 +1671,8 @@ pub fn ways_tree_cs(
         }
         (j, zoom) = (j + 1, zoom + 1);
     }
-    // The pool ran out: the blocks each level before took, given back.
+    // The pool or the scratch ran out: the blocks each level before took,
+    // given back.
     if !ok && t == 0 {
         let mut level = 0;
         while level < j {
@@ -1697,7 +1713,7 @@ pub fn ways_tree_cs(
                 if gave != tree::NONE {
                     freed(scratch, mine, gave / 8);
                 } else {
-                    record(scratch, mine, &pool, first);
+                    record(scratch, records, &pool, first);
                 }
             }
             c += lanes;
@@ -1706,12 +1722,17 @@ pub fn ways_tree_cs(
     settle();
     if t == 0 {
         let root = if ok { 8 * id(stack, first) } else { 0 };
+        let short = lane_word(levels, held);
         if ok {
-            record(scratch, mine, &pool, root);
-        } else if lane_word(levels, held) == PAST {
+            record(scratch, records, &pool, root);
+        } else if short == PAST {
             // Past the square's own most, which no pool's growth lets it
             // build: its count `NONE`, refused at once (pxl-render `Landing`).
-            put(scratch, mine + RECORDS_AT, tree::NONE);
+            put(scratch, records, tree::NONE);
+        } else if short == SHORT {
+            // Past what its scratch holds: its count `CRAMPED`, the
+            // scratch's to grow, as none is the pool's (pxl-render `Short`).
+            put(scratch, records, tree::CRAMPED);
         }
         put(ground, base + window::ROOT_AT, root);
     }
@@ -1727,7 +1748,7 @@ pub fn ways_freed_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] scratch: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] stack: &mut [u32],
 ) {
-    let mine = fill::scratch_at(group.z);
+    let mine = fill::scratch_at(scratch, group.z);
     let n = at(scratch, mine + FREED_AT);
     let mut r = lane.x;
     while r < n {

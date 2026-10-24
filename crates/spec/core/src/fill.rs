@@ -125,10 +125,14 @@ impl ways::tree::Runs for Scratch<'_> {
     }
 }
 
-/// Where the square a frame hands `k`-th has its scratch
-/// (`ways::tree::SCRATCH_WORDS` each).
-pub const fn scratch_at(k: u32) -> u32 {
-    k * ways::tree::SCRATCH_WORDS
+/// Where the square a frame hands `k`-th has its scratch in the frame's
+/// `scratch`, `window::HANDED` squares' alike, each a `HANDED`th of its
+/// length (`ways::tree::scratch_words`), which the renderer grows
+/// (pxl-render gpu/renderer.rs `GroundBuffers::grow_scratch`): taken from
+/// the buffer, as the pool's free stack takes its own (pxl-shader `pop`).
+/// A one square's scratch is the first's.
+pub fn scratch_at(scratch: &[u32], k: u32) -> u32 {
+    k * (scratch.len() as u32 / window::HANDED)
 }
 
 /// The square handed `k`-th in `fresh` as its ways' tree is of: its cells'
@@ -240,7 +244,8 @@ pub fn look(looks: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
 /// it do not fit `ways::SPANS`; 0 for the rest.
 pub fn ways(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, write: bool, i: u32) -> u32 {
     let (rec, base, place, cell) = handed(fresh, k);
-    let firsts = scratch_at(k) + FIRSTS_AT;
+    let mine = scratch_at(scratch, k);
+    let firsts = mine + FIRSTS_AT;
     if i >= SQUARE_CELLS {
         return 0;
     }
@@ -257,7 +262,7 @@ pub fn ways(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, write: b
         crate::ways::around(&filling, [x as i32, y as i32])
     };
     let (from, room) = if write { (at(scratch, firsts + i), RUNS_SQUARE) } else { (0, 0) };
-    let n = put_runs(scratch, scratch_at(k), &around, cell, from, room);
+    let n = put_runs(scratch, mine, &around, cell, from, room);
     if !write {
         put(scratch, firsts + i, n);
     }
@@ -277,7 +282,7 @@ const STRETCH: u32 = SQUARE_CELLS / SCAN_THREADS;
 /// Thread `t`'s stretch of the square handed `k`-th: its columns' runs, as
 /// counted into their firsts in its scratch (`ways`), summed.
 pub fn stretch_runs(scratch: &[u32], k: u32, t: u32) -> u32 {
-    let firsts = scratch_at(k) + FIRSTS_AT + t * STRETCH;
+    let firsts = scratch_at(scratch, k) + FIRSTS_AT + t * STRETCH;
     let (mut n, mut k) = (0, 0);
     while k < STRETCH {
         (n, k) = (n + at(scratch, firsts + k), k + 1);
@@ -291,7 +296,7 @@ pub fn stretch_runs(scratch: &[u32], k: u32, t: u32) -> u32 {
 /// threads, Blelloch 1990): each column's the runs before it; the last
 /// thread's, the square's count past them (`window::FIRSTS_AT`).
 pub fn scanned(scratch: &mut [u32], k: u32, t: u32, before: u32) {
-    let firsts = scratch_at(k) + FIRSTS_AT;
+    let firsts = scratch_at(scratch, k) + FIRSTS_AT;
     let (mut n, mut k) = (before, t * STRETCH);
     while k < (t + 1) * STRETCH {
         let count = at(scratch, firsts + k);

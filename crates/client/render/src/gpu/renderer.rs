@@ -145,6 +145,11 @@ pub struct GroundSquares<'a> {
     /// build runs out, never past the most, nor `ways::tree::POOL_BLOCKS`
     /// (`GroundBuffers::grow`).
     pub pool: [u32; 2],
+    /// The blocks each handed square's scratch holds a tree of, at first and
+    /// at most (pxl-kernel param `WAYS_SCRATCH_BYTES`): it starts at the
+    /// first and doubles each time a build outgrows it, never past the most,
+    /// nor `ways::tree::SQUARE_BLOCKS` (`GroundBuffers::grow_scratch`).
+    pub scratch: [u32; 2],
     /// A read's records' room at first, in bytes: every read's is doubled
     /// past a square's records that outgrew it, up to
     /// `ways::tree::RECORDS_BYTES` (`GroundBuffers::record_bytes`).
@@ -157,11 +162,13 @@ pub enum Landing<'a> {
     /// record each (pxl-spec-core `ways::tree::lay`).
     Built(&'a [u32]),
     /// To be filled again, for want of room the renderer grows: its tree not
-    /// built, the pool it was built in having run out, or built but its
-    /// records past its read's room, the tree the refill frees.
+    /// built, the pool or the scratch it was built in having run out
+    /// (`Short`), or built but its records past its read's room, the tree
+    /// the refill frees.
     Again,
-    /// Its tree refused, the pool at its most, or the square past its own
-    /// (`ways::tree::past`): the square stays absent.
+    /// Its tree refused, the pool or the scratch at its most having run out,
+    /// or the square past its own (`ways::tree::past`): the square stays
+    /// absent.
     Refused,
 }
 
@@ -477,17 +484,24 @@ struct GroundBuffers {
     record_rooms: [Box<[u32]>; READS],
     record_mapping: Box<[u32; READS]>,
     record_bytes: u32,
-    /// The pool's blocks each read's square was built in (`ran_out`).
-    built_in: [u32; READS],
-    /// The ways' pool, which the cast reads, its blocks, its free stack and
-    /// whether a build ran out of it since it last grew (`grow`); and the
-    /// handed squares' scratch, whose records each read copies
-    /// (`ways::tree::SCRATCH_WORDS`).
+    /// What each read's square was built in, indexed by `Short`: the pool's
+    /// blocks and the blocks a square's scratch held (`ran_out`).
+    built_in: [[u32; 2]; READS],
+    /// Whether a build ran out of the pool, or of the scratch, since it last
+    /// grew, indexed by `Short` (`grow`, `grow_scratch`).
+    ran_out: [bool; 2],
+    /// The ways' pool, which the cast reads, its blocks and its free stack;
+    /// and the handed squares' scratch, the blocks each square's holds a
+    /// tree of (`ways::tree::scratch_words`), whose records each read copies
+    /// in the frame they are built: nothing in it outlives its frame.
     pool: u32,
     blocks: u32,
     stack: u32,
-    ran_out: bool,
     scratch: u32,
+    scratch_blocks: u32,
+    /// Each slot's number, `bound_cs`'s level and `ways_cs`'s pass, at a
+    /// dynamic offset of their groups.
+    slots: u32,
     heights_built: Built,
     heights_group: u32,
     bound_built: Built,
@@ -501,7 +515,7 @@ struct GroundBuffers {
     /// each pass and its group, over the ways' pool, heap words then data
     /// words (`pool_bytes`), its free stack, the count taken then the ids,
     /// block 0 never among them, a word a block, and each handed square's
-    /// scratch past its build (`ways::tree::SCRATCH_WORDS`).
+    /// scratch past its build (`ways::tree::FREED_AT`).
     free_built: Built,
     free_group: u32,
     tree_built: Built,
@@ -530,22 +544,62 @@ fn pool_buffers(g: &Gpu, blocks: u32) -> (u32, u32) {
     (g.buffer(pool_bytes(blocks), usage), g.buffer(word_bytes(blocks as usize), usage))
 }
 
-/// What a build that ran out of the pool does, built in a pool of `built`
-/// blocks, the pool now of `blocks`, at most `most`.
+/// The handed squares' scratch, each square's for a tree of `blocks`, in
+/// bytes: `HANDED` of them, every square's alike, so each finds its own off
+/// the buffer's length (pxl-spec-core fill.rs `scratch_at`).
+const fn scratch_bytes(blocks: u32) -> u32 {
+    HANDED * ways::tree::scratch_words(blocks) * 4
+}
+const _: () = assert!(
+    crate::frame::shader::floor::fits(scratch_bytes(ways::tree::SQUARE_BLOCKS) as u64, true),
+    "the scratch at its most binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
+);
+
+/// The handed squares' scratch, each square's for a tree of `blocks`,
+/// which its records are copied out of.
+fn scratch_buffer(g: &Gpu, blocks: u32) -> u32 {
+    g.buffer(scratch_bytes(blocks), buffer_usage::STORAGE | buffer_usage::COPY_SRC)
+}
+
+/// What a build may run out of, each grown as builds do: the ways' pool
+/// (`grow`) and the handed squares' scratch (`grow_scratch`), an index of
+/// `GroundBuffers::built_in` and `ran_out`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Short {
+    Pool,
+    Scratch,
+}
+
+/// What a build whose records' count is `n` ran out of (pxl-shader
+/// `ways_tree_cs`): none counted the pool, `CRAMPED` the scratch; neither
+/// for a tree built, nor for one past the square's own most (`NONE`), which
+/// no growth lets it build.
+fn short_of(n: u32) -> Option<Short> {
+    match n {
+        0 => Some(Short::Pool),
+        ways::tree::CRAMPED => Some(Short::Scratch),
+        _ => None,
+    }
+}
+
+/// What a build that ran out of the pool or the scratch does, built in one
+/// of `built` blocks, the one it ran out of now of `blocks`, at most `most`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RanOut {
-    /// The pool grew since: built again, as the larger may hold it.
+    /// It grew since: built again, as the larger may hold it.
     Again,
-    /// The pool it ran out of, which grows (`grow`), and built again.
+    /// The one it ran out of, which grows (`grow`, `grow_scratch`), and
+    /// built again.
     Grow,
-    /// The pool at its most ran out: refused.
+    /// It ran out at its most: refused.
     Refused,
 }
 
 /// A read is out a frame more than its build (`READS`), so a build that
-/// ran out of the pool may land after the pool grew for another: judged
-/// against the pool it was built in, it grows the pool no further and is
-/// refused only by the pool at its most.
+/// ran out of the pool or the scratch may land after it grew for another:
+/// judged against what it was built in, it grows it no further and is
+/// refused only by it at its most. The pool's and the scratch's alike,
+/// each against its own (`Short`).
 fn ran_out(built: u32, blocks: u32, most: u32) -> RanOut {
     if built < blocks {
         RanOut::Again
@@ -557,12 +611,16 @@ fn ran_out(built: u32, blocks: u32, most: u32) -> RanOut {
 }
 
 impl GroundBuffers {
-    /// The ways' passes' groups over the pool and its stack as they are.
+    /// The ways' passes' groups over the pool, its stack and the scratch as
+    /// they are, and `bound_cs`'s and `ways_cs`'s over the scratch.
     fn ways_groups(&mut self, g: &Gpu) {
-        for group in [self.free_group, self.tree_group, self.freed_group] {
+        for group in [self.bound_group, self.ways_group, self.free_group, self.tree_group, self.freed_group] {
             release(group);
         }
         let (fresh, ground, pool, stack, scratch) = (self.fresh, self.ground, self.pool, self.stack, self.scratch);
+        let entries = [buffer_range_entry(0, self.slots, 0, 16), buffer_entry(1, fresh), buffer_entry(2, ground), buffer_entry(3, scratch)];
+        self.bound_group = g.bind_group(self.bound_built.layouts[0], &entries);
+        self.ways_group = g.bind_group(self.ways_built.layouts[0], &entries);
         self.free_group = g.bind_group(
             self.free_built.layouts[0],
             &[buffer_entry(0, fresh), buffer_entry(1, ground), buffer_entry(2, pool), buffer_entry(3, stack)],
@@ -596,6 +654,23 @@ impl GroundBuffers {
         release(self.pool);
         release(self.stack);
         (self.pool, self.stack, self.blocks) = (pool, stack, blocks);
+        self.ways_groups(g);
+    }
+
+    /// The scratch's squares each twice as large, never past `most` blocks,
+    /// once a build outgrew it (`read_back`). Nothing is copied: what a
+    /// square's holds goes with the frame it is filled in, its records
+    /// copied into its read in that frame (`read_back`), before any turn
+    /// grows it, and each read carries its own buffer. Ahead of the turn's
+    /// squares, so their passes lay theirs out by the new length.
+    fn grow_scratch(&mut self, g: &Gpu, most: u32) {
+        let blocks = (2 * self.scratch_blocks).min(most).min(ways::tree::SQUARE_BLOCKS);
+        if blocks <= self.scratch_blocks {
+            return;
+        }
+        let scratch = scratch_buffer(g, blocks);
+        release(self.scratch);
+        (self.scratch, self.scratch_blocks) = (scratch, blocks);
         self.ways_groups(g);
     }
 
@@ -849,6 +924,7 @@ impl RaysPass {
     /// no eye's.
     fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: &mut GroundSquares) {
         let blocks = ground.pool[0].min(ground.pool[1]).min(ways::tree::POOL_BLOCKS);
+        let scratch_blocks = ground.scratch[0].min(ground.scratch[1]).clamp(1, ways::tree::SQUARE_BLOCKS);
         let gb = self.ground.get_or_insert_with(|| {
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
@@ -863,10 +939,8 @@ impl RaysPass {
             for k in 0..=LEVELS {
                 g.write_buffer(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
             }
-            let scratch = buffer(word_bytes((HANDED * ways::tree::SCRATCH_WORDS) as usize), buffer_usage::STORAGE | buffer_usage::COPY_SRC);
-            let entries = [buffer_range_entry(0, slots, 0, 16), buffer_entry(1, fresh), buffer_entry(2, frames_buffer), buffer_entry(3, scratch)];
+            let scratch = scratch_buffer(g, scratch_blocks);
             let (bound_built, ways_built) = (pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP), pipelines.build_compute(g, SHADER_WAYS, &BOUND_GROUP));
-            let (bound_group, ways_group) = (g.bind_group(bound_built.layouts[0], &entries), g.bind_group(ways_built.layouts[0], &entries));
             let (pool, stack) = pool_buffers(g, blocks);
             let free_built = pipelines.build_compute(g, SHADER_WAYS_FREE, &compute::WAYS_FREE_GROUP);
             let tree_built = pipelines.build_compute(g, SHADER_WAYS_TREE, &compute::WAYS_TREE_GROUP);
@@ -884,19 +958,21 @@ impl RaysPass {
                 record_reads: [0; READS],
                 record_rooms: core::array::from_fn(|_| Box::default()),
                 record_mapping: Box::new([0; READS]),
-                built_in: [0; READS],
+                built_in: [[0; 2]; READS],
                 record_bytes: (ground.records.next_multiple_of(4)).clamp(word_bytes(1 + ways::tree::RECORD_WORDS as usize), ways::tree::RECORDS_BYTES),
                 pool,
                 blocks,
                 stack,
-                ran_out: false,
+                ran_out: [false; 2],
                 scratch,
+                scratch_blocks,
+                slots,
                 heights_built,
                 heights_group,
                 bound_built,
-                bound_group,
+                bound_group: 0,
                 ways_built,
-                ways_group,
+                ways_group: 0,
                 free_built,
                 free_group: 0,
                 tree_built,
@@ -907,8 +983,11 @@ impl RaysPass {
             gb.ways_groups(g);
             gb
         });
-        if core::mem::take(&mut gb.ran_out) {
+        if core::mem::take(&mut gb.ran_out[Short::Pool as usize]) {
             gb.grow(g, ground.pool[1]);
+        }
+        if core::mem::take(&mut gb.ran_out[Short::Scratch as usize]) {
+            gb.grow_scratch(g, ground.scratch[1]);
         }
         // A square handed takes a read its frame: none past those free.
         let free = gb.held.iter().filter(|h| h.0 == FREE).count().min(HANDED as usize) as u32;
@@ -1325,7 +1404,8 @@ impl RaysPass {
     /// view, the platform's own completion (a command buffer's handler, a
     /// timeline semaphore) is the wake.
     fn read_back(&mut self, g: &Gpu, ground: &mut GroundSquares) {
-        let (landed, joined, most) = (&mut *ground.landed, ground.joined, ground.pool[1]);
+        let (landed, joined) = (&mut *ground.landed, ground.joined);
+        let most = [ground.pool[1].min(ways::tree::POOL_BLOCKS), ground.scratch[1].min(ways::tree::SQUARE_BLOCKS)];
         // The fold, once its mapping is free: a frame-old copy reads safely,
         // as an entry answers only for the block whose key it holds.
         if let Some(c) = self.cast.as_mut().filter(|c| c.joined_back && *c.joined_mapping & DONE != 0) {
@@ -1339,10 +1419,11 @@ impl RaysPass {
         // A read lands with its square's words and its records both: told
         // where it is of the square's latest fill, discarded where a later
         // fill asked again, whose own read brings it. A build with no
-        // record ran out of the pool it was built in, which grows ahead of
-        // the next turn's squares where it is the pool still and may
-        // (`ran_out`, `grow`), the square filled again; one past its own
-        // most is refused at once; one whose records outgrew its read is
+        // record ran out of the pool or the scratch it was built in, its
+        // count saying which (`short_of`), which grows ahead of the next
+        // turn's squares where it is as built still and may (`ran_out`,
+        // `grow`, `grow_scratch`), the square filled again; one past its
+        // own most is refused at once; one whose records outgrew its read is
         // filled again, every read's room grown past them.
         for k in 0..READS {
             let (s, ticket) = c.held[k];
@@ -1359,11 +1440,12 @@ impl RaysPass {
             let words = 1 + n.min(ways::tree::SQUARE_BLOCKS) * ways::tree::RECORD_WORDS;
             let landing = if n == ways::tree::NONE {
                 Landing::Refused
-            } else if n == 0 {
-                match ran_out(c.built_in[k], c.blocks, most.min(ways::tree::POOL_BLOCKS)) {
+            } else if let Some(short) = short_of(n) {
+                let (i, now) = (short as usize, [c.blocks, c.scratch_blocks]);
+                match ran_out(c.built_in[k][i], now[i], most[i]) {
                     RanOut::Again => Landing::Again,
                     RanOut::Grow => {
-                        c.ran_out = true;
+                        c.ran_out[i] = true;
                         Landing::Again
                     }
                     RanOut::Refused => Landing::Refused,
@@ -1377,7 +1459,8 @@ impl RaysPass {
             landed(s, ticket, landing);
         }
         // Each square the frame handed, its words and its build's records
-        // copied in its frame, into a read `hand` kept free for it.
+        // copied in its frame, into a read `hand` kept free for it: as much
+        // of its records as the read's room holds, and its scratch's do.
         let fresh = core::mem::take(&mut c.fresh_len);
         if fresh == 0 {
             return;
@@ -1391,13 +1474,11 @@ impl RaysPass {
             free = k + 1;
             c.room(g, k);
             g.copy_buffer(e, (c.ground, s * SQUARE_BYTES + COLUMNS_AT * 4), (c.reads[k], 0), BACK_WORDS * 4);
-            g.copy_buffer(
-                e,
-                (c.scratch, word_bytes((h * ways::tree::SCRATCH_WORDS + ways::tree::RECORDS_AT) as usize)),
-                (c.record_reads[k], 0),
-                word_bytes(c.record_rooms[k].len()),
-            );
-            (c.held[k], c.built_in[k], taken[k]) = ((s, c.asked[s as usize].ticket), c.blocks, true);
+            let sb = c.scratch_blocks;
+            let records = (h * ways::tree::scratch_words(sb) + ways::tree::records_at(sb)) as usize;
+            let words = c.record_rooms[k].len().min((1 + sb * ways::tree::RECORD_WORDS) as usize);
+            g.copy_buffer(e, (c.scratch, word_bytes(records)), (c.record_reads[k], 0), word_bytes(words));
+            (c.held[k], c.built_in[k], taken[k]) = ((s, c.asked[s as usize].ticket), [c.blocks, sb], true);
         }
         g.submit(e);
         for k in (0..READS).filter(|&k| taken[k]) {
