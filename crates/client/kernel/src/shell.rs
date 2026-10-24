@@ -70,7 +70,8 @@ pub struct Shown {
     camera_busy: bool,
     zooming: bool,
     over_badge: bool,
-    settings: [u32; SettingKey::ALL.len()],
+    /// By each setting's number, a retired number's 0.
+    settings: [u32; SettingKey::SLOTS],
     m_per_px: f64,
     division: Option<(Tile, u32)>,
     previews: ([u32; CASES_MAX], usize),
@@ -107,7 +108,13 @@ fn shown() -> Shown {
         camera_busy: dragging(),
         zooming: crate::control::camera::controller::zooming(),
         over_badge: crate::door::over_badge(),
-        settings: SettingKey::ALL.map(|key| settings.get(key)),
+        settings: {
+            let mut by_number = [0; SettingKey::SLOTS];
+            for key in SettingKey::ALL {
+                by_number[key as usize] = settings.get(key);
+            }
+            by_number
+        },
         m_per_px: m_per_px(),
         division: focus.and_then(|at| naming(&at)),
         previews,

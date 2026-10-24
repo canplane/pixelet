@@ -13,11 +13,15 @@
 // development one; the shell's production bundle carries SETTINGS_SHIPPED,
 // the table without them, in SETTINGS' place.
 //
-// A choice's `options` names one of the lists below, and the option crosses
-// and is held as its index there; only storage keeps it by name. A setting
-// is numbered by its place in SETTINGS (the kernel's SettingKey), which is
-// what crosses for it. An `index` is a place in a list kept elsewhere — the
-// person and the pet are by theirs in variant.json — and crosses as itself.
+// A setting carries its `number` (the kernel's SettingKey), and a choice's
+// `options` names one of the lists below, which numbers each option. The
+// numbers are what crosses and what storage keeps; the names are the
+// shell's alone, for its rows and the locale. A number is given out once: a
+// setting or an option taken out leaves its number in its table's
+// `$retired`, and the generator refuses a number given twice or one
+// retired, so a number stored or sent never comes to mean another. An
+// `index` is a place in a list kept elsewhere — the person and the pet are
+// by theirs in variant.json — and crosses as itself.
 
 export const SETTINGS = {
   /** Ground color from the art pack (four taps of the layer array per
@@ -87,7 +91,10 @@ export const SETTINGS = {
     key: 5 as number,
     kind: "choice",
     default: "orbit",
-    options: ["orbit", "free"],
+    options: {
+      orbit: 0 as number,
+      free: 1 as number,
+    },
     section: "world",
   },
   /** The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck. */
@@ -103,7 +110,11 @@ export const SETTINGS = {
     key: 7 as number,
     kind: "choice",
     default: "climb",
-    options: ["through", "stop", "climb"],
+    options: {
+      through: 0 as number,
+      stop: 1 as number,
+      climb: 2 as number,
+    },
     section: "camera",
     dev_options: ["through"],
   },
@@ -131,7 +142,11 @@ export const SETTINGS = {
     key: 10 as number,
     kind: "choice",
     default: "corner",
-    options: ["off", "corner", "screen"],
+    options: {
+      off: 0 as number,
+      corner: 1 as number,
+      screen: 2 as number,
+    },
     costs: ["", "low", "high"],
     section: "lighting",
   },
@@ -153,7 +168,11 @@ export const SETTINGS = {
     key: 12 as number,
     kind: "choice",
     default: "auto",
-    options: ["auto", "fixed", "low"],
+    options: {
+      auto: 0 as number,
+      fixed: 1 as number,
+      low: 2 as number,
+    },
     section: "display",
   },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
@@ -275,7 +294,10 @@ export const SETTINGS_SHIPPED = {
     key: 5 as number,
     kind: "choice",
     default: "orbit",
-    options: ["orbit", "free"],
+    options: {
+      orbit: 0 as number,
+      free: 1 as number,
+    },
     section: "world",
   },
   /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. */
@@ -283,7 +305,11 @@ export const SETTINGS_SHIPPED = {
     key: 7 as number,
     kind: "choice",
     default: "climb",
-    options: ["through", "stop", "climb"],
+    options: {
+      through: 0 as number,
+      stop: 1 as number,
+      climb: 2 as number,
+    },
     section: "camera",
     dev_options: ["through"],
   },
@@ -311,7 +337,11 @@ export const SETTINGS_SHIPPED = {
     key: 10 as number,
     kind: "choice",
     default: "corner",
-    options: ["off", "corner", "screen"],
+    options: {
+      off: 0 as number,
+      corner: 1 as number,
+      screen: 2 as number,
+    },
     costs: ["", "low", "high"],
     section: "lighting",
   },
@@ -333,7 +363,11 @@ export const SETTINGS_SHIPPED = {
     key: 12 as number,
     kind: "choice",
     default: "auto",
-    options: ["auto", "fixed", "low"],
+    options: {
+      auto: 0 as number,
+      fixed: 1 as number,
+      low: 2 as number,
+    },
     section: "display",
   },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */

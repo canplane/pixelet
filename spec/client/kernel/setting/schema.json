@@ -11,14 +11,18 @@
     "development one; the shell's production bundle carries SETTINGS_SHIPPED,",
     "the table without them, in SETTINGS' place.",
     "",
-    "A choice's `options` names one of the lists below, and the option crosses",
-    "and is held as its index there; only storage keeps it by name. A setting",
-    "is numbered by its place in SETTINGS (the kernel's SettingKey), which is",
-    "what crosses for it. An `index` is a place in a list kept elsewhere — the",
-    "person and the pet are by theirs in variant.json — and crosses as itself."
+    "A setting carries its `number` (the kernel's SettingKey), and a choice's",
+    "`options` names one of the lists below, which numbers each option. The",
+    "numbers are what crosses and what storage keeps; the names are the",
+    "shell's alone, for its rows and the locale. A number is given out once: a",
+    "setting or an option taken out leaves its number in its table's",
+    "`$retired`, and the generator refuses a number given twice or one",
+    "retired, so a number stored or sent never comes to mean another. An",
+    "`index` is a place in a list kept elsewhere — the person and the pet are",
+    "by theirs in variant.json — and crosses as itself."
   ],
   "RESOLUTION_MODES": {
-    "$value": ["auto", "fixed", "low"],
+    "$value": { "auto": 0, "fixed": 1, "low": 2 },
     "$doc": [
       "How many device pixels the world is drawn at to a CSS pixel.",
       "",
@@ -31,7 +35,7 @@
     ]
   },
   "CAMERA_MODES": {
-    "$value": ["orbit", "free"],
+    "$value": { "orbit": 0, "free": 1 },
     "$doc": [
       "Which controller makes the camera's pose.",
       "",
@@ -43,7 +47,7 @@
     ]
   },
   "ORBIT_OBSTACLE_MODES": {
-    "$value": ["through", "stop", "climb"],
+    "$value": { "through": 0, "stop": 1, "climb": 2 },
     "$doc": [
       "What terrain does to the camera.",
       "",
@@ -58,7 +62,7 @@
     ]
   },
   "AO_MODES": {
-    "$value": ["off", "corner", "screen"],
+    "$value": { "off": 0, "corner": 1, "screen": 2 },
     "$doc": [
       "Where the ambient occlusion comes from.",
       "",
@@ -76,7 +80,9 @@
     ]
   },
   "SETTINGS": {
+    "$retired": [],
     "textures": {
+      "number": 0,
       "$doc": [
         "Ground color from the art pack (four taps of the layer array per",
         "fragment) instead of the flat per-instance average. The paint shader's",
@@ -93,6 +99,7 @@
       "cost": "low"
     },
     "decor": {
+      "number": 1,
       "$doc": [
         "Procedurally scattered decor only; what the player placed stays.",
         "",
@@ -111,6 +118,7 @@
       "cost": "med"
     },
     "clouds": {
+      "number": 2,
       "$doc": [
         "The cumulus' models and the altocumulus and cirrus sheets",
         "(crates/client/kernel/src/scene/environment/cloud.rs, crates/client/render/src/gpu/clouds.rs).",
@@ -122,6 +130,7 @@
       "cost": "med"
     },
     "place": {
+      "number": 3,
       "$doc": ["The places' badges over the world, from the published places tiles."],
       "kind": "toggle",
       "default": false,
@@ -129,6 +138,7 @@
       "cost": "low"
     },
     "tilt_lock": {
+      "number": 4,
       "$doc": [
         "Rotate-drag and pinch stop writing polar; azimuth is unaffected.",
         "Off by default: the tilt is the one control a view from above is expected to",
@@ -139,6 +149,7 @@
       "section": "camera"
     },
     "camera_mode": {
+      "number": 5,
       "$doc": [
         "Which controller makes the camera's pose; CAMERA_MODES says each. To",
         "first person the person stands at the focus, the eye at its",
@@ -151,6 +162,7 @@
       "section": "world"
     },
     "surface_follow": {
+      "number": 6,
       "$doc": [
         "The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."
       ],
@@ -160,6 +172,7 @@
       "dev": true
     },
     "orbit_obstacle": {
+      "number": 7,
       "$doc": ["What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each."],
       "kind": "choice",
       "default": "climb",
@@ -168,6 +181,7 @@
       "dev_options": ["through"]
     },
     "edge_shade": {
+      "number": 8,
       "$doc": [
         "Darkens cube edges that border open air (crates/client/render/src/frame/shader/paint.wgsl).",
         "A few fragment ops behind a uniform; the shader is the same either way."
@@ -178,6 +192,7 @@
       "cost": "low"
     },
     "rim_light": {
+      "number": 9,
       "$doc": ["A uniform on an already-compiled shader term; not a pass."],
       "kind": "toggle",
       "default": true,
@@ -185,6 +200,7 @@
       "cost": "low"
     },
     "ao": {
+      "number": 10,
       "$doc": [
         "corner, the occlusion a voxel world reads off its own cubes' faces;",
         "screen, N8AO's screen-space pass, the costliest of the three. AO_MODES",
@@ -197,6 +213,7 @@
       "section": "lighting"
     },
     "shadows": {
+      "number": 11,
       "$doc": [
         "The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world",
         "cast once more from the sun, a ray a texel through the world's query at",
@@ -210,6 +227,7 @@
       "section": "lighting"
     },
     "resolution": {
+      "number": 12,
       "$doc": [
         "The pixels the world is filled at, the GPU's largest cost: two to a",
         "CSS pixel is four times the fragments of one. RESOLUTION_MODES says each."
@@ -220,18 +238,21 @@
       "section": "display"
     },
     "view": {
+      "number": 13,
       "$doc": ["Where the camera and the pointer are, read live (profiler/summary.rs, its view section)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"
     },
     "profiler": {
+      "number": 14,
       "$doc": ["The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"
     },
     "world_gizmo": {
+      "number": 15,
       "$doc": [
         "Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' squares by how they stand, their tiles and shards (scene/indicator/coverage_gizmo.rs)."
       ],
@@ -240,6 +261,7 @@
       "section": "debug"
     },
     "camera_gizmo": {
+      "number": 16,
       "$doc": [
         "The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the blocks the rays stop on tinted by the share of a grid cell a face shows the eye: green within one to four, blue finer, red coarser (scene/indicator/camera_gizmo.rs)."
       ],
@@ -247,9 +269,10 @@
       "default": false,
       "section": "debug"
     },
-    "person": { "kind": "index", "default": { "$value": 1, "$type": "u8", "$doc": ["female-2, by its number in variant.json's person keys."] }, "section": "character" },
-    "pet": { "kind": "index", "default": { "$value": 5, "$type": "u8", "$doc": ["chick, by its number in variant.json's pet keys."] }, "section": "character" },
+    "person": { "number": 17, "kind": "index", "default": { "$value": 1, "$type": "u8", "$doc": ["female-2, by its number in variant.json's person keys."] }, "section": "character" },
+    "pet": { "number": 18, "kind": "index", "default": { "$value": 5, "$type": "u8", "$doc": ["chick, by its number in variant.json's pet keys."] }, "section": "character" },
     "ray_steps": {
+      "number": 19,
       "$doc": [
         "Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (crates/client/render/src/frame/shader/screen_rays.wgsl)."
       ],

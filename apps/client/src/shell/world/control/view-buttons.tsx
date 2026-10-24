@@ -7,8 +7,8 @@ import { SETTINGS } from "@/shell/setting/schema.ts";
 import { ButtonStack } from "@/shell/ui/button-stack.tsx";
 
 const MODE = SETTINGS.camera_mode;
-const FREE = MODE.options.indexOf("free");
-const ORBIT = MODE.options.indexOf("orbit");
+const FREE = MODE.options.free;
+const ORBIT = MODE.options.orbit;
 const PLACE = SETTINGS.place.key;
 
 export function ViewButtons() {

@@ -13,11 +13,15 @@
 // development one; the shell's production bundle carries SETTINGS_SHIPPED,
 // the table without them, in SETTINGS' place.
 //
-// A choice's `options` names one of the lists below, and the option crosses
-// and is held as its index there; only storage keeps it by name. A setting
-// is numbered by its place in SETTINGS (the kernel's SettingKey), which is
-// what crosses for it. An `index` is a place in a list kept elsewhere — the
-// person and the pet are by theirs in variant.json — and crosses as itself.
+// A setting carries its `number` (the kernel's SettingKey), and a choice's
+// `options` names one of the lists below, which numbers each option. The
+// numbers are what crosses and what storage keeps; the names are the
+// shell's alone, for its rows and the locale. A number is given out once: a
+// setting or an option taken out leaves its number in its table's
+// `$retired`, and the generator refuses a number given twice or one
+// retired, so a number stored or sent never comes to mean another. An
+// `index` is a place in a list kept elsewhere — the person and the pet are
+// by theirs in variant.json — and crosses as itself.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
@@ -41,9 +45,9 @@ pub enum CameraMode {
 impl CameraMode {
     pub const ALL: [CameraMode; 2] = [CameraMode::orbit, CameraMode::free];
 
-    /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<CameraMode> {
-        CameraMode::ALL.get(index as usize).copied()
+    /// The option a number names, or none for a number the list does not give out.
+    pub fn of(number: u32) -> Option<CameraMode> {
+        CameraMode::ALL.into_iter().find(|o| *o as u32 == number)
     }
 }
 
@@ -68,9 +72,9 @@ pub enum OrbitObstacleMode {
 impl OrbitObstacleMode {
     pub const ALL: [OrbitObstacleMode; 3] = [OrbitObstacleMode::through, OrbitObstacleMode::stop, OrbitObstacleMode::climb];
 
-    /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<OrbitObstacleMode> {
-        OrbitObstacleMode::ALL.get(index as usize).copied()
+    /// The option a number names, or none for a number the list does not give out.
+    pub fn of(number: u32) -> Option<OrbitObstacleMode> {
+        OrbitObstacleMode::ALL.into_iter().find(|o| *o as u32 == number)
     }
 }
 
@@ -98,9 +102,9 @@ pub enum AoMode {
 impl AoMode {
     pub const ALL: [AoMode; 3] = [AoMode::off, AoMode::corner, AoMode::screen];
 
-    /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<AoMode> {
-        AoMode::ALL.get(index as usize).copied()
+    /// The option a number names, or none for a number the list does not give out.
+    pub fn of(number: u32) -> Option<AoMode> {
+        AoMode::ALL.into_iter().find(|o| *o as u32 == number)
     }
 }
 
@@ -123,9 +127,9 @@ pub enum ResolutionMode {
 impl ResolutionMode {
     pub const ALL: [ResolutionMode; 3] = [ResolutionMode::auto, ResolutionMode::fixed, ResolutionMode::low];
 
-    /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<ResolutionMode> {
-        ResolutionMode::ALL.get(index as usize).copied()
+    /// The option a number names, or none for a number the list does not give out.
+    pub fn of(number: u32) -> Option<ResolutionMode> {
+        ResolutionMode::ALL.into_iter().find(|o| *o as u32 == number)
     }
 }
 
@@ -137,7 +141,7 @@ pub enum SettingKind {
     Index,
 }
 
-/// Every setting, by its place in schema.json's SETTINGS.
+/// Every setting, by its number in schema.json's SETTINGS.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SettingKey {
@@ -236,9 +240,13 @@ impl SettingKey {
         SettingKey::ray_steps,
     ];
 
-    /// The setting a number names, or none for a number past the table.
+    /// One past the highest number: the length of a list of every
+    /// setting's value at its number, where a retired number's stays 0.
+    pub const SLOTS: usize = 20;
+
+    /// The setting a number names, or none for a number the table does not give out.
     pub fn of(number: u32) -> Option<SettingKey> {
-        SettingKey::ALL.get(number as usize).copied()
+        SettingKey::ALL.into_iter().find(|key| *key as u32 == number)
     }
 
     pub fn kind(self) -> SettingKind {
@@ -263,43 +271,6 @@ impl SettingKey {
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
             SettingKey::ray_steps => SettingKind::Toggle,
-        }
-    }
-
-    /// Its name, as storage keeps it.
-    pub fn name(self) -> &'static str {
-        match self {
-            SettingKey::textures => "textures",
-            SettingKey::decor => "decor",
-            SettingKey::clouds => "clouds",
-            SettingKey::place => "place",
-            SettingKey::tilt_lock => "tilt_lock",
-            SettingKey::camera_mode => "camera_mode",
-            SettingKey::surface_follow => "surface_follow",
-            SettingKey::orbit_obstacle => "orbit_obstacle",
-            SettingKey::edge_shade => "edge_shade",
-            SettingKey::rim_light => "rim_light",
-            SettingKey::ao => "ao",
-            SettingKey::shadows => "shadows",
-            SettingKey::resolution => "resolution",
-            SettingKey::view => "view",
-            SettingKey::profiler => "profiler",
-            SettingKey::world_gizmo => "world_gizmo",
-            SettingKey::camera_gizmo => "camera_gizmo",
-            SettingKey::person => "person",
-            SettingKey::pet => "pet",
-            SettingKey::ray_steps => "ray_steps",
-        }
-    }
-
-    /// A choice's options by name, in index order; none for any other kind.
-    pub fn options(self) -> &'static [&'static str] {
-        match self {
-            SettingKey::camera_mode => &["orbit", "free"],
-            SettingKey::orbit_obstacle => &["through", "stop", "climb"],
-            SettingKey::ao => &["off", "corner", "screen"],
-            SettingKey::resolution => &["auto", "fixed", "low"],
-            _ => &[],
         }
     }
 
@@ -367,8 +338,8 @@ impl Settings {
         ray_steps: false,
     };
 
-    /// A setting's value as it crosses: a toggle's 0 or 1, a choice's option
-    /// by its place in its list, an index as itself.
+    /// A setting's value as it crosses and is kept: a toggle's 0 or 1, a
+    /// choice's option by its number, an index as itself.
     pub fn get(&self, key: SettingKey) -> u32 {
         match key {
             SettingKey::textures => self.textures as u32,
