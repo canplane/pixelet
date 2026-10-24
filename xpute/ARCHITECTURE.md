@@ -1,6 +1,6 @@
 # Architecture — xpute
 
-[xpute](./README.md) runs one program inside another and gives it resources rather than abstractions. The outer program, the **host**, owns the platform: the clock, the memory, whatever reaches outside. The inner one, the **guest**, owns none of it. The host grants it a fixed memory once and a quota of time on every turn, and does the outside work it asks for. Over those grants the guest builds what it needs — an allocator, a scheduler, tables of what it holds — and the policy each runs by.
+[xpute](./README.md) runs one program inside another and gives it resources rather than abstractions. The outer program, the **host**, owns the platform: the clock, the memory, whatever reaches outside. The inner one, the **guest**, owns none of it. The host allocates and routes, as a hypervisor does: it grants a fixed memory once and a quota of time on every turn, and carries what the guest asks of the outside to whatever the program has bound to answer it — a file's root to the program's own opener, a GPU call to a device. Over those grants the guest builds what it needs — an allocator, a scheduler, tables of what it holds — and the policy each runs by.
 
 That split is an exokernel's with its library operating system, not an operating system's with a process: the host grants a real region and a real quota, and nothing is virtualized. Unlike an exokernel, nothing enforces the grant. A guest can spend a whole quota inside one function, and the host cannot take the turn back until it returns.
 
@@ -187,7 +187,7 @@ Every table is fixed at N slots, the one over what another side keeps (`HandleTa
 
 ## I/O, by asking
 
-A guest cannot do I/O, because the host owns the connections, the way an operating system owns its devices. So the guest asks, in what its turn leaves, and the host brings back what came of it — in a message, or into memory the request named.
+A guest cannot do I/O, because the host owns the connections, the way an operating system owns its devices. So the guest asks, in what its turn leaves, and the host routes the ask to what the program bound there and brings back what came of it — in a message, or into memory the request named. What a file is, where it lies and how it is fetched are the binding's; the host only carries the call (`SysHost`).
 
 How much may be out at once, and which want goes first, xpute does not say: ordering demands needs to know what the program is for. A program that wants a bound passes one in its own messages.
 
