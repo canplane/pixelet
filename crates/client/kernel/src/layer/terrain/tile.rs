@@ -72,7 +72,7 @@ impl Base for TerrainTile {
 /// so the packets kept, which only a drawn frame gives back, never take the
 /// slots a read needs to arrive into (io/body.rs). A packet past it is
 /// freed once decoded, and its tile asked again when one could be kept
-/// (layer/terrain/window.rs `step`).
+/// (`again_room`, layer/terrain/window.rs `step`).
 pub fn most_kept() -> u32 {
     let credits = crate::io::request::credits().max(1);
     BODY_SLOTS.saturating_sub(credits + Residency::<Earth>::FRAMES)
@@ -83,9 +83,11 @@ const _: () = assert!(
     "the body slots keep a terrain packet beside a body on every credit and the Earth's"
 );
 
-/// Whether one more of a tile's packets could be kept now.
-pub fn may_keep() -> bool {
-    kept().count() < most_kept()
+/// How many tiles may be asked again for their packets now: as many as
+/// could still be kept, less those asked again and not yet come, so none
+/// is fetched only to be freed past `most_kept`.
+pub fn again_room() -> u32 {
+    most_kept().saturating_sub(kept().count() + TerrainTile::residency().asked_again())
 }
 
 /// The tiles whose squares the windows want filled, off their packets.

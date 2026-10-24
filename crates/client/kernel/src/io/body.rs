@@ -29,10 +29,11 @@
 //! (layer/terrain/window.rs `fill`): each frame hands `HANDED` squares only
 //! of tiles kept or void (`due`), a square handed is wanted no more, and a
 //! packet whose tile left or that no window wants is given back on that
-//! upload too, the stream full or not (layer/kept.rs `send`). A tile whose
-//! packet was freed is asked again on the step after a packet is given
-//! back, while one could be kept (`step`), so nothing is fetched only to be
-//! freed while nothing is drawn.
+//! upload too, the stream full or not (layer/kept.rs `send`). Tiles whose
+//! packets were freed are asked again on the step after a packet is given
+//! back, no more of them than could still be kept less those already asked
+//! and not yet come (layer/terrain/tile.rs `again_room`), so nothing is
+//! fetched only to be freed.
 
 use xpute_guest::global::Global;
 use xpute_guest::mem::heap::{alloc, free, Block};

@@ -79,7 +79,7 @@ struct Windows {
     filled: bool,
     /// The packets kept when the slots were last stepped over: one given
     /// back may leave room to ask again for a tile whose packet was not
-    /// kept (`tile::may_keep`).
+    /// kept (`tile::again_room`).
     kept: u32,
     /// The tiles the windows apart from the eye's want (`pinned`).
     pinned: List<Tile, { PINNED_TILES as usize }>,
@@ -243,10 +243,11 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         return false;
     }
     w.kept = kept;
-    // A tile is asked again only where its packet could be kept, or it
-    // would come back only to be freed: while no frame is drawn, so none
-    // gives a packet back, it is asked once room is given back instead.
-    let may_keep = crate::layer::terrain::tile::may_keep();
+    // Tiles are asked again only as far as their packets could be kept,
+    // in slot order, or they would come back only to be freed: while no
+    // frame is drawn, so none gives a packet back, the rest are asked once
+    // room is given back instead.
+    let mut room = crate::layer::terrain::tile::again_room();
     for win in 0..WINDOWS {
         let (cell, first) = (w.windows[win as usize].cell, first_of(w, win));
         for s in 0..SLOTS {
@@ -266,8 +267,9 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             }
             if slot.is_absent() {
                 let t = tile_of(cell, slot.square).0;
-                if may_keep && !crate::layer::terrain::tile::kept_for(t) {
+                if room > 0 && !crate::layer::terrain::tile::kept_for(t) && !terrain.again_held(t) {
                     terrain.again(t);
+                    room -= u32::from(terrain.again_held(t));
                 }
             }
         }

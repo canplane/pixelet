@@ -453,6 +453,11 @@ impl<L: Base> Residency<L> {
         self.readable(p).is_some_and(|h| h.again)
     }
 
+    /// The tiles held and asked for again, not yet come (`again_held`).
+    pub fn asked_again(&self) -> u32 {
+        self.tiles.values().filter(|e| e.ask.is_some() && e.held.as_ref().is_some_and(|h| h.again)).count() as u32
+    }
+
     /// What is read over `p` moved, as a tile's arriving would.
     pub fn moved_at(&mut self, p: Tile) {
         self.moved.push(p);
