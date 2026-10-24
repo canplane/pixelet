@@ -422,17 +422,17 @@ What the host tells of itself comes with its commands: whether the build is a de
 
 This section is how a read is named, answered and paced.
 
-A read is a file in xpute's sense, reached as Plan 9 reaches one ([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)): the kernel names a root by its number and a path below it, and the host binds each root to wherever its files lie (`apps/client/src/kernel/boot.ts`, `bind_root`). The roots are `spec/client/kernel/abi/host.json` `root`'s:
+A read is a file in xpute's sense, reached as Plan 9 reaches one ([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)): the kernel names a root by its number and an object below it by its number, the path's one name, and pixelet's end of the kernel binds each root to what each number is, carried there by xpute's host (`apps/client/src/kernel/boot.ts`, `bind_root`). The roots are `spec/client/kernel/abi/host.json` `root`'s:
 
-| Root               | The kernel's path                                           | What the host binds it to                     |
-| ------------------ | ----------------------------------------------------------- | --------------------------------------------- |
-| each bake, by kind | the version its source declares there, then the tile's name | the edge's `/tile/<kind>/…`                   |
-| `ASSET`            | a load's number, in decimal                                 | the shipped asset that number is, by its hash |
-| `STORAGE`          | a kept slot's number, in decimal (`kept`)                   | the platform's storage, under a key it picks  |
+| Root               | The kernel's path                                              | What pixelet's end binds it to                                                                                 |
+| ------------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| each bake, by kind | a tile's number, its subject, in decimal; the Earth's `SPHERE` | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`kernel/io/object.ts`) |
+| `ASSET`            | a load's number, in decimal                                    | the shipped asset that number is, by its hash                                                                  |
+| `STORAGE`          | a kept slot's number, in decimal (`kept`)                      | the platform's storage, under a key it picks                                                                   |
 
-So the kernel names no URL, no storage key and no platform: a path is numbers, or data the kernel was given (a version out of the source's declaration). Where a file lies, what key or address it has, and what to do with one the kernel refuses are the host's. A kept file starts with its slot's `format`, which the kernel checks as a driver checks a superblock, and a file of another format is refused and never written over; the shell sets it aside and plugs in an empty slot (`apps/client/src/kernel/io/kept.ts`).
+So the kernel names no URL, no version, no storage key and no platform: a path is a number. Where a file lies, what key or address it has, which version serves a tile, and what to do with a file the kernel refuses are pixelet's end's. The kernel reads the source's declaration for its zooms, shards and formats; its versions are read in pixelet's end alone, which shows them in the settings too. A kept file starts with its slot's `format`, which the kernel checks as a driver checks a superblock, and a file of another format is refused and never written over; the shell sets it aside and plugs in an empty slot (`apps/client/src/kernel/io/kept.ts`).
 
-Only the host knows a file's address and protocol (`io/file.rs`). The type says which of three answers came back:
+Only pixelet's end knows a file's address and protocol (`io/file.rs`). The type says which of three answers came back:
 
 | `Opened`             | What it means                        | The descriptor |
 | -------------------- | ------------------------------------ | -------------- |
@@ -442,7 +442,7 @@ Only the host knows a file's address and protocol (`io/file.rs`). The type says 
 
 Each descriptor has an owner, and an answer reaches only that owner.
 
-The world's reads fetch tiles by their bake and name (`io/fetch.rs` `DemandName`). An absent tile is an answer with no body, and its owner decides what it means: no ground tile means the parent's ground stands. An empty read is an error (`EBADMSG`). A body is a heap block, which the command that decodes it releases unless a store keeps it; terrain's and the Earth's, whose packets run just past a mebibyte, are slots of their longest packet's pages, seven to a run the heap gives, rather than the buddy's block of twice that (`io/body.rs`).
+The world's reads fetch tiles by their bake and subject (`io/fetch.rs` `start`). An absent tile is an answer with no body, and its owner decides what it means: no ground tile means the parent's ground stands. An empty read is an error (`EBADMSG`). A body is a heap block, which the command that decodes it releases unless a store keeps it; terrain's and the Earth's, whose packets run just past a mebibyte, are slots of their longest packet's pages, seven to a run the heap gives, rather than the buddy's block of twice that (`io/body.rs`).
 
 How many reads are out at once is bounded by **credits**, which pixelet's end sends with each frame, a constant 6 (`sched.ts` `NET_CREDITS`), and the kernel takes at most 16 of (`param::MAX_CREDITS`). One **request scheduler** spends them (`io/request.rs`). It promises that a camera that has just moved can always state its demand, however much old work is still draining.
 
@@ -524,7 +524,7 @@ The shell reads the kernel through one **snapshot**, replaced whole after a turn
 - the focus, whether the view shows ground there yet, and whether it has wandered from the device or past the service area;
 - the state of the device's location and heading, the camera's azimuth, whether it follows the device, and whether it is dragged or zooming;
 - the companion's readiness, the tool held and a marker waiting for its words, the display cases, and the settings by their numbers;
-- the meters a pixel spans at the focus, the divisions it is in, whether the pointer is over a badge, the kept slots it refused, a server's stall, and the version each source serves.
+- the meters a pixel spans at the focus, the divisions it is in, whether the pointer is over a badge, the kept slots it refused, and a server's stall.
 
 What is rounded or timed for presentation, such as a scale bar's length or a toast, is the shell's.
 
@@ -643,7 +643,7 @@ A version reaches the client through one private bucket that only the Worker rea
 
 Everything a build ships is decided at build time, as JSON under `spec/`, from the commands and catalogs to the settings schema and the published versions. `pxl-tool` writes a Rust module from each file, and a TypeScript one where the shell reads it; `check:spec` fails when the tree disagrees.
 
-A catalog is never sent, because both sides compile it. Where bytes cross, as a tile or a saved blob, the layout is the model's, and the version is in a tile's path or a kept file's format byte.
+A catalog is never sent, because both sides compile it. Where bytes cross, as a tile or a saved blob, the layout is the model's, and the version is in a tile's URL, which pixelet's end picks from the declaration, or a kept file's format byte.
 
 - **Cubes and decors** are numbers in `spec/spec/block/`, and the object store writes the number.
 - **Models** are named by a path under `asset/content/` in the catalog that uses them.

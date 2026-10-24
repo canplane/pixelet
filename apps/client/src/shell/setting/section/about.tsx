@@ -7,8 +7,7 @@ import { Prose, Section, settingText } from "@/shell/setting/row.tsx";
 import { BrandSymbol } from "@/shell/ui/brand-symbol.tsx";
 import { textStyle } from "@/shell/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/config/deploy.ts";
-import type { Snapshot } from "@/kernel/abi/cmd.spec.ts";
-import { useKernel } from "@/kernel/snapshot.ts";
+import { useSourceVersions } from "@/kernel/io/source.ts";
 import { format } from "@/kernel/abi/host.spec.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
 
@@ -21,7 +20,7 @@ function envLabel(): string {
 }
 
 /** Each bake a line, as the source declares where it is read from. */
-function bakeLines(source: Snapshot["source"]): string[] {
+function bakeLines(source: readonly { kind: string; version: string }[]): string[] {
   return source.map((s) => `${s.kind}/${s.version}`);
 }
 
@@ -40,7 +39,7 @@ function buildLabel(): string {
 
 export function AboutSection() {
   const { t } = useTranslation();
-  const source = useKernel((s) => s.source);
+  const source = useSourceVersions();
   return (
     <Section title={t("settings.about.section_title")}>
       <Prose>

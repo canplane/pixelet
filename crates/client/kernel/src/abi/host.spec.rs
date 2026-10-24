@@ -36,14 +36,22 @@ pub mod op {
 }
 
 /// The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a
-/// bake, numbered by its kind (pxl-spec bake/published.spec.rs), and a path is an object's
-/// name in it.
+/// bake, numbered by its kind (pxl-spec bake/published.spec.rs). Below every root a path is
+/// an object's number in decimal, its one name; what that object is called and where, a
+/// tile's version and URL, a storage key, is what pixelet's end of the kernel
+/// (apps/client/src/kernel/) binds the root to, xpute's host carrying the open there.
 pub mod root {
     /// The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice.
     pub const STORAGE: u32 = 256;
     /// The shipped assets; a path is a load's number in decimal (io/load.rs).
     pub const ASSET: u32 = 257;
 }
+
+/// Below the earth's root, the Earth's picture whole (pxl-spec route.json's `TILE_SPHERE`),
+/// under the earth's own version. Any other number below a bake's root is a tile's subject
+/// (pxl-spec space/layer/tile.rs), which is never 0: a tile's key ends in a 1 within its
+/// high half.
+pub const SPHERE: u32 = 0;
 
 /// The files the kernel keeps below STORAGE, by slot. What a slot holds is its
 /// owner's, written whole, its slot's `format` first (pxl-kernel io/file.rs).

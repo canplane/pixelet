@@ -5,8 +5,8 @@ import type { BaseLayer } from "./published.spec.ts";
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
 
-/** `<tile>/<layer>/<version>/<name>`: the kernel names the object under the
- * version its source declares serving it. */
+/** `<tile>/<layer>/<version>/<name>`: the object a bake's number is, under
+ * the version its source declares serving it (kernel/io/object.ts). */
 export function tileUrl(layer: BaseLayer, object: string): string {
   return `${TILE_ROOT}/${layer}/${object}`;
 }

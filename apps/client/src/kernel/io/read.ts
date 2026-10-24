@@ -1,9 +1,10 @@
 // @pxl/client/kernel/io/read.ts
 
 /**
- * The bus under the kernel's reads: the kernel names a baked object, under
- * its version, or a shipped asset, this side makes it a URL. 204 is a page its version leaves
- * out, ENOENT; 404 names nothing, a failure like any other.
+ * The bus under the kernel's reads: the kernel names a bake's object or a
+ * shipped asset by number, and this side, pixelet's end of the kernel, makes it
+ * a URL (io/object.ts). 204 is a page its version leaves out, ENOENT; 404
+ * names nothing, a failure like any other.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -15,6 +16,8 @@ import { BASE_LAYERS } from "@/config/published.spec.ts";
 import { assetUrl, tileUrl } from "@/config/route.ts";
 import { originGet } from "@/bracket.tsx";
 import { online } from "@/kernel/online.ts";
+import { tile_object } from "@/kernel/io/object.ts";
+import { source_declared } from "@/kernel/io/source.ts";
 
 async function get(url: string, name: string, signal: AbortSignal): Promise<U8Array> {
   let res: Response;
@@ -47,7 +50,11 @@ function packed(body: U8Array): boolean {
   return (body[0] === 0x28 && body[1] === 0xb5) || (body[0] === 0x1f && body[1] === 0x8b);
 }
 
-export async function read_object(bake: u32, name: string, signal: AbortSignal): Promise<U8Array> {
+/** A bake's object by its number; none before the source is declared, as the kernel asks for none. */
+export async function read_object(bake: u32, number: bigint, signal: AbortSignal): Promise<U8Array> {
+  const declared = source_declared();
+  const name = declared === null ? null : tile_object(declared, BASE_LAYERS[bake], number);
+  if (name === null) throw new FileError(Errno.ENOENT);
   const body = await get(tileUrl(BASE_LAYERS[bake], name), name, signal);
   if (body.byteLength > 0 && packed(body)) {
     // Fail here: handing it on would fail in the kernel's decoder, far from the cause.
@@ -60,8 +67,8 @@ export async function read_object(bake: u32, name: string, signal: AbortSignal):
 const KEYS: readonly string[] = Object.values(INGESTED).map((a) => a.key);
 
 /** A load number: an asset's index in the ingest's table, or one past it for the texture pack. */
-export function read_asset(load: u32, signal: AbortSignal): Promise<U8Array> {
-  const key = load === KEYS.length ? PACK.key : KEYS[load];
+export function read_asset(load: bigint, signal: AbortSignal): Promise<U8Array> {
+  const key = load === BigInt(KEYS.length) ? PACK.key : KEYS[Number(load)];
   if (key === undefined) return Promise.reject(new FileError(Errno.ENOENT));
   return get(assetUrl(key), key, signal);
 }

@@ -42,10 +42,12 @@ fn a_file_of_another_format_is_refused_until_emptied() {
 }
 
 #[test]
-fn a_slot_s_path_is_its_number_and_fits() {
+fn an_object_s_path_is_its_number_in_decimal() {
+    for n in [0, 1, 9, 10, 702561541869797376, u64::MAX] {
+        assert_eq!(Path::of(n).as_str(), n.to_string());
+    }
     for kept in Kept::ALL {
         assert_eq!(kept.path().as_str(), kept.slot().to_string());
-        assert!(kept.path().as_str().len() <= PATH_BYTES);
         assert_eq!(Kept::of_slot(kept.slot()), Some(kept));
     }
 }

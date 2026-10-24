@@ -3,24 +3,26 @@
 //! xpute's file table with an owner per descriptor, so an open's answer
 //! reaches its owner and one for a closed descriptor reaches no one. A
 //! native test has no host and opens nothing.
+//!
+//! Every file is a root's object by number (host.json `root`): a tile by its
+//! subject, an asset by its load, a kept file by its slot. The number is the
+//! path's one name, in decimal; what it is and where, a version, a URL or a
+//! storage key, is what pixelet's end of the kernel (apps/client/src/kernel/)
+//! binds the root to, xpute's host carrying the open there.
 
 use xpute_guest::ipc::file::Files;
 use xpute_guest::ipc::sys::Fd;
-
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64;
 use base64::Engine;
 
 use crate::abi::host::{format, kept, root};
-use crate::asset::LOADS;
 use crate::io::failure::Failure;
 use crate::io::host::{answered, sys, turn, Refused};
 use crate::io::request::Credit;
 use crate::mem::spec::MIN_HEAP_BYTES;
 use crate::param::MAX_CREDITS;
 use crate::sched::edge::request_world_tick;
-use pxl_spec::bake::source::VERSION_BYTES;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
@@ -64,25 +66,15 @@ impl Kept {
     }
 
     fn path(self) -> Path {
-        Path::of(|p| core::fmt::Write::write_fmt(p, format_args!("{}", self.slot())))
+        Path::of(u64::from(self.slot()))
     }
 }
 
-/// The longest name the kernel opens: a leaf's name, a digit a zoom, under
-/// its version, an asset's number or a kept slot's. A longer one is a bug, so the host
-/// stream's reserve can count on it.
-pub const PATH_BYTES: usize = {
-    let mut most = VERSION_BYTES + 1 + LEAF_ZOOM as usize;
-    let names = [LOADS.ilog10() as usize + 1];
-    let mut i = 0;
-    while i < names.len() + Kept::ALL.len() {
-        // `| 1`: slot 0 is one digit, as 1 is.
-        let len = if i < names.len() { names[i] } else { (Kept::ALL[i - names.len()].slot() | 1).ilog10() as usize + 1 };
-        most = if len > most { len } else { most };
-        i += 1;
-    }
-    most
-};
+/// The longest name the kernel opens: a number in decimal, a u64's widest,
+/// so the host stream's reserve can count on it.
+pub const PATH_BYTES: usize = 20;
+
+const _: () = assert!(u64::MAX.ilog10() as usize + 1 == PATH_BYTES);
 
 /// `Load` is an asset's file, read as a model or an image as its attempt's
 /// subject says.
@@ -104,9 +96,9 @@ fn files() -> &'static mut Files<Owner, OPEN> {
     FILES.get(Files::new)
 }
 
-/// None where there is no host.
-pub fn open(_: Credit, root: u32, path: &str, owner: Owner) -> Option<Fd> {
-    Some(files().open(sys()?, root, named(path), owner))
+/// Opens `root`'s object `number`; none where there is no host.
+pub fn open(_: Credit, root: u32, number: u64, owner: Owner) -> Option<Fd> {
+    Some(files().open(sys()?, root, Path::of(number).as_str(), owner))
 }
 
 /// Opens a kept file to be read whole; what it held is taken with `take_kept`.
@@ -280,40 +272,30 @@ pub fn close(fd: Fd) {
     }
 }
 
-/// A path as `open` takes it, written where it is wanted: at most
-/// `PATH_BYTES`, so no path is allocated.
-pub struct Path {
-    bytes: [u8; PATH_BYTES],
-    len: usize,
+/// An object's path below its root, its number in decimal, written where it
+/// is wanted, so no path is allocated.
+struct Path {
+    digits: [u8; PATH_BYTES],
+    from: usize,
 }
 
 impl Path {
-    /// The path `write` writes; past `PATH_BYTES` is a bug, as `named` says.
-    pub fn of(write: impl FnOnce(&mut Path) -> core::fmt::Result) -> Path {
-        let mut p = Path { bytes: [0; PATH_BYTES], len: 0 };
-        xpute_kit::ensure!(write(&mut p).is_ok(), EMSGSIZE, PATH_BYTES);
-        p
+    fn of(mut number: u64) -> Path {
+        let mut p = Path { digits: [0; PATH_BYTES], from: PATH_BYTES };
+        loop {
+            p.from -= 1;
+            p.digits[p.from] = b'0' + (number % 10) as u8;
+            number /= 10;
+            if number == 0 {
+                return p;
+            }
+        }
     }
 
-    pub fn as_str(&self) -> &str {
-        // SAFETY: only `write_str`'s whole strs are in it.
-        unsafe { core::str::from_utf8_unchecked(&self.bytes[..self.len]) }
+    fn as_str(&self) -> &str {
+        // SAFETY: ASCII digits only.
+        unsafe { core::str::from_utf8_unchecked(&self.digits[self.from..]) }
     }
-}
-
-impl core::fmt::Write for Path {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        let end = self.len + s.len();
-        let to = self.bytes.get_mut(self.len..end).ok_or(core::fmt::Error)?;
-        to.copy_from_slice(s.as_bytes());
-        self.len = end;
-        Ok(())
-    }
-}
-
-fn named(path: &str) -> &str {
-    xpute_kit::ensure!(path.len() <= PATH_BYTES, EMSGSIZE, path.len());
-    path
 }
 
 pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {

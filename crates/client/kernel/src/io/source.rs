@@ -3,12 +3,13 @@
 //! The tile source's declaration, read once at boot: the published bake's
 //! `source` out of the bucket (script/publish.ts), or the dev tile server's
 //! answer in its shape. It says the zoom the floor is held at, the
-//! shards served, the format each kind is in and where each kind is: a tile
-//! no served shard is over or under is never asked for, and a tile is opened
-//! under the version that serves it, which the client does not read.
+//! shards served and the format each kind is in: a tile no served shard is
+//! over or under is never asked for. The versions it names are pixelet's end
+//! of the kernel's, which reads a tile under the one that serves it
+//! (apps/client/src/kernel/io/source.ts).
 
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
-use pxl_spec::bake::source::{is_version, key, sharded};
+use pxl_spec::bake::source::{key, sharded};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::Cells;
@@ -17,21 +18,10 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 use pxl_spec_core::area::{self, Area};
 use xpute_guest::global::Global;
 use xpute_kit::codec::json::{read_json, JsonType, JsonValue};
-use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-
-/// A kind's version each, where one is named.
-type Versions = [Option<String>; BaseLayer::ALL.len()];
-
-struct Shard {
-    tile: Tile,
-    version: Versions,
-}
 
 struct Source {
     top_zoom: Zoom,
-    version: [String; BaseLayer::ALL.len()],
-    shard: Vec<Shard>,
     /// The area at `SHARD_ZOOM` (pxl-spec-core `area::Area`): every cell's
     /// nine by its key (`area::shard_key`), none beside no served one.
     nine: Vec<u16>,
@@ -40,10 +30,6 @@ struct Source {
     /// it, one past its index (0 none), and whether a shard is at or under
     /// it (`UNDER`).
     nodes: Vec<u32>,
-    /// Each shard's version a kind, as the finest shard over it, itself
-    /// among them, that names one, the last of the finest as declared
-    /// (`version_of`); none where none does.
-    versions: Vec<[Option<u16>; BaseLayer::ALL.len()]>,
 }
 
 /// A node's word's bit: a shard is at or under it.
@@ -63,9 +49,8 @@ static DECLARED: Global<Option<Source>> = Global::new();
 
 /// Declared once, at boot: what it says is read as long as the kernel runs.
 /// Refused whole for anything the client cannot follow: a zoom out of the
-/// pyramid, a key no shard or node over shards (pxl-spec bake/source.rs), a
-/// kind with no format or one it does not read, or with no version, a
-/// version that is no URL segment.
+/// pyramid, a key no shard or node over shards (pxl-spec bake/source.rs), or
+/// a kind with no format or one it does not read.
 pub fn declare(text: &str) -> Result<(), Errno> {
     let declared = DECLARED.get(Default::default);
     if declared.is_some() {
@@ -116,18 +101,6 @@ pub fn nines() -> &'static [u16] {
     declared().map_or(&[], |s| &s.nine)
 }
 
-/// The kind's own version, over every shard's: an object no shard holds
-/// (`pxl-spec route` `TILE_SPHERE`) is opened under it.
-pub fn whole(layer: BaseLayer) -> &'static str {
-    &declared().or_bug(Errno::ENOTRECOVERABLE).version[layer as usize]
-}
-
-/// The version `p` is opened under. No tile is asked for before the source
-/// is declared: nothing is observed until then (view/observation.rs).
-pub fn version(layer: BaseLayer, p: Tile) -> &'static str {
-    declared().or_bug(Errno::ENOTRECOVERABLE).version_of(layer, p)
-}
-
 impl Source {
     /// `p`'s node among `nodes`: itself, or past `SHARD_ZOOM` the one over
     /// it there, which every shard over it is over too (no shard is finer).
@@ -140,31 +113,6 @@ impl Source {
     fn covers(&self, p: Tile) -> bool {
         self.node_over(p).is_some_and(|w| w & 0xffff != 0 || p.zoom <= SHARD_ZOOM && w & UNDER != 0)
     }
-
-    /// The finest key over `p` that names one for `layer`, else the source's:
-    /// the finest shard over it, then its version's (`versions`).
-    fn version_of(&self, layer: BaseLayer, p: Tile) -> &str {
-        let finest = self.node_over(p).map_or(0, |w| w & 0xffff);
-        let own = (sharded(layer) && finest != 0).then(|| self.versions[finest as usize - 1][layer as usize]).flatten();
-        own.map_or(&self.version[layer as usize], |k| {
-            self.shard[usize::from(k)].version[layer as usize].as_deref().or_bug(Errno::ENOTRECOVERABLE)
-        })
-    }
-}
-
-/// Each kind's version as declared, the one over every shard's own; none
-/// until declared.
-pub fn versions(each: &mut dyn FnMut(BaseLayer, &str)) {
-    if let Some(s) = declared() {
-        for l in BaseLayer::ALL {
-            each(l, &s.version[l as usize]);
-        }
-    }
-}
-
-/// `k` is `p` or a tile over it.
-fn over(k: Tile, p: Tile) -> bool {
-    k.zoom <= p.zoom && Tile::over(k.zoom, p.first_leaf()) == k
 }
 
 fn parse(text: &str) -> Option<Source> {
@@ -173,15 +121,8 @@ fn parse(text: &str) -> Option<Source> {
     let top_zoom = o.get("top_zoom")?.as_f64().filter(|z| z.fract() == 0.0 && pyramid.contains(z))? as Zoom;
     read_format(o.get("format")?)?;
     let mut shard = Vec::new();
-    for (name, entry) in o.get("shard").filter(|v| v.type_of() == JsonType::Object)?.fields() {
-        shard.push(Shard {
-            tile: key(name.as_plain()?)?,
-            version: read_versions(entry.get("version"))?,
-        });
-    }
-    let version = read_versions(o.get("version"))?;
-    if version.iter().any(Option::is_none) {
-        return None;
+    for (name, _) in o.get("shard").filter(|v| v.type_of() == JsonType::Object)?.fields() {
+        shard.push(key(name.as_plain()?)?);
     }
     // Every cell a shard covers at `SHARD_ZOOM`, a key no finer (`key`),
     // served; then every cell it and each beside it, its nine laid once
@@ -190,8 +131,8 @@ fn parse(text: &str) -> Option<Source> {
     let cells = area::SHARD_CELLS as usize;
     let (mut served, mut off, mut covered) = (vec![false; cells], false, Vec::new());
     for k in &shard {
-        let d = SHARD_ZOOM - k.tile.zoom;
-        let [x, y] = k.tile.at.map(|v| v << d);
+        let d = SHARD_ZOOM - k.zoom;
+        let [x, y] = k.at.map(|v| v << d);
         for j in 0..1 << d {
             for i in 0..1 << d {
                 match area::shard_key([x + i, y + j]) {
@@ -221,7 +162,7 @@ fn parse(text: &str) -> Option<Source> {
     // or under its own, the last of the finest as declared.
     let mut nodes = vec![0u32; ((1usize << (2 * (SHARD_ZOOM + 1))) - 1) / 3];
     for (n, k) in shard.iter().enumerate() {
-        let (zk, at) = (k.tile.zoom, k.tile.at);
+        let (zk, at) = (k.zoom, k.at);
         for z in 0..=zk {
             if let Some(i) = node_of(z, at.map(|v| v >> (zk - z))) {
                 nodes[i] |= UNDER;
@@ -233,57 +174,20 @@ fn parse(text: &str) -> Option<Source> {
                 for i in 0..1 << d {
                     let Some(at) = node_of(z, [(at[0] << d) + i, (at[1] << d) + j]) else { continue };
                     let was = nodes[at] & 0xffff;
-                    if was == 0 || shard[was as usize - 1].tile.zoom <= zk {
+                    if was == 0 || shard[was as usize - 1].zoom <= zk {
                         nodes[at] = nodes[at] & UNDER | (n as u32 + 1);
                     }
                 }
             }
         }
     }
-    // Each shard's version a kind: the finest shard over it that names one,
-    // the last of the finest as declared, as `max_by_key` keeps the last of
-    // equals.
-    let versions = (0..shard.len())
-        .map(|i| {
-            core::array::from_fn(|l| {
-                let mut best: Option<usize> = None;
-                for (j, k) in shard.iter().enumerate() {
-                    if over(k.tile, shard[i].tile) && k.version[l].is_some() && best.is_none_or(|b| shard[b].tile.zoom <= k.tile.zoom) {
-                        best = Some(j);
-                    }
-                }
-                best.map(|b| b as u16)
-            })
-        })
-        .collect();
-    Some(Source {
-        top_zoom,
-        version: version.map(Option::unwrap_or_default),
-        shard,
-        nine,
-        nodes,
-        versions,
-    })
+    Some(Source { top_zoom, nine, nodes })
 }
 
 /// Every kind is in the format this client reads it in.
 fn read_format(v: JsonValue<'_>) -> Option<()> {
     let reads = |l: BaseLayer| v.get(l.name())?.as_f64().filter(|&n| n == f64::from(FORMAT.of(l)));
     (v.type_of() == JsonType::Object && BaseLayer::ALL.into_iter().all(|l| reads(l).is_some())).then_some(())
-}
-
-fn read_versions(v: Option<JsonValue<'_>>) -> Option<Versions> {
-    let mut out = Versions::default();
-    let Some(v) = v else { return Some(out) };
-    if v.type_of() != JsonType::Object {
-        return None;
-    }
-    for (kind, version) in v.fields() {
-        let layer = BaseLayer::ALL.into_iter().find(|l| kind.eq_str(l.name()))?;
-        let version = version.as_str()?.as_plain()?;
-        out[layer as usize] = Some(is_version(version).then(|| version.to_string())?);
-    }
-    Some(out)
 }
 
 #[cfg(test)]

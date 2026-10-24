@@ -23,7 +23,6 @@ const INITIAL: Snapshot = {
   previews: [],
   kept_refused: [],
   stall: null,
-  source: [],
 };
 
 let snapshot: Snapshot = INITIAL;

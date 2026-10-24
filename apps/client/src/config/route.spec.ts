@@ -64,3 +64,6 @@ export const ASSET_PREFIX = "/asset/";
 export function tileObject(version: string, name: string): string {
   return `${version}/${name}`;
 }
+
+/** The Earth's picture whole, in place of a tile's name under the earth layer's version: the sphere's, no tile of the pyramid. */
+export const TILE_SPHERE = "sphere";

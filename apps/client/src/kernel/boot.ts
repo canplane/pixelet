@@ -56,9 +56,9 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
 export async function boot_kernel(): Promise<void> {
   await load_guest();
   BASE_LAYERS.forEach((_, bake) => {
-    bind_root(bake, (name, signal) => read_object(bake, name, signal));
+    bind_root(bake, (number, signal) => read_object(bake, number, signal));
   });
-  bind_root(root.ASSET, (path, signal) => read_asset(Number(path), signal));
+  bind_root(root.ASSET, read_asset);
   start_sched();
   GUEST_DOORBELL.signal = on_signal;
   gpuBoot();

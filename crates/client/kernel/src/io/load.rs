@@ -17,18 +17,16 @@ use std::rc::Rc;
 use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use xpute_guest::sched::edge::{next_turn, yield_if_spent};
 
-use crate::abi::host::root;
+use crate::abi::host::{root, SPHERE};
 use crate::asset::{Load, LoadKind, LOADS};
 use crate::io::demand::Ask;
 use crate::io::failure::Ended;
-use crate::io::file::{self, Opened, Owner, Path};
+use crate::io::file::{self, Opened, Owner};
 use crate::io::host::Refused;
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::io::source;
 use crate::sched::edge::{request_world_tick, world_edge};
-use core::fmt::Write as _;
 use pxl_spec::bake::published::BaseLayer;
-use pxl_spec::route::{tile_object, TILE_SPHERE};
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -166,14 +164,11 @@ fn settled() {
 /// is its attempt's subject's (`opened`).
 pub fn open_asset(credit: Credit, load: Load) {
     let owner = Owner::Load { key: credit.key() };
+    // The sphere's number is no tile's: a subject is never 0.
+    const _: () = assert!(pxl_spec::space::hierarchy::morton::bits::<2>(pxl_spec::space::layer::tile::LEAF_ZOOM) < 63);
     match load {
-        Load::Sphere => file::open(
-            credit,
-            BaseLayer::earth as u32,
-            Path::of(|w| tile_object(w, source::whole(BaseLayer::earth), TILE_SPHERE)).as_str(),
-            owner,
-        ),
-        _ => file::open(credit, root::ASSET, Path::of(|w| write!(w, "{}", load.number())).as_str(), owner),
+        Load::Sphere => file::open(credit, BaseLayer::earth as u32, u64::from(SPHERE), owner),
+        _ => file::open(credit, root::ASSET, u64::from(load.number()), owner),
     };
 }
 

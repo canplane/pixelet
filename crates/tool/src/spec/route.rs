@@ -123,6 +123,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "}".into(),
         String::new(),
     ]);
+    ts.extend(ts_doc(&[sphere_doc.to_string()], ""));
+    ts.extend([format!("export const TILE_SPHERE = {};", json_str(sphere)), String::new()]);
 
     let mut worker = head("@pxl/web/cloudflare-worker/route.spec.ts");
     worker.extend(

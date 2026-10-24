@@ -712,14 +712,11 @@ pub struct Snapshot<'a> {
     pub kept_refused: &'a [u32],
     /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say.
     pub stall: Option<Message>,
-    /// Each kind's version as the tile source declared it: a published one, or a dev
-    /// server's; empty until declared.
-    pub source: &'a dyn Fn(&mut dyn FnMut(&SourceVersion<'_>)),
 }
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 17;
+    pub const FIELDS: u32 = 16;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(FocusState::FIELDS, |w| self.focus.write(w));
@@ -744,13 +741,6 @@ impl Snapshot<'_> {
         w.u32_array(Some(self.previews));
         w.u32_array(Some(self.kept_refused));
         w.u32(self.stall.map(|m| m as u32));
-        let mut n = 0;
-        (self.source)(&mut |_| n += 1);
-        w.branch(n, |w| {
-            (self.source)(&mut |item| {
-                w.branch(SourceVersion::FIELDS, |w| item.write(w));
-            })
-        });
     }
 }
 
@@ -915,21 +905,6 @@ impl LangName<'_> {
     pub fn write(&self, w: &mut PacketWriter) {
         w.str_display(self.lang);
         w.str_display(self.name);
-    }
-}
-
-pub struct SourceVersion<'a> {
-    pub kind: &'a dyn Display,
-    pub version: &'a dyn Display,
-}
-
-impl SourceVersion<'_> {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.str_display(self.kind);
-        w.str_display(self.version);
     }
 }
 

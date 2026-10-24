@@ -6,6 +6,8 @@
 // sys.json, pxl-kernel io/host.rs, apps/client/src/kernel/host.ts), and the range and the
 // files it keeps them in.
 
+import type { u32 } from "@xpute/kit/abi/word.ts";
+
 /** The stream's range, laid out by the kernel's map. */
 export const stream = {
   /** The range's size. A record names what it moves rather than carrying it, so
@@ -28,14 +30,22 @@ export const op = {
 } as const;
 
 /** The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a
- * bake, numbered by its kind (pxl-spec bake/published.spec.rs), and a path is an object's
- * name in it. */
+ * bake, numbered by its kind (pxl-spec bake/published.spec.rs). Below every root a path is
+ * an object's number in decimal, its one name; what that object is called and where, a
+ * tile's version and URL, a storage key, is what pixelet's end of the kernel
+ * (apps/client/src/kernel/) binds the root to, xpute's host carrying the open there. */
 export const root = {
   /** The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice. */
   STORAGE: 256 as number,
   /** The shipped assets; a path is a load's number in decimal (io/load.rs). */
   ASSET: 257 as number,
 } as const;
+
+/** Below the earth's root, the Earth's picture whole (pxl-spec route.json's `TILE_SPHERE`),
+ * under the earth's own version. Any other number below a bake's root is a tile's subject
+ * (pxl-spec space/layer/tile.rs), which is never 0: a tile's key ends in a 1 within its
+ * high half. */
+export const SPHERE: u32 = 0 as number;
 
 /** The files the kernel keeps below STORAGE, by slot. What a slot holds is its
  * owner's, written whole, its slot's `format` first (pxl-kernel io/file.rs). */

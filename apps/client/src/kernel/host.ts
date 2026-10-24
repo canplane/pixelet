@@ -96,20 +96,27 @@ function program(code: u32, w: U32Array, a: u32): void {
   }
 }
 
-type Open = (path: string, signal: AbortSignal) => U8Array | Promise<U8Array>;
+/** What a root's object is, by its number: every root is named so (host.json `root`). */
+type Open = (number: bigint, signal: AbortSignal) => U8Array | Promise<U8Array>;
+
+/** A path's one name, an object's number in decimal; ENOENT for any other. */
+function number_of(path: string): bigint {
+  if (!/^\d{1,20}$/.test(path)) throw new FileError(Errno.ENOENT);
+  return BigInt(path);
+}
 
 const STORAGE: Storage = { get: storageGet, set: storageSet };
 
-/** STORAGE's files: a path is a kept slot's number in decimal, under the key kept.ts gives it. */
-function storage_key(path: string): string {
-  const key = /^\d+$/.test(path) ? kept_key(Number(path)) : undefined;
+/** STORAGE's object `number` is a kept slot, under the key kept.ts gives it. */
+function storage_key(number: bigint): string {
+  const key = number <= 0xffff_ffffn ? kept_key(Number(number)) : undefined;
   if (key === undefined) throw new FileError(Errno.ENOENT);
   return key;
 }
 
 /** A kept slot's text, or null where none is kept. */
 export function read_kept(slot: u32): string | null {
-  return storageGet(storage_key(String(slot)));
+  return storageGet(storage_key(BigInt(slot)));
 }
 
 /** Before the kernel reads a slot: what was kept before the slots carried over, once. */
@@ -122,12 +129,13 @@ export function kept_refused(slots: readonly u32[]): void {
   follow_refused(slots, STORAGE, (slot) => send_next(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(GUEST_DOORBELL, slot)));
 }
 
-const ROOTS = new Map<u32, Open>([[root.STORAGE, (path) => {
-  const value = storageGet(storage_key(path));
+const ROOTS = new Map<u32, Open>([[root.STORAGE, (number) => {
+  const value = storageGet(storage_key(number));
   if (value === null) throw new FileError(Errno.ENOENT);
   return te.encode(value);
 }]]);
 
+/** Binds a root to what each of its numbers is: carried by xpute's host, which reads the path, and bound here. */
 export function bind_root(r: u32, open: Open): void {
   ROOTS.set(r, open);
 }
@@ -135,7 +143,7 @@ export function bind_root(r: u32, open: Open): void {
 function open(r: u32, path: string, signal: AbortSignal) {
   const bound = ROOTS.get(r);
   if (bound === undefined) throw new FileError(Errno.ENOENT);
-  return bound(path, signal);
+  return bound(number_of(path), signal);
 }
 
 let stopCode: string | null = null;
@@ -151,7 +159,7 @@ const SYS = new Sys({
   open,
   commit: (r, path, bytes) => {
     if (r !== root.STORAGE) throw new FileError(Errno.EROFS);
-    storageSet(storage_key(path), td.decode(bytes));
+    storageSet(storage_key(number_of(path)), td.decode(bytes));
   },
   opened: (fd, res, detail) => send_next(XputeCommand.SYS_OPENED, encode_sys_opened(GUEST_DOORBELL, fd, res, detail)),
   abort: ({ errno, file, line, column, a, b }) => {

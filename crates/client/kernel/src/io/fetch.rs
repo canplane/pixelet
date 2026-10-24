@@ -1,12 +1,10 @@
 // pxl-kernel/io/fetch.rs
 
-//! The world's reads. The kernel names an object (its bake, the version the
-//! source serves it under and its name, `DemandName`) and opens it as a file; the host
-//! alone knows the address and protocol. What an absent object means is decided here per stream.
+//! The world's reads. The kernel opens a tile as its bake's object by its
+//! subject (io/file.rs); its version, address and protocol are pixelet's end
+//! of the kernel's (apps/client/src/kernel/io/read.ts). What an absent object means is decided here per stream.
 //! Every body is a block (`io/body.rs`) released in the command that
 //! decodes it, unless a store keeps it.
-
-use core::fmt;
 
 use xpute_guest::ipc::sys::Fd;
 use xpute_guest::mem::base::ptr_at;
@@ -18,36 +16,19 @@ use xpute_kit::status::errno::Errno;
 use crate::io::body;
 use crate::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::io::failure::{Ended, Failure};
-use crate::io::file::{self, Opened, Owner, Path};
+use crate::io::file::{self, Opened, Owner};
 use crate::io::host::Refused;
 use crate::io::request::{attempt_of, settle, Credit};
-use crate::io::source;
 use crate::param::MAX_CREDITS;
 use crate::sched::edge::{request_world_tick, world_edge};
-use pxl_spec::route::tile_object;
-use pxl_spec::space::hierarchy::morton::write_name;
-use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-pub struct DemandName(pub Stream, pub u64);
-
-impl fmt::Display for DemandName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let key = self;
-        match key.0 {
-            Stream::terrain | Stream::place | Stream::earth | Stream::division => write_name::<2>(f, Tile::of_subject(key.1).key()),
-            // Assets are opened below the assets' root (io/load.rs), never here.
-            Stream::asset => Ok(()),
-        }
-    }
-}
-
+/// Assets are opened below the assets' root (io/load.rs), never here.
 pub fn start(credit: Credit, stream: Stream, subject: u64) {
     let Some(bake) = stream.bake() else { return };
-    let name = Path::of(|w| tile_object(w, source::version(bake, Tile::of_subject(subject)), DemandName(stream, subject)));
     let owner = Owner::Fetch { key: credit.key(), at_ms: now() };
-    file::open(credit, bake as u32, name.as_str(), owner);
+    file::open(credit, bake as u32, subject, owner);
 }
 
 /// Settled as stopped at once: nothing is reported for a closed descriptor.
@@ -215,3 +196,7 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     };
     settle(key, Ended::Failed(fail), Some(phases));
 }
+
+#[cfg(test)]
+#[path = "fetch.test.rs"]
+mod test;
