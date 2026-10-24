@@ -77,11 +77,16 @@ pub fn overwrites() -> Overwrites<'static> {
 /// packets kept for them, and off each void tile, held with none.
 pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::residency();
-    kept().send(pxl_render::gpu::api::device_generation(), &mut |frame, pkt| {
-        let Some(t) = terrain.in_frame(frame) else { return Offered::Taken };
-        let Some(held) = terrain.get(t) else { return Offered::Taken };
-        window::fill(t, Handed::Packet(pkt, held), write)
-    });
+    let wanted = |frame| terrain.in_frame(frame).is_some_and(|t| terrain.get(t).is_some() && window::tile_wanted(t));
+    kept().send(
+        pxl_render::gpu::api::device_generation(),
+        &mut |frame, pkt| {
+            let Some(t) = terrain.in_frame(frame) else { return Offered::Taken };
+            let Some(held) = terrain.get(t) else { return Offered::Taken };
+            window::fill(t, Handed::Packet(pkt, held), write)
+        },
+        &wanted,
+    );
     // The due squares' void tiles, not every tile held.
     for p in window::voids() {
         if window::fill(p, Handed::Void, write) == Offered::Full {

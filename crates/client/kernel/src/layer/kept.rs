@@ -78,12 +78,23 @@ impl Kept {
     }
 
     /// Each waiting packet to `send` with its frame, freed once taken whole
-    /// by the device `on`, until the stream runs out.
-    pub fn send(&mut self, on: u32, send: &mut dyn FnMut(u32, &[u8]) -> Offered) {
+    /// by the device `on`, until the stream runs out; past that, each one
+    /// nothing wants any more (`wanted`) is freed unsent, so the packets
+    /// given back do not wait on the stream when the slots are short.
+    pub fn send(&mut self, on: u32, send: &mut dyn FnMut(u32, &[u8]) -> Offered, wanted: &dyn Fn(u32) -> bool) {
+        let mut full = false;
         for (record, frame) in self.frames.iter_mut().enumerate() {
             let Frame::Waiting(block) = *frame else { continue };
+            if full {
+                if !wanted(record as u32) {
+                    release(Some(block));
+                    *frame = Frame::Empty;
+                    self.waiting -= 1;
+                }
+                continue;
+            }
             match send(record as u32, body(block)) {
-                Offered::Full => return,
+                Offered::Full => full = true,
                 Offered::Kept => {}
                 Offered::Taken => {
                     release(Some(block));

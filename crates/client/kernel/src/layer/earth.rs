@@ -76,10 +76,16 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
         }
     }
     // A packet `receive` read reads again.
-    kept.send(on, &mut |record, pkt| match earth::decode(pkt).map(|texels| write(record, texels)) {
-        Err(_) | Ok(true) => Offered::Taken,
-        Ok(false) => Offered::Full,
-    });
+    // An Earth packet is wanted until its texels are written, at most a
+    // frame's four of them kept.
+    kept.send(
+        on,
+        &mut |record, pkt| match earth::decode(pkt).map(|texels| write(record, texels)) {
+            Err(_) | Ok(true) => Offered::Taken,
+            Ok(false) => Offered::Full,
+        },
+        &|_| true,
+    );
 }
 
 /// The floor's tiles (`floor`, the view's) at the top as a window, its south-west tile first, and

@@ -419,6 +419,20 @@ static FILL: Global<Fill> = Global::new();
 /// A void tile's samples.
 static ZEROS: [i16; ELE_LANE] = [0; ELE_LANE];
 
+/// Whether slot `i` wants a square of `tile`, absent.
+fn slot_wants(w: &Windows, tile: Tile, i: u32) -> bool {
+    let cell = GROUND.cell_zoom(tile.zoom);
+    let (slot, win) = (w.slots[i as usize], w.windows[(i / SLOTS) as usize]);
+    slot.is_absent() && win.cell == cell && first_of(w, i / SLOTS).is_some() && tile_of(cell, slot.square).0 == tile
+}
+
+/// Whether a window wants one of `tile`'s squares, absent: its packet is
+/// kept for it while one does.
+pub fn tile_wanted(tile: Tile) -> bool {
+    let w = windows();
+    (0..SQUARES).any(|i| slot_wants(w, tile, i))
+}
+
 /// Each square the turn hands (`due`) in `tile`, filled from `from` while
 /// `write` takes them: its own looks here, its four looks and the tile's
 /// samples to the GPU. Taken where no window wants another of its squares;
@@ -427,10 +441,7 @@ static ZEROS: [i16; ELE_LANE] = [0; ELE_LANE];
 pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> bool) -> Offered {
     let cell = GROUND.cell_zoom(tile.zoom);
     let w = windows();
-    let wants = |w: &Windows, i: u32| {
-        let (slot, win) = (w.slots[i as usize], w.windows[(i / SLOTS) as usize]);
-        slot.is_absent() && win.cell == cell && first_of(w, i / SLOTS).is_some() && tile_of(cell, slot.square).0 == tile
-    };
+    let wants = |w: &Windows, i: u32| slot_wants(w, tile, i);
     let rest = |w: &Windows| match (0..SQUARES).any(|i| wants(w, i)) {
         true => Offered::Kept,
         false => Offered::Taken,
