@@ -1,19 +1,24 @@
-// @pxl/client/host/io/kept.ts
+// @pxl/client/host/io/storage.ts
 
 /**
- * The kernel's kept slots as the host holds them (host.json `kept`). The
- * kernel opens a slot by its number and reads it only where it is of the
- * slot's format, refusing anything else and writing nothing over it; which
- * storage key a slot is, what becomes of a file it refused, and how a file
- * kept before the slots carries over are decided here. Nothing kept is
- * dropped: a refused file is set aside under a key of its own, and the copy
- * read back, before its slot is emptied.
+ * STORAGE's backend: the kernel's kept slots as the host holds them, in the
+ * platform's storage (host.json `kept`). The kernel opens a slot by its
+ * number and reads it only where it is of the slot's format, refusing
+ * anything else and writing nothing over it; which storage key a slot is,
+ * what becomes of a file it refused, and how a file kept before the slots
+ * carries over are decided here. Nothing kept is dropped: a refused file is
+ * set aside under a key of its own, and the copy read back, before its slot
+ * is emptied.
  */
 
+import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { b64url_to_bytes, bytes_to_b64url } from "@xpute/kit/codec/encoding.ts";
+import { b64url_to_bytes, bytes_to_b64url, td, te } from "@xpute/kit/codec/encoding.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { FileError } from "@xpute/host/ipc/sys.ts";
 
 import { kept } from "@/host/abi/host.spec.ts";
+import { storageGet, storageSet } from "@/bracket.tsx";
 
 /** Storage as the bracket gives it: a refused write keeps nothing, and does not throw. */
 export interface Storage {
@@ -104,4 +109,40 @@ export function follow_refused(refused: readonly u32[], s: Storage, emptied: (sl
     emptying.add(slot);
     emptied(slot);
   }
+}
+
+const STORAGE: Storage = { get: storageGet, set: storageSet };
+
+/** STORAGE's object `number` is a kept slot, under the key `kept_key` gives it. */
+function storage_key(number: bigint): string {
+  const key = number <= 0xffff_ffffn ? kept_key(Number(number)) : undefined;
+  if (key === undefined) throw new FileError(Errno.ENOENT);
+  return key;
+}
+
+/** STORAGE's object `number`, whole; ENOENT where nothing is kept. */
+export function open_storage(number: bigint): U8Array {
+  const value = storageGet(storage_key(number));
+  if (value === null) throw new FileError(Errno.ENOENT);
+  return te.encode(value);
+}
+
+/** What the kernel wrote to STORAGE's object `number`, kept whole. */
+export function commit_storage(number: bigint, bytes: U8Array): void {
+  storageSet(storage_key(number), td.decode(bytes));
+}
+
+/** A kept slot's text, or null where none is kept. */
+export function read_kept(slot: u32): string | null {
+  return storageGet(storage_key(BigInt(slot)));
+}
+
+/** Before the kernel reads a slot: what was kept before the slots carried over, once. */
+export function migrate_kept(): void {
+  migrate(STORAGE);
+}
+
+/** The snapshot's refused slots, each set aside and emptied, the kernel told (`emptied`). */
+export function kept_refused(slots: readonly u32[], emptied: (slot: u32) => void): void {
+  follow_refused(slots, STORAGE, emptied);
 }

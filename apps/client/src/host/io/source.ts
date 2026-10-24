@@ -5,7 +5,7 @@
  * tile root until it answers: the published bake's out of the bucket, or a dev
  * tile server's. The kernel is handed it unread and observes nothing until
  * then; its versions are read here alone, for the objects the bakes' roots are
- * bound to (io/object.ts) and for what the settings show.
+ * bound to (io/tile.ts) and for what the settings show.
  */
 
 import { useSyncExternalStore } from "react";
@@ -17,7 +17,7 @@ import { GUEST_DOORBELL } from "@/host/mem.ts";
 import { send_next } from "@/host/sched.ts";
 import { online, whenOnline } from "@/host/online.ts";
 import { BASE_LAYERS, type BaseLayer } from "@/config/published.spec.ts";
-import { type Declaration, declaration } from "@/host/io/object.ts";
+import { type Declaration, declaration } from "@/host/io/tile.ts";
 
 let declared: Declaration | null = null;
 let shown: readonly { kind: BaseLayer; version: string }[] = [];

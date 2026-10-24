@@ -1,21 +1,28 @@
-// @pxl/client/host/io/object.ts
+// @pxl/client/host/io/tile.ts
 
 /**
- * A bake's object as the kernel names it, a number (host.json `root`), made
- * the object the source serves (spec/spec/route.json `object`): a tile's
+ * The bakes' backend. A bake's object as the kernel names it, a number
+ * (host.json `root`), made the object the source serves (spec/spec/route.json `object`): a tile's
  * subject its name, under the version the declaration gives it, its finest
  * shard's own where one names one; or the Earth's sphere (`SPHERE`), under
  * the earth's own version. The kernel reads the declaration for what is its
  * own, the zooms, the shards and the formats, and never its versions:
  * which object a number is, is the host's to say.
- * object.fixture.json holds what the kernel made of these when it named
- * them itself, and object.test.ts that this makes the same.
+ * tile.fixture.json holds what the kernel made of these when it named
+ * them itself, and tile.test.ts that this makes the same; the object is
+ * read from the edge (`read_object`).
  */
 
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { FileError } from "@xpute/host/ipc/sys.ts";
 import type { BaseLayer } from "@/config/published.spec.ts";
 import { BASE_LAYERS } from "@/config/published.spec.ts";
 import { TILE_SPHERE, tileObject } from "@/config/route.spec.ts";
+import { tileUrl } from "@/config/route.ts";
 import { SPHERE } from "@/host/abi/host.spec.ts";
+import { get } from "@/host/io/read.ts";
 
 /** What of a declaration this side reads: each kind's version, and a shard's own. */
 export interface Declaration {
@@ -82,4 +89,28 @@ export function tile_object(d: Declaration, kind: BaseLayer, number: bigint): st
   if (number === BigInt(SPHERE)) return kind === "earth" ? tileObject(d.version.earth, TILE_SPHERE) : null;
   const name = tile_name(number);
   return name === null ? null : tileObject(version_of(d, kind, name), name);
+}
+
+/**
+ * A body still packed means the transport did not decode the stored
+ * encoding: a browser that cannot, which the Worker cannot refuse, since
+ * Cloudflare rewrites `accept-encoding` before the Worker sees it; or a
+ * device whose own decode (apps/native/src/origin.ts) was skipped.
+ */
+function packed(body: U8Array): boolean {
+  return (body[0] === 0x28 && body[1] === 0xb5) || (body[0] === 0x1f && body[1] === 0x8b);
+}
+
+/** A bake's object by its number, under the source `declared`; none before
+ * the source is declared, as the kernel asks for none. */
+export async function read_object(declared: Declaration | null, bake: u32, number: bigint, signal: AbortSignal): Promise<U8Array> {
+  const name = declared === null ? null : tile_object(declared, BASE_LAYERS[bake], number);
+  if (name === null) throw new FileError(Errno.ENOENT);
+  const body = await get(tileUrl(BASE_LAYERS[bake], name), name, signal);
+  if (body.byteLength > 0 && packed(body)) {
+    // Fail here: handing it on would fail in the kernel's decoder, far from the cause.
+    console.warn(`[read] ${name}: the body arrived still packed, with no encoding to undo it`);
+    throw new FileError(Errno.EBADMSG);
+  }
+  return body;
 }

@@ -1,10 +1,10 @@
-// @pxl/client/host/io/kept.test.ts
+// @pxl/client/host/io/storage.test.ts
 
 import { assertEquals } from "@std/assert";
 import { b64url_to_bytes, bytes_to_b64url } from "@xpute/kit/codec/encoding.ts";
 
 import { format, kept } from "@/host/abi/host.spec.ts";
-import { follow_refused, formatted, kept_key, migrate, set_aside, type Storage } from "./kept.ts";
+import { follow_refused, formatted, kept_key, migrate, set_aside, type Storage } from "./storage.ts";
 
 function storage(entries: Record<string, string> = {}, refuses = false): Storage & { map: Map<string, string> } {
   const map = new Map(Object.entries(entries));

@@ -8,7 +8,7 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
-import { Command, encode_world_boot, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/host/abi/cmd.spec.ts";
+import { Command, encode_world_boot, encode_world_kept_emptied, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/host/abi/cmd.spec.ts";
 import {
   geolocationStart,
   geolocationStop,
@@ -20,15 +20,14 @@ import {
   orientationSupported,
 } from "@/bracket.tsx";
 import { declare_source } from "@/host/io/source.ts";
-import { read_asset, read_object } from "@/host/io/read.ts";
-import { bind_root, kept_refused, migrate_kept, read_kept } from "@/host/host.ts";
-import { BASE_LAYERS } from "@/config/published.spec.ts";
+import { bind_roots } from "@/host/io/roots.ts";
+import { kept_refused, migrate_kept, read_kept } from "@/host/io/storage.ts";
 import { GUEST, GUEST_DOORBELL, load_guest } from "@/host/mem.ts";
-import { kept, root } from "@/host/abi/host.spec.ts";
+import { kept } from "@/host/abi/host.spec.ts";
 import { bytes_at } from "@/host/module.ts";
 import { gpuBoot } from "@/bracket.tsx";
 import { onlineWatch } from "@/bracket.tsx";
-import { start_sched, strobe } from "@/host/sched.ts";
+import { send_next, start_sched, strobe } from "@/host/sched.ts";
 import { kernel_snapshot, set_snapshot } from "@/host/snapshot.ts";
 
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
@@ -37,7 +36,7 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
       // Too large for a ring frame; valid until the kernel writes the next, a turn away.
       const { at, len } = read_world_snapshot(f!);
       set_snapshot(bytes_at(GUEST.buffer, at, len));
-      kept_refused(kernel_snapshot().kept_refused);
+      kept_refused(kernel_snapshot().kept_refused, (slot) => send_next(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(GUEST_DOORBELL, slot)));
       return;
     }
     case Command.SENSOR_START:
@@ -55,10 +54,7 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
 /** Called once from shell/bootstrap.ts, so boot order is explicit, not import order. */
 export async function boot_kernel(): Promise<void> {
   await load_guest();
-  BASE_LAYERS.forEach((_, bake) => {
-    bind_root(bake, (number, signal) => read_object(bake, number, signal));
-  });
-  bind_root(root.ASSET, read_asset);
+  bind_roots();
   start_sched();
   GUEST_DOORBELL.signal = on_signal;
   gpuBoot();

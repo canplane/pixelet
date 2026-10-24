@@ -1,12 +1,12 @@
-// @pxl/client/host/io/object.test.ts
+// @pxl/client/host/io/tile.test.ts
 
 import { assertEquals } from "@std/assert";
 
 import type { BaseLayer } from "@/config/published.spec.ts";
 import { tileUrl } from "@/config/route.ts";
 import { SPHERE } from "@/host/abi/host.spec.ts";
-import { declaration, tile_name, tile_object } from "./object.ts";
-import FIXTURE from "./object.fixture.json" with { type: "json" };
+import { declaration, tile_name, tile_object } from "./tile.ts";
+import FIXTURE from "./tile.fixture.json" with { type: "json" };
 
 const DECLARED = declaration(JSON.stringify(FIXTURE.source))!;
 

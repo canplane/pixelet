@@ -10,7 +10,7 @@ import { Doorbell } from "@xpute/host/ipc/doorbell.ts";
 import { openGuest } from "@/bracket.tsx";
 import { key } from "@xpute/host/ipc/directory.spec.ts";
 import { directory, type Guest } from "@/host/module.ts";
-import { run_host_stream } from "@/host/host.ts";
+import { run_host_stream } from "@/host/sys.ts";
 
 // Set once by `load_guest`, which the boot awaits: Metro's bundle cannot wait on a module import.
 
