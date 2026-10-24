@@ -84,7 +84,22 @@ wants.
    `SKIN`), with no id and no catalog entry, though they are drawn as decor
    is. And the file table, `pxl-spec asset/ingested.spec.rs` `Asset`, holds
    the word asset for files alone.
-5. **Control asks by kind** where it asks what a block occupies or hides:
+5. **The kernel knows which assets exist.** The socket is already there:
+   the kernel opens an asset on the `ASSET` root by a number
+   (`io/load.rs`), and the host's backend reads the bytes that number is
+   (`apps/client/src/host/io/asset.ts` `read_asset`). But the number is an
+   index into the file table compiled into the kernel (`Asset`, 163 files),
+   and what each file is for is compiled in beside it:
+   - the characters and pets: `spec/client/kernel/model/variant.json`,
+     paired to files in `scene/character/variant.rs`, apart from the block
+     catalog;
+   - the decors: `spec/spec/block/decor.json`;
+   - the clouds: written in the kernel.
+
+   The texture pack is one past the table's end (`asset.rs` `Load::Pack`,
+   and `load === KEYS.length` on the host's side). The table's counts size
+   the memory at build time (`door/layout.rs`).
+6. **Control asks by kind** where it asks what a block occupies or hides:
    `control/interaction/collision.rs` (markers), `edit.rs` (`hide_in`), and
    `ghost.rs` (`Ghost::Box` or `Ghost::Decor`). Whether each is a question the
    child should answer is open.
@@ -107,6 +122,19 @@ wants.
    instance.
 4. **Control's questions by kind**, wherever one is better put as the child's
    answer.
+5. **The catalog is an asset the host plugs in.**
+   - The kernel reads the catalog through the socket at boot: every asset's
+     id, its kind, and the ids of the files it references. It then asks for
+     those files by id.
+   - The texture pack is the file the cube kind's definition references.
+     The characters, the pets, the clouds and the decors' models are
+     references like any other.
+   - The kernel keeps only each kind's behaviour: painting a cube, striking
+     a decor, playing an actor's clips, a marker's designs. It knows no
+     asset by name.
+   - This reverses "A catalog is never sent, because both sides compile it"
+     (ARCHITECTURE.md, "Catalogs and assets"), and the memory's bounds are
+     then sized at boot, once the catalog is read.
 
 ## What stays
 
