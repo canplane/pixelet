@@ -21,7 +21,7 @@ use crate::scene::actor::Actors;
 use crate::scene::environment::EnvironmentDraw;
 use crate::scene::frame::Frame;
 use crate::scene::indicator::debug_lines::DebugLines;
-use crate::scene::indicator::hover_cursor::GhostDraw;
+use crate::scene::indicator::ghost::GhostDraw;
 use crate::scene::indicator::location_puck::LocationPuck;
 
 #[derive(Default)]

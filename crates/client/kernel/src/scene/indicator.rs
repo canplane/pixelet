@@ -6,7 +6,7 @@ pub mod camera_gizmo;
 pub mod coverage_gizmo;
 pub mod debug_lines;
 pub mod frame_gizmo;
+pub mod ghost;
 #[path = "indicator/gizmo.spec.rs"]
 pub mod gizmo_spec;
-pub mod hover_cursor;
 pub mod location_puck;

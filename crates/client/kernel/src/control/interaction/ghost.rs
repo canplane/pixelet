@@ -3,7 +3,7 @@
 //! The ghost the tool held shows under the pointer: the decor a placement
 //! would stand or bring back, the box it would fill or carve, or what the
 //! eraser is over. What it looks like, its color, its texture and what stands
-//! in for a decor not yet loaded, is the scene's (`scene/indicator/hover_cursor.rs`).
+//! in for a decor not yet loaded, is the scene's (`scene/indicator/ghost.rs`).
 
 use pxl_spec::block::decor::Decor;
 use pxl_spec::block::object::{cube_of, Cube};

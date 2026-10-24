@@ -1,6 +1,6 @@
-// pxl-kernel/scene/indicator/hover_cursor.rs
+// pxl-kernel/scene/indicator/ghost.rs
 
-//! The hover cursor's ghost, half transparent: a box the box shader unfolds
+//! The ghost, half transparent: a box the box shader unfolds
 //! (pxl-render `mesh::ghost`), or one decor instance drawn by decor's. What it
 //! shows is the tool's (`control/interaction/ghost.rs`); how it looks is
 //! decided here: a box's color and texture, and the box that stands in for a
