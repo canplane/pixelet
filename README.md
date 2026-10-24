@@ -10,40 +10,70 @@ _Started on December 15, 2025._
 
 <img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.webp" width="100%">
 
-The planet is too large to load or draw at once, so pixelet follows one rule: **draw what the eye can tell apart, and nothing else.** A city, a mountain range or a tower behind a ridge costs the cells it covers on the screen, not what it holds.
+The planet is too large to load or draw at once, so how finely anything is drawn follows one rule: **the eye decides.** The view is a grid of cells of equal angle about the eye, so a cell grows with distance. Space is cut into cubes at every zoom; one cube of space at one zoom is a **node**, an address the world is asked about, never something stored. A block is drawn at the zoom whose block spans at least a cell where it stands (`pxl-spec-core grid.rs` `cell_at`). A city, a mountain range or a tower behind a ridge costs the cells it covers on the screen, not what it holds.
+
+Every pixel's ray, every step a walker takes and every edit asks the world the same question: what fills this node? One function answers it (`pxl-spec-core world.rs` `node`), building the answer from the ground up: the ground's grid with its caves carved in it, then the ways off the ground over that, then what players placed over all. The function is compiled twice, for the CPU and through rust-gpu for the GPU (`pxl-spec-core cast.rs` `first`, `pxl-shader` `cast_cs`), so what is drawn is what is walked on and edited.
 
 ```text
-asks                                      answers
+ a pixel's ray        a walker's step       an edit
+the GPU's cast            the CPU           the CPU
+       └─────────────────────┼─────────────────┘
+                             ▼
+                   what fills this node?
 
-the eye                                       ▲
-  │   what can be told apart, cell by cell    │
-  ▼                                           │
-chunks                                        │
-  │   the pieces of the world drawn           │
-  ▼                                           │
-query                                         │
-  │   the one way to ask what is there        │
-  ▼                                           │
-layers                                        │
-  │   terrain · object · place                │
-  ▼                                           │
-tiles ────────────────────────────────────────┘
-      fetched only when the view lacks them
+              what players placed       ┐ each
+              the ways off the ground   │ written
+              the ground's grid,        │ over the
+                its caves carved in it  ┘ one below
 ```
 
-- **Real geography is baked ahead; what you build is live.** [Overture Maps](https://overturemaps.org/)' geometry, OpenStreetMap's coastline and [GEDTM30](https://doi.org/10.5281/zenodo.18887460)'s elevation are painted into tiles before anyone asks; what players place is kept as they place it, and the trees and cars the ground grows are worked out where they stand, never stored.
-- **Cells express detail, tiles are fetched.** One cell of the eye's view is one ray the cast draws, and a tile is what arrives when the view lacks it.
+- **Real geography is baked ahead; what you build is live.** [Overture Maps](https://overturemaps.org/)' geometry, OpenStreetMap's coastline and [GEDTM30](https://doi.org/10.5281/zenodo.18887460)'s elevation are painted into tiles before anyone asks, and a tile is fetched only when the view lacks it; what players place is kept as they place it, and the trees and cars the ground grows are worked out where they stand, never stored.
 - **The same world runs in a browser and on a device**, through one Rust kernel drawing with WebGPU.
 
-## The eye decides
+---
 
-The world has its own fixed lattice. The eye lays a second grid over it, cells of equal solid angle, so they grow with distance. Where the eye can tell more apart, its cells are finer; where it cannot, one cell draws what they fold into.
+## What runs where
+
+The world lives in one Rust **kernel** (`pxl-kernel`, drawing through `pxl-render`). It runs as the guest of [xpute](./xpute/ARCHITECTURE.md), which runs one program inside another: the **host** owns the platform, grants the guest one memory once and a quota of time each turn, and does the outside work the guest asks for in that memory after each turn returns. xpute provides both ends and knows nothing of pixelet.
+
+What the host is made of depends on where the kernel runs, and a **bracket** plugs it in there. In a browser tab, `pxl-wasm` makes the kernel one WebAssembly module, and the page (`apps/web`) instantiates it and runs its GPU calls on the browser's WebGPU. On a device, `pxl-native` links the kernel into the app as a library that runs its own GPU calls on wgpu, and the app (`apps/native`) reaches it through one native module. Each app hands the rest of what its place gives — storage, text, the network, the sensors, the surfaces drawn into — to the client once, at its entry (`apps/client/src/bracket.tsx`).
+
+The **client** (`apps/client`) is the same TypeScript in both: pixelet's end of the kernel (`src/kernel/`), which boots it, submits each turn's frame and answers its reads, and the **shell** (`src/shell/`), the UI, which decides nothing about the world and changes it only by commands the kernel applies.
+
+Almost nothing is computed at request time. Tiles and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a tile under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked. [ARCHITECTURE.md](./ARCHITECTURE.md) follows the kernel part by part.
+
+| Layer     | Technology                                                                                                                     | Where                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Shell     | TypeScript, React 19 in React Native: react-native-web and Vite on a page, Expo on a device                                    | the browser, served by the Worker; the device app                                             |
+| Kernel    | Rust, no wasm-bindgen; `embassy-executor`: in one WebAssembly module on a page, in a static library linked into the device app | one memory reserved once, `PHONE_BYTES` on a phone and `DESKTOP_BYTES` elsewhere (`mem.json`) |
+| Rendering | WebGPU (WGSL), driven from the kernel: the browser's, or wgpu over Metal on an iPhone and Vulkan on Android                    | the device's GPU                                                                              |
+| Edge      | Cloudflare Worker + R2                                                                                                         | the client, the baked tiles, the assets                                                       |
+| Servers   | Rust: axum, tokio-postgres — one per URL root, one database each                                                               | one VM behind Caddy                                                                           |
+| Databases | PostgreSQL: `db-main`, and `db-geo` with PostGIS                                                                               | the same VM                                                                                   |
+| Geodata   | Overture Maps + OSM land polygons + GEDTM30, ingested into db-geo, baked into tiles                                            | offline, into R2                                                                              |
+| Workspace | Deno drives every task, the Rust ones included                                                                                 | —                                                                                             |
+
+```text
+                every request
+                      │
+           one Worker, one origin
+┌─────────────────────┴─────────────────┐
+▼   answered here                       ▼   relayed to the VM
+the client                              /geo/search ─▶ pxl-geo ─▶ db-geo
+/tile        R2, by version                                     (PostGIS)
+/asset       R2, by hashed path         /api        ─▶ pxl-api ─▶ db-main
+filled by the bakes, offline
+```
+
+The four roots are written in one file, `spec/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
+
+One format was made here: **XTP**, xpute's relocatable binary tree, read without copying ([xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md#the-message-and-the-packet-it-carries)).
 
 ---
 
 ## Getting Started
 
-> Requires [Deno](https://deno.land/) 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`), and Docker for the local databases. Every dev, build and check task builds the kernel module from `crates/` first.
+> Requires [Deno](https://deno.land/) 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`), and Docker for the local databases. The dev and build tasks build the kernel module from `crates/` first.
 
 ```bash
 git clone git@github.com:canplane/pixelet.git
@@ -94,6 +124,7 @@ deno task dev:oven
 | `deno task render:brand`         | The favicon, app icons and link preview from `apps/web/brand/`                                                                                                                                                                                                    |
 | `deno task spec`                 | Generate Rust and TypeScript from the JSON under `spec/`                                                                                                                                                                                                          |
 | `deno task usage`                | What the deployment has used of its free allowances, before a publish                                                                                                                                                                                             |
+| `deno task publish`              | Declare in the bucket which baked version of each kind clients read; nothing is built or deployed                                                                                                                                                                 |
 | `deno task deploy`               | Build the client and publish the Cloudflare Worker                                                                                                                                                                                                                |
 | `deno task smoke <url>`          | What a deployment must answer, against a running one                                                                                                                                                                                                              |
 | `deno task check`                | Everything: format, rules, types, clippy, the device, the C++, the files made from `spec/`                                                                                                                                                                        |
@@ -104,60 +135,27 @@ deno task dev:oven
 
 db-geo is filled by each source's `ingest` under `infra/geo/`, run by path as [infra/geo/README.md](./infra/geo/README.md) says: they make a database's state rather than a file the tree keeps.
 
-To measure the client, use `preview` (`localhost:4173`). It is the bundle as the deployment builds it, so the dev server's unbundled modules and hooks are gone. It is still a development build, so it offers the nightly settings a deployed build leaves out; the profiler's overlay, which reads the numbers, is in both.
+To measure the client, use `preview` (`localhost:4173`): the bundle as a deploy builds it, without the dev server's unbundled modules and hooks or the settings only a development build offers. The `profiler` setting opens the profiler's panel and records while it is open (`apps/client/src/shell/debug/profiler.tsx` `ProfilerPanel`), in either build.
+
+A development page puts two things in the browser console once the kernel has booted (`apps/client/src/shell/debug/console.ts`, installed by `shell/bootstrap.ts` under `__IS_DEV__`): `xpute`, the guest's doorbell, whose `cmd(command, ...args)` sends the kernel any command by its number with its arguments as the packet's fields, in order (`spec/client/kernel/abi/cmd.json` numbers them); and `pxl.profiler`, whose `report()` and `trace()` are the profiler panel's two exports.
 
 ### On a device
 
-`apps/native` is the same shell as a React Native app, through Expo, with the kernel linked in and every route from the live deployment. Its native projects are generated by `expo prebuild` from `app.json`, the config plugins and the module under `modules/platform/`, and are not kept. The kernel is built with the app, by a step of its native build (`apps/native/script/build-native.ts`): a Debug build's with the kernel's dev settings, a Release build's without, as a deployed page's is. `deno task dev:native` runs Metro, which a Debug build loads its bundle from. Setting a machine up, building, installing and what has gone wrong are the [device-build skill](./.agents/skills/device-build/SKILL.md).
-
----
-
-## What runs where
-
-The client is a Rust **kernel** and the TypeScript around it. The kernel holds the world, schedules its own work and draws; its **host** gives it memory, I/O and the device, and its **shell** is the UI, which decides nothing about the world. In a browser tab the kernel runs in one WebAssembly module drawing through the page's WebGPU; on a device it is linked into a React Native app and draws through wgpu. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./xpute/ARCHITECTURE.md), which knows nothing of any of this.
-
-Almost nothing is computed at request time. Tiles and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a tile under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked. [ARCHITECTURE.md](./ARCHITECTURE.md) follows the chain above, part by part.
-
-| Layer     | Technology                                                                                                                     | Where                                                 |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| Shell     | TypeScript, React 19 in React Native: react-native-web and Vite on a page, Expo on a device                                    | the browser, served by the Worker; the device app     |
-| Kernel    | Rust, no wasm-bindgen; `embassy-executor`: in one WebAssembly module on a page, in a static library linked into the device app | 512 MiB on a phone and 1 GiB elsewhere, reserved once |
-| Rendering | WebGPU (WGSL), driven from the kernel: the browser's, or wgpu over Metal on an iPhone and Vulkan on Android                    | the device's GPU                                      |
-| Edge      | Cloudflare Worker + R2                                                                                                         | the client, the baked tiles, the assets               |
-| Servers   | Rust: axum, tokio-postgres — one per URL root, one database each                                                               | one VM behind Caddy                                   |
-| Databases | PostgreSQL: `db-main`, and `db-geo` with PostGIS                                                                               | the same VM                                           |
-| Geodata   | Overture Maps + OSM land polygons + GEDTM30, ingested into db-geo, baked into tiles                                            | offline, into R2                                      |
-| Workspace | Deno drives every task, the Rust ones included                                                                                 | —                                                     |
-
-```text
-                every request
-                      │
-           one Worker, one origin
-┌─────────────────────┴─────────────────┐
-▼   answered here                       ▼   relayed to the VM
-the client                              /geo/search ─▶ pxl-geo ─▶ db-geo
-/tile        R2, by version                                     (PostGIS)
-/asset       R2, by hashed path         /api        ─▶ pxl-api ─▶ db-main
-filled by the bakes, offline
-```
-
-The four roots are written in one file, `spec/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
-
-One format was made here: **XTP**, xpute's relocatable binary tree, read without copying.
+`apps/native` is the device's bracket: a React Native app, through Expo, that bundles the client, links the kernel in and takes every route from the live deployment. Its native projects are generated by `expo prebuild` from `app.json`, the config plugins and the module under `modules/platform/`, and are not kept. The kernel is built with the app, by a step of its native build (`apps/native/script/build-native.ts`): a Debug build's with the kernel's dev settings, a Release build's without, as a deployed page's is. `deno task dev:native` runs Metro, which a Debug build loads its bundle from. Setting a machine up, building, installing and what has gone wrong are the [device-build skill](./.agents/skills/device-build/SKILL.md).
 
 ---
 
 ## Repository Structure
 
-The tree is grouped by where a thing runs, and the kernel's modules by where they stand on the chain.
+The tree is grouped by where a thing runs, and the kernel's modules by where they stand on the chain from the eye to the reads.
 
 ```
 .
 ├── apps/
-│   ├── client/               # The shell and its end of the kernel, which both apps bundle
+│   ├── client/               # The client, which both apps bundle
 │   │   └── src/
 │   │       ├── bracket.tsx   #   what the client asks of the place it runs in
-│   │       ├── kernel/       #   the shell's end of the kernel: abi, boot, control, io, mem, render, turn
+│   │       ├── kernel/       #   pixelet's end of the kernel: abi, boot, control, io, mem, render, turn
 │   │       ├── shell/        #   the UI: frame, world, settings, search, debug, ui kit (pill.ios.tsx beside pill.tsx), locale
 │   │       ├── catalog/      #   the data screens show (cells, assets)
 │   │       └── config/       #   deployment config and routes
@@ -167,9 +165,11 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 │       └── modules/platform/ #   its native half: one module, the views, the linked kernel
 ├── crates/                   # The Rust workspace, grouped by where a crate runs
 │   ├── spec/                 #   pxl-spec: the model every crate shares
+│   │   └── core/             #     pxl-spec-core: what the CPU and the GPU compute alike
 │   ├── client/               #   what the client runs
 │   │   ├── render/           #     pxl-render: the view
-│   │   └── kernel/           #     pxl-kernel: the kernel
+│   │   ├── kernel/           #     pxl-kernel: the kernel
+│   │   └── shader/           #     pxl-shader: pxl-spec-core's compute entries, built to WGSL apart
 │   ├── client-bracket/       #   where the client is plugged in to run, no domain
 │   │   ├── wasm/             #     pxl-wasm: the guest as one WebAssembly module
 │   │   └── native/           #     pxl-native: the guest as a device app's library
@@ -184,45 +184,47 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 ├── xpute/                    # The system under it, its own repository's root and workspaces:
 │                             #   rust/, ts/ and cpp/ by language: kit, guest, host; spec/ the contract
 ├── asset/                    # Shipped models, texture pack and sky, imported by nothing
-├── script/                   # the tree's checks, the deployment smoke, the usage report
+├── script/                   # the tree's checks, the shaders' WGSL, the publish, the deployment smoke, the usage report
 ├── infra/                    # local and production compose files, and what fills db-geo
 └── doc/                      # The record: backlog.md what is queued, minutes/ each meeting's
                               #   record (archive/ those retired), experiment/ measurements
 ```
 
-**What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the servers, the bakes and the asset ingest compile the model, so they are crates; the Overture and elevation ingests put a provider's data into Postgres sharing nothing with the model, so they are scripts under `infra/geo/`. The host and the shell are TypeScript because neither decides anything about the world; what they need of the model — catalogs, ABI enums, routes — is generated into `apps/client/src/**/*.spec.ts` from the same JSON the Rust is generated from.
+**What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the servers, the bakes and the asset ingest compile the model, so they are crates; the Overture and elevation ingests put a provider's data into Postgres sharing nothing with the model, so they are scripts under `infra/geo/`. The client is TypeScript because it decides nothing about the world; what it needs of the model — catalogs, ABI enums, routes — is generated into `apps/client/src/**/*.spec.ts` from the same JSON the Rust is generated from.
 
-| Crate / package | What it is                                                                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pxl-spec`      | The model: the position, the zooms and lattices, the block catalog, the command numbers, the tile formats, the asset tables. One implementation. |
-| `pxl-render`    | The view: glTF, the badge sheet, the draw list, the shaders, the renderer. It knows no kernel.                                                   |
-| `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                            |
-| `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                       |
-| `pxl-native`    | The guest on a device: a static library that runs every call on a thread of its own and exports `pxl_interrupt` through the C ABI.               |
-| `apps/client`   | The shell and its end of the kernel, which both apps bundle and hand what their place gives (`src/bracket.tsx`).                                 |
-| `apps/web`      | The page's bracket: what a browser tab gives the client, the guest module it instantiates, and the Cloudflare Worker that serves it all.         |
-| `apps/native`   | The device's bracket: what the app gives the client through its native module, which links the kernel.                                           |
-| `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                                      |
-| `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                         |
-| `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                                       |
-| `pxl-api`       | The application's server.                                                                                                                        |
-| `pxl-geo-bake`  | The bakes — terrain, place, division, earth — and, behind a feature, the dev tile server.                                                        |
-| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables; generates code from `spec/`; bakes the stars, the Moon, the brand.          |
+| Crate / package | What it is                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pxl-spec`      | The model: the position, the zooms and lattices, the block catalog, the command numbers, the tile formats, the asset tables. One implementation.                         |
+| `pxl-spec-core` | The part of the model the GPU computes too, one source for both: the zooms' cells, the caves, the ground, the decor it grows, the world's one query and a ray's descent. |
+| `pxl-render`    | The view: glTF, the badge sheet, the draw list, the shaders, the renderer. It knows no kernel.                                                                           |
+| `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                                                    |
+| `pxl-shader`    | `pxl-spec-core` as the GPU's compute entries, built to WGSL through rust-gpu by `script/shader-wgsl.ts` and checked in beside the renderer's shaders.                    |
+| `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                                               |
+| `pxl-native`    | The guest on a device: a static library behind one C header (`include/pxl_native.h`), which runs every call on a thread of its own.                                      |
+| `apps/client`   | The client, the same in both apps: pixelet's end of the kernel and the shell, handed what its place gives (`src/bracket.tsx`).                                           |
+| `apps/web`      | The page's bracket: what a browser tab gives the client, the guest module it instantiates, and the Cloudflare Worker that serves it all.                                 |
+| `apps/native`   | The device's bracket: what the app gives the client through its native module, which links the kernel.                                                                   |
+| `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                                                              |
+| `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                                                 |
+| `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                                                               |
+| `pxl-api`       | The application's server.                                                                                                                                                |
+| `pxl-geo-bake`  | The bakes — terrain, place, division, earth — and, behind a feature, the dev tile server.                                                                                |
+| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables; generates code from `spec/`; bakes the stars, the Moon, the brand.                                  |
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat. The kernel's are named as the chain is:
 
-| Where on the chain | `pxl-kernel` modules                                     |
-| ------------------ | -------------------------------------------------------- |
-| the top            | `turn` `door` `shell`                                    |
-| over the view      | `control`                                                |
-| the chain          | `scene` `chunk` `view` `query` `layer`                   |
-| under everyone     | `io` `sched` `mem` `abi`                                 |
-| leaves             | `setting` `model` `decor` `billboard` `param` `approach` |
-| beside             | `profiler`                                               |
+| Where on the chain | `pxl-kernel` modules                                             |
+| ------------------ | ---------------------------------------------------------------- |
+| the top            | `turn` `door` `shell`                                            |
+| over the view      | `control`                                                        |
+| the chain          | `scene` `chunk` `view` `query` `layer`                           |
+| under everyone     | `io` `sched` `mem` `abi`                                         |
+| leaves             | `setting` `model` `asset` `decor` `billboard` `param` `approach` |
+| beside             | `profiler`                                                       |
 
 One gitignored tree holds what the tree makes: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and under it `out/oven/` is what `dev:oven` bakes on demand, deleted at no cost. Scratch — logs, probes, diffs — goes in `tmp/`, which ignores itself, and is deleted when done. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 
-The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's host (`apps/client/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
+The casing in the tree is not mixed by accident. Rust, the xpute packages and pixelet's end of the kernel (`apps/client/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The shell, the brackets' TypeScript and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
 ---
 

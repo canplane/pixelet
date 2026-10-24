@@ -1,6 +1,6 @@
 # xpute
 
-xpute runs one program inside another, and gives it resources rather than abstractions. The **host** owns the platform — the clock, the memory, whatever reaches outside — and the **guest** owns none of it on its own account: it controls what it is granted. Everything the guest has, the host granted it, a slice at a time: the memory once at boot, and a quota of time on every turn. What the guest builds over them — its allocator, its scheduler, its tables — is its own, as a library operating system's is over an exokernel, without the hardware that enforces the grant.
+xpute runs one program inside another across three edges and no others: one memory they share, one call in, and one number out. The outer program, the **host**, owns the platform: the clock, the memory, whatever reaches outside. The inner one, the **guest**, owns none of it on its own account. Everything it has, the host granted it: the memory once at boot, and a quota of time on every turn. What the guest builds over those grants — its allocator, its scheduler, its tables — is its own, as a library operating system's is over an exokernel, without the hardware that enforces the grant.
 
 **xpute is both ends of that arrangement, and `kit`, the generic code underneath them.** `kit` is written in every language xpute has, and each end in the languages it is built in.
 
@@ -25,11 +25,11 @@ It was written for a program driven by TypeScript: compiled to one WebAssembly m
 
 Three edges, and one call the other way: the guest reads the host's clock (`now`), because it spends its quota against that clock in the middle of a turn, when the host cannot run. There is no second entry point, no other callback, and nothing either side holds a pointer to on the other.
 
-`interrupt` is the whole of the guest's life. It runs when the host rings, for as long as the quota it was handed, and when the call returns it is not running at all — its answer is when it would like the next one. A guest that asks for nothing is rung for nothing.
+`interrupt` is the whole of the guest's life. It runs when the host rings, for as long as the quota it was handed, and when the call returns it is not running at all. Its answer, `wake_ms`, is when it would like the next turn. A guest that asks for nothing is rung for nothing.
 
-What the guest cannot do itself — a file, a call to a device — it asks for in what its turn leaves, and the host takes every such request before it rings again.
+Everything else is written into the memory while a turn runs. The host's commands wait for the guest in one queue, and what the guest answers or raises waits for the host in another, each a message of four words. What the guest cannot do itself — a file, a call to a GPU — it writes as records into a stream, and the host runs every record after the turn returns and before it rings again.
 
-[ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped that way: the memory, the rings, the turn, the handles, the contract either end must keep, the wire formats, the records.
+[ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped that way: the memory, the messages and the packets they carry, the turn, the handles, I/O and the GPU's calls, the contract either end must keep, and the records that hold the languages to it.
 
 ## `kit`, `guest` and `host`
 
@@ -41,11 +41,11 @@ Golden records under `spec/golden/` hold the languages to each other wherever by
 
 ```text
 rust/kit  ·  ts/kit  ·  cpp/kit                the same kit, in each language
-rust/guest  ·  cpp/guest  ·  ts/host               the guest end, in each language · the host end
+rust/guest  ·  cpp/guest  ·  ts/host           the guest end, in each language · the host end
 rust/gpu  ·  ts/gpu  ·  cpp/gpu                WebGPU's calls, which a guest writes and a host runs
-rust/conformance  ·  cpp/conformance              a guest in each, and the contract's traces
-ts/conformance                                    the host that runs the traces against them
-spec                                              numbers all of them are generated from
+rust/conformance  ·  cpp/conformance           a guest in each, and the contract's traces
+ts/conformance                                 the host that runs the traces against them
+spec                                           numbers all of them are generated from
 ```
 
 ## What it leaves to whoever uses it
@@ -73,4 +73,4 @@ deno task lint    # deno lint
 
 ## License
 
-xpute is MIT. One file under `alloc/` is a port of someone else's code rather than a dependency, and `THIRD_PARTY_NOTICES.md` carries the notice its license asks for.
+xpute is MIT. The buddy allocator under `alloc/`, in Rust and in C++, is a port of someone else's code rather than a dependency, and `THIRD_PARTY_NOTICES.md` carries the notice its license asks for.

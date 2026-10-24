@@ -1,7 +1,7 @@
 # The record
 
-What the system is lives in the code, `AGENTS.md`, `ARCHITECTURE.md` and
-the READMEs beside the code: they are what binds today. This folder holds
+What the system is lives in the code, `ARCHITECTURE.md` and the READMEs
+beside the code: they are what binds today. This folder holds
 how it came to be that way and what is next, the way a company keeps its
 agenda, its minutes and its reports beside its rules.
 
@@ -20,8 +20,8 @@ agenda, its minutes and its reports beside its rules.
 - [experiment/](./experiment/) — measurements, dated, each with its
   procedure, its numbers and what produced them.
 
-A resolution binds once the code, `AGENTS.md` or `ARCHITECTURE.md` carries
-it or cites it; where one of them and the minutes disagree, they win.
+A resolution binds once the code or `ARCHITECTURE.md` carries it or cites
+it; where one of them and the minutes disagree, they win.
 Minutes that replace an earlier resolution say which.
 
 The record is history, and its links and names are not tracked: one found

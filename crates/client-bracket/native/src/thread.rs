@@ -3,7 +3,7 @@
 //! The kernel's own thread. The app calls in from whichever thread its shell
 //! runs on — React Native's JavaScript thread, whose stack is 1 MiB — and a
 //! turn that draws through wgpu can take more than that
-//! (doc/minutes/20260926-a-device-s-kernel-on-a-thread-of-its-own.md). So every
+//! (doc/minutes/archive/20260926-a-device-s-kernel-on-a-thread-of-its-own.md). So every
 //! call that reaches the kernel is handed to this thread, with a stack the
 //! kernel sizes, and the caller waits for it: one of the two runs at a time,
 //! and the kernel is single-threaded on this thread rather than the

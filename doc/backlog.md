@@ -39,10 +39,10 @@ Nothing now.
   CPU or GPU is a question of the whole drawing, never of one kind of
   thing sent to the other side. The steps a cast pays
   are measured already, and where on the screen they lie
-  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./decision/20260928-what-is-drawn-is-what-the-screen-covers.md),
+  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md),
   "the steps, measured").
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
   program WASI's calls translated into the contract's requests, which is what
   would let an existing program in. Not without one to build it against;
   guests stay `wasm32-unknown-unknown` meanwhile —
-  [20260930-wasi-and-the-boundary.md](./decision/20260930-wasi-and-the-boundary.md).
+  [20260930-wasi-and-the-boundary.md](./minutes/20260930-wasi-and-the-boundary.md).

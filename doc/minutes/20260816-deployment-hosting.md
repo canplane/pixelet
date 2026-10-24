@@ -446,7 +446,7 @@ the whole prefix.
 
 ## Deliberately not addressed
 
-> **Superseded by [20260908-overture-poi-adoption.md](./20260908-overture-poi-adoption.md).**
+> **Superseded by [20260908-overture-poi-adoption.md](./archive/20260908-overture-poi-adoption.md).**
 > Reverse geocoding no longer calls Nominatim or any third party at request
 > time — it's baked per L3 page from Overture's Divisions theme. The
 > live-call risk and `VITE_GEOCODE_BASE_URL` escape hatch described below no

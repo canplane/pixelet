@@ -8,7 +8,7 @@ way tagged alike should stand alike, so a structure's height is computed
 as Arnis computes it (Apache-2.0; `src/element_processing/bridges.rs`,
 `highways.rs`, `railways.rs`), less the blocks it places — the bake is
 headless. This replaces the solve of
-[ways off the ground](./20261001-ways-off-the-ground.md), which
+[ways off the ground](./archive/20261001-ways-off-the-ground.md), which
 reinterpreted Arnis rather than took it. That record's storage — a deck is
 a line in the terrain page — stands. A contract of our own for the same
 surfaces was drafted and aborted the day before
