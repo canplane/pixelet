@@ -136,8 +136,7 @@ pub const fn same<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) -> b
 }
 
 use crate::frame::draw::{
-    PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
-    PIPELINE_SKINNED,
+    PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
 };
 use crate::frame::shader::floor;
 
@@ -257,7 +256,23 @@ const LIT_FRAME: [[u32; 2]; 15] = {
     // worked out; a fragment reads its words and the eye's texel, whose white
     // it shows by (atmos_eye.wgsl). The sky's views and the Earth's picture
     // are the sky pass's, laid out unread.
-    [[0, UNIFORM], SHADOW[0], SHADOW[1], [7, TEXTURE], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5], AIR[6], AIR[7], AIR[8], AIR[9], AIR[10]]
+    [
+        [0, UNIFORM],
+        SHADOW[0],
+        SHADOW[1],
+        [7, TEXTURE],
+        AIR[0],
+        AIR[1],
+        AIR[2],
+        AIR[3],
+        AIR[4],
+        AIR[5],
+        AIR[6],
+        AIR[7],
+        AIR[8],
+        AIR[9],
+        AIR[10],
+    ]
 };
 /// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
 const CLOUD_GROUP: [[u32; 2]; 16] = and([[0, UNIFORM], [19, UNIFORM], [1, UNIFORM], [2, TEXTURE], [3, SAMPLER]], AIR);

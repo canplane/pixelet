@@ -724,8 +724,14 @@ mod tests {
             let s = UNIT_ZOOM - zoom;
             let over = (0..3).all(|a| TARGET[a] >> s == node[a]);
             match (zoom < UNIT_ZOOM, over) {
-                (true, true) => In { kind: Kind::Split, block: [slab_word(ANY), 0] },
-                (false, true) => In { kind: Kind::Block, block: [kept_word(stone as u32, self.kept), 0] },
+                (true, true) => In {
+                    kind: Kind::Split,
+                    block: [slab_word(ANY), 0],
+                },
+                (false, true) => In {
+                    kind: Kind::Block,
+                    block: [kept_word(stone as u32, self.kept), 0],
+                },
                 _ => In { kind: Kind::Block, block: [AIR, 0] },
             }
         }
@@ -737,7 +743,11 @@ mod tests {
         let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
         let o = [steps(5.0), steps(y), steps(z)];
         let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
-        let detail = Detail { tau: 1.0, range: [UNIT_ZOOM, UNIT_ZOOM], eye: [0.0; 3] };
+        let detail = Detail {
+            tau: 1.0,
+            range: [UNIT_ZOOM, UNIT_ZOOM],
+            eye: [0.0; 3],
+        };
         first(&mut One { kept }, o, &ray, detail, Until::Fills)
     }
 

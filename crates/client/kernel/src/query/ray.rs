@@ -283,7 +283,10 @@ impl<'a> World<'a> {
             t,
             point: ray.at(t),
             normal,
-            cube: Aabb { min: std::array::from_fn(|k| min[k] + side * f64::from(lo[k])), max: std::array::from_fn(|k| min[k] + side * f64::from(hi[k])) },
+            cube: Aabb {
+                min: std::array::from_fn(|k| min[k] + side * f64::from(lo[k])),
+                max: std::array::from_fn(|k| min[k] + side * f64::from(hi[k])),
+            },
             struck,
         }
     }

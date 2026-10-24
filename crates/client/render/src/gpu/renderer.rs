@@ -13,8 +13,8 @@ use xpute_guest::global::Global;
 
 use crate::api_spec::surface_role;
 use crate::frame::draw::{
-    census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
-    PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
+    census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
+    PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UPLOAD_WORDS,
 };
 use crate::frame::shader::record::{compute, dynamic, same, within};
 use crate::frame::shader::record::{
@@ -592,7 +592,11 @@ struct Nodes {
 
 impl Default for Nodes {
     fn default() -> Nodes {
-        Nodes { words: [0; sun::MOVED_WORDS], len: 0, whole: false }
+        Nodes {
+            words: [0; sun::MOVED_WORDS],
+            len: 0,
+            whole: false,
+        }
     }
 }
 
@@ -1780,7 +1784,8 @@ impl Renderer {
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, uniforms, b);
         self.debug.prepare(g, &draws, uniforms, lists_moved);
         let meshes: [u32; GROUPS as usize] = core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
-        self.screen.prepare(g, cast, &meshes, (world.rays_view, [world.width, world.height]), (self.shadow.world, self.shadow.frame));
+        self.screen
+            .prepare(g, cast, &meshes, (world.rays_view, [world.width, world.height]), (self.shadow.world, self.shadow.frame));
         // The frame draws the decor grown, so it reads whether that is on:
         // decor turned off grows nothing and casts no ray again, yet the
         // frame stands without it.

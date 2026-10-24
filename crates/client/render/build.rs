@@ -49,14 +49,28 @@ fn main() {
     let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
     // The side of the box a block kept short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-spec-core answer.rs `side`).
-    let sides: String = (1..pxl_spec_core::answer::EIGHTHS).map(|k| format!("case {k}u: {{ return {:?}; }} ", pxl_spec_core::answer::side(k))).collect();
+    let sides: String = (1..pxl_spec_core::answer::EIGHTHS)
+        .map(|k| format!("case {k}u: {{ return {:?}; }} ", pxl_spec_core::answer::side(k)))
+        .collect();
     let kept = format!("fn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n");
     // A coarse block's four looks, its ray's third word, as a cell's word
     // holds them (pxl-spec-core ground.rs `looks`).
     let b = pxl_spec_core::ground::LOOK_BITS;
     let m = (1u32 << b) - 1;
-    let looks = format!("fn ray_looks(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n", 2 * b, 3 * b);
-    let ray = [field("value", 0, VALUE_BITS), field("face", FACE_SHIFT, FACE_BITS), field("zoom", ZOOM_SHIFT, ZOOM_BITS), field("kept", KEPT_SHIFT, KEPT_BITS), kept, faces, looks];
+    let looks = format!(
+        "fn ray_looks(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
+        2 * b,
+        3 * b
+    );
+    let ray = [
+        field("value", 0, VALUE_BITS),
+        field("face", FACE_SHIFT, FACE_BITS),
+        field("zoom", ZOOM_SHIFT, ZOOM_BITS),
+        field("kept", KEPT_SHIFT, KEPT_BITS),
+        kept,
+        faces,
+        looks,
+    ];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
     // The eye's words the screen pass reads (pxl-spec-core eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.

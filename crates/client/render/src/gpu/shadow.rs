@@ -12,10 +12,10 @@
 //! drawn over it depth only, from the light's frame. The lit passes read
 //! the map as a plain light box. 16 MB each at 2048.
 
-use pxl_spec_core::eye;
-use pxl_spec_core::sun::{self, Sun};
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec_core::eye;
+use pxl_spec_core::sun::{self, Sun};
 use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_SUN_MAP};
@@ -81,10 +81,24 @@ impl Shadow {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Shadow {
         let map = g.texture(SIZE, SIZE, 1, Format::depth32float, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
         let map_view = g.view(map, false, 0, 1, 0, 1);
-        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::nearest, AddressMode::clamp_to_edge, Some(CompareFunction::less_equal), 1);
+        let sampler = g.sampler(
+            FilterMode::linear,
+            FilterMode::linear,
+            MipmapFilterMode::nearest,
+            AddressMode::clamp_to_edge,
+            Some(CompareFunction::less_equal),
+            1,
+        );
         let blank = g.texture(1, 1, 1, Format::depth32float, 1, texture_usage::TEXTURE_BINDING);
         let blank_view = g.view(blank, false, 0, 1, 0, 1);
-        let blank_sampler = g.sampler(FilterMode::nearest, FilterMode::nearest, MipmapFilterMode::nearest, AddressMode::clamp_to_edge, Some(CompareFunction::less_equal), 1);
+        let blank_sampler = g.sampler(
+            FilterMode::nearest,
+            FilterMode::nearest,
+            MipmapFilterMode::nearest,
+            AddressMode::clamp_to_edge,
+            Some(CompareFunction::less_equal),
+            1,
+        );
         let world = g.texture(SIZE, SIZE, 1, Format::r32uint, 1, texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING);
         let world = g.view(world, true, 0, 1, 0, 1);
         let lay = pipelines.build(g, PIPELINE_SUN_MAP, Format::depth32float);

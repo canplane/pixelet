@@ -50,7 +50,15 @@ pub const SUN_WORDS: usize = 20;
 /// Every word, the sun's light box last.
 pub const WORDS: usize = SUN + SUN_WORDS;
 const _: () = assert!(
-    STEPS == ORIGIN + 3 && REACH == FORWARD + 3 && TAU == RIGHT + 3 && TAN == UP + 4 && RANGE == TAN + 2 && CARVE == RANGE + 2 && HIDE == CARVE + CUT_WORDS && GRID.is_multiple_of(4) && SUN.is_multiple_of(4)
+    STEPS == ORIGIN + 3
+        && REACH == FORWARD + 3
+        && TAU == RIGHT + 3
+        && TAN == UP + 4
+        && RANGE == TAN + 2
+        && CARVE == RANGE + 2
+        && HIDE == CARVE + CUT_WORDS
+        && GRID.is_multiple_of(4)
+        && SUN.is_multiple_of(4)
 );
 
 /// The slope a caster's depth in the sun's map is pushed back by, as a

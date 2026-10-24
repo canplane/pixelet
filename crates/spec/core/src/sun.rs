@@ -265,7 +265,12 @@ pub struct Held {
 }
 
 impl Held {
-    pub const NONE: Held = Held { near: DEPTH_ONE, far: 0, zoom: NO_ZOOM, reach: 0 };
+    pub const NONE: Held = Held {
+        near: DEPTH_ONE,
+        far: 0,
+        zoom: NO_ZOOM,
+        reach: 0,
+    };
 
     pub fn with(self, word: u32) -> Held {
         let (q, z) = (word >> ZOOM_BITS, word & NO_ZOOM);
@@ -498,7 +503,11 @@ mod tests {
         // normal, as decor's and the actors' are.
         let n = [0.3, -0.5, 0.81];
         let [i, j] = slope(n, across, down, deep);
-        let step = [across[0] - down[0] * 2.0 + deep[0] * (i - 2.0 * j), across[1] - down[1] * 2.0 + deep[1] * (i - 2.0 * j), across[2] - down[2] * 2.0 + deep[2] * (i - 2.0 * j)];
+        let step = [
+            across[0] - down[0] * 2.0 + deep[0] * (i - 2.0 * j),
+            across[1] - down[1] * 2.0 + deep[1] * (i - 2.0 * j),
+            across[2] - down[2] * 2.0 + deep[2] * (i - 2.0 * j),
+        ];
         assert!(dot(n, step).abs() < 1e-7, "{}", dot(n, step));
         // A face along the rays has none.
         assert_eq!(slope([r, 0.0, r], across, down, deep), [0.0, 0.0]);
@@ -506,7 +515,11 @@ mod tests {
 
     #[test]
     fn its_words_are_its_fields_a_vec4_each() {
-        let s = Sun { corner: [-7, 9], kept: [3, -4], ..down() };
+        let s = Sun {
+            corner: [-7, 9],
+            kept: [3, -4],
+            ..down()
+        };
         let w = s.words();
         assert_eq!(CORNER.map(|k| w[k] as i32), s.corner);
         assert_eq!(KEPT.map(|k| w[k] as i32), s.kept);
@@ -534,7 +547,11 @@ mod tests {
     #[test]
     fn a_slot_stands_while_the_eye_asks_its_stop_at_its_zoom() {
         let s = down();
-        let far = Detail { tau: 1.0, range: [0, crate::FINEST_ZOOM], eye: [0.0, 0.0, -400.0] };
+        let far = Detail {
+            tau: 1.0,
+            range: [0, crate::FINEST_ZOOM],
+            eye: [0.0, 0.0, -400.0],
+        };
         let w = s.word(far, 0.25);
         assert!(s.stands(far, w));
         // The eye come up to the stop asks it finer.
@@ -580,7 +597,11 @@ mod tests {
             let w = [next() * 40.0 - 20.0, next() * 40.0 - 20.0, 60.0 + next() * 40.0];
             let mut sun = Sun::of([x, y, z, w], size, [3, -5]);
             sun.kept = sun.corner;
-            let detail = Detail { tau: 0.5 + next() * 3.0, range: [0, crate::FINEST_ZOOM], eye: [0.0; 3] };
+            let detail = Detail {
+                tau: 0.5 + next() * 3.0,
+                range: [0, crate::FINEST_ZOOM],
+                eye: [0.0; 3],
+            };
             let eye = [1000, -2000, 300];
             let tile = [(next() * 8.0) as u32 % 8, (next() * 8.0) as u32 % 8];
             let (p, run) = sun.tile_texel(size, tile);
@@ -595,7 +616,10 @@ mod tests {
             for k in 0..TILE * TILE {
                 let q = [p[0] + k % TILE, p[1] + k / TILE];
                 let (_, _, from) = ray(eye, &sun, q);
-                let at = Detail { eye: [from[0] + shift[0], from[1] + shift[1], from[2] + shift[2]], ..detail };
+                let at = Detail {
+                    eye: [from[0] + shift[0], from[1] + shift[1], from[2] + shift[2]],
+                    ..detail
+                };
                 let d = if trial % 7 == 0 && k % 5 == 0 { 1.0 } else { d0 + next() * 0.02 };
                 words[k as usize] = sun.word(at, d);
                 held = held.with(words[k as usize]);

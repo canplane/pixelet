@@ -16,12 +16,12 @@
 //! last bit where it falls on an eighth of a block.
 
 use crate::answer::{bound_of, bound_word, eighths, slab_word, In, Kind, ANY};
-use crate::overwrite::FULL;
 use crate::area::{earth, walled, Area, Shard};
 use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
-use crate::lattice::TILE_CELLS;
 use crate::lattice::CELL_CENTER;
+use crate::lattice::TILE_CELLS;
+use crate::overwrite::FULL;
 use crate::window::Found;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
@@ -505,7 +505,12 @@ pub struct Cell {
 
 impl Cell {
     /// No ground: void at sea level, as a column no tile is read for.
-    pub const NONE: Cell = Cell { look: VOID, top: 0, part: FULL, fold: [VOID; 4] };
+    pub const NONE: Cell = Cell {
+        look: VOID,
+        top: 0,
+        part: FULL,
+        fold: [VOID; 4],
+    };
 
     /// The share of block `z` its ground fills, in `overwrite::FULL`'s
     /// units, where a block of it fills there (`block`): whole under its

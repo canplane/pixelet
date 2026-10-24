@@ -13,8 +13,8 @@ use pxl_spec::block::decor::Decor;
 use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec_core::{overwrite, FRAC_W};
 use pxl_spec_core::scatter::{self as core_scatter, Grounds, Grown};
+use pxl_spec_core::{overwrite, FRAC_W};
 
 use super::world::World;
 use crate::layer::instance::{Instance, Meta, Source};
