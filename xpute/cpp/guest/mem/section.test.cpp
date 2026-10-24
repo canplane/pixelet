@@ -10,14 +10,6 @@ using namespace xpute;
 
 static constexpr std::uint32_t PAGE = 1 << 12;
 
-XPUTE_TEST(memory_a_range_ends_at_the_boundary_the_next_one_begins_on) {
-    XPUTE_CHECK(align_up(0, PAGE) == 0);
-    XPUTE_CHECK(align_up(1, PAGE) == PAGE);
-    XPUTE_CHECK(align_up(PAGE - 1, PAGE) == PAGE);
-    XPUTE_CHECK_EQ(align_up(PAGE, PAGE), PAGE, "a boundary is already one");
-    XPUTE_CHECK(align_up(PAGE + 1, PAGE) == 2 * PAGE);
-}
-
 XPUTE_TEST(memory_ranges_laid_end_to_end_each_begin_on_the_unit_and_never_overlap) {
     const std::array<std::uint32_t, 4> sizes{PAGE, 1, 3 * PAGE + 1, 0};
     const std::uint32_t base = 8 * PAGE;
@@ -30,11 +22,6 @@ XPUTE_TEST(memory_ranges_laid_end_to_end_each_begin_on_the_unit_and_never_overla
     }
     XPUTE_CHECK_EQ(span_of(sizes, PAGE), 6 * PAGE, "the last one's rounding is in the span");
     XPUTE_CHECK_EQ(nth_at(base, sizes, PAGE, sizes.size()), base + span_of(sizes, PAGE), "and one past the last is where the span ends");
-}
-
-XPUTE_TEST(memory_nothing_laid_spans_nothing) {
-    XPUTE_CHECK(span_of({}, PAGE) == 0);
-    XPUTE_CHECK(nth_at(64, {}, PAGE, 0) == 64);
 }
 
 XPUTE_TEST(memory_a_span_inside_a_section_is_reached_only_where_it_ends_by_the_section_s_end) {

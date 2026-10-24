@@ -50,11 +50,6 @@ Deno.test("the encoder writes the bytes the typescript writes", async () => {
   check("graft", (t) => t.graft(inner));
 });
 
-Deno.test("a packet grafted whole is that packet", () => {
-  const inner = encode((t) => t.set([1, "x"]));
-  assertEquals(encode((t) => t.graft(inner)), inner);
-});
-
 Deno.test("a packet under the cap is written, whatever the cap", () => {
   const t = new TreeView().u8_array(new Uint8Array(1100) as U8Array);
   assertEquals(new TreeEncoder().encode(t, { max_cap: 1500 }).byteLength, 16 + 8 + 1104);

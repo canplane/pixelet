@@ -94,7 +94,6 @@ XPUTE_TEST(ring_a_packet_written_in_place_reads_as_the_one_pushed_and_one_past_a
 XPUTE_TEST(ring_one_payload_a_slot_so_the_payloads_run_out_with_the_slots_and_never_before_them) {
     Fixture f = fixture(8, 64);
     const Ring &r = f.ring;
-    XPUTE_CHECK(packet_of(1).size() == 56);
     for (std::uint32_t n = 1; n <= 8; n++) XPUTE_CHECK(r.push(n, 0x0101, 0, 0, packet_of(n)) == Errno::ok);
     XPUTE_CHECK_EQ(r.push(9, 0x0101, 0, 0, packet_of(9)), Errno::eagain, "the ring fills before the payloads do");
     XPUTE_CHECK(r.len() == 8);

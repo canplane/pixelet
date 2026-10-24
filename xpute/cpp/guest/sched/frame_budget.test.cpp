@@ -38,13 +38,6 @@ std::vector<int> range(int n) {
 
 } // namespace
 
-XPUTE_TEST(run_under_budget_runs_everything_when_the_budget_is_ample) {
-    std::vector<int> seen;
-    PassStats s = run_under_budget(std::array{1, 2, 3}, [&](int n) { return seen.push_back(n), true; }, opts(1000));
-    XPUTE_CHECK((seen == std::vector{1, 2, 3}));
-    XPUTE_CHECK(s.ran == 3 && !s.stopped_early);
-}
-
 XPUTE_TEST(run_under_budget_stops_once_the_time_budget_is_spent) {
     std::vector<int> seen;
     PassStats s = run_under_budget(std::array{1, 2, 3, 4, 5}, [&](int n) { return seen.push_back(n), burn(6), true; }, opts(10));

@@ -151,9 +151,10 @@ XPUTE_TEST(slab_a_run_goes_back_to_the_pages_when_its_last_slot_does) {
 XPUTE_TEST(slab_a_request_of_a_page_or_more_is_the_page_allocator_s_own) {
     static SlabMalloc<TestRange<6>> heap;
     for (std::size_t size : {PAGE, PAGE + 1, PAGE * 4}) {
-        std::size_t before = heap.pages().live();
+        std::size_t before = heap.pages().live(), run = heap.run_live(), slot = heap.slot_live();
         void *p = heap.alloc(size, 8);
         XPUTE_CHECK(p != nullptr);
+        XPUTE_CHECK_EQ(heap.run_live() == run && heap.slot_live() == slot, true, "a whole-page request took a run or a slot");
         XPUTE_CHECK(heap.pages().live() - before >= size);
         XPUTE_CHECK_EQ(reinterpret_cast<std::uintptr_t>(p) % PAGE, std::uintptr_t{0}, "a whole-page request was not page-aligned");
         heap.dealloc(p, size, 8);
@@ -188,14 +189,4 @@ XPUTE_TEST(slab_what_is_out_in_slots_is_inside_the_runs_it_is_carved_from) {
         check();
     }
     XPUTE_CHECK(heap.slot_live() == 0 && heap.run_live() == 0 && heap.pages().live() == 0);
-}
-
-XPUTE_TEST(slab_a_whole_page_request_is_no_run_and_no_slot) {
-    static SlabMalloc<TestRange<8>> heap;
-    std::size_t run = heap.run_live(), slot = heap.slot_live();
-    void *p = heap.alloc(PAGE * 2, 8);
-    XPUTE_CHECK(p != nullptr);
-    XPUTE_CHECK(heap.run_live() == run && heap.slot_live() == slot);
-    XPUTE_CHECK(heap.pages().live() >= run + PAGE * 2);
-    heap.dealloc(p, PAGE * 2, 8);
 }

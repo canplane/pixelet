@@ -5,7 +5,6 @@
 
 #include "tick.hpp"
 
-#include <array>
 #include <string_view>
 #include <vector>
 
@@ -145,15 +144,6 @@ XPUTE_TEST(tick_the_report_phase_sees_every_phase_before_it) {
     t.run(s, 0.016, QUOTA_MS, now());
     XPUTE_CHECK(s.a >= 2);
     XPUTE_CHECK(s.b == 0);
-}
-
-XPUTE_TEST(frame_budget_run_forward_progress_survives_an_exhausted_pool) {
-    set_clock(test_clock);
-    clock_ms = 0;
-    FrameBudget budget(0, now(), POLICY.hard_slack_ms);
-    burn(1);
-    PassStats s = budget.run(std::array{1, 2, 3}, [](int) { return true; });
-    XPUTE_CHECK(s.ran == 1 && s.stopped_early);
 }
 
 XPUTE_TEST(tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_one_step) {

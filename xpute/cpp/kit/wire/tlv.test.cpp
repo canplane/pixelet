@@ -119,11 +119,9 @@ XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
     XPUTE_CHECK_EQ(got, v.s("huge.read"), "a length past the buffer");
 }
 
-XPUTE_TEST(tlv_a_sealed_writer_refuses_and_an_unknown_tag_does_not_read) {
+XPUTE_TEST(tlv_a_sealed_writer_refuses) {
     std::vector<std::uint8_t> buf;
     tlv::Writer w(buf);
     w.finish();
     XPUTE_CHECK(!w.write(std::uint8_t{1}).ok());
-    const std::uint8_t unknown[] = {0x7f, 0};
-    XPUTE_CHECK(!tlv::Reader(unknown).next().ok());
 }

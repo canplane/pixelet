@@ -274,10 +274,10 @@ Its numbers — the errno table, the directory's keys, a frame's and a ring head
 
 The golden records are what hold the languages to each other.
 
-Under `spec/golden/` are lines of `path<TAB>value`, produced once, checked once, and frozen. They are read by splitting each line (`kit golden`), so no parser change can make them drift. There are two kinds, and the kind decides whether a record may ever be re-recorded:
+Under `spec/golden/` are lines of `path<TAB>value`, produced once, checked once, and frozen. They are read by splitting each line (`kit golden`), so no parser change can make them drift. Rust, TypeScript and C++ each read every record bit for bit, so a record is never re-recorded to make a test pass: a difference means one side moved, and a record changed on purpose changes for all three at once. There are two kinds:
 
-- **Across a protocol** — `wire/xtp`, `wire/tlv`, `codec/json`'s grammar (which texts are JSON at all, as the host's own `JSON.parse` judges them), and `gpu/programs` (the words each encoder writes and the bytes each host reads back). Every language must produce these exactly.
-- **Inside a language** — everything else. A record holds one implementation to itself; where Rust and JavaScript's `Math` round differently, each follows its own.
+- **Across a protocol** — `wire/xtp`, `wire/tlv`, `codec/json` (which texts are JSON at all, and what a number past the doubles reads as, as the host's own `JSON.parse` judges them), and `gpu/programs` (the words each encoder writes and the bytes each host reads back). The bytes cross a boundary, so every language must produce these exactly.
+- **Across languages** — `math/rng` (`rng.32` and `rng.64`), `math/scalar`, `collection/deque` and `collection/heap`. Nothing crosses a boundary, but one set of values holds every language's implementation: the same draws, the same rounding, the same order.
 
 The **traces** under `spec/conformance/` are a third kind, not outputs at all. Each says what a host does and what it must then see: the completions, stream records and next-turn asks each turn leaves. They are written from the contract's rules and name only what a host can observe, so they hold every guest to the same thing.
 

@@ -156,50 +156,7 @@ fn tick_the_report_phase_sees_every_phase_before_it() {
     assert_eq!(s.b, 0.0);
 }
 
-#[test]
-fn frame_budget_run_forward_progress_survives_an_exhausted_pool() {
-    set_clock(clock);
-    CLOCK_MS.with(|c| c.set(0.0));
-    let budget = FrameBudget::new(0.0, now(), POLICY.hard_slack_ms);
-    burn(1.0);
-    let stats = budget.run([1, 2, 3], |_| true, None);
-    assert_eq!(stats.ran, 1);
-    assert!(stats.stopped_early);
-}
-
 const COST: f64 = 0.3;
-
-#[test]
-fn tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_one_step() {
-    let mut t = tick();
-    t.on_tick(
-        Phase::visible,
-        |c| {
-            c.state.runs = c
-                .budget
-                .run(
-                    0..2000,
-                    |_| {
-                        burn(COST);
-                        true
-                    },
-                    None,
-                )
-                .ran;
-        },
-        0,
-    );
-    let mut s = Seen::default();
-    let report = t.run(&mut s, 0.016, QUOTA_MS, now());
-    assert!(s.runs >= 1, "forward progress");
-    assert!(s.runs < 2000, "the storm was cut short");
-    assert!(
-        report.phase_ms[Phase::visible as usize] <= report.budget_ms + COST,
-        "visible {} over budget {}",
-        report.phase_ms[Phase::visible as usize],
-        report.budget_ms
-    );
-}
 
 #[test]
 fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ceiling() {

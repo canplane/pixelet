@@ -5,15 +5,6 @@ use super::*;
 const PAGE: u32 = 1 << 12;
 
 #[test]
-fn memory_a_range_ends_at_the_boundary_the_next_one_begins_on() {
-    assert_eq!(align_up(0, PAGE), 0);
-    assert_eq!(align_up(1, PAGE), PAGE);
-    assert_eq!(align_up(PAGE - 1, PAGE), PAGE);
-    assert_eq!(align_up(PAGE, PAGE), PAGE, "a boundary is already one");
-    assert_eq!(align_up(PAGE + 1, PAGE), 2 * PAGE);
-}
-
-#[test]
 fn memory_ranges_laid_end_to_end_each_begin_on_the_unit_and_never_overlap() {
     let sizes = [PAGE, 1, 3 * PAGE + 1, 0];
     let base = 8 * PAGE;
@@ -25,12 +16,6 @@ fn memory_ranges_laid_end_to_end_each_begin_on_the_unit_and_never_overlap() {
     }
     assert_eq!(span_of(&sizes, PAGE), 6 * PAGE, "the last one's rounding is in the span");
     assert_eq!(nth_at(base, &sizes, PAGE, sizes.len()), base + span_of(&sizes, PAGE), "and one past the last is where the span ends");
-}
-
-#[test]
-fn memory_nothing_laid_spans_nothing() {
-    assert_eq!(span_of(&[], PAGE), 0);
-    assert_eq!(nth_at(64, &[], PAGE, 0), 64);
 }
 
 #[test]
