@@ -1,17 +1,16 @@
 // pxl-kernel/billboard/chat.rs
 
-//! The (dev-only) map chat's latest line and who says it: a bubble in its
-//! speaker's frame, hung from the point over its head the scene hands over
-//! (`speak_from`) and shown by its own rule (`hangs`), not read from the
+//! The (dev-only) map chat's latest line and who says it: a bubble hung from
+//! the point over its speaker's head that the scene hands over
+//! (`speak_from`), and shown by its own rule (`hangs`), not read from the
 //! chunks as a marker someone put up is. `scene/place.rs` lays both out.
 
 use std::rc::Rc;
 
-use pxl_spec::block::marker::MARKER_SHOWN_FROM;
-use pxl_spec::space::camera::grid::{Tau, CHUNK_STEPS};
+use pxl_spec::block::object::marker_shows;
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
@@ -66,20 +65,12 @@ pub fn speak_from(speaker: Option<(Q3, Q3)>) {
 }
 
 /// Where a line hangs, over its speaker's head, while it shows there seen
-/// from `eye` at `tau`: by the camera grid's cell where the speaker stands
-/// (`shows`).
+/// from `eye` at `tau`: as a marker shows (`marker_shows`), so a line reads
+/// where the markers about its speaker do. A marker someone put up is
+/// judged by the chunk the markers are read from; a line, which no chunk
+/// holds, by the camera grid's cell where its speaker stands, the zoom such
+/// a chunk would be drawn at there.
 pub fn hangs(eye: V3, tau: Tau) -> Option<Q3> {
     let (feet, over) = chat().speaker?;
-    shows(cell_at(eye, tau, to_world(&feet))).then_some(over)
-}
-
-/// Whether a line shows where the camera grid's cell at its speaker is at
-/// `cell`: where a chunk of that cell is no coarser than
-/// `MARKER_SHOWN_FROM`, the threshold a marker someone put up shows from,
-/// so a line reads where the markers about its speaker do. A marker is
-/// judged by the chunk the markers are read from; a line, which no chunk
-/// holds, by its speaker's own cell, the zoom such a chunk would be drawn at
-/// there.
-fn shows(cell: Zoom) -> bool {
-    cell as i32 - CHUNK_STEPS as i32 >= MARKER_SHOWN_FROM as i32
+    marker_shows(cell_at(eye, tau, to_world(&feet))).then_some(over)
 }
