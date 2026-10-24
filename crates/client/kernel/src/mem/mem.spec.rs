@@ -90,15 +90,15 @@ pub const GLOBAL_BASE: u32 = 8388608;
 /// constants), so a terrain grown past a phone fails to build; and at boot
 /// against where it actually started and what the device actually gave.
 ///
-/// 256 MiB, with the fixed ranges at 175.29 (the terrain's 157.75 of them) and
-/// the module's data ending at 10.5, leaves the phone 326.2 in practice, so
-/// there are 70 MiB of headroom over the guarantee (2026-10-24).
+/// 256 MiB, with the fixed ranges at 208.45 (the terrain's 157.75 of them and
+/// the bodies' 33.12) and the module's data ending at 10.5, leaves the phone
+/// 293.0 in practice, so there are 37 MiB of headroom over the guarantee
+/// (2026-10-24).
 ///
 /// The heap's bounded flows at their worst are checked against it at compile
-/// time too (door/layout.rs `HEAP_FLOWS_BYTES`): every kept terrain and Earth
-/// packet in a slot of its longest packet's pages, seven to an 8 MiB run
-/// (io/body.rs), and a body on every credit, a slot or the buddy's block for
-/// a division's, 160 MiB.
+/// time too (door/layout.rs `HEAP_FLOWS_BYTES`): a body on every credit in
+/// the buddy's block for a division's, 64 MiB. Terrain's and the Earth's
+/// bodies are `.fixed`'s (io/body.rs).
 pub const MIN_HEAP_BYTES: u32 = 268435456;
 
 /// What a device's memory is counted in: a reservation is a whole number of

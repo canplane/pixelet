@@ -78,6 +78,7 @@ pub struct FrameTurn {
 pub fn profiler_frame(t: FrameTurn) {
     // Taken whether or not recording, so a recording starts from now.
     let rings = profiler_take_rings();
+    let body_slots_peak = f64::from(crate::io::body::take_peak());
     let terrain_refused = TerrainTile::residency().take_refusals() as f64;
     let host = core::mem::take(HOST.get(HostFrame::default));
     if !profiler_recording() {
@@ -107,6 +108,7 @@ pub fn profiler_frame(t: FrameTurn) {
         tiles,
         heap: heap_sample(),
         rings,
+        body_slots_peak,
         waiting: counts.map(|c| f64::from(c.0)),
         out: counts.map(|c| f64::from(c.1)),
         terrain_refused,

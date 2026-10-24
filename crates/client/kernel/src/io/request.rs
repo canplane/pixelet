@@ -103,8 +103,9 @@ impl Wanted {
 #[derive(Clone, Copy, Debug)]
 enum Wait {
     Ready,
-    /// Its body was refused heap room: until the heap gives some back.
-    Heap(Refused),
+    /// Its body was refused room, the heap's or a body slot's: until that
+    /// gives some back.
+    Room(Refused),
     /// Its object failed: for as long as it is wanted.
     Object,
 }
@@ -113,7 +114,7 @@ impl Wait {
     fn ready(self) -> bool {
         match self {
             Wait::Ready => true,
-            Wait::Heap(refused) => refused.over(),
+            Wait::Room(refused) => refused.over(),
             Wait::Object => false,
         }
     }
@@ -404,7 +405,7 @@ impl<S: Serve> RequestScheduler<S> {
             Ended::Refused(refused) => {
                 self.answered();
                 if let Some(i) = want {
-                    self.desired[i].wait = Wait::Heap(refused);
+                    self.desired[i].wait = Wait::Room(refused);
                 }
             }
             Ended::Aborted => {}

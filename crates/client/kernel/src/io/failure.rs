@@ -49,8 +49,8 @@ pub enum Ended {
     Ok,
     Aborted,
     Failed(Failure),
-    /// The heap refused its body room, as its release count was then: no
-    /// failure of the object's or the server's, and over once the heap gives
+    /// Its body was refused room, by the heap or the body slots: no failure
+    /// of the object's or the server's, and over once what refused it gives
     /// some back (`Refused::over`).
     Refused(Refused),
 }

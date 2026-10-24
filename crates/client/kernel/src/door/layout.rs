@@ -52,12 +52,14 @@ const _: () = assert!(
 );
 
 /// The ranges of `.fixed`, in address order: the resident terrain, the
-/// resident divisions' cells, the renderer's block table, the GPU call
-/// stream, the kernel's other host calls, the profiler's rings.
+/// resident divisions' cells, terrain's and the Earth's bodies, the
+/// renderer's block table, the GPU call stream, the kernel's other host
+/// calls, the profiler's rings.
 #[derive(Clone, Copy)]
 pub enum Fixed {
     Terrain,
     Division,
+    Bodies,
     Blocks,
     Gpu,
     Host,
@@ -80,9 +82,10 @@ const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::scene::environment::cloud::BL
 
 pub const BLOCK_SLOTS: usize = pxl_render::gpu::blocks::block_slots(MAX_LIVE_BLOCKS);
 
-const FIXED: [u32; 6] = [
+const FIXED: [u32; 7] = [
     crate::layer::terrain::fixed::TERRAIN_BYTES,
     crate::layer::division::DIVISION_BYTES,
+    crate::io::body::BODIES_BYTES,
     pxl_render::gpu::blocks::blocks_bytes(BLOCK_SLOTS),
     pxl_render::api_spec::stream::BYTES,
     crate::abi::host::stream::BYTES,
@@ -103,7 +106,8 @@ const _: () = assert!(
 );
 
 /// A body its kind's packet at its longest, in the block the buddy gives
-/// it, a power of two; none for a kind whose bodies take slots.
+/// it, a power of two; none for a kind whose bodies take a slot of
+/// `.fixed.bodies` (io/body.rs).
 const fn body_block(stream: crate::io::demand::Stream) -> u64 {
     match stream.max_body() {
         Some(_) if crate::io::body::slotted(stream) => 0,
@@ -112,19 +116,12 @@ const fn body_block(stream: crate::io::demand::Stream) -> u64 {
     }
 }
 
-/// The heap's bounded flows at their worst: every terrain frame's packet
-/// kept for its windows (layer/terrain/tile.rs `kept`) and every Earth
-/// frame's for its texels (layer/earth.rs), each in a slot (io/body.rs),
-/// and a body on every credit, in a slot too or in the buddy's block for
-/// the longest other kind, at whichever split costs most. The rest of the
-/// heap is workspace, which asks first.
+/// The heap's bounded flows at their worst: a body on every credit, in the
+/// buddy's block for the longest kind whose bodies are the heap's, each
+/// freed as it is decoded. Terrain's and the Earth's, kept or not, are
+/// `.fixed.bodies`'. The rest of the heap is workspace, which asks first.
 const HEAP_FLOWS_BYTES: u64 = {
-    use crate::io::body::{slots_bytes, slotted};
     use crate::io::demand::Stream;
-    use crate::layer::residency::Residency;
-    use crate::param::MAX_CREDITS;
-    assert!(slotted(Stream::terrain) && slotted(Stream::earth), "the kept packets are counted as slots");
-    let kept = Residency::<pxl_spec::bake::tile::terrain::TerrainTile>::FRAMES + Residency::<crate::layer::earth::Earth>::FRAMES;
     let mut longest = 0;
     let mut k = 0;
     while k < Stream::ALL.len() {
@@ -133,16 +130,7 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    let mut worst = 0;
-    let mut in_slots = 0;
-    while in_slots <= MAX_CREDITS {
-        let bytes = slots_bytes(kept + in_slots) + (MAX_CREDITS - in_slots) as u64 * longest;
-        if bytes > worst {
-            worst = bytes;
-        }
-        in_slots += 1;
-    }
-    worst
+    crate::param::MAX_CREDITS as u64 * longest
 };
 
 const _: () = assert!(

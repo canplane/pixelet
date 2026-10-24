@@ -126,6 +126,9 @@ pub struct FrameSample {
     pub tiles: TileSample,
     pub heap: HeapSample,
     pub rings: RingSample,
+    /// The most of `.fixed.bodies`' slots out at once since the frame before
+    /// (io/body.rs `take_peak`).
+    pub body_slots_peak: f64,
     /// Requests waiting for a credit, and out on one, by stream.
     pub waiting: [f64; STREAMS],
     pub out: [f64; STREAMS],
@@ -156,6 +159,7 @@ words!(FrameSample, FRAME::WORDS,
     heap.slot_bytes => FRAME::heap_slot_bytes, heap.range_bytes => FRAME::heap_range_bytes,
     heap.largest_free_bytes => FRAME::heap_largest_free_bytes, heap.refusals => FRAME::heap_refusals,
     rings.cq_peak => FRAME::ring_cq_peak, rings.held_peak => FRAME::ring_held_peak,
+    body_slots_peak => FRAME::body_slots_peak,
     waiting => FRAME::waiting, out => FRAME::out,
     terrain_refused => FRAME::cap_terrain_refused,
 );

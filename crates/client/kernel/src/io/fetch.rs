@@ -59,7 +59,7 @@ enum Got {
     Read(Option<Block>),
     Absent,
     Failed(Failure),
-    /// The heap refused the body room, as its release count was then.
+    /// The body was refused room (io/body.rs `take`).
     Refused(Refused),
 }
 
@@ -132,13 +132,13 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
         }
         Opened::Bytes(n) => {
             let got = match body::take(stream, n) {
-                Some(block) => {
+                Ok(block) => {
                     // SAFETY: a block just acquired, `n` long, and no one else's;
                     // the arrival holds it until `fetch_task` waits out the turn.
                     unsafe { file::read(fd, core::slice::from_raw_parts_mut(ptr_at::<u8>(block.0), n as usize)) };
                     Got::Read(Some(block))
                 }
-                None => Got::Refused(Refused::now()),
+                Err(refused) => Got::Refused(refused),
             };
             file::close(fd);
             got
