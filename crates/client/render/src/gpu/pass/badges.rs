@@ -20,16 +20,12 @@ use crate::gpu::sheet::shelf::{DrawSpec, Sheet, SlotSet};
 use crate::gpu::sheet::{SheetPainter, Sketch, SHEET_SCALE};
 use crate::gpu::text::TextOf;
 use crate::look::badge::{
-    bubble_box_h, point_mark, BADGE_FONT, BLACK, BORDER, BUBBLE_FONT, COUNT_FILL, COUNT_TEXT, DOT_BORDER, DOT_CY, DOT_DIAM, DOT_FILL, DOT_RING, LINE_H, NOTCH, PADDING_Y, PILL_FILL, PILL_H, PILL_R,
-    POINT_FONT, POINT_GAP, POINT_LINE, POINT_PAD, POINT_PITCH, POINT_RIM, POINT_RIM_FILL, POINT_SHADE, POINT_SHADOW_BLUR, POINT_SHADOW_DY, POINT_SHADOW_FILL, POINT_TEXT_HALO, TAIL_H, TAIL_W, WHITE,
+    bubble_box_h, point_mark, BADGE_FONT, BLACK, BORDER, BUBBLE_FONT, DOT_BORDER, DOT_CY, DOT_DIAM, DOT_FILL, DOT_RING, LINE_H, NOTCH, PADDING_Y, PILL_H, PILL_R, POINT_FONT, POINT_GAP, POINT_LINE,
+    POINT_PAD, POINT_PITCH, POINT_RIM, POINT_RIM_FILL, POINT_SHADE, POINT_SHADOW_BLUR, POINT_SHADOW_DY, POINT_SHADOW_FILL, POINT_TEXT_HALO, TAIL_H, TAIL_W, WHITE,
 };
 
 const BADGE_FLOATS: usize = 40;
 const SETS: usize = 32;
-
-fn pill(p: &mut Sketch, logical_w: f32) {
-    p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, PILL_FILL);
-}
 
 fn anchor_dot(p: &mut Sketch, logical_w: f32) {
     p.circle(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, DOT_FILL);
@@ -52,15 +48,9 @@ fn point(p: &mut Sketch, lines: &[String], icon: bool, symbol: Option<u16>, fill
     }
 }
 
-fn labeled_pill(p: &mut Sketch, label: &str, logical_w: f32) {
-    pill(p, logical_w);
-    p.text(BADGE_FONT, WHITE, label, logical_w / 2.0, PILL_H / 2.0 + 1.0);
-    anchor_dot(p, logical_w);
-}
-
-fn count_pill(p: &mut Sketch, label: &str, logical_w: f32) {
-    p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, COUNT_FILL);
-    p.text(BADGE_FONT, COUNT_TEXT, label, logical_w / 2.0, PILL_H / 2.0 + 1.0);
+fn labeled_pill(p: &mut Sketch, label: &str, fill: u32, text: u32, logical_w: f32) {
+    p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, fill);
+    p.text(BADGE_FONT, text, label, logical_w / 2.0, PILL_H / 2.0 + 1.0);
     anchor_dot(p, logical_w);
 }
 
@@ -195,8 +185,7 @@ impl BadgePass {
             let Some(spec) = sheet.slot_draw(slot) else { continue };
             let mut p = Sketch::default();
             match spec {
-                DrawSpec::Pill { label, logical_w } => labeled_pill(&mut p, label, *logical_w as f32),
-                DrawSpec::Count { label, logical_w } => count_pill(&mut p, label, *logical_w as f32),
+                DrawSpec::Pill { label, fill, text, logical_w } => labeled_pill(&mut p, label, *fill, *text, *logical_w as f32),
                 DrawSpec::Point {
                     lines,
                     icon,

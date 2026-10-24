@@ -23,5 +23,8 @@
 pub const MARKER_SHOWN_FROM: u8 = 14;
 
 /// A marker's cell on the camera grid, in zooms: −1 spans two of the grid's
-/// cells, as a place's icon does.
+/// cells, as a place's icon does. A cell shows one marker: where more than
+/// one stands in it, they are one, their count on a marker's pill in its
+/// colors turned over, at the cell's middle over what is drawn there
+/// (pxl-kernel scene/place.rs `markers`).
 pub const MARKER_SCALE_STEPS: i8 = -1;

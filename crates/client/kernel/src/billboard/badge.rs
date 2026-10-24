@@ -1,8 +1,8 @@
 // pxl-kernel/billboard/badge.rs
 
 //! What a billboard paints, each its own design on the one sheet: words on a
-//! pill, a marker's someone put up, or the count of a cell's markers where
-//! more than one stands in it; a place, as Carto draws it; a line said in the
+//! pill, a marker's someone put up, or in its colors turned over the count
+//! of a cell's markers where more than one stands in it; a place, as Carto draws it; a line said in the
 //! chat, in a bubble. A label is what is painted and nothing of who shows
 //! it, so two that paint alike are one: measured, given its slot and painted
 //! once, and shown only once painted (`ready`).
@@ -15,7 +15,7 @@ use crate::billboard::sheet::billboard_sheet;
 use crate::io::text::{text_lines, text_width};
 use pxl_render::gpu::sheet::shelf::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::sheet::SHEET_SCALE;
-use pxl_render::look::badge::{bubble_size, marker_size, point_size, BADGE_FONT, BUBBLE_FONT, BUBBLE_TEXT_W, POINT_FONT};
+use pxl_render::look::badge::{bubble_size, marker_size, point_size, BADGE_FONT, BUBBLE_FONT, BUBBLE_TEXT_W, COUNT_FILL, COUNT_TEXT, PILL_FILL, PILL_TEXT, POINT_FONT};
 use xpute_guest::global::Global;
 
 use xpute_kit::status::bug::OrBug;
@@ -23,11 +23,9 @@ use xpute_kit::status::errno::Errno;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Label {
-    /// Words on a pill: a marker's (`pill`).
-    Pill { text: Rc<str> },
-    /// The count of the markers in one marker's cell (`marker_cell`), on a
-    /// pill of its own.
-    Count { text: Rc<str> },
+    /// Words on a pill in its `fill`, in its `ink`: a marker's (`pill`) or
+    /// a count of them (`count`).
+    Pill { text: Rc<str>, fill: u32, ink: u32 },
     /// A place as Carto draws it: its symbol (`icon`), or a dot, in its
     /// category's `fill`, and under it its name, where it is named, in its
     /// category's `text` color, wrapped at `wrap` pixels (`spaced`).
@@ -50,12 +48,21 @@ impl Label {
         if words.chars().count() > SHOWN_CHARS {
             shown.push('…');
         }
-        Label::Pill { text: shown.into() }
+        Label::Pill {
+            text: shown.into(),
+            fill: PILL_FILL,
+            ink: PILL_TEXT,
+        }
     }
 
-    /// The count of `n` markers.
+    /// The count of `n` markers in one marker's cell (`marker_cell`), on a
+    /// marker's pill in the count's colors.
     pub fn count(n: usize) -> Label {
-        Label::Count { text: n.to_string().into() }
+        Label::Pill {
+            text: n.to_string().into(),
+            fill: COUNT_FILL,
+            ink: COUNT_TEXT,
+        }
     }
 
     /// As it is laid out where a place keeps `spacing` pixels to itself
@@ -126,7 +133,7 @@ pub fn size(label: &Label) -> Option<[f64; 3]> {
         Some((laid.iter().map(|&(_, w)| w).fold(0.0, f64::max), laid.iter().map(|&(l, _)| l.trim().to_owned()).collect()))
     };
     let (size, lines) = match label {
-        Label::Pill { text } | Label::Count { text } => (marker_size(text_width(BADGE_FONT, text)?.ceil()), Vec::new()),
+        Label::Pill { text, .. } => (marker_size(text_width(BADGE_FONT, text)?.ceil()), Vec::new()),
         Label::Point { name: None, icon, .. } => (point_size(*icon, None), Vec::new()),
         Label::Point { name: Some(name), wrap, icon, .. } => {
             let (w, lines) = laid(POINT_FONT, f64::from(*wrap), name)?;
@@ -158,12 +165,10 @@ pub fn slot(label: &Label) -> i32 {
             w * SHEET_SCALE,
             h * SHEET_SCALE,
             match label {
-                Label::Pill { text } => DrawSpec::Pill {
+                Label::Pill { text, fill, ink } => DrawSpec::Pill {
                     label: text.to_string(),
-                    logical_w: w,
-                },
-                Label::Count { text } => DrawSpec::Count {
-                    label: text.to_string(),
+                    fill: *fill,
+                    text: *ink,
                     logical_w: w,
                 },
                 Label::Bubble { .. } => DrawSpec::Bubble { lines: b.lines.clone(), box_w: w },

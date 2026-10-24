@@ -30,10 +30,11 @@ pub const PILL_H: f32 = PILL_INNER + PAD_Y;
 pub const PILL_R: f32 = PILL_H / 2.0;
 pub const DOT_CY: f32 = PILL_H + DOT_GAP + DOT_DIAM / 2.0;
 pub const PILL_FILL: u32 = 0x14141ab8;
+pub const PILL_TEXT: u32 = WHITE;
 pub const DOT_FILL: u32 = 0xffffff99;
 pub const DOT_RING: u32 = 0xffffff40;
-/// A count's pill, a marker's turned over, so it does not read as words
-/// that are a number.
+/// The pill of a cell's markers' count, a marker's in its colors turned
+/// over, so it does not read as words that are a number.
 pub const COUNT_FILL: u32 = 0xffffffe6;
 pub const COUNT_TEXT: u32 = 0x14141aff;
 
