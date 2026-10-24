@@ -209,10 +209,10 @@ A record past the range is a sizing bug, not a state to handle, and stops the gu
 
 Some calls are every program's: open, read, write and close a file, and report the invariant that stopped the guest. Those are xpute's **system calls** (`ipc/sys`), records in one stream the directory names. The report (`ABORT`) drops the turn's other calls and is published alone, at once. A program's own calls go in the same stream, numbered past a PROGRAM bit.
 
-Files are reached as Plan 9 reaches them:
+Files borrow Plan 9's file namespace:
 
 - the guest issues the descriptor, a handle of its own file table (`ipc/file`), which is fixed at N slots as every table is;
-- it names a file by a root the program numbers and a path below it, and the host binds each root to wherever it keeps things;
+- it names a file by a root the program numbers and a path below it, and the program binds each root to wherever it keeps things;
 - a path walks down a name at a time, and an empty name, `.` or `..` is refused, so a root is the whole of what it grants.
 
 An open is the one call that waits: the host answers it on a later turn, once the file can be read whole. A read, a write and a close are done before the next turn. A close ends a descriptor whether or not its open was answered, so a late answer reaches nothing.
