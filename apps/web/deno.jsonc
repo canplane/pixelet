@@ -38,9 +38,8 @@
     },
 
     // Builds the client and publishes it with the Worker, under the build
-    // number CI took; `--prebuilt` publishes a `dist/` already built — see
-    // script/deploy.ts. wrangler runs through Deno, not npx, since it wants a
-    // newer Node than a system may have.
+    // number CI took — see script/deploy.ts. wrangler runs through Deno,
+    // not npx, since it wants a newer Node than a system may have.
     "deploy": "deno run -A script/deploy.ts",
 
     "check": "deno check src/main.tsx cloudflare-worker/index.ts",

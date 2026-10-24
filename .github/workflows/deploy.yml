@@ -1,0 +1,281 @@
+# What a push to deploy publishes: only what can be done here, with the
+# secrets and the VM. Nothing is checked or tested here. A deploy's checks
+# and tests run before the push, by hand (.agents/skills/deploy/SKILL.md),
+# so a commit that would fail them is not pushed, and one that is pushed
+# anyway fails here only where the build or a deploy does, with its number
+# already taken.
+#
+# A deploy is whole: every push to deploy publishes the client and rebuilds
+# the servers from the one commit, so the two never run different commits,
+# and nothing guesses from a diff which half a commit could change. The
+# number first, then the servers, then the client; see deploy-web.
+#
+# Secrets this needs, all repository secrets:
+#   CLOUDFLARE_API_TOKEN   Workers + R2 write. Wrangler publishes the Worker
+#                          with it and reads/writes the build counter object.
+#   CLOUDFLARE_ACCOUNT_ID  Which account, since a token may reach more than one.
+#   VM_HOST / VM_USER      The Hetzner box the compose stack runs on.
+#   VM_SSH_KEY             A private key whose public half is in that user's
+#                          authorized_keys. Deploy-only; nothing else uses it.
+#
+# See infra/README.md §3 and §4 for what the two deploys do by hand, which is
+# what these automate and what to fall back to.
+#
+# Every checkout pins `ref: github.sha`. Left to itself the action takes the
+# branch's tip at fetch time, which is not the commit the run was started for
+# once a push lands — or a history is rewritten — while an earlier run is
+# still going. Main is rewritten here as a matter of course, so the default
+# would have runs building something other than what they report.
+
+name: Deploy
+
+# deploy alone. main is pushed to carry work between machines, compiling or
+# not, and a push there is not a request to build it; publishing is a
+# separate act, `git push origin main:deploy` (forced after main is
+# rewritten). A dispatch runs the deploy again for deploy's tip; against any
+# other ref every job declines.
+#
+# Prose does not build: a push that touches only markdown cannot change what
+# the bundle or the servers are made of. It is excluded rather than the code
+# being included: the set of paths that matter is nearly the whole tree, so a
+# list of them would be long and would fail the wrong way — a directory added
+# later and left off it would be skipped in silence, where a file type left
+# off this one only costs a run. What this gives up is a build number for
+# such a push, which is the honest reading of a count that nothing was ever
+# built for.
+on:
+  push:
+    branches: [deploy]
+    paths-ignore: ["**.md"]
+  workflow_dispatch: {}
+
+# A run may not be canceled: it takes a build number, and one killed between
+# taking it and publishing would burn it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Neither language's version is here. rust-toolchain.toml says the Rust and
+  # rustup reads it on its own; .tool-versions says the Deno and setup-deno is
+  # pointed at it. A job installs from a file rather than being told, so the
+  # number is in one place.
+  #
+  # wasm-opt prints the import/export mapping the shell imports, and which
+  # letters it assigns is the optimizer's own business — so the version is
+  # pinned rather than taken from apt, where it also lags by years.
+  BINARYEN_VERSION: "132"
+  # A runner's build is thrown away: debuginfo and incremental state were
+  # most of a 5 GB cache that took four minutes to unpack.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+
+jobs:
+  # Every build of deploy is numbered, shipped or not — a build lab's count.
+  # A push of prose alone never runs and takes no number (see the trigger),
+  # so the count is of builds and not of pushes. A push that then fails to
+  # build or deploy has spent its number, which is simply never published.
+  number:
+    name: take the next build number
+    if: github.ref == 'refs/heads/deploy'
+    runs-on: ubuntu-latest
+    # One holder of the counter at a time: the take is read-add-write and
+    # two runs holding it together would take the same number. deploy-web is
+    # in the same group, so a deploy push queues behind the one in front of it.
+    concurrency:
+      group: build-counter
+      cancel-in-progress: false
+    outputs:
+      build_number: ${{ steps.number.outputs.value }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version-file: .tool-versions
+
+      - name: Take the next build number
+        id: number
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: echo "value=$(./script/build-counter.ts)" >> "$GITHUB_OUTPUT"
+
+  deploy-server:
+    name: rebuild the servers on the VM
+    needs: number
+    runs-on: ubuntu-latest
+    # As deploy-web: what landed.
+    outputs:
+      rebuilt: ${{ steps.landed.outputs.yes }}
+    concurrency:
+      group: deploy-server
+      cancel-in-progress: false
+    steps:
+      # The one file it sends; the VM builds from its own clone.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: infra/prod/deploy.sh
+          sparse-checkout-cone-mode: false
+
+      # infra/prod/deploy.sh on the VM, the script a hand deploy runs too.
+      - name: Rebuild and restart the stack
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          VM_KNOWN_HOSTS: ${{ secrets.VM_KNOWN_HOSTS }}
+          SHA: ${{ github.sha }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # Pinned when the secret carries it — `ssh-keyscan HOST` on the VM
+          # produces the lines. Without it this trusts whatever answers on the
+          # day, which is the usual trust-on-first-use hole and is worth
+          # closing for a host that takes a deploy.
+          if [ -n "${VM_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::VM_KNOWN_HOSTS is not set — the host key is being accepted unverified"
+            ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$VM_USER@$VM_HOST" bash -eu -s -- "$SHA" < infra/prod/deploy.sh
+
+      # Last, so a failure anywhere above leaves it unset.
+      - id: landed
+        run: echo "yes=true" >> "$GITHUB_OUTPUT"
+
+  deploy-web:
+    name: build and publish the client and the Worker
+    # After the servers and not beside them. A new client against an old server
+    # is the direction that breaks; an old client against a new one is not, so
+    # long as the server still answers the old shape for a release. That order
+    # is what the b15 deploy followed by hand
+    # (doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md) and
+    # what running the two in parallel left to whichever finished first.
+    #
+    # A failed server deploy now keeps the client back too, which is the
+    # failure worth having: nothing goes out ahead of what it talks to.
+    needs: [number, deploy-server]
+    runs-on: ubuntu-latest
+    # What landed: the last step says whether it worked, because a job that
+    # fails still carries its earlier steps' outputs and the build log believed one.
+    outputs:
+      published: ${{ steps.landed.outputs.yes }}
+    # The number's group, so that a run cannot publish while the next one is
+    # already taking its number: the bucket's counter and what is live on
+    # plei.me move together.
+    concurrency:
+      group: build-counter
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version-file: .tool-versions
+
+      # Its own cargo cache: the module and what builds it.
+      - uses: ./.github/actions/toolchain
+        with:
+          cache: rust-publish
+          binaryen-version: ${{ env.BINARYEN_VERSION }}
+
+      # Builds under the number taken, so the bundle carries it from its
+      # build, then keeps the panic paths and publishes.
+      # apps/web/script/deploy.ts is the same script a hand deploy runs; a
+      # hand deploy just has no number to give it.
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PXL_BUILD_NUMBER: ${{ needs.number.outputs.build_number }}
+        run: deno task deploy
+
+      # Last, so a failure anywhere above leaves it unset.
+      - id: landed
+        run: echo "yes=true" >> "$GITHUB_OUTPUT"
+
+  # What plei.me answers is the two deploys composed, so it is asked once both
+  # have settled rather than from inside either. One of its checks,
+  # /geo/search, is the Worker proxying to the VM: asked from deploy-web it can
+  # land while deploy-server is still recreating the stack, and Cloudflare
+  # answers 521 for an origin that is merely restarting.
+  smoke:
+    name: smoke-test the public surface
+    needs: [deploy-web, deploy-server]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version-file: .tool-versions
+      - name: Smoke-test the published routes
+        run: deno task smoke https://plei.me
+
+  # The one thing the repository could not answer about itself: what went out
+  # in a given build. The counter is an object in the bucket and deliberately
+  # outside git (script/build-counter.ts), so `#18` existed with nothing to
+  # look it up by, and the question meant opening this workflow's run history.
+  #
+  # The record is the commit subjects and not a commit id, because main's
+  # history is rewritten here as a matter of course: a tag, a stored sha and
+  # BUILD_ID's own hash all name something that may not exist by
+  # the time anyone looks, while text written while the history is still that
+  # history survives every rewrite after it. It goes beside the counter for the
+  # counter's own reason — no squash, rebase or fresh clone reaches what is not
+  # in git.
+  #
+  # Not gated on the smoke, which is why it does not need it: a build that
+  # answered badly still went out, and what is recorded is what is live rather
+  # than what is well. A number with no record was counted and never published.
+  #
+  # It runs after both deploys, so a red job here has already let the deploy
+  # through — it reports a missing record and takes nothing back.
+  record:
+    name: record what this build carried
+    needs: [number, deploy-web, deploy-server, smoke]
+    # Not `!failure()`: one half failing does not unpublish the other, and a
+    # build that reached the edge and not the VM is exactly the one worth
+    # having a line about. It waits for the
+    # smoke so the line can say what the smoke found, and records whatever it
+    # found — a build that went out and failed the smoke is still a build that
+    # went out, and the one most worth finding in the log later.
+    if: ${{ !cancelled() && (needs.deploy-web.outputs.published == 'true' || needs.deploy-server.outputs.rebuilt == 'true') }}
+    runs-on: ubuntu-latest
+    # R2 has no append, so the write is read-add-write as the counter's is, and
+    # this is what keeps two of them from losing a line. Its own group rather
+    # than the counter's: a run may record while the next one is already being
+    # numbered, and the two objects have nothing to say to each other.
+    concurrency:
+      group: build-log
+      cancel-in-progress: false
+    steps:
+      # The whole history, because the log counts commits since the build it
+      # last recorded and a shallow checkout cannot reach back that far.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version-file: .tool-versions
+
+      - name: Append this build to the log
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          ./script/build-log.ts --record "${{ needs.number.outputs.build_number }}" \
+            ${{ needs.deploy-web.outputs.published == 'true' && '--web' || '' }} \
+            ${{ needs.deploy-server.outputs.rebuilt == 'true' && '--server' || '' }} \
+            --smoke "${{ needs.smoke.result }}"

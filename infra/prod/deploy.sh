@@ -4,7 +4,7 @@
 #
 #   ssh root@<vm> bash -eu -s -- <sha> < infra/prod/deploy.sh
 #
-# CI's deploy-server runs it so (.github/workflows/check-and-deploy.yml), and
+# CI's deploy-server runs it so (.github/workflows/deploy.yml), and
 # so does a deploy by hand (infra/README.md §3).
 set -eu
 
