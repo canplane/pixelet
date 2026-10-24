@@ -101,7 +101,7 @@ struct Seen {
     tau: pxl_spec::space::camera::grid::Tau,
     places: bool,
     spacing: f64,
-    drafted: Option<(EntryAt, Instance)>,
+    drafted: Option<(EntryAt, u64)>,
     line: Option<Label>,
     hangs: Option<Q3>,
 }
@@ -120,7 +120,7 @@ enum Key {
 
 /// What a source hands the layout: by its holder's key, the label it paints,
 /// where it stands, and where a tap on it goes, none where it takes none.
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 struct Instance {
     key: Key,
     label: Label,
@@ -280,8 +280,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         stands: over,
         tap: None,
     });
-    let (drafted_at, drafted) = seen.drafted.clone().unzip();
-    let shown = drafted.into_iter().chain(pin::shown(&pins, drafted_at)).chain(read_places.iter().map(|(_, s)| s.clone())).chain(said);
+    let shown = pin::shown(&pins).chain(read_places.iter().map(|(_, s)| s.clone())).chain(said);
     let spacing = seen.spacing;
     // What was drawn last by its holder's key, read once: a marker's words,
     // a count, a place's look or wrap or the line changed, and what was
@@ -380,7 +379,7 @@ pub fn draw(draw: &mut pxl_render::frame::draw::DrawList, eye: V3) {
 
 /// Where a tap on a billboard goes: to its place; a marker someone put up is
 /// its entry's, which the tool held decides what to do with.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 pub enum Went {
     To(Q3),
     Marker(EntryAt, Q3),

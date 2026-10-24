@@ -6,6 +6,8 @@
 //! marker's pill in its colors turned over, the markers' own rule
 //! (`block/marker.json`); the one waiting for its words wherever it is.
 
+use core::hash::Hasher;
+
 use super::{surface, Instance, Key, Went};
 use crate::billboard::badge::Label;
 use crate::chunk::Chunk;
@@ -115,10 +117,13 @@ pub(super) fn read(chunk: Chunk, pins: &mut Vec<Pin>) {
     }
 }
 
-/// What `pins` show, a cell's markers but the one waiting at `drafted`: one
-/// is itself, more their count, which a tap takes to where it stands.
-pub(super) fn shown(pins: &[Pin], drafted: Option<EntryAt>) -> impl Iterator<Item = Instance> + '_ {
-    pins.chunk_by(|a, b| a.cell == b.cell).filter_map(move |run| {
+/// What `pins` show: the one waiting for its words, wherever it is, then a
+/// cell's markers but that one: one is itself, more their count, which a
+/// tap takes to where it stands.
+pub(super) fn shown(pins: &[Pin]) -> impl Iterator<Item = Instance> + '_ {
+    let drafted = draft().map(|d| d.at);
+    let waiting = draft().map(|d| one(d.at, pill(&d.words), marker_at(d.at).0));
+    waiting.into_iter().chain(pins.chunk_by(|a, b| a.cell == b.cell).filter_map(move |run| {
         let mut left = run.iter().filter(|p| Some(p.at) != drafted);
         let first = left.next()?;
         let n = 1 + left.count();
@@ -131,12 +136,17 @@ pub(super) fn shown(pins: &[Pin], drafted: Option<EntryAt>) -> impl Iterator<Ite
             },
             _ => one(first.at, first.label.clone(), first.stands),
         })
-    })
+    }))
 }
 
-/// The one waiting for its words, shown wherever it is, and its entry.
-pub(super) fn drafted() -> Option<(EntryAt, Instance)> {
-    draft().map(|d| (d.at, one(d.at, pill(&d.words), marker_at(d.at).0)))
+/// The one waiting for its words, as `Seen` compares it: its entry and its
+/// words by their hash, so a settled turn asks the heap for nothing.
+pub(super) fn drafted() -> Option<(EntryAt, u64)> {
+    draft().map(|d| {
+        let mut h = fnv::FnvHasher::default();
+        h.write(d.words.as_bytes());
+        (d.at, h.finish())
+    })
 }
 
 /// Where the count of a cell's markers stands: at its middle, half a marker
