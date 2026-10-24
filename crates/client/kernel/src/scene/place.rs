@@ -2,7 +2,7 @@
 
 //! Where places, markers and the chat's line are drawn, each by its own
 //! source: a place as Carto draws it, read from the tile that says its
-//! ground at the zoom the view is at there (`places.rs`); a marker someone
+//! ground at the zoom the view is at there (`place_tile.rs`); a marker someone
 //! put up, near enough (`pin.rs`); a line said, hung over its speaker's
 //! head where its own rule shows it (`line.rs`). Each source hands the
 //! layout an `Instance`, and the layout asks each the same: what it paints,
@@ -11,7 +11,7 @@
 
 mod line;
 mod pin;
-mod places;
+mod place_tile;
 mod selection;
 use selection::select_visible_billboards;
 
@@ -46,7 +46,7 @@ struct Placement {
     /// Nearest the eye first: screen box, and where a tap on it goes.
     hits: Vec<([f64; 4], Went)>,
     /// Kept so a settled turn asks the heap for nothing; a chunk's in a
-    /// run, as each source reads it (`pin.rs`, `places.rs`).
+    /// run, as each source reads it (`pin.rs`, `place_tile.rs`).
     pins: Vec<pin::Pin>,
     places: Vec<(Chunk, Instance)>,
     /// The drawn chunks `pins` and `places` were read from: a chunk drawn still keeps
@@ -242,7 +242,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
             |&(_, chunk)| {
                 pin::read(chunk, &mut pins);
                 if places {
-                    places::read(chunk, &mut read_places);
+                    place_tile::read(chunk, &mut read_places);
                 }
                 true
             },
@@ -264,7 +264,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let mut labeled = core::mem::take(&mut p.spare);
     labeled.clear();
     p.pending.clear();
-    let shown = pin::shown(&pins).chain(read_places.iter().map(|(_, s)| s.clone())).chain(seen.said.shown());
+    let shown = pin::shown(&pins).chain(place_tile::shown(&read_places)).chain(seen.said.shown());
     let spacing = seen.spacing;
     // What was drawn last by its holder's key, read once: what a holder
     // shows changed, and what was drawn stays until the new one is ready to

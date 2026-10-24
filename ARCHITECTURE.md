@@ -256,7 +256,7 @@ Decor is grown and drawn on the GPU each frame, a thread a candidate, never stor
 
 **Marks** are the places and markers, gathered over the eye's cubes. Each stands at a cell's center, at the height of the surface drawn there.
 
-A place is the place layer's mark (`scene/place.rs`). Each cube in view reads its place tiles and shows what Carto shows at the zoom drawn there: a dot or an icon, named from its kind's label zoom (`scene/place/places.rs` `point_of`). A place stands on what a ray down its cell meets first, and where nothing is drawn there is no place. A tap on one is the place's before the ground's.
+A place is the place layer's mark (`scene/place.rs`). Each cube in view reads its place tiles and shows what Carto shows at the zoom drawn there: a dot or an icon, named from its kind's label zoom (`scene/place/place_tile.rs` `point_of`). A place stands on what a ray down its cell meets first, and where nothing is drawn there is no place. A tap on one is the place's before the ground's.
 
 ---
 

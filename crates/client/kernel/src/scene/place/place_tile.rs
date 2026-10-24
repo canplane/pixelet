@@ -1,10 +1,10 @@
-// pxl-kernel/scene/place/places.rs
+// pxl-kernel/scene/place/place_tile.rs
 
-//! The places the place tiles hold, as Carto draws them at the zoom of
-//! Carto's the view is at where they stand: a dot or an icon in its
-//! category's fill, named from its category's label zoom. A place stands at
-//! its ground leaf cell's center on the surface a ray down meets first, and
-//! a tap on it goes there.
+//! The place layer's markers, read from its place tiles: each place a tile
+//! holds as Carto draws it at the zoom of Carto's the view is at where it
+//! stands, a dot or an icon in its category's fill, named from its
+//! category's label zoom. A place stands at its ground leaf cell's center on
+//! the surface a ray down meets first, and a tap on it goes there.
 
 use super::{surface, Instance, Key, Went};
 use crate::billboard::badge::Label;
@@ -17,6 +17,11 @@ use pxl_spec::space::coord::world::REACH;
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows};
+
+/// What `read` read, as the layout takes it.
+pub(super) fn shown(read: &[(Chunk, Instance)]) -> impl Iterator<Item = Instance> + '_ {
+    read.iter().map(|(_, s)| s.clone())
+}
 
 /// The places standing in `chunk`, read where its cells are tiles' cells,
 /// each read from the tile that says it exactly; of them what Carto shows
