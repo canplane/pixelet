@@ -52,7 +52,7 @@ The words for what is sized:
 - A **tile** is what is fetched and stored as one. A layer's tile has the same number of cells a side at every zoom (`pxl-spec space/layer/lattice.rs`). Terrain's is 512, so its z24 cells make z15 tiles.
 - The **pyramid** is the tree of all tiles: a tile at z covers the 2 × 2 under it at z + 1, and its Morton key is a prefix of theirs (`space/hierarchy/morton.rs`).
 - A **chunk** is a cube of cells about the eye, which gathers what stands in the world.
-- A **block** is a thing placed, never a size.
+- A **block** is what stands in a cell, grown by the ground or placed: a cube, a decor or a marker (`layer/object/store.rs` `Block`).
 
 A tile's zoom is a web map's, and a z24 cell is a web map's z16 pixel; only the 3857 adapter knows it (`adapter/3857.rs` `cell_zoom_of`).
 
