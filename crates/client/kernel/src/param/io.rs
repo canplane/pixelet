@@ -21,24 +21,29 @@ pub const MAX_CREDITS: u32 = 16;
 
 // ---- bodies ----
 
-/// Terrain's and the Earth's packets kept past their decode at once, which
-/// `.fixed.bodies` holds beside a body on every credit (io/body.rs
-/// `SLOTS`): sized to a moving eye, not to the worst.
+/// The most terrain and Earth bodies out at once, in slots of the heap's
+/// runs (io/body.rs): those on a credit until their decode, and the packets
+/// kept past it, a terrain tile's while a window wants one of its squares
+/// still absent (layer/terrain/window.rs `fill`), the Earth's until its
+/// texels are taken. Sized to a moving eye, not to the worst.
 ///
-/// A terrain packet is kept only while a window wants a square of its tile
-/// still absent (layer/terrain/window.rs `fill`), and a window is a tile's
-/// cells a side (pxl-spec-core `window::WINDOW`), so it wants four tiles at
-/// most. The fill hands `HANDED` squares a frame, about a row of one
-/// window's, so an eye that moves keeps the tiles of the few windows
-/// refilling at once: four windows' four is 16. An Earth packet is kept
-/// only until its texels are taken, a frame or a few, inside that margin.
-/// A jump or a zoom that empties every window wants all their tiles,
-/// `WINDOWS` × 4 = 60, past this: the bodies past the slots wait for one
-/// given back while the fill goes on from the packets held.
+/// The host grants six credits (pixelet's end `NET_CREDITS`), and the
+/// Earth keeps four frames at most. A window is a tile's cells a side
+/// (pxl-spec-core `window::WINDOW`), so it wants four tiles at most, and
+/// the fill hands `HANDED` squares a frame, about a row of one window's: an
+/// eye that moves keeps the tiles of the few windows refilling at once,
+/// four windows' four. 6 + 4 + 16 is 26, and 28 is four whole runs of
+/// seven, since a run's slots past the cap would be borrowed and idle. A
+/// jump or a zoom that empties every window wants all their tiles,
+/// `WINDOWS` × 4 = 60, past this: what is past it waits for a slot.
 ///
-/// Each slot is its longest packet's pages of `.fixed`, about a mebibyte
-/// whether used or not, against the phone's headroom (mem.json
-/// MIN_HEAP_BYTES); fewer makes a moving eye's tiles wait on slots, and at
-/// none the view still converges, a tile at a time. The profiler's
-/// `body_slots_peak` is what it is measured by.
-pub const KEPT_BODIES: u32 = 16;
+/// The heap gives the runs only while their slots are out, so a settled
+/// view holds none, and at most four runs, 32 MiB, as `HEAP_FLOWS_BYTES`
+/// counts (door/layout.rs). Fewer makes a moving eye's tiles wait; the
+/// profiler's `body_slots_peak` is what it is measured by.
+pub const BODY_SLOTS: u32 = 28;
+
+/// The run the heap gives slots in: a power of two, the buddy's own block,
+/// seven slots at today's packets, so a slot with its share of the run
+/// costs 1.14 MiB where the buddy's block would be 2.
+pub const BODY_RUN_BYTES: u32 = 8 << 20;

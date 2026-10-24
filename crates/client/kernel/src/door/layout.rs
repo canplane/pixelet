@@ -52,14 +52,12 @@ const _: () = assert!(
 );
 
 /// The ranges of `.fixed`, in address order: the resident terrain, the
-/// resident divisions' cells, terrain's and the Earth's bodies, the
-/// renderer's block table, the GPU call stream, the kernel's other host
-/// calls, the profiler's rings.
+/// resident divisions' cells, the renderer's block table, the GPU call
+/// stream, the kernel's other host calls, the profiler's rings.
 #[derive(Clone, Copy)]
 pub enum Fixed {
     Terrain,
     Division,
-    Bodies,
     Blocks,
     Gpu,
     Host,
@@ -82,10 +80,9 @@ const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::scene::environment::cloud::BL
 
 pub const BLOCK_SLOTS: usize = pxl_render::gpu::blocks::block_slots(MAX_LIVE_BLOCKS);
 
-const FIXED: [u32; 7] = [
+const FIXED: [u32; 6] = [
     crate::layer::terrain::fixed::TERRAIN_BYTES,
     crate::layer::division::DIVISION_BYTES,
-    crate::io::body::BODIES_BYTES,
     pxl_render::gpu::blocks::blocks_bytes(BLOCK_SLOTS),
     pxl_render::api_spec::stream::BYTES,
     crate::abi::host::stream::BYTES,
@@ -106,8 +103,7 @@ const _: () = assert!(
 );
 
 /// A body its kind's packet at its longest, in the block the buddy gives
-/// it, a power of two; none for a kind whose bodies take a slot of
-/// `.fixed.bodies` (io/body.rs).
+/// it, a power of two; none for a kind whose bodies take slots.
 const fn body_block(stream: crate::io::demand::Stream) -> u64 {
     match stream.max_body() {
         Some(_) if crate::io::body::slotted(stream) => 0,
@@ -116,11 +112,13 @@ const fn body_block(stream: crate::io::demand::Stream) -> u64 {
     }
 }
 
-/// The heap's bounded flows at their worst: a body on every credit, in the
-/// buddy's block for the longest kind whose bodies are the heap's, each
-/// freed as it is decoded. Terrain's and the Earth's, kept or not, are
-/// `.fixed.bodies`'. The rest of the heap is workspace, which asks first.
+/// The heap's bounded flows at their worst: terrain's and the Earth's
+/// bodies, kept or on a credit, in the runs `BODY_SLOTS` slots fill
+/// (io/body.rs), and a body on every credit in the buddy's block for the
+/// longest other kind, each freed as it is decoded. The rest of the heap is
+/// workspace, which asks first.
 const HEAP_FLOWS_BYTES: u64 = {
+    use crate::io::body::slots_bytes;
     use crate::io::demand::Stream;
     let mut longest = 0;
     let mut k = 0;
@@ -130,7 +128,7 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    crate::param::MAX_CREDITS as u64 * longest
+    slots_bytes(crate::param::BODY_SLOTS) + crate::param::MAX_CREDITS as u64 * longest
 };
 
 const _: () = assert!(
@@ -149,3 +147,7 @@ pub fn range(f: Fixed) -> Section {
     use xpute_kit::status::bug::OrBug;
     map().or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE).fixed.nth(&FIXED, PAGE_BYTES, f as usize)
 }
+
+#[cfg(test)]
+#[path = "layout.test.rs"]
+mod test;

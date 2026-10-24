@@ -118,15 +118,18 @@
       "constants), so a terrain grown past a phone fails to build; and at boot",
       "against where it actually started and what the device actually gave.",
       "",
-      "256 MiB, with the fixed ranges at 208.45 (the terrain's 157.75 of them and",
-      "the bodies' 33.12) and the module's data ending at 10.5, leaves the phone",
-      "293.0 in practice, so there are 37 MiB of headroom over the guarantee",
-      "(2026-10-24).",
+      "256 MiB. The fixed ranges take 175.32 MiB, the terrain's 157.75 MiB of",
+      "them, and the module's data ends at about 10.5 MiB (`__data_end` in a",
+      "build), which leaves the phone 326.2 in practice, so there are 70 MiB of",
+      "headroom over the guarantee (2026-10-24).",
       "",
       "The heap's bounded flows at their worst are checked against it at compile",
-      "time too (door/layout.rs `HEAP_FLOWS_BYTES`): a body on every credit in",
-      "the buddy's block for a division's, 64 MiB. Terrain's and the Earth's",
-      "bodies are `.fixed`'s (io/body.rs)."
+      "time too (door/layout.rs `HEAP_FLOWS_BYTES`): the runs that `BODY_SLOTS`",
+      "terrain and Earth bodies fill (io/body.rs), and a body on every credit in",
+      "the buddy's block for a division's, 96.00 MiB.",
+      "",
+      "Each figure here in MiB to two places is held to the code by a test",
+      "(door/layout.test.rs); the data's end is a build's, and read off one."
     ]
   },
 

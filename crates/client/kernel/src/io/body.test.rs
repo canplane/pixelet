@@ -2,42 +2,35 @@
 
 use super::*;
 
-/// `.fixed.bodies` as a test has it: memory of its size, placed once and
-/// never freed, as boot places the range, with every slot back.
-fn placed() -> &'static mut Slots {
-    let s = held();
-    if s.at.is_none() {
-        let room: &'static mut [u8] = Box::leak(vec![0u8; BODIES_BYTES as usize].into_boxed_slice());
-        s.at = Some(xpute_guest::mem::base::off_of(room.as_ptr()));
-    }
-    s.out = 0;
-    s
+fn runs() -> usize {
+    held().runs.len()
 }
 
 #[test]
-fn terrain_and_earth_bodies_take_the_slots_until_every_one_is_out_and_then_wait_for_one_given_back() {
+fn terrain_and_earth_bodies_share_a_run_until_it_is_full_and_it_goes_once_the_last_is_back() {
     let _g = crate::serial();
-    placed();
+    let before = runs();
     let longest = longest(Stream::terrain);
     let mut out: Vec<Block> = (0..SLOTS).map(|k| take(Some(if k % 2 == 0 { Stream::terrain } else { Stream::earth }), longest).unwrap()).collect();
+    assert_eq!(runs(), before + 1, "{SLOTS} bodies fill one run");
     let mut at: Vec<usize> = out.iter().map(|b| b.0).collect();
     at.sort();
     assert!(at.windows(2).all(|w| w[1] - w[0] >= SLOT_BYTES as usize), "no two slots overlap");
-
-    let refused = take(Some(Stream::terrain), longest).unwrap_err();
-    assert_eq!(refused, Refused::bodies(), "every slot out: refused by the slots");
-    assert!(!refused.over(), "and waits");
+    out.push(take(Some(Stream::terrain), longest).unwrap());
+    assert_eq!(runs(), before + 2, "and the next borrows another");
 
     for (k, &(at, n)) in out.iter().enumerate() {
         // SAFETY: `n` bytes of a slot just taken.
         unsafe { core::ptr::write_bytes(xpute_guest::mem::base::ptr_at::<u8>(at), k as u8, n as usize) };
     }
+    let released = releases();
     let freed = out.remove(1);
     // SAFETY: from `take`, given back once, here and below.
     unsafe { give(freed) };
-    assert!(refused.over(), "a slot given back ends the wait");
+    assert_eq!(releases(), released.wrapping_add(1), "a slot given back is a release");
     let again = take(Some(Stream::earth), longest).unwrap();
-    assert_eq!(again.0, freed.0, "and the slot given back is the one taken");
+    assert_eq!(again.0, freed.0, "a slot given back is taken again before a run is borrowed");
+    assert_eq!(runs(), before + 2);
     for (k, &(at, n)) in out.iter().enumerate().skip(1) {
         // SAFETY: still out, `n` bytes long.
         let bytes = unsafe { core::slice::from_raw_parts(xpute_guest::mem::base::ptr_at::<u8>(at), n as usize) };
@@ -48,16 +41,16 @@ fn terrain_and_earth_bodies_take_the_slots_until_every_one_is_out_and_then_wait_
     for block in out {
         unsafe { give(block) };
     }
-    assert_eq!(held().out, 0, "every slot back");
+    assert_eq!(runs(), before, "a run is given back once its last slot is");
 }
 
 #[test]
 fn every_other_body_is_a_heap_block_of_its_own() {
     let _g = crate::serial();
-    placed();
+    let before = runs();
     for stream in [Some(Stream::place), Some(Stream::division), None] {
         let block = take(stream, 4096).unwrap();
-        assert_eq!(held().out, 0, "{stream:?} takes no slot");
+        assert_eq!(runs(), before, "{stream:?} takes no slot");
         let released = releases();
         // SAFETY: from `take`, given back once.
         unsafe { give(block) };
@@ -66,9 +59,23 @@ fn every_other_body_is_a_heap_block_of_its_own() {
 }
 
 #[test]
+fn no_more_than_body_slots_are_out_and_one_given_back_ends_the_wait() {
+    let _g = crate::serial();
+    let longest = longest(Stream::terrain);
+    let mut out: Vec<Block> = (0..BODY_SLOTS).map(|_| take(Some(Stream::terrain), longest).unwrap()).collect();
+    let refused = take(Some(Stream::earth), longest).unwrap_err();
+    assert!(!refused.over(), "every slot out: the body waits");
+    // SAFETY: from `take`, given back once, here and below.
+    unsafe { give(out.pop().unwrap()) };
+    assert!(refused.over(), "until one is given back");
+    for block in out {
+        unsafe { give(block) };
+    }
+}
+
+#[test]
 fn the_peak_is_the_most_slots_out_since_it_was_last_taken() {
     let _g = crate::serial();
-    placed();
     take_peak();
     let a = take(Some(Stream::terrain), 1).unwrap();
     let b = take(Some(Stream::earth), 1).unwrap();
@@ -81,8 +88,8 @@ fn the_peak_is_the_most_slots_out_since_it_was_last_taken() {
 
 #[test]
 fn a_slot_costs_less_than_the_buddy_block_it_replaces() {
+    assert_eq!(SLOTS, 7, "at today's packets, as io/body.rs says");
     for stream in SLOTTED {
-        assert!(SLOT_BYTES >= longest(stream) && SLOT_BYTES < longest(stream).next_power_of_two());
+        assert!(SLOT_BYTES >= longest(stream) && (BODY_RUN_BYTES / SLOTS) < longest(stream).next_power_of_two());
     }
-    assert_eq!(BODIES_BYTES, (MAX_CREDITS + KEPT_BODIES) * SLOT_BYTES);
 }

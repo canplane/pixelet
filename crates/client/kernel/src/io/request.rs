@@ -5,8 +5,8 @@
 //! retry waits are the `Serve` policy's.
 //!
 //! An answer ends its want; a failure ends only its attempt. A failure of the
-//! object drops its want; a body the heap refused room holds its want until
-//! the heap gives some back; one of the network or the server holds back
+//! object drops its want; a body refused room, by the heap or the body
+//! slots, holds its want until either gives some back; one of the network or the server holds back
 //! every start, then lets one probe out until something answers, and the
 //! server's past its last wait gives the reads up. A running attempt is never
 //! preempted.

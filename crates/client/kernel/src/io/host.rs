@@ -171,41 +171,23 @@ pub fn heap_stat() -> HeapStat {
     (HEAP.get(|| no_heap))()
 }
 
-/// A request refused room, by the heap or by the body slots (io/body.rs),
-/// as what refused it counted its releases then: it waits until that gives
-/// some room back, never on a clock, since only a release can change the
-/// answer, and not on the other, whose releases free nothing it could take.
+/// A request the heap or the body slots refused room (io/body.rs), as
+/// their release counts were then: it waits until either gives some back,
+/// never on a clock, since only a release can change the answer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Refused(Room, u32);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Room {
-    Heap,
-    Bodies,
-}
-
-impl Room {
-    fn released(self) -> u32 {
-        match self {
-            Room::Heap => heap_stat().releases,
-            Room::Bodies => crate::io::body::releases(),
-        }
-    }
-}
+pub struct Refused(u32);
 
 impl Refused {
-    /// By the heap.
     pub fn now() -> Refused {
-        Refused(Room::Heap, Room::Heap.released())
-    }
-
-    /// By the body slots, every one out.
-    pub fn bodies() -> Refused {
-        Refused(Room::Bodies, Room::Bodies.released())
+        Refused(released())
     }
 
     /// Whether room has been given back since, so asking again may be served.
     pub fn over(self) -> bool {
-        self.0.released() != self.1
+        released() != self.0
     }
+}
+
+fn released() -> u32 {
+    heap_stat().releases.wrapping_add(crate::io::body::releases())
 }
