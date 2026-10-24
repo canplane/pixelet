@@ -41,8 +41,9 @@ export function geolocationStart(): void {
   if (geolocationWatch !== null || !("geolocation" in navigator)) return;
   geolocationWatch = navigator.geolocation.watchPosition(
     (pos) => {
-      const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-      kernel_position(longitude, latitude, altitude, accuracy, heading);
+      const { latitude, longitude, altitude, altitudeAccuracy, accuracy, heading } = pos.coords;
+      // An altitude with no accuracy is none measured: a desktop's location gives 0.
+      kernel_position(longitude, latitude, altitudeAccuracy === null ? null : altitude, accuracy, heading);
     },
     (err) => {
       // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT and ends
