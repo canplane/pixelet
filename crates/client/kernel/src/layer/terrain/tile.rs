@@ -97,7 +97,9 @@ const _: () = assert!(
 /// could still be kept, less those asked again and not yet come, so none
 /// is fetched only to be freed past `most_kept`.
 pub fn again_room() -> u32 {
-    most_kept().saturating_sub(kept().count() + TerrainTile::residency().asked_again())
+    // Not one whose object failed: it is not read again while it is wanted.
+    let coming = TerrainTile::residency().asked_again(|p| !crate::io::request::object_failed(Stream::terrain, p.subject()));
+    most_kept().saturating_sub(kept().count() + coming)
 }
 
 /// The tiles whose squares the windows want filled, off their packets.

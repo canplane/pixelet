@@ -387,6 +387,12 @@ impl<S: Serve> RequestScheduler<S> {
         }
     }
 
+    /// Whether `stream`'s want of `subject` waits on its object, which
+    /// failed: it is not asked again while it is wanted.
+    pub fn object_failed(&self, stream: Stream, subject: u64) -> bool {
+        self.find(stream, subject).is_some_and(|i| matches!(self.desired[i].wait, Wait::Object))
+    }
+
     pub fn attempt_of(&self, key: u64) -> Option<(Stream, u64)> {
         let slot = self.slot_of(key)?;
         self.attempt[slot].map(|a| (a.stream, a.subject))
@@ -564,6 +570,10 @@ pub fn take_stops(each: impl FnMut(u64)) {
 
 pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {
     sched().attempt_of(key)
+}
+
+pub fn object_failed(stream: Stream, subject: u64) -> bool {
+    sched().object_failed(stream, subject)
 }
 
 pub fn settle(key: u64, ended: Ended, phases: Option<Phases>) {

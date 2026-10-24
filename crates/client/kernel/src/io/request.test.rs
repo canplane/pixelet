@@ -349,3 +349,17 @@ fn an_asset_shares_the_credits_and_is_never_withdrawn() {
     assert_eq!(started(&mut l).len(), 1, "one credit, one read — an asset does not go beside the tiles");
     assert_eq!(l.stream_counts(Stream::asset), (1, 0), "and it is what is waiting");
 }
+
+#[test]
+fn a_want_whose_object_failed_says_so_while_it_is_wanted() {
+    let mut l = scheduler();
+    let want = [(1u64, ask(Why::Demand, 0.0))];
+    l.declare(Stream::terrain, &want, 0.0);
+    l.pump(0.0);
+    let key = started(&mut l)[0];
+    assert!(!l.object_failed(Stream::terrain, 1));
+    failed_with(&mut l, key, Errno::EBADMSG, 0.0);
+    assert!(l.object_failed(Stream::terrain, 1), "its object's failure holds it");
+    l.declare(Stream::terrain, &[], 0.0);
+    assert!(!l.object_failed(Stream::terrain, 1), "and nothing once it is no longer wanted");
+}
