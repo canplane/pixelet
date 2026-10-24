@@ -94,11 +94,6 @@ export class Sys {
 
   constructor(private readonly host: SysHost) {}
 
-  /** For a program call to consume in place rather than READ into the guest. */
-  bytes(fd: u32): U8Array | null {
-    return this.open.get(fd)?.bytes ?? null;
-  }
-
   run(memory: ArrayBuffer, at: u32): void {
     each_record(memory, at, HEAD, this.record);
   }
