@@ -299,8 +299,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     // What was read stands for a chunk still drawn whose columns no change
     // touches (query/changed.rs), while places did not turn: a chunk left or
     // touched drops its run, and only one entered or touched is read, as
-    // many a turn as `PLACE_CHUNKS_READ`, nearest the eye first; the rest are
-    // not read yet, so a later turn reads them.
+    // many a turn as a pass of the tick's budget reads and at least one,
+    // nearest the eye first; the rest are not read yet, so a later turn
+    // reads them.
     p.moved = false;
     let before = match &p.found_for {
         Some(f) if f.places == places => f.drawn.as_slice(),
@@ -317,14 +318,21 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     entering.clear();
     entering.extend(now.drawn.iter().filter(|c| !stands(c)).map(|&c| (v3::len(&v3::sub(&c.region().center(), &o.eye)), c)));
     entering.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
-    let read = entering.len().min(crate::param::PLACE_CHUNKS_READ);
+    let read = ctx
+        .budget
+        .run(
+            entering.iter(),
+            |&(_, chunk)| {
+                markers(chunk, &mut found);
+                if places {
+                    places_in(chunk, &mut found);
+                }
+                true
+            },
+            None,
+        )
+        .visited as usize;
     let unread = entering.len() - read;
-    for &(_, chunk) in &entering[..read] {
-        markers(chunk, &mut found);
-        if places {
-            places_in(chunk, &mut found);
-        }
-    }
     // Not read, so not what `found` was read from.
     let later = &mut entering[read..];
     later.sort_unstable_by_key(|e| e.1);
