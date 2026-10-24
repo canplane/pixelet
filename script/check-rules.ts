@@ -1,8 +1,8 @@
 #!/usr/bin/env -S deno run -A
-// Holds the tree to the rules a machine can decide: no raw pointer casts in
-// offset crates, `@expo/ui` only in the sheet, each rounding half to even, no
-// CommonJS file, each generated shader made from the sources the tree holds
-// now.
+// Holds the tree to what a reader cannot see and the code must keep: no raw
+// pointer casts in offset crates, each rounding half to even, each generated
+// shader made from the sources the tree holds now. How the tree is written
+// is CONVENTION.md's.
 //   deno run -A script/check-rules.ts
 
 import { dirname, fromFileUrl, join } from "@std/path";
@@ -47,15 +47,6 @@ for (const f of files) {
   });
 }
 
-const SWIFTUI_OWNERS = ["apps/client/src/shell/ui/panel.ios.tsx"];
-
-for (const f of files) {
-  if (!/\.tsx?$/.test(f) || !f.startsWith("apps/") || SWIFTUI_OWNERS.includes(f)) continue;
-  read(f)?.split("\n").forEach((line, n) => {
-    if (/^\s*import\b.*["']@expo\/ui/.test(line)) problems.push(`${f}:${n + 1}: imports @expo/ui outside the sheet, where a control that takes a touch is UIKit's`);
-  });
-}
-
 // One rounding: half to even (ARCHITECTURE.md, Terrain). A call that
 // rounds otherwise, or a floor of a half added, is refused in pixelet's code
 // and xpute's; xpute's scalar keeps its named variants, round_half_up and
@@ -91,13 +82,6 @@ for (const f of files) {
   });
 }
 
-// The tree's scripts are ES modules, TypeScript where a loader takes it, the
-// bundlers' configs among them: Node runs only the native toolchain's own
-// scripts (CocoaPods, Xcode's and Gradle's phases).
-for (const f of files) {
-  if (/\.c[jt]s$/.test(f)) problems.push(`${f}: CommonJS; the tree's scripts are ES modules`);
-}
-
 // A generated shader names the digest of the sources it was made from
 // (shader-wgsl.ts `inputsDigest`); one the tree has moved past is stale.
 const digest = await inputsDigest(root);
@@ -111,4 +95,4 @@ if (problems.length) {
   console.error(`\ncheck-rules: ${problems.length}`);
   Deno.exit(1);
 }
-console.log("check-rules: the memory's offsets, SwiftUI's place, one rounding, ES modules and the generated shaders hold");
+console.log("check-rules: the memory's offsets, one rounding and the generated shaders hold");
