@@ -230,7 +230,7 @@ implemented.
 
 - The crate line is mechanism/policy and stays that way; the pair check
   and the reshaping after the move both follow it
-  ([where the pair differs](./20260914-where-the-pair-differs.md)).
+  ([where the pair differs](./archive/20260914-where-the-pair-differs.md)).
 - Nothing about opening xpute is scheduled. It is recorded so the
   checkpoint — a second, non-spatial workload — is recognized when it
   comes, after the WASM move is done and the boundary has been corrected

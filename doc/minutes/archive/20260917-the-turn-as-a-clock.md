@@ -2,7 +2,7 @@
 
 **2026-09-17** — worked out in a conversation after an audit found that the
 turn path, the one actually in use, did not match what
-[20260914-mechanism-and-policy-and-what-xpute-is.md](./20260914-mechanism-and-policy-and-what-xpute-is.md)
+[20260914-mechanism-and-policy-and-what-xpute-is.md](../20260914-mechanism-and-policy-and-what-xpute-is.md)
 records. This settles the boundary between the host and the guest. What runs
 inside the guest's turn is a second pass, not taken here.
 

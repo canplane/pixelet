@@ -106,4 +106,4 @@ Kept here because each will come up again:
   generic and lets the driver decide what a command means. Here:
   `xpute-core` is the ring, the arena and the numbering scheme; what the
   commands are is `pxl`'s
-  ([mechanism and policy, and what xpute is](./20260914-mechanism-and-policy-and-what-xpute-is.md)).
+  ([mechanism and policy, and what xpute is](../20260914-mechanism-and-policy-and-what-xpute-is.md)).
