@@ -10,7 +10,12 @@ use pxl_spec::space::camera::grid::CHUNK_STEPS;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::wrap_cell;
-use pxl_spec::space::coord::zoom::{index_of, units, Zoom};
+use pxl_spec::space::coord::zoom::{index_of, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::TOP_ZOOM;
+
+// The coarsest chunk, of the top's ground cells, is a 3D root.
+const _: () = assert!(GROUND.grid_zoom(TOP_ZOOM) == SHARD_ZOOM + CHUNK_STEPS, "the top's cells are a 3D root's chunk's");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Chunk {

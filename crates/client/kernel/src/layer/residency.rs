@@ -86,8 +86,8 @@ pub struct Residency<L: Base> {
 /// What a layer's residency holds at once, from what it asks for. A layer
 /// holds only what it asks for (`Base::ASKS`).
 impl<L: Base> Residency<L> {
-    /// The zooms the layer's pyramid holds, its leaves to its lattice's top.
-    pub const ZOOMS: u32 = (L::LEAF - L::LATTICE.top() + 1);
+    /// The zooms the layer's pyramid holds, its leaves to the coarsest it is read at.
+    pub const ZOOMS: u32 = (L::LEAF - L::COARSEST + 1);
 
     /// A destination's line from its leaf to the top.
     pub const DESTINATION_TILES: u32 = Self::ZOOMS;
@@ -253,7 +253,7 @@ impl<L: Base> Residency<L> {
         let held = |q: Tile| lines.at[q.zoom as usize].filter(|l| l.tile == q);
         let line = match held(p) {
             Some(l) => l,
-            None if p.zoom > L::LATTICE.top() => {
+            None if p.zoom > L::COARSEST => {
                 let over = self.seek(lines, p.parent());
                 self.step(&over, p)
             }

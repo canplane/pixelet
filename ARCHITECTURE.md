@@ -39,12 +39,12 @@ The parts follow that order. **The world** is what the kernel carries: sizes, po
 
 Every size in the world is one number, its zoom. The world is 2^24 units round, and a thing whose side is the world's over 2^z is at zoom z: one zoom finer is half as wide (`pxl-spec space/coord/zoom.rs`).
 
-| Zoom | Side   | What it sizes                                               |
-| ---- | ------ | ----------------------------------------------------------- |
-| z27  | `1/8u` | a placed object's finest cell                               |
-| z24  | `1u`   | a ground cell, the unit a position names                    |
-| z15  | `512u` | a leaf tile: the finest terrain is fetched and stored at    |
-| top  |        | the coarsest tile, where the pyramid stops (`Lattice::top`) |
+| Zoom | Side   | What it sizes                                                                  |
+| ---- | ------ | ------------------------------------------------------------------------------ |
+| z27  | `1/8u` | a placed object's finest cell                                                  |
+| z24  | `1u`   | a ground cell, the unit a position names                                       |
+| z15  | `512u` | a leaf tile: the finest terrain is fetched and stored at                       |
+| top  |        | the coarsest tile, where the pyramid stops (`pxl-spec-core lib.rs` `TOP_ZOOM`) |
 
 The words for what is sized:
 

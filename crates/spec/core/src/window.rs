@@ -12,7 +12,7 @@
 
 use crate::ground::{ELE_WORDS, UNKNOWN, VOID};
 use crate::lattice::{GROUND, TILE_CELLS};
-use crate::{wrap_index, Zoom, LEAF_CELL};
+use crate::{wrap_index, Zoom, LEAF_CELL, TOP_ZOOM};
 
 /// A square's side in cells, as a shift.
 pub const SQUARE_SHIFT: u32 = 6;
@@ -26,7 +26,7 @@ pub const SLOTS: u32 = ACROSS * ACROSS;
 /// A window's side in cells.
 pub const WINDOW: u32 = ACROSS * SQUARE;
 /// The eye's coarsest window's cells' zoom: the top's.
-pub const FIRST_CELL: Zoom = GROUND.cell_zoom(GROUND.top());
+pub const FIRST_CELL: Zoom = GROUND.cell_zoom(TOP_ZOOM);
 /// The eye's windows, every zoom the pyramid draws, coarsest first, which
 /// the GPU's cast reads: the one at `cell` is `cell − FIRST_CELL`.
 pub const EYE_WINDOWS: u32 = LEAF_CELL - FIRST_CELL + 1;

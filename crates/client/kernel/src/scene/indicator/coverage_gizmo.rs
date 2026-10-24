@@ -21,7 +21,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 use pxl_spec_core::window::{self, Slot, EYE_WINDOWS, FIRST_CELL, SLOTS, SQUARE_SHIFT};
 use pxl_spec_core::{CHUNK_STEPS, LEAF_CELL};
 use xpute_guest::global::Global;
@@ -132,7 +132,7 @@ pub fn coverage_gizmo_step(show: bool) {
     // Its lines are f32 about the corner under the eye of a tile about as wide as
     // the eye is high: what is near resolves, and a move rebuilds them once a height.
     let height = (o.eye[2] - o.ground).max(1.0);
-    let zoom = within(height).clamp(GROUND.top() as i32, LEAF_ZOOM as i32) as Zoom;
+    let zoom = within(height).clamp(TOP_ZOOM as i32, LEAF_ZOOM as i32) as Zoom;
     let span = units(zoom);
     let eye = view().at().eye;
     let about = [(eye[0] / span).floor() * span, (eye[1] / span).floor() * span, 0.0];

@@ -9,8 +9,8 @@
 use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::{self, Builder, Separation, POINT_SCALE};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, u_from_mer};
-use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::lattice::TILE_CELLS;
+use pxl_spec::space::layer::tile::{LEAF_ZOOM, TOP_ZOOM};
 use xpute_kit::math::scalar::round;
 
 use crate::separation::Line;
@@ -61,7 +61,7 @@ type Point = ([f64; 2], f64, u8);
 /// bake/separation.rs `fold_separation`).
 fn edge_coarsest(m: i64) -> u8 {
     let first = LEAF_ZOOM.saturating_sub(if m == 0 { LEAF_ZOOM } else { m.trailing_zeros().min(LEAF_ZOOM) });
-    first.saturating_sub(1).max(GROUND.top()) as u8
+    first.saturating_sub(1).max(TOP_ZOOM) as u8
 }
 
 /// The line through `points` with a point where it crosses each edge of the

@@ -4,7 +4,6 @@
 //! one-zoom function the client runs.
 
 use fnv::{FnvHashMap, FnvHashSet};
-use pxl_spec::space::layer::lattice::GROUND;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -14,7 +13,7 @@ use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM, TOP_ZOOM};
 
 use crate::util::{pack, unpack, write_atomic, Level};
 
@@ -201,7 +200,7 @@ pub fn ancestor(mut p: Tile, zoom: Zoom) -> Tile {
 /// `changed` may hold tiles of any zoom, each taken up at its own: one with
 /// no object is changed when what its absence is has.
 pub fn fold<L: Base>(set: &mut Staged<'_>, mut changed: FnvHashSet<Tile>, absent: &impl Absent<L>, workers: usize) -> Result<(), String> {
-    for zoom in (GROUND.top()..L::LEAF).rev() {
+    for zoom in (TOP_ZOOM..L::LEAF).rev() {
         if changed.is_empty() {
             break;
         }

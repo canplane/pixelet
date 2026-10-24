@@ -13,7 +13,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 use pxl_spec_core::area::{self, Area};
 use xpute_guest::global::Global;
 use xpute_kit::codec::json::{read_json, JsonType, JsonValue};
@@ -169,7 +169,7 @@ fn over(k: Tile, p: Tile) -> bool {
 
 fn parse(text: &str) -> Option<Source> {
     let o = read_json(text).filter(|v| v.type_of() == JsonType::Object)?;
-    let pyramid = f64::from(GROUND.top())..=f64::from(LEAF_ZOOM);
+    let pyramid = f64::from(TOP_ZOOM)..=f64::from(LEAF_ZOOM);
     let top_zoom = o.get("top_zoom")?.as_f64().filter(|z| z.fract() == 0.0 && pyramid.contains(z))? as Zoom;
     read_format(o.get("format")?)?;
     let mut shard = Vec::new();

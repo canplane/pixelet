@@ -15,7 +15,7 @@ use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile, GROUND_LANE};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 
 use crate::layer::object::store::Store;
 use crate::layer::residency::Residency;
@@ -51,7 +51,7 @@ fn resident(centre: [f64; 2], held: &[(Tile, Leaf)]) -> Residency<TerrainTile> {
     let mut admitted: Vec<Tile> = Vec::new();
     let mut cells = Vec::new();
     for (p, Leaf { tile, looks, heights }) in held {
-        let line = std::iter::successors(Some(*p), |q| (q.zoom > GROUND.top()).then(|| q.parent()));
+        let line = std::iter::successors(Some(*p), |q| (q.zoom > TOP_ZOOM).then(|| q.parent()));
         for (k, q) in line.enumerate() {
             if admitted.contains(&q) {
                 continue;

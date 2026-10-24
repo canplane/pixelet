@@ -47,7 +47,7 @@ use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::{child_of, Node};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
 use pxl_spec_core::answer::{In, Kind};
 use pxl_spec_core::area::Area;
 use pxl_spec_core::ground::VOID;
@@ -64,7 +64,7 @@ use crate::layer::Answer;
 
 /// The coarsest zoom a block is asked at: the coarsest cells a tile draws.
 pub(super) fn coarsest() -> Zoom {
-    GROUND.grid_zoom(GROUND.top())
+    GROUND.grid_zoom(TOP_ZOOM)
 }
 
 /// A node as a descent reaches it, X on the asker's lap, and what its

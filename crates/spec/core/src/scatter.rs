@@ -22,7 +22,7 @@ use crate::decor::{Counts, Decor, Orientation, BLOCK, DECORS};
 use crate::lattice::GROUND;
 use crate::overwrite::{self, Lanes, PLACED};
 use crate::window::{EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
-use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, UNIT_ZOOM};
+use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
 const BLOCK_SHIFT: u32 = BLOCK.trailing_zeros();
 const _: () = assert!(BLOCK.is_power_of_two(), "a block's side is a power of two, so a uniform cell in it is a draw's top bits");
@@ -58,7 +58,7 @@ fn block_seed(decor: &Decor, born: Zoom, b: [i32; 2]) -> (u32, u32) {
 /// Every candidate of `decor` born at `zoom` or coarser in `[min, max)`
 /// (leaf cells), block by block, coarsest first.
 pub fn each_candidate(decor: &Decor, zoom: Zoom, [min, max]: [[i32; 2]; 2], mut each: impl FnMut(Candidate)) {
-    let top = GROUND.top();
+    let top = TOP_ZOOM;
     let mut born = zoom + 1;
     while born > top {
         born -= 1;
@@ -95,7 +95,7 @@ pub fn each_candidate(decor: &Decor, zoom: Zoom, [min, max]: [[i32; 2]; 2], mut 
 /// `zoom` or coarser, the finest born first: its zoom and index; false past
 /// the last.
 pub fn block_of(zoom: Zoom, [min, max]: [[i32; 2]; 2], n: u32) -> (Zoom, [i32; 2], bool) {
-    let top = GROUND.top();
+    let top = TOP_ZOOM;
     let (mut born, mut n) = (zoom + 1, n);
     while born > top {
         born -= 1;
@@ -117,7 +117,7 @@ pub fn block_of(zoom: Zoom, [min, max]: [[i32; 2]; 2], n: u32) -> (Zoom, [i32; 2
 pub const SQUARE_BLOCKS: u32 = {
     let side = crate::window::SQUARE_SHIFT;
     let (mut born, mut sum) = (LEAF_ZOOM + 1, 0);
-    while born > GROUND.top() {
+    while born > TOP_ZOOM {
         born -= 1;
         let shift = BLOCK_SHIFT + GROUND.finest_in(born).trailing_zeros();
         let across = if side > shift { 1 << (side - shift) } else { 1 };
@@ -347,7 +347,7 @@ pub fn candidate_of(decor: &Decor, zoom: Zoom, region: [[i32; 2]; 2], n: u32, i:
     }
     let (block, shift) = block_seed(decor, born, b);
     let mut draws = SplitMix32::new(block);
-    if i >= decor.counts[usize::from(born != GROUND.top())].of(draws.next_u32()) {
+    if i >= decor.counts[usize::from(born != TOP_ZOOM)].of(draws.next_u32()) {
         return (NONE, false);
     }
     // Two draws a candidate before it.

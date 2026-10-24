@@ -27,8 +27,7 @@ use pxl_spec::bake::published::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::sharded;
 use pxl_spec::route::{tile_object_parts, ASSET_ROOT, TILE_ROOT, TILE_SPHERE};
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 use std::path::{Path as FsPath, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -246,9 +245,9 @@ fn run() -> Result<(), String> {
     }
 
     let (tiles, top_zoom) = match shelf {
-        Some(dir) => (Tiles::Shelf(dir), GROUND.top()),
+        Some(dir) => (Tiles::Shelf(dir), TOP_ZOOM),
         None => {
-            let top_zoom = LEAF_ZOOM.checked_sub(folds).filter(|&z| z >= GROUND.top()).ok_or("--folds past the pyramid's top")?;
+            let top_zoom = LEAF_ZOOM.checked_sub(folds).filter(|&z| z >= TOP_ZOOM).ok_or("--folds past the pyramid's top")?;
             (Tiles::Oven(Server::open(workers, cache.clone(), top_zoom, limits)?), top_zoom)
         }
     };

@@ -13,8 +13,7 @@ pub mod way;
 use postgres::Client;
 use pxl_spec::bake::separation::Form;
 use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, G3857};
-use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{LEAF_ZOOM, TOP_ZOOM};
 use pxl_spec_core::ways;
 
 use crate::terrain::repository::TerrainRepository;
@@ -84,7 +83,7 @@ pub fn coarsest(points: &[G3857], ends: [bool; 2]) -> Vec<u8> {
             heap.push(Reverse((Area(area[j]), j)));
         }
     }
-    let end = |whole: bool| if whole { GROUND.top() } else { LEAF_ZOOM } as u8;
+    let end = |whole: bool| if whole { TOP_ZOOM } else { LEAF_ZOOM } as u8;
     (0..n)
         .map(|i| match i {
             0 => end(ends[0]),

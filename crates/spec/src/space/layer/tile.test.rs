@@ -70,7 +70,7 @@ fn a_point_goes_round_in_x_and_stops_at_the_edge_in_y() {
     assert_eq!(world::point(half + 3.0, REACH.max[1] + 100.0, 0.0), world::point(-half + 3.0, REACH.max[1], 0.0));
     assert_eq!(nearest(-half + 3.0, half - 1.0), half + 3.0);
     assert_eq!(nearest(half - 1.0, -half + 3.0), -half - 1.0);
-    for zoom in [GROUND.top(), LEAF_ZOOM] {
+    for zoom in [TOP_ZOOM, LEAF_ZOOM] {
         let n = 1i32 << zoom;
         assert_eq!(tile_at(zoom, [n / 2, 0]), tile_at(zoom, [-n / 2, 0]));
         assert!(!tile_rows(zoom).contains(&(n / 2)));
@@ -93,7 +93,7 @@ fn the_known_tile_is_named_as_the_bucket_holds_it() {
 /// One prefix is one region at every zoom, and a name's length is its zoom.
 #[test]
 fn a_coarser_tile_is_named_by_a_prefix_of_the_leaf_under_it() {
-    for zoom in GROUND.top()..LEAF_ZOOM {
+    for zoom in TOP_ZOOM..LEAF_ZOOM {
         let coarse = Tile::over(zoom, BUNDANG).name();
         assert_eq!(coarse.len(), zoom as usize);
         assert!(BUNDANG_NAME.starts_with(&coarse), "z{zoom} {coarse}");
@@ -105,7 +105,7 @@ fn every_tile_survives_its_name_at_every_zoom() {
     let n = 1i32 << LEAF_ZOOM;
     for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
         for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
-            for zoom in GROUND.top()..=LEAF_ZOOM {
+            for zoom in TOP_ZOOM..=LEAF_ZOOM {
                 let p = Tile::over(zoom, [x, y]);
                 assert_eq!(Tile::of_name(&p.name()), Some(p), "({x}, {y}) at z{zoom}");
             }

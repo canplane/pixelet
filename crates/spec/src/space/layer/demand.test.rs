@@ -40,7 +40,7 @@ fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Tile> {
 
 #[test]
 fn a_zoom_demands_at_most_its_reach_in_tiles_wherever_the_foot_stands() {
-    for zoom in GROUND.top()..=LEAF_ZOOM {
+    for zoom in TOP_ZOOM..=LEAF_ZOOM {
         for foot in feet(zoom) {
             let n = demands(zoom, foot).len() as u32;
             assert!(n <= REACH_TILES, "z{zoom} at {foot:?}: {n} tiles");
@@ -50,7 +50,7 @@ fn a_zoom_demands_at_most_its_reach_in_tiles_wherever_the_foot_stands() {
 
 #[test]
 fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
-    for zoom in GROUND.top() + 1..=LEAF_ZOOM {
+    for zoom in TOP_ZOOM + 1..=LEAF_ZOOM {
         for foot in feet(zoom) {
             let above = demands(zoom - 1, foot);
             for p in demands(zoom, foot) {
@@ -63,7 +63,7 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
 /// The reach is exactly where a zoom stops being asked for.
 #[test]
 fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {
-    for zoom in GROUND.top()..=LEAF_ZOOM {
+    for zoom in TOP_ZOOM..=LEAF_ZOOM {
         let r = demand_reach(GROUND, zoom);
         assert_eq!(zoom_at(short_of(r)), zoom as i32, "z{zoom} is asked for up to its radius");
         assert_eq!(zoom_at(r), zoom as i32 - 1, "and not at it");
@@ -83,7 +83,7 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
             assert_eq!(zoom_at(libm::ldexp(r, n)), z - n, "{r} scaled by 2^{n}");
         }
     }
-    for z in GROUND.top() as i32..=LEAF_ZOOM as i32 + 3 {
+    for z in TOP_ZOOM as i32..=LEAF_ZOOM as i32 + 3 {
         assert_eq!(zoom_at(split_distance(GROUND.grid_zoom(z as Zoom))), z, "a zoom begins at its split distance");
         assert_eq!(zoom_at(short_of(split_distance(GROUND.grid_zoom(z as Zoom - 1)))), z, "and ends where the next coarser begins");
     }

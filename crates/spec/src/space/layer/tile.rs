@@ -5,7 +5,7 @@
 //! placement, tile membership, folding order and cell centers are decided
 //! here only; a layer owns what a cell carries and how it folds.
 
-use super::lattice::{Lattice, GROUND};
+use super::lattice::Lattice;
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::q3::{self, FRAC_W, Q3};
 use crate::space::coord::world;
@@ -17,6 +17,8 @@ use pxl_spec_core::wrap_index;
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
 /// world 2^15 round.
 pub use pxl_spec_core::LEAF_ZOOM;
+/// The top: the coarsest tile any layer is kept in.
+pub use pxl_spec_core::TOP_ZOOM;
 const _: () = assert!(morton::bits::<2>(LEAF_ZOOM) < 63, "a tile's key fits its subject's word");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -52,7 +54,7 @@ impl Tile {
     /// `key`'s inverse; `None` for a zoom the pyramid does not hold.
     pub fn of_key(key: u128) -> Option<Tile> {
         let (zoom, at) = node_of::<2>(key);
-        (GROUND.top()..=LEAF_ZOOM).contains(&zoom).then(|| tile_at(zoom, at))
+        (TOP_ZOOM..=LEAF_ZOOM).contains(&zoom).then(|| tile_at(zoom, at))
     }
 
     /// What a baked tile is stored as, on disk and in the bucket alike.
@@ -110,7 +112,7 @@ impl Tile {
 /// The coarsest tile of a layer made at `leaf` when the source supplies
 /// terrain whole from `top`: as many zooms over its leaves.
 pub fn top_over(leaf: Zoom, top: Zoom) -> Zoom {
-    top.saturating_sub(LEAF_ZOOM - leaf).max(GROUND.top())
+    top.saturating_sub(LEAF_ZOOM - leaf).max(TOP_ZOOM)
 }
 
 /// The 4×4 tiles a zoom finer around a tile's children, each at

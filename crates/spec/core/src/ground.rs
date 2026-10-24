@@ -21,9 +21,9 @@ use crate::area::{earth, walled, Area, Shard};
 use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::TILE_CELLS;
-use crate::lattice::{CELL_CENTER, GROUND};
+use crate::lattice::CELL_CENTER;
 use crate::window::Found;
-use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM};
+use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
 // The catalog's looks this rule names, read into a word.
 /// The catalog's void and unknown as the words a look is read into.
@@ -454,7 +454,7 @@ pub fn node<H: Held>(held: &mut H, cave: Cave, shard: Shard, place: &mut Found, 
         return (answer, Cell::NONE, EMPTY);
     }
     // Coarser than any tile, no one index holds it.
-    if zoom < GROUND.top() {
+    if zoom < TOP_ZOOM {
         return (split, Cell::NONE, EMPTY);
     }
     // A block's cells are its zoom's. A coarser node's are every zoom's

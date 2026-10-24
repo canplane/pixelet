@@ -21,8 +21,7 @@
 pub mod tree;
 
 use crate::cube::{sentinel, Ground};
-use crate::lattice::GROUND;
-use crate::{cells_of_m, Zoom, LEAF_CELL, LEAF_ZOOM};
+use crate::{cells_of_m, Zoom, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM};
 
 /// Points are eighths of the tile's cell.
 pub const POINT_SCALE: f32 = 8.0;
@@ -87,7 +86,7 @@ pub fn vanishes(width: f32) -> bool {
 /// line's ends weigh without bound and are held at every zoom.
 pub fn coarsest(weight: f32) -> Zoom {
     let mut z = LEAF_ZOOM;
-    while z > GROUND.top() && weight >= (1u32 << (2 * (LEAF_ZOOM - z + 1))) as f32 {
+    while z > TOP_ZOOM && weight >= (1u32 << (2 * (LEAF_ZOOM - z + 1))) as f32 {
         z -= 1;
     }
     z

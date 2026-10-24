@@ -15,8 +15,7 @@ use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::bake::source::{is_version, key, sharded};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
 use serde_json::{json, Map, Value};
 
 use crate::pyramid::MANIFEST;
@@ -77,8 +76,8 @@ pub fn declaration(top_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Resu
 
 /// Four siblings all held, written as their parent, up to the pyramid's top.
 fn folded(mut keys: BTreeSet<Tile>) -> BTreeSet<Tile> {
-    let finest = keys.iter().map(|t| t.zoom).max().unwrap_or(GROUND.top());
-    for zoom in (GROUND.top() + 1..=finest).rev() {
+    let finest = keys.iter().map(|t| t.zoom).max().unwrap_or(TOP_ZOOM);
+    for zoom in (TOP_ZOOM + 1..=finest).rev() {
         let parents: BTreeSet<Tile> = keys.iter().filter(|t| t.zoom == zoom).map(|t| t.parent()).collect();
         for p in parents {
             if p.children().iter().all(|c| keys.contains(c)) {
@@ -147,7 +146,7 @@ pub fn recorded(record: &Value) -> Result<Value, String> {
         }
         overrides.insert(tile, own);
     }
-    declaration(GROUND.top(), &kinds, &overrides)
+    declaration(TOP_ZOOM, &kinds, &overrides)
 }
 
 #[cfg(test)]

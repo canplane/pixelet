@@ -6,7 +6,7 @@
 //! alike. What places it in the world, a position's cell or a tile's
 //! neighbors, is pxl-spec's (space/layer/lattice.rs `Cells`).
 
-use crate::{count, Zoom, CHUNK_STEPS, FINEST_ZOOM, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
+use crate::{count, Zoom, FINEST_ZOOM, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM};
 
 /// Where a cell's center lies in it, as a share of its side from its low
 /// corner: what a cell is painted, sampled and crossed at.
@@ -38,14 +38,6 @@ impl Lattice {
         Lattice { scale_steps: steps, ..self }
     }
 
-    /// The coarsest tile it is kept in: the one whose cells fold into the
-    /// coarsest grid cell any chunk has, a 3D root's (`SHARD_ZOOM`) cells. The
-    /// ground's lands on z4 exactly: z8's chunks have z13 cells, which the
-    /// ground's 512 a tile make a z4 tile's.
-    pub const fn top(self) -> Zoom {
-        self.tile_zoom_of_grid(SHARD_ZOOM + CHUNK_STEPS) as Zoom
-    }
-
     // What a layer reads for a node of the view, named by its zoom and column
     // and the cell zoom it is drawn at: the tile whose cells fold into those
     // cells, or past the leaves its leaf, and where the node lies in it.
@@ -53,9 +45,8 @@ impl Lattice {
     /// The zoom of the tile cells at `cell` are read from, held to the pyramid's zooms.
     pub const fn read_zoom(self, cell: Zoom) -> Zoom {
         let z = self.tile_zoom_of_grid(cell);
-        let top = self.top() as i32;
-        (if z < top {
-            top
+        (if z < TOP_ZOOM as i32 {
+            TOP_ZOOM as i32
         } else if z < LEAF_ZOOM as i32 {
             z
         } else {

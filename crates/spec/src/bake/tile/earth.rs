@@ -11,12 +11,13 @@ use crate::bake::malformed;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::demand_reach;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
+use crate::space::layer::tile::TOP_ZOOM;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 /// The Earth's one zoom: the ground's top. Its tiles are the ground's lattice,
 /// a ground cell a texel, so the tile follows the grid as the ground does.
-pub const EARTH_ZOOM: Zoom = GROUND.top();
+pub const EARTH_ZOOM: Zoom = TOP_ZOOM;
 
 /// How far from the eye the tiles are drawn, before the global picture: the
 /// ground's demand at that zoom.

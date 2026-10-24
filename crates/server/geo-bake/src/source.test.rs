@@ -22,7 +22,7 @@ fn a_shard_is_served_only_where_every_kind_holds_it_and_four_siblings_are_their_
         BaseLayer::earth => Kind { shard: None, ..kind(&[]) },
         _ => kind(&all),
     });
-    let shard = &declaration(GROUND.top(), &kinds, &Overrides::new()).expect("a declaration")["shard"];
+    let shard = &declaration(TOP_ZOOM, &kinds, &Overrides::new()).expect("a declaration")["shard"];
     let keys: Vec<&str> = shard.as_object().expect("a map").keys().map(String::as_str).collect();
     assert_eq!(keys, ["0103300"]);
 }
@@ -36,7 +36,7 @@ fn a_key_or_path_no_client_reads_is_never_written() {
         version: if l == BaseLayer::terrain { "a/b" } else { "v1" }.into(),
         shard: shards().filter(|_| l != BaseLayer::earth),
     });
-    assert!(declaration(GROUND.top(), &kinds, &Overrides::new()).is_err(), "a version no segment");
+    assert!(declaration(TOP_ZOOM, &kinds, &Overrides::new()).is_err(), "a version no segment");
     let earth_held = super::try_kinds(|_| {
         Ok(Kind {
             format: 1,
@@ -45,7 +45,7 @@ fn a_key_or_path_no_client_reads_is_never_written() {
         })
     })
     .expect("a kind each");
-    assert!(declaration(GROUND.top(), &earth_held, &Overrides::new()).is_err(), "the Earth's picture held by shards");
+    assert!(declaration(TOP_ZOOM, &earth_held, &Overrides::new()).is_err(), "the Earth's picture held by shards");
 }
 
 #[test]
@@ -56,7 +56,7 @@ fn an_override_names_its_shard_and_path_whatever_the_fold() {
     });
     let at = tiles(["01033001"]).expect("a name").pop_first().expect("one");
     let overrides = Overrides::from([(at, vec![(BaseLayer::place, "v10.2026-10-12.1".to_string())])]);
-    let shard = &declaration(GROUND.top(), &kinds, &overrides).expect("a declaration")["shard"];
+    let shard = &declaration(TOP_ZOOM, &kinds, &overrides).expect("a declaration")["shard"];
     assert_eq!(shard["0103300"], json!({}));
     assert_eq!(shard["01033001"], json!({ "version": { "place": "v10.2026-10-12.1" } }));
 }
@@ -71,6 +71,6 @@ fn an_override_on_a_shard_not_every_kind_holds_is_refused_for_it_would_serve_it(
     for name in ["01033001", "0103300"] {
         let at = key(name).expect("a key");
         let overrides = Overrides::from([(at, vec![(BaseLayer::place, "v10.2026-10-12.1".to_string())])]);
-        assert!(declaration(GROUND.top(), &kinds, &overrides).is_err(), "{name}");
+        assert!(declaration(TOP_ZOOM, &kinds, &overrides).is_err(), "{name}");
     }
 }

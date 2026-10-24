@@ -6,8 +6,8 @@
 mod answer;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::lattice::Lattice;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::lattice::{Lattice, GROUND};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 use xpute_guest::mem::heap::Block;
 
 use crate::io::demand::{Phases, Stream};
@@ -50,6 +50,10 @@ pub trait Base: Clone + 'static {
     /// The zoom its tiles are made at, as the bake's `Base::LEAF`.
     const LEAF: Zoom = LEAF_ZOOM;
 
+    /// The coarsest zoom its tiles are read at: where its lattice reads the
+    /// top's ground cells, the coarsest any reader asks.
+    const COARSEST: Zoom = Self::LATTICE.read_zoom(GROUND.cell_zoom(TOP_ZOOM));
+
     /// What it asks of the view; its residency is sized so.
     const ASKS: Asks = Asks::View;
 
@@ -61,10 +65,10 @@ pub trait Base: Clone + 'static {
 
     /// The coarsest zoom it is asked for and drawn at: its own source's
     /// (`TOP`) or else the ground's declared one, never coarser than the
-    /// coarsest tile its lattice is kept in (`Lattice::top`); none until the
-    /// source is declared.
+    /// coarsest it is read at (`COARSEST`); none until the source is
+    /// declared.
     fn top() -> Option<Zoom> {
-        Self::TOP.or(crate::io::source::top()).map(|t| t.max(Self::LATTICE.top()))
+        Self::TOP.or(crate::io::source::top()).map(|t| t.max(Self::COARSEST))
     }
 
     /// The most tiles a reader that takes no coarser answer pins apart from

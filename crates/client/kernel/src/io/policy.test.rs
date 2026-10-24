@@ -2,14 +2,14 @@
 
 use super::*;
 use crate::io::demand::Why;
-use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::TOP_ZOOM;
 
 fn at(why: Why, seen: bool, near: f64) -> Ask {
     Ask { why, order: Order { seen, near } }
 }
 
 fn key(stream: Stream, ask: Ask) -> (u8, f64) {
-    let subject = Tile::new(GROUND.top(), [0, 0]).subject();
+    let subject = Tile::new(TOP_ZOOM, [0, 0]).subject();
     let r = Policy::standard().rank(stream, subject, ask, 0.0);
     (r.class, r.distance)
 }
@@ -41,7 +41,7 @@ fn of_tiles_as_near_the_finer_is_asked_first() {
     let p = Policy::standard();
     let eye = at(Why::Floor, true, 0.0);
     let rank = |zoom| p.rank(Stream::terrain, Tile { zoom, at: [0, 0] }.subject(), eye, 0.0);
-    let (leaf, top) = (rank(LEAF_ZOOM), rank(GROUND.top()));
+    let (leaf, top) = (rank(LEAF_ZOOM), rank(TOP_ZOOM));
     assert_eq!((leaf.class, leaf.distance), (top.class, top.distance));
     assert!(leaf.detail > top.detail);
 }
