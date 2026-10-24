@@ -19,7 +19,6 @@
 use core::cmp::Ordering;
 
 use crate::asset::LOAD_FILES;
-use crate::io::body::slotted;
 use crate::io::demand::{Ask, Phases, Stream};
 use crate::io::failure::{Ended, Failure};
 use crate::io::host::Refused;
@@ -55,11 +54,6 @@ pub trait Serve {
     /// The wait after the server's `strikes`th failure in a row, none once
     /// it is given up; `seed` differs per failure.
     fn backoff(&self, strikes: u32, seed: u64) -> Option<f64>;
-
-    /// The body slots terrain's and the Earth's reads may still take
-    /// (io/body.rs `room`), asked only where one of theirs is ready: such a
-    /// read starts only while those already out leave it one.
-    fn body_room(&self) -> u32;
 }
 
 /// Whose a failure is, which decides what waits on it.
@@ -337,22 +331,10 @@ impl<S: Serve> RequestScheduler<S> {
         }
         ready.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
-        // A terrain or Earth read starts only while the slots out and its
-        // stream's attempts out leave one, so none arrives to find the slots
-        // full and is refused after its bytes came; one is counted twice
-        // while its body waits for its decode.
-        let mut slotted_out = self.attempt.iter().flatten().filter(|a| slotted(a.stream)).count() as u32;
-        let mut body_room = None;
         let intake = self.serve.intake().max(1) as usize;
         for &(placed, i) in ready.iter().take(intake) {
             if self.attempt.iter().flatten().count() >= room {
                 break;
-            }
-            if slotted(placed.stream) {
-                if slotted_out >= *body_room.get_or_insert_with(|| self.serve.body_room()) {
-                    continue;
-                }
-                slotted_out += 1;
             }
             let Some(slot) = self.free_slot() else { break };
             self.start(slot, placed.stream, self.desired[i], placed.rank, at);
