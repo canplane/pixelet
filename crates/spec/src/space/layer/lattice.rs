@@ -14,6 +14,13 @@ use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, 
 /// world is here (`Cells`).
 pub use pxl_spec_core::lattice::{Lattice, GROUND, TILE_CELLS};
 
+/// The coarsest zoom `lattice`'s tiles are read at: where it reads the top's
+/// ground cells, the coarsest the camera grid draws. A tile coarser is one no
+/// reader asks for, so the bake folds no coarser.
+pub const fn coarsest(lattice: Lattice) -> Zoom {
+    lattice.read_zoom(GROUND.cell_zoom(super::tile::TOP_ZOOM))
+}
+
 /// How far from an observer's foot a demand at `zoom` can lie: where the
 /// grid's cell a zoom coarser begins. Bounds the run along the ground too.
 pub const fn demand_reach(lattice: Lattice, zoom: Zoom) -> f64 {

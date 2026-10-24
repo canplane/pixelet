@@ -24,6 +24,8 @@ pub const CELL_U: f64 = units(GROUND.cell());
 impl crate::pyramid::Base for TerrainTile {
     const LAYER: pxl_spec::bake::published::BaseLayer = pxl_spec::bake::published::BaseLayer::terrain;
 
+    const LATTICE: pxl_spec::space::layer::lattice::Lattice = GROUND;
+
     /// Refused where a record's room does not hold its lines (pxl-spec
     /// `Separation::fits`), or a window's square would hold more of its
     /// ways' entries than a client gives one (pxl-spec `terrain::ways_fit`),

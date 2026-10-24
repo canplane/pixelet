@@ -155,10 +155,10 @@ The bucket, `pixelet-tiles`, holds everything the client fetches that is not the
 
 | Prefix                  | Object                                          | Named by                 | Policy                                                           |
 | ----------------------- | ----------------------------------------------- | ------------------------ | ---------------------------------------------------------------- |
-| `terrain/<version>/`    | packed XTP tile                                 | name, 5–15               | immutable; a re-bake is a new version                            |
-| `place/<version>/`      | XTP count tile                                  | name, 5–15               | immutable; a re-bake is a new version                            |
-| `division/<version>/`   | XTP division tile                               | name, 5–12               | immutable; a re-bake is a new version                            |
-| `earth/<version>/`      | packed earth tile; `sphere`, its picture whole  | name, 5                  | immutable; a re-bake is a new version                            |
+| `terrain/<version>/`    | packed XTP tile                                 | name, 4–15               | immutable; a re-bake is a new version                            |
+| `place/<version>/`      | XTP count tile                                  | name, 7–15               | immutable; a re-bake is a new version                            |
+| `division/<version>/`   | XTP division tile                               | name, 4–12               | immutable; a re-bake is a new version                            |
+| `earth/<version>/`      | packed earth tile; `sphere`, its picture whole  | name, 4                  | immutable; a re-bake is a new version                            |
 | `asset/`                | glb, png, webp — not packed                     | the SHA-256 of its bytes | immutable by construction; unreferenced keys deleted whenever    |
 | `source`                | the source's declaration, JSON                  | fixed name               | mutable; written by `publish`, `no-cache`, revalidated each boot |
 | `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's gate, never by hand           |

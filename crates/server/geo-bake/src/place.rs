@@ -15,6 +15,8 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 impl crate::pyramid::Base for PlaceTile {
     const LAYER: pxl_spec::bake::published::BaseLayer = pxl_spec::bake::published::BaseLayer::place;
 
+    const LATTICE: pxl_spec::space::layer::lattice::Lattice = place::PLACE_LATTICE;
+
     fn encode(&self, _: Tile) -> Result<Vec<u8>, String> {
         place::encode(self).map_err(|e| e.to_string())
     }

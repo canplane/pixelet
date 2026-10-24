@@ -89,3 +89,26 @@ fn every_kind_carto_draws_an_icon_for_ships_its_symbol() {
         }
     }
 }
+
+#[test]
+fn no_grid_cell_reads_a_tile_coarser_than_the_coarsest() {
+    use crate::space::layer::tile::TOP_ZOOM;
+    let top = GROUND.cell_zoom(TOP_ZOOM);
+    const { assert!(crate::space::layer::lattice::coarsest(GROUND) == TOP_ZOOM, "the ground is read up to the pyramid's top") };
+    const {
+        assert!(
+            crate::space::layer::lattice::coarsest(PLACE_LATTICE) > TOP_ZOOM,
+            "places are read no coarser than their icon's cell allows"
+        )
+    };
+    for lattice in [GROUND, PLACE_LATTICE] {
+        assert_eq!(lattice.read_zoom(top), crate::space::layer::lattice::coarsest(lattice));
+        for cell in top..=GROUND.cell() {
+            assert!(
+                lattice.read_zoom(cell) >= crate::space::layer::lattice::coarsest(lattice),
+                "cell z{cell} reads coarser than {}",
+                crate::space::layer::lattice::coarsest(lattice)
+            );
+        }
+    }
+}

@@ -46,9 +46,19 @@ impl Kind {
         }
     }
 
-    /// Its coarsest tile served, which the client reads from too.
+    /// Its coarsest tile served, which the client reads from too: never
+    /// coarser than the kind is read at.
     fn top(self, top: Zoom) -> Zoom {
-        pxl_spec::space::layer::tile::top_over(self.leaf(), top)
+        pxl_spec::space::layer::tile::top_over(self.leaf(), top).max(self.coarsest())
+    }
+
+    /// The coarsest zoom it is read at (`pyramid::Base::COARSEST`).
+    fn coarsest(self) -> Zoom {
+        match self {
+            Self::Terrain => TerrainTile::COARSEST,
+            Self::Place => PlaceTile::COARSEST,
+            Self::Division => DivisionTile::COARSEST,
+        }
     }
 
     pub fn name(self) -> &'static str {

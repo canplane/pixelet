@@ -13,7 +13,8 @@ use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::lattice::{coarsest, Lattice};
+use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 
 use crate::util::{pack, unpack, write_atomic, Level};
 
@@ -24,8 +25,16 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// The kind it is published as, whose `FORMAT` it is written in.
     const LAYER: BaseLayer;
 
-    /// The zoom its tiles are made at; every coarser one is folded.
+    /// The zoom its tiles are made at; every coarser one is folded, up to
+    /// `COARSEST`.
     const LEAF: Zoom = LEAF_ZOOM;
+
+    /// Its tiles' cells, as the client's layer reads them.
+    const LATTICE: Lattice;
+
+    /// The coarsest zoom it is folded to: the coarsest the client reads it
+    /// at (pxl-spec lattice.rs `coarsest`), since a tile coarser is one nobody asks for.
+    const COARSEST: Zoom = coarsest(Self::LATTICE);
 
     /// As tile `at` is published.
     fn encode(&self, at: Tile) -> Result<Vec<u8>, String>;
@@ -200,7 +209,7 @@ pub fn ancestor(mut p: Tile, zoom: Zoom) -> Tile {
 /// `changed` may hold tiles of any zoom, each taken up at its own: one with
 /// no object is changed when what its absence is has.
 pub fn fold<L: Base>(set: &mut Staged<'_>, mut changed: FnvHashSet<Tile>, absent: &impl Absent<L>, workers: usize) -> Result<(), String> {
-    for zoom in (TOP_ZOOM..L::LEAF).rev() {
+    for zoom in (L::COARSEST..L::LEAF).rev() {
         if changed.is_empty() {
             break;
         }
@@ -323,3 +332,7 @@ fn fold_band<L: Base>(set: &Staged<'_>, rows: &[&[Tile]], absent: &impl Absent<L
     }
     Ok((written, gone))
 }
+
+#[cfg(test)]
+#[path = "pyramid.test.rs"]
+mod test;

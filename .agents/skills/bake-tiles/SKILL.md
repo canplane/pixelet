@@ -75,7 +75,7 @@ deno task bake terrain --stage fold --stage commit
    A tile coarser than z13 makes the server bake what is under it first, so
    the first ask takes seconds to a minute. A mismatch means the two paths
    have drifted: investigate before publishing.
-3. **Places:** the manifest's `zooms` reach z5 and a leaf decodes
+3. **Places:** the manifest's `zooms` reach the coarsest the client reads (pxl-spec `lattice.rs` `coarsest`), and a leaf decodes
    (`pxl-spec bake/tile/place.rs` `decode`). The client draws places only with
    the `place` setting on, which is off by default, so a world without them is
    not a failed bake.

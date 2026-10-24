@@ -6,8 +6,8 @@
 mod answer;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::lattice::{coarsest, Lattice};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_guest::mem::heap::Block;
 
 use crate::io::demand::{Phases, Stream};
@@ -50,9 +50,9 @@ pub trait Base: Clone + 'static {
     /// The zoom its tiles are made at, as the bake's `Base::LEAF`.
     const LEAF: Zoom = LEAF_ZOOM;
 
-    /// The coarsest zoom its tiles are read at: where its lattice reads the
-    /// top's ground cells, the coarsest any reader asks.
-    const COARSEST: Zoom = Self::LATTICE.read_zoom(GROUND.cell_zoom(TOP_ZOOM));
+    /// The coarsest zoom its tiles are read at (pxl-spec lattice.rs `coarsest`), which
+    /// the bake folds up to and no further.
+    const COARSEST: Zoom = coarsest(Self::LATTICE);
 
     /// What it asks of the view; its residency is sized so.
     const ASKS: Asks = Asks::View;

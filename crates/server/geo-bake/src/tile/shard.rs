@@ -30,7 +30,7 @@ use crate::source;
 use crate::util::git_sha;
 use pxl_spec::bake::published::FORMAT;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
-use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
+use pxl_spec::space::layer::tile::Tile;
 
 /// The fold's unit in the stage, and the same once its commit has begun; no
 /// shard is named so.
@@ -243,9 +243,11 @@ impl Stage {
             fs::remove_dir_all(to).map_err(|e| io(to, e))?;
         }
         fs::create_dir_all(to).map_err(|e| io(to, e))?;
-        // A reader starts at the pyramid's top, so no tile there goes.
-        let skip = if pruned { unasked::<L>(&self.set, TOP_ZOOM)? } else { FnvHashSet::default() };
-        for p in self.set.by_zoom()?.into_values().flatten().filter(|p| !skip.contains(p)) {
+        // A reader starts at the kind's coarsest, so no tile there goes, and
+        // none coarser was ever read: a set baked before the fold stopped
+        // there still holds them.
+        let skip = if pruned { unasked::<L>(&self.set, L::COARSEST)? } else { FnvHashSet::default() };
+        for p in self.set.by_zoom()?.into_values().flatten().filter(|p| p.zoom >= L::COARSEST && !skip.contains(p)) {
             fs::hard_link(self.set.path(p), to.join(p.name())).map_err(|e| io(&self.set.path(p), e))?;
         }
         // What the copy is, which the set may stop being once it changes again.
@@ -328,7 +330,7 @@ impl Run {
             if let Some(held) = source::manifest(&self.stage.set.root)?.as_ref().map(source::held).transpose()?.flatten() {
                 fields["shard"] = serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
             }
-            write_manifest(&self.stage.set, TOP_ZOOM, git_sha().as_deref(), fields)?;
+            write_manifest(&self.stage.set, L::COARSEST, git_sha().as_deref(), fields)?;
         }
         if self.publish {
             let mut to = self.stage.set.root.clone().into_os_string();
