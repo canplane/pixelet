@@ -36,7 +36,8 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
       // Too large for a ring frame; valid until the kernel writes the next, a turn away.
       const { at, len } = read_world_snapshot(f!);
       set_snapshot(bytes_at(GUEST.buffer, at, len));
-      kept_refused(kernel_snapshot().kept_refused, (slot) => send_next(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(GUEST_DOORBELL, slot)));
+      // Sent after the completion ring is read: the doorbell refuses a write while it reads.
+      kept_refused(kernel_snapshot().kept_refused, (slot) => queueMicrotask(() => send_next(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(GUEST_DOORBELL, slot))));
       return;
     }
     case Command.SENSOR_START:
