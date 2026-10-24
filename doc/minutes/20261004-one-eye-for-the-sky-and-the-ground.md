@@ -4,7 +4,7 @@
 
 The world is matte and mostly untextured, blocks as plastic is, and its light
 should read as daylight rather than a toy's. Until now the sky was lit and
-shown physically ([the sky is the air](./20260922-the-sky-is-the-air.md)) while
+shown physically ([the sky is the air](./archive/20260922-the-sky-is-the-air.md)) while
 the ground was lit on a scale of its own: a theme's ambient by the hour, and a
 floor of 0.6 of every surface's albedo, by day and by night. The floor was
 most of what a lit face showed, so a night read as day, and the planet's

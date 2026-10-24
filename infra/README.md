@@ -151,6 +151,22 @@ that ([deployment hosting](../doc/minutes/20260816-deployment-hosting.md)).
 Writes are outside it, and nothing configures a spending cap: a publish is a
 pyramid's worth of Class A operations, so `deno task usage` comes before one.
 
+The bucket, `pixelet-tiles`, holds everything the client fetches that is not the app itself:
+
+| Prefix                  | Object                                          | Named by                 | Policy                                                           |
+| ----------------------- | ----------------------------------------------- | ------------------------ | ---------------------------------------------------------------- |
+| `terrain/<version>/`    | packed XTP tile                                 | name, 5–15               | immutable; a re-bake is a new version                            |
+| `place/<version>/`      | XTP count tile                                  | name, 5–15               | immutable; a re-bake is a new version                            |
+| `division/<version>/`   | XTP division tile                               | name, 5–12               | immutable; a re-bake is a new version                            |
+| `earth/<version>/`      | packed earth tile; `sphere`, its picture whole  | name, 5                  | immutable; a re-bake is a new version                            |
+| `asset/`                | glb, png, webp — not packed                     | the SHA-256 of its bytes | immutable by construction; unreferenced keys deleted whenever    |
+| `source`                | the source's declaration, JSON                  | fixed name               | mutable; written by `publish`, `no-cache`, revalidated each boot |
+| `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's gate, never by hand           |
+| `_meta/build-log.jsonl` | a line a published build                        | fixed name               | appended by CI's `record` (`script/build-log.ts`)                |
+| `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number             | written by `deno task deploy` under a build number; never served |
+
+A tile's name is its Morton key, so the same name under two kinds is the same ground, and one prefix is one region across every kind at every zoom. Every object is uploaded `public, max-age=31536000, immutable`, so a new version is a new prefix and no cache needs purging.
+
 The Worker claims all four (`wrangler.jsonc` `run_worker_first`): the bucket
 answers `/tile/*`, under its path less the root, and `/asset/*`, under its
 path; `/geo/*` and `/api/*` go to `GEO_ORIGIN` and `API_ORIGIN` unchanged.

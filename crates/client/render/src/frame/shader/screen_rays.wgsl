@@ -129,7 +129,7 @@ struct Drawn {
 // source holds it: at the ground's cell or finer, its swatch and its layer
 // in all four taps; coarser, one colour as it reads from afar, the ground's
 // the mean of the four looks its cell folds where its face's own is among
-// them (doc/minutes/20260928-what-is-drawn-is-what-the-screen-covers.md,
+// them (doc/minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md,
 // "the 2 × 2 is by design").
 fn drawn(c: vec3u) -> Drawn {
   let value = ray_value(c.x);

@@ -55,12 +55,11 @@ arrangement, not the number's meaning. A zoom finer than z24 is a fraction
 of a unit and lives in a position's fraction, down to z32, a 256th.
 
 A size answers the same questions at every zoom (`coord/zoom.rs`): its side in
-units (`units`), how many of a finer zoom's cells stand across it (`count`),
-which cell a point lies in and where that cell begins (`index_of`,
-`base_of`), and its box (`cube`). The world is
-zoom 0's cell, once around in X (`ROUND`, `around`, `wrap_index`), and a
-stored X stands where it is nearest the eye (`nearest`); all of it is
-`coord/world.rs`'s.
+units (`units`), which cell a point lies in and where that cell begins
+(`index_of`, `base_of`), and its box (`cube`). The world is zoom 0's cell,
+once around in X (`coord/world.rs` `ROUND`, `around`), and a stored X stands
+where it is nearest the eye (`nearest`); which lap a cell's X is named on is
+pxl-spec-core's `wrap_index`, which every walk names it by.
 
 A zoom's side can reach the world's extent on an axis, and then that axis
 collapses: the world is 2^16 units tall, so from z8 coarser a cell is
@@ -114,22 +113,25 @@ z15            z14
 
 A tile at z holds the same record a leaf does — 512 cells a side — so its
 cells are z + 9, a layer's cells always its tile's zoom plus the layer's own
-constant (`Lattice`). Its key is a leaf's key shifted down 15 − z, and a key
+constant (pxl-spec-core `lattice.rs` `Lattice`, which `layer/lattice.rs`
+places in the world). Its key is a leaf's key shifted down 15 − z, and a key
 alone does not say by how much, so a tile is named by its zoom and a key
-together (`Tile`, `layer/tile.rs`); `idx(LEAF_ZOOM, addr)` always answers the leaf
-question: which 512u square.
+together (`Tile`, `layer/tile.rs`); the tile at a zoom over a leaf is
+`Tile::over`, and a tile's first leaf, which 512u square it begins at, is
+`first_leaf`.
 
 The distance chooses a cell zoom (`camera/grid.rs` `cell_at`), and terrain's tile
-zoom is the one whose cells those are (`Lattice::tile_zoom`); the cast
+zoom is the one whose cells those are (pxl-spec-core `Lattice::tile_zoom`); the cast
 measures its own step against the same cell zoom
-([every size is a zoom](../../../../doc/minutes/20261006-every-size-is-a-zoom.md)).
+([every size is a zoom](../../../../doc/minutes/archive/20261006-every-size-is-a-zoom.md)).
 
 ## The trees share their geometry and nothing else
 
 Every tree in this world is dyadic. A node's parent is its coordinate
 halved and its children are the 2^D under it (`hierarchy/tree.rs`), its size is a
 zoom, a cube at a zoom is one box (`coord/zoom.rs` `cube`), and a ray crosses a
-box by one slab test (pxl-spec-core `cast.rs` `slab`). That much is one law,
+box by the ray's span between the box's planes on each axis (pxl-spec-core
+`cast.rs` `spans`, `entered`). That much is one law,
 written once. What a node holds, whether it is resident, how it is stored
 and how a reader walks it are each tree's own, and follow from what it
 represents:
@@ -164,7 +166,7 @@ objects ever resident by tile, their branches would be a layer of the
 pyramid, and a block of equal leaves joined its occupancy.
 
 A reader that crosses two trees walks each its own way and puts the answers
-together (pxl-kernel query.rs `first_hit`). A ray reads the ground
+together (pxl-kernel query/ray.rs `first_hit`). A ray reads the ground
 again from each point along it, since a tile over it may be missing and a
 descent would stall on the gap, and it walks the objects' bounds nearest
 first, since none is missing.

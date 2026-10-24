@@ -97,7 +97,7 @@ once.
 **A slot's payload is 4 KiB.** AF_XDP's sample and DPDK's mbuf both use 2 KiB,
 and `XSK_UMEM__DEFAULT_FRAME_SIZE` is 4,096. What settles it here is not
 either of those: 4 KiB is the page this kernel already counts in
-([the page table the pool did not need](./20260916-the-page-table-the-pool-did-not-need.md))
+([the page table the pool did not need](./archive/20260916-the-page-table-the-pool-did-not-need.md))
 and the buddy's smallest block
 ([the slab over the buddy](./closed/20260917-the-slab-over-the-buddy.md)), so a payload
 is one block wherever one has to come from, and "a packet is at most a page,

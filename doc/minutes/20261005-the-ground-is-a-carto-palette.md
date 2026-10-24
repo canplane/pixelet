@@ -117,7 +117,7 @@ it.
 
 The order decides only what lies on the ground at one height. What stands
 over or under it is not painted: a bridge is a deck, a tunnel a bore, both
-lines the bake writes beside the ground (decision/20261001-ways-off-the-ground.md),
+lines the bake writes beside the ground (archive/20261001-ways-off-the-ground.md),
 and an indoor passage is left off. A road with none of those flags that
 crosses a building's footprint is where the order speaks, and the building
 shows. For the same reason a bridge's own area (`man_made=bridge`, Carto's

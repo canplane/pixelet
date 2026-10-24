@@ -1,22 +1,26 @@
 # Characters (the Actor tier)
 
-This directory is the current, only member of the "Actor" rendering tier —
-see [doc/minutes/20260907-world-rendering-tiers.md](/doc/minutes/20260907-world-rendering-tiers.md)
-for the full taxonomy this belongs to. Kept as `character/`, not renamed to
-`actors/`, on purpose: "Character" is already a real user-facing concept
-(Settings > Character, the drawer's Character tab — which variant a person or
-pet uses), and renaming the folder to the engine's own tier name would make it
-read as a different thing from that settings surface when it's the same one.
+An **actor** is a model that plays its own clips: each tick advances its
+clips and writes its joint palette into its block (`../actor.rs` `Actors`).
+That is what sets this tier apart from decor, whose population is instances
+of static models, and from the indicators, which have no clips. Actors are
+few and each is distinct. This directory holds every one of them:
 
-**What makes something an Actor, not one of the other tiers:** one of the
-kernel's actors (`/crates/client/kernel/src/scene/actor.rs`) — a model played by
-its own clips, its joint palette written each tick — rather than an instance
-of a static model the way decor's population is, with position and animation
-driven in a step of the frame's tick (`../../sched/tick.rs`, the interaction
-phase) rather than by anything the shell holds, at "a few, individually
-distinct" instance count. `companion.rs`'s `Figure` (person + pet) is the
-only instance today.
+- the companion, the person and the pet at the focus (`companion.rs`
+  `Figure`), placed each tick in the interaction phase
+  (`../../turn.rs` `companion_tick`);
+- the variant picker's display cases, a character idling in its case's own
+  canvas (`preview.rs`).
 
-The person's chat line is no Actor of its own: it is a billboard label as a
-marker's is, laid out with them (`../place.rs`), and the companion
-only hands down where it is said from (`../../billboard/chat.rs` `speak_from`).
+Where an actor stands is the kernel's, never the shell's. Its clips advance
+in the scene's own tick (`../../scene.rs`).
+
+The person's chat line is not an actor. It is a billboard label laid out as
+a marker's is (`../place.rs`), and the companion only hands down where it is
+said from (`../../billboard/chat.rs` `speak_from`).
+
+The folder is `character/`, not `actors/`, because "Character" is already
+what a user reads: the settings' Character section and the drawer's
+Character tab choose which variant the person and the pet use. The tier's
+place among the others is
+[doc/minutes/archive/20260907-world-rendering-tiers.md](/doc/minutes/archive/20260907-world-rendering-tiers.md).
