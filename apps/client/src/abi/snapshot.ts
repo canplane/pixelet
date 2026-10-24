@@ -1,10 +1,10 @@
-// @pxl/client/host/snapshot.ts
+// @pxl/client/abi/snapshot.ts
 
 import { useSyncExternalStore } from "react";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
-import { ActiveTool, DevicePoseStatus, GroundStatus, read_snapshot, type Snapshot } from "@/host/abi/cmd.spec.ts";
+import { ActiveTool, DevicePoseStatus, GroundStatus, read_snapshot, type Snapshot } from "@/abi/cmd.spec.ts";
 
 const INITIAL: Snapshot = {
   focus: { status: GroundStatus.Idle, is_off_center: false, center: null, outside: false },

@@ -1,4 +1,4 @@
-// @pxl/client/host/boot.ts
+// @pxl/client/abi/boot.ts
 
 /**
  * Hands the completion ring's signals to whoever runs them, and boots
@@ -8,7 +8,7 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
-import { Command, encode_world_boot, encode_world_kept_emptied, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/host/abi/cmd.spec.ts";
+import { Command, encode_world_boot, encode_world_kept_emptied, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/abi/cmd.spec.ts";
 import {
   geolocationStart,
   geolocationStop,
@@ -19,16 +19,16 @@ import {
   orientationSilenceIsLoss,
   orientationSupported,
 } from "@/bracket.tsx";
-import { declare_source } from "@/host/io/source.ts";
-import { bind_roots } from "@/host/io/roots.ts";
-import { kept_refused, migrate_kept, read_kept } from "@/host/io/storage.ts";
+import { declare_source } from "@/namespace/source.ts";
+import { bind_roots } from "@/namespace/roots.ts";
+import { kept_refused, migrate_kept, read_kept } from "@/namespace/storage.ts";
 import { GUEST, GUEST_DOORBELL, load_guest } from "@/host/mem.ts";
-import { kept } from "@/host/abi/host.spec.ts";
+import { kept } from "@/abi/host.spec.ts";
 import { bytes_at } from "@/host/module.ts";
 import { gpuBoot } from "@/bracket.tsx";
 import { onlineWatch } from "@/bracket.tsx";
 import { send_next, start_sched, strobe } from "@/host/sched.ts";
-import { kernel_snapshot, set_snapshot } from "@/host/snapshot.ts";
+import { kernel_snapshot, set_snapshot } from "@/abi/snapshot.ts";
 
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   switch (cmd) {

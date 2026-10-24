@@ -1,6 +1,6 @@
-// @pxl/client/host/control/sensor.ts
+// @pxl/client/abi/control/sensor.ts
 
-/** The host's end of the device's sensors: each platform's driver reports what it hears through these. */
+/** The device's sensors as the kernel's commands: each platform's driver reports what it hears through these. */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
@@ -12,7 +12,7 @@ import {
   type GeolocationErrorCode,
   type PermissionAnswer,
   type Sensor,
-} from "@/host/abi/cmd.spec.ts";
+} from "@/abi/cmd.spec.ts";
 import { GUEST_DOORBELL } from "@/host/mem.ts";
 import { ring_now, send_next } from "@/host/sched.ts";
 

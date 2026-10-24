@@ -1,4 +1,4 @@
-// @pxl/client/host/io/asset.ts
+// @pxl/client/namespace/asset.ts
 
 /**
  * ASSET's backend: the kernel names a shipped asset by its load number, and
@@ -10,7 +10,7 @@ import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 import { INGESTED, PACK } from "@/catalog/asset/ingested.spec.ts";
 import { assetUrl } from "@/config/route.ts";
-import { get } from "@/host/io/read.ts";
+import { get } from "@/namespace/read.ts";
 
 const KEYS: readonly string[] = Object.values(INGESTED).map((a) => a.key);
 

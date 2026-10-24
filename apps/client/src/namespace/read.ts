@@ -1,7 +1,7 @@
-// @pxl/client/host/io/read.ts
+// @pxl/client/namespace/read.ts
 
 /**
- * The bus under the backends' reads (io/tile.ts, io/asset.ts): an object
+ * The bus under the backends' reads (tile.ts, asset.ts): an object
  * fetched from the origin, whole, as a file's open answers. 204 is a page its
  * version leaves out, ENOENT; 404 names nothing, a failure like any other.
  */

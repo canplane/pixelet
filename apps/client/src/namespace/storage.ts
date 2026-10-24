@@ -1,7 +1,7 @@
-// @pxl/client/host/io/storage.ts
+// @pxl/client/namespace/storage.ts
 
 /**
- * STORAGE's backend: the kernel's kept slots as the host holds them, in the
+ * STORAGE's backend: the kernel's kept slots as the client holds them, in the
  * platform's storage (host.json `kept`). The kernel opens a slot by its
  * number and reads it only where it is of the slot's format, refusing
  * anything else and writing nothing over it; which storage key a slot is,
@@ -17,7 +17,7 @@ import { b64url_to_bytes, bytes_to_b64url, td, te } from "@xpute/kit/codec/encod
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
-import { kept } from "@/host/abi/host.spec.ts";
+import { kept } from "@/abi/host.spec.ts";
 import { storageGet, storageSet } from "@/bracket.tsx";
 
 /** Storage as the bracket gives it: a refused write keeps nothing, and does not throw. */

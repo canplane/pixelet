@@ -12,11 +12,11 @@ import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { AppState, type GestureResponderEvent, type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, StyleSheet, type ViewProps } from "react-native";
 
-import { PointerPhase, PointerType } from "@pxl/client/host/abi/cmd.spec.ts";
-import { kernel_open, kernel_rect, kernel_visible } from "@pxl/client/host/control/input.ts";
+import { PointerPhase, PointerType } from "@pxl/client/abi/cmd.spec.ts";
+import { kernel_open, kernel_rect, kernel_visible } from "@pxl/client/abi/control/input.ts";
 import { worldPointer } from "@pxl/client/shell/store/pointer.ts";
-import { surface_role } from "@pxl/client/host/render/gpu/api.spec.ts";
-import { surface_close, surface_open, surface_size } from "@pxl/client/host/render/surface.ts";
+import { surface_role } from "@pxl/client/abi/render/gpu/api.spec.ts";
+import { surface_close, surface_open, surface_size } from "@pxl/client/abi/render/surface.ts";
 import { request_frame, type Viewport } from "@pxl/client/host/sched.ts";
 
 interface SurfaceProps extends ViewProps {

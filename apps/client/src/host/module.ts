@@ -9,7 +9,7 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { Directory } from "@xpute/host/ipc/directory.ts";
 
-import { DIRECTORY_AT } from "@/host/mem/mem.spec.ts";
+import { DIRECTORY_AT } from "@/abi/mem/mem.spec.ts";
 
 /** The memory never moves or grows. */
 export interface Guest {

@@ -3,8 +3,8 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { useTranslation } from "react-i18next";
 
-import type { DivisionPart, LonLat } from "@/host/abi/cmd.spec.ts";
-import { useKernel } from "@/host/shell.ts";
+import type { DivisionPart, LonLat } from "@/abi/cmd.spec.ts";
+import { useKernel } from "@/abi/shell.ts";
 import { DIVISION_SUBTYPE } from "./division.spec.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 import { assembleLabel, primaryLanguage } from "./label.ts";

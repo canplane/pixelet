@@ -1,6 +1,6 @@
-// @pxl/client/host/control/input.ts
+// @pxl/client/abi/control/input.ts
 
-/** The host as an interrupt source: drivers translate their events into these. */
+/** Input as the kernel's commands: drivers translate their events into these. */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import {
@@ -14,7 +14,7 @@ import {
   encode_world_visibility,
   type PointerPhase,
   type PointerType,
-} from "@/host/abi/cmd.spec.ts";
+} from "@/abi/cmd.spec.ts";
 import { permissionFollow } from "@/bracket.tsx";
 import { GUEST_DOORBELL } from "@/host/mem.ts";
 import { request_frame, ring_now, send_input, set_driver, strobe, type Viewport } from "@/host/sched.ts";

@@ -7,8 +7,8 @@ import { Prose, Section, settingText } from "@/shell/setting/row.tsx";
 import { BrandSymbol } from "@/shell/ui/brand-symbol.tsx";
 import { textStyle } from "@/shell/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/config/deploy.ts";
-import { useSourceVersions } from "@/host/io/source.ts";
-import { format } from "@/host/abi/host.spec.ts";
+import { useSourceVersions } from "@/namespace/source.ts";
+import { format } from "@/abi/host.spec.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
 
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };

@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { messageKey } from "@/shell/locale/message-key.ts";
-import { DevicePoseStatus, GroundStatus, Message } from "@/host/abi/cmd.spec.ts";
+import { DevicePoseStatus, GroundStatus, Message } from "@/abi/cmd.spec.ts";
 import { Gpu, useGpu } from "@/host/gpu.ts";
 import { useOnline } from "@/host/online.ts";
-import { useKernel } from "@/host/shell.ts";
+import { useKernel } from "@/abi/shell.ts";
 
 import { toastDismiss, toastShow, ToastTone } from "@/shell/ui/toast/store.ts";
 

@@ -1,23 +1,23 @@
-// @pxl/client/host/io/source.ts
+// @pxl/client/namespace/source.ts
 
 /**
  * The tile source's declaration (script/publish.ts writes the bucket's), asked of the
  * tile root until it answers: the published bake's out of the bucket, or a dev
  * tile server's. The kernel is handed it unread and observes nothing until
  * then; its versions are read here alone, for the objects the bakes' roots are
- * bound to (io/tile.ts) and for what the settings show.
+ * bound to (tile.ts) and for what the settings show.
  */
 
 import { useSyncExternalStore } from "react";
 
-import { Command, encode_world_source } from "@/host/abi/cmd.spec.ts";
+import { Command, encode_world_source } from "@/abi/cmd.spec.ts";
 import { TILE_SOURCE_ROUTE } from "@/config/route.ts";
 import { originGet } from "@/bracket.tsx";
 import { GUEST_DOORBELL } from "@/host/mem.ts";
 import { send_next } from "@/host/sched.ts";
 import { online, whenOnline } from "@/host/online.ts";
 import { BASE_LAYERS, type BaseLayer } from "@/config/published.spec.ts";
-import { type Declaration, declaration } from "@/host/io/tile.ts";
+import { type Declaration, declaration } from "@/namespace/tile.ts";
 
 let declared: Declaration | null = null;
 let shown: readonly { kind: BaseLayer; version: string }[] = [];

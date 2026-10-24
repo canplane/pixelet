@@ -1,6 +1,6 @@
 // @pxl/web/gpu.ts
 
-import { Command } from "@pxl/client/host/abi/cmd.spec.ts";
+import { Command } from "@pxl/client/abi/cmd.spec.ts";
 import { acquireDevice } from "./webgpu.ts";
 import { request_frame, send_next } from "@pxl/client/host/sched.ts";
 import { Gpu, setGpu } from "@pxl/client/host/gpu.ts";

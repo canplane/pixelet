@@ -43,7 +43,7 @@
       "The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a",
       "bake, numbered by its kind (pxl-spec bake/published.spec.rs). Below every root a path is",
       "an object's number in decimal, its one name; what that object is called and where, a",
-      "tile's version and URL, a storage key, is what the host (apps/client/src/host/)",
+      "tile's version and URL, a storage key, is what the host (apps/client/src/namespace/)",
       "binds the root to, `@xpute/host` carrying the open there."
     ],
     "STORAGE": {

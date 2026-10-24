@@ -1,4 +1,4 @@
-// @pxl/client/host/io/tile.ts
+// @pxl/client/namespace/tile.ts
 
 /**
  * The bakes' backend. A bake's object as the kernel names it, a number
@@ -7,7 +7,7 @@
  * shard's own where one names one; or the Earth's sphere (`SPHERE`), under
  * the earth's own version. The kernel reads the declaration for what is its
  * own, the zooms, the shards and the formats, and never its versions:
- * which object a number is, is the host's to say.
+ * which object a number is, is the client's to say.
  * tile.fixture.json holds what the kernel made of these when it named
  * them itself, and tile.test.ts that this makes the same; the object is
  * read from the edge (`read_object`).
@@ -21,8 +21,8 @@ import type { BaseLayer } from "@/config/published.spec.ts";
 import { BASE_LAYERS } from "@/config/published.spec.ts";
 import { TILE_SPHERE, tileObject } from "@/config/route.spec.ts";
 import { tileUrl } from "@/config/route.ts";
-import { SPHERE } from "@/host/abi/host.spec.ts";
-import { get } from "@/host/io/read.ts";
+import { SPHERE } from "@/abi/host.spec.ts";
+import { get } from "@/namespace/read.ts";
 
 /** What of a declaration this side reads: each kind's version, and a shard's own. */
 export interface Declaration {

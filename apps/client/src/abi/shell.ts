@@ -1,16 +1,16 @@
-// @pxl/client/host/shell.ts
+// @pxl/client/abi/shell.ts
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import type { Errno } from "@xpute/kit/status/errno.spec.ts";
 import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
-import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/host/abi/cmd.spec.ts";
+import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/abi/cmd.spec.ts";
 import { GUEST, GUEST_DOORBELL } from "@/host/mem.ts";
 import { ring_now, send_input } from "@/host/sched.ts";
 import { orientationPermit } from "@/bracket.tsx";
 
-export { kernel_snapshot, useKernel } from "@/host/snapshot.ts";
-export { kernel_hold, kernel_keys } from "@/host/control/input.ts";
+export { kernel_snapshot, useKernel } from "@/abi/snapshot.ts";
+export { kernel_hold, kernel_keys } from "@/abi/control/input.ts";
 export { ring_now as kernel_command } from "@/host/sched.ts";
 
 /** iOS Safari's compass prompt runs here, inside the press. */

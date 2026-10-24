@@ -2,23 +2,21 @@
 
 /**
  * The kernel's system calls as the host answers them, the `SysHost` that
- * `@xpute/host` hands every one to: an open dispatched by root to what is bound
- * there (io/roots.ts), a write committed to STORAGE, the program's own calls
- * (text.ts), and the report that stopped the kernel. All run between turns,
+ * `@xpute/host` hands every one to: an open and a write dispatched by root to
+ * what is bound there (namespace/roots.ts), the program's own calls
+ * (abi/text.ts), and the report that stopped the kernel. All run between turns,
  * so what they write is in place by the time the kernel reads it.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
+import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { Command as XputeCommand, encode_sys_opened } from "@xpute/host/abi/cmd.spec.ts";
-import { FileError, Sys } from "@xpute/host/ipc/sys.ts";
+import { Sys } from "@xpute/host/ipc/sys.ts";
 
-import { root } from "@/host/abi/host.spec.ts";
-import { number_of, open_root } from "@/host/io/roots.ts";
-import { commit_storage } from "@/host/io/storage.ts";
+import { commit_root, open_root } from "@/namespace/roots.ts";
 import { GUEST_DOORBELL } from "@/host/mem.ts";
 import { send_next } from "@/host/sched.ts";
-import { text_call } from "@/host/text.ts";
+import { text_call } from "@/abi/text.ts";
 import { BUILD_NUMBER } from "@/config/deploy.ts";
 
 let stopCode: string | null = null;
@@ -32,10 +30,7 @@ export function stop_code(): string | null {
 
 const SYS = new Sys({
   open: open_root,
-  commit: (r, path, bytes) => {
-    if (r !== root.STORAGE) throw new FileError(Errno.EROFS);
-    commit_storage(number_of(path), bytes);
-  },
+  commit: commit_root,
   opened: (fd, res, detail) => send_next(XputeCommand.SYS_OPENED, encode_sys_opened(GUEST_DOORBELL, fd, res, detail)),
   abort: ({ errno, file, line, column, a, b }) => {
     console.error(`[kernel] stopped: ${strerror(errno)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`);

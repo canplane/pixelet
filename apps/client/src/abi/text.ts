@@ -1,4 +1,4 @@
-// @pxl/client/host/text.ts
+// @pxl/client/abi/text.ts
 
 /**
  * The kernel's own system calls, TEXT_LAYOUT and TEXT_RASTER, answered from
@@ -12,7 +12,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import { te } from "@xpute/kit/codec/encoding.ts";
 import { text_of } from "@xpute/host/ipc/stream.ts";
 
-import { op } from "@/host/abi/host.spec.ts";
+import { op } from "@/abi/host.spec.ts";
 import { textRaster, textWidth } from "@/bracket.tsx";
 
 const word = new DataView(new ArrayBuffer(4));

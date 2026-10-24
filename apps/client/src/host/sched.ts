@@ -8,7 +8,7 @@
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { Strobe } from "@xpute/host/sched/strobe.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
-import { Command, encode_world_frame } from "@/host/abi/cmd.spec.ts";
+import { Command, encode_world_frame } from "@/abi/cmd.spec.ts";
 import { GUEST, GUEST_DOORBELL } from "@/host/mem.ts";
 import { directory } from "@/host/module.ts";
 

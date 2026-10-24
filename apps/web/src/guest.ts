@@ -9,8 +9,8 @@
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { reserve_memory } from "@xpute/host/mem/reserve.ts";
-import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@pxl/client/host/mem/mem.spec.ts";
-import { key } from "@pxl/client/host/abi/directory.spec.ts";
+import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@pxl/client/abi/mem/mem.spec.ts";
+import { key } from "@pxl/client/abi/directory.spec.ts";
 import { directory, type Guest } from "@pxl/client/host/module.ts";
 import { runGpuStream } from "./webgpu.ts";
 import { DEV_BUNDLE } from "@pxl/client/config/bundle.ts";

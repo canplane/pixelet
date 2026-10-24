@@ -1,7 +1,7 @@
-// @pxl/client/host/render/surface.ts
+// @pxl/client/abi/render/surface.ts
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
-import { Command, encode_surface_close, encode_surface_open, encode_surface_resize } from "@/host/abi/cmd.spec.ts";
+import { Command, encode_surface_close, encode_surface_open, encode_surface_resize } from "@/abi/cmd.spec.ts";
 import { GUEST_DOORBELL } from "@/host/mem.ts";
 import { send_next } from "@/host/sched.ts";
 

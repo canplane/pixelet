@@ -8,7 +8,7 @@
 
 import { StyleSheet, Text, View } from "react-native";
 
-import { useKernel } from "@/host/shell.ts";
+import { useKernel } from "@/abi/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { gauge, Head } from "./profiler/gauge.tsx";
 import { Fold } from "./fold.tsx";
