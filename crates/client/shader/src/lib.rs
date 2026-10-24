@@ -104,14 +104,19 @@ fn square_at(square: u32) -> u32 {
 /// cast draws by them, none where a pass draws nothing (`Unlooked`).
 #[derive(Clone, Copy)]
 pub struct World<'a, L> {
-    /// Per window of the eye's, from the top's, a row a slot: the square it
-    /// holds, and whether it is present (pxl-spec-core `window`).
+    /// The windows' table (pxl-spec-core `window::Slot`): every window's
+    /// slots, a row each, the square it wants, the berth holding it plus one
+    /// while present (`Slot::berth`) and the fill it is on its way from,
+    /// the eye's windows first, from the top's; then each window's first
+    /// square (`window::ORIGIN_AT`) and the eye's windows' folds
+    /// (`window::JOINED_AT`).
     window: &'a [IVec4],
-    /// Per square of every window, its columns (`heights_cs`, `ways_cs`),
-    /// their levels (`bound_cs`), their runs (`ways_cs`) and its cells as
-    /// laid (`heights_cs`) (`window::SQUARE_WORDS`); the eye's windows first.
+    /// Per berth (`window::SQUARES`), its square's columns (`heights_cs`,
+    /// `ways_cs`), their levels (`bound_cs`), their runs (`ways_cs`) and its
+    /// cells as laid (`heights_cs`) (`window::SQUARE_WORDS`), whichever
+    /// window filled it.
     ground: &'a [u32],
-    /// Per square, in the same order, its cells' four looks (`Looks`).
+    /// Per berth, in the same order, its cells' four looks (`Looks`).
     looks: L,
     /// The service area's index (pxl-spec-core `area::Area`), its keys four a
     /// row.

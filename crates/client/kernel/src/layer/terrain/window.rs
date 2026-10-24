@@ -27,10 +27,11 @@ use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use crate::io::host::Refused;
 use crate::io::source::Declared;
 use crate::layer::kept::Offered;
 use crate::layer::terrain::fixed::{cells_off, fill_off, joined_off, CELLS_LANE_BYTES, RANGE};
-use crate::layer::terrain::mirror::{mirror, Mirror};
+use crate::layer::terrain::mirror::{mirror, Mirror, Unlaid};
 use crate::layer::Base;
 use crate::mem::fixed::lane;
 use pxl_render::gpu::api::DONE;
@@ -72,9 +73,11 @@ struct Window {
 /// windows want it. Windows at one zoom want a square in the same slot
 /// (`window::slot`), so it is held in one of that slot's berths, `WINDOWS`
 /// of them (`of_slot`); no more squares want a slot than there are
-/// windows, so a square wanted always finds one free (`berth`). A window
-/// takes its own where it is free, so windows overlapping none hold their
-/// squares as if alone.
+/// windows, so a square wanted always finds one free (`berth`), and
+/// windows that overlap take no berth more than the squares they want. A
+/// window takes its own where it is free: windows that never overlapped
+/// hold their squares as if alone, but once two have overlapped and
+/// parted, one may hold its squares in the other's.
 #[derive(Clone, Copy)]
 struct Berth {
     /// Its square's cells' zoom, 0 where it holds none (`is_free`), no
@@ -83,7 +86,7 @@ struct Berth {
     square: [i32; 2],
     present: bool,
     /// The fill its cells are on their way from, 0 where none is, or
-    /// `REFUSED`.
+    /// `REFUSED`, or `WAITING`.
     ticket: u32,
 }
 
@@ -146,6 +149,9 @@ struct Windows {
     pinned: List<Tile, { PINNED_TILES as usize }>,
     /// The berths this turn hands the fill (`due`).
     due: List<u32, { HANDED as usize }>,
+    /// The heap as it was when it first refused a square's blocks the
+    /// mirror's room, while one waits on it (`WAITING`).
+    heap: Option<Refused>,
 }
 
 static WINDOWS_STATE: Global<Windows> = Global::new();
@@ -173,6 +179,7 @@ fn fresh() -> Windows {
         kept: 0,
         pinned: List::new(),
         due: List::new(),
+        heap: None,
     }
 }
 
@@ -268,7 +275,8 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     // Per window, whether its zoom moved, and whether it moved at all.
     let (mut moved, mut changed) = ([false; WINDOWS as usize], [lost; WINDOWS as usize]);
     let kept = crate::layer::terrain::tile::kept().count();
-    let mut stale = lost || core::mem::take(&mut w.filled) || terrain.revision() != w.read || kept != w.kept;
+    let released = wake(w);
+    let mut stale = lost || released || core::mem::take(&mut w.filled) || terrain.revision() != w.read || kept != w.kept;
     for win in 0..WINDOWS {
         let (centre, laid) = layout(win);
         let p = at[centre as usize];
@@ -346,6 +354,20 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     was[..] != w.pinned[..]
 }
 
+/// Each square waiting on the heap absent again, to be handed again, where
+/// the heap gave a page back since it refused one the mirror's room
+/// (`WAITING`): true where it did.
+fn wake(w: &mut Windows) -> bool {
+    if !w.heap.is_some_and(|h| h.over()) {
+        return false;
+    }
+    w.heap = None;
+    for held in w.berths.iter_mut().filter(|b| b.ticket == WAITING) {
+        held.ticket = 0;
+    }
+    true
+}
+
 /// Each square a laid window wants held in one berth: the device that went
 /// took every berth's cells; a berth no window wants any more is given up,
 /// a fill on its way to it laying nothing (`landed`); and a square wanted
@@ -415,20 +437,27 @@ fn show(w: &mut Windows, i: u32) {
 
 /// A berth's ticket while its square's ways' tree is refused, the pool or
 /// the scratch at its cap (pxl-render gpu/renderer.rs `Short`), the square
-/// past its own most or the mirror refused its room (`landed`): never a
-/// fill's (`fill`), and not absent, so the square is not handed again every
-/// turn, nor its tile asked or kept for it, while a window wants it
-/// (`berth`). A reader reads the coarser window's, as for any square
-/// absent.
+/// past its own most or its blocks past the mirror's cap (`landed`), none
+/// of which asking again changes: never a fill's (`fill`), and not absent,
+/// so the square is not handed again every turn, nor its tile asked or kept
+/// for it, while a window wants it (`berth`). A reader reads the coarser
+/// window's, as for any square absent.
 const REFUSED: u32 = u32::MAX;
+/// A berth's ticket while the heap refused its square's blocks the
+/// mirror's room (`mirror::Unlaid::Heap`): not absent, as `REFUSED`, until
+/// the heap gives a page back (`Windows::heap`), when it is absent again
+/// and handed again (`step`).
+const WAITING: u32 = u32::MAX - 1;
+const _: () = assert!(WAITING > DONE - 1, "no fill's ticket waits");
 
 /// Berth `b`'s cells back from its fill `ticket` (pxl-render
 /// `read_back`), and how its ways' tree landed, where the berth still waits
 /// on that fill: built, its blocks laid into the pool's mirror at their
 /// slots, it is present and what is read over its tile moved; to be filled
 /// again (`Landing::Again`), it is absent, handed again; refused, or its
-/// blocks refused the mirror's room by its cap or the heap, it is absent
-/// and `REFUSED` while a window wants it. A fill no berth waits on lays
+/// blocks past the mirror's cap, it is absent and `REFUSED` while a window
+/// wants it; its blocks refused the mirror's room by the heap, it is absent
+/// and `WAITING` on the heap. A fill no berth waits on lays
 /// nothing: its blocks may be another's by now. Every window's slot
 /// holding the square shows it (`show`).
 pub fn landed(b: u32, ticket: u32, landing: Landing) {
@@ -438,13 +467,20 @@ pub fn landed(b: u32, ticket: u32, landing: Landing) {
         return;
     }
     held.ticket = match landing {
-        Landing::Built(records) if mirror().lay(records) => {
-            held.present = true;
-            TerrainTile::residency().moved_at(tile_of(held.cell, held.square).0);
-            0
-        }
+        Landing::Built(records) => match mirror().lay(records) {
+            Ok(()) => {
+                held.present = true;
+                TerrainTile::residency().moved_at(tile_of(held.cell, held.square).0);
+                0
+            }
+            Err(Unlaid::Heap) => {
+                w.heap.get_or_insert_with(Refused::now);
+                WAITING
+            }
+            Err(Unlaid::Cap) => REFUSED,
+        },
         Landing::Again => 0,
-        Landing::Built(_) | Landing::Refused => REFUSED,
+        Landing::Refused => REFUSED,
     };
     // Absent again: what is due moves.
     w.filled |= !held.present;

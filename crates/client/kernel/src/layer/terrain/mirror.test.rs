@@ -17,7 +17,7 @@ fn records(ids: &[u32]) -> Vec<u32> {
 #[test]
 fn a_landing_grows_the_mirror_to_its_highest_block_and_reads_back_at_its_slots() {
     let mut m = Mirror::default();
-    assert!(m.lay(&records(&[1, 3 * CHUNK_BLOCKS + 5])));
+    assert_eq!(m.lay(&records(&[1, 3 * CHUNK_BLOCKS + 5])), Ok(()));
     assert_eq!(m.chunks.len(), 4, "grown a chunk at a time to the highest id laid");
     for b in [1, 3 * CHUNK_BLOCKS + 5] {
         for k in 0..8 {
@@ -31,7 +31,7 @@ fn a_landing_grows_the_mirror_to_its_highest_block_and_reads_back_at_its_slots()
 #[test]
 fn a_block_past_the_cap_is_refused_and_nothing_laid() {
     let mut m = Mirror::default();
-    assert!(!m.lay(&records(&[1, MOST_BLOCKS])));
+    assert_eq!(m.lay(&records(&[1, MOST_BLOCKS])), Err(Unlaid::Cap), "past the cap, which no asking again changes");
     assert_eq!(m.heap(8), 0);
     assert!(m.chunks.is_empty());
 }

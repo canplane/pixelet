@@ -191,8 +191,12 @@ pub struct Cast<'a> {
     /// The eye (pxl-spec-core `eye`; pxl-kernel view/lens.rs `gpu_cast`,
     /// scene/cast.rs `eye`).
     pub eye: [u32; eye::WORDS],
-    /// Per window of the eye's, from the top's, a row a slot: the square it
-    /// holds, X and Y, and whether it is present, and a spare.
+    /// The windows' table (pxl-spec-core `window::Slot`; pxl-kernel
+    /// layer/terrain/window.rs `table`), four words a row: every window's
+    /// slots, the eye's first, from the top's, each the square it wants, X
+    /// and Y, the berth holding it plus one while present (`Slot::berth`)
+    /// and the fill it is on its way from; then each window's first square
+    /// (`window::ORIGIN_AT`).
     pub window: &'a [i32],
     /// The service area's index (pxl-spec-core `area::Area`), its keys four a
     /// row (pxl-kernel scene/cast.rs `shards`); read where it lies,

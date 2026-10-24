@@ -39,7 +39,7 @@ fn mirrored(records: &[u32]) {
     for blocks in records.chunks((SQUARE_BLOCKS * RECORD_WORDS) as usize) {
         let mut laid = vec![(blocks.len() / RECORD_WORDS as usize) as u32];
         laid.extend_from_slice(blocks);
-        assert!(m.lay(&laid), "the test's pool past the mirror's cap");
+        assert_eq!(m.lay(&laid), Ok(()), "the test's pool past the mirror's cap");
     }
 }
 
@@ -350,4 +350,37 @@ fn a_landing_shows_in_every_window_wanting_the_square() {
     assert!(!berth_wants(w, tile_of(LEAF_CELL, q).0, b), "nor is its tile kept for it");
     lay(w, far, far);
     assert_eq!(berth_of(w, LEAF_CELL, q), None);
+}
+
+#[test]
+fn a_square_waiting_on_the_heap_is_handed_again_once_a_page_is_given_back() {
+    use crate::io::host::set_heap_stat;
+    use core::sync::atomic::{AtomicU32, Ordering};
+    use xpute_guest::mem::heap::HeapStat;
+    static RELEASES: AtomicU32 = AtomicU32::new(0);
+    let _g = crate::serial();
+    set_heap_stat(|| HeapStat {
+        releases: RELEASES.load(Ordering::Relaxed),
+        ..HeapStat::default()
+    });
+    WINDOWS_STATE.set(fresh());
+    let w = windows();
+    lay(w, leaf(CENTRE), leaf(CENTRE));
+    let (eye, focus) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
+    let q = want(w, eye, 0);
+    let b = berth_of(w, LEAF_CELL, q).unwrap();
+    // As `landed` leaves it where the heap refused the mirror its chunk.
+    (w.berths[b as usize].ticket, w.heap) = (WAITING, Some(Refused::now()));
+    assert!(!wake(w), "no page given back: it waits");
+    lay(w, leaf(CENTRE), leaf(CENTRE));
+    assert_eq!(w.berths[b as usize].ticket, WAITING, "unhanded while it waits");
+    assert!(!berth_wants(w, tile_of(LEAF_CELL, q).0, b), "nor its tile kept for it");
+    RELEASES.fetch_add(1, Ordering::Relaxed);
+    assert!(wake(w) && w.heap.is_none());
+    berth(w, false);
+    assert!(w.berths[b as usize].is_absent() && berth_wants(w, tile_of(LEAF_CELL, q).0, b), "absent, to be handed again");
+    for win in [eye, focus] {
+        assert_eq!(w.slots[(win * SLOTS) as usize].ticket, 0, "its rows show it");
+    }
+    set_heap_stat(HeapStat::default);
 }

@@ -35,6 +35,15 @@ pub struct Mirror {
 
 static MIRROR: Global<Mirror> = Global::new();
 
+/// Why a square's blocks were not laid: one lies past the pool's cap,
+/// which asking again never changes; or the heap refused a chunk, which a
+/// page given back may (pxl-kernel io/host.rs `Refused`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unlaid {
+    Cap,
+    Heap,
+}
+
 /// The mirror, empty before any square lands.
 pub fn mirror() -> &'static mut Mirror {
     MIRROR.get(Mirror::default)
@@ -42,39 +51,38 @@ pub fn mirror() -> &'static mut Mirror {
 
 impl Mirror {
     /// A square's records (pxl-spec-core `ways::tree::lay`) laid at their
-    /// blocks' ids, the chunks they reach grown first: false, nothing laid,
-    /// where one lies past the cap or the heap refuses a chunk, which the
-    /// square's landing takes as its tree refused.
-    pub fn lay(&mut self, records: &[u32]) -> bool {
+    /// blocks' ids, the chunks they reach grown first; nothing laid where
+    /// one lies past the cap or the heap refuses a chunk, which the square's
+    /// landing takes as its tree refused or waiting on the heap
+    /// (layer/terrain/window.rs `landed`).
+    pub fn lay(&mut self, records: &[u32]) -> Result<(), Unlaid> {
         let n = records.first().map_or(0, |&n| n.min(SQUARE_BLOCKS));
         let id = |r: u32| records.get((1 + r * RECORD_WORDS) as usize).copied().unwrap_or(0);
         let most = (0..n).map(id).max().unwrap_or(0);
-        if !self.reach(most) {
-            return false;
-        }
+        self.reach(most)?;
         tree::lay(self, records);
-        true
+        Ok(())
     }
 
-    /// The chunks grown to hold block `block`; false where it lies past the
-    /// cap or the heap refuses, the chunks grown so far kept.
-    fn reach(&mut self, block: u32) -> bool {
+    /// The chunks grown to hold block `block`; refused where it lies past
+    /// the cap or the heap refuses, the chunks grown so far kept.
+    fn reach(&mut self, block: u32) -> Result<(), Unlaid> {
         if block >= MOST_BLOCKS {
-            return false;
+            return Err(Unlaid::Cap);
         }
         let need = (block / CHUNK_BLOCKS + 1) as usize;
         if need > self.chunks.len() && self.chunks.try_reserve_exact(need - self.chunks.len()).is_err() {
-            return false;
+            return Err(Unlaid::Heap);
         }
         while self.chunks.len() < need {
             let mut chunk = Vec::new();
             if chunk.try_reserve_exact(CHUNK_WORDS).is_err() {
-                return false;
+                return Err(Unlaid::Heap);
             }
             chunk.resize(CHUNK_WORDS, 0);
             self.chunks.push(chunk.into_boxed_slice());
         }
-        true
+        Ok(())
     }
 
     /// Every block let go: the device that held the pool went, every
