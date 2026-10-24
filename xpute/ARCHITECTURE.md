@@ -127,7 +127,7 @@ It runs inside one call, `interrupt(quota_ms)`, and when that call returns it is
 
 How long a turn may take, and how that time is spent, are settled at three levels, from the outside in.
 
-1. **Quantum** (`sched/quantum`) is the host's, and it sets the quota: a cooperative counterpart of an exokernel's CPU slice (Aegis), ended by the guest's return rather than a timer. The host measures the display's refresh from the gaps between the frames it is handed, and paces turns a whole number of refreshes apart (`paced`). The guest's directory declares the rest: the share of a frame left unspent (`margin_share`), how many frames a batch turn spans (`batch_frames`), and how long after input a turn counts as interactive (`settle_ms`), as is one after a falling edge of 0. A turn that runs long is not cut off; its overrun, the whole ring's time past the quota, comes off the next quota.
+1. **Quantum** (`sched/quantum`) is the host's, and it sets the quota: a cooperative counterpart of Aegis's CPU slice, ended by the guest's return rather than a timer. The host measures the display's refresh from the gaps between the frames it is handed, and paces turns a whole number of refreshes apart (`paced`). The guest's directory declares the rest: the share of a frame left unspent (`margin_share`), how many frames a batch turn spans (`batch_frames`), and how long after input a turn counts as interactive (`settle_ms`), as is one after a falling edge of 0. A turn that runs long is not cut off; its overrun, the whole ring's time past the quota, comes off the next quota.
 2. **Tick** (`sched/tick`) is the guest's. It runs phases named once for every language (`spec/sched/tick.json`) in a fixed order — `interaction`, `visible`, `content`, `cosmetic`, `report` — against one budget, the quota counted from the rising edge, and does not divide it among them. While `visible` runs, the share kept for `content` (`content_share`) is held back from it; no other phase is held back. What runs in each is the program's. A phase's time is recorded, never stopped.
 3. **Pass** (`sched/frame_budget`) spends what is left of the budget on an ordered list of steps until the budget or a step cap says stop. Both are waived until a step has done work, so nothing starves behind what sits ahead of it. The hard budget, what is left plus the tick's `hard_slack_ms`, is never waived, but the first step is always tried.
 
@@ -187,7 +187,7 @@ Every table is fixed at N slots, the one over what another side keeps (`HandleTa
 
 ## I/O, by asking
 
-A guest cannot do I/O, because the host owns the connections, the way an operating system owns its devices. So the guest asks, in what its turn leaves, and xpute's host end hands the ask to the program and brings back what came of it — in a message, or into memory the request named. It does not route by root: every file call goes to the program's one `SysHost.open`, and the program dispatches by root to whatever it bound there. What a file is, where it lies and how it is fetched are the binding's; xpute only carries the call.
+A guest cannot do I/O, because the host owns the connections, the way an operating system owns its devices. So the guest asks, in what its turn leaves, and the host (`ts/host`) hands the ask to the program and brings back what came of it — in a message, or into memory the request named. It does not route by root: every file call goes to the program's one `SysHost.open`, and the program dispatches by root to whatever it bound there. What a file is, where it lies and how it is fetched are the binding's; xpute only carries the call.
 
 How much may be out at once, and which want goes first, xpute does not say: ordering demands needs to know what the program is for. A program that wants a bound passes one in its own messages.
 
@@ -294,7 +294,7 @@ What xpute took from work before it, or found it had arrived at. A link is given
 | Precedent                                                   | Where                            | What is taken                                                                  |
 | ----------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
 | The exokernel and its library operating system              | the arrangement                  | The host grants real resources; the guest keeps its own abstractions over them |
-| Aegis                                                       | `sched/quantum`                  | The quota as a cooperative counterpart of the exokernel's CPU slice            |
+| Aegis                                                       | `sched/quantum`                  | The quota as a cooperative counterpart of its CPU slice                        |
 | Android Swappy's frame pacing                               | `sched/quantum`, `sched/strobe`  | Turns a whole number of refreshes apart                                        |
 | "core" for main memory, as in a core dump                   | the core memory                  | Its name                                                                       |
 | A linker script's output sections                           | `mem/section`                    | Ranges placed end to end without knowing what they hold                        |
