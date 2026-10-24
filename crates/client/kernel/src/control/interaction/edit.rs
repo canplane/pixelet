@@ -116,14 +116,16 @@ pub fn marker_waiting() -> (bool, &'static str) {
     draft().map_or((false, ""), |d| (true, d.words.as_str()))
 }
 
-/// The waiting marker's words as they are now. Words past
+/// The waiting marker's words as they are now, written into the draft's own
+/// buffer, so a keystroke allocates only past the longest words it has held. Words past
 /// `MARKER_TEXT_CHARS` are refused whole, and the words before stay.
 pub fn draft_words(text: &str) -> Result<(), Errno> {
     if text.chars().count() > MARKER_TEXT_CHARS as usize {
         return Err(Errno::EMSGSIZE);
     }
     if let Some(d) = redraft() {
-        d.words = text.to_string();
+        d.words.clear();
+        d.words.push_str(text);
     }
     Ok(())
 }
