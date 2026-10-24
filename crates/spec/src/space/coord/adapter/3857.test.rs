@@ -25,26 +25,13 @@ fn round_trip(x: f64, y: f64, z: f64) -> [f64; 3] {
 }
 
 #[test]
-fn epsg3857_project_unproject_round_trips_the_origin() {
-    let [x, y, z] = round_trip(0.0, 0.0, 0.0);
-    assert_almost(x, 0.0, ROUND_TRIP_TOL);
-    assert_almost(y, 0.0, ROUND_TRIP_TOL);
-    assert_almost(z, 0.0, ROUND_TRIP_TOL);
-}
-
-#[test]
 fn epsg3857_project_unproject_round_trips_a_real_world_scale_coordinate_roughly_seoul() {
     // About (127.03, 37.50).
     let x_m = 14139274.0;
     let y_m = 4508140.0;
-    let [x, y, _] = round_trip(x_m, y_m, 0.0);
+    let [x, y, z] = round_trip(x_m, y_m, 50.0);
     assert_almost(x, x_m, ROUND_TRIP_TOL);
     assert_almost(y, y_m, ROUND_TRIP_TOL);
-}
-
-#[test]
-fn epsg3857_project_unproject_round_trips_a_nonzero_altitude_mercator_corrected_and_un_corrected_symmetrically() {
-    let [_, _, z] = round_trip(14139274.0, 4508140.0, 50.0);
     assert_almost(z, 50.0, ROUND_TRIP_TOL);
 }
 

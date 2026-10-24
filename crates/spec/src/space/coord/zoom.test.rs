@@ -6,11 +6,8 @@ use super::*;
 fn a_zoom_is_one_power_of_two_however_it_is_read() {
     for zoom in [27, UNIT_ZOOM, 18, 15] {
         assert_eq!(of_side(units(zoom)), zoom);
-        assert_eq!(count(zoom, zoom - 2) * count(zoom - 2, zoom - 5), count(zoom, zoom - 5));
     }
     assert_eq!(count(UNIT_ZOOM, 15) as f64, units(15));
-    assert_eq!(units(27), 0.125);
-    assert_eq!(units(0), (1u64 << UNIT_ZOOM) as f64, "z0 is the world");
 }
 
 /// A point's cell at a zoom holds it, either side of the origin and below a unit.

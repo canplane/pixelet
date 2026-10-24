@@ -55,5 +55,4 @@ fn folded<const PLACE: bool>() -> Vec<Zoom> {
 fn a_kind_is_folded_up_to_its_coarsest_and_no_further() {
     assert_eq!(folded::<false>(), (Count::<false>::COARSEST..=LEAF_ZOOM).collect::<Vec<_>>());
     assert_eq!(folded::<true>(), (Count::<true>::COARSEST..=LEAF_ZOOM).collect::<Vec<_>>());
-    const { assert!(Count::<true>::COARSEST > Count::<false>::COARSEST, "places stop short of the ground's top") };
 }

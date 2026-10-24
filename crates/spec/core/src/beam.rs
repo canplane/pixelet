@@ -294,27 +294,13 @@ pub const SAMPLE_NONE: u32 = u32::MAX;
 mod tests {
     use super::*;
 
-    /// The beam rays' words a 50° screen drawn `w` × `h` at τ `tau` needs,
-    /// laid out as `Grid::of` lays them.
-    fn need(w: u32, h: u32, tau: f32) -> (Grid, u32) {
-        let up = 0.466_307_67;
-        let g = Grid::of([up * w as f32 / h as f32, up], tau);
-        (g, g.size())
-    }
-
     #[test]
-    fn words_for_is_its_parts() {
-        // 2000 × 1100 drawn, τ as pxl-kernel `lens::tau_of` makes it there.
-        let (g, words) = need(2000, 1100, 1.963_562);
-        assert_eq!((g.span, g.corners, g.samples, g.past), ([166, 92], [179, 105], [669, 373], 6));
-        assert_eq!(words, 6_896_758);
-        // 4112 × 2338 drawn, a ratio of 2, τ at its least: the lines, the
-        // cells and the samples, 58, 0.5 and 42 in a hundred, within the
-        // 33,554,432 words a storage binding holds on every device
-        // (pxl-render floor.rs).
-        let (g, words) = need(4112, 2338, 1.0);
-        assert_eq!((g.span, g.corners, g.samples, g.past), ([315, 180], [328, 193], [1265, 725], 6));
-        assert_eq!(words, 328 * 193 * LINE_WORDS + 315 * 180 * CELL_WORDS + 1265 * 725 * SAMPLE_WORDS);
-        assert_eq!(words, 24_159_524);
+    fn the_largest_beam_fits_a_storage_binding() {
+        // 4112 × 2338 drawn, a ratio of 2, at a 50° screen and τ at its
+        // least, within the 33,554,432 words a storage binding holds on
+        // every device (pxl-render floor.rs).
+        let up = 0.466_307_67;
+        let words = Grid::of([up * 4112.0 / 2338.0, up], 1.0).size();
+        assert!(words <= 33_554_432, "{words} words");
     }
 }

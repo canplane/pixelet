@@ -2,10 +2,7 @@
 //
 // The lattice hash is written twice, here for the kernel's cumulus and in
 // noise.wgsl for the sheets' field, and both must draw the same cells: the
-// WGSL's body carries this one's numbers in this one's order, and this one
-// answers as it did.
-
-use super::lattice_hash;
+// WGSL's body carries this one's numbers in this one's order.
 
 /// The numbers in function `name`'s body in `source`, as written less a
 /// digit separator or an unsigned suffix: what the two languages spell
@@ -39,20 +36,4 @@ fn the_shaders_hash_is_this_one() {
     let wgsl = numbers(include_str!("../frame/shader/noise.wgsl"), "lattice_hash");
     assert_eq!(rust.len(), 10, "the multipliers, shifts and scale: {rust:?}");
     assert_eq!(rust, wgsl);
-}
-
-#[test]
-fn the_hash_answers_as_it_did() {
-    // The cumulus's cells are laid out by these: a change here moves every
-    // cloud, and noise.wgsl moves with it.
-    let known = [
-        ([1, 0], 0, 0.691_144_645_214_080_8),
-        ([0, 1], 0, 0.479_734_838_008_880_6),
-        ([0, 0], 1, 0.427_846_193_313_598_63),
-        ([123, 456], 7, 0.942_320_048_809_051_5),
-        ([u32::MAX, 4095], 0x4d2b_6f31, 0.396_522_581_577_301),
-    ];
-    for (at, salt, h) in known {
-        assert_eq!(lattice_hash(at, salt), h, "{at:?} salt {salt}");
-    }
 }

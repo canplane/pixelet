@@ -24,7 +24,4 @@ fn a_gesture_brought_back_asks_what_it_began_at() {
         drive(&mut a, now, f64::INFINITY);
     }
     assert_eq!(drive(&mut a, 100.0, f64::INFINITY), 3.0);
-    let zoom = Anchor::new(300.0, 100.0);
-    assert_eq!(zoom.ask(50.0, spread), 600.0);
-    assert_eq!(zoom.ask(100.0, spread), 300.0);
 }

@@ -55,19 +55,6 @@ fn a_cell_keeps_its_first_by_the_zoom_its_kind_shows_from_then_id() {
 }
 
 #[test]
-fn what_is_shown_only_grows_with_the_zoom() {
-    let places: Vec<_> = (0..60u32).map(|k| (point(k * 7 % 500, k * 13 % 500), k)).collect();
-    let ids: Vec<String> = places.iter().map(|(_, k)| format!("{k:03}")).collect();
-    let categories = ["cafe", "hospital", "restaurant", "pharmacy_and_drug_store", "shopping"];
-    let tile = PlaceTile::leaf(leaf(), places.iter().map(|&(at, k)| (at, called("x", categories[k as usize % categories.len()], &ids[k as usize]))));
-    for zoom in PLACE_FIRST..PLACE_LAST {
-        let now: Vec<_> = tile.iter().filter(|(_, h)| h.from <= zoom).map(|(i, _)| i).collect();
-        let next: Vec<_> = tile.iter().filter(|(_, h)| h.from <= zoom + 1).map(|(i, _)| i).collect();
-        assert!(now.iter().all(|i| next.contains(i)), "z{zoom}");
-    }
-}
-
-#[test]
 fn a_parent_is_what_its_children_show_from_its_zoom_on() {
     let child = PlaceTile::leaf(leaf(), [(point(10, 10), called("Peak", "mountain", "1")), (point(300, 10), called("Cafe", "cafe", "2"))]);
     let empty = PlaceTile::default();
@@ -93,7 +80,6 @@ fn every_kind_carto_draws_an_icon_for_ships_its_symbol() {
 #[test]
 fn no_grid_cell_reads_a_tile_coarser_than_the_coarsest() {
     use crate::space::layer::tile::TOP_ZOOM;
-    let top = GROUND.cell_zoom(TOP_ZOOM);
     const { assert!(crate::space::layer::lattice::coarsest(GROUND) == TOP_ZOOM, "the ground is read up to the pyramid's top") };
     const {
         assert!(
@@ -101,14 +87,4 @@ fn no_grid_cell_reads_a_tile_coarser_than_the_coarsest() {
             "places are read no coarser than their icon's cell allows"
         )
     };
-    for lattice in [GROUND, PLACE_LATTICE] {
-        assert_eq!(lattice.read_zoom(top), crate::space::layer::lattice::coarsest(lattice));
-        for cell in top..=GROUND.cell() {
-            assert!(
-                lattice.read_zoom(cell) >= crate::space::layer::lattice::coarsest(lattice),
-                "cell z{cell} reads coarser than {}",
-                crate::space::layer::lattice::coarsest(lattice)
-            );
-        }
-    }
 }

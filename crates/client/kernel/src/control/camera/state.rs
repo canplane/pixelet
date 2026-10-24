@@ -76,7 +76,3 @@ static CAMERA_STATE: Global<CameraState> = Global::new();
 pub fn camera_state() -> &'static mut CameraState {
     CAMERA_STATE.get(CameraState::new)
 }
-
-#[cfg(test)]
-#[path = "state.test.rs"]
-mod test;

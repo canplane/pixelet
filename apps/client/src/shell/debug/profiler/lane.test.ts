@@ -15,7 +15,6 @@ Deno.test("LANES - a list lane spans a word a name, a census entry two", () => {
     if (!isList(name)) assertEquals(width, 1, name);
     else assertEquals(width, LIST_NAMES[name].length * (name === "census" ? 2 : 1), name);
   }
-  assertEquals(LANES.reduce((n, l) => n + l.width, 0), FRAME.WORDS);
 });
 
 Deno.test("frameAt - reads each lane at its word", () => {

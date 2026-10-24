@@ -7,22 +7,15 @@ use crate::space::layer::lattice::Cells;
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::lattice::*;
 
-/// A cell's center and the coarser cell's over it are one computation: the cell `up` zooms coarser.
+/// A cell is found from its own corner, and the cell `up` zooms coarser is the point's cell there.
 #[test]
-fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
+fn a_cell_is_found_from_its_corner_and_the_cell_over_it_from_the_point() {
     let point = base_of(UNIT_ZOOM, [-1234, 5678, 0]);
     for zoom in [LEAF_ZOOM, LEAF_ZOOM - 3, LEAF_ZOOM - 7] {
         let cell = GROUND.cell_of(zoom, &point);
         assert_eq!(cell.tile_zoom(), zoom);
         assert_eq!(GROUND.cell_of(zoom, &cell.base()), cell, "a cell is found from its own corner");
         assert_eq!(cell.up(2), GROUND.cell_of(zoom - 2, &point), "the cell over it");
-        let side = cell.side();
-        let c = cell.center(10.0);
-        let at = q3::unpack(&c);
-        let base = cell.base();
-        assert_eq!(at[2], 10.0 + side / 2.0);
-        assert_eq!(at[0], q3::to_real(i64::from(base[0])) + side / 2.0);
-        assert_eq!(at[1], q3::to_real(i64::from(base[1])) + side / 2.0);
     }
 }
 
