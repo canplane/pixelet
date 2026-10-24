@@ -11,6 +11,30 @@
 
 const number = Deno.env.get("PXL_BUILD_NUMBER");
 const PATHS = new URL("../src/guest.paths.json", import.meta.url);
+const BUILT = new URL("../dist/index.html", import.meta.url);
+/** The custom domain the Worker answers on (wrangler.jsonc `routes`). */
+const SITE = "https://plei.me";
+
+/** What a page loads: its hashed scripts and styles, which name the build. */
+const loads = (html: string) => [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]).sort().join(" ");
+
+/** Whether the site serves this build: what wrangler's exit cannot say once
+ * it failed after the Worker went out (a route, a domain). */
+async function live(): Promise<boolean> {
+  try {
+    const res = await fetch(`${SITE}/?_deploy=${crypto.randomUUID()}`);
+    const built = loads(Deno.readTextFileSync(BUILT));
+    return res.ok && built !== "" && loads(await res.text()) === built;
+  } catch {
+    return false;
+  }
+}
+
+/** Said to CI's next jobs (`published`), where the run has an output file. */
+function landed(yes: boolean): void {
+  const out = Deno.env.get("GITHUB_OUTPUT");
+  if (out) Deno.writeTextFileSync(out, `published=${yes}\n`, { append: true });
+}
 
 async function step(name: string, cmd: string, args: string[], env: Record<string, string> = {}): Promise<void> {
   console.log(`[deploy] ${name}`);
@@ -42,10 +66,13 @@ if (number) {
 console.log("[deploy] publish");
 const published = await new Deno.Command("deno", { args: wrangler("deploy"), stdout: "inherit", stderr: "inherit" }).output();
 if (!published.success) {
-  // wrangler can fail after the Worker went out (a route, a domain), so this
-  // says no more than that the publish did not finish.
-  console.error(`[deploy] publish failed; wrangler's output above says how far it got${number ? `, and _meta/paths/${number}.json is kept` : ""}`);
+  // wrangler can fail after the Worker went out (a route, a domain), so what
+  // landed is read off the site, not off its exit.
+  const yes = await live();
+  landed(yes);
+  console.error(`[deploy] publish failed, and ${SITE} serves ${yes ? "this build all the same" : "an earlier one"}${number ? `; _meta/paths/${number}.json is kept` : ""}`);
   Deno.exit(published.code || 1);
 }
 
+landed(true);
 console.log(number ? `[deploy] #${number} published` : "[deploy] published, unnumbered");

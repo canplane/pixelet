@@ -162,10 +162,11 @@ jobs:
     # failure worth having: nothing goes out ahead of what it talks to.
     needs: [number, deploy-server]
     runs-on: ubuntu-latest
-    # What landed: the last step says whether it worked, because a job that
-    # fails still carries its earlier steps' outputs and the build log believed one.
+    # What landed: the deploy step says it, read off the site where wrangler
+    # failed after the Worker went out, so the build log never believes a
+    # failed job published nothing when it did.
     outputs:
-      published: ${{ steps.landed.outputs.yes }}
+      published: ${{ steps.deploy.outputs.published }}
     # The number's group, so that a run cannot publish while the next one is
     # already taking its number: the bucket's counter and what is live on
     # plei.me move together.
@@ -196,11 +197,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PXL_BUILD_NUMBER: ${{ needs.number.outputs.build_number }}
+        # deploy.ts says `published`: true once wrangler finishes, and where it
+        # fails, whether the site serves this build all the same.
+        id: deploy
         run: deno task deploy
-
-      # Last, so a failure anywhere above leaves it unset.
-      - id: landed
-        run: echo "yes=true" >> "$GITHUB_OUTPUT"
 
   # What plei.me answers is the two deploys composed, so it is asked once both
   # have settled rather than from inside either. One of its checks,
