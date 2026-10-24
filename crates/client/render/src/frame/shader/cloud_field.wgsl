@@ -1,9 +1,8 @@
 // What the cloud layers share. A shader including it declares `cloud_tile`
 // and `cloud_tile_sampler` in a group of its own.
 
-// 2^12 cells, about 8 km at mid latitudes; a power of two so clouds wrap with
-// the map (look/cloud.rs `LATTICE_SHAMT`).
-const CLOUD_LATTICE_CELLS: u32 = 4096u;
+// A lattice unit is `CLOUD_LATTICE_CELLS` cells, which build.rs writes from
+// pxl-spec-core cloud.rs `LATTICE_SHAMT`.
 
 // On the map under it, so a cloud stays over its ground wherever the eye is.
 fn cloud_lattice(point: vec3f) -> vec2f {

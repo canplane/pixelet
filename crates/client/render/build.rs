@@ -86,6 +86,19 @@ fn main() {
     use pxl_spec_core::sun::{DEPTH_ONE, ZOOM_BITS as SUN_ZOOM_BITS};
     let sun = format!("fn sun_depth(w: u32) -> f32 {{ return f32(w >> {SUN_ZOOM_BITS}u) / {DEPTH_ONE}.0; }}\n");
     std::fs::write(out.join("sun_word.wgsl"), sun).expect("the sun word's shader");
+    // The cloud field's lattice unit and the hash its cells draw from, the
+    // cumulus's own on the CPU (pxl-spec-core cloud.rs `lattice_hash`): its
+    // multipliers, its rounds and its kept bits as the Rust takes them.
+    use pxl_spec_core::cloud::{HASH_IN, HASH_KEPT, HASH_LAST, HASH_ROUNDS, LATTICE_SHAMT};
+    let [hx, hy, hs] = HASH_IN;
+    let rounds: String = HASH_ROUNDS.iter().map(|[shift, mul]| format!("h ^= h >> {shift}u; h *= {mul}u; ")).collect();
+    let cloud = format!(
+        "const CLOUD_LATTICE_CELLS: u32 = {}u;\nfn lattice_hash(i: vec2u, salt: u32) -> f32 {{ var h = (i.x * {hx}u) ^ (i.y * {hy}u) ^ (salt * {hs}u); {rounds}h ^= h >> {HASH_LAST}u; return f32(h >> {}u) / {}.0; }}\n",
+        1u32 << LATTICE_SHAMT,
+        32 - HASH_KEPT,
+        1u32 << HASH_KEPT
+    );
+    std::fs::write(out.join("cloud_hash.wgsl"), cloud).expect("the cloud hash's shader");
     std::fs::write(Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"), compute(dir)).expect("the compute layouts");
     assemble(&out);
     println!("cargo:rerun-if-changed=src/frame/shader");

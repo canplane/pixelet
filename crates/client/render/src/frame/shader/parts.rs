@@ -184,9 +184,9 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_STARS
     &["frame", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "stars"],
     // SHADER_CLOUDS
-    air!["frame", "encode", "finish", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "sky_words", "clouds"],
+    air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "sky_words", "clouds"],
     // SHADER_CLOUD_FIELD
-    &["noise", "cloud_tile", "atmos_pass", "cloud_bake"],
+    &["cloud_hash", "noise", "cloud_tile", "atmos_pass", "cloud_bake"],
     // SHADER_SHEET
     &["sheet"],
     // SHADER_IMPOSTOR

@@ -3,7 +3,7 @@
 //! The cumulus, drawn as decor is and held as decor is not. It claims no cell,
 //! so nothing is built around it and a tower stands through it; it is no
 //! layer and no chunk holds it. It is laid on the field's own map, which the
-//! wind carries (`pxl-render look/cloud.rs` `drift`): a block of cells there
+//! wind carries (`pxl-spec-core cloud.rs` `drift`): a block of cells there
 //! is built once and drawn moved, each instance a model, a sprite or nothing
 //! by its size on the screen (`scene/decor/cell.rs` `present_block`).
 
@@ -11,12 +11,12 @@ use fnv::FnvHashMap;
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::pass::decor::GROUPS;
-use pxl_render::look::cloud::{drift, lattice_hash, shown, CUMULUS_KM, WIND};
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::block::decor::DECORS;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
+use pxl_spec_core::cloud::{drift, lattice_hash, CUMULUS_KM, WIND};
 use pxl_spec_core::scatter::drawn;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
@@ -134,13 +134,19 @@ pub fn drift_step_s() -> f64 {
     units_per_px_at(clouds().seen) / libm::hypot(WIND[0], WIND[1])
 }
 
-/// How much of the clouds shows: none where the setting is off, and fading
-/// as the eye climbs to where they are gone.
+/// Where the clouds are gone, faded from half of it: a product number.
+const GONE_KM: f64 = 64.0;
+
+/// How much of the clouds shows, the cumulus and the sheets alike (the stage's
+/// `CLOUDS`): none where the setting is off, all of them up to half of
+/// `GONE_KM` and none from it.
 pub fn clouds_shown() -> f64 {
     if !settings_store().clouds {
         return 0.0;
     }
-    shown(f64::from(kernel().scene.environment.out[ENV_AIR]))
+    let altitude_km = f64::from(kernel().scene.environment.out[ENV_AIR]);
+    let t = ((altitude_km - GONE_KM / 2.0) / (GONE_KM / 2.0)).clamp(0.0, 1.0);
+    1.0 - t * t * (3.0 - 2.0 * t)
 }
 
 /// Takes the models as they arrive, keeps the blocks the eye can see a cloud
@@ -257,14 +263,15 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
     (0..BLOCK_CELLS).flat_map(move |j| (0..BLOCK_CELLS).map(move |i| (i, j))).filter_map(move |(i, j)| {
         let cell = [key[0] * i64::from(BLOCK_CELLS) + i64::from(i), key[1] * i64::from(BLOCK_CELLS) + i64::from(j)];
         let at = cell.map(|v| (v & (CELLS_AROUND - 1)) as u32);
-        if lattice_hash(at, SALT) >= SHARE {
+        let hash = |salt: u32| f64::from(lattice_hash(at, salt));
+        if hash(SALT) >= SHARE {
             return None;
         }
-        let jitter = [lattice_hash(at, SALT + 1), lattice_hash(at, SALT + 2)];
+        let jitter = [hash(SALT + 1), hash(SALT + 2)];
         let local = [(f64::from(i) + 0.25 + 0.5 * jitter[0]) * CELL, (f64::from(j) + 0.25 + 0.5 * jitter[1]) * CELL];
-        let variant = ((lattice_hash(at, SALT + 4) * VARIANTS.len() as f64) as usize).min(VARIANTS.len() - 1);
+        let variant = ((hash(SALT + 4) * VARIANTS.len() as f64) as usize).min(VARIANTS.len() - 1);
         let asset = VARIANTS[variant];
-        let width = WIDTH[0] + (WIDTH[1] - WIDTH[0]) * lattice_hash(at, SALT + 3);
+        let width = WIDTH[0] + (WIDTH[1] - WIDTH[0]) * hash(SALT + 3);
         let scale = width / widest(asset);
         let height = extent(asset)[2] * scale;
         Some(Cloud {
@@ -272,7 +279,7 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
             local,
             z: base + 0.5 * height,
             width,
-            spin: core::f64::consts::TAU * lattice_hash(at, SALT + 5),
+            spin: core::f64::consts::TAU * hash(SALT + 5),
             scale,
         })
     })

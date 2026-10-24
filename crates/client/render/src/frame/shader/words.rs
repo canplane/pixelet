@@ -170,8 +170,8 @@ pub const ATMOS_FLOATS: usize = floats(atmos::FIELDS);
 uniform! {
     /// The cloud sheets' (clouds.wgsl, gpu/clouds.rs); their ray is the sky's.
     clouds {
-        /// Faded over the upper half of the climb to where the clouds are
-        /// gone (look/cloud.rs `shown`).
+        /// How much of the clouds the kernel shows (pxl-kernel
+        /// scene/environment/cloud.rs `clouds_shown`).
         SHOWN: F32 = 0,
         /// How far the eye observes, in km: past it no sheet is drawn.
         REACH: F32 = 1,
@@ -207,7 +207,7 @@ pub const UNIFORMS: [(&str, &[Field]); 5] = [
     (stars::NAME, stars::FIELDS),
 ];
 
-/// The cloud sheets' tile (look/cloud.rs), one fetch a pixel and a mip chain
+/// The cloud sheets' tile (gpu/clouds.rs), one fetch a pixel and a mip chain
 /// in place of eight octaves of hashes: 32 lattice units is about 250 km,
 /// further than the layer is drawn, and the lattice wraps with the tile.
 pub const CLOUD_TILE_UNITS: u32 = 32;

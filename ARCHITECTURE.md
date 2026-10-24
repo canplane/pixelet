@@ -361,9 +361,9 @@ The sky is drawn at the far plane, so only pixels no ray met run it (`frame/shad
 
 The air between the eye and what is drawn comes from the **air's volume**, Hillaire's aerial-perspective volume (`gpu/atmosphere.rs` `froxel`). A compute pass marches a grid of screen columns through froxels, which cover only the air each ray crosses, spaced by depth cubed so the near view gets most. A drawn point mixes the four columns about it, each read at the point's own distance (`atmos_air.wgsl` `air_before`).
 
-The **clouds** are three layers on one wind (`pxl-render look/cloud.rs`). The cumulus is models drawn like decor but claiming no cell, so a tower stands through it (`scene/environment/cloud.rs`). Each sits by a hash in a lattice of its own, a model, a sprite or nothing by its size on screen.
+The **clouds** are three layers on one wind (`pxl-spec-core cloud.rs`). The cumulus is models drawn like decor but claiming no cell, so a tower stands through it (`scene/environment/cloud.rs`). Each sits by a hash in a lattice of its own, a model, a sprite or nothing by its size on screen.
 
-Above it, altocumulus and cirrus are planes read where a ray meets them (`frame/shader/clouds.wgsl` `sheet_t`), laid over the world without depth. From below they fill only the sky and from above they cover everything, so a peak above one is knowingly wrong. Every layer fades out as the eye climbs toward where the clouds are gone.
+Above it, altocumulus and cirrus are planes read where a ray meets them (`frame/shader/clouds.wgsl` `sheet_t`), laid over the world without depth. From below they fill only the sky and from above they cover everything, so a peak above one is knowingly wrong. Every layer fades out as the eye climbs toward where the clouds are gone (`scene/environment/cloud.rs` `clouds_shown`).
 
 ## Badges and the sheet
 

@@ -4,6 +4,5 @@
 
 pub mod atmosphere;
 pub mod badge;
-pub mod cloud;
 pub mod color;
 pub mod environment;

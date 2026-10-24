@@ -5,7 +5,7 @@
 //! What pixelet's spec computes the same on the CPU and on the GPU, in
 //! `core` alone: the zooms and the lattices of cells on them, a node's seed
 //! and the caves, the ground and the service area it ends at, the decor the
-//! ground grows, and the ray's descent. pxl-spec takes it as its own, and a shader crate depends on it as
+//! ground grows, the clouds' field, and the ray's descent. pxl-spec takes it as its own, and a shader crate depends on it as
 //! it is.
 
 #![no_std]
@@ -15,6 +15,7 @@ pub mod area;
 pub mod beam;
 pub mod cast;
 pub mod caves;
+pub mod cloud;
 #[path = "cube.spec.rs"]
 pub mod cube;
 #[path = "decor.spec.rs"]

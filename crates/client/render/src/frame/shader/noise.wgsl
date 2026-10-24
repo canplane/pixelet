@@ -1,12 +1,6 @@
-fn lattice_hash(i: vec2u, salt: u32) -> f32 {
-  var h = (i.x * 0x8da6b343u) ^ (i.y * 0xd8163841u) ^ (salt * 0xcb1ab31fu);
-  h ^= h >> 16u;
-  h *= 0x7feb352du;
-  h ^= h >> 15u;
-  h *= 0x846ca68bu;
-  h ^= h >> 16u;
-  return f32(h >> 8u) / 16777216.0;
-}
+// Value noise over the cloud field's hash, `lattice_hash`, which build.rs
+// writes from pxl-spec-core cloud.rs, where the cumulus draws its cells from
+// it on the CPU.
 
 // Wraps at `mask + 1`, the lattice's count across the world, so the noise wraps with the map.
 fn lattice_noise(base: vec2u, p: vec2f, mask: u32, salt: u32) -> f32 {
