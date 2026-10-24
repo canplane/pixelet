@@ -234,11 +234,11 @@ Where a square is not present, both read the coarser window's. A square that ent
 
 Demand is what the view asks for, and residency what it keeps. **Demand** is what an observation requires, the ground at the resolution its distance chooses, before it is any tile; the layer's storage maps it to tiles (`view/demand.rs` `observe`).
 
-Demand is a function of the eye alone: at each zoom, every tile within the band of distance that zoom is drawn at (`view/observation.rs` `ByEye`). It never depends on what the rays met. A tile it requires that is not held is a miss. Every layer is asked this way, so the place layer has no residency of its own.
+Demand is a function of the eye alone: at each zoom, every tile within the band of distance that zoom is drawn at (`view/observation.rs` `ByEye`). It never depends on what the rays met. A tile it requires that is not held is a miss. Every layer is asked this way, the place layer too, and holds what it is asked for in a residency of its own.
 
 The **floor** is a law: every observation has an answer. It is kept by holding the coarsest zoom the source supplies whole, all around the eye (`layer/residency/floor.rs`).
 
-**Residency** holds a tile hard for the floor, for demand while it is demanded, or as cache; only the hard set is correctness. Its capacity is asserted on its **frames**, the slots tiles are held in (`Residency::FRAMES`). A tile that arrives takes a free frame, or else the farthest one nothing holds hard and the view does not read. A region goes from unresolved to coarse to as fine as it is observed, and never back.
+**Residency** holds a tile hard for the floor, for demand while it is demanded, or as cache; only the hard set is correctness. Its capacity is asserted on its **frames**, the slots tiles are held in (`Residency::FRAMES`): 76 for terrain, 649 for places, 9 for divisions and 4 for the Earth. A tile that arrives takes a free frame, or else the farthest one nothing holds hard and the view does not read. A region goes from unresolved to coarse to as fine as it is observed, and never back.
 
 The view is loading until something has reached the screen and every tile demanded shows, exact or coarser (`layer/residency.rs` `Residency::shown`). A version is never rewritten, so a tile never changes under its key; what changes is which tile answers a node. **Nothing is prefetched**: a view converges to exact on its misses alone.
 
@@ -262,14 +262,14 @@ A place is the place layer's mark (`scene/place.rs`). Each cube in view reads it
 
 Taken together, the view is six concerns between the world and the screen, each with its own bound:
 
-| Concern    | Asks                                          | Bounded by                           | Where                                              |
-| ---------- | --------------------------------------------- | ------------------------------------ | -------------------------------------------------- |
-| Storage    | a layer's records, in the layer's own shape   | nothing of the view                  | a layer; the bucket                                |
-| Query      | what a node holds, a point, or first on a ray | —; it holds nothing                  | `query.rs`                                         |
-| Drawing    | what each pixel's ray meets                   | the screen's rays                    | `scene/cast.rs`, `pxl-render gpu/renderer.rs`      |
-| Demand     | which records an observation requires         | 3 × 3 tiles a zoom                   | `pxl-spec space/layer/demand.rs`, `view/demand.rs` |
-| Residency  | which records are held, and why               | its frames, asserted at compile time | `layer/residency.rs`                               |
-| Scheduling | which waiting work runs now                   | the turn's quota and the credits     | `io/request.rs`, `io/policy.rs`                    |
+| Concern    | Asks                                          | Bounded by                                   | Where                                              |
+| ---------- | --------------------------------------------- | -------------------------------------------- | -------------------------------------------------- |
+| Storage    | a layer's records, in the layer's own shape   | nothing of the view                          | a layer; the bucket                                |
+| Query      | what a node holds, a point, or first on a ray | —; it holds nothing                          | `query.rs`                                         |
+| Drawing    | what each pixel's ray meets                   | the screen's rays                            | `scene/cast.rs`, `pxl-render gpu/renderer.rs`      |
+| Demand     | which records an observation requires         | 2 × 2 ground tiles a zoom, 8 × 8 place tiles | `pxl-spec space/layer/demand.rs`, `view/demand.rs` |
+| Residency  | which records are held, and why               | its frames, asserted at compile time         | `layer/residency.rs`                               |
+| Scheduling | which waiting work runs now                   | the turn's quota and the credits             | `io/request.rs`, `io/policy.rs`                    |
 
 Every number a person would tune, such as τ's target, the screen's cells and decor's tiers, is named once in `pxl-kernel param.rs`, grouped by the policy it tunes, with its reason.
 
@@ -406,7 +406,7 @@ A **bracket** plugs the kernel into a platform: it hands over the memory, the cl
 
 Each app's TypeScript hands the client, once, what its platform gives: the guest, the GPU, storage, text, the network, the sensors and the surfaces (`apps/client/src/bracket.tsx` `Bracket`). Neither app names the other.
 
-**Pixelet's end** of the kernel (`apps/client/src/kernel/`) is the same TypeScript over either bracket. It wires xpute's doorbell over the bracket, submits each turn's frame and rings the kernel (`sched.ts`), forwards input as commands, answers the kernel's system calls (`host.ts`), and does the reads the kernel asks for into blocks the kernel chose.
+**Pixelet's end** of the kernel (`apps/client/src/kernel/`) is the same TypeScript over either bracket. It wires xpute's doorbell over the bracket (`mem.ts`), submits each frame and rings the kernel (`sched.ts`), forwards input as commands, answers the kernel's system calls (`host.ts`), and does the reads the kernel asks for into blocks the kernel chose.
 
 The **shell** (`apps/client/src/shell/`) is the UI: React over the snapshot the kernel writes, where every control is a command. It hands the kernel the surfaces to draw into, each named by a handle. It computes no coordinate, tile or draw; what it needs of the model is generated from the same JSON as the Rust. Pixelet's end and the shell are one package, `apps/client`. Which technology draws each piece of the shell on each platform is in [apps/client/src/shell/ui/README.md](./apps/client/src/shell/ui/README.md).
 
@@ -414,9 +414,9 @@ The **shell** (`apps/client/src/shell/`) is the UI: React over the snapshot the 
 
 This section is how the kernel's calls to the outside are made and answered.
 
-The kernel records its calls during a turn, and the host runs them after it returns, so each is done before the next turn begins (`io/host.rs`). Only the clock is called directly, because a turn measures its own budget. An answer comes back as a number, read once by `answered` into a count or one of xpute's `Errno` members. A code no member names is the host breaking the protocol.
+The kernel records its calls during a turn, and the host runs them after it returns, so each is done before the next turn begins (`io/host.rs`). Only the bracket's own functions are called directly: the clock, because a turn measures its own budget, the allocator's reading, whether a frame can be taken now, and where to report what stopped it (`door.rs` `Bracket`). An answer comes back as a number, read once by `answered` into a count or one of xpute's `Errno` members. A code no member names is the host breaking the protocol.
 
-What the host tells of itself sits here too: the wall clock, whether the device is handheld, whether the build is a development one, the allocator's reading. The door hands these in at boot.
+What the host tells of itself comes with its commands: whether the build is a development one and which sensors it has in `WORLD_BOOT`, and the wall clock with each `WORLD_FRAME`.
 
 ## Reads, and the one scheduler
 
@@ -434,11 +434,11 @@ Each descriptor has an owner, and an answer reaches only that owner.
 
 The world's reads fetch tiles by their bake and name (`io/fetch.rs` `DemandName`). An absent tile is an answer with no body, and its owner decides what it means: no ground tile means the parent's ground stands. An empty read is an error (`EBADMSG`). A body is a heap block, which the command that decodes it releases unless a store keeps it.
 
-How many reads are out at once is bounded by **credits**, which the host grants each turn. One **request scheduler** spends them (`io/request.rs`). It promises that a camera that has just moved can always state its demand, however much old work is still draining.
+How many reads are out at once is bounded by **credits**, which pixelet's end sends with each frame, a constant 6 (`sched.ts` `NET_CREDITS`), and the kernel takes at most 16 of (`param::MAX_CREDITS`). One **request scheduler** spends them (`io/request.rs`). It promises that a camera that has just moved can always state its demand, however much old work is still draining.
 
-That follows from its shape. A producer states only what it wants, each with a rank, replacing last turn's list. It never starts, stops or retries an attempt. Wants and running attempts are two tables of fixed size. An answer ends its want; a failure ends only its attempt, which waits before asking again. A running attempt is never preempted, and stops only when nobody wants it.
+That follows from its shape. A producer states only what it wants, each with a rank, replacing last turn's list. It never starts, stops or retries an attempt. Wants and running attempts are two tables of fixed size. An answer ends its want; a failure ends only its attempt. An object that failed is not asked again while it is wanted, and a body the heap refused room waits until the heap gives some back. A network or server failure holds every start, longer with each server failure in a row, and after `RETRY_ATTEMPTS` (6) of them the reads are given up. A running attempt is never preempted, and stops only when nobody wants it.
 
-A **serve policy** ranks the wants (`io/policy.rs`). Terrain comes first, then decor's assets, then places. Within a layer, seen comes before unseen and nearer before farther; among equally near tiles the finer comes first, so the leaf under the eye is not asked after the coarse tiles over it. The policy changes how soon the view is right, never what it is.
+A **serve policy** ranks the wants (`io/policy.rs`). Terrain comes first, then the assets, then places and the Earth; divisions, and any want asked last (`Order::LAST`), come after everything. Within a layer, seen comes before unseen and nearer before farther; among equally near tiles the finer comes first, so the leaf under the eye is not asked after the coarse tiles over it. The policy changes how soon the view is right, never what it is.
 
 Models and textures spend the same credits (`io/load.rs`). Each is fetched and parsed at most once, retried if it did not arrive and final if it does not parse. An image's file is read into the heap and handed to the renderer, which copies it into a texture through the GPU stream (`COPY_EXTERNAL_IMAGE`, the host decoding it); once the texture lands the file goes, and a device lost reads it again (`images_lost`).
 
@@ -466,32 +466,36 @@ The turn and its quota are xpute's: the host rings, the guest spends what it was
 │ the frame task                                                 │
 │                                                                │
 │   effects  each compares the world with what it last saw:      │
-│            navigation, the view, the fetchers, the object      │
-│            store, the hover, the puck                          │
+│            navigation, the bootstrap, the orientation, the     │
+│            following, the destination, decor's assets, the     │
+│            object store, an edit, the hover, the puck, the     │
+│            settings                                            │
 │   tick     interaction → visible → content → cosmetic → report │
 │   pump     start the reads this turn's credits bought          │
 │   stage    the frame's uniforms and its draw list              │
+│   profile  what the turn cost                                  │
 │                                                                │
-│ three tasks beside it, polled on what the tick left            │
+│ three tasks beside it, and one a load file being read, polled  │
+│ on a share kept past the frame                                 │
 │                                                                │
-│   fetch · decor assets · the object store                      │
+│   fetch · decor assets · the object store · arrival            │
 └────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
                         the falling edge  ──▶  wake_ms
 ```
 
-Before each turn, pixelet's end submits one `WORLD_FRAME` (`apps/client/src/kernel/sched.ts`): the viewport, the display's pacing, whether the turn is interactive, how many reads are allowed out, and the wall clock. The quota's values are the kernel's (`sched/tick.rs` `QUANTUM`). The first turn writes them, and where the rings are, into the kernel's **directory**, which the host reads once.
+Before each turn the strobe grants a frame, pixelet's end submits one `WORLD_FRAME` (`apps/client/src/kernel/sched.ts`): the viewport, the display's pacing, whether the turn is interactive, how many reads are allowed out, and the wall clock. A turn rung for a command alone carries none, and draws nothing. The quota's values are the kernel's (`sched/tick.rs` `QUANTUM`). The kernel's boot writes them, and where the rings are, into the kernel's **directory**, which the host reads at boot (`mem.ts`, `sched.ts`). The tasks keep a share of the paced frame past the frame task, whatever it overran (`sched/edge.rs` `tasks_after_frame`).
 
 The phases are xpute's, in the order that is their priority:
 
-| Phase         | What pixelet runs in it                                                                    |
-| ------------- | ------------------------------------------------------------------------------------------ |
-| `interaction` | the controller, input, the camera, the environment, the companion, the character's preview |
-| `visible`     | demand, the scene's pass, handed the camera's focus, which lays the world gizmo first      |
-| `content`     | nothing yet; it is guaranteed `content_share` of the budget                                |
-| `cosmetic`    | nothing yet                                                                                |
-| `report`      | the profiler, last, so it sees everything                                                  |
+| Phase         | What pixelet runs in it                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `interaction` | the controller, input, the camera, the environment, the companion, the character's preview                                                |
+| `visible`     | demand, the scene's pass, handed the camera's focus, which lays the world gizmo first; `content_share` of the budget is held back from it |
+| `content`     | nothing; the share held back from `visible` goes unspent here, and the tasks keep one of their own past the frame                         |
+| `cosmetic`    | nothing yet                                                                                                                               |
+| `report`      | nothing; the profiler records the turn after the stage (`turn.rs` `world_frame`)                                                          |
 
 The frame is a task, so the order above is its own and not the executor's.
 
@@ -503,14 +507,14 @@ This section is what crosses between the host and the kernel, and how the shell 
 
 The host and the kernel share xpute's two rings of small messages with page-sized payload slots. One carries what pixelet's end submits. The other carries what the kernel completes, and holds all one turn leaves; a turn short of room leaves the rest of the submissions for the next.
 
-The **commands** are listed in `spec/client/kernel/abi/cmd.json`, from which both sides' readers and writers are generated. A packet is an XTP tree, xpute's relocatable binary tree, and anything larger than a slot crosses in a heap block. The kernel also posts messages nobody asked for: a fetch to start, an image to decode, a sensor to watch, a new snapshot.
+The **commands** are listed in `spec/client/kernel/abi/cmd.json`, from which both sides' readers and writers are generated. A packet is an XTP tree, xpute's relocatable binary tree, and anything larger than a slot crosses in a heap block. The kernel also posts **signals** nobody asked for: a sensor to watch or let go (`SENSOR_START`, `SENSOR_STOP`) and a new snapshot (`WORLD_SNAPSHOT`). A read to open and its other calls go in its host stream (`io/host.rs`).
 
 The shell reads the kernel through one **snapshot**, replaced whole after a turn only when what it is made of moved (`shell.rs` `Shown`). It carries only what the kernel owns:
 
 - the focus, whether the view shows ground there yet, and whether it has wandered from the device or past the service area;
-- the device's location and heading, and the camera's azimuth and motion;
-- the companion's readiness, the tool held, the display cases and the settings;
-- the meters a pixel spans at the focus, the place it is in, and a server's stall.
+- the state of the device's location and heading, the camera's azimuth, whether it follows the device, and whether it is dragged or zooming;
+- the companion's readiness, the tool held and a marker waiting for its words, the display cases, and the settings by their numbers;
+- the meters a pixel spans at the focus, the divisions it is in, whether the pointer is over a badge, a server's stall, and the version each source serves.
 
 What is rounded or timed for presentation, such as a scale bar's length or a toast, is the shell's.
 
@@ -518,37 +522,38 @@ What is rounded or timed for presentation, such as a scale bar's length or a toa
 
 This section is where every range of the client's state lives.
 
-The client's state is xpute's [core memory](./xpute/ARCHITECTURE.md#the-core-memory-placed-once), placed once and never moved. In a tab it is a `WebAssembly.Memory` of `DESKTOP_BYTES` on the desktop and `PHONE_BYTES` on a phone, since a phone's JavaScriptCore counts the whole reservation against the tab (`mem.json`). On a device it is one region of `PHONE_BYTES` the library takes (`pxl-native memory.rs`). Every address is an offset from the first byte, so the map holds on both.
+The client's state is xpute's [core memory](./xpute/ARCHITECTURE.md#the-core-memory-placed-once), placed once and never moved. In a tab it is a `WebAssembly.Memory` of `DESKTOP_BYTES`, or `PHONE_BYTES` where the pointer is coarse, since a phone's JavaScriptCore counts the whole reservation against the tab (`mem.json`, `apps/web/src/device.ts` `HANDHELD`). On a device it is always one region of `PHONE_BYTES` the library takes, and the kernel's data is the process's, so its ranges begin at `GLOBAL_BASE` (`pxl-native memory.rs`). Every address is an offset from the first byte, so the map holds on both.
 
 ```text
 address      range               bytes                  placed by
 ──────────────────────────────────────────────────────────────────────
-0            .stack              1 MiB                  rustc
+0            .stack              1 MiB                  wasm-ld
 1 MiB        .ring.desc          36 KiB + 68 KiB        mem.json
 2 MiB        .ring.slot          8 MiB + 16 MiB         mem.json
 32 MiB−4KiB  the directory       4 KiB                  mem.json
-32 MiB       .rodata .data .bss  ~0.7 MiB               wasm-ld
+32 MiB       .rodata .data .bss  ~2.5 MiB               wasm-ld
 D            .fixed              each owner's range     door/layout.rs
 D + .fixed   .heap               the rest               the allocator
 end          PHONE_BYTES or DESKTOP_BYTES
 ──────────────────────────────────────────────────────────────────────
-             D: __data_end rounded up to a page, about 32.7 MiB
+             D: __data_end rounded up to a page, about 34.5 MiB;
+                GLOBAL_BASE on a device
              sizes as mem.json sets them
 ```
 
 The map is `pxl-kernel mem/section.rs`'s. `.stack` is first so an overflow wraps below zero and traps, the only guard without an MMU. The rings and the directory sit at addresses from `spec/client/kernel/mem/mem.json`, which also tells the linker where its data may begin.
 
-`.fixed` holds what the kernel places once, sizes at compile time and never frees: the terrain's room, the resident divisions' cells, the renderer's live blocks, the GPU and host streams, the profiler's rings. Each owner states its size, and the door lays the ranges in order and hands each its own at boot (`door/layout.rs` `FIXED_BYTES`). Each range is read through a `Section`, which checks every access against its end.
+`.fixed` holds what the kernel places once, sizes at compile time and never frees: the terrain's room, the resident divisions' cells, the renderer's live blocks, the GPU and host streams, the profiler's rings. Each owner states its size, and the door lays the ranges in order and hands each its own at boot (`door/layout.rs` `FIXED_BYTES`). The terrain's, the divisions' and the profiler's ranges are read through a `Section`, which checks every access against its end; the others are handed their first byte, which the renderer and the streams write from.
 
 `.heap` is everything else, under xpute's slab over buddy, including what another format sizes, such as a glTF or a PNG. A refused request is a wait, not a failure: the asker tries again on a later turn.
 
-What the renderer reads each frame is laid out as **column lanes**, structure-of-arrays, each set with one owner that a consumer borrows for one call. The JavaScript heap holds only glue.
+What the renderer reads each frame is the kernel's **draw list**, records of uploads, rewrites, draws and frees (`pxl-render frame/draw.rs`), its uploads' and frees' lanes in `.fixed.blocks`. What an upload names is a block laid out in lanes, structure-of-arrays: a model's positions, normals, UVs, joints and weights each its own. The JavaScript heap holds only glue.
 
 ## Settings and the profiler
 
 This section covers the settings, which anything reads, and the profiler, which reads anything.
 
-Every setting is one entry of one schema (`spec/client/kernel/setting/schema.json`). The store keeps only the user's overrides, by name. An entry marked `dev` is offered only by a development build.
+Every setting is one entry of one schema (`spec/client/kernel/setting/schema.json`). The store keeps only the user's overrides, by number: each setting and each option has one in the schema, given out once, a retired one kept in `$retired`, and the kept file is a format byte and `(number, value)` pairs (`setting/store.rs`). An entry marked `dev` is offered only by a development build.
 
 The **profiler** (`profiler/`) is reached by production only where it records. It keeps what each frame and task cost in rings laid out by `spec/client/kernel/profiler/profiler.json`, which the shell reads in place, prints as a report or exports as a Chrome trace. Nothing schedules by what it records.
 
