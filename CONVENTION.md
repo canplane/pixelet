@@ -14,10 +14,6 @@ How the tree is written. `AGENTS.md` is how a session works in it;
   `packages/`) or the word has no singular in its sense (`minutes/`).
 - Systemic modules take their conventional abbreviation (`io`, `mem`, `abi`,
   `sched`); domain modules take the full word (`scene`, `control`, `query`).
-- xpute's words are host, guest and their contract; kernel, shell and
-  pixelet appear nowhere under `xpute/`. pixelet's host is
-  `apps/client/src/host/` plus a platform bracket, and the kernel is its
-  guest.
 
 ## Files
 
