@@ -84,7 +84,7 @@ fn companion_tick(ctx: &mut TickContext) {
 }
 
 /// Each pyramid layer's tiles, from the live eye.
-fn demand_tick(_: &mut TickContext) {
+fn demand_tick(ctx: &mut TickContext) {
     // The ground's windows where their centres now stand, before what arrives fills them.
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
     let pinned = crate::layer::terrain::window::step(
@@ -98,7 +98,7 @@ fn demand_tick(_: &mut TickContext) {
     if pinned {
         TerrainTile::demand().moved();
     }
-    crate::view::demand::admit_arrived();
+    crate::view::demand::admit_arrived(&ctx.budget);
     changes_step();
     let tau = crate::view::lens::tau();
     TerrainTile::demand().step(crate::control::navigation::destination::tile(), crate::layer::terrain::window::pinned(), tau);

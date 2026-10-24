@@ -105,6 +105,11 @@ pub struct Answered {
 /// No more are kept than fetches are out, each on its credit, oldest first.
 static ANSWERED: Global<List<Answered, { MAX_CREDITS as usize }>> = Global::new();
 
+/// How many answers of one of `of` are not yet taken.
+pub fn answered(of: &[Stream]) -> usize {
+    ANSWERED.get(List::new).iter().filter(|a| of.contains(&a.stream)).count()
+}
+
 /// The oldest answer of one of `of`, not yet taken. No more are kept than
 /// fetches are out, so the scan is short.
 pub fn next_answered(of: &[Stream]) -> Option<Answered> {
@@ -155,8 +160,9 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     arrivals().notify();
 }
 
-/// Arrivals are decoded on a later turn, once their bytes are in, as many
-/// as the quota allows and at least one.
+/// Arrivals are handed to their owners on a later turn, once their bytes
+/// are in, yielding where the turn is spent; the owner decodes them
+/// (view/demand.rs `admit_arrived`).
 pub async fn fetch_task() {
     loop {
         notified(arrivals).await;

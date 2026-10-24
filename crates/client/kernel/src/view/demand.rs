@@ -16,13 +16,13 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::global::Global;
 
 use crate::io::demand::Stream;
-use crate::io::fetch::{answer_settled, body, next_answered, release, Answered};
+use crate::io::fetch::{answer_settled, answered, body, next_answered, release, Answered};
 use crate::io::request::attempt_of;
 use crate::layer::earth::Earth;
 use crate::layer::{Asks, Base};
-use crate::sched::edge::world_edge;
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::mem::heap::Block;
+use xpute_guest::sched::frame_budget::FrameBudget;
 use xpute_kit::status::errno::Errno;
 
 use fnv::FnvHashMap;
@@ -327,39 +327,48 @@ impl<L: Observed> Demand<L> {
     }
 }
 
-/// The pyramid tiles arrived, admitted against the view as many as the
-/// turn's quota allows and at least one; each fetch settles here.
-pub fn admit_arrived() {
-    let mut first = true;
-    while first || !world_edge().spent() {
-        let Some(Answered {
-            key,
-            stream,
-            subject,
-            block,
-            mut phases,
-        }) = next_answered(&[Stream::terrain, Stream::place, Stream::earth, Stream::division])
-        else {
-            return;
-        };
-        first = false;
-        let tile = Tile::of_subject(subject);
-        // A key the request scheduler no longer holds is one a reset forgot.
-        if attempt_of(key).is_none() {
-            release(block);
-            continue;
-        }
-        let result = match (stream, block) {
-            (Stream::terrain, block) => arrived::<TerrainTile>(tile, block, &mut phases),
-            (Stream::place, block) => arrived::<PlaceTile>(tile, block, &mut phases),
-            (Stream::division, block) => arrived::<DivisionTile>(tile, block, &mut phases),
-            (Stream::earth, block) => arrived::<Earth>(tile, block, &mut phases),
-            (_, block) => {
+/// The pyramid tiles arrived, admitted against the view as a pass of the
+/// tick's budget, so the visible phase's hold on the content share binds it,
+/// and at least one; each fetch settles here. What the pass leaves stays
+/// queued, and a turn is asked for it.
+pub fn admit_arrived(budget: &FrameBudget) {
+    const OF: [Stream; 4] = [Stream::terrain, Stream::place, Stream::earth, Stream::division];
+    let pass = budget.run(
+        0..answered(&OF),
+        |_| {
+            let Some(Answered {
+                key,
+                stream,
+                subject,
+                block,
+                mut phases,
+            }) = next_answered(&OF)
+            else {
+                return false;
+            };
+            let tile = Tile::of_subject(subject);
+            // A key the request scheduler no longer holds is one a reset forgot.
+            if attempt_of(key).is_none() {
                 release(block);
-                Err(Errno::ENOTRECOVERABLE.into())
+                return false;
             }
-        };
-        answer_settled(key, result, phases);
+            let result = match (stream, block) {
+                (Stream::terrain, block) => arrived::<TerrainTile>(tile, block, &mut phases),
+                (Stream::place, block) => arrived::<PlaceTile>(tile, block, &mut phases),
+                (Stream::division, block) => arrived::<DivisionTile>(tile, block, &mut phases),
+                (Stream::earth, block) => arrived::<Earth>(tile, block, &mut phases),
+                (_, block) => {
+                    release(block);
+                    Err(Errno::ENOTRECOVERABLE.into())
+                }
+            };
+            answer_settled(key, result, phases);
+            true
+        },
+        None,
+    );
+    if pass.stopped_early {
+        crate::sched::edge::request_world_tick();
     }
 }
 
