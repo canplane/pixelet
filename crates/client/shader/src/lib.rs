@@ -1592,8 +1592,11 @@ pub fn ways_tree_cs(
     let slot = |stack: &[u32], from: u32, c: u32| 8 * id(stack, from + c / 8) + c % 8;
     // levels[2j], levels[2j + 1]: level j's first id on the stack and its
     // candidates; the last three words, the blocks the square has taken, its
-    // cells' zoom and whether the pool held every level so far.
+    // cells' zoom and whether the pool held every level so far (`HELD`), or
+    // the level the square took past its own most (`PAST`).
     let (taken, cells, held) = (lanes - 3, lanes - 2, lanes - 1);
+    const HELD: u32 = 1;
+    const PAST: u32 = 2;
     if t == 0 {
         put(scratch, mine + FREED_AT, 0);
         put(scratch, mine + RECORDS_AT, 0);
@@ -1609,7 +1612,7 @@ pub fn ways_tree_cs(
     }
     let (cell, first) = (shared(levels, cells), shared(levels, 0));
     let (mut j, mut zoom) = (0, 0);
-    let mut ok = shared(levels, held) != 0;
+    let mut ok = shared(levels, held) == HELD;
     while ok && zoom < cell {
         settle();
         let (from, n) = (shared(levels, 2 * j), shared(levels, 2 * j + 1));
@@ -1632,9 +1635,10 @@ pub fn ways_tree_cs(
             set_shared(levels, t, taken, had + flagged);
             set_shared(levels, t, 2 * j + 2, next);
             set_shared(levels, t, 2 * j + 3, 8 * flagged);
-            set_shared(levels, t, held, fits as u32);
+            let past = !fits && tree::past(had, flagged);
+            set_shared(levels, t, held, if fits { HELD } else if past { PAST } else { 0 });
         }
-        ok = shared(levels, held) != 0;
+        ok = shared(levels, held) == HELD;
         let next = shared(levels, 2 * j + 2);
         let (mut before, mut c) = (0, 0);
         while ok && c < n {
@@ -1704,6 +1708,10 @@ pub fn ways_tree_cs(
         let root = if ok { 8 * id(stack, first) } else { 0 };
         if ok {
             record(scratch, mine, &pool, root);
+        } else if lane_word(levels, held) == PAST {
+            // Past the square's own most, which no pool's growth lets it
+            // build: its count `NONE`, refused at once (pxl-render `Landing`).
+            put(scratch, mine + RECORDS_AT, tree::NONE);
         }
         put(ground, base + window::ROOT_AT, root);
     }

@@ -120,9 +120,10 @@ const fn body_block(stream: crate::io::demand::Stream) -> u64 {
 /// mirror at its cap (layer/terrain/mirror.rs, param `WAYS_POOL_BYTES`),
 /// the renderer's rooms for the squares' records, every read's at a
 /// square's most (pxl-render gpu/renderer.rs `GroundBuffers::room`), and
-/// the profiler's lanes while its setting is on (profiler/record.rs). Each
-/// is refused past its cap, and waits or stays absent where the heap
-/// refuses it. The rest of the heap is workspace, which asks first.
+/// the profiler's lanes while its setting is on (profiler/record.rs), each
+/// in the buddy's blocks, a power of two. Each is refused past its cap, and
+/// waits or stays absent where the heap refuses it. The rest of the heap
+/// is workspace, which asks first.
 const HEAP_FLOWS_BYTES: u64 = {
     use crate::io::body::slots_bytes;
     use crate::io::demand::Stream;
@@ -134,8 +135,8 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    let ways = crate::param::WAYS_POOL_BYTES as u64 + pxl_spec_core::window::READS as u64 * pxl_spec_core::ways::tree::RECORDS_BYTES as u64;
-    slots_bytes(crate::param::BODY_SLOTS) + crate::param::MAX_CREDITS as u64 * longest + ways + crate::profiler::record::PROFILER_BYTES as u64
+    let ways = crate::layer::terrain::mirror::MIRROR_BYTES + pxl_render::gpu::renderer::RECORD_ROOMS_BYTES;
+    slots_bytes(crate::param::BODY_SLOTS) + crate::param::MAX_CREDITS as u64 * longest + ways + crate::profiler::record::PROFILER_BYTES
 };
 
 const _: () = assert!(

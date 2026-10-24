@@ -620,14 +620,19 @@ export class GpuHost {
         return;
       }
       case op.MAP_ASYNC: {
-        const buffer = this.get<GPUBuffer>(r.u());
+        const id = r.u();
+        const buffer = this.get<GPUBuffer>(id);
         const offset = r.u();
         const size = r.u();
         const address = r.u();
         const word = r.u();
         const ticket = r.u();
-        // The word is the mapping's own: it lands whatever it holds.
+        // The word is the mapping's own: it lands whatever it holds. Where
+        // the device went since, its objects forgotten (`lost`), it lands
+        // nowhere, as the native host's pending reads are dropped: the guest
+        // lets the room and the word go once it hears of the loss.
         buffer.mapAsync(GPUMapMode.READ, offset, size).then(() => {
+          if (this.get<GPUBuffer>(id) !== buffer) return;
           this.bytesAt(address, size).set(new Uint8Array(buffer.getMappedRange(offset, size)));
           buffer.unmap();
           new Uint32Array(this.memory(), word, 1)[0] = (ticket | DONE) >>> 0;

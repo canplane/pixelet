@@ -156,12 +156,19 @@ pub enum Landing<'a> {
     /// Its ways' tree built: the blocks it holds, their count first, a
     /// record each (pxl-spec-core `ways::tree::lay`).
     Built(&'a [u32]),
-    /// Its tree not built for want of room the renderer grows, its pool's or
-    /// its read's: the square is to be filled again.
+    /// To be filled again, for want of room the renderer grows: its tree not
+    /// built, the pool it was built in having run out, or built but its
+    /// records past its read's room, the tree the refill frees.
     Again,
-    /// Its tree refused, the pool at its most: the square stays absent.
+    /// Its tree refused, the pool at its most, or the square past its own
+    /// (`ways::tree::past`): the square stays absent.
     Refused,
 }
+
+/// The pool's records the renderer keeps on the heap at their worst, in
+/// the buddy's blocks: every read's room at a square's most
+/// (`GroundBuffers::room`), each a power of two as the heap gives it.
+pub const RECORD_ROOMS_BYTES: u64 = window::READS as u64 * (ways::tree::RECORDS_BYTES as u64).next_power_of_two();
 
 /// A square whose cells came back, the fill they are of
 /// (`CellsBack::ticket`), and how its ways' tree landed.
@@ -470,6 +477,8 @@ struct GroundBuffers {
     record_rooms: [Box<[u32]>; READS],
     record_mapping: Box<[u32; READS]>,
     record_bytes: u32,
+    /// The pool's blocks each read's square was built in (`ran_out`).
+    built_in: [u32; READS],
     /// The ways' pool, which the cast reads, its blocks, its free stack and
     /// whether a build ran out of it since it last grew (`grow`); and the
     /// handed squares' scratch, whose records each read copies
@@ -521,6 +530,32 @@ fn pool_buffers(g: &Gpu, blocks: u32) -> (u32, u32) {
     (g.buffer(pool_bytes(blocks), usage), g.buffer(word_bytes(blocks as usize), usage))
 }
 
+/// What a build that ran out of the pool does, built in a pool of `built`
+/// blocks, the pool now of `blocks`, at most `most`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RanOut {
+    /// The pool grew since: built again, as the larger may hold it.
+    Again,
+    /// The pool it ran out of, which grows (`grow`), and built again.
+    Grow,
+    /// The pool at its most ran out: refused.
+    Refused,
+}
+
+/// A read is out a frame more than its build (`READS`), so a build that
+/// ran out of the pool may land after the pool grew for another: judged
+/// against the pool it was built in, it grows the pool no further and is
+/// refused only by the pool at its most.
+fn ran_out(built: u32, blocks: u32, most: u32) -> RanOut {
+    if built < blocks {
+        RanOut::Again
+    } else if blocks < most {
+        RanOut::Grow
+    } else {
+        RanOut::Refused
+    }
+}
+
 impl GroundBuffers {
     /// The ways' passes' groups over the pool and its stack as they are.
     fn ways_groups(&mut self, g: &Gpu) {
@@ -565,21 +600,19 @@ impl GroundBuffers {
     }
 
     /// Read `k`'s records' room, free, made `record_bytes` where it is
-    /// another, its buffer with it, the heap granting the room; else the
-    /// room it has, whose read lands short and is filled again, as a
+    /// another, its buffer with it, the old room given back first, so no
+    /// two of a read's are held at once; where the heap refuses it, a room
+    /// of the count alone, whose read lands short and is filled again, as a
     /// square waits on the heap. A read's first room is made here.
     fn room(&mut self, g: &Gpu, k: usize) {
         let words = (self.record_bytes / 4) as usize;
         if self.record_rooms[k].len() == words {
             return;
         }
+        self.record_rooms[k] = Box::default();
         let mut room = Vec::new();
         if room.try_reserve_exact(words).is_err() {
-            if self.record_reads[k] != 0 {
-                return;
-            }
-            // None yet: the least a landing reads, its count.
-            room.push(0);
+            room = vec![0];
         } else {
             room.resize(words, 0);
         }
@@ -851,6 +884,7 @@ impl RaysPass {
                 record_reads: [0; READS],
                 record_rooms: core::array::from_fn(|_| Box::default()),
                 record_mapping: Box::new([0; READS]),
+                built_in: [0; READS],
                 record_bytes: (ground.records.next_multiple_of(4)).clamp(word_bytes(1 + ways::tree::RECORD_WORDS as usize), ways::tree::RECORDS_BYTES),
                 pool,
                 blocks,
@@ -1305,10 +1339,11 @@ impl RaysPass {
         // A read lands with its square's words and its records both: told
         // where it is of the square's latest fill, discarded where a later
         // fill asked again, whose own read brings it. A build with no
-        // record ran out of the pool, which grows ahead of the next turn's
-        // squares where it may (`grow`), the square filled again; one whose
-        // records outgrew its read is filled again, every read's room
-        // grown past them.
+        // record ran out of the pool it was built in, which grows ahead of
+        // the next turn's squares where it is the pool still and may
+        // (`ran_out`, `grow`), the square filled again; one past its own
+        // most is refused at once; one whose records outgrew its read is
+        // filled again, every read's room grown past them.
         for k in 0..READS {
             let (s, ticket) = c.held[k];
             if s == FREE || c.mapping[k] & DONE == 0 || c.record_mapping[k] & DONE == 0 {
@@ -1320,14 +1355,18 @@ impl RaysPass {
             }
             c.asked[s as usize].ticket = 0;
             let room = &c.record_rooms[k];
-            let words = 1 + room.first().map_or(0, |&n| n.min(ways::tree::SQUARE_BLOCKS)) * ways::tree::RECORD_WORDS;
-            let landing = if room.first().is_none_or(|&n| n == 0) {
-                let grows = c.blocks < most.min(ways::tree::POOL_BLOCKS);
-                c.ran_out |= grows;
-                if grows {
-                    Landing::Again
-                } else {
-                    Landing::Refused
+            let n = room.first().copied().unwrap_or(0);
+            let words = 1 + n.min(ways::tree::SQUARE_BLOCKS) * ways::tree::RECORD_WORDS;
+            let landing = if n == ways::tree::NONE {
+                Landing::Refused
+            } else if n == 0 {
+                match ran_out(c.built_in[k], c.blocks, most.min(ways::tree::POOL_BLOCKS)) {
+                    RanOut::Again => Landing::Again,
+                    RanOut::Grow => {
+                        c.ran_out = true;
+                        Landing::Again
+                    }
+                    RanOut::Refused => Landing::Refused,
                 }
             } else if words as usize > room.len() {
                 c.record_bytes = c.record_bytes.max(word_bytes(words as usize).next_power_of_two().min(ways::tree::RECORDS_BYTES));
@@ -1358,7 +1397,7 @@ impl RaysPass {
                 (c.record_reads[k], 0),
                 word_bytes(c.record_rooms[k].len()),
             );
-            (c.held[k], taken[k]) = ((s, c.asked[s as usize].ticket), true);
+            (c.held[k], c.built_in[k], taken[k]) = ((s, c.asked[s as usize].ticket), c.blocks, true);
         }
         g.submit(e);
         for k in (0..READS).filter(|&k| taken[k]) {
@@ -2261,3 +2300,7 @@ fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32], b
     let moved = !(lists.frees.is_empty() && lists.uploads.is_empty() && lists.rewrites.is_empty());
     (lists.draws, lists.uniforms, moved)
 }
+
+#[cfg(test)]
+#[path = "renderer.test.rs"]
+mod test;

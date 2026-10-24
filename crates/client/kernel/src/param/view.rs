@@ -67,6 +67,13 @@ pub const NEAR: f64 = 0.1;
 /// squares their ways' trees, each left absent to the coarser window
 /// (layer/terrain/window.rs `REFUSED`); the mirror at it is a heap flow
 /// (door/layout.rs `HEAP_FLOWS_BYTES`).
+///
+/// A known gap: the GPU's pool at it binds within WebGPU's floor, asserted
+/// (pxl-render gpu/renderer.rs `pool_bytes`), so no device's limits refuse
+/// it, but a device out of memory may fail to make the doubled buffer, and
+/// nothing hears it: the host keeps no error scope, so the renderer reads
+/// on with a buffer the device holds as an error. The last doubling holds
+/// the old pool beside the new, 32 MiB with 64, until the copy is submitted.
 pub const WAYS_POOL_BYTES: u32 = 64 << 20;
 const _: () = assert!(
     WAYS_POOL_BYTES <= pxl_spec_core::ways::tree::POOL_BLOCKS * 64 && WAYS_POOL_BYTES >= 2 * 64,

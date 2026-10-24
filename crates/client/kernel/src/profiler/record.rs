@@ -12,7 +12,6 @@ use core::mem::size_of;
 
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
-use xpute_guest::mem::section::span_of;
 
 use crate::profiler::block::RecBlock;
 use crate::profiler::frame::{FrameSample, RingSample, WorstFrame};
@@ -68,11 +67,18 @@ const LANES: [u32; 4] = [
     (SPREAD_LIMIT * size_of::<f64>()) as u32,
 ];
 
-const LANE_ALIGN: u32 = 64;
-
-/// The lanes' bytes together: what the heap holds of the profiler while its
-/// setting is on (door/layout.rs `HEAP_FLOWS_BYTES`).
-pub const PROFILER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
+/// What the heap holds of the profiler while its setting is on, in the
+/// buddy's blocks: each lane a power of two as the heap gives it
+/// (door/layout.rs `HEAP_FLOWS_BYTES`).
+pub const PROFILER_BYTES: u64 = {
+    let mut sum = 0;
+    let mut k = 0;
+    while k < LANES.len() {
+        sum += (LANES[k] as u64).next_power_of_two();
+        k += 1;
+    }
+    sum
+};
 
 /// A lane of `n` records, zeroed, a valid record each; none where the heap
 /// refuses it.

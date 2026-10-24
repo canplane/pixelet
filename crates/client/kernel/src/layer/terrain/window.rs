@@ -30,6 +30,7 @@ use crate::layer::terrain::fixed::{cells_off, fill_off, joined_off, CELLS_LANE_B
 use crate::layer::terrain::mirror::{mirror, Mirror};
 use crate::layer::Base;
 use crate::mem::fixed::lane;
+use pxl_render::gpu::api::DONE;
 use pxl_render::gpu::renderer::Landing;
 
 /// Who a window is about.
@@ -287,7 +288,8 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
 }
 
 /// A slot's ticket while its square's ways' tree is refused, the pool at
-/// its cap (`landed`): never a fill's (`fill`), and not absent, so the
+/// its cap, the square past its own most or the mirror refused its room
+/// (`landed`): never a fill's (`fill`), and not absent, so the
 /// square is not handed again every turn, nor its tile asked or kept for
 /// it, until the slot is laid again (`step`). A reader reads the coarser
 /// window's, as for any square absent.
@@ -296,9 +298,10 @@ const REFUSED: u32 = u32::MAX;
 /// Square `s`'s cells back from its fill `ticket` (pxl-render
 /// `read_back`), and how its ways' tree landed, where its slot still waits
 /// on that fill: built, its blocks laid into the pool's mirror at their
-/// slots, it is present and what is read over its tile moved; to be built
+/// slots, it is present and what is read over its tile moved; to be filled
 /// again (`Landing::Again`), it is absent, handed again; refused, or its
-/// blocks refused the mirror's room, it is absent and `REFUSED`. A fill no
+/// blocks refused the mirror's room by its cap or the heap, it is absent
+/// and `REFUSED` until its slot is laid again. A fill no
 /// slot waits on lays nothing: its blocks may be another's by now.
 pub fn landed(s: u32, ticket: u32, landing: Landing) {
     let w = windows();
@@ -506,7 +509,10 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
             cut[4 * i as usize..4 * i as usize + 4].copy_from_slice(&lane[from..from + 4]);
         }
         let written = square_lines(tile, &held.separation, place, scratch, lines);
-        w.ticket = w.ticket % (REFUSED - 1) + 1;
+        // Under `DONE`, which a read's word holds once it lands, so no
+        // ticket reads as landed before it is: 1 to `DONE` − 1, never
+        // `REFUSED`, which is past them.
+        w.ticket = w.ticket % (DONE - 1) + 1;
         let back = CellsBack {
             cells: off_of_slice(cells(i)) as u32,
             ticket: w.ticket,

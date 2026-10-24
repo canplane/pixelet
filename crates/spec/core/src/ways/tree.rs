@@ -215,10 +215,19 @@ pub fn flag(pool: &impl Pool, w: &impl Squares, s: u32, of: Of, zoom: Zoom, slot
 /// taken `taken`, stays within `SQUARE_BLOCKS`. None is taken past either:
 /// the tree is refused, its root word 0 and no record kept, which the
 /// renderer reads as the pool's to grow or, at its cap, the square's to
-/// stay absent (pxl-render gpu/renderer.rs `Landing`); the bake bounds a
-/// set's and a square's (pxl-geo-bake terrain/pool.rs).
+/// stay absent; its count `NONE` where it is `past` the square's most,
+/// absent at once (pxl-render gpu/renderer.rs `Landing`). The bake bounds
+/// a set's and a square's (pxl-geo-bake terrain/pool.rs).
 pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
-    flagged <= left && flagged <= SQUARE_BLOCKS - taken
+    flagged <= left && !past(taken, flagged)
+}
+
+/// Whether a level's `flagged` blocks take a square that has taken `taken`
+/// past its most, `SQUARE_BLOCKS`: refused whatever the pool holds, so its
+/// build keeps `NONE` for its records' count rather than none, which the
+/// pool's growth answers (pxl-shader `ways_tree_cs`).
+pub fn past(taken: u32, flagged: u32) -> bool {
+    flagged > SQUARE_BLOCKS - taken
 }
 
 /// The flagged candidate at `slot`, a node of `zoom`, a branch whose

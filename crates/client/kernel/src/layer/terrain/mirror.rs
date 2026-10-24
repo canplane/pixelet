@@ -19,6 +19,13 @@ const CHUNK_WORDS: usize = (CHUNK_BLOCKS * BLOCK_WORDS) as usize;
 /// The blocks the cap holds.
 const MOST_BLOCKS: u32 = crate::param::WAYS_POOL_BYTES / (4 * BLOCK_WORDS);
 
+/// The mirror at the cap as the heap holds it, in the buddy's blocks: its
+/// chunks, each a power of two, and the list of them
+/// (door/layout.rs `HEAP_FLOWS_BYTES`).
+pub const MIRROR_BYTES: u64 = {
+    let chunks = MOST_BLOCKS.div_ceil(CHUNK_BLOCKS) as u64;
+    chunks * (CHUNK_WORDS as u64 * 4).next_power_of_two() + (chunks * size_of::<Box<[u32]>>() as u64).next_power_of_two()
+};
 /// The chunks, block after block, each its eight heap words then its eight
 /// data words; a block past them reads zero, nothing, as one never laid.
 #[derive(Default)]
