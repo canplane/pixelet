@@ -10,8 +10,10 @@
 - The boundary is xpute's, and its words name only it. The host grants the
   kernel memory and time, carries bytes, and binds each root to where its
   bytes are; it decides nothing about what they mean. pixelet's host is
-  `apps/client/src/host/` plus a platform bracket. Reading the world's data
-  is the kernel's, its guest, and the UI is the shell's
-  (`apps/client/src/shell/`), which is not the host. Host, guest and their
+  `apps/client/src/host/` plus a platform bracket. The world is the
+  kernel's, its guest. The shell (`apps/client/src/shell/`) is the UI and
+  the application's policy over the kernel, such as which version a root
+  serves or what becomes of data the kernel refused; it computes no
+  coordinate or tile, and it is not the host. Host, guest and their
   contract never name a pixelet part, and kernel, shell and pixelet appear
   nowhere under `xpute/`.
