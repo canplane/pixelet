@@ -93,3 +93,28 @@ fn a_slot_costs_less_than_the_buddy_block_it_replaces() {
         assert!(SLOT_BYTES >= longest(stream) && (BODY_RUN_BYTES / SLOTS) < longest(stream).next_power_of_two());
     }
 }
+
+#[test]
+fn a_body_refused_a_slot_waits_on_the_slots_and_not_on_the_heap() {
+    use crate::io::host::set_heap_stat;
+    use core::sync::atomic::{AtomicU32, Ordering};
+    use xpute_guest::mem::heap::HeapStat;
+    static RELEASES: AtomicU32 = AtomicU32::new(0);
+    let _g = crate::serial();
+    set_heap_stat(|| HeapStat {
+        releases: RELEASES.load(Ordering::Relaxed),
+        ..HeapStat::default()
+    });
+    let longest = longest(Stream::terrain);
+    let mut out: Vec<Block> = (0..BODY_SLOTS).map(|_| take(Some(Stream::terrain), longest).unwrap()).collect();
+    let refused = take(Some(Stream::terrain), longest).unwrap_err();
+    RELEASES.fetch_add(1, Ordering::Relaxed);
+    assert!(!refused.over(), "the heap's pages given back give no slot");
+    // SAFETY: from `take`, given back once, here and below.
+    unsafe { give(out.pop().unwrap()) };
+    assert!(refused.over());
+    for block in out {
+        unsafe { give(block) };
+    }
+    set_heap_stat(HeapStat::default);
+}

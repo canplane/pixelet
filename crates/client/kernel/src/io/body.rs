@@ -123,15 +123,16 @@ fn held() -> &'static mut Slots {
 }
 
 /// A block for a body of `n` bytes, of `stream` where the request
-/// scheduler still holds it; refused where the slots or the heap had no
-/// room.
+/// scheduler still holds it; refused where every slot is out, or where the
+/// heap had no room for it or for a run of slots, each refusal waiting on
+/// what refused it.
 pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refused> {
     if !stream.is_some_and(slotted) || n > SLOT_BYTES {
         return alloc(n).ok_or_else(Refused::now);
     }
     let s = held();
     if s.out >= BODY_SLOTS {
-        return Err(Refused::now());
+        return Err(Refused::bodies());
     }
     let i = match s.runs.iter().position(|r| r.out != FULL) {
         Some(i) => i,
@@ -172,8 +173,8 @@ pub unsafe fn give(block: Block) {
     }
 }
 
-/// Moves whenever a slot is given back, as the heap's count moves for its
-/// blocks: a body refused room may be served once either has.
+/// Moves whenever a slot is given back: a body refused one (`Refused::bodies`)
+/// may be served once it has.
 pub fn releases() -> u32 {
     held().releases
 }

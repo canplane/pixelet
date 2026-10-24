@@ -6,10 +6,10 @@
 //!
 //! An answer ends its want; a failure ends only its attempt. A failure of the
 //! object drops its want; a body refused room, by the heap or the body
-//! slots, holds its want until either gives some back; one of the network or the server holds back
-//! every start, then lets one probe out until something answers, and the
-//! server's past its last wait gives the reads up. A running attempt is never
-//! preempted.
+//! slots, holds its want until what refused it gives some back; one of the
+//! network or the server holds back every start, then lets one probe out
+//! until something answers, and the server's past its last wait gives the
+//! reads up. A running attempt is never preempted.
 //!
 //! Invariants: no more attempts than credits and no want past its stream's
 //! bound; ties broken by stream then subject so the order is total; a free
