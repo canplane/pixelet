@@ -71,8 +71,9 @@ const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::
 const SINGLE_BLOCKS: usize = 4;
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a
-/// count the structure fixes (a catalog's length, the camera grid's cells,
-/// the surfaces), so overflowing the renderer's table is a bug, not a load.
+/// count the structure fixes (the models the catalogs can name, the clouds'
+/// blocks within their reach, the actors, the singles), so overflowing the
+/// renderer's table is a bug, not a load.
 /// The renderer frees a list's blocks before taking its uploads, so it never
 /// holds more.
 const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::scene::environment::cloud::BLOCKS_MAX + crate::scene::actor::ACTORS_MAX + SINGLE_BLOCKS;
