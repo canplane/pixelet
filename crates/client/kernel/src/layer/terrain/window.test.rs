@@ -13,11 +13,12 @@ pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, pxl_spec::bake::separ
 
 /// What `hold` leaves held: the squares' words up to their last that is
 /// not zero, the pool's blocks taken as records (pxl-spec-core
-/// `ways::tree::lay`), and the slots.
+/// `ways::tree::lay`), the slots and the berths.
 struct Built {
     cells: Vec<u32>,
     records: Vec<u32>,
     slots: Vec<Slot>,
+    berths: Vec<Berth>,
 }
 
 /// What windows are built over: a centre and the tiles held.
@@ -43,7 +44,8 @@ fn mirrored(records: &[u32]) {
 }
 
 /// The eye's and the focus's windows about `centre`, in units, X then Y,
-/// each square the tiles `held` cover present: per tile, a cell's own look
+/// each square the tiles `held` cover present in its berth, the focus's
+/// windows the eye's finest two again: per tile, a cell's own look
 /// and its height, row by row from its first, and its lines; each square's
 /// columns, its tops and its ways' runs as its fill writes them
 /// (`fill_columns`), and its levels as a GPU folds them (pxl-spec-core
@@ -60,6 +62,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
                 cells: upto(planes().cells),
                 records,
                 slots: windows().slots.to_vec(),
+                berths: windows().berths.to_vec(),
             };
             built.push(((centre, held.to_vec()), b));
             built.len() - 1
@@ -78,6 +81,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     mirrored(&b.records);
     WINDOWS_STATE.set(fresh());
     windows().slots.copy_from_slice(&b.slots);
+    windows().berths.copy_from_slice(&b.berths);
 }
 
 /// `hold`'s windows, built: the blocks their trees took, as records.
@@ -91,9 +95,6 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     // The pool's blocks, each square's tree taken after the one before's, as
     // the GPU's stack hands them, block 0 none's.
     let mut next = 1;
-    // A square's words before its tree, by its cells' zoom and where it
-    // lies: the focus's windows are the eye's finest two again.
-    let mut laid_out: fnv::FnvHashMap<(Zoom, [i32; 2]), [Vec<u32>; 2]> = Default::default();
     WINDOWS_STATE.set(fresh());
     let w = windows();
     for win in 0..WINDOWS {
@@ -104,57 +105,61 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         let first = window::origin(cell, cell_at(cell, centre));
         w.slots[(SQUARES + win) as usize] = Slot { square: first, present: 1, ticket: 0 };
         for s in 0..SLOTS {
-            let i = win * SLOTS + s;
-            let square = wanted(cell, first, s);
-            w.slots[i as usize].square = square;
-            let (t, place) = tile_of(cell, square);
-            let Some((_, looks_of, heights, separation)) = held.iter().find(|(p, _, _, _)| *p == t) else {
-                continue;
-            };
-            let [lane, scratch] = laid_out.entry((cell, square)).or_insert_with(|| {
-                let side = GROUND.tile_cells();
-                let at = |k: u32| {
-                    let [x, y] = window::of_index(k);
-                    ((place[1] * SQUARE + y) * side + place[0] * SQUARE + x) as usize
-                };
-                let (mut scratch, mut lines) = (vec![(0, 0); window::WAYS_SQUARE_SEGMENTS as usize], vec![0; window::LINES_WORDS as usize]);
-                let n = pxl_spec::bake::tile::terrain::square_lines(t, separation, place, &mut scratch, &mut lines);
-                let laid = pxl_spec::bake::tile::terrain::Laid {
-                    cell,
-                    place,
-                    lines: &lines[..n],
-                    looks: |k: u32| word([u32::from(looks_of[at(k)]); 4]),
-                    height: |c: [i32; 2]| i32::from(heights[at(window::index_of([c[0].clamp(0, SQUARE as i32 - 1) as u32, c[1].clamp(0, SQUARE as i32 - 1) as u32]))]),
-                };
-                let (mut lane, mut scratch) = (vec![0u32; window::SQUARE_WORDS as usize], vec![0u32; pxl_spec_core::ways::tree::SCRATCH_WORDS as usize]);
-                fill_columns(&laid, |k| i32::from(heights[at(k)]), &mut lane, &mut scratch);
-                for k in 0..window::LAID_WORDS {
-                    let half = |j: u32| window::laid_half(u32::from(looks_of[at(2 * k + j)]), 0);
-                    lane[(window::LAID_AT + k) as usize] = half(0) | half(1) << 16;
-                }
-                for j in 0..=LEVELS {
-                    for y in 0..SQUARE >> j {
-                        for x in 0..SQUARE >> j {
-                            pxl_spec_core::fill::level(&mut lane, 0, &pxl_spec_core::fill::Scratch { words: &scratch, at: 0 }, cell, j, [x, y]);
-                        }
-                    }
-                }
-                [lane, scratch]
-            });
-            let (mut lane, scratch) = (lane.clone(), &*scratch);
-            // Its ways' tree into the pool's mirror, its root word naming it.
-            let of = pxl_spec_core::ways::tree::Of {
-                cell,
-                at: [wrap_index(cell - SQUARE_SHIFT, square[0]), square[1]],
-            };
-            let [taken, _] = pxl_spec_core::fill::tree(&lane, scratch, of, &mut pool, next);
-            assert_ne!(taken, u32::MAX, "a square's tree past the pool");
-            lane[window::ROOT_AT as usize] = 8 * next;
-            next += taken;
-            let at = (i * CELLS_LANE_BYTES / 4) as usize;
-            planes().cells[at..at + window::BACK_WORDS as usize].copy_from_slice(&lane);
-            w.slots[i as usize].present = 1;
+            w.slots[(win * SLOTS + s) as usize].square = wanted(cell, first, s);
         }
+    }
+    berth(w, false);
+    for b in 0..SQUARES {
+        let Berth { cell, square, .. } = w.berths[b as usize];
+        if w.berths[b as usize].is_free() {
+            continue;
+        }
+        let (t, place) = tile_of(cell, square);
+        let Some((_, looks_of, heights, separation)) = held.iter().find(|(p, _, _, _)| *p == t) else {
+            continue;
+        };
+        let side = GROUND.tile_cells();
+        let at = |k: u32| {
+            let [x, y] = window::of_index(k);
+            ((place[1] * SQUARE + y) * side + place[0] * SQUARE + x) as usize
+        };
+        let (mut segments, mut lines) = (vec![(0, 0); window::WAYS_SQUARE_SEGMENTS as usize], vec![0; window::LINES_WORDS as usize]);
+        let n = pxl_spec::bake::tile::terrain::square_lines(t, separation, place, &mut segments, &mut lines);
+        let laid = pxl_spec::bake::tile::terrain::Laid {
+            cell,
+            place,
+            lines: &lines[..n],
+            looks: |k: u32| word([u32::from(looks_of[at(k)]); 4]),
+            height: |c: [i32; 2]| i32::from(heights[at(window::index_of([c[0].clamp(0, SQUARE as i32 - 1) as u32, c[1].clamp(0, SQUARE as i32 - 1) as u32]))]),
+        };
+        let (mut lane, mut scratch) = (vec![0u32; window::SQUARE_WORDS as usize], vec![0u32; pxl_spec_core::ways::tree::SCRATCH_WORDS as usize]);
+        fill_columns(&laid, |k| i32::from(heights[at(k)]), &mut lane, &mut scratch);
+        for k in 0..window::LAID_WORDS {
+            let half = |j: u32| window::laid_half(u32::from(looks_of[at(2 * k + j)]), 0);
+            lane[(window::LAID_AT + k) as usize] = half(0) | half(1) << 16;
+        }
+        for j in 0..=LEVELS {
+            for y in 0..SQUARE >> j {
+                for x in 0..SQUARE >> j {
+                    pxl_spec_core::fill::level(&mut lane, 0, &pxl_spec_core::fill::Scratch { words: &scratch, at: 0 }, cell, j, [x, y]);
+                }
+            }
+        }
+        // Its ways' tree into the pool's mirror, its root word naming it.
+        let of = pxl_spec_core::ways::tree::Of {
+            cell,
+            at: [wrap_index(cell - SQUARE_SHIFT, square[0]), square[1]],
+        };
+        let [taken, _] = pxl_spec_core::fill::tree(&lane, &scratch, of, &mut pool, next);
+        assert_ne!(taken, u32::MAX, "a square's tree past the pool");
+        lane[window::ROOT_AT as usize] = 8 * next;
+        next += taken;
+        let at = (b * CELLS_LANE_BYTES / 4) as usize;
+        planes().cells[at..at + window::BACK_WORDS as usize].copy_from_slice(&lane);
+        w.berths[b as usize].present = true;
+    }
+    for i in 0..SQUARES {
+        show(w, i);
     }
     // Every block taken, a record each: its id, its heap words, its data.
     let p = pxl_spec_core::ways::tree::Read(&pool);
@@ -188,4 +193,161 @@ fn fill_columns(sq: &impl window::Square, top: impl Fn(u32) -> i32, lane: &mut [
         });
     }
     scratch[(FIRSTS_AT + SQUARE_CELLS) as usize] = runs;
+}
+
+/// The eye's windows laid out about `eye` and the focus's about `focus`, in
+/// units, X then Y, as `step` lays a window that moved, no destination's;
+/// their squares berthed (`berth`), what was held before kept.
+fn lay(w: &mut Windows, eye: [f64; 2], focus: [f64; 2]) {
+    for win in 0..WINDOWS {
+        let (centre_of, cell) = layout(win);
+        let p = match centre_of {
+            Centre::Eye => eye,
+            Centre::Focus => focus,
+            Centre::Destination => continue,
+        };
+        let first = window::origin(cell, cell_at(cell, p));
+        w.slots[(SQUARES + win) as usize] = Slot { square: first, present: 1, ticket: 0 };
+        for s in 0..SLOTS {
+            w.slots[(win * SLOTS + s) as usize].square = wanted(cell, first, s);
+        }
+    }
+    berth(w, false);
+}
+
+/// Every square held present, as if each had landed.
+fn land_all(w: &mut Windows) {
+    for b in w.berths.iter_mut().filter(|b| !b.is_free()) {
+        b.present = true;
+    }
+    for i in 0..SQUARES {
+        show(w, i);
+    }
+}
+
+/// A leaf cell's middle, in units.
+fn leaf(c: [f64; 2]) -> [f64; 2] {
+    c.map(|v| (v + 0.5) * units(LEAF_CELL))
+}
+
+/// The berths holding a square at `cell`.
+fn held_at(w: &Windows, cell: Zoom) -> usize {
+    w.berths.iter().filter(|b| b.cell == cell).count()
+}
+
+/// The square window `win` wants in slot `s`.
+fn want(w: &Windows, win: u32, s: u32) -> [i32; 2] {
+    w.slots[(win * SLOTS + s) as usize].square
+}
+
+const CENTRE: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
+
+#[test]
+fn a_square_two_windows_want_is_held_once() {
+    let _g = crate::serial();
+    WINDOWS_STATE.set(fresh());
+    let w = windows();
+    lay(w, leaf(CENTRE), leaf(CENTRE));
+    assert_eq!(w.berths.iter().filter(|b| !b.is_free()).count(), (EYE_WINDOWS * SLOTS) as usize, "the focus's windows take no berth");
+    for focus in EYE_WINDOWS..EYE_WINDOWS + 2 {
+        let cell = layout(focus).1;
+        let eye = cell - FIRST_CELL;
+        for s in 0..SLOTS {
+            assert_eq!(want(w, focus, s), want(w, eye, s));
+            assert_eq!(berth_of(w, cell, want(w, focus, s)), Some(eye * SLOTS + s), "in the eye's own berth");
+        }
+    }
+    land_all(w);
+    for focus in EYE_WINDOWS..EYE_WINDOWS + 2 {
+        for s in 0..SLOTS {
+            let row = w.slots[(focus * SLOTS + s) as usize];
+            assert!(
+                row.holds(row.square) && row.berth() == (layout(focus).1 - FIRST_CELL) * SLOTS + s,
+                "the focus's rows name the eye's berths"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_square_one_window_leaves_is_kept_while_another_wants_it() {
+    let _g = crate::serial();
+    WINDOWS_STATE.set(fresh());
+    let w = windows();
+    let (eye, focus) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
+    lay(w, leaf(CENTRE), leaf(CENTRE));
+    land_all(w);
+    // The eye a square on at the leaves: its window there leaves a column
+    // the focus's still wants, and wants a column the focus's does not.
+    let on = leaf([CENTRE[0] + f64::from(SQUARE), CENTRE[1]]);
+    lay(w, on, leaf(CENTRE));
+    assert_eq!(held_at(w, LEAF_CELL), (SLOTS + window::ACROSS) as usize);
+    for s in 0..SLOTS {
+        let q = want(w, focus, s);
+        assert!(Windowed.present(LEAF_CELL, q).1, "the focus's squares stay present");
+        assert!(w.slots[(focus * SLOTS + s) as usize].holds(q));
+    }
+    let new: Vec<u32> = (0..SLOTS).filter(|&s| !w.slots[(eye * SLOTS + s) as usize].holds(want(w, eye, s))).collect();
+    assert_eq!(new.len(), window::ACROSS as usize, "the eye's new column alone is absent");
+    for &s in &new {
+        let b = berth_of(w, LEAF_CELL, want(w, eye, s)).unwrap();
+        assert!(
+            w.berths[b as usize].is_absent() && b != eye * SLOTS + s,
+            "in a free berth, the eye's own still holding the focus's square"
+        );
+    }
+    // Back where it was, the eye finds the column it left present.
+    land_all(w);
+    lay(w, leaf(CENTRE), leaf(CENTRE));
+    for s in 0..SLOTS {
+        assert!(w.slots[(eye * SLOTS + s) as usize].holds(want(w, eye, s)), "not filled again");
+    }
+    assert_eq!(held_at(w, LEAF_CELL), SLOTS as usize, "the column no window wants is given up");
+}
+
+#[test]
+fn windows_apart_hold_their_squares_in_their_own_berths() {
+    let _g = crate::serial();
+    WINDOWS_STATE.set(fresh());
+    let w = windows();
+    lay(w, leaf(CENTRE), leaf([CENTRE[0] + 100.0 * f64::from(SQUARE), CENTRE[1]]));
+    for win in 0..EYE_WINDOWS + 2 {
+        for s in 0..SLOTS {
+            assert_eq!(berth_of(w, layout(win).1, want(w, win, s)), Some(win * SLOTS + s));
+        }
+    }
+}
+
+#[test]
+fn a_landing_shows_in_every_window_wanting_the_square() {
+    let _g = crate::serial();
+    WINDOWS_STATE.set(fresh());
+    let w = windows();
+    let (eye, focus) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
+    lay(w, leaf(CENTRE), leaf(CENTRE));
+    let q = want(w, eye, 0);
+    let b = berth_of(w, LEAF_CELL, q).unwrap();
+    w.berths[b as usize].ticket = 7;
+    for i in of_slot(0) {
+        show(w, i);
+    }
+    landed(b, 6, Landing::Refused);
+    assert_eq!(w.berths[b as usize].ticket, 7, "another fill's landing lays nothing");
+    landed(b, 7, Landing::Built(&[0]));
+    for win in [eye, focus] {
+        let row = w.slots[(win * SLOTS) as usize];
+        assert!(row.holds(q) && row.berth() == b);
+    }
+    // Refused while a window wants it, then given up with the last.
+    w.berths[b as usize] = Berth {
+        present: false,
+        ticket: REFUSED,
+        ..w.berths[b as usize]
+    };
+    let far = leaf([CENTRE[0] + 100.0 * f64::from(SQUARE), CENTRE[1]]);
+    lay(w, leaf(CENTRE), far);
+    assert_eq!(w.berths[b as usize].ticket, REFUSED, "the eye still wants it");
+    assert!(!berth_wants(w, tile_of(LEAF_CELL, q).0, b), "nor is its tile kept for it");
+    lay(w, far, far);
+    assert_eq!(berth_of(w, LEAF_CELL, q), None);
 }

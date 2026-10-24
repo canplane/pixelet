@@ -6,8 +6,10 @@
 //! reach), so a window `WINDOW` cells a side about it holds every cell it
 //! can observe there. A window is `ACROSS` squares a side, each square
 //! held in the slot its place names modulo `ACROSS`, so the window follows
-//! its centre a square at a time and no held cell moves. A square is
-//! present once its cells are drawn; a reader of one absent reads the
+//! its centre a square at a time and no held cell moves. Windows at one
+//! zoom hold a square in the same slot, so a square at a zoom is held once,
+//! in a berth of that slot, however many windows want it (`Slot`). A square
+//! is present once its cells are drawn; a reader of one absent reads the
 //! coarser window's (`step`).
 
 use crate::ground::{ELE_WORDS, UNKNOWN, VOID};
@@ -40,8 +42,12 @@ pub const fn eye_cell(w: u32) -> Zoom {
 /// walking and editing read; a destination's one, at the zoom its line says
 /// its ground, found exactly (pxl-kernel layer/terrain/window.rs).
 pub const WINDOWS: u32 = EYE_WINDOWS + 3;
-/// Squares every window holds, the eye's first: the most the GPU holds, and
-/// so the most of their cells read back at once.
+/// The berths every window's squares are held in, `WINDOWS` a slot, berth
+/// `k × SLOTS + s` slot `s`'s `k`-th (pxl-kernel layer/terrain/window.rs
+/// `Berth`): no more squares want a slot than there are windows, so the
+/// most the GPU holds, and so the most of their cells read back at once,
+/// where no two windows at a zoom overlap. A square two of them want takes
+/// one.
 pub const SQUARES: u32 = WINDOWS * SLOTS;
 /// What the GPU's fill costs a frame, measured at dpr 2 on an M-series Mac
 /// (2026-10-17, the `fill` span): its passes whatever it is handed, and each
@@ -59,7 +65,7 @@ pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_SQUARE_MS) as u32;
 /// frame's mappings are still landing while the next is copied.
 pub const READS: u32 = 2 * HANDED;
 
-/// A square handed to the GPU's fill, in words: its index, where it lies in
+/// A square handed to the GPU's fill, in words: its berth, where it lies in
 /// its tile (`place_word`, in squares), its cells' zoom, its window's as the
 /// window holds it (pxl-kernel layer/terrain/window.rs `Window::cell`; a
 /// destination's moves with its line), never derived from the index; its
@@ -112,6 +118,12 @@ pub const fn place_word([x, y]: [u32; 2]) -> u32 {
 /// `place_word`'s place.
 pub const fn place_of(w: u32) -> [u32; 2] {
     [w & 0xffff, w >> 16]
+}
+
+/// The square a fresh square's first cell (`FRESH_FIRST`) lies in, at its
+/// cells' zoom: what a reader of the handed records finds its slot by.
+pub const fn fresh_square(first: [u32; 2]) -> [i32; 2] {
+    [first[0] as i32 >> SQUARE_SHIFT, first[1] as i32 >> SQUARE_SHIFT]
 }
 
 /// How far from its centre a window holds every cell, in its own cells: a
@@ -299,25 +311,26 @@ pub const fn handed_at(k: u32) -> u32 {
 }
 
 /// The windows as one side holds them: per window, a zoom's cells about
-/// its centre, which square each slot holds once present, and its cells.
+/// its centre, which square each slot holds once present, and the berths
+/// their cells are held in.
 pub trait Squares {
-    /// Where square `q` at `cell` is held present: a slot of the side's own
-    /// naming, which the reads below take; false where no window holds it.
+    /// The berth square `q` at `cell` is held present in, which the reads
+    /// below take (`Slot::berth`); false where no window holds it.
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool);
-    /// The square the eye's window at `cell` holds in `slot`, and whether
+    /// The square the eye's window at `cell` wants in `slot`, and whether
     /// present: `present` the other way.
     fn square(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool);
-    /// The four looks of cell `i` of the square in `slot` (`ground::looks`).
-    fn look(&self, cell: Zoom, slot: u32, i: u32) -> u32;
-    /// Column word `i` of the square in `slot` (`COLUMN_WORDS`), `i` to
+    /// The four looks of cell `i` of the square in `berth` (`ground::looks`).
+    fn look(&self, cell: Zoom, berth: u32, i: u32) -> u32;
+    /// Column word `i` of the square in `berth` (`COLUMN_WORDS`), `i` to
     /// `SQUARE_CELLS`.
-    fn column(&self, cell: Zoom, slot: u32, i: u32) -> u32;
-    /// Entry `at` of level `j` of the square in `slot`, its bounds
+    fn column(&self, cell: Zoom, berth: u32, i: u32) -> u32;
+    /// Entry `at` of level `j` of the square in `berth`, its bounds
     /// (`ground::Bounds`) as bound words (`answer::bound_word`): its
     /// columns' joined (`join`), level 0 one.
-    fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
+    fn level(&self, cell: Zoom, berth: u32, j: u32, at: [u32; 2]) -> [i32; 2];
     /// Cell `i` as its fill laid it (`LAID_WORDS`, `laid_at`).
-    fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32;
+    fn laid(&self, cell: Zoom, berth: u32, i: u32) -> u32;
     /// Entry `e` of the eye's window at `cell`'s levels over its squares
     /// (`JOINED_WORDS`, `fold`), as the GPU folded them; the zero entry,
     /// none, where a side holds no fold.
@@ -326,8 +339,8 @@ pub trait Squares {
     /// squares are counted from (`fold`), and whether it is laid out
     /// (`ORIGIN_AT`).
     fn origin(&self, cell: Zoom) -> ([i32; 2], bool);
-    /// The root of the square in `slot`'s ways' tree (`ROOT_AT`), 0 for none.
-    fn root(&self, cell: Zoom, slot: u32) -> u32;
+    /// The root of the square in `berth`'s ways' tree (`ROOT_AT`), 0 for none.
+    fn root(&self, cell: Zoom, berth: u32) -> u32;
 }
 
 /// One square as its fill reads it, for the ways' one rule
@@ -463,7 +476,7 @@ impl<Q: Square> crate::ways::Columns for Q {
 
 /// Where a node's cells at `cell`, a square's or fewer, are held, as `step`
 /// finds them: the zoom they were asked at, the window holding them present
-/// (its zoom `from`, at `cell` or coarser, and its slot), or none; one word,
+/// (its zoom `from`, at `cell` or coarser, and the berth), or none; one word,
 /// as a descent carries it down beside what is placed (`overwrite::Held`).
 /// `step` reads only the square at `cell` holding them and the squares over
 /// it, so every node whose cells lie in that square has this answer: a
@@ -472,14 +485,13 @@ impl<Q: Square> crate::ways::Columns for Q {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Found(u32);
 
-/// A slot as a source names it: a GPU's in the eye's window at `from`, the
-/// CPU's among every window's (`SQUARES`).
-const FOUND_SLOT_BITS: u32 = SQUARES.next_power_of_two().trailing_zeros();
-const FOUND_HERE: u32 = 1 << FOUND_SLOT_BITS;
-const FOUND_FROM_SHIFT: u32 = FOUND_SLOT_BITS + 1;
+/// A berth, which a GPU and the CPU name alike (`SQUARES`).
+const FOUND_BERTH_BITS: u32 = SQUARES.next_power_of_two().trailing_zeros();
+const FOUND_HERE: u32 = 1 << FOUND_BERTH_BITS;
+const FOUND_FROM_SHIFT: u32 = FOUND_BERTH_BITS + 1;
 const FOUND_CELL_SHIFT: u32 = FOUND_FROM_SHIFT + crate::ZOOM_BITS;
 const FOUND_ZOOM_MASK: u32 = (1 << crate::ZOOM_BITS) - 1;
-/// A `Found`'s word's bits: its slot, here, and its two zooms.
+/// A `Found`'s word's bits: its berth, here, and its two zooms.
 const FOUND_BITS: u32 = FOUND_CELL_SHIFT + crate::ZOOM_BITS;
 const _: () = assert!(FOUND_BITS <= 32);
 const _: () = assert!(FIRST_CELL >= 2, "a zoom asked is never NONE's, nor one finer");
@@ -487,8 +499,8 @@ const _: () = assert!(FIRST_CELL >= 2, "a zoom asked is never NONE's, nor one fi
 impl Found {
     pub const NONE: Found = Found(0);
 
-    const fn of(cell: Zoom, from: Zoom, slot: u32, here: bool) -> Found {
-        Found(cell << FOUND_CELL_SHIFT | from << FOUND_FROM_SHIFT | (here as u32) << FOUND_SLOT_BITS | slot)
+    const fn of(cell: Zoom, from: Zoom, berth: u32, here: bool) -> Found {
+        Found(cell << FOUND_CELL_SHIFT | from << FOUND_FROM_SHIFT | (here as u32) << FOUND_BERTH_BITS | berth)
     }
     /// The zoom its cells were asked at.
     pub const fn cell(self) -> Zoom {
@@ -498,7 +510,7 @@ impl Found {
     pub const fn from(self) -> Zoom {
         (self.0 >> FOUND_FROM_SHIFT) & FOUND_ZOOM_MASK
     }
-    pub const fn slot(self) -> u32 {
+    pub const fn berth(self) -> u32 {
         self.0 & (FOUND_HERE - 1)
     }
     pub const fn here(self) -> bool {
@@ -538,15 +550,15 @@ pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, 
     // answers, or to the first window where it answers none.
     let known = above != Found::NONE && cell >= above.from();
     let (floor, mut f) = if known {
-        (above.cell(), Found::of(cell, above.from(), above.slot(), above.here()))
+        (above.cell(), Found::of(cell, above.from(), above.berth(), above.here()))
     } else {
         (FIRST_CELL - 1, Found::of(cell, FIRST_CELL, 0, false))
     };
     let mut c = cell;
     while c > floor {
-        let (slot, here) = w.present(c, square_of(cell_at(cell, c, g)).0);
+        let (berth, here) = w.present(c, square_of(cell_at(cell, c, g)).0);
         if here {
-            f = Found::of(cell, c, slot, true);
+            f = Found::of(cell, c, berth, true);
             break;
         }
         c -= 1;
@@ -576,8 +588,8 @@ pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u3
     if !f.here() {
         return (VOID, 0, laid_half(VOID, 0), f);
     }
-    let (from, slot, i) = (f.from(), f.slot(), index_of(at));
-    (w.look(from, slot, i), w.column(from, slot, i), w.laid(from, slot, i), f)
+    let (from, berth, i) = (f.from(), f.berth(), index_of(at));
+    (w.look(from, berth, i), w.column(from, berth, i), w.laid(from, berth, i), f)
 }
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
@@ -600,8 +612,8 @@ pub fn ground(w: &(impl Squares + crate::area::Area), place: Found, zoom: Zoom, 
 /// Entry `at` of level `j` of a square, from 1, over the level under it,
 /// written before: the join of the four under it, each source's its own
 /// (`ground::joined`), as bound words.
-pub fn join(w: &impl Squares, cell: Zoom, slot: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
-    let under = |q: u32| crate::ground::bounds_of(w.level(cell, slot, j - 1, [2 * x + q % 2, 2 * y + q / 2]));
+pub fn join(w: &impl Squares, cell: Zoom, berth: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
+    let under = |q: u32| crate::ground::bounds_of(w.level(cell, berth, j - 1, [2 * x + q % 2, 2 * y + q / 2]));
     let mut b = under(0);
     let mut q = 1;
     while q < 4 {
@@ -633,8 +645,10 @@ pub const JOINED_WORDS: u32 = 4;
 /// A row of the windows' table, as the kernel writes it (pxl-kernel
 /// layer/terrain/window.rs `table`) and the GPU reads it (pxl-shader
 /// `World`), an `IVec4` of its buffer: the square a slot's window wants
-/// there, whether its cells are present, and the fill they are on their
-/// way from, 0 where none is. Neither: wanted, its tile not yet handed it.
+/// there; where its cells are present, the berth holding them plus one
+/// (`berth`), which another window at its zoom may have filled, 0 while
+/// they are not; and the fill they are on their way from, 0 where none is.
+/// Neither: wanted, its tile not yet handed it.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Slot {
@@ -659,10 +673,6 @@ impl Slot {
         }
     }
 
-    pub fn is_absent(&self) -> bool {
-        self.present == 0 && self.ticket == 0
-    }
-
     /// Its square, and whether present (`Squares::square`).
     pub fn held(&self) -> ([i32; 2], bool) {
         (self.square, self.present != 0)
@@ -672,11 +682,16 @@ impl Slot {
     pub fn holds(&self, q: [i32; 2]) -> bool {
         self.present != 0 && self.square[0] == q[0] && self.square[1] == q[1]
     }
+
+    /// The berth its square's cells are held in, while present.
+    pub fn berth(&self) -> u32 {
+        (self.present - 1) as u32
+    }
 }
 
 /// The row of the windows' buffer each window's first square is at: past
 /// every window's slots, a row a window shaped as a slot's (`Slot`), its
-/// square the window's first and present while it is laid out
+/// square the window's first and `present` 1 while it is laid out
 /// (`Squares::origin`).
 pub const ORIGIN_AT: u32 = SQUARES;
 /// The row of the windows' buffer the eye's windows' entries begin at:
@@ -725,7 +740,7 @@ pub fn fold(w: &impl Squares, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS 
     while laid && k < 4 {
         let (dx, dy) = ((k & 1) * half, (k >> 1) * half);
         let got = if l == 1 {
-            // The square in the slot, read by its side's own naming of it.
+            // The square in the slot, read in the berth holding it.
             let (q, _) = w.square(cell, slot([((x << l) + dx) as i32, ((y << l) + dy) as i32]));
             let (s, held) = w.present(cell, q);
             if held {
@@ -848,12 +863,12 @@ fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i
     }
     let (f, p) = step(w, *place, cell, g);
     *place = f;
-    let (from, slot) = (f.from(), f.slot());
+    let (from, berth) = (f.from(), f.berth());
     if !f.here() {
         return ([[0, 0]; 2], from, false, false);
     }
     let (j, at) = entry_at(zoom, from, p);
-    (crate::ground::bounds_of(w.level(from, slot, j, at)), from, true, true)
+    (crate::ground::bounds_of(w.level(from, berth, j, at)), from, true, true)
 }
 
 /// The level of a square at `from` bounding a node at `zoom`, level 0 a

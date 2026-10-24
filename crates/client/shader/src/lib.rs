@@ -186,12 +186,14 @@ impl<L> World<'_, L> {
     }
 }
 
-/// The eye's windows, as the GPU holds them.
+/// The eye's windows, as the GPU holds them: a square in the berth its
+/// slot's row names, whichever window filled it.
 impl<L: Looks> Squares for World<'_, L> {
-    /// The slot square `q` is held in, while it holds it present.
+    /// The berth square `q` is held in, while the eye's window holds it
+    /// present.
     fn present(&self, cell: u32, q: [i32; 2]) -> (u32, bool) {
-        let s = window::slot(q);
-        (s, self.row((cell - FIRST_CELL) * SLOTS + s).holds(q))
+        let row = self.row((cell - FIRST_CELL) * SLOTS + window::slot(q));
+        (row.berth(), row.holds(q))
     }
     fn square(&self, cell: u32, slot: u32) -> ([i32; 2], bool) {
         self.row((cell - FIRST_CELL) * SLOTS + slot).held()
@@ -205,20 +207,20 @@ impl<L: Looks> Squares for World<'_, L> {
     fn origin(&self, cell: u32) -> ([i32; 2], bool) {
         self.row(window::ORIGIN_AT + (cell - FIRST_CELL)).held()
     }
-    fn look(&self, cell: u32, slot: u32, i: u32) -> u32 {
-        self.looks.look(((cell - FIRST_CELL) * SLOTS + slot) * SQUARE_CELLS + i)
+    fn look(&self, _: u32, berth: u32, i: u32) -> u32 {
+        self.looks.look(berth * SQUARE_CELLS + i)
     }
-    fn column(&self, cell: u32, slot: u32, i: u32) -> u32 {
-        column_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
+    fn column(&self, _: u32, berth: u32, i: u32) -> u32 {
+        column_of(self.ground, square_at(berth), i)
     }
-    fn level(&self, cell: u32, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        level_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), j, at)
+    fn level(&self, _: u32, berth: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        level_of(self.ground, square_at(berth), j, at)
     }
-    fn laid(&self, cell: u32, slot: u32, i: u32) -> u32 {
-        fill::laid_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot), i)
+    fn laid(&self, _: u32, berth: u32, i: u32) -> u32 {
+        fill::laid_of(self.ground, square_at(berth), i)
     }
-    fn root(&self, cell: u32, slot: u32) -> u32 {
-        fill::root_of(self.ground, square_at((cell - FIRST_CELL) * SLOTS + slot))
+    fn root(&self, _: u32, berth: u32) -> u32 {
+        fill::root_of(self.ground, square_at(berth))
     }
 }
 
@@ -1764,7 +1766,8 @@ pub fn ways_freed_cs(
 /// its count the dispatch's: every one where `marks` asks it, decor having
 /// been off, else one whose
 /// square its records were not grown for (`scatter::grown_for`), beside a
-/// square filled this frame (`fresh`), or met by a box (`scatter::meets`):
+/// square of its window filled this frame in any berth (`fresh`), or met
+/// by a box (`scatter::meets`):
 /// an edit, or a preview's cut as it was or is. A listed slot's head is
 /// laid anew, its count none.
 /// Whether kind `j` is shown at the window zoom `cell`: bit `cell −
@@ -1795,12 +1798,15 @@ pub fn decor_mark_cs(
     let (cell, q, h) = (window::eye_cell(s / SLOTS), [held.x, held.y], scatter::head_at(s));
     let head = [at(records, h), at(records, h + 1), at(records, h + 2), at(records, h + 3)];
     let mut marked = at(marks, 0) != 0 || !scatter::grown_for(head, q);
+    // A square handed at this window's zoom that it wants, whichever
+    // window's berth it is filled into.
     let mut k = 0;
     while k < at(marks, 1) {
-        let f = at(fresh, window::handed_at(k) + window::FRESH_SQUARE);
-        if f < scatter::EYE_SLOTS && f / SLOTS == s / SLOTS {
-            let other = at(window, f);
-            marked = marked || scatter::beside(cell, q, [other.x, other.y]);
+        let r = window::handed_at(k);
+        let other = window::fresh_square([at(fresh, r + window::FRESH_FIRST), at(fresh, r + window::FRESH_FIRST + 1)]);
+        if at(fresh, r + window::FRESH_CELL) == cell {
+            let wants = at(window, (s / SLOTS) * SLOTS + window::slot(other));
+            marked = marked || wants.x == other[0] && wants.y == other[1] && scatter::beside(cell, q, other);
         }
         k += 1;
     }

@@ -94,8 +94,10 @@ pub const fn separation_lane(record: u32, k: usize) -> (u32, u32) {
     (separation_plane(k) + record * bytes, bytes)
 }
 
-pub const fn cells_off(square: u32) -> u32 {
-    SEPARATION_BYTES + square * CELLS_LANE_BYTES
+/// Where berth `berth`'s cells come back to (layer/terrain/window.rs
+/// `Berth`), `SQUARES` of them.
+pub const fn cells_off(berth: u32) -> u32 {
+    SEPARATION_BYTES + berth * CELLS_LANE_BYTES
 }
 
 pub const fn joined_off() -> u32 {

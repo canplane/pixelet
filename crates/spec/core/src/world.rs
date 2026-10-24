@@ -150,9 +150,9 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     };
     let before = *place;
     let (i, cell, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
-    if place.from() != before.from() || place.slot() != before.slot() || place.here() != before.here() {
+    if place.from() != before.from() || place.berth() != before.berth() || place.here() != before.here() {
         *trail = if place.here() {
-            overwrite::cursor(pool, squares.root(place.from(), place.slot()), zoom, c)
+            overwrite::cursor(pool, squares.root(place.from(), place.berth()), zoom, c)
         } else {
             overwrite::Held::NOTHING
         };

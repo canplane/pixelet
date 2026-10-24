@@ -61,7 +61,10 @@ use pxl_spec_core::ray;
 use pxl_spec_core::scatter::GROUPS;
 use pxl_spec_core::sun;
 use pxl_spec_core::ways;
-use pxl_spec_core::window::{self, CellsBack, FreshSquare, BACK_WORDS, COLUMNS_AT, ELE_AT, HANDED, HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_WORDS};
+use pxl_spec_core::window::{
+    self, CellsBack, FreshSquare, BACK_WORDS, COLUMNS_AT, ELE_AT, FRESH_CELL, FRESH_FIRST, FRESH_SQUARE, FRESH_WORDS, HANDED, HANDED_WORDS, LEVELS, LINES_AT, LOOKS_AT, SQUARE, SQUARES, SQUARE_CELLS,
+    SQUARE_WORDS,
+};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -128,8 +131,8 @@ pub struct EarthTiles<'a> {
 }
 
 /// The ground's windows as the GPU holds them (pxl-spec-core `window`,
-/// `SQUARES` of them): the squares to hand it, and where their cells come
-/// back.
+/// their squares in `SQUARES` berths): the squares to hand it, and where
+/// their cells come back.
 pub struct GroundSquares<'a> {
     /// Hands each square whose cells the GPU is to draw to the writer.
     pub upload: &'a mut TerrainUpload,
@@ -446,11 +449,12 @@ struct RaysPass {
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
 struct GroundBuffers {
-    /// Per square of the windows, its columns, levels, runs and cells as
-    /// laid, which `heights_cs`, `ways_cs` and `bound_cs` write in the turn
-    /// it is handed (pxl-spec-core `window::SQUARE_WORDS`).
+    /// Per berth of the windows' squares (`window::SQUARES`), its columns,
+    /// levels, runs and cells as laid, which `heights_cs`, `ways_cs` and
+    /// `bound_cs` write in the turn it is handed (pxl-spec-core
+    /// `window::SQUARE_WORDS`).
     ground: u32,
-    /// Per square, its cells' four looks (`LOOKS_BYTES`).
+    /// Per berth, its cells' four looks (`LOOKS_BYTES`).
     looks: u32,
     /// The squares the turn handed, `window::HANDED` at most, a record each
     /// (`window::HANDED_WORDS`): its words, then its looks, its tile's
@@ -458,13 +462,14 @@ struct GroundBuffers {
     /// `bound_cs`'s and `ways_cs`'s one per `id.z`.
     fresh: u32,
     fresh_len: u32,
-    /// Per square place (`window::SQUARES`), its cells' way back: the fill
+    /// Per berth (`window::SQUARES`), its cells' way back: the fill
     /// the next landing must be of (its ticket 0 where none is asked).
     asked: [CellsBack; SQUARES as usize],
-    /// The squares the frame handed, in the order handed, each with a read
-    /// of its own (`hand` hands none past the reads free): a fill's records
-    /// live in its frame's scratch, so its read is taken in its frame.
-    handed: [u32; HANDED as usize],
+    /// The squares the frame handed, their words (`window::fresh`), in the
+    /// order handed, each with a read of its own (`hand` hands none past the
+    /// reads free): a fill's records live in its frame's scratch, so its
+    /// read is taken in its frame.
+    handed: [[u32; FRESH_WORDS as usize]; HANDED as usize],
     /// The buffers cells are copied into and mapped back through, as many as
     /// a frame hands squares a mapping still out a frame more (`READS`);
     /// each one's square and the fill it carries (`FREE` where none), and
@@ -842,7 +847,7 @@ const _: () = assert!(
     "GROUND_BYTES: the windows' squares bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// The windows' squares' cells' four looks, a word a cell in the squares'
+/// The windows' squares' cells' four looks, a word a cell in the berths'
 /// order: written by the fill off each handed square (`heights_cs`), read
 /// by the cast at a hit (pxl-shader `World`'s `Looks`). Their own
 /// buffer, as the squares' binding has no room for them.
@@ -954,7 +959,7 @@ impl RaysPass {
                 fresh,
                 fresh_len: 0,
                 asked: [CellsBack::default(); SQUARES as usize],
-                handed: [0; HANDED as usize],
+                handed: [[0; FRESH_WORDS as usize]; HANDED as usize],
                 reads: core::array::from_fn(|_| buffer(BACK_WORDS * 4, buffer_usage::MAP_READ | buffer_usage::COPY_DST)),
                 held: [(FREE, 0); READS],
                 mapping: Box::new([0; READS]),
@@ -1005,7 +1010,7 @@ impl RaysPass {
             g.write_buffer(gb.fresh, at + ELE_AT * 4, bytes(q.samples));
             g.write_buffer(gb.fresh, at + LINES_AT * 4, bytes(q.lines));
             gb.asked[square as usize] = q.back;
-            gb.handed[fresh as usize] = square;
+            gb.handed[fresh as usize] = q.fresh;
             fresh += 1;
             true
         });
@@ -1236,13 +1241,16 @@ impl RaysPass {
             c.slots.clear();
             c.slots.extend_from_slice(rows);
         }
+        // A square handed moves the eye's slot that wants it, whichever
+        // window's berth it is filled into.
         if let Some(gb) = self.ground.as_ref() {
-            for &s in &gb.handed[..fresh as usize] {
-                let k = s as usize;
-                if k < eye_rows {
+            for f in &gb.handed[..fresh as usize] {
+                let (cell, q) = (f[FRESH_CELL as usize], window::fresh_square([f[FRESH_FIRST as usize], f[FRESH_FIRST as usize + 1]]));
+                let w = cell.wrapping_sub(window::FIRST_CELL);
+                let k = (w * window::SLOTS + window::slot(q)) as usize;
+                if w < window::EYE_WINDOWS && square(&cast.window[4 * k..4 * k + 4], k).0 == q {
                     c.moved[k / 32] |= 1 << (k % 32);
-                    let (at, zoom) = square(&cast.window[4 * k..4 * k + 4], k);
-                    nodes.push(at, zoom);
+                    nodes.push(q, window::squares_zoom(cell));
                 }
             }
         }
@@ -1472,7 +1480,7 @@ impl RaysPass {
         let mut taken = [false; READS];
         let mut free = 0;
         for h in 0..fresh {
-            let s = c.handed[h as usize];
+            let s = c.handed[h as usize][FRESH_SQUARE as usize];
             let Some(k) = (free..READS).find(|&k| c.held[k].0 == FREE) else { break };
             free = k + 1;
             c.room(g, k);
