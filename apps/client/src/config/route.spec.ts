@@ -10,15 +10,8 @@
 //
 // Every relay reads a root or a branch and never a route name: adding a route
 // is a change to the one server that answers it and to nothing else. This file
-// is where all of them read it from — the client's shell and its kernel are
-// written from it, and the generator fails when the Worker's own literals or
-// the deploy guard's sentinels drift from it.
-//
-// `bundle` names the artifact that carries a root or a branch the client
-// requests whole — the shell's bundle or the kernel's module — so its path
-// survives as one literal and the deploy guard knows which file to look in.
-// A root the client only requests under, as it does the geo root, never
-// reaches one: a branch is folded into a single constant here.
+// is where all of them read it from — the client's shell, its kernel and the
+// Worker are written from it.
 
 /** The world's data: what is baked from Overture and the elevation raster,
  * and the one query over it that cannot be baked. pxl-geo answers what the

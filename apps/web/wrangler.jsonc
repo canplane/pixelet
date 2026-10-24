@@ -1,7 +1,7 @@
 {
   // Cloudflare Worker that serves both the built app and its terrain tiles.
-  // Deployed by `deno task deploy` (apps/web/script/deploy.ts): build, the
-  // bundle check, then wrangler through Deno.
+  // Deployed by `deno task deploy` (apps/web/script/deploy.ts): build, then
+  // wrangler through Deno.
   //
   // `name` becomes the *.workers.dev subdomain; a custom domain is attached
   // in the dashboard afterward. Rationale for this shape — one Worker, one
