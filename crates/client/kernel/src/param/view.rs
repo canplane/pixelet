@@ -105,14 +105,23 @@ pub const WAYS_RECORDS_FIRST_BYTES: u32 = 16 << 10;
 /// window (layer/terrain/window.rs `REFUSED`), as the pool's cap does. The
 /// GPU's alone: its records are copied out in the frame they are built,
 /// into each read's room (`WAYS_RECORDS_FIRST_BYTES`).
+///
+/// The pool's known gap holds for it too (`WAYS_POOL_BYTES`): a device
+/// out of memory may fail to make the larger scratch, and nothing hears
+/// it, the host keeping no error scope, so the renderer builds on in a
+/// buffer the device holds as an error. Its last growth holds the old
+/// scratch beside the new, 11.33 MiB with 15.54, until the old is let go.
 pub const WAYS_SCRATCH_BYTES: u32 = pxl_spec_core::window::HANDED * pxl_spec_core::ways::tree::SCRATCH_WORDS * 4;
 
 /// The handed squares' scratch at first, 1 MiB, 539 blocks a square: its
-/// runs, two thirds of a MiB for the nine, are a square's most whatever it
-/// holds, and the rest a tree of 539 blocks, more than a read's first room
-/// holds records of (240). It doubles each time a build outgrows it, the
-/// square filled again a turn later, so a square at the bake's bound
-/// reaches it in six. Not yet measured against a dense view.
+/// runs, 699,012 B for the nine, are a square's most whatever it holds,
+/// and the rest a tree of 539 blocks, more than a read's first room holds
+/// records of (240). Each square's tree room doubles each time a build
+/// outgrows it, its runs fixed, the square filled again a turn later, so
+/// the scratch goes 1.00, 1.33, 2.00, 3.33, 6.00, 11.33 and 15.54 MiB, a
+/// square at the bake's bound reaching the cap in six. Not yet measured
+/// against a dense view; the pool's known gap holds for each growth
+/// (`WAYS_SCRATCH_BYTES`).
 pub const WAYS_SCRATCH_FIRST_BYTES: u32 = 1 << 20;
 const _: () = {
     use pxl_spec_core::{ways::tree, window::HANDED};

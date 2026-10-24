@@ -657,8 +657,11 @@ impl GroundBuffers {
         self.ways_groups(g);
     }
 
-    /// The scratch's squares each twice as large, never past `most` blocks,
-    /// once a build outgrew it (`read_back`). Nothing is copied: what a
+    /// Each square's tree room in the scratch twice as many blocks, never
+    /// past `most`, once a build outgrew it (`read_back`); its runs stay as
+    /// they are (`window::TREE_AT`), so the buffer grows by less than
+    /// twice, 1.00 MiB to 1.33, 2.00, 3.33, 6.00, 11.33 and 15.54 from the
+    /// kernel's first. Nothing is copied: what a
     /// square's holds goes with the frame it is filled in, its records
     /// copied into its read in that frame (`read_back`), before any turn
     /// grows it, and each read carries its own buffer. Ahead of the turn's

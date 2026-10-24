@@ -229,7 +229,8 @@ pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::w
 pub const RUNS_SQUARE: u32 = 15320;
 
 /// A handed square's scratch, the GPU's own for the frame it is filled
-/// (`HANDED` of them, `ways::tree::SCRATCH_WORDS` each): its columns'
+/// (`HANDED` of them, each `ways::tree::scratch_words` of the blocks its
+/// tree holds, `ways::tree::SCRATCH_WORDS` at the renderer's cap): its columns'
 /// runs, what its ways write along z (`ways::run_word`), lowest first, each
 /// to the next's first block and a column's last `NOTHING` on, a column no
 /// way writes in none (`RUNS_AT`), each column's first among them, row by

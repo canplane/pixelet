@@ -287,9 +287,9 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     was[..] != w.pinned[..]
 }
 
-/// A slot's ticket while its square's ways' tree is refused, the pool at
-/// its cap, the square past its own most or the mirror refused its room
-/// (`landed`): never a fill's (`fill`), and not absent, so the
+/// A slot's ticket while its square's ways' tree is refused, the pool or
+/// the scratch at its cap (pxl-render gpu/renderer.rs `Short`), the square
+/// past its own most or the mirror refused its room (`landed`): never a fill's (`fill`), and not absent, so the
 /// square is not handed again every turn, nor its tile asked or kept for
 /// it, until the slot is laid again (`step`). A reader reads the coarser
 /// window's, as for any square absent.
