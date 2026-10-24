@@ -9,6 +9,7 @@
 
 use crate::space::layer::lattice::Cells;
 use fnv::FnvHashMap;
+use std::borrow::Cow;
 
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
@@ -28,7 +29,8 @@ pub const DIVISION_LEAF: Zoom = 12;
 /// A cell in no division, and a division with no parent.
 pub const NONE: u32 = u32::MAX;
 
-const CELLS: usize = (TILE_CELLS * TILE_CELLS) as usize;
+/// A tile's cells, and so the room a client decodes them into.
+pub const CELLS: usize = (TILE_CELLS * TILE_CELLS) as usize;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Division {
@@ -48,8 +50,9 @@ pub struct Division {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DivisionTile {
-    /// Each cell's division, by `GROUND.cell_index`; `NONE` in none.
-    pub cells: Vec<u32>,
+    /// Each cell's division, by `GROUND.cell_index`; `NONE` in none. The
+    /// bake's own; a client's borrowed from the room it decoded them into.
+    pub cells: Cow<'static, [u32]>,
     pub divisions: Vec<Division>,
     pub occupancy: Occupancy,
 }
@@ -73,7 +76,7 @@ impl Default for DivisionTile {
     /// In no division: what a tile the set holds no object for is.
     fn default() -> DivisionTile {
         DivisionTile {
-            cells: vec![NONE; CELLS],
+            cells: vec![NONE; CELLS].into(),
             divisions: Vec::new(),
             occupancy: Occupancy::ZERO,
         }
@@ -202,8 +205,29 @@ impl<'a> DivisionTileView<'a> {
     }
 }
 
+/// Copied out as the bake holds it.
 pub fn decode(pkt: &[u8]) -> Result<DivisionTile, MarshalError> {
     let v = open(pkt)?;
+    Ok(DivisionTile {
+        cells: v.cells.to_vec().into(),
+        ..of(&v)?
+    })
+}
+
+/// Decoded straight into its resident room, `CELLS` long: its cells; its
+/// divisions, a handful, on the heap.
+pub fn decode_into(pkt: &[u8], room: &'static mut [u32]) -> Result<DivisionTile, MarshalError> {
+    let v = open(pkt)?;
+    if room.len() != CELLS {
+        return Err(malformed());
+    }
+    let tile = of(&v)?;
+    room.copy_from_slice(v.cells);
+    Ok(DivisionTile { cells: Cow::Borrowed(room), ..tile })
+}
+
+/// The divisions and the occupancy, the cells left empty.
+fn of(v: &DivisionTileView<'_>) -> Result<DivisionTile, MarshalError> {
     let divisions = (0..v.subtypes.len())
         .map(|k| {
             let i = k as u32;
@@ -220,7 +244,7 @@ pub fn decode(pkt: &[u8]) -> Result<DivisionTile, MarshalError> {
         })
         .collect::<Result<Vec<_>, MarshalError>>()?;
     Ok(DivisionTile {
-        cells: v.cells.to_vec(),
+        cells: Cow::Borrowed(&[]),
         divisions,
         occupancy: v.occupancy,
     })
@@ -284,7 +308,7 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
         d.parent = if d.parent == NONE { NONE } else { renumber[d.parent as usize] };
     }
     DivisionTile {
-        cells: cells.into_iter().map(|c| if c == NONE { NONE } else { renumber[c as usize] }).collect(),
+        cells: cells.into_iter().map(|c| if c == NONE { NONE } else { renumber[c as usize] }).collect::<Vec<_>>().into(),
         divisions,
         occupancy: Occupancy::of_slots(kept),
     }

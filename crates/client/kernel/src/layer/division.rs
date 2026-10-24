@@ -3,9 +3,11 @@
 //! The divisions as a layer of the pyramid, held over the focus alone: its
 //! line is asked as a destination's, and the deepest tile held on it names
 //! the cell. Nothing here is drawn; the name is read straight into the UI
-//! snapshot.
+//! snapshot. A tile's record is a room in `.fixed.division` for its cells,
+//! decoded into straight from the packet; its divisions, a handful, are on
+//! the heap.
 
-use pxl_spec::bake::tile::division::{self, Division, DivisionTile, DIVISION_LEAF};
+use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELLS, DIVISION_LEAF};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{index_of, Zoom};
@@ -21,6 +23,15 @@ use crate::layer::{Asks, Base};
 
 static DIVISION: Global<Residency<DivisionTile>> = Global::new();
 
+/// `.fixed.division`, handed in at boot.
+pub static RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
+
+/// A record's cells, a word each, on a whole cache line.
+const RECORD_BYTES: u32 = ((CELLS * 4).div_ceil(64) * 64) as u32;
+
+/// A record a frame, end to end.
+pub const DIVISION_BYTES: u32 = Residency::<DivisionTile>::FRAMES * RECORD_BYTES;
+
 impl Base for DivisionTile {
     const STREAM: Stream = Stream::division;
     const LATTICE: Lattice = GROUND;
@@ -35,9 +46,12 @@ impl Base for DivisionTile {
         DIVISION.get(Residency::default)
     }
 
-    /// A handful over the focus, so held on the heap with its names decoded.
-    fn receive(_tile: Tile, _record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<DivisionTile, Failure> {
-        Ok(division::decode(pkt)?)
+    /// Its cells into its record; its divisions, a handful over the focus,
+    /// held on the heap with their names decoded.
+    fn receive(_tile: Tile, record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<DivisionTile, Failure> {
+        // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
+        let room = unsafe { crate::mem::fixed::lane::<u32>(RANGE.get(), record * RECORD_BYTES, CELLS) };
+        Ok(division::decode_into(pkt, room)?)
     }
 }
 

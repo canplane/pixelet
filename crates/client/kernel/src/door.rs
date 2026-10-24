@@ -157,6 +157,7 @@ fn lay_out(b: &Bracket) -> u32 {
     section::set_map(section::lay_out(b.given, b.data_end, layout::FIXED_BYTES));
     // Each range to its owner.
     crate::layer::terrain::fixed::RANGE.set(layout::range(layout::Fixed::Terrain));
+    crate::layer::division::RANGE.set(layout::range(layout::Fixed::Division));
     crate::profiler::record::RANGE.set(layout::range(layout::Fixed::Profiler));
     // A layer asks for no more tiles than its residency frames.
     crate::io::request::open(|c| match c {

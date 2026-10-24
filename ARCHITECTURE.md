@@ -538,7 +538,7 @@ end          PHONE_BYTES or DESKTOP_BYTES
 
 The map is `pxl-kernel mem/section.rs`'s. `.stack` is first so an overflow wraps below zero and traps, the only guard without an MMU. The rings and the directory sit at addresses from `spec/client/kernel/mem/mem.json`, which also tells the linker where its data may begin.
 
-`.fixed` holds what the kernel places once, sizes at compile time and never frees: the terrain's room, the renderer's live blocks, the GPU and host streams, the profiler's rings. Each owner states its size, and the door lays the ranges in order and hands each its own at boot (`door/layout.rs` `FIXED_BYTES`). Each range is read through a `Section`, which checks every access against its end.
+`.fixed` holds what the kernel places once, sizes at compile time and never frees: the terrain's room, the resident divisions' cells, the renderer's live blocks, the GPU and host streams, the profiler's rings. Each owner states its size, and the door lays the ranges in order and hands each its own at boot (`door/layout.rs` `FIXED_BYTES`). Each range is read through a `Section`, which checks every access against its end.
 
 `.heap` is everything else, under xpute's slab over buddy, including what another format sizes, such as a glTF or a PNG. A refused request is a wait, not a failure: the asker tries again on a later turn.
 

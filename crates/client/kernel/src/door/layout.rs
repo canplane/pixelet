@@ -52,11 +52,12 @@ const _: () = assert!(
 );
 
 /// The ranges of `.fixed`, in address order: the resident terrain, the
-/// renderer's block table, the GPU call stream, the kernel's other host
-/// calls, the profiler's rings.
+/// resident divisions' cells, the renderer's block table, the GPU call
+/// stream, the kernel's other host calls, the profiler's rings.
 #[derive(Clone, Copy)]
 pub enum Fixed {
     Terrain,
+    Division,
     Blocks,
     Gpu,
     Host,
@@ -78,8 +79,9 @@ const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::scene::environment::cloud::BL
 
 pub const BLOCK_SLOTS: usize = pxl_render::gpu::blocks::block_slots(MAX_LIVE_BLOCKS);
 
-const FIXED: [u32; 5] = [
+const FIXED: [u32; 6] = [
     crate::layer::terrain::fixed::TERRAIN_BYTES,
+    crate::layer::division::DIVISION_BYTES,
     pxl_render::gpu::blocks::blocks_bytes(BLOCK_SLOTS),
     pxl_render::api_spec::stream::BYTES,
     crate::abi::host::stream::BYTES,
