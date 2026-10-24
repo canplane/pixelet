@@ -160,18 +160,43 @@ wants.
 
 ## The kernel's folders
 
-Bottom to top, with no edge pointing up.
+ARCHITECTURE.md's figure is the order: the top wires everything, the domain is
+a DAG whose asks go down and whose answers come back up, and what all of it
+stands on is below it. The folders show that order, and nothing else is a
+sibling of it.
 
-| Height                  | What                                                                                                                                                                                                                                           |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| below io and sched      | `mem`, `param`; the draw list and `laid()`, out of the crate root's `Kernel`; io's host spec, out of `abi/`                                                                                                                                    |
-| `sched`, `io`           | the loads by file id, and the catalog read at boot (`io/catalog`); the in-flight cap in `param`, so sched reads no asset                                                                                                                       |
-| `setting`, `layer`      | unchanged                                                                                                                                                                                                                                      |
-| `asset/`                | each kind's behaviour, behind one interface (`asset.rs`): `model/` (a file type: meshes, joints), `cube/`, `decor/` (the strike), `marker/` (designs, the sheet, measuring), `actor/` (clips, the palette), `sky/` (the by-size draw)          |
-| `query`, `view`         | query may name decor's strike and the models; view names no asset                                                                                                                                                                              |
-| `scene/`                | frames and their instances, behind one interface (`scene.rs`): `world/` (the cast, the GPU's decor, the pins and places), `person/`, `pet/`, `pointer/`, `wind/`, `fix/`, `case/`; and what is no frame: `stage`, `sky`'s evaluation, `debug/` |
-| `control`               | may name query, view and the asset interface, never scene                                                                                                                                                                                      |
-| `turn`, `door`, `shell` | name scene's interface; each owner declares its own bounds                                                                                                                                                                                     |
+```text
+kernel/src/
+  turn.rs  door/  shell.rs   the top: wires everything; nothing below names it
+  domain/                    the world and the eye, two heads over one trunk
+    scene/                   what this frame draws
+    control/                 what moves the eye and asks the query
+    view/  query/  layer/    the trunk both heads stand on
+  sys/                       what all of it stands on
+    io/  sched/  mem/        and, at its root, the load table io and sched read
+  profiler/                  beside: reads anything, and no decision reads it
+```
+
+- **The domain and the system** are named as modules are: a domain module
+  by its whole word, a systemic one by its conventional abbreviation
+  (the `convention` skill).
+- **`chunk` goes.** It is one consumer's partition now (the markers'), while
+  decor gathers over the eye's windows; the markers gather over the windows'
+  squares too, and the z-range test that counted a place in one chunk of its
+  column is not needed.
+- **A leaf sits under its lowest reader,** so every edge points down: the
+  billboards under `scene/`, decor and the models under `query/`, the settings
+  under `view/`, the camera fixture under `control/camera/`, the commands'
+  spec under `control/`, the directory's under `door/`, the host's under
+  `sys/io/`, and each tuned number under the lowest rung that reads it (the
+  ways' pool under `layer/terrain/`). The easing two heads share sits at the
+  domain's root, or in xpute's kit, which it already imports.
+- **The crate root's `Kernel` global** splits: the scene's state into
+  `scene/`, the draw list beside the models, its lowest reader.
+- **Open:** where each kind's behaviour (cube, decor, marker, actor, sky)
+  sits once the catalog is plugged in, and the frames' folders under
+  `scene/` (the world, a person, a pet, the pointer, the wind, the fix, a
+  case).
 
 ## Open
 
