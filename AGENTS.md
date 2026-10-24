@@ -5,8 +5,8 @@
   another session's hunk in the same file goes in with yours.
 - Documents, comments and commits are in English (the `ko` locale aside), and
   say what and why, never who said it.
-- Write by [CONVENTION.md](./CONVENTION.md): names, files, citations and the
-  code's few fixed rules.
+- How the tree is written — names, files, citations and the code's few
+  fixed rules — is the `convention` skill's (`.agents/skills/convention/`).
 - The boundary is xpute's, and its words name only it. The host grants the
   kernel memory and time, carries bytes, and binds each root to where its
   bytes are; it decides nothing about what they mean. pixelet's host is

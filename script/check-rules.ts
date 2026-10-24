@@ -3,7 +3,7 @@
 // pointer casts in offset crates, each rounding half to even in every
 // language, no CommonJS file, each generated shader made from the sources the
 // tree holds now. A rule Rust alone keeps is clippy's (crates/clippy.toml);
-// how the tree is written is CONVENTION.md's.
+// how the tree is written is the convention skill's.
 //   deno run -A script/check-rules.ts
 
 import { dirname, fromFileUrl, join } from "@std/path";

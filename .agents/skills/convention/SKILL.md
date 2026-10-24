@@ -1,7 +1,12 @@
+---
+name: convention
+description: How the tree is written — names (singular, short for systemic modules and whole for the domain's, one word a structure), a source file's path header, how code is cited, and the code's fixed rules (rounding half to even, libm and fnv in Rust, offsets through ptr_at, ES modules, @expo/ui only in the sheet). Use when naming, creating, moving or renaming a module, folder, file or type; when a doc or comment names a structure or cites code; and when writing rounding, float math, a map, a pointer from an offset, a script or an @expo/ui import.
+---
+
 # Convention
 
-How the tree is written. `AGENTS.md` is how a session works in it;
-`ARCHITECTURE.md` is what the system is.
+How the tree is written. `AGENTS.md` is how a session works in it, and the
+host/guest boundary's words; `ARCHITECTURE.md` is what the system is.
 
 ## Names
 
