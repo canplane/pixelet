@@ -9,9 +9,9 @@
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { reserve_memory } from "@xpute/hypervisor/mem/reserve.ts";
-import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@pxl/client/kernel/mem/mem.spec.ts";
-import { key } from "@pxl/client/kernel/abi/directory.spec.ts";
-import { directory, type Guest } from "@pxl/client/kernel/module.ts";
+import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@pxl/client/vmm/mem/mem.spec.ts";
+import { key } from "@pxl/client/vmm/abi/directory.spec.ts";
+import { directory, type Guest } from "@pxl/client/vmm/module.ts";
 import { runGpuStream } from "./webgpu.ts";
 import { DEV_BUNDLE } from "@pxl/client/config/bundle.ts";
 import { HANDHELD } from "./device.ts";

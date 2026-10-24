@@ -201,7 +201,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/abi/directory.json",
         uses: &[],
-        ts: Some("apps/client/src/kernel/abi/directory.spec.ts"),
+        ts: Some("apps/client/src/vmm/abi/directory.spec.ts"),
         rs: Some("crates/client/kernel/src/abi/directory.spec.rs"),
         module: Some("directory"),
         enums: Enums::None,
@@ -241,7 +241,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/render/gpu/api.json",
         uses: &[],
-        ts: Some("apps/client/src/kernel/render/gpu/api.spec.ts"),
+        ts: Some("apps/client/src/vmm/render/gpu/api.spec.ts"),
         rs: Some("crates/client/render/src/gpu/api.spec.rs"),
         module: Some("api_spec"),
         enums: Enums::None,
@@ -251,7 +251,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/abi/host.json",
         uses: &[],
-        ts: Some("apps/client/src/kernel/abi/host.spec.ts"),
+        ts: Some("apps/client/src/vmm/abi/host.spec.ts"),
         rs: Some("crates/client/kernel/src/abi/host.spec.rs"),
         module: Some("host"),
         enums: Enums::None,
@@ -261,7 +261,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/io/demand.json",
         uses: &[],
-        ts: Some("apps/client/src/kernel/io/demand.spec.ts"),
+        ts: Some("apps/client/src/vmm/io/demand.spec.ts"),
         rs: Some("crates/client/kernel/src/io/demand.spec.rs"),
         module: Some("spec"),
         enums: Enums::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
@@ -271,7 +271,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/turn/step.json",
         uses: &[],
-        ts: Some("apps/client/src/kernel/turn/step.spec.ts"),
+        ts: Some("apps/client/src/vmm/turn/step.spec.ts"),
         rs: Some("crates/client/kernel/src/turn/step.spec.rs"),
         module: Some("spec"),
         enums: Enums::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
@@ -281,7 +281,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/render/gpu/span.json",
         uses: &[],
-        ts: Some("apps/client/src/kernel/render/gpu/span.spec.ts"),
+        ts: Some("apps/client/src/vmm/render/gpu/span.spec.ts"),
         rs: Some("crates/client/render/src/gpu/span.spec.rs"),
         module: Some("span_spec"),
         enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS"]),
@@ -307,7 +307,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "spec/client/kernel/mem/mem.json",
         uses: &[],
-        ts: Some("apps/client/src/kernel/mem/mem.spec.ts"),
+        ts: Some("apps/client/src/vmm/mem/mem.spec.ts"),
         rs: Some("crates/client/kernel/src/mem/mem.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,

@@ -10,8 +10,8 @@
  */
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_keys } from "@/kernel/shell.ts";
+import { ActiveTool } from "@/vmm/abi/cmd.spec.ts";
+import { kernel_keys } from "@/vmm/shell.ts";
 import { closeModal, modalOpen, openModal } from "@/shell/modal.tsx";
 import { holdTool, RECENT_PICKS, useUiStore } from "@/shell/store/ui.ts";
 

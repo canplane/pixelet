@@ -10,7 +10,7 @@
 import type { ComponentType } from "react";
 
 import type { f32, f64, u32 } from "@xpute/kit/abi/word.ts";
-import type { Guest } from "@/kernel/module.ts";
+import type { Guest } from "@/vmm/module.ts";
 import type { SafeArea } from "@/shell/ui/bottom-rest.ts";
 
 export interface Bracket {

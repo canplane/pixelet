@@ -9,7 +9,7 @@ import { shippedTopTextureKey } from "@/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { ORIGIN } from "@/bracket.tsx";
 import { assetUrl } from "@/config/route.ts";
-import { useKernel } from "@/kernel/shell.ts";
+import { useKernel } from "@/vmm/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 
 function cubeTextureUrl(cube: Cube): string | null {

@@ -18,8 +18,8 @@ import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
 import { fps, type Gauge, profilerGaugeRead, profilerReportRead } from "./profiler/view.ts";
 import { installLongFrameObservers, longFramesClear } from "./profiler/long-frame.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
-import { Command } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, useKernel } from "@/kernel/shell.ts";
+import { Command } from "@/vmm/abi/cmd.spec.ts";
+import { kernel_command, useKernel } from "@/vmm/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 
 const enum Tint {

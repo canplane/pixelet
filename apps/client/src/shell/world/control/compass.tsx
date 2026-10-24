@@ -3,7 +3,7 @@
 import { StyleSheet, View } from "react-native";
 import { Path, Svg } from "react-native-svg";
 
-import { useKernel } from "@/kernel/shell.ts";
+import { useKernel } from "@/vmm/shell.ts";
 
 import { LABEL, NORTH } from "@/shell/ui/palette.ts";
 import { chrome, SECONDARY } from "@/shell/ui/theme.ts";

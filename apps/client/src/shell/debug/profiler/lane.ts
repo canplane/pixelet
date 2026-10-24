@@ -12,10 +12,10 @@ import { round } from "@xpute/kit/math/scalar.ts";
 
 import { PHASES } from "@xpute/hypervisor/sched/tick.spec.ts";
 import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS, WAKES } from "./profiler.spec.ts";
-import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
-import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
+import { EFFECT_NAMES } from "@/vmm/turn/step.spec.ts";
+import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/vmm/render/gpu/span.spec.ts";
 import { op } from "@xpute/gpu/api.spec.ts";
-import { STREAM_NAMES } from "@/kernel/io/demand.spec.ts";
+import { STREAM_NAMES } from "@/vmm/io/demand.spec.ts";
 import { fixed } from "@/shell/fixed.ts";
 
 /** The one unit every figure in bytes is shown in: a mebibyte. */

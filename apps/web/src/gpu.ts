@@ -1,9 +1,9 @@
 // @pxl/web/gpu.ts
 
-import { Command } from "@pxl/client/kernel/abi/cmd.spec.ts";
+import { Command } from "@pxl/client/vmm/abi/cmd.spec.ts";
 import { acquireDevice } from "./webgpu.ts";
-import { request_frame, send_next } from "@pxl/client/kernel/sched.ts";
-import { Gpu, setGpu } from "@pxl/client/kernel/gpu.ts";
+import { request_frame, send_next } from "@pxl/client/vmm/sched.ts";
+import { Gpu, setGpu } from "@pxl/client/vmm/gpu.ts";
 
 /** Safari, after losing its GPU process, gave no device for a while, so the
  * page keeps asking. The first retry waits too, or an adapter returning an

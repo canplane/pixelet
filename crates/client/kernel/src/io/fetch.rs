@@ -1,8 +1,8 @@
 // pxl-kernel/io/fetch.rs
 
 //! The world's reads. The kernel opens a tile as its bake's object by its
-//! subject (io/file.rs); its version, address and protocol are pixelet's end
-//! of the kernel's (apps/client/src/kernel/io/read.ts). What an absent object means is decided here per stream.
+//! subject (io/file.rs); its version, address and protocol are the
+//! VMM's (apps/client/src/vmm/io/read.ts). What an absent object means is decided here per stream.
 //! Every body is a block (`io/body.rs`) released in the command that
 //! decodes it, unless a store keeps it.
 

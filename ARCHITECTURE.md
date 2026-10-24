@@ -406,9 +406,9 @@ A **bracket** plugs the kernel into a platform: it hands over the memory, the cl
 
 Each app's TypeScript hands the client, once, what its platform gives: the guest, the GPU, storage, text, the network, the sensors and the surfaces (`apps/client/src/bracket.tsx` `Bracket`). Neither app names the other.
 
-**Pixelet's end** of the kernel (`apps/client/src/kernel/`) is the same TypeScript over either bracket. It wires xpute's doorbell over the bracket (`mem.ts`), submits each frame and rings the kernel (`sched.ts`), forwards input as commands, answers the kernel's system calls (`host.ts`), and does the reads the kernel asks for into blocks the kernel chose.
+xpute's hypervisor runs the guest, as KVM does; **the VMM** (`apps/client/src/vmm/`) is what QEMU is to it: it boots the guest, runs its turns, injects its input and binds its file roots to backends. In the classic literature a VMM can mean the hypervisor itself; here it means the QEMU half. It is the same TypeScript over either bracket. It wires xpute's doorbell over the bracket (`mem.ts`), submits each frame and rings the kernel (`sched.ts`), forwards input as commands, answers the kernel's system calls (`host.ts`), and does the reads the kernel asks for into blocks the kernel chose.
 
-The **shell** (`apps/client/src/shell/`) is the UI: React over the snapshot the kernel writes, where every control is a command. It hands the kernel the surfaces to draw into, each named by a handle. It computes no coordinate, tile or draw; what it needs of the model is generated from the same JSON as the Rust. Pixelet's end and the shell are one package, `apps/client`. Which technology draws each piece of the shell on each platform is in [apps/client/src/shell/ui/README.md](./apps/client/src/shell/ui/README.md).
+The **shell** (`apps/client/src/shell/`) is the UI: React over the snapshot the kernel writes, where every control is a command. It hands the kernel the surfaces to draw into, each named by a handle. It computes no coordinate, tile or draw; what it needs of the model is generated from the same JSON as the Rust. The VMM and the shell are one package, `apps/client`. Which technology draws each piece of the shell on each platform is in [apps/client/src/shell/ui/README.md](./apps/client/src/shell/ui/README.md).
 
 ## The host's end
 
@@ -422,17 +422,17 @@ What the host tells of itself comes with its commands: whether the build is a de
 
 This section is how a read is named, answered and paced.
 
-A read is a file in xpute's sense, reached as Plan 9 reaches one ([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)): the kernel names a root by its number and an object below it by its number, the path's one name, and pixelet's end of the kernel binds each root to what each number is, carried there by xpute's host (`apps/client/src/kernel/boot.ts`, `bind_root`). The roots are `spec/client/kernel/abi/host.json` `root`'s:
+A read is a file in xpute's sense, reached as Plan 9 reaches one ([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)): the kernel names a root by its number and an object below it by its number, the path's one name, and the VMM binds each root to what each number is, xpute's hypervisor carrying the open there (`apps/client/src/vmm/boot.ts`, `bind_root`). The roots are `spec/client/kernel/abi/host.json` `root`'s:
 
-| Root               | The kernel's path                                              | What pixelet's end binds it to                                                                                 |
-| ------------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| each bake, by kind | a tile's number, its subject, in decimal; the Earth's `SPHERE` | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`kernel/io/object.ts`) |
-| `ASSET`            | a load's number, in decimal                                    | the shipped asset that number is, by its hash                                                                  |
-| `STORAGE`          | a kept slot's number, in decimal (`kept`)                      | the platform's storage, under a key it picks                                                                   |
+| Root               | The kernel's path                                              | What the VMM binds it to                                                                                    |
+| ------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| each bake, by kind | a tile's number, its subject, in decimal; the Earth's `SPHERE` | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`vmm/io/object.ts`) |
+| `ASSET`            | a load's number, in decimal                                    | the shipped asset that number is, by its hash                                                               |
+| `STORAGE`          | a kept slot's number, in decimal (`kept`)                      | the platform's storage, under a key it picks                                                                |
 
-So the kernel names no URL, no version, no storage key and no platform: a path is a number. Where a file lies, what key or address it has, which version serves a tile, and what to do with a file the kernel refuses are pixelet's end's. The kernel reads the source's declaration for its zooms, shards and formats; its versions are read in pixelet's end alone, which shows them in the settings too. A kept file starts with its slot's `format`, which the kernel checks as a driver checks a superblock, and a file of another format is refused and never written over; the shell sets it aside and plugs in an empty slot (`apps/client/src/kernel/io/kept.ts`).
+So the kernel names no URL, no version, no storage key and no platform: a path is a number. Where a file lies, what key or address it has, which version serves a tile, and what to do with a file the kernel refuses are the VMM's. The kernel reads the source's declaration for its zooms, shards and formats; its versions are read in the VMM alone, which shows them in the settings too. A kept file starts with its slot's `format`, which the kernel checks as a driver checks a superblock, and a file of another format is refused and never written over; the shell sets it aside and plugs in an empty slot (`apps/client/src/vmm/io/kept.ts`).
 
-Only pixelet's end knows a file's address and protocol (`io/file.rs`). The type says which of three answers came back:
+Only the VMM knows a file's address and protocol (`io/file.rs`). The type says which of three answers came back:
 
 | `Opened`             | What it means                        | The descriptor |
 | -------------------- | ------------------------------------ | -------------- |
@@ -444,7 +444,7 @@ Each descriptor has an owner, and an answer reaches only that owner.
 
 The world's reads fetch tiles by their bake and subject (`io/fetch.rs` `start`). An absent tile is an answer with no body, and its owner decides what it means: no ground tile means the parent's ground stands. An empty read is an error (`EBADMSG`). A body is a heap block, which the command that decodes it releases unless a store keeps it; terrain's and the Earth's, whose packets run just past a mebibyte, are slots of their longest packet's pages in `.fixed`, rather than the buddy's block of twice that (`io/body.rs`). The slots are as many as are typically out, a body on every credit and the packets a moving eye keeps for its windows (`param::KEPT_BODIES`); with every one out, a body is refused and its want waits for one given back.
 
-How many reads are out at once is bounded by **credits**, which pixelet's end sends with each frame, a constant 6 (`sched.ts` `NET_CREDITS`), and the kernel takes at most 16 of (`param::MAX_CREDITS`). One **request scheduler** spends them (`io/request.rs`). It promises that a camera that has just moved can always state its demand, however much old work is still draining.
+How many reads are out at once is bounded by **credits**, which the VMM sends with each frame, a constant 6 (`sched.ts` `NET_CREDITS`), and the kernel takes at most 16 of (`param::MAX_CREDITS`). One **request scheduler** spends them (`io/request.rs`). It promises that a camera that has just moved can always state its demand, however much old work is still draining.
 
 That follows from its shape. A producer states only what it wants, each with a rank, replacing last turn's list. It never starts, stops or retries an attempt. Wants and running attempts are two tables of fixed size. An answer ends its want; a failure ends only its attempt. An object that failed is not asked again while it is wanted, and a body refused room waits until what refused it, the heap or the body slots, gives some back. A network or server failure holds every start, longer with each server failure in a row, and after `RETRY_ATTEMPTS` (6) of them the reads are given up. A running attempt is never preempted, and stops only when nobody wants it.
 
@@ -452,7 +452,7 @@ A **serve policy** ranks the wants (`io/policy.rs`). Terrain comes first, then t
 
 Models and textures spend the same credits (`io/load.rs`). Each is fetched and parsed at most once, retried if it did not arrive and final if it does not parse. An image's file is read into the heap and handed to the renderer, which copies it into a texture through the GPU stream (`COPY_EXTERNAL_IMAGE`, the host decoding it); once the texture lands the file goes, and a device lost reads it again (`images_lost`).
 
-The settings and the placed objects are kept on the device, each in a slot the kernel opens by its number (`host.json` `kept`, `io/file.rs` `Kept`). A kept file begins with its slot's format byte; the kernel refuses one of another format, as a driver refuses a superblock it does not know, and names it in the snapshot. A kept file the kernel cannot read is never written over. Which storage key a slot is, and what becomes of a refused file, are the host's: it sets the file aside under a key of its own, empties the slot and says so (`WORLD_KEPT_EMPTIED`), and carries over what was kept before the slots, once (`apps/client/src/kernel/io/kept.ts`). Text is asked of the platform a line at a time, widths then pixels (`io/text.rs`).
+The settings and the placed objects are kept on the device, each in a slot the kernel opens by its number (`host.json` `kept`, `io/file.rs` `Kept`). A kept file begins with its slot's format byte; the kernel refuses one of another format, as a driver refuses a superblock it does not know, and names it in the snapshot. A kept file the kernel cannot read is never written over. Which storage key a slot is, and what becomes of a refused file, are the host's: it sets the file aside under a key of its own, empties the slot and says so (`WORLD_KEPT_EMPTIED`), and carries over what was kept before the slots, once (`apps/client/src/vmm/io/kept.ts`). Text is asked of the platform a line at a time, widths then pixels (`io/text.rs`).
 
 ## When something goes wrong
 
@@ -495,7 +495,7 @@ The turn and its quota are xpute's: the host rings, the guest spends what it was
                         the falling edge  ──▶  wake_ms
 ```
 
-Before each turn the strobe grants a frame, pixelet's end submits one `WORLD_FRAME` (`apps/client/src/kernel/sched.ts`): the viewport, the display's pacing, whether the turn is interactive, how many reads are allowed out, and the wall clock. A turn rung for a command alone carries none, and draws nothing. The quota's values are the kernel's (`sched/tick.rs` `QUANTUM`). The kernel's boot writes them, and where the rings are, into the kernel's **directory**, which the host reads at boot (`mem.ts`, `sched.ts`). The tasks keep a share of the paced frame past the frame task, whatever it overran (`sched/edge.rs` `tasks_after_frame`).
+Before each turn the strobe grants a frame, the VMM submits one `WORLD_FRAME` (`apps/client/src/vmm/sched.ts`): the viewport, the display's pacing, whether the turn is interactive, how many reads are allowed out, and the wall clock. A turn rung for a command alone carries none, and draws nothing. The quota's values are the kernel's (`sched/tick.rs` `QUANTUM`). The kernel's boot writes them, and where the rings are, into the kernel's **directory**, which the host reads at boot (`mem.ts`, `sched.ts`). The tasks keep a share of the paced frame past the frame task, whatever it overran (`sched/edge.rs` `tasks_after_frame`).
 
 The phases are xpute's, in the order that is their priority:
 
@@ -515,7 +515,7 @@ Once a turn, before the layers observe, the kernel says what moved (`turn.rs` `c
 
 This section is what crosses between the host and the kernel, and how the shell reads the kernel.
 
-The host and the kernel share xpute's two rings of small messages with page-sized payload slots. One carries what pixelet's end submits. The other carries what the kernel completes, and holds all one turn leaves; a turn short of room leaves the rest of the submissions for the next.
+The host and the kernel share xpute's two rings of small messages with page-sized payload slots. One carries what the VMM submits. The other carries what the kernel completes, and holds all one turn leaves; a turn short of room leaves the rest of the submissions for the next.
 
 The **commands** are listed in `spec/client/kernel/abi/cmd.json`, from which both sides' readers and writers are generated. A packet is an XTP tree, xpute's relocatable binary tree, and anything larger than a slot crosses in a heap block. The kernel also posts **signals** nobody asked for: a sensor to watch or let go (`SENSOR_START`, `SENSOR_STOP`) and a new snapshot (`WORLD_SNAPSHOT`). A read to open and its other calls go in its host stream (`io/host.rs`).
 
@@ -643,7 +643,7 @@ A version reaches the client through one private bucket that only the Worker rea
 
 Everything a build ships is decided at build time, as JSON under `spec/`, from the commands and catalogs to the settings schema and the published versions. `pxl-tool` writes a Rust module from each file, and a TypeScript one where the shell reads it; `check:spec` fails when the tree disagrees.
 
-A catalog is never sent, because both sides compile it. Where bytes cross, as a tile or a saved blob, the layout is the model's, and the version is in a tile's URL, which pixelet's end picks from the declaration, or a kept file's format byte.
+A catalog is never sent, because both sides compile it. Where bytes cross, as a tile or a saved blob, the layout is the model's, and the version is in a tile's URL, which the VMM picks from the declaration, or a kept file's format byte.
 
 - **Cubes and decors** are numbers in `spec/spec/block/`, and the object store writes the number.
 - **Models** are named by a path under `asset/content/` in the catalog that uses them.

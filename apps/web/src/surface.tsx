@@ -9,14 +9,14 @@ import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
-import { PointerPhase, PointerType } from "@pxl/client/kernel/abi/cmd.spec.ts";
-import { kernel_open, kernel_rect, kernel_visible, kernel_wheel } from "@pxl/client/kernel/control/input.ts";
+import { PointerPhase, PointerType } from "@pxl/client/vmm/abi/cmd.spec.ts";
+import { kernel_open, kernel_rect, kernel_visible, kernel_wheel } from "@pxl/client/vmm/control/input.ts";
 import { releasePointers, worldPointer } from "@pxl/client/shell/store/pointer.ts";
 import { keyDown, keyUp, releaseKeys } from "@pxl/client/shell/store/keyboard.ts";
-import { surface_role } from "@pxl/client/kernel/render/gpu/api.spec.ts";
-import { surface_close, surface_open, surface_size } from "@pxl/client/kernel/render/surface.ts";
-import { request_frame } from "@pxl/client/kernel/sched.ts";
-import { useKernel } from "@pxl/client/kernel/shell.ts";
+import { surface_role } from "@pxl/client/vmm/render/gpu/api.spec.ts";
+import { surface_close, surface_open, surface_size } from "@pxl/client/vmm/render/surface.ts";
+import { request_frame } from "@pxl/client/vmm/sched.ts";
+import { useKernel } from "@pxl/client/vmm/shell.ts";
 import { bindSurface, unbindSurface } from "./webgpu.ts";
 
 /** A wheel line in CSS pixels: a page's default line height. */

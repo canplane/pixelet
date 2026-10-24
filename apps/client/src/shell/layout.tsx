@@ -3,9 +3,9 @@
 import { type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { Message } from "@/kernel/abi/cmd.spec.ts";
-import { Gpu, useGpu } from "@/kernel/gpu.ts";
-import { useKernel } from "@/kernel/shell.ts";
+import { Message } from "@/vmm/abi/cmd.spec.ts";
+import { Gpu, useGpu } from "@/vmm/gpu.ts";
+import { useKernel } from "@/vmm/shell.ts";
 import { Boot, useBoot, useStopCode } from "./bootstrap.ts";
 import { Modals } from "./modal.tsx";
 import { BlueScreen, Halt } from "./halt.tsx";

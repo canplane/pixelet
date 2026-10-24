@@ -5,7 +5,7 @@ import { G, Path, Svg } from "react-native-svg";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
-import { useKernel } from "@/kernel/shell.ts";
+import { useKernel } from "@/vmm/shell.ts";
 
 import { Presence } from "@/shell/ui/motion/presence.tsx";
 import { LEAVE, SETTLE } from "@/shell/ui/motion/transition.ts";

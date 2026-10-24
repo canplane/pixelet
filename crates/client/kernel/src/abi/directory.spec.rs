@@ -4,7 +4,7 @@
 //
 // The kernel's own entries in its directory (xpute-guest ipc/directory.rs), each a
 // key with xpute's PROGRAM bit set: the memory the host reads besides the rings and
-// the system calls (pxl-kernel door.rs, apps/client/src/kernel/module.ts).
+// the system calls (pxl-kernel door.rs, apps/client/src/vmm/module.ts).
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To

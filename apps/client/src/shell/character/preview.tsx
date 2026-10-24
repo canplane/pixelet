@@ -9,8 +9,8 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Spinner } from "@/shell/ui/icon.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { CaseSurface } from "@/bracket.tsx";
-import { Command, encode_preview_close, encode_preview_open } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, kernel_room, useKernel } from "@/kernel/shell.ts";
+import { Command, encode_preview_close, encode_preview_open } from "@/vmm/abi/cmd.spec.ts";
+import { kernel_command, kernel_room, useKernel } from "@/vmm/shell.ts";
 import type { CharacterVariant } from "@/shell/character/variant.ts";
 import { chrome } from "@/shell/ui/theme.ts";
 

@@ -8,7 +8,7 @@
  * `trace()`, the window saved for ui.perfetto.dev.
  */
 
-import { GUEST_DOORBELL } from "@/kernel/mem.ts";
+import { GUEST_DOORBELL } from "@/vmm/mem.ts";
 import { profilerReportText } from "./profiler/report.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
 import { profilerReportRead } from "./profiler/view.ts";

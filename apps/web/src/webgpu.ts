@@ -12,7 +12,7 @@ import { handle_slot } from "@xpute/hypervisor/abi/handle.ts";
 import { GpuHost } from "@xpute/gpu/host.ts";
 
 import { DEV_BUNDLE } from "@pxl/client/config/bundle.ts";
-import { stream } from "@pxl/client/kernel/render/gpu/api.spec.ts";
+import { stream } from "@pxl/client/vmm/render/gpu/api.spec.ts";
 
 let host: GpuHost | null = null;
 /** The kernel's memory, which the host reads the stream from and writes answers into. */

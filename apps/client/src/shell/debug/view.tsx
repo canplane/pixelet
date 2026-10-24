@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 
-import { useKernel } from "@/kernel/shell.ts";
+import { useKernel } from "@/vmm/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { Fold, useOpenFold } from "./fold.tsx";
 import { ProfilerView } from "./profiler/gauge.tsx";

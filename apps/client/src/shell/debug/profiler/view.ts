@@ -10,14 +10,14 @@ import type { F64Array } from "@xpute/kit/abi/array.ts";
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { td } from "@xpute/kit/codec/encoding.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
-import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
-import { OUTCOME_NAMES, STREAM_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/demand.spec.ts";
-import { kernel_call, kernel_memory, kernel_room } from "@/kernel/shell.ts";
+import { Command, encode_profiler_read } from "@/vmm/abi/cmd.spec.ts";
+import { OUTCOME_NAMES, STREAM_NAMES, TASK_PHASE_NAMES } from "@/vmm/io/demand.spec.ts";
+import { kernel_call, kernel_memory, kernel_room } from "@/vmm/shell.ts";
 
 import { PHASES } from "@xpute/hypervisor/sched/tick.spec.ts";
 import { FRAME, READ, RINGS, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WAKES, WORST } from "./profiler.spec.ts";
-import { STEP_NAMES } from "@/kernel/turn/step.spec.ts";
-import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
+import { STEP_NAMES } from "@/vmm/turn/step.spec.ts";
+import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/vmm/render/gpu/span.spec.ts";
 import { type Frame, frameAt } from "./lane.ts";
 import { type LongFrame, longFramesSince } from "./long-frame.ts";
 

@@ -80,7 +80,7 @@ impl Serve for Policy {
         self.intake
     }
 
-    /// As the host's read classes them (web `kernel/io/read.ts`). An object's
+    /// As the host's read classes them (the VMM's `vmm/io/read.ts`). An object's
     /// failure comes back the same however often it is asked: the bytes are
     /// fixed by the key within a version.
     fn blame(&self, failure: Failure) -> Blame {

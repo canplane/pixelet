@@ -6,7 +6,7 @@ import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
 import { useWindowSize } from "@/bracket.tsx";
 import { openModal } from "@/shell/modal.tsx";
-import { useKernel } from "@/kernel/shell.ts";
+import { useKernel } from "@/vmm/shell.ts";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { Presence } from "@/shell/ui/motion/presence.tsx";
 import { LEAVE, SETTLE, SNAP } from "@/shell/ui/motion/transition.ts";
