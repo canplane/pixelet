@@ -18,7 +18,6 @@
 pub mod surface_role {
     pub const WORLD: u32 = 0;
     pub const CASE: u32 = 1;
-    pub const KEYS: &[&str] = &["WORLD", "CASE"];
 }
 
 /// The one place the renderer's calls cross (gpu/api.rs): a stream
@@ -42,7 +41,6 @@ pub mod stream {
     /// refused, so an upload, which can wait a turn, is taken only while this much
     /// is left after it.
     pub const RESERVE: u32 = 1048576;
-    pub const KEYS: &[&str] = &["HEAD", "BYTES", "RESERVE"];
 }
 
 /// A pipeline record's codes (frame/shader/record.rs, expanded into xpute's
@@ -98,43 +96,4 @@ pub mod record {
     pub const STORAGE_TEXTURE_RW: u32 = 11;
     pub const TEXTURE_3D: u32 = 12;
     pub const STORAGE_TEXTURE_3D: u32 = 13;
-    pub const KEYS: &[&str] = &[
-        "HEAD",
-        "TRIANGLES",
-        "STRIP",
-        "CULL_NONE",
-        "CULL_BACK",
-        "ALWAYS",
-        "GREATER",
-        "GREATER_EQUAL",
-        "LESS",
-        "NO_DEPTH",
-        "OPAQUE",
-        "ALPHA",
-        "ADD",
-        "VS",
-        "VS_DEPTH",
-        "PER_VERTEX",
-        "PER_INSTANCE",
-        "U32",
-        "U32X2",
-        "F32X2",
-        "F32X3",
-        "F32X4",
-        "U32X4",
-        "UNIFORM",
-        "UNIFORM_DYNAMIC",
-        "STORAGE",
-        "TEXTURE",
-        "TEXTURE_ARRAY",
-        "DEPTH",
-        "SAMPLER",
-        "SAMPLER_COMPARISON",
-        "TEXTURE_UNFILTERED",
-        "STORAGE_RW",
-        "TEXTURE_UINT_ARRAY",
-        "STORAGE_TEXTURE_RW",
-        "TEXTURE_3D",
-        "STORAGE_TEXTURE_3D",
-    ];
 }

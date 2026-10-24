@@ -28,18 +28,4 @@ pub mod DIVISION_SUBTYPE {
     pub const MACROHOOD: u8 = 9;
     pub const NEIGHBORHOOD: u8 = 10;
     pub const MICROHOOD: u8 = 11;
-    pub const KEYS: &[&str] = &[
-        "COUNTRY",
-        "DEPENDENCY",
-        "MACROREGION",
-        "REGION",
-        "MACROCOUNTY",
-        "COUNTY",
-        "LOCALADMIN",
-        "LOCALITY",
-        "BOROUGH",
-        "MACROHOOD",
-        "NEIGHBORHOOD",
-        "MICROHOOD",
-    ];
 }

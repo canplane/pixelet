@@ -14,7 +14,7 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
-pub const STREAM_NAMES: &[&str] = &["terrain", "place", "division", "asset", "earth"];
+pub const STREAM_NAMES: usize = 5;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StreamName {
@@ -36,7 +36,7 @@ impl StreamName {
     }
 }
 
-pub const OUTCOME_NAMES: &[&str] = &["ok", "aborted", "error"];
+pub const OUTCOME_NAMES: usize = 3;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum OutcomeName {
@@ -56,7 +56,7 @@ impl OutcomeName {
     }
 }
 
-pub const TASK_PHASE_NAMES: &[&str] = &["net_ms", "bytes", "decode_ms", "adopt_ms"];
+pub const TASK_PHASE_NAMES: usize = 4;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TaskPhaseName {

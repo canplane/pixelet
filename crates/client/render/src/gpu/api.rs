@@ -47,7 +47,7 @@ pub const OBJECTS: usize = 1 << 15;
 
 use crate::frame::shader::record::GROUP_ENTRIES;
 
-const SPANS: usize = GPU_SPAN_NAMES.len();
+const SPANS: usize = GPU_SPAN_NAMES;
 
 /// WebGPU's default minUniformBufferOffsetAlignment: an adapter's limit is a
 /// power of two no larger, so a larger one is no device's.

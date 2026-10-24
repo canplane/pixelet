@@ -14,7 +14,7 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
-pub const STEP_NAMES: &[&str] = &["controller", "input", "camera", "environment", "companion", "preview", "demand", "scene"];
+pub const STEP_NAMES: usize = 8;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
@@ -48,21 +48,7 @@ impl StepName {
     }
 }
 
-pub const EFFECT_NAMES: &[&str] = &[
-    "navigation",
-    "bootstrap",
-    "orientation",
-    "follow",
-    "destination",
-    "decor",
-    "objects",
-    "edit",
-    "hover",
-    "puck",
-    "settings",
-    "assets",
-    "pump",
-];
+pub const EFFECT_NAMES: usize = 13;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum EffectName {

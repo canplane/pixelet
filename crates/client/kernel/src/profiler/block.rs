@@ -16,8 +16,8 @@ use xpute_guest::sched::tick::PHASES;
 
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
-pub const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
-const CATEGORIES: usize = STREAM_NAMES.len();
+pub const TASK_PHASES: usize = TASK_PHASE_NAMES;
+const CATEGORIES: usize = STREAM_NAMES;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -64,8 +64,8 @@ pub struct FramesBlock {
     pub phases_p95: [f64; PHASES.len()],
     pub gpu_spans_p95: [f64; GPU_SPANS],
     /// Frames by the renderer's FRAME_KINDS, and turns' last ask by WAKES.
-    pub kinds: [f64; FRAME_KINDS.len()],
-    pub wakes: [f64; WAKES.len()],
+    pub kinds: [f64; FRAME_KINDS],
+    pub wakes: [f64; WAKES],
     pub heap_used_delta_bytes: f64,
     pub last: FrameSample,
 }

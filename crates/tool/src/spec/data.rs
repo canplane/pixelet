@@ -3,6 +3,9 @@
 //! Data specs: JSON of named values written as Rust constants and, where the
 //! shell reads them, TypeScript `as const`. A number is f64 unless a `$type`
 //! says otherwise; a u64 is a hex string. `{ "$value", "$doc" }` carries a reason.
+//! pixelet's Rust carries no names: a list of them is its count, and an enum
+//! where the spec asks for one, and a table's keys are not listed; the
+//! TypeScript keeps them for what a person reads. xpute's Rust keeps its own.
 
 use super::{align_star, casing_note, enum_name, file, js_num, json_str, laid_out, line_comments, read, rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output};
 
@@ -356,6 +359,9 @@ struct Scope {
     top: Vec<String>,
     enums: bool,
     enum_names: Vec<String>,
+    /// Names are carried as strings, as xpute's own tables are; pixelet's
+    /// Rust gets a list's count in their place.
+    names: bool,
 }
 
 fn is_primitive(ty: &str) -> bool {
@@ -450,7 +456,7 @@ fn rs_items(name: &str, n: &Node, ty: &str, indent: &str, out: &mut Vec<String>,
         for (k, v) in &keys {
             rs_items(k, v, t, &inner, &mut body, scope)?;
         }
-        if !scope.enums {
+        if !scope.enums && scope.names {
             body.push(format!(
                 "{indent}    pub const KEYS: &[&str] = &[{}];",
                 keys.iter().map(|(k, _)| json_str(k)).collect::<Vec<_>>().join(", ")
@@ -497,11 +503,16 @@ fn rs_leaf(name: &str, v: &Node, ty: &str, indent: &str, out: &mut Vec<String>, 
     if let Node::Arr(a) = v {
         let strings = matches!(a.first(), Some(Node::Str(_)));
         if strings && ty != "u64" && enum_path(ty, scope).is_none() && ty != "rgb" {
-            out.push(format!(
-                "{indent}pub const {}: &[&str] = &[{}];",
-                rs_ident(name),
-                a.iter().map(|e| e.str().map(json_str).unwrap_or_default()).collect::<Vec<_>>().join(", ")
-            ));
+            out.push(if scope.names {
+                format!(
+                    "{indent}pub const {}: &[&str] = &[{}];",
+                    rs_ident(name),
+                    a.iter().map(|e| e.str().map(json_str).unwrap_or_default()).collect::<Vec<_>>().join(", ")
+                )
+            } else {
+                // How many there are, as the spec's widths read a list's name.
+                format!("{indent}pub const {}: usize = {};", rs_ident(name), a.len())
+            });
             if (scope.enums || scope.enum_names.iter().any(|n| n == name)) && a.iter().all(|e| e.str().is_some_and(is_name)) {
                 let variants: Vec<(String, String)> = a.iter().enumerate().map(|(i, e)| (e.str().unwrap_or_default().to_string(), i.to_string())).collect();
                 rs_enum(name, &variants, indent, out);
@@ -662,6 +673,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     Enums::Named(list) => list.iter().map(|s| s.to_string()).collect(),
                     _ => Vec::new(),
                 },
+                names: crate_name.starts_with("xpute-"),
             };
             for name in &names {
                 let mut items = Vec::new();

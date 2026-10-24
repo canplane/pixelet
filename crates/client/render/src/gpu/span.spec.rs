@@ -14,7 +14,7 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
-pub const GPU_SPAN_NAMES: &[&str] = &["air", "prepass", "ao", "world", "badges", "debug", "cases", "fill", "cast", "grow", "shadow"];
+pub const GPU_SPAN_NAMES: usize = 11;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -54,7 +54,7 @@ impl GpuSpanName {
     }
 }
 
-pub const FRAME_KINDS: &[&str] = &["none", "unready", "held", "dropped", "plain", "standing", "cast", "stood"];
+pub const FRAME_KINDS: usize = 8;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FrameKind {

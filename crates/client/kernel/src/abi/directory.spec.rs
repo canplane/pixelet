@@ -18,5 +18,4 @@
 pub mod key {
     /// Where the renderer's stream is, run after every turn; 0 where the kernel draws itself.
     pub const GPU_STREAM: u32 = 2147483650;
-    pub const KEYS: &[&str] = &["GPU_STREAM"];
 }

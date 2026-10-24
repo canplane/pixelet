@@ -20,28 +20,22 @@
 pub mod frame {
     pub mod focus {
         pub const rgb: u32 = 0x000000;
-        pub const KEYS: &[&str] = &["rgb"];
     }
     pub mod level {
         pub const rgb: u32 = 0x000000;
         pub const dashed: bool = true;
-        pub const KEYS: &[&str] = &["rgb", "dashed"];
     }
     pub mod forward {
         pub const rgb: u32 = 0xff0000;
         pub const dashed: bool = true;
-        pub const KEYS: &[&str] = &["rgb", "dashed"];
     }
     pub mod north {
         pub const rgb: u32 = 0x00ff00;
         pub const dashed: bool = true;
-        pub const KEYS: &[&str] = &["rgb", "dashed"];
     }
     pub mod up {
         pub const rgb: u32 = 0x0000ff;
-        pub const KEYS: &[&str] = &["rgb"];
     }
-    pub const KEYS: &[&str] = &["focus", "level", "forward", "north", "up"];
 }
 
 pub mod coverage {
@@ -49,43 +43,35 @@ pub mod coverage {
         pub const rgb: u32 = 0xffffff;
         pub const alpha: f32 = 0.4;
         pub const dashed: bool = false;
-        pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
     }
     pub mod drawn_from_floor {
         pub const rgb: u32 = 0x00ffff;
         pub const alpha: f32 = 0.6;
         pub const dashed: bool = false;
-        pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
     }
     pub mod unbuilt {
         pub const rgb: u32 = 0xffff00;
         pub const alpha: f32 = 0.6;
         pub const dashed: bool = true;
-        pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
     }
     pub mod floor_only {
         pub const rgb: u32 = 0xff00ff;
         pub const alpha: f32 = 0.6;
         pub const dashed: bool = true;
-        pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
     }
     pub mod no_tile {
         pub const rgb: u32 = 0xff0000;
         pub const alpha: f32 = 0.6;
         pub const dashed: bool = true;
-        pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
     }
     pub mod tile {
         pub const rgb: u32 = 0xff9500;
         pub const alpha: f32 = 0.9;
         pub const dashed: bool = false;
-        pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
     }
     pub mod shard {
         pub const rgb: u32 = 0x7cff7c;
         pub const alpha: f32 = 1.0;
         pub const dashed: bool = false;
-        pub const KEYS: &[&str] = &["rgb", "alpha", "dashed"];
     }
-    pub const KEYS: &[&str] = &["drawn", "drawn_from_floor", "unbuilt", "floor_only", "no_tile", "tile", "shard"];
 }

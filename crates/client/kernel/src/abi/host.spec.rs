@@ -19,7 +19,6 @@ pub mod stream {
     /// The range's size. A record names what it moves rather than carrying it, so
     /// a turn's records are words, and a text's bytes the most of them.
     pub const BYTES: u32 = 65536;
-    pub const KEYS: &[&str] = &["BYTES"];
 }
 
 /// The kernel's calls, each with xpute's PROGRAM bit; a record's call, then its arguments.
@@ -34,7 +33,6 @@ pub mod op {
     /// the middle of its em box on the middle row, into `width` by `height` pixels at
     /// `at`, RGBA a byte a channel, top row first, alpha not premultiplied
     pub const TEXT_RASTER: u32 = 2147483650;
-    pub const KEYS: &[&str] = &["TEXT_LAYOUT", "TEXT_RASTER"];
 }
 
 /// The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a
@@ -45,7 +43,6 @@ pub mod root {
     pub const STORAGE: u32 = 256;
     /// The shipped assets; a path is a load's number in decimal (io/load.rs).
     pub const ASSET: u32 = 257;
-    pub const KEYS: &[&str] = &["STORAGE", "ASSET"];
 }
 
 /// The settings' file below STORAGE.

@@ -36,8 +36,9 @@ use crate::view::frame::pose::view;
 use crate::view::lens::tau;
 use crate::view::observation::{observation, ByEye};
 
-/// What an edge marks. Its look and its rank are the spec's
-/// (`gizmo_spec::coverage`): a stretch takes the mark of highest rank over it.
+/// What an edge marks, in the spec's order (`gizmo_spec::coverage`), which is
+/// its rank: a stretch takes the mark of highest rank over it. Its look is the
+/// spec's.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Mark {
     Drawn,
@@ -49,42 +50,42 @@ enum Mark {
     Shard,
 }
 
-const MARKS: usize = gizmo_spec::coverage::KEYS.len();
+const MARKS: usize = Mark::ALL.len();
 
 impl Mark {
-    const ALL: [Mark; MARKS] = [Mark::Drawn, Mark::DrawnFromFloor, Mark::Unbuilt, Mark::FloorOnly, Mark::NoTile, Mark::Tile, Mark::Shard];
+    const ALL: [Mark; 7] = [Mark::Drawn, Mark::DrawnFromFloor, Mark::Unbuilt, Mark::FloorOnly, Mark::NoTile, Mark::Tile, Mark::Shard];
 
-    /// Its name in the spec, its color, opacity and dash.
-    fn look(self) -> (&'static str, u32, f32, bool) {
+    /// Its color, opacity and dash.
+    fn look(self) -> (u32, f32, bool) {
         use gizmo_spec::coverage::*;
         match self {
-            Mark::Drawn => ("drawn", drawn::rgb, drawn::alpha, drawn::dashed),
-            Mark::DrawnFromFloor => ("drawn_from_floor", drawn_from_floor::rgb, drawn_from_floor::alpha, drawn_from_floor::dashed),
-            Mark::Unbuilt => ("unbuilt", unbuilt::rgb, unbuilt::alpha, unbuilt::dashed),
-            Mark::FloorOnly => ("floor_only", floor_only::rgb, floor_only::alpha, floor_only::dashed),
-            Mark::NoTile => ("no_tile", no_tile::rgb, no_tile::alpha, no_tile::dashed),
-            Mark::Tile => ("tile", tile::rgb, tile::alpha, tile::dashed),
-            Mark::Shard => ("shard", shard::rgb, shard::alpha, shard::dashed),
+            Mark::Drawn => (drawn::rgb, drawn::alpha, drawn::dashed),
+            Mark::DrawnFromFloor => (drawn_from_floor::rgb, drawn_from_floor::alpha, drawn_from_floor::dashed),
+            Mark::Unbuilt => (unbuilt::rgb, unbuilt::alpha, unbuilt::dashed),
+            Mark::FloorOnly => (floor_only::rgb, floor_only::alpha, floor_only::dashed),
+            Mark::NoTile => (no_tile::rgb, no_tile::alpha, no_tile::dashed),
+            Mark::Tile => (tile::rgb, tile::alpha, tile::dashed),
+            Mark::Shard => (shard::rgb, shard::alpha, shard::dashed),
         }
     }
 
     /// Its place in the spec's order.
     fn rank(self) -> usize {
-        gizmo_spec::coverage::KEYS.iter().position(|&k| k == self.look().0).expect("a mark the spec names")
+        self as usize
     }
 
     fn of_rank(rank: usize) -> Mark {
-        *Mark::ALL.iter().find(|m| m.rank() == rank).expect("a rank the spec has")
+        Mark::ALL[rank]
     }
 
     fn rgba(self) -> [f32; 4] {
-        let (_, rgb, a, _) = self.look();
+        let (rgb, a, _) = self.look();
         let [r, g, b] = linear_rgb(rgb).map(|c| c as f32);
         [r, g, b, a]
     }
 
     fn dashed(self) -> bool {
-        self.look().3
+        self.look().2
     }
 }
 

@@ -13,7 +13,7 @@ use pxl_render::frame::draw::{DrawCensus, DRAW_PIPELINES};
 use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 
-pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
+pub const CENSUS_LEN: usize = CENSUS_TAGS;
 
 /// A tag a draw pipeline, in the renderer's order (pxl-render frame/draw.rs
 /// `DRAW_PIPELINES`): a pipeline added without its tag does not compile.
@@ -162,8 +162,8 @@ words!(FrameSample, FRAME::WORDS,
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
 
-pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
-pub const STREAMS: usize = crate::io::spec::STREAM_NAMES.len();
+pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
+pub const STREAMS: usize = crate::io::spec::STREAM_NAMES;
 pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
 
 const _: () = assert!(
