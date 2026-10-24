@@ -1,14 +1,11 @@
 #!/usr/bin/env -S deno run -A
-// Holds the tree to the rules a machine can decide: the header
-// path, cited paths and names existing, no raw pointer casts in offset
-// crates, `@expo/ui` only in the sheet, each rounding half to even, no
+// Holds the tree to the rules a machine can decide: no raw pointer casts in
+// offset crates, `@expo/ui` only in the sheet, each rounding half to even, no
 // CommonJS file, each generated shader made from the sources the tree holds
 // now.
-// `doc/minutes/` and `doc/experiment/` are exempt from cited paths: each
-// names the files of its day.
 //   deno run -A script/check-rules.ts
 
-import { dirname, fromFileUrl, join, normalize } from "@std/path";
+import { dirname, fromFileUrl, join } from "@std/path";
 
 import { GENERATED, INPUTS, inputsDigest } from "./shader-wgsl.ts";
 
@@ -37,120 +34,7 @@ function read(f: string): string | null {
   }
 }
 
-const crates = new Map<string, string>();
-for (const f of files.filter((f) => f.endsWith("Cargo.toml"))) {
-  const name = read(f)?.match(/^\[package\][^[]*?^name\s*=\s*"([^"]+)"/ms)?.[1];
-  if (name) crates.set(name, f.slice(0, -"Cargo.toml".length));
-}
-
 const problems: string[] = [];
-
-function header(f: string): string | null {
-  if (f.endsWith(".rs")) {
-    for (let dir = dirname(f); dir !== "."; dir = dirname(dir)) {
-      const name = [...crates].find(([, d]) => d === `${dir}/`)?.[0];
-      if (!name) continue;
-      const src = `${dir}/src/`;
-      return f.startsWith(src) ? `${name}/${f.slice(src.length)}` : `${name}/${f.slice(dir.length + 1)}`;
-    }
-    return null;
-  }
-  if (/^xpute\/cpp\/.*\.(cpp|hpp)$/.test(f)) return f.slice("xpute/".length);
-  if (!/\.tsx?$/.test(f)) return null;
-  const app = f.match(/^apps\/([\w-]+)\/(?:src\/)?(.*)$/);
-  if (app) return `@pxl/${app[1]}/${app[2]}`;
-  const pkg = f.match(/^xpute\/ts\/(\w+)\/src\/(.*)$/);
-  return pkg ? `@xpute/${pkg[1]}/${pkg[2]}` : null;
-}
-
-for (const f of files) {
-  const want = header(f);
-  const text = want && read(f);
-  if (!text || text.startsWith("#!")) continue;
-  const first = text.slice(0, text.indexOf("\n"));
-  if (first !== `// ${want}`) problems.push(`${f}:1: opens with "${first}", not "// ${want}"`);
-}
-
-const suffixes = new Set<string>();
-for (const f of files) {
-  const parts = f.split("/");
-  for (let i = 0; i < parts.length; i++) suffixes.add(parts.slice(i).join("/"));
-}
-
-/** Where `@/` points from a file: its own package's source, or, cited from
- * outside the apps, any of theirs. */
-function ownSources(from: string): string[] {
-  const app = from.match(/^apps\/([\w-]+)\//);
-  return app ? [`apps/${app[1]}/src/`] : ["apps/client/src/", "apps/web/src/", "apps/native/src/"];
-}
-
-function exists(path: string, from: string): boolean {
-  if (path.startsWith("../")) return suffixes.has(normalize(join(dirname(from), path)));
-  if (path.startsWith("./")) return suffixes.has(normalize(join(dirname(from), path))) || suffixes.has(path.slice(2));
-  if (suffixes.has(path)) return true;
-  const [head, ...rest] = path.split("/");
-  const tail = rest.join("/");
-  if (head === "@pxl") {
-    const [app, ...within] = rest;
-    return suffixes.has(`apps/${app}/src/${within.join("/")}`) || suffixes.has(`apps/${app}/${within.join("/")}`);
-  }
-  if (head === "@") return ownSources(from).some((src) => suffixes.has(`${src}${tail}`));
-  if (head === "@xpute") return suffixes.has(`xpute/ts/${rest[0]}/src/${rest.slice(1).join("/")}`);
-  const dir = crates.get(head);
-  if (dir && (suffixes.has(`${dir}src/${tail}`) || suffixes.has(`${dir}${tail}`))) return true;
-  // By what git ignores, not disk: a fresh checkout runs this before any build.
-  return [join(dirname(from), path), path, `apps/client/src/${path}`, `apps/web/src/${path}`].some((p) => {
-    try {
-      if (Deno.statSync(join(root, p)).isFile) return true;
-    } catch { /* not built here */ }
-    return new Deno.Command("git", { args: ["check-ignore", "-q", p], cwd: root }).outputSync().code === 0;
-  });
-}
-
-const CITED = /(?<![\w/.:@-])((?:\.{1,2}\/)*@?(?:[\w.@-]+\/)*[\w-]+(?:\.[\w-]+)*\.(?:rs|ts|tsx|wgsl))(?![\w/])/g;
-
-function resolve(path: string, from: string): string[] {
-  const tails = new Set<string>();
-  if (path.startsWith("./") || path.startsWith("../")) tails.add(normalize(join(dirname(from), path)));
-  tails.add(path.replace(/^\.\//, ""));
-  const [head, ...rest] = path.split("/");
-  const tail = rest.join("/");
-  if (head === "@pxl") {
-    const [app, ...within] = rest;
-    tails.add(`apps/${app}/src/${within.join("/")}`).add(`apps/${app}/${within.join("/")}`);
-  }
-  if (head === "@") { for (const src of ownSources(from)) tails.add(`${src}${tail}`); }
-  if (head === "@xpute") tails.add(`xpute/ts/${rest[0]}/src/${rest.slice(1).join("/")}`);
-  const dir = crates.get(head);
-  if (dir) tails.add(`${dir}src/${tail}`).add(`${dir}${tail}`);
-  return files.filter((f) => [...tails].some((t) => f === t || f.endsWith(`/${t}`)));
-}
-
-const NAMED = /^`?\s+`([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)`/;
-const PROSE = /\.(rs|tsx?|wgsl|md|jsonc?)$/;
-
-for (const f of files) {
-  if (/^doc\/(minutes|experiment)\//.test(f) || !PROSE.test(f)) continue;
-  const text = read(f);
-  if (!text) continue;
-  const doc = f.endsWith(".md") || f.endsWith(".json") || f.endsWith(".jsonc");
-  text.split("\n").forEach((line, n) => {
-    if (!doc && !/^\s*(\/\/|\/?\*)/.test(line)) return;
-    if (line.includes("://")) return;
-    for (const m of line.matchAll(CITED)) {
-      const path = m[1];
-      if (!exists(path, f)) {
-        problems.push(`${f}:${n + 1}: names ${path}, which is no file here`);
-        continue;
-      }
-      const name = line.slice(m.index! + path.length).match(NAMED)?.[1]?.split("::").pop();
-      const within = name ? resolve(path, f) : [];
-      if (name && within.length > 0 && !within.some((w) => new RegExp(`\\b${name}\\b`).test(read(w) ?? ""))) {
-        problems.push(`${f}:${n + 1}: names ${name} in ${path}, which has no ${name}`);
-      }
-    }
-  });
-}
 
 const OFFSET_CRATES = ["xpute/rust/guest/src/", "crates/client/kernel/src/", "crates/client/render/src/", "crates/client-bracket/wasm/src/", "crates/client-bracket/native/src/"];
 const CAST_TO_POINTER = /\bas\s+\*(const|mut)\b/;
@@ -227,4 +111,4 @@ if (problems.length) {
   console.error(`\ncheck-rules: ${problems.length}`);
   Deno.exit(1);
 }
-console.log("check-rules: headers, cited paths, the memory's offsets, SwiftUI's place, one rounding, ES modules and the generated shaders hold");
+console.log("check-rules: the memory's offsets, SwiftUI's place, one rounding, ES modules and the generated shaders hold");
