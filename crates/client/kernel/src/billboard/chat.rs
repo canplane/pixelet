@@ -4,6 +4,8 @@
 //! as a marker is, standing over the speaker's head rather than on a cell
 //! (`scene/place.rs` lays both out).
 
+use std::rc::Rc;
+
 use pxl_spec::space::coord::q3::Q3;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -18,7 +20,7 @@ const SHOWN_MS: f64 = 8000.0;
 /// spell would take the last frame's time and read as long gone. A
 /// character swap cannot make a dismissed line look new.
 struct Line {
-    text: String,
+    text: Rc<str>,
     said: f64,
 }
 
@@ -37,22 +39,18 @@ fn chat() -> &'static mut Chat {
 }
 
 pub fn append_chat_line(text: &str) {
-    chat().line = Some(Line { text: text.to_string(), said: now() });
+    chat().line = Some(Line { text: text.into(), said: now() });
 }
 
-/// The line to show, none once shown its while; the turn is woken then.
+/// The line to show, in its bubble, none once shown its while; the turn is
+/// woken then.
 pub fn shown_line() -> Option<Label> {
-    let said = chat().line.as_ref()?.said;
-    if said + SHOWN_MS <= now() {
+    let line = chat().line.as_ref()?;
+    if line.said + SHOWN_MS <= now() {
         return None;
     }
-    wake_at(said + SHOWN_MS);
-    Some(Label::Chat { said: said.to_bits() })
-}
-
-/// The line said at `said`'s bits; none once another has been.
-pub fn line_said(said: u64) -> Option<String> {
-    chat().line.as_ref().filter(|l| l.said.to_bits() == said).map(|l| l.text.clone())
+    wake_at(line.said + SHOWN_MS);
+    Some(Label::Bubble { text: line.text.clone() })
 }
 
 /// None while there is no one to speak.
