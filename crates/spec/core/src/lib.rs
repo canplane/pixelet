@@ -76,8 +76,9 @@ pub const HEIGHT_BITS: u32 = 16;
 /// world's data is ingested, baked and kept in.
 pub const SHARD_ZOOM: Zoom = UNIT_ZOOM - HEIGHT_BITS;
 
-/// A chunk, what is built and drawn as one, is 2^CHUNK_STEPS of the camera
-/// grid's cells a side (pxl-spec space/camera/grid.rs).
+/// A chunk, the cube of the camera grid's cells that what stands in the world
+/// is gathered by, is 2^CHUNK_STEPS cells a side (pxl-spec
+/// space/camera/grid.rs).
 pub const CHUNK_STEPS: Zoom = 5;
 
 /// Element `i` of `s`, a buffer the host wrote or a table, read totally:

@@ -17,8 +17,8 @@
  * one late: the most refreshes that fit `PACED_MAX_MS`, 60 Hz, and at least
  * one — 60 Hz on a 120 Hz display, 72 on a 144, 90 on a 90, and the refresh
  * itself where a browser caps it below 60. The divisor is the display's, not
- * the load's: what a frame costs is the drawn resolution's to fit (pxl-kernel
- * view/frame/resolution.rs), so one controller answers it.
+ * the load's: what a frame costs is the guest's to fit, so one controller
+ * answers it.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
