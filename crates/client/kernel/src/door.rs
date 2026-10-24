@@ -23,7 +23,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
-use xpute_guest::ipc::door::Door;
+use xpute_guest::ipc::door::{Door, DoorStat};
 use xpute_guest::ipc::ring::Ring;
 use xpute_guest::mem::base::{off_of, off_of_slice, ptr_at};
 use xpute_guest::mem::heap::HeapStat;
@@ -62,8 +62,14 @@ fn door() -> &'static Door {
     DOOR.get(|| {
         // SAFETY: the module's memory, which never moves and outlives the door;
         // the ranges are the layout's alone.
-        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, SIGNALS, crate::profiler::record::profiler_note_rings) }
+        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, SIGNALS) }
     })
+}
+
+/// The rings' peaks since the last take, the profiler's (profiler/report.rs
+/// `profiler_frame`).
+pub(crate) fn take_stat() -> DoorStat {
+    door().take_stat()
 }
 
 /// What a turn raises, all after its drain and once (`post_shell` at the
@@ -91,7 +97,10 @@ fn ring_address(ring: &Ring) -> u32 {
 static STATE: Global<State> = Global::new();
 
 fn state() -> &'static mut State {
-    STATE.get(|| State { sent: Default::default(), asked: false })
+    STATE.get(|| State {
+        sent: Default::default(),
+        asked: false,
+    })
 }
 
 /// xpute's three (two rings and the quantum) count as five entries, plus the

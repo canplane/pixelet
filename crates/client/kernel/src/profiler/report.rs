@@ -14,8 +14,8 @@ use xpute_guest::sched::tick::TickReport;
 use crate::io::demand::Stream;
 use crate::io::request::stream_counts;
 use crate::layer::Base;
-use crate::profiler::frame::{DeviceSample, FrameSample, GpuSample, HeapSample, TileSample};
-use crate::profiler::record::{profiler_record_frame, profiler_recording, profiler_take_rings};
+use crate::profiler::frame::{DeviceSample, FrameSample, GpuSample, HeapSample, RingSample, TileSample};
+use crate::profiler::record::{profiler_record_frame, profiler_recording};
 
 /// What the renderer made of this turn's frame (scene/stage.rs `stage_render`).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -57,6 +57,17 @@ fn heap_sample() -> HeapSample {
     }
 }
 
+/// The rings as the door states them since the frame before, which taking
+/// them starts again.
+fn ring_sample() -> RingSample {
+    let s = crate::door::take_stat();
+    RingSample {
+        cq_peak: f64::from(s.cq_peak),
+        sq_peak: f64::from(s.sq_peak),
+        held_peak: f64::from(s.left_peak),
+    }
+}
+
 /// A frame turn's own measures (turn.rs `world_frame`).
 pub struct FrameTurn {
     pub tick: TickReport,
@@ -77,7 +88,7 @@ pub struct FrameTurn {
 /// The frame turn's record, once its frame is drawn.
 pub fn profiler_frame(t: FrameTurn) {
     // Taken whether or not recording, so a recording starts from now.
-    let rings = profiler_take_rings();
+    let rings = ring_sample();
     let body_slots_peak = f64::from(crate::io::body::take_peak());
     let terrain_refused = TerrainTile::residency().take_refusals() as f64;
     let host = core::mem::take(HOST.get(HostFrame::default));

@@ -79,6 +79,7 @@
     "heap_largest_free_bytes": 1,
     "heap_refusals": 1,
     "ring_cq_peak": 1,
+    "ring_sq_peak": 1,
     "ring_held_peak": 1,
     "body_slots_peak": 1,
     "waiting": "STREAM_NAMES",
@@ -149,6 +150,7 @@
     ],
     "ring": [
       "ring_cq_peak",
+      "ring_sq_peak",
       "ring_held_peak"
     ],
     "body": [

@@ -29,7 +29,7 @@ fn door() -> (Door, Box<[u8]>) {
     };
     // SAFETY: the buffer outlives the door — both are returned together and
     // the caller holds them for the test.
-    let d = unsafe { Door::init(buf.as_mut_ptr(), &layout, MOST_SIGNALS, |_, _| {}) };
+    let d = unsafe { Door::init(buf.as_mut_ptr(), &layout, MOST_SIGNALS) };
     (d, buf)
 }
 
@@ -47,4 +47,39 @@ fn door_a_command_is_not_started_with_room_for_its_signals_but_not_its_reply() {
         Ok(Some(7))
     });
     assert!(d.pending(), "it waits for the next turn rather than overrunning this one");
+}
+
+#[test]
+fn door_keeps_the_rings_peaks_until_they_are_taken_and_starts_again_from_zero() {
+    let (d, _buf) = door();
+    // Three commands start before the reserve runs out, so five of eight wait.
+    for _ in 0..CQ - (MOST_SIGNALS + 1) - 2 {
+        d.post(0, 2, 0, 0, None);
+    }
+    for _ in 0..SQ {
+        assert_eq!(d.submission().push(0, 1, frame::ACKREQ, None, 0), Errno::OK);
+    }
+    assert_eq!(d.drain(|_, _| Ok(Some(0))), 3);
+    assert_eq!(
+        d.take_stat(),
+        DoorStat {
+            cq_peak: CQ - MOST_SIGNALS,
+            sq_peak: SQ,
+            left_peak: SQ - 3
+        }
+    );
+    assert_eq!(d.take_stat(), DoorStat::default(), "taking it starts the next from zero");
+
+    while d.completion().peek() >= 0 {
+        d.completion().advance();
+    }
+    assert_eq!(d.drain(|_, _| Ok(Some(0))), SQ - 3);
+    assert_eq!(
+        d.take_stat(),
+        DoorStat {
+            cq_peak: SQ - 3,
+            sq_peak: SQ - 3,
+            left_peak: 0
+        }
+    );
 }

@@ -14,7 +14,7 @@ use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
 use crate::profiler::block::RecBlock;
-use crate::profiler::frame::{FrameSample, RingSample, WorstFrame};
+use crate::profiler::frame::{FrameSample, WorstFrame};
 use crate::profiler::task::TaskRow;
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
@@ -106,7 +106,6 @@ struct Profiler {
     worst_len: usize,
     /// The summary's, where it sorts what it spreads (summary.rs).
     scratch: Box<[f64]>,
-    rings: RingSample,
     /// The interval in progress: the last frame turn's record, which every
     /// turn after it adds its time to until the next frame turn closes it.
     open: Option<FrameSample>,
@@ -132,7 +131,6 @@ fn profiler() -> &'static mut Profiler {
         worst: Box::default(),
         worst_len: 0,
         scratch: Box::default(),
-        rings: RingSample::default(),
         open: None,
         frame_task_ms: 0.0,
     })
@@ -207,16 +205,6 @@ pub fn profiler_record(row: impl FnOnce() -> TaskRow) {
     if !land_lane(&mut l.task_ring, &mut l.task_len, &mut l.task_head, row) {
         l.truncated = true;
     }
-}
-
-pub fn profiler_note_rings(cq_len: u32, held: u32) {
-    let r = &mut profiler().rings;
-    r.cq_peak = r.cq_peak.max(cq_len as f64);
-    r.held_peak = r.held_peak.max(held as f64);
-}
-
-pub fn profiler_take_rings() -> RingSample {
-    core::mem::take(&mut profiler().rings)
 }
 
 /// A frame turn, `s` its record: closes the interval in progress with

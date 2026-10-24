@@ -62,12 +62,13 @@ export const FRAME = {
   heap_largest_free_bytes: 101 as number,
   heap_refusals: 102 as number,
   ring_cq_peak: 103 as number,
-  ring_held_peak: 104 as number,
-  body_slots_peak: 105 as number,
-  waiting: 106 as number,
-  out: 111 as number,
-  cap_terrain_refused: 116 as number,
-  WORDS: 117 as number,
+  ring_sq_peak: 104 as number,
+  ring_held_peak: 105 as number,
+  body_slots_peak: 106 as number,
+  waiting: 107 as number,
+  out: 112 as number,
+  cap_terrain_refused: 117 as number,
+  WORDS: 118 as number,
 } as const;
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it. */
@@ -81,7 +82,7 @@ export const FRAME_GROUPS = {
   tiles: ["zoom_tiles", "tiles_place"],
   device: ["blocks", "blocks_bytes", "depth_bytes", "layers_bytes", "gpu_objects"],
   heap: ["heap_used_bytes", "heap_live_bytes", "heap_run_bytes", "heap_slot_bytes", "heap_range_bytes", "heap_largest_free_bytes", "heap_refusals"],
-  ring: ["ring_cq_peak", "ring_held_peak"],
+  ring: ["ring_cq_peak", "ring_sq_peak", "ring_held_peak"],
   body: ["body_slots_peak"],
 } as const;
 
@@ -108,9 +109,9 @@ export const TASK = {
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */
 export const WORST = {
   sample: 0 as number,
-  has_prev: 117 as number,
-  prev: 118 as number,
-  WORDS: 235 as number,
+  has_prev: 118 as number,
+  prev: 119 as number,
+  WORDS: 237 as number,
 } as const;
 
 export const SPREAD = {
@@ -175,15 +176,15 @@ export const SUMMARY = {
     wakes: 45 as number,
     heap_used_delta_bytes: 48 as number,
     last: 49 as number,
-    WORDS: 166 as number,
+    WORDS: 167 as number,
   },
   tasks: {
-    AT: 169 as number,
+    AT: 170 as number,
     slots: 0 as number,
     WORDS: 120 as number,
   },
   steps: {
-    AT: 289 as number,
+    AT: 290 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
@@ -192,7 +193,7 @@ export const SUMMARY = {
    * The hover is what the pointer meets as drawn, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel query/ray.rs `by_distance`).
    * The pick is what the tool held strikes there (pxl-kernel control/interaction.rs `picked`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (control/interaction/collision.rs `is_placement_blocked`). */
   view: {
-    AT: 450 as number,
+    AT: 451 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -218,7 +219,7 @@ export const SUMMARY = {
     blocked: 22 as number,
     WORDS: 23 as number,
   },
-  WORDS: 473 as number,
+  WORDS: 474 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words. */

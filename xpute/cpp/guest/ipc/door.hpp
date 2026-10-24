@@ -7,8 +7,10 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <span>
+#include <utility>
 
 #include "../../kit/status/bug.hpp"
 #include "../../kit/status/errno.spec.hpp"
@@ -24,18 +26,30 @@ struct Applied {
     std::int32_t value = 0;
 };
 
-// For whoever measures how full the rings run.
-using DoorNote = void (*)(std::uint32_t completions, std::uint32_t left);
+// How full the rings ran since the stat was last taken (`Door::take_stat`):
+// each figure the most it reached.
+struct DoorStat {
+    // The completion ring's length.
+    std::uint32_t cq_peak = 0;
+    // The submission ring's length as a drain started: how close it came to full.
+    std::uint32_t sq_peak = 0;
+    // The submissions a drain left for lack of room.
+    std::uint32_t left_peak = 0;
+
+    bool operator==(const DoorStat &) const = default;
+};
 
 class Door {
   public:
     // `most_signals` is the most one command raises, or the turn once its drain
     // is done: the program's bound.
-    Door(Ring submission, Ring completion, std::uint32_t most_signals, DoorNote note = nullptr) noexcept
-        : sq_(submission), cq_(completion), reserve_(most_signals + 1), note_(note) {}
+    Door(Ring submission, Ring completion, std::uint32_t most_signals) noexcept : sq_(submission), cq_(completion), reserve_(most_signals + 1) {}
 
     const Ring &submission() const noexcept { return sq_; }
     const Ring &completion() const noexcept { return cq_; }
+
+    // The peaks since the last take, which starts the next from zero.
+    DoorStat take_stat() const noexcept { return std::exchange(stat_, {}); }
 
     void post(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result) const noexcept {
         posted(cmd, cq_.push(tag, cmd, flags, result));
@@ -58,6 +72,7 @@ class Door {
     // leave; replies to ACKREQ and to failures. Answers how many completions it made.
     template <class Apply> std::uint32_t drain(Apply &&apply) const noexcept {
         std::uint32_t tail = cq_.tail();
+        stat_.sq_peak = std::max(stat_.sq_peak, sq_.len());
         while (has_room()) {
             std::optional<Ring::Message> m = sq_.peek();
             if (!m) break;
@@ -70,7 +85,7 @@ class Door {
                 post(m->tag, m->cmd, frame::RES, a.value);
             }
         }
-        if (note_ != nullptr) note_(cq_.len(), sq_.len());
+        stat_.left_peak = std::max(stat_.left_peak, sq_.len());
         return cq_.tail() - tail;
     }
 
@@ -80,7 +95,7 @@ class Door {
     bool has_room() const noexcept { return cq_.len() + reserve_ <= cq_.capacity(); }
 
     void posted(std::uint32_t cmd, Errno e) const noexcept {
-        if (note_ != nullptr) note_(cq_.len(), 0);
+        stat_.cq_peak = std::max(stat_.cq_peak, cq_.len());
         ensure(e == Errno::ok, Errno::enospc, cmd, static_cast<std::uint64_t>(static_cast<std::int64_t>(e)));
     }
 
@@ -88,7 +103,8 @@ class Door {
     Ring cq_;
     // What one command may leave: its signals, or the turn's after the drain, and its reply.
     std::uint32_t reserve_;
-    DoorNote note_;
+    // Kept by the const calls that move the rings, as the rings' own words are.
+    mutable DoorStat stat_;
 };
 
 } // namespace xpute

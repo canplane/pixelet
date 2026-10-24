@@ -62,3 +62,18 @@ XPUTE_TEST(door_a_signal_s_packet_is_written_in_place_and_a_packet_that_does_not
     m = d.completion().peek();
     XPUTE_CHECK(m && m->tag == 5 && m->result == static_cast<std::int32_t>(Errno::ebadmsg));
 }
+
+XPUTE_TEST(door_keeps_the_rings_peaks_until_they_are_taken_and_starts_again_from_zero) {
+    Fixture f = door();
+    const Door &d = f.door;
+    // Three commands start before the reserve runs out, so five of eight wait.
+    for (std::uint32_t k = 0; k < CQ - (MOST_SIGNALS + 1) - 2; k++) d.post(0, 2, 0, 0);
+    for (std::uint32_t k = 0; k < SQ; k++) XPUTE_CHECK(d.submission().push(0, 1, frame::ACKREQ, 0) == Errno::ok);
+    XPUTE_CHECK(d.drain([](std::uint32_t, std::span<const std::uint8_t>) { return Applied{}; }) == 3);
+    XPUTE_CHECK((d.take_stat() == DoorStat{.cq_peak = CQ - MOST_SIGNALS, .sq_peak = SQ, .left_peak = SQ - 3}));
+    XPUTE_CHECK_EQ(d.take_stat() == DoorStat{}, true, "taking it starts the next from zero");
+
+    while (d.completion().peek()) d.completion().advance();
+    XPUTE_CHECK(d.drain([](std::uint32_t, std::span<const std::uint8_t>) { return Applied{}; }) == SQ - 3);
+    XPUTE_CHECK((d.take_stat() == DoorStat{.cq_peak = SQ - 3, .sq_peak = SQ - 3, .left_peak = 0}));
+}

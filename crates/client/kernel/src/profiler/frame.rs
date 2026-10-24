@@ -78,12 +78,15 @@ pub struct HeapSample {
     pub refusals: f64,
 }
 
-/// The completion ring's peak, and the most submissions a turn held back for
-/// lack of room (each answered a frame late).
+/// The rings' peaks since the frame before, as the door keeps them
+/// (xpute-guest ipc/door.rs `DoorStat`): the completion ring's length, the
+/// submission ring's as a drain started, and the most submissions a drain
+/// held back for lack of room (each answered a frame late).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RingSample {
     pub cq_peak: f64,
+    pub sq_peak: f64,
     pub held_peak: f64,
 }
 
@@ -158,7 +161,7 @@ words!(FrameSample, FRAME::WORDS,
     heap.used_bytes => FRAME::heap_used_bytes, heap.live_bytes => FRAME::heap_live_bytes, heap.run_bytes => FRAME::heap_run_bytes,
     heap.slot_bytes => FRAME::heap_slot_bytes, heap.range_bytes => FRAME::heap_range_bytes,
     heap.largest_free_bytes => FRAME::heap_largest_free_bytes, heap.refusals => FRAME::heap_refusals,
-    rings.cq_peak => FRAME::ring_cq_peak, rings.held_peak => FRAME::ring_held_peak,
+    rings.cq_peak => FRAME::ring_cq_peak, rings.sq_peak => FRAME::ring_sq_peak, rings.held_peak => FRAME::ring_held_peak,
     body_slots_peak => FRAME::body_slots_peak,
     waiting => FRAME::waiting, out => FRAME::out,
     terrain_refused => FRAME::cap_terrain_refused,
