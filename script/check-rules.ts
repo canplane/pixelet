@@ -1,8 +1,8 @@
 #!/usr/bin/env -S deno run -A
-// Holds the tree to what a machine decides exactly: no CommonJS file, and
-// each generated shader made from the sources the tree holds now. Rust's
-// rounding is clippy's (crates/clippy.toml); how the tree is written is
-// CONVENTION.md's.
+// Holds the tree to what a reader cannot see and the code must keep: no raw
+// pointer casts in offset crates, each rounding half to even in every
+// language, no CommonJS file, each generated shader made from the sources the
+// tree holds now. How the tree is written is CONVENTION.md's.
 //   deno run -A script/check-rules.ts
 
 import { dirname, fromFileUrl, join } from "@std/path";
@@ -36,6 +36,52 @@ function read(f: string): string | null {
 
 const problems: string[] = [];
 
+const OFFSET_CRATES = ["xpute/rust/guest/src/", "crates/client/kernel/src/", "crates/client/render/src/", "crates/client-bracket/wasm/src/", "crates/client-bracket/native/src/"];
+const CAST_TO_POINTER = /\bas\s+\*(const|mut)\b/;
+
+for (const f of files) {
+  if (!f.endsWith(".rs") || !OFFSET_CRATES.some((c) => f.startsWith(c))) continue;
+  read(f)?.split("\n").forEach((line, n) => {
+    if (/^\s*\/\//.test(line)) return;
+    if (CAST_TO_POINTER.test(line)) problems.push(`${f}:${n + 1}: casts to a pointer where an offset goes through mem::base::ptr_at: ${line.trim()}`);
+  });
+}
+
+// One rounding: half to even (ARCHITECTURE.md, Terrain). A call that
+// rounds otherwise, or a floor of a half added, is refused in pixelet's code
+// and xpute's; xpute's scalar keeps its named variants, round_half_up and
+// round_half_away, as options a library offers.
+const ROUNDING_ROOTS = ["crates/", "apps/", "xpute/"];
+const ROUNDING_NAMED = [
+  "xpute/rust/kit/src/math/scalar.rs",
+  "xpute/rust/kit/src/math/scalar.test.rs",
+  "xpute/ts/kit/src/math/scalar.ts",
+  "xpute/ts/kit/src/math/scalar.test.ts",
+  "xpute/cpp/kit/math/scalar.hpp",
+  "xpute/cpp/kit/math/scalar.test.cpp",
+];
+const NOT_EVEN = [
+  /\.round\(\)/,
+  /\bf(?:32|64)::round\b/,
+  /\blibm::roundf?\(/,
+  /\bMath\.round\(/,
+  /\bstd::round\b/,
+  // A number's text rounds its last place half up: `fixed` (apps/client shell/fixed.ts) rounds it half to even.
+  /\.toFixed\(/,
+  /\.toPrecision\(/,
+  // A half added inside a floor's own parentheses, or before `.floor()`.
+  /\bfloor\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\+\s*0\.5\s*\)/,
+  /\([^()]*\+\s*0\.5\s*\)\.floor\(\)/,
+];
+for (const f of files) {
+  if (!ROUNDING_ROOTS.some((r) => f.startsWith(r)) || ROUNDING_NAMED.includes(f) || !/\.(rs|tsx?|wgsl|hpp|cpp)$/.test(f) || f.endsWith(".gen.wgsl")) continue;
+  const text = read(f);
+  if (text === null) continue;
+  text.split("\n").forEach((line, n) => {
+    if (NOT_EVEN.some((r) => r.test(line))) problems.push(`${f}:${n + 1}: rounds other than half to even: ${line.trim()}`);
+  });
+}
+
 // The tree's scripts are ES modules, TypeScript where a loader takes it, the
 // bundlers' configs among them: Node runs only the native toolchain's own
 // scripts (CocoaPods, Xcode's and Gradle's phases).
@@ -56,4 +102,4 @@ if (problems.length) {
   console.error(`\ncheck-rules: ${problems.length}`);
   Deno.exit(1);
 }
-console.log("check-rules: ES modules and the generated shaders hold");
+console.log("check-rules: the memory's offsets, one rounding, ES modules and the generated shaders hold");
