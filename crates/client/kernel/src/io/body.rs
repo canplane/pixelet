@@ -17,23 +17,31 @@
 //! least), and is then freed or kept. Kept packets are given back only by
 //! a drawn frame (scene/cast.rs `upload`, layer/earth.rs `earth_upload`),
 //! so they are bounded apart from it: the Earth's by its frames, terrain's
-//! by the slots less one for the most credits granted and every Earth frame
-//! (layer/terrain/tile.rs `most_kept`), a packet past it, or one no window
-//! wants a square of, freed once decoded. The kept thus leave a slot for every credit, and a body on one
-//! finds one: the residency, which the query and the controls read, fills
-//! with no frame drawn. Only a body that came for a read since stopped,
-//! held a turn until it is dropped (io/fetch.rs `fetch_task`), can take a
-//! slot past those, and a body that then finds none is refused (`take`),
-//! its want waiting for a slot given back. In a drawn frame a terrain
-//! packet is given back once no window wants one of its squares absent
-//! (layer/terrain/window.rs `fill`): each frame hands `HANDED` squares only
-//! of tiles kept or void (`due`), a square handed is wanted no more, and a
-//! packet whose tile left or that no window wants is given back on that
-//! upload too, the stream full or not (layer/kept.rs `send`). Tiles whose
-//! packets were freed are asked again on the step after a packet is given
-//! back, no more of them than could still be kept less those already asked
-//! and not yet come (layer/terrain/tile.rs `again_room`), so nothing is
-//! fetched only to be freed.
+//! by the slots less one for the most credits granted and every Earth
+//! frame (layer/terrain/tile.rs `most_kept`), a packet past it, or one no
+//! window wants a square of, freed once decoded. The kept thus leave a
+//! slot for every credit, and a body on one finds one: the residency,
+//! which the query and the controls read, fills with no frame drawn.
+//!
+//! A body is refused a slot in two cases, and its want waits on what can
+//! end it (io/host.rs `Refused`): one that came for a read since stopped,
+//! held a turn until it is dropped (io/fetch.rs `fetch_task`), can find
+//! every slot out, and waits for one given back; and one that needs a run
+//! when the heap can give none waits for the heap's pages or a slot given
+//! back in a run held. Either way the next slot given back asks a turn, in
+//! which the want is asked again.
+//!
+//! In a drawn frame a terrain packet is given back once no window wants
+//! one of its squares absent (layer/terrain/window.rs `fill`): each frame
+//! hands `HANDED` squares only of tiles kept or void (`due`), a square
+//! handed is wanted no more, and a packet whose tile left or that no
+//! window wants is given back on that upload too, the stream full or not
+//! (layer/kept.rs `send`). Tiles whose packets were freed are asked again
+//! on the step after a packet is given back, no more of them than could
+//! still be kept less those already asked and not yet come
+//! (layer/terrain/tile.rs `again_room`), so a tile is rarely fetched only
+//! to be freed: a first arrival a window wants is kept outside that
+//! reckoning, and may take the place a tile asked again was counted on.
 
 use xpute_guest::global::Global;
 use xpute_guest::mem::heap::{alloc, free, Block};
@@ -114,6 +122,9 @@ struct Slots {
     releases: u32,
     /// The most slots out at once since the profiler last took it.
     peak: u32,
+    /// A body was refused for want of a slot, so the next given back asks a
+    /// turn for its want to be asked again in (io/request.rs `pump`).
+    waited: bool,
 }
 
 static HELD: Global<Slots> = Global::new();
@@ -132,12 +143,16 @@ pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refused> {
     }
     let s = held();
     if s.out >= BODY_SLOTS {
+        s.waited = true;
         return Err(Refused::bodies());
     }
     let i = match s.runs.iter().position(|r| r.out != FULL) {
         Some(i) => i,
         None => {
-            let (at, _) = alloc(BODY_RUN_BYTES).ok_or_else(Refused::now)?;
+            let Some((at, _)) = alloc(BODY_RUN_BYTES) else {
+                s.waited = true;
+                return Err(Refused::run());
+            };
             s.runs.push(Run { at, out: 0 });
             s.runs.len() - 1
         }
@@ -167,6 +182,9 @@ pub unsafe fn give(block: Block) {
     run.out &= !bit;
     s.out -= 1;
     s.releases = s.releases.wrapping_add(1);
+    if core::mem::take(&mut s.waited) {
+        crate::sched::edge::request_world_tick();
+    }
     if run.out == 0 {
         let run = s.runs.swap_remove(i);
         // SAFETY: the run `take` borrowed, no slot of it out.

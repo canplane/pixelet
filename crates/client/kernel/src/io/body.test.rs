@@ -118,3 +118,29 @@ fn a_body_refused_a_slot_waits_on_the_slots_and_not_on_the_heap() {
     }
     set_heap_stat(HeapStat::default);
 }
+
+#[test]
+fn a_body_refused_a_run_waits_on_the_heap_or_a_slot_given_back() {
+    let _g = crate::serial();
+    let refused = crate::io::host::Refused::run();
+    assert!(!refused.over());
+    let block = take(Some(Stream::terrain), 1).unwrap();
+    // SAFETY: from `take`, given back once.
+    unsafe { give(block) };
+    assert!(refused.over(), "a slot given back in a run held serves it");
+}
+
+#[test]
+fn a_slot_given_back_after_a_refusal_asks_a_turn() {
+    let _g = crate::serial();
+    let longest = longest(Stream::terrain);
+    let mut out: Vec<Block> = (0..BODY_SLOTS).map(|_| take(Some(Stream::terrain), longest).unwrap()).collect();
+    assert!(take(Some(Stream::terrain), longest).is_err());
+    assert!(held().waited, "refused for want of a slot");
+    // SAFETY: from `take`, given back once, here and below.
+    unsafe { give(out.pop().unwrap()) };
+    assert!(!held().waited, "the slot given back asked the turn");
+    for block in out {
+        unsafe { give(block) };
+    }
+}
