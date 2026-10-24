@@ -1,4 +1,4 @@
-// @xpute/host/sched/tick.spec.ts
+// @xpute/hypervisor/sched/tick.spec.ts
 //
 // GENERATED from spec/sched/tick.json — do not edit.
 //

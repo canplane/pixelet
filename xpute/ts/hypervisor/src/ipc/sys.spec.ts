@@ -1,4 +1,4 @@
-// @xpute/host/ipc/sys.spec.ts
+// @xpute/hypervisor/ipc/sys.spec.ts
 //
 // GENERATED from spec/ipc/sys.json — do not edit.
 //

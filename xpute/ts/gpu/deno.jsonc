@@ -1,4 +1,4 @@
 {
-  // Nearly empty on purpose, as ts/host's is: the package is `@xpute/gpu/`
+  // Nearly empty on purpose, as ts/hypervisor's is: the package is `@xpute/gpu/`
   // by the import maps, and everything it needs is said once at the root.
 }

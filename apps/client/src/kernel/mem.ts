@@ -6,9 +6,9 @@
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { Doorbell } from "@xpute/host/ipc/doorbell.ts";
+import { Doorbell } from "@xpute/hypervisor/ipc/doorbell.ts";
 import { openGuest } from "@/bracket.tsx";
-import { key } from "@xpute/host/ipc/directory.spec.ts";
+import { key } from "@xpute/hypervisor/ipc/directory.spec.ts";
 import { directory, type Guest } from "@/kernel/module.ts";
 import { run_host_stream } from "@/kernel/host.ts";
 

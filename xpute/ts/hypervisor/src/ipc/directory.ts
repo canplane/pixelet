@@ -1,4 +1,4 @@
-// @xpute/host/ipc/directory.ts
+// @xpute/hypervisor/ipc/directory.ts
 
 /**
  * The directory a guest's first turn writes (rust/guest/src/ipc/directory.rs):

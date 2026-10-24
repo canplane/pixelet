@@ -8,7 +8,7 @@
  */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
-import { reserve_memory } from "@xpute/host/mem/reserve.ts";
+import { reserve_memory } from "@xpute/hypervisor/mem/reserve.ts";
 import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@pxl/client/kernel/mem/mem.spec.ts";
 import { key } from "@pxl/client/kernel/abi/directory.spec.ts";
 import { directory, type Guest } from "@pxl/client/kernel/module.ts";

@@ -1,4 +1,4 @@
-// @xpute/host/ipc/directory.spec.ts
+// @xpute/hypervisor/ipc/directory.spec.ts
 //
 // GENERATED from spec/ipc/directory.json — do not edit.
 //

@@ -1,4 +1,4 @@
-// @xpute/host/ipc/frame.spec.ts
+// @xpute/hypervisor/ipc/frame.spec.ts
 //
 // GENERATED from spec/ipc/frame.json — do not edit.
 //

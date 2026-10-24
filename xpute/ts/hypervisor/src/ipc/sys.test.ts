@@ -1,4 +1,4 @@
-// @xpute/host/ipc/sys.test.ts
+// @xpute/hypervisor/ipc/sys.test.ts
 
 /** Runs spec/conformance/sys/file.tsv against the host's end of the system calls. */
 

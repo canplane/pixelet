@@ -1,4 +1,4 @@
-// @xpute/host/abi/cmd.spec.ts
+// @xpute/hypervisor/abi/cmd.spec.ts
 //
 // GENERATED from spec/abi/cmd.json — do not edit.
 

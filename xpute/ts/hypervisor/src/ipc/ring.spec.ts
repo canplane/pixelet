@@ -1,4 +1,4 @@
-// @xpute/host/ipc/ring.spec.ts
+// @xpute/hypervisor/ipc/ring.spec.ts
 //
 // GENERATED from spec/ipc/ring.json — do not edit.
 //

@@ -111,7 +111,7 @@
 
   "imports": {
     "@xpute/kit/": "./xpute/ts/kit/src/",
-    "@xpute/host/": "./xpute/ts/host/src/",
+    "@xpute/hypervisor/": "./xpute/ts/hypervisor/src/",
     "@xpute/gpu/": "./xpute/ts/gpu/src/",
     "@xpute/conformance/": "./xpute/ts/conformance/src/",
 

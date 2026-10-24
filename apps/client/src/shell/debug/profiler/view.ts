@@ -14,7 +14,7 @@ import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
 import { OUTCOME_NAMES, STREAM_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/demand.spec.ts";
 import { kernel_call, kernel_memory, kernel_room } from "@/kernel/shell.ts";
 
-import { PHASES } from "@xpute/host/sched/tick.spec.ts";
+import { PHASES } from "@xpute/hypervisor/sched/tick.spec.ts";
 import { FRAME, READ, RINGS, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WAKES, WORST } from "./profiler.spec.ts";
 import { STEP_NAMES } from "@/kernel/turn/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";

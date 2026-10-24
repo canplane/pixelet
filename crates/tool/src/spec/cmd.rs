@@ -832,8 +832,8 @@ struct Target {
 const TARGETS: [Target; 2] = [
     Target {
         json: "xpute/spec/abi/cmd.json",
-        ts: "xpute/ts/host/src/abi/cmd.spec.ts",
-        ts_logical: "@xpute/host/abi/cmd.spec.ts",
+        ts: "xpute/ts/hypervisor/src/abi/cmd.spec.ts",
+        ts_logical: "@xpute/hypervisor/abi/cmd.spec.ts",
         rs_dir: "xpute/rust/guest/src/abi",
         rs_logical: "xpute-guest/abi",
         number: "crate::abi::number",

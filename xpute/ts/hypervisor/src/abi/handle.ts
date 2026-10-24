@@ -1,4 +1,4 @@
-// @xpute/host/abi/handle.ts
+// @xpute/hypervisor/abi/handle.ts
 
 /** A guest handle is `slot | generation << 16`, as `xpute_guest::abi::handle` hands it out. */
 

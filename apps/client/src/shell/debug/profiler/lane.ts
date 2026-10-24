@@ -10,7 +10,7 @@
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
-import { PHASES } from "@xpute/host/sched/tick.spec.ts";
+import { PHASES } from "@xpute/hypervisor/sched/tick.spec.ts";
 import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS, WAKES } from "./profiler.spec.ts";
 import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";

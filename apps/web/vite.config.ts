@@ -271,7 +271,7 @@ const remoteOriginDefault = "https://plei.me";
 // kernel's memory and device, and a hot-swapped copy ran beside them — a
 // second device beside the renderer's objects on the first. The built module
 // is the page's own, beside the guest.ts that opens it.
-const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/apps/client/src/kernel/", "/apps/client/src/catalog/", "/apps/web/src/guest."];
+const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/hypervisor/", "/apps/client/src/kernel/", "/apps/client/src/catalog/", "/apps/web/src/guest."];
 
 // One reload for a change that reaches both sides: while the kernel builds, a
 // core change waits for it, so the page never runs the shell generated from a

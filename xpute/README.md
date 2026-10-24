@@ -1,6 +1,6 @@
 # xpute
 
-xpute runs one program inside another across three edges and no others: one memory they share, one call in, and one number out. The outer program, the **host**, owns the platform: the clock, the memory, whatever reaches outside. The inner one, the **guest**, owns none of it on its own account. Everything it has, the host granted it: the memory once at boot, and a quota of time on every turn. What the guest builds over those grants — its allocator, its scheduler, its tables — is its own, as a library operating system's is over an exokernel, without the hardware that enforces the grant.
+xpute runs one program inside another across three edges and no others: one memory they share, one call in, and one number out. The outer program, the **host**, owns the platform: the clock, the memory, whatever reaches outside. The inner one, the **guest**, owns none of it on its own account. Everything it has, the host granted it: the memory once at boot, and a quota of time on every turn. xpute's end in the host is the hypervisor, as KVM is: it allocates and routes, and names nothing of what the guest computes. What the guest builds over those grants — its allocator, its scheduler, its tables — is its own, as a library operating system's is over an exokernel, without the hardware that enforces the grant.
 
 **xpute is both ends of that arrangement, and `kit`, the generic code underneath them.** `kit` is written in every language xpute has, and each end in the languages it is built in.
 
@@ -27,21 +27,21 @@ Three edges, and one call the other way: the guest reads the host's clock (`now`
 
 `interrupt` is the whole of the guest's life. It runs when the host rings, for as long as the quota it was handed, and when the call returns it is not running at all. Its answer, `wake_ms`, is when it would like the next turn. A guest that asks for nothing is rung for nothing.
 
-Everything else is written into the memory while a turn runs. The host's commands wait for the guest in one queue, and what the guest answers or raises waits for the host in another, each a message of four words. What the guest cannot do itself — a file, a call to a GPU — it writes as records into a stream, and the host runs every record after the turn returns and before it rings again.
+Everything else is written into the memory while a turn runs. The host's commands wait for the guest in one queue, and what the guest answers or raises waits for the host in another, each a message of four words. What the guest cannot do itself — a file, a call to a GPU — it writes as records into a stream, and the host runs every record after the turn returns and before it rings again. The hypervisor hands every file call to the program's one `SysHost.open`; it does not route by root, and the program dispatches by root to whatever it bound there.
 
 [ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped that way: the memory, the messages and the packets they carry, the turn, the handles, I/O and the GPU's calls, the contract either end must keep, and the records that hold the languages to it.
 
-## `kit`, `guest` and `host`
+## `kit`, `guest` and `hypervisor`
 
 `kit` is that and nothing more — collections, codecs, scalar math, an errno table, the wire formats. Link it and use it: it knows nothing of turns, hosts or memories.
 
 Golden records under `spec/golden/` hold the languages to each other wherever bytes cross.
 
-`guest` and `host` are the arrangement above, named by the end each is. They are the two ends of one thing, not two implementations of it: a module on one side with nothing facing it is not a gap to fill, and what the two owe each other is not matching module lists but matching formats. The guest end exists in more than one language, and those are one end, so they match as `kit` does.
+`guest` and `hypervisor` are the arrangement above, the guest's end and the host's. They are the two ends of one thing, not two implementations of it: a module on one side with nothing facing it is not a gap to fill, and what the two owe each other is not matching module lists but matching formats. The guest end exists in more than one language, and those are one end, so they match as `kit` does.
 
 ```text
 rust/kit  ·  ts/kit  ·  cpp/kit                the same kit, in each language
-rust/guest  ·  cpp/guest  ·  ts/host           the guest end, in each language · the host end
+rust/guest  ·  cpp/guest  ·  ts/hypervisor     the guest end, in each language · the hypervisor
 rust/gpu  ·  ts/gpu  ·  cpp/gpu                WebGPU's calls, which a guest writes and a host runs
 rust/conformance  ·  cpp/conformance           a guest in each, and the contract's traces
 ts/conformance                                 the host that runs the traces against them

@@ -1,4 +1,4 @@
-// @xpute/host/mem/reserve.ts
+// @xpute/hypervisor/mem/reserve.ts
 
 /**
  * The guest's memory, reserved with `initial == maximum` so it never grows and

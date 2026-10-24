@@ -10,8 +10,8 @@
 
 import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { handle_slot } from "@xpute/host/abi/handle.ts";
-import { bytes_of, each_record, text_of } from "@xpute/host/ipc/stream.ts";
+import { handle_slot } from "@xpute/hypervisor/abi/handle.ts";
+import { bytes_of, each_record, text_of } from "@xpute/hypervisor/ipc/stream.ts";
 
 import { DONE, NONE, op, STATUS, SURFACE_PREFERRED } from "./api.spec.ts";
 import {

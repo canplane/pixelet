@@ -103,7 +103,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "xpute/spec/ipc/directory.json",
         uses: &[],
-        ts: Some("xpute/ts/host/src/ipc/directory.spec.ts"),
+        ts: Some("xpute/ts/hypervisor/src/ipc/directory.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/directory.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
@@ -113,7 +113,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "xpute/spec/ipc/frame.json",
         uses: &[],
-        ts: Some("xpute/ts/host/src/ipc/frame.spec.ts"),
+        ts: Some("xpute/ts/hypervisor/src/ipc/frame.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/frame.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
@@ -123,7 +123,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "xpute/spec/ipc/ring.json",
         uses: &[],
-        ts: Some("xpute/ts/host/src/ipc/ring.spec.ts"),
+        ts: Some("xpute/ts/hypervisor/src/ipc/ring.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/ring.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
@@ -133,7 +133,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "xpute/spec/ipc/sys.json",
         uses: &[],
-        ts: Some("xpute/ts/host/src/ipc/sys.spec.ts"),
+        ts: Some("xpute/ts/hypervisor/src/ipc/sys.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/sys.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
@@ -191,7 +191,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "xpute/spec/sched/tick.json",
         uses: &[],
-        ts: Some("xpute/ts/host/src/sched/tick.spec.ts"),
+        ts: Some("xpute/ts/hypervisor/src/sched/tick.spec.ts"),
         rs: Some("xpute/rust/guest/src/sched/tick.spec.rs"),
         module: Some("spec"),
         enums: Enums::Named(&["PHASES"]),
@@ -573,7 +573,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         if let Some(ts_path) = d.ts {
             let logical = [
                 ("apps/client/src/", "@pxl/client/"),
-                ("xpute/ts/host/src/", "@xpute/host/"),
+                ("xpute/ts/hypervisor/src/", "@xpute/hypervisor/"),
                 ("xpute/ts/gpu/src/", "@xpute/gpu/"),
                 ("xpute/ts/conformance/src/", "@xpute/conformance/"),
             ]

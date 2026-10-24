@@ -1,4 +1,4 @@
-// @xpute/host/sched/quantum.test.ts
+// @xpute/hypervisor/sched/quantum.test.ts
 
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 
