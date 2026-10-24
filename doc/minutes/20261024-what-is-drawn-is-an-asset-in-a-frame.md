@@ -5,17 +5,22 @@ already does is cited, and where it does not.
 
 ## The structure
 
-- An **asset** is what is drawn: what a block id names (a cube's look, a
-  decor's model, a marker's design), and everything else drawn — a
-  character's or a pet's model, a cloud. A **marker** is any asset drawn
-  flat to the camera from a design on the sheet: a pin, a place, a chat
-  line's bubble, each its own design. What it is
+- An **asset** is anything in the content library, as an engine's are: a
+  definition (a cube's look, a decor's variants, a marker's design, a cloud,
+  a character or a pet) and the shipped files a definition references (a
+  glb, a png, the texture pack), as a prefab references a mesh. The catalog
+  (`spec/`) is where assets are declared. An **asset id** is what today's
+  `spec/spec/block/id.json` calls a block's id: its kind over its shape. A
+  **marker** is any asset drawn flat to the camera from a design on the
+  sheet: a pin, a place, a chat line's bubble, each its own design. What it is
   (how it is drawn, what it occupies, what it is at a coarser zoom) is its
   own metadata.
 - A **frame** is a coordinate system, which may move: the world's grid, a
   character, the pointer, the wind's field, a preview's case.
 - An **instance** is an asset in a frame at a pose, with what is its own
-  alone: a clip's time, a joint palette.
+  alone: a clip's time, a joint palette. A **block** is an instance standing
+  in a cell of the world's grid, and nothing else is: a cloud claims no
+  cell, so it is no block.
 - A **key** is the holder's: the name a holder calls an instance by — a world
   cell in the object store, a place's tile and index, a speaker. It is never
   part of what the asset is; an asset's painted or uploaded form is found by
@@ -74,7 +79,12 @@ wants.
 3. **A preview's case registers its model again** at one unit tall
    (`scene/character/preview.rs`): a scale, which is an instance's pose,
    made a second asset.
-4. **Control asks by kind** where it asks what a block occupies or hides:
+4. **The clouds are declared nowhere.** Their three models and their skin
+   are written in the kernel (`scene/environment/cloud.rs` `VARIANTS`,
+   `SKIN`), with no id and no catalog entry, though they are drawn as decor
+   is. And the file table, `pxl-spec asset/ingested.spec.rs` `Asset`, holds
+   the word asset for files alone.
+5. **Control asks by kind** where it asks what a block occupies or hides:
    `control/interaction/collision.rs` (markers), `edit.rs` (`hide_in`), and
    `ghost.rs` (`Ghost::Box` or `Ghost::Decor`). Whether each is a question the
    child should answer is open.
