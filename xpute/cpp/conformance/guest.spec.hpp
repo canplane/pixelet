@@ -39,8 +39,8 @@ inline constexpr std::uint32_t STREAM_WORDS = 256u;
 // The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them.
 inline constexpr std::uint32_t SYS_WORDS = 64u;
 
-// The guest's heap, in its own range: what its file table holds lies there, since the
-// memory a host hands a module never grows and a guest takes nothing it was not given.
+// The guest's heap, in its own range, since the memory a host hands a module never grows
+// and a guest takes nothing it was not given.
 inline constexpr std::uint32_t HEAP_BYTES = 65536u;
 
 // Slots in the guest's handle table, slot 0 never handed out.

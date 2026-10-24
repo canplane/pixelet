@@ -58,8 +58,8 @@
     "$value": 65536,
     "$type": "u32",
     "$doc": [
-      "The guest's heap, in its own range: what its file table holds lies there, since the",
-      "memory a host hands a module never grows and a guest takes nothing it was not given."
+      "The guest's heap, in its own range, since the memory a host hands a module never grows",
+      "and a guest takes nothing it was not given."
     ]
   },
 

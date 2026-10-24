@@ -1,8 +1,9 @@
 // cpp/guest/abi/handle.hpp
 
-// A handle is `slot
-// generation << 16`, the far side reading only the slot,
+// A handle is `slot | generation << 16`, the far side reading only the slot,
 // so a handle kept past its release names nothing. Slot 0 is never handed out.
+// `HandleTable` is fixed at N slots for what another side keeps; `Slots` is
+// fixed at N slots too, and holds values this side keeps.
 
 #pragma once
 
@@ -11,7 +12,6 @@
 #include <cstdint>
 #include <optional>
 #include <utility>
-#include <vector>
 
 #include "../../kit/status/bug.hpp"
 
@@ -98,20 +98,20 @@ template <std::size_t N> class HandleTable {
     std::uint32_t count_ = 0;
 };
 
-// Grows and never shrinks; a handle kept past its value's removal names
-// nothing rather than whatever took its slot.
-template <class T> class Slots {
+// Fixed at N slots, slot 0 never handed out, as `HandleTable`; a slot given
+// back is the next one taken.
+template <class T, std::size_t N> class Slots {
+    static_assert(N >= 2 && N <= (std::size_t{1} << HANDLE_SLOT_BITS), "a slot is 16 bits, and slot 0 is never handed out");
+
   public:
-    std::uint32_t insert(T value) {
-        if (entries_.empty()) entries_.emplace_back();
+    std::uint32_t insert(T value) noexcept {
         std::uint32_t slot;
-        if (!free_.empty()) {
-            slot = free_.back();
-            free_.pop_back();
+        if (free_ != 0) {
+            slot = free_;
+            free_ = next_[slot];
         } else {
-            ensure(entries_.size() < (std::size_t{1} << HANDLE_SLOT_BITS), Errno::enospc, HANDLE_SLOT_BITS);
-            entries_.emplace_back();
-            slot = static_cast<std::uint32_t>(entries_.size() - 1);
+            ensure(std::size_t{top_} + 1 < N, Errno::enospc, N);
+            slot = ++top_;
         }
         Entry &e = entries_[slot];
         e.generation = next_generation(e.generation);
@@ -125,22 +125,23 @@ template <class T> class Slots {
     }
     const T *get(std::uint32_t handle) const noexcept { return const_cast<Slots *>(this)->get(handle); }
 
-    std::optional<T> remove(std::uint32_t handle) {
+    std::optional<T> remove(std::uint32_t handle) noexcept {
         Entry *e = entry(handle);
         if (e == nullptr) return std::nullopt;
-        free_.push_back(handle_slot(handle));
+        std::uint32_t slot = handle_slot(handle);
+        next_[slot] = free_;
+        free_ = slot;
         return std::exchange(e->value, std::nullopt);
     }
 
     template <class F> void each(F &&f) {
-        for (std::uint32_t slot = 0; slot < entries_.size(); slot++) {
+        for (std::uint32_t slot = 1; slot <= top_; slot++) {
             Entry &e = entries_[slot];
             if (e.value) f(slot | std::uint32_t{e.generation} << HANDLE_SLOT_BITS, *e.value);
         }
     }
 
   private:
-    // Slot 0 is held empty so no handle is 0.
     struct Entry {
         std::uint16_t generation = 0;
         std::optional<T> value;
@@ -148,13 +149,17 @@ template <class T> class Slots {
 
     Entry *entry(std::uint32_t handle) noexcept {
         std::uint32_t slot = handle_slot(handle);
-        if (slot >= entries_.size()) return nullptr;
+        if (slot == 0 || slot > top_) return nullptr;
         Entry &e = entries_[slot];
         return e.value && e.generation == handle >> HANDLE_SLOT_BITS ? &e : nullptr;
     }
 
-    std::vector<Entry> entries_;
-    std::vector<std::uint32_t> free_;
+    std::array<Entry, N> entries_{};
+    // A free slot's next free slot; 0, which is never handed out, ends the list.
+    std::array<std::uint32_t, N> next_{};
+    std::uint32_t free_ = 0;
+    // The highest slot handed out; those past it never have been.
+    std::uint32_t top_ = 0;
 };
 
 } // namespace xpute

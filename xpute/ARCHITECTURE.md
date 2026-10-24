@@ -179,7 +179,7 @@ one 32-bit handle
                has, and cannot name whatever took the slot next
 ```
 
-A table is fixed at N slots; one over values a side keeps (`Slots`) grows as they come. Slot 0 is never handed out, so 0 means "none". Handles are in `guest` and `host` rather than `kit`, because a handle is one side of a boundary, not a container.
+Every table is fixed at N slots, the one over what another side keeps (`HandleTable`) and the one over values a side keeps itself (`Slots`) alike. Slot 0 is never handed out, so 0 means "none". Handles are in `guest` and `host` rather than `kit`, because a handle is one side of a boundary, not a container.
 
 ---
 
@@ -207,7 +207,7 @@ Some calls are every program's: open, read, write and close a file, and report t
 
 Files are reached as Plan 9 reaches them:
 
-- the guest issues the descriptor, a handle of its own file table (`ipc/file`);
+- the guest issues the descriptor, a handle of its own file table (`ipc/file`), which is fixed at N slots as every table is;
 - it names a file by a root the program numbers and a path below it, and the host binds each root to wherever it keeps things;
 - a path walks down a name at a time, and an empty name, `.` or `..` is refused, so a root is the whole of what it grants.
 

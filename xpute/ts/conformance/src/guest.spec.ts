@@ -35,8 +35,8 @@ export const STREAM_WORDS: u32 = 256 as number;
 /** The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them. */
 export const SYS_WORDS: u32 = 64 as number;
 
-/** The guest's heap, in its own range: what its file table holds lies there, since the
- * memory a host hands a module never grows and a guest takes nothing it was not given. */
+/** The guest's heap, in its own range, since the memory a host hands a module never grows
+ * and a guest takes nothing it was not given. */
 export const HEAP_BYTES: u32 = 65536 as number;
 
 /** Slots in the guest's handle table, slot 0 never handed out. */

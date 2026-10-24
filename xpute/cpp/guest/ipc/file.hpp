@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -15,7 +16,8 @@
 
 namespace xpute {
 
-template <class O> class Files {
+// At most `N - 1` open at once (`Slots`).
+template <class O, std::size_t N> class Files {
   public:
     Fd open(Sys &sys, std::uint32_t root, std::string_view path, O owner) {
         Fd fd = held_.insert(std::move(owner));
@@ -49,7 +51,7 @@ template <class O> class Files {
     }
 
   private:
-    Slots<O> held_;
+    Slots<O, N> held_;
 };
 
 } // namespace xpute

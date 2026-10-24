@@ -57,7 +57,7 @@ struct State {
     Stream stream;
     Sys sys;
     // Each for the owner its packet named.
-    Files<std::uint32_t> files;
+    Files<std::uint32_t, HANDLES> files;
     HandleTable<HANDLES> handles;
     xpute_conformance_now now;
     double mark = 0;
