@@ -7,7 +7,9 @@ already does is cited, and where it does not.
 
 - An **asset** is what is drawn: what a block id names (a cube's look, a
   decor's model, a marker's design), and everything else drawn — a
-  character's or a pet's model, a chat line's bubble, a cloud. What it is
+  character's or a pet's model, a cloud. A **marker** is any asset drawn
+  flat to the camera from a design on the sheet: a pin, a place, a chat
+  line's bubble, each its own design. What it is
   (how it is drawn, what it occupies, what it is at a coarser zoom) is its
   own metadata.
 - A **frame** is a coordinate system, which may move: the world's grid, a
@@ -88,9 +90,9 @@ wants.
      kind in `block/marker.json` beside `MARKER_SCALE_STEPS`, whose cell it
      already is.
    - `Label::Count`, `DrawSpec::Count`, `count_pill` and `Thing::Count` go.
-2. **Frames.** A character is a frame, with its model and its line instances
-   in it. Whether the line shows is the frame's to say, not the marker
-   kind's.
+2. **Frames.** A character is a frame, with its model and its line, a
+   marker, instances in it. Whether the line shows is the frame's to say,
+   not the world grid's chunks'.
 3. **A preview's case** draws the one registered model, scaled by its
    instance.
 4. **Control's questions by kind**, wherever one is better put as the child's
