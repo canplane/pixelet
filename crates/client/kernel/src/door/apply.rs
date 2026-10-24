@@ -2,7 +2,7 @@
 
 //! The shell's commands, applied.
 
-use super::{post_shell, State};
+use super::State;
 use crate::abi::cmd::{self as abi, Command};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::Q3;
@@ -34,11 +34,12 @@ fn bearing(deg: Option<f64>) -> bool {
     deg.is_none_or(|d| (0.0..=360.0).contains(&d))
 }
 
-/// A UI command: asks for a turn and raises what it asks of the host before
-/// returning, so a sensor close sent after the strobe stopped is still heard.
+/// A UI command: asks for a turn, and has this one raise what it asks of the
+/// host at its falling edge, so a sensor close sent after the strobe stopped is
+/// still heard.
 fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
     crate::sched::edge::request_world_tick();
-    post_shell(s);
+    s.asked = true;
     Ok(Some(0))
 }
 

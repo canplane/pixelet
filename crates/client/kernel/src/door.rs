@@ -52,6 +52,8 @@ pub struct Bracket {
 struct State {
     /// The UI snapshot last posted; one is posted only where it moved.
     sent: crate::shell::Sent,
+    /// A UI command was applied this turn, so its falling edge posts to the shell.
+    asked: bool,
 }
 
 static DOOR: Global<Door> = Global::new();
@@ -64,8 +66,9 @@ fn door() -> &'static Door {
     })
 }
 
-/// What a turn raises, all after its drain (`post_shell`): a sensor's start or
-/// stop each, and the snapshot.
+/// What a turn raises, all after its drain and once (`post_shell` at the
+/// falling edge): a sensor's start or stop each, and the snapshot. A command
+/// raises nothing itself, so the door's reserve past this is its reply.
 const SIGNALS: u32 = Sensor::ALL.len() as u32 + 1;
 
 fn raise(cmd: Command, count: u32, f: impl Fn(&mut PacketWriter)) {
@@ -79,7 +82,7 @@ fn ring_address(ring: &Ring) -> u32 {
 static STATE: Global<State> = Global::new();
 
 fn state() -> &'static mut State {
-    STATE.get(|| State { sent: Default::default() })
+    STATE.get(|| State { sent: Default::default(), asked: false })
 }
 
 /// xpute's three (two rings and the quantum) count as five entries, plus the
@@ -199,7 +202,10 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
         xpute_guest::sched::task::poll();
     }
     let polled = now();
-    if take_world_drawn() {
+    // Once a turn, where a frame was drawn or a UI command applied: a second
+    // snapshot would point into the buffer the first one's signal still names.
+    let asked = core::mem::take(&mut s.asked);
+    if take_world_drawn() || asked {
         post_shell(s);
     }
     pxl_render::gpu::api::gpu_publish();
@@ -218,7 +224,8 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
 }
 
 /// Grows to the largest snapshot and stays, so a settled turn allocates nothing.
-/// The shell reads it on the signal, before the next turn can rewrite it.
+/// One is posted a turn, and the shell reads it on the signal, before the next
+/// turn can rewrite it.
 static SNAPSHOT: Global<Vec<u8>> = Global::new();
 
 fn post_shell(s: &mut State) {
