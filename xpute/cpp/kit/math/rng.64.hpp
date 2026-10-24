@@ -1,11 +1,10 @@
 // cpp/kit/math/rng.64.hpp
 
 // The 64-bit family: splitmix64's finalizer, a seed derived through it, and
-// splitmix64's stream drawn as u32.
+// splitmix64's stream drawn as u32, each its word's high 32 bits.
 
 #pragma once
 
-#include <cmath>
 #include <cstdint>
 
 namespace xpute {
@@ -33,9 +32,9 @@ class SplitMix64 {
         z = (z ^ z >> 30) * 0xbf58476d1ce4e5b9u;
         z = (z ^ z >> 27) * 0x94d049bb133111ebu;
         z ^= z >> 31;
-        // Through a double, as JavaScript draws it: past 2^53 the word is rounded
-        // before the modulo, so these are not the low bits.
-        return static_cast<std::uint32_t>(std::fmod(static_cast<double>(z), 4294967296.0));
+        // The high half, as java.util.random's nextInt and rand_xoshiro's
+        // SplitMix64 take a u32 from a 64-bit word.
+        return static_cast<std::uint32_t>(z >> 32);
     }
 
   private:

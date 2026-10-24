@@ -303,5 +303,5 @@ What xpute took from work before it, or found it had arrived at. A link is given
 | POSIX and Linux errno                                       | `spec/status/errno.json`         | Negative errno numbers                                                         |
 | The host's `JSON.parse`                                     | `codec/json`                     | The grammar, judged as the host's parser judges it                             |
 | IEEE 754's round half to even, as WGSL rounds               | `math/scalar`                    | One rounding in every language                                                 |
-| splitmix64                                                  | `math/rng`                       | A reproducible generator and its seed's finalizer                              |
+| splitmix64                                                  | `math/rng`                       | A reproducible generator, its seed's finalizer, and its high half as a u32     |
 | FNV                                                         | `codec`                          | The hash                                                                       |

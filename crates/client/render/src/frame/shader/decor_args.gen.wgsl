@@ -3,7 +3,7 @@
 // Source: crates/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through crates/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in crates/client/shader/build.
-// Inputs: 161f8ae68d7695d6a2912a6b4c8be075fb8ba15c965e3e24e96c5fdf9979cbf8
+// Inputs: d656671322955cfb614685aea0de892a1ec578bcab5ff879f136fecdb54e769a
 struct type_2 {
     member: array<u32>,
 }
