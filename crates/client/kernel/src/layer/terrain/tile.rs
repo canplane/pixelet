@@ -61,9 +61,18 @@ impl Base for TerrainTile {
         Ok(terrain)
     }
 
-    /// What its windows want of it is the GPU's, off the packet.
+    /// What its windows want of it is the GPU's, off the packet: kept only
+    /// where a window wants one of its squares, so an ancestor's or another
+    /// zoom's packet no window reads takes no place of `most_kept`.
     fn keep(record: Option<u32>, block: Block) {
-        kept().keep(record, block, most_kept());
+        let wanted = |r: &u32| TerrainTile::residency().in_frame(*r).is_some_and(crate::layer::terrain::window::tile_wanted);
+        match record {
+            Some(r) if !wanted(&r) => {
+                kept().forget(r);
+                crate::io::fetch::release(Some(block));
+            }
+            _ => kept().keep(record, block, most_kept()),
+        }
     }
 }
 

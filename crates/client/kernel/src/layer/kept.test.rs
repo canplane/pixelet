@@ -46,3 +46,12 @@ fn past_a_full_stream_the_packets_nothing_wants_are_freed_unsent() {
     assert!(!k.waiting(1) && !k.waiting(3) && k.sent_on(1).is_none(), "the rest freed, and not sent");
     assert_eq!(k.count(), 2);
 }
+
+#[test]
+fn a_frame_forgotten_holds_nothing_and_counts_none() {
+    let mut k = Kept::new(2);
+    k.keep(Some(0), block(), 2);
+    k.forget(0);
+    k.forget(1);
+    assert!(!k.waiting(0) && k.count() == 0);
+}

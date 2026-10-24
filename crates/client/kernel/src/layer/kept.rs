@@ -59,6 +59,16 @@ impl Kept {
         *frame = Frame::Waiting(block);
     }
 
+    /// Frame `record`'s packet, if one is kept, freed, leaving the frame
+    /// nothing to send.
+    pub fn forget(&mut self, record: u32) {
+        let frame = &mut self.frames[record as usize];
+        if let Frame::Waiting(was) = core::mem::replace(frame, Frame::Empty) {
+            release(Some(was));
+            self.waiting -= 1;
+        }
+    }
+
     /// The packets kept.
     pub fn count(&self) -> u32 {
         self.waiting

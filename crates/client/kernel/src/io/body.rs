@@ -18,8 +18,8 @@
 //! a drawn frame (scene/cast.rs `upload`, layer/earth.rs `earth_upload`),
 //! so they are bounded apart from it: the Earth's by its frames, terrain's
 //! by the slots less one for every credit granted and every Earth frame
-//! (layer/terrain/tile.rs `most_kept`), a packet past it freed once
-//! decoded. The kept thus leave a slot for every credit, and a body on one
+//! (layer/terrain/tile.rs `most_kept`), a packet past it, or one no window
+//! wants a square of, freed once decoded. The kept thus leave a slot for every credit, and a body on one
 //! finds one: the residency, which the query and the controls read, fills
 //! with no frame drawn. Only a body that came for a read since stopped,
 //! held a turn until it is dropped (io/fetch.rs `fetch_task`), can take a
