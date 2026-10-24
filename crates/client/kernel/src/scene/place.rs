@@ -3,13 +3,15 @@
 //! Where places, markers and the chat's line are drawn: a place as Carto
 //! draws it at the zoom of Carto's the view is at where it stands, read from
 //! the tile that says its ground at that zoom; a marker someone put up, near
-//! enough, or where more than one stands in a marker's cell (`marker_cell`),
-//! their count at the cell's middle; a line said, in its speaker's frame
-//! over its head, where its own rule shows it (`billboard/chat.rs`
-//! `hangs`). A place stands at its ground
-//! leaf cell's center on the surface a ray down meets first, a marker at its
-//! own cell's.
+//! enough, as its own source gives it (`pin.rs`); a line said, in its
+//! speaker's frame over its head, where its own rule shows it
+//! (`billboard/chat.rs` `hangs`). A place stands at its ground leaf cell's
+//! center on the surface a ray down meets first. Each source hands the
+//! layout an `Instance`, and the layout asks each the same: what it paints,
+//! its size, its slot and whether it is ready (`billboard/badge.rs`), and
+//! where a tap on it goes.
 
+mod pin;
 mod selection;
 use selection::select_visible_billboards;
 
@@ -18,7 +20,6 @@ use crate::billboard::batch::BillboardBatch;
 use crate::billboard::chat::{hangs, shown_line};
 use crate::billboard::field::{billboard_instance, BillboardSet};
 use crate::chunk::Chunk;
-use crate::layer::object::preview::draft;
 use crate::layer::place::carto_zoom;
 use crate::query::{at_zoom, Ray, World};
 use crate::sched::tick::TickContext;
@@ -26,7 +27,6 @@ use crate::setting::store::settings_store;
 use crate::view::frame::pose::ndc_to_px;
 use pxl_render::gpu::sheet::shelf::NO_SLOT;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::block::object::{marker_cell_of, marker_shows, object_value_is_marker};
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -37,8 +37,8 @@ use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, LABEL_ZOOM, TEXT};
 use pxl_spec::bake::tile::place::{stands, symbol_of, Placed, PLACE_FIRST, PLACE_LATTICE, SPACING_CELLS};
 use pxl_spec::space::camera::grid::px_per_unit;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::world::{point, REACH};
-use pxl_spec::space::coord::zoom::{cube, units, Zoom};
+use pxl_spec::space::coord::world::REACH;
+use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile};
@@ -52,24 +52,25 @@ struct Placement {
     /// Nearest the eye first: screen box, and where a tap on it goes.
     hits: Vec<([f64; 4], Went)>,
     /// Kept so a settled turn asks the heap for nothing; a chunk's in a
-    /// run, its markers in a run a cell.
-    found: Vec<Shown>,
-    /// The drawn chunks `found` was read from: a chunk drawn still keeps
+    /// run: the markers, theirs in a run a cell (`pin.rs`), and the places.
+    pins: Vec<pin::Pin>,
+    places: Vec<(Chunk, Instance)>,
+    /// The drawn chunks `pins` and `places` were read from: a chunk drawn still keeps
     /// what was read from it, so an eye move casts rays only in the chunks it
     /// enters.
     found_for: Option<Found>,
     /// The same, read this turn.
     now: Found,
-    /// Places, ground or objects moved since `found` was read.
+    /// Places, ground or objects moved since they were read.
     moved: bool,
     /// The place tiles whose answer moved, beside the ground's
     /// (query/changed.rs): a chunk they touch is read again.
     moved_places: Vec<Tile>,
     /// The chunks this turn would read, by how far from the eye.
     entering: Vec<(f64, Chunk)>,
-    labeled: Vec<(Key, Label, Q3)>,
+    labeled: Vec<Instance>,
     /// Last turn's `labeled`, its buffer reused.
-    spare: Vec<(Key, Label, Q3)>,
+    spare: Vec<Instance>,
     /// Labels not ready yet, kept to become so.
     pending: Vec<Label>,
     /// What was drawn last by its holder's key, and the labels the badges
@@ -99,65 +100,37 @@ struct Seen {
     tau: pxl_spec::space::camera::grid::Tau,
     places: bool,
     spacing: f64,
-    drafted: Option<(EntryAt, Label, Q3)>,
+    drafted: Option<(EntryAt, Instance)>,
     line: Option<Label>,
     hangs: Option<Q3>,
 }
 
 /// The name a holder calls what it shows by, from one run to the next, and
-/// none of what is painted (`badge.rs`): a marker by its entry, the markers
-/// of a marker's cell by the cell, a place by its tile and its index there,
-/// the chat's line by its speaker, the frame it hangs in, of which there is
-/// one.
+/// none of what is painted (`badge.rs`): the markers by their own
+/// (`pin::Held`), a place by its tile and its index there, the chat's line
+/// by its speaker, the frame it hangs in, of which there is one. The layout
+/// only tells one from another.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Key {
-    Pin(EntryAt),
-    Cell((Zoom, [i32; 3])),
+    Pin(pin::Held),
     Place(Tile, u32),
     Line,
 }
 
-impl Key {
-    /// Where a tap on what it shows, standing at `stands`, goes: a marker
-    /// to its entry, anything else but a line to where it stands.
-    fn went(self, stands: Q3) -> Option<Went> {
-        match self {
-            Key::Pin(at) => Some(Went::Marker(at, stands)),
-            Key::Cell(_) | Key::Place(..) => Some(Went::To(stands)),
-            // A line is no place to go to.
-            Key::Line => None,
-        }
-    }
+/// What a source hands the layout: by its holder's key, the label it paints,
+/// where it stands, and where a tap on it goes, none where it takes none.
+#[derive(Clone, PartialEq)]
+struct Instance {
+    key: Key,
+    label: Label,
+    stands: Q3,
+    tap: Option<Went>,
 }
 
 static PLACEMENT: Global<Placement> = Global::new();
 
-/// What a drawn chunk was read to show: by its holder's key, its label, and
-/// where it stands; a marker with its cell.
-#[derive(Clone)]
-struct Shown {
-    chunk: Chunk,
-    key: Key,
-    label: Label,
-    stands: Q3,
-    crowd: Option<Crowd>,
-}
-
-impl Shown {
-    fn cell(&self) -> Option<(Zoom, [i32; 3])> {
-        self.crowd.as_ref().map(|c| c.cell)
-    }
-}
-
-/// A marker's cell (`marker_cell`) and, where it holds more than one, where
-/// their count stands and the count.
-#[derive(Clone)]
-struct Crowd {
-    cell: (Zoom, [i32; 3]),
-    count: Option<(Q3, Label)>,
-}
-
-/// What `found` was read from: the drawn chunks, and whether places were on.
+/// What `pins` and `places` were read from: the drawn chunks, and whether
+/// places were on.
 #[derive(Default, PartialEq)]
 struct Found {
     drawn: Vec<Chunk>,
@@ -168,61 +141,6 @@ pub fn moved(places: &[Tile]) {
     let p = PLACEMENT.get(Placement::default);
     p.moved = true;
     p.moved_places.extend_from_slice(places);
-}
-
-/// The markers put up in `chunk`, by the chunk their base is in, a run a
-/// marker's cell: a cell nests in its chunk, so no run is another chunk's too.
-fn markers(chunk: Chunk, found: &mut Vec<Shown>) {
-    let cell_zoom = chunk.cell_zoom();
-    if !marker_shows(cell_zoom) {
-        return;
-    }
-    let region = chunk.region();
-    let world = World::now();
-    let from = found.len();
-    world.placed_in(&region, &mut |e| {
-        if !object_value_is_marker(e.state) {
-            return;
-        }
-        let (stands, at) = marker_at(e.id());
-        if (0..3).all(|k| (region.min[k]..region.max[k]).contains(&at[k])) {
-            let cell = marker_cell_of(cell_zoom, e.id());
-            found.push(Shown {
-                chunk,
-                key: Key::Pin(e.id()),
-                label: Label::pill(world.words(e).unwrap_or_default()),
-                stands,
-                crowd: Some(Crowd { cell, count: None }),
-            });
-        }
-    });
-    let detail = GROUND.read_zoom(cell_zoom);
-    let mine = &mut found[from..];
-    mine.sort_unstable_by_key(Shown::cell);
-    for run in mine.chunk_by_mut(|a, b| a.cell() == b.cell()).filter(|run| run.len() > 1) {
-        let (Some((z, at)), Key::Pin(one)) = (run[0].cell(), run[0].key) else {
-            continue;
-        };
-        let count = Some((crowd_at(z, at, one.zoom(), detail), Label::count(run.len())));
-        run.iter_mut().filter_map(|s| s.crowd.as_mut()).for_each(|c| c.count.clone_from(&count));
-    }
-}
-
-/// Where the count of a cell's markers stands: at its middle, half a marker
-/// at `marker` over what is drawn there first within it, or over its floor.
-fn crowd_at(zoom: Zoom, at: [i32; 3], marker: Zoom, detail: Zoom) -> Q3 {
-    let c = cube(zoom, at);
-    let [x, y, _] = c.center();
-    let top = surface(&point(x, y, c.min[2]), (c.max[2], c.min[2]), detail).unwrap_or(c.min[2]);
-    point(x, y, top + units(marker) / 2.0)
-}
-
-/// A marker at its own cell's center, half a cell over the floor it stands
-/// on, where the dot under its pill is drawn, and its base.
-fn marker_at(at: EntryAt) -> (Q3, V3) {
-    let c = cube(at.zoom(), at.at());
-    let [x, y, z] = c.center();
-    (point(x, y, z), [x, y, c.min[2]])
 }
 
 /// The height a ray down over `at` from `high` first meets what is drawn,
@@ -273,15 +191,12 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         return;
     };
     let tau = crate::view::lens::tau();
-    let draft = draft();
-    // A waiting marker is shown wherever it is.
-    let drafted = draft.map(|d| (d.at, Label::pill(&d.words), marker_at(d.at).0));
     let seen = Seen {
         o,
         tau,
         places: settings_store().place,
         spacing: spacing_px(),
-        drafted,
+        drafted: pin::drafted(),
         line: shown_line(),
         hangs: hangs(o.eye, tau),
     };
@@ -319,8 +234,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         let r = c.region();
         before.binary_search(c).is_ok() && !crate::query::changed::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
     };
-    let mut found = core::mem::take(&mut p.found);
-    found.retain(|s| now.drawn.binary_search(&s.chunk).is_ok() && stands(&s.chunk));
+    let (mut pins, mut read_places) = (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
+    pins.retain(|s| now.drawn.binary_search(&s.chunk).is_ok() && stands(&s.chunk));
+    read_places.retain(|(c, _)| now.drawn.binary_search(c).is_ok() && stands(c));
     let entering = &mut p.entering;
     entering.clear();
     entering.extend(now.drawn.iter().filter(|c| !stands(c)).map(|&c| (v3::len(&v3::sub(&c.region().center(), &o.eye)), c)));
@@ -330,9 +246,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         .run(
             entering.iter(),
             |&(_, chunk)| {
-                markers(chunk, &mut found);
+                pin::read(chunk, &mut pins);
                 if places {
-                    places_in(chunk, &mut found);
+                    places_in(chunk, &mut read_places);
                 }
                 true
             },
@@ -340,7 +256,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
         )
         .visited as usize;
     let unread = entering.len() - read;
-    // Not read, so not what `found` was read from.
+    // Not read, so not what they were read from.
     let later = &mut entering[read..];
     later.sort_unstable_by_key(|e| e.1);
     now.drawn.retain(|c| later.binary_search_by_key(c, |e| e.1).is_err());
@@ -354,33 +270,30 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let mut labeled = core::mem::take(&mut p.spare);
     labeled.clear();
     p.pending.clear();
-    // The line hangs in its speaker's frame, where its own rule shows it.
+    // The line hangs in its speaker's frame, where its own rule shows it; a
+    // line is no place to go to.
     let line = seen.line.clone();
-    let said = line.clone().zip(seen.hangs).map(|(label, over)| (Key::Line, label, over));
-    let is_drafted = |key: &Key| matches!(key, Key::Pin(at) if Some(*at) == draft.map(|d| d.at));
-    // A cell's markers but the waiting one: one is itself, more their count.
-    let shown = found.chunk_by(|a, b| a.cell().is_some() && a.cell() == b.cell()).filter_map(|run| {
-        let mut left = run.iter().filter(|s| !is_drafted(&s.key));
-        let first = left.next()?;
-        let n = 1 + left.count();
-        Some(match &first.crowd {
-            Some(Crowd { cell, count: Some((at, count)) }) if n > 1 => (Key::Cell(*cell), if n == run.len() { count.clone() } else { Label::count(n) }, *at),
-            _ => (first.key, first.label.clone(), first.stands),
-        })
+    let said = line.clone().zip(seen.hangs).map(|(label, over)| Instance {
+        key: Key::Line,
+        label,
+        stands: over,
+        tap: None,
     });
+    let (drafted_at, drafted) = seen.drafted.clone().unzip();
+    let shown = drafted.into_iter().chain(pin::shown(&pins, drafted_at)).chain(read_places.iter().map(|(_, s)| s.clone())).chain(said);
     let spacing = seen.spacing;
     // What was drawn last by its holder's key, read once: a marker's words,
     // a count, a place's look or wrap or the line changed, and what was
     // drawn stays until the new one is ready to show.
     let before = &mut p.before;
     before.clear();
-    before.extend(drawn_before.iter().map(|(k, l, _)| (*k, l.clone())));
+    before.extend(drawn_before.iter().map(|s| (s.key, s.label.clone())));
     let mut unlaid = false;
-    let drafted = seen.drafted.clone().map(|(at, label, stands)| (Key::Pin(at), label, stands));
-    // Laid out last, so a line wins a tie with a badge (the sort's tiebreak).
-    for (key, label, center) in drafted.into_iter().chain(shown).chain(said) {
-        let (label, region) = label.spaced(spacing);
-        let label = match before.get(&key) {
+    // The line is laid out last, so it wins a tie with a badge (the sort's
+    // tiebreak).
+    for s in shown {
+        let (label, region) = s.label.spaced(spacing);
+        let label = match before.get(&s.key) {
             Some(before) if *before != label && !badge::ready(&label) => {
                 p.pending.push(label);
                 before.clone()
@@ -392,13 +305,13 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
             unlaid = true;
             continue;
         };
-        let local = crate::view::frame::coord::to_world(&center);
+        let local = crate::view::frame::coord::to_world(&s.stands);
         p.batch.push(local[0], local[1], local[2], [width, height, region], anchor, labeled.len() as f64);
-        labeled.push((key, label, center));
+        labeled.push(Instance { label, ..s });
     }
     // The line's slot is kept while it is said, wherever its speaker is.
     p.keep.clear();
-    p.keep.extend(labeled.iter().map(|l| l.1.clone()).chain(p.pending.iter().cloned()).chain(line));
+    p.keep.extend(labeled.iter().map(|s| s.label.clone()).chain(p.pending.iter().cloned()).chain(line));
     let freed = badge::retain(&p.keep);
     // Painted at render, or laid out by the host, neither of which asks a
     // turn: one looks again, while a label is on its way (`badge::coming`),
@@ -408,11 +321,11 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     if p.waiting {
         crate::sched::edge::request_world_tick();
     }
-    p.found = found;
+    (p.pins, p.places) = (pins, read_places);
     select_visible_billboards(&mut p.batch, &mut p.kept);
     p.drawn.clear();
     for &i in &p.kept {
-        if badge::slot(&labeled[i as usize].1) == NO_SLOT {
+        if badge::slot(&labeled[i as usize].label) == NO_SLOT {
             continue;
         }
         p.drawn.push(i);
@@ -425,12 +338,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
             .then(batch.tiebreak[a as usize].total_cmp(&batch.tiebreak[b as usize]))
     });
     p.hits.clear();
-    p.hits.extend(
-        p.drawn
-            .iter()
-            .rev()
-            .filter_map(|&i| Some((p.batch.screen[i as usize], labeled[i as usize].0.went(labeled[i as usize].2)?))),
-    );
+    p.hits.extend(p.drawn.iter().rev().filter_map(|&i| Some((p.batch.screen[i as usize], labeled[i as usize].tap?))));
     let mut instances = core::mem::take(&mut p.spare_instances);
     instances.clear();
     // f32 instances, so about the sea under the eye rather than the world's origin.
@@ -438,7 +346,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     for &i in &p.drawn {
         let i = i as usize;
         let at = [p.batch.local_x[i] - about[0], p.batch.local_y[i] - about[1], p.batch.local_z[i] - about[2]];
-        let label = &labeled[i].1;
+        let label = &labeled[i].label;
         let [w, h, anchor] = badge::size(label).or_bug(Errno::ENOTRECOVERABLE);
         instances.extend_from_slice(&billboard_instance(at, [w, h], badge::slot(label) as u32, anchor / h, f64::from(p.batch.region_px[i])));
     }
@@ -460,7 +368,7 @@ pub fn draw(draw: &mut pxl_render::frame::draw::DrawList, eye: V3) {
 
 /// Where a tap on a billboard goes: to its place; a marker someone put up is
 /// its entry's, which the tool held decides what to do with.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Went {
     To(Q3),
     Marker(EntryAt, Q3),
@@ -476,7 +384,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
 /// The places standing in `chunk`, read where its cells are tiles' cells,
 /// each read from the tile that says it exactly; of them what Carto shows
 /// at the zoom those cells are drawn at, as it shows them (`point_of`).
-fn places_in(chunk: Chunk, found: &mut Vec<Shown>) {
+fn places_in(chunk: Chunk, found: &mut Vec<(Chunk, Instance)>) {
     let zoom = carto_zoom(chunk.cell_zoom());
     if zoom < PLACE_FIRST as i32 {
         return;
@@ -504,13 +412,16 @@ fn places_in(chunk: Chunk, found: &mut Vec<Shown>) {
         if top - 1.0 < h0 || top - 1.0 >= h1 {
             return;
         }
-        found.push(Shown {
+        let stands = ground.center(top);
+        found.push((
             chunk,
-            key: Key::Place(src, place),
-            label,
-            stands: ground.center(top),
-            crowd: None,
-        });
+            Instance {
+                key: Key::Place(src, place),
+                label,
+                stands,
+                tap: Some(Went::To(stands)),
+            },
+        ));
     });
 }
 

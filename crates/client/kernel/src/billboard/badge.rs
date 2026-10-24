@@ -1,11 +1,11 @@
 // pxl-kernel/billboard/badge.rs
 
 //! What a billboard paints, each its own design on the one sheet: words on a
-//! pill, a marker's someone put up, or in its colors turned over the count
-//! of a cell's markers where more than one stands in it; a place, as Carto draws it; a line said in the
-//! chat, in a bubble. A label is what is painted and nothing of who shows
-//! it, so two that paint alike are one: measured, given its slot and painted
-//! once, and shown only once painted (`ready`).
+//! pill, a place as Carto draws it, a line said in a bubble. A label is what
+//! is painted and nothing of who shows it, so two that paint alike are one:
+//! measured, given its slot and painted once, and shown only once painted
+//! (`ready`). Which words and colors a source paints are its own
+//! (scene/place.rs and its `pin.rs`).
 
 use std::rc::Rc;
 
@@ -15,7 +15,7 @@ use crate::billboard::sheet::billboard_sheet;
 use crate::io::text::{text_lines, text_width};
 use pxl_render::gpu::sheet::shelf::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::sheet::SHEET_SCALE;
-use pxl_render::look::badge::{bubble_size, marker_size, point_size, BADGE_FONT, BUBBLE_FONT, BUBBLE_TEXT_W, COUNT_FILL, COUNT_TEXT, PILL_FILL, PILL_TEXT, POINT_FONT};
+use pxl_render::look::badge::{bubble_size, marker_size, point_size, BADGE_FONT, BUBBLE_FONT, BUBBLE_TEXT_W, POINT_FONT};
 use xpute_guest::global::Global;
 
 use xpute_kit::status::bug::OrBug;
@@ -23,8 +23,7 @@ use xpute_kit::status::errno::Errno;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Label {
-    /// Words on a pill in its `fill`, in its `ink`: a marker's (`pill`) or
-    /// a count of them (`count`).
+    /// Words on a pill in its `fill`, in its `ink`.
     Pill { text: Rc<str>, fill: u32, ink: u32 },
     /// A place as Carto draws it: its symbol (`icon`), or a dot, in its
     /// category's `fill`, and under it its name, where it is named, in its
@@ -42,29 +41,6 @@ pub enum Label {
 }
 
 impl Label {
-    /// A marker's words, cut to `SHOWN_CHARS`.
-    pub fn pill(words: &str) -> Label {
-        let mut shown: String = words.chars().take(SHOWN_CHARS).collect();
-        if words.chars().count() > SHOWN_CHARS {
-            shown.push('…');
-        }
-        Label::Pill {
-            text: shown.into(),
-            fill: PILL_FILL,
-            ink: PILL_TEXT,
-        }
-    }
-
-    /// The count of `n` markers in one marker's cell (`marker_cell`), on a
-    /// marker's pill in the count's colors.
-    pub fn count(n: usize) -> Label {
-        Label::Pill {
-            text: n.to_string().into(),
-            fill: COUNT_FILL,
-            ink: COUNT_TEXT,
-        }
-    }
-
     /// As it is laid out where a place keeps `spacing` pixels to itself
     /// (scene/place.rs `spacing_px`), and the width of the region it keeps
     /// (`field.rs`): a place's name wrapped to it, and its region it; any
@@ -81,10 +57,6 @@ impl Label {
         }
     }
 }
-
-/// A product choice: the length a one-line badge still reads as a name at.
-/// Code points, so a non-BMP character is never cut in half.
-const SHOWN_CHARS: usize = 12;
 
 struct Badge {
     size: [f64; 3],
