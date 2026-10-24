@@ -8,8 +8,10 @@
 //! left as no object is drawn from the tile over it, whose cells there are
 //! open water; at the source's top, it is void.
 
+use crate::layer::earth::Earth;
 use crate::layer::kept::Kept;
 use crate::layer::residency::Residency;
+use crate::param::{BODY_SLOTS, MAX_CREDITS};
 use pxl_spec::bake::separation;
 use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
@@ -61,8 +63,29 @@ impl Base for TerrainTile {
 
     /// What its windows want of it is the GPU's, off the packet.
     fn keep(record: Option<u32>, block: Block) {
-        kept().keep(record, block);
+        kept().keep(record, block, most_kept());
     }
+}
+
+/// The most terrain packets kept at once: the body slots (`BODY_SLOTS`)
+/// less one for every credit the host grants and one for every Earth frame,
+/// so the packets kept, which only a drawn frame gives back, never take the
+/// slots a read needs to arrive into (io/body.rs). A packet past it is
+/// freed once decoded, and its tile asked again when one could be kept
+/// (layer/terrain/window.rs `step`).
+pub fn most_kept() -> u32 {
+    let credits = crate::io::request::credits().max(1);
+    BODY_SLOTS.saturating_sub(credits + Residency::<Earth>::FRAMES)
+}
+
+const _: () = assert!(
+    BODY_SLOTS > MAX_CREDITS + Residency::<Earth>::FRAMES,
+    "the body slots keep a terrain packet beside a body on every credit and the Earth's"
+);
+
+/// Whether one more of a tile's packets could be kept now.
+pub fn may_keep() -> bool {
+    kept().count() < most_kept()
 }
 
 /// The tiles whose squares the windows want filled, off their packets.

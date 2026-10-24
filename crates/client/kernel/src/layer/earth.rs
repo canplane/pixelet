@@ -48,9 +48,10 @@ impl Base for Earth {
         Ok(Earth)
     }
 
-    /// The texels are kept until the GPU has them.
+    /// The texels are kept until the GPU has them: every frame's, whose
+    /// slots terrain's bound leaves them (layer/terrain/tile.rs `most_kept`).
     fn keep(record: Option<u32>, block: Block) {
-        kept().keep(record, block);
+        kept().keep(record, block, EARTH_FRAMES);
     }
 }
 

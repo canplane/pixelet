@@ -77,6 +77,10 @@ struct Windows {
     /// packet go since, which moves what is due and what is asked again.
     read: u32,
     filled: bool,
+    /// The packets kept when the slots were last stepped over: one given
+    /// back may leave room to ask again for a tile whose packet was not
+    /// kept (`tile::may_keep`).
+    kept: u32,
     /// The tiles the windows apart from the eye's want (`pinned`).
     pinned: List<Tile, { PINNED_TILES as usize }>,
     /// The squares this turn hands the fill (`due`).
@@ -104,6 +108,7 @@ fn fresh() -> Windows {
         ticket: 0,
         read: 0,
         filled: true,
+        kept: 0,
         pinned: List::new(),
         due: List::new(),
     }
@@ -211,7 +216,8 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     let lost = core::mem::replace(&mut w.on, on) != on;
     // Per window, whether its zoom moved, and whether it moved at all.
     let (mut moved, mut changed) = ([false; WINDOWS as usize], [lost; WINDOWS as usize]);
-    let mut stale = lost || core::mem::take(&mut w.filled) || terrain.revision() != w.read;
+    let kept = crate::layer::terrain::tile::kept().count();
+    let mut stale = lost || core::mem::take(&mut w.filled) || terrain.revision() != w.read || kept != w.kept;
     for win in 0..WINDOWS {
         let (centre, laid) = layout(win);
         let p = at[centre as usize];
@@ -236,6 +242,11 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     if !stale {
         return false;
     }
+    w.kept = kept;
+    // A tile is asked again only where its packet could be kept, or it
+    // would come back only to be freed: while no frame is drawn, so none
+    // gives a packet back, it is asked once room is given back instead.
+    let may_keep = crate::layer::terrain::tile::may_keep();
     for win in 0..WINDOWS {
         let (cell, first) = (w.windows[win as usize].cell, first_of(w, win));
         for s in 0..SLOTS {
@@ -255,7 +266,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             }
             if slot.is_absent() {
                 let t = tile_of(cell, slot.square).0;
-                if !crate::layer::terrain::tile::kept_for(t) {
+                if may_keep && !crate::layer::terrain::tile::kept_for(t) {
                     terrain.again(t);
                 }
             }

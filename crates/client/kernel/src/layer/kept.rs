@@ -28,30 +28,50 @@ pub enum Offered {
     Full,
 }
 
-pub struct Kept(Vec<Frame>);
+pub struct Kept {
+    frames: Vec<Frame>,
+    /// The frames `Waiting`.
+    waiting: u32,
+}
 
 impl Kept {
     pub fn new(frames: u32) -> Kept {
-        Kept(vec![Frame::Empty; frames as usize])
+        Kept {
+            frames: vec![Frame::Empty; frames as usize],
+            waiting: 0,
+        }
     }
 
-    /// The packet a tile came in, kept for the frame `record` took it into,
-    /// or freed where none did.
-    pub fn keep(&mut self, record: Option<u32>, block: Block) {
+    /// The packet a tile came in, kept for the frame `record` took it into
+    /// while fewer than `most` are kept besides; freed where no frame took
+    /// it or `most` are, the frame then holding nothing to send.
+    pub fn keep(&mut self, record: Option<u32>, block: Block, most: u32) {
         let Some(record) = record else { return release(Some(block)) };
-        if let Frame::Waiting(was) = core::mem::replace(&mut self.0[record as usize], Frame::Waiting(block)) {
-            release(Some(was));
+        let frame = &mut self.frames[record as usize];
+        match *frame {
+            Frame::Waiting(was) => release(Some(was)),
+            _ if self.waiting >= most => {
+                *frame = Frame::Empty;
+                return release(Some(block));
+            }
+            _ => self.waiting += 1,
         }
+        *frame = Frame::Waiting(block);
+    }
+
+    /// The packets kept.
+    pub fn count(&self) -> u32 {
+        self.waiting
     }
 
     /// Whether frame `record`'s packet is still to be sent.
     pub fn waiting(&self, record: u32) -> bool {
-        matches!(self.0[record as usize], Frame::Waiting(_))
+        matches!(self.frames[record as usize], Frame::Waiting(_))
     }
 
     /// The device frame `record`'s tile was sent to, once it was.
     pub fn sent_on(&self, record: u32) -> Option<u32> {
-        match self.0[record as usize] {
+        match self.frames[record as usize] {
             Frame::Sent(on) => Some(on),
             _ => None,
         }
@@ -60,7 +80,7 @@ impl Kept {
     /// Each waiting packet to `send` with its frame, freed once taken whole
     /// by the device `on`, until the stream runs out.
     pub fn send(&mut self, on: u32, send: &mut dyn FnMut(u32, &[u8]) -> Offered) {
-        for (record, frame) in self.0.iter_mut().enumerate() {
+        for (record, frame) in self.frames.iter_mut().enumerate() {
             let Frame::Waiting(block) = *frame else { continue };
             match send(record as u32, body(block)) {
                 Offered::Full => return,
@@ -68,8 +88,13 @@ impl Kept {
                 Offered::Taken => {
                     release(Some(block));
                     *frame = Frame::Sent(on);
+                    self.waiting -= 1;
                 }
             }
         }
     }
 }
+
+#[cfg(test)]
+#[path = "kept.test.rs"]
+mod test;

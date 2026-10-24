@@ -15,6 +15,25 @@
 //! refusal does. Every other body is a heap block of its own: a place's or
 //! a division's is at most a power of two the buddy gives whole, and freed
 //! as it is decoded.
+//!
+//! The slots never stop the reads, drawn or not. A body on a credit needs
+//! no other to be decoded (view/demand.rs `admit_arrived`, one a pass at
+//! least), and is then freed or kept. Kept packets are given back only by
+//! a drawn frame (scene/cast.rs `upload`, layer/earth.rs `earth_upload`),
+//! so they are bounded apart from it: the Earth's by its frames, terrain's
+//! by the slots less one for every credit granted and every Earth frame
+//! (layer/terrain/tile.rs `most_kept`), a packet past it freed once
+//! decoded. Kept packets thus leave a slot for every credit, and since a
+//! read out holds one slot at most, counted twice at worst, a read can
+//! start whenever fewer than half the credits are out: the residency,
+//! which the query and the controls read, fills with no frame drawn. In a
+//! drawn frame a terrain packet is given back once no window wants one of
+//! its squares absent (layer/terrain/window.rs `fill`): each frame hands
+//! `HANDED` squares only of tiles kept or void (`due`), a square handed is
+//! wanted no more, and a packet whose tile left or that no window wants is
+//! given back on that upload too. A tile whose packet was freed is asked
+//! again on the step after a packet is given back, while one could be kept
+//! (`step`), so nothing is fetched only to be freed while nothing is drawn.
 
 use xpute_guest::global::Global;
 use xpute_guest::mem::heap::{alloc, free, Block};
