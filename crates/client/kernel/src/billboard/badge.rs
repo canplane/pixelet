@@ -21,19 +21,14 @@ use crate::billboard::chat::line_said;
 use crate::billboard::sheet::billboard_sheet;
 use crate::io::text::{text_lines, text_width};
 use crate::query::World;
-use pxl_render::gpu::pass::badges::{badge_width, bubble_size, point_size, BADGE_FONT, BUBBLE_FONT, BUBBLE_TEXT_W, POINT_FONT};
 use pxl_render::gpu::sheet::shelf::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::sheet::SHEET_SCALE;
+use pxl_render::look::badge::{bubble_size, marker_size, point_size, BADGE_FONT, BUBBLE_FONT, BUBBLE_TEXT_W, POINT_FONT};
 use pxl_spec::block::object::marker_shows;
 use xpute_guest::global::Global;
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-
-/// A marker's pill and where it stands, down from its top: the dot under the
-/// pill, which its cell's center is drawn at.
-const MARKER_HEIGHT: f64 = 37.0;
-const MARKER_ANCHOR: f64 = 34.0;
 
 /// How a place shows at a zoom: its icon or a dot, and whether its name.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -169,7 +164,7 @@ pub fn size(label: Label) -> Option<[f64; 3]> {
         Some((laid.iter().map(|&(_, w)| w).fold(0.0, f64::max), laid.iter().map(|&(l, _)| l.trim().to_owned()).collect()))
     };
     let (size, lines) = match label {
-        Label::Marker { .. } | Label::Count { .. } => ([badge_width(text_width(BADGE_FONT, &text)?.ceil()), MARKER_HEIGHT, MARKER_ANCHOR], Vec::new()),
+        Label::Marker { .. } | Label::Count { .. } => (marker_size(text_width(BADGE_FONT, &text)?.ceil()), Vec::new()),
         Label::Place { look, .. } if text.is_empty() => (point_size(look.icon, None), Vec::new()),
         Label::Place { look, wrap, .. } => {
             let (w, lines) = laid(POINT_FONT, f64::from(wrap))?;

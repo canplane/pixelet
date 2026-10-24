@@ -17,105 +17,23 @@ use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::{DrawSpec, Sheet, SlotSet};
-use crate::gpu::sheet::{Halo, SheetPainter, Sketch, SHEET_SCALE};
-use crate::gpu::text::{Font, TextOf};
+use crate::gpu::sheet::{SheetPainter, Sketch, SHEET_SCALE};
+use crate::gpu::text::TextOf;
+use crate::look::badge::{
+    bubble_box_h, point_mark, BADGE_FONT, BLACK, BORDER, BUBBLE_FONT, COUNT_FILL, COUNT_TEXT, DOT_BORDER, DOT_CY, DOT_DIAM, DOT_FILL, DOT_RING, LINE_H, NOTCH, PADDING_Y, PILL_FILL, PILL_H, PILL_R,
+    POINT_FONT, POINT_GAP, POINT_LINE, POINT_PAD, POINT_PITCH, POINT_RIM, POINT_RIM_FILL, POINT_SHADE, POINT_SHADOW_BLUR, POINT_SHADOW_DY, POINT_SHADOW_FILL, POINT_TEXT_HALO, TAIL_H, TAIL_W, WHITE,
+};
 
 const BADGE_FLOATS: usize = 40;
 const SETS: usize = 32;
 
-// Regular and semibold, not canvas's "bold" (700); the system faces carry a real
-// semibold, so neither is synthetic.
-
-const REGULAR: u32 = 400;
-const SEMIBOLD: u32 = 600;
-
-const BLACK: u32 = 0x000000ff;
-const WHITE: u32 = 0xffffffff;
-
-pub const BADGE_FONT: Font = Font { weight: REGULAR, px: 12.0 };
-const PILL_INNER: f32 = 20.0;
-const PAD_X: f32 = 10.0;
-const PAD_Y: f32 = 7.0;
-const DOT_DIAM: f32 = 6.0;
-const DOT_GAP: f32 = 4.0;
-const DOT_BORDER: f32 = 1.0;
-const PILL_H: f32 = PILL_INNER + PAD_Y;
-const PILL_R: f32 = PILL_H / 2.0;
-const DOT_CY: f32 = PILL_H + DOT_GAP + DOT_DIAM / 2.0;
-
 fn pill(p: &mut Sketch, logical_w: f32) {
-    p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, 0x14141ab8);
+    p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, PILL_FILL);
 }
 
 fn anchor_dot(p: &mut Sketch, logical_w: f32) {
-    p.circle(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, 0xffffff99);
-    p.ring(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, DOT_BORDER, 0xffffff40);
-}
-
-pub fn badge_width(text_w: f64) -> f64 {
-    (text_w + 2.0 * PAD_X as f64).max(PILL_H as f64)
-}
-
-// A place as a map app draws one: its symbol white on a disc of its
-// category's fill, rimmed white so it holds on any ground, lit from above and
-// casting a soft shadow, or before its icon's zoom a small disc of the same; the name under it in its category's
-// color, semibold, in a near-opaque white halo. Which places and when are
-// Carto's (`pxl-spec bake/place_theme.spec.rs`); how they look is not.
-
-pub const POINT_FONT: Font = Font { weight: SEMIBOLD, px: 12.0 };
-/// A symbol's disc across: the symbol (`SYMBOL_PX` at the sheet's scale, 14)
-/// with four pixels of fill round it.
-const POINT_DISC: f32 = 22.0;
-const POINT_DOT: f32 = 8.0;
-const POINT_RIM: f32 = 1.5;
-const POINT_RIM_FILL: u32 = 0xffffffe6;
-/// The fill lighter at the disc's top and darker at its foot by this much.
-const POINT_SHADE: f32 = 0.18;
-/// A shadow as wide as the disc and a little more, dropped and blurred, and
-/// the room it takes round the disc.
-const POINT_SHADOW_DY: f32 = 1.5;
-const POINT_SHADOW_BLUR: f32 = 3.0;
-const POINT_SHADOW_FILL: u32 = 0x00000059;
-const POINT_PAD: f32 = 3.0;
-/// From the mark's foot to the name's first line.
-const POINT_GAP: f32 = 2.0;
-const POINT_HALO: f32 = 2.0;
-const POINT_HALO_FILL: u32 = 0xfffffff2;
-/// Under the halo as under the disc: dropped, and soft past the halo's edge.
-const POINT_TEXT_HALO: Halo = Halo {
-    color: POINT_HALO_FILL,
-    radius: POINT_HALO,
-    shadow: 0x00000038,
-    shadow_radius: POINT_HALO + 1.5,
-    shadow_dy: 1.0,
-};
-/// A line, the font's size and its halo above and below.
-const POINT_LINE: f32 = POINT_FONT.px + 2.0 * POINT_HALO;
-/// From one line to the next, as Mapnik sets it (text_line.cpp): the face's
-/// own line height plus Carto's @standard-line-spacing-size, −0.15 em. The
-/// face is the system's, whose metrics the sheet does not read; 1.2 em is
-/// CSS's `line-height: normal` at its high end (CSS 2.1 §10.8.1).
-const POINT_PITCH: f32 = (1.2 - 0.15) * POINT_FONT.px;
-
-/// The disc's side and the shadow's room round it.
-fn point_mark(icon: bool) -> f32 {
-    2.0 * POINT_PAD + if icon { POINT_DISC } else { POINT_DOT }
-}
-
-/// A point's sprite, its mark an icon's or a dot's, for a name laid out in
-/// `lines` as wide as `text_w`, or none: its width, height and where the
-/// place is, down from its top.
-pub fn point_size(icon: bool, text: Option<(f64, usize)>) -> [f64; 3] {
-    let mark = f64::from(point_mark(icon));
-    match text {
-        None => [mark, mark, mark / 2.0],
-        Some((w, lines)) => {
-            // The last line's shadow reaches past its halo.
-            let shadow = f64::from(POINT_TEXT_HALO.shadow_radius - POINT_HALO + POINT_TEXT_HALO.shadow_dy);
-            let h = mark - f64::from(POINT_PAD) + f64::from(POINT_GAP) + f64::from(POINT_PITCH) * (lines.max(1) - 1) as f64 + f64::from(POINT_LINE) + shadow;
-            [(w + 2.0 * f64::from(POINT_TEXT_HALO.shadow_radius)).ceil().max(mark), h.ceil(), mark / 2.0]
-        }
-    }
+    p.circle(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, DOT_FILL);
+    p.ring(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, DOT_BORDER, DOT_RING);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -140,23 +58,11 @@ fn labeled_pill(p: &mut Sketch, label: &str, logical_w: f32) {
     anchor_dot(p, logical_w);
 }
 
-/// A marker's pill turned over, so a count does not read as words that are a number.
 fn count_pill(p: &mut Sketch, label: &str, logical_w: f32) {
-    p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, 0xffffffe6);
-    p.text(BADGE_FONT, 0x14141aff, label, logical_w / 2.0, PILL_H / 2.0 + 1.0);
+    p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, COUNT_FILL);
+    p.text(BADGE_FONT, COUNT_TEXT, label, logical_w / 2.0, PILL_H / 2.0 + 1.0);
     anchor_dot(p, logical_w);
 }
-
-pub const BUBBLE_FONT: Font = Font { weight: SEMIBOLD, px: 14.0 };
-/// The widest a bubble's line runs before it wraps.
-pub const BUBBLE_TEXT_W: f64 = 220.0;
-const PADDING_X: f32 = 11.0;
-const PADDING_Y: f32 = 8.0;
-const LINE_H: f32 = 17.0;
-const BORDER: f32 = 2.0;
-const NOTCH: f32 = 3.0;
-const TAIL_W: f32 = 14.0;
-const TAIL_H: f32 = 10.0;
 
 /// The uncovered corners read as a pixel-art rounded corner; a real arc would
 /// anti-alias against nearest sampling.
@@ -164,17 +70,6 @@ const TAIL_H: f32 = 10.0;
 fn notched_rect(p: &mut Sketch, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
     p.rect(x + notch, y, (w - notch * 2.0).max(0.0), h, fill);
     p.rect(x, y + notch, w, (h - notch * 2.0).max(0.0), fill);
-}
-
-fn bubble_box_h(lines: usize) -> f32 {
-    lines as f32 * LINE_H + PADDING_Y * 2.0
-}
-
-/// A bubble's sprite for `lines` lines as wide as `text_w`: its width,
-/// height with the tail, and where its speaker is, at the tail's tip.
-pub fn bubble_size(text_w: f64, lines: usize) -> [f64; 3] {
-    let h = f64::from(bubble_box_h(lines) + TAIL_H);
-    [text_w.ceil() + f64::from(PADDING_X) * 2.0, h, h]
 }
 
 fn bubble(p: &mut Sketch, lines: &[String], box_w: f32) {
