@@ -13,7 +13,7 @@ use crate::billboard::badge::Label;
 use crate::chunk::Chunk;
 use crate::layer::object::preview::draft;
 use crate::query::World;
-use pxl_render::look::badge::{COUNT_FILL, COUNT_TEXT, PILL_FILL, PILL_TEXT};
+use pxl_render::look::badge::{COUNT_FILL, COUNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::block::object::{marker_cell_of, marker_shows, object_value_is_marker};
 use pxl_spec::space::coord::q3::Q3;
@@ -56,7 +56,7 @@ fn pill(words: &str) -> Label {
     Label::Pill {
         words: shown.into(),
         fill: PILL_FILL,
-        ink: PILL_TEXT,
+        ink: PILL_INK,
     }
 }
 
@@ -66,7 +66,7 @@ fn count(n: usize) -> Label {
     Label::Pill {
         words: n.to_string().into(),
         fill: COUNT_FILL,
-        ink: COUNT_TEXT,
+        ink: COUNT_INK,
     }
 }
 

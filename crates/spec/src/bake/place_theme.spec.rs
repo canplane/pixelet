@@ -321,8 +321,8 @@ pub const FILL: [u32; 256] = [
     0xac39acff, 0, 0, 0xac39acff, 0, 0xac39acff, 0xac39acff, 0xac39acff, 0xbf0000ff, 0xbf0000ff, 0xac39acff, 0x4d80b3ff, 0, 0, 0xac39acff, 0, 0, 0,
 ];
 
-/// A category's label fill as `0xRRGGBBAA`, category k at `TEXT[k - 1]`.
-pub const TEXT: [u32; 256] = [
+/// A category's label fill, its ink, as `0xRRGGBBAA`, category k at `INK[k - 1]`.
+pub const INK: [u32; 256] = [
     0, 0, 0, 0x5e3b9eff, 0, 0xae6500ff, 0, 0, 0x993399ff, 0, 0, 0x0066ffff, 0, 0x0c8416ff, 0x734a08ff, 0, 0, 0x993399ff, 0, 0, 0x4863a0ff, 0x993399ff, 0x993399ff, 0, 0, 0, 0, 0, 0, 0x734a08ff,
     0xae6500ff, 0, 0x0066ffff, 0xbf0000ff, 0x993399ff, 0, 0, 0x000033ff, 0, 0, 0, 0xae6500ff, 0x0066ffff, 0, 0, 0x734a08ff, 0x734a08ff, 0xae6500ff, 0, 0x000033ff, 0x734a08ff, 0, 0xae6500ff, 0, 0, 0,
     0x734a08ff, 0, 0, 0x993399ff, 0x4863a0ff, 0x734a08ff, 0x734a08ff, 0x734a08ff, 0xbf0000ff, 0x993399ff, 0, 0, 0x993399ff, 0, 0x0c8416ff, 0, 0, 0, 0, 0x993399ff, 0, 0x4863a0ff, 0xbf0000ff,

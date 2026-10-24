@@ -169,7 +169,7 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
     list("The zoom from which Carto draws a category's icon, 0 for never", "u8", "ICON_ZOOM", &|k| zoom(k, "icon"))?;
     list("The zoom from which Carto names a category, 0 for never", "u8", "LABEL_ZOOM", &|k| zoom(k, "label"))?;
     list("A category's icon or dot fill as `0xRRGGBBAA`", "u32", "FILL", &|k| color(k, "fill"))?;
-    list("A category's label fill as `0xRRGGBBAA`", "u32", "TEXT", &|k| color(k, "text"))?;
+    list("A category's label fill, its ink, as `0xRRGGBBAA`", "u32", "INK", &|k| color(k, "text"))?;
     list("A category's icon under Carto's `symbols/`, \"\" for none", "&str", "SYMBOL", &|k| {
         Ok(json_str(rows.get(k).and_then(|r| r.str_at("symbol")).unwrap_or_default()))
     })?;

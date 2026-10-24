@@ -11,7 +11,7 @@ use crate::billboard::badge::Label;
 use crate::chunk::Chunk;
 use crate::layer::place::carto_zoom;
 use crate::query::World;
-use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, LABEL_ZOOM, TEXT};
+use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, INK, LABEL_ZOOM};
 use pxl_spec::bake::tile::place::{stands, symbol_of, Placed, PLACE_FIRST, PLACE_LATTICE};
 use pxl_spec::space::coord::world::REACH;
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
@@ -85,6 +85,6 @@ fn point_of(h: &Placed, zoom: i32) -> Option<Label> {
         icon,
         symbol: symbol_of(h.place.category),
         fill: FILL[k],
-        ink: TEXT[k],
+        ink: INK[k],
     })
 }

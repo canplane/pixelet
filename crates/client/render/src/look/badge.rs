@@ -31,13 +31,13 @@ pub const PILL_R: f32 = PILL_H / 2.0;
 pub const DOT_CY: f32 = PILL_H + DOT_GAP + DOT_DIAM / 2.0;
 /// A dark pill, its words white.
 pub const PILL_FILL: u32 = 0x14141ab8;
-pub const PILL_TEXT: u32 = WHITE;
+pub const PILL_INK: u32 = WHITE;
 pub const DOT_FILL: u32 = 0xffffff99;
 pub const DOT_RING: u32 = 0xffffff40;
 /// A pill's colors turned over, a light pill, its words dark, so a number
 /// on it does not read as words that are a number.
 pub const COUNT_FILL: u32 = 0xffffffe6;
-pub const COUNT_TEXT: u32 = 0x14141aff;
+pub const COUNT_INK: u32 = 0x14141aff;
 
 /// A pill's sprite for words as wide as `text_w`: its width, height down to
 /// the dot's foot, and where what it marks is, at the dot's.
