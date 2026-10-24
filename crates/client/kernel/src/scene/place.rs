@@ -381,7 +381,7 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     let drafted = seen.drafted.clone().map(|(at, label, stands)| (Key::Pin(at), label, stands));
     // Laid out last, so a line wins a tie with a badge (the sort's tiebreak).
     for (key, label, center) in drafted.into_iter().chain(shown).chain(said) {
-        let label = label.spaced(spacing);
+        let (label, region) = label.spaced(spacing);
         let label = match before.get(&key) {
             Some(before) if *before != label && !badge::ready(&label) => {
                 p.pending.push(label);
@@ -394,7 +394,6 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
             unlaid = true;
             continue;
         };
-        let region = if matches!(label, Label::Point { .. }) { spacing } else { width };
         let local = crate::view::frame::coord::to_world(&center);
         p.batch.push(local[0], local[1], local[2], [width, height, region], anchor, labeled.len() as f64);
         labeled.push((key, label, center));

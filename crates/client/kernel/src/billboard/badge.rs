@@ -66,12 +66,19 @@ impl Label {
     }
 
     /// As it is laid out where a place keeps `spacing` pixels to itself
-    /// (scene/place.rs `spacing_px`): a place's name wrapped to it.
-    pub fn spaced(mut self, spacing: f64) -> Label {
-        if let Label::Point { name: Some(_), wrap, .. } = &mut self {
-            *wrap = spacing as u32;
+    /// (scene/place.rs `spacing_px`), and the width of the region it keeps
+    /// (`field.rs`): a place's name wrapped to it, and its region it; any
+    /// other's region its own width (0, which the batch widens to it).
+    pub fn spaced(mut self, spacing: f64) -> (Label, f64) {
+        match &mut self {
+            Label::Point { name, wrap, .. } => {
+                if name.is_some() {
+                    *wrap = spacing as u32;
+                }
+                (self, spacing)
+            }
+            _ => (self, 0.0),
         }
-        self
     }
 }
 
