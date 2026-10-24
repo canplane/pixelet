@@ -36,6 +36,10 @@ How the tree is written. `AGENTS.md` is how a session works in it;
 - One rounding: half to even, in pixelet and xpute alike. Rust's `.round()`,
   `Math.round`, `toFixed` and a floor of a half added round otherwise; the
   kit's scalar module names the other ways as options a library offers.
+- The same bits on every machine: pxl's Rust takes a transcendental from the
+  pinned `libm`, never the platform's, writes no `powi`, whose precision is
+  unspecified, and keys a map by `fnv`, never std's seeded hasher
+  (`crates/clippy.toml`).
 - In the crates that address the core memory by offset (xpute's guest, the
   kernel, the renderer, both brackets), an offset becomes a pointer only
   through `xpute_guest::mem::base::ptr_at`, never `as *const` or `as *mut`.

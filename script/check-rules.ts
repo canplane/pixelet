@@ -1,9 +1,9 @@
 #!/usr/bin/env -S deno run -A
 // Holds the tree to what a reader cannot see and the code must keep: no raw
 // pointer casts in offset crates, each rounding half to even in every
-// language, the same bits on every machine, no CommonJS file, each generated
-// shader made from the sources the tree holds now. Rust's own lints are
-// clippy's; how the tree is written is CONVENTION.md's.
+// language, no CommonJS file, each generated shader made from the sources the
+// tree holds now. A rule Rust alone keeps is clippy's (crates/clippy.toml);
+// how the tree is written is CONVENTION.md's.
 //   deno run -A script/check-rules.ts
 
 import { dirname, fromFileUrl, join } from "@std/path";
@@ -83,27 +83,6 @@ for (const f of files) {
   });
 }
 
-// The same bits on every machine (ARCHITECTURE.md, Terrain): pxl's Rust takes
-// a transcendental from the pinned libm (crates/Cargo.toml), not the
-// platform's, and a map from fnv, whose order does not change run to run as
-// std's seeded hasher's does. `powi`'s precision is unspecified, by platform
-// and by call (std's doc). The shader crate is rust-gpu's, built apart.
-const SAME_BITS_ROOT = "crates/";
-const SAME_BITS_APART = ["crates/client/shader/"];
-const FLOAT_STD = "sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|asinh|acosh|atanh|exp|exp2|exp_m1|ln|ln_1p|log2|log10|powf|powi|cbrt|hypot|sin_cos";
-const NOT_SAME_BITS: [RegExp, string][] = [
-  [new RegExp(`\\.(?:${FLOAT_STD})\\(`), "takes a float function from the platform, not libm"],
-  [new RegExp(`\\bf(?:32|64)::(?:${FLOAT_STD})\\b`), "takes a float function from the platform, not libm"],
-  [/\b(?:HashMap|HashSet)\b/, "keys a map by std's seeded hasher, not fnv's"],
-];
-for (const f of files) {
-  if (!f.startsWith(SAME_BITS_ROOT) || SAME_BITS_APART.some((a) => f.startsWith(a)) || !f.endsWith(".rs")) continue;
-  read(f)?.split("\n").forEach((line, n) => {
-    if (/^\s*\/\//.test(line)) return;
-    for (const [r, why] of NOT_SAME_BITS) if (r.test(line)) problems.push(`${f}:${n + 1}: ${why}: ${line.trim()}`);
-  });
-}
-
 // The tree's scripts are ES modules, TypeScript where a loader takes it, the
 // bundlers' configs among them: Node runs only the native toolchain's own
 // scripts (CocoaPods, Xcode's and Gradle's phases).
@@ -124,4 +103,4 @@ if (problems.length) {
   console.error(`\ncheck-rules: ${problems.length}`);
   Deno.exit(1);
 }
-console.log("check-rules: the memory's offsets, one rounding, the same bits, ES modules and the generated shaders hold");
+console.log("check-rules: the memory's offsets, one rounding, ES modules and the generated shaders hold");
