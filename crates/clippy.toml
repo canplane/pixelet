@@ -52,6 +52,11 @@ disallowed-methods = [
     # Its precision is unspecified, by platform and by call (std's doc).
     { path = "f64::powi", reason = "write the product out, or libm::pow" },
     { path = "f32::powi", reason = "write the product out, or libm::powf" },
+    # One rounding, half to even (CONVENTION.md): these round half away from zero.
+    { path = "f64::round", replacement = "xpute_kit::math::scalar::round_half_even" },
+    { path = "f32::round", replacement = "xpute_kit::math::scalar::round_half_even" },
+    { path = "libm::round", replacement = "xpute_kit::math::scalar::round_half_even" },
+    { path = "libm::roundf", replacement = "xpute_kit::math::scalar::round_half_even" },
 ]
 
 # A map's order is the same on every run: std's hasher is seeded per process.
