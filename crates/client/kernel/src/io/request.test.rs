@@ -37,6 +37,10 @@ impl Serve for ByWhy {
     fn backoff(&self, strikes: u32, _seed: u64) -> Option<f64> {
         (strikes <= 2).then_some(2_000.0)
     }
+
+    fn body_room(&self) -> u32 {
+        u32::MAX
+    }
 }
 
 /// Room for every test's wants in each stream.
@@ -311,6 +315,10 @@ impl Serve for Restless {
     fn backoff(&self, _strikes: u32, _seed: u64) -> Option<f64> {
         Some(0.0)
     }
+
+    fn body_room(&self) -> u32 {
+        u32::MAX
+    }
 }
 
 #[test]
@@ -348,4 +356,49 @@ fn an_asset_shares_the_credits_and_is_never_withdrawn() {
     l.pump(0.0);
     assert_eq!(started(&mut l).len(), 1, "one credit, one read — an asset does not go beside the tiles");
     assert_eq!(l.stream_counts(Stream::asset), (1, 0), "and it is what is waiting");
+}
+
+/// `ByWhy`, with `room` body slots left.
+struct Slotted {
+    room: u32,
+}
+
+impl Serve for Slotted {
+    fn rank(&self, stream: Stream, subject: u64, ask: Ask, enqueue_ms: f64) -> Rank {
+        ByWhy.rank(stream, subject, ask, enqueue_ms)
+    }
+
+    fn intake(&self) -> u32 {
+        ByWhy.intake()
+    }
+
+    fn blame(&self, failure: Failure) -> Blame {
+        ByWhy.blame(failure)
+    }
+
+    fn backoff(&self, strikes: u32, seed: u64) -> Option<f64> {
+        ByWhy.backoff(strikes, seed)
+    }
+
+    fn body_room(&self) -> u32 {
+        self.room
+    }
+}
+
+#[test]
+fn a_terrain_or_earth_read_starts_only_while_the_body_slots_leave_it_one() {
+    let mut l = RequestScheduler::new(Slotted { room: 1 }, BOUNDS);
+    l.set_credits(4);
+    l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0)), (2, ask(Why::Demand, 1.0))], 0.0);
+    l.declare(Stream::earth, &[(3, ask(Why::Demand, 2.0))], 0.0);
+    l.declare(Stream::place, &[(4, ask(Why::Demand, 3.0))], 0.0);
+    l.pump(0.0);
+    let out = started(&mut l);
+    assert_eq!(out.len(), 2, "one slotted read for the one slot, and the place's, which takes none");
+    assert_eq!(l.stream_counts(Stream::place).1, 1);
+    l.pump(0.0);
+    assert!(started(&mut l).is_empty(), "the one out holds the slot");
+    l.serve.room = 2;
+    l.pump(0.0);
+    assert_eq!(started(&mut l).len(), 1, "a slot given back starts the next");
 }

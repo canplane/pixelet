@@ -80,6 +80,10 @@ impl Serve for Policy {
         self.intake
     }
 
+    fn body_room(&self) -> u32 {
+        crate::io::body::room()
+    }
+
     /// As the host's read classes them (`apps/client/src/host/io/read.ts`). An object's
     /// failure comes back the same however often it is asked: the bytes are
     /// fixed by the key within a version.
