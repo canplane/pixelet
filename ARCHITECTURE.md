@@ -440,7 +440,7 @@ That follows from its shape. A producer states only what it wants, each with a r
 
 A **serve policy** ranks the wants (`io/policy.rs`). Terrain comes first, then decor's assets, then places. Within a layer, seen comes before unseen and nearer before farther; among equally near tiles the finer comes first, so the leaf under the eye is not asked after the coarse tiles over it. The policy changes how soon the view is right, never what it is.
 
-Models and textures spend the same credits (`io/load.rs`). Each is fetched and parsed at most once, retried if it did not arrive and final if it does not parse. The host decodes images under a handle, and they never enter the kernel.
+Models and textures spend the same credits (`io/load.rs`). Each is fetched and parsed at most once, retried if it did not arrive and final if it does not parse. An image's file is read into the heap and handed to the renderer, which copies it into a texture through the GPU stream (`COPY_EXTERNAL_IMAGE`, the host decoding it); once the texture lands the file goes, and a device lost reads it again (`images_lost`).
 
 The settings and the placed objects are kept on the device (`KeptFile`). A kept file the kernel cannot read is never written over. Text is asked of the platform a line at a time, widths then pixels (`io/text.rs`).
 

@@ -7,10 +7,10 @@
 //! A read that did not arrive is retried, and one the heap refused room for
 //! is asked again once the heap gives some back; bytes that do not parse are
 //! final, since asking again returns the same bytes. An image is its file's
-//! bytes, kept for as long as the kernel runs and handed to the renderer
-//! under the asset's number, which makes its texture on whatever device
-//! there is (pxl-render `Gpu::image`): io is transport, and the device the
-//! renderer's.
+//! bytes, handed to the renderer under the asset's number, which makes its
+//! texture on whatever device there is (pxl-render `Gpu::image`), and let
+//! go once that texture lands: a device lost reads the file again. io is
+//! transport, and the device the renderer's.
 
 use std::rc::Rc;
 
@@ -46,8 +46,10 @@ enum Entry {
     Refused(Refused),
     /// A parsed model.
     Model(Rc<Gltf>),
-    /// An image's bytes, sized by its header.
+    /// An image's bytes, sized by its header, until its texture lands.
     Image(Vec<u8>),
+    /// An image whose texture landed on the device there is, its bytes gone.
+    Landed,
     Failed,
 }
 
@@ -86,11 +88,13 @@ pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
 }
 
 /// An image as the renderer takes it: the asset's number and its file's
-/// bytes, once read; none while it loads.
+/// bytes, once read, and no bytes once its texture landed; none while it
+/// loads.
 pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
     let entry = loader().at(LoadKind::Image, load.number() as usize);
     match entry {
         Some(Entry::Image(file)) => Some((load.number(), file.as_slice())),
+        Some(Entry::Landed) => Some((load.number(), &[])),
         Some(_) => None,
         None => {
             *entry = Some(Entry::Pending);
@@ -204,6 +208,24 @@ fn image_arrived(n: usize, file: Vec<u8>) {
     request_world_tick();
 }
 
+/// The renderer took the texture of the image numbered `image`
+/// (pxl-render `take_landed`): its file goes.
+pub fn image_landed(image: u32) {
+    if let Some(entry @ Some(Entry::Image(_))) = loader().entries[LoadKind::Image as usize].get_mut(image as usize) {
+        *entry = Some(Entry::Landed);
+    }
+}
+
+/// The device went, and every texture an image landed in: each is read
+/// again when next asked for. One still in its bytes is handed again.
+pub fn images_lost() {
+    for entry in &mut loader().entries[LoadKind::Image as usize] {
+        if matches!(entry, Some(Entry::Landed)) {
+            *entry = None;
+        }
+    }
+}
+
 /// A file opened, read in its own task: no arrival waits on another's
 /// parse or landing. Where the turn's quota is spent before the tasks run, as
 /// it is while the frame outweighs its share, each task advances a step a
@@ -216,8 +238,8 @@ fn arrive(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
     xpute_kit::ensure!(spawned, ENOSPC, n);
 }
 
-/// An asset file arrived, read whole: a model parsed, an image put into its
-/// texture.
+/// An asset file arrived, read whole: a model parsed, an image kept until
+/// its texture lands.
 async fn arrival(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
     yield_if_spent(world_edge).await;
     // SAFETY: `buf` is held across the turn the host fills it in.

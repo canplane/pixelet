@@ -54,9 +54,9 @@ const SPANS: usize = GPU_SPAN_NAMES;
 pub const UNIFORM_ALIGN_MAX: u32 = 256;
 
 /// An image file as its asker hands it: its name, the asker's own and the
-/// same for one file wherever it is handed, and its bytes, handed for as
-/// long as the image is wanted, so a device gone takes it again from them
-/// (`Gpu::image`).
+/// same for one file wherever it is handed, and its bytes, handed until its
+/// texture lands (`take_landed`) and empty after, while the texture is the
+/// taker's (`Gpu::image`).
 pub type Image = (u32, &'static [u8]);
 
 /// The device's block (xpute DEVICE): a word a limit, the features a bit
@@ -217,8 +217,10 @@ struct State {
     /// Whether the last frame submitted took a read in: its figures are then
     /// that read's, and else the read before it, not measured again.
     gpu_landed: bool,
-    /// The images on their way into textures (`image_arrive`).
+    /// The images on their way into textures (`Gpu::image`).
     images: Vec<Arriving>,
+    /// The images taken since `take_landed` last ran, on this device.
+    landed: Vec<u32>,
     /// The devices gone so far: what was handed to the GPU under another
     /// count is on none there is.
     generation: u32,
@@ -277,6 +279,7 @@ pub unsafe fn install(at: u32) -> u32 {
         gpu_ms: [0.0; SPANS],
         gpu_landed: false,
         images: Vec::new(),
+        landed: Vec::new(),
         generation: 0,
     }));
     at
@@ -370,6 +373,7 @@ pub fn device_lost() {
         unsafe { core::ptr::write_bytes(core::ptr::from_mut(s.encoder), 0, 1) };
         (s.asked, s.device, s.stamps) = (false, None, None);
         s.images.clear();
+        s.landed.clear();
         s.generation = s.generation.wrapping_add(1);
         *head(STAMPS_WORD_AT) = 0;
     }
@@ -378,6 +382,15 @@ pub fn device_lost() {
 pub fn gpu_publish() {
     if let Some(s) = STATE.get(|| None).as_mut() {
         s.stream.publish();
+    }
+}
+
+/// Each image whose texture was taken since this last ran, on the device
+/// there is: its asker may let its file go, and hands it again only once
+/// the device is lost.
+pub fn take_landed(mut landed: impl FnMut(u32)) {
+    if let Some(s) = STATE.get(|| None).as_mut() {
+        s.landed.drain(..).for_each(&mut landed);
     }
 }
 
@@ -793,13 +806,18 @@ impl Gpu {
     /// once, on this device, for the one that takes it. None while it
     /// lands, the first ask handing it to the device; none for good for a
     /// file whose size no header gives (pxl-spec `asset::image_size`),
-    /// which the kernel does not hand.
-    /// The file's bytes are its asker's for as long as the image is wanted
-    /// (`Image`), so the host reads them where they lie.
+    /// which the kernel does not hand, and for the empty file of one
+    /// already taken on this device.
+    /// The file's bytes are its asker's until it is taken (`take_landed`);
+    /// the host copies them out as it runs the turn.
     pub fn image(&self, image: u32, file: &'static [u8]) -> Option<Id> {
-        let images = &mut self.s().images;
-        if let Some(k) = images.iter().position(|a| a.image == image) {
-            return (*images[k].word & DONE != 0).then(|| images.swap_remove(k).texture);
+        let s = self.s();
+        if let Some(k) = s.images.iter().position(|a| a.image == image) {
+            if *s.images[k].word & DONE == 0 {
+                return None;
+            }
+            s.landed.push(image);
+            return Some(s.images.swap_remove(k).texture);
         }
         let (width, height) = pxl_spec::asset::image_size(file)?;
         let usage = TEXTURE_USAGE::TEXTURE_BINDING | TEXTURE_USAGE::COPY_SRC | TEXTURE_USAGE::COPY_DST | TEXTURE_USAGE::RENDER_ATTACHMENT;

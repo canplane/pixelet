@@ -2,8 +2,9 @@
 
 //! What `.fixed` is to whoever holds a range of it: placed once at boot,
 //! never freed, sized at compile time. Only the kernel's own formats belong
-//! here; external ones (glTF, PNG) have no predictable bound and stay in the
-//! heap. Which ranges there are and how large is the roof's
+//! here; external ones (glTF, PNG) have no predictable bound and are read
+//! into the heap, a model kept parsed and an image only until its texture
+//! lands (io/load.rs). Which ranges there are and how large is the roof's
 //! (door/layout.rs), which hands each owner its own at boot; a range is read
 //! only through `lane` and `Section::at`, which check its end.
 

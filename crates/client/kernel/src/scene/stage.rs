@@ -162,6 +162,8 @@ pub fn stage_render(pace: crate::view::frame::resolution::Pace) {
     if out.redraw {
         request_world_tick();
     }
+    // An image whose texture the frame took needs its file no more.
+    pxl_render::gpu::api::take_landed(crate::io::load::image_landed);
     // What the renderer holds, drawn this frame or not.
     let held = pxl_render::gpu::api::gpu().map_or([0; OBJECT_OPS], |g| *g.objects());
     let objects: [f64; OBJECT_OPS - 1] = core::array::from_fn(|k| f64::from(held[k + 1]));
