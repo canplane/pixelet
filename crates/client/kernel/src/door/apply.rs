@@ -319,7 +319,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // panel off would record with nothing to show or stop it.
         Command::PROFILER_START => {
             refuse_unless(settings_store().profiler, Errno::EPERM)?;
-            profiler_window_start();
+            refuse_unless(profiler_window_start(), Errno::ENOMEM)?;
             applied(s)
         }
         Command::PROFILER_STOP => {

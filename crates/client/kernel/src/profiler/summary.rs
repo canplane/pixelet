@@ -10,7 +10,7 @@ use crate::profiler::block::TASK_PHASES;
 use crate::profiler::block::{FramesBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::profiler::frame::FrameSample;
 use crate::profiler::frame::{long, missed, overran};
-use crate::profiler::record::{fixed_lane, profiler_frames_since, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
+use crate::profiler::record::{profiler_frames_since, profiler_recording_state, profiler_scratch, profiler_tasks_since};
 use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
@@ -28,16 +28,12 @@ const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 struct Block {
     /// On the heap, not a static: a native build's statics are outside the shell-readable memory.
     words: Box<[f64; WORDS]>,
-    scratch: &'static mut [f64],
 }
 
 static BLOCK: Global<Block> = Global::new();
 
 fn block() -> &'static mut Block {
-    BLOCK.get(|| Block {
-        words: Box::new([0.0; WORDS]),
-        scratch: &mut [],
-    })
+    BLOCK.get(|| Block { words: Box::new([0.0; WORDS]) })
 }
 
 fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
@@ -58,11 +54,7 @@ fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
 
 /// No window is the whole recording.
 pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
-    let b = block();
-    if b.scratch.is_empty() {
-        b.scratch = fixed_lane(Lane::Scratch, SPREAD_LIMIT);
-    }
-    let (out, scratch) = (&mut b.words[..], &mut *b.scratch);
+    let (out, scratch) = (&mut block().words[..], profiler_scratch());
     out.fill(0.0);
     let since = window_ms.map_or(f64::NEG_INFINITY, |w| now() - w);
 

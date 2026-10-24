@@ -101,13 +101,21 @@ impl Of {
     }
 }
 
-/// The pool's blocks, eight slots each, every square's tree's: a bake's set
-/// fits it wherever the eye is (pxl-spec bake/tile/terrain.rs
-/// `pool_needs`), so the free stack runs out of none, and a build past it
-/// fails loudly (`fits`). Block 0 is never handed out: its words stay
-/// zero, nothing (`overwrite::Lanes`), so a root word 0 is a square with
-/// no tree, read as nothing without a word of its own (`window::ROOT_AT`).
+/// The most blocks the pool grows to, eight slots each, every square's
+/// tree's: a bake's set fits it wherever the eye is (pxl-spec
+/// bake/tile/terrain.rs `pool_needs`), so a pool this large refuses none.
+/// The pool starts smaller and grows as a build runs out
+/// (pxl-render gpu/renderer.rs `GroundBuffers::grow`), up to the kernel's
+/// cap (pxl-kernel param `WAYS_POOL_BYTES`), no more than this; a build
+/// past what it holds is refused (`fits`), its square left absent. Block 0
+/// is never handed out: its words stay zero, nothing (`overwrite::Lanes`),
+/// so a root word 0 is a square with no tree, read as nothing without a
+/// word of its own (`window::ROOT_AT`).
 pub const POOL_BLOCKS: u32 = 1 << 20;
+
+/// A block's words in a pool: its eight heap words and its eight data
+/// words.
+pub const BLOCK_WORDS: u32 = 16;
 
 /// The most blocks one square's build takes before its fold gives any
 /// back: the most of the format-12 set (2026-10-18, its windows' squares
@@ -205,8 +213,10 @@ pub fn flag(pool: &impl Pool, w: &impl Squares, s: u32, of: Of, zoom: Zoom, slot
 /// Whether a level's blocks, a flagged candidate's each, may be taken
 /// together: the pool has `flagged` left of `left`, and the square, having
 /// taken `taken`, stays within `SQUARE_BLOCKS`. None is taken past either:
-/// the tree fails loudly, as the bake bounds a set's and a square's
-/// (pxl-geo-bake terrain/pool.rs).
+/// the tree is refused, its root word 0 and no record kept, which the
+/// renderer reads as the pool's to grow or, at its cap, the square's to
+/// stay absent (pxl-render gpu/renderer.rs `Landing`); the bake bounds a
+/// set's and a square's (pxl-geo-bake terrain/pool.rs).
 pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
     flagged <= left && flagged <= SQUARE_BLOCKS - taken
 }
@@ -317,9 +327,9 @@ pub fn under(pool: &impl Pool, slot: u32) -> u32 {
 /// `RECORDS_AT` on, their count, then a block its tree holds each.
 pub const RECORDS_WORDS: u32 = SCRATCH_WORDS - RECORDS_AT;
 
-/// A square's records in bytes: what a read-back copies off its scratch,
-/// and how far a read-back's room lies after the one before
-/// (`window::READS` of them).
+/// A square's records in bytes at their most: the most a read-back
+/// copies off its scratch, which copies what its room holds
+/// (pxl-render gpu/renderer.rs `GroundBuffers::record_bytes`).
 pub const RECORDS_BYTES: u32 = RECORDS_WORDS * 4;
 
 /// A square's records (`RECORDS_WORDS`) laid into `pool` at the slots they

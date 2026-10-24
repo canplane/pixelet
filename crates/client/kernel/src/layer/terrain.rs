@@ -3,6 +3,7 @@
 //! The ground as a layer of the pyramid.
 
 pub mod fixed;
+pub mod mirror;
 mod query;
 pub mod tile;
 pub mod window;

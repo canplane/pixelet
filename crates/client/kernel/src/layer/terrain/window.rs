@@ -17,7 +17,6 @@ use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use pxl_spec_core::area::{Area, Shard};
 use pxl_spec_core::fill;
 use pxl_spec_core::ground::word;
-use pxl_spec_core::ways;
 use pxl_spec_core::window::{self, CellsBack, FreshSquare, Slot, Squares, EYE_WINDOWS, FIRST_CELL, HANDED, LEVELS, SLOTS, SQUARE, SQUARES, SQUARE_CELLS, SQUARE_SHIFT, WINDOWS};
 use pxl_spec_core::wrap_index;
 use pxl_spec_core::LEAF_CELL;
@@ -27,9 +26,11 @@ use xpute_kit::collection::list::List;
 
 use crate::io::source::Declared;
 use crate::layer::kept::Offered;
-use crate::layer::terrain::fixed::{cells_off, fill_off, joined_off, pool_off, records_off, CELLS_LANE_BYTES, POOL_BYTES, RANGE, RECORDS_ROOM_BYTES};
+use crate::layer::terrain::fixed::{cells_off, fill_off, joined_off, CELLS_LANE_BYTES, RANGE};
+use crate::layer::terrain::mirror::{mirror, Mirror};
 use crate::layer::Base;
 use crate::mem::fixed::lane;
+use pxl_render::gpu::renderer::Landing;
 
 /// Who a window is about.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -137,7 +138,8 @@ pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
 }
 
 /// Every square's planes on the CPU, in `.fixed.terrain` (fixed.rs): its
-/// cells as they come back and its own looks; a test's own.
+/// cells as they come back, and the eye's windows' fold; a test's own. Its
+/// ways' trees' blocks are the heap's (mirror.rs).
 pub(crate) struct Planes {
     /// Each square's words as they came back, whole (`window::BACK_WORDS`),
     /// `CELLS_LANE_BYTES` apart.
@@ -145,12 +147,6 @@ pub(crate) struct Planes {
     /// The eye's windows' levels over their squares, as the GPU folded them
     /// and the renderer reads them back (pxl-spec-core `window::fold`).
     pub joined: &'static mut [u32],
-    /// A landing square's ways' records, a room a read-back
-    /// (pxl-spec-core `ways::tree::RECORDS_BYTES` apart).
-    pub records: &'static mut [u32],
-    /// The GPU's ways' pool as the CPU mirrors it, each landing square's
-    /// blocks laid at their slots (pxl-spec-core `ways::tree::lay`).
-    pub pool: &'static mut [u32],
 }
 
 pub(crate) static PLANES: Global<Planes> = Global::new();
@@ -163,8 +159,6 @@ fn planes() -> &'static mut Planes {
             Planes {
                 cells: lane(r, cells_off(0), (SQUARES * CELLS_LANE_BYTES / 4) as usize),
                 joined: lane(r, joined_off(), window::EYE_JOINED_WORDS as usize),
-                records: lane(r, records_off(), (RECORDS_ROOM_BYTES / 4) as usize),
-                pool: lane(r, pool_off(), (POOL_BYTES / 4) as usize),
             }
         }
     })
@@ -177,19 +171,11 @@ pub fn joined_lane() -> u32 {
     off_of_slice(joined) as u32
 }
 
-/// Where a landing square's ways' records come back to in the module's
-/// memory, read-back `k`'s `ways::tree::RECORDS_BYTES` after the first's
-/// (pxl-render `GroundSquares::records`).
-pub fn records_lane() -> u32 {
-    let records: &[u32] = planes().records;
-    off_of_slice(records) as u32
-}
-
 /// The GPU's ways' pool as the CPU mirrors it, the landed squares' blocks
 /// at the GPU's slots, which a cursor reads as the cast reads the GPU's
 /// (pxl-spec-core `ways::tree`).
-pub fn pool() -> ways::tree::Read<'static> {
-    ways::tree::Read(planes().pool)
+pub fn pool() -> &'static Mirror {
+    mirror()
 }
 
 /// Square `s`'s words as they came back: a square's words whole, from its
@@ -214,6 +200,10 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     let w = windows();
     let terrain = TerrainTile::residency();
     let lost = core::mem::replace(&mut w.on, on) != on;
+    // The device that went took its pool: no square holds a tree of it.
+    if lost {
+        mirror().clear();
+    }
     // Per window, whether its zoom moved, and whether it moved at all.
     let (mut moved, mut changed) = ([false; WINDOWS as usize], [lost; WINDOWS as usize]);
     let kept = crate::layer::terrain::tile::kept().count();
@@ -296,22 +286,38 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     was[..] != w.pinned[..]
 }
 
+/// A slot's ticket while its square's ways' tree is refused, the pool at
+/// its cap (`landed`): never a fill's (`fill`), and not absent, so the
+/// square is not handed again every turn, nor its tile asked or kept for
+/// it, until the slot is laid again (`step`). A reader reads the coarser
+/// window's, as for any square absent.
+const REFUSED: u32 = u32::MAX;
+
 /// Square `s`'s cells back from its fill `ticket` (pxl-render
-/// `read_back`), its ways' records in read-back `k`'s room: present where
-/// its slot still waits on that fill, its tree's blocks laid into the
-/// pool's mirror at their slots, and what is read over its tile moved. A
-/// fill no slot waits on lays nothing: its blocks may be another's by now.
-pub fn landed(s: u32, ticket: u32, k: u32) {
+/// `read_back`), and how its ways' tree landed, where its slot still waits
+/// on that fill: built, its blocks laid into the pool's mirror at their
+/// slots, it is present and what is read over its tile moved; to be built
+/// again (`Landing::Again`), it is absent, handed again; refused, or its
+/// blocks refused the mirror's room, it is absent and `REFUSED`. A fill no
+/// slot waits on lays nothing: its blocks may be another's by now.
+pub fn landed(s: u32, ticket: u32, landing: Landing) {
     let w = windows();
     let cell = w.windows[(s / SLOTS) as usize].cell;
     let slot = &mut w.slots[s as usize];
-    if slot.ticket == ticket {
-        let at = (k * ways::tree::RECORDS_BYTES / 4) as usize;
-        let p = planes();
-        ways::tree::lay(&mut ways::tree::Lane(p.pool), &p.records[at..at + ways::tree::RECORDS_WORDS as usize]);
-        (slot.present, slot.ticket) = (1, 0);
-        TerrainTile::residency().moved_at(tile_of(cell, slot.square).0);
+    if slot.ticket != ticket {
+        return;
     }
+    slot.ticket = match landing {
+        Landing::Built(records) if mirror().lay(records) => {
+            slot.present = 1;
+            TerrainTile::residency().moved_at(tile_of(cell, slot.square).0);
+            0
+        }
+        Landing::Again => 0,
+        Landing::Built(_) | Landing::Refused => REFUSED,
+    };
+    // Absent again: what is due moves.
+    w.filled |= slot.present == 0;
 }
 
 /// The squares this turn hands, nearest first, as many as a frame's fill
@@ -500,7 +506,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshSquare<'_>) -> 
             cut[4 * i as usize..4 * i as usize + 4].copy_from_slice(&lane[from..from + 4]);
         }
         let written = square_lines(tile, &held.separation, place, scratch, lines);
-        w.ticket = w.ticket % u32::MAX + 1;
+        w.ticket = w.ticket % (REFUSED - 1) + 1;
         let back = CellsBack {
             cells: off_of_slice(cells(i)) as u32,
             ticket: w.ticket,

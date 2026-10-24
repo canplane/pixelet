@@ -119,7 +119,7 @@ impl World<'_> {
         let node = (zoom + 1, child_of(c, k));
         At {
             node,
-            handed: at.handed.child(&self.objects.lanes(), &pool(), node),
+            handed: at.handed.child(&self.objects.lanes(), pool(), node),
         }
     }
 
@@ -136,7 +136,7 @@ impl World<'_> {
     pub(super) fn node(&self, at: &mut At, asked: [Zoom; 2], lines: &mut Lines) -> Answer<In<[u32; 2]>> {
         let (lanes, cuts) = (self.objects.lanes(), [self.cut(self.carve), self.cut(self.hide)]);
         let mut reading = Reading::new(self, lines);
-        let i = world::node(&mut reading, &Windowed, &lanes, &pool(), &mut at.handed, at.node, asked, cuts);
+        let i = world::node(&mut reading, &Windowed, &lanes, pool(), &mut at.handed, at.node, asked, cuts);
         reading.answer(i.kind != Kind::Lacks, || i)
     }
 }

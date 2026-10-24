@@ -53,7 +53,10 @@ const _: () = assert!(
 
 /// The ranges of `.fixed`, in address order: the resident terrain, the
 /// resident divisions' cells, the renderer's block table, the GPU call
-/// stream, the kernel's other host calls, the profiler's rings.
+/// stream, the kernel's other host calls. Each is mostly in use whenever
+/// the kernel runs, or the host's reservation; what is held only at times,
+/// or far below its worst most of the time, is the heap's
+/// (`HEAP_FLOWS_BYTES`).
 #[derive(Clone, Copy)]
 pub enum Fixed {
     Terrain,
@@ -61,7 +64,6 @@ pub enum Fixed {
     Blocks,
     Gpu,
     Host,
-    Profiler,
 }
 
 /// None is let go.
@@ -80,13 +82,12 @@ const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::scene::environment::cloud::BL
 
 pub const BLOCK_SLOTS: usize = pxl_render::gpu::blocks::block_slots(MAX_LIVE_BLOCKS);
 
-const FIXED: [u32; 6] = [
+const FIXED: [u32; 5] = [
     crate::layer::terrain::fixed::TERRAIN_BYTES,
     crate::layer::division::DIVISION_BYTES,
     pxl_render::gpu::blocks::blocks_bytes(BLOCK_SLOTS),
     pxl_render::api_spec::stream::BYTES,
     crate::abi::host::stream::BYTES,
-    crate::profiler::record::PROFILER_BYTES,
 ];
 
 pub const FIXED_BYTES: u32 = xpute_guest::mem::section::span_of(&FIXED, PAGE_BYTES);
@@ -115,8 +116,13 @@ const fn body_block(stream: crate::io::demand::Stream) -> u64 {
 /// The heap's bounded flows at their worst: terrain's and the Earth's
 /// bodies, kept or on a credit, in the runs `BODY_SLOTS` slots fill
 /// (io/body.rs), and a body on every credit in the buddy's block for the
-/// longest other kind, each freed as it is decoded. The rest of the heap is
-/// workspace, which asks first.
+/// longest other kind, each freed as it is decoded; the ways' pool's
+/// mirror at its cap (layer/terrain/mirror.rs, param `WAYS_POOL_BYTES`),
+/// the renderer's rooms for the squares' records, every read's at a
+/// square's most (pxl-render gpu/renderer.rs `GroundBuffers::room`), and
+/// the profiler's lanes while its setting is on (profiler/record.rs). Each
+/// is refused past its cap, and waits or stays absent where the heap
+/// refuses it. The rest of the heap is workspace, which asks first.
 const HEAP_FLOWS_BYTES: u64 = {
     use crate::io::body::slots_bytes;
     use crate::io::demand::Stream;
@@ -128,7 +134,8 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    slots_bytes(crate::param::BODY_SLOTS) + crate::param::MAX_CREDITS as u64 * longest
+    let ways = crate::param::WAYS_POOL_BYTES as u64 + pxl_spec_core::window::READS as u64 * pxl_spec_core::ways::tree::RECORDS_BYTES as u64;
+    slots_bytes(crate::param::BODY_SLOTS) + crate::param::MAX_CREDITS as u64 * longest + ways + crate::profiler::record::PROFILER_BYTES as u64
 };
 
 const _: () = assert!(

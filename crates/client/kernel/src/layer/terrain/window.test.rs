@@ -5,16 +5,18 @@
 
 use super::*;
 use pxl_spec_core::ground::word;
+use pxl_spec_core::overwrite::Lanes;
 
 /// A tile as `hold` takes it: a cell's own look and its height, row by row
 /// from its first, and its lines.
 pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, pxl_spec::bake::separation::Separation);
 
-/// What `hold` leaves held: the squares' words and the pool's, each up to
-/// its last that is not zero, and the slots.
+/// What `hold` leaves held: the squares' words up to their last that is
+/// not zero, the pool's blocks taken as records (pxl-spec-core
+/// `ways::tree::lay`), and the slots.
 struct Built {
     cells: Vec<u32>,
-    pool: Vec<u32>,
+    records: Vec<u32>,
     slots: Vec<Slot>,
 }
 
@@ -28,6 +30,18 @@ static BUILT: std::sync::Mutex<Vec<(Over, Built)>> = std::sync::Mutex::new(Vec::
 const CELLS_WORDS: usize = (SQUARES * CELLS_LANE_BYTES / 4) as usize;
 const POOL_WORDS: usize = 16 * pxl_spec_core::ways::tree::POOL_BLOCKS as usize;
 
+/// The pool's mirror holding `records`, a square's most at a time.
+fn mirrored(records: &[u32]) {
+    use pxl_spec_core::ways::tree::{RECORD_WORDS, SQUARE_BLOCKS};
+    let m = mirror();
+    m.clear();
+    for blocks in records.chunks((SQUARE_BLOCKS * RECORD_WORDS) as usize) {
+        let mut laid = vec![(blocks.len() / RECORD_WORDS as usize) as u32];
+        laid.extend_from_slice(blocks);
+        assert!(m.lay(&laid), "the test's pool past the mirror's cap");
+    }
+}
+
 /// The eye's and the focus's windows about `centre`, in units, X then Y,
 /// each square the tiles `held` cover present: per tile, a cell's own look
 /// and its height, row by row from its first, and its lines; each square's
@@ -40,11 +54,11 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     let k = match built.iter().position(|((c, h), _)| *c == centre && h.as_slice() == held) {
         Some(k) => k,
         None => {
-            build(centre, held);
+            let records = build(centre, held);
             let upto = |words: &[u32]| words[..words.iter().rposition(|&w| w != 0).map_or(0, |i| i + 1)].to_vec();
             let b = Built {
                 cells: upto(planes().cells),
-                pool: upto(planes().pool),
+                records,
                 slots: windows().slots.to_vec(),
             };
             built.push(((centre, held.to_vec()), b));
@@ -60,21 +74,20 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     PLANES.set(Planes {
         cells: of(&b.cells, CELLS_WORDS),
         joined: vec![0; window::EYE_JOINED_WORDS as usize].leak(),
-        records: vec![0; (window::READS * pxl_spec_core::ways::tree::RECORDS_BYTES / 4) as usize].leak(),
-        pool: of(&b.pool, POOL_WORDS),
     });
+    mirrored(&b.records);
     WINDOWS_STATE.set(fresh());
     windows().slots.copy_from_slice(&b.slots);
 }
 
-/// `hold`'s windows, built.
-fn build(centre: [f64; 2], held: &[HeldTile]) {
+/// `hold`'s windows, built: the blocks their trees took, as records.
+fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     PLANES.set(Planes {
         cells: vec![0; CELLS_WORDS].leak(),
         joined: vec![0; window::EYE_JOINED_WORDS as usize].leak(),
-        records: vec![0; (window::READS * pxl_spec_core::ways::tree::RECORDS_BYTES / 4) as usize].leak(),
-        pool: vec![0; POOL_WORDS].leak(),
     });
+    // The trees built into a pool in one lane, as the GPU's.
+    let mut pool = vec![0; POOL_WORDS];
     // The pool's blocks, each square's tree taken after the one before's, as
     // the GPU's stack hands them, block 0 none's.
     let mut next = 1;
@@ -134,7 +147,7 @@ fn build(centre: [f64; 2], held: &[HeldTile]) {
                 cell,
                 at: [wrap_index(cell - SQUARE_SHIFT, square[0]), square[1]],
             };
-            let [taken, _] = pxl_spec_core::fill::tree(&lane, scratch, of, planes().pool, next);
+            let [taken, _] = pxl_spec_core::fill::tree(&lane, scratch, of, &mut pool, next);
             assert_ne!(taken, u32::MAX, "a square's tree past the pool");
             lane[window::ROOT_AT as usize] = 8 * next;
             next += taken;
@@ -143,6 +156,15 @@ fn build(centre: [f64; 2], held: &[HeldTile]) {
             w.slots[i as usize].present = 1;
         }
     }
+    // Every block taken, a record each: its id, its heap words, its data.
+    let p = pxl_spec_core::ways::tree::Read(&pool);
+    let mut records = Vec::new();
+    for b in 1..next {
+        records.push(b);
+        records.extend((0..8).map(|k| p.heap(8 * b + k)));
+        records.extend((0..8).map(|k| p.data(8 * b + k)));
+    }
+    records
 }
 
 /// A square's columns as a GPU's fill writes them (pxl-spec-core

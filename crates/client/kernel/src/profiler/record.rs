@@ -3,7 +3,10 @@
 //! Read-only instrument: records where time and work go. Never read back
 //! into a scheduling decision. Records are laid out word for word as
 //! profiler.json says, in lanes the shell reads in place, so reading the
-//! profiler allocates nothing in the heap it measures.
+//! profiler allocates nothing in the heap it measures. The lanes are the
+//! heap's while the profiler's setting is on, taken whole as it starts
+//! recording and given back as it is turned off (`profiler_release`): its
+//! heap figures count them all along, so a frame's deltas do not.
 
 use core::mem::size_of;
 
@@ -11,13 +14,9 @@ use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::mem::section::span_of;
 
-use crate::mem::fixed::{lane, Held};
 use crate::profiler::block::RecBlock;
 use crate::profiler::frame::{FrameSample, RingSample, WorstFrame};
 use crate::profiler::task::TaskRow;
-
-/// `.fixed.profiler`, handed in at boot.
-pub static RANGE: Held = Held::new();
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
 /// display or a heavy minute fills a lane early, which drops its oldest and
@@ -60,14 +59,8 @@ pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
     *len -= n;
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum Lane {
-    Tasks,
-    Frames,
-    Worst,
-    Scratch,
-}
-
+/// The lanes, in order: tasks, frames, the worst frames and the summary's
+/// scratch (summary.rs).
 const LANES: [u32; 4] = [
     (TASK_LIMIT * size_of::<TaskRow>()) as u32,
     (FRAME_LIMIT * size_of::<FrameSample>()) as u32,
@@ -77,18 +70,23 @@ const LANES: [u32; 4] = [
 
 const LANE_ALIGN: u32 = 64;
 
+/// The lanes' bytes together: what the heap holds of the profiler while its
+/// setting is on (door/layout.rs `HEAP_FLOWS_BYTES`).
 pub const PROFILER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
 
-pub(crate) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
-    // SAFETY: the lane's own bytes, held only by its ring, zeroed when laid;
-    // zero is a valid record.
-    unsafe { lane(RANGE.get().nth(&LANES, LANE_ALIGN, which as usize), 0, cap) }
+/// A lane of `n` records, zeroed, a valid record each; none where the heap
+/// refuses it.
+fn heap_lane<T: Copy + Default>(n: usize) -> Option<Box<[T]>> {
+    let mut lane = Vec::new();
+    lane.try_reserve_exact(n).ok()?;
+    lane.resize(n, T::default());
+    Some(lane.into_boxed_slice())
 }
 
 struct Profiler {
-    task_ring: &'static mut [TaskRow],
+    task_ring: Box<[TaskRow]>,
     task_len: usize,
-    frame_ring: &'static mut [FrameSample],
+    frame_ring: Box<[FrameSample]>,
     frame_len: usize,
     task_head: usize,
     frame_head: usize,
@@ -98,8 +96,10 @@ struct Profiler {
     recording: bool,
     started_at: f64,
     stopped_at: Option<f64>,
-    worst: &'static mut [WorstFrame],
+    worst: Box<[WorstFrame]>,
     worst_len: usize,
+    /// The summary's, where it sorts what it spreads (summary.rs).
+    scratch: Box<[f64]>,
     rings: RingSample,
     /// The interval in progress: the last frame turn's record, which every
     /// turn after it adds its time to until the next frame turn closes it.
@@ -113,9 +113,9 @@ static PROFILER: Global<Profiler> = Global::new();
 
 fn profiler() -> &'static mut Profiler {
     PROFILER.get(|| Profiler {
-        task_ring: &mut [],
+        task_ring: Box::default(),
         task_len: 0,
-        frame_ring: &mut [],
+        frame_ring: Box::default(),
         frame_len: 0,
         task_head: 0,
         frame_head: 0,
@@ -123,8 +123,9 @@ fn profiler() -> &'static mut Profiler {
         recording: false,
         started_at: now(),
         stopped_at: None,
-        worst: &mut [],
+        worst: Box::default(),
         worst_len: 0,
+        scratch: Box::default(),
         rings: RingSample::default(),
         open: None,
         frame_task_ms: 0.0,
@@ -145,8 +146,16 @@ pub fn profiler_recording_state() -> RecBlock {
     }
 }
 
-pub fn profiler_recording_start() {
+/// Recording from now, its lanes taken from the heap where it holds none
+/// yet: false, nothing recorded, where the heap refuses them.
+pub fn profiler_recording_start() -> bool {
     let l = profiler();
+    if l.task_ring.is_empty() {
+        let (Some(tasks), Some(frames), Some(worst), Some(scratch)) = (heap_lane(TASK_LIMIT), heap_lane(FRAME_LIMIT), heap_lane(WORST_CAP), heap_lane(SPREAD_LIMIT)) else {
+            return false;
+        };
+        (l.task_ring, l.frame_ring, l.worst, l.scratch) = (tasks, frames, worst, scratch);
+    }
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
     (l.task_head, l.frame_head) = (0, 0);
     l.open = None;
@@ -154,6 +163,7 @@ pub fn profiler_recording_start() {
     l.started_at = now();
     l.stopped_at = None;
     l.recording = true;
+    true
 }
 
 pub fn profiler_recording_stop() {
@@ -165,6 +175,20 @@ pub fn profiler_recording_stop() {
     l.stopped_at = Some(now());
 }
 
+/// The lanes given back to the heap, what they held with them: the
+/// profiler's setting is off, so nothing shows them.
+pub fn profiler_release() {
+    profiler_recording_stop();
+    let l = profiler();
+    (l.task_len, l.frame_len, l.worst_len, l.task_head, l.frame_head) = (0, 0, 0, 0, 0);
+    (l.task_ring, l.frame_ring, l.worst, l.scratch) = (Box::default(), Box::default(), Box::default(), Box::default());
+}
+
+/// The summary's scratch, empty while the lanes are not held.
+pub(crate) fn profiler_scratch() -> &'static mut [f64] {
+    &mut profiler().scratch
+}
+
 /// `row` is made only while recording.
 pub fn profiler_record(row: impl FnOnce() -> TaskRow) {
     let l = profiler();
@@ -172,12 +196,9 @@ pub fn profiler_record(row: impl FnOnce() -> TaskRow) {
         return;
     }
     let row = row();
-    if l.task_ring.is_empty() {
-        l.task_ring = fixed_lane(Lane::Tasks, TASK_LIMIT);
-    }
     let dropped = trim(&l.task_ring[..l.task_len], &mut l.task_head, row.end_ms - WINDOW_MS, |r| r.end_ms);
-    drop_front(l.task_ring, &mut l.task_len, dropped);
-    if !land_lane(l.task_ring, &mut l.task_len, &mut l.task_head, row) {
+    drop_front(&mut l.task_ring, &mut l.task_len, dropped);
+    if !land_lane(&mut l.task_ring, &mut l.task_len, &mut l.task_head, row) {
         l.truncated = true;
     }
 }
@@ -221,9 +242,6 @@ pub fn profiler_record_turn(turn_ms: f64, poll_ms: f64, wake: f64, wake_in_ms: f
 }
 
 fn land(l: &mut Profiler, s: FrameSample) {
-    if l.worst.is_empty() {
-        l.worst = fixed_lane(Lane::Worst, WORST_CAP);
-    }
     let at = l.worst[..l.worst_len].partition_point(|w| w.sample.interval_ms >= s.interval_ms);
     if at < l.worst.len() {
         let prev = l.frame_ring[..l.frame_len].last().copied();
@@ -237,12 +255,9 @@ fn land(l: &mut Profiler, s: FrameSample) {
         l.worst_len = kept + 1;
     }
 
-    if l.frame_ring.is_empty() {
-        l.frame_ring = fixed_lane(Lane::Frames, FRAME_LIMIT);
-    }
     let dropped = trim(&l.frame_ring[..l.frame_len], &mut l.frame_head, s.t - WINDOW_MS, |f| f.t);
-    drop_front(l.frame_ring, &mut l.frame_len, dropped);
-    if !land_lane(l.frame_ring, &mut l.frame_len, &mut l.frame_head, s) {
+    drop_front(&mut l.frame_ring, &mut l.frame_len, dropped);
+    if !land_lane(&mut l.frame_ring, &mut l.frame_len, &mut l.frame_head, s) {
         l.truncated = true;
     }
 }

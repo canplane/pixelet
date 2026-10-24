@@ -1411,18 +1411,24 @@ fn settle() {
     >();
 }
 
-/// The ways' pool's free stack (pxl-spec-core `ways::tree::POOL_BLOCKS`
-/// words), which starts as WebGPU makes a buffer, zeroed: word `TAKEN`
-/// how many blocks are taken, the `free` after it the free blocks' ids,
-/// block 0 never among them, a square's root word 0 naming no tree as a
-/// heap word 0 names no children. A slot's id is read and written by `id`
-/// and `put_id` alone, a slot's word its id XOR its index, so a slot never
-/// written holds its own index: every block free, with no start to write.
+/// The ways' pool's free stack, a word a block of the pool's, the two
+/// grown together (pxl-render gpu/renderer.rs `GroundBuffers::grow`),
+/// which starts as WebGPU makes a buffer, zeroed: word `TAKEN` how many
+/// blocks are taken, the slots after it their ids, then the free blocks'
+/// ids, block 0 never among them, a square's root word 0 naming no tree as
+/// a heap word 0 names no children. A slot's id is read and written by
+/// `id` and `put_id` alone, a slot's word its id XOR its index, so a slot
+/// never written holds its own index: every block free, with no start to
+/// write, the ids handed from the lowest up, and a stack grown holds the
+/// blocks past the old free, so every id ever handed lies under the most
+/// ever taken, which the pool's and its mirror's growth keep to
+/// (pxl-kernel layer/terrain/mirror.rs).
 const TAKEN: u32 = 0;
 
-/// The blocks free when `taken` are, block 0 never one.
-fn free(taken: u32) -> u32 {
-    tree::POOL_BLOCKS - 1 - taken
+/// The blocks free when `taken` are of a stack of `len` slots, block 0
+/// never one.
+fn free(len: u32, taken: u32) -> u32 {
+    len - 1 - taken
 }
 
 /// The id stack slot `i` holds.
@@ -1448,11 +1454,11 @@ fn add(s: &mut [u32], i: u32, v: u32) -> u32 {
     }
 }
 
-/// Block `block` back on the stack.
+/// Block `block` back on the stack, into the slot of the last taken.
 fn push(stack: &mut [u32], block: u32) {
     // One fewer taken: an add of -1, as the count's word is unsigned.
-    let k = free(add(stack, TAKEN, 1u32.wrapping_neg()));
-    put_id(stack, 1 + k, block);
+    let was = add(stack, TAKEN, 1u32.wrapping_neg());
+    put_id(stack, was, block);
 }
 
 /// `n` blocks off the stack together for a square that has taken `taken`:
@@ -1460,13 +1466,14 @@ fn push(stack: &mut [u32], block: u32) {
 /// square would take more than its most (`ways::tree::fits`), none taken.
 /// One exit, for the reason `add` gives.
 fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
+    let len = stack.len() as u32;
     // SAFETY: word `TAKEN`, the stack's first; the buffer is never empty
-    // (pxl-render gpu/renderer.rs makes it `POOL_BLOCKS` words).
+    // (pxl-render gpu/renderer.rs makes it a word a block of the pool's).
     let count = unsafe { stack.get_unchecked_mut(TAKEN as usize) };
     let mut gone = unsafe { spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(count) };
     let (mut done, mut ok) = (false, false);
     while !done {
-        if !tree::fits(free(gone), taken, n) {
+        if !tree::fits(free(len, gone), taken, n) {
             done = true;
         } else {
             // SAFETY: as above.
@@ -1479,7 +1486,7 @@ fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
             }
         }
     }
-    (if ok { 1 + free(gone) - n } else { 0 }, ok)
+    (if ok { 1 + gone } else { 0 }, ok)
 }
 
 use tree::{FREED_AT, RECORDS_AT, RECORD_WORDS};
