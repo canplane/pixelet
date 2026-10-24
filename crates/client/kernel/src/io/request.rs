@@ -164,6 +164,8 @@ pub struct RequestScheduler<S> {
     attempt: [Option<Attempt>; MAX_CREDITS as usize],
     generation: [u32; MAX_CREDITS as usize],
     credits: u32,
+    /// The most credits ever granted.
+    most_credits: u32,
     started: Vec<(u64, Stream, u64)>,
     stops: Vec<u64>,
     ready: Vec<(Placed, usize)>,
@@ -207,6 +209,7 @@ impl<S: Serve> RequestScheduler<S> {
             attempt: [None; MAX_CREDITS as usize],
             generation: [0; MAX_CREDITS as usize],
             credits: 0,
+            most_credits: 0,
             started: Vec::new(),
             stops: Vec::new(),
             ready: Vec::with_capacity(desired),
@@ -284,6 +287,7 @@ impl<S: Serve> RequestScheduler<S> {
 
     pub fn set_credits(&mut self, credits: u32) {
         self.credits = credits.min(MAX_CREDITS);
+        self.most_credits = self.most_credits.max(self.credits);
     }
 
     /// `stream`'s requests waiting for a credit and out on one. For a
@@ -531,9 +535,10 @@ pub fn set_credits(credits: u32) {
     sched().set_credits(credits);
 }
 
-/// The credits the host last granted, as many as are kept to.
-pub fn credits() -> u32 {
-    sched().credits
+/// The most credits the host has granted: a body on each may still be out
+/// after a grant of fewer.
+pub fn most_credits() -> u32 {
+    sched().most_credits
 }
 
 pub fn stream_counts(stream: Stream) -> (u32, u32) {

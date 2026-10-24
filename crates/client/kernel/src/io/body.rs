@@ -17,7 +17,7 @@
 //! least), and is then freed or kept. Kept packets are given back only by
 //! a drawn frame (scene/cast.rs `upload`, layer/earth.rs `earth_upload`),
 //! so they are bounded apart from it: the Earth's by its frames, terrain's
-//! by the slots less one for every credit granted and every Earth frame
+//! by the slots less one for the most credits granted and every Earth frame
 //! (layer/terrain/tile.rs `most_kept`), a packet past it, or one no window
 //! wants a square of, freed once decoded. The kept thus leave a slot for every credit, and a body on one
 //! finds one: the residency, which the query and the controls read, fills
@@ -160,9 +160,10 @@ pub unsafe fn give(block: Block) {
     };
     let run = &mut s.runs[i];
     let off = block.0 - run.at;
-    let bit = 1 << (off / SLOT_BYTES as usize);
     // A block inside a run that is not a slot out is given back twice, or was never taken.
-    xpute_kit::ensure!(off.is_multiple_of(SLOT_BYTES as usize) && run.out & bit != 0, ENOTRECOVERABLE, off);
+    xpute_kit::ensure!(off < (SLOTS * SLOT_BYTES) as usize && off.is_multiple_of(SLOT_BYTES as usize), ENOTRECOVERABLE, off);
+    let bit = 1 << (off / SLOT_BYTES as usize);
+    xpute_kit::ensure!(run.out & bit != 0, ENOTRECOVERABLE, off);
     run.out &= !bit;
     s.out -= 1;
     s.releases = s.releases.wrapping_add(1);

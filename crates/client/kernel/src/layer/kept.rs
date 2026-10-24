@@ -3,7 +3,8 @@
 //! What of a layer's tiles goes to the GPU off the packet it came in: per
 //! frame, the packet the GPU does not hold yet, kept until the turn's stream
 //! takes it and freed then, and the device it went to; a frame taken again
-//! replaces it.
+//! replaces it. A packet is freed unkept past the layer's bound (`keep`),
+//! and freed unsent past a full stream once nothing wants it (`send`).
 
 use xpute_guest::mem::heap::Block;
 

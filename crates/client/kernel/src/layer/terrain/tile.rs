@@ -77,13 +77,14 @@ impl Base for TerrainTile {
 }
 
 /// The most terrain packets kept at once: the body slots (`BODY_SLOTS`)
-/// less one for every credit the host grants and one for every Earth frame,
+/// less one for the most credits the host has granted and one for every
+/// Earth frame,
 /// so the packets kept, which only a drawn frame gives back, never take the
 /// slots a read needs to arrive into (io/body.rs). A packet past it is
 /// freed once decoded, and its tile asked again when one could be kept
 /// (`again_room`, layer/terrain/window.rs `step`).
 pub fn most_kept() -> u32 {
-    let credits = crate::io::request::credits().max(1);
+    let credits = crate::io::request::most_credits().max(1);
     BODY_SLOTS.saturating_sub(credits + Residency::<Earth>::FRAMES)
 }
 
