@@ -69,8 +69,9 @@ pub enum Fixed {
 /// None is let go.
 const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::decor::assets::MODELS_MAX + crate::scene::environment::cloud::MODELS_MAX;
 
-/// The ghost's, the puck's zone, the debug lines' and the billboards'.
-const SINGLE_BLOCKS: usize = 4;
+/// The ghost's, the puck's zone, the two debug line sets' (the gizmo's and the
+/// coverage's, `scene.rs` `debug` and `coverage`) and the billboards'.
+const SINGLE_BLOCKS: usize = 5;
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a
 /// count the structure fixes (the models the catalogs can name, the clouds'
