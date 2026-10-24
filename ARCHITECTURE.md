@@ -260,13 +260,13 @@ The host submits one `WORLD_FRAME` before it rings — the viewport, the gap sin
 
 **The phases** are xpute's, in the order that is their priority:
 
-| Phase         | What pixelet runs in it                                           |
-| ------------- | ----------------------------------------------------------------- |
-| `interaction` | the controller, input, the camera, the environment, the companion |
-| `visible`     | demand, the scene's pass                                          |
-| `content`     | nothing yet; it is guaranteed `content_share` of the budget       |
-| `cosmetic`    | the world gizmo                                                   |
-| `report`      | the profiler, last, so it sees everything                         |
+| Phase         | What pixelet runs in it                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| `interaction` | the controller, input, the camera, the environment, the companion, the character's preview |
+| `visible`     | demand, the scene's pass, which lays the world gizmo before its list begins                |
+| `content`     | nothing yet; it is guaranteed `content_share` of the budget                                |
+| `cosmetic`    | nothing yet                                                                                |
+| `report`      | the profiler, last, so it sees everything                                                  |
 
 The tasks run on `embassy-executor`'s raw executor, which the module installs. The frame is a task rather than a function so that the order above is its own, and no task depends on the order the executor polls them in.
 

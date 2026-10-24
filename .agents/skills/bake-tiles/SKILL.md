@@ -187,7 +187,7 @@ places and, of each kind, the place of least id with the leaf cell it
 stands in — its names, held to 32 code points, the source's own id and its
 kind by name, from a pool of places held once a tile. A kind is the place's
 category as the search list names it (`pxl-geo-spec overture/properties.rs`),
-one of `spec/spec/bake/place_badge.json`'s. The leaves are counted from `overture_places`, the zooms above are
+one of `spec/spec/bake/place_theme.json`'s `THEME`. The leaves are counted from `overture_places`, the zooms above are
 folded by adding, with the same fold driver terrain uses
 (`geo-bake/src/pyramid.rs`); a version leaves out every tile its parent's
 occupancy marks none (`unasked`): where no cell over a tile holds two places,
