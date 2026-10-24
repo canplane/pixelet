@@ -5,7 +5,10 @@
 //! each, pxl-spec `bake::tile::max_packet_bytes`), where the buddy would
 //! give each body a block of two. Their bodies take slots instead, each
 //! their longest packet in pages, carved from a run the heap gives whole
-//! and takes back once its last slot is free. A run is borrowed only when
+//! and takes back once its last slot is free: a cache for one kind of
+//! object, as Bonwick's slab allocator keeps a large object's, its
+//! bookkeeping off the run, picked by the stream rather than by size as
+//! xpute's `SlabMalloc` picks. A run is borrowed only when
 //! every one held is full, so no more are held than the most slots out at
 //! once fill, and never more slots than `BODY_SLOTS` (param/io.rs), which
 //! bounds what the heap gives them. Every other body is a heap block of its
