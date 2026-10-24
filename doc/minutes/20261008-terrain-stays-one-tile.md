@@ -3,10 +3,12 @@
 **2026-10-08**
 
 A terrain tile keeps its ground, elevation, decks and bores, and index
-together, one object a node (`crates/spec/src/bake/format.rs` `TerrainTile`). It
-is not torn into a pyramid per channel, and it is not made sparse, a child
-kept only where it says more than its parent. Places and divisions are
-sparse (`crates/server/geo-bake/src/pyramid.rs` `prune`); terrain is not.
+together, one object a node (`crates/spec/src/bake/tile/terrain.rs`
+`TerrainTile`, which since 2026-10-23 holds no index, only which children
+are tiles beside them). It is not torn into a pyramid per channel, and it is
+not made sparse, a child kept only where it says more than its parent.
+Places and divisions are sparse (`crates/server/geo-bake/src/pyramid.rs`
+`unasked`, left out where they are published); terrain is not.
 
 ## The question
 

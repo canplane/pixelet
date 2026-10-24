@@ -64,7 +64,10 @@ library reaches the host through WASI's imports — `fd_write` for a print,
 channel beside the contract, and a second clock beside `now`; a browser
 would need a shim to answer them. The WASI SDK builds C++ for the same kind
 of guest: its linker and libc++ are what a C++ guest needs, and a guest that
-calls nothing of the OS imports nothing of WASI.
+calls nothing of the OS imports nothing of WASI. The C++ guest is built so,
+by the SDK's clang with `--target=wasm32-wasip1` (xpute/script/cpp.ts), and
+its module imports `env.memory` and `env.now` alone, as the Rust guest's does
+(xpute/ts/conformance/src/trace.test.ts `MODULE_IMPORTS`).
 
 ## What was decided
 
@@ -72,15 +75,15 @@ calls nothing of the OS imports nothing of WASI.
   reading in place are what it is for, and a WASI boundary covers wasm
   alone and gives up the last two.
 - WASI as a subsystem over the contract is parked in
-  [BACKLOG.md](../BACKLOG.md), not now: it is what would let an existing
+  [backlog.md](../backlog.md), not now: it is what would let an existing
   program in, which is where an open-source xpute gains users, and it has
   no program to be built against yet.
 - Aligning the vocabulary is the part worth having early, and it is the
   same question as the resource vocabulary
-  ([20260930-resources-files-and-streams.md](./closed/20260930-resources-files-and-streams.md)),
+  ([20260930-resources-files-and-streams.md](./archive/20260930-resources-files-and-streams.md)),
   decided 10-01 as a guest's files reached as Plan 9 reaches them, in
   POSIX's and WASI's words
-  ([20261001-a-guest-s-files-as-plan-9-s.md](./closed/20261001-a-guest-s-files-as-plan-9-s.md)).
+  ([20261001-a-guest-s-files-as-plan-9-s.md](./archive/20261001-a-guest-s-files-as-plan-9-s.md)).
 
 ## Where it stands
 

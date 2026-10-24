@@ -22,9 +22,9 @@ hidden, unless something else culls it first, and that culling is where
 special cases pile up. Image order pays per pixel, for the steps of a
 descent, whatever is hidden behind the first surface.
 
-The first rule of AGENTS.md's main axis, "the eye decides", is image order.
-The rest of this record is how the tree arrived there, one counterexample
-at a time.
+The first rule of the main axis AGENTS.md then held, "the eye decides", is
+image order; ARCHITECTURE.md now opens with it. The rest of this record is
+how the tree arrived there, one counterexample at a time.
 
 ## How the tree arrived
 
@@ -170,12 +170,14 @@ is built while drawing.
 - **The tree** is the zooms: eight children a node, an octree whose nodes
   are addresses and are never stored.
 - **The bound** says whether a node can be passed. The ground's is the
-  lowest and highest it draws over a column, read from a tile's index lane,
-  whose coarser levels hold the join of the cells under them
-  (`crates/spec/core/src/ground.rs` `over`, `relief`). Outside this is called a
+  lowest and highest it draws over a column, read from a square's levels,
+  which the GPU folds over the square's columns as it lands, each coarser
+  level the join of the one under it (`bound_cs`;
+  `crates/spec/core/src/window.rs` `bound_over`, `crates/spec/core/src/ground.rs`
+  `relief`). Outside this is called a
   min-max (or maximum) mipmap, the usual structure for casting rays at a
   heightmap. The kernel's query carries a box a node
-  (`crates/client/kernel/src/layer/query.rs` `Bound`), as a BVH does.
+  (`crates/client/kernel/src/layer/query.rs` `Query::bounds`), as a BVH does.
 - **The content** is the pyramid's tiles, folded at each zoom, which answer
   what a block is where a ray stops.
 
@@ -184,17 +186,24 @@ Object order's hierarchical depth buffer is the same shape turned around:
 |                        | plane              | each cell holds                 | a test discards           |
 | ---------------------- | ------------------ | ------------------------------- | ------------------------- |
 | depth pyramid (raster) | the screen         | the farthest depth under it     | a thing farther than that |
-| index lane (ray)       | the world's ground | the lowest and highest under it | a node outside that range |
+| levels (ray)           | the world's ground | the lowest and highest under it | a node outside that range |
 
 Raster keeps its pyramid in screen space and rebuilds it every frame from
-the frame before. The ray keeps its pyramid in world space, and the bake
-made it.
+the frame before. The ray keeps its pyramid in world space, and the GPU
+folds it once, as a square lands (`bound_cs`).
 
-What the rays need is already streamed the way GigaVoxels streams it: the
-tiles a descent lacked are part of the observation, and demand follows them
-(`crates/client/kernel/src/view/sight.rs`).
+What the rays need was then streamed the way GigaVoxels streams it: the
+tiles a descent lacked were part of the observation, and demand followed
+them (`view/sight.rs`, since removed). That no longer holds: demand is a
+function of the eye alone, never of what the rays met
+(`crates/client/kernel/src/view/observation.rs` `ByEye`).
 
 ## Where it points
+
+_Since carried out in part: the grid, the bound and the overwrites are the
+GPU's (the decision's Status), the beam is
+[a cell casts a beam](./20261022-a-cell-casts-a-beam.md), and the chunk no
+longer draws (below)._
 
 **Cost.** The decision records the price: at full resolution a few frames a
 second, at half about thirteen. The descent itself is cheap. What costs is
@@ -209,21 +218,24 @@ the retreat is the first middle road, chunks chosen by rays, from
 **Two reductions in view.** Neither adds a mechanism; each hands a role
 the rays already play to the rays alone.
 
-- _Which tiles matter._ Fetching follows the rays' lacks, but evicting
-  ranks tiles by whether a sphere around each is in the frustum and by
-  distance (`crates/client/kernel/src/view/demand.rs` `Farthest`, through
-  `crates/spec/src/space/camera/eye.rs` `measure`). A tile behind a mountain
-  is in the frustum and no ray reads it. GigaVoxels marks what the rays
-  read and evicts what they did not; here the descent already counts the
-  nodes it asks about (`c44070e06`). The same order also ranks every
-  layer's work, which this did not look into.
-- _The chunk._ What a chunk still does is draw the blocks the CPU's rays
-  stopped on (`crates/client/kernel/src/chunk/domain.rs`). The decision's last
+- _Which tiles matter._ Fetching then followed the rays' lacks (now the
+  eye alone, above), but evicting ranks tiles by whether a box around each
+  is in the frustum and by distance (`crates/client/kernel/src/io/demand.rs`
+  `Order`, through `crates/spec/src/space/camera/eye.rs` `measure`). A tile
+  behind a mountain is in the frustum and no ray reads it. GigaVoxels marks
+  what the rays read and evicts what they did not; here the descent already
+  counts the nodes it asks about (`c44070e06`). The same order also ranks
+  every layer's work, which this did not look into.
+- _The chunk._ What a chunk then did was draw the blocks the CPU's rays
+  stopped on (`chunk/domain.rs`, since removed). The decision's last
   step moves what is laid over the ground — the separation, what is placed,
   decor — to the GPU's query, and then retires the CPU's drawing cast.
   After that a chunk has nothing left to do, and the axis loses a rung:
   scene, view, query, layer. Sparse voxel renderers have no chunk either,
-  only pages of data and rays.
+  only pages of data and rays. Done but for the rung: a chunk draws
+  nothing, and is now only the address by which what stands in the world,
+  decor and places, is gathered about the eye
+  (`crates/client/kernel/src/chunk.rs`, `view/observation.rs` `cubes`).
 
 **The floor.** Below these, five things remain, and removing any one brings
 its problem back: the tree, or the cost is linear in the world; the bound,
@@ -236,8 +248,11 @@ detail and visibility must be solved apart.
 and stay inside this structure on three conditions. It must stay inside the
 cells it is registered in, or a ray passing the part outside never learns
 it is there; a decor model can be larger than its box today
-(`crates/spec/src/block.rs` `reach`). A ray must not stop at its cell as if
-the cell were full, or the ground behind shows a cell-shaped hole; decor
-already leaves its cell empty (`fills`). And the fold must say what it is
+(`crates/spec/src/block.rs` `Decor::reach`). A ray must not stop at its cell
+as if the cell were full, or the ground behind shows a cell-shaped hole;
+decor already leaves its cell empty (`crates/spec/core/src/answer.rs`
+`fills`). And the fold must say what it is
 at a zoom whose block is larger than it. Within those, a mesh is a block of
-an intricate shape.
+an intricate shape. Decor today is not inside the rays: the GPU grows it and
+draws it as a model or a sprite beside them
+(`crates/client/render/src/gpu/grown.rs`).

@@ -9,6 +9,12 @@ again on 2026-09-22 at the 512-cell page, with a different answer on the
 codec and an open question on where it is decoded. The baked pages were
 built on 2026-09-24 and are zstd; every other row here is still later work.
 
+> The first half, Brotli q11 for the baked pages (the "By traffic" row and
+> "When"), and then "gzip stays" ("Decided for now"), is superseded by the
+> later dated sections: zstd, decoded by the transport, and zstd stays.
+> What binds is `CONTENT_ENCODING` and `pack`/`unpack` in
+> `crates/server/geo-bake/src/util.rs`, which are zstd alone.
+
 ## Measured on our own pages
 
 Twenty-five published terrain pages (v2, fetched from the deployment and
@@ -65,6 +71,8 @@ POI. Decode time was not measured (the timing run broke on shell quoting).
   encoding and a stream.
 
 ## When
+
+> Superseded by "2026-09-22, later" below: zstd, not Brotli.
 
 The baked pages first, when it is taken up: the bake tools compress with
 Brotli (`node:zlib`'s `brotliCompressSync`), the uploads and the monthly
@@ -159,9 +167,12 @@ write and read one format (RFC 8878), so the bake compresses with `libzstd`
 (the `zstd` crate), which alone has the high levels, and whichever decoder
 the host builds with reads it; a native kernel can take `libzstd` too.
 Streaming decode buys nothing either way: the kernel reads a body whole
-(`body_read`).
+(then `body_read`; now the host's `get` in `apps/client/src/kernel/io/read.ts`
+reads it with `arrayBuffer()`).
 
 ### Decided for now
+
+> Superseded the same day by the section below.
 
 gzip stays. The switch is a batch job whenever it is taken up: every baked
 object is gunzipped and recompressed, which is lossless and needs no
@@ -212,6 +223,11 @@ through `zstd -b`. Level 3 packs them to 4.57 MB at 3,147 MB/s and 19 to
 19 unpacks faster, 8,942 MB/s against 6,866. The level costs the bake alone,
 once; the reader gets fewer bytes and a quicker decode. 19 stays, and 3
 stays where a page is packed while someone waits for it.
+
+> No longer applies: every bake writes zstd, and the bake reads zstd
+> alone (`unpack` in `crates/server/geo-bake/src/util.rs`), so there is no
+> mixed bucket to tell apart and no `encoding_of`. What stands is that the
+> upload takes the encoding from the manifest (`script/publish.ts`).
 
 **One label per object, and the bytes decide it.** An object's encoding is
 metadata its upload sets, so gzip and zstd versions can share the bucket and
@@ -268,11 +284,11 @@ cache can read is one it normalizes, and it stores the decoded body.
 `Content-Encoding` it does not know passes the bytes through undecoded rather
 than saying anything, so a body that still begins with a compression magic is
 one the transport did not decode — a fact about the browser, found on the one
-side that can see it (`apps/web/src/kernel/io/fetch.ts`). It is the same
-judgment the bake makes on the other side of the wire (`geo-bake util.rs`'s
-`encoding_of`). Such a body is not handed to the kernel, which would spend a
-heap block and fail in its decoder far from the cause; the notice goes up and
-every later read is settled without being made.
+side that can see it (`packed` in `apps/client/src/kernel/io/read.ts`). The
+bake once made the same judgment on the other side of the wire (`geo-bake
+util.rs`'s `encoding_of`, since gone). Such a body is not handed to the
+kernel, which would spend a heap block and fail in its decoder far from the
+cause; the notice goes up and every later read is settled without being made.
 
 The decoded copy the edge makes for a client that did not offer zstd is
 therefore still made, and still cached. Nothing in a Worker prevents it. What
@@ -282,9 +298,9 @@ it costs is in the table above, and the only lever left is the codec.
 brotli q11 at 4.2 KB against zstd -22's 4.3, so the gap buys nothing in size;
 what it buys is decode, 0.34 ms a page against 0.69. Nothing in this tree
 decodes, though — the transport does, in the browser's own network stack, off
-the main thread, and at most sixteen reads are out at once (`io/sched.rs`'s
-`MAX_CREDITS`). The difference lands outside the kernel's quota and outside
-the bill alike.
+the main thread, and at most sixteen reads are out at once (`MAX_CREDITS` in
+`crates/client/kernel/src/param/io.rs`). The difference lands outside the
+kernel's quota and outside the bill alike.
 
 What keeps zstd is the host after this one. OkHttp takes gzip and nothing
 else, so brotli moves the gap to the React Native client rather than closing

@@ -1,6 +1,6 @@
 # A slot and its payload: what following the ring's own precedents cost
 
-**2026-09-17** — [The ring and its precedents](./closed/20260914-the-ring-and-its-precedents.md)
+**2026-09-17** — [The ring and its precedents](./archive/20260914-the-ring-and-its-precedents.md)
 was written three days ago and already said what the ring should be. Under
 io_uring it says the closest precedent is "the split between a fixed entry and
 a separately held payload", and under the questions already answered:
@@ -63,8 +63,9 @@ rather than where it is pushed.
 
 ## A slot in two places
 
-The descriptors are 36 KiB a ring and the payloads are 8 MiB, so keeping them
-in one block made the small one as coarse as the large one. virtio keeps its
+The descriptors are 36 KiB a ring and the payloads are 8 MiB (the submission
+ring's; the completion ring's are now 68 KiB and 16 MiB), so keeping them in
+one block made the small one as coarse as the large one. virtio keeps its
 descriptor table, avail ring and used ring in three separate areas; AF_XDP
 keeps its rings in one mapping and its UMEM in another; NVMe programs its
 queue base addresses and its data goes by PRP/SGL. The ratio is the tell:
@@ -99,10 +100,15 @@ and `XSK_UMEM__DEFAULT_FRAME_SIZE` is 4,096. What settles it here is not
 either of those: 4 KiB is the page this kernel already counts in
 ([the page table the pool did not need](./archive/20260916-the-page-table-the-pool-did-not-need.md))
 and the buddy's smallest block
-([the slab over the buddy](./closed/20260917-the-slab-over-the-buddy.md)), so a payload
+([the slab over the buddy](./archive/20260917-the-slab-over-the-buddy.md)), so a payload
 is one block wherever one has to come from, and "a packet is at most a page,
 and past that it is bulk" is a sentence that can be said without looking at any
 command.
+
+_Superseded: there are two rings and no spill, and the completion ring is
+twice the submission's — `SUBMISSION_CAPACITY` 2,048, `COMPLETION_CAPACITY`
+4,096 (spec/client/kernel/mem/mem.json), since a turn answers what it was sent
+and raises its own signals besides._
 
 **The depth is 2,048 and the three are equal.** io_uring's default is CQ twice
 SQ, and its own manual page says why that is not a universal ratio — "adequate
@@ -113,7 +119,8 @@ lists no longer crosses, and what the shell still sends is on its way in behind
 it. Equal is the choice that makes no claim.
 
 `2,048 × 4 KiB = 8 MiB` a ring, which is xdpsock's UMEM exactly, by two numbers
-neither of which was chosen to land there.
+neither of which was chosen to land there. (The completion ring's payloads
+are now `4,096 × 4 KiB = 16 MiB`.)
 
 ## What was considered and not taken
 
@@ -147,43 +154,49 @@ a constant's clothes.
 The linker owns the bottom of the memory, so it has to be kept out of the
 range. `--global-base` is how it is told where its own data may begin, and the
 same arithmetic has to produce that flag and the addresses the code uses —
-which is why both come out of `crates/pxl/wasm/build.rs`, one emitted as a
-link argument and the rest written into a file the module includes. There is
-no second place to get them wrong.
+which is why both come out of one file of numbers,
+`spec/client/kernel/mem/mem.json`: its generated `mem/mem.spec.rs` is what
+`crates/client-bracket/wasm/build.rs` emits as the link argument and what
+`crates/client/kernel/src/door/layout.rs` lays the rings from. There is no
+second place to get them wrong.
+
+The map as the code now holds it (mem.json, door/layout.rs; a descriptor
+range is `ring_bytes` rounded up to a page):
 
 ```
 addr                          bytes          what
 ────────────────────────────────────────────────────────────────────────
-0            1,048,576          1.00 MiB     stack, descending
-1,048,576    1,085,440         36 KiB        sq    descriptors
-1,085,440    1,122,304         36 KiB        cq    descriptors
-1,122,304    1,159,168         36 KiB        spill descriptors
-2,097,152   10,485,760          8 MiB        sq    payloads  2,048 × 4 KiB
-10,485,760  18,874,368          8 MiB        cq    payloads
-18,874,368  27,262,976          8 MiB        spill payloads
+0            1,048,576          1.00 MiB     stack, descending  STACK_BYTES
+1,048,576    1,085,440         36 KiB        sq descriptors     RING_DESC_AT
+1,085,440    1,155,072         68 KiB        cq descriptors
+2,097,152   10,485,760          8 MiB        sq payloads  2,048 × 4 KiB  RING_SLOT_AT
+10,485,760  27,262,976         16 MiB        cq payloads  4,096 × 4 KiB
+33,550,336  33,554,432          4 KiB        the directory      DIRECTORY_AT
 ────────────────────────────────────────────────────────────────────────
-33,554,432                     ~1.75 MiB     .rodata .data .bss   ← --global-base
-             67,108,864        ~30 MiB       (room for both to grow)
+33,554,432                                   .rodata .data .bss   ← --global-base
 ────────────────────────────────────────────────────────────────────────
-67,108,864  273,082,912       196.43 MiB     slab — the terrain
-273,084,416        end        251.57 MiB     heap (phone) / 763.57 MiB (desktop)
+page past the data                           .fixed — the terrain and the rest
+past .fixed                    end           heap
 ```
 
 Two ranges that grow without moving each other: the rings have everything
-under 32 MiB and the module's data everything over it. `MODULE_BYTES` is 64 MiB
-and covers both.
+under 32 MiB and the module's data everything over it. `.fixed` begins at the
+first page past the module's data (pxl-kernel mem/section.rs `fixed_at`) and
+the heap past it.
 
-**The 31 MiB of slack costs address space, not RAM.** Linear memory is backed
-by the OS on first touch, so an untouched gap is not resident. The exception
-this repository has already met is accounting rather than residency:
-JavaScriptCore reports the whole reservation as the page's JavaScript memory —
-a Safari heap timeline read it as one `ArrayBuffer` — which is why a phone is
-given 512 MiB and not 1 GiB (`apps/web/src/wasm/core_memory.ts`). The
-reservation did not change here, so neither does that.
+**The slack under the directory, about 6 MiB, costs address space, not RAM.**
+Linear memory is backed by the OS on first touch, so an untouched gap is not
+resident. The exception this repository has already met is accounting rather
+than residency: JavaScriptCore reports the whole reservation as the page's
+JavaScript memory — a Safari heap timeline read it as one `ArrayBuffer` —
+which is why a phone is given 512 MiB and not 1 GiB (mem.json `PHONE_BYTES`,
+`apps/web/src/guest.ts`). The reservation did not change here, so neither does
+that.
 
 **The stack stays at the bottom, and that is the only guard there is.** rustc
 passes `--stack-first` and `-z stack-size=1048576` to wasm-ld for
-wasm32-unknown-unknown by default; the linked module's `__stack_pointer`
+wasm32-unknown-unknown by default, and build.rs now passes both itself from
+`STACK_BYTES`; the linked module's `__stack_pointer`
 initializes to 1,048,576. With the stack first, an overflow goes below zero,
 wraps as an unsigned 32-bit address, lands outside the memory and traps. With
 the default layout it would write over `.data` silently instead, which is the
@@ -193,6 +206,12 @@ wraparound is the whole of the protection, and moving the stack anywhere else
 gives it up.
 
 ## What crosses by address now
+
+_Superseded in its particulars: of the commands below only `WORLD_SNAPSHOT`
+is left, a block the kernel holds named by address and length
+(spec/client/kernel/abi/cmd.json); `FETCH_BODY`, `VOLUME_READ`,
+`OBJECT_COLUMNS`, `LOAD_UPDATE` and `REPLY_BYTES` are gone, and a reply is the
+completion's result word (xpute-guest ipc/door.rs `Door::drain`)._
 
 `FETCH_BODY` already did it — the shell asks for room, writes the body, and
 names the block — so terrain never touched a slot. The rest now matches:
@@ -216,6 +235,12 @@ that is not happening.
 
 ## A full ring is a wait, not a panic
 
+_Superseded: the spill is gone. The host reads the completion ring dry before
+it rings again, so overrunning it is a sizing bug (`Door::post` answers
+ENOSPC), and `drain` stops before a command when the completion ring has no
+room for what one command may leave, its signals and its reply (xpute-guest
+ipc/door.rs `Door::has_room`)._
+
 `Outbox::post` tried the completion ring, then the spill, and asserted. The
 spill is io_uring's backlog — "never dropping events but providing backpressure
 on submits" — but io_uring has the second half too: a submission is refused
@@ -232,6 +257,9 @@ so the stop is enough — the spill remains for the tick, which emits as the
 builder walks and has no equally clean place to stop.
 
 ## What this leaves open
+
+_`MOST_SIGNALS` is gone: the kernel's bound is `SIGNALS` (pxl-kernel door.rs),
+what a turn raises after its drain._
 
 - `MOST_SIGNALS` is 64: what one command may raise before `drain` checks again.
   It bounds a command, not a turn, because a tick is not a submission.

@@ -1,8 +1,19 @@
 # A visit reads one entry
 
 **2026-10-20** — ordered in the conversation: recorded, then carried out as
-written and nothing beyond it. **Status: checks done; build not started.** The checks below came back
-with their counts. Nothing is built until the user's word.
+written and nothing beyond it. The checks below came back with their
+counts.
+
+**Status (2026-10-24): built, as the observed pyramid** (pxl-spec-core
+observed.rs). It is filled where the rays asked: the beam rays, the samples,
+and the pixels whose reading walk missed (`ray::MISS`), walked again from
+their cell's start in the same pass (pxl-shader `miss_cs`). An entry's key
+is its walk's tag and the zooms asked (`key(tag, [far, near])`); entries are
+kept between frames and forgotten over the squares that moved (`forgets`),
+or whole where what every node is asked of moved (`FORGETS_ALL`).
+It is not the open-addressed Morton table sketched under The structure:
+nodes are kept in tiles of eight siblings under the world's roots (`keeps`),
+each entry naming its children's tile.
 
 A ray asks the world whether a node is empty
 ([a ray asks the world](./20261013-a-ray-asks-the-world-whether-a-node-is-empty.md)),
@@ -241,6 +252,11 @@ Neither the log nor the probe was kept.
   - when the table drops keys no frame reads any more.
 
 ## What disappears when it is built
+
+_As built (Status), only the reading walk is free of these (pxl-shader
+`Reading`); the walks that write the pyramid still compose a node its entry
+does not hold, from what was handed it, and keep that in the entry
+(`Writing`, `world::At::words`)._
 
 - Every source's composition inside the cast: placed, ground, zoom loop,
   fallback, `held_of`, caves, shard, the ways' cursor and the slab join.

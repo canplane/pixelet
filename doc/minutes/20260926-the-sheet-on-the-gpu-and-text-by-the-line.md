@@ -29,9 +29,9 @@ Read call by call, none of it needed a 2D canvas:
   tail, and text. The shapes are what a shader draws as signed distances.
 
 So the stream is gone, on the page as well. An image is uploaded as the
-texture it already was and copied on the GPU (`COPY_TEXTURE`). A sheet entry
-is drawn by one pass into a texture of its size and copied into its
-rectangle (`pxl-render gpu/sheet.rs`, `frame/shader/sheet.wgsl`): its shapes
+texture it already was and copied on the GPU (`COPY_TEXTURE_TO_TEXTURE`). A
+sheet entry is drawn by one pass into a texture of its size and copied into
+its rectangle (`pxl-render gpu/sheet.rs`, `frame/shader/sheet.wgsl`): its shapes
 as signed distances, its text as pixels the platform drew. The page's shell
 lost the paint player, its scratch canvas and the width round trip.
 
@@ -62,7 +62,7 @@ and emoji are the platform engine's, the quality a page's labels already
 had, on every target alike. A text too wide for its box is broken into lines
 by the shell, measuring with the same platform (`kernel/host.ts`
 `line_ends`), and the kernel asks for each line's pixels
-(`pxl-kernel text.rs`, host.json's `TEXT_LAYOUT` and `TEXT_RASTER`).
+(`pxl-kernel io/text.rs`, host.json's `TEXT_LAYOUT` and `TEXT_RASTER`).
 
 The cost is reuse: "Gangnam Station" and "Gangnam-gu Office" share no
 pixels. A line is rasterized once, when a sheet entry is drawn, and what is
@@ -74,6 +74,6 @@ the boundary's shape.
 ## Where it stands
 
 Built on both targets. Images decode where the device is: the browser's
-`createImageBitmap` on a page, the `png` and `image-webp` crates in the
-device's core. The sheet pass and the platform's lines draw every badge and
-bubble on the page, the simulator and an iPhone.
+`createImageBitmap` on a page, the `png` and `image-webp` crates on a device
+(xpute-gpu `image.rs`). The sheet pass and the platform's lines draw every
+badge and bubble on the page, the simulator and an iPhone.

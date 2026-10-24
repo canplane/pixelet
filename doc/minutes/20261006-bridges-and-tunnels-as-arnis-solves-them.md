@@ -12,7 +12,7 @@ headless. This replaces the solve of
 reinterpreted Arnis rather than took it. That record's storage — a deck is
 a line in the terrain page — stands. A contract of our own for the same
 surfaces was drafted and aborted the day before
-([closed](./closed/20261005-the-surface-a-way-runs-on.md)).
+([archived](./archive/20261005-the-surface-a-way-runs-on.md)).
 
 ## What is taken
 
@@ -50,11 +50,13 @@ between ways stay its own.
 
 Arnis's numbers are metres — a block is a metre upright on the Earth (its
 `celestial.rs`) — and each is taken into the page's cells by the page's
-scale, `u_per_m` at the page's base, rounded half to even
-(`pxl-geo-bake deck/arnis.rs`). A deck's slab is Arnis's structure depth so taken
-(`pxl-spec bake/deck.rs` `occupies`), and a bore's clear space is carried by
-its line (`clear`): its ceiling under cover, the whole height to the sky
-where the roof is open.
+scale, `u_per_m` at the page's south-west corner (`pxl-spec procedural.rs`
+`Frame::per_m`), rounded half to even (`pxl-spec-core` `cells_of_m`;
+`pxl-geo-bake separation/arnis.rs`). A deck's slab is Arnis's structure
+depth so taken (`pxl-spec-core ways.rs` `occupies`, `slab_depth`), and a
+bore's clear space is carried by its line (`pxl-spec bake/separation.rs`
+`clear`): its ceiling under cover, the whole height to the sky where the
+roof is open.
 
 ## What is not taken
 
@@ -87,8 +89,8 @@ draws nothing that is not in use.
   whose rings cut it in different places solve it differently: one cell of
   one seam of nine pages at Namsan.
 
-It is the page bake's solve (`pxl-geo-bake deck/arnis.rs`); the earlier one
-and the structures it kept between pages are gone.
+It is the page bake's solve (`pxl-geo-bake separation/arnis.rs`); the
+earlier one and the structures it kept between pages are gone.
 
 Measured at Namsan, nine pages each solved from its own ring: 0.08 to 0.41 s a page, of which the solve is 0.01 to 0.04 s
 and the rest reading; of twelve seams, eleven draw every shared cell

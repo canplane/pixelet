@@ -4,10 +4,19 @@
 which parts of the current architecture had to change to make that true.
 
 > Mechanical details below (table names, route paths, env vars like
-> `VITE_TILE_BASE_URL`) reflect this doc's own date and have since moved —
-> `apps/web/src/lib/env/routes.ts` and `infra/README.md` are current. The
-> reasoning (pre-baked tiles, object storage, one-Worker-one-origin) still
-> holds; this note exists so the paths below aren't mistaken for current.
+> `VITE_TILE_BASE_URL`, `apps/api`, `/tiles/v1`, the `_ocean` fallback,
+> gzip) reflect this doc's own date and have since moved —
+> `spec/spec/route.json`, `apps/web/wrangler.jsonc`,
+> `apps/web/cloudflare-worker/index.ts` and `infra/README.md` are current.
+> The reasoning (pre-baked tiles, object storage, one-Worker-one-origin)
+> still holds for what the bucket serves; this note exists so the paths
+> below aren't mistaken for current.
+>
+> The deployment is no longer serverless. The Worker relays `/geo/*` and
+> `/api/*` to `GEO_ORIGIN` and `API_ORIGIN` (`wrangler.jsonc` `vars`), where
+> Caddy sends them to pxl-geo and pxl-api, each with its database
+> (`infra/prod/Caddyfile`, `infra/prod/docker-compose.yml`). The bucket
+> still serves the tiles, under `/tile/*`, and the assets, under `/asset/*`.
 
 ---
 
@@ -29,6 +38,11 @@ once, offline, and served as a static file. That collapses the deployment from
 
 ### 1. Tiles are pre-baked to an object store, not served live
 
+> Superseded in part: tiles are still baked and served from the bucket, now
+> by the Rust bakes (`bake_terrain`, `bake_place`, `bake_division` in
+> `crates/server/geo-bake/src/bin/`), but search and the application are
+> served live behind the same Worker — see the note at the top.
+
 The whole coverage area is baked once by an offline tool
 (`apps/api/src/bake/terrain/tools/bake_tiles.ts`) and uploaded as static
 objects. No API server and no database exist in the deployed request path.
@@ -43,6 +57,12 @@ The live API keeps working unchanged for development, where baking on demand is
 what you actually want.
 
 ### 2. Open-ocean pages are not baked at all — one shared fallback covers them
+
+> Superseded: there is no `_ocean` object now. A page a version leaves out
+> is answered `204` by the Worker (`left()` in
+> `apps/web/cloudflare-worker/index.ts`), and the client reads a 204 as no
+> object (`apps/client/src/kernel/io/read.ts`); 404 stays for a key that
+> names nothing.
 
 Classifying the coverage bbox against `osm_coastline_polygons` (the same
 predicate `repository.ts`'s `OSM_COAST_SQL` already uses, so "has land" means
@@ -83,6 +103,13 @@ so a 404 there is a genuine failure and must keep surfacing as one.
 
 ### 3. Tile origin is a build-time env var, versioned by URL prefix
 
+> Superseded: `__TILE_BASE_URL__` is gone, and `VITE_TILE_BASE_URL` now
+> only points the dev server's proxy at a local tile server
+> (`apps/web/vite.config.ts`). Tile URLs are `/tile/<kind>/<version>/<name>`
+> (`tileUrl` in `apps/client/src/config/route.ts`), and which version is
+> served is the bucket's `source` declaration (`spec/spec/bake/published.json`).
+> Immutable versions, never overwritten in place, still hold.
+
 `VITE_TILE_BASE_URL` is read in `vite.config.ts` and injected as the
 `__TILE_BASE_URL__` build constant (matching the existing `__APP_ENV__` /
 `__IS_DEV__` pattern rather than introducing a second mechanism).
@@ -104,6 +131,11 @@ Per-tile content hashing was considered and rejected as more machinery than a
 dataset re-baked a handful of times a year needs.
 
 ### 4. Objects are stored pre-gzipped
+
+> Superseded: objects are stored zstd now (`CONTENT_ENCODING` in
+> `crates/server/geo-bake/src/util.rs`; see
+> [compression by traffic](./20260913-compression-by-traffic.md)). The
+> upload takes the encoding from the bake's manifest (`script/publish.ts`).
 
 Object stores don't compress on the fly. Each tile is gzipped at bake time and
 uploaded with `content-type: application/octet-stream` +
@@ -347,6 +379,9 @@ A miss is a billed class-B operation, so without this anyone can walk
 prober which guesses had the right shape, and the client cannot act on the
 difference anyway.
 
+> Since then: the shape is `KEY_RE` in `apps/web/cloudflare-worker/index.ts`,
+> and a well-shaped page key with no object answers 204 (`left()`), not 404.
+
 ### On its own domain — and what that took (2026-08-17)
 
 Closed, by moving the app off `*.workers.dev` and onto `plei.me`. The
@@ -367,7 +402,7 @@ door propped open. It disabled Preview URLs as a side effect, which wrangler
 warns about; nothing needed them.
 
 `plei.me` rather than one of the `xpute.*` domains the account also holds.
-`@xpute/core` is a runtime kit that carries no pixelet knowledge and is meant
+`@xpute/kit` is a runtime kit that carries no pixelet knowledge and is meant
 to stay portable, so spending that name on one of the things
 built with it would be the same conflation the package boundary exists to
 prevent.
@@ -438,6 +473,9 @@ in the first place.
 
 ### Uploading
 
+> Now `script/publish.ts`: `aws s3 sync` against R2's S3 endpoint, with the
+> `content-encoding` and `content-type` taken from the bake's manifest.
+
 43,506 objects rules out `wrangler r2 object put`, which handles one object per
 invocation. R2 is S3-compatible, so `rclone copy` or `aws s3 sync` is the
 practical route, setting `content-encoding: gzip`,
@@ -469,6 +507,12 @@ being used. `VITE_GEOCODE_BASE_URL` exists to make that swap a config change
 rather than a code change — it is a door left open, not one to walk through
 now.
 
+> Placed objects are now the kernel's file `OBJECTS_PATH` below its
+> `STORAGE` root (`crates/client/kernel/src/abi/host.spec.rs`); the page
+> keeps each such file in `localStorage` under `pxl:` and its path
+> (`storage_key` in `apps/client/src/kernel/host.ts`), the device app in the
+> platform's preferences.
+
 **Placed objects stay in `localStorage`.** Nothing is shared between visitors;
 each browser sees only its own edits. Correct for a demo, and it's what makes
 "no server" possible at all. The 5–10 MB quota and synchronous main-thread I/O
@@ -482,6 +526,9 @@ demo goes up or not. What stays private is the part that matters more — the ba
 pipeline itself (OSM policy, POI ranking, PostGIS SQL, quantization) lives in
 `apps/api` and never leaves the server, and the baked binaries don't give it up.
 
+> The bake pipeline no longer lives in `apps/api`, which is gone: it is
+> `crates/server/geo-bake`, and still never deployed.
+
 **API hardening remains parked.** Rate limiting, timeouts, and circuit breaking
 were judged out of scope (see project notes). They're moot for the static
 deployment, which has no API to harden. The in-process LRU cache and
@@ -489,6 +536,11 @@ single-flight added to the live tile endpoint stay useful for development and fo
 any future non-static path.
 
 ## Deploying it: what actually broke
+
+> The Worker is `apps/web/cloudflare-worker/index.ts` now, and
+> `run_worker_first` claims four roots, `["/geo/*", "/api/*", "/tile/*",
+> "/asset/*"]` (`apps/web/wrangler.jsonc`, written from
+> `spec/spec/route.json`). The reasoning below holds.
 
 The shape that shipped is one Cloudflare Worker serving both the built app and
 the tiles (`apps/web/wrangler.jsonc`, `apps/web/worker/index.ts`), so tiles live
@@ -536,6 +588,11 @@ the wire did.
 
 ### The same trap again, one layer out
 
+> Since replaced: the cache stores the packed bytes with their encoding
+> parked on `x-pxl-stored-encoding` (`STORED_ENCODING`), and `serve()` puts
+> it back with `encodeBody: "manual"` on both paths out
+> (`apps/web/cloudflare-worker/index.ts`).
+
 Putting the Cache API in front of R2 — the cost control described below —
 reintroduced the identical failure on cache hits alone. A tile stored at 34,261
 bytes served at 34,261 on a MISS and **30,728 on a HIT**, and the decode broke.
@@ -559,6 +616,9 @@ compression working rather than breaking. Comparing served size against stored
 size is what catches it; nothing about the response is otherwise suspicious.
 
 ### Verified end to end
+
+> As of this date. A page never baked now answers 204, and there is no
+> `_ocean` (decision 2's note).
 
 | Check                | Result                                                              |
 | -------------------- | ------------------------------------------------------------------- |
@@ -589,6 +649,15 @@ Two secret-looking literals in the bundle were checked and are benign: React's
 own list of input types (which contains `password`), and the deliberate
 attribution link in the license section.
 
+> Since superseded: Nominatim is not called; reverse geocoding is baked
+> (the divisions bake), and the coordinate that leaves the client now is
+> forward search's `near`, sent to the project's own `/geo/search`
+> (`fetchSearch` in `apps/client/src/shell/search/repository.ts`). The
+> settings this paragraph lists are now `pxl:lang`, `pxl:ui_hotbar` and the
+> kernel's `settings` and `object/v15` files (`pxl:settings`,
+> `pxl:object:v15`). pxl-api is deployed and its `/api/internal` is behind
+> the admin token (`API_INTERNAL`, `crates/server/api/src/main.rs`).
+
 **Location is the sensitive surface here.** The only personal data
 leaving the client is the map-center coordinate sent to Nominatim — rounded to
 four decimal places (~11 m) and debounced, never stored. That is now disclosed
@@ -603,6 +672,9 @@ carried over from development. The bucket stays private and is read only
 through the Worker ("What actually bounds the spend", above).
 
 ## Changes this produced
+
+> History: `apps/api` and every file below it are gone, and the client is
+> `apps/client`; none of these paths is current.
 
 | File                                                     | Change                                                                    |
 | -------------------------------------------------------- | ------------------------------------------------------------------------- |
