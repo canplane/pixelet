@@ -46,7 +46,7 @@ struct Placement {
     /// Nearest the eye first: screen box, and where a tap on it goes.
     hits: Vec<([f64; 4], Went)>,
     /// Kept so a settled turn asks the heap for nothing; a chunk's in a
-    /// run: the markers, theirs in a run a cell (`pin.rs`), and the places.
+    /// run, as each source reads it (`pin.rs`, `places.rs`).
     pins: Vec<pin::Pin>,
     places: Vec<(Chunk, Instance)>,
     /// The drawn chunks `pins` and `places` were read from: a chunk drawn still keeps
@@ -266,9 +266,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::scene::frame::Frame) {
     p.pending.clear();
     let shown = pin::shown(&pins).chain(read_places.iter().map(|(_, s)| s.clone())).chain(seen.said.shown());
     let spacing = seen.spacing;
-    // What was drawn last by its holder's key, read once: a marker's words,
-    // a count, a place's look or wrap or the line changed, and what was
-    // drawn stays until the new one is ready to show.
+    // What was drawn last by its holder's key, read once: what a holder
+    // shows changed, and what was drawn stays until the new one is ready to
+    // show.
     let before = &mut p.before;
     before.clear();
     before.extend(drawn_before.iter().map(|s| (s.key, s.label.clone())));
