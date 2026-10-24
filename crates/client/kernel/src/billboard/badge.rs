@@ -24,20 +24,21 @@ use xpute_kit::status::errno::Errno;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Label {
     /// Words on a pill in its `fill`, in its `ink`.
-    Pill { text: Rc<str>, fill: u32, ink: u32 },
+    Pill { words: Rc<str>, fill: u32, ink: u32 },
     /// A place as Carto draws it: its symbol (`icon`), or a dot, in its
     /// category's `fill`, and under it its name, where it is named, in its
-    /// category's `text` color, wrapped at `wrap` pixels (`spaced`).
+    /// category's text color, its `ink`, wrapped at `wrap` pixels
+    /// (`spaced`).
     Point {
         name: Option<Rc<str>>,
         wrap: u32,
         icon: bool,
         symbol: Option<u16>,
         fill: u32,
-        text: u32,
+        ink: u32,
     },
     /// A line said in the chat.
-    Bubble { text: Rc<str> },
+    Bubble { words: Rc<str> },
 }
 
 impl Label {
@@ -112,14 +113,14 @@ pub fn size(label: &Label) -> Option<[f64; 3]> {
         Some((laid.iter().map(|&(_, w)| w).fold(0.0, f64::max), laid.iter().map(|&(l, _)| l.trim().to_owned()).collect()))
     };
     let (size, lines) = match label {
-        Label::Pill { text, .. } => (marker_size(text_width(BADGE_FONT, text)?.ceil()), Vec::new()),
+        Label::Pill { words, .. } => (marker_size(text_width(BADGE_FONT, words)?.ceil()), Vec::new()),
         Label::Point { name: None, icon, .. } => (point_size(*icon, None), Vec::new()),
         Label::Point { name: Some(name), wrap, icon, .. } => {
             let (w, lines) = laid(POINT_FONT, f64::from(*wrap), name)?;
             (point_size(*icon, Some((w, lines.len()))), lines)
         }
-        Label::Bubble { text } => {
-            let (w, lines) = laid(BUBBLE_FONT, BUBBLE_TEXT_W, text)?;
+        Label::Bubble { words } => {
+            let (w, lines) = laid(BUBBLE_FONT, BUBBLE_TEXT_W, words)?;
             (bubble_size(w, lines.len()), lines)
         }
     };
@@ -142,19 +143,19 @@ pub fn slot(label: &Label) -> i32 {
             w * SHEET_SCALE,
             h * SHEET_SCALE,
             match label {
-                Label::Pill { text, fill, ink } => DrawSpec::Pill {
-                    label: text.to_string(),
+                Label::Pill { words, fill, ink } => DrawSpec::Pill {
+                    words: words.to_string(),
                     fill: *fill,
-                    text: *ink,
+                    ink: *ink,
                     logical_w: w,
                 },
                 Label::Bubble { .. } => DrawSpec::Bubble { lines: b.lines.clone(), box_w: w },
-                &Label::Point { icon, symbol, fill, text, .. } => DrawSpec::Point {
+                &Label::Point { icon, symbol, fill, ink, .. } => DrawSpec::Point {
                     lines: b.lines.clone(),
                     icon,
                     symbol,
                     fill,
-                    text,
+                    ink,
                     logical_w: w,
                 },
             },

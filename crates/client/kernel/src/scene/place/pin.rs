@@ -54,7 +54,7 @@ fn pill(words: &str) -> Label {
         shown.push('…');
     }
     Label::Pill {
-        text: shown.into(),
+        words: shown.into(),
         fill: PILL_FILL,
         ink: PILL_TEXT,
     }
@@ -64,7 +64,7 @@ fn pill(words: &str) -> Label {
 /// count's colors.
 fn count(n: usize) -> Label {
     Label::Pill {
-        text: n.to_string().into(),
+        words: n.to_string().into(),
         fill: COUNT_FILL,
         ink: COUNT_TEXT,
     }

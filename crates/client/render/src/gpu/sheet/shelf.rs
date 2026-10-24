@@ -12,11 +12,10 @@ pub const NO_SLOT: i32 = -1;
 /// What an entry paints, in logical pixels before the render scale.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DrawSpec {
-    /// A label alone on a pill in the fill, in the text color: a placed
-    /// billboard's words, or the count of the markers one cell holds.
-    Pill { label: String, fill: u32, text: u32, logical_w: f64 },
+    /// Words alone on a pill in its fill and text colors (`ink`).
+    Pill { words: String, fill: u32, ink: u32, logical_w: f64 },
     /// A place as Carto draws it: a dot or its icon in the fill, and under
-    /// it the name, if shown, in the text color.
+    /// it the name, if shown, in the text color (`ink`).
     Point {
         /// Its name as laid out, a line each; none where it is not named.
         lines: Vec<String>,
@@ -24,7 +23,7 @@ pub enum DrawSpec {
         /// Carto's symbol for it, by its place in `SYMBOLS`; a disc where none.
         symbol: Option<u16>,
         fill: u32,
-        text: u32,
+        ink: u32,
         logical_w: f64,
     },
     /// A speech bubble over its tail, its words a line each.

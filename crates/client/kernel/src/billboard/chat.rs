@@ -56,7 +56,7 @@ pub fn shown_line() -> Option<Label> {
         return None;
     }
     wake_at(line.said + SHOWN_MS);
-    Some(Label::Bubble { text: line.text.clone() })
+    Some(Label::Bubble { words: line.text.clone() })
 }
 
 /// None while there is no one to speak.

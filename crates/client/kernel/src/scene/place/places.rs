@@ -80,6 +80,6 @@ fn point_of(h: &Placed, zoom: i32) -> Option<Label> {
         icon,
         symbol: symbol_of(h.place.category),
         fill: FILL[k],
-        text: TEXT[k],
+        ink: TEXT[k],
     })
 }

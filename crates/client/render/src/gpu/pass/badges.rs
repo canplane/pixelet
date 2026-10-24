@@ -33,7 +33,7 @@ fn anchor_dot(p: &mut Sketch, logical_w: f32) {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn point(p: &mut Sketch, lines: &[String], icon: bool, symbol: Option<u16>, fill: u32, text: u32, logical_w: f32) {
+fn point(p: &mut Sketch, lines: &[String], icon: bool, symbol: Option<u16>, fill: u32, ink: u32, logical_w: f32) {
     let (cx, cy) = (logical_w / 2.0, point_mark(icon) / 2.0);
     let r = cy - POINT_PAD;
     p.soft_circle(cx, cy + POINT_SHADOW_DY, r + 0.5, POINT_SHADOW_BLUR, 0.0, POINT_SHADOW_FILL);
@@ -44,13 +44,13 @@ fn point(p: &mut Sketch, lines: &[String], icon: bool, symbol: Option<u16>, fill
     }
     for (k, line) in lines.iter().enumerate() {
         let ty = 2.0 * cy - POINT_PAD + POINT_GAP + POINT_LINE / 2.0 + POINT_PITCH * k as f32;
-        p.haloed_text(POINT_FONT, text, POINT_TEXT_HALO, line, cx, ty);
+        p.haloed_text(POINT_FONT, ink, POINT_TEXT_HALO, line, cx, ty);
     }
 }
 
-fn labeled_pill(p: &mut Sketch, label: &str, fill: u32, text: u32, logical_w: f32) {
+fn labeled_pill(p: &mut Sketch, words: &str, fill: u32, ink: u32, logical_w: f32) {
     p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, fill);
-    p.text(BADGE_FONT, text, label, logical_w / 2.0, PILL_H / 2.0 + 1.0);
+    p.text(BADGE_FONT, ink, words, logical_w / 2.0, PILL_H / 2.0 + 1.0);
     anchor_dot(p, logical_w);
 }
 
@@ -185,15 +185,15 @@ impl BadgePass {
             let Some(spec) = sheet.slot_draw(slot) else { continue };
             let mut p = Sketch::default();
             match spec {
-                DrawSpec::Pill { label, fill, text, logical_w } => labeled_pill(&mut p, label, *fill, *text, *logical_w as f32),
+                DrawSpec::Pill { words, fill, ink, logical_w } => labeled_pill(&mut p, words, *fill, *ink, *logical_w as f32),
                 DrawSpec::Point {
                     lines,
                     icon,
                     symbol,
                     fill,
-                    text,
+                    ink,
                     logical_w,
-                } => point(&mut p, lines, *icon, *symbol, *fill, *text, *logical_w as f32),
+                } => point(&mut p, lines, *icon, *symbol, *fill, *ink, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w } => bubble(&mut p, lines, *box_w as f32),
             }
             match SheetPainter::rasters(&p, text) {
