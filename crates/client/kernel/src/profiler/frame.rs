@@ -129,7 +129,7 @@ pub struct FrameSample {
     pub tiles: TileSample,
     pub heap: HeapSample,
     pub rings: RingSample,
-    /// The most of `.fixed.bodies`' slots out at once since the frame before
+    /// The most body slots out at once since the frame before
     /// (io/body.rs `take_peak`).
     pub body_slots_peak: f64,
     /// Requests waiting for a credit, and out on one, by stream.
