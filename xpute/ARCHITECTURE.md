@@ -22,18 +22,18 @@ Three things cross between the ends and nothing else does: one memory they share
 
 The memory is the one thing the two ends share, so its rules come first.
 
-It is the **core memory**, core as in a core dump. The host reserves it at boot and never grows it, so a view into it stays valid for as long as the guest lives. That is what lets a queue keep its words at a fixed address, and a payload be read where it lies.
+It is the **core memory**, core as in a core dump. The host reserves it at boot, or a guest linked into a native program maps it itself and sets its base (`mem/base`). Either way it never grows, so a view into it stays valid for as long as the guest lives. That is what lets a queue keep its words at a fixed address, and a payload be read where it lies.
 
 What goes in the memory is the guest's business. The guest hands in a base, a unit and a list of sizes, and gets back where each range landed (`mem/section`), as a linker script places output sections without knowing what they hold. Whatever is asked of a range is checked against its end (`Section::at`, `nth`), so nothing written through one range lands in the next.
 
-The memory need not begin at address zero. A WebAssembly module's does; a guest linked into a native program is given a region wherever the system put it. So every address a guest names is an offset from the memory's base, never a pointer (`mem/base`). It means the same to the host however the guest is built, and it fits a `u32` however wide the machine's pointers are. A pointer becomes an offset in one place (`off_of`), which refuses one outside the memory; an empty slice is offset 0.
+The memory need not begin at address zero. A WebAssembly module's does; a guest linked into a native program has a region wherever the system put it. So every address a guest names is an offset from the memory's base, never a pointer (`mem/base`). It means the same to the host however the guest is built, and it crosses as a `u32` however wide the machine's pointers are. A pointer becomes an offset in one place (`off_of`), which refuses one outside the memory; an empty slice is offset 0. C++'s also refuses an offset past a `u32`, where Rust's counts on the memory being no larger than a `u32` spans.
 
 The last range is the heap, reached through a single call (`mem/heap`) whose answer is the guest's choice. `kit` offers two allocators that fit together:
 
 - a buddy allocator of fixed pages (`alloc/buddy_tree.rs`), ported from evanw/buddy-malloc, which was written for this same situation: a module handed one heap with no system allocator beneath it;
 - a slab of size classes over it (`alloc/slab.rs`), which keeps its bookkeeping inside the blocks it has not handed out.
 
-Since the guest places everything, the host has to be told where. The guest's first turn writes a **directory** (`ipc/directory`): a magic, a version, then entries of a key and a value — where each ring lies, the numbers of its quantum policy, and keys the program numbers for itself. The host learns one offset from outside, the directory's, and finds everything else from there.
+Since the guest places everything, the host has to be told where. The guest writes a **directory** (`ipc/directory`) in its first turn, or in a boot call that returns its offset, as the conformance guests do. A head of four words — a magic, a version, the count of entries and one reserved — comes before the entries, each a key and a value: where each ring lies, the numbers of its quantum policy, and keys the program numbers for itself. The host learns one offset from outside, the directory's, and finds everything else from there. It refuses a directory whose magic or version it does not know, or with a key written twice.
 
 ---
 
@@ -105,7 +105,7 @@ descriptors                                  payloads, elsewhere in memory
 
 Keeping descriptors apart from payloads is what virtio's descriptor table and AF_XDP's UMEM do: the descriptors are small and stay hot, the payloads are large and do not.
 
-Positions only grow, so `tail - head` is how many messages wait. Message _n_ owns slot _n_, so a slot is free exactly when its message has been read, and nothing under the ring allocates. A push fails in two ways only. `EAGAIN` means the ring is full, and the producer waits. `EMSGSIZE` means the packet is bigger than a slot, and such a packet crosses by address instead, in a heap block.
+Positions only grow, so `tail - head` is how many messages wait. Message _n_ owns slot _n_, so a slot is free exactly when its message has been read, and nothing under the ring allocates. A push fails in two ways only. `EAGAIN` means the ring is full, and the producer waits. `EMSGSIZE` means the packet is bigger than a slot, and such a packet crosses by address instead, in a heap block. A packet the host wrote anywhere but the tail's slot is not a third way to fail but a bug, and its push stops on it (`ENOTRECOVERABLE`).
 
 Two rings make a pair: one for what the host submits, one for what the guest completes. The host drives the pair through the **doorbell** (`ipc/doorbell.ts`):
 
@@ -115,7 +115,7 @@ Two rings make a pair: one for what the host submits, one for what the guest com
 
 Two ways in sit on top of that. A question the host needs answered at once is a `call`: submitted with `ACKREQ` and rung with no quota until its reply comes back. A command from outside the host's own code, such as a developer's console, is `cmd`: it takes the command's number and its arguments, writes each argument as the packet's next field, lowered as XTP lowers a value (`TreeView.set`), then sends and rings. A guest that traps is gone, and the doorbell rings it no more.
 
-The guest's end is the **door** (`ipc/door`). It applies the submissions in order, answers each, and posts what the guest raises into the completion ring. That ring holds a whole turn's output: the guest stops applying submissions while too little room is left for what one more might raise, and leaves the rest for the next turn, in order.
+The guest's end is the **door** (`ipc/door`). It applies the submissions in order, answers each, and posts what the guest raises into the completion ring. That ring holds a whole turn's output. Before each submission the door checks that the ring has room for the most one command may leave, its signals and its reply, a bound the program gives (`most_signals`). Where it has not, the door applies no more and leaves the rest for the next turn, in order. The room is checked there and nowhere else, so what a turn raises after its drain is covered only where the drain ran out of submissions, not of room.
 
 ---
 
@@ -127,13 +127,15 @@ It runs inside one call, `interrupt(quota_ms)`, and when that call returns it is
 
 How long a turn may take, and how that time is spent, are settled at three levels, from the outside in.
 
-1. **Quantum** (`sched/quantum`) is the host's, and it sets the quota: a cooperative counterpart of an exokernel's CPU slice (Aegis), ended by the guest's return rather than a timer. The host measures the display's refresh from the gaps between the frames it is handed, and paces turns a whole number of refreshes apart (`paced`). The guest's directory declares the rest: the share of a frame left unspent (`margin_share`), how many frames a batch turn spans (`batch_frames`), and how long after input a turn counts as interactive (`settle_ms`). A turn that runs long is not cut off; its overrun comes off the next quota.
-2. **Tick** (`sched/tick`) is the guest's, and it divides the quota among phases named once for every language (`spec/sched/tick.json`): `interaction`, then `visible`, which may not take the share kept for `content` (`content_share`), then `content`, `cosmetic` and `report`. What runs in each is the program's. A phase that runs past its share is not stopped, only counted against the turn.
-3. **Pass** (`sched/frame_budget`) spends one phase's share on an ordered list of steps until a budget or a step cap says stop. The budget is waived until a step has done work, so nothing starves behind what sits ahead of it; a hard budget, where one is given, is never waived.
+1. **Quantum** (`sched/quantum`) is the host's, and it sets the quota: a cooperative counterpart of an exokernel's CPU slice (Aegis), ended by the guest's return rather than a timer. The host measures the display's refresh from the gaps between the frames it is handed, and paces turns a whole number of refreshes apart (`paced`). The guest's directory declares the rest: the share of a frame left unspent (`margin_share`), how many frames a batch turn spans (`batch_frames`), and how long after input a turn counts as interactive (`settle_ms`), as is one after a falling edge of 0. A turn that runs long is not cut off; its overrun, the whole ring's time past the quota, comes off the next quota.
+2. **Tick** (`sched/tick`) is the guest's. It runs phases named once for every language (`spec/sched/tick.json`) in a fixed order — `interaction`, `visible`, `content`, `cosmetic`, `report` — against one budget, the quota counted from the rising edge, and does not divide it among them. While `visible` runs, the share kept for `content` (`content_share`) is held back from it; no other phase is held back. What runs in each is the program's. A phase's time is recorded, never stopped.
+3. **Pass** (`sched/frame_budget`) spends what is left of the budget on an ordered list of steps until the budget or a step cap says stop. Both are waived until a step has done work, so nothing starves behind what sits ahead of it. The hard budget, what is left plus the tick's `hard_slack_ms`, is never waived, but the first step is always tried.
 
-Work too long for one turn is a **task**, written against `sched/edge` in its language's form, a future or a coroutine. A task gets the turn's quota as a deadline, `yield_if_spent` to stop when the quota is gone, and `next_turn` to wait for the next turn. Whatever assembles the guest picks an executor, marks the edges with `rise` and `fall`, and polls it between them.
+Work too long for one turn is a **task**, written against `sched/edge` in its language's form, a future or a coroutine. A task gets the turn's quota as a deadline, `yield_if_spent` to stop once the deadline has passed, and `next_turn` to wait for the next turn. The guest may move the deadline past the quota (`extend_to`), keeping its tasks a share past what ran before them. A task parked by either makes the falling edge 0, the next frame. Whatever assembles the guest picks an executor, marks the edges with `rise` and `fall`, and polls it between them.
 
-On the host side, the **strobe** (`sched/strobe.ts`) decides when to ring at all. It rings on an animation frame, only when the host or the guest's last falling edge asked for a turn, and only on the refreshes the quantum paces at. A guest that asks for nothing is rung for nothing, and no turn runs on a timer of the host's own.
+On the host side, the **strobe** (`sched/strobe.ts`) decides when a turn of work is rung. It rings on an animation frame, only when the host or the guest's last falling edge asked for a turn, and only on the refreshes the quantum paces at; a frame sooner than that is skipped, and the next asked for. A positive `wake_ms` sets a timer that asks for a frame when it fires. A guest that asks for nothing is rung for nothing, and no turn runs on a timer of the host's own.
+
+The strobe's are not the only rings. The doorbell rings with no quota to make room in a full submission ring, to wait for a call's reply and to send a `cmd`, and whatever holds the doorbell may ring it too. Those turns are outside what the quantum observes.
 
 ```text
 host · TypeScript                          guest
@@ -199,11 +201,13 @@ Some requests come in thousands a turn — every call a renderer makes to a devi
 head…   op · n · n words   op · n · n words   …
 ```
 
-A record is an op the program numbers, a count, and that many words. Since the whole stream runs between two turns, a record can name memory for the host to write into, and the guest reads it next turn: the order is the acknowledgment. A turn that asks for more than its range holds is refused the record, not dropped.
+A record is an op the program numbers, a count, and that many words. Since the whole stream runs between two turns, a record can name memory for the host to write into, and the guest reads it next turn: the order is the acknowledgment.
+
+A record past the range is a sizing bug, not a state to handle, and stops the guest. Inside a transaction (`begin`, `commit`), a record that does not fit drops the transaction whole, and `commit` says so. A program's call can be tried instead (`try_call`), which records nothing where the call would leave less than the room asked, for the caller to ask again a later turn.
 
 ### System calls and files
 
-Some calls are every program's: open, read, write and close a file, and report the invariant that stopped the guest. Those are xpute's **system calls** (`ipc/sys`), records in one stream the directory names. A program's own calls go in the same stream, numbered past a PROGRAM bit.
+Some calls are every program's: open, read, write and close a file, and report the invariant that stopped the guest. Those are xpute's **system calls** (`ipc/sys`), records in one stream the directory names. The report (`ABORT`) drops the turn's other calls and is published alone, at once. A program's own calls go in the same stream, numbered past a PROGRAM bit.
 
 Files are reached as Plan 9 reaches them:
 
@@ -231,7 +235,7 @@ The contract is the part neither end may change; the rest of this document is ho
 
 What cannot change is the rules below and the formats they travel in: the directory, the message's four words, the ring's layout and the stream's records. Each rule is one the other end could catch being broken.
 
-0. **The directory.** The guest's first turn writes it, and the host finds everything from the one offset it learns outside. A key appears at most once, and an unknown key is passed over.
+0. **The directory.** The guest writes it in its first turn or in a boot call that returns its offset, and the host finds everything from the one offset it learns outside. A key appears at most once, an unknown key is passed over, and an unknown version is refused.
 1. **The core memory.** It never moves or grows while the guest lives, and every address that crosses is an offset into it.
 2. **The turn.** The guest runs only inside `interrupt`, and the two sides never run at once: the host touches nothing a turn writes until it has returned. The quota is advice, not a deadline. `wake_ms` is 0 for the next turn, a positive number for that many milliseconds from now, and negative (`NO_WAKE`) for none. A turn of no quota is still a turn, and a question the host needs answered at once is asked in one — but only of a command the guest answers from what it already holds; one that waits on anything outside is answered on a later turn.
 3. **The message.** Four words: `tag`, `cmd` with its flags, `result`, and the packet. With `ACKREQ` a message gets exactly one reply; without it, a reply only when it failed. A reply carries its message's `tag` and `cmd`, and `RES`.
