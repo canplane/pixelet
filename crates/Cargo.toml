@@ -49,7 +49,7 @@ members = [
 libm = "=0.2.16"
 # FNV-1a, 64 bits: what a places page keys a record by (id_hash), the kernel
 # keys a demand by, and every hash map hashes with, so an order read off one
-# is the same on every run (clippy.toml). Over UTF-8 bytes, the same as pxl-tool/spec/data.rs's.
+# is the same on every run (script/check-rules.ts). Over UTF-8 bytes, the same as pxl-tool/spec/data.rs's.
 fnv = "1"
 # base64url without padding: the blob a placement set is kept under in the
 # shell's storage.
