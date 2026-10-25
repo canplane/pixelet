@@ -4,7 +4,7 @@
 // and it is never reset. The take is read-add-write; the number job's
 // concurrency group (.github/workflows/deploy.yml) keeps two runs apart.
 //
-//   ./script/build-counter.ts
+//   ./.github/script/build-counter.ts
 
 const BUCKET = "pixelet-tiles";
 const KEY = "_meta/build-counter";
