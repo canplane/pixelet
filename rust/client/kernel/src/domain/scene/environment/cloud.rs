@@ -70,6 +70,18 @@ pub const PATCHES_MAX: usize = {
 /// field, the cumulus gathered in clumps with bare country between.
 const SHARE: f64 = 0.5;
 const SALT: u32 = 0x0c0c;
+/// The fewest camera cells a cell of the field spans: past where it spans
+/// fewer, each octave farther keeps a quarter of the clouds, the same quarter
+/// of those kept nearer, so the clouds a camera cell holds stay as many as
+/// the ground's cells do. Kept whole, the field ran to the horizon a cloud a
+/// cell, a band of dots. Set by eye.
+const SPACING_CELLS: f64 = 32.0;
+
+/// How many octaves the field is thinned `d` units from the eye.
+fn thinned(d: f64) -> u32 {
+    let spans = CELL * pxl_spec::space::camera::grid::SPLIT / d;
+    libm::ceil(libm::log2(SPACING_CELLS / spans)).max(0.0) as u32
+}
 
 struct Patch {
     at: u32,
@@ -77,6 +89,8 @@ struct Patch {
     handle: u32,
     index: u32,
     heights: [f32; 2],
+    /// Its octaves thinned (`thinned`), where it was built.
+    thinned: u32,
 }
 
 #[derive(Default)]
@@ -84,7 +98,7 @@ struct Clouds {
     models: [Option<u32>; VARIANTS.len()],
     patches: FnvHashMap<[i64; 2], Patch>,
     /// Kept so a settled turn asks the heap for nothing.
-    wanted: Vec<[i64; 2]>,
+    wanted: Vec<([i64; 2], u32)>,
     gone: Vec<[i64; 2]>,
     lanes: [Vec<[f32; 5]>; VARIANTS.len()],
     sprites: Vec<u32>,
@@ -184,13 +198,15 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         for x in span(0) {
             let d = near([x, y]).max(1e-3);
             if d <= reach && drawn::tier((largest / units_per_px_at(d)) as f32, decor_gone_px() as f32, decor_sprite_px() as f32) != drawn::GONE {
-                c.wanted.push([x, y]);
+                c.wanted.push(([x, y], thinned(d)));
             }
         }
     }
     c.wanted.sort_unstable();
     c.gone.clear();
-    c.gone.extend(c.patches.keys().copied().filter(|k| c.wanted.binary_search(k).is_err()));
+    let wanted = &c.wanted;
+    let kept = |k: &[i64; 2], b: &Patch| wanted.binary_search_by_key(k, |w| w.0).is_ok_and(|i| wanted[i].1 == b.thinned);
+    c.gone.extend(c.patches.iter().filter(|(k, b)| !kept(k, b)).map(|(k, _)| *k));
     for k in c.gone.drain(..) {
         if let Some(b) = c.patches.remove(&k) {
             draw.free(b.handle);
@@ -199,10 +215,10 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         }
     }
     let (patches, lanes) = (&mut c.patches, &mut c.lanes);
-    c.wanted.retain(|k| !patches.contains_key(k));
+    c.wanted.retain(|(k, _)| !patches.contains_key(k));
     pass.run(
         c.wanted.iter().copied(),
-        |key| match build(key, base, lanes, draw) {
+        |(key, thinned)| match build(key, thinned, base, lanes, draw) {
             Some(b) => {
                 patches.insert(key, b);
                 true
@@ -255,13 +271,15 @@ struct Cloud {
     scale: f64,
 }
 
-/// The patch's clouds: a cell a cloud where the field's hash says one is.
-fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
+/// The patch's clouds: a cell a cloud where the field's hash says one is,
+/// a quarter of them each octave `thinned`.
+fn clouds_of(key: [i64; 2], thinned: u32, base: f64) -> impl Iterator<Item = Cloud> {
+    let share = SHARE / f64::from(1u32 << (2 * thinned.min(15)));
     (0..PATCH_CELLS).flat_map(move |j| (0..PATCH_CELLS).map(move |i| (i, j))).filter_map(move |(i, j)| {
         let cell = [key[0] * i64::from(PATCH_CELLS) + i64::from(i), key[1] * i64::from(PATCH_CELLS) + i64::from(j)];
         let at = cell.map(|v| (v & (CELLS_AROUND - 1)) as u32);
         let hash = |salt: u32| f64::from(lattice_hash(at, salt));
-        if hash(SALT) >= SHARE {
+        if hash(SALT) >= share {
             return None;
         }
         let jitter = [hash(SALT + 1), hash(SALT + 2)];
@@ -304,12 +322,12 @@ fn built(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
 
 /// The patch's clouds on the field's map, as decor's lanes about its corner;
 /// none where the heap refused.
-fn build(key: [i64; 2], base: f64, lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()], draw: &mut DrawList) -> Option<Patch> {
+fn build(key: [i64; 2], thinned: u32, base: f64, lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()], draw: &mut DrawList) -> Option<Patch> {
     for l in lanes.iter_mut() {
         l.clear();
     }
     let mut heights = [f32::INFINITY, f32::NEG_INFINITY];
-    for c in clouds_of(key, base) {
+    for c in clouds_of(key, thinned, base) {
         heights = [heights[0].min((c.z - c.width / 2.0) as f32), heights[1].max((c.z + c.width / 2.0) as f32)];
         lanes[c.variant].push([c.local[0] as f32, c.local[1] as f32, c.z as f32, c.spin as f32, c.scale as f32]);
     }
@@ -340,6 +358,7 @@ fn build(key: [i64; 2], base: f64, lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()], 
         handle,
         index,
         heights: if instances == 0 { [0.0; 2] } else { heights },
+        thinned,
     })
 }
 

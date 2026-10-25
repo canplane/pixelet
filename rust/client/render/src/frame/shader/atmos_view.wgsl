@@ -153,9 +153,18 @@ fn air_reach(span: vec2f, z: f32) -> f32 {
   return span.x + (span.y - span.x) * z * z * z;
 }
 
-// `air_reach` the other way: how deep a point `d` units from the eye lies.
-fn air_z(span: vec2f, d: f32) -> f32 {
-  return pow(clamp((d - span.x) / max(span.y - span.x, 1e-6), 0.0, 1.0), 1.0 / 3.0);
+// Where a point `d` units from the eye lies among the slices, 0 to the last:
+// the slice before it, and its share of the way to the next by distance, not
+// by depth. The air before a point runs near straight with its distance, so
+// cubed with depth, and read straight by depth it bowed between slices by a
+// few percent a slice, a line across the sea at each.
+fn air_slice(span: vec2f, d: f32) -> f32 {
+  let last = f32(AIR_FROXELS - 1u);
+  let z = pow(clamp((d - span.x) / max(span.y - span.x, 1e-6), 0.0, 1.0), 1.0 / 3.0);
+  let k = min(floor(z * last), last - 1.0);
+  let a = air_reach(span, k / last);
+  let b = air_reach(span, (k + 1.0) / last);
+  return k + clamp((d - a) / max(b - a, 1e-6), 0.0, 1.0);
 }
 
 // The march to a point, the volume's one maker (atmos_froxel.wgsl): what

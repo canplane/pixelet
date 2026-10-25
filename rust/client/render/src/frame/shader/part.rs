@@ -134,7 +134,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MARKER
     &["frame", "encode", "marker", "marker_sprite"],
     // SHADER_SKY
-    air!["frame", "encode", "finish", "dither"; "atmos_air", "atmos_ground", "sky_word", "sky"],
+    air!["frame", "encode", "finish"; "atmos_air", "atmos_ground", "sky_word", "sky"],
     // SHADER_DEBUG
     &["frame", "encode", "debug"],
     // SHADER_MIP

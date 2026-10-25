@@ -9,6 +9,7 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
 use pxl_spec::space::coord::mat4::{self, Mat4};
+use pxl_spec::space::coord::q3::{from_real, to_real};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
@@ -142,7 +143,19 @@ pub fn view_resize(width: f64, height: f64, ratio: f64) {
 /// (`observation::observation`), which is what it was where neither the
 /// pose nor the ground under the eye moved (`observation::turn`), and is
 /// made again where either did.
+///
+/// The eye is held on the steps the cast's rays leave from (pxl-spec
+/// `world::origin`), so the world the rays draw and what is rasterized on
+/// its faces — the puck's zone, the ghosts, the markers' anchors — stand
+/// about one eye. Off them, the rays' eye stood up to a step from the
+/// raster's, past the step back the world's depth is written by
+/// (screen_ray.wgsl `behind`) within ~64 units, and a face and what lay on
+/// it fought.
 pub fn view_compose(pose: Option<ObserverPose>) {
+    let pose = pose.map(|p| ObserverPose {
+        eye: p.eye.map(|v| to_real(from_real(v))),
+        ..p
+    });
     let moved = view().pose != pose;
     crate::domain::view::observation::turn(moved);
     if !moved {
