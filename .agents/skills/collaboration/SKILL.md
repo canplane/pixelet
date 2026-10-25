@@ -12,10 +12,8 @@ so none of it waits:
 - All work in the one checkout, on main's tip; no worktrees.
 - No holds. A path is never reserved, and another session's announced work
   is no reason to stop yours.
-- Land small commits as you go, and rebase over whatever landed
-  meanwhile. Whoever lands second resolves the conflict.
-- Say what landed after it lands, so the others rebase knowingly. Do not
-  ask before you start, and do not wait for an answer to go on.
+- Commit on main and push.
+- Do not ask before you start, and do not wait for an answer to go on.
 - A review or a confirmation round runs beside the work, not in front of
   it, unless the owner asks for it first.
 
