@@ -112,7 +112,7 @@ export function orientationPermit(): Promise<boolean> {
       return granted;
     },
     (err) => {
-      console.error("[kernel] orientation permission error:", err);
+      console.error("[sensor] orientation permission error:", err);
       heard.permission("orientation", "failed");
       return false;
     },
