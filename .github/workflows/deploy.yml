@@ -56,10 +56,12 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Neither language's version is here. rust/rust-toolchain.toml says the Rust and
-  # rustup reads it on its own; .tool-versions says the Deno and setup-deno is
-  # pointed at it. A job installs from a file rather than being told, so the
-  # number is in one place.
+  # No language's version is here: each tree says its own. rust/rust-toolchain.toml
+  # says the Rust and rustup reads it on its own; ts/.tool-versions says the Deno
+  # and setup-deno is pointed at it. The Python scripts take the standard
+  # library alone and run on the runner's python3, as the shell scripts on its
+  # sh. A job installs from a file rather than being told, so the number is in
+  # one place.
   #
   # wasm-opt prints the import/export mapping the shell imports, and which
   # letters it assigns is the optimizer's own business — so the version is
@@ -94,7 +96,7 @@ jobs:
 
       - uses: denoland/setup-deno@v2
         with:
-          deno-version-file: .tool-versions
+          deno-version-file: ts/.tool-versions
 
       - name: Take the next build number
         id: number
@@ -180,7 +182,7 @@ jobs:
 
       - uses: denoland/setup-deno@v2
         with:
-          deno-version-file: .tool-versions
+          deno-version-file: ts/.tool-versions
 
       # Its own cargo cache: the module and what builds it.
       - uses: ./.github/actions/toolchain
@@ -215,9 +217,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-      - uses: actions/setup-python@v6
-        with:
-          python-version-file: .tool-versions
       - name: Smoke-test the published routes
         run: ./script/smoke.py https://plei.me
 
@@ -268,7 +267,7 @@ jobs:
 
       - uses: denoland/setup-deno@v2
         with:
-          deno-version-file: .tool-versions
+          deno-version-file: ts/.tool-versions
 
       - name: Append this build to the log
         env:
