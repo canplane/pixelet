@@ -12,14 +12,13 @@
 //! guest finds its word at `ticket | DONE` a turn or more later, as on the
 //! web, and nothing here waits.
 
-use core::marker::PhantomData;
-use core::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 
 use serde::de::value::{Error as NameError, StrDeserializer};
 use serde::de::{DeserializeOwned, IntoDeserializer};
 use xpute_guest::abi::handle::handle_slot;
+use xpute_host::mem::Memory;
 
 use crate::enums::{
     ADDRESS_MODE, BLEND_FACTOR, BLEND_OPERATION, BUFFER_BINDING_TYPE, CANVAS_ALPHA_MODE, COMPARE_FUNCTION, CULL_MODE, FEATURE_NAME, FILTER_MODE, FRONT_FACE, INDEX_FORMAT, LIMIT_NAME, LOAD_OP,
@@ -372,71 +371,6 @@ pub struct GpuHost {
 /// A mesh, the largest write a frame makes, is about a MiB; larger writes take
 /// a chunk of their own.
 const BELT_CHUNK_BYTES: u64 = 1 << 20;
-
-/// The guest's core memory, as the host reads and writes it: by the offsets
-/// the guest names, each read or write reaching only the range it names, and
-/// never one reference over the whole. The host's own blocks may lie in the
-/// same memory — a guest linked into the host's process allocates for both
-/// from one heap — and a `&mut [u8]` over all of it would claim them too.
-pub struct Memory<'a> {
-    base: NonNull<u8>,
-    bytes: usize,
-    of: PhantomData<&'a mut [u8]>,
-}
-
-impl<'a> Memory<'a> {
-    /// A memory the caller holds whole, as a test does.
-    pub fn of(bytes: &'a mut [u8]) -> Memory<'a> {
-        Memory {
-            bytes: bytes.len(),
-            base: NonNull::from(bytes).cast(),
-            of: PhantomData,
-        }
-    }
-
-    /// The memory at `base`, `bytes` long.
-    ///
-    /// # Safety
-    /// The `bytes` bytes at `base` are readable and writable for as long as
-    /// the value is used. While it is, the caller holds no reference into a
-    /// range the guest names, and no other thread reads or writes one: the
-    /// guest is between turns, and what else lies in the memory (the host's
-    /// own blocks among it) is reached only through its owners.
-    pub unsafe fn from_raw(base: NonNull<u8>, bytes: usize) -> Memory<'a> {
-        Memory { base, bytes, of: PhantomData }
-    }
-
-    /// The `n` bytes at `at`; past the memory's end is the guest's bug.
-    fn range(&self, at: usize, n: usize) -> *mut u8 {
-        let end = at.checked_add(n).filter(|&end| end <= self.bytes);
-        assert!(end.is_some(), "[gpu] {n} bytes at {at} run past the memory's {}", self.bytes);
-        // SAFETY: in bounds, as just checked.
-        unsafe { self.base.as_ptr().add(at) }
-    }
-
-    /// The bytes at `at`, borrowed while nothing is written.
-    fn read(&self, at: usize, n: usize) -> &[u8] {
-        // SAFETY: in the memory, which `from_raw`'s caller lets this read;
-        // `&self` keeps every write out while the slice lives.
-        unsafe { core::slice::from_raw_parts(self.range(at, n), n) }
-    }
-
-    fn write(&mut self, at: usize, from: &[u8]) {
-        let to = self.range(at, from.len());
-        // SAFETY: in the memory; `from` may lie in it too (the host's own
-        // blocks can), so the copy allows an overlap.
-        unsafe { core::ptr::copy(from.as_ptr(), to, from.len()) }
-    }
-
-    fn word(&self, at: u32) -> u32 {
-        let w = self.read(at as usize, 4);
-        u32::from_le_bytes([w[0], w[1], w[2], w[3]])
-    }
-
-    fn set_word(&mut self, at: u32, v: u32) {
-        self.write(at as usize, &v.to_le_bytes());
-    }
-}
 
 impl GpuHost {
     /// `preferred` the surface format the platform shows best, `configure_at`

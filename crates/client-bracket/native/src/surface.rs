@@ -19,9 +19,10 @@ use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use pxl_render::api_spec::stream;
-use xpute_gpu::host::{ConfigureAt, GpuHost, Memory};
+use xpute_gpu::host::{ConfigureAt, GpuHost};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
+use xpute_host::mem::Memory;
 
 use crate::on_kernel;
 

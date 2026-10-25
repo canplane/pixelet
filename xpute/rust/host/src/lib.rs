@@ -13,8 +13,12 @@
 //! are TypeScript's: xpute was written for a program that drives its guest
 //! from TypeScript, wherever the guest runs.
 //!
-//! `native` is unix's, since it maps the core memory from the system
-//! through libc. Elsewhere the crate is empty, and so are its tests.
+//! `mem` is every host's: the guest's memory read and written by offset,
+//! whatever holds it. `native` is unix's, since it maps the core memory from
+//! the system through libc; elsewhere the crate is `mem` alone, and so are
+//! its tests.
+
+pub mod mem;
 
 #[cfg(unix)]
 pub mod native;

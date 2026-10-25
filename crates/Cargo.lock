@@ -3157,6 +3157,7 @@ dependencies = [
  "serde",
  "wgpu",
  "xpute-guest",
+ "xpute-host",
  "xpute-kit",
  "zune-jpeg",
 ]

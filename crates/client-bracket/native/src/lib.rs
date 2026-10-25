@@ -21,8 +21,8 @@ use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::door::Bracket;
 use pxl_kernel::sys::io::host::Stop;
 use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES};
-use xpute_gpu::host::Memory;
 use xpute_guest::mem::heap::HeapStat;
+use xpute_host::mem::Memory;
 use xpute_host::native::{self, Alloc, Plan};
 
 /// The library's one allocator: the kernel's blocks in its memory, so a

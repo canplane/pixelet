@@ -10,6 +10,10 @@ path = "src/lib.rs"
 [dependencies]
 xpute-guest = { path = "../guest" }
 xpute-kit = { path = "../kit" }
+# The guest's memory as a host reads it by offset (xpute_host::mem), for the
+# host's end below: wgpu already brings libc where xpute-host takes it, and
+# xpute-host depends on nothing of this crate's.
+xpute-host = { path = "../host", optional = true }
 # The host's end on a native device (src/host.rs), which a guest never links:
 # wgpu runs the records, its serde names read the spec's, and an external
 # image is decoded here where the web asks its browser.
@@ -20,7 +24,7 @@ image-webp = { version = "0.2", optional = true }
 zune-jpeg = { version = "0.5", optional = true }
 
 [features]
-host = ["dep:wgpu", "dep:serde", "dep:png", "dep:image-webp", "dep:zune-jpeg"]
+host = ["dep:xpute-host", "dep:wgpu", "dep:serde", "dep:png", "dep:image-webp", "dep:zune-jpeg"]
 
 [dev-dependencies]
 # The golden records' reader, and a device asked for without a runtime.

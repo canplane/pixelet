@@ -42,7 +42,7 @@ Golden records under `spec/golden/` hold the languages to each other wherever by
 ```text
 rust/kit  ·  ts/kit  ·  cpp/kit                the same kit, in each language
 rust/guest  ·  cpp/guest  ·  ts/host           the guest end, in each language · the host end in TypeScript
-rust/host                                      the host end in Rust, for a guest linked into the host's own native program
+rust/host                                      the host end in Rust: a guest's memory read by offset, and the host of a guest linked into its own native program
 rust/gpu  ·  ts/gpu  ·  cpp/gpu                WebGPU's calls, which a guest writes and a host runs; ts/gpu/script runs the web host's test in Chrome
 rust/link                                      how a Rust guest's build script links it as a WebAssembly module
 rust/conformance  ·  cpp/conformance           a guest in each, and the contract's traces
