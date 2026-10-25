@@ -27,6 +27,22 @@ surfaces was drafted and aborted the day before
   are solved first.
 - **A rail bridge** rides a road deck of its layer it runs along, or is one
   level a viaduct with ramps at its free ends.
+
+  > Since 2026-10-25, Arnis being the reference and the 1-ring the bound:
+  > a structure is no longer solved as one line over all of it, which a
+  > ring that sees part of it cannot do, and neighbouring tiles stepped
+  > where their rings saw different parts. Whether decks stand side by
+  > side, a deck's axis and its course are judged on the ways whole. A deck
+  > is solved in blocks of 16 cells along its way, each from what lies
+  > about the block (`pxl-geo-bake separation/arnis.rs` `DECK_BLOCK`,
+  > `DECK_WINDOW`, `DECK_NEAR`), and a cell between two blocks is their
+  > blend. The ground floors a deck and is no point of its line; a deck
+  > with no end of its own in sight holds the highest it meets in sight,
+  > and an end at the ground holds only its own way's deck. A track rides a
+  > deck where nearly all of it within a window does. A long span with
+  > nothing high in sight sags to what is: over the river at Seongsu
+  > `6023e5fa…` runs 24, 15, 20 where Arnis held it at 22 to 25. At Namsan,
+  > Bukak and three Han River bridges no deck crossing of a seam differs.
 - **A road tunnel** is as deep as its cover asks, and the ways at grade
   leading to a portal sink into it, cutting the ground (a grade line), so
   the bore starts at depth.
