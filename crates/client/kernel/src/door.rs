@@ -145,8 +145,12 @@ fn boot(b: &Bracket) {
     // location. Both are process-wide, and on a device the app's other
     // threads (a driver's callback, an image's decode) fail through them
     // too: those are not the kernel's to report, and its state is its own
-    // thread's, so they are told by the bracket's last words alone, or by
-    // the hook this one replaced (xpute_guest::global `off_marked_thread`).
+    // thread's. Such a panic is told by the bracket's last words where it
+    // has them, since they are where a device's reports are read (Android's
+    // log), and by the hook this one replaced only where it has none, so
+    // std's own hook does not print it a second time; a bug there is not
+    // reported, and is told as the panic it then is (xpute_guest::global
+    // `off_marked_thread`).
     xpute_kit::status::bug::set_report(|errno, at, a, b| {
         if !off_marked_thread() {
             crate::sys::io::host::host_bug(errno, at, a, b);

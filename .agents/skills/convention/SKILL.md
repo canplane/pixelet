@@ -42,8 +42,9 @@ host/guest boundary's words; `ARCHITECTURE.md` is what the system is.
   pinned `libm`, never the platform's, writes no `powi`, whose precision is
   unspecified, and keys a map by `fnv`, never std's seeded hasher
   (`crates/clippy.toml`).
-- In the crates that address the core memory by offset (xpute's guest, the
-  kernel, the renderer, both brackets), an offset becomes a pointer only
+- In the crates that address the core memory by offset (xpute's guest and
+  host, the kernel, the renderer, both brackets — `script/check-rules.ts`
+  `OFFSET_CRATES`), an offset becomes a pointer only
   through `xpute_guest::mem::base::ptr_at`, never `as *const` or `as *mut`.
 - The tree's scripts are ES modules, TypeScript where a loader takes it:
   no `.cjs` or `.cts`. Node runs only the native toolchain's own scripts.
