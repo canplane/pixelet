@@ -100,6 +100,14 @@ jobs:
       - name: Install wrangler
         run: npm install --global "wrangler@${WRANGLER_VERSION}"
 
+      # The Worker as wrangler bundles it, over its config, before anything
+      # goes out: the servers are rebuilt before the client is published, so a
+      # Worker refused only at the publish would leave this commit half out.
+      # The bundle's assets need only exist here, not hold the page.
+      - name: Bundle the Worker
+        working-directory: ts/server/edge
+        run: mkdir -p dist && wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
+
       - name: Take the next build number
         id: number
         env:
