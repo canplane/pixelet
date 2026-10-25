@@ -10,7 +10,7 @@ use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem::base::ptr_at;
 
 use crate::domain::layer::instance::{Instance, Meta};
-use crate::domain::query::decor::asset::decor_assets_for;
+use crate::domain::query::decor::asset::decor_model;
 use crate::domain::query::model::registry::Models;
 
 /// How far any decor, its box or its model, reaches from its box's min corner.
@@ -23,7 +23,7 @@ pub fn reach() -> f64 {
 pub fn strike(models: &Models, i: &Instance, o: V3, d: V3, limit: f64) -> Option<f64> {
     let Meta::Decor(m) = i.meta;
     let decor = Decor::of(DecorId::of(i.id)?);
-    let mesh = decor_assets_for(decor)?.models.get(m.variant as usize).copied().flatten().and_then(|h| models.mesh(h))?;
+    let mesh = decor_model(decor, m.variant as usize).and_then(|h| models.mesh(h))?;
     // SAFETY: the model's block, positions first, indices past the vertex words.
     let (positions, indices) = unsafe {
         (

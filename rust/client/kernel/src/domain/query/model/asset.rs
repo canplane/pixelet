@@ -57,14 +57,12 @@ pub fn model_of(asset: Asset, height_u: Option<f64>) -> Option<ModelHandle> {
     entry.ok()
 }
 
-/// Whether `model_of` refused `asset` at `height_u` and the heap has given
-/// room back since, so asking again may be served.
-pub fn model_refusal_over(asset: Asset, height_u: Option<f64>) -> bool {
+/// `asset` as `model_of` registered it at `height_u`, asking nothing: what a
+/// reader that must not load, such as the query, finds; none while it is
+/// not registered.
+pub fn registered(asset: Asset, height_u: Option<f64>) -> Option<ModelHandle> {
     let key = height_u.map(f64::to_bits);
-    REGISTERED
-        .get(Vec::new)
-        .iter()
-        .any(|(a, h, entry)| *a == asset && *h == key && entry.as_ref().is_err_and(|refused| refused.over()))
+    REGISTERED.get(Vec::new).iter().find(|(a, h, _)| *a == asset && *h == key).and_then(|(_, _, entry)| entry.clone().ok())
 }
 
 /// At its own size when `height_u` is None; None when it has no mesh or the

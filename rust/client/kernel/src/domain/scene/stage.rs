@@ -19,7 +19,7 @@ use crate::profiler::frame::{DeviceSample, GpuSample};
 use pxl_render::gpu::api::OBJECT_OPS;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
-use crate::domain::query::decor::asset::decor_assets;
+use crate::domain::query::decor::asset::{decor_model, decor_skin};
 use crate::domain::query::model::draw_list;
 use crate::domain::scene::character::companion::companion_skins;
 use crate::domain::scene::character::preview::preview_rows;
@@ -94,10 +94,10 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     let lists = draw_list().take();
     let models = crate::domain::query::model::models();
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
-    let variants = decor_assets().iter().flat_map(|entry| {
-        (0..entry.models.len()).map(move |v| {
-            let extent = entry.decor.variants.get(v).and_then(|a| a.model.ingested().extent).unwrap_or([0.0; 3]);
-            (entry.models[v], entry.skin(v), extent.map(|e| e as f32))
+    let variants = pxl_spec::asset::decor::DECORS.iter().flat_map(|decor| {
+        decor.variants.iter().enumerate().map(move |(v, variant)| {
+            let extent = variant.model.ingested().extent.unwrap_or([0.0; 3]);
+            (decor_model(decor, v), decor_skin(decor, v), extent.map(|e| e as f32))
         })
     });
     for (slot, (model, image, extent)) in decor.iter_mut().zip(variants) {

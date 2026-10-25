@@ -19,7 +19,7 @@ use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::coord::v3::V3;
 
 use crate::domain::layer::object::preview::{Ghost, GhostBox};
-use crate::domain::query::decor::asset::decor_assets_for;
+use crate::domain::query::decor::asset::{decor_model, decor_skin};
 use crate::domain::view::setting::store::settings_store;
 
 pub const GHOST_OPACITY: f32 = 0.5;
@@ -90,7 +90,7 @@ impl GhostDraw {
     /// world's own and drawn as it is. Whether what is drawn changed.
     #[allow(clippy::too_many_arguments)]
     fn set_decor(&mut self, draw: &mut DrawList, at: V3, decor: &Decor, variant: u32, rotation: f32, scale: f32, stand_in: Option<GhostBox>) -> bool {
-        let ready = || decor_assets_for(decor).is_some_and(|a| a.models.get(variant as usize).is_some_and(Option::is_some) && a.skin(variant as usize).is_some());
+        let ready = || decor_model(decor, variant as usize).is_some() && decor_skin(decor, variant as usize).is_some();
         if let Some(b) = stand_in.filter(|_| !ready()) {
             return self.set_box(draw, b);
         }

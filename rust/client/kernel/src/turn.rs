@@ -24,7 +24,7 @@ use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 
 use crate::domain::layer::earth::Earth;
-use crate::domain::query::decor::asset::decor_assets_wanted;
+use crate::domain::query::decor::asset::decor_models_step;
 use crate::domain::query::model::draw_list;
 use crate::domain::scene::character::companion::{companion_step, CompanionProps};
 use crate::domain::scene::environment::environment_step;
@@ -154,10 +154,7 @@ pub fn boot() {
 fn world_tasks() {
     use crate::sys::sched::edge::TaskPriority::*;
     use xpute_guest::sched::task::spawn;
-    let spawned = spawn(frame_task(), Frame as u8)
-        && spawn(crate::sys::io::fetch::fetch_task(), Arrival as u8)
-        && spawn(crate::domain::query::decor::asset::decor_asset_task(), Background as u8)
-        && spawn(crate::domain::layer::object::repository::task(), Background as u8);
+    let spawned = spawn(frame_task(), Frame as u8) && spawn(crate::sys::io::fetch::fetch_task(), Arrival as u8) && spawn(crate::domain::layer::object::repository::task(), Background as u8);
     if !spawned {
         std::process::abort();
     }
@@ -205,7 +202,7 @@ pub fn world_turn() -> f64 {
         crate::domain::control::navigation::support::support_step();
         crate::domain::control::navigation::destination::destination_step()
     });
-    effect!(worst, decor, decor_assets_wanted());
+    effect!(worst, decor, decor_models_step());
     effect!(worst, objects, crate::domain::layer::object::repository::step());
     effect!(worst, edit, {
         let edits = crate::domain::control::interaction::edit::pending_step();

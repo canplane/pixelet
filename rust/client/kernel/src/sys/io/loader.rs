@@ -148,18 +148,6 @@ fn ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
     what
 }
 
-static SETTLED: Global<bool> = Global::new();
-
-/// Whether a load settled, arrived or failed, since last taken: what waits on
-/// assets takes it on its turn rather than being called from here.
-pub fn take_settled() -> bool {
-    core::mem::take(SETTLED.get(|| false))
-}
-
-fn settled() {
-    *SETTLED.get(|| false) = true;
-}
-
 /// A model and an image of one load are the same file; which it is read as
 /// is its attempt's subject's (`opened`).
 pub fn open_asset(credit: Credit, load: Load) {
@@ -198,7 +186,6 @@ pub fn opened(fd: u32, key: u64, opened: Opened) {
 /// own failure, so it is final.
 fn image_arrived(n: usize, file: Vec<u8>) {
     *loader().at(LoadKind::Image, n) = Some(if pxl_spec::asset::image_size(&file).is_some() { Entry::Image(file) } else { Entry::Failed });
-    settled();
     // A turn hands it on.
     request_world_tick();
 }
@@ -256,7 +243,6 @@ async fn arrival(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
         Err(_) => Entry::Failed,
     };
     *loader().at(LoadKind::Gltf, n) = Some(entry);
-    settled();
     request_world_tick();
 }
 
@@ -265,5 +251,4 @@ async fn arrival(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
 pub fn load_rejected(key: u64, how: Ended) {
     let Some((kind, load)) = ended(key, how) else { return };
     *loader().at(kind, load.number() as usize) = None;
-    settled();
 }

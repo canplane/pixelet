@@ -487,7 +487,7 @@ The turn and its quota are xpute's: the host rings, the guest spends what it was
 │                                                                │
 │   effects  each compares the world with what it last saw:      │
 │            navigation, the bootstrap, the orientation, the     │
-│            following, the destination, decor's assets, the     │
+│            following, the destination, decor's models, the     │
 │            object store, an edit, the hover, the puck, the     │
 │            settings                                            │
 │   tick     interaction → visible → content → cosmetic → report │
@@ -495,10 +495,10 @@ The turn and its quota are xpute's: the host rings, the guest spends what it was
 │   stage    the frame's uniforms and its draw list              │
 │   profile  what the turn cost                                  │
 │                                                                │
-│ three tasks beside it, and one a load file being read, polled  │
+│ two tasks beside it, and one a load file being read, polled    │
 │ on a share kept past the frame                                 │
 │                                                                │
-│   fetch · decor assets · the object store · arrival            │
+│   fetch · the object store · arrival                           │
 └────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
