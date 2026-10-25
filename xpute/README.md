@@ -45,7 +45,7 @@ rust/guest  ·  cpp/guest  ·  ts/host           the guest end, in each language
 rust/gpu  ·  ts/gpu  ·  cpp/gpu                WebGPU's calls, which a guest writes and a host runs
 rust/conformance  ·  cpp/conformance           a guest in each, and the contract's traces
 ts/conformance                                 the host that runs the traces against them
-ts/script                                      what the repository runs over its trees, never shipped
+script                                         what the repository runs over its trees, never shipped
 spec                                           numbers all of them are generated from
 ```
 
@@ -73,7 +73,7 @@ make -j8 test-gpu  # the GPU hosts against golden/gpu: the native one on wgpu, t
 make lint          # deno lint
 ```
 
-Each runs every tree's own target, in parallel with `-j`; `check-ts`, `check-cpp`, `check-rust` and the like run one tree's, as `deno task --cwd ts`, `make -C cpp` and `cargo` in `rust/` do. The copy to xpute's own repository is `./ts/script/export.ts --to <its checkout>`.
+Each runs every tree's own target, in parallel with `-j`; `check-ts`, `check-cpp`, `check-rust` and the like run one tree's, as `deno task --cwd ts`, `make -C cpp` and `cargo` in `rust/` do. The copy to xpute's own repository is `./script/export.ts --to <its checkout>`.
 
 ## License
 

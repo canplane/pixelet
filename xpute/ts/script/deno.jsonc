@@ -1,5 +1,0 @@
-{
-  // Nearly empty on purpose, as the packages' are: the scripts xpute runs
-  // over its trees (the web GPU test in Chrome, the export), a member so the
-  // workspace root's imports and checks are theirs too.
-}

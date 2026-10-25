@@ -3,12 +3,11 @@
 // byte, its root being this directory. Prints a commit message naming the
 // pixelet commit it came from, for `git commit -F -` there.
 //
-//   ./ts/script/export.ts --to ../xpute [--check]
+//   ./script/export.ts --to ../xpute [--check]
 
 import { dirname, join, relative } from "@std/path";
 
-/** xpute's root, the repository the copy is of: two up from here. */
-const XPUTE = dirname(dirname(dirname(new URL(import.meta.url).pathname)));
+const XPUTE = dirname(dirname(new URL(import.meta.url).pathname));
 
 /** Neither written nor compared: build output and lock files, a lock or
  * node_modules/ in any tree, as .gitignore has them. */

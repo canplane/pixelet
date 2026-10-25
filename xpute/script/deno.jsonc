@@ -1,0 +1,21 @@
+{
+  // The repository's own scripts, each standing alone: the web GPU test in
+  // Chrome and the export. A root of its own, beside the trees it runs over,
+  // in the Deno the TypeScript tree needs anyway.
+  "workspace": [],
+
+  "imports": {
+    "@std/path": "jsr:@std/path@^1"
+  },
+
+  "tasks": {
+    "check": "deno fmt --check && deno lint && deno check *.ts",
+    "fmt": "deno fmt",
+    "lint": "deno lint"
+  },
+
+  "fmt": {
+    "lineWidth": 200,
+    "proseWrap": "preserve"
+  }
+}

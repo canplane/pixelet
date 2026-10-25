@@ -237,7 +237,7 @@ The casing in the tree is not mixed by accident. Rust, the xpute packages and th
 
 [AGENTS.md](./AGENTS.md) is how to work in the tree, [doc/backlog.md](./doc/backlog.md) what is queued next, and [doc/minutes/](./doc/minutes/) why things went the way they did.
 
-`xpute/` is xpute's repository root, developed here and copied out byte for byte by `xpute/ts/script/export.ts` (`deno task export:xpute`): [xpute/README.md](./xpute/README.md) and [xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) are the system under the application — its memory, rings, turn, handles, contract and wire formats — with `xpute/LICENSE` and `xpute/THIRD_PARTY_NOTICES.md` beside them. Nothing under it names pixelet.
+`xpute/` is xpute's repository root, developed here and copied out byte for byte by `xpute/script/export.ts` (`deno task export:xpute`): [xpute/README.md](./xpute/README.md) and [xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) are the system under the application — its memory, rings, turn, handles, contract and wire formats — with `xpute/LICENSE` and `xpute/THIRD_PARTY_NOTICES.md` beside them. Nothing under it names pixelet.
 
 ---
 

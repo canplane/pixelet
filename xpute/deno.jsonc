@@ -5,7 +5,7 @@
   // documents and the spec. deno fmt is dprint's engine, kept here so it is
   // the same one ts/ formats with. What runs over the trees is the Makefile's.
   "workspace": [],
-  "exclude": ["ts/"],
+  "exclude": ["ts/", "script/"],
   // It imports nothing, so there is nothing for a lock to pin.
   "lock": false,
 
