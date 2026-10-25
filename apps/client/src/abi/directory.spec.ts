@@ -4,7 +4,7 @@
 //
 // The kernel's own entries in its directory (xpute-guest ipc/directory.rs), each a
 // key with xpute's PROGRAM bit set: the memory the host reads besides the rings and
-// the system calls (pxl-kernel door.rs, apps/client/src/host/module.ts).
+// the system calls (pxl-kernel door.rs, apps/web/src/guest.ts).
 
 /** What an entry's value is. */
 export const key = {

@@ -6,7 +6,6 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import type { Grant } from "@xpute/host/sched/quantum.ts";
 import { Strobe } from "@xpute/host/sched/strobe.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { GUEST_DIRECTORY, GUEST_DOORBELL } from "@/host/mem.ts";
@@ -37,6 +36,6 @@ export let strobe: Strobe;
 
 /** The quantum is the guest's, from its directory; `submit` fills the rings
  * before each frame it grants is rung. */
-export function start_sched(submit: (grant: Grant) => void): void {
+export function start_sched(submit: ConstructorParameters<typeof Strobe>[2]): void {
   strobe = new Strobe(GUEST_DOORBELL, GUEST_DIRECTORY.quantum(), submit, (run) => requestAnimationFrame(run));
 }

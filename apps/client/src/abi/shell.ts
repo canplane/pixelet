@@ -11,7 +11,6 @@ import { orientationPermit } from "@/bracket.tsx";
 
 export { kernel_snapshot, useKernel } from "@/abi/snapshot.ts";
 export { kernel_hold, kernel_keys } from "@/abi/control/input.ts";
-export { ring_now as kernel_command } from "@/host/sched.ts";
 
 /** iOS Safari's compass prompt runs here, inside the press. */
 export async function kernel_tracking(tracking: Tracking): Promise<void> {
@@ -20,6 +19,11 @@ export async function kernel_tracking(tracking: Tracking): Promise<void> {
     return;
   }
   send_input(Command.INPUT_TRACKING, encode_input_tracking(GUEST_DOORBELL, tracking));
+}
+
+/** A command of the kernel's, rung at once with no quota. */
+export function kernel_command(cmd: Command, pkt?: PacketWriter): void {
+  ring_now(cmd, pkt);
 }
 
 export function kernel_setting(key: u32, value: u32): void {

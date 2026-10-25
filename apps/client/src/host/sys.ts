@@ -24,5 +24,6 @@ export function start_sys(host: Omit<SysHost, "opened">): void {
 }
 
 export function run_host_stream(memory: ArrayBuffer, at: u32): void {
-  SYS!.run(memory, at);
+  if (SYS === null) throw new Error("sys: a host stream ran before start_sys");
+  SYS.run(memory, at);
 }

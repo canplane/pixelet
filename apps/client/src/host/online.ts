@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 
-/** Whether the device says it is online: the host's to know, as the GPU is, and the kernel's only as a read's failure. */
+/** Whether the device says it is online: the host's to know, as the GPU is, and the guest's only as a read's failure. */
 const useOnlineStore = create(() => ({ online: true }));
 
 export function setOnline(online: boolean): void {

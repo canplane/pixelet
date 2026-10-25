@@ -424,17 +424,17 @@ What the host tells of itself comes with its commands: whether the build is a de
 
 This section is how a read is named, answered and paced.
 
-A read is a file in xpute's sense ([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)): the kernel names a root by its number and an object below it by its number, the path's one name, and the host binds each root to what each number is, `@xpute/host` carrying the open and the write there. The binds are one table, bound once at boot and sealed (`apps/client/src/namespace/roots.ts` `ROOTS`). The roots are `spec/client/kernel/abi/host.json` `root`'s:
+A read is a file in xpute's sense ([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)): the kernel names a root by its number and an object below it by its number, the path's one name, and the client binds each root to what each number is (`apps/client/src/namespace/roots.ts`), `@xpute/host` carrying the open and the write there. The binds are one table, bound once at boot and sealed (`apps/client/src/namespace/roots.ts` `ROOTS`). The roots are `spec/client/kernel/abi/host.json` `root`'s:
 
-| Root               | The kernel's path                                              | What the host binds it to                                                                                    |
+| Root               | The kernel's path                                              | What the client binds it to                                                                                  |
 | ------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | each bake, by kind | a tile's number, its subject, in decimal; the Earth's `SPHERE` | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`namespace/tile.ts`) |
 | `ASSET`            | a load's number, in decimal                                    | the shipped asset that number is, by its hash (`namespace/asset.ts`)                                         |
 | `STORAGE`          | a kept slot's number, in decimal (`kept`)                      | the platform's storage, under a key it picks (`namespace/storage.ts`)                                        |
 
-So the kernel names no URL, no version, no storage key and no platform: a path is a number. Where a file lies, what key or address it has, which version serves a tile, and what to do with a file the kernel refuses are the host's. The kernel reads the source's declaration for its zooms, shards and formats; its versions are read in the host alone, which shows them in the settings too. A kept file starts with its slot's `format`, which the kernel checks as a driver checks a superblock, and a file of another format is refused and never written over; the host sets it aside and plugs in an empty slot (`apps/client/src/namespace/storage.ts`).
+So the kernel names no URL, no version, no storage key and no platform: a path is a number. Where a file lies, what key or address it has, which version serves a tile, and what to do with a file the kernel refuses are the client's. The kernel reads the source's declaration for its zooms, shards and formats; its versions are read in the client alone, which shows them in the settings too. A kept file starts with its slot's `format`, which the kernel checks as a driver checks a superblock, and a file of another format is refused and never written over; the client sets it aside and plugs in an empty slot (`apps/client/src/namespace/storage.ts`).
 
-Only the host knows a file's address and protocol (`io/file.rs`). The type says which of three answers came back:
+Only the client knows a file's address and protocol (`io/file.rs`). The type says which of three answers came back:
 
 | `Opened`             | What it means                        | The descriptor |
 | -------------------- | ------------------------------------ | -------------- |
@@ -454,7 +454,7 @@ A **serve policy** ranks the wants (`io/policy.rs`). Terrain comes first, then t
 
 Models and textures spend the same credits (`io/load.rs`). Each is fetched and parsed at most once, retried if it did not arrive and final if it does not parse. An image's file is read into the heap and handed to the renderer, which copies it into a texture through the GPU stream (`COPY_EXTERNAL_IMAGE`, the host decoding it); once the texture lands the file goes, and a device lost reads it again (`images_lost`).
 
-The settings and the placed objects are kept on the device, each in a slot the kernel opens by its number (`host.json` `kept`, `io/file.rs` `Kept`). A kept file begins with its slot's format byte; the kernel refuses one of another format, as a driver refuses a superblock it does not know, and names it in the snapshot. A kept file the kernel cannot read is never written over. Which storage key a slot is, and what becomes of a refused file, are the host's: it sets the file aside under a key of its own, empties the slot and says so (`WORLD_KEPT_EMPTIED`), and carries over what was kept before the slots, once (`apps/client/src/namespace/storage.ts`). Text is asked of the platform a line at a time, widths then pixels (`io/text.rs`).
+The settings and the placed objects are kept on the device, each in a slot the kernel opens by its number (`host.json` `kept`, `io/file.rs` `Kept`). A kept file begins with its slot's format byte; the kernel refuses one of another format, as a driver refuses a superblock it does not know, and names it in the snapshot. A kept file the kernel cannot read is never written over. Which storage key a slot is, and what becomes of a refused file, are the client's: it sets the file aside under a key of its own, empties the slot and says so (`WORLD_KEPT_EMPTIED`), and carries over what was kept before the slots, once (`apps/client/src/namespace/storage.ts`). Text is asked of the platform a line at a time, widths then pixels (`io/text.rs`).
 
 ## When something goes wrong
 
@@ -645,7 +645,7 @@ A version reaches the client through one private bucket that only the Worker rea
 
 Everything a build ships is decided at build time, as JSON under `spec/`, from the commands and catalogs to the settings schema and the published versions. `pxl-tool` writes a Rust module from each file, and a TypeScript one where the shell reads it; `check:spec` fails when the tree disagrees.
 
-A catalog is never sent, because both sides compile it. Where bytes cross, as a tile or a saved blob, the layout is the model's, and the version is in a tile's URL, which the host picks from the declaration, or a kept file's format byte.
+A catalog is never sent, because both sides compile it. Where bytes cross, as a tile or a saved blob, the layout is the model's, and the version is in a tile's URL, which the client picks from the declaration, or a kept file's format byte.
 
 - **Cubes and decors** are numbers in `spec/spec/block/`, and the object store writes the number.
 - **Models** are named by a path under `asset/content/` in the catalog that uses them.
