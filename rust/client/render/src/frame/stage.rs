@@ -21,8 +21,8 @@ pub mod STAGE_AT {
     /// The viewport in CSS pixels (2).
     pub const VIEWPORT: usize = EYE + 3;
     pub const FOV: usize = VIEWPORT + 2;
-    pub const LOD_CELL: usize = FOV + 1;
-    pub const EDGE_STRENGTH: usize = LOD_CELL + 1;
+    pub const CELL: usize = FOV + 1;
+    pub const EDGE_STRENGTH: usize = CELL + 1;
     pub const LOW_SPEC: usize = EDGE_STRENGTH + 1;
     pub const EDGE_WIDTH: usize = LOW_SPEC + 1;
     pub const RIM_INTENSITY: usize = EDGE_WIDTH + 1;

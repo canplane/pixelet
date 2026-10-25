@@ -196,7 +196,7 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
 fn spacing_px() -> f64 {
     let v = crate::domain::view::frame::pose::view();
     let drawn = v.height * crate::domain::view::frame::resolution::display_ratio();
-    let cell = crate::domain::view::lens::cell_angle(crate::domain::view::lens::tau()) * px_per_unit(drawn, crate::domain::view::param::FOV);
+    let cell = crate::domain::view::lens::cell(crate::domain::view::lens::tau()) * px_per_unit(drawn, crate::domain::view::param::FOV);
     libm::rint(f64::from(SPACING_CELLS) * cell)
 }
 

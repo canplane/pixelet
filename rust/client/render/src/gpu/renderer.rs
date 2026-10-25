@@ -1876,7 +1876,7 @@ impl Renderer {
             u[CAMERA_POS + i] = eye[i] as f32;
         }
         u[EDGE_STRENGTH] = s[STAGE_AT::EDGE_STRENGTH] as f32;
-        u[CELL] = s[STAGE_AT::LOD_CELL] as f32;
+        u[CELL] = s[STAGE_AT::CELL] as f32;
         u[LOW_SPEC] = s[STAGE_AT::LOW_SPEC] as f32;
         u[EDGE_WIDTH] = s[STAGE_AT::EDGE_WIDTH] as f32;
         u[RIM_INTENSITY] = s[STAGE_AT::RIM_INTENSITY] as f32;

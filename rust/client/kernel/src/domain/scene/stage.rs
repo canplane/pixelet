@@ -71,7 +71,7 @@ pub fn stage_write() {
     // The camera grid's cell angle: the footprint a drawn block covers per
     // unit of distance, square on.
     let tau = crate::domain::view::lens::tau();
-    s[STAGE_AT::LOD_CELL] = crate::domain::view::lens::cell_angle(tau);
+    s[STAGE_AT::CELL] = crate::domain::view::lens::cell(tau);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::domain::scene::param::EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
     s[STAGE_AT::CORNER_AO] = if settings.ao == AoMode::corner { crate::domain::scene::param::AO_STRENGTH } else { 0.0 };

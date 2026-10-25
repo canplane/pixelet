@@ -16,14 +16,14 @@ use crate::domain::query::asked;
 use crate::domain::view::frame::pose::view;
 
 /// The camera grid's cell at `tau`, as an angle.
-pub fn cell_angle(tau: Tau) -> f64 {
+pub fn cell(tau: Tau) -> f64 {
     tau.scale() / SPLIT
 }
 
 /// The camera grid's cell `distance` from the eye, in units: what spans it is
 /// observed there, and a motion that carries something this far is seen.
 pub fn cell_there(distance: f64) -> f64 {
-    cell_angle(tau()) * distance
+    cell(tau()) * distance
 }
 
 /// The quality: a cell spans as many drawn pixels at the optical axis as
