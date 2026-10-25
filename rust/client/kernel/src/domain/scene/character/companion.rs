@@ -25,8 +25,7 @@ use crate::domain::scene::character::variant::{character_variant, CharacterVaria
 use crate::domain::scene::frame::Frame;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::setting::store::settings_store;
-use crate::sys::io::loader::load_image;
-use crate::sys::load::Load;
+use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::mem::section;
 use crate::sys::sched::edge::wake_at;
 use crate::sys::sched::tick::TickContext;
@@ -129,7 +128,7 @@ impl Figure {
         if self.held.is_some() {
             return;
         }
-        let (Some(model), Some(_)) = (model_of(variant.model as u32, Some(variant.height_u)), load_image(Load::Asset(variant.skin as u32))) else {
+        let (Some(model), Some(_)) = (model_of(variant.model, Some(variant.height_u)), load_of(variant.skin).and_then(load_image)) else {
             return;
         };
         let Some(Some(actor)) = section::map().map(|_| Actor::new(draw_list(), crate::domain::query::model::models(), model.model)) else {
@@ -415,7 +414,7 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, (u32, &'static [u8]))> {
     [&c.person, &c.pet]
         .into_iter()
         .flatten()
-        .filter_map(|w| Some((w.held.as_ref()?.model.model, load_image(Load::Asset(w.variant.skin as u32))?)))
+        .filter_map(|w| Some((w.held.as_ref()?.model.model, load_of(w.variant.skin).and_then(load_image)?)))
 }
 
 /// `world`'s step-slide from `from`, its floor at `stands`, toward `to`:

@@ -277,3 +277,11 @@ kernel/src/
   > most loads) or to move to the heap.
 - **The spec tree.** `spec/spec/block/` holds the one catalog; whether it
   becomes `spec/spec/asset/`, and what the file table is named then.
+- **What the catalog decides.** It names files, not assets. Which assets
+  exist, their kinds and how many files each references stay compiled, the
+  world's rule; each reference is a slot the catalog fills, read through the
+  asset root at boot (pxl-spec `asset/catalog.rs`). Every bound is then the
+  compiled shape's, so none waits on the catalog. Not to be done: a catalog
+  that decides ids or counts, which the GPU and the bakes would not read.
+  Left compiled for now: the pack's tile layout, which the far ground is
+  painted from before anything is read.

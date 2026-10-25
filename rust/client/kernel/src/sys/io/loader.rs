@@ -4,6 +4,10 @@
 //! at most once. An asset is a want in the request scheduler like a tile, sharing
 //! its credits, and stays wanted until it arrives.
 //!
+//! Which file an asset references is the catalog's, the first file asked
+//! for (`catalog`): a slot names no file until it lands, which its reader
+//! takes as one still loading.
+//!
 //! A read that did not arrive is retried, and one the heap refused room for
 //! waits, as a tile's body does, until the heap gives some back (the request
 //! scheduler's `Wait::Room`): its bytes are taken when the open answers, and
@@ -22,11 +26,12 @@ use xpute_guest::sched::edge::{next_turn, yield_if_spent};
 use crate::sys::io::demand::Ask;
 use crate::sys::io::failure::Ended;
 use crate::sys::io::file::{self, Opened, Owner};
-use crate::sys::io::host_spec::{root, SPHERE};
+use crate::sys::io::host_spec::{root, CATALOG, SPHERE};
 use crate::sys::io::request::{attempt_of, settle, Credit};
 use crate::sys::io::source;
 use crate::sys::load::{Load, LoadKind};
 use crate::sys::sched::edge::{request_world_tick, world_edge};
+use pxl_spec::asset::catalog::{Catalog, Slot};
 use pxl_spec::bake::published::BaseLayer;
 use xpute_guest::global::Global;
 
@@ -42,17 +47,18 @@ enum Entry {
     Model(Rc<Gltf>),
     /// An image's bytes, sized by its header, until its texture lands.
     Image(Vec<u8>),
-    /// An image whose texture landed on the device there is, its bytes gone.
+    /// Taken in where its reader keeps it, its bytes gone: an image's
+    /// texture on the device there is, the catalog as `catalog` reads it.
     Landed,
     Failed,
 }
 
 struct Loader {
     /// By kind, then by number below the asset root, grown to the highest
-    /// asked: one file can be wanted as both.
-    entries: [Vec<Option<Entry>>; 2],
+    /// asked: one file can be wanted as several.
+    entries: [Vec<Option<Entry>>; 3],
     /// The sphere's, by kind.
-    sphere: [Option<Entry>; 2],
+    sphere: [Option<Entry>; 3],
     /// Kept so saying the wants every turn allocates nothing.
     wants: Vec<(u64, Ask)>,
 }
@@ -75,10 +81,30 @@ static LOADER: Global<Loader> = Global::new();
 
 fn loader() -> &'static mut Loader {
     LOADER.get(|| Loader {
-        entries: [Vec::new(), Vec::new()],
-        sphere: [None, None],
+        entries: [Vec::new(), Vec::new(), Vec::new()],
+        sphere: [None, None, None],
         wants: Vec::new(),
     })
+}
+
+static READ: Global<Option<Catalog>> = Global::new();
+
+/// The catalog the host plugs in (pxl-spec asset/catalog.rs), asked for
+/// when first read; none while it loads.
+pub fn catalog() -> Option<&'static Catalog> {
+    if let Some(c) = READ.get(|| None).as_ref() {
+        return Some(c);
+    }
+    let entry = loader().at(LoadKind::Catalog, Load::Asset(CATALOG));
+    if entry.is_none() {
+        *entry = Some(Entry::Pending);
+    }
+    None
+}
+
+/// The file `slot` names; none while the catalog loads.
+pub fn load_of(slot: Slot) -> Option<Load> {
+    catalog().map(|c| Load::Asset(c.file(slot)))
 }
 
 pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
@@ -109,22 +135,22 @@ pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
     }
 }
 
-/// Kind in the high word, since one asset can be wanted both as a model and as an image.
+/// Kind in the high word, since one file can be wanted as more than one.
 pub fn subject_of(kind: LoadKind, load: Load) -> u64 {
     (kind as u64) << 32 | load.number() as u64
 }
 
 pub fn of_subject(subject: u64) -> Option<(LoadKind, Load)> {
-    let kind = if subject >> 32 == 0 { LoadKind::Gltf } else { LoadKind::Image };
+    let kind = [LoadKind::Gltf, LoadKind::Image, LoadKind::Catalog].into_iter().find(|k| *k as u64 == subject >> 32)?;
     Load::of(subject as u32).map(|load| (kind, load))
 }
 
 pub fn load_wants() -> &'static [(u64, Ask)] {
     let l = loader();
     l.wants.clear();
-    // By subject, as a stream's wants are said: the models, then the
-    // images, each the files by number and the sphere past them.
-    for kind in [LoadKind::Gltf, LoadKind::Image] {
+    // By subject, as a stream's wants are said: the models, the images,
+    // then the catalog, each the files by number and the sphere past them.
+    for kind in [LoadKind::Gltf, LoadKind::Image, LoadKind::Catalog] {
         let files = (0..l.entries[kind as usize].len() as u32).map(Load::Asset);
         for load in files.chain([Load::Sphere]) {
             // The Earth's is opened under the version its source declares.
@@ -201,6 +227,15 @@ fn image_arrived(load: Load, file: Vec<u8>) {
     request_world_tick();
 }
 
+/// The catalog's bytes, read: kept where they read as the compiled slots,
+/// else its failure, final, since asking again returns the same bytes.
+fn catalog_arrived(load: Load, file: &[u8]) {
+    let read = Catalog::read(file);
+    *loader().at(LoadKind::Catalog, load) = Some(if read.is_some() { Entry::Landed } else { Entry::Failed });
+    READ.set(read);
+    request_world_tick();
+}
+
 /// The renderer took the texture of the image numbered `image`
 /// (pxl-render `take_landed`): its file goes.
 pub fn image_landed(image: u32) {
@@ -228,21 +263,23 @@ pub fn images_lost() {
 /// turn, so k arrivals advance k steps, not one.
 fn arrive(kind: LoadKind, load: Load, bytes: Vec<u8>) {
     *loader().at(kind, load) = Some(Entry::Arrived);
-    // The pool holds a task for each kind of every load (TASKS), and each
-    // has one file in flight at most, so there is always room.
+    // The pool holds a task for each slot, the catalog and the sphere
+    // (TASKS): a slot is wanted as one kind of one file, and each has one
+    // file in flight at most, so there is always room.
     let spawned = xpute_guest::sched::task::spawn(arrival(kind, load, bytes), crate::sys::sched::edge::TaskPriority::Arrival as u8);
     xpute_kit::ensure!(spawned, ENOSPC, load.number());
 }
 
 /// An asset file arrived, read whole: a model parsed, an image kept until
-/// its texture lands.
+/// its texture lands, the catalog read.
 async fn arrival(kind: LoadKind, load: Load, buf: Vec<u8>) {
     // In once the host has run the turn's records.
     next_turn(world_edge).await;
     yield_if_spent(world_edge).await;
-    if kind == LoadKind::Image {
-        image_arrived(load, buf);
-        return;
+    match kind {
+        LoadKind::Image => return image_arrived(load, buf),
+        LoadKind::Catalog => return catalog_arrived(load, &buf),
+        LoadKind::Gltf => {}
     }
     let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
         Ok(g) => Entry::Model(Rc::new(g)),

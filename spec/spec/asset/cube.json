@@ -5,8 +5,8 @@
       "The texture pack, the file the cube kind's look is drawn from: one image",
       "of every tile under asset/content/cube/, which the asset ingest composes",
       "and ships as the table's file at this path, with which tile each cube",
-      "wears on which face (pxl-tool bin/ingest_asset.rs, pxl_spec::asset::ingested",
-      "`PACK`)."
+      "wears on which face (pxl-tool bin/ingest_asset.rs, ingested.json); the",
+      "catalog names it as the cube kind's `pack` slot (pxl_spec::asset::catalog)."
     ]
   },
   "base": {

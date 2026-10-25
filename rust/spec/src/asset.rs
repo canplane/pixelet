@@ -1,12 +1,12 @@
 // pxl-spec/asset.rs
 
-//! The content library: every asset the catalog declares
-//! (`spec/spec/asset/`), each a definition of a kind — the cubes and their
-//! colors, the decors, the marker, the actors, the sky — numbered by its id, its kind
-//! over its shape (`id`), and the shipped files a definition references
-//! (`ingested`). The texture pack is the cube kind's: which of its tiles a
-//! cube wears on each face. A cube with no image still draws as its catalog
-//! color.
+//! The content library: every asset the specs declare (`spec/spec/asset/`),
+//! each a definition of a kind — the cubes and their colors, the decors, the
+//! marker, the actors, the sky — numbered by its id, its kind over its shape
+//! (`id`), and each file a definition references a slot, which the catalog
+//! the host plugs in fills (`catalog`). The texture pack is the cube kind's:
+//! which of its tiles a cube wears on each face (`ingested`). A cube with no
+//! image still draws as its catalog color.
 
 #![allow(non_upper_case_globals)]
 
@@ -14,6 +14,7 @@ use std::sync::LazyLock;
 
 #[path = "asset/actor.spec.rs"]
 pub mod actor;
+pub mod catalog;
 #[path = "asset/color.spec.rs"]
 pub mod color;
 pub mod cube;
@@ -34,6 +35,7 @@ pub use id::AssetId;
 
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::zoom::units;
+use catalog::Catalog;
 use cube::Cube;
 use ingested::{CubeFace, PACK};
 
@@ -50,11 +52,16 @@ impl Swatch {
 }
 
 impl decor::Variant {
-    /// The largest dimension of its model, in units; NaN is kept rather than
-    /// dropped, so a model the ingest could not measure is never taken for none.
-    pub fn extent(&self) -> f64 {
-        self.model.ingested().extent.unwrap_or([0.0; 3]).into_iter().fold(0.0, largest)
+    /// The largest dimension of its model, in units, as the catalog measures
+    /// it, and none before one is read; NaN is kept rather than dropped, so
+    /// a model the ingest could not measure is never taken for none.
+    pub fn extent(&self, catalog: Option<&Catalog>) -> f64 {
+        model_extent(self, catalog).into_iter().fold(0.0, largest)
     }
+}
+
+fn model_extent(v: &decor::Variant, catalog: Option<&Catalog>) -> [f64; 3] {
+    catalog.map_or([0.0; 3], |c| c.extent(v.model))
 }
 
 impl decor::Decor {
@@ -64,16 +71,17 @@ impl decor::Decor {
     }
 
     /// The largest over every variant's model, in units.
-    pub fn extent(&self) -> f64 {
-        self.variants.iter().map(decor::Variant::extent).fold(0.0, largest)
+    pub fn extent(&self, catalog: Option<&Catalog>) -> f64 {
+        self.variants.iter().map(|v| v.extent(catalog)).fold(0.0, largest)
     }
 
     /// How far any variant's box, or its model about the box's middle, reaches
-    /// from the box's min corner however it turns, in units.
-    pub fn reach(&self) -> f64 {
+    /// from the box's min corner however it turns, in units: its box alone
+    /// before a catalog is read.
+    pub fn reach(&self, catalog: Option<&Catalog>) -> f64 {
         let cell = units(self.row.cell_zoom());
         let reach = |(v, size): (&decor::Variant, &[u32; 3])| {
-            let [ex, ey, ez] = v.model.ingested().extent.unwrap_or([0.0; 3]);
+            let [ex, ey, ez] = model_extent(v, catalog);
             let [x, y, z] = size.map(|n| f64::from(n) * cell);
             let (across, up) = (x.max(y).max(ex).max(ey), z.max(ez));
             libm::sqrt(2.0 * across * across + up * up)

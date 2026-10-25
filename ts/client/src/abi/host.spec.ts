@@ -37,7 +37,7 @@ export const op = {
 export const root = {
   /** The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice. */
   STORAGE: 256 as number,
-  /** The shipped assets; a path is a load's number in decimal (sys/io/loader.rs). */
+  /** The shipped assets; a path is a load's number in decimal, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs). */
   ASSET: 257 as number,
 } as const;
 
@@ -46,6 +46,11 @@ export const root = {
  * (pxl-spec space/layer/tile.rs), which is never 0: a tile's key ends in a 1 within its
  * high half. */
 export const SPHERE: u32 = 0 as number;
+
+/** Below the asset root, the catalog the host plugs in (pxl-spec asset/catalog.rs): the
+ * file each of the asset specs' references names. Any other number below it is a file,
+ * its row in the asset ingest's table counted from 1 (spec/spec/asset/ingested.json). */
+export const CATALOG: u32 = 0 as number;
 
 /** The files the kernel keeps below STORAGE, by slot. What a slot holds is its
  * owner's, written whole, its slot's `format` first (pxl-kernel sys/io/file.rs). */

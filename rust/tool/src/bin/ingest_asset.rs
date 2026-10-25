@@ -1,11 +1,11 @@
 // pxl-tool/bin/ingest_asset.rs
 
-//! Every shipped file, `asset/content/`, into the bucket's form, named by the
+//! Every shipped asset, `asset/content/`, into the bucket's form, named by the
 //! SHA-256 of its bytes alone: served with a year's `max-age` and no purge, a
 //! changed file gets a new name, and where a file lies names nothing. What a
 //! catalog calls it, its path under `asset/content/`, is the table's to map.
 //!
-//!   ./script/tool.ts ingest asset
+//!   deno task ingest:asset
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -166,11 +166,13 @@ fn run() -> Result<(), String> {
     write_formatted(&root.join("rust/spec/src/asset/symbol.spec.rs"), &symbol::render_rs(&symbols))?;
     write_formatted(&root.join("ts/client/src/shell/search/place-symbol.ts"), &symbol::render_ts(&symbols))?;
 
-    write_formatted(&root.join("ts/client/src/catalog/asset/ingested.spec.ts"), &table::render_ts(&rows, &laid))?;
-    write_formatted(&root.join("rust/spec/src/asset/ingested.spec.rs"), &table::render_rs(&rows, &laid))?;
+    // What the code is generated from: the host's table, the pack's layout
+    // and the catalog.
+    write_formatted(&root.join("spec/spec/asset/ingested.json"), &table::render_json(&rows, &laid))?;
+    pxl_tool::spec::generate(true)?;
 
     println!(
-        "[ingest] {} files, {:.1} MiB, pack {} tiles {:.0} KiB -> out/asset/, tables written",
+        "[ingest] {} assets, {:.1} MiB, pack {} tiles {:.0} KiB -> out/asset/, spec/spec/asset/ingested.json and what it generates written",
         rows.len(),
         total as f64 / 1024.0 / 1024.0,
         laid.tiles.len(),

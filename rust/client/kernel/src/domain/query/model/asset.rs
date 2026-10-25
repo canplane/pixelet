@@ -16,9 +16,9 @@ use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 
 use crate::sys::io::host::Refused;
-use crate::sys::io::loader::load_gltf;
-use crate::sys::load::Load;
+use crate::sys::io::loader::{load_gltf, load_of};
 use crate::sys::mem::section;
+use pxl_spec::asset::catalog::Slot;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelHandle {
@@ -36,10 +36,13 @@ type Registration = Result<ModelHandle, Refused>;
 /// asked at, its bits.
 static REGISTERED: Global<Vec<(u32, Option<u64>, Registration)>> = Global::new();
 
-/// `file` registered `height_u` units tall, or at its own size when None,
-/// once. None while it loads, and while the heap refuses it room: a refusal
-/// is a wait, not a failure, asked again once the heap gives some back.
-pub fn model_of(file: u32, height_u: Option<f64>) -> Option<ModelHandle> {
+/// The file `slot` names registered `height_u` units tall, or at its own
+/// size when None, once: two slots naming one file reach one. None while it
+/// loads, and while the heap refuses it room: a refusal is a wait, not a
+/// failure, asked again once the heap gives some back.
+pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
+    let load = load_of(slot)?;
+    let file = load.number();
     let key = height_u.map(f64::to_bits);
     let registered = REGISTERED.get(Vec::new);
     let at = registered.iter().position(|(a, h, _)| *a == file && *h == key);
@@ -48,7 +51,7 @@ pub fn model_of(file: u32, height_u: Option<f64>) -> Option<ModelHandle> {
         Some(Err(refused)) if !refused.over() => return None,
         _ => {}
     }
-    let gltf = load_gltf(Load::Asset(file))?;
+    let gltf = load_gltf(load)?;
     let entry = register_model(&gltf, height_u).ok_or_else(Refused::now);
     match at {
         Some(at) => registered[at].2 = entry.clone(),
@@ -57,10 +60,11 @@ pub fn model_of(file: u32, height_u: Option<f64>) -> Option<ModelHandle> {
     entry.ok()
 }
 
-/// `file` as `model_of` registered it at `height_u`, asking nothing: what a
-/// reader that must not load, such as the query, finds; none while it is
-/// not registered.
-pub fn registered(file: u32, height_u: Option<f64>) -> Option<ModelHandle> {
+/// `slot`'s model as `model_of` registered it at `height_u`, asking
+/// nothing: what a reader that must not load, such as the query, finds;
+/// none while it is not registered.
+pub fn registered(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
+    let file = load_of(slot)?.number();
     let key = height_u.map(f64::to_bits);
     REGISTERED.get(Vec::new).iter().find(|(a, h, _)| *a == file && *h == key).and_then(|(_, _, entry)| entry.clone().ok())
 }

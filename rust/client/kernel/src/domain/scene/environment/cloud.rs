@@ -16,7 +16,7 @@ use fnv::FnvHashMap;
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
-use pxl_spec::asset::ingested::Asset;
+use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
@@ -35,11 +35,10 @@ use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{km_per_u, units_per_px_at};
 use crate::domain::view::observation::eye;
 use crate::domain::view::setting::store::settings_store;
-use crate::sys::io::loader::load_image;
-use crate::sys::load::Load;
+use crate::sys::io::loader::{catalog, load_image, load_of};
 
 /// Its models, a cloud each one of them.
-const VARIANTS: [Asset; cumulus::models.len()] = cumulus::models;
+const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
 
 pub const MODELS_MAX: usize = VARIANTS.len();
 
@@ -103,19 +102,20 @@ fn clouds() -> &'static mut Clouds {
 /// Each variant's draw group: its mesh, 0 while it loads, its skin and its extent.
 pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<pxl_render::gpu::api::Image>, [f32; 3])> {
     let models = crate::domain::query::model::models();
-    let skin = load_image(Load::Asset(cumulus::skin as u32));
+    let skin = load_of(cumulus::skin).and_then(load_image);
     clouds().models.iter().zip(VARIANTS).enumerate().map(move |(k, (m, asset))| {
         let mesh = m.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle);
         (FIRST_GROUP + k, mesh, skin, extent(asset).map(|e| e as f32))
     })
 }
 
-fn extent(asset: Asset) -> [f64; 3] {
-    asset.ingested().extent.unwrap_or([0.0; 3])
+/// Its model's, as the catalog measures it; none before one is read.
+fn extent(slot: Slot) -> [f64; 3] {
+    catalog().map_or([0.0; 3], |c| c.extent(slot))
 }
 
-fn widest(asset: Asset) -> f64 {
-    extent(asset).into_iter().fold(0.0, f64::max)
+fn widest(slot: Slot) -> f64 {
+    extent(slot).into_iter().fold(0.0, f64::max)
 }
 
 /// The layer's height over the datum, in units, as the sky draws it.
@@ -153,7 +153,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     c.seen = f64::INFINITY;
     for (slot, asset) in c.models.iter_mut().zip(VARIANTS) {
         if slot.is_none() {
-            *slot = model_of(asset as u32, None).map(|h| h.model);
+            *slot = model_of(asset, None).map(|h| h.model);
         }
     }
     let Some(eye) = eye() else { return };

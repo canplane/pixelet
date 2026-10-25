@@ -12,8 +12,7 @@ use crate::domain::query::model::registry::Models;
 use crate::domain::scene::actor::{Actor, Pose};
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
 use crate::domain::scene::frame::Frame;
-use crate::sys::io::loader::load_image;
-use crate::sys::load::Load;
+use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 use crate::sys::sched::tick::TickContext;
@@ -95,10 +94,10 @@ pub fn preview_step(ctx: &mut TickContext) {
     let mut turned = false;
     for case in &mut c.cases {
         if case.model.is_none() {
-            case.model = model_of(case.variant.model as u32, Some(case.variant.height_u));
+            case.model = model_of(case.variant.model, Some(case.variant.height_u));
         }
         if case.actor.is_none() {
-            if let (Some(model), Some(_)) = (&case.model, load_image(Load::Asset(case.variant.skin as u32))) {
+            if let (Some(model), Some(_)) = (&case.model, load_of(case.variant.skin).and_then(load_image)) {
                 let id = model.model;
                 case.actor = section::map().and_then(|_| Actor::new(draw_list(), crate::domain::query::model::models(), id));
                 if let (Some(actor), true) = (case.actor.as_mut(), IDLE_CLIP < model.clip_count) {
@@ -150,5 +149,5 @@ pub fn preview_rows() -> impl Iterator<Item = (u32, u32, (u32, &'static [u8]))> 
     let c: &'static _ = cases();
     c.cases
         .iter()
-        .filter_map(|case| Some((case.id, case.actor.as_ref()?.palette(), load_image(Load::Asset(case.variant.skin as u32))?)))
+        .filter_map(|case| Some((case.id, case.actor.as_ref()?.palette(), load_of(case.variant.skin).and_then(load_image)?)))
 }

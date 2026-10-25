@@ -7,6 +7,9 @@
 //! where the spec asks for one, and a table's keys are not listed; the
 //! TypeScript keeps them for what a person reads. xpute's Rust keeps its own.
 
+use std::cell::Cell;
+
+use super::catalog::{run_of, FILE};
 use super::{align_star, casing_note, enum_name, file, js_num, json_str, laid_out, line_comments, read, rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output};
 
 pub enum Enums {
@@ -22,9 +25,6 @@ struct DataSpec {
     uses: &'static [&'static str],
     ts: Option<&'static str>,
     rs: Option<&'static str>,
-    /// Where the same Rust is written again, for a crate that cannot depend
-    /// on the one `rs` is in (a build script), each under its crate's name.
-    rs_also: &'static [(&'static str, &'static str)],
     module: Option<&'static str>,
     enums: Enums,
     /// Absent where the TypeScript reads all of it.
@@ -38,7 +38,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/config/earth.spec.ts"),
         rs: Some("rust/spec/src/space/coord/earth.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -49,7 +48,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: None,
         rs: Some("rust/spec/src/space/coord/geoid.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -60,7 +58,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/catalog/block/ext.spec.ts"),
         rs: Some("rust/spec/src/block/ext.spec.rs"),
-        rs_also: &[],
         module: Some("ext"),
         enums: Enums::All,
         ts_names: Some(&["MARKER_TEXT_CHARS"]),
@@ -71,7 +68,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: None,
         rs: Some("rust/spec/src/asset/marker.spec.rs"),
-        rs_also: &[],
         module: Some("marker"),
         enums: Enums::None,
         ts_names: None,
@@ -82,7 +78,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: None,
         rs: Some("rust/spec/src/asset/id.spec.rs"),
-        rs_also: &[],
         module: Some("id"),
         enums: Enums::All,
         ts_names: None,
@@ -93,7 +88,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/shell/world/division/division.spec.ts"),
         rs: Some("rust/spec/src/division.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -104,7 +98,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("xpute/ts/host/src/conformance.spec.ts"),
         rs: Some("xpute/rust/conformance/src/guest.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -115,7 +108,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("xpute/ts/host/src/ipc/directory.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/directory.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -126,7 +118,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("xpute/ts/host/src/ipc/frame.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/frame.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -137,7 +128,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("xpute/ts/host/src/ipc/ring.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/ring.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -148,7 +138,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("xpute/ts/host/src/ipc/sys.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/sys.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -159,7 +148,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("xpute/ts/gpu/src/api.spec.ts"),
         rs: Some("xpute/rust/gpu/src/api.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::Named(&["BINDING_KIND", "RESOURCE_KIND"]),
         ts_names: None,
@@ -170,7 +158,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("xpute/ts/gpu/src/enum.spec.ts"),
         rs: Some("xpute/rust/gpu/src/enum.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::Named(&[
             "TEXTURE_FORMAT",
@@ -209,7 +196,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("xpute/ts/host/src/sched/tick.spec.ts"),
         rs: Some("xpute/rust/guest/src/sched/tick.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::Named(&["PHASES"]),
         ts_names: None,
@@ -220,7 +206,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/abi/directory.spec.ts"),
         rs: Some("rust/client/kernel/src/door/directory.spec.rs"),
-        rs_also: &[],
         module: Some("directory"),
         enums: Enums::None,
         ts_names: None,
@@ -231,7 +216,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/shell/search/place_theme.spec.ts"),
         rs: None,
-        rs_also: &[],
         module: None,
         enums: Enums::None,
         ts_names: None,
@@ -242,7 +226,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/catalog/asset/actor.spec.ts"),
         rs: Some("rust/spec/src/asset/actor.spec.rs"),
-        rs_also: &[],
         module: Some("actor"),
         enums: Enums::All,
         ts_names: Some(&["groups", "PERSON_GENDER_PREFIXES"]),
@@ -253,7 +236,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: None,
         rs: Some("rust/spec/src/asset/sky.spec.rs"),
-        rs_also: &[],
         module: Some("sky"),
         enums: Enums::None,
         ts_names: None,
@@ -264,7 +246,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/shell/debug/gizmo.spec.ts"),
         rs: Some("rust/client/kernel/src/domain/scene/indicator/gizmo.spec.rs"),
-        rs_also: &[],
         module: Some("gizmo_spec"),
         enums: Enums::None,
         ts_names: None,
@@ -275,7 +256,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/abi/render/gpu/api.spec.ts"),
         rs: Some("rust/client/render/src/gpu/api.spec.rs"),
-        rs_also: &[],
         module: Some("api_spec"),
         enums: Enums::None,
         ts_names: Some(&["surface_role", "stream"]),
@@ -286,7 +266,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/abi/host.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/io/host.spec.rs"),
-        rs_also: &[],
         module: Some("host_spec"),
         enums: Enums::None,
         ts_names: None,
@@ -297,7 +276,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/abi/io/demand.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/io/demand.spec.rs"),
-        rs_also: &[],
         module: Some("demand_spec"),
         enums: Enums::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
         ts_names: None,
@@ -308,7 +286,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/abi/turn/step.spec.ts"),
         rs: Some("rust/client/kernel/src/turn/step.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
         ts_names: None,
@@ -319,7 +296,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/abi/render/gpu/span.spec.ts"),
         rs: Some("rust/client/render/src/gpu/span.spec.rs"),
-        rs_also: &[],
         module: Some("span_spec"),
         enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS"]),
         ts_names: None,
@@ -336,7 +312,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         ],
         ts: Some("ts/client/src/shell/debug/profiler/profiler.spec.ts"),
         rs: Some("rust/client/kernel/src/profiler/profiler.spec.rs"),
-        rs_also: &[],
         module: Some("spec"),
         enums: Enums::Named(&["WAKES"]),
         ts_names: None,
@@ -347,8 +322,6 @@ const DATA_SPECS: [DataSpec; 26] = [
         uses: &[],
         ts: Some("ts/client/src/abi/mem/mem.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/mem/mem.spec.rs"),
-        // pxl-wasm's build script, which links the module by these numbers.
-        rs_also: &[("rust/client-bracket/wasm/mem.spec.rs", "pxl-wasm/mem.spec.rs")],
         module: Some("spec"),
         enums: Enums::None,
         ts_names: Some(&["DIRECTORY_AT", "DESKTOP_BYTES", "PHONE_BYTES", "REGION_BYTES", "SUBMISSION_CAPACITY", "COMPLETION_CAPACITY"]),
@@ -402,6 +375,8 @@ struct Scope {
     /// Names are carried as strings, as xpute's own tables are; pixelet's
     /// Rust gets a list's count in their place.
     names: bool,
+    /// The next file reference's slot (catalog.rs).
+    slot: Cell<u16>,
 }
 
 fn is_primitive(ty: &str) -> bool {
@@ -423,6 +398,10 @@ fn enum_path(ty: &str, scope: &Scope) -> Option<String> {
 fn rs_scalar(n: &Node, ty: &str, scope: &Scope) -> Result<(String, String), String> {
     Ok(match n {
         Node::Bool(b) => ("bool".to_string(), b.to_string()),
+        Node::Str(_) if ty == FILE => {
+            let slot = scope.slot.replace(scope.slot.get() + 1);
+            ("crate::asset::catalog::Slot".to_string(), format!("crate::asset::catalog::Slot({slot})"))
+        }
         Node::Str(s) => match ty {
             "u64" => ("u64".to_string(), s.clone()),
             "rgb" => ("u32".to_string(), rgb_literal(s)?),
@@ -542,7 +521,7 @@ fn cpp_ident(k: &str) -> String {
 fn rs_leaf(name: &str, v: &Node, ty: &str, indent: &str, out: &mut Vec<String>, scope: &Scope) -> Result<(), String> {
     if let Node::Arr(a) = v {
         let strings = matches!(a.first(), Some(Node::Str(_)));
-        if strings && ty != "u64" && enum_path(ty, scope).is_none() && ty != "rgb" {
+        if strings && ty != "u64" && enum_path(ty, scope).is_none() && ty != "rgb" && ty != FILE {
             out.push(if scope.names {
                 format!(
                     "{indent}pub const {}: &[&str] = &[{}];",
@@ -709,6 +688,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     _ => Vec::new(),
                 },
                 names: crate_name.starts_with("xpute-"),
+                slot: Cell::new(run_of(d.json)?.0),
             };
             for name in &names {
                 let mut items = Vec::new();
@@ -718,10 +698,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     rs.extend(items);
                 }
             }
-            for (path, logical) in d.rs_also {
-                let mut also = rs.clone();
-                also[0] = format!("// {logical}");
-                outputs.push(Output::new(path, file(&also)));
+            let (first, count) = run_of(d.json)?;
+            if scope.slot.get() != first + count {
+                return Err(format!("{}: its file references are not the catalog's", d.json));
             }
             outputs.push(Output::new(rs_path, file(&rs)));
         }

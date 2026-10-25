@@ -31,7 +31,7 @@ use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
 use crate::profiler::report::set_host_frame;
-use crate::sys::io::loader::load_image;
+use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
 use crate::sys::mem::section;
@@ -97,7 +97,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
     for d in &pxl_spec::asset::decor::DECORS {
         for (v, variant) in d.variants.iter().enumerate() {
-            let extent = variant.model.ingested().extent.unwrap_or([0.0; 3]).map(|e| e as f32);
+            let extent = catalog().map_or([0.0; 3], |c| c.extent(variant.model)).map(|e| e as f32);
             let mesh = decor_model(d, v).and_then(|m| models.mesh(m)).map_or(0, |m| m.handle);
             decor[d.first_group() as usize + v] = (mesh, decor_skin(d, v), extent);
         }
@@ -131,8 +131,8 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         decor: &decor,
         skins: &skins[..skin_cnt],
         cases: &cases[..case_cnt],
-        pack: || load_image(Load::Asset(pxl_spec::asset::ingested::PACK.image as u32)),
-        moon: || load_image(Load::Asset(pxl_spec::asset::sky::moon::picture as u32)),
+        pack: || load_of(pxl_spec::asset::catalog::pack).and_then(load_image),
+        moon: || load_of(pxl_spec::asset::sky::moon::picture).and_then(load_image),
         earth: || load_image(EARTH),
         earth_tiles: EarthTiles {
             window,

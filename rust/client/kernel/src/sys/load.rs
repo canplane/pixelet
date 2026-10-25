@@ -1,21 +1,22 @@
 // pxl-kernel/sys/load.rs
 
-//! What the kernel loads, and how many: the shipped files, each by its
-//! number below the asset root, the texture pack's among them, and the
-//! Earth's sphere, each as a model, an image or both. A leaf: io loads
-//! them, and the turn's edge sizes its tasks by them.
+//! What the kernel loads, and how many: the catalog, the files it names,
+//! each by its number below the asset root, and the Earth's sphere, each as
+//! the catalog, a model or an image. A leaf: io loads them, and the turn's
+//! edge sizes its tasks by them.
 
-use pxl_spec::asset::ingested::Asset;
+use pxl_spec::asset::catalog::SLOTS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadKind {
     Gltf = 0,
     Image = 1,
+    Catalog = 2,
 }
 
-/// A file below the asset root, by its number, the texture pack's image
-/// among them; the Earth's picture whole is the earth layer's, under its
-/// version.
+/// A file below the asset root, by its number, the catalog's
+/// (host.json `CATALOG`) or one it names; the Earth's picture whole is the
+/// earth layer's, under its version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Load {
     Asset(u32),
@@ -43,9 +44,6 @@ impl Load {
     }
 }
 
-/// Every asset and the sphere.
-pub const LOADS: usize = Asset::ALL.len() + 1;
-
-/// The files that can be in flight at once: each load, as a model and as an
-/// image.
-pub const LOAD_FILES: usize = 2 * LOADS;
+/// The files that can be in flight at once: a slot's each, which is wanted
+/// as one kind, the catalog and the sphere.
+pub const LOAD_FILES: usize = SLOTS + 2;

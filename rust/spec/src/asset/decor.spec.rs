@@ -7,27 +7,27 @@
 // Numbered in the decor kind (id.json), so a placed leaf's value says it is
 // decor: an object value is a u16.
 //
-// Each decor is said here once: its number, its models, and how the ground
-// grows it on its own. A decor's `seed` names its scatter, so changing it
+// Each kind is said here once: its number, its models, and how the ground
+// grows it on its own. A kind's `seed` names its scatter, so changing it
 // reshuffles every one the ground grows; `density` is its mean candidates per
 // cell at the cell's zoom, the intensity of the Poisson process that scatters
 // it (pxl-spec-core scatter.rs); `on` the looks it may stand on; `orientation`
 // a random heading, or along the road or rail its cell lies on. A variant's
 // skin is its pack's colormap, kept outside the glb.
 //
-// A variant's `size` is the box it claims, in its decor's cells: every cell
+// A variant's `size` is the box it claims, in its kind's cells: every cell
 // of it is the decor's. Its model is drawn as made, a glb unit a unit, its
 // origin at the middle of the box's base, where it stands: no origin is
 // moved, and glTF fixes none, so a model must be made with it there. It may
 // reach a little past the box. A
-// decor's cell is a unit, a z24 cell, `scale_steps` zooms coarser (finer
+// kind's cell is a unit, a z24 cell, `scale_steps` zooms coarser (finer
 // where negative, as a marker's, marker.json), one for every variant,
 // since a placement lands on the cell before its variant is drawn. The
-// ground grows a decor only on its own looks, and no two decors share one, so
-// two decors' boxes never meet.
+// ground grows a kind only on its own looks, and no two kinds share one, so
+// two kinds' boxes never meet.
 //
 // A decor thing carries `meta`, the fields its id gives it beside where it
-// stands: which variant of its decor, its heading in quarter turns (an odd
+// stands: which variant of its kind, its heading in quarter turns (an odd
 // one swaps its box's sides) and its scale. The ground evaluates them from
 // its cell; a placed one's are the placement's.
 //
@@ -63,11 +63,11 @@ impl DecorId {
 /// How it grows, one row with the GPU's.
 pub use pxl_spec_core::decor::Orientation;
 
-/// A model and its pack's colormap.
+/// A model and its pack's colormap, each a slot the catalog fills.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Variant {
-    pub model: crate::asset::ingested::File,
-    pub skin: crate::asset::ingested::File,
+    pub model: crate::asset::catalog::Slot,
+    pub skin: crate::asset::catalog::Slot,
 }
 
 /// A decor: its id, its row (how the ground grows it and the boxes its
@@ -98,40 +98,40 @@ pub const DECORS: [Decor; 4] = [
         row: &pxl_spec_core::decor::DECORS[0],
         variants: &[
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_fantasy_town_tree_glb,
-                skin: crate::asset::ingested::File::decor_kenney_fantasy_town_colormap_png,
+                model: crate::asset::catalog::Slot(1),
+                skin: crate::asset::catalog::Slot(2),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_fantasy_town_tree_high_glb,
-                skin: crate::asset::ingested::File::decor_kenney_fantasy_town_colormap_png,
+                model: crate::asset::catalog::Slot(3),
+                skin: crate::asset::catalog::Slot(4),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_fantasy_town_tree_crooked_glb,
-                skin: crate::asset::ingested::File::decor_kenney_fantasy_town_colormap_png,
+                model: crate::asset::catalog::Slot(5),
+                skin: crate::asset::catalog::Slot(6),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_fantasy_town_tree_high_round_glb,
-                skin: crate::asset::ingested::File::decor_kenney_fantasy_town_colormap_png,
+                model: crate::asset::catalog::Slot(7),
+                skin: crate::asset::catalog::Slot(8),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_fantasy_town_tree_high_crooked_glb,
-                skin: crate::asset::ingested::File::decor_kenney_fantasy_town_colormap_png,
+                model: crate::asset::catalog::Slot(9),
+                skin: crate::asset::catalog::Slot(10),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_graveyard_kit_pine_glb,
-                skin: crate::asset::ingested::File::decor_kenney_graveyard_kit_colormap_png,
+                model: crate::asset::catalog::Slot(11),
+                skin: crate::asset::catalog::Slot(12),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_graveyard_kit_pine_crooked_glb,
-                skin: crate::asset::ingested::File::decor_kenney_graveyard_kit_colormap_png,
+                model: crate::asset::catalog::Slot(13),
+                skin: crate::asset::catalog::Slot(14),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_graveyard_kit_pine_fall_glb,
-                skin: crate::asset::ingested::File::decor_kenney_graveyard_kit_colormap_png,
+                model: crate::asset::catalog::Slot(15),
+                skin: crate::asset::catalog::Slot(16),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_graveyard_kit_pine_fall_crooked_glb,
-                skin: crate::asset::ingested::File::decor_kenney_graveyard_kit_colormap_png,
+                model: crate::asset::catalog::Slot(17),
+                skin: crate::asset::catalog::Slot(18),
             },
         ],
     },
@@ -143,20 +143,20 @@ pub const DECORS: [Decor; 4] = [
         row: &pxl_spec_core::decor::DECORS[1],
         variants: &[
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_watercraft_pack_boat_row_small_glb,
-                skin: crate::asset::ingested::File::decor_kenney_watercraft_pack_colormap_png,
+                model: crate::asset::catalog::Slot(19),
+                skin: crate::asset::catalog::Slot(20),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_watercraft_pack_boat_fishing_small_glb,
-                skin: crate::asset::ingested::File::decor_kenney_watercraft_pack_colormap_png,
+                model: crate::asset::catalog::Slot(21),
+                skin: crate::asset::catalog::Slot(22),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_watercraft_pack_boat_sail_a_glb,
-                skin: crate::asset::ingested::File::decor_kenney_watercraft_pack_colormap_png,
+                model: crate::asset::catalog::Slot(23),
+                skin: crate::asset::catalog::Slot(24),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_watercraft_pack_boat_speed_a_glb,
-                skin: crate::asset::ingested::File::decor_kenney_watercraft_pack_colormap_png,
+                model: crate::asset::catalog::Slot(25),
+                skin: crate::asset::catalog::Slot(26),
             },
         ],
     },
@@ -169,24 +169,24 @@ pub const DECORS: [Decor; 4] = [
         row: &pxl_spec_core::decor::DECORS[2],
         variants: &[
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_car_kit_sedan_glb,
-                skin: crate::asset::ingested::File::decor_kenney_car_kit_colormap_png,
+                model: crate::asset::catalog::Slot(27),
+                skin: crate::asset::catalog::Slot(28),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_car_kit_suv_glb,
-                skin: crate::asset::ingested::File::decor_kenney_car_kit_colormap_png,
+                model: crate::asset::catalog::Slot(29),
+                skin: crate::asset::catalog::Slot(30),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_car_kit_van_glb,
-                skin: crate::asset::ingested::File::decor_kenney_car_kit_colormap_png,
+                model: crate::asset::catalog::Slot(31),
+                skin: crate::asset::catalog::Slot(32),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_car_kit_hatchback_sports_glb,
-                skin: crate::asset::ingested::File::decor_kenney_car_kit_colormap_png,
+                model: crate::asset::catalog::Slot(33),
+                skin: crate::asset::catalog::Slot(34),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_car_kit_taxi_glb,
-                skin: crate::asset::ingested::File::decor_kenney_car_kit_colormap_png,
+                model: crate::asset::catalog::Slot(35),
+                skin: crate::asset::catalog::Slot(36),
             },
         ],
     },
@@ -198,20 +198,20 @@ pub const DECORS: [Decor; 4] = [
         row: &pxl_spec_core::decor::DECORS[3],
         variants: &[
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_train_kit_train_locomotive_a_glb,
-                skin: crate::asset::ingested::File::decor_kenney_train_kit_colormap_png,
+                model: crate::asset::catalog::Slot(37),
+                skin: crate::asset::catalog::Slot(38),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_train_kit_train_locomotive_b_glb,
-                skin: crate::asset::ingested::File::decor_kenney_train_kit_colormap_png,
+                model: crate::asset::catalog::Slot(39),
+                skin: crate::asset::catalog::Slot(40),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_train_kit_train_diesel_a_glb,
-                skin: crate::asset::ingested::File::decor_kenney_train_kit_colormap_png,
+                model: crate::asset::catalog::Slot(41),
+                skin: crate::asset::catalog::Slot(42),
             },
             Variant {
-                model: crate::asset::ingested::File::decor_kenney_train_kit_train_electric_city_a_glb,
-                skin: crate::asset::ingested::File::decor_kenney_train_kit_colormap_png,
+                model: crate::asset::catalog::Slot(43),
+                skin: crate::asset::catalog::Slot(44),
             },
         ],
     },

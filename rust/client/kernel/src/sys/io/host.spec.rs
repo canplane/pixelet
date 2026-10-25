@@ -43,7 +43,7 @@ pub mod op {
 pub mod root {
     /// The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice.
     pub const STORAGE: u32 = 256;
-    /// The shipped assets; a path is a load's number in decimal (sys/io/loader.rs).
+    /// The shipped assets; a path is a load's number in decimal, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs).
     pub const ASSET: u32 = 257;
 }
 
@@ -52,6 +52,11 @@ pub mod root {
 /// (pxl-spec space/layer/tile.rs), which is never 0: a tile's key ends in a 1 within its
 /// high half.
 pub const SPHERE: u32 = 0;
+
+/// Below the asset root, the catalog the host plugs in (pxl-spec asset/catalog.rs): the
+/// file each of the asset specs' references names. Any other number below it is a file,
+/// its row in the asset ingest's table counted from 1 (spec/spec/asset/ingested.json).
+pub const CATALOG: u32 = 0;
 
 /// The files the kernel keeps below STORAGE, by slot. What a slot holds is its
 /// owner's, written whole, its slot's `format` first (pxl-kernel sys/io/file.rs).

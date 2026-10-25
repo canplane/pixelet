@@ -52,7 +52,7 @@
     },
     "ASSET": {
       "$value": 257,
-      "$doc": ["The shipped assets; a path is a load's number in decimal (sys/io/loader.rs)."]
+      "$doc": ["The shipped assets; a path is a load's number in decimal, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs)."]
     }
   },
   "SPHERE": {
@@ -63,6 +63,15 @@
       "under the earth's own version. Any other number below a bake's root is a tile's subject",
       "(pxl-spec space/layer/tile.rs), which is never 0: a tile's key ends in a 1 within its",
       "high half."
+    ]
+  },
+  "CATALOG": {
+    "$type": "u32",
+    "$value": 0,
+    "$doc": [
+      "Below the asset root, the catalog the host plugs in (pxl-spec asset/catalog.rs): the",
+      "file each of the asset specs' references names. Any other number below it is a file,",
+      "its row in the asset ingest's table counted from 1 (spec/spec/asset/ingested.json)."
     ]
   },
   "kept": {

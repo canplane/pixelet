@@ -115,7 +115,7 @@ So decor is no layer. A grown tree and a placed tree are one kind from two sourc
 | decor  | what the ground grows               | a placed decor  |
 | marker | a place, Carto's icon and its name  | a placed marker |
 
-The ground grows decor by evaluating, never storing: what stands in a leaf cell is a function of the cell, a seed and the ground's face (`domain/query/scatter.rs` `grown_at`). Two grown decors never share a cell. Models, seeds, densities and colors are catalog entries compiled into both sides (Catalogs and assets).
+The ground grows decor by evaluating, never storing: what stands in a leaf cell is a function of the cell, a seed and the ground's face (`domain/query/scatter.rs` `grown_at`). Two grown decors never share a cell. Seeds, densities and colors are compiled into both sides, and a variant's model is a slot the catalog fills (Catalogs and assets).
 
 ---
 
@@ -653,11 +653,11 @@ A version reaches the client through one private bucket that only the Worker rea
 
 Everything a build ships is decided at build time, as JSON under `spec/`, from the commands and catalogs to the settings schema and the published versions. `pxl-tool` writes a Rust module from each file, and a TypeScript one where the shell reads it; `check-spec` fails when the tree disagrees.
 
-A catalog is never sent, because both sides compile it. Where bytes cross, as a tile or a saved blob, the layout is the model's, and the version is in a tile's URL, which the client picks from the declaration, or a kept file's format byte.
+Which assets exist is compiled on both sides: the world's rule, which the CPU, the GPU, the bakes and the stores agree on. Which file each references is the one catalog the host plugs in, read through the asset root like any file (`pxl-spec asset/catalog.rs`). Where bytes cross, as a tile or a saved blob, the layout is the model's, and the version is in a tile's URL, which the client picks from the declaration, or a kept file's format byte.
 
 - **Cubes and decors** are numbers in `spec/spec/asset/`, and the object store writes the number.
-- **Models** are named by a path under `asset/content/` in the catalog that uses them.
-- **Asset keys** come from the table `pxl-tool`'s ingest writes (`pxl-spec asset/ingested.spec.rs`). Each file is keyed by the SHA-256 of its bytes, so moving it changes no key.
+- **A file reference** is a path under `asset/content/` in the spec that makes it, compiled as a slot: the kernel knows "the cumulus' skin", never which file it is. The catalog fills each slot with a file's number below the asset root and what the ingest measured of it, and until it is read every slot reads as loading. Its count bounds the files the kernel loads at once, so no memory waits on the catalog.
+- **Asset keys** come from the table `pxl-tool`'s ingest writes (`spec/spec/asset/ingested.json`), which numbers each file, the host binding a number to its key. Each file is keyed by the SHA-256 of its bytes, so moving it changes no key.
 - **The texture pack** is one table of which image a cube wears on which face, and one WebP image, the file the cube kind's definition names (`spec/spec/asset/cube.json` `pack`), which the ingest composes and ships as a row of the table like any other. A textured look is drawn from afar as its tile's mean, so the ingest draws each top toward its look's color (`pxl-tool asset/pack.rs` `TOWARD_CARTO`).
 
 # Prior art

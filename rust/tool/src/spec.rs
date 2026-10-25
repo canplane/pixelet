@@ -5,15 +5,20 @@
 
 pub mod asset;
 pub mod bake;
+pub mod catalog;
 pub mod cmd;
 pub mod data;
+pub mod ingested;
 pub mod route;
 pub mod setting;
 pub mod xpute;
 
+use std::thread;
+
 use serde::de::{Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::Deserialize;
 
+use crate::fmt::formatted;
 use crate::root;
 
 pub struct Output {
@@ -39,8 +44,49 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     out.extend(bake::object_outputs()?);
     out.extend(bake::place_theme_outputs()?);
     out.extend(data::outputs()?);
+    out.extend(ingested::outputs()?);
+    out.extend(catalog::outputs()?);
     out.extend(route::outputs()?);
     Ok(out)
+}
+
+/// Writes every generated file that differs from what its JSON writes, or,
+/// not `write`, fails where one does.
+pub fn generate(write: bool) -> Result<(), String> {
+    let outputs = thread::scope(|scope| {
+        let handles: Vec<_> = outputs()?
+            .into_iter()
+            .map(|o| scope.spawn(move || formatted(&o.path, o.text).map(|text| Output { path: o.path, text })))
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().map_err(|_| "a formatter thread panicked".to_string())?)
+            .collect::<Result<Vec<_>, String>>()
+    })?;
+    let root = root();
+    let stale: Vec<&Output> = outputs
+        .iter()
+        .filter(|o| std::fs::read_to_string(root.join(&o.path)).ok().as_deref() != Some(o.text.as_str()))
+        .collect();
+    if write {
+        // Only what differs: a rewrite moves the mtime, and cargo and Vite rebuild.
+        for o in &stale {
+            let at = root.join(&o.path);
+            std::fs::create_dir_all(at.parent().ok_or("a path with no parent")?).map_err(|e| e.to_string())?;
+            std::fs::write(&at, &o.text).map_err(|e| format!("{}: {e}", o.path))?;
+            println!("wrote {}", o.path);
+        }
+        return Ok(());
+    }
+    let stale: Vec<&str> = stale.iter().map(|o| o.path.as_str()).collect();
+    if !stale.is_empty() {
+        for s in &stale {
+            eprintln!("spec: {s} is not what its JSON writes — run `deno task spec`");
+        }
+        return Err(format!("{} stale", stale.len()));
+    }
+    println!("spec: {} generated files are what their JSON writes", outputs.len());
+    Ok(())
 }
 
 /// A JSON value in file order, which numbers enums and orders tables;

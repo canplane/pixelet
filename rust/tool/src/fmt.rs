@@ -13,9 +13,9 @@ pub fn formatted(path: &str, text: String) -> Result<String, String> {
         let mut c = Command::new("rustfmt");
         c.args(["--edition", "2021", "--emit", "stdout", "--config-path"]).arg(root().join("rust/rustfmt.toml"));
         c
-    } else if path.ends_with(".ts") {
+    } else if let Some(ext) = [".ts", ".json"].into_iter().find(|e| path.ends_with(e)) {
         let mut c = Command::new("deno");
-        c.args(["fmt", "--ext", "ts", "-"]).current_dir(root());
+        c.args(["fmt", "--ext", &ext[1..], "-"]).current_dir(root());
         c
     } else {
         return Ok(text);

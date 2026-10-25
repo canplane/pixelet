@@ -12,10 +12,12 @@ use xpute_guest::mem::base::ptr_at;
 use crate::domain::layer::instance::Instance;
 use crate::domain::query::decor::asset::decor_model;
 use crate::domain::query::model::registry::Models;
+use crate::sys::io::loader::catalog;
 
-/// How far any decor, its box or its model, reaches from its box's min corner.
+/// How far any decor, its box or its model, reaches from its box's min
+/// corner: its box alone while the catalog loads, when no model is struck.
 pub fn reach() -> f64 {
-    DECORS.iter().map(Decor::reach).fold(0.0, f64::max)
+    DECORS.iter().map(|d| d.reach(catalog())).fold(0.0, f64::max)
 }
 
 /// Where a ray from `o` along `d` first meets `i`'s model, nearer than

@@ -4,7 +4,7 @@
 //
 // The sky kind (id.json): what hangs in the sky, claiming no cell, so no
 // block is of it. Each by its files' paths under asset/content/; what a
-// path's bytes are is the asset ingest's (pxl_spec::asset::ingested).
+// path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
@@ -18,15 +18,11 @@
 /// cloud one of its models (pxl-kernel domain/scene/environment/cloud.rs).
 /// Quaternius, CC0.
 pub mod cumulus {
-    pub const models: [crate::asset::ingested::File; 3] = [
-        crate::asset::ingested::File::sky_cloud_cumulus_1_glb,
-        crate::asset::ingested::File::sky_cloud_cumulus_2_glb,
-        crate::asset::ingested::File::sky_cloud_stratus_glb,
-    ];
-    pub const skin: crate::asset::ingested::File = crate::asset::ingested::File::sky_cloud_white_png;
+    pub const models: [crate::asset::catalog::Slot; 3] = [crate::asset::catalog::Slot(83), crate::asset::catalog::Slot(84), crate::asset::catalog::Slot(85)];
+    pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(86);
 }
 
 /// The Moon's near side, the picture the sky draws it with (NASA).
 pub mod moon {
-    pub const picture: crate::asset::ingested::File = crate::asset::ingested::File::sky_moon_png;
+    pub const picture: crate::asset::catalog::Slot = crate::asset::catalog::Slot(87);
 }

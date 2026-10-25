@@ -22,6 +22,7 @@ use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::query::World;
 use crate::domain::view::frame::pose::units_per_px_at;
 use crate::domain::view::setting::store::settings_store;
+use crate::sys::io::loader::catalog;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec_core::window::FIRST_CELL;
 
@@ -50,10 +51,16 @@ fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
     split_distance(cell_zoom) <= sprite_reach(extent_u)
 }
 
+/// Each kind's window zooms where it is a sprite's worth, a bit each.
+fn shown() -> [u32; DECORS.len()] {
+    let at = |k: usize| (FIRST_CELL..=LEAF_CELL).filter(move |&c| decor_shown(DECORS[k].extent(catalog()), c));
+    core::array::from_fn(|k| at(k).fold(0, |w, c| w | 1 << (c - FIRST_CELL)))
+}
+
 /// The frame's hand-over, kept so a settled frame asks the heap for nothing,
 /// and made again only where what it is made of changed.
 struct Handed {
-    /// A constant of the decor table, made once.
+    /// Made with the params, from the variants' extents.
     shown: [u32; DECORS.len()],
     params: [u32; drawn::PARAM_WORDS as usize],
     placed: Vec<[u32; scatter::GROWN_WORDS as usize]>,
@@ -69,14 +76,16 @@ struct Handed {
 }
 
 /// What the params are made of: the unit the eye stands in (its anchor), a
-/// pixel's size there, and the ground's decor the eraser leaves out. A new
-/// input goes here or the params never see it change. The eye within its
-/// unit moves only the translation.
+/// pixel's size there, the ground's decor the eraser leaves out, and
+/// whether the catalog that measures the variants is read. A new input goes
+/// here or the params never see it change. The eye within its unit moves
+/// only the translation.
 #[derive(Clone, Copy, PartialEq)]
 struct Seen {
     anchor: V3,
     upp: f64,
     scattered: Option<[i32; 3]>,
+    read: bool,
 }
 
 /// What the placed decor was walked over: the eye's cell at the reach's
@@ -95,7 +104,7 @@ static HANDED: Global<Handed> = Global::new();
 
 fn handed() -> &'static mut Handed {
     HANDED.get(|| Handed {
-        shown: core::array::from_fn(|k| (FIRST_CELL..=LEAF_CELL).filter(|&c| decor_shown(DECORS[k].extent(), c)).fold(0, |w, c| w | 1 << (c - FIRST_CELL))),
+        shown: [0; DECORS.len()],
         params: [0; drawn::PARAM_WORDS as usize],
         placed: Vec::new(),
         edits: [[0; 4]; scatter::EDITS as usize],
@@ -123,17 +132,19 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         anchor,
         upp: units_per_px_at(1.0),
         scattered,
+        read: catalog().is_some(),
     };
     if h.seen != Some(seen) {
         h.seen = Some(seen);
         params(&mut h.params, seen);
+        h.shown = shown();
     }
     // Out to the reach from anywhere in the anchor's unit: every unit of the
     // eye's cell at the reach's zoom reaches no farther than the cell and
     // one beside it, whose side the reach is short of. What is past an
     // eye's own reach `decor_count_cs` leaves out by its size, as it does
     // what is past the box.
-    let reach = DECORS.iter().map(|d| d.extent()).fold(0.0, f64::max) / (decor_sprite_px() * seen.upp);
+    let reach = DECORS.iter().map(|d| d.extent(catalog())).fold(0.0, f64::max) / (decor_sprite_px() * seen.upp);
     let mut zoom = UNIT_ZOOM;
     while zoom > 0 && units(zoom) < reach {
         zoom -= 1;
@@ -190,7 +201,7 @@ fn params(p: &mut [u32; drawn::PARAM_WORDS as usize], seen: Seen) {
         let at = drawn::HIDE as usize;
         p[at..at + 4].copy_from_slice(&[wrapped(x), y as u32, z as u32, 1]);
     }
-    let extents = DECORS.iter().flat_map(|d| d.variants.iter().map(|v| v.extent() as f32));
+    let extents = DECORS.iter().flat_map(|d| d.variants.iter().map(|v| v.extent(catalog()) as f32));
     for (k, e) in extents.enumerate() {
         p[drawn::EXTENTS as usize + k] = e.to_bits();
     }

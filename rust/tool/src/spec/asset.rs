@@ -2,10 +2,8 @@
 
 use regex::Regex;
 
+use super::catalog::{run_of, CUBE_JSON, DECOR_JSON};
 use super::{align_star, casing_note, file, js_num, json_str, pretty, read, rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output};
-
-const CUBE_JSON: &str = "spec/spec/asset/cube.json";
-const DECOR_JSON: &str = "spec/spec/asset/decor.json";
 const ID_JSON: &str = "spec/spec/asset/id.json";
 const COLOR_JSON: &str = "spec/spec/asset/color.json";
 
@@ -564,7 +562,8 @@ fn ground_looks() -> Result<Vec<(String, u32)>, String> {
 /// (how the ground grows each one, its looks, its boxes), in pxl-spec its
 /// models over that row.
 fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec<String>), String> {
-    const FILE: &str = "crate::asset::ingested::File";
+    const SLOT: &str = "crate::asset::catalog::Slot";
+    let mut slot = run_of(DECOR_JSON)?.0;
     let scatter = spec.get("scatter").ok_or(format!("{DECOR_JSON}: no scatter"))?;
     let whole = |key: &str| {
         scatter
@@ -574,11 +573,11 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             .map(|n| n as u32)
             .ok_or(format!("{DECOR_JSON}: scatter.{key}"))
     };
-    let (patch, kept) = (whole("patch")?, whole("kept")?);
-    if !patch.is_power_of_two() || kept < 2 {
-        return Err(format!("{DECOR_JSON}: scatter.patch is a power of two and scatter.kept at least 2"));
+    let (block, kept) = (whole("block")?, whole("kept")?);
+    if !block.is_power_of_two() || kept < 2 {
+        return Err(format!("{DECOR_JSON}: scatter.block is a power of two and scatter.kept at least 2"));
     }
-    // A patch's mean count: at the top all it bears, finer all but what the
+    // A block's mean count: at the top all it bears, finer all but what the
     // zoom over it kept.
     let shares = [1.0, 1.0 - 1.0 / f64::from(kept)];
 
@@ -619,9 +618,10 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         for v in k.get("variants").and_then(Node::arr).ok_or(at("variants"))? {
             let size = v.get("size").and_then(Node::arr).filter(|s| s.len() == 3).map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
             match (v.str_at("model"), v.str_at("skin"), size.flatten()) {
-                (Some(m), Some(s), Some(size)) if size.iter().all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u16::MAX)) => {
+                (Some(_), Some(_), Some(size)) if size.iter().all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u16::MAX)) => {
                     sizes.push(format!("[{}]", size.iter().map(|&n| js_num(n)).collect::<Vec<_>>().join(", ")));
-                    models.push(format!("Variant {{ model: {FILE}::{}, skin: {FILE}::{} }}", rs_ident(m), rs_ident(s)));
+                    models.push(format!("Variant {{ model: {SLOT}({slot}), skin: {SLOT}({}) }}", slot + 1));
+                    slot += 2;
                 }
                 _ => return Err(at("variants")),
             }
@@ -635,7 +635,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             value,
             doc: k.lines_at("$doc").unwrap_or_default(),
             seed: seed.to_string(),
-            counts: shares.map(|share| poisson_thresholds(density * f64::from(patch * patch) * share)),
+            counts: shares.map(|share| poisson_thresholds(density * f64::from(block * block) * share)),
             orientation: orientation.to_string(),
             on,
             scale_steps: scale_steps as i32,
@@ -649,12 +649,12 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
     let mut portable: Vec<String> = vec![String::new()];
     portable.extend(rs_doc(&scatter.lines_at("$doc").unwrap_or_default(), "", "///"));
     portable.extend([
-        format!("pub const PATCH: u32 = {patch};"),
+        format!("pub const BLOCK: u32 = {block};"),
         format!("pub const KEPT: u32 = {kept};"),
         String::new(),
-        "/// The most variants a decor has.".into(),
+        "/// The most variants a kind has.".into(),
         format!("pub const VARIANTS: usize = {variants_max};"),
-        "/// The most thresholds a decor's counts hold.".into(),
+        "/// The most thresholds a kind's counts hold.".into(),
         format!("pub const COUNTS: usize = {counts_max};"),
     ]);
     portable.extend(
@@ -669,7 +669,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    along_transport,",
             "}",
             "",
-            "/// A patch's Poisson count as thresholds on a u32 draw: the k-th is",
+            "/// A block's Poisson count as thresholds on a u32 draw: the k-th is",
             "/// ⌈P(N ≤ k) · 2^32⌉, as many as fall under 2^32, and a draw bears as many as",
             "/// it reaches (pxl-spec-core scatter.rs `Counts::of`).",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
@@ -688,7 +688,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    pub value: u32,",
             "    /// Its scatter: changing it reshuffles every one the ground grows.",
             "    pub seed: u32,",
-            "    /// A patch's counts, born at the top zoom and born finer.",
+            "    /// A block's counts, born at the top zoom and born finer.",
             "    pub counts: [Counts; 2],",
             "    pub orientation: Orientation,",
             "    /// The looks it may stand on, a bit each.",
@@ -696,7 +696,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    /// Its cell: a unit's zoom, this many coarser.",
             "    pub scale_steps: i32,",
             "    pub variants: u32,",
-            "    /// Each variant's box, in its decor's cells; none past `variants`.",
+            "    /// Each variant's box, in its kind's cells; none past `variants`.",
             "    pub sizes: [[u32; 3]; VARIANTS],",
             "}",
             "",
@@ -734,11 +734,11 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         "/// How it grows, one row with the GPU's.",
         "pub use pxl_spec_core::decor::Orientation;",
         "",
-        "/// A model and its pack's colormap.",
+        "/// A model and its pack's colormap, each a slot the catalog fills.",
         "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
         "pub struct Variant {",
-        "    pub model: crate::asset::ingested::File,",
-        "    pub skin: crate::asset::ingested::File,",
+        "    pub model: crate::asset::catalog::Slot,",
+        "    pub skin: crate::asset::catalog::Slot,",
         "}",
         "",
         "/// A decor: its id, its row (how the ground grows it and the boxes its",
