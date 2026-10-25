@@ -136,7 +136,7 @@ sql psql -v ON_ERROR_STOP=1 -c "ANALYZE overture_places; ANALYZE overture_divisi
 rm ~/overture.dump
 ```
 
-`./ts/app/web/script/smoke.ts https://api.plei.me --origin` checks the result.
+`./script/smoke.ts https://api.plei.me --origin` checks the result.
 
 ## 4. Cloudflare
 
@@ -194,7 +194,7 @@ unnumbered.
 wrangler login           # once a machine
 make -j8 check && make -j8 test
 make deploy         # build, publish
-./ts/app/web/script/smoke.ts https://plei.me
+./script/smoke.ts https://plei.me
 ```
 
 A deploy uploads only
@@ -220,7 +220,7 @@ it is lives in the workflow's comments.
 | `number`        | every push to deploy  | takes a build number                                                                                    |
 | `deploy-server` | after `number`        | ssh, `infra/prod/deploy.sh`: reset to the run's commit, `docker compose up -d --build --force-recreate` |
 | `deploy-web`    | after `deploy-server` | `make deploy` under the build number: builds, keeps the panic paths, publishes                          |
-| `smoke`         | after both deployed   | `./ts/app/web/script/smoke.ts https://plei.me`                                                          |
+| `smoke`         | after both deployed   | `./script/smoke.ts https://plei.me`                                                          |
 | `record`        | after either deployed | appends the build to the log                                                                            |
 
 A deploy is whole: the client and the servers go out from the one commit,

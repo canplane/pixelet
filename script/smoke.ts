@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run -A
 // What a deployment must answer, checked against a running one. Addresses
-// come from the generated route constants, so a moved root cannot leave this
-// checking a dead URL. `--origin` skips the bucket's branches, which only the
+// come from spec/spec/route.json, which every relay is written from, so a
+// moved root cannot leave this checking a dead URL. `--origin` skips the bucket's branches, which only the
 // edge serves.
 //
 // A rough check, not a test: each answer's status, and what it plainly is —
@@ -10,13 +10,20 @@
 // asset's type. What depends on the edge's mood (whether the second ask hit
 // the cache) is said, not failed.
 //
-//   deno run -A ts/app/web/script/smoke.ts https://plei.me
-//   deno run -A ts/app/web/script/smoke.ts https://api.plei.me --origin
+//   ./script/smoke.ts https://plei.me
+//   ./script/smoke.ts https://api.plei.me --origin
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
-import { INGESTED } from "@pxl/client/catalog/asset/ingested.spec.ts";
+const SPEC = new URL("../spec/spec/", import.meta.url);
+const read = async (path: string) => JSON.parse(await Deno.readTextFile(new URL(path, SPEC)));
 
-import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT, tileObject } from "@pxl/client/config/route.spec.ts";
+/** The roots and their branches, as route.json names them. */
+const route = await read("route.json");
+const root = (name: string): string => route.roots[name].path;
+const branch = (name: string): string => `${root(route.branches[name].under)}/${route.branches[name].name}`;
+const [GEO_ROOT, API_ROOT, TILE_ROOT] = [root("GEO_ROOT"), root("API_ROOT"), root("TILE_ROOT")];
+const [SEARCH_URL, GEO_INTERNAL, API_INTERNAL] = [branch("SEARCH_URL"), branch("GEO_INTERNAL"), branch("API_INTERNAL")];
+/** A tile's object under its kind, route.json's `object` filled in. */
+const tileObject = (version: string, name: string): string => route.roots.TILE_ROOT.object.replace("{version}", version).replace("{name}", name);
 
 /** A land page in Bundang: the zoom-15 tile's name. */
 const PAGE = "010332102130223";
@@ -30,7 +37,8 @@ const DIVISION_TOP = "01033";
  * shaped, and no bake holds it. */
 const OPEN_SEA = "333333333333333";
 
-const ASSET_KEY = Object.values(INGESTED)[0].key;
+/** Any shipped asset's bucket key: the first ingested.json lists. */
+const ASSET_KEY: string = (await read("asset/ingested.json")).files[0].key;
 
 /** What every baked tile is packed in: zstd's frame magic, little-endian. */
 const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd];
@@ -41,14 +49,14 @@ const BROWSER_ENCODINGS = "gzip, deflate, br, zstd";
 
 /** An answer as a check reads it. */
 interface Answer {
-  status: u32;
+  status: number;
   headers: Headers;
   body: Uint8Array;
 }
 
 interface Check {
   path: string;
-  want: u32;
+  want: number;
   why: string;
   /** What is wrong with an answer of the right status, or null. */
   look?: (a: Answer) => string | null;
@@ -155,7 +163,7 @@ const argv = Deno.args.filter((a) => a !== "--origin");
 const originOnly = Deno.args.includes("--origin");
 const base = argv[0]?.replace(/\/$/, "");
 if (!base) {
-  console.error("usage: deno run -A ts/app/web/script/smoke.ts <base-url> [--origin]");
+  console.error("usage: deno run -A script/smoke.ts <base-url> [--origin]");
   Deno.exit(2);
 }
 

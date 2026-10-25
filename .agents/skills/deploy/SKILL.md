@@ -73,8 +73,8 @@ The client and the servers are already out, and `record` logs the build with
 what the smoke found. Ask again from here:
 
 ```bash
-./ts/app/web/script/smoke.ts https://plei.me
-./ts/app/web/script/smoke.ts https://api.plei.me --origin    # the VM alone, past the edge
+./script/smoke.ts https://plei.me
+./script/smoke.ts https://api.plei.me --origin    # the VM alone, past the edge
 ```
 
 A `/geo/search` 521 that passes on asking again was the stack still

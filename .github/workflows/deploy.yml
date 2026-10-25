@@ -219,7 +219,7 @@ jobs:
         with:
           deno-version-file: .tool-versions
       - name: Smoke-test the published routes
-        run: ./ts/app/web/script/smoke.ts https://plei.me
+        run: ./script/smoke.ts https://plei.me
 
   # The one thing the repository could not answer about itself: what went out
   # in a given build. The counter is an object in the bucket and deliberately
