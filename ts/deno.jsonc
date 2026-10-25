@@ -21,7 +21,7 @@
   "exclude": ["**/.vite/", "**/dist/", "**/node_modules/"],
 
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno task --cwd app/web check && deno task --cwd app/native check && deno task --cwd server/edge check && deno check build/*.ts app/web/script/*.ts server/edge/script/*.ts",
+    "check": "deno fmt --check && deno lint && deno task --cwd app/web check && deno task --cwd app/native check && deno task --cwd server/edge check && deno check build/*.ts app/web/script/*.ts",
     "test": "deno task --cwd client test",
     "fmt": "deno fmt",
     "lint": "deno lint"

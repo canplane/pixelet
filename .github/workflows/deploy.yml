@@ -190,14 +190,14 @@ jobs:
 
       # Builds under the number taken, so the bundle carries it from its
       # build, then keeps the panic paths and publishes.
-      # ts/server/edge/script/deploy.ts is the same script a hand deploy runs; a
+      # ts/server/edge/script/deploy.py is the same script a hand deploy runs; a
       # hand deploy just has no number to give it.
       - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PXL_BUILD_NUMBER: ${{ needs.number.outputs.build_number }}
-        # deploy.ts says `published`: true once wrangler finishes, and where it
+        # deploy.py says `published`: true once wrangler finishes, and where it
         # fails, whether the site serves this build all the same.
         id: deploy
         run: make deploy

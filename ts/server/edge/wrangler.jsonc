@@ -1,6 +1,6 @@
 {
   // Cloudflare Worker that serves both the built app and its terrain tiles.
-  // Deployed by `make deploy` (ts/server/edge/script/deploy.ts): build, then
+  // Deployed by `make deploy` (ts/server/edge/script/deploy.py): build, then
   // wrangler through Deno.
   //
   // `name` becomes the *.workers.dev subdomain; a custom domain is attached
@@ -49,7 +49,7 @@
   },
 
   // The page's bundle, built by the web app and staged here before a deploy
-  // (script/stage.ts), so this config names nothing outside its package.
+  // (script/stage.sh), so this config names nothing outside its package.
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
