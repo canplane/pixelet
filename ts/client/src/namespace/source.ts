@@ -1,7 +1,7 @@
 // @pxl/client/namespace/source.ts
 
 /**
- * The tile source's declaration (ts/app/web/script/publish.ts writes the bucket's), asked of the
+ * The tile source's declaration (script/publish.py writes the bucket's), asked of the
  * tile root until it answers: the published bake's out of the bucket, or a dev
  * tile server's. It is read here once: the kernel is handed what is its own,
  * the top zoom, each kind's format and the shards (WORLD_SOURCE), and observes

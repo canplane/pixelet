@@ -1,7 +1,7 @@
 // pxl-kernel/sys/io/source.rs
 
 //! The tile source's declaration, read once at boot: the published bake's
-//! `source` out of the bucket (ts/app/web/script/publish.ts), or the dev tile server's
+//! `source` out of the bucket (script/publish.py), or the dev tile server's
 //! answer in its shape. The client reads its text and hands over what is the
 //! kernel's (ts/client/src/namespace/source.ts, `WORLD_SOURCE`): the zoom
 //! the floor is held at, the format each kind is in, and the shards served,

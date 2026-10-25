@@ -37,7 +37,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         .and_then(|(_, r)| r.str_at("object"))
         .ok_or(format!("{JSON}: TILE_ROOT has no object"))?;
     let segments: Vec<&str> = object.split('/').map(|s| s.strip_prefix('{').and_then(|s| s.strip_suffix('}')).unwrap_or_default()).collect();
-    // A version is a folder its tiles go up in whole (ts/app/web/script/publish.ts), so it comes first.
+    // A version is a folder its tiles go up in whole (script/publish.py), so it comes first.
     if segments != ["version", "name"] {
         return Err(format!("{JSON}: TILE_ROOT.object {object:?} is not {{version}}/{{name}}"));
     }
