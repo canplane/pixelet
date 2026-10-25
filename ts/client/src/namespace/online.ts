@@ -1,4 +1,4 @@
-// @pxl/client/io/online.ts
+// @pxl/client/namespace/online.ts
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
 

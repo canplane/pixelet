@@ -6,7 +6,7 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { INGESTED, PACK } from "@/io/ingested.spec.ts";
+import { INGESTED, PACK } from "@/namespace/ingested.spec.ts";
 
 /** By a cube's id, its group and type (`ground.land`). */
 const TOP_TILE = new Map<string, u32>(PACK.faces.filter(([, , face]) => face === "top").map(([group, type, , n]) => [`${group}.${type}`, n]));

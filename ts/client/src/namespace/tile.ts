@@ -1,4 +1,4 @@
-// @pxl/client/io/tile.ts
+// @pxl/client/namespace/tile.ts
 
 /**
  * The bakes' backend: a number the kernel names (host.json `root`) made the
@@ -17,8 +17,8 @@ import { BASE_LAYERS, type BaseLayer } from "@/config/published.spec.ts";
 import { TILE_SPHERE, tileObject } from "@/config/route.spec.ts";
 import { tile_url } from "@/config/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
-import { get } from "@/io/read.ts";
-import type { Declaration } from "@/io/source.ts";
+import { get } from "@/namespace/read.ts";
+import type { Declaration } from "@/namespace/source.ts";
 
 /** A tile's name by its subject, a digit a zoom (pxl-spec space/hierarchy/morton.rs
  * `write_name`, two axes, each a digit from z1): the subject is its key's high

@@ -1,4 +1,4 @@
-// @pxl/client/io/tile.test.ts
+// @pxl/client/namespace/tile.test.ts
 
 import { assertEquals } from "@std/assert";
 

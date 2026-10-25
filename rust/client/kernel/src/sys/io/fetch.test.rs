@@ -8,7 +8,7 @@ use xpute_kit::codec::json::read_json;
 /// named it itself,
 /// recorded in this fixture, which its test reads too (tile.test.ts):
 /// each name there is its subject's, as pxl-spec writes it.
-const FIXTURE: &str = include_str!(concat!(env!("PXL_REPO"), "/ts/client/src/io/tile.fixture.json"));
+const FIXTURE: &str = include_str!(concat!(env!("PXL_REPO"), "/ts/client/src/namespace/tile.fixture.json"));
 
 #[test]
 fn the_host_s_fixture_names_each_tile_as_pxl_spec_does() {

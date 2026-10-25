@@ -38,7 +38,7 @@ pub mod op {
 /// The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a
 /// bake, numbered by its kind (pxl-spec bake/published.spec.rs). Below every root a path is
 /// an object's number in decimal, its one name; what that object is called and where, a
-/// tile's version and URL, a storage key, is what the host (ts/client/src/io/)
+/// tile's version and URL, a storage key, is what the host (ts/client/src/namespace/)
 /// binds the root to, `@xpute/host` carrying the open there.
 pub mod root {
     /// The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice.

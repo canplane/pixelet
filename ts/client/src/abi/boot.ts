@@ -13,9 +13,9 @@ import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { SysHost } from "@xpute/host/ipc/sys.ts";
 import { Command, encode_world_boot, encode_world_kept_emptied, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/abi/cmd.spec.ts";
-import { declare_source } from "@/io/source.ts";
-import * as io from "@/io/mod.ts";
-import { follow_refused, migrate } from "@/io/storage.ts";
+import { declare_source } from "@/namespace/source.ts";
+import { namespace } from "@/namespace/roots.ts";
+import { follow_refused, migrate } from "@/namespace/storage.ts";
 import { GUEST, GUEST_DOORBELL, HOST, open_host } from "@/host/mem.ts";
 import { DESKTOP_BYTES, DIRECTORY_AT, PHONE_BYTES, REGION_BYTES } from "@/host/mem.spec.ts";
 import { key } from "@/abi/directory.spec.ts";
@@ -26,7 +26,7 @@ import { text_call } from "@/abi/text.ts";
 import { BUILD_NUMBER } from "@/config/deploy.ts";
 import { bracket, type Plan } from "@/bracket.tsx";
 import { GPU_STATE, set_gpu } from "@/abi/render/gpu/state.ts";
-import { set_online } from "@/io/online.ts";
+import { set_online } from "@/namespace/online.ts";
 import { kernel_snapshot, set_snapshot } from "@/abi/snapshot.ts";
 
 let code: string | null = null;
@@ -76,8 +76,8 @@ export async function boot(): Promise<void> {
     gpu_stream: key.GPU_STREAM,
     gpu_head: stream.HEAD,
   };
-  const mounts = io.mount_table();
-  await open_host(plan, { open: mounts.open, commit: mounts.commit, program: text_call, abort }, submit_frame);
+  const ns = namespace();
+  await open_host(plan, { open: ns.open, commit: ns.commit, program: text_call, abort }, submit_frame);
   bracket.sensor.hear(SENSOR_HEARD);
   GUEST_DOORBELL.signal = on_signal;
   bracket.gpu.boot({ ready: () => HOST.send(Command.GPU_READY), state: (state) => set_gpu(GPU_STATE[state]), wake: () => HOST.strobe.request() });

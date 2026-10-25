@@ -1,4 +1,4 @@
-// @pxl/client/io/storage.test.ts
+// @pxl/client/namespace/storage.test.ts
 
 import { assertEquals } from "@std/assert";
 import { b64url_to_bytes, bytes_to_b64url } from "@xpute/kit/codec/encoding.ts";

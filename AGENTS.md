@@ -13,7 +13,7 @@
   outside it, and the policy over them, are pixelet's, outside the host:
   its commands, snapshot and boot in `ts/client/src/abi/`; what answers
   the kernel's opens and writes, with the names, versions, kept keys and
-  refusals behind it, in `ts/client/src/io/`. None of it lowers into
+  refusals behind it, in `ts/client/src/namespace/`. None of it lowers into
   `@xpute/host` or `xpute-host`. The shell
   (`ts/client/src/shell/`) is the UI; it computes no coordinate or tile,
   and it is not the host. pixelet's words (kernel, shell, pixelet)

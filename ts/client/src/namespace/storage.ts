@@ -1,4 +1,4 @@
-// @pxl/client/io/storage.ts
+// @pxl/client/namespace/storage.ts
 
 /**
  * STORAGE's backend: the kernel's kept slots (host.json `kept`) in the
