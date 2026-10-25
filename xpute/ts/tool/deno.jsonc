@@ -1,0 +1,5 @@
+{
+  // Nearly empty on purpose, as the packages' are: the TypeScript tools that
+  // read xpute's own code, today the web GPU host's test run in Chrome. A
+  // script that reads none of it is the repository's script/.
+}

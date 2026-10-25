@@ -1,19 +1,20 @@
 {
-  // xpute's TypeScript, one workspace as rust/ is one Cargo workspace. Two
+  // xpute's TypeScript, one workspace as rust/ is one Cargo workspace. Three
   // kinds of member: kit, host and gpu are what a program links, and get a
   // name and exports the day they are published; conformance is the host
-  // that proves the contract against every guest, and is never published. What runs
+  // that proves the contract against every guest; tool holds the tools that
+  // read xpute's code. The last two are never published. What runs
   // across the languages is the root's (../deno.jsonc).
-  "workspace": ["kit", "host", "gpu", "conformance"],
+  "workspace": ["kit", "host", "gpu", "conformance", "tool"],
   "nodeModulesDir": "auto",
 
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno check kit/src/**/*.ts && deno check host/src/**/*.ts && deno check gpu/src/**/*.ts gpu/web.ts && deno check conformance/src/**/*.ts",
+    "check": "deno fmt --check && deno lint && deno check kit/src/**/*.ts && deno check host/src/**/*.ts && deno check gpu/src/**/*.ts && deno check tool/*.ts && deno check conformance/src/**/*.ts",
     "test": "deno test -A kit/src && deno test -A host/src",
     // The traces run against guests the root's test builds first.
     "test:conformance": "deno test -A conformance/src",
-    // The web host's test where it runs, in Chrome (gpu/web.ts).
-    "test:gpu:web": "./gpu/web.ts",
+    // The web host's test where it runs, in Chrome (tool/web-gpu.ts).
+    "test:gpu:web": "./tool/web-gpu.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },
