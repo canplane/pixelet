@@ -6,7 +6,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Prose, Section, settingText } from "@/shell/setting/row.tsx";
 import { BrandSymbol } from "./brand-symbol.tsx";
 import { textStyle } from "@/shell/ui/theme.ts";
-import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/config/deploy.ts";
+import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/deploy.ts";
 import { format } from "@/abi/host.spec.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { useSourceVersions } from "@/shell/store/system.ts";

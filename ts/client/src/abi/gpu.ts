@@ -1,4 +1,4 @@
-// @pxl/client/abi/render/gpu/state.ts
+// @pxl/client/abi/gpu.ts
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import type { GpuHeard } from "@/bracket.tsx";

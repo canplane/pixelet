@@ -1,4 +1,4 @@
-// @pxl/client/config/deploy.ts
+// @pxl/client/deploy.ts
 
 /**
  * Deployment values that ship as data. `__IS_DEV__` and friends stay bare

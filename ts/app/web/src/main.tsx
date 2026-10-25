@@ -11,7 +11,8 @@ import { createRoot } from "react-dom/client";
 import * as bracket from "@pxl/client/bracket.tsx";
 import * as locale from "@pxl/client/shell/locale/i18n.ts";
 import { boot } from "@pxl/client/shell/boot.ts";
-import { AppRouter } from "./router.tsx";
+import { AppLayout } from "@pxl/client/shell/layout.tsx";
+import WorldPage from "@pxl/client/shell/world/page.tsx";
 import { Halt } from "@pxl/client/shell/halt.tsx";
 import { page } from "@/bracket.ts";
 import * as webgpu from "@/webgpu.ts";
@@ -30,7 +31,11 @@ try {
   if (!root) throw new Error("web: missing root container: #root");
   createRoot(root).render(
     <StrictMode>
-      {missing ? <Halt of={`halt.${missing}`} /> : <AppRouter />}
+      {missing ? <Halt of={`halt.${missing}`} /> : (
+        <AppLayout>
+          <WorldPage />
+        </AppLayout>
+      )}
     </StrictMode>,
   );
 } catch (err) {

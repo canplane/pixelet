@@ -25,7 +25,7 @@ import { cancelMarker, chatFits, DockMode, draftMarkerWords, holdTier, holdTool,
 import { kernel_snapshot } from "@/abi/shell.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { type Cube, cubeId } from "@/shell/catalog/asset/mod.ts";
-import { OBJECT_TIERS } from "@/config/object.spec.ts";
+import { OBJECT_TIERS } from "./object.spec.ts";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/shell/catalog/asset/swatch.tsx";
 import { useKernel } from "@/shell/store/system.ts";
 

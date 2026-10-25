@@ -11,11 +11,11 @@ import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
-import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS, WAKES } from "./profiler.spec.ts";
-import { EFFECT_NAMES } from "@/abi/turn/step.spec.ts";
-import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/render/gpu/span.spec.ts";
+import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS, WAKES } from "@/abi/profiler.spec.ts";
+import { EFFECT_NAMES } from "@/abi/step.spec.ts";
+import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { op } from "@xpute/gpu/api.spec.ts";
-import { STREAM_NAMES } from "@/abi/io/demand.spec.ts";
+import { STREAM_NAMES } from "@/abi/demand.spec.ts";
 import { fixed } from "@/shell/fixed.ts";
 
 /** The one unit every figure in bytes is shown in: a mebibyte. */

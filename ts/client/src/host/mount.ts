@@ -1,4 +1,4 @@
-// @pxl/client/host/mem.ts
+// @pxl/client/host/mount.ts
 
 /**
  * The opened guest and the host mounted on it (@xpute/host/host.ts). What

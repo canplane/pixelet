@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 
-import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "@pxl/client/config/route.spec.ts";
+import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "@pxl/client/namespace/route.spec.ts";
 import { DECL, enumAt, literal, type Members, readEnums, stale } from "@pxl/build/const-enum.ts";
 import { REPO, WORKSPACE } from "@pxl/build/import-map.ts";
 
@@ -63,7 +63,7 @@ function buildNumber(id: string): string {
 
 /**
  * `virtual:pxl-build` — what a build is: when it was built, which source,
- * which official number (config/deploy.ts reads it). A module rather than
+ * which official number (deploy.ts reads it). A module rather than
  * `define` constants so that a dev server gives every page load the values
  * as they are then, not as they were when the server started: the module is
  * dropped from the graph on each navigation and computed again on import,

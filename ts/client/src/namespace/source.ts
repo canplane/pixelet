@@ -11,7 +11,7 @@
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import { Command, encode_world_source } from "@/abi/cmd.spec.ts";
 import { TILE_SOURCE_ROUTE } from "@/namespace/route.ts";
-import { GUEST_DOORBELL, HOST } from "@/host/mem.ts";
+import { GUEST_DOORBELL, HOST } from "@/host/mount.ts";
 import { online, when_online } from "@/namespace/online.ts";
 import { BASE_LAYERS, type BaseLayer } from "./published.spec.ts";
 import { bracket } from "@/bracket.tsx";

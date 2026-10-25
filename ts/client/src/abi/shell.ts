@@ -5,11 +5,11 @@ import { FaultError } from "@xpute/kit/status/error.ts";
 import type { Errno } from "@xpute/kit/status/errno.spec.ts";
 import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/abi/cmd.spec.ts";
-import { GUEST, GUEST_DOORBELL, HOST } from "@/host/mem.ts";
+import { GUEST, GUEST_DOORBELL, HOST } from "@/host/mount.ts";
 import { bracket } from "@/bracket.tsx";
 
 export { kernel_snapshot } from "@/abi/snapshot.ts";
-export { kernel_hold, kernel_keys } from "@/abi/control/input.ts";
+export { kernel_hold, kernel_keys } from "./input.ts";
 
 /** iOS Safari's compass prompt runs here, inside the press. */
 export async function kernel_tracking(tracking: Tracking): Promise<void> {

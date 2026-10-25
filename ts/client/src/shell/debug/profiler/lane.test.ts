@@ -2,7 +2,7 @@
 
 import { assertEquals } from "@std/assert";
 
-import { FRAME, FRAME_GROUPS } from "./profiler.spec.ts";
+import { FRAME, FRAME_GROUPS } from "@/abi/profiler.spec.ts";
 import { frameAt, GROUPS, isList, LANES, LIST_NAMES } from "./lane.ts";
 
 Deno.test("FRAME_GROUPS - every lane is printed, in one group", () => {

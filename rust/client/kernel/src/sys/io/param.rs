@@ -28,7 +28,7 @@ pub const MAX_CREDITS: u32 = 16;
 /// texels are taken. Sized to a moving eye, not to the worst.
 ///
 /// Each frame grants six credits (`NET_CREDITS` in the client's
-/// abi/control/input.ts), and the
+/// abi/input.ts), and the
 /// Earth keeps four frames at most. A window is a tile's cells a side
 /// (pxl-spec-core `window::WINDOW`), so it wants four tiles at most, and
 /// the fill hands `HANDED` squares a frame, about a row of one window's: an

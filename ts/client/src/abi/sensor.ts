@@ -1,4 +1,4 @@
-// @pxl/client/abi/control/sensor.ts
+// @pxl/client/abi/sensor.ts
 
 /** The device's sensors as the kernel's commands: what each platform's driver
  * heard, in its words (bracket.tsx `SensorHeard`), sent as the kernel numbers it. */
@@ -6,7 +6,7 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_position, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/abi/cmd.spec.ts";
 import type { SensorHeard } from "@/bracket.tsx";
-import { GUEST_DOORBELL, HOST } from "@/host/mem.ts";
+import { GUEST_DOORBELL, HOST } from "@/host/mount.ts";
 
 /** A device reading the device could not give — NaN, an infinity — is sent as none. */
 function given(n: number | null): number | null {

@@ -1,4 +1,4 @@
-// @pxl/client/shell/division/center.ts
+// @pxl/client/shell/division/focus.ts
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { useTranslation } from "react-i18next";

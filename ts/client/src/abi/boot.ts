@@ -16,16 +16,16 @@ import { Command, encode_world_boot, encode_world_kept_emptied, read_sensor_star
 import { declare_source } from "@/namespace/source.ts";
 import { namespace } from "@/namespace/roots.ts";
 import { follow_refused, migrate } from "@/namespace/storage.ts";
-import { GUEST, GUEST_DOORBELL, HOST, open_host } from "@/host/mem.ts";
-import { DESKTOP_BYTES, DIRECTORY_AT, PHONE_BYTES, REGION_BYTES } from "@/host/mem.spec.ts";
+import { GUEST, GUEST_DOORBELL, HOST, open_host } from "@/host/mount.ts";
+import { DESKTOP_BYTES, DIRECTORY_AT, PHONE_BYTES, REGION_BYTES } from "./mem.spec.ts";
 import { key } from "@/abi/directory.spec.ts";
-import { stream } from "@/abi/render/gpu/api.spec.ts";
-import { SENSOR_HEARD } from "@/abi/control/sensor.ts";
-import { submit_frame } from "@/abi/control/input.ts";
+import { stream } from "./gpu.spec.ts";
+import { SENSOR_HEARD } from "./sensor.ts";
+import { submit_frame } from "./input.ts";
 import { text_call } from "@/abi/text.ts";
-import { BUILD_NUMBER } from "@/config/deploy.ts";
+import { BUILD_NUMBER } from "@/deploy.ts";
 import { bracket, type Plan } from "@/bracket.tsx";
-import { GPU_STATE, set_gpu } from "@/abi/render/gpu/state.ts";
+import { GPU_STATE, set_gpu } from "./gpu.ts";
 import { set_online } from "@/namespace/online.ts";
 import { kernel_snapshot, set_snapshot } from "@/abi/snapshot.ts";
 

@@ -1,4 +1,4 @@
-// @pxl/client/abi/control/input.ts
+// @pxl/client/abi/input.ts
 
 /** Input as the kernel's commands, from the place's words (`POINTER_PHASE`,
  * `POINTER_KIND`), and what each frame the strobe grants submits with the viewport. */
@@ -19,7 +19,7 @@ import {
   PointerType,
 } from "@/abi/cmd.spec.ts";
 import { bracket, type PointerKind, type PointerPhase as PlacePhase, type Viewport } from "@/bracket.tsx";
-import { GUEST_DOORBELL, HOST } from "@/host/mem.ts";
+import { GUEST_DOORBELL, HOST } from "@/host/mount.ts";
 
 /** Asked every frame, so a resize needs no event of its own. */
 let driver: (() => Viewport) | null = null;

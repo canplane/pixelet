@@ -5,9 +5,9 @@ import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
 import { bracket, type InputDriver } from "@/bracket.tsx";
-import { kernel_open, kernel_rect, kernel_visible, kernel_wheel, POINTER_KIND, POINTER_PHASE } from "@/abi/control/input.ts";
-import { surface_role } from "@/abi/render/gpu/api.spec.ts";
-import { surface_driver } from "@/abi/render/surface.ts";
+import { kernel_open, kernel_rect, kernel_visible, kernel_wheel, POINTER_KIND, POINTER_PHASE } from "@/abi/input.ts";
+import { surface_role } from "@/abi/gpu.spec.ts";
+import { surface_driver } from "@/abi/surface.ts";
 import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
 import { releasePointers, worldPointer } from "./pointer.ts";
 import { Corner } from "./corner.tsx";
@@ -23,7 +23,7 @@ import { TopOverlays } from "@/shell/world/top/top.tsx";
 import { DOCK_HEIGHT } from "./dock.tsx";
 import { ToastController } from "@/shell/world/toast/controller.tsx";
 import { useKernel } from "@/shell/store/system.ts";
-import { HOST } from "@/host/mem.ts";
+import { HOST } from "@/host/mount.ts";
 
 const TOAST_LIFT_PX = chrome.inset + 20;
 

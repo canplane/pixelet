@@ -73,8 +73,6 @@
 
     "react": "npm:react@19.2.3",
     "react-dom": "npm:react-dom@19.2.3",
-    // The page is the one app routed by URL (src/router.tsx).
-    "react-router-dom": "npm:react-router-dom@^7.18.4",
     // The shell is written, and type-checked, against React Native's own
     // API; on the web vite.config.ts bundles react-native-web in its place,
     // which renders the same primitives as the DOM.

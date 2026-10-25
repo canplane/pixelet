@@ -265,7 +265,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/kernel/domain/scene/indicator/gizmo.json",
         uses: &[],
-        ts: Some("ts/client/src/shell/debug/gizmo.spec.ts"),
+        ts: Some("ts/client/src/abi/gizmo.spec.ts"),
         rs: Some("rust/client/kernel/src/domain/scene/indicator/gizmo.spec.rs"),
         rs_also: &[],
         module: Some("gizmo_spec"),
@@ -276,7 +276,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/render/gpu/api.json",
         uses: &[],
-        ts: Some("ts/client/src/abi/render/gpu/api.spec.ts"),
+        ts: Some("ts/client/src/abi/gpu.spec.ts"),
         rs: Some("rust/client/render/src/gpu/api.spec.rs"),
         rs_also: &[],
         module: Some("api_spec"),
@@ -298,7 +298,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/kernel/sys/io/demand.json",
         uses: &[],
-        ts: Some("ts/client/src/abi/io/demand.spec.ts"),
+        ts: Some("ts/client/src/abi/demand.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/io/demand.spec.rs"),
         rs_also: &[],
         module: Some("demand_spec"),
@@ -309,7 +309,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/kernel/turn/step.json",
         uses: &[],
-        ts: Some("ts/client/src/abi/turn/step.spec.ts"),
+        ts: Some("ts/client/src/abi/step.spec.ts"),
         rs: Some("rust/client/kernel/src/turn/step.spec.rs"),
         rs_also: &[],
         module: Some("spec"),
@@ -320,7 +320,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/render/gpu/span.json",
         uses: &[],
-        ts: Some("ts/client/src/abi/render/gpu/span.spec.ts"),
+        ts: Some("ts/client/src/abi/span.spec.ts"),
         rs: Some("rust/client/render/src/gpu/span.spec.rs"),
         rs_also: &[],
         module: Some("span_spec"),
@@ -337,7 +337,7 @@ const DATA_SPECS: [DataSpec; 26] = [
             "spec/client/render/gpu/span.json",
             "xpute/spec/gpu/api.json",
         ],
-        ts: Some("ts/client/src/shell/debug/profiler/profiler.spec.ts"),
+        ts: Some("ts/client/src/abi/profiler.spec.ts"),
         rs: Some("rust/client/kernel/src/profiler/profiler.spec.rs"),
         rs_also: &[],
         module: Some("spec"),
@@ -348,7 +348,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/kernel/sys/mem/mem.json",
         uses: &[],
-        ts: Some("ts/client/src/host/mem.spec.ts"),
+        ts: Some("ts/client/src/abi/mem.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/mem/mem.spec.rs"),
         // pxl-wasm's build script, which links the module by these numbers.
         rs_also: &[("rust/client-bracket/wasm/mem.spec.rs", "pxl-wasm/mem.spec.rs")],

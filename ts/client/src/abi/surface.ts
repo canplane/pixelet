@@ -1,9 +1,9 @@
-// @pxl/client/abi/render/surface.ts
+// @pxl/client/abi/surface.ts
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import type { SurfaceDriver } from "@/bracket.tsx";
 import { Command, encode_surface_close, encode_surface_open, encode_surface_resize } from "@/abi/cmd.spec.ts";
-import { GUEST_DOORBELL, HOST } from "@/host/mem.ts";
+import { GUEST_DOORBELL, HOST } from "@/host/mount.ts";
 
 /** 0 when the kernel has none left. */
 export function surface_open(role: u32): u32 {

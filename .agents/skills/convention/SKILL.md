@@ -45,7 +45,7 @@ is `ARCHITECTURE.md`'s, and the host/guest boundary's roles `AGENTS.md`'s.
 
 - A source file opens with its own path as a comment: a crate's name and
   the path under its `src/` (`// pxl-kernel/domain/scene/marker/arrangement.rs`), a
-  package's name and the path under its `src/` (`// @pxl/client/host/mem.ts`,
+  package's name and the path under its `src/` (`// @pxl/client/host/mount.ts`,
   `// @xpute/host/ipc/doorbell.ts`). A file that is moved takes its new
   path.
 - Code is cited as its path and then its name in backticks

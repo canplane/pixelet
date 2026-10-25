@@ -14,7 +14,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 import { BASE_LAYERS, type BaseLayer } from "./published.spec.ts";
-import { TILE_SPHERE, tileObject } from "@/config/route.spec.ts";
+import { TILE_SPHERE, tileObject } from "./route.spec.ts";
 import { tile_url } from "@/namespace/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
 import { get } from "@/namespace/read.ts";

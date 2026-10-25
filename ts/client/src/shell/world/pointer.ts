@@ -12,7 +12,7 @@ import { Keyboard } from "react-native";
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
-import { kernel_pointer } from "@/abi/control/input.ts";
+import { kernel_pointer } from "@/abi/input.ts";
 import { DockMode, useUiStore } from "@/shell/store/ui.ts";
 
 /** The pointers spent putting the typing away. */

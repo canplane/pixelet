@@ -28,7 +28,7 @@ const FROM_APP = path.join(here, "index.ts");
 
 /**
  * What this build is — when, from which source, under which number — as the
- * module `virtual:pxl-build` (config/deploy.ts reads it). The source is git's
+ * module `virtual:pxl-build` (deploy.ts reads it). The source is git's
  * short hash, `-dirty` where the tree had changes; the number is the one CI
  * handed the build, or else `#<n>-<id>` from the number the deployment serves
  * (ts/client/.build_number, script/build-number.py), since a build CI did not

@@ -11,7 +11,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { gauge, Head } from "./profiler/gauge.tsx";
 import { Fold } from "./fold.tsx";
-import { coverage, frame } from "./gizmo.spec.ts";
+import { coverage, frame } from "@/abi/gizmo.spec.ts";
 import { useKernel } from "@/shell/store/system.ts";
 
 interface Look {
