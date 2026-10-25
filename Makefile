@@ -28,8 +28,8 @@
 
 # `check` is everything, and with `test` what passes before a push to deploy,
 # since CI checks nothing (.agents/skills/deploy/SKILL.md). `check-build` is
-# what ships, made as a deploy makes it without publishing: the client's
-# bundle and the Worker beside it.
+# the client's bundle as a deploy builds it; the Worker is bundled by the
+# deploy itself, in CI, which is what runs wrangler.
 check: check-ts check-rust check-rules check-spec check-build check-xpute
 check-ts:
 	deno task --cwd ts check
@@ -42,7 +42,7 @@ check-rules:
 check-spec:
 	+cd rust && cargo spec
 check-build:
-	./script/deploy.py --dry-run
+	deno task --cwd ts/app/web build
 check-xpute:
 	$(MAKE) -C xpute check
 

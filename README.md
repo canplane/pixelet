@@ -73,7 +73,7 @@ One format was made here: **XTP**, xpute's relocatable binary tree, read without
 
 ## Getting Started
 
-> Requires [Deno](https://deno.land/) 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`), and Docker for the local databases. Deploying and `make check` (its build check) also need Cloudflare's `wrangler`; everyday dev does not. The dev and build tasks build the kernel module from `rust/` first.
+> Requires [Deno](https://deno.land/) 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`), and Docker for the local databases. The dev and build tasks build the kernel module from `rust/` first.
 
 ```bash
 git clone git@github.com:canplane/pixelet.git

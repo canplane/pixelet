@@ -9,11 +9,9 @@
 # kept in the bucket (r2.py); the Worker, published by wrangler; and the site
 # read back. Everything that can fail before the Worker goes out runs before
 # it, so a failure says truly what was published, and the last step is the
-# publish itself. `--dry-run` makes what a deploy makes, the bundle and the
-# Worker as wrangler bundles it, and publishes nothing: a type-check can pass
-# where wrangler's resolver fails, as it did on 10-23.
+# publish itself.
 #
-#   ./script/deploy.py [--dry-run]
+#   ./script/deploy.py
 
 import os
 import re
@@ -29,7 +27,6 @@ import r2
 REPO = Path(__file__).resolve().parent.parent
 EDGE = REPO / "ts/server/edge"
 WEB = REPO / "ts/app/web"
-DRY = "--dry-run" in sys.argv[1:]
 NUMBER = os.environ.get("PXL_BUILD_NUMBER")
 # The panics' `#n` → path table the page's build wrote beside its guest.
 PATHS = REPO / "ts/app/web/src/guest.paths.json"
@@ -82,10 +79,6 @@ step("build", ["deno", "task", "--cwd", str(WEB), "build"])
 # left from before.
 shutil.rmtree(EDGE / "dist", ignore_errors=True)
 shutil.copytree(WEB / "dist", EDGE / "dist")
-
-if DRY:
-    step("the Worker as wrangler bundles it", [*r2.WRANGLER, "deploy", "--dry-run", "--outdir", ".wrangler/dry-run"])
-    sys.exit(0)
 
 # The `#n` → path table for this build's panics, kept beside the build log,
 # never served. Before the publish: a table for a build that then failed to
