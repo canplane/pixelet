@@ -11,7 +11,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import { handle_slot } from "@xpute/host/abi/handle.ts";
 import { GpuHost } from "@xpute/gpu/host.ts";
 
-import { DEV_BUNDLE } from "@pxl/client/bracket.tsx";
+import { DEV_BUNDLE } from "./bundle.ts";
 
 let host: GpuHost | null = null;
 /** The kernel's memory, which the host reads the stream from and writes answers into. */

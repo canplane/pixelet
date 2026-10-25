@@ -13,8 +13,6 @@ import type { f32, f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Guest } from "@/host/module.ts";
 
 export type { Guest };
-/** Whether this is a development bundle, as the bundler defines it; the place's to read. */
-export { DEV_BUNDLE } from "@/config/bundle.ts";
 
 /** What a place needs to open the guest, which the guest's own numbers say:
  * its memory, the offset its directory is at, and where its GPU stream's
@@ -32,7 +30,7 @@ export interface GuestPlan {
 export interface GpuHeard {
   /** A device answered, the first time or after a loss. */
   ready(): void;
-  /** Whether there is a GPU: one, none yet while it asks again, none it will ask for again, or none again after one it drew with. */
+  /** Whether there is a GPU: one, none yet while it asks again, none it will ask for again, or none again after one it drew with. A place says only what it hears. */
   state(state: "present" | "waiting" | "missing" | "lost"): void;
   /** A completion the device wrote between turns, which a turn must read. */
   wake(): void;
@@ -118,7 +116,7 @@ export interface Bracket {
   ORIGIN: string;
   /** Rejects with a TypeError on a transport failure. */
   originGet(route: string, signal?: AbortSignal): Promise<Response>;
-  /** Says whether the device is online, now and on each change. */
+  /** Says whether the device is online, as far as the place can tell: a place that cannot says nothing. */
   onlineWatch(report: (online: boolean) => void): void;
 
   geolocationSupported(): boolean;

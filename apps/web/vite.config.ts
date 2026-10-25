@@ -568,7 +568,7 @@ export default defineConfig(({ mode }) => {
       __APP_ENV__: JSON.stringify(appEnv),
       __IS_DEV__: JSON.stringify(isDev),
       // Vite's own import.meta.env.DEV, as a global a bundle Vite did not
-      // make can set too (config/bundle.ts).
+      // make can set too (src/bundle.ts).
       __DEV_BUNDLE__: JSON.stringify(mode !== "production"),
 
       __DEV_SOURCE__: JSON.stringify(devSource),
