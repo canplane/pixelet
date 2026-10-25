@@ -32,7 +32,8 @@ use xpute_kit::status::errno::Errno;
 ///
 /// A kept file is its slot's format byte (host.json `format`), then what its
 /// owner keeps, the whole in base64 as storage keeps text. One of another
-/// format, or not base64, is refused: read as nothing and never written over,
+/// format, not base64, or larger than any heap a device is given (no build
+/// reads it) is refused: read as nothing and never written over,
 /// and named to the host (`refused`), whose it is to set the file aside and
 /// empty the slot (`emptied`). Which storage a slot is, and what an older
 /// file becomes, the kernel never says.
@@ -112,9 +113,8 @@ pub enum KeptFile {
     None,
     /// What its owner kept, past the format byte.
     Bytes(Vec<u8>),
-    /// There, and not readable here: larger than any heap a device is given,
-    /// an error other than its absence, or refused (`refused`). It must not
-    /// be written over.
+    /// There, and not readable here: an error other than its absence, or
+    /// refused (`refused`). It must not be written over.
     Unreadable,
 }
 
@@ -125,8 +125,8 @@ fn refusals() -> &'static mut [bool; Kept::ALL.len()] {
     REFUSED.get(|| [false; Kept::ALL.len()])
 }
 
-/// Its file is not of its slot's format: none of it was read, and nothing
-/// is written over it until the host empties the slot.
+/// Its file is not of its slot's format, or too large for any heap: none of
+/// it was read, and nothing is written over it until the host empties the slot.
 pub fn refused(kept: Kept) -> bool {
     refusals()[kept as usize]
 }
@@ -148,12 +148,15 @@ pub fn kept_of(kept: Kept, text: &[u8]) -> KeptFile {
             bytes.remove(0);
             KeptFile::Bytes(bytes)
         }
-        _ => {
-            refusals()[kept as usize] = true;
-            request_world_tick();
-            KeptFile::Unreadable
-        }
+        _ => refuse(kept),
     }
+}
+
+/// Named to the host in the next snapshot, for it to set aside.
+fn refuse(kept: Kept) -> KeptFile {
+    refusals()[kept as usize] = true;
+    request_world_tick();
+    KeptFile::Unreadable
 }
 
 /// The file `kept` holds `bytes`, sealed with its slot's format.
@@ -210,9 +213,20 @@ fn kept_opened(kept: Kept, fd: Fd, opened: Opened) {
         },
         // Only its absence says nothing was kept.
         Opened::Absent => KeptRead::Read(KeptFile::None),
+        Opened::Failed { errno: Errno::EFBIG, .. } => KeptRead::Read(refuse(kept)),
         Opened::Failed { .. } => KeptRead::Read(KeptFile::Unreadable),
     };
     kept_read(kept, read);
+}
+
+/// The host's answer to `open_kept`, for a test with none: `text`, read
+/// whole and taken from the next turn on, or an open that came to no bytes.
+#[cfg(test)]
+pub fn kept_answered(kept: Kept, answer: Result<&[u8], Opened>) {
+    match answer {
+        Ok(text) => kept_read(kept, KeptRead::Reading { bytes: text.to_vec(), asked: turn() }),
+        Err(opened) => kept_opened(kept, 0, opened),
+    }
 }
 
 /// What a kept file held, once it is read whole; None until then.
