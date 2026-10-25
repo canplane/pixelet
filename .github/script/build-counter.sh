@@ -9,8 +9,9 @@
 set -eu
 
 KEY=pixelet-tiles/_meta/build-counter
-# wrangler at the version ts/deno.lock holds for the edge's deploy.
-wrangler() { deno run -A --node-modules-dir=auto npm:wrangler@4.123.0 "$@"; }
+edge="$(cd "$(dirname "$0")/../.." && pwd)/ts/server/edge"
+# wrangler as the edge's deploy runs it, from its package, so ts/deno.lock pins it.
+wrangler() { (cd "$edge" && deno run -A --node-modules-dir=auto npm:wrangler "$@"); }
 die() { echo "[build-counter] $1" >&2; exit 1; }
 
 # A count that restarts is worse than no build; start one explicitly:

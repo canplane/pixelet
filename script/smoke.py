@@ -19,6 +19,7 @@ import secrets
 import sys
 import urllib.error
 import urllib.request
+import zlib
 from pathlib import Path
 
 SPEC = Path(__file__).resolve().parent.parent / "spec" / "spec"
@@ -61,7 +62,10 @@ ZSTD_MAGIC = bytes([0x28, 0xB5, 0x2F, 0xFD])
 # An XTP packet's magic, "XT": what a tile's bytes start with once unpacked.
 XTP_MAGIC = b"XT"
 
-BROWSER_ENCODINGS = "gzip, deflate, br, zstd"
+# What a browser offers, but br, which the standard library cannot unpack:
+# a transport encoding laid on a tile is taken off as a browser would, so
+# what is checked is what the client is handed.
+BROWSER_ENCODINGS = "gzip, deflate, zstd"
 
 
 class Answer:
@@ -89,11 +93,22 @@ def ask(url, raw=False):
     req = urllib.request.Request(url, headers={"accept-encoding": BROWSER_ENCODINGS if raw else "identity"})
     try:
         with OPENER.open(req, timeout=30) as res:
-            return Answer(res.status, res.headers, res.read())
+            return Answer(res.status, res.headers, unpacked(res.headers, res.read()))
     except urllib.error.HTTPError as err:
-        return Answer(err.code, err.headers, err.read())
+        return Answer(err.code, err.headers, unpacked(err.headers, err.read()))
     except Exception as err:
         return type(err).__name__
+
+
+def unpacked(headers, body):
+    """The body as a browser hands it on: gzip or deflate taken off, zstd,
+    which the client unpacks itself, left on."""
+    enc = (headers.get("content-encoding") or "").lower()
+    if enc == "gzip":
+        return zlib.decompress(body, 16 + zlib.MAX_WBITS)
+    if enc == "deflate":
+        return zlib.decompress(body)
+    return body
 
 
 # What is wrong with an answer of the right status, or None.
