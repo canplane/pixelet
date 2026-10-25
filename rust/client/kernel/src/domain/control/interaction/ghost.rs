@@ -49,12 +49,7 @@ pub fn ghost() -> Ghost {
     // Looked at each frame turn, a hover not asked of this one too.
     carved.kept();
     let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
-        (Some(h), true) => {
-            let (xy, cell) = ([h[0], h[1]].map(|v| q3::to_real(i64::from(v))), units(GROUND.cell()));
-            carved.of(*h, [xy.map(|v| v - cell), xy.map(|v| v + cell)], || {
-                cube_of(u32::from(World::now().surface(h, LEAF_ZOOM).value().flatten().map_or(0, |s| s.block)))
-            })
-        }
+        (Some(h), true) => carved.of(World::now(), *h, |w| cube_of(u32::from(w.surface(h, LEAF_ZOOM).value().flatten().map_or(0, |s| s.block)))),
         _ => None,
     };
 

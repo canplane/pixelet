@@ -58,7 +58,7 @@ fn companion_props() -> Option<CompanionProps> {
     let center = crate::domain::view::frame::coord::to_world(&goal);
     Some(CompanionProps {
         center: [center[0], center[1]],
-        floor: crate::domain::scene::character::companion::focus_floor(goal, [center[0], center[1]], || crate::domain::control::navigation::support::floor_seen(&goal)),
+        floor: crate::domain::scene::character::companion::focus_floor(goal, |w| crate::domain::control::navigation::support::floor_seen(w, &goal)),
         azimuth: crate::domain::control::camera::controller::azimuth(),
         dragging: crate::domain::control::camera::input::dragging(),
         steered: crate::domain::control::camera::input::steering(),

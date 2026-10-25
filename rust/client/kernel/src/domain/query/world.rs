@@ -84,6 +84,13 @@ impl<'a> World<'a> {
             c.read(a, b, zoom);
         }
     }
+
+    /// The columns `columns`, read (`reading`): what a kept answer read.
+    pub(super) fn read_columns(&self, columns: [[f64; 2]; 2]) {
+        if let Some(c) = self.reading {
+            c.join(columns);
+        }
+    }
 }
 
 /// What a walk over columns carries from one to the next (`World::bounds`):

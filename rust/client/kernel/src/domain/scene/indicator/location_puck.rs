@@ -11,7 +11,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::query::changed::{within, Columns};
+use crate::domain::query::changed::Asked;
 use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
 use crate::domain::scene::frame::Frame;
@@ -96,9 +96,10 @@ pub struct LocationPuck {
     last_known_device_coord: Option<Q3>,
     /// None until grounded, rather than drawing at a guessed height.
     last_known_center_z: Option<f64>,
-    /// What the zone was last grounded from, the columns grounding it read,
-    /// and the center it gave; none where it found no height.
-    grounded: Option<(Seen, [[f64; 2]; 2], Option<V3>)>,
+    /// The center the zone was last grounded at, none where it found no
+    /// height, kept while the fix stands and no change touched what
+    /// grounding it read (`Asked`).
+    grounded: Asked<Seen, Option<V3>>,
     /// The zone grounded this step, kept so a step allocates nothing.
     lane: Vec<f32>,
     /// The zone's instances drawn, ZONE_INSTANCE_FLOATS floats an instance,
@@ -123,15 +124,11 @@ impl LocationPuck {
             device,
             pos: crate::domain::view::frame::coord::to_world(&device),
         };
-        let center_pos = match self.grounded {
-            Some((s, read, center)) if s == seen && !within(read, &[]) => center,
-            _ => {
-                let read = Columns::default();
-                let center = self.ground(World::now().reading(&read), draw, seen);
-                self.grounded = read.get().map(|r| (seen, r, center));
-                center
-            }
-        };
+        // Looked at each turn, so each change is seen once.
+        let mut grounded = core::mem::take(&mut self.grounded);
+        grounded.kept();
+        let center_pos = grounded.of(World::now(), seen, |w| self.ground(w, draw, seen));
+        self.grounded = grounded;
         let Some(center_pos) = center_pos else {
             return self.clear(draw);
         };

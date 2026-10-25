@@ -36,7 +36,7 @@ use pxl_spec::asset::marker::marker_shows;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
@@ -245,7 +245,7 @@ impl Figure {
             *stands = arrive_z;
         } else if moved {
             // Where the leaf under it, or a map's `to`, is not held, it goes on at its height.
-            if let Some((to, z)) = walk_to(self.at, *stands, at, p) {
+            if let Some((to, z)) = walk_to(World::now(), self.at, *stands, at, p) {
                 (at, *stands) = if follows && gap(to, at) > WALK_EPS { (target, arrive_z) } else { (to, z) };
             }
         }
@@ -316,13 +316,13 @@ pub struct CompanionProps {
     pub tau: Tau,
 }
 
-/// The floor the focus `goal` is drawn on, `center` its place in units:
-/// `ask`'s, kept while the focus stands and no change touched its column
-/// (`Asked`), as the figures' own floors are.
-pub fn focus_floor(goal: Q3, center: [f64; 2], ask: impl FnOnce() -> Option<f64>) -> Option<f64> {
-    let (c, cell) = (companion(), units(GROUND.cell()));
+/// The floor the focus `goal` is drawn on: `ask`'s of the world, kept while
+/// the focus stands and no change touched what it read (`Asked`), as the
+/// figures' own floors are.
+pub fn focus_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Option<f64> {
+    let c = companion();
     c.floor.kept();
-    c.floor.of(goal, [center.map(|v| v - cell), center.map(|v| v + cell)], ask)
+    c.floor.of(World::now(), goal, ask)
 }
 
 fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: [f64; 2]) -> &'a mut Figure {
@@ -366,15 +366,12 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
     let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
-    // Its own floor beside the person, walked to from the person: over the
-    // columns between the two, a cell either side.
+    // Its own floor beside the person, walked to from the person.
     let reached = |(beside, _): &([f64; 2], f64)| libm::hypot(beside[0] - pet_target[0], beside[1] - pet_target[1]) <= WALK_EPS;
-    let cell = units(GROUND.cell());
-    let columns = [0, 1].map(|end| core::array::from_fn(|k| if end == 0 { p.center[k].min(pet_target[k]) - cell } else { p.center[k].max(pet_target[k]) + cell }));
     let from = |floor: f64| world_to_canonical(&[p.center[0], p.center[1], over(floor)]);
     let mut walked = |floor: f64| {
         let of = (p.center, floor, pet_target, walks(&from(floor), &p.eye));
-        c.beside.of(of, columns, || walk_to(p.center, floor, pet_target, &p).filter(reached).map_or(floor, |(_, z)| z))
+        c.beside.of(World::now(), of, |w| walk_to(w, p.center, floor, pet_target, &p).filter(reached).map_or(floor, |(_, z)| z))
     };
     if let Some((target, z)) = p.floor.map(|z| (pet_target, walked(z))).or_else(|| hold(pet)) {
         pet.step(ctx, target, z, &p);
@@ -421,12 +418,12 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, (u32, &'static [u8]))> {
         .filter_map(|w| Some((w.held.as_ref()?.model.model, load_image(Load::Asset(w.variant.skin))?)))
 }
 
-/// The world's step-slide from `from`, its floor at `stands`, toward `to`:
+/// `world`'s step-slide from `from`, its floor at `stands`, toward `to`:
 /// where it ends and its floor there, short of a leaf on the way not held;
 /// none where the leaf under `from`, or a map's `to`, is not held.
-fn walk_to(from: [f64; 2], stands: f64, to: [f64; 2], p: &CompanionProps) -> Option<([f64; 2], f64)> {
+fn walk_to(world: World<'_>, from: [f64; 2], stands: f64, to: [f64; 2], p: &CompanionProps) -> Option<([f64; 2], f64)> {
     let [a, b] = [from, to].map(|[x, y]| world_to_canonical(&[x, y, over(stands)]));
-    let at = to_world(&World::now().step_slide(&a, &b, &p.eye, true)?);
+    let at = to_world(&world.step_slide(&a, &b, &p.eye, true)?);
     Some(([at[0], at[1]], under(at[2])))
 }
 
@@ -439,8 +436,8 @@ fn drawn_floor(asked: &mut Asked<([f64; 2], f64, Zoom), f64>, at: [f64; 2], stan
     let eye = to_world(&p.eye);
     let r2 = (0..3).map(|k| (center[k] - eye[k]) * (center[k] - eye[k])).sum();
     let zoom = GROUND.z_at(p.tau, r2);
-    asked.of((at, stands, zoom), [at, at], || {
-        World::now().floor_under(&world_to_canonical(&center), zoom).value().flatten().unwrap_or(stands)
+    asked.of(World::now(), (at, stands, zoom), |w| {
+        w.floor_under(&world_to_canonical(&center), zoom).value().flatten().unwrap_or(stands)
     })
 }
 

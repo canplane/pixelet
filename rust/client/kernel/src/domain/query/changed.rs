@@ -6,6 +6,7 @@
 //! asks again only where one of them touches the columns it read, which its
 //! queries report (`Columns`), so a change stops at the ground it touches.
 
+use super::world::World;
 use crate::domain::layer::Base as _;
 use core::cell::Cell;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -70,7 +71,11 @@ impl Columns {
     pub(super) fn read(&self, a: [f64; 2], b: [f64; 2], zoom: Zoom) {
         let side = units(zoom);
         let [lo, hi] = [[0, 1].map(|k| a[k].min(b[k])), [0, 1].map(|k| a[k].max(b[k]))];
-        let cells = [lo.map(|v| libm::floor(v / side) * side), hi.map(|v| (libm::floor(v / side) + 1.0) * side)];
+        self.join([lo.map(|v| libm::floor(v / side) * side), hi.map(|v| (libm::floor(v / side) + 1.0) * side)]);
+    }
+
+    /// The columns `cells` read too, put on the lap of the first.
+    pub(super) fn join(&self, cells: [[f64; 2]; 2]) {
         let joined = match self.0.get() {
             None => cells,
             Some(c) => {
@@ -88,10 +93,17 @@ impl Columns {
 }
 
 /// What a step asked the world, kept with what it asked it of and the
-/// columns its answer read, their corners in units: asked again only where
-/// what it asks of moved, or a change to the ground or the objects touched
-/// those columns (`kept`).
+/// columns its answer read, as its queries report them (`World::reading`),
+/// their corners in units: asked again only where what it asks of moved,
+/// or a change to the ground or the objects touched those columns (`kept`).
+/// An answer that read nothing is not kept, as nothing says when it goes.
 pub struct Asked<K, A>(Option<(K, [[f64; 2]; 2], A)>);
+
+impl<K, A> Default for Asked<K, A> {
+    fn default() -> Self {
+        Asked(None)
+    }
+}
 
 impl<K: PartialEq, A: Copy> Asked<K, A> {
     pub const NONE: Asked<K, A> = Asked(None);
@@ -104,15 +116,22 @@ impl<K: PartialEq, A: Copy> Asked<K, A> {
         }
     }
 
-    /// The answer to `of`, which reads `columns`: the one kept, else `ask`'s.
-    pub fn of(&mut self, of: K, columns: [[f64; 2]; 2], ask: impl FnOnce() -> A) -> A {
-        match &self.0 {
-            Some((k, _, a)) if *k == of => *a,
-            _ => {
-                let a = ask();
-                self.0 = Some((of, columns, a));
-                a
+    /// The answer to `of`: the one kept, else `ask`'s of `world`, whose
+    /// queries say what it read. What it read is read of `world` too, so an
+    /// answer kept inside another's ask lets that one go with it.
+    pub fn of(&mut self, world: World<'_>, of: K, ask: impl FnOnce(World<'_>) -> A) -> A {
+        if let Some((k, columns, a)) = &self.0 {
+            if *k == of {
+                world.read_columns(*columns);
+                return *a;
             }
         }
+        let read = Columns::default();
+        let a = ask(world.reading(&read));
+        self.0 = read.get().map(|columns| {
+            world.read_columns(columns);
+            (of, columns, a)
+        });
+        a
     }
 }

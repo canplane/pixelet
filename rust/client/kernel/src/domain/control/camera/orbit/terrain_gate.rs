@@ -13,7 +13,7 @@ use xpute_kit::math::scalar::wrap;
 use crate::domain::control::camera::orbit::orbit_eye_offset;
 use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::EYE_CLEARANCE_U;
-use crate::domain::query::changed::{within, Columns};
+use crate::domain::query::changed::Asked;
 use crate::domain::query::{over, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
@@ -161,16 +161,9 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
         at,
         center: world_to_canonical(&at.target),
     };
-    let last = CLIMBED.get(|| None);
-    match *last {
-        Some(Climbed(c, read, polar)) if c == climb && !within(read, &[]) => polar,
-        _ => {
-            let read = Columns::default();
-            let polar = climbed(at, &World::now().reading(&read)).polar;
-            *last = read.get().map(|r| Climbed(climb, r, polar));
-            polar
-        }
-    }
+    let last = CLIMBED.get(|| Asked::NONE);
+    last.kept();
+    last.of(World::now(), climb, |w| climbed(at, &w).polar)
 }
 
 /// What a climb is made of, by value.
@@ -180,12 +173,9 @@ struct Climb {
     center: Q3,
 }
 
-/// A climb, the columns it read, and the pitch it gave.
-#[derive(Clone, Copy)]
-struct Climbed(Climb, [[f64; 2]; 2], f64);
-
-/// The last climb.
-static CLIMBED: Global<Option<Climbed>> = Global::new();
+/// The last climb's pitch, kept while what it is made of stands and no
+/// change touched what it read (`Asked`).
+static CLIMBED: Global<Asked<Climb, f64>> = Global::new();
 
 fn climbed(mut at: ViewPose, access: &World) -> ViewPose {
     for _ in 0..CLIMB_PASSES {

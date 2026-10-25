@@ -11,8 +11,6 @@ use crate::domain::query::{over, under};
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::{self, REACH};
-use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::Answer;
@@ -72,23 +70,20 @@ pub fn support_step() {
     stood().kept();
 }
 
-/// An unknown Z on the surface of the finest ground known there; none where
-/// nothing stands. Kept while the point is the one asked and nothing changed
-/// under it (`STOOD`).
-fn standing(at: &Q3) -> Answer<Option<Q3>> {
+/// An unknown Z on the surface of `world`'s finest ground known there; none
+/// where nothing stands. Kept while the point is the one asked and nothing
+/// changed under what it read (`STOOD`).
+fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
     if !is_unknown(at) {
         return Answer::Exact(Some(*at));
     }
-    let cell = units(GROUND.cell());
-    let c = to_world(at);
-    let columns = [[c[0] - cell, c[1] - cell], [c[0] + cell, c[1] + cell]];
-    stood().of(*at, columns, || World::now().surface_support(at).map(|top| top.map(|top| stand_over(at, top))))
+    stood().of(world, *at, |w| w.surface_support(at).map(|top| top.map(|top| stand_over(at, top))))
 }
 
-/// The floor `center` is drawn on: its own, or where its height is not known
-/// the finest ground's there; none where nothing is known.
-pub fn floor_seen(center: &Q3) -> Option<f64> {
-    match standing(center) {
+/// The floor `center` is drawn on in `world`: its own, or where its height is
+/// not known the finest ground's there; none where nothing is known.
+pub fn floor_seen(world: World<'_>, center: &Q3) -> Option<f64> {
+    match standing(world, center) {
         Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => Some(floor_of(&p)),
         _ => None,
     }
@@ -96,7 +91,7 @@ pub fn floor_seen(center: &Q3) -> Option<f64> {
 
 /// Where `at` is drawn; at `held`'s height where nothing is known.
 pub fn resolve(at: &Q3, held: V3) -> V3 {
-    match standing(at) {
+    match standing(World::now(), at) {
         Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => to_world(&p),
         Answer::Exact(None) | Answer::Coarser(None, _) | Answer::Nothing(_) => {
             let l = to_world(at);
@@ -112,7 +107,7 @@ pub fn nearest(at: &Q3) -> Option<Q3> {
 
 /// An unknown Z once a leaf gives it.
 pub fn exact(at: &Q3) -> Option<Q3> {
-    standing(at).exact().flatten()
+    standing(World::now(), at).exact().flatten()
 }
 
 /// `resolve` for a camera's target, writing the leaves' Z into it once known.
