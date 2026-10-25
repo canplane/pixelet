@@ -231,7 +231,7 @@ stays where a page is packed while someone waits for it.
 > No longer applies: every bake writes zstd, and the bake reads zstd
 > alone (`unpack` in `rust/server/geo-bake/src/util.rs`), so there is no
 > mixed bucket to tell apart and no `encoding_of`. What stands is that the
-> upload takes the encoding from the manifest (`ts/app/web/script/publish.ts`).
+> upload takes the encoding from the manifest (`script/publish.py`).
 
 **One label per object, and the bytes decide it.** An object's encoding is
 metadata its upload sets, so gzip and zstd versions can share the bucket and

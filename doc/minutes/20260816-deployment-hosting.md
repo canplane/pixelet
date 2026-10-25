@@ -135,7 +135,7 @@ dataset re-baked a handful of times a year needs.
 > Superseded: objects are stored zstd now (`CONTENT_ENCODING` in
 > `rust/server/geo-bake/src/util.rs`; see
 > [compression by traffic](./20260913-compression-by-traffic.md)). The
-> upload takes the encoding from the bake's manifest (`ts/app/web/script/publish.ts`).
+> upload takes the encoding from the bake's manifest (`script/publish.py`).
 
 Object stores don't compress on the fly. Each tile is gzipped at bake time and
 uploaded with `content-type: application/octet-stream` +
@@ -476,7 +476,7 @@ in the first place.
 
 ### Uploading
 
-> Now `ts/app/web/script/publish.ts`: `aws s3 sync` against R2's S3 endpoint, with the
+> Now `script/publish.py`: `aws s3 sync` against R2's S3 endpoint, with the
 > `content-encoding` and `content-type` taken from the bake's manifest.
 
 43,506 objects rules out `wrangler r2 object put`, which handles one object per
