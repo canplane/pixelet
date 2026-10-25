@@ -312,18 +312,36 @@ impl Frame {
     }
 }
 
-/// The frames a surface may have drawn and not yet finished on the GPU: what
-/// it is configured to queue (`desired_maximum_frame_latency`), and what
+/// The frames a surface may have drawn and not yet finished on the GPU unless
+/// the program says otherwise (`GpuHost::with_frame_latency`): what it is
+/// configured to queue (`desired_maximum_frame_latency`), and what
 /// `GpuHost::admit` lets stand. A surface keeps one texture more than this,
 /// so with this many unfinished one is still free, and taking it never
 /// blocks the thread that turns the guest.
 pub const FRAME_LATENCY: u32 = 2;
 
-/// The frames admitted and not yet done on the GPU. The queue's callback
-/// takes one off, run by the host's poll; it captures nothing, so handing it
-/// over allocates nothing each frame. One count for the process: two hosts
-/// that admit frames hold each other back, and neither miscounts.
-static UNFINISHED: AtomicU32 = AtomicU32::new(0);
+/// One frame admitted and not yet done, counted in its host's count from
+/// when it is handed to the queue until the queue's callback that holds it
+/// ends: called once the work is done, or let go uncalled, as wgpu lets go
+/// a device's callbacks when the device goes. The count is taken off as the
+/// guard drops, not in the callback's body, so a frame let go uncalled is
+/// taken off too, and a host's frames never stand forever.
+struct Unfinished(Arc<AtomicU32>);
+
+impl Unfinished {
+    /// `count`'s next frame, and the callback the queue is handed for it.
+    fn count(count: &Arc<AtomicU32>) -> impl FnOnce() + Send + 'static {
+        count.fetch_add(1, Ordering::Relaxed);
+        let frame = Unfinished(count.clone());
+        move || drop(frame)
+    }
+}
+
+impl Drop for Unfinished {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Relaxed);
+    }
+}
 
 /// Where a stale surface is configured: configuring one sets its layer's
 /// properties, which some platforms allow on one thread alone. `Elsewhere`
@@ -361,6 +379,13 @@ pub struct GpuHost {
     finished: Vec<wgpu::CommandBuffer>,
     /// This turn's frame was admitted, so it is counted once presented.
     admitted: bool,
+    /// Its frames admitted and not yet done on the GPU: its own, so one
+    /// host's frames, or a gone device's, hold back no other. Shared with
+    /// each frame's callback (`Unfinished`), which wgpu boxes: a block a
+    /// frame, beside the box it makes of any callback.
+    unfinished: Arc<AtomicU32>,
+    /// The frames it lets stand unfinished (`FRAME_LATENCY` unless said).
+    frame_latency: u32,
     /// Every buffer write goes through the belt, whose chunks are mapped once
     /// and reused, into `uploads`, which goes ahead of whatever is submitted
     /// next: `Queue::write_buffer` makes a Metal buffer and mapping a write.
@@ -384,6 +409,9 @@ impl GpuHost {
     /// for a loss of the device's (`Unknown`), and for its destruction or drop
     /// by its owner (`Destroyed`), which is no loss; the host tells the guest
     /// in its block at the next turn's edge and asks for that turn.
+    ///
+    /// It paces its frames to `FRAME_LATENCY` unless the program says
+    /// otherwise (`with_frame_latency`).
     pub fn new(adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue, preferred: wgpu::TextureFormat, configure_at: ConfigureAt, wake: fn()) -> GpuHost {
         let gone = Arc::new(AtomicBool::new(false));
         let lost = gone.clone();
@@ -411,8 +439,20 @@ impl GpuHost {
             scratch: Vec::new(),
             finished: Vec::new(),
             admitted: false,
+            unfinished: Arc::new(AtomicU32::new(0)),
+            frame_latency: FRAME_LATENCY,
             uploads: None,
         }
+    }
+
+    /// Paced to `frames` admitted and unfinished at once, and each surface
+    /// configured to queue as many, where `FRAME_LATENCY` is the default: the
+    /// program's choice of lag behind its input against how busy the GPU is
+    /// kept. At least one.
+    pub fn with_frame_latency(mut self, frames: u32) -> GpuHost {
+        assert!(frames >= 1, "[gpu] a frame latency of {frames}");
+        self.frame_latency = frames;
+        self
     }
 
     /// The window's surface for the guest's `surface`, configured as the
@@ -434,6 +474,7 @@ impl GpuHost {
     /// configured: run where `configure_at` says, while nothing else uses the
     /// host.
     pub fn configure_surfaces(&mut self) {
+        let frame_latency = self.frame_latency;
         for (n, s) in self.surfaces.iter_mut().enumerate() {
             let (Some(b), Some((format, usage, premultiplied))) = (s.bound.as_mut().filter(|b| b.stale), s.asked) else {
                 continue;
@@ -454,7 +495,7 @@ impl GpuHost {
                 width: s.size[0],
                 height: s.size[1],
                 present_mode: wgpu::PresentMode::Fifo,
-                desired_maximum_frame_latency: FRAME_LATENCY,
+                desired_maximum_frame_latency: frame_latency,
                 alpha_mode,
                 view_formats: Vec::new(),
             };
@@ -602,12 +643,13 @@ impl GpuHost {
         }
     }
 
-    /// Whether this turn may draw a frame: while fewer than `FRAME_LATENCY`
-    /// admitted frames are unfinished, so each surface's next texture is free
-    /// and taking it does not block. Asked once a turn, before the turn draws;
-    /// on the web the browser paces frames and every one is admitted.
+    /// Whether this turn may draw a frame: while fewer than its frame latency
+    /// of the frames it admitted are unfinished, so each surface's next
+    /// texture is free and taking it does not block. Asked once a turn,
+    /// before the turn draws; on the web the browser paces frames and every
+    /// one is admitted.
     pub fn admit(&mut self) -> bool {
-        self.admitted = UNFINISHED.load(Ordering::Relaxed) < FRAME_LATENCY;
+        self.admitted = self.unfinished.load(Ordering::Relaxed) < self.frame_latency;
         self.admitted
     }
 
@@ -621,10 +663,7 @@ impl GpuHost {
             }
         }
         if core::mem::take(&mut self.admitted) {
-            UNFINISHED.fetch_add(1, Ordering::Relaxed);
-            self.queue.on_submitted_work_done(|| {
-                UNFINISHED.fetch_sub(1, Ordering::Relaxed);
-            });
+            self.queue.on_submitted_work_done(Unfinished::count(&self.unfinished));
         }
     }
 
