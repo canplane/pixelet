@@ -9,10 +9,10 @@
 
 import { dirname, fromFileUrl, join } from "@std/path";
 
-/** xpute's root, three up: the spec it serves and the target it bundles into. */
+/** xpute's root, three up: the spec it serves, and ts/target/, which it bundles into. */
 const ROOT = join(dirname(fromFileUrl(import.meta.url)), "../../..");
 const TEST = "ts/gpu/src/host.test.ts";
-const BUNDLE = join(ROOT, "target/browser/host.test.js");
+const BUNDLE = join(ROOT, "ts/target/browser/host.test.js");
 const CHROME = Deno.env.get("CHROME") ?? (Deno.build.os === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
 const SECONDS = 60;
 

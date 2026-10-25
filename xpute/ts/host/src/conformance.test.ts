@@ -87,9 +87,9 @@ function module(path: string): Opener {
 
 const GUESTS: Record<string, () => Opener> = {
   "rust native": () => native(library(join(CARGO_TARGET, "debug"), "xpute_conformance")),
-  "cpp native": () => native(library(join(ROOT, "target/cpp"), "xpute_conformance")),
+  "cpp native": () => native(library(join(ROOT, "cpp/target"), "xpute_conformance")),
   "rust wasm": () => module(join(CARGO_TARGET, "wasm32-unknown-unknown/debug/xpute_conformance.wasm")),
-  "cpp wasm": () => module(join(ROOT, "target/cpp/xpute_conformance.wasm")),
+  "cpp wasm": () => module(join(ROOT, "cpp/target/xpute_conformance.wasm")),
 };
 
 const MOST_SETTLE_TURNS = 64;

@@ -8,5 +8,3 @@
 !rust
 !xpute/rust
 **/target
-rust/client/shader/target-linux
-rust/client/shader/cargo-home
