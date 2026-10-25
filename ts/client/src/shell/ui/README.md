@@ -1,8 +1,8 @@
 # Where the platforms part in the shell's pieces
 
 A piece the platforms draw differently is one file and its overrides beside
-it, as React Native names them: `pill.tsx` is the page's and Android's,
-`pill.ios.tsx` an iPhone's; `motion/motion.native.tsx` both devices'. Metro
+it, as React Native names them: `segmented.tsx` is the page's and Android's,
+`segmented.ios.tsx` an iPhone's; `motion/motion.native.tsx` both devices'. Metro
 takes the file of the device's platform, Vite the default, and every import
 names the default. An override re-exports the default and replaces only what it
 draws itself, and `ts/client/src/shell/ui/conform.ts` holds each to its default's

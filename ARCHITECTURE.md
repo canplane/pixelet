@@ -438,9 +438,9 @@ A read is a file in xpute's sense ([xpute's system calls and files](./xpute/ARCH
 
 | Root               | The kernel's path                                              | What the client binds it to                                                                                  |
 | ------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| each bake, by kind | a tile's number, its subject, in decimal; the Earth's `SPHERE` | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`host/io/tile.ts`) |
-| `ASSET`            | a load's number, in decimal                                    | the shipped asset that number is, by its hash (`host/io/asset.ts`)                                         |
-| `STORAGE`          | a kept slot's number, in decimal (`kept`)                      | the platform's storage, under a key it picks (`host/io/storage.ts`)                                        |
+| each bake, by kind | a tile's number, its subject, in decimal; the Earth's `SPHERE` | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`namespace/tile.ts`) |
+| `ASSET`            | a load's number, in decimal                                    | the shipped asset that number is, by its hash (`namespace/asset.ts`)                                         |
+| `STORAGE`          | a kept slot's number, in decimal (`kept`)                      | the platform's storage, under a key it picks (`namespace/storage.ts`)                                        |
 
 So the kernel names no URL, no version, no storage key and no platform: a path is a number. Where a file lies, what key or address it has, which version serves a tile, and what to do with a file the kernel refuses are the client's. The client reads the source's declaration once: it hands the kernel the top zoom, each kind's format and the shards (`WORLD_SOURCE`), and keeps the versions, which it shows in the settings too. A kept file starts with its slot's `format`, which the kernel checks as a driver checks a superblock, and a file of another format is refused and never written over; the client sets it aside and plugs in an empty slot (`ts/client/src/namespace/storage.ts`).
 
