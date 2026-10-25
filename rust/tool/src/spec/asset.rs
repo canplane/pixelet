@@ -310,9 +310,6 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     ts.extend(cube_sections.iter().map(|(s, e)| format!("  {}: \"{s}\",", e.value)));
     ts.extend([
         "};".to_string(),
-        String::new(),
-        "/** What a cell nothing painted shows. */".into(),
-        format!("export const BASE = cube.ground.{base_type};"),
     ]);
 
     // Rust

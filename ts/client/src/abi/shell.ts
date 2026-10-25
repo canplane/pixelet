@@ -1,6 +1,7 @@
 // @pxl/client/abi/shell.ts
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { Doorbell } from "@xpute/host/ipc/doorbell.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import type { Errno } from "@xpute/kit/status/errno.spec.ts";
 import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
@@ -36,6 +37,11 @@ export const kernel_room: PacketRoom = { writer: (count) => GUEST_DOORBELL.write
 /** Whether a command carrying `pkt` can be sent; the shell refuses input that cannot. */
 export function kernel_fits(pkt: PacketWriter): boolean {
   return GUEST_DOORBELL.fits(pkt);
+}
+
+/** The guest's doorbell itself, for a development console's `cmd`. */
+export function kernel_doorbell(): Doorbell {
+  return GUEST_DOORBELL;
 }
 
 /** The kernel's memory, where a call leaves its reply; a view of it holds until the next turn. */

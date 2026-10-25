@@ -12,7 +12,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { SysHost } from "@xpute/host/ipc/sys.ts";
-import { Command, encode_world_boot, encode_world_kept_emptied, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/abi/cmd.spec.ts";
+import { Command, encode_world_boot, encode_world_kept_emptied, encode_world_source, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/abi/cmd.spec.ts";
 import { declare_source } from "@/namespace/source.ts";
 import { namespace } from "@/namespace/roots.ts";
 import { follow_refused, migrate } from "@/namespace/storage.ts";
@@ -66,6 +66,14 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
 }
 
+/** The source's declaration to the kernel, refused where it is more than a command carries. */
+function send_source(top_zoom: number, formats: number[], shards: string[]): boolean {
+  const pkt = encode_world_source(GUEST_DOORBELL, top_zoom, formats, shards);
+  if (!GUEST_DOORBELL.fits(pkt)) return false;
+  HOST.send(Command.WORLD_SOURCE, pkt);
+  return true;
+}
+
 /** Called once from shell/boot.ts, so boot order is explicit, not import order. */
 export async function boot(): Promise<void> {
   // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
@@ -88,7 +96,7 @@ export async function boot(): Promise<void> {
   const booted = GUEST_DOORBELL.call(Command.WORLD_BOOT, pkt, (result) => result);
   if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
-  void declare_source();
+  void declare_source(send_source);
 }
 
 /** `listener` hears the kernel stop for good: its turns end with it. */

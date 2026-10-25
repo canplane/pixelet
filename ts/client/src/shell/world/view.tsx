@@ -5,7 +5,7 @@ import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
 import { bracket, type InputDriver } from "@/bracket.tsx";
-import { kernel_open, kernel_rect, kernel_visible, kernel_wheel, POINTER_KIND, POINTER_PHASE } from "@/abi/input.ts";
+import { kernel_frame, kernel_open, kernel_rect, kernel_visible, kernel_wheel, POINTER_KIND, POINTER_PHASE } from "@/abi/input.ts";
 import { surface_role } from "@/abi/gpu.spec.ts";
 import { surface_driver } from "@/abi/surface.ts";
 import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
@@ -23,7 +23,6 @@ import { TopOverlays } from "@/shell/world/top/top.tsx";
 import { DOCK_HEIGHT } from "./dock.tsx";
 import { ToastController } from "@/shell/world/toast/controller.tsx";
 import { useKernel } from "@/shell/store/system.ts";
-import { HOST } from "@/host/mount.ts";
 
 const TOAST_LIFT_PX = chrome.inset + 20;
 
@@ -44,7 +43,7 @@ const INPUT: InputDriver = {
   releaseKeys,
   releasePointers,
   visible: kernel_visible,
-  requestFrame: () => HOST.strobe.request(),
+  requestFrame: kernel_frame,
 };
 
 /** Alone, so a marker under the pointer re-renders only the surface. */

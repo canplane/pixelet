@@ -37,7 +37,7 @@ export function tile_name(subject: bigint): string | null {
 /** The version `name` is served under: the finest shard over it, the one its
  * name prefixes, that names one, the last of the finest as declared; else the
  * kind's own. The Earth's picture is no shard's (pxl-spec bake/source.rs `sharded`). */
-export function version_of(d: Declaration, kind: BaseLayer, name: string): string {
+function version_of(d: Declaration, kind: BaseLayer, name: string): string {
   let finest: [number, string] | null = null;
   if (kind !== "earth") {
     for (const [key, shard] of Object.entries(d.shard)) {

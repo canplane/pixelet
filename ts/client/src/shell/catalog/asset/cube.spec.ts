@@ -259,6 +259,3 @@ export const cube_section: Readonly<Record<number, CubeSection>> = {
   270: "colors",
   271: "colors",
 };
-
-/** What a cell nothing painted shows. */
-export const BASE = cube.ground.land;

@@ -80,6 +80,11 @@ export function kernel_visible(visible: boolean): void {
   } else HOST.strobe.stop();
 }
 
+/** A turn asked for now, as a moved box needs one. */
+export function kernel_frame(): void {
+  HOST.strobe.request();
+}
+
 /** A place's pointer phase, as the kernel numbers it. */
 export const POINTER_PHASE: Readonly<Record<PlacePhase, PointerPhase>> = {
   down: PointerPhase.Down,

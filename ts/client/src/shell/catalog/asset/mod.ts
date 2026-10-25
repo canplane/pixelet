@@ -13,8 +13,6 @@ import { decor, type DecorId } from "./decor.spec.ts";
 /** A cube by its number in the catalog's one value space: a ground look or a placed color. */
 export type Cube = u16;
 
-export type { CubeSection };
-
 /** The catalog's group a cube's name is in. */
 type Group = "ground" | "object";
 

@@ -8,7 +8,7 @@
  * `trace()`, the window saved for ui.perfetto.dev.
  */
 
-import { GUEST_DOORBELL } from "@/host/mount.ts";
+import { kernel_doorbell } from "@/abi/shell.ts";
 import { profilerReportText } from "./profiler/report.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
 import { profilerReportRead } from "./profiler/view.ts";
@@ -16,6 +16,6 @@ import { profilerReportRead } from "./profiler/view.ts";
 /** Once the kernel has booted: its doorbell is made then. */
 export function installConsole(): void {
   const g = globalThis as { xpute?: unknown; pxl?: unknown };
-  g.xpute = GUEST_DOORBELL;
+  g.xpute = kernel_doorbell();
   g.pxl = { profiler: { report: () => profilerReportText(profilerReportRead()), trace: profilerTraceSave } };
 }

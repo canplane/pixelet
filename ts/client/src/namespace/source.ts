@@ -9,9 +9,7 @@
  */
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
-import { Command, encode_world_source } from "@/abi/cmd.spec.ts";
 import { TILE_SOURCE_ROUTE } from "@/namespace/route.ts";
-import { GUEST_DOORBELL, HOST } from "@/host/mount.ts";
 import { online, when_online } from "@/namespace/online.ts";
 import { BASE_LAYERS, type BaseLayer } from "./published.spec.ts";
 import { bracket } from "@/bracket.tsx";
@@ -111,7 +109,11 @@ async function asked(): Promise<string | null> {
   }
 }
 
-export async function declare_source(): Promise<void> {
+/** Hands the kernel its part of the declaration (WORLD_SOURCE); false where
+ * it is more than a command carries. */
+export type SendSource = (top_zoom: number, formats: number[], shards: string[]) => boolean;
+
+export async function declare_source(send: SendSource): Promise<void> {
   let source = await asked();
   let wait_ms = ASK_AGAIN_MS;
   while (source === null) {
@@ -129,13 +131,11 @@ export async function declare_source(): Promise<void> {
     return;
   }
   const shards = Object.keys(read.shard);
-  const pkt = encode_world_source(GUEST_DOORBELL, read.top_zoom, BASE_LAYERS.map((kind) => read.format[kind]), shards);
-  if (!GUEST_DOORBELL.fits(pkt)) {
+  if (!send(read.top_zoom, BASE_LAYERS.map((kind) => read.format[kind]), shards)) {
     console.error(`[source] the declaration's ${shards.length} shards are more than a command carries`);
     set(Source.Refused);
     return;
   }
-  HOST.send(Command.WORLD_SOURCE, pkt);
   declared = read;
   shown = BASE_LAYERS.map((kind) => ({ kind, version: read.version[kind] }));
   set(Source.Declared);

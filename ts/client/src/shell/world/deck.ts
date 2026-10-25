@@ -14,11 +14,6 @@ const OPACITY = [1, 0.6, 0.3];
 const SCALE = [1, 0.94, 0.88];
 const SWIPE_PX = 24;
 
-/** The depth of the card at index `i`, front 0, with the deck turned by `rotation`. */
-export function deckDepth(i: u32, rotation: i32, count: u32): u32 {
-  return count > 0 ? ((i - rotation) % count + count) % count : 0;
-}
-
 interface CardPose {
   rest: { translateY: f64; scale: f64 };
   above: { translateY: f64 };
