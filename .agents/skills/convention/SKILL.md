@@ -43,6 +43,13 @@ boundaries run is `ARCHITECTURE.md`'s, and the host/guest boundary's roles
   workspace's manifest. A config that must read another package's output has its
   build step put it inside first (`ts/app/native/script/build-native.py`,
   `script/deploy.py`).
+- A script is in the language its work takes and run by its path: Python on its
+  standard library alone, or sh. One in JavaScript is an ES module, TypeScript
+  where a loader takes it: no `.cjs` or `.cts`. Node runs only the native
+  toolchain's own scripts.
+- Deno is the TypeScript trees' tool (`ts/`, `xpute/ts/`) and runs only in
+  them; a program outside them (wrangler, aws) is called from the PATH, never
+  through Deno or a tree's lock.
 
 ## Files
 
@@ -58,10 +65,6 @@ boundaries run is `ARCHITECTURE.md`'s, and the host/guest boundary's roles
 - A comment says only what a reader would otherwise get wrong — an invariant, a
   hazard, where a number comes from — in a sentence. It tells no history and
   does not restate the code or a document.
-- A script is in the language its work takes and run by its path: Python on its
-  standard library alone, or sh. One in JavaScript is an ES module, TypeScript
-  where a loader takes it: no `.cjs` or `.cts`. Node runs only the native
-  toolchain's own scripts.
 
 ## Code
 

@@ -29,8 +29,7 @@ make sync-build-number
 - Xcode with a signing team for a phone, CocoaPods, and the Rust targets, which
   `rust/rust-toolchain.toml` installs.
 - Node, as `ts/app/native/package.json`'s `engines` asks, on `PATH` for
-  `pod
-  install`, and named for Xcode's script phases in
+  `pod install`, and named for Xcode's script phases in
   `ts/app/native/ios/.xcode.env.local` (`export NODE_BINARY=…`), which prebuild
   does not write.
 
@@ -60,11 +59,12 @@ xcrun devicectl device process launch --terminate-existing --device <devicectl i
 ```
 
 For the simulator: `-configuration Debug -destination 'id=<simulator id>'` with
-no signing, then
-`xcrun simctl install booted
-build/derived/Build/Products/Debug-iphonesimulator/pixelet.app`
-and `xcrun
-simctl launch booted me.plei.pixelet`.
+no signing, then:
+
+```bash
+xcrun simctl install booted build/derived/Build/Products/Debug-iphonesimulator/pixelet.app
+xcrun simctl launch booted me.plei.pixelet
+```
 
 `--console` on the launch streams the app's stdout, where the kernel's last
 words go (`[pxl] …`).
@@ -85,8 +85,7 @@ xcrun simctl launch <id> me.plei.pixelet
 ### What goes wrong
 
 - **"Unable to find a destination"**: the phone dropped off;
-  `devicectl list
-  devices` shows it `unavailable`. Reconnect or unlock it.
+  `devicectl list devices` shows it `unavailable`. Reconnect or unlock it.
 - **Install works, launch fails "could not be unlocked"**: the phone is locked.
   Unlock it and launch again.
 
@@ -136,11 +135,13 @@ adb shell am start -S -n me.plei.pixelet/.MainActivity
 words and panics go to logcat under the tag `pxl`:
 `adb logcat -d | grep -E "FATAL| pxl |ReactNativeJS"`.
 
-On an emulator: grant location
-(`adb shell pm grant me.plei.pixelet
-android.permission.ACCESS_FINE_LOCATION`),
-and put it where there is data — `adb emu geo fix 126.9780 37.5665`; its default
-is outside the data, which draws no terrain.
+On an emulator, grant location and put it where there is data; its default is
+outside the data, which draws no terrain:
+
+```bash
+adb shell pm grant me.plei.pixelet android.permission.ACCESS_FINE_LOCATION
+adb emu geo fix 126.9780 37.5665
+```
 `adb exec-out screencap -p > shot.png` for a look.
 
 ### A Meta Quest

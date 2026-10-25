@@ -1,6 +1,8 @@
 # Agent Instructions
 
-- How the tree is written — names, files, citations and the code's few fixed
+- A skill holds one role, its description says which, and a rule goes to the
+  skill whose role it is, or to a new one — never to one it merely sits near.
+  How the tree is written — names, files, citations and the code's few fixed
   rules — is the `convention` skill's (`.agents/skills/convention/`).
 - **xpute** is the floor a guest program runs on. Its words are host, guest and
   their contract, and they name no program. The host grants the guest memory and

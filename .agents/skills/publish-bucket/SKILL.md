@@ -55,11 +55,10 @@ make bake-<kind> ARGS="--stage publish"    # terrain, place or division
 
 `publish` names the version, uploads the copy with the manifest's
 content-encoding, checks the stored count, then writes `source`.
-`./script/publish.py serve <kind> <version>` serves a version the bucket holds
-again, which is how to go back;
-`./script/publish.py override <shard> <kind>
-<version>` serves a version for one
-shard and the tiles under it, `-` dropping it.
+```bash
+./script/publish.py serve <kind> <version>              # serve a held version again: how to go back
+./script/publish.py override <shard> <kind> <version>   # one shard and the tiles under it; - drops it
+```
 
 **Never overwrite an existing version in place**, of any kind: publish a new one
 and serve it.
