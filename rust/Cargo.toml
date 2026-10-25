@@ -114,7 +114,7 @@ lto = true
 codegen-units = 1
 panic = "abort"
 # The name section is not stripped here. What is published is what Binaryen
-# finishes (ts/app/web/script/build-wasm.ts): it strips the name, producers and
+# finishes (ts/app/web/script/build-wasm.py): it strips the name, producers and
 # target-features sections in one pass, and it has to read the target
 # features before it can take them off — which it cannot do if Cargo has
 # already thrown them away.

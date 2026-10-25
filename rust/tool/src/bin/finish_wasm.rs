@@ -1,6 +1,6 @@
 // pxl-tool/bin/finish_wasm.rs
 
-//! Rewrites a linked wasm module in place, for ts/app/web/script/build-wasm.ts.
+//! Rewrites a linked wasm module in place, for ts/app/web/script/build-wasm.py.
 //!
 //!   finish_wasm exports <module.wasm> <name>...      # keep only these exports
 //!   finish_wasm number <module.wasm> <paths.json>    # number the panic paths

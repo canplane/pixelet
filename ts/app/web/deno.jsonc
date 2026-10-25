@@ -12,11 +12,11 @@
   "tasks": {
     // The guest's module, from rust/, into src/guest.wasm. Every
     // task that loads it depends on this, so it is never stale or missing.
-    "build:wasm": "deno run -A script/build-wasm.ts",
+    "build:wasm": "./script/build-wasm.py",
     // The same module in its published shape — without the dev-only settings
     // and with its panic paths blanked — which is what `build` bundles, so a
-    // local build and the deploy's are the same bytes (script/build-wasm.ts).
-    "build:wasm:published": "deno run -A script/build-wasm.ts --published",
+    // local build and the deploy's are the same bytes (script/build-wasm.py).
+    "build:wasm:published": "./script/build-wasm.py --published",
     // The icons and link preview, from ts/client/brand into public/brand/ and kept
     // out of git, so what is served is never older than the brand
     // (pxl-tool/bin/render_brand.rs).

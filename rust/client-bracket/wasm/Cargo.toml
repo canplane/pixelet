@@ -19,7 +19,7 @@ pxl-kernel.workspace = true
 
 [features]
 # Forwarded to the kernel. On for a module anyone works on; the published one
-# is built `--no-default-features` (ts/app/web/script/build-wasm.ts) and
+# is built `--no-default-features` (ts/app/web/script/build-wasm.py) and
 # carries no dev-only setting.
 default = ["dev"]
 dev = ["pxl-kernel/dev"]

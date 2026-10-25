@@ -395,7 +395,7 @@ function rebuildKernelOnRustChange(): Plugin {
         kernelBuild.running = true;
         do {
           again = false;
-          const done = await new Deno.Command("deno", { args: ["run", "-A", "script/build-wasm.ts"], cwd: __dirname }).output();
+          const done = await new Deno.Command("./script/build-wasm.py", { cwd: __dirname }).output();
           const said = new TextDecoder().decode(done.success ? done.stdout : done.stderr).trim();
           if (done.success) server.config.logger.info(said.split("\n").at(-1) ?? "", { timestamp: true });
           else server.config.logger.error(`kernel build failed\n${said}`, { timestamp: true });
