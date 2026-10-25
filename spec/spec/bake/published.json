@@ -2,7 +2,7 @@
   "$doc": [
     "The format each kind is baked and read in, the code's. Which version of",
     "each is served is the bucket's alone: its `source`, which the client reads",
-    "at boot and apps/tool/publish.ts writes, so a publish changes nothing here."
+    "at boot and apps/web/script/publish.ts writes, so a publish changes nothing here."
   ],
   "FORMAT": {
     "$doc": [

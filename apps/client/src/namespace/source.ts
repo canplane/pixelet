@@ -1,7 +1,7 @@
 // @pxl/client/namespace/source.ts
 
 /**
- * The tile source's declaration (apps/tool/publish.ts writes the bucket's), asked of the
+ * The tile source's declaration (apps/web/script/publish.ts writes the bucket's), asked of the
  * tile root until it answers: the published bake's out of the bucket, or a dev
  * tile server's. The kernel is handed it unread and observes nothing until
  * then; its versions are read here alone, for the objects the bakes' roots are

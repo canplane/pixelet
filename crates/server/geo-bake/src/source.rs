@@ -5,7 +5,7 @@
 //! and version, and the shards every kind holds, four siblings written as their
 //! parent, with each override's version. The published one is made from a
 //! record of what the bucket serves (bin/declare_source.rs, which
-//! apps/tool/publish.ts gathers out of the bucket and uploads), a dev tile
+//! apps/web/script/publish.ts gathers out of the bucket and uploads), a dev tile
 //! server's from what it serves (bin/serve_tiles.rs).
 
 use std::collections::{BTreeMap, BTreeSet};

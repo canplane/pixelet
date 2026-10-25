@@ -17,10 +17,10 @@
 // and the tiles under it, `-` dropping it. Uses the AWS CLI's `r2` profile
 // and `$R2`, the bucket's S3 endpoint (publish-bucket).
 //
-//   ./apps/tool/publish.ts <terrain|place|division|earth>…
-//   ./apps/tool/publish.ts upload <terrain|place|division|earth>…
-//   ./apps/tool/publish.ts serve <kind> <version>
-//   ./apps/tool/publish.ts override <shard> <kind> <version|->
+//   ./apps/web/script/publish.ts <terrain|place|division|earth>…
+//   ./apps/web/script/publish.ts upload <terrain|place|division|earth>…
+//   ./apps/web/script/publish.ts serve <kind> <version>
+//   ./apps/web/script/publish.ts override <shard> <kind> <version|->
 
 import { tileObject } from "@pxl/client/config/route.spec.ts";
 
@@ -199,24 +199,24 @@ async function upload(record: Served, kind: string): Promise<Kind> {
 async function command(record: Served, [first, ...rest]: string[]): Promise<Served | undefined> {
   if (first === "serve") {
     const [kind, version] = rest;
-    if (!KINDS.includes(kind) || !version) die("usage: ./apps/tool/publish.ts serve <kind> <version>");
+    if (!KINDS.includes(kind) || !version) die("usage: ./apps/web/script/publish.ts serve <kind> <version>");
     record.kind[kind] = await manifestOf(kind, version);
   } else if (first === "override") {
     const [shard, kind, version] = rest;
-    if (!shard || !KINDS.includes(kind) || !version) die("usage: ./apps/tool/publish.ts override <shard> <kind> <version|->");
+    if (!shard || !KINDS.includes(kind) || !version) die("usage: ./apps/web/script/publish.ts override <shard> <kind> <version|->");
     const own = { ...record.override[shard] };
     if (version === "-") delete own[kind];
     else own[kind] = version;
     if (Object.keys(own).length > 0) record.override[shard] = own;
     else delete record.override[shard];
   } else if (first === "upload") {
-    if (rest.length === 0 || rest.some((k) => !KINDS.includes(k))) die(`usage: ./apps/tool/publish.ts upload <${KINDS.join("|")}>…`);
+    if (rest.length === 0 || rest.some((k) => !KINDS.includes(k))) die(`usage: ./apps/web/script/publish.ts upload <${KINDS.join("|")}>…`);
     for (const kind of rest) await upload(record, kind);
     return undefined;
   } else {
     const kinds = [first, ...rest];
     if (!first || kinds.some((k) => !KINDS.includes(k))) {
-      die(`usage: ./apps/tool/publish.ts [upload] <${KINDS.join("|")}>… | serve <kind> <version> | override <shard> <kind> <version|->`);
+      die(`usage: ./apps/web/script/publish.ts [upload] <${KINDS.join("|")}>… | serve <kind> <version> | override <shard> <kind> <version|->`);
     }
     for (const kind of kinds) record.kind[kind] = await upload(record, kind);
   }

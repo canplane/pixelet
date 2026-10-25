@@ -1,7 +1,7 @@
 // pxl-kernel/sys/io/source.rs
 
 //! The tile source's declaration, read once at boot: the published bake's
-//! `source` out of the bucket (apps/tool/publish.ts), or the dev tile server's
+//! `source` out of the bucket (apps/web/script/publish.ts), or the dev tile server's
 //! answer in its shape. It says the zoom the floor is held at, the
 //! shards served and the format each kind is in: a tile no served shard is
 //! over or under is never asked for. The versions it names are the

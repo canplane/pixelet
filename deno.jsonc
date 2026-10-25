@@ -4,7 +4,6 @@
   "workspace": [
     "apps/client",
     "apps/web",
-    "apps/tool",
     // A package.json member: Expo and Metro find packages the npm way.
     "apps/native"
   ],
@@ -89,11 +88,11 @@
     // The deployment. Does not upload what the bucket holds.
     "deploy": "deno task --cwd apps/web deploy",
     // Against a running deployment, not a checkout.
-    "smoke": "./apps/tool/smoke.ts",
+    "smoke": "./apps/web/script/smoke.ts",
     // Reads with wrangler's login and hcloud's context.
     "usage": "./script/usage.ts",
     // A bake's publish stage into the bucket under a new name; deploy after.
-    "publish": "./apps/tool/publish.ts",
+    "publish": "./apps/web/script/publish.ts",
 
     // The rest.
     "export:xpute": "./xpute/script/export.ts",

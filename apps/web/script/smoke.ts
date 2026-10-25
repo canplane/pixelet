@@ -10,8 +10,8 @@
 // asset's type. What depends on the edge's mood (whether the second ask hit
 // the cache) is said, not failed.
 //
-//   deno run -A apps/tool/smoke.ts https://plei.me
-//   deno run -A apps/tool/smoke.ts https://api.plei.me --origin
+//   deno run -A apps/web/script/smoke.ts https://plei.me
+//   deno run -A apps/web/script/smoke.ts https://api.plei.me --origin
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { INGESTED } from "@pxl/client/catalog/asset/ingested.spec.ts";
@@ -155,7 +155,7 @@ const argv = Deno.args.filter((a) => a !== "--origin");
 const originOnly = Deno.args.includes("--origin");
 const base = argv[0]?.replace(/\/$/, "");
 if (!base) {
-  console.error("usage: deno run -A apps/tool/smoke.ts <base-url> [--origin]");
+  console.error("usage: deno run -A apps/web/script/smoke.ts <base-url> [--origin]");
   Deno.exit(2);
 }
 
