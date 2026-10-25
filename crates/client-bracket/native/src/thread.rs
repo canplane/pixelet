@@ -63,6 +63,8 @@ fn handoff() -> &'static Mutex<Handoff> {
             .stack_size(STACK_BYTES)
             .spawn(move || {
                 ON_KERNEL.with(|k| k.set(true));
+                // What the kernel does process-wide tells its thread by this.
+                xpute_guest::global::mark_thread();
                 for Job(job) in next {
                     // SAFETY: the caller's closure, which it keeps until the
                     // answer below has reached it.

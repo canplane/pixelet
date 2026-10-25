@@ -3,8 +3,16 @@
 //! One value for the module's life, made on first use. Handing out `&mut`
 //! from a static is sound only because the module runs on one thread and a
 //! turn never re-enters another.
+//!
+//! A module has one thread. A guest linked into a native process shares it
+//! with the host's other threads, so its host runs it on one of them and
+//! marks that one (`mark_thread`): what the guest does process-wide, such as
+//! a panic hook, can then tell its own thread from the others, and touch its
+//! `Global`s only there. Until a thread is marked every thread is taken for
+//! the guest's, as a test's are.
 
-use core::cell::UnsafeCell;
+use core::cell::{Cell, UnsafeCell};
+use core::sync::atomic::{AtomicBool, Ordering};
 
 pub struct Global<T>(UnsafeCell<Option<T>>);
 
@@ -34,6 +42,33 @@ impl<T> Global<T> {
 pub fn serial() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Some thread is marked as the guest's.
+static MARKED: AtomicBool = AtomicBool::new(false);
+
+thread_local! {
+    static ON_MARKED: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Marks this thread as the one the guest runs on, before its first turn:
+/// once a process, by the host that runs the guest there. A second thread
+/// marked is a host's bug.
+pub fn mark_thread() {
+    let again = MARKED.swap(true, Ordering::AcqRel);
+    assert!(!again || on_marked_thread(), "a second thread marked as the guest's");
+    ON_MARKED.with(|on| on.set(true));
+}
+
+/// Whether this is the thread marked as the guest's.
+pub fn on_marked_thread() -> bool {
+    ON_MARKED.with(Cell::get)
+}
+
+/// Whether a thread is marked as the guest's and this is another: where a
+/// `Global` must not be touched.
+pub fn off_marked_thread() -> bool {
+    MARKED.load(Ordering::Acquire) && !on_marked_thread()
 }
 
 impl<T> Default for Global<T> {

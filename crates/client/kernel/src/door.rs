@@ -24,7 +24,7 @@ use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::clock::now;
-use xpute_guest::global::Global;
+use xpute_guest::global::{off_marked_thread, Global};
 use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_guest::ipc::door::{Door, DoorStat};
 use xpute_guest::ipc::ring::Ring;
@@ -141,9 +141,27 @@ fn boot(b: &Bracket) {
     crate::sys::io::host::set_admit_frame(b.admit_frame);
     crate::sys::io::host::set_last_words(b.last_words);
     executor::install();
-    // Named invariants report through `bug!`; a core panic reports only its location.
-    xpute_kit::status::bug::set_report(crate::sys::io::host::host_bug);
-    std::panic::set_hook(Box::new(|info| {
+    // Named invariants report through `bug!`; a core panic reports only its
+    // location. Both are process-wide, and on a device the app's other
+    // threads (a driver's callback, an image's decode) fail through them
+    // too: those are not the kernel's to report, and its state is its own
+    // thread's, so they are told by the bracket's last words alone, or by
+    // the hook this one replaced (xpute_guest::global `off_marked_thread`).
+    xpute_kit::status::bug::set_report(|errno, at, a, b| {
+        if !off_marked_thread() {
+            crate::sys::io::host::host_bug(errno, at, a, b);
+        }
+    });
+    let theirs = std::panic::take_hook();
+    let say = b.last_words;
+    std::panic::set_hook(Box::new(move |info| {
+        if off_marked_thread() {
+            match say {
+                Some(say) => say(crate::sys::io::host::Stop::Panic(info)),
+                None => theirs(info),
+            }
+            return;
+        }
         if crate::sys::io::host::stopped() {
             return;
         }
