@@ -56,6 +56,10 @@ POI. Decode time was not measured (the timing run broke on shell quoting).
 | **Local persistence** — placements, a future OPFS tile cache             | on write                            | store what arrived as it arrived; placements are small enough that encoding matters more than a codec                                                                                                                                                                                                                                                                                         |
 | **Inside the page** — worker slabs, the change log                       | never                               | memory is moved or read in place; compression would only add a copy                                                                                                                                                                                                                                                                                                                           |
 
+> Since checked (2026-10-25): the app bundle is the edge's. The deployment
+> serves its JavaScript as `br` or `gzip`, whichever the client offers, with
+> nothing pre-compressed at build.
+
 ## What follows from it
 
 - **Encoding before codec.** What a codec can take is set by the layout it
