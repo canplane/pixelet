@@ -46,7 +46,7 @@
     "download": "./script/tool.ts download",
     // After any change under asset/content/:
     "ingest:asset": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin ingest_asset",
-    // By hand, when apps/web/brand changes.
+    // By hand, when apps/client/brand changes.
     "render:brand": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin render_brand",
 
     // Made from the tree: the code generated from spec/, the kernel's module.

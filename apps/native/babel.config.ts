@@ -24,7 +24,7 @@ import { ROOT } from "../client/script/import-map.ts";
  * and all. The table refuses an enum it cannot inline; `inlineEnums` below
  * does the rest.
  */
-const TABLE = readEnums([path.join(ROOT, "apps/client/src"), path.join(ROOT, "apps/web/src"), path.join(ROOT, "xpute/ts"), path.join(ROOT, "apps/native/src")]);
+const TABLE = readEnums([path.join(ROOT, "apps/client/src"), path.join(ROOT, "xpute/ts"), path.join(ROOT, "apps/native/src")]);
 const { exported: EXPORTED, local: LOCAL } = TABLE;
 
 /** The table is read once, when Metro loads this file, so an enum or a member

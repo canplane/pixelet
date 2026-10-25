@@ -11,7 +11,7 @@ export function gpuBoot(heard: GpuHeard): void {
     return;
   }
   // A completion the device's host learns of between turns asks the turn
-  // that reads it, as the page's host does (apps/web/src/gpu.ts).
+  // that reads it.
   PLATFORM.addListener("onWake", () => heard.wake());
   heard.ready();
 }
