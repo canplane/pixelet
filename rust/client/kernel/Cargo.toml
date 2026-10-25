@@ -27,7 +27,7 @@ critical-section = "1.1"
 # What a development build has and a published one does not: the settings
 # schema.json marks `dev` — the nightly features — offered. A published module
 # is built without (pxl-wasm's `dev`, off by ts/app/web/script/build-wasm.py,
-# and pxl-native's for a Release by ts/app/native/script/build-native.ts): it
+# and pxl-native's for a Release by ts/app/native/script/build-native.py): it
 # offers no dev setting, each running at the default the JSON gives.
 default = ["dev"]
 dev = []

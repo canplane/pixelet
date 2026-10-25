@@ -6,7 +6,7 @@
  * prebuild` generates (android/ is its, and not kept).
  *
  * - One ABI, arm64-v8a: the kernel is built for aarch64-linux-android alone
- *   (script/build-native.ts), and an ABI packed without it is an app that
+ *   (script/build-native.py), and an ABI packed without it is an app that
  *   dies loading its library on the phones that take that ABI.
  * - The SDK floor: the Vulkan this build takes for wgpu.
  * - The debug builds of both flavors, a phone's and a Quest's (the `mobile`

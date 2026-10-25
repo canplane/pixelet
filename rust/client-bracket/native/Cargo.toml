@@ -7,7 +7,7 @@ publish.workspace = true
 [lib]
 # Linked into the device app's binary.
 # An Android app loads a shared library instead, which its build asks cargo
-# for by name (ts/app/native/script/build-native.ts, `--crate-type cdylib`), so
+# for by name (ts/app/native/script/build-native.py, `--crate-type cdylib`), so
 # no iPhone build links one it would not use.
 crate-type = ["staticlib"]
 path = "src/lib.rs"

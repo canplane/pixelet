@@ -40,7 +40,7 @@ terrain version is every tile, so a few in a month is past it. Before an upload
 and after:
 
 ```bash
-./script/usage.ts     # Class A this month against the million
+./script/usage.py     # Class A this month against the million
 ```
 
 and set the object count `publish` prints against what is left. Deleting an

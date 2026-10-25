@@ -4,7 +4,7 @@
 # view the kernel draws into, the kernel linked with it, and what the shell
 # asks of the system — storage, the clipboard, text, the compass. The kernel
 # is in the guest (rust/client-bracket/native), built by this pod's script phase
-# (ts/app/native/script/build-native.ts) for the configuration and the SDK the
+# (ts/app/native/script/build-native.py) for the configuration and the SDK the
 # app is, into a directory each has of its own, which the app links from and
 # Swift imports it from (`import PxlNative`, the guest's include/, put there
 # beside the library by the same script). Not named
@@ -28,11 +28,11 @@ Pod::Spec.new do |s|
   s.source_files = '*.swift'
 
   # Run on every build: cargo is what knows whether the kernel is current,
-  # and answers in a moment when it is. rustup's and Deno's installers put
-  # their tools in the home directory, which Xcode's PATH does not name.
+  # and answers in a moment when it is. rustup's installer puts its tools in
+  # the home directory, which Xcode's PATH does not name.
   s.script_phase = {
     name: 'Build the kernel',
-    script: 'export PATH="$HOME/.cargo/bin:$HOME/.deno/bin:$PATH"; exec "$PODS_TARGET_SRCROOT/../../../script/build-native.ts"',
+    script: 'export PATH="$HOME/.cargo/bin:$PATH"; exec "$PODS_TARGET_SRCROOT/../../../script/build-native.py"',
     execution_position: :before_compile,
     always_out_of_date: '1',
   }
@@ -40,7 +40,7 @@ Pod::Spec.new do |s|
     'SWIFT_INCLUDE_PATHS' => '"$(PODS_CONFIGURATION_BUILD_DIR)/PxlNative/include"',
   }
   # The simulator the kernel is built for is an Apple silicon Mac's, arm64
-  # alone (build-native.ts); a Release build makes every architecture it is
+  # alone (build-native.py); a Release build makes every architecture it is
   # not told otherwise, and an Intel slice would link no kernel.
   s.user_target_xcconfig = {
     # The app imports this pod's Swift module, which imports PxlNative, and

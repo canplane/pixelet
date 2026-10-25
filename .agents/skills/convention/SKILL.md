@@ -33,7 +33,7 @@ is `ARCHITECTURE.md`'s, and the host/guest boundary's roles `AGENTS.md`'s.
   `ts/build/import-map.ts` (`WORKSPACE`, `REPO`), which finds them
   from the workspace's manifest. A config that must read another package's
   output has its build step put it inside first
-  (`ts/app/native/script/build-native.ts`, `ts/server/edge/script/stage.sh`).
+  (`ts/app/native/script/build-native.py`, `ts/server/edge/script/stage.sh`).
 
 ## Files
 
@@ -64,7 +64,7 @@ The same bits on every machine, in pixelet and xpute alike:
 The core memory is addressed by offset:
 
 - In the crates that do (xpute's guest and host, the kernel, the renderer,
-  both brackets — `script/check-rules.ts` `OFFSET_CRATES`), an offset
+  both brackets — pxl-tool `bin/check_rules.rs` `OFFSET_CRATES`), an offset
   becomes a pointer only through `xpute_guest::mem::base::ptr_at`, never
   `as *const` or `as *mut`.
 

@@ -52,7 +52,7 @@ A `deploy-web` that fails at `wrangler deploy` says in its last line whether
 plei.me serves the build anyway (wrangler can fail after the Worker went
 out), and `record` logs it so.
 
-While working, `./script/check-diff.ts` runs the checks and tests of what the
+While working, `./script/check-diff.py` runs the checks and tests of what the
 working tree's changes reach. Before a deploy it is the whole `check` and
 `test`, never the narrowed one.
 
