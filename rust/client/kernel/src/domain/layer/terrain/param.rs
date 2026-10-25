@@ -4,7 +4,7 @@
 
 /// The most the ways' pool takes on each side, the GPU's buffer and the
 /// CPU's mirror (domain/layer/terrain/mirror.rs), 64 MiB: the bake's bound,
-/// `ways::tree::POOL_OCTETS` octets of 64 B, which every set fits wherever
+/// `ways::tree::POOL_FAMILIES` families of 64 B, which every set fits wherever
 /// the eye is (pxl-spec bake/tile/terrain.rs `pool_needs`), so at this no
 /// square of a baked set is refused. Less refuses a dense view's last
 /// squares their ways' trees, each left absent to the coarser window
@@ -19,6 +19,6 @@
 /// the old pool beside the new, 32 MiB with 64, until the copy is submitted.
 pub const WAYS_POOL_BYTES: u32 = 64 << 20;
 const _: () = assert!(
-    WAYS_POOL_BYTES <= pxl_spec_core::ways::tree::POOL_OCTETS * 64 && WAYS_POOL_BYTES >= 2 * 64,
-    "the pool's cap is no more than the bake's bound, nor less than an octet past octet 0"
+    WAYS_POOL_BYTES <= pxl_spec_core::ways::tree::POOL_FAMILIES * 64 && WAYS_POOL_BYTES >= 2 * 64,
+    "the pool's cap is no more than the bake's bound, nor less than a family past family 0"
 );

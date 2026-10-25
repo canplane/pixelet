@@ -234,11 +234,11 @@ pub fn square_runs(tile: Tile, held: &TerrainTile, place: [u32; 2], scratch: &mu
 }
 
 /// Each square of `tile`'s windows' ways' tree as a GPU builds it, row by
-/// row of its squares (pxl-spec-core `fill::tree`): the octets it takes,
+/// row of its squares (pxl-spec-core `fill::tree`): the families it takes,
 /// and those it holds once folded; none for a tile without ways, whose
-/// squares hold their root's octet alone. `runs` its scratch as a GPU's, and
+/// squares hold their root's family alone. `runs` its scratch as a GPU's, and
 /// `pool` a square's room to build in, its heap words then its data words.
-pub fn square_octets(tile: Tile, held: &TerrainTile, scratch: &mut [(u32, u32)], [handed, lane, runs, pool]: [&mut [u32]; 4]) -> Vec<[u32; 2]> {
+pub fn square_families(tile: Tile, held: &TerrainTile, scratch: &mut [(u32, u32)], [handed, lane, runs, pool]: [&mut [u32]; 4]) -> Vec<[u32; 2]> {
     use pxl_spec_core::window::SQUARE;
     if held.separation.is_empty() {
         return Vec::new();
@@ -252,11 +252,11 @@ pub fn square_octets(tile: Tile, held: &TerrainTile, scratch: &mut [(u32, u32)],
         .collect()
 }
 
-/// The octets the windows' trees take wherever the eye is, of the pool
-/// (pxl-spec-core `ways::tree::POOL_OCTETS`): each eye's window's most at
+/// The families the windows' trees take wherever the eye is, of the pool
+/// (pxl-spec-core `ways::tree::POOL_FAMILIES`): each eye's window's most at
 /// its cells (`worst`, the most any placement of it holds), the others'
 /// each the most of any, the squares handed a frame each the most a square
-/// takes before its fold gives octets back (`taken`), and a root's octet a
+/// takes before its fold gives families back (`taken`), and a root's family a
 /// square besides.
 pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
     use pxl_spec_core::window::{EYE_WINDOWS, FIRST_CELL, HANDED, SQUARES, WINDOWS};

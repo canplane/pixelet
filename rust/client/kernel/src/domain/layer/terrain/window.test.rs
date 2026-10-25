@@ -12,7 +12,7 @@ use pxl_spec_core::overwrite::Lanes;
 pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, pxl_spec::bake::separation::Separation);
 
 /// What `hold` leaves held: the squares' words up to their last that is
-/// not zero, the pool's octets taken as records (pxl-spec-core
+/// not zero, the pool's families taken as records (pxl-spec-core
 /// `ways::tree::lay`), the slots and the berths.
 struct Built {
     cells: Vec<u32>,
@@ -29,16 +29,16 @@ type Over = ([f64; 2], Vec<HeldTile>);
 static BUILT: std::sync::Mutex<Vec<(Over, Built)>> = std::sync::Mutex::new(Vec::new());
 
 const CELLS_WORDS: usize = (SQUARES * CELLS_LANE_BYTES / 4) as usize;
-const POOL_WORDS: usize = 16 * pxl_spec_core::ways::tree::POOL_OCTETS as usize;
+const POOL_WORDS: usize = 16 * pxl_spec_core::ways::tree::POOL_FAMILIES as usize;
 
 /// The pool's mirror holding `records`, a square's most at a time.
 fn mirrored(records: &[u32]) {
-    use pxl_spec_core::ways::tree::{RECORD_WORDS, SQUARE_OCTETS};
+    use pxl_spec_core::ways::tree::{RECORD_WORDS, SQUARE_FAMILIES};
     let m = mirror();
     m.clear();
-    for octets in records.chunks((SQUARE_OCTETS * RECORD_WORDS) as usize) {
-        let mut laid = vec![(octets.len() / RECORD_WORDS as usize) as u32];
-        laid.extend_from_slice(octets);
+    for families in records.chunks((SQUARE_FAMILIES * RECORD_WORDS) as usize) {
+        let mut laid = vec![(families.len() / RECORD_WORDS as usize) as u32];
+        laid.extend_from_slice(families);
         assert_eq!(m.lay(&laid), Ok(()), "the test's pool past the mirror's cap");
     }
 }
@@ -84,7 +84,7 @@ pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     windows().berths.copy_from_slice(&b.berths);
 }
 
-/// `hold`'s windows, built: the octets their trees took, as records.
+/// `hold`'s windows, built: the families their trees took, as records.
 fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     PLANES.set(Planes {
         cells: vec![0; CELLS_WORDS].leak(),
@@ -92,8 +92,8 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     });
     // The trees built into a pool in one lane, as the GPU's.
     let mut pool = vec![0; POOL_WORDS];
-    // The pool's octets, each square's tree taken after the one before's, as
-    // the GPU's stack hands them, octet 0 none's.
+    // The pool's families, each square's tree taken after the one before's, as
+    // the GPU's stack hands them, family 0 none's.
     let mut next = 1;
     WINDOWS_STATE.set(fresh());
     let w = windows();
@@ -161,7 +161,7 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     for i in 0..SQUARES {
         show(w, i);
     }
-    // Every octet taken, a record each: its id, its heap words, its data.
+    // Every family taken, a record each: its id, its heap words, its data.
     let p = pxl_spec_core::ways::tree::Read(&pool);
     let mut records = Vec::new();
     for b in 1..next {

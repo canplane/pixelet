@@ -211,7 +211,7 @@ pub struct Store {
     /// Bumped by every write that changes the tree, so a reader holding a
     /// copy of its lanes, the GPU's, knows to take them again.
     revision: u32,
-    /// The octets the tree wrote between the revision the lanes were last
+    /// The families the tree wrote between the revision the lanes were last
     /// handed at (`since`) and that hand (`gpu_lanes`), each once.
     handed: Vec<u32>,
     since: u32,
@@ -219,8 +219,8 @@ pub struct Store {
 
 /// The tree's lanes as the GPU takes them (`Store::gpu_lanes`): both as
 /// they live, the room either has before it grows, the store's revision,
-/// and the octets written since the lanes were last handed, at `since`, by
-/// their first slots: a copy of them at `since` with those octets taken
+/// and the families written since the lanes were last handed, at `since`, by
+/// their first slots: a copy of them at `since` with those families taken
 /// again is the lanes at `revision`.
 pub struct GpuLanes<'a> {
     pub heap: &'a [u32],
@@ -260,7 +260,7 @@ impl Store {
         self.revision
     }
 
-    /// The tree's lanes as the GPU takes them (`GpuLanes`): the octets
+    /// The tree's lanes as the GPU takes them (`GpuLanes`): the families
     /// written since the last hand, each once, and the revision it was at.
     pub fn gpu_lanes(&mut self) -> GpuLanes<'_> {
         self.tree.take_written(&mut self.handed);
@@ -404,7 +404,7 @@ impl Store {
                 None => NONE,
             };
             let value = Leaf { id: id16, ext: handle }.word();
-            if self.tree.set(depth(zoom), path(zoom, at), value, |tree, octet, d| fold(tree, octet, d - 1)) {
+            if self.tree.set(depth(zoom), path(zoom, at), value, |tree, family, d| fold(tree, family, d - 1)) {
                 changed.push(cube(zoom, at));
                 self.revision = self.revision.wrapping_add(1);
             }

@@ -1,10 +1,10 @@
 // pxl-geo-bake/terrain/pool.rs
 
 //! Whether a set's ways' trees fit the client's pool wherever the eye is
-//! (pxl-spec-core `ways::tree::POOL_OCTETS`): a fact of the set, not of a
+//! (pxl-spec-core `ways::tree::POOL_FAMILIES`): a fact of the set, not of a
 //! tile, as a window is a fixed grid of squares about the eye laid at any
 //! square, across tiles. Each square's tree is built as a GPU builds it
-//! (pxl-spec `terrain::square_octets`); each window's most is the most any
+//! (pxl-spec `terrain::square_families`); each window's most is the most any
 //! placement of it holds, a sliding sum over its zoom's squares; the
 //! windows together need `terrain::pool_needs`.
 
@@ -15,7 +15,7 @@ use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::ways::tree::{POOL_OCTETS, SCRATCH_WORDS, SQUARE_OCTETS};
+use pxl_spec_core::ways::tree::{POOL_FAMILIES, SCRATCH_WORDS, SQUARE_FAMILIES};
 use pxl_spec_core::window::{ACROSS, HANDED_WORDS, SQUARE, SQUARE_WORDS, WAYS_SQUARE_SEGMENTS};
 
 use crate::pyramid::Staged;
@@ -23,7 +23,7 @@ use crate::pyramid::Staged;
 /// The squares a tile is a side.
 const SIDE: u32 = TILE_CELLS / SQUARE;
 
-/// A zoom's squares, each the octets its tree holds, by its index at its
+/// A zoom's squares, each the families its tree holds, by its index at its
 /// cells; and the most a square takes before its fold.
 #[derive(Default)]
 struct Held {
@@ -51,7 +51,7 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<(), String> {
     }
     let worst: BTreeMap<Zoom, ([i32; 2], u64)> = all.squares.iter().map(|(&cell, squares)| (cell, most(squares))).collect();
     let needs = terrain::pool_needs(|cell| worst.get(&cell).map_or(0, |w| w.1), all.taken);
-    if needs <= u64::from(POOL_OCTETS) {
+    if needs <= u64::from(POOL_FAMILIES) {
         return Ok(());
     }
     let (cell, (first, n)) = worst.iter().max_by_key(|(_, w)| w.1).map(|(&c, &w)| (c, w)).unwrap_or((0, ([0; 2], 0)));
@@ -62,7 +62,7 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<(), String> {
     under.sort_unstable();
     under.dedup();
     Err(format!(
-        "its ways' trees need {needs} of the pool's {POOL_OCTETS} octets: the window at cells {cell} from square ({}, {}) holds {n}, over tiles {}, and a square takes {} before its fold",
+        "its ways' trees need {needs} of the pool's {POOL_FAMILIES} families: the window at cells {cell} from square ({}, {}) holds {n}, over tiles {}, and a square takes {} before its fold",
         first[0],
         first[1],
         under.join(" "),
@@ -70,20 +70,20 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<(), String> {
     ))
 }
 
-/// The squares of `tiles` the set holds, each its tree's octets.
+/// The squares of `tiles` the set holds, each its tree's families.
 fn held(set: &Staged<'_>, tiles: &[Tile]) -> Result<Held, String> {
     let mut scratch = vec![(0, 0); WAYS_SQUARE_SEGMENTS as usize];
     let (mut handed, mut lane, mut runs) = (vec![0; HANDED_WORDS as usize], vec![0; SQUARE_WORDS as usize], vec![0; SCRATCH_WORDS as usize]);
-    // A square's room: the most a build takes, past the octet none holds.
-    let mut pool = vec![0; 16 * (SQUARE_OCTETS as usize + 1)];
+    // A square's room: the most a build takes, past the family none holds.
+    let mut pool = vec![0; 16 * (SQUARE_FAMILIES as usize + 1)];
     let mut out = Held::default();
     for &p in tiles {
         let Some(tile) = set.read::<TerrainTile>(p)? else { continue };
-        let octets = terrain::square_octets(p, &tile, &mut scratch, [&mut handed, &mut lane, &mut runs, &mut pool]);
+        let families = terrain::square_families(p, &tile, &mut scratch, [&mut handed, &mut lane, &mut runs, &mut pool]);
         let cell = GROUND.cell_zoom(p.zoom);
-        for (k, [taken, held]) in octets.into_iter().enumerate() {
+        for (k, [taken, held]) in families.into_iter().enumerate() {
             if taken == u32::MAX {
-                return Err(format!("{}: its square {k} takes more than SQUARE_OCTETS ({SQUARE_OCTETS}) of its ways' tree's octets", p.name()));
+                return Err(format!("{}: its square {k} takes more than SQUARE_FAMILIES ({SQUARE_FAMILIES}) of its ways' tree's families", p.name()));
             }
             let at = [p.at[0] * SIDE as i32 + (k as u32 % SIDE) as i32, p.at[1] * SIDE as i32 + (k as u32 / SIDE) as i32];
             out.squares.entry(cell).or_default().insert(at, u64::from(held));

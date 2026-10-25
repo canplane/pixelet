@@ -1418,21 +1418,21 @@ fn settle() {
     >();
 }
 
-/// The ways' pool's free stack, a word an octet of the pool's, the two
+/// The ways' pool's free stack, a word a family of the pool's, the two
 /// grown together (pxl-render gpu/renderer.rs `GroundBuffers::grow`),
 /// which starts as WebGPU makes a buffer, zeroed: word `TAKEN` how many
-/// octets are taken, the slots after it their ids, then the free octets'
-/// ids, octet 0 never among them, a square's root word 0 naming no tree as
+/// families are taken, the slots after it their ids, then the free families'
+/// ids, family 0 never among them, a square's root word 0 naming no tree as
 /// a heap word 0 names no children. A slot's id is read and written by
 /// `id` and `put_id` alone, a slot's word its id XOR its index, so a slot
-/// never written holds its own index: every octet free, with no start to
+/// never written holds its own index: every family free, with no start to
 /// write, the ids handed from the lowest up, and a stack grown holds the
-/// octets past the old free, so every id ever handed lies under the most
+/// families past the old free, so every id ever handed lies under the most
 /// ever taken, which the pool's and its mirror's growth keep to
 /// (pxl-kernel domain/layer/terrain/mirror.rs).
 const TAKEN: u32 = 0;
 
-/// The octets free when `taken` are of a stack of `len` slots, octet 0
+/// The families free when `taken` are of a stack of `len` slots, family 0
 /// never one.
 fn free(len: u32, taken: u32) -> u32 {
     len - 1 - taken
@@ -1443,9 +1443,9 @@ fn id(stack: &[u32], i: u32) -> u32 {
     at(stack, i) ^ i
 }
 
-/// Octet `octet` into stack slot `i`.
-fn put_id(stack: &mut [u32], i: u32, octet: u32) {
-    put(stack, i, octet ^ i);
+/// Family `family` into stack slot `i`.
+fn put_id(stack: &mut [u32], i: u32, family: u32) {
+    put(stack, i, family ^ i);
 }
 
 /// An atomic add of `v` on word `i` of `s`, its old value; none past `s`.
@@ -1461,21 +1461,21 @@ fn add(s: &mut [u32], i: u32, v: u32) -> u32 {
     }
 }
 
-/// Octet `octet` back on the stack, into the slot of the last taken.
-fn push(stack: &mut [u32], octet: u32) {
+/// Family `family` back on the stack, into the slot of the last taken.
+fn push(stack: &mut [u32], family: u32) {
     // One fewer taken: an add of -1, as the count's word is unsigned.
     let was = add(stack, TAKEN, 1u32.wrapping_neg());
-    put_id(stack, was, octet);
+    put_id(stack, was, family);
 }
 
-/// `n` octets off the stack together for a square that has taken `taken`:
+/// `n` families off the stack together for a square that has taken `taken`:
 /// where their ids begin in it, and false where fewer are free or the
 /// square would take more than its most (`ways::tree::fits`), none taken.
 /// One exit, for the reason `add` gives.
 fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
     let len = stack.len() as u32;
     // SAFETY: word `TAKEN`, the stack's first; the buffer is never empty
-    // (pxl-render gpu/renderer.rs makes it a word an octet of the pool's).
+    // (pxl-render gpu/renderer.rs makes it a word a family of the pool's).
     let count = unsafe { stack.get_unchecked_mut(TAKEN as usize) };
     let mut gone = unsafe { spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(count) };
     let (mut done, mut ok) = (false, false);
@@ -1498,7 +1498,7 @@ fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
 
 use tree::{FREED_AT, RECORD_WORDS};
 
-/// Octet `first / 8`'s record, its id and its sixteen words, the next of
+/// Family `first / 8`'s record, its id and its sixteen words, the next of
 /// the records at `records` in the scratch (`tree::records_at`).
 fn record(scratch: &mut [u32], records: u32, pool: &impl Pool, first: u32) {
     let r = add(scratch, records, 1);
@@ -1515,15 +1515,15 @@ fn record(scratch: &mut [u32], records: u32, pool: &impl Pool, first: u32) {
     }
 }
 
-/// Octet `octet` the build gave back, into the scratch at `at`.
-fn freed(scratch: &mut [u32], at: u32, octet: u32) {
+/// Family `family` the build gave back, into the scratch at `at`.
+fn freed(scratch: &mut [u32], at: u32, family: u32) {
     let r = add(scratch, at + FREED_AT, 1);
-    put(scratch, at + FREED_AT + 1 + r, octet);
+    put(scratch, at + FREED_AT + 1 + r, family);
 }
 
 /// Each re-filled square's old ways' tree given back to the pool, a
 /// workgroup a square, ahead of its build (`ways_tree_cs`): walked from its
-/// root word, depth first, every octet its own and its branches' pushed.
+/// root word, depth first, every family its own and its branches' pushed.
 #[spirv(compute(threads(64, 1, 1)))]
 pub fn ways_free_cs(
     #[spirv(workgroup_id)] group: UVec3,
@@ -1538,7 +1538,7 @@ pub fn ways_free_cs(
         return;
     }
     let heap = |slot: u32| at(pool, slot);
-    // Each level's octet and the next of its eight to look under.
+    // Each level's family and the next of its eight to look under.
     let mut path = [[0u32; 2]; LEAF_CELL as usize + 1];
     let (mut d, mut first) = (0usize, root);
     path[0] = [root, 0];
@@ -1568,13 +1568,13 @@ pub fn ways_free_cs(
 /// (pxl-spec-core `ways::tree`), a workgroup a square, `group.z` its place
 /// in `fresh`: from the world's zoom-0 block down a level at a time, each
 /// candidate flagged where the square's levels say a way may lie under it
-/// and the flagged given their children's octets off the pool's stack
+/// and the flagged given their children's families off the pool's stack
 /// together, in the order the workgroup's scan ranks them; at the square's
 /// cells each a leaf off its column's runs; then up, each branch folded,
-/// one of eight equal leaves written as that leaf and its octet given back
-/// (`ways_freed_cs` pushes them), every octet it holds kept as a record for
+/// one of eight equal leaves written as that leaf and its family given back
+/// (`ways_freed_cs` pushes them), every family it holds kept as a record for
 /// the read-back. Its root word last; none where the pool or its scratch
-/// ran out, the octets it took given back, and its records' count saying
+/// ran out, the families it took given back, and its records' count saying
 /// which (`tree::CRAMPED`). A level's numbers are what every lane reads
 /// alike (`shared`), the loops' bounds.
 #[spirv(compute(threads(64, 1, 1)))]
@@ -1594,16 +1594,16 @@ pub fn ways_tree_cs(
     let of = fill::of(fresh, k);
     let base = square_at(at(fresh, window::handed_at(k) + window::FRESH_SQUARE));
     let mine = fill::scratch_at(scratch, k);
-    // The octets a square's scratch holds, every square's alike, and where
+    // The families a square's scratch holds, every square's alike, and where
     // its records begin (`tree::scratch_words`).
-    let room = tree::scratch_octets(scratch.len() as u32 / window::HANDED);
+    let room = tree::scratch_families(scratch.len() as u32 / window::HANDED);
     let records = mine + tree::records_at(room);
     let mut pool = tree::Lane(pool);
-    // A level's candidate `c`: slot `c % 8` of the octet whose id is the
+    // A level's candidate `c`: slot `c % 8` of the family whose id is the
     // level's `c / 8`-th off the stack, from where its ids begin.
     let slot = |stack: &[u32], from: u32, c: u32| 8 * id(stack, from + c / 8) + c % 8;
     // levels[2j], levels[2j + 1]: level j's first id on the stack and its
-    // candidates; the last three words, the octets the square has taken, its
+    // candidates; the last three words, the families the square has taken, its
     // cells' zoom and whether the pool held every level so far (`HELD`), or
     // the level the square took past its own most (`PAST`), or past what its
     // scratch holds (`SHORT`).
@@ -1631,7 +1631,7 @@ pub fn ways_tree_cs(
         settle();
         let (from, n) = (shared(levels, 2 * j), shared(levels, 2 * j + 1));
         let square = fill::Fresh { ground, base };
-        // The flagged, counted, then given their octets together.
+        // The flagged, counted, then given their families together.
         let (mut flagged, mut c) = (0, 0);
         while c < n {
             // Asked of every lane, its own past the level or not, then
@@ -1678,7 +1678,7 @@ pub fn ways_tree_cs(
         }
         (j, zoom) = (j + 1, zoom + 1);
     }
-    // The pool or the scratch ran out: the octets each level before took,
+    // The pool or the scratch ran out: the families each level before took,
     // given back.
     if !ok && t == 0 {
         let mut level = 0;
@@ -1745,7 +1745,7 @@ pub fn ways_tree_cs(
     }
 }
 
-/// The octets each handed square's build gave back (`ways_tree_cs`), on the
+/// The families each handed square's build gave back (`ways_tree_cs`), on the
 /// stack again: after the build, so no push lands under another square's
 /// ids while it reads them.
 #[spirv(compute(threads(64, 1, 1)))]

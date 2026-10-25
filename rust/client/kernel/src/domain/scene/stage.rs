@@ -143,9 +143,9 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
             upload: &mut terrain_upload,
             landed: &mut terrain_landed,
             joined: crate::domain::layer::terrain::window::joined_lane(),
-            pool: [crate::domain::scene::param::WAYS_POOL_FIRST_BYTES, crate::domain::layer::terrain::param::WAYS_POOL_BYTES].map(|b| b / (4 * pxl_spec_core::ways::tree::OCTET_WORDS)),
+            pool: [crate::domain::scene::param::WAYS_POOL_FIRST_BYTES, crate::domain::layer::terrain::param::WAYS_POOL_BYTES].map(|b| b / (4 * pxl_spec_core::ways::tree::FAMILY_WORDS)),
             scratch: [crate::domain::scene::param::WAYS_SCRATCH_FIRST_BYTES, crate::domain::scene::param::WAYS_SCRATCH_BYTES]
-                .map(|b| pxl_spec_core::ways::tree::scratch_octets(b / (4 * pxl_spec_core::window::HANDED))),
+                .map(|b| pxl_spec_core::ways::tree::scratch_families(b / (4 * pxl_spec_core::window::HANDED))),
             records: crate::domain::scene::param::WAYS_RECORDS_FIRST_BYTES,
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {

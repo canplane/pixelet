@@ -236,7 +236,7 @@ A window is a few **squares** of cells a side, each held in a slot its place nam
 
 A square is filled on the GPU as its tile lands. Compute passes make each cell's **column**, its ground's top and the runs its ways write over it along z (`heights_cs`, `ways_cs`). They fold a bound over the columns into **levels** (`bound_cs`). Both are read back, so the CPU's query and the cast meet the same bridge or tunnel.
 
-Its ways are built into a tree of octets, a node's eight children each, from one pool every square shares, on the GPU, and its octets read back into the CPU's mirror of the pool. Both grow as the trees take octets, up to a cap (`param` `WAYS_POOL_BYTES`). A square whose tree the pool at its cap cannot hold, or past a square's own most, or whose octets lie past the mirror's cap, stays absent while a window wants it. One whose octets the heap refuses the mirror waits until the heap gives a page back, and is filled again.
+Its ways are built into a tree of families, a node's eight children each, from one pool every square shares, on the GPU, and its families read back into the CPU's mirror of the pool. Both grow as the trees take families, up to a cap (`param` `WAYS_POOL_BYTES`). A square whose tree the pool at its cap cannot hold, or past a square's own most, or whose families lie past the mirror's cap, stays absent while a window wants it. One whose families the heap refuses the mirror waits until the heap gives a page back, and is filled again.
 
 Where a square is not present, both read the coarser window's. A square that enters asks its tile again, and the browser's cache answers.
 

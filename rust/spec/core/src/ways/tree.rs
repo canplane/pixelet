@@ -4,12 +4,12 @@
 //! shape (pxl-spec-core overwrite.rs), so a reader asks them by the one
 //! rule it asks what is placed by
 //! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md): from the
-//! world's zoom-0 block down to the square's cells, a node's eight slots an octet,
+//! world's zoom-0 block down to the square's cells, a node's eight slots a family,
 //! children only where they differ, each branch its eight folded
 //! (`overwrite::fold`), its leaves what the ways write at its cells
-//! (`ways::lined`, read off the square's runs). Its octets are taken from
+//! (`ways::lined`, read off the square's runs). Its families are taken from
 //! one pool every square's tree shares, off a free stack, and a square's
-//! root word names its zoom-0 nodes' octet (`window::ROOT_AT`), read as the placed
+//! root word names its zoom-0 nodes' family (`window::ROOT_AT`), read as the placed
 //! tree's is (`overwrite::cursor`).
 //!
 //! Built a level at a time, one square to a workgroup (pxl-shader
@@ -18,15 +18,15 @@
 //! - the zoom-0 block's eight are the first level's candidates (`root`);
 //! - each candidate coarser than the cells is flagged where it is the
 //!   square's or under it and its z meets the ways' bound in the square's
-//!   levels (`flag`): a flagged one takes an octet for its children,
+//!   levels (`flag`): a flagged one takes a family for its children,
 //!   the next level's candidates (`branch`), the rest hold nothing
-//!   (`empty`); a level's octets come off the stack together, `fits` the
+//!   (`empty`); a level's families come off the stack together, `fits` the
 //!   check before;
 //! - the candidates at the cells are leaves (`leaf`);
 //! - from the deepest level up, each branch is folded, and one whose eight
-//!   are one leaf, nothing included, is written as that leaf and its octet
+//!   are one leaf, nothing included, is written as that leaf and its family
 //!   given back (`fold`): the tree held is the one the rule defines, its
-//!   octets the fewest that hold it.
+//!   families the fewest that hold it.
 //!
 //! A candidate's node is held in its data word while the tree is built,
 //! where its leaf or fold is written after (`pack`).
@@ -101,82 +101,82 @@ impl Of {
     }
 }
 
-/// The most octets the pool grows to, eight slots each, every square's
+/// The most families the pool grows to, eight slots each, every square's
 /// tree's: a bake's set fits it wherever the eye is (pxl-spec
 /// bake/tile/terrain.rs `pool_needs`), so a pool this large refuses none.
 /// The pool starts smaller and grows as a build runs out
 /// (pxl-render gpu/renderer.rs `GroundBuffers::grow`), up to the kernel's
 /// cap (pxl-kernel domain/layer/terrain/param.rs `WAYS_POOL_BYTES`), no more than this; a build
-/// past what it holds is refused (`fits`), its square left absent. Octet 0
+/// past what it holds is refused (`fits`), its square left absent. Family 0
 /// is never handed out: its words stay zero, nothing (`overwrite::Lanes`),
 /// so a root word 0 is a square with no tree, read as nothing without a
 /// word of its own (`window::ROOT_AT`).
-pub const POOL_OCTETS: u32 = 1 << 20;
+pub const POOL_FAMILIES: u32 = 1 << 20;
 
-/// An octet's words in a pool: its eight heap words and its eight data
+/// A family's words in a pool: its eight heap words and its eight data
 /// words.
-pub const OCTET_WORDS: u32 = 16;
+pub const FAMILY_WORDS: u32 = 16;
 
-/// The most octets one square's build takes before its fold gives any
+/// The most families one square's build takes before its fold gives any
 /// back: the most of the format-12 set (2026-10-18, its windows' squares
 /// lined as before the face block, which only lines more); a tile past it
 /// fails its bake (pxl-geo-bake terrain/pool.rs), and what a build keeps a
-/// square, its records and the octets its fold gives back, is held to it.
-pub const SQUARE_OCTETS: u32 = 24_067;
+/// square, its records and the families its fold gives back, is held to it.
+pub const SQUARE_FAMILIES: u32 = 24_067;
 
-/// No slot: a fold that gives no octet back.
+/// No slot: a fold that gives no family back.
 pub const NONE: u32 = u32::MAX;
 
 /// A handed square's scratch past its runs (`window::TREE_AT`), a frame's,
-/// for a tree of `octets` at most: the octets its build gave back, their
+/// for a tree of `families` at most: the families its build gave back, their
 /// count first, for the pushes after it (pxl-shader `ways_freed_cs`); then
-/// the octets its tree holds from `records_at`, their count first, a
-/// record each, its octet's id and its eight heap and eight data words,
+/// the families its tree holds from `records_at`, their count first, a
+/// record each, its family's id and its eight heap and eight data words,
 /// which the read-back carries to the CPU's mirror. A build takes no more
 /// than its scratch holds (`cramped`), so neither runs past its room. The
 /// renderer starts it small and grows it (pxl-render gpu/renderer.rs
 /// `GroundBuffers::grow_scratch`), every square's alike, so a frame's
 /// scratch is `window::HANDED` of them and each square's length is a
 /// `HANDED`th of its buffer's (pxl-spec-core fill.rs `scratch_at`); at
-/// `SQUARE_OCTETS` it is `SCRATCH_WORDS`.
+/// `SQUARE_FAMILIES` it is `SCRATCH_WORDS`.
 pub const FREED_AT: u32 = crate::window::TREE_AT;
 pub const RECORD_WORDS: u32 = 17;
 
-/// A square's scratch for a tree of `octets` at most, in words.
-pub const fn scratch_words(octets: u32) -> u32 {
-    FREED_AT + 2 + octets * (1 + RECORD_WORDS)
+/// A square's scratch for a tree of `families` at most, in words.
+pub const fn scratch_words(families: u32) -> u32 {
+    FREED_AT + 2 + families * (1 + RECORD_WORDS)
 }
 
-/// The octets a square's scratch of `words` holds a tree of, no more than
-/// `SQUARE_OCTETS`: `scratch_words`'s inverse, none where it holds none.
-pub const fn scratch_octets(words: u32) -> u32 {
+/// The families a square's scratch of `words` holds a tree of, no more than
+/// `SQUARE_FAMILIES`: `scratch_words`'s inverse, none where it holds none.
+pub const fn scratch_families(words: u32) -> u32 {
     if words < FREED_AT + 2 {
         return 0;
     }
-    let octets = (words - FREED_AT - 2) / (1 + RECORD_WORDS);
-    if octets < SQUARE_OCTETS {
-        octets
+    let families = (words - FREED_AT - 2) / (1 + RECORD_WORDS);
+    if families < SQUARE_FAMILIES {
+        families
     } else {
-        SQUARE_OCTETS
+        SQUARE_FAMILIES
     }
 }
 
-/// Where a square's records begin in its scratch for a tree of `octets`.
-pub const fn records_at(octets: u32) -> u32 {
-    FREED_AT + 1 + octets
+/// Where a square's records begin in its scratch for a tree of `families`.
+pub const fn records_at(families: u32) -> u32 {
+    FREED_AT + 1 + families
 }
 
-/// A square's scratch at its most, a tree of `SQUARE_OCTETS`: what a bake
+/// A square's scratch at its most, a tree of `SQUARE_FAMILIES`: what a bake
 /// or a test fills one square in.
-pub const SCRATCH_WORDS: u32 = scratch_words(SQUARE_OCTETS);
+pub const SCRATCH_WORDS: u32 = scratch_words(SQUARE_FAMILIES);
 
-/// A build's records' count where its tree would take more octets than its
+/// A build's records' count where its tree would take more families than its
 /// scratch holds (`cramped`), short of the square's own most: no record
 /// kept and its root word 0, which the renderer reads as the scratch's to
 /// grow, as a count of none is the pool's, and `NONE` the square's own
 /// most (pxl-render gpu/renderer.rs `Short`). Past any count of a square's.
 pub const CRAMPED: u32 = NONE - 1;
-const _: () = assert!(CRAMPED > SQUARE_OCTETS, "no count of records is the mark");
+const _: () = assert!(CRAMPED > SQUARE_FAMILIES, "no count of records is the mark");
 
 /// A candidate's word: its X and Y under the square, `SQUARE_SHIFT` bits
 /// each, none coarser than the square; whether it is off the square, a
@@ -218,7 +218,7 @@ fn unpack(of: Of, zoom: Zoom, w: u32) -> ([i32; 3], bool) {
     ([(of.at[0] << s) + rel[0], (of.at[1] << s) + rel[1], z], true)
 }
 
-/// The first level: the world's zoom-0 block, its eight nodes in the octet at `root` as
+/// The first level: the world's zoom-0 block, its eight nodes in the family at `root` as
 /// `overwrite::cursor` lays them, each a candidate.
 pub fn root(pool: &mut impl Pool, of: Of, root: u32) {
     let mut k = 0;
@@ -230,7 +230,7 @@ pub fn root(pool: &mut impl Pool, of: Of, root: u32) {
     }
 }
 
-/// Whether the candidate at `slot`, a node of `zoom`, takes an octet for
+/// Whether the candidate at `slot`, a node of `zoom`, takes a family for
 /// its children: it is coarser than the square's cells, the square's or
 /// under it, and its Z meets where the square's ways write under it, the
 /// ways' bound of the square's levels at its size, the square's whole over
@@ -251,9 +251,9 @@ pub fn flag(pool: &impl Pool, w: &impl Squares, s: u32, of: Of, zoom: Zoom, slot
     lo < (at[2] + 1) << d && hi > at[2] << d
 }
 
-/// Whether a level's octets, a flagged candidate's each, may be taken
+/// Whether a level's families, a flagged candidate's each, may be taken
 /// together: the pool has `flagged` left of `left`, and the square, having
-/// taken `taken`, stays within `SQUARE_OCTETS`. None is taken past either:
+/// taken `taken`, stays within `SQUARE_FAMILIES`. None is taken past either:
 /// the tree is refused, its root word 0 and no record kept, which the
 /// renderer reads as the pool's to grow or, at its cap, the square's to
 /// stay absent; its count `NONE` where it is `past` the square's most,
@@ -263,26 +263,26 @@ pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
     flagged <= left && !past(taken, flagged)
 }
 
-/// Whether a level's `flagged` octets take a square that has taken `taken`
-/// past its most, `SQUARE_OCTETS`: refused whatever the pool holds, so its
+/// Whether a level's `flagged` families take a square that has taken `taken`
+/// past its most, `SQUARE_FAMILIES`: refused whatever the pool holds, so its
 /// build keeps `NONE` for its records' count rather than none, which the
 /// pool's growth answers (pxl-shader `ways_tree_cs`).
 pub fn past(taken: u32, flagged: u32) -> bool {
-    flagged > SQUARE_OCTETS - taken
+    flagged > SQUARE_FAMILIES - taken
 }
 
-/// Whether a level's `flagged` octets take a square that has taken `taken`
-/// past the `octets` its scratch holds (`scratch_octets`), whose freed
-/// octets and records each have room for so many: not taken, its build
+/// Whether a level's `flagged` families take a square that has taken `taken`
+/// past the `families` its scratch holds (`scratch_families`), whose freed
+/// families and records each have room for so many: not taken, its build
 /// keeping `CRAMPED` for its records' count, which the scratch's growth
 /// answers (pxl-shader `ways_tree_cs`). Asked after `past`, so it marks
 /// only what a larger scratch holds.
-pub fn cramped(octets: u32, taken: u32, flagged: u32) -> bool {
-    taken + flagged > octets
+pub fn cramped(families: u32, taken: u32, flagged: u32) -> bool {
+    taken + flagged > families
 }
 
 /// The flagged candidate at `slot`, a node of `zoom`, a branch whose
-/// children's octet begins at `first`: its eight, the next level's
+/// children's family begins at `first`: its eight, the next level's
 /// candidates.
 pub fn branch(pool: &mut impl Pool, of: Of, zoom: Zoom, slot: u32, first: u32) {
     let (at, _) = unpack(of, zoom, pool.data(slot));
@@ -342,7 +342,7 @@ pub fn leaf(pool: &mut impl Pool, runs: &impl Runs, of: Of, slot: u32) {
 
 /// The branch at `slot`, a node of `zoom`, its children written: where its
 /// eight are leaves of one word, nothing included, that leaf, and the first
-/// slot of the octet it gives back; else its eight folded by volume
+/// slot of the family it gives back; else its eight folded by volume
 /// (`overwrite::fold`, each child's share `overwrite::share`), and `NONE`.
 pub fn fold(pool: &mut impl Pool, zoom: Zoom, slot: u32) -> u32 {
     let first = pool.heap(slot) & !BRANCH;
@@ -371,8 +371,8 @@ pub fn fold(pool: &mut impl Pool, zoom: Zoom, slot: u32) -> u32 {
     NONE
 }
 
-/// The first slot of the octet under the branch at `slot`, `NONE` under a
-/// leaf: a square's old tree walked, its octets given back before it is
+/// The first slot of the family under the branch at `slot`, `NONE` under a
+/// leaf: a square's old tree walked, its families given back before it is
 /// built again.
 pub fn under(pool: &impl Pool, slot: u32) -> u32 {
     let h = pool.heap(slot);
@@ -384,10 +384,10 @@ pub fn under(pool: &impl Pool, slot: u32) -> u32 {
 }
 
 /// A square's records at their most as the read-back carries them: its
-/// scratch from `records_at` on, their count, then an octet its tree holds
+/// scratch from `records_at` on, their count, then a family its tree holds
 /// each.
-pub const RECORDS_WORDS: u32 = 1 + SQUARE_OCTETS * RECORD_WORDS;
-const _: () = assert!(RECORDS_WORDS == SCRATCH_WORDS - records_at(SQUARE_OCTETS), "the records end the scratch");
+pub const RECORDS_WORDS: u32 = 1 + SQUARE_FAMILIES * RECORD_WORDS;
+const _: () = assert!(RECORDS_WORDS == SCRATCH_WORDS - records_at(SQUARE_FAMILIES), "the records end the scratch");
 
 /// A square's records in bytes at their most: the most a read-back
 /// copies off its scratch, which copies what its room holds
@@ -395,13 +395,13 @@ const _: () = assert!(RECORDS_WORDS == SCRATCH_WORDS - records_at(SQUARE_OCTETS)
 pub const RECORDS_BYTES: u32 = RECORDS_WORDS * 4;
 
 /// A square's records (`RECORDS_WORDS`) laid into `pool` at the slots they
-/// came from, each its octet's id and its eight heap and eight data words:
+/// came from, each its family's id and its eight heap and eight data words:
 /// the CPU's mirror of the GPU's pool, where they land, so a cursor reads
 /// one tree on both sides.
 pub fn lay(pool: &mut impl Pool, records: &[u32]) {
     let n = crate::at(records, 0);
     let mut r = 0;
-    while r < n && r < SQUARE_OCTETS {
+    while r < n && r < SQUARE_FAMILIES {
         let at = 1 + r * RECORD_WORDS;
         let first = 8 * crate::at(records, at);
         let mut k = 0;
@@ -430,19 +430,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_scratch_holds_the_octets_it_is_made_for() {
+    fn a_scratch_holds_the_families_it_is_made_for() {
         // At a square's most, the layout it had before it grew: its runs,
-        // its freed octets' count and ids, its records' count and records.
-        assert_eq!(SCRATCH_WORDS, crate::window::TREE_AT + 1 + SQUARE_OCTETS + 1 + SQUARE_OCTETS * RECORD_WORDS);
-        for octets in [1, 539, 1078, SQUARE_OCTETS] {
-            assert_eq!(scratch_octets(scratch_words(octets)), octets);
-            // A word short holds an octet fewer.
-            assert_eq!(scratch_octets(scratch_words(octets) - 1), octets - 1);
+        // its freed families' count and ids, its records' count and records.
+        assert_eq!(SCRATCH_WORDS, crate::window::TREE_AT + 1 + SQUARE_FAMILIES + 1 + SQUARE_FAMILIES * RECORD_WORDS);
+        for families in [1, 539, 1078, SQUARE_FAMILIES] {
+            assert_eq!(scratch_families(scratch_words(families)), families);
+            // A word short holds a family fewer.
+            assert_eq!(scratch_families(scratch_words(families) - 1), families - 1);
             // Its records end it.
-            assert_eq!(records_at(octets) + 1 + octets * RECORD_WORDS, scratch_words(octets));
+            assert_eq!(records_at(families) + 1 + families * RECORD_WORDS, scratch_words(families));
         }
-        assert_eq!(scratch_octets(scratch_words(SQUARE_OCTETS) + 1000), SQUARE_OCTETS);
-        assert_eq!(scratch_octets(FREED_AT + 1), 0);
+        assert_eq!(scratch_families(scratch_words(SQUARE_FAMILIES) + 1000), SQUARE_FAMILIES);
+        assert_eq!(scratch_families(FREED_AT + 1), 0);
     }
 
     #[test]
@@ -450,6 +450,6 @@ mod tests {
         assert!(!cramped(8, 1, 7));
         assert!(cramped(8, 1, 8));
         // Past the square's most is `past`'s, asked first.
-        assert!(past(1, SQUARE_OCTETS));
+        assert!(past(1, SQUARE_FAMILIES));
     }
 }

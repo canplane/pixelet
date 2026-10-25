@@ -397,17 +397,17 @@ pub fn square(fresh: &mut [u32], lane: &mut [u32], scratch: &mut [u32], place: [
 /// (`square`), its ways' tree built
 /// into `pool`, its heap words then its data words, a level at a time as a
 /// GPU's workgroup builds it (pxl-shader `ways_tree_cs`,
-/// `ways::tree`), its octets taken in order from octet `from`, its root's,
-/// octet 0 being none's: the octets it took, and those it holds once
+/// `ways::tree`), its families taken in order from family `from`, its root's,
+/// family 0 being none's: the families it took, and those it holds once
 /// folded; `u32::MAX` both where `pool` has too few or it takes more than
-/// `ways::tree::SQUARE_OCTETS`.
+/// `ways::tree::SQUARE_FAMILIES`.
 pub fn tree(lane: &[u32], scratch: &[u32], of: ways::tree::Of, pool: &mut [u32], from: u32) -> [u32; 2] {
     use ways::tree::{self as t, Lane};
     let (square, runs) = (Fresh { ground: lane, base: 0 }, Scratch { words: scratch, at: 0 });
     let room = pool.len() as u32 / 16;
     let mut p = Lane(pool);
     t::root(&mut p, of, 8 * from);
-    // Each level's candidates, the octets the level over it took.
+    // Each level's candidates, the families the level over it took.
     let mut levels = [[0u32; 2]; crate::LEAF_CELL as usize + 1];
     let (mut b, mut n, mut taken) = (8 * from, 8, 1);
     let mut zoom = 0;

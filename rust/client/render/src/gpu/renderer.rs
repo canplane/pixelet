@@ -146,15 +146,15 @@ pub struct GroundSquares<'a> {
     /// the module's memory (`joined_cs`; pxl-spec-core
     /// `window::EYE_JOINED_WORDS`).
     pub joined: u32,
-    /// The ways' pool's octets at first and at most (pxl-kernel domain/layer/terrain/param.rs
+    /// The ways' pool's families at first and at most (pxl-kernel domain/layer/terrain/param.rs
     /// `WAYS_POOL_BYTES`): it starts at the first and doubles each time a
-    /// build runs out, never past the most, nor `ways::tree::POOL_OCTETS`
+    /// build runs out, never past the most, nor `ways::tree::POOL_FAMILIES`
     /// (`GroundBuffers::grow`).
     pub pool: [u32; 2],
-    /// The octets each handed square's scratch holds a tree of, at first and
+    /// The families each handed square's scratch holds a tree of, at first and
     /// at most (pxl-kernel domain/scene/param.rs `WAYS_SCRATCH_BYTES`): it starts at the
     /// first and doubles each time a build outgrows it, never past the most,
-    /// nor `ways::tree::SQUARE_OCTETS` (`GroundBuffers::grow_scratch`).
+    /// nor `ways::tree::SQUARE_FAMILIES` (`GroundBuffers::grow_scratch`).
     pub scratch: [u32; 2],
     /// A read's records' room at first, in bytes: every read's is doubled
     /// past a square's records that outgrew it, up to
@@ -164,7 +164,7 @@ pub struct GroundSquares<'a> {
 
 /// How a square's fill landed: its cells are back in every case.
 pub enum Landing<'a> {
-    /// Its ways' tree built: the octets it holds, their count first, a
+    /// Its ways' tree built: the families it holds, their count first, a
     /// record each (pxl-spec-core `ways::tree::lay`).
     Built(&'a [u32]),
     /// To be filled again, for want of room the renderer grows: its tree not
@@ -212,7 +212,7 @@ pub struct Cast<'a> {
 
 /// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it lives: its
 /// heap and data lanes, unwritten until the page replays the turn, the room
-/// either has before it grows, the revision they are at, and the octets
+/// either has before it grows, the revision they are at, and the families
 /// written since `since`, the revision they were last handed at, by their
 /// first slots (`GpuLanes`).
 pub struct Overwrites<'a> {
@@ -497,20 +497,20 @@ struct GroundBuffers {
     record_mapping: Box<[u32; READS]>,
     record_bytes: u32,
     /// What each read's square was built in, indexed by `Short`: the pool's
-    /// octets and the octets a square's scratch held (`ran_out`).
+    /// families and the families a square's scratch held (`ran_out`).
     built_in: [[u32; 2]; READS],
     /// Whether a build ran out of the pool, or of the scratch, since it last
     /// grew, indexed by `Short` (`grow`, `grow_scratch`).
     ran_out: [bool; 2],
-    /// The ways' pool, which the cast reads, its octets and its free stack;
-    /// and the handed squares' scratch, the octets each square's holds a
+    /// The ways' pool, which the cast reads, its families and its free stack;
+    /// and the handed squares' scratch, the families each square's holds a
     /// tree of (`ways::tree::scratch_words`), whose records each read copies
     /// in the frame they are built: nothing in it outlives its frame.
     pool: u32,
-    octets: u32,
+    families: u32,
     stack: u32,
     scratch: u32,
-    scratch_octets: u32,
+    scratch_families: u32,
     /// Each slot's number, `bound_cs`'s level and `ways_cs`'s pass, at a
     /// dynamic offset of their groups.
     slots: u32,
@@ -523,10 +523,10 @@ struct GroundBuffers {
     ways_built: Built,
     ways_group: u32,
     /// A re-filled square's old ways' tree given back, its new one built,
-    /// the octets the build gave back pushed (pxl-spec-core `ways::tree`):
+    /// the families the build gave back pushed (pxl-spec-core `ways::tree`):
     /// each pass and its group, over the ways' pool, heap words then data
     /// words (`pool_bytes`), its free stack, the count taken then the ids,
-    /// octet 0 never among them, a word an octet, and each handed square's
+    /// family 0 never among them, a word a family, and each handed square's
     /// scratch past its build (`ways::tree::FREED_AT`).
     free_built: Built,
     free_group: u32,
@@ -536,41 +536,41 @@ struct GroundBuffers {
     freed_group: u32,
 }
 
-/// The ways' pool of `octets` on the GPU, in bytes: a slot two words,
-/// eight an octet. Its free stack is a word an octet: the count taken, then
-/// every octet's id but octet 0's, every octet free but octet 0 as WebGPU
+/// The ways' pool of `families` on the GPU, in bytes: a slot two words,
+/// eight a family. Its free stack is a word a family: the count taken, then
+/// every family's id but family 0's, every family free but family 0 as WebGPU
 /// makes it, zeroed (pxl-shader `TAKEN`, `id`), so nothing is written to
 /// start it, nor to grow it.
-const fn pool_bytes(octets: u32) -> u32 {
-    octets * ways::tree::OCTET_WORDS * 4
+const fn pool_bytes(families: u32) -> u32 {
+    families * ways::tree::FAMILY_WORDS * 4
 }
 const _: () = assert!(
-    crate::frame::shader::floor::fits(pool_bytes(ways::tree::POOL_OCTETS) as u64, true),
+    crate::frame::shader::floor::fits(pool_bytes(ways::tree::POOL_FAMILIES) as u64, true),
     "the ways' pool at its most binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// The ways' pool of `octets` and its free stack, zeroed: each copied
+/// The ways' pool of `families` and its free stack, zeroed: each copied
 /// from as it grows, and into.
-fn pool_buffers(g: &Gpu, octets: u32) -> (u32, u32) {
+fn pool_buffers(g: &Gpu, families: u32) -> (u32, u32) {
     let usage = buffer_usage::STORAGE | buffer_usage::COPY_SRC | buffer_usage::COPY_DST;
-    (g.buffer(pool_bytes(octets), usage), g.buffer(word_bytes(octets as usize), usage))
+    (g.buffer(pool_bytes(families), usage), g.buffer(word_bytes(families as usize), usage))
 }
 
-/// The handed squares' scratch, each square's for a tree of `octets`, in
+/// The handed squares' scratch, each square's for a tree of `families`, in
 /// bytes: `HANDED` of them, every square's alike, so each finds its own off
 /// the buffer's length (pxl-spec-core fill.rs `scratch_at`).
-const fn scratch_bytes(octets: u32) -> u32 {
-    HANDED * ways::tree::scratch_words(octets) * 4
+const fn scratch_bytes(families: u32) -> u32 {
+    HANDED * ways::tree::scratch_words(families) * 4
 }
 const _: () = assert!(
-    crate::frame::shader::floor::fits(scratch_bytes(ways::tree::SQUARE_OCTETS) as u64, true),
+    crate::frame::shader::floor::fits(scratch_bytes(ways::tree::SQUARE_FAMILIES) as u64, true),
     "the scratch at its most binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// The handed squares' scratch, each square's for a tree of `octets`,
+/// The handed squares' scratch, each square's for a tree of `families`,
 /// which its records are copied out of.
-fn scratch_buffer(g: &Gpu, octets: u32) -> u32 {
-    g.buffer(scratch_bytes(octets), buffer_usage::STORAGE | buffer_usage::COPY_SRC)
+fn scratch_buffer(g: &Gpu, families: u32) -> u32 {
+    g.buffer(scratch_bytes(families), buffer_usage::STORAGE | buffer_usage::COPY_SRC)
 }
 
 /// What a build may run out of, each grown as builds do: the ways' pool
@@ -595,7 +595,7 @@ fn short_of(n: u32) -> Option<Short> {
 }
 
 /// What a build that ran out of the pool or the scratch does, built in one
-/// of `built` octets, the one it ran out of now of `octets`, at most `most`.
+/// of `built` families, the one it ran out of now of `families`, at most `most`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RanOut {
     /// It grew since: built again, as the larger may hold it.
@@ -612,10 +612,10 @@ enum RanOut {
 /// judged against what it was built in, it grows it no further and is
 /// refused only by it at its most. The pool's and the scratch's alike,
 /// each against its own (`Short`).
-fn ran_out(built: u32, octets: u32, most: u32) -> RanOut {
-    if built < octets {
+fn ran_out(built: u32, families: u32, most: u32) -> RanOut {
+    if built < families {
         RanOut::Again
-    } else if octets < most {
+    } else if families < most {
         RanOut::Grow
     } else {
         RanOut::Refused
@@ -644,32 +644,32 @@ impl GroundBuffers {
         self.freed_group = g.bind_group(self.freed_built.layouts[0], &[buffer_entry(0, scratch), buffer_entry(1, stack)]);
     }
 
-    /// The ways' pool twice as large, never past `most` octets, once a
+    /// The ways' pool twice as large, never past `most` families, once a
     /// build ran out of it (`read_back`): its heap words and its stack
     /// copied where they were, its data words to the new data's first, so
     /// every id a tree or a read in flight names holds what it held, and the
-    /// stack's slots past the old hold the new octets free (pxl-shader
+    /// stack's slots past the old hold the new families free (pxl-shader
     /// `TAKEN`). Ahead of the turn's squares, so their builds and the cast
     /// read the new one; the cast's groups follow its id (`prepare`).
     fn grow(&mut self, g: &Gpu, most: u32) {
-        let octets = (2 * self.octets).min(most).min(ways::tree::POOL_OCTETS);
-        if octets <= self.octets {
+        let families = (2 * self.families).min(most).min(ways::tree::POOL_FAMILIES);
+        if families <= self.families {
             return;
         }
-        let (pool, stack) = pool_buffers(g, octets);
-        let half = |octets: u32| pool_bytes(octets) / 2;
+        let (pool, stack) = pool_buffers(g, families);
+        let half = |families: u32| pool_bytes(families) / 2;
         let e = g.encoder();
-        g.copy_buffer(e, (self.pool, 0), (pool, 0), half(self.octets));
-        g.copy_buffer(e, (self.pool, half(self.octets)), (pool, half(octets)), half(self.octets));
-        g.copy_buffer(e, (self.stack, 0), (stack, 0), word_bytes(self.octets as usize));
+        g.copy_buffer(e, (self.pool, 0), (pool, 0), half(self.families));
+        g.copy_buffer(e, (self.pool, half(self.families)), (pool, half(families)), half(self.families));
+        g.copy_buffer(e, (self.stack, 0), (stack, 0), word_bytes(self.families as usize));
         g.submit(e);
         release(self.pool);
         release(self.stack);
-        (self.pool, self.stack, self.octets) = (pool, stack, octets);
+        (self.pool, self.stack, self.families) = (pool, stack, families);
         self.ways_groups(g);
     }
 
-    /// Each square's tree room in the scratch twice as many octets, never
+    /// Each square's tree room in the scratch twice as many families, never
     /// past `most`, once a build outgrew it (`read_back`); its runs stay as
     /// they are (`window::TREE_AT`), so the buffer grows by less than
     /// twice, 1.00 MiB to 1.33, 2.00, 3.33, 6.00, 11.33 and 15.54 from the
@@ -679,13 +679,13 @@ impl GroundBuffers {
     /// grows it, and each read carries its own buffer. Ahead of the turn's
     /// squares, so their passes lay theirs out by the new length.
     fn grow_scratch(&mut self, g: &Gpu, most: u32) {
-        let octets = (2 * self.scratch_octets).min(most).min(ways::tree::SQUARE_OCTETS);
-        if octets <= self.scratch_octets {
+        let families = (2 * self.scratch_families).min(most).min(ways::tree::SQUARE_FAMILIES);
+        if families <= self.scratch_families {
             return;
         }
-        let scratch = scratch_buffer(g, octets);
+        let scratch = scratch_buffer(g, families);
         release(self.scratch);
-        (self.scratch, self.scratch_octets) = (scratch, octets);
+        (self.scratch, self.scratch_families) = (scratch, families);
         self.ways_groups(g);
     }
 
@@ -938,8 +938,8 @@ impl RaysPass {
     /// go once handed; whether or not an eye casts, as a tile's cells are
     /// no eye's.
     fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: &mut GroundSquares) {
-        let octets = ground.pool[0].min(ground.pool[1]).min(ways::tree::POOL_OCTETS);
-        let scratch_octets = ground.scratch[0].min(ground.scratch[1]).clamp(1, ways::tree::SQUARE_OCTETS);
+        let families = ground.pool[0].min(ground.pool[1]).min(ways::tree::POOL_FAMILIES);
+        let scratch_families = ground.scratch[0].min(ground.scratch[1]).clamp(1, ways::tree::SQUARE_FAMILIES);
         let gb = self.ground.get_or_insert_with(|| {
             let buffer = |size: u32, usage: u32| g.buffer(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
@@ -954,9 +954,9 @@ impl RaysPass {
             for k in 0..=LEVELS {
                 g.write_buffer(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
             }
-            let scratch = scratch_buffer(g, scratch_octets);
+            let scratch = scratch_buffer(g, scratch_families);
             let (bound_built, ways_built) = (pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP), pipelines.build_compute(g, SHADER_WAYS, &BOUND_GROUP));
-            let (pool, stack) = pool_buffers(g, octets);
+            let (pool, stack) = pool_buffers(g, families);
             let free_built = pipelines.build_compute(g, SHADER_WAYS_FREE, &compute::WAYS_FREE_GROUP);
             let tree_built = pipelines.build_compute(g, SHADER_WAYS_TREE, &compute::WAYS_TREE_GROUP);
             let freed_built = pipelines.build_compute(g, SHADER_WAYS_FREED, &compute::WAYS_FREED_GROUP);
@@ -976,11 +976,11 @@ impl RaysPass {
                 built_in: [[0; 2]; READS],
                 record_bytes: (ground.records.next_multiple_of(4)).clamp(word_bytes(1 + ways::tree::RECORD_WORDS as usize), ways::tree::RECORDS_BYTES),
                 pool,
-                octets,
+                families,
                 stack,
                 ran_out: [false; 2],
                 scratch,
-                scratch_octets,
+                scratch_families,
                 slots,
                 heights_built,
                 heights_group,
@@ -1189,17 +1189,17 @@ impl RaysPass {
         }
         let overwrites_moved = c.overwrite_revision != Some(o.revision);
         if overwrites_moved {
-            // Held at `since`: the octets written after it alone, a record
+            // Held at `since`: the families written after it alone, a record
             // each, where the stream has room for them all; else both lanes
             // whole, read where they live, two records however large.
-            fn octet(lane: &[u32], first: u32) -> &[u32] {
+            fn family(lane: &[u32], first: u32) -> &[u32] {
                 &lane[first as usize..first as usize + 8]
             }
-            let listed = |lane: &[u32]| o.written.iter().map(|&f| write_buffer_bytes(bytes(octet(lane, f)))).sum::<usize>();
+            let listed = |lane: &[u32]| o.written.iter().map(|&f| write_buffer_bytes(bytes(family(lane, f)))).sum::<usize>();
             if c.overwrite_revision == Some(o.since) && crate::gpu::api::room(listed(o.heap) + listed(o.data)) {
                 for &first in o.written {
-                    g.write_buffer(c.overwrites, word_bytes(first as usize), bytes(octet(o.heap, first)));
-                    g.write_buffer(c.overwrites, word_bytes(o.room + first as usize), bytes(octet(o.data, first)));
+                    g.write_buffer(c.overwrites, word_bytes(first as usize), bytes(family(o.heap, first)));
+                    g.write_buffer(c.overwrites, word_bytes(o.room + first as usize), bytes(family(o.data, first)));
                 }
             } else {
                 g.upload_buffer(c.overwrites, 0, bytes(o.heap));
@@ -1359,7 +1359,7 @@ impl RaysPass {
     fn grids(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
         let Some(c) = self.ground.as_mut().filter(|c| c.fresh_len != 0) else { return false };
         let pass = g.compute_pass(encoder, stamp.pass());
-        // A re-filled square's old ways' octets given back, off its root word
+        // A re-filled square's old ways' families given back, off its root word
         // before its build writes another (pxl-spec-core `ways::tree`).
         g.set_pipeline(pass, c.free_built.pipeline);
         g.set_bind_group(pass, 0, c.free_group, &[]);
@@ -1423,7 +1423,7 @@ impl RaysPass {
     /// timeline semaphore) is the wake.
     fn read_back(&mut self, g: &Gpu, ground: &mut GroundSquares) {
         let (landed, joined) = (&mut *ground.landed, ground.joined);
-        let most = [ground.pool[1].min(ways::tree::POOL_OCTETS), ground.scratch[1].min(ways::tree::SQUARE_OCTETS)];
+        let most = [ground.pool[1].min(ways::tree::POOL_FAMILIES), ground.scratch[1].min(ways::tree::SQUARE_FAMILIES)];
         // The fold, once its mapping is free: a frame-old copy reads safely,
         // as an entry answers only for the block whose key it holds.
         if let Some(c) = self.cast.as_mut().filter(|c| c.joined_back && *c.joined_mapping & DONE != 0) {
@@ -1455,11 +1455,11 @@ impl RaysPass {
             c.asked[s as usize].ticket = 0;
             let room = &c.record_rooms[k];
             let n = room.first().copied().unwrap_or(0);
-            let words = 1 + n.min(ways::tree::SQUARE_OCTETS) * ways::tree::RECORD_WORDS;
+            let words = 1 + n.min(ways::tree::SQUARE_FAMILIES) * ways::tree::RECORD_WORDS;
             let landing = if n == ways::tree::NONE {
                 Landing::Refused
             } else if let Some(short) = short_of(n) {
-                let (i, now) = (short as usize, [c.octets, c.scratch_octets]);
+                let (i, now) = (short as usize, [c.families, c.scratch_families]);
                 match ran_out(c.built_in[k][i], now[i], most[i]) {
                     RanOut::Again => Landing::Again,
                     RanOut::Grow => {
@@ -1492,11 +1492,11 @@ impl RaysPass {
             free = k + 1;
             c.room(g, k);
             g.copy_buffer(e, (c.ground, s * SQUARE_BYTES + COLUMNS_AT * 4), (c.reads[k], 0), BACK_WORDS * 4);
-            let sb = c.scratch_octets;
+            let sb = c.scratch_families;
             let records = (h * ways::tree::scratch_words(sb) + ways::tree::records_at(sb)) as usize;
             let words = c.record_rooms[k].len().min((1 + sb * ways::tree::RECORD_WORDS) as usize);
             g.copy_buffer(e, (c.scratch, word_bytes(records)), (c.record_reads[k], 0), word_bytes(words));
-            (c.held[k], c.built_in[k], taken[k]) = ((s, c.asked[s as usize].ticket), [c.octets, sb], true);
+            (c.held[k], c.built_in[k], taken[k]) = ((s, c.asked[s as usize].ticket), [c.families, sb], true);
         }
         g.submit(e);
         for k in (0..READS).filter(|&k| taken[k]) {
