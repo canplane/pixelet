@@ -1,6 +1,7 @@
 // pxl-kernel/domain/scene/environment/cloud.rs
 
-//! The cumulus, drawn as decor is and held as decor is not. It claims no cell,
+//! The cumulus, the sky kind's (`spec/spec/asset/sky.json` `cumulus`), drawn
+//! as decor is and held as decor is not. It claims no cell,
 //! so nothing is built around it and a tower stands through it; it is no
 //! layer and no window's square holds it. It is laid on the field's own map, which the
 //! wind carries (`pxl-spec-core cloud.rs` `drift`): a block of cells there
@@ -14,6 +15,7 @@ use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
 use pxl_spec::asset::decor::DECORS;
 use pxl_spec::asset::ingested::Asset;
+use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
 use pxl_spec_core::cloud::{drift, lattice_hash, CUMULUS_KM, WIND};
@@ -35,8 +37,8 @@ use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::load_image;
 use crate::sys::load::Load;
 
-const VARIANTS: [Asset; 3] = [Asset::sky_cloud_cumulus_1_glb, Asset::sky_cloud_cumulus_2_glb, Asset::sky_cloud_stratus_glb];
-const SKIN: Asset = Asset::sky_cloud_white_png;
+/// Its models, a cloud each one of them.
+const VARIANTS: [Asset; cumulus::models.len()] = cumulus::models;
 
 pub const MODELS_MAX: usize = VARIANTS.len();
 
@@ -106,7 +108,7 @@ fn clouds() -> &'static mut Clouds {
 /// Each variant's draw group: its mesh, 0 while it loads, its skin and its extent.
 pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<pxl_render::gpu::api::Image>, [f32; 3])> {
     let models = crate::domain::query::model::models();
-    let skin = load_image(Load::Asset(SKIN));
+    let skin = load_image(Load::Asset(cumulus::skin));
     clouds().models.iter().zip(VARIANTS).enumerate().map(move |(k, (m, asset))| {
         let mesh = m.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle);
         (FIRST_GROUP + k, mesh, skin, extent(asset).map(|e| e as f32))

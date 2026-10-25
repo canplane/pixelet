@@ -1,0 +1,31 @@
+{
+  "$doc": [
+    "The sky kind (id.json): what hangs in the sky, claiming no cell, so no",
+    "block is of it. Each by its files' paths under asset/content/; what a",
+    "path's bytes are is the asset ingest's (pxl_spec::asset::ingested)."
+  ],
+  "cumulus": {
+    "$doc": [
+      "The cumulus, drawn on the wind's moving field as decor is drawn, each",
+      "cloud one of its models (pxl-kernel domain/scene/environment/cloud.rs).",
+      "Quaternius, CC0."
+    ],
+    "models": {
+      "$type": "crate::asset::ingested::Asset",
+      "$value": ["sky/cloud/cumulus_1.glb", "sky/cloud/cumulus_2.glb", "sky/cloud/stratus.glb"]
+    },
+    "skin": {
+      "$type": "crate::asset::ingested::Asset",
+      "$value": "sky/cloud/white.png"
+    }
+  },
+  "moon": {
+    "$doc": [
+      "The Moon's near side, the picture the sky draws it with (NASA)."
+    ],
+    "picture": {
+      "$type": "crate::asset::ingested::Asset",
+      "$value": "sky/moon.png"
+    }
+  }
+}

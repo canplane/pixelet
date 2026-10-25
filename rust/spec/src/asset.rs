@@ -2,7 +2,7 @@
 
 //! The content library: every asset the catalog declares
 //! (`spec/spec/asset/`), each a definition of a kind — the cubes and their
-//! colors, the decors, the marker, the actors — numbered by its id, its kind
+//! colors, the decors, the marker, the actors, the sky — numbered by its id, its kind
 //! over its shape (`id`), and the shipped files a definition references
 //! (`ingested`). The texture pack is the cube kind's: which of its tiles a
 //! cube wears on each face. A cube with no image still draws as its catalog
@@ -23,6 +23,8 @@ pub mod id;
 #[path = "asset/ingested.spec.rs"]
 pub mod ingested;
 pub mod marker;
+#[path = "asset/sky.spec.rs"]
+pub mod sky;
 pub mod star;
 #[path = "asset/symbol.spec.rs"]
 pub mod symbol;

@@ -17,7 +17,6 @@ use xpute_guest::global::Global;
 
 use crate::profiler::frame::{DeviceSample, GpuSample};
 use pxl_render::gpu::api::OBJECT_OPS;
-use pxl_spec::asset::ingested::Asset;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
 use crate::domain::query::decor::asset::decor_assets;
@@ -134,7 +133,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         skins: &skins[..skin_cnt],
         cases: &cases[..case_cnt],
         pack: || load_image(Load::Pack),
-        moon: || load_image(Load::Asset(Asset::sky_moon_png)),
+        moon: || load_image(Load::Asset(pxl_spec::asset::sky::moon::picture)),
         earth: || load_image(EARTH),
         earth_tiles: EarthTiles {
             window,
