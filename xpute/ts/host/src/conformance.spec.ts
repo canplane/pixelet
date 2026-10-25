@@ -1,4 +1,4 @@
-// @xpute/conformance/guest.spec.ts
+// @xpute/host/conformance.spec.ts
 //
 // GENERATED from spec/conformance/guest.json — do not edit.
 //

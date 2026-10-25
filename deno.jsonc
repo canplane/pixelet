@@ -114,7 +114,6 @@
     "@xpute/kit/": "./xpute/ts/kit/src/",
     "@xpute/host/": "./xpute/ts/host/src/",
     "@xpute/gpu/": "./xpute/ts/gpu/src/",
-    "@xpute/conformance/": "./xpute/ts/conformance/src/",
 
     "@std/path": "jsr:@std/path@^1",
     "@std/jsonc": "jsr:@std/jsonc@^1",

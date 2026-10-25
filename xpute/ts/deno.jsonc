@@ -1,18 +1,18 @@
 {
-  // xpute's TypeScript, one workspace as rust/ is one Cargo workspace. Two
-  // kinds of member: kit, host and gpu are what a program links, and get a
-  // name and exports the day they are published; conformance is the host
-  // that proves the contract against every guest, and is never published.
-  // A package's own scripts sit beside its src/ (gpu/script/). What runs
-  // across the languages is the root's (../Makefile).
-  "workspace": ["kit", "host", "gpu", "conformance"],
+  // xpute's TypeScript, one workspace as rust/ is one Cargo workspace: kit,
+  // host and gpu, what a program links, each to get a name and exports the
+  // day it is published. A package's own scripts sit beside its src/
+  // (gpu/script/). What runs across the languages is the root's
+  // (../Makefile).
+  "workspace": ["kit", "host", "gpu"],
   "nodeModulesDir": "auto",
 
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno check kit/src/**/*.ts && deno check host/src/**/*.ts && deno check gpu/src/**/*.ts gpu/script/*.ts && deno check conformance/src/**/*.ts",
-    "test": "deno test -A kit/src && deno test -A host/src",
-    // The traces run against guests the root's test builds first.
-    "test:conformance": "deno test -A conformance/src",
+    "check": "deno fmt --check && deno lint && deno check kit/src/**/*.ts && deno check host/src/**/*.ts && deno check gpu/src/**/*.ts gpu/script/*.ts",
+    "test": "deno test -A kit/src && deno test -A --ignore=host/src/conformance.test.ts host/src",
+    // The host's run of the contract's traces against every guest, which the
+    // root's test builds first.
+    "test:conformance": "deno test -A host/src/conformance.test.ts",
     // The web host's test where it runs, in Chrome (gpu/script/web-gpu.ts).
     "test:gpu:web": "./gpu/script/web-gpu.ts",
     "fmt": "deno fmt",
@@ -31,7 +31,6 @@
     "@xpute/kit/": "./kit/src/",
     "@xpute/host/": "./host/src/",
     "@xpute/gpu/": "./gpu/src/",
-    "@xpute/conformance/": "./conformance/src/",
     "@std/assert": "jsr:@std/assert@^1",
     "@std/path": "jsr:@std/path@^1"
   },

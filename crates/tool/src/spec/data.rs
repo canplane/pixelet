@@ -93,7 +93,7 @@ const DATA_SPECS: [DataSpec; 25] = [
     DataSpec {
         json: "xpute/spec/conformance/guest.json",
         uses: &[],
-        ts: Some("xpute/ts/conformance/src/guest.spec.ts"),
+        ts: Some("xpute/ts/host/src/conformance.spec.ts"),
         rs: Some("xpute/rust/conformance/src/guest.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
@@ -575,7 +575,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 ("apps/client/src/", "@pxl/client/"),
                 ("xpute/ts/host/src/", "@xpute/host/"),
                 ("xpute/ts/gpu/src/", "@xpute/gpu/"),
-                ("xpute/ts/conformance/src/", "@xpute/conformance/"),
             ]
             .iter()
             .find_map(|(dir, name)| ts_path.strip_prefix(dir).map(|p| format!("{name}{p}")))

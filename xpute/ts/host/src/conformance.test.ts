@@ -1,9 +1,9 @@
-// @xpute/conformance/trace.test.ts
+// @xpute/host/conformance.test.ts
 
 /**
  * Runs the traces under spec/conformance/ against every guest, Rust or
  * C++, native or WebAssembly, through this runtime's host. Build the guests
- * first (`deno task build`): Cargo for Rust, cpp/Makefile for C++.
+ * first (`make build` at xpute's root): Cargo for Rust, cpp/Makefile for C++.
  */
 
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
@@ -19,7 +19,7 @@ import { key as directory_key } from "@xpute/host/ipc/directory.spec.ts";
 import * as frame from "@xpute/host/ipc/frame.ts";
 import { Ring } from "@xpute/host/ipc/ring.ts";
 import { each_record } from "@xpute/host/ipc/stream.ts";
-import { cmd, key, MEMORY_BYTES } from "./guest.spec.ts";
+import { cmd, key, MEMORY_BYTES } from "@xpute/host/conformance.spec.ts";
 
 const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
 /** A relative CARGO_TARGET_DIR is cargo's, which the root's tasks run from rust/. */
