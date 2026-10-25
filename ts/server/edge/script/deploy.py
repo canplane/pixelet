@@ -19,18 +19,19 @@ import urllib.request
 from pathlib import Path
 
 EDGE = Path(__file__).resolve().parent.parent
-def workspace_of(start):
-    """The TypeScript workspace over `start`: the nearest directory up whose
-    deno.jsonc lists members, as Deno itself finds it. The repository holds
-    it, so this works in a tree copied without .git."""
+
+
+def repo_of(start):
+    """The repository over `start`: the nearest directory up holding the
+    TypeScript workspace's manifest, ts/deno.jsonc, as pxl-tool finds it by
+    its own manifest. It works in a tree copied without .git."""
     for d in [start, *start.parents]:
-        f = d / "deno.jsonc"
-        if f.is_file() and re.search(r'"workspace":\s*\[\s*"', f.read_text()):
+        if (d / "ts" / "deno.jsonc").is_file():
             return d
-    sys.exit(f"no TypeScript workspace over {start}")
+    sys.exit(f"no repository over {start}")
 
 
-REPO = workspace_of(EDGE).parent
+REPO = repo_of(EDGE)
 NUMBER = os.environ.get("PXL_BUILD_NUMBER")
 # The panics' `#n` → path table the page's build wrote beside its guest.
 PATHS = REPO / "ts/app/web/src/guest.paths.json"

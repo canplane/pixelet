@@ -9,14 +9,14 @@
 set -eu
 
 edge=$(cd "$(dirname "$0")/.." && pwd)
-# The TypeScript workspace over the Worker: the nearest directory up whose
-# deno.jsonc lists members, as Deno finds it.
-ws=$edge
-until grep -Eq '"workspace": *\[ *("|$)' "$ws/deno.jsonc" 2>/dev/null; do
-  [ "$ws" != / ] || { echo "[stage] no TypeScript workspace over $edge" >&2; exit 1; }
-  ws=$(dirname "$ws")
+# The repository over the Worker: the nearest directory up holding the
+# TypeScript workspace's manifest, ts/deno.jsonc.
+repo=$edge
+until [ -f "$repo/ts/deno.jsonc" ]; do
+  [ "$repo" != / ] || { echo "[stage] no repository over $edge" >&2; exit 1; }
+  repo=$(dirname "$repo")
 done
-web="$ws/app/web"
+web="$repo/ts/app/web"
 
 deno task --cwd "$web" build
 rm -rf "$edge/dist"
