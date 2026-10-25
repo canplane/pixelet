@@ -71,7 +71,7 @@ pub fn stage_write() {
     // The camera grid's cell angle: the footprint a drawn block covers per
     // unit of distance, square on.
     let tau = crate::domain::view::lens::tau();
-    s[STAGE_AT::LOD_CELL] = crate::domain::view::lens::cell_angle(tau);
+    s[STAGE_AT::CELL] = crate::domain::view::lens::cell(tau);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::domain::scene::param::EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
     s[STAGE_AT::CORNER_AO] = if settings.ao == AoMode::corner { crate::domain::scene::param::AO_STRENGTH } else { 0.0 };
@@ -192,8 +192,8 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
             census: stat.census,
         },
         DeviceSample {
-            blocks: stat.blocks,
-            blocks_bytes: stat.block_bytes,
+            uploads: stat.uploads,
+            uploads_bytes: stat.upload_bytes,
             depth_bytes: stat.depth_bytes,
             pack_bytes: stat.pack_bytes,
             objects,
@@ -201,24 +201,9 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     );
 }
 
-struct Pass {
-    draw: bool,
-}
-
-static PASS: Global<Pass> = Global::new();
-
-fn pass() -> &'static mut Pass {
-    PASS.get(|| Pass { draw: false })
-}
-
-pub fn take_draw() -> bool {
-    core::mem::take(&mut pass().draw)
-}
-
 /// The scene's turn, `focus` and `heading` the camera's as the turn hands
 /// them (pxl-kernel turn.rs `scene_tick`), for the world gizmo.
 pub fn visible_step(ctx: &mut TickContext, focus: Option<pxl_spec::space::coord::q3::Q3>, heading: Option<f64>) {
-    let c = pass();
     let v = view();
 
     let anchor = sea_under_eye();
@@ -248,13 +233,17 @@ pub fn visible_step(ctx: &mut TickContext, focus: Option<pxl_spec::space::coord:
     });
     {
         let edits = crate::domain::layer::object::preview::current();
-        crate::domain::scene::decor::drawn::step(frame.eye, edits.hide, edits.scattered);
+        // Decor's records leave out only a decor: hidden, anything else is
+        // the rays' to cut, and its walk is kept.
+        let hide = edits
+            .hide
+            .filter(|&at| crate::domain::query::World::now().placed(at).is_some_and(|e| pxl_spec::block::object::object_value_is_decor(e.state)));
+        crate::domain::scene::decor::drawn::step(frame.eye, hide, edits.scattered);
         crate::domain::scene::environment::cloud::step(draw_list(), &frame, &ctx.budget);
     }
     crate::domain::scene::marker::step(ctx, &frame);
     crate::domain::scene::marker::draw(draw_list(), frame.eye);
     if draw {
-        c.draw = true;
         ctx.invalidate();
     }
 }

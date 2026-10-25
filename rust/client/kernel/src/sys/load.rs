@@ -19,7 +19,7 @@ pub enum LoadKind {
 /// earth layer's, under its version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Load {
-    Asset(u32),
+    File(u32),
     Sphere,
 }
 
@@ -30,7 +30,7 @@ const SPHERE: u32 = 1 << 16;
 impl Load {
     pub fn number(self) -> u32 {
         match self {
-            Load::Asset(n) => n,
+            Load::File(n) => n,
             Load::Sphere => SPHERE,
         }
     }
@@ -38,7 +38,7 @@ impl Load {
     pub fn of(number: u32) -> Option<Load> {
         match number {
             SPHERE => Some(Load::Sphere),
-            n if n < SPHERE => Some(Load::Asset(n)),
+            n if n < SPHERE => Some(Load::File(n)),
             _ => None,
         }
     }

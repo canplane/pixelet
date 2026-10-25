@@ -81,7 +81,7 @@ pub fn generate(write: bool) -> Result<(), String> {
     let stale: Vec<&str> = stale.iter().map(|o| o.path.as_str()).collect();
     if !stale.is_empty() {
         for s in &stale {
-            eprintln!("spec: {s} is not what its JSON writes — run `deno task spec`");
+            eprintln!("spec: {s} is not what its JSON writes — run `make spec`");
         }
         return Err(format!("{} stale", stale.len()));
     }

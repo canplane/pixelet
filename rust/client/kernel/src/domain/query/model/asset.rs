@@ -25,6 +25,8 @@ pub struct ModelHandle {
     pub model: u32,
     /// One per animation in file order, so a clip's number is its animation's index.
     pub clip_count: u32,
+    /// What it is drawn at to stand the height it was registered at.
+    pub scale: f32,
 }
 
 const IDENTITY: [f32; 16] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
@@ -239,6 +241,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
         Some(ModelHandle {
             model,
             clip_count: gltf.animations.len() as u32,
+            scale,
         })
     })
 }

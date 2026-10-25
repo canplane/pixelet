@@ -7,14 +7,14 @@
 // asset by its path and reads its key here; the bytes themselves are in the bucket.
 // Its order numbers each file below the asset root, from 1 (namespace/asset.ts).
 
-export interface IngestedAsset {
+export interface IngestedFile {
   key: string;
   bytes: number;
   /** ENU (x, y, z-up); absent for an image. */
   extent?: readonly [number, number, number];
 }
 
-export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
+export const INGESTED: Readonly<Record<string, IngestedFile>> = {
   "actor/kenney_cube_pets/beaver.glb": { key: "asset/20f91809e69c66625190eb02aebef9ab543f5cf5cb17b8211b1002330584bfac.glb", bytes: 149728, extent: [1.25, 1.84, 1.5] },
   "actor/kenney_cube_pets/bee.glb": { key: "asset/9d3116da6c22eabf0b46efeeec7fceae8fbd01e101fddd4e6746379ff851e192.glb", bytes: 164356, extent: [1.33, 1.29, 2.02] },
   "actor/kenney_cube_pets/bunny.glb": { key: "asset/94b654915d9de70071bcf0bfa13de379a3ba4fdfeb231f0fec49335232cbc821.glb", bytes: 131568, extent: [1.25, 1.33, 2.01] },

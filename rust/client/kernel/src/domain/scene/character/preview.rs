@@ -2,14 +2,14 @@
 
 //! Display cases for the variant picker: a character idling and spinning in
 //! place, drawn into the case's own canvas from far below the world. A case
-//! is a frame, holding its actor's instance: the variant's one registered
-//! model, which the instance scales to one unit tall, since the cases
+//! is a holder of its actor's instance: the variant's one registered model,
+//! which the instance's stance scales to one unit tall, since the cases
 //! compare silhouettes, not scale.
 
 use crate::domain::query::model::asset::{model_of, ModelHandle};
 use crate::domain::query::model::draw_list;
 use crate::domain::query::model::registry::Models;
-use crate::domain::scene::actor::{Actor, Pose};
+use crate::domain::scene::actor::{Actor, Stance};
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
 use crate::domain::scene::frame::Frame;
 use crate::sys::io::loader::{load_image, load_of};
@@ -30,7 +30,7 @@ struct Case {
     variant: CharacterVariant,
     actor: Option<Actor>,
     /// Where its actor stands, once held.
-    pose: Option<Pose>,
+    stance: Option<Stance>,
     model: Option<ModelHandle>,
     spin: f64,
 }
@@ -58,7 +58,7 @@ pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
         id,
         variant,
         actor: None,
-        pose: None,
+        stance: None,
         model: None,
         spin: 0.0,
     });
@@ -108,8 +108,8 @@ pub fn preview_step(ctx: &mut TickContext) {
         let (Some(_), Some(model)) = (&case.actor, &case.model) else { continue };
         case.spin += SPIN_RATE_RAD_S * ctx.delta;
         // The model as registered, the variant's height tall, at one unit.
-        let scale = crate::domain::query::model::models().get(model.model).map_or(1.0, |m| m.scale()) / case.variant.height_u as f32;
-        case.pose = Some(Pose {
+        let scale = model.scale / case.variant.height_u as f32;
+        case.stance = Some(Stance {
             at,
             rotation_z: case.spin as f32,
             scale,
@@ -126,8 +126,8 @@ pub fn preview_step(ctx: &mut TickContext) {
 pub fn preview_animate(draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
     let mut moved = false;
     for case in &mut cases().cases {
-        if let (Some(actor), Some(pose)) = (case.actor.as_mut(), case.pose) {
-            moved |= actor.tick(draw, models, frame, &pose);
+        if let (Some(actor), Some(stance)) = (case.actor.as_mut(), case.stance) {
+            moved |= actor.tick(draw, models, frame, &stance);
         }
     }
     moved
@@ -136,8 +136,8 @@ pub fn preview_animate(draw: &mut DrawList, models: &Models, frame: &Frame) -> b
 /// Each case's actor into the frame's list, where it stands.
 pub fn preview_draw(draw: &mut DrawList, models: &Models, eye: V3) {
     for case in &cases().cases {
-        if let (Some(actor), Some(pose)) = (&case.actor, case.pose) {
-            actor.draw(draw, models, &pose, eye);
+        if let (Some(actor), Some(stance)) = (&case.actor, case.stance) {
+            actor.draw(draw, models, &stance, eye);
         }
     }
 }

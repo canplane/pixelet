@@ -2,8 +2,8 @@
 
 //! Every file generated from `spec/`, written or checked.
 //!
-//!   deno task spec          # write every generated file
-//!   deno task check:spec    # fail where one on disk is not what its JSON writes
+//!   make spec          # write every generated file
+//!   make check-spec    # fail where one on disk is not what its JSON writes
 
 use std::process::ExitCode;
 

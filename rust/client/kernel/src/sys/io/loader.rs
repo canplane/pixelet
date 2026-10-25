@@ -67,7 +67,7 @@ impl Loader {
     fn at(&mut self, kind: LoadKind, load: Load) -> &mut Option<Entry> {
         let n = match load {
             Load::Sphere => return &mut self.sphere[kind as usize],
-            Load::Asset(n) => n as usize,
+            Load::File(n) => n as usize,
         };
         let row = &mut self.entries[kind as usize];
         if row.len() <= n {
@@ -95,7 +95,7 @@ pub fn catalog() -> Option<&'static Catalog> {
     if let Some(c) = READ.get(|| None).as_ref() {
         return Some(c);
     }
-    let entry = loader().at(LoadKind::Catalog, Load::Asset(CATALOG));
+    let entry = loader().at(LoadKind::Catalog, Load::File(CATALOG));
     if entry.is_none() {
         *entry = Some(Entry::Pending);
     }
@@ -104,7 +104,7 @@ pub fn catalog() -> Option<&'static Catalog> {
 
 /// The file `slot` names; none while the catalog loads.
 pub fn load_of(slot: Slot) -> Option<Load> {
-    catalog().map(|c| Load::Asset(c.file(slot)))
+    catalog().map(|c| Load::File(c.file(slot)))
 }
 
 pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
@@ -151,7 +151,7 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
     // By subject, as a stream's wants are said: the models, the images,
     // then the catalog, each the files by number and the sphere past them.
     for kind in [LoadKind::Gltf, LoadKind::Image, LoadKind::Catalog] {
-        let files = (0..l.entries[kind as usize].len() as u32).map(Load::Asset);
+        let files = (0..l.entries[kind as usize].len() as u32).map(Load::File);
         for load in files.chain([Load::Sphere]) {
             // The Earth's is opened under the version its source declares.
             if load == Load::Sphere && source::top().is_none() {

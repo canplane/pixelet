@@ -573,11 +573,11 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             .map(|n| n as u32)
             .ok_or(format!("{DECOR_JSON}: scatter.{key}"))
     };
-    let (block, kept) = (whole("block")?, whole("kept")?);
-    if !block.is_power_of_two() || kept < 2 {
-        return Err(format!("{DECOR_JSON}: scatter.block is a power of two and scatter.kept at least 2"));
+    let (patch, kept) = (whole("patch")?, whole("kept")?);
+    if !patch.is_power_of_two() || kept < 2 {
+        return Err(format!("{DECOR_JSON}: scatter.patch is a power of two and scatter.kept at least 2"));
     }
-    // A block's mean count: at the top all it bears, finer all but what the
+    // A patch's mean count: at the top all it bears, finer all but what the
     // zoom over it kept.
     let shares = [1.0, 1.0 - 1.0 / f64::from(kept)];
 
@@ -635,7 +635,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             value,
             doc: k.lines_at("$doc").unwrap_or_default(),
             seed: seed.to_string(),
-            counts: shares.map(|share| poisson_thresholds(density * f64::from(block * block) * share)),
+            counts: shares.map(|share| poisson_thresholds(density * f64::from(patch * patch) * share)),
             orientation: orientation.to_string(),
             on,
             scale_steps: scale_steps as i32,
@@ -649,12 +649,12 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
     let mut portable: Vec<String> = vec![String::new()];
     portable.extend(rs_doc(&scatter.lines_at("$doc").unwrap_or_default(), "", "///"));
     portable.extend([
-        format!("pub const BLOCK: u32 = {block};"),
+        format!("pub const PATCH: u32 = {patch};"),
         format!("pub const KEPT: u32 = {kept};"),
         String::new(),
-        "/// The most variants a kind has.".into(),
+        "/// The most variants a decor has.".into(),
         format!("pub const VARIANTS: usize = {variants_max};"),
-        "/// The most thresholds a kind's counts hold.".into(),
+        "/// The most thresholds a decor's counts hold.".into(),
         format!("pub const COUNTS: usize = {counts_max};"),
     ]);
     portable.extend(
@@ -669,7 +669,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    along_transport,",
             "}",
             "",
-            "/// A block's Poisson count as thresholds on a u32 draw: the k-th is",
+            "/// A patch's Poisson count as thresholds on a u32 draw: the k-th is",
             "/// ⌈P(N ≤ k) · 2^32⌉, as many as fall under 2^32, and a draw bears as many as",
             "/// it reaches (pxl-spec-core scatter.rs `Counts::of`).",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
@@ -688,7 +688,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    pub value: u32,",
             "    /// Its scatter: changing it reshuffles every one the ground grows.",
             "    pub seed: u32,",
-            "    /// A block's counts, born at the top zoom and born finer.",
+            "    /// A patch's counts, born at the top zoom and born finer.",
             "    pub counts: [Counts; 2],",
             "    pub orientation: Orientation,",
             "    /// The looks it may stand on, a bit each.",
@@ -696,7 +696,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    /// Its cell: a unit's zoom, this many coarser.",
             "    pub scale_steps: i32,",
             "    pub variants: u32,",
-            "    /// Each variant's box, in its kind's cells; none past `variants`.",
+            "    /// Each variant's box, in its decor's cells; none past `variants`.",
             "    pub sizes: [[u32; 3]; VARIANTS],",
             "}",
             "",

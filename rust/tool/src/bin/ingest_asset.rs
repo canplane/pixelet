@@ -1,11 +1,11 @@
 // pxl-tool/bin/ingest_asset.rs
 
-//! Every shipped asset, `asset/content/`, into the bucket's form, named by the
+//! Every shipped file, `asset/content/`, into the bucket's form, named by the
 //! SHA-256 of its bytes alone: served with a year's `max-age` and no purge, a
 //! changed file gets a new name, and where a file lies names nothing. What a
 //! catalog calls it, its path under `asset/content/`, is the table's to map.
 //!
-//!   deno task ingest:asset
+//!   ./script/tool.ts ingest asset
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

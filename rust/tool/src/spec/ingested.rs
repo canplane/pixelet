@@ -98,14 +98,14 @@ fn render_ts(rows: &[File], pack: &Pack) -> String {
 // asset by its path and reads its key here; the bytes themselves are in the bucket.
 // Its order numbers each file below the asset root, from 1 (namespace/asset.ts).
 
-export interface IngestedAsset {
+export interface IngestedFile {
   key: string;
   bytes: number;
   /** ENU (x, y, z-up); absent for an image. */
   extent?: readonly [number, number, number];
 }
 
-export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
+export const INGESTED: Readonly<Record<string, IngestedFile>> = {
 "#,
     );
     for r in rows {
