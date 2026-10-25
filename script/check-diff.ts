@@ -34,8 +34,8 @@ interface Package {
 }
 
 const metadata = new Deno.Command("cargo", {
-  args: ["metadata", "--no-deps", "--format-version", "1", "--manifest-path", "rust/Cargo.toml"],
-  cwd: root,
+  args: ["metadata", "--no-deps", "--format-version", "1"],
+  cwd: join(root, "rust"),
   stdout: "piped",
 }).outputSync();
 if (!metadata.success) throw new Error("cargo metadata failed");

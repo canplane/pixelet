@@ -56,7 +56,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Neither language's version is here. rust-toolchain.toml says the Rust and
+  # Neither language's version is here. rust/rust-toolchain.toml says the Rust and
   # rustup reads it on its own; .tool-versions says the Deno and setup-deno is
   # pointed at it. A job installs from a file rather than being told, so the
   # number is in one place.

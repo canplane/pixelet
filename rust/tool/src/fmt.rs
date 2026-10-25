@@ -11,7 +11,7 @@ use crate::root;
 pub fn formatted(path: &str, text: String) -> Result<String, String> {
     let mut cmd = if path.ends_with(".rs") {
         let mut c = Command::new("rustfmt");
-        c.args(["--edition", "2021", "--emit", "stdout", "--config-path"]).arg(root().join("rustfmt.toml"));
+        c.args(["--edition", "2021", "--emit", "stdout", "--config-path"]).arg(root().join("rust/rustfmt.toml"));
         c
     } else if path.ends_with(".ts") {
         let mut c = Command::new("deno");

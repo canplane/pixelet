@@ -45,7 +45,7 @@ fi
 
 mkdir -p "$WARPED_DIR"
 BAKE_BIN="${CARGO_TARGET_DIR:-$REPO_ROOT/rust/target}/server/elevation_shards"
-cargo build -q --manifest-path "$REPO_ROOT/rust/Cargo.toml" --profile server -p pxl-geo-bake --bin elevation_shards
+(cd "$REPO_ROOT/rust" && cargo build -q --profile server -p pxl-geo-bake --bin elevation_shards)
 SHARDS=$("$BAKE_BIN")
 
 # On its own descriptor: psql would read the list as its input.

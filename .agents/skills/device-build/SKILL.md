@@ -27,7 +27,7 @@ deno task sync:build-number
 ### Once per machine
 
 - Xcode with a signing team for a phone, CocoaPods, and the Rust targets,
-  which `rust-toolchain.toml` installs.
+  which `rust/rust-toolchain.toml` installs.
 - Node, as `ts/app/native/package.json`'s `engines` asks, on `PATH` for `pod
   install`, and named for Xcode's script phases in
   `ts/app/native/ios/.xcode.env.local` (`export NODE_BINARY=…`), which prebuild
@@ -102,7 +102,7 @@ xcrun simctl launch <id> me.plei.pixelet
   Opening the project in Android Studio rewrites Gradle's daemon criteria
   (`android/gradle/gradle-daemon-jvm.properties`) for its own Java 25, which
   outranks `JAVA_HOME`; prebuild again to restore them.
-- The Rust target `aarch64-linux-android`, which `rust-toolchain.toml`
+- The Rust target `aarch64-linux-android`, which `rust/rust-toolchain.toml`
   installs.
 
 ### Generate

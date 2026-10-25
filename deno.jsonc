@@ -24,9 +24,9 @@
       "dependencies": ["sync:build-number"]
     },
     // The `server` profile: a debug build's rasterizer is felt on every page.
-    "dev:geo": "./script/with-env.sh cargo run --manifest-path rust/Cargo.toml --profile server -p pxl-geo --",
-    "dev:api": "./script/with-env.sh cargo run --manifest-path rust/Cargo.toml --profile server -p pxl-api --",
-    "dev:tile": "./script/with-env.sh cargo run --manifest-path rust/Cargo.toml --profile server --features serve --bin serve_tiles --",
+    "dev:geo": "./script/tool.ts serve geo",
+    "dev:api": "./script/tool.ts serve api",
+    "dev:tile": "./script/tool.ts serve tile",
     "dev:native": "deno task --cwd ts/app/native start",
     // Measure the client here: the dev server's unbundled modules are not what ships.
     "preview": "deno task --cwd ts/app/web preview",
@@ -43,13 +43,13 @@
     "bake": "./script/tool.ts bake",
     "download": "./script/tool.ts download",
     // After any change under asset/content/:
-    "ingest:asset": "cargo run --manifest-path rust/Cargo.toml -p pxl-tool --bin ingest_asset",
+    "ingest:asset": "cd rust && cargo run -p pxl-tool --bin ingest_asset",
     // By hand, when ts/client/brand's symbol changes: its outline, which both
     // apps bundle. The page's icons are made by its build (ts/app/web build:brand).
-    "render:brand": "cargo run --manifest-path rust/Cargo.toml -p pxl-tool --bin render_brand -- --symbol",
+    "render:brand": "cd rust && cargo run -p pxl-tool --bin render_brand -- --symbol",
 
     // Made from the tree: the code generated from spec/, the kernel's module.
-    "spec": "cargo run -q --manifest-path rust/Cargo.toml -p pxl-tool --bin spec -- --write",
+    "spec": "cd rust && cargo spec --write",
     "build:wasm": "deno task --cwd ts/app/web build:wasm",
 
     // `check` is everything, and with `test` what passes before a push to
@@ -61,25 +61,25 @@
     "check:ship": "deno task check:web && deno task check:script && deno task check:rust && deno task check:spec && deno task --cwd ts/server/edge check:build",
     "check:style": "deno task check:fmt && deno task check:rules && deno task lint",
     "check:diff": "./script/check-diff.ts",
-    "check:fmt": "deno fmt --check && deno task --cwd ts fmt --check && deno task --cwd script fmt --check && cargo fmt --manifest-path rust/Cargo.toml --all --check",
+    "check:fmt": "deno fmt --check && deno task --cwd ts fmt --check && deno task --cwd script fmt --check && cd rust && cargo fmt --all --check",
     "check:web": "deno task --cwd ts/app/web check",
     // The tree's own scripts, which `deno run` runs unchecked.
     "check:script": "deno task --cwd script check && deno check --config ts/deno.jsonc ts/app/web/script/*.ts ts/server/edge/script/*.ts",
     // check:web never reaches the device's own modules.
-    "check:native": "deno task --cwd ts/app/native check && cargo clippy --manifest-path rust/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path rust/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings",
+    "check:native": "deno task --cwd ts/app/native check && cd rust && cargo lint-ios && cargo lint-android",
     "check:xpute": "make -C xpute -j8 check",
     // What ships: the kernel's module in both builds, and the servers with their tests' code.
-    "check:rust": "cargo clippy --manifest-path rust/Cargo.toml --target wasm32-unknown-unknown -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path rust/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings && cargo clippy --manifest-path rust/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-api -- -D warnings",
+    "check:rust": "cd rust && cargo lint-guest && cargo lint-guest-published && cargo lint-server",
     // What runs here alone: the tests' code, the bakes (the tile server's
     // feature with them, which only adds) and the tools.
-    "check:host": "cargo clippy --manifest-path rust/Cargo.toml --all-targets -p pxl-spec -p pxl-spec-core -p pxl-render -p pxl-kernel -p pxl-geo-bake -p pxl-tool --features pxl-geo-bake/serve -- -D warnings",
+    "check:host": "cd rust && cargo lint-host",
     "check:rules": "./script/check-rules.ts",
-    "check:spec": "cargo run -q --manifest-path rust/Cargo.toml -p pxl-tool --bin spec",
+    "check:spec": "cd rust && cargo spec",
     "test": "deno task test:client && deno task test:xpute && deno task test:rust",
     "test:client": "deno task --cwd ts/client test",
     "test:xpute": "make -C xpute -j8 test",
     // pxl-tool holds every model to the committed table, which has been wrong by hand before.
-    "test:rust": "cargo test --manifest-path rust/Cargo.toml -p pxl-spec -p pxl-spec-core -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path rust/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path rust/Cargo.toml -p pxl-geo-bake --features serve",
+    "test:rust": "cd rust && cargo test-host && cargo test-kernel-published && cargo test-bake-serve",
     "lint": "deno task --cwd ts lint && deno task --cwd script lint",
     "fmt": "deno fmt && deno task --cwd ts fmt && deno task --cwd script fmt",
 

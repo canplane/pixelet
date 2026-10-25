@@ -23,6 +23,7 @@
 //   ./ts/app/web/script/publish.ts override <shard> <kind> <version|->
 
 import { tileObject } from "@pxl/client/config/route.spec.ts";
+import { REPO } from "@pxl/client/script/import-map.ts";
 
 const BUCKET = "pixelet-tiles";
 const KINDS = ["terrain", "place", "division", "earth"];
@@ -128,7 +129,8 @@ async function servedNow(): Promise<Served> {
 /** The declaration pxl-geo-bake writes of a record (bin/declare_source.rs), refusing what a client would. */
 async function declared(record: Served): Promise<Uint8Array> {
   const child = new Deno.Command("cargo", {
-    args: ["run", "-q", "--manifest-path", "rust/Cargo.toml", "-p", "pxl-geo-bake", "--bin", "declare_source"],
+    args: ["run", "-q", "-p", "pxl-geo-bake", "--bin", "declare_source"],
+    cwd: `${REPO}/rust`,
     stdin: "piped",
     stdout: "piped",
     stderr: "inherit",

@@ -1,0 +1,20 @@
+# The workspace's own commands, run from rust/ as the root's tasks do, so
+# rustup reads rust-toolchain.toml beside them: what a check holds a change
+# to, what the tests run, and the generator.
+[alias]
+# The module as it ships, in both builds, and the servers with their tests' code.
+lint-guest = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "pxl-spec", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-wasm", "--", "-D", "warnings"]
+lint-guest-published = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "pxl-wasm", "--no-default-features", "--", "-D", "warnings"]
+lint-server = ["clippy", "--all-targets", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-api", "--", "-D", "warnings"]
+# What runs here alone: the tests' code, the bakes (the tile server's feature
+# with them, which only adds) and the tools.
+lint-host = ["clippy", "--all-targets", "-p", "pxl-spec", "-p", "pxl-spec-core", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-geo-bake", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve", "--", "-D", "warnings"]
+# The device's library, for an iPhone and an Android phone.
+lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-native", "--", "-D", "warnings"]
+lint-android = ["clippy", "--target", "aarch64-linux-android", "-p", "pxl-native", "--no-default-features", "--", "-D", "warnings"]
+# pxl-tool holds every model to the committed table, which has been wrong by hand before.
+test-host = ["test", "-p", "pxl-spec", "-p", "pxl-spec-core", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-geo-bake", "-p", "pxl-api", "-p", "pxl-tool"]
+test-kernel-published = ["test", "-p", "pxl-kernel", "--no-default-features"]
+test-bake-serve = ["test", "-p", "pxl-geo-bake", "--features", "serve"]
+# The code generated from spec/: `cargo spec` says what is stale, `cargo spec --write` writes it.
+spec = ["run", "-q", "-p", "pxl-tool", "--bin", "spec", "--"]

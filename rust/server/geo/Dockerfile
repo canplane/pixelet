@@ -2,9 +2,11 @@
 #
 # Build context is the repo root: docker build -f rust/server/geo/Dockerfile .
 
-# Must equal rust-toolchain.toml.
+# Must equal rust/rust-toolchain.toml; the build runs under the image's own
+# toolchain (RUSTUP_TOOLCHAIN), so rustup fetches none of the file's targets.
 FROM rust:1.98.1-slim-trixie AS build
 WORKDIR /src
+ENV RUSTUP_TOOLCHAIN=$RUST_VERSION
 
 COPY rust ./rust
 COPY xpute/rust ./xpute/rust
@@ -14,8 +16,8 @@ COPY xpute/rust ./xpute/rust
 # lock is outside the mount (`failed to unpack libm ... File exists`).
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/src/rust/target \
-    cargo build --manifest-path rust/Cargo.toml --profile server -p pxl-geo \
- && cp rust/target/server/pxl-geo /usr/local/bin/pxl-geo
+    cd rust && cargo build --profile server -p pxl-geo \
+ && cp target/server/pxl-geo /usr/local/bin/pxl-geo
 
 # No CA bundle or shell: the only connection is db-geo on the internal network, without TLS.
 FROM gcr.io/distroless/cc-debian12
