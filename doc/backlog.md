@@ -31,16 +31,6 @@ Nothing now.
 
 ## Parked, with the reason on file
 
-- **How the samples are drawn**, held until the user says the time is
-  right. On the iPhone 13 mini, four shapes over the same tiles and views: today's boxes, the same as masked faces, a ray a
-  pixel, and a bounded observation a cell — what the rule asks for, a cell
-  being an angular footprint and not a sample point. Each shape is built
-  whole on the CPU and whole on the GPU, one representation either way:
-  CPU or GPU is a question of the whole drawing, never of one kind of
-  thing sent to the other side. The steps a cast pays
-  are measured already, and where on the screen they lie
-  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md),
-  "the steps, measured").
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
   program WASI's calls translated into the contract's requests, which is what
   would let an existing program in. Not without one to build it against;
