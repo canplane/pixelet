@@ -61,7 +61,7 @@ const DATA_SPECS: [DataSpec; 25] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/spec/block/marker.json",
+        json: "spec/spec/asset/marker.json",
         uses: &[],
         ts: None,
         rs: Some("crates/spec/src/block/marker.spec.rs"),
@@ -71,7 +71,7 @@ const DATA_SPECS: [DataSpec; 25] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/spec/block/id.json",
+        json: "spec/spec/asset/id.json",
         uses: &[],
         ts: None,
         rs: Some("crates/spec/src/block/id.spec.rs"),

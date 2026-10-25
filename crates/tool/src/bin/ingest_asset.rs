@@ -77,7 +77,7 @@ fn run() -> Result<(), String> {
     // toward that color; the underground's looks are no Carto's, and a side,
     // a bottom and a color are not looks.
     let slots = pack::load(&raw_dir.join("cube"), &asset_dir.join("cube"))?;
-    let carto = pxl_tool::spec::block::ground_colors()?;
+    let carto = pxl_tool::spec::asset::ground_colors()?;
     let toward: BTreeMap<String, u32> = slots
         .iter()
         .filter_map(|i| match &i.slot {
@@ -131,7 +131,7 @@ fn run() -> Result<(), String> {
     if let Some(i) = slots.iter().find(|i| !tiles.contains(&format!("cube/{}", i.file))) {
         return Err(format!("{} names {}, which is not under asset/content/cube", i.label, i.file));
     }
-    let faces = table::faces(&tile_slots, &pxl_tool::spec::block::catalog()?)?;
+    let faces = table::faces(&tile_slots, &pxl_tool::spec::asset::catalog()?)?;
     let composed = pack::compose(&tiles.iter().map(|t| (t.clone(), shipped[t].as_slice())).collect::<Vec<_>>())?;
     let image_name = named("pack.webp", &composed.bytes);
     std::fs::write(out_dir.join(&image_name), &composed.bytes).map_err(|e| e.to_string())?;

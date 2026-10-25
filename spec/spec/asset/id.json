@@ -1,0 +1,13 @@
+{
+  "$doc": [
+    "An asset's id is a u16: its kind over which shape of that kind it is.",
+    "`id >> SHAPE_BITS` is the kind, the low bits the shape. The kind is what an",
+    "asset is drawn and struck as, and what its metadata is: a cube a meshed box",
+    "with none, decor a model with a variant, heading and scale, a marker drawn",
+    "flat to the camera from a design, as the pin someone puts up at a place.",
+    "A block, the instance standing in a cell of the world's grid, is stored",
+    "as its asset's id (pxl-spec block/object.rs)."
+  ],
+  "SHAPE_BITS": { "$value": 10, "$type": "u32" },
+  "KIND": { "$type": "u16", "cube": 0, "decor": 1, "marker": 2 }
+}

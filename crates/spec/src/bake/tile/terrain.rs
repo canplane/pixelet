@@ -41,7 +41,7 @@ pub const MAX_PACKET_BYTES: usize = {
 pub const WAYS_SQUARE_SEGMENTS: usize = pxl_spec_core::window::WAYS_SQUARE_SEGMENTS as usize;
 
 /// What a ground cell holds: the id of a cube of the ground's palette, a
-/// Carto look, which fits a byte (`block/cube.json`).
+/// Carto look, which fits a byte (`asset/cube.json`).
 pub type GroundId = u8;
 
 /// A tile's ground: in the bake the four looks a cell folds, `dx + 2·dy`, as

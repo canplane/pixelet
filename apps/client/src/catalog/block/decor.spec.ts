@@ -21,7 +21,7 @@
 // moved, and glTF fixes none, so a model must be made with it there. It may
 // reach a little past the box. A
 // kind's cell is a unit, a z24 cell, `scale_steps` zooms coarser (finer
-// where negative, as a marker's, block/marker.json), one for every variant,
+// where negative, as a marker's, marker.json), one for every variant,
 // since a placement lands on the cell before its variant is drawn. The
 // ground grows a kind only on its own looks, and no two kinds share one, so
 // two kinds' boxes never meet.

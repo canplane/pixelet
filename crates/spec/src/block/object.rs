@@ -1,10 +1,10 @@
 // pxl-spec/block/object.rs
 
 //! A block as the object layer stores it: a `u16` id, its kind over its shape
-//! (`block/id.json`). In the cube kind the byte range is the ground's palette,
+//! (`asset/id.json`). In the cube kind the byte range is the ground's palette,
 //! so a cube in a look stores the look's number, and past it is what only an
-//! object is: air and the placed colors (`block/cube.json`); the decor kind
-//! is the decors (`block/decor.json`), and the marker kind a label.
+//! object is: air and the placed colors (`asset/cube.json`); the decor kind
+//! is the decors (`asset/decor.json`), and the marker kind a label.
 
 #![allow(non_upper_case_globals)]
 
@@ -43,7 +43,7 @@ pub const MARKER: u32 = (Kind::marker as u32) << SHAPE_BITS;
 pub const MARK_STEPS: Zoom = 4;
 
 /// A marker's cell where the camera grid's cell is at `cell`: its scale on
-/// the grid (`block/marker.json`).
+/// the grid (`asset/marker.json`).
 pub const fn marker_cell(cell: Zoom) -> i32 {
     cell as i32 + MARKER_SCALE_STEPS as i32
 }
@@ -84,7 +84,7 @@ pub static decor_ids: LazyLock<Vec<DecorId>> = LazyLock::new(|| {
     ids
 });
 
-/// A cube of the catalog (`block/cube.json`): a look of the ground's palette,
+/// A cube of the catalog (`asset/cube.json`): a look of the ground's palette,
 /// or a color only an object takes; a player may place either.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Cube {

@@ -79,7 +79,7 @@ pub fn faces(slots: &[(u32, Slot)], groups: &[(String, Vec<String>)]) -> Result<
             }
         }
         if out.len() == before {
-            return Err(format!("the manifest's {slot:?} is no cube in spec/spec/block/cube.json"));
+            return Err(format!("the manifest's {slot:?} is no cube in spec/spec/asset/cube.json"));
         }
     }
     Ok(out)

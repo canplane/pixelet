@@ -1,7 +1,7 @@
 // pxl-kernel/domain/query/scatter.rs
 
 //! How the ground grows decor on its own: never stored, a pure function of
-//! each decor's seed (the catalog's, spec/spec/block/decor.json) and the
+//! each decor's seed (the catalog's, spec/spec/asset/decor.json) and the
 //! world as its one query answers it, so a cell grows the same wherever it
 //! is read and whichever layer holds what it stands on. It reads no tile:
 //! where it stands is its column's footing, the world's ray down it

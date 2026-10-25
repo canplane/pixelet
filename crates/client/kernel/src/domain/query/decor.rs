@@ -9,7 +9,7 @@
 //! may differ at a chunk's edge.
 //!
 //! Under it is the decors' runtime half, beside the catalog
-//! (spec/spec/block/decor.json): their models as they arrive (`assets`),
+//! (spec/spec/asset/decor.json): their models as they arrive (`assets`),
 //! and a decor thing struck by its model (`strike`).
 
 pub mod asset;

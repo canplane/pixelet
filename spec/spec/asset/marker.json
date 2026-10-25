@@ -1,10 +1,10 @@
 {
   "$doc": [
-    "How the marker id is shown: the marker kind's one shape, a label put up",
-    "at a place (cell/id.json). A marker's cell is the camera grid's at its",
+    "How the marker kind is shown: its one shape, the pin, the marker someone",
+    "puts up at a place (id.json). A marker's cell is the camera grid's at its",
     "scale, as a place's icon is, its own apart from the places' since a",
     "marker is drawn as its own design (pxl-spec block/object.rs",
-    "`marker_cell`). Per id where the class comes to hold more than one shape."
+    "`marker_cell`). Per id where the kind comes to hold more than one shape."
   ],
   "MARKER_SHOWN_FROM": {
     "$value": 14,

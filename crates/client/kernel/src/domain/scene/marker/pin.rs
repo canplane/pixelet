@@ -3,7 +3,7 @@
 //! The pins someone put up, as the object store holds them: each its words
 //! on a pill at its own cell, or where more than one stands in a pin's cell
 //! (`marker_cell`), their count at the cell's middle on a pin's pill in its
-//! colors turned over, the pins' own rule (`block/marker.json`); the one
+//! colors turned over, the pins' own rule (`asset/marker.json`); the one
 //! waiting for its words wherever it is.
 
 use core::hash::Hasher;
