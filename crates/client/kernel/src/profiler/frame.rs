@@ -130,7 +130,7 @@ pub struct FrameSample {
     pub heap: HeapSample,
     pub rings: RingSample,
     /// The most body slots out at once since the frame before
-    /// (io/body.rs `take_peak`).
+    /// (sys/io/body.rs `take_peak`).
     pub body_slots_peak: f64,
     /// Requests waiting for a credit, and out on one, by stream.
     pub waiting: [f64; STREAMS],
@@ -170,7 +170,7 @@ words!(FrameSample, FRAME::WORDS,
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
-pub const STREAMS: usize = crate::io::spec::STREAM_NAMES;
+pub const STREAMS: usize = crate::sys::io::spec::STREAM_NAMES;
 pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
 
 const _: () = assert!(
@@ -189,7 +189,7 @@ pub fn missed(f: &FrameSample) -> bool {
 
 /// Past even the hard ceiling: one step too big for the forward-progress waiver.
 pub fn overran(f: &FrameSample) -> bool {
-    f.tick_ms > f.budget_ms + crate::sched::tick::HARD_SLACK_MS
+    f.tick_ms > f.budget_ms + crate::sys::sched::tick::HARD_SLACK_MS
 }
 
 /// What the interval's turns ran past it, read off the interval and the

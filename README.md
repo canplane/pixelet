@@ -137,7 +137,7 @@ db-geo is filled by each source's `ingest` under `infra/geo/`, run by path as [i
 
 To measure the client, use `preview` (`localhost:4173`): the bundle as a deploy builds it, without the dev server's unbundled modules and hooks or the settings only a development build offers. The `profiler` setting opens the profiler's panel and records while it is open (`apps/client/src/shell/debug/profiler.tsx` `ProfilerPanel`), in either build.
 
-A development page puts two things in the browser console once the kernel has booted (`apps/client/src/shell/debug/console.ts`, installed by `shell/bootstrap.ts` under `__IS_DEV__`): `xpute`, the guest's doorbell, whose `cmd(command, ...args)` sends the kernel any command by its number with its arguments as the packet's fields, in order (`spec/client/kernel/abi/cmd.json` numbers them); and `pxl.profiler`, whose `report()` and `trace()` are the profiler panel's two exports.
+A development page puts two things in the browser console once the kernel has booted (`apps/client/src/shell/debug/console.ts`, installed by `shell/bootstrap.ts` under `__IS_DEV__`): `xpute`, the guest's doorbell, whose `cmd(command, ...args)` sends the kernel any command by its number with its arguments as the packet's fields, in order (`spec/client/kernel/domain/control/cmd.json` numbers them); and `pxl.profiler`, whose `report()` and `trace()` are the profiler panel's two exports.
 
 ### On a device
 
@@ -215,14 +215,16 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat. The kernel's are named as the chain is:
 
-| Where on the chain | `pxl-kernel` modules                                             |
-| ------------------ | ---------------------------------------------------------------- |
-| the top            | `turn` `door` `shell`                                            |
-| over the view      | `control`                                                        |
-| the chain          | `scene` `chunk` `view` `query` `layer`                           |
-| under everyone     | `io` `sched` `mem` `abi`                                         |
-| leaves             | `setting` `model` `asset` `decor` `billboard` `param` `approach` |
-| beside             | `profiler`                                                       |
+| Where                   | `pxl-kernel` modules                       |
+| ----------------------- | ------------------------------------------ |
+| the top                 | `turn` `door` `shell`                      |
+| `domain`, the two heads | `scene` `control`                          |
+| `domain`, the trunk     | `view` `query` `layer`                     |
+| `domain`, at its root   | `approach`, which both heads read; `chunk` |
+| `sys`, under everyone   | `io` `sched` `mem` `load`                  |
+| beside                  | `profiler`                                 |
+
+A leaf sits under its lowest reader: the settings under `view`, the models and decor under `query`, the billboards under `scene`, and each tuned number in a `param` beside the lowest part that reads it.
 
 One gitignored tree holds what the tree makes: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and under it `out/oven/` is what `dev:oven` bakes on demand, deleted at no cost. Scratch — logs, probes, diffs — goes in `tmp/`, which ignores itself, and is deleted when done. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 

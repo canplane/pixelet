@@ -4,31 +4,16 @@
 //! knows of WebAssembly, a browser or threads (pxl-wasm does), so the same
 //! code runs under `cargo test` and in the client's module.
 
-pub mod abi;
-pub mod approach;
-pub mod asset;
-pub mod billboard;
-pub mod chunk;
-pub mod control;
-pub mod decor;
+pub mod domain;
 pub mod door;
-pub mod io;
-pub mod layer;
-pub mod mem;
-pub mod model;
-pub mod param;
 pub mod profiler;
-pub mod query;
-pub mod scene;
-pub mod sched;
-pub mod setting;
 pub mod shell;
+pub mod sys;
 pub mod turn;
-pub mod view;
 
 use pxl_render::frame::draw::DrawList;
 
-use crate::scene::Scene;
+use crate::domain::scene::Scene;
 use xpute_guest::global::Global;
 
 pub struct Kernel {
@@ -55,14 +40,14 @@ pub fn kernel() -> &'static mut Kernel {
 /// None before the memory map is laid (`mem::section::map`), when nothing
 /// may take the heap.
 pub fn laid() -> Option<&'static mut Kernel> {
-    crate::mem::section::map().map(|_| kernel())
+    crate::sys::mem::section::map().map(|_| kernel())
 }
 
 impl Kernel {
     /// Split into fields so the scene and the draw list borrow at once. None
     /// before the memory map is laid.
     pub fn parts(&mut self) -> Option<(&mut Scene, &mut DrawList)> {
-        crate::mem::section::map()?;
+        crate::sys::mem::section::map()?;
         let Kernel { scene, draw } = self;
         Some((scene, draw))
     }
@@ -74,7 +59,3 @@ pub fn serial() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
-
-#[cfg(test)]
-#[path = "fixture.test.rs"]
-pub(crate) mod fixture;

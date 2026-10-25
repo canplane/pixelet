@@ -29,7 +29,7 @@ pub fn narrow(side2: f32, far2: f32, s: f32) -> bool {
 
 /// The camera grid as a frame lays it over the screen, worked out once,
 /// from the screen's tangents and τ (`of`), where the kernel writes the
-/// eye's words (pxl-kernel view/lens.rs `gpu_cast`, pxl-spec-core
+/// eye's words (pxl-kernel domain/view/lens.rs `gpu_cast`, pxl-spec-core
 /// `eye::GRID`): every thread of the cast reads it off them
 /// (pxl-shader `grid`), and the renderer sizes the cast's dispatches
 /// and its buffer off the same words, so no reader works any of it out

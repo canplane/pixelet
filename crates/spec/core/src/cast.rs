@@ -28,7 +28,7 @@ use crate::{axis, wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical
 /// axis: a drawn pixel's middle, its tangents the screen's half-angles'
-/// (pxl-kernel view/lens.rs `Lens`) scaled by where it lies on the screen,
+/// (pxl-kernel domain/view/lens.rs `Lens`) scaled by where it lies on the screen,
 /// as a projection puts it.
 pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f32) -> [f32; 3] {
     let d = [
@@ -327,7 +327,7 @@ pub fn kept_bounds((lo, hi): ([f32; 3], [f32; 3]), block: u32) -> ([f32; 3], [f3
 /// floor of its node `n` on its grid from the origin `o`, and the share of
 /// the node's side its top lies over that floor — its cube's top where its
 /// word `block` keeps it whole, else its kept box's. What a walker and decor
-/// stand on (pxl-kernel query/ray.rs `hit`, `scatter::footing`).
+/// stand on (pxl-kernel domain/query/ray.rs `hit`, `scatter::footing`).
 pub fn top(o: [i32; 3], n: &Node, block: u32) -> (i32, f32) {
     (n.index(o)[2], kept_bounds(([0.0; 3], [1.0; 3]), block).1[2])
 }

@@ -184,7 +184,7 @@ pub const fn grown_for(head: [u32; 4], q: [i32; 2]) -> bool {
 }
 
 /// The edits a frame hands decor's growth at most (pxl-kernel
-/// scene/decor/drawn.rs): each the columns an overwrite wrote, a box of
+/// domain/scene/decor/drawn.rs): each the columns an overwrite wrote, a box of
 /// leaf cells `[x0, y0, x1, y1)`, X on any lap; past them the kernel unions
 /// the rest into the last.
 pub const EDITS: u32 = 8;
@@ -460,7 +460,7 @@ pub struct Grown {
 /// The footing down column `g` at `cell`: the first block that fills on
 /// the world's one ray straight down the column's middle, at `cell`'s
 /// blocks alone, from the top of the world (`HEIGHT_BITS`) — where a walker
-/// stands (pxl-kernel query/support.rs `highest`), whichever layer holds
+/// stands (pxl-kernel domain/query/support.rs `highest`), whichever layer holds
 /// it. Its top as drawn, at `cell` (`cast::top`); false where the ray
 /// meets none.
 pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> ((i32, f32), bool) {

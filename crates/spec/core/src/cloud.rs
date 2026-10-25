@@ -3,7 +3,7 @@
 //! gpu-portable: the cloud field the cumulus and the sheets share. The
 //! lattice it lies on, the wind that carries it and the hash its cells draw
 //! from: the cumulus draws its cells from the hash on the CPU (pxl-kernel
-//! scene/environment/cloud.rs), and the sheets sum the hash's noise on the
+//! domain/scene/environment/cloud.rs), and the sheets sum the hash's noise on the
 //! GPU (pxl-render frame/shader/noise.wgsl), whose `lattice_hash` pxl-render
 //! build.rs writes from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_KEPT`.
 

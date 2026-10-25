@@ -4,8 +4,7 @@
 //! place by the panel and the report so both agree. Sections go only through
 //! `put`; indexing lanes by hand let sections drift out of order (2026-09-23).
 
-use crate::control::camera::controller;
-use crate::io::failure::Outcome;
+use crate::domain::control::camera::controller;
 use crate::profiler::block::TASK_PHASES;
 use crate::profiler::block::{FramesBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::profiler::frame::FrameSample;
@@ -14,7 +13,8 @@ use crate::profiler::record::{profiler_frames_since, profiler_recording_state, p
 use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
-use crate::sched::tick::tick_step_stats;
+use crate::sys::io::failure::Outcome;
+use crate::sys::sched::tick::tick_step_stats;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -159,32 +159,32 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
 }
 
 fn side(out: &mut [f64]) {
-    use crate::control::interaction::{self, collision};
-    let tau = crate::view::lens::tau();
+    use crate::domain::control::interaction::{self, collision};
+    let tau = crate::domain::view::lens::tau();
     let pointed = interaction::pointed();
     // What the pointer meets as drawn, whatever the tool could strike there,
     // and the zoom the rays draw it at.
     let met = pointed.and_then(|[x, y]| {
         let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
-        let pose = crate::view::frame::pose::view();
-        crate::view::frame::pose::ray_of(pose.at(), x, y, &mut origin, &mut direction);
-        let ray = crate::query::Ray {
+        let pose = crate::domain::view::frame::pose::view();
+        crate::domain::view::frame::pose::ray_of(pose.at(), x, y, &mut origin, &mut direction);
+        let ray = crate::domain::query::Ray {
             origin,
             direction,
-            reach: crate::view::observation::eye_reach().unwrap_or(0.0),
+            reach: crate::domain::view::observation::eye_reach().unwrap_or(0.0),
         };
-        let detail = crate::query::by_distance(tau);
-        let hit = crate::query::World::now().first_hit(&ray, detail).value().flatten()?;
-        Some((crate::view::frame::coord::world_to_canonical(&hit.point), detail.at((hit.t * hit.t) as f32)))
+        let detail = crate::domain::query::by_distance(tau);
+        let hit = crate::domain::query::World::now().first_hit(&ray, detail).value().flatten()?;
+        Some((crate::domain::view::frame::coord::world_to_canonical(&hit.point), detail.at((hit.t * hit.t) as f32)))
     });
     let (hover, cell) = (met.map(|m| m.0), met.map(|m| m.1));
     // What the tool held strikes there, as the hover picks it.
     let picked = pointed.and_then(|[x, y]| interaction::picked(x, y, tau));
     let struck = picked.as_ref().map_or(f64::NAN, |p| match p.hit.struck {
-        crate::query::Struck::Ground => 0.0,
-        crate::query::Struck::Object(_) => 1.0,
-        crate::query::Struck::Objects => 2.0,
-        crate::query::Struck::Decor(_) => 3.0,
+        crate::domain::query::Struck::Ground => 0.0,
+        crate::domain::query::Struck::Object(_) => 1.0,
+        crate::domain::query::Struck::Objects => 2.0,
+        crate::domain::query::Struck::Decor(_) => 3.0,
     });
     let tool = collision::PlacementTool::of(&interaction::holding());
     let place = interaction::hover().coord.filter(|_| tool.is_some());
@@ -200,7 +200,7 @@ fn side(out: &mut [f64]) {
             dist: controller::dist(),
             polar: controller::polar(),
             azimuth: controller::azimuth(),
-            tau: crate::view::lens::tau().scale(),
+            tau: crate::domain::view::lens::tau().scale(),
             center_lon,
             center_lat,
             center_z,

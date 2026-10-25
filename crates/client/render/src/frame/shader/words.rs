@@ -171,7 +171,7 @@ uniform! {
     /// The cloud sheets' (clouds.wgsl, gpu/clouds.rs); their ray is the sky's.
     clouds {
         /// How much of the clouds the kernel shows (pxl-kernel
-        /// scene/environment/cloud.rs `clouds_shown`).
+        /// domain/scene/environment/cloud.rs `clouds_shown`).
         SHOWN: F32 = 0,
         /// How far the eye observes, in km: past it no sheet is drawn.
         REACH: F32 = 1,

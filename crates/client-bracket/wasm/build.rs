@@ -2,7 +2,7 @@
 
 // The module imports its memory: the central scheduler gives it one
 // (@xpute/host/mem/reserve.ts's reserve_memory), and the kernel lays out
-// everything inside it (pxl_kernel::mem, over xpute_guest::mem).
+// everything inside it (pxl_kernel::sys::mem, over xpute_guest::mem).
 //
 // The front of that memory is the door's (pxl-kernel door/layout.rs): the
 // rings sit at addresses both sides compute rather than discover, which they
@@ -13,11 +13,11 @@
 // `.data` over a ring.
 //
 // The numbers are not decided here either. They are mem.json's, included
-// below rather than copied (pxl-tool/bin/spec.rs writes mem/mem.spec.rs;
+// below rather than copied (pxl-tool/bin/spec.rs writes sys/mem/mem.spec.rs;
 // `deno task check:spec` fails where what is on disk is not what the JSON
 // writes).
 
-#[path = "../../client/kernel/src/mem/mem.spec.rs"]
+#[path = "../../client/kernel/src/sys/mem/mem.spec.rs"]
 mod spec;
 
 use spec::{DESKTOP_BYTES, GLOBAL_BASE, PHONE_BYTES, STACK_BYTES};
@@ -38,5 +38,5 @@ fn main() {
     println!("cargo:rustc-link-arg=--global-base={GLOBAL_BASE}");
     println!("cargo:rustc-link-arg=--initial-memory={MIN_MEMORY_BYTES}");
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=../../client/kernel/src/mem/mem.spec.rs");
+    println!("cargo:rerun-if-changed=../../client/kernel/src/sys/mem/mem.spec.rs");
 }

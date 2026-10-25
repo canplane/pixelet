@@ -3,7 +3,7 @@
 //! The shell's commands, applied.
 
 use super::State;
-use crate::abi::cmd::{self as abi, Command};
+use crate::domain::control::cmd::{self as abi, Command};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::Q3;
 use xpute_guest::abi::cmd as xpute_cmd;
@@ -38,7 +38,7 @@ fn bearing(deg: Option<f64>) -> bool {
 /// host at its falling edge, so a sensor close sent after the strobe stopped is
 /// still heard.
 fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
-    crate::sched::edge::request_world_tick();
+    crate::sys::sched::edge::request_world_tick();
     s.asked = true;
     Ok(Some(0))
 }
@@ -46,13 +46,13 @@ fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
 /// Applies one submission. None (replied as ENOSYS) for an unknown command
 /// or a signal submitted as one.
 pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
-    use crate::control::camera::input::{camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel};
-    use crate::control::interaction::{hold, holding};
-    use crate::control::sensor::{device_orientation, geolocation};
+    use crate::domain::control::camera::input::{camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel};
+    use crate::domain::control::interaction::{hold, holding};
+    use crate::domain::control::sensor::{device_orientation, geolocation};
+    use crate::domain::view::setting::store::{settings_load, settings_store, SettingKey};
     use crate::profiler::window::{profiler_follow, profiler_window_start, profiler_window_stop};
-    use crate::sched::edge::request_world_tick;
-    use crate::setting::store::{settings_load, settings_store, SettingKey};
     use crate::shell as ui;
+    use crate::sys::sched::edge::request_world_tick;
     use crate::turn::world_platform;
 
     if let Some(cmd) = xpute_cmd::Command::of(number) {
@@ -65,7 +65,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             refuse_unless(p.refresh_ms >= 0.0 && p.paced_ms >= 0.0 && p.unix_ms.is_finite(), Errno::EINVAL)?;
             // The step is the one clock's change since the last frame: none on
             // the first, and none where the clock was set back.
-            let last = crate::io::host::wall_now();
+            let last = crate::sys::io::host::wall_now();
             let delta = if last > 0.0 { ((p.unix_ms - last) / 1000.0).max(0.0) } else { 0.0 };
             crate::turn::world_frame_asked(crate::turn::HostFrame {
                 width: p.width,
@@ -76,13 +76,13 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 interactive: p.interactive,
                 credits: p.credits,
             });
-            crate::io::host::set_wall_now(p.unix_ms);
+            crate::sys::io::host::set_wall_now(p.unix_ms);
             Ok(Some(0))
         }
         Command::WORLD_BOOT => {
             let p = abi::WorldBoot::read(packet(pkt)?)?;
             super::host_attached(s);
-            crate::io::host::set_development(p.development);
+            crate::sys::io::host::set_development(p.development);
             crate::turn::set_world_platform(crate::turn::Platform {
                 geolocation: p.geolocation,
                 orientation: device_orientation::OrientationPlatform {
@@ -93,24 +93,24 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             });
             settings_load(p.settings);
             profiler_follow(settings_store().profiler);
-            crate::layer::object::repository::open();
+            crate::domain::layer::object::repository::open();
             // The shell holds the kernel's state from its first render on.
             applied(s)
         }
         Command::WORLD_SOURCE => {
             let p = abi::WorldSource::read(packet(pkt)?)?;
-            refuse_unless(crate::io::source::declare(p.source).is_ok(), Errno::EINVAL)?;
+            refuse_unless(crate::sys::io::source::declare(p.source).is_ok(), Errno::EINVAL)?;
             Ok(Some(0))
         }
         Command::WORLD_KEPT_EMPTIED => {
-            use crate::io::file::{self, Kept};
+            use crate::sys::io::file::{self, Kept};
             let p = abi::WorldKeptEmptied::read(packet(pkt)?)?;
             let kept = or_refuse(Kept::of_slot(p.slot).filter(|&k| file::refused(k)), Errno::EINVAL)?;
             file::emptied(kept);
             // The settings write what they hold from the next keep on; the
             // objects are read again, empty, and saved from then on.
             if kept == Kept::Objects {
-                crate::layer::object::repository::open();
+                crate::domain::layer::object::repository::open();
             }
             Ok(Some(0))
         }
@@ -159,15 +159,15 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::INPUT_MARKER_WORDS => {
             let text = abi::InputMarkerWords::read(packet(pkt)?)?.text;
-            or_refuse(crate::control::interaction::edit::draft_words(text).ok(), Errno::EMSGSIZE)?;
+            or_refuse(crate::domain::control::interaction::edit::draft_words(text).ok(), Errno::EMSGSIZE)?;
             Ok(Some(0))
         }
         Command::INPUT_MARKER_PUT => {
-            crate::control::interaction::edit::put_marker();
+            crate::domain::control::interaction::edit::put_marker();
             Ok(Some(0))
         }
         Command::INPUT_MARKER_CANCEL => {
-            crate::control::interaction::edit::cancel_marker();
+            crate::domain::control::interaction::edit::cancel_marker();
             Ok(Some(0))
         }
         Command::INPUT_WHEEL => {
@@ -186,8 +186,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::INPUT_COMPASS_RESET => {
             // Following the heading would turn it straight back.
-            if !crate::control::navigation::follow_mode::following() {
-                crate::control::camera::controller::reset_azimuth();
+            if !crate::domain::control::navigation::follow_mode::following() {
+                crate::domain::control::camera::controller::reset_azimuth();
             }
             applied(s)
         }
@@ -201,11 +201,11 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let p = abi::InputPose::read(packet(pkt)?)?;
             // A unit quaternion by the protocol; one of no length turns nothing.
             refuse_unless(p.qx * p.qx + p.qy * p.qy + p.qz * p.qz + p.qw * p.qw > 0.0, Errno::EINVAL)?;
-            crate::control::camera::controller::tracked_pose([p.x, p.y, p.z], [p.qx, p.qy, p.qz, p.qw]);
+            crate::domain::control::camera::controller::tracked_pose([p.x, p.y, p.z], [p.qx, p.qy, p.qz, p.qw]);
             applied(s)
         }
         Command::INPUT_POSE_END => {
-            crate::control::camera::controller::tracked_end();
+            crate::domain::control::camera::controller::tracked_end();
             applied(s)
         }
         Command::SENSOR_POSITION => {
@@ -249,7 +249,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             if visible {
                 device_orientation::orientation_visible();
             } else {
-                crate::layer::object::repository::flush();
+                crate::domain::layer::object::repository::flush();
             }
             Ok(Some(0))
         }
@@ -281,7 +281,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let p = abi::SurfaceResize::read(packet(pkt)?)?;
             refuse_unless(p.device_pixel_ratio > 0.0, Errno::EINVAL)?;
             let role = pxl_render::gpu::surface::surface(p.surface).map_or(0, |s| s.role);
-            let ratio = crate::view::frame::resolution::surface_ratio(role, [p.width, p.height], p.device_pixel_ratio);
+            let ratio = crate::domain::view::frame::resolution::surface_ratio(role, [p.width, p.height], p.device_pixel_ratio);
             refuse_unless(pxl_render::gpu::surface::surface_resize(p.surface, p.width, p.height, p.device_pixel_ratio, ratio), Errno::EBADF)?;
             request_world_tick();
             Ok(Some(0))
@@ -302,17 +302,17 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             applied(s)
         }
         Command::CHAT_SEND => {
-            crate::billboard::chat::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
+            crate::domain::scene::billboard::chat::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
             applied(s)
         }
         Command::PREVIEW_OPEN => {
             let p = abi::PreviewOpen::read(packet(pkt)?)?;
             refuse_unless(pxl_render::gpu::surface::surface(p.surface).is_some(), Errno::EBADF)?;
-            refuse_unless(crate::scene::character::preview::preview_open(p.surface, p.group, p.number), Errno::EINVAL)?;
+            refuse_unless(crate::domain::scene::character::preview::preview_open(p.surface, p.group, p.number), Errno::EINVAL)?;
             applied(s)
         }
         Command::PREVIEW_CLOSE => {
-            refuse_unless(crate::scene::character::preview::preview_close(abi::PreviewClose::read(packet(pkt)?)?.surface), Errno::EBADF)?;
+            refuse_unless(crate::domain::scene::character::preview::preview_close(abi::PreviewClose::read(packet(pkt)?)?.surface), Errno::EBADF)?;
             applied(s)
         }
         // Records only while the profiler setting is on: a window opened with the
@@ -344,7 +344,7 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
         }
         xpute_cmd::Command::SYS_OPENED => {
             let p = xpute_cmd::SysOpened::read(packet(pkt)?)?;
-            crate::io::file::opened(p.fd, p.res, p.detail);
+            crate::sys::io::file::opened(p.fd, p.res, p.detail);
             Ok(Some(0))
         }
     }
@@ -398,9 +398,9 @@ enum BadgeTap {
 /// the eraser takes away a marker someone put up, and the marker tool has the
 /// waiting marker stand there. None where no badge there takes it.
 fn badge_tap(x: f64, y: f64) -> Option<BadgeTap> {
-    use crate::control::interaction::ActiveTool;
-    use crate::scene::place::Went;
-    match (crate::control::interaction::holding().active_tool, crate::scene::place::tap(x, y)?) {
+    use crate::domain::control::interaction::ActiveTool;
+    use crate::domain::scene::place::Went;
+    match (crate::domain::control::interaction::holding().active_tool, crate::domain::scene::place::tap(x, y)?) {
         (ActiveTool::Pointer, Went::To(at) | Went::Marker(_, at)) => Some(BadgeTap::Go(at)),
         (ActiveTool::Eraser, Went::Marker(e, _)) => Some(BadgeTap::Remove(e)),
         (ActiveTool::Marker, Went::Marker(e, _)) => Some(BadgeTap::Wait(e)),
@@ -410,14 +410,14 @@ fn badge_tap(x: f64, y: f64) -> Option<BadgeTap> {
 
 /// Whether the pointer is over a badge a tap would act on.
 pub(crate) fn over_badge() -> bool {
-    crate::control::interaction::pointed().is_some_and(|[x, y]| badge_tap(x, y).is_some())
+    crate::domain::control::interaction::pointed().is_some_and(|[x, y]| badge_tap(x, y).is_some())
 }
 
 fn tap_at(x: f64, y: f64) {
     match badge_tap(x, y) {
-        Some(BadgeTap::Go(at)) => crate::control::navigation::destination::go_to_place(at),
-        Some(BadgeTap::Remove(e)) => crate::control::interaction::edit::remove(e),
-        Some(BadgeTap::Wait(e)) => crate::control::interaction::edit::wait_at(e),
-        None => crate::control::interaction::tap(x, y, crate::view::lens::tau()),
+        Some(BadgeTap::Go(at)) => crate::domain::control::navigation::destination::go_to_place(at),
+        Some(BadgeTap::Remove(e)) => crate::domain::control::interaction::edit::remove(e),
+        Some(BadgeTap::Wait(e)) => crate::domain::control::interaction::edit::wait_at(e),
+        None => crate::domain::control::interaction::tap(x, y, crate::domain::view::lens::tau()),
     }
 }

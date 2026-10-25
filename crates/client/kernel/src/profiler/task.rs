@@ -1,13 +1,13 @@
 // pxl-kernel/profiler/task.rs
 
 //! A task's row in the profiler's lanes: what ran, when, and what it came
-//! to. The work that ran writes it (io/request.rs `record`).
+//! to. The work that ran writes it (sys/io/request.rs `record`).
 
 use core::mem::{offset_of, size_of};
 
-use crate::io::demand::PHASES_MAX;
 use crate::profiler::spec::TASK;
 use crate::profiler::word::{words, Words};
+use crate::sys::io::demand::PHASES_MAX;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

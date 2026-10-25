@@ -4,7 +4,7 @@
 //! on and off together.
 
 use crate::profiler::record::{profiler_recording_start, profiler_recording_stop, profiler_release};
-use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
+use crate::sys::sched::tick::{set_step_timing, tick_step_stats_reset};
 
 /// Called at WORLD_BOOT with the stored setting, before the first turn, so
 /// a profiler left on has the boot in its window; turned off, the

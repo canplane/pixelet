@@ -40,10 +40,10 @@ pub const fn eye_cell(w: u32) -> Zoom {
 }
 /// Every window: the eye's; the focus's, the leaves' and one over, what
 /// walking and editing read; a destination's one, at the zoom its line says
-/// its ground, found exactly (pxl-kernel layer/terrain/window.rs).
+/// its ground, found exactly (pxl-kernel domain/layer/terrain/window.rs).
 pub const WINDOWS: u32 = EYE_WINDOWS + 3;
 /// The berths every window's squares are held in, `WINDOWS` a slot, berth
-/// `k × SLOTS + s` slot `s`'s `k`-th (pxl-kernel layer/terrain/window.rs
+/// `k × SLOTS + s` slot `s`'s `k`-th (pxl-kernel domain/layer/terrain/window.rs
 /// `Berth`): no more squares want a slot than there are windows, so the
 /// most the GPU holds, and so the most of their cells read back at once,
 /// where no two windows at a zoom overlap. A square two of them want takes
@@ -57,7 +57,7 @@ pub const FILL_SQUARE_MS: f32 = 0.22;
 /// The share of a frame the fill may take.
 pub const FILL_SHARE_MS: f32 = 4.0;
 /// The squares a frame hands the fill at most, nearest first (pxl-kernel
-/// layer/terrain/window.rs `due`): its share less its passes, over a square.
+/// domain/layer/terrain/window.rs `due`): its share less its passes, over a square.
 pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_SQUARE_MS) as u32;
 
 /// The read-backs a square's cells and its ways' records come back in
@@ -67,7 +67,7 @@ pub const READS: u32 = 2 * HANDED;
 
 /// A square handed to the GPU's fill, in words: its berth, where it lies in
 /// its tile (`place_word`, in squares), its cells' zoom, its window's as the
-/// window holds it (pxl-kernel layer/terrain/window.rs `Window::cell`; a
+/// window holds it (pxl-kernel domain/layer/terrain/window.rs `Window::cell`; a
 /// destination's moves with its line), never derived from the index; its
 /// first cell at that zoom as the world names it, X wrapped there, then Y,
 /// two words; and what is known of the service area at it (`area::Shard`,
@@ -643,7 +643,7 @@ pub const JOINED_ENTRIES: u32 = joined_index(JOINED_LEVELS + 1, [0, 0]);
 /// buffer, an `IVec4` as their slot table's are, after it (`JOINED_AT`).
 pub const JOINED_WORDS: u32 = 4;
 /// A row of the windows' table, as the kernel writes it (pxl-kernel
-/// layer/terrain/window.rs `table`) and the GPU reads it (pxl-shader
+/// domain/layer/terrain/window.rs `table`) and the GPU reads it (pxl-shader
 /// `World`), an `IVec4` of its buffer: the square a slot's window wants
 /// there; where its cells are present, the berth holding them plus one
 /// (`berth`), which another window at its zoom may have filled, 0 while

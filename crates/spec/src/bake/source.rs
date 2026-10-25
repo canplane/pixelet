@@ -1,7 +1,7 @@
 // pxl-spec/bake/source.rs
 
 //! What a tile source's declaration may name, held alike where it is written
-//! (pxl-geo-bake source.rs) and where it is read (pxl-kernel io/source.rs):
+//! (pxl-geo-bake source.rs) and where it is read (pxl-kernel sys/io/source.rs):
 //! a declaration one side writes is one the other reads.
 
 use crate::bake::published::BaseLayer;

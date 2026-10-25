@@ -443,7 +443,7 @@ fn pass_of(table: usize) -> usize {
 }
 
 /// A view is drawn again for any new height of its light, which the sky's
-/// clock moves only a step at a time (pxl-kernel scene/environment.rs, by
+/// clock moves only a step at a time (pxl-kernel domain/scene/environment.rs, by
 /// `steps`), or for the eye's altitude moved its share.
 fn moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
     match drawn {

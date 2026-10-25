@@ -35,7 +35,7 @@ use spirv_std::arch::IndexUnchecked;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::{spirv, Image};
 
-/// The eye a cast is from (pxl-kernel view/lens.rs `gpu_cast`), its words
+/// The eye a cast is from (pxl-kernel domain/view/lens.rs `gpu_cast`), its words
 /// where pxl-spec-core `eye` lays them (asserted below).
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -96,7 +96,7 @@ fn square_at(square: u32) -> u32 {
     square * SQUARE_WORDS
 }
 
-/// The world as the GPU holds it (pxl-kernel scene/cast.rs fills it): the
+/// The world as the GPU holds it (pxl-kernel domain/scene/cast.rs fills it): the
 /// squares the eye's windows hold, their columns, levels and runs, the
 /// service area, and what is placed with a preview's cuts; the caves are a
 /// hash, held nowhere. Decor is not here (pxl-spec-core `cast::Query`).
@@ -121,7 +121,7 @@ pub struct World<'a, L> {
     /// The service area's index (pxl-spec-core `area::Area`), its keys four a
     /// row.
     shards: &'a [IVec4],
-    /// The overwrites' tree (pxl-kernel layer/object/store.rs): its heap
+    /// The overwrites' tree (pxl-kernel domain/layer/object/store.rs): its heap
     /// lane, then its data lane from half the buffer.
     overwrites: &'a [u32],
     /// The eye, whose preview cuts are read where something placed or cut
@@ -170,7 +170,7 @@ impl<L: Looks> Area for World<'_, L> {
     fn ends(&self) -> bool {
         true
     }
-    /// Its cells' nines four a row, by key (pxl-kernel scene/cast.rs
+    /// Its cells' nines four a row, by key (pxl-kernel domain/scene/cast.rs
     /// `shards`); none past them.
     fn nine(&self, key: u32) -> u32 {
         let r = at(self.shards, key / 4);
@@ -241,7 +241,7 @@ impl<L: Looks> ground::Held for World<'_, L> {
 
     /// The block's column off the windows, the area's edge laid on it
     /// (pxl-spec-core `window::ground`), as the CPU reads it (pxl-kernel
-    /// query/node.rs `Reading::cell`).
+    /// domain/query/node.rs `Reading::cell`).
     fn cell(&mut self, place: Found, zoom: u32, c: [i32; 3]) -> ground::Cell {
         window::ground(self, place, zoom, [c[0], c[1]]).0
     }
@@ -1429,7 +1429,7 @@ fn settle() {
 /// write, the ids handed from the lowest up, and a stack grown holds the
 /// blocks past the old free, so every id ever handed lies under the most
 /// ever taken, which the pool's and its mirror's growth keep to
-/// (pxl-kernel layer/terrain/mirror.rs).
+/// (pxl-kernel domain/layer/terrain/mirror.rs).
 const TAKEN: u32 = 0;
 
 /// The blocks free when `taken` are of a stack of `len` slots, block 0

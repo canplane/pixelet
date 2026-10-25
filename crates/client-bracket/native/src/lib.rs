@@ -23,7 +23,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use pxl_kernel::door::Bracket;
-use pxl_kernel::io::host::Stop;
+use pxl_kernel::sys::io::host::Stop;
 
 /// The device's clock, in milliseconds from the first reading: a turn's quota
 /// is spent against it, and only differences are read.

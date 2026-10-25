@@ -46,7 +46,7 @@ pub struct Halo {
 
 /// Device pixels a sheet draws per logical pixel: past two, texels cost more
 /// than the eye resolves at arm's length. The world is drawn no finer
-/// (pxl-kernel param/view.rs `RESOLUTION_MAX`), so a label is never shown
+/// (pxl-kernel domain/view/param.rs `RESOLUTION_MAX`), so a label is never shown
 /// smaller than drawn.
 pub const SHEET_SCALE: f64 = 2.0;
 

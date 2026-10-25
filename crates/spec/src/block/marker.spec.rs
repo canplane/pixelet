@@ -18,14 +18,14 @@
 
 /// The coarsest chunk that draws a marker: z14, where OpenMapTiles' `poi`
 /// layer holds every point (layers/poi/poi.yaml): what someone puts up, by
-/// the chunk it is read from (pxl-kernel scene/place/pin.rs). A chat line's
+/// the chunk it is read from (pxl-kernel domain/scene/place/pin.rs). A chat line's
 /// bubble, which no chunk holds, shows from the same, judged at the camera
-/// grid's cell where its speaker stands (pxl-kernel billboard/chat.rs).
+/// grid's cell where its speaker stands (pxl-kernel domain/scene/billboard/chat.rs).
 pub const MARKER_SHOWN_FROM: u8 = 14;
 
 /// A marker's cell on the camera grid, in zooms: −1 spans two of the grid's
 /// cells, as a place's icon does. A cell shows one marker: where more than
 /// one stands in it, they are one, their count on a marker's pill in its
 /// colors turned over, at the cell's middle over what is drawn there
-/// (pxl-kernel scene/place/pin.rs).
+/// (pxl-kernel domain/scene/place/pin.rs).
 pub const MARKER_SCALE_STEPS: i8 = -1;

@@ -52,7 +52,7 @@ pub const NO_KEY: u32 = u32::MAX;
 /// `served` says of each, bit `(dy + 1)·3 + (dx + 1)` for the cell `dx, dy`
 /// from it, its own among them, as `Shard::served` holds them: a cell's
 /// word in the area (`Area::nine`), laid once where the area is made
-/// (pxl-kernel io/source.rs), so a node's shard is one read (`Shard::at`).
+/// (pxl-kernel sys/io/source.rs), so a node's shard is one read (`Shard::at`).
 pub fn nine(served: impl Fn([i32; 2]) -> bool, own: [i32; 2]) -> u32 {
     let mut bits = 0u32;
     let mut k = 0u32;

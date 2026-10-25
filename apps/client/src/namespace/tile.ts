@@ -35,7 +35,7 @@ const VERSION = /^[A-Za-z0-9._-]{1,32}$/;
 
 /** The declaration's text, where every kind has a version and every version
  * is a URL's segment; none where it is not, and the kernel, never handed it,
- * observes nothing. The rest is the kernel's to refuse (pxl-kernel io/source.rs). */
+ * observes nothing. The rest is the kernel's to refuse (pxl-kernel sys/io/source.rs). */
 export function declaration(text: string): Declaration | null {
   let d: unknown;
   try {

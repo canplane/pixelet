@@ -11,13 +11,13 @@ use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::sched::tick::TickReport;
 
-use crate::io::demand::Stream;
-use crate::io::request::stream_counts;
-use crate::layer::Base;
+use crate::domain::layer::Base;
 use crate::profiler::frame::{DeviceSample, FrameSample, GpuSample, HeapSample, RingSample, TileSample};
 use crate::profiler::record::{profiler_record_frame, profiler_recording};
+use crate::sys::io::demand::Stream;
+use crate::sys::io::request::stream_counts;
 
-/// What the renderer made of this turn's frame (scene/stage.rs `stage_render`).
+/// What the renderer made of this turn's frame (domain/scene/stage.rs `stage_render`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct HostFrame {
     kind: FrameKind,
@@ -45,7 +45,7 @@ pub fn set_host_frame(kind: FrameKind, gpu: GpuSample, device: DeviceSample) {
 
 /// The heap as its allocator states it, in its own bytes.
 fn heap_sample() -> HeapSample {
-    let h = crate::io::host::heap_stat();
+    let h = crate::sys::io::host::heap_stat();
     HeapSample {
         used_bytes: h.used as f64,
         live_bytes: h.live as f64,
@@ -89,7 +89,7 @@ pub struct FrameTurn {
 pub fn profiler_frame(t: FrameTurn) {
     // Taken whether or not recording, so a recording starts from now.
     let rings = ring_sample();
-    let body_slots_peak = f64::from(crate::io::body::take_peak());
+    let body_slots_peak = f64::from(crate::sys::io::body::take_peak());
     let terrain_refused = TerrainTile::residency().take_refusals() as f64;
     let host = core::mem::take(HOST.get(HostFrame::default));
     if !profiler_recording() {

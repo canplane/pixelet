@@ -3,7 +3,7 @@
 //! The cloud sheets, altocumulus and cirrus, laid over the world's pass, both
 //! reading the cloud field (`pxl-spec-core cloud.rs`) as a tile baked once
 //! per device.
-//! The cumulus is drawn as decor is (`pxl-kernel scene/environment/cloud.rs`).
+//! The cumulus is drawn as decor is (`pxl-kernel domain/scene/environment/cloud.rs`).
 
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};

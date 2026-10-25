@@ -3,32 +3,32 @@
 //! What the page's UI reads of the kernel (a Snapshot packet, handed over
 //! only when changed) and the commands it applies to the stores.
 
-use crate::layer::Base as _;
+use crate::domain::layer::Base as _;
 use pxl_spec::block::object::{cube_id, decor_num_id};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
 use xpute_kit::wire::xtp::PacketWriter;
 
-use crate::abi::cmd::Tracking;
-use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, Message, OrientationState, Snapshot};
-use crate::control::camera::controller::{dist, focus, Motion};
-use crate::control::camera::input::dragging;
-use crate::control::camera::state::camera_state;
-use crate::control::interaction::{holding, Holding};
-use crate::control::navigation::destination::go_to_ground;
-use crate::control::navigation::follow_mode::{following, set_following};
-use crate::control::navigation::off_center::off_center;
-use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
-use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
-use crate::control::sensor::reading::{device_location_store, device_orientation_store, Pose};
-use crate::io::file::{self, Kept};
-use crate::layer::division::{named, naming};
-use crate::scene::character::companion::companion_ready;
-use crate::scene::character::preview::{preview_rows, CASES_MAX};
-use crate::scene::stage::screen_drawn;
-use crate::setting::store::{settings_store, SettingKey};
+use crate::domain::control::camera::controller::{dist, focus, Motion};
+use crate::domain::control::camera::input::dragging;
+use crate::domain::control::camera::state::camera_state;
+use crate::domain::control::cmd::Tracking;
+use crate::domain::control::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, Message, OrientationState, Snapshot};
+use crate::domain::control::interaction::{holding, Holding};
+use crate::domain::control::navigation::destination::go_to_ground;
+use crate::domain::control::navigation::follow_mode::{following, set_following};
+use crate::domain::control::navigation::off_center::off_center;
+use crate::domain::control::sensor::device_orientation::{orientation_close, request_orientation};
+use crate::domain::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
+use crate::domain::control::sensor::reading::{device_location_store, device_orientation_store, Pose};
+use crate::domain::layer::division::{named, naming};
+use crate::domain::scene::character::companion::companion_ready;
+use crate::domain::scene::character::preview::{preview_rows, CASES_MAX};
+use crate::domain::scene::stage::screen_drawn;
+use crate::domain::view::frame::pose::units_per_px_at;
+use crate::domain::view::setting::store::{settings_store, SettingKey};
+use crate::sys::io::file::{self, Kept};
 use crate::turn::world_platform;
-use crate::view::frame::pose::units_per_px_at;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::status::errno::Errno;
@@ -84,7 +84,7 @@ pub struct Shown {
 
 fn shown() -> Shown {
     let (location, settings) = (device_location_store(), settings_store());
-    let focus = crate::control::camera::controller::focus();
+    let focus = crate::domain::control::camera::controller::focus();
     let mut previews = ([0u32; CASES_MAX], 0);
     for (slot, (surface, _, _)) in previews.0.iter_mut().zip(preview_rows()) {
         *slot = surface;
@@ -94,7 +94,7 @@ fn shown() -> Shown {
         // Shown once a frame went to the screen over a view whose tiles all
         // show, if coarser: a finer tile asked for as the eye moves is not
         // the area loading, and would flash its toast each time.
-        status: match (crate::view::observation::eye(), screen_drawn()) {
+        status: match (crate::domain::view::observation::eye(), screen_drawn()) {
             (None, _) => GroundStatus::Idle,
             (Some(_), true) if TerrainTile::residency().shown() => GroundStatus::Success,
             _ => GroundStatus::Loading,
@@ -104,12 +104,12 @@ fn shown() -> Shown {
         location: (location.pose, location.location.is_some()),
         companion: companion_ready(),
         holding: holding(),
-        marker: crate::control::interaction::edit::marker_waiting().0,
+        marker: crate::domain::control::interaction::edit::marker_waiting().0,
         orientation: device_orientation_store().pose,
         azimuth: camera_state().intent.azimuth,
         is_follow_mode: following(),
         camera_busy: dragging(),
-        zooming: crate::control::camera::controller::zooming(),
+        zooming: crate::domain::control::camera::controller::zooming(),
         over_badge: crate::door::over_badge(),
         settings: {
             let mut by_number = [0; SettingKey::SLOTS];
@@ -122,7 +122,7 @@ fn shown() -> Shown {
         division: focus.and_then(|at| naming(&at)),
         previews,
         stall: stall(),
-        declared: crate::io::source::top().is_some(),
+        declared: crate::sys::io::source::top().is_some(),
         kept_refused: {
             let mut refused = ([0; Kept::ALL.len()], 0);
             for kept in Kept::ALL.into_iter().filter(|&k| file::refused(k)) {
@@ -146,7 +146,7 @@ impl Sent {
     /// What the snapshot is made of now, where it moved since it was last
     /// sent; taken as sent.
     pub fn moved(&mut self) -> Option<Shown> {
-        let (now, (_, words)) = (shown(), crate::control::interaction::edit::marker_waiting());
+        let (now, (_, words)) = (shown(), crate::domain::control::interaction::edit::marker_waiting());
         if self.shown == Some(now) && self.words == words {
             return None;
         }
@@ -159,7 +159,7 @@ impl Sent {
 
 /// The snapshot made of `shown` into `out`; none where it does not fit.
 pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
-    let (_, words) = crate::control::interaction::edit::marker_waiting();
+    let (_, words) = crate::domain::control::interaction::edit::marker_waiting();
     let held = shown.holding;
     let snapshot = Snapshot {
         focus: FocusState {
@@ -169,7 +169,7 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
                 let g = epsg4326::unproject(&c);
                 LonLat { lon: g[0], lat: g[1] }
             }),
-            outside: shown.focus.is_some_and(|c| crate::io::source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))),
+            outside: shown.focus.is_some_and(|c| crate::sys::io::source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))),
         },
         location: LocationState {
             status: shown.location.0.status(),
@@ -229,15 +229,15 @@ pub fn tracking_action(tracking: Tracking) {
         }
         Tracking::Unfollow => {
             set_following(false);
-            crate::control::camera::controller::reset_azimuth();
+            crate::domain::control::camera::controller::reset_azimuth();
         }
     }
 }
 
 /// A search's place: a view far out comes in.
 pub fn go_to_degrees(lon: f64, lat: f64) {
-    crate::control::navigation::destination::go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
-    crate::control::camera::controller::come_in_to_default();
+    crate::domain::control::navigation::destination::go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
+    crate::domain::control::camera::controller::come_in_to_default();
 }
 
 /// The compass is asked for where it is used (`tracking_action`).
@@ -259,10 +259,10 @@ pub fn sensors_close() {
 /// Why the server does not answer the world's reads now: failing, or given up.
 /// The network and the GPU are the host's, which says them.
 fn stall() -> Option<Message> {
-    if crate::io::request::given_up() {
+    if crate::sys::io::request::given_up() {
         return Some(Message::WorldUnavailable);
     }
-    match crate::io::request::failing() {
+    match crate::sys::io::request::failing() {
         Some(Errno::ENETUNREACH) | None => None,
         Some(_) => Some(Message::WorldReadFailing),
     }

@@ -1,7 +1,7 @@
 // pxl-geo-bake/source.rs
 
 //! The tile source's declaration, the one writer of what pxl-kernel
-//! io/source.rs reads: the coarsest zoom supplied whole, each kind's format
+//! sys/io/source.rs reads: the coarsest zoom supplied whole, each kind's format
 //! and version, and the shards every kind holds, four siblings written as their
 //! parent, with each override's version. The published one is made from a
 //! record of what the bucket serves (bin/declare_source.rs, which

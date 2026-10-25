@@ -7,10 +7,10 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::io::spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use crate::profiler::frame::{FrameSample, GPU_SPANS};
 use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY, WAKES};
 use crate::profiler::word::{words, Words};
+use crate::sys::io::spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use pxl_render::gpu::span_spec::FRAME_KINDS;
 use xpute_guest::sched::tick::PHASES;
 

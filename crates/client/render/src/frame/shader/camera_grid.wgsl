@@ -2,7 +2,7 @@
 
 // The camera grid fixed to the screen: the sphere about the eye cut into cells
 // of one solid angle, a cell's angle squared (`frame_cell`, pxl-kernel
-// view/lens.rs `cell_angle`, τ / `SPLIT`), in rings a cell apart about the
+// domain/view/lens.rs `cell_angle`, τ / `SPLIT`), in rings a cell apart about the
 // optical axis, each ring cut into as many as fit, so a cell here holds the
 // area the eye decides a block's zoom by (pxl-spec-core grid.rs).
 

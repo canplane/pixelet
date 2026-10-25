@@ -143,13 +143,13 @@ pub struct GroundSquares<'a> {
     /// the module's memory (`joined_cs`; pxl-spec-core
     /// `window::EYE_JOINED_WORDS`).
     pub joined: u32,
-    /// The ways' pool's blocks at first and at most (pxl-kernel param
+    /// The ways' pool's blocks at first and at most (pxl-kernel domain/layer/terrain/param.rs
     /// `WAYS_POOL_BYTES`): it starts at the first and doubles each time a
     /// build runs out, never past the most, nor `ways::tree::POOL_BLOCKS`
     /// (`GroundBuffers::grow`).
     pub pool: [u32; 2],
     /// The blocks each handed square's scratch holds a tree of, at first and
-    /// at most (pxl-kernel param `WAYS_SCRATCH_BYTES`): it starts at the
+    /// at most (pxl-kernel domain/layer/terrain/param.rs `WAYS_SCRATCH_BYTES`): it starts at the
     /// first and doubles each time a build outgrows it, never past the most,
     /// nor `ways::tree::SQUARE_BLOCKS` (`GroundBuffers::grow_scratch`).
     pub scratch: [u32; 2],
@@ -188,18 +188,18 @@ pub type CellsLanded = dyn FnMut(u32, u32, Landing<'_>);
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
 /// GPU holds them, and what is placed.
 pub struct Cast<'a> {
-    /// The eye (pxl-spec-core `eye`; pxl-kernel view/lens.rs `gpu_cast`,
-    /// scene/cast.rs `eye`).
+    /// The eye (pxl-spec-core `eye`; pxl-kernel domain/view/lens.rs `gpu_cast`,
+    /// domain/scene/cast.rs `eye`).
     pub eye: [u32; eye::WORDS],
     /// The windows' table (pxl-spec-core `window::Slot`; pxl-kernel
-    /// layer/terrain/window.rs `table`), four words a row: every window's
+    /// domain/layer/terrain/window.rs `table`), four words a row: every window's
     /// slots, the eye's first, from the top's, each the square it wants, X
     /// and Y, the berth holding it plus one while present (`Slot::berth`)
     /// and the fill it is on its way from; then each window's first square
     /// (`window::ORIGIN_AT`).
     pub window: &'a [i32],
     /// The service area's index (pxl-spec-core `area::Area`), its keys four a
-    /// row (pxl-kernel scene/cast.rs `shards`); read where it lies,
+    /// row (pxl-kernel domain/scene/cast.rs `shards`); read where it lies,
     /// unwritten until the page replays the turn.
     pub shards: &'a [[i32; 4]],
     pub overwrites: Overwrites<'a>,
@@ -207,7 +207,7 @@ pub struct Cast<'a> {
     pub decor: DecorFrame<'a>,
 }
 
-/// The overwrites' tree (pxl-kernel layer/object/store.rs) as it lives: its
+/// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it lives: its
 /// heap and data lanes, unwritten until the page replays the turn, the room
 /// either has before it grows, the revision they are at, and the blocks
 /// written since `since`, the revision they were last handed at, by their

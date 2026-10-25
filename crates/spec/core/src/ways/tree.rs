@@ -106,7 +106,7 @@ impl Of {
 /// bake/tile/terrain.rs `pool_needs`), so a pool this large refuses none.
 /// The pool starts smaller and grows as a build runs out
 /// (pxl-render gpu/renderer.rs `GroundBuffers::grow`), up to the kernel's
-/// cap (pxl-kernel param `WAYS_POOL_BYTES`), no more than this; a build
+/// cap (pxl-kernel domain/layer/terrain/param.rs `WAYS_POOL_BYTES`), no more than this; a build
 /// past what it holds is refused (`fits`), its square left absent. Block 0
 /// is never handed out: its words stay zero, nothing (`overwrite::Lanes`),
 /// so a root word 0 is a square with no tree, read as nothing without a

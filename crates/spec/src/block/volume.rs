@@ -1,7 +1,7 @@
 // pxl-spec/block/volume.rs
 
 //! The objects' sparse tree folded as it is written (pxl-kernel
-//! layer/object/store.rs), each branch its eight by the overwrites' one
+//! domain/layer/object/store.rs), each branch its eight by the overwrites' one
 //! rule (pxl-spec-core `overwrite::fold`).
 
 use crate::space::coord::zoom::Zoom;

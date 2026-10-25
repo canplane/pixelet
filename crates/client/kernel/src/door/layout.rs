@@ -8,8 +8,8 @@
 use xpute_guest::ipc::door::{DoorLayout, RingLayout};
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes};
 
-use crate::mem::section::{fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
-use crate::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};
+use crate::sys::mem::section::{fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
+use crate::sys::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};
 use xpute_guest::mem::section::{Section, PAGE_BYTES};
 
 /// A packet is at most a page; anything larger crosses by address. A page
@@ -67,10 +67,10 @@ pub enum Fixed {
 }
 
 /// None is let go.
-const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::decor::assets::MODELS_MAX + crate::scene::environment::cloud::MODELS_MAX;
+const MODELS_MAX: usize = crate::domain::scene::character::variant::MODELS_MAX + crate::domain::query::decor::assets::MODELS_MAX + crate::domain::scene::environment::cloud::MODELS_MAX;
 
 /// The ghost's, the puck's zone, the two debug line sets' (the gizmo's and the
-/// coverage's, `scene.rs` `debug` and `coverage`) and the billboards'.
+/// coverage's, `domain/scene.rs` `debug` and `coverage`) and the billboards'.
 const SINGLE_BLOCKS: usize = 5;
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a
@@ -79,16 +79,16 @@ const SINGLE_BLOCKS: usize = 5;
 /// renderer's table is a bug, not a load.
 /// The renderer frees a list's blocks before taking its uploads, so it never
 /// holds more.
-const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::scene::environment::cloud::BLOCKS_MAX + crate::scene::actor::ACTORS_MAX + SINGLE_BLOCKS;
+const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::domain::scene::environment::cloud::BLOCKS_MAX + crate::domain::scene::actor::ACTORS_MAX + SINGLE_BLOCKS;
 
 pub const BLOCK_SLOTS: usize = pxl_render::gpu::blocks::block_slots(MAX_LIVE_BLOCKS);
 
 const FIXED: [u32; 5] = [
-    crate::layer::terrain::fixed::TERRAIN_BYTES,
-    crate::layer::division::DIVISION_BYTES,
+    crate::domain::layer::terrain::fixed::TERRAIN_BYTES,
+    crate::domain::layer::division::DIVISION_BYTES,
     pxl_render::gpu::blocks::blocks_bytes(BLOCK_SLOTS),
     pxl_render::api_spec::stream::BYTES,
-    crate::abi::host::stream::BYTES,
+    crate::sys::io::host_spec::stream::BYTES,
 ];
 
 pub const FIXED_BYTES: u32 = xpute_guest::mem::section::span_of(&FIXED, PAGE_BYTES);
@@ -106,9 +106,9 @@ const _: () = assert!(
 
 /// A body its kind's packet at its longest, in the block the buddy gives
 /// it, a power of two; none for a kind whose bodies take slots.
-const fn body_block(stream: crate::io::demand::Stream) -> u64 {
+const fn body_block(stream: crate::sys::io::demand::Stream) -> u64 {
     match stream.max_body() {
-        Some(_) if crate::io::body::slotted(stream) => 0,
+        Some(_) if crate::sys::io::body::slotted(stream) => 0,
         Some(max) => max.next_power_of_two() as u64,
         None => 0,
     }
@@ -116,9 +116,9 @@ const fn body_block(stream: crate::io::demand::Stream) -> u64 {
 
 /// The heap's bounded flows at their worst: terrain's and the Earth's
 /// bodies, kept or on a credit, in the runs `BODY_SLOTS` slots fill
-/// (io/body.rs), and a body on every credit in the buddy's block for the
+/// (sys/io/body.rs), and a body on every credit in the buddy's block for the
 /// longest other kind, each freed as it is decoded; the ways' pool's
-/// mirror at its cap (layer/terrain/mirror.rs, param `WAYS_POOL_BYTES`),
+/// mirror at its cap (domain/layer/terrain/mirror.rs, domain/layer/terrain/param.rs `WAYS_POOL_BYTES`),
 /// the renderer's rooms for the squares' records, every read's at a
 /// square's most (pxl-render gpu/renderer.rs `GroundBuffers::room`), and
 /// the profiler's lanes while its setting is on (profiler/record.rs), each
@@ -126,8 +126,8 @@ const fn body_block(stream: crate::io::demand::Stream) -> u64 {
 /// waits or stays absent where the heap refuses it. The rest of the heap
 /// is workspace, which asks first.
 const HEAP_FLOWS_BYTES: u64 = {
-    use crate::io::body::slots_bytes;
-    use crate::io::demand::Stream;
+    use crate::sys::io::body::slots_bytes;
+    use crate::sys::io::demand::Stream;
     let mut longest = 0;
     let mut k = 0;
     while k < Stream::ALL.len() {
@@ -136,8 +136,8 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    let ways = crate::layer::terrain::mirror::MIRROR_BYTES + pxl_render::gpu::renderer::RECORD_ROOMS_BYTES;
-    slots_bytes(crate::param::BODY_SLOTS) + crate::param::MAX_CREDITS as u64 * longest + ways + crate::profiler::record::PROFILER_BYTES
+    let ways = crate::domain::layer::terrain::mirror::MIRROR_BYTES + pxl_render::gpu::renderer::RECORD_ROOMS_BYTES;
+    slots_bytes(crate::sys::io::param::BODY_SLOTS) + crate::sys::io::param::MAX_CREDITS as u64 * longest + ways + crate::profiler::record::PROFILER_BYTES
 };
 
 const _: () = assert!(

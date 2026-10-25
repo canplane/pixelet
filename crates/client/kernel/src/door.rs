@@ -6,16 +6,19 @@
 
 mod apply;
 pub(crate) use apply::over_badge;
+/// The directory's keys, generated from directory.json.
+#[path = "door/directory.spec.rs"]
+pub mod directory;
 mod executor;
 pub mod layout;
 
-use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
-use crate::io::demand::Stream;
-use crate::layer::earth::Earth;
-use crate::layer::residency::Residency;
-use crate::mem::section;
+use crate::domain::control::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
+use crate::domain::layer::earth::Earth;
+use crate::domain::layer::residency::Residency;
 use crate::profiler::record::profiler_record_turn;
 use crate::profiler::spec::Wake;
+use crate::sys::io::demand::Stream;
+use crate::sys::mem::section;
 use layout::DOOR_LAYOUT;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::bake::tile::place::PlaceTile;
@@ -46,7 +49,7 @@ pub struct Bracket {
     /// Where a bracket whose process dies with the kernel reports why: no host
     /// is left to run the record, and a panic's text is not in its numbers.
     /// None where the host outlives the kernel (a page).
-    pub last_words: Option<crate::io::host::LastWords>,
+    pub last_words: Option<crate::sys::io::host::LastWords>,
 }
 
 struct State {
@@ -117,41 +120,41 @@ fn close_surface(handle: u32) {
     if let Some(closed) = pxl_render::gpu::surface::surface_close(handle) {
         pxl_render::gpu::renderer::surface_closed(closed);
     }
-    crate::scene::character::preview::preview_close(handle);
+    crate::domain::scene::character::preview::preview_close(handle);
 }
 
 fn host_attached(s: &mut State) {
-    crate::io::request::reset();
+    crate::sys::io::request::reset();
     let open: Vec<u32> = pxl_render::gpu::surface::surfaces().map(|surface| surface.handle).collect();
     for handle in open {
         close_surface(handle);
     }
     crate::shell::sensors_close();
-    crate::io::text::text_forget();
+    crate::sys::io::text::text_forget();
     s.sent = Default::default();
 }
 
 /// First turn: lays out memory and writes the directory at DIRECTORY_AT.
 fn boot(b: &Bracket) {
     xpute_guest::clock::set_clock(b.clock);
-    crate::io::host::set_heap_stat(b.heap_stat);
-    crate::io::host::set_admit_frame(b.admit_frame);
-    crate::io::host::set_last_words(b.last_words);
+    crate::sys::io::host::set_heap_stat(b.heap_stat);
+    crate::sys::io::host::set_admit_frame(b.admit_frame);
+    crate::sys::io::host::set_last_words(b.last_words);
     executor::install();
     // Named invariants report through `bug!`; a core panic reports only its location.
-    xpute_kit::status::bug::set_report(crate::io::host::host_bug);
+    xpute_kit::status::bug::set_report(crate::sys::io::host::host_bug);
     std::panic::set_hook(Box::new(|info| {
-        if crate::io::host::stopped() {
+        if crate::sys::io::host::stopped() {
             return;
         }
-        crate::io::host::last_words(crate::io::host::Stop::Panic(info));
+        crate::sys::io::host::last_words(crate::sys::io::host::Stop::Panic(info));
         if let Some(at) = info.location() {
-            crate::io::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
+            crate::sys::io::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
         }
     }));
     let gpu_stream = lay_out(b);
     crate::turn::boot();
-    let [margin, batch, settle] = quantum_entries(&crate::sched::tick::QUANTUM);
+    let [margin, batch, settle] = quantum_entries(&crate::sys::sched::tick::QUANTUM);
     let entries: [Entry; DIRECTORY_ENTRIES] = [
         (key::SUBMISSION, ring_address(door().submission())),
         (key::COMPLETION, ring_address(door().completion())),
@@ -159,11 +162,11 @@ fn boot(b: &Bracket) {
         batch,
         settle,
         (key::SYS, fixed_at(layout::Fixed::Host)),
-        (crate::abi::directory::key::GPU_STREAM, gpu_stream),
+        (crate::door::directory::key::GPU_STREAM, gpu_stream),
     ];
     // SAFETY: the page at DIRECTORY_AT, kept clear of the rings and the
     // bracket's data; the directory's alone.
-    let words = unsafe { &mut *ptr_at::<[u32; directory_words(DIRECTORY_ENTRIES)]>(crate::mem::spec::DIRECTORY_AT as usize) };
+    let words = unsafe { &mut *ptr_at::<[u32; directory_words(DIRECTORY_ENTRIES)]>(crate::sys::mem::spec::DIRECTORY_AT as usize) };
     write_directory(words, &entries);
 }
 
@@ -177,10 +180,10 @@ fn lay_out(b: &Bracket) -> u32 {
     // The map first: what lives in `.fixed` is handed its range from it.
     section::set_map(section::lay_out(b.given, b.data_end, layout::FIXED_BYTES));
     // Each range to its owner.
-    crate::layer::terrain::fixed::RANGE.set(layout::range(layout::Fixed::Terrain));
-    crate::layer::division::RANGE.set(layout::range(layout::Fixed::Division));
+    crate::domain::layer::terrain::fixed::RANGE.set(layout::range(layout::Fixed::Terrain));
+    crate::domain::layer::division::RANGE.set(layout::range(layout::Fixed::Division));
     // A layer asks for no more tiles than its residency frames.
-    crate::io::request::open(|c| match c {
+    crate::sys::io::request::open(|c| match c {
         Stream::terrain => Residency::<TerrainTile>::FRAMES,
         Stream::place => Residency::<PlaceTile>::FRAMES,
         Stream::earth => Residency::<Earth>::FRAMES,
@@ -190,7 +193,7 @@ fn lay_out(b: &Bracket) -> u32 {
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {
-        crate::io::host::set_host_stream(fixed_at(layout::Fixed::Host));
+        crate::sys::io::host::set_host_stream(fixed_at(layout::Fixed::Host));
         pxl_render::gpu::blocks::set_blocks(fixed_at(layout::Fixed::Blocks), layout::BLOCK_SLOTS);
         pxl_render::gpu::api::install(fixed_at(layout::Fixed::Gpu))
     }
@@ -206,13 +209,13 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
     }
     let s = state();
     let rise = now();
-    crate::io::host::host_rise();
-    crate::sched::edge::world_edge().rise(quota_ms);
+    crate::sys::io::host::host_rise();
+    crate::sys::sched::edge::world_edge().rise(quota_ms);
     // The device's loss, as its host wrote it into the device's block: before
     // the commands, as a device answering again among them asks that block anew.
     if pxl_render::gpu::api::take_device_lost() {
         pxl_render::gpu::renderer::gpu_lost();
-        crate::io::load::images_lost();
+        crate::sys::io::load::images_lost();
     }
     door().drain(|number, pkt| apply::apply(s, number, pkt));
     let drained = now();
@@ -227,8 +230,8 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
         post_shell(s);
     }
     pxl_render::gpu::api::gpu_publish();
-    crate::io::host::host_fall();
-    let fall = crate::sched::edge::world_fall();
+    crate::sys::io::host::host_fall();
+    let fall = crate::sys::sched::edge::world_fall();
     // What the completion ring had no room for is still in the submission ring.
     let wake = if door().pending() { 0.0 } else { fall };
     let asked = match wake {
@@ -247,9 +250,9 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
 static SNAPSHOT: Global<Vec<u8>> = Global::new();
 
 fn post_shell(s: &mut State) {
-    use crate::control::sensor::device_orientation::{take_orientation_command, OrientationCommand};
-    use crate::control::sensor::geolocation::{take_geolocation_command, GeolocationCommand};
-    use crate::io::request::{take_started, take_stops};
+    use crate::domain::control::sensor::device_orientation::{take_orientation_command, OrientationCommand};
+    use crate::domain::control::sensor::geolocation::{take_geolocation_command, GeolocationCommand};
+    use crate::sys::io::request::{take_started, take_stops};
 
     let sensor = |cmd: Command, sensor: Sensor| raise(cmd, SensorStartSignal::FIELDS, |w| SensorStartSignal { sensor }.write(w));
     if let Some(c) = take_geolocation_command() {
@@ -281,20 +284,20 @@ fn post_shell(s: &mut State) {
     }
     // The key is an opaque handle to the shell.
     take_started(|credit, stream, subject| match stream.bake() {
-        Some(_) => crate::io::fetch::start(credit, stream, subject),
+        Some(_) => crate::sys::io::fetch::start(credit, stream, subject),
         None => {
-            if let Some((_, load)) = crate::io::load::of_subject(subject) {
-                crate::io::load::open_asset(credit, load);
+            if let Some((_, load)) = crate::sys::io::load::of_subject(subject) {
+                crate::sys::io::load::open_asset(credit, load);
             }
         }
     });
     // Collected first: stopping a read settles it, which must not happen inside
     // the request scheduler's own walk.
-    let mut stops = List::<u64, { crate::param::MAX_CREDITS as usize }>::new();
+    let mut stops = List::<u64, { crate::sys::io::param::MAX_CREDITS as usize }>::new();
     take_stops(|key| stops.push(key));
     for key in stops {
-        if !crate::io::fetch::cancel(key) {
-            crate::io::load::cancel_asset(key);
+        if !crate::sys::io::fetch::cancel(key) {
+            crate::sys::io::load::cancel_asset(key);
         }
     }
 }

@@ -4,7 +4,7 @@
 //!
 //! No wasm-bindgen. The central scheduler gives the module its memory, and
 //! the kernel lays out everything inside it on its first turn
-//! (pxl_kernel::mem); the shell reads the directory once, at an address both
+//! (pxl_kernel::sys::mem); the shell reads the directory once, at an address both
 //! sides know, and everything after crosses in that memory
 //! (pxl_kernel::door). What is here is the bracket: what the linker and the
 //! page decide — where the module's own data ends, how much memory it was
@@ -37,7 +37,7 @@ impl Bounds for ModuleBounds {
     }
 }
 
-/// The module's one allocator (pxl_kernel::mem::heap).
+/// The module's one allocator (pxl_kernel::sys::mem::heap).
 #[global_allocator]
 static ALLOC: Heap<ModuleBounds> = Heap::new();
 
@@ -57,7 +57,7 @@ fn admit_frame() -> bool {
 /// it admits.
 fn bracket() -> Bracket {
     let stack_high = core::ptr::addr_of!(__stack_high) as u32;
-    xpute_kit::ensure!(stack_high == pxl_kernel::mem::spec::STACK_BYTES, ENOTRECOVERABLE, stack_high);
+    xpute_kit::ensure!(stack_high == pxl_kernel::sys::mem::spec::STACK_BYTES, ENOTRECOVERABLE, stack_high);
     let given = given();
     Bracket {
         given: given.min(u32::MAX as u64) as u32,

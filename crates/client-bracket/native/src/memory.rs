@@ -28,7 +28,7 @@ use xpute_guest::mem::heap::{heap_stat, Bounds, Heap, HeapStat};
 
 use crate::thread::on_kernel_thread;
 use pxl_kernel::door::layout::heap_at;
-use pxl_kernel::mem::spec::{GLOBAL_BASE, PHONE_BYTES};
+use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES};
 
 /// The memory the kernel is given: a phone's reservation, mem.json's, as a
 /// page on a phone reserves.

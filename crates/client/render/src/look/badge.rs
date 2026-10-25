@@ -4,7 +4,7 @@
 //! sizes and its colors, and where its anchor stands down from its top. The
 //! pass paints by them (`gpu/pass/badges.rs`), and the kernel sizes a
 //! billboard's sprite by them before it is painted (pxl-kernel
-//! billboard/badge.rs).
+//! domain/scene/billboard/badge.rs).
 
 use crate::gpu::sheet::Halo;
 use crate::gpu::text::Font;

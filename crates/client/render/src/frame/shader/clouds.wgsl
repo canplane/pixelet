@@ -1,4 +1,4 @@
-// The thin cloud layers over the cumulus (pxl-kernel scene/environment/cloud.rs): altocumulus'
+// The thin cloud layers over the cumulus (pxl-kernel domain/scene/environment/cloud.rs): altocumulus'
 // small heaps at 4 to 5 km and cirrus' veil at 6 to 12, each one sheet read
 // once where a ray meets it, laid over the opaque world. They write no depth:
 // from below they fill only the sky, from above they cover everything, so a
