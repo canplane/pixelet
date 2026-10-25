@@ -1,12 +1,15 @@
 // pxl-tool/bin/render_brand.rs
 
-//! The app's icons and link preview from `apps/client/brand` into
-//! `apps/web/public`, and the symbol's outline into
-//! `apps/client/src/shell/ui/symbol-path.ts`. `icon.png` is opaque because both
-//! platforms paint alpha black; `og-image.png` stays PNG because the source
-//! was a 10-bit AVIF not every decoder reads.
+//! The page's icons and link preview from `apps/client/brand` into
+//! `apps/web/public/brand`, made by each web build and kept out of git, so they are
+//! never older than the brand. The symbol's outline is code both apps bundle
+//! (`apps/client/src/shell/ui/symbol-path.ts`), so it is kept: a build only
+//! checks it is what the brand writes, and `--symbol` rewrites it. `icon.png`
+//! is opaque because both platforms paint alpha black; `og-image.png` stays
+//! PNG because the source was a 10-bit AVIF not every decoder reads.
 //!
-//!   deno task render:brand
+//!   deno task --cwd apps/web build:brand   the icons, the outline checked
+//!   deno task render:brand                 the outline rewritten as well
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -114,15 +117,15 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let out = root().join("apps/web/public");
+    let out = root().join("apps/web/public/brand");
     let symbol = trim(&open("symbol.png")?, 8);
     let icon = open("icon.png")?;
     let preview = open("og-image.png")?;
 
-    write(&out.join("favicon/apple-touch-icon.png"), &opaque_png_bytes(&resize(&icon, 180, 180))?)?;
-    write(&out.join("favicon/web-app-manifest-512x512-maskable.png"), &opaque_png_bytes(&resize(&icon, 512, 512))?)?;
-    write(&out.join("favicon/web-app-manifest-192x192.png"), &png_bytes(&symbol_icon(&symbol, 192, 0.06))?)?;
-    write(&out.join("favicon/web-app-manifest-512x512.png"), &png_bytes(&symbol_icon(&symbol, 512, 0.06))?)?;
+    write(&out.join("apple-touch-icon.png"), &opaque_png_bytes(&resize(&icon, 180, 180))?)?;
+    write(&out.join("web-app-manifest-512x512-maskable.png"), &opaque_png_bytes(&resize(&icon, 512, 512))?)?;
+    write(&out.join("web-app-manifest-192x192.png"), &png_bytes(&symbol_icon(&symbol, 192, 0.06))?)?;
+    write(&out.join("web-app-manifest-512x512.png"), &png_bytes(&symbol_icon(&symbol, 512, 0.06))?)?;
 
     let frames = [16, 32, 48]
         .iter()
@@ -130,7 +133,7 @@ fn run() -> Result<(), String> {
         .collect::<Result<Vec<_>, _>>()?;
     let mut ico = Vec::new();
     IcoEncoder::new(&mut ico).encode_images(&frames).map_err(|e| e.to_string())?;
-    write(&out.join("favicon/favicon.ico"), &ico)?;
+    write(&out.join("favicon.ico"), &ico)?;
 
     let rgb = DynamicImage::ImageRgba8(preview).to_rgb8();
     let mut enc = mozjpeg::Compress::new(mozjpeg::ColorSpace::JCS_RGB);
@@ -141,8 +144,14 @@ fn run() -> Result<(), String> {
     write(&out.join("og-image.jpg"), &started.finish().map_err(|e| e.to_string())?)?;
 
     let symbol_path = root().join("apps/client/src/shell/ui/symbol-path.ts");
-    write(&symbol_path, symbol_module()?.as_bytes())?;
-
-    println!("[brand] icons and og-image written to {}, the symbol's outline to {}", out.display(), symbol_path.display());
+    let module = symbol_module()?;
+    if std::env::args().any(|a| a == "--symbol") {
+        write(&symbol_path, module.as_bytes())?;
+        println!("[brand] icons and og-image written to {}, the symbol's outline to {}", out.display(), symbol_path.display());
+    } else if std::fs::read_to_string(&symbol_path).ok().as_deref() != Some(module.as_str()) {
+        return Err(format!("{} is not what symbol-mono.svg writes: run `deno task render:brand`", symbol_path.display()));
+    } else {
+        println!("[brand] icons and og-image written to {}", out.display());
+    }
     Ok(())
 }

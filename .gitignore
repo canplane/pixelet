@@ -186,6 +186,9 @@ vite.config.ts.timestamp-*
 # The guest's module, built from crates/ by apps/web/script/build-wasm.ts
 apps/web/src/guest.wasm
 apps/web/src/guest.paths.json
+# The page's icons and link preview, made from apps/client/brand by each web
+# build (pxl-tool/bin/render_brand.rs).
+apps/web/public/brand/
 
 # The last build number this checkout saw (script/build-log.ts), which a dev build of either app is labeled from
 apps/client/.build_number

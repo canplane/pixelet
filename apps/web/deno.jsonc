@@ -17,24 +17,28 @@
     // and with its panic paths blanked — which is what `build` bundles, so a
     // local build and the deploy's are the same bytes (script/build-wasm.ts).
     "build:wasm:published": "deno run -A script/build-wasm.ts --published",
+    // The icons and link preview, from apps/client/brand into public/brand/ and kept
+    // out of git, so what is served is never older than the brand
+    // (pxl-tool/bin/render_brand.rs).
+    "build:brand": "cargo run -q --manifest-path ../../crates/Cargo.toml -p pxl-tool --bin render_brand",
 
     // Server routes answered by the published deployment: no local server,
     // database or Docker. See vite.config.ts's VITE_DEV_SOURCE comment.
-    "dev": { "command": "deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
+    "dev": { "command": "deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm", "build:brand"] },
     // The same client against the servers on this machine.
-    "dev:oven": { "command": "VITE_DEV_SOURCE=oven deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
-    "dev:shelf": { "command": "VITE_DEV_SOURCE=shelf deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
+    "dev:oven": { "command": "VITE_DEV_SOURCE=oven deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm", "build:brand"] },
+    "dev:shelf": { "command": "VITE_DEV_SOURCE=shelf deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm", "build:brand"] },
 
-    "build": { "command": "deno run -A --node-modules-dir=auto npm:vite build", "dependencies": ["build:wasm:published"] },
+    "build": { "command": "deno run -A --node-modules-dir=auto npm:vite build", "dependencies": ["build:wasm:published", "build:brand"] },
     "preview": { "command": "deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },
     // A bundle names where its tiles come from when it is built, so each is its own build.
     "preview:oven": {
       "command": "VITE_DEV_SOURCE=oven deno run -A --node-modules-dir=auto npm:vite build && VITE_DEV_SOURCE=oven deno run -A --node-modules-dir=auto npm:vite preview",
-      "dependencies": ["build:wasm:published"]
+      "dependencies": ["build:wasm:published", "build:brand"]
     },
     "preview:shelf": {
       "command": "VITE_DEV_SOURCE=shelf deno run -A --node-modules-dir=auto npm:vite build && VITE_DEV_SOURCE=shelf deno run -A --node-modules-dir=auto npm:vite preview",
-      "dependencies": ["build:wasm:published"]
+      "dependencies": ["build:wasm:published", "build:brand"]
     },
 
     // Builds the client and publishes it with the Worker, under the build

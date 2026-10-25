@@ -46,8 +46,9 @@
     "download": "./script/tool.ts download",
     // After any change under asset/content/:
     "ingest:asset": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin ingest_asset",
-    // By hand, when apps/client/brand changes.
-    "render:brand": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin render_brand",
+    // By hand, when apps/client/brand's symbol changes: its outline, which both
+    // apps bundle. The page's icons are made by its build (apps/web build:brand).
+    "render:brand": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin render_brand -- --symbol",
 
     // Made from the tree: the code generated from spec/, the kernel's module.
     "spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec -- --write",
