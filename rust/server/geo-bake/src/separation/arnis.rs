@@ -240,7 +240,11 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         let d = [0, 1].map(|k| (own[0][k] - p[k]).max(p[k] - own[1][k]).max(0.0));
         libm::hypot(d[0], d[1])
     };
-    for p in portals_in(r.client, grown(own, reach_of(-(TUNNEL_MAX_LAYERS_BELOW + 1))))? {
+    // and never past the ring, whatever the reach comes to: the query is cut to the ring's box, as `load`
+    // refuses a tile past it
+    let asked = grown(own, reach_of(-(TUNNEL_MAX_LAYERS_BELOW + 1)));
+    let asked = [[asked[0][0].max(lo[0]), asked[0][1].max(lo[1])], [asked[1][0].min(hi[0]), asked[1][1].min(hi[1])]];
+    for p in portals_in(r.client, asked)? {
         let d = reach_of(p.level);
         if off(p.at) <= d {
             let [a, b] = [tile_of([p.at[0] - d, p.at[1] - d]), tile_of([p.at[0] + d, p.at[1] + d])];
