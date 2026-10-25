@@ -17,6 +17,8 @@ is `ARCHITECTURE.md`'s, and the host/guest boundary's roles `AGENTS.md`'s.
   other things elsewhere, as a page frame, a stack frame and a display
   frame share one, so a word in use for something else is no reason to
   rename. A borrowed term is weighed by its defining properties alone.
+- Where a word is in doubt, the 04-05 checkpoint's
+  (`checkpoint/20260405-rpc`) is a reference: frame, packet, signal.
 - Folders and files are singular, for what each one is; plural only where
   the ecosystem names a collection of independent units (`skills/`,
   Expo's `modules/`) or the word has no singular in its sense (`minutes/`).
