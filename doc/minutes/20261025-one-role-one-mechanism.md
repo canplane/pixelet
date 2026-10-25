@@ -96,3 +96,11 @@ renderer's compare-last-input; the text layout.
 Items 1, 4, 5, 7 and 8 sit in what the kernel's folders and the asset kinds
 change ([what is drawn is an asset in a frame](./20261024-what-is-drawn-is-an-asset-in-a-frame.md)),
 and are taken with that work. The rest stand alone.
+
+> Since taken: 1, `Asked` reads its columns off `World::reading`, and the
+> puck and the terrain gate keep their answers through it; the edit
+> preview's check and decor's written boxes keep their own, as they stand on
+> reads `World::reading` does not report. 4, an asset's bytes are taken in
+> `opened`. 5, decor registers through `model_of` alone. 7, the lanes are
+> `domain/scene/lane.rs`, the by-size draw the clouds'. 8, the groups are
+> numbered by `scatter.rs`.

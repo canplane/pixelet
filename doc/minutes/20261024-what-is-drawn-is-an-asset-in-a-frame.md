@@ -95,18 +95,35 @@ wants.
    point over its person's head and hands it over (`domain/scene/character/
    companion.rs` `speak_from`). The person, the pet and the line each carry a
    world position the companion works out.
+
+   > Since the frames: the person and the pet are each a frame the walk
+   > moves (`companion.rs` `Figure`), standing its actor at a `Pose`; the
+   > person's holds its line over its head and says whether it shows
+   > (`line_hangs`), by the rule it showed by. `speak_from` is gone.
 3. **An actor's instances are in one shared table**, `domain/scene/actor.rs`
    `Actors`, sized by its users' bounds (`ACTORS_MAX`, `CASES_MAX`), beside
    `domain/scene/character/`. Playing clips is the actor kind's behaviour, and a
    clip's time and palette are an instance's, held by its frame.
+
+   > Since the frames: `actor.rs` is the kind's behaviour, an `Actor`
+   > instance; the figures and the cases each hold theirs and declare their
+   > bounds (`companion::FIGURES`, `preview::CASES_MAX`). No table is left.
 4. **A preview's case registers its model again** at one unit tall
    (`domain/scene/character/preview.rs`): a scale, which is an instance's pose,
    made a second asset.
+
+   > Since fixed: a case's instance scales the variant's one model to a
+   > unit, and the renderer finds a case's draw by its palette.
 5. **The clouds are declared nowhere.** Their three models and their skin
    are written in the kernel (`domain/scene/environment/cloud.rs` `VARIANTS`,
    `SKIN`), with no id and no catalog entry, and drawn with decor's draw
    groups and its by-size draw (`domain/scene/decor/cell.rs`, which only the clouds
    use). They are the sky kind's.
+
+   > Since fixed: `spec/spec/asset/sky.json` declares the cumulus and the
+   > Moon's picture; the by-size draw is the clouds' own (`cloud.rs`
+   > `present_block`), the lanes `domain/scene/lane.rs`'s, the groups
+   > numbered by pxl-spec-core's `scatter`.
 6. **The kernel knows which assets exist.** The number the socket takes is
    an index into the file table compiled into the kernel (`pxl-spec
    asset/ingested.spec.rs` `Asset`, 163 files, which also holds the word
@@ -121,11 +138,26 @@ wants.
    The texture pack is one past the table's end (`sys/load.rs` `Load::Pack`,
    and `load === KEYS.length` on the host's side). The table's counts size
    the memory at build time (`door/layout.rs`).
+
+   > Since then: the actors are `spec/spec/asset/actor.json`, the clouds
+   > `sky.json`, and `id.json`'s `KIND` takes the actor and the sky. The
+   > texture pack is the file `cube.json`'s `pack` names, a row of the table
+   > like any other, so `Load::Pack` and the host's special case are gone.
+   > The table is still compiled in; see Open.
 7. **Control asks by kind** where it asks what a block occupies or hides:
    `domain/control/interaction/collision.rs` (markers), `edit.rs` (`hide_in`), and
    `ghost.rs` (`Ghost::Box` or `Ghost::Decor`), and `turn.rs` turns each
    `Ghost` into a call of its own. Whether each is a question the child
    should answer is open.
+
+   > Since judged: the placement asks each placed thing the room its kind
+   > occupies and whether it is stood on (`World::placed_occupying`,
+   > `Kind::stood_on`); `hide_in` is gone, the hidden object handed by its
+   > key alone; the ghost's type is an edit not yet made in the trunk
+   > (`layer/object/preview.rs` `Ghost`), which its drawer takes whole
+   > (`GhostDraw::set`). How a kind is drawn stays the drawer's match: one
+   > interface, not one behaviour. `PlacementTool`'s `zoom` and `room` stay
+   > by kind, since the tool is the descriptor of the asset it places.
 8. **The top sums its owners' bounds by name** (`door/layout.rs`
    `MODELS_MAX`, `SINGLE_BLOCKS`). `SINGLE_BLOCKS` is 4 for five owners — the
    ghost, the puck, two debug line sets (`domain/scene.rs` `debug`, `coverage`) and
@@ -196,6 +228,10 @@ kernel/src/
   decor gathers over the eye's windows; the markers gather over the windows'
   squares too, and the z-range test that counted a place in one chunk of its
   column is not needed.
+
+  > Since done: `domain/view/observation.rs` `squares` partitions the ground
+  > into the windows' squares, which the markers read; `domain/chunk.rs` and
+  > `CHUNK_STEPS` are gone, and `MARKER_SHOWN_FROM` is said in cells (z19).
 - **A leaf sits under its lowest reader,** so every edge points down: the
   billboards under `scene/`, decor and the models under `query/`, the settings
   under `view/`, the camera fixture under `control/camera/`, the commands'
@@ -218,8 +254,26 @@ kernel/src/
   source compiled for the CPU and, through rust-gpu, for the GPU"), and the
   bakes compile `cube.json`. What the socket carries is the kinds and the
   files they reference, unless that half becomes buffers uploaded at boot.
+
+  > Checked (2026-10-25): it does not resolve by moving the files. The
+  > shaders take the decor rows as constants: `scatter.rs` loops over
+  > `DECORS` and sizes `GROUPS`, `drawn::REGIONS`, `PARAM_WORDS` and
+  > `GROWS_WORDS` by them, all compiled into the checked-in WGSL. Reading the
+  > decors at boot means the scatter reads them from a buffer instead.
 - **Bounds at boot.** `.fixed`'s block slots and render's draw groups are
   sized at build time today; whether they can be laid after the catalog is
   read is to be checked against `sys/mem/section.rs`.
+
+  > Checked (2026-10-25): not as they are. `section.rs` `lay_out` takes
+  > `.fixed`'s size as an argument, but the heap begins after it, and the
+  > allocator asks for its first block before boot (`door/layout.rs`
+  > `heap_at`), while reading a catalog needs the heap and the rings. The
+  > block slots (`BLOCK_SLOTS` from `MAX_LIVE_BLOCKS`, which sums the
+  > catalogs' `MODELS_MAX`), the turn's task pool (`sched/edge.rs` `TASKS`,
+  > a const generic over `load::LOADS`), the loader's tables and the
+  > renderer's `gpu/pass/decor.rs` `GROUPS` are sized by the compiled
+  > catalog, and `.fixed` is asserted against the phone's heap at compile
+  > time. Laid at boot, each needs a bound of its own (a most models, a
+  > most loads) or to move to the heap.
 - **The spec tree.** `spec/spec/block/` holds the one catalog; whether it
   becomes `spec/spec/asset/`, and what the file table is named then.
