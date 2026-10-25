@@ -1,48 +1,11 @@
 {
   "description": "A kit, and a guest and a host end over it, for a program run inside another.",
 
-  // Routes only. Each tree is a root of its own: ts/ as Deno's, its scripts
-  // among its members; rust/ as Cargo's, its commands as aliases in
-  // rust/.cargo/config.toml; and cpp/ as Make's (cpp/Makefile). What is here
-  // is the documents and the spec, formatted below, a task a tree for each
-  // verb, and the aggregates over them, run in parallel; the one order said
-  // is the traces' after the guests they drive.
+  // The formatter's settings for the files that are no one tree's: the
+  // documents and the spec. deno fmt is dprint's engine, kept here so it is
+  // the same one ts/ formats with. What runs over the trees is the Makefile's.
   "workspace": [],
   "exclude": ["ts/"],
-
-  "tasks": {
-    "check": { "dependencies": ["check:doc", "check:ts", "check:cpp", "check:rust"] },
-    "check:doc": "deno fmt --check",
-    "check:ts": "deno task --cwd ts check",
-    "check:cpp": "make -C cpp -j8 check",
-    "check:rust": "cd rust && cargo fmt --all --check && cargo lint",
-
-    // The one thing xpute builds: the guest the contract's traces drive, in
-    // Rust and in C++, each a native library and a WebAssembly module.
-    "build": { "dependencies": ["build:cpp", "build:rust"] },
-    "build:cpp": "make -C cpp -j8 guest wasm",
-    "build:rust": "cd rust && cargo guest && cargo guest-wasm",
-
-    "test": { "dependencies": ["test:ts", "test:cpp", "test:rust", "test:conformance"] },
-    "test:ts": "deno task --cwd ts test",
-    "test:cpp": "make -C cpp -j8 test",
-    "test:rust": "cd rust && cargo test --all",
-    "test:conformance": { "command": "deno task --cwd ts test:conformance", "dependencies": ["build"] },
-    // What needs a GPU: the web host in Chrome (ts/script/web-gpu.ts), and the native one on wgpu.
-    "test:gpu": { "dependencies": ["test:gpu:web", "test:gpu:native"] },
-    "test:gpu:web": "./ts/script/web-gpu.ts",
-    "test:gpu:native": "cd rust && cargo test-gpu",
-
-    "fmt": { "dependencies": ["fmt:doc", "fmt:ts", "fmt:rust"] },
-    "fmt:doc": "deno fmt",
-    "fmt:ts": "deno task --cwd ts fmt",
-    "fmt:rust": "cd rust && cargo fmt --all",
-
-    "lint": { "dependencies": ["lint:ts"] },
-    "lint:ts": "deno task --cwd ts lint",
-
-    "export": "./ts/script/export.ts"
-  },
 
   "fmt": {
     "lineWidth": 200,

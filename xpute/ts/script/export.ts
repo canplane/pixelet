@@ -3,7 +3,7 @@
 // byte, its root being this directory. Prints a commit message naming the
 // pixelet commit it came from, for `git commit -F -` there.
 //
-//   deno task export --to ../xpute [--check]
+//   ./ts/script/export.ts --to ../xpute [--check]
 
 import { dirname, join, relative } from "@std/path";
 
