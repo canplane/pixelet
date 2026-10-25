@@ -9,6 +9,10 @@
 # - the AWS CLI's `r2` profile, with the bucket's S3 endpoint as its
 #   `endpoint_url` or in `$R2`, as a machine that publishes holds them
 #   (publish-bucket).
+# - for a read alone, wrangler's own login, as any machine that runs the
+#   client has it: a dev build reads the build log with nothing set up for the
+#   bucket, as it always has. Writes are CI's and a publisher's, and want one
+#   of the two above.
 
 import hashlib
 import json
@@ -16,8 +20,12 @@ import os
 import subprocess
 import tempfile
 import urllib.request
+from pathlib import Path
 
 BUCKET = "pixelet-tiles"
+# wrangler as the edge's deploy runs it, from its package, so ts/deno.lock pins it.
+EDGE = Path(__file__).resolve().parent.parent / "ts/server/edge"
+WRANGLER = ["deno", "run", "-A", "--node-modules-dir=auto", "npm:wrangler"]
 
 
 class Unreachable(Exception):
@@ -70,9 +78,26 @@ def _cli():
     return _resolved
 
 
+def _wrangler_get(key):
+    """The object's bytes through wrangler's login, with no ETag to write over;
+    None where there is no such object."""
+    run = subprocess.run([*WRANGLER, "r2", "object", "get", f"{BUCKET}/{key}", "--remote", "--pipe"], cwd=EDGE, capture_output=True)
+    if run.returncode != 0:
+        err = run.stderr.decode(errors="replace")
+        if "does not exist" in err or "NoSuchKey" in err or "404" in err:
+            return None
+        raise Unreachable(f"get {key} through wrangler: {err.strip()}")
+    return run.stdout, None
+
+
 def get(key):
-    """The object's bytes and its ETag; None where there is no such object."""
-    args, env = _cli()
+    """The object's bytes and its ETag; None where there is no such object.
+    With no credential for the bucket, read through wrangler's login, the ETag
+    then None."""
+    try:
+        args, env = _cli()
+    except Unreachable:
+        return _wrangler_get(key)
     with tempfile.TemporaryDirectory() as d:
         out = os.path.join(d, "body")
         run = subprocess.run(["aws", "s3api", "get-object", "--bucket", BUCKET, "--key", key, out, *args], env=env, capture_output=True, text=True)
