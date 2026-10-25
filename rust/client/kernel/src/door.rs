@@ -13,16 +13,10 @@ mod executor;
 pub mod layout;
 
 use crate::domain::control::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
-use crate::domain::layer::earth::Earth;
-use crate::domain::layer::residency::Residency;
 use crate::profiler::record::profiler_record_turn;
 use crate::profiler::spec::Wake;
-use crate::sys::io::demand::Stream;
 use crate::sys::mem::section;
 use layout::DOOR_LAYOUT;
-use pxl_spec::bake::tile::division::DivisionTile;
-use pxl_spec::bake::tile::place::PlaceTile;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::clock::now;
 use xpute_guest::global::{off_marked_thread, Global};
 use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
@@ -205,13 +199,7 @@ fn lay_out(b: &Bracket) -> u32 {
     crate::domain::layer::terrain::fixed::RANGE.set(layout::range(layout::Fixed::Terrain));
     crate::domain::layer::division::RANGE.set(layout::range(layout::Fixed::Division));
     // A layer asks for no more tiles than its residency frames.
-    crate::sys::io::request::open(|c| match c {
-        Stream::terrain => Residency::<TerrainTile>::FRAMES,
-        Stream::place => Residency::<PlaceTile>::FRAMES,
-        Stream::earth => Residency::<Earth>::FRAMES,
-        Stream::division => Residency::<DivisionTile>::FRAMES,
-        _ => 0,
-    });
+    crate::sys::io::request::open(|c| crate::domain::view::demand::of_stream(c).map_or(0, |l| l.frames));
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {

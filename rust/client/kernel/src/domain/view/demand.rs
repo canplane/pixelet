@@ -87,6 +87,30 @@ impl Observed for Earth {
     }
 }
 
+/// A layer's own, by the stream its tiles come in (`Base::STREAM`).
+pub struct Layer {
+    pub stream: Stream,
+    /// The most tiles it asks for at once, its residency's frames.
+    pub frames: u32,
+    arrived: fn(Tile, Option<Block>, &mut Phases) -> Result<(), Failure>,
+}
+
+const fn layer<L: Observed>() -> Layer {
+    Layer {
+        stream: L::STREAM,
+        frames: Residency::<L>::FRAMES,
+        arrived: arrived::<L>,
+    }
+}
+
+/// Every layer on the ground: the one place a stream names its layer.
+const LAYERS: [Layer; 4] = [layer::<TerrainTile>(), layer::<PlaceTile>(), layer::<Earth>(), layer::<DivisionTile>()];
+
+/// The layer whose tiles `stream` carries; none for an asset's.
+pub fn of_stream(stream: Stream) -> Option<&'static Layer> {
+    LAYERS.iter().find(|l| l.stream == stream)
+}
+
 /// Everything the asks depend on, as read; two turns agreeing on all of it
 /// ask for the same tiles, so the second decides nothing.
 #[derive(Clone, Copy, PartialEq)]
@@ -332,7 +356,15 @@ impl<L: Observed> Demand<L> {
 /// and at least one; each fetch settles here. What the pass leaves stays
 /// queued, and a turn is asked for it.
 pub fn admit_arrived(budget: &FrameBudget) {
-    const OF: [Stream; 4] = [Stream::terrain, Stream::place, Stream::earth, Stream::division];
+    const OF: [Stream; LAYERS.len()] = {
+        let mut of = [Stream::asset; LAYERS.len()];
+        let mut k = 0;
+        while k < of.len() {
+            of[k] = LAYERS[k].stream;
+            k += 1;
+        }
+        of
+    };
     let pass = budget.run(
         0..answered(&OF),
         |_| {
@@ -352,12 +384,9 @@ pub fn admit_arrived(budget: &FrameBudget) {
                 release(block);
                 return false;
             }
-            let result = match (stream, block) {
-                (Stream::terrain, block) => arrived::<TerrainTile>(tile, block, &mut phases),
-                (Stream::place, block) => arrived::<PlaceTile>(tile, block, &mut phases),
-                (Stream::division, block) => arrived::<DivisionTile>(tile, block, &mut phases),
-                (Stream::earth, block) => arrived::<Earth>(tile, block, &mut phases),
-                (_, block) => {
+            let result = match of_stream(stream) {
+                Some(l) => (l.arrived)(tile, block, &mut phases),
+                None => {
                     release(block);
                     Err(Errno::ENOTRECOVERABLE.into())
                 }
