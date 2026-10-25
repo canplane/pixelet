@@ -269,6 +269,10 @@ struct Surface {
     /// RESIZE's, at least a pixel each way.
     size: [u32; 2],
     bound: Option<Bound>,
+    /// The guest's handle for the surface bound here, 0 for none: a slot
+    /// outlives a handle, so letting an old one go must not take the one
+    /// bound since (`GpuHost::unbind`).
+    handle: u32,
     /// This turn's texture, the same to every CURRENT of the turn.
     frame: Option<Frame>,
     /// The texture drawn where the window gives none, kept until what is
@@ -297,6 +301,7 @@ impl Default for Surface {
             asked: None,
             size: [1, 1],
             bound: None,
+            handle: 0,
             frame: None,
             unshown: None,
         }
@@ -451,19 +456,42 @@ impl GpuHost {
         }
     }
 
-    /// The window's surface for the guest's `surface`, configured as the
-    /// guest asked once it is (`configure_at`), at the size it last gave.
-    pub fn bind_surface(&mut self, surface: u32, s: wgpu::Surface<'static>) {
-        self.surface(surface).bound = Some(Bound { surface: s, stale: true });
-        self.want_configured(surface);
+    /// The window's surface `s` for the guest's surface `handle`
+    /// (`slot | generation << 16`, the contract's), configured as the guest
+    /// asked once it is (`configure_at`), at the size it last gave: the guest
+    /// names it by its slot. It takes the slot from whatever was bound there.
+    pub fn bind(&mut self, handle: u32, s: wgpu::Surface<'static>) {
+        let slot = self.claim(handle);
+        self.surface(slot).bound = Some(Bound { surface: s, stale: true });
+        self.want_configured(slot);
     }
 
-    /// The guest's `surface` drawn, until a surface is bound again, into
-    /// frames never shown.
-    pub fn unbind_surface(&mut self, surface: u32) {
-        let s = self.surface(surface);
+    /// Lets `handle`'s surface go, if it is still the one bound under its
+    /// slot, which is then drawn into frames never shown until a surface is
+    /// bound again: whether it was. An older handle of the slot lets nothing
+    /// go, so a view that goes after a newer one took its slot does not
+    /// unbind the newer.
+    pub fn unbind(&mut self, handle: u32) -> bool {
+        let Some(slot) = self.release(handle) else { return false };
+        let s = self.surface(slot);
         s.bound = None;
         s.frame = None;
+        true
+    }
+
+    /// `handle` made the one bound under its slot: the slot.
+    fn claim(&mut self, handle: u32) -> u32 {
+        let slot = handle_slot(handle);
+        self.surface(slot).handle = handle;
+        slot
+    }
+
+    /// `handle`'s slot, if `handle` is the one bound there, which then holds none.
+    fn release(&mut self, handle: u32) -> Option<u32> {
+        let slot = handle_slot(handle);
+        let s = self.surfaces.get_mut(slot as usize).filter(|s| handle != 0 && s.handle == handle)?;
+        s.handle = 0;
+        Some(slot)
     }
 
     /// Every bound surface whose configuration is not what is asked,

@@ -71,6 +71,26 @@ fn a_gone_devices_frames_are_released() {
     assert_eq!(count.load(Ordering::Relaxed), 0, "released as the device went");
 }
 
+/// A surface's handle holds its slot only while it is the one bound there:
+/// an old handle's late unbind lets go no newer surface in the slot, and the
+/// newer one unbinds its own, once. A window's surface needs a window, so
+/// the slot is claimed as `bind` claims it, without one.
+#[test]
+fn an_old_handle_unbinds_no_newer_surface() {
+    let (adapter, device, queue) = device();
+    let mut h = host(&adapter, &device, &queue, 2);
+    // Slot 3, generations 1 and 2 (`slot | generation << 16`).
+    let (old, newer) = (3 | (1 << 16), 3 | (2 << 16));
+    assert!(!h.unbind(old), "nothing is bound");
+    assert_eq!(h.claim(old), 3);
+    assert_eq!(h.claim(newer), 3, "the newer takes the slot");
+    assert!(!h.unbind(old), "an old handle unbinds nothing");
+    assert_eq!(h.surfaces[3].handle, newer);
+    assert!(h.unbind(newer), "the newer unbinds its own");
+    assert!(!h.unbind(newer), "and only once");
+    assert!(!h.unbind(0), "0 is never a handle");
+}
+
 /// Each program's recorded turns, run as they were written, read back the
 /// bytes the record holds: turn K's ticket, K + 1, stands at the done word
 /// as the guest left it, and the next turn waits for its DONE.

@@ -20,7 +20,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use pxl_render::api_spec::{device as numbers, stream};
 use xpute_gpu::host::{ConfigureAt, GpuHost, Plan};
-use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_host::mem::Memory;
 
@@ -50,9 +49,6 @@ const PLAN: Plan = Plan {
 struct Device {
     instance: wgpu::Instance,
     host: GpuHost,
-    /// The kernel's handle bound under each surface slot: a slot outlives its
-    /// handle, and unbinding an old one must not take the one bound since.
-    bound: Vec<u32>,
 }
 
 static DEVICE: Global<Option<Device>> = Global::new();
@@ -132,7 +128,7 @@ fn open() -> bool {
         return false;
     };
     let host = GpuHost::new(adapter, device, queue, PLAN, wake);
-    DEVICE.set(Some(Device { instance, host, bound: Vec::new() }));
+    DEVICE.set(Some(Device { instance, host }));
     true
 }
 
@@ -185,12 +181,7 @@ pub(crate) unsafe fn bind(handle: u32, made: impl FnOnce() -> wgpu::SurfaceTarge
         let Some(d) = device() else { return -2 };
         // SAFETY: the caller's target, kept until the surface is unbound.
         let Ok(surface) = (unsafe { d.instance.create_surface_unsafe(made()) }) else { return -3 };
-        let slot = handle_slot(handle);
-        if d.bound.len() <= slot as usize {
-            d.bound.resize(slot as usize + 1, 0);
-        }
-        d.bound[slot as usize] = handle;
-        d.host.bind_surface(slot, surface);
+        d.host.bind(handle, surface);
         0
     })
 }
@@ -210,15 +201,13 @@ pub unsafe extern "C" fn pxl_surface_bind(handle: u32, layer: *mut c_void) -> i3
     unsafe { bind(handle, move || wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(core::ptr::with_exposed_provenance_mut(layer))) }
 }
 
-/// Lets `handle`'s layer go, if it is still the one bound under its slot.
+/// Lets `handle`'s layer go, if it is still the one bound under its slot
+/// (xpute-gpu host `GpuHost::unbind`).
 #[no_mangle]
 pub extern "C" fn pxl_surface_unbind(handle: u32) {
     on_kernel(move || {
-        let Some(d) = device() else { return };
-        let slot = handle_slot(handle);
-        if d.bound.get(slot as usize) == Some(&handle) {
-            d.bound[slot as usize] = 0;
-            d.host.unbind_surface(slot);
+        if let Some(d) = device() {
+            d.host.unbind(handle);
         }
     });
 }
