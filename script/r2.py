@@ -6,8 +6,9 @@
 #   keys are the token's, as Cloudflare documents them (r2/api/tokens) — the
 #   key id the token's id, the secret the SHA-256 of its value — and the
 #   endpoint the account's.
-# - the AWS CLI's `r2` profile and `$R2`, the bucket's S3 endpoint, as a
-#   machine that publishes holds them (publish-bucket).
+# - the AWS CLI's `r2` profile, with the bucket's S3 endpoint as its
+#   `endpoint_url` or in `$R2`, as a machine that publishes holds them
+#   (publish-bucket).
 
 import hashlib
 import json
@@ -37,6 +38,15 @@ def _token_id(token, account):
     raise Unreachable("CLOUDFLARE_API_TOKEN did not verify as a user or an account token")
 
 
+def profile_endpoint():
+    """The `r2` profile's endpoint: `$R2` where it is set, else the profile's
+    own `endpoint_url`; none where neither is."""
+    if os.environ.get("R2"):
+        return os.environ["R2"]
+    got = subprocess.run(["aws", "configure", "get", "endpoint_url", "--profile", "r2"], capture_output=True, text=True)
+    return got.stdout.strip() or None
+
+
 _resolved = None
 
 
@@ -52,10 +62,10 @@ def _cli():
         env["AWS_SECRET_ACCESS_KEY"] = hashlib.sha256(token.encode()).hexdigest()
         env.pop("AWS_PROFILE", None)
         args = ["--endpoint-url", f"https://{account}.r2.cloudflarestorage.com"]
-    elif os.environ.get("R2"):
-        args = ["--profile", "r2", "--endpoint-url", os.environ["R2"]]
+    elif endpoint := profile_endpoint():
+        args = ["--profile", "r2", "--endpoint-url", endpoint]
     else:
-        raise Unreachable("no credential for the bucket: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, or the `r2` profile with $R2")
+        raise Unreachable("no credential for the bucket: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, or the `r2` profile with its endpoint_url (or $R2)")
     _resolved = (args, env)
     return _resolved
 

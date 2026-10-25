@@ -14,8 +14,8 @@
 # uploads and serves it. `serve <kind> <version>` serves a version the bucket
 # holds, as a new format's is with the client that reads it, and going back
 # is. `override <shard> <kind> <version>` serves that version for a shard
-# and the tiles under it, `-` dropping it. Uses the AWS CLI's `r2` profile
-# and `$R2`, the bucket's S3 endpoint (publish-bucket).
+# and the tiles under it, `-` dropping it. Uses the AWS CLI's `r2` profile,
+# its endpoint_url or `$R2` the bucket's S3 endpoint (publish-bucket).
 #
 #   ./script/publish.py <terrain|place|division|earth>…
 #   ./script/publish.py upload <terrain|place|division|earth>…
@@ -31,6 +31,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+import r2
 
 REPO = Path(__file__).resolve().parent.parent
 BUCKET = "pixelet-tiles"
@@ -55,7 +57,7 @@ def tile_object(version, name):
 
 
 def endpoint():
-    return os.environ.get("R2") or die("no $R2: export the bucket's S3 endpoint (publish-bucket)")
+    return r2.profile_endpoint() or die("no endpoint for the `r2` profile: set its endpoint_url, or export $R2 (publish-bucket)")
 
 
 def aws(args, inherit=False, none=False):

@@ -25,10 +25,11 @@ its own so a default AWS profile is left alone:
 
 ```bash
 aws configure --profile r2          # region: auto
-export R2=https://<account_id>.r2.cloudflarestorage.com
+aws configure set endpoint_url https://<account_id>.r2.cloudflarestorage.com --profile r2
 ```
 
-`publish.py` uses exactly that profile and `$R2`. A manual `aws s3 sync` needs
+`publish.py` and the build log (`script/r2.py`) use exactly that profile;
+`$R2`, where set, stands in for its endpoint. A manual `aws s3 sync` needs
 `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` too, since the CLI's checksum
 headers are refused by R2; `publish.py` sets it for itself.
 
