@@ -85,9 +85,28 @@ draws nothing that is not in use.
   of the bridge segment `ba443603…`: the bridge has no end there to come
   down to, and a portal's approach is only a way at grade, so the bore's
   mouth is at 44 under a deck at 50. Arnis leaves it so, and so does this.
+
+  > Since fixed (2026-10-25): a road tunnel's portal on a road deck, at the
+  > deck's end or along it, opens at the deck's height and ramps down from
+  > it with no approach to sink, and where that holds it over the ground it
+  > is an embankment up to it; between two decks it runs straight from one
+  > to the other. `1821b44d…` lies between two decks, `ba443603…` at 52 and
+  > `698a1efb…` at 45, and runs from 51 to 45: a step of a cell a cell
+  > leaves it one short of the higher deck.
 - **A tunnel the ring cuts** keeps its cut ends at depth, so two pages
   whose rings cut it in different places solve it differently: one cell of
   one seam of nine pages at Namsan.
+
+  > Since fixed (2026-10-25): a road tunnel is read whole, with the ground
+  > within its approaches' reach of each portal, and a page solves every
+  > road tunnel whose portal lies within that reach of it and every road
+  > tunnel or deck an end of one lies on; it keeps the stretch in its ring.
+  > A rail tunnel is the ring's still, a depth under the ground cell by cell.
+  > Measured at the seams, where a line crosses the edge two pages share:
+  > at Namsan, 0 of 49 tunnel crossings differ (4 did, by up to 4 cells); at
+  > Bukak (126.9845 37.6025), 2 of 6 differ by 1 and 2 cells (4 did, by up
+  > to 14), where a bridge's ramp takes a tunnel's approach in one page and
+  > not in the other: the bridges are the ring's.
 
 It is the page bake's solve (`pxl-geo-bake separation/arnis.rs`); the
 earlier one and the structures it kept between pages are gone.
