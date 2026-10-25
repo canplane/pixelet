@@ -28,12 +28,14 @@ use xpute_guest::global::Global;
 
 use crate::domain::layer::terrain::window::{eye_slots, tile_of};
 use crate::domain::layer::Base as _;
+use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
 use crate::domain::scene::indicator::gizmo_spec;
+use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::view;
 use crate::domain::view::lens::tau;
 use crate::domain::view::observation::{observation, ByEye};
-use crate::kernel;
+use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 
 /// What an edge marks, in the spec's order (`gizmo_spec::coverage`), which is
@@ -122,7 +124,7 @@ static COVERAGE: Global<Coverage> = Global::new();
 /// and the origin they are drawn about are the same turn's.
 pub fn coverage_gizmo_step(show: bool) {
     let c = COVERAGE.get(Coverage::default);
-    let Some((scene, draw)) = kernel().parts() else { return };
+    let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else { return };
     let (Some(o), Some(top)) = (observation().filter(|_| show), TerrainTile::top()) else {
         if c.drawn.take().is_some() {
             scene.coverage.set(draw, [0.0; 3], &[], 0);

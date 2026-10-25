@@ -161,7 +161,7 @@ fn a_body_the_heap_refused_waits_for_a_release_not_a_clock() {
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     set_heap_stat(|| HeapStat {
         releases: RELEASES.load(Ordering::Relaxed),
         ..HeapStat::default()
@@ -194,7 +194,7 @@ fn a_release_between_the_refusal_and_its_settling_is_not_waited_for_again() {
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     set_heap_stat(|| HeapStat {
         releases: RELEASES.load(Ordering::Relaxed),
         ..HeapStat::default()

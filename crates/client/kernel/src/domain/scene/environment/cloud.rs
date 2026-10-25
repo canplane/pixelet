@@ -28,10 +28,10 @@ use crate::domain::scene::decor::cell::{present_block, Shown};
 use crate::domain::scene::decor::drawn::{decor_gone_px, decor_sprite_px, sprite_reach};
 use crate::domain::scene::decor::instance::{decor_groups, GroupLanes};
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{km_per_u, units_per_px_at};
 use crate::domain::view::observation::eye;
 use crate::domain::view::setting::store::settings_store;
-use crate::kernel;
 use crate::sys::io::loader::load_image;
 use crate::sys::load::Load;
 
@@ -144,7 +144,7 @@ pub fn clouds_shown() -> f64 {
     if !settings_store().clouds {
         return 0.0;
     }
-    let altitude_km = f64::from(kernel().scene.environment.out[ENV_AIR]);
+    let altitude_km = f64::from(scene().environment.out[ENV_AIR]);
     let t = ((altitude_km - GONE_KM / 2.0) / (GONE_KM / 2.0)).clamp(0.0, 1.0);
     1.0 - t * t * (3.0 - 2.0 * t)
 }
@@ -160,7 +160,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
         }
     }
     let Some(eye) = eye() else { return };
-    let env = &kernel().scene.environment.out;
+    let env = &scene().environment.out;
     // None, nothing is built or drawn, and what is held waits.
     let opacity = clouds_shown() as f32;
     if opacity <= 0.0 {

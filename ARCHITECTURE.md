@@ -334,7 +334,7 @@ A receiver compares nine taps, each moved by its own plane's slope (`shadow.wgsl
 
 ## The frame
 
-Each turn ends with a **draw list** (`pxl-render frame/draw.rs`): entries tagged by the pipeline that draws them, each with its block and uniform. It holds the cumulus (instanced as decor is, or as an **impostor** sprite where a model is drawn too small to be worth it), the actors, the location puck, an edit's ghosts, the badges and the debug lines. The rays and the GPU's decor are not in it; they are the cast and the grown decor (`gpu/grown.rs`).
+Each turn ends with a **draw list** (`pxl-render frame/draw.rs`), one for the kernel's life, kept beside the models whose meshes it uploads (`domain/query/model.rs` `draw_list`): entries tagged by the pipeline that draws them, each with its block and uniform. It holds the cumulus (instanced as decor is, or as an **impostor** sprite where a model is drawn too small to be worth it), the actors, the location puck, an edit's ghosts, the badges and the debug lines. The rays and the GPU's decor are not in it; they are the cast and the grown decor (`gpu/grown.rs`).
 
 The kernel writes the frame's uniforms into one lane of doubles (`frame/stage.rs`) and calls the renderer (`gpu/renderer.rs` `render_frame`) with the list, the models, the badges' images, the earth's tiles, the windows' squares and the cast. It draws every open surface, the world and the character picker's display case, and reports the cost and whether it wants another turn.
 

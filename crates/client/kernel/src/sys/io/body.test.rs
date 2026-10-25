@@ -8,7 +8,7 @@ fn runs() -> usize {
 
 #[test]
 fn terrain_and_earth_bodies_share_a_run_until_it_is_full_and_it_goes_once_the_last_is_back() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     let before = runs();
     let longest = longest(Stream::terrain);
     let mut out: Vec<Block> = (0..SLOTS).map(|k| take(Some(if k % 2 == 0 { Stream::terrain } else { Stream::earth }), longest).unwrap()).collect();
@@ -46,7 +46,7 @@ fn terrain_and_earth_bodies_share_a_run_until_it_is_full_and_it_goes_once_the_la
 
 #[test]
 fn every_other_body_is_a_heap_block_of_its_own() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     let before = runs();
     for stream in [Some(Stream::place), Some(Stream::division), None] {
         let block = take(stream, 4096).unwrap();
@@ -60,7 +60,7 @@ fn every_other_body_is_a_heap_block_of_its_own() {
 
 #[test]
 fn no_more_than_body_slots_are_out_and_one_given_back_ends_the_wait() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     let longest = longest(Stream::terrain);
     let mut out: Vec<Block> = (0..BODY_SLOTS).map(|_| take(Some(Stream::terrain), longest).unwrap()).collect();
     let refused = take(Some(Stream::earth), longest).unwrap_err();
@@ -75,7 +75,7 @@ fn no_more_than_body_slots_are_out_and_one_given_back_ends_the_wait() {
 
 #[test]
 fn the_peak_is_the_most_slots_out_since_it_was_last_taken() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     take_peak();
     let a = take(Some(Stream::terrain), 1).unwrap();
     let b = take(Some(Stream::earth), 1).unwrap();
@@ -100,7 +100,7 @@ fn a_body_refused_a_slot_waits_on_the_slots_and_not_on_the_heap() {
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     set_heap_stat(|| HeapStat {
         releases: RELEASES.load(Ordering::Relaxed),
         ..HeapStat::default()
@@ -121,7 +121,7 @@ fn a_body_refused_a_slot_waits_on_the_slots_and_not_on_the_heap() {
 
 #[test]
 fn a_body_refused_a_run_waits_on_the_heap_or_a_slot_given_back() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     let refused = crate::sys::io::host::Refused::run();
     assert!(!refused.over());
     let block = take(Some(Stream::terrain), 1).unwrap();
@@ -132,7 +132,7 @@ fn a_body_refused_a_run_waits_on_the_heap_or_a_slot_given_back() {
 
 #[test]
 fn a_slot_given_back_after_a_refusal_asks_a_turn() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     let longest = longest(Stream::terrain);
     let mut out: Vec<Block> = (0..BODY_SLOTS).map(|_| take(Some(Stream::terrain), longest).unwrap()).collect();
     assert!(take(Some(Stream::terrain), longest).is_err());

@@ -5,7 +5,6 @@
 //! nothing of the kernel on its own.
 
 use crate::domain::scene::frame::Frame;
-use crate::laid;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
@@ -22,19 +21,21 @@ use pxl_spec::asset::ingested::Asset;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
 use crate::domain::query::decor::assets::decor_assets;
+use crate::domain::query::model::draw_list;
 use crate::domain::scene::billboard::sheet::billboard_sheet;
 use crate::domain::scene::character::companion::companion_skins;
 use crate::domain::scene::character::preview::preview_rows;
 use crate::domain::scene::environment::cloud::cloud_groups;
 use crate::domain::scene::indicator::coverage_gizmo::coverage_gizmo_step;
 use crate::domain::scene::indicator::frame_gizmo::frame_gizmo_step;
+use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::kernel;
 use crate::profiler::report::set_host_frame;
 use crate::sys::io::loader::load_image;
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
+use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 
 /// The device the last frame went to the screen on (`device_generation`).
@@ -91,7 +92,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     if load_image(EARTH).is_none() {
         return;
     }
-    let lists = kernel().draw.take();
+    let lists = draw_list().take();
     let models = crate::domain::query::model::models();
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
     let variants = decor_assets().iter().flat_map(|entry| {
@@ -128,7 +129,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     let mut terrain_landed = crate::domain::layer::terrain::window::landed;
     let out = render_frame(FrameInput {
         lists,
-        environment: &kernel().scene.environment.out,
+        environment: &scene().environment.out,
         decor: &decor,
         skins: &skins[..skin_cnt],
         cases: &cases[..case_cnt],
@@ -239,21 +240,21 @@ pub fn visible_step(ctx: &mut TickContext, focus: Option<pxl_spec::space::coord:
     let show = settings_store().world_gizmo;
     frame_gizmo_step(show, focus, heading);
     coverage_gizmo_step(show);
-    let draw = laid().is_some_and(|k| {
+    let draw = section::map().is_some_and(|_| {
+        let (scene, list) = (scene(), draw_list());
         let models = crate::domain::query::model::models();
-        let animating = k.scene.tick(&mut k.draw, models, &frame);
-        k.scene.begin(&mut k.draw, models, frame.eye);
-        crate::domain::scene::indicator::camera_gizmo::draw(&mut k.draw, settings_store().camera_gizmo);
+        let animating = scene.tick(list, models, &frame);
+        scene.begin(list, models, frame.eye);
+        crate::domain::scene::indicator::camera_gizmo::draw(list, settings_store().camera_gizmo);
         animating
     });
     {
-        let k = kernel();
         let edits = crate::domain::layer::object::preview::current();
         crate::domain::scene::decor::drawn::step(frame.eye, edits.hide.filter(|_| edits.hide_in.1), edits.scattered);
-        crate::domain::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
+        crate::domain::scene::environment::cloud::step(draw_list(), &frame, &ctx.budget);
     }
     crate::domain::scene::place::step(ctx, &frame);
-    crate::domain::scene::place::draw(&mut kernel().draw, frame.eye);
+    crate::domain::scene::place::draw(draw_list(), frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();

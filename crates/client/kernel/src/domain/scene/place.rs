@@ -22,6 +22,7 @@ use crate::domain::scene::billboard::batch::BillboardBatch;
 use crate::domain::scene::billboard::field::{billboard_instance, BillboardSet};
 use crate::domain::view::frame::pose::ndc_to_px;
 use crate::domain::view::setting::store::settings_store;
+use crate::sys::mem::section;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::gpu::sheet::shelf::NO_SLOT;
 use pxl_spec::bake::constant::EntryAt;
@@ -167,7 +168,7 @@ fn spacing_px() -> f64 {
 pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     let p = PLACEMENT.get(Placement::default);
     if crate::domain::view::observation::eye().is_none() {
-        if p.set.free(&mut crate::kernel().draw) {
+        if p.set.free(crate::domain::query::model::draw_list()) {
             ctx.invalidate();
         }
         // Nothing is drawn now: what comes back is laid out afresh.
@@ -353,8 +354,8 @@ pub fn step(ctx: &mut TickContext, frame: &crate::domain::scene::frame::Frame) {
     }
     // Written, and a frame asked, only where what is drawn changed.
     if instances != p.instances {
-        if let Some(k) = crate::laid() {
-            p.set.write(&mut k.draw, about, &instances);
+        if section::map().is_some() {
+            p.set.write(crate::domain::query::model::draw_list(), about, &instances);
         }
         ctx.invalidate();
     }

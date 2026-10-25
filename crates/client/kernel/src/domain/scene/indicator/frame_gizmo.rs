@@ -10,10 +10,12 @@ use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
+use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
 use crate::domain::scene::indicator::gizmo_spec::frame;
+use crate::domain::scene::scene;
 use crate::domain::view::frame::coord::to_world;
-use crate::kernel;
+use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -102,7 +104,7 @@ fn sketch(s: &mut Sketch, focus: &Q3, heading: Option<f64>) {
 static GIZMOS: Global<(Sketch, bool, Sketch)> = Global::new();
 
 fn set_lines(at: V3, lines: &[f32]) {
-    let Some((scene, draw)) = kernel().parts() else { return };
+    let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else { return };
     scene.debug.set(draw, at, lines, lines.len());
 }
 

@@ -22,7 +22,7 @@ use crate::domain::layer::residency::Residency;
 use pxl_spec::space::coord::zoom::{index_of, units, Zoom};
 
 use crate::domain::layer::object::store::Write;
-use crate::serial;
+use crate::sys::serial;
 
 const CELLS: usize = GROUND_LANE;
 const SPAN: usize = TILE_CELLS as usize;

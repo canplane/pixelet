@@ -244,7 +244,7 @@ const CENTRE: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
 
 #[test]
 fn a_square_two_windows_want_is_held_once() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
     lay(w, leaf(CENTRE), leaf(CENTRE));
@@ -271,7 +271,7 @@ fn a_square_two_windows_want_is_held_once() {
 
 #[test]
 fn a_square_one_window_leaves_is_kept_while_another_wants_it() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
     let (eye, focus) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
@@ -307,7 +307,7 @@ fn a_square_one_window_leaves_is_kept_while_another_wants_it() {
 
 #[test]
 fn windows_apart_hold_their_squares_in_their_own_berths() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
     lay(w, leaf(CENTRE), leaf([CENTRE[0] + 100.0 * f64::from(SQUARE), CENTRE[1]]));
@@ -320,7 +320,7 @@ fn windows_apart_hold_their_squares_in_their_own_berths() {
 
 #[test]
 fn a_landing_shows_in_every_window_wanting_the_square() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
     let (eye, focus) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
@@ -358,7 +358,7 @@ fn a_square_waiting_on_the_heap_is_handed_again_once_a_page_is_given_back() {
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     set_heap_stat(|| HeapStat {
         releases: RELEASES.load(Ordering::Relaxed),
         ..HeapStat::default()

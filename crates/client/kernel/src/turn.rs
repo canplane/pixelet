@@ -8,6 +8,7 @@
 pub mod spec;
 
 use crate::domain::layer::Base as _;
+use crate::sys::mem::section;
 use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
 use xpute_guest::sched::edge::{notified, Notify};
@@ -24,12 +25,13 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 
 use crate::domain::layer::earth::Earth;
 use crate::domain::query::decor::assets::decor_assets_wanted;
+use crate::domain::query::model::draw_list;
 use crate::domain::scene::character::companion::{companion_step, CompanionProps};
 use crate::domain::scene::environment::environment_step;
 use crate::domain::scene::indicator::location_puck::location_puck_step;
+use crate::domain::scene::scene;
 use crate::domain::scene::stage::{take_draw, visible_step};
 use crate::domain::view::demand::Observed as _;
-use crate::kernel;
 use crate::profiler::report::{profiler_frame, FrameTurn};
 use crate::sys::sched::edge::{request_world_tick, world_edge};
 use crate::sys::sched::tick::{on_tick, run_tick, TickContext};
@@ -69,7 +71,7 @@ fn companion_props() -> Option<CompanionProps> {
 /// The tool's ghost, drawn by the scene.
 fn ghost_step() {
     use crate::domain::control::interaction::ghost::{ghost, Ghost};
-    let changed = kernel().parts().map(|(scene, draw)| match ghost() {
+    let changed = section::map().map(|_| (scene(), draw_list())).map(|(scene, draw)| match ghost() {
         Ghost::None => scene.ghost.clear(draw),
         Ghost::Decor {
             at,

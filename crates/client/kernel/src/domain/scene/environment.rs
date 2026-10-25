@@ -12,8 +12,8 @@ use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3;
 
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
-use crate::kernel;
 use crate::sys::io::host::wall_now;
 use crate::sys::sched::edge::wake_at;
 use celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
@@ -23,7 +23,7 @@ use xpute_guest::clock::now;
 /// nothing else asks for a frame while the view is still, so the clock asks
 /// for one when its next step falls (`EnvironmentDraw::observe`).
 pub fn environment_step() {
-    let next_ms = kernel().scene.environment.observe(wall_now());
+    let next_ms = scene().environment.observe(wall_now());
     wake_at(now() + next_ms);
 }
 

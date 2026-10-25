@@ -70,7 +70,7 @@ fn a_pair_past_one_the_schema_does_not_hold_still_reads() {
 /// start at the defaults, and nothing is written over it until it is emptied.
 #[test]
 fn a_slot_of_another_format_is_refused_and_held_unwritten() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     file::emptied(Kept::Settings);
     settings_load(r#"{"ao":"screen"}"#);
     assert_eq!(*settings_store(), Settings::DEFAULT);

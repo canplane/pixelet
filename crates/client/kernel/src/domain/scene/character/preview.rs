@@ -6,12 +6,13 @@
 //! silhouettes, not scale.
 
 use crate::domain::query::model::asset::{model_of, ModelHandle};
+use crate::domain::query::model::draw_list;
 use crate::domain::query::model::variant_spec::IDLE_CLIP;
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
-use crate::kernel;
-use crate::laid;
+use crate::domain::scene::scene;
 use crate::sys::io::loader::load_image;
 use crate::sys::load::Load;
+use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 use crate::sys::sched::tick::TickContext;
 use xpute_guest::global::Global;
@@ -64,8 +65,8 @@ pub fn preview_close(id: u32) -> bool {
     let Some(pos) = c.cases.iter().position(|case| case.id == id) else { return false };
     let case = c.cases.remove(pos);
     if let Some(actor) = case.actor {
-        if let Some(k) = laid() {
-            k.scene.actors.remove_actor(&mut k.draw, actor);
+        if section::map().is_some() {
+            scene().actors.remove_actor(draw_list(), actor);
         }
     }
     true
@@ -91,15 +92,15 @@ pub fn preview_step(ctx: &mut TickContext) {
         if case.actor.is_none() {
             if let (Some(model), Some(_)) = (&case.model, load_image(Load::Asset(case.variant.skin))) {
                 let id = model.model;
-                case.actor = laid().and_then(|k| k.scene.actors.new_actor(&mut k.draw, crate::domain::query::model::models(), id));
+                case.actor = section::map().and_then(|_| scene().actors.new_actor(draw_list(), crate::domain::query::model::models(), id));
                 if let (Some(actor), true) = (case.actor, IDLE_CLIP < model.clip_count) {
-                    kernel().scene.actors.play(actor, IDLE_CLIP, 0.0);
+                    scene().actors.play(actor, IDLE_CLIP, 0.0);
                 }
             }
         }
         let Some(actor) = case.actor else { continue };
         case.spin += SPIN_RATE_RAD_S * ctx.delta;
-        if let Some(a) = kernel().scene.actors.actor(actor) {
+        if let Some(a) = scene().actors.actor(actor) {
             a.at = at;
             a.rotation_z = case.spin as f32;
             a.visible = true;

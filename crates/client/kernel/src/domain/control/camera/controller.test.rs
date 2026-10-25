@@ -3,7 +3,7 @@
 use super::*;
 use crate::domain::control::camera::fixture::place;
 use crate::domain::view::frame::coord::to_world;
-use crate::serial;
+use crate::sys::serial;
 
 struct Rng(u64);
 

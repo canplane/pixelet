@@ -10,18 +10,19 @@
 use crate::domain::approach::damp_alpha;
 use crate::domain::query::changed::Asked;
 use crate::domain::query::model::asset::{model_of, ModelHandle};
+use crate::domain::query::model::draw_list;
 use crate::domain::query::model::variant_spec::IDLE_CLIP;
 use crate::domain::query::World;
 use crate::domain::query::{over, under, walks};
 use crate::domain::scene::billboard::chat::speak_from;
 use crate::domain::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
+use crate::domain::scene::scene;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::setting::store::settings_store;
-use crate::kernel;
-use crate::laid;
 use crate::sys::io::loader::load_image;
 use crate::sys::load::Load;
+use crate::sys::mem::section;
 use crate::sys::sched::edge::wake_at;
 use crate::sys::sched::tick::TickContext;
 use pxl_spec::space::camera::grid::Tau;
@@ -115,7 +116,7 @@ impl Figure {
         let (Some(model), Some(_)) = (model_of(variant.model, Some(variant.height_u)), load_image(Load::Asset(variant.skin))) else {
             return;
         };
-        let Some(Some(actor)) = laid().map(|k| k.scene.actors.new_actor(&mut k.draw, crate::domain::query::model::models(), model.model)) else {
+        let Some(Some(actor)) = section::map().map(|_| scene().actors.new_actor(draw_list(), crate::domain::query::model::models(), model.model)) else {
             return;
         };
         self.held = Some(Held { actor, model });
@@ -124,8 +125,8 @@ impl Figure {
 
     fn release(&mut self) {
         if let Some(held) = self.held.take() {
-            if let Some(k) = laid() {
-                k.scene.actors.remove_actor(&mut k.draw, held.actor);
+            if section::map().is_some() {
+                scene().actors.remove_actor(draw_list(), held.actor);
             }
         }
     }
@@ -234,7 +235,7 @@ impl Figure {
         self.at = at;
 
         let Some(held) = &self.held else { return };
-        let sched = &mut kernel().scene;
+        let sched = scene();
         if let Some(a) = sched.actors.actor(held.actor) {
             a.at = [at[0], at[1], drawn_floor(&mut self.drawn, at, *stands, p)];
             a.rotation_z = self.heading as f32;
@@ -341,7 +342,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         person.step(ctx, target, z, &p);
     }
     // The person speaks from where it is drawn, its line over its head.
-    let actors = laid().map(|k| &k.scene.actors);
+    let actors = section::map().map(|_| &scene().actors);
     let drawn = person.held.as_ref().and_then(|h| actors?.actor_ref(h.actor)).filter(|a| a.visible).map(|a| a.at);
     speak_from(drawn.map(|at| (world_to_canonical(&at), world_to_canonical(&[at[0], at[1], at[2] + person_variant.height_u + HEAD_CLEARANCE_U]))));
 

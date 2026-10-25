@@ -12,9 +12,11 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::query::changed::{within, Columns};
+use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
 use crate::domain::scene::frame::Frame;
-use crate::kernel;
+use crate::domain::scene::scene;
+use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 
 // A world-space footprint (4u), whatever the ground's cell; the .707 is a
@@ -63,7 +65,7 @@ struct Seen {
 }
 
 pub fn location_puck_step(device_coord: Option<Q3>) {
-    let Some((scene, draw)) = kernel().parts() else { return };
+    let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else { return };
     let night = scene.environment.night();
     scene.puck.step(draw, device_coord, night);
 }

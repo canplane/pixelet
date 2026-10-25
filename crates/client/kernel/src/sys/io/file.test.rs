@@ -12,7 +12,7 @@ fn read(kept: Kept, text: &[u8]) -> Option<Vec<u8>> {
 /// What an owner keeps reads back as it wrote it, its slot's format first.
 #[test]
 fn a_kept_file_is_its_format_then_its_owner_s_bytes() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     for kept in Kept::ALL {
         emptied(kept);
         let text = sealed(kept, &[7, 0, 255]);
@@ -28,7 +28,7 @@ fn a_kept_file_is_its_format_then_its_owner_s_bytes() {
 /// before it carried its format, is refused until the slot is emptied.
 #[test]
 fn a_file_of_another_format_is_refused_until_emptied() {
-    let _g = crate::serial();
+    let _g = crate::sys::serial();
     let foreign = BASE64.encode([format::OBJECTS.wrapping_add(1), 1, 2]).into_bytes();
     // An XTP packet begins "XTP\0": what the objects kept, alone, before.
     let unformatted = BASE64.encode(b"XTP\0\0\0\0\0").into_bytes();
