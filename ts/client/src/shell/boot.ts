@@ -3,7 +3,7 @@
 import { create } from "zustand";
 
 import { installConsole } from "@/shell/debug/console.ts";
-import * as kernel from "@/abi/boot.ts";
+import * as kernel from "@/host/abi/boot.ts";
 import * as locale from "@/shell/locale/i18n.ts";
 
 export const enum Boot {

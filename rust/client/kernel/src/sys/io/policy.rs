@@ -80,7 +80,7 @@ impl Serve for Policy {
         self.intake
     }
 
-    /// As the client's read classes them (`ts/client/src/namespace/read.ts`). An object's
+    /// As the client's read classes them (`ts/client/src/host/io/read.ts`). An object's
     /// failure comes back the same however often it is asked: the bytes are
     /// fixed by the key within a version.
     fn blame(&self, failure: Failure) -> Blame {

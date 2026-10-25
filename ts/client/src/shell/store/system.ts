@@ -4,11 +4,11 @@
 
 import { useSyncExternalStore } from "react";
 
-import type { Snapshot } from "@/abi/cmd.spec.ts";
-import { kernel_snapshot, watch_snapshot } from "@/abi/snapshot.ts";
+import type { Snapshot } from "@/host/abi/cmd.spec.ts";
+import { kernel_snapshot, watch_snapshot } from "@/host/abi/snapshot.ts";
 import { type Gpu, gpu, watch_gpu } from "@/host/gpu.ts";
 import { online, watch_online } from "@/host/online.ts";
-import { type Source, source_state, source_versions, watch_source } from "@/namespace/source.ts";
+import { type Source, source_state, source_versions, watch_source } from "@/host/io/source.ts";
 
 /** `select` must return a primitive or an existing reference; a fresh object renders forever. */
 export function useKernel<T>(select: (s: Snapshot) => T): T {

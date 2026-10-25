@@ -5,7 +5,7 @@ import type { GlyphName } from "@/shell/ui/icon.tsx";
 
 import { type Setting, type SettingName, SETTINGS, type SettingSection, settingsIn } from "@/shell/setting/schema.ts";
 import { Section, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
-import { kernel_setting } from "@/abi/shell.ts";
+import { kernel_setting } from "@/host/abi/shell.ts";
 import { useKernel } from "@/shell/store/system.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {

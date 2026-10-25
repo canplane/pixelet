@@ -126,7 +126,7 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
     let json = bare_keys.replace_all(&json, "$1:");
     let json = close_brace.replace_all(&json, ",\n$1}");
     let json = close_bracket.replace_all(&json, ",\n$1]");
-    let mut ts = vec!["// @pxl/client/catalog/asset/color.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/shell/catalog/asset/color.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     ts.extend([String::new(), format!("export default {json};")]);
 
@@ -177,7 +177,7 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
         rs.extend(["    }", "}"].map(String::from));
     }
     Ok(vec![
-        Output::new("ts/client/src/catalog/asset/color.spec.ts", file(&ts)),
+        Output::new("ts/client/src/shell/catalog/asset/color.spec.ts", file(&ts)),
         Output::new("rust/spec/src/asset/color.spec.rs", file(&rs)),
     ])
 }
@@ -259,7 +259,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     };
 
     // TS
-    let mut ts = vec!["// @pxl/client/catalog/asset/cube.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/shell/catalog/asset/cube.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     // Every placeable cube under its heading: the ground's looks, and the colors past a ground byte.
     let cube_sections: Vec<(&str, &Entry)> = sectioned(&ground).chain(sectioned(&object).filter(|(_, e)| is_color(e))).collect();
@@ -449,7 +449,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "}".into(),
     ]);
     Ok(vec![
-        Output::new("ts/client/src/catalog/asset/cube.spec.ts", file(&ts)),
+        Output::new("ts/client/src/shell/catalog/asset/cube.spec.ts", file(&ts)),
         Output::new("rust/spec/core/src/cube.spec.rs", file(&unwrapped(rs, "pub mod cubes {"))),
     ])
 }
@@ -489,7 +489,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
         .unwrap_or_default();
     let (portable, table) = decor_table(&spec, &ground_looks()?)?;
 
-    let mut ts = vec!["// @pxl/client/catalog/asset/decor.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/shell/catalog/asset/decor.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     ts.extend(doc.iter().map(|l| format!("// {l}")));
     ts.push("export const decor = {".into());
@@ -545,7 +545,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
     );
     row.extend(portable);
     Ok(vec![
-        Output::new("ts/client/src/catalog/asset/decor.spec.ts", file(&ts)),
+        Output::new("ts/client/src/shell/catalog/asset/decor.spec.ts", file(&ts)),
         Output::new("rust/spec/src/asset/decor.spec.rs", file(&unwrapped(rs, "pub mod decors {"))),
         Output::new("rust/spec/core/src/decor.spec.rs", file(&row)),
     ])

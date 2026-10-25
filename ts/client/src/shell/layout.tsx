@@ -3,7 +3,7 @@
 import { type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { Message } from "@/abi/cmd.spec.ts";
+import { Message } from "@/host/abi/cmd.spec.ts";
 import { Gpu } from "@/host/gpu.ts";
 import { Boot, useBoot, useStop } from "./boot.ts";
 import { Modals } from "./modal.tsx";

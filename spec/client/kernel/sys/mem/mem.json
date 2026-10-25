@@ -10,7 +10,7 @@
     "  rust/client/kernel/src/sys/mem/section.rs    the map — the fixed ranges and the heap",
     "  rust/client/kernel/src/door/layout.rs        the front — the rings and the directory",
     "  rust/client-bracket/wasm/build.rs            the linker flags for the module",
-    "  ts/client/src/abi/boot.ts                    the reservation a tab makes, handed to the page",
+    "  ts/client/src/host/abi/boot.ts                    the reservation a tab makes, handed to the page",
     "  rust/client-bracket/native/src/lib.rs        the memory a device is given"
   ],
 

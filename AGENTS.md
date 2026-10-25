@@ -8,12 +8,13 @@
   number; it decides nothing about what a number means.
 - **pixelet** fills those roles with its own parts. The kernel is its
   guest, and its host is `ts/client/src/host/` plus the client's bracket,
-  holding only what `@xpute/host` is handed; on a device, only what
-  `xpute-host` is handed. What the kernel's numbers mean outside it, and
-  the policy over them, are pixelet's: its commands, snapshot and boot in
-  `ts/client/src/abi/`; each root's backend, with the names, versions,
-  kept keys and refusals behind it, in `ts/client/src/namespace/`. None
-  of it lowers into `@xpute/host` or `xpute-host`. The shell
+  mounting `@xpute/host` (on a device, `xpute-host` beside it). What the
+  kernel's numbers mean outside it, and the policy over them, are
+  pixelet's and the host's parts: its commands, snapshot and boot in
+  `host/abi/`; what answers the kernel's opens and writes, with the names,
+  versions, kept keys and refusals behind it, in `host/io/`. The host's
+  own files name none of pixelet's numbers, and none of it lowers into
+  `@xpute/host` or `xpute-host`. The shell
   (`ts/client/src/shell/`) is the UI; it computes no coordinate or tile,
   and it is not the host. pixelet's words (kernel, shell, pixelet)
   appear nowhere under `xpute/`.

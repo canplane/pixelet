@@ -1,7 +1,7 @@
 {
   "$doc": [
     "The kernel's own system calls, beside xpute's in the same stream (xpute/spec/ipc/",
-    "sys.json, pxl-kernel sys/io/host.rs, ts/client/src/abi/text.ts), and the range and the",
+    "sys.json, pxl-kernel sys/io/host.rs, ts/client/src/host/abi/text.ts), and the range and the",
     "files it keeps them in."
   ],
   "stream": {
@@ -43,7 +43,7 @@
       "The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a",
       "bake, numbered by its kind (pxl-spec bake/published.spec.rs). Below every root a path is",
       "an object's number in decimal, its one name; what that object is called and where, a",
-      "tile's version and URL, a storage key, is what the host (ts/client/src/namespace/)",
+      "tile's version and URL, a storage key, is what the host (ts/client/src/host/io/)",
       "binds the root to, `@xpute/host` carrying the open there."
     ],
     "STORAGE": {

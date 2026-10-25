@@ -39,7 +39,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
-        ts: Some("ts/client/src/config/earth.spec.ts"),
+        ts: Some("ts/client/src/host/config/earth.spec.ts"),
         rs: Some("rust/spec/src/space/coord/earth.spec.rs"),
         rs_also: &[],
         module: Some("spec"),
@@ -72,7 +72,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/spec/asset/marker.json",
         uses: &[],
-        ts: Some("ts/client/src/catalog/asset/marker.spec.ts"),
+        ts: Some("ts/client/src/shell/catalog/asset/marker.spec.ts"),
         rs: Some("rust/spec/src/asset/marker.spec.rs"),
         rs_also: &[],
         module: Some("marker"),
@@ -221,7 +221,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/kernel/door/directory.json",
         uses: &[],
-        ts: Some("ts/client/src/abi/directory.spec.ts"),
+        ts: Some("ts/client/src/host/abi/directory.spec.ts"),
         rs: Some("rust/client/kernel/src/door/directory.spec.rs"),
         rs_also: &[],
         module: Some("directory"),
@@ -243,7 +243,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/spec/asset/actor.json",
         uses: &[],
-        ts: Some("ts/client/src/catalog/asset/actor.spec.ts"),
+        ts: Some("ts/client/src/shell/catalog/asset/actor.spec.ts"),
         rs: Some("rust/spec/src/asset/actor.spec.rs"),
         rs_also: &[],
         module: Some("actor"),
@@ -276,7 +276,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/render/gpu/api.json",
         uses: &[],
-        ts: Some("ts/client/src/abi/render/gpu/api.spec.ts"),
+        ts: Some("ts/client/src/host/abi/render/gpu/api.spec.ts"),
         rs: Some("rust/client/render/src/gpu/api.spec.rs"),
         rs_also: &[],
         module: Some("api_spec"),
@@ -287,7 +287,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/kernel/sys/io/host.json",
         uses: &[],
-        ts: Some("ts/client/src/abi/host.spec.ts"),
+        ts: Some("ts/client/src/host/abi/host.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/io/host.spec.rs"),
         rs_also: &[],
         module: Some("host_spec"),
@@ -298,7 +298,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/kernel/sys/io/demand.json",
         uses: &[],
-        ts: Some("ts/client/src/abi/io/demand.spec.ts"),
+        ts: Some("ts/client/src/host/abi/io/demand.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/io/demand.spec.rs"),
         rs_also: &[],
         module: Some("demand_spec"),
@@ -309,7 +309,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/kernel/turn/step.json",
         uses: &[],
-        ts: Some("ts/client/src/abi/turn/step.spec.ts"),
+        ts: Some("ts/client/src/host/abi/turn/step.spec.ts"),
         rs: Some("rust/client/kernel/src/turn/step.spec.rs"),
         rs_also: &[],
         module: Some("spec"),
@@ -320,7 +320,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/render/gpu/span.json",
         uses: &[],
-        ts: Some("ts/client/src/abi/render/gpu/span.spec.ts"),
+        ts: Some("ts/client/src/host/abi/render/gpu/span.spec.ts"),
         rs: Some("rust/client/render/src/gpu/span.spec.rs"),
         rs_also: &[],
         module: Some("span_spec"),
@@ -348,7 +348,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/client/kernel/sys/mem/mem.json",
         uses: &[],
-        ts: Some("ts/client/src/abi/mem/mem.spec.ts"),
+        ts: Some("ts/client/src/host/abi/mem/mem.spec.ts"),
         rs: Some("rust/client/kernel/src/sys/mem/mem.spec.rs"),
         // pxl-wasm's build script, which links the module by these numbers.
         rs_also: &[("rust/client-bracket/wasm/mem.spec.rs", "pxl-wasm/mem.spec.rs")],

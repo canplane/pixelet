@@ -5,7 +5,7 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import { SETTINGS } from "@/shell/setting/schema.ts";
-import { Group, groups, PERSON_GENDER_PREFIXES } from "@/catalog/asset/actor.spec.ts";
+import { Group, groups, PERSON_GENDER_PREFIXES } from "@/shell/catalog/asset/actor.spec.ts";
 
 export interface CharacterVariant {
   group: u32;
