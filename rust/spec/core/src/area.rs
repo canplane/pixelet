@@ -57,7 +57,10 @@ pub fn nine(served: impl Fn([i32; 2]) -> bool, own: [i32; 2]) -> u32 {
     let mut bits = 0u32;
     let mut k = 0u32;
     while k < 9 {
-        let n = [wrap(SHARD_ZOOM, own[0] + (k % 3) as i32 - 1), own[1] + (k / 3) as i32 - 1];
+        let n = [
+            wrap(SHARD_ZOOM, own[0] + (k % 3) as i32 - 1),
+            own[1] + (k / 3) as i32 - 1,
+        ];
         bits |= (served(n) as u32) << k;
         k += 1;
     }
@@ -150,8 +153,14 @@ impl Shard {
     /// The area is searched once a shard, where it is first known (`at`).
     pub fn past_leaf(self, (zoom, c): (Zoom, [i32; 2]), leaf: [i32; 2]) -> bool {
         let (s, t) = (zoom - SHARD_ZOOM, LEAF_ZOOM - SHARD_ZOOM);
-        let d = [wrap(SHARD_ZOOM, (leaf[0] >> t) - (c[0] >> s)), (leaf[1] >> t) - (c[1] >> s)];
-        debug_assert!(self.known() && d[0].abs() <= 1 && d[1].abs() <= 1, "a leaf in the node's shard's nine");
+        let d = [
+            wrap(SHARD_ZOOM, (leaf[0] >> t) - (c[0] >> s)),
+            (leaf[1] >> t) - (c[1] >> s),
+        ];
+        debug_assert!(
+            self.known() && d[0].abs() <= 1 && d[1].abs() <= 1,
+            "a leaf in the node's shard's nine"
+        );
         self.served() >> ((d[1] + 1) * 3 + d[0] + 1) & 1 == 0
     }
     pub const fn word(self) -> u32 {
@@ -166,7 +175,10 @@ impl Shard {
 pub fn tile_at(zoom: Zoom, c: [i32; 2]) -> [i32; 2] {
     if zoom < LEAF_ZOOM {
         let s = LEAF_ZOOM - zoom;
-        [wrap(LEAF_ZOOM, (c[0] << s) + (1 << (s - 1))), (c[1] << s) + (1 << (s - 1))]
+        [
+            wrap(LEAF_ZOOM, (c[0] << s) + (1 << (s - 1))),
+            (c[1] << s) + (1 << (s - 1)),
+        ]
     } else {
         let s = zoom - LEAF_ZOOM;
         [wrap(LEAF_ZOOM, c[0] >> s), c[1] >> s]
@@ -248,7 +260,11 @@ pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
     let mut k = 0;
     while k < 8 {
         let d = beside(k);
-        gone |= (shard.past_leaf(node, tile_at(LEAF_CELL, [wrap(LEAF_CELL, l[0] + d[0]), l[1] + d[1]])) as u32) << k;
+        gone |= (shard.past_leaf(
+            node,
+            tile_at(LEAF_CELL, [wrap(LEAF_CELL, l[0] + d[0]), l[1] + d[1]]),
+        ) as u32)
+            << k;
         k += 1;
     }
     gone

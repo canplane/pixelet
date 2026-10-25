@@ -21,9 +21,16 @@ impl WalkPlan {
     /// same beat after a pan of 1 unit or 1000; a fixed speed made big pans
     /// absurdly long.
     pub fn at(&self, now: f64) -> ([f64; 2], Option<f64>) {
-        let frac = if self.duration > 0.0 { ((now - self.start_time) / self.duration).clamp(0.0, 1.0) } else { 1.0 };
+        let frac = if self.duration > 0.0 {
+            ((now - self.start_time) / self.duration).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
         let at = std::array::from_fn(|k| self.start[k] + (self.target[k] - self.start[k]) * frac);
-        (at, (frac < 1.0).then(|| heading_to(self.start, self.target)))
+        (
+            at,
+            (frac < 1.0).then(|| heading_to(self.start, self.target)),
+        )
     }
 }
 

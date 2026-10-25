@@ -10,7 +10,12 @@ use serde_json::Value;
 pub type Range = [f64; 2];
 
 fn range_of(rule: &Value) -> Option<Range> {
-    let between = rule["between"].as_array().map(|b| (b.first().and_then(Value::as_f64), b.get(1).and_then(Value::as_f64)));
+    let between = rule["between"].as_array().map(|b| {
+        (
+            b.first().and_then(Value::as_f64),
+            b.get(1).and_then(Value::as_f64),
+        )
+    });
     let [a, b] = match between {
         Some((Some(a), Some(b))) => [a.clamp(0.0, 1.0), b.clamp(0.0, 1.0)],
         _ => [0.0, 1.0],
@@ -34,13 +39,29 @@ impl Rules {
             Some(Ok(Value::Array(all))) => all,
             _ => Vec::new(),
         };
-        Rules(all.into_iter().filter_map(|r| Some((range_of(&r)?, r))).collect())
+        Rules(
+            all.into_iter()
+                .filter_map(|r| Some((range_of(&r)?, r)))
+                .collect(),
+        )
     }
 
     /// Where a flag among `wanted` holds, ranges `cell` apart joined (`cell_of`).
     pub fn flagged(&self, wanted: &[&str], cell: f64) -> Vec<Range> {
-        let has = |r: &Value| r["values"].as_array().is_some_and(|v| v.iter().any(|v| v.as_str().is_some_and(|v| wanted.contains(&v))));
-        merged(self.0.iter().filter(|(_, r)| has(r)).map(|(range, _)| *range).collect(), cell)
+        let has = |r: &Value| {
+            r["values"].as_array().is_some_and(|v| {
+                v.iter()
+                    .any(|v| v.as_str().is_some_and(|v| wanted.contains(&v)))
+            })
+        };
+        merged(
+            self.0
+                .iter()
+                .filter(|(_, r)| has(r))
+                .map(|(range, _)| *range)
+                .collect(),
+            cell,
+        )
     }
 
     /// Where every rule begins and ends.
@@ -50,7 +71,10 @@ impl Rules {
 
     /// The value of the first rule that holds at `at`.
     pub fn at(&self, at: f64) -> Option<&Value> {
-        self.0.iter().find(|([a, b], _)| (*a..=*b).contains(&at)).map(|(_, r)| &r["value"])
+        self.0
+            .iter()
+            .find(|([a, b], _)| (*a..=*b).contains(&at))
+            .map(|(_, r)| &r["value"])
     }
 }
 
@@ -116,17 +140,34 @@ impl<'a> Line<'a> {
         if d >= self.length() {
             return self.points[self.points.len() - 1];
         }
-        let i = self.cum.partition_point(|&c| c < d).clamp(1, self.points.len() - 1);
+        let i = self
+            .cum
+            .partition_point(|&c| c < d)
+            .clamp(1, self.points.len() - 1);
         let (p, q) = (self.points[i - 1], self.points[i]);
         let span = self.cum[i] - self.cum[i - 1];
-        let t = if span > 0.0 { (d - self.cum[i - 1]) / span } else { 0.0 };
-        [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t]
+        let t = if span > 0.0 {
+            (d - self.cum[i - 1]) / span
+        } else {
+            0.0
+        };
+        [
+            p[0] + (q[0] - p[0]) * t,
+            p[1] + (q[1] - p[1]) * t,
+            p[2] + (q[2] - p[2]) * t,
+        ]
     }
 
     pub fn between(&self, from: f64, to: f64) -> Vec<G3857> {
         let (from, to) = (from * self.length(), to * self.length());
         let mut out = vec![self.at(from)];
-        out.extend(self.points.iter().zip(&self.cum).filter(|(_, &c)| c > from && c < to).map(|(p, _)| *p));
+        out.extend(
+            self.points
+                .iter()
+                .zip(&self.cum)
+                .filter(|(_, &c)| c > from && c < to)
+                .map(|(p, _)| *p),
+        );
         out.push(self.at(to));
         out
     }

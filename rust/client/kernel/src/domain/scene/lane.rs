@@ -35,9 +35,13 @@ impl GroupLanes {
 pub fn groups(words: &[u32]) -> impl Iterator<Item = (u32, u32)> + '_ {
     let groups = words.first().map_or(0, |&g| g as usize);
     let mut at = 1 + groups;
-    words.get(1..1 + groups).unwrap_or(&[]).iter().map(move |&n| {
-        let (first, n) = (at, n as usize);
-        at += GroupLanes::words(n);
-        (first as u32, n as u32)
-    })
+    words
+        .get(1..1 + groups)
+        .unwrap_or(&[])
+        .iter()
+        .map(move |&n| {
+            let (first, n) = (at, n as usize);
+            at += GroupLanes::words(n);
+            (first as u32, n as u32)
+        })
 }

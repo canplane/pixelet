@@ -19,7 +19,10 @@ async fn main() -> ExitCode {
             default_port: 3002,
             db_url_key: "DB_MAIN_URL",
         },
-        probe: Probe { sql: "select 1", name: "main" },
+        probe: Probe {
+            sql: "select 1",
+            name: "main",
+        },
         internal: API_INTERNAL,
     };
     serve(server, |_pool| Router::new()).await

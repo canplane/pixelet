@@ -43,9 +43,13 @@ fn run() -> Result<(), String> {
                         None => Ok(Done::Empty),
                         Some(divisions) => {
                             let at = Tile::new(DIVISION_LEAF, tile);
-                            let packed = pack(&divisions.encode(at)?, Level::Stored).map_err(|e| e.to_string())?;
+                            let packed = pack(&divisions.encode(at)?, Level::Stored)
+                                .map_err(|e| e.to_string())?;
                             set.write(at, &packed)?;
-                            Ok(Done::Wrote { bytes: packed.len() as u64, items: 0 })
+                            Ok(Done::Wrote {
+                                bytes: packed.len() as u64,
+                                items: 0,
+                            })
                         }
                     },
                 )?;

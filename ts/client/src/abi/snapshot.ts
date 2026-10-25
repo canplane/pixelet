@@ -1,14 +1,33 @@
 // @pxl/client/abi/snapshot.ts
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
+import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
-import { ActiveTool, DevicePoseStatus, GroundStatus, read_snapshot, type Snapshot } from "@/abi/cmd.spec.ts";
+import {
+  ActiveTool,
+  DevicePoseStatus,
+  GroundStatus,
+  read_snapshot,
+  type Snapshot,
+} from "@/abi/cmd.spec.ts";
 
 const INITIAL: Snapshot = {
-  focus: { status: GroundStatus.Idle, is_off_center: false, center: null, outside: false },
+  focus: {
+    status: GroundStatus.Idle,
+    is_off_center: false,
+    center: null,
+    outside: false,
+  },
   location: { status: DevicePoseStatus.Idle, has_location: false, error: null },
   companion: { person_ready: false, pet_ready: false },
-  holding: { tool: ActiveTool.Pointer, cube: 0, decor: 0, tier: 0, marker: false, words: "" },
+  holding: {
+    tool: ActiveTool.Pointer,
+    cube: 0,
+    decor: 0,
+    tier: 0,
+    marker: false,
+    words: "",
+  },
   orientation: { status: DevicePoseStatus.Idle, error: null },
   azimuth: 0,
   is_follow_mode: false,
@@ -24,21 +43,16 @@ const INITIAL: Snapshot = {
 };
 
 let snapshot: Snapshot = INITIAL;
-const snapshot_listeners = new Set<() => void>();
+const listeners = new Listeners();
 
 /** Read whole now: the kernel writes the next one in the same place. */
 export function set_snapshot(bytes: U8Array): void {
   snapshot = read_snapshot(new TreeReader(bytes).read_branch());
-  for (const listener of snapshot_listeners) listener();
+  listeners.notify();
 }
 
-export function watch_snapshot(listener: () => void): () => void {
-  snapshot_listeners.add(listener);
-  return () => snapshot_listeners.delete(listener);
-}
+export const watch_snapshot = listeners.watch;
 
 export function kernel_snapshot(): Snapshot {
   return snapshot;
 }
-
-/** `select` must return a primitive or an existing reference; a fresh object renders forever. */

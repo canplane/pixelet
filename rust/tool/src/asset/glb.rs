@@ -9,7 +9,9 @@ use serde::Deserialize;
 /// ingest writes part of pxl-spec and must build when that output is broken.
 type Mat4 = [f64; 16];
 
-const IDENTITY: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+const IDENTITY: Mat4 = [
+    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+];
 
 fn mul(a: &Mat4, b: &Mat4) -> Mat4 {
     let mut out = [0.0; 16];
@@ -90,7 +92,9 @@ fn json_chunk(bytes: &[u8]) -> Result<&[u8], String> {
     if u32_le(bytes, 16) != Some(CHUNK_JSON) {
         return Err("first chunk is not JSON".to_string());
     }
-    bytes.get(20..20 + len).ok_or_else(|| "truncated JSON chunk".to_string())
+    bytes
+        .get(20..20 + len)
+        .ok_or_else(|| "truncated JSON chunk".to_string())
 }
 
 fn local(node: &Node) -> Mat4 {
@@ -149,15 +153,23 @@ fn visit(gltf: &Gltf, index: usize, parent: &Mat4, bounds: &mut Bounds, depth: u
     if depth > 64 {
         return;
     }
-    let Some(node) = gltf.nodes.get(index) else { return };
+    let Some(node) = gltf.nodes.get(index) else {
+        return;
+    };
     let world = mul(parent, &local(node));
 
     if let Some(mesh) = node.mesh.and_then(|m| gltf.meshes.get(m)) {
         for primitive in &mesh.primitives {
-            let Some(accessor) = primitive.attributes.get("POSITION").and_then(|a| gltf.accessors.get(*a)) else {
+            let Some(accessor) = primitive
+                .attributes
+                .get("POSITION")
+                .and_then(|a| gltf.accessors.get(*a))
+            else {
                 continue;
             };
-            let (Some(min), Some(max)) = (&accessor.min, &accessor.max) else { continue };
+            let (Some(min), Some(max)) = (&accessor.min, &accessor.max) else {
+                continue;
+            };
             if min.len() < 3 || max.len() < 3 {
                 continue;
             }
@@ -187,7 +199,10 @@ pub fn extent(bytes: &[u8]) -> Result<[f64; 3], String> {
         Some(s) => vec![s],
         None => gltf.scenes.iter().collect(),
     };
-    let roots: Vec<usize> = scenes.iter().flat_map(|s| s.nodes.iter().copied()).collect();
+    let roots: Vec<usize> = scenes
+        .iter()
+        .flat_map(|s| s.nodes.iter().copied())
+        .collect();
     for r in roots {
         visit(&gltf, r, &IDENTITY, &mut bounds, 0);
     }
@@ -196,5 +211,9 @@ pub fn extent(bytes: &[u8]) -> Result<[f64; 3], String> {
         return Err("no POSITION accessor with bounds".to_string());
     }
     let round = |v: f64| (v * 100.0).round_ties_even() / 100.0;
-    Ok([round(bounds.hi[0] - bounds.lo[0]), round(bounds.hi[2] - bounds.lo[2]), round(bounds.hi[1] - bounds.lo[1])])
+    Ok([
+        round(bounds.hi[0] - bounds.lo[0]),
+        round(bounds.hi[2] - bounds.lo[2]),
+        round(bounds.hi[1] - bounds.lo[1]),
+    ])
 }

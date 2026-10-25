@@ -43,7 +43,12 @@ impl Base for Earth {
         EARTH.get(Residency::default)
     }
 
-    fn receive(_tile: Tile, _record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<Earth, Failure> {
+    fn receive(
+        _tile: Tile,
+        _record: u32,
+        pkt: &[u8],
+        _phases: &mut Phases,
+    ) -> Result<Earth, Failure> {
         earth::decode(pkt)?;
         Ok(Earth)
     }
@@ -91,17 +96,24 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
 /// The floor's tiles (`floor`, the view's) at the top as a window, its south-west tile first, and
 /// per tile row by row its layer plus one, zero where the global picture
 /// answers: residency as the GPU of generation `on` reads it, kept nowhere.
-pub fn earth_window(floor: impl Iterator<Item = Tile> + Clone, on: u32) -> ([i32; 2], [u32; REACH_TILES as usize]) {
+pub fn earth_window(
+    floor: impl Iterator<Item = Tile> + Clone,
+    on: u32,
+) -> ([i32; 2], [u32; REACH_TILES as usize]) {
     let mut layers = [0; REACH_TILES as usize];
     let at = |p: Tile| p.at;
-    let Some([first, _]) = floor.clone().next().map(at) else { return ([0; 2], layers) };
+    let Some([first, _]) = floor.clone().next().map(at) else {
+        return ([0; 2], layers);
+    };
     // X wraps: the window's west tile is the one fewest tiles east of the first.
     let around = 1 << EARTH_ZOOM;
     let east = |x: i32| wrap_index(EARTH_ZOOM, x - first);
     let x0 = first + floor.clone().map(|p| east(at(p)[0])).min().unwrap_or(0);
     let y0 = floor.clone().map(|p| at(p)[1]).min().unwrap_or(0);
     for p in floor {
-        let Some(record) = Earth::residency().frame(p) else { continue };
+        let Some(record) = Earth::residency().frame(p) else {
+            continue;
+        };
         if kept().sent_on(record) == Some(on) {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);

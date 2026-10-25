@@ -1,24 +1,24 @@
 # The ground one device does not draw
 
-A Galaxy S23 drew the decor, the models and the sky, and no terrain at all.
-An iPhone 13 mini drew everything. So did a Mac, in both Safari and Chrome,
-and so did an iPad. The ground had been missing on that one device since the
-bake moved onto the arena, and nothing anywhere said so.
+A Galaxy S23 drew the decor, the models and the sky, and no terrain at all. An
+iPhone 13 mini drew everything. So did a Mac, in both Safari and Chrome, and so
+did an iPad. The ground had been missing on that one device since the bake moved
+onto the arena, and nothing anywhere said so.
 
 It was a struct. Every chunk draw is eight floats the renderer lists and the
 shader reads back — where the mesh sits, whether it shows, the cell its boxes
-are measured in, the step their heights count, and which of the two box
-formats it holds. The shader declared them opening on a three-float vector:
+are measured in, the step their heights count, and which of the two box formats
+it holds. The shader declared them opening on a three-float vector:
 
 ```wgsl
 struct Draw { translation: vec3f, visible: f32, opacity: f32, unit: f32, … };
 @group(0) @binding(3) var<storage, read> draws: array<Draw>;
 ```
 
-A `vec3f` is twelve bytes and aligns to sixteen. WGSL puts the float after it
-at twelve; this device's backend put it at sixteen. So the first member read
-and every member past it took its neighbor's value, and the shader spent
-each draw's numbers one slot along from where they were written.
+A `vec3f` is twelve bytes and aligns to sixteen. WGSL puts the float after it at
+twelve; this device's backend put it at sixteen. So the first member read and
+every member past it took its neighbor's value, and the shader spent each draw's
+numbers one slot along from where they were written.
 
 ## What the device was
 
@@ -48,58 +48,56 @@ falls out of one table.
 | `box_words`          | the next draw's `x`     | a coordinate, so the format flipped draw to draw        |
 
 The last row is why the screen looked different every few frames, and why a
-probe that reached into a box's own words could come back right: the test
-that picks the box format was reading a world coordinate, so a draw took the
-leaf's format or the coarse one depending on where its chunk stood.
+probe that reached into a box's own words could come back right: the test that
+picks the box format was reading a world coordinate, so a draw took the leaf's
+format or the coarse one depending on where its chunk stood.
 
 The other shaders' draw records have the same shape and none of them failed,
-because theirs are `var<uniform>`, bound one draw at a time. The chunk
-shader's is the only one that is a struct inside a `var<storage>` array.
+because theirs are `var<uniform>`, bound one draw at a time. The chunk shader's
+is the only one that is a struct inside a `var<storage>` array.
 
 ## Why every instrument said it was fine
 
 The ledger reported the terrain as drawn: `chunk 51 draws / 315k tris`,
 `zoom_tris [z16 315k]`, every cap at zero, no slot wait, no stale chunk, 24
-pages resident, 436 tiers built, nothing refused. The fetch chain, the
-records, the mounts, the builds and the draw list were all clean — and they
-were right. The draws happened. They drew the wrong shape, and a census of
-counts is the wrong instrument for that.
+pages resident, 436 tiers built, nothing refused. The fetch chain, the records,
+the mounts, the builds and the draw list were all clean — and they were right.
+The draws happened. They drew the wrong shape, and a census of counts is the
+wrong instrument for that.
 
-It could not have caught a weaker fault either, because **the census counts
-the draw list, not the draws** (`gpu/renderer.rs`'s `frame_stat`). A draw the
+It could not have caught a weaker fault either, because **the census counts the
+draw list, not the draws** (`gpu/renderer.rs`'s `frame_stat`). A draw the
 renderer skips is still in the list it counted. Three places report success no
 matter what happens:
 
 - `gpu/arena.rs` creates its six buffers and never looks at whether they were
-  made — the id goes into the table either way, and `arena_bytes` counts a
-  group by its id, so the panel reads 236 MB whether or not the device has
-  any of it;
-- `gpu/renderer.rs`'s `draw_meshes` skips a draw whose buffer is missing with
-  a bare `continue`;
+  made — the id goes into the table either way, and `arena_bytes` counts a group
+  by its id, so the panel reads 236 MB whether or not the device has any of it;
+- `gpu/renderer.rs`'s `draw_meshes` skips a draw whose buffer is missing with a
+  bare `continue`;
 - `frame_stat` counts what was listed.
 
-None of that was the cause, and two of the three are closed below. The first
-is not: the shell already asks an out-of-memory scope and says when a buffer
-is refused, but the kernel never learns, because the answer comes back on a
-promise and the id has long since gone into the table.
+None of that was the cause, and two of the three are closed below. The first is
+not: the shell already asks an out-of-memory scope and says when a buffer is
+refused, but the kernel never learns, because the answer comes back on a promise
+and the id has long since gone into the table.
 
 ## How the device was read at all
 
 Neither device can be attached to: Safari wants a Mac on a cable, Chrome on
-Android wants `chrome://inspect` on a desktop. So the page says its console
-down the socket it was served over — `feature/dev/remote-console.ts` forwards
+Android wants `chrome://inspect` on a desktop. So the page says its console down
+the socket it was served over — `feature/dev/remote-console.ts` forwards
 `console.*` and both unhandled-error events to `/__console`, and
 `vite.config.ts` prints them and appends them to `apps/web/.dev-console.log`.
 Dev only, and gone from every built bundle.
 
-WebGPU needs a secure context, and a LAN address over plain http is not one,
-so the device reached the dev server through a tunnel
-(`cloudflared tunnel --url http://localhost:5173`, with `.trycloudflare.com`
-in `server.allowedHosts`).
+WebGPU needs a secure context, and a LAN address over plain http is not one, so
+the device reached the dev server through a tunnel
+(`cloudflared tunnel --url http://localhost:5173`, with `.trycloudflare.com` in
+`server.allowedHosts`).
 
-That channel is the reason any of this was possible, and it stayed: it caught
-a regression in this very fix, on two devices, within ten seconds of a
-reload.
+That channel is the reason any of this was possible, and it stayed: it caught a
+regression in this very fix, on two devices, within ten seconds of a reload.
 
 ## The twenty that were not why
 
@@ -130,49 +128,48 @@ Each line is a hypothesis and the measurement that ended it.
 
 ## Why isolating a mechanism never found it
 
-Three standalone pages were written, each using no project code, each
-rendering pixels it read back, so a device with no console could still say
-what it saw. Between them they covered the storage read, the instance-stepped
-attribute at the arena's own strides and offsets, the draw index on the first
-vertex, the six buffers held together, and the `Draw` struct itself. **Every
-case passed on the failing device.**
+Three standalone pages were written, each using no project code, each rendering
+pixels it read back, so a device with no console could still say what it saw.
+Between them they covered the storage read, the instance-stepped attribute at
+the arena's own strides and offsets, the draw index on the first vertex, the six
+buffers held together, and the `Draw` struct itself. **Every case passed on the
+failing device.**
 
 They had to. A layout disagreement is not a property of a mechanism but of a
-declaration, and a page that declares the struct in a shader of one binding is
-a page whose compiler had no reason to get it wrong. The smallest program that
+declaration, and a page that declares the struct in a shader of one binding is a
+page whose compiler had no reason to get it wrong. The smallest program that
 shows a driver fault is worth what it costs, and these were built at the right
 moments and killed what they were built to kill. What none of them could do is
 find a fault that exists only in the real thing — and after the fifth one that
 passed, the passing was the finding.
 
-What found it was cutting the real shader down on the device. Two cuts.
-Replace `unit` with the constant the finer of the two box formats always has,
-and the giant boxes that came back said the draw record was lying. Force the
-format test, and the ground appeared with its heights still wrong, which named
-the half of the record that was lying. Both cuts mean nothing on a correct
-device — that format's `unit` is always 1, and its pipeline is already its
-own — which is what made them readable. A probe that also changes the answer
-says nothing.
+What found it was cutting the real shader down on the device. Two cuts. Replace
+`unit` with the constant the finer of the two box formats always has, and the
+giant boxes that came back said the draw record was lying. Force the format
+test, and the ground appeared with its heights still wrong, which named the half
+of the record that was lying. Both cuts mean nothing on a correct device — that
+format's `unit` is always 1, and its pipeline is already its own — which is what
+made them readable. A probe that also changes the answer says nothing.
 
-Two cautions that still hold about the table above. The color probes — "red
-if this, green if that" — sample **one** vertex of thousands of overlapping
-full-screen triangles, so they prove "at least one box passed", never "all
-did"; only the probes read as a _shape_ (piled against scattered) carried
-their weight. And this remains a description of one device: what is recorded
-here is that two declarations of the same eight floats behave differently on
-it, not a fact about Adreno in general.
+Two cautions that still hold about the table above. The color probes — "red if
+this, green if that" — sample **one** vertex of thousands of overlapping
+full-screen triangles, so they prove "at least one box passed", never "all did";
+only the probes read as a _shape_ (piled against scattered) carried their
+weight. And this remains a description of one device: what is recorded here is
+that two declarations of the same eight floats behave differently on it, not a
+fact about Adreno in general.
 
 ## What changed
 
-- **The record is two four-float vectors.** The eight floats are written
-  exactly as before; the shader reads them as two sixteen-byte halves, which
-  no layout rule can place two ways.
+- **The record is two four-float vectors.** The eight floats are written exactly
+  as before; the shader reads them as two sixteen-byte halves, which no layout
+  rule can place two ways.
 - **The mesh arrives as instance-rate vertex attributes.** This came first and
   was not the fix — the storage pull would have worked once the record did. It
   stays because it is the right shape: a box is one record thirty-six vertices
   share, drawn as a run of consecutive boxes, which is what an instance-rate
-  input is for, and the hardware's vertex fetch does the address arithmetic
-  the shader was doing by hand.
+  input is for, and the hardware's vertex fetch does the address arithmetic the
+  shader was doing by hand.
 
   ```
   was   set_bind_group(1, arena)
@@ -184,50 +181,48 @@ it, not a fact about Adreno in general.
         @location(n) the box's words, stepMode "instance"
   ```
 
-  The arena, its slots, its pool and who owns the memory are untouched. This
-  is not the pre-arena block layout coming back — that was a different
-  question, about where a mesh lives, and it was answered (20260922,
-  `904a6721`).
+  The arena, its slots, its pool and who owns the memory are untouched. This is
+  not the pre-arena block layout coming back — that was a different question,
+  about where a mesh lives, and it was answered (20260922, `904a6721`).
 - **The draw record's index rides on the first vertex.** WebGPU fetches an
-  instance-stepped element at `first_instance + i`, so a first instance is
-  added to the binding's offset rather than read beside it, and cannot also
-  carry the record's index. No attribute steps per vertex, so the first vertex
-  slides nothing: the draw gives it the index times the cube, and the shader
-  divides it back out.
+  instance-stepped element at `first_instance + i`, so a first instance is added
+  to the binding's offset rather than read beside it, and cannot also carry the
+  record's index. No attribute steps per vertex, so the first vertex slides
+  nothing: the draw gives it the index times the cube, and the shader divides it
+  back out.
 - **The two box formats are two vertex entry points.** They were already two
-  pipelines, one per stride, so which format a draw holds is the pipeline's,
-  and the float the shader read it back from is gone from the record. A
-  pipeline record names its entry point now (`record.VS`, `record.VS_COARSE`),
-  and `every_pipeline_matches_its_shader` holds a pipeline's attributes
-  against the inputs of the entry point it actually enters.
+  pipelines, one per stride, so which format a draw holds is the pipeline's, and
+  the float the shader read it back from is gone from the record. A pipeline
+  record names its entry point now (`record.VS`, `record.VS_COARSE`), and
+  `every_pipeline_matches_its_shader` holds a pipeline's attributes against the
+  inputs of the entry point it actually enters.
 - **A record's head is one number.** Adding that word broke the frame, because
-  three parsers each held their own copy of how many words a record opens
-  with and only two were changed. The number is `record.HEAD` in the spec, and
-  all three read it.
+  three parsers each held their own copy of how many words a record opens with
+  and only two were changed. The number is `record.HEAD` in the spec, and all
+  three read it.
 - **A draw that cannot be issued stops the frame.** Both cases the bare
-  `continue` swallowed are faults in the list — an arena group with no buffer
-  is one the arena does not configure, and a block handle that will not
-  resolve is one already freed — so neither is a frame to get through. The
-  census then needs no second counter: every draw listed is a draw issued, so
-  reading the list is reading the draws. It also turned up an arm the split
-  into two pipelines had left behind, `PIPELINE_CHUNK_COARSE` falling through
-  to zero triangles, which is every tier past the leaves.
+  `continue` swallowed are faults in the list — an arena group with no buffer is
+  one the arena does not configure, and a block handle that will not resolve is
+  one already freed — so neither is a frame to get through. The census then
+  needs no second counter: every draw listed is a draw issued, so reading the
+  list is reading the draws. It also turned up an arm the split into two
+  pipelines had left behind, `PIPELINE_CHUNK_COARSE` falling through to zero
+  triangles, which is every tier past the leaves.
 - **The gap and the step are two numbers.** `MAX_DELTA_S` sat in the strobe,
   clamping what the host measured before anything saw it. How long a gap still
-  counts as motion is a question about what the guest simulates, so the
-  constant left the runtime: the host reports what passed, the world is
-  stepped by at most `MAX_STEP_S`, and `dt_ms` is the interval its own field
-  had always claimed it was.
+  counts as motion is a question about what the guest simulates, so the constant
+  left the runtime: the host reports what passed, the world is stepped by at
+  most `MAX_STEP_S`, and `dt_ms` is the interval its own field had always
+  claimed it was.
 
 ## Beside it, and not fixed here
 
-- **A refused buffer is still silent to the kernel.** The shell knows; the
-  arena does not, so `arena_bytes` counts a group whose id was handed out
-  rather than one whose buffer was made. The answer arrives on a promise,
-  which makes this a question about how a refusal gets back across, not a
-  measurement.
-- **The iPad's frame rate.** 91 ms a frame at 4.9 Mpx, of which the kernel is
-  1 ms and the GPU 17: 73 ms is neither, and it does not move when the draw
-  count does. It is outside both spans, so no lane added inside them can see
-  it. The world pass is the only span that is not zero — there is no depth
-  prepass — and the phone that drew no terrain at all ran at 60.
+- **A refused buffer is still silent to the kernel.** The shell knows; the arena
+  does not, so `arena_bytes` counts a group whose id was handed out rather than
+  one whose buffer was made. The answer arrives on a promise, which makes this a
+  question about how a refusal gets back across, not a measurement.
+- **The iPad's frame rate.** 91 ms a frame at 4.9 Mpx, of which the kernel is 1
+  ms and the GPU 17: 73 ms is neither, and it does not move when the draw count
+  does. It is outside both spans, so no lane added inside them can see it. The
+  world pass is the only span that is not zero — there is no depth prepass — and
+  the phone that drew no terrain at all ran at 60.

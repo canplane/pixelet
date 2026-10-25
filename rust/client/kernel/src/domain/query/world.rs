@@ -49,7 +49,10 @@ impl World<'static> {
             models: crate::domain::query::model::models(),
             tau,
         };
-        World { decor: Some(decor), ..self }
+        World {
+            decor: Some(decor),
+            ..self
+        }
     }
 }
 
@@ -69,12 +72,19 @@ impl<'a> World<'a> {
     /// entry's zoom or finer, where it is drawn as held; coarser, the stored
     /// fold stands.
     pub fn previewing(self, hide: Option<EntryAt>, carve: Option<EntryAt>) -> World<'a> {
-        World { hide, carve, ..self }
+        World {
+            hide,
+            carve,
+            ..self
+        }
     }
 
     /// As it is, the columns its queries read reported into `columns`.
     pub fn reading(self, columns: &'a Columns) -> World<'a> {
-        World { reading: Some(columns), ..self }
+        World {
+            reading: Some(columns),
+            ..self
+        }
     }
 
     /// The cells of `zoom` the box from `a` to `b` lies in, read

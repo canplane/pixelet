@@ -74,7 +74,13 @@ export type GlyphName = keyof typeof PHOSPHOR;
 type GlyphWeight = "regular" | "semibold" | "bold" | "heavy" | "black";
 
 /** Phosphor has two stroked weights; SF's heavier ones take its bold. */
-const WEIGHT: Record<GlyphWeight, IconWeight> = { regular: "regular", semibold: "bold", bold: "bold", heavy: "bold", black: "bold" };
+const WEIGHT: Record<GlyphWeight, IconWeight> = {
+  regular: "regular",
+  semibold: "bold",
+  bold: "bold",
+  heavy: "bold",
+  black: "bold",
+};
 
 export interface IconProps {
   glyph: GlyphName;
@@ -85,7 +91,14 @@ export interface IconProps {
 
 export function Icon({ glyph, size, color, weight = "regular" }: IconProps) {
   const [Drawn, filled, turn] = PHOSPHOR[glyph];
-  return <Drawn size={size} color={color} weight={filled ? "fill" : WEIGHT[weight]} style={turn ? { transform: [{ rotate: `${turn}deg` }] } : undefined} />;
+  return (
+    <Drawn
+      size={size}
+      color={color}
+      weight={filled ? "fill" : WEIGHT[weight]}
+      style={turn ? { transform: [{ rotate: `${turn}deg` }] } : undefined}
+    />
+  );
 }
 
 export function Spinner({ size, color }: { size: f64; color: string }) {

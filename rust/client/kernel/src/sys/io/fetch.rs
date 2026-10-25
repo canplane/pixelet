@@ -2,12 +2,12 @@
 
 //! The world's reads. The kernel opens a tile as its bake's object by its
 //! subject (sys/io/file.rs); its version, address and protocol are the
-//! client's (ts/client/src/namespace/tile.ts). What an absent object means is decided here per stream.
+//! client's (ts/client/src/host/io/tile.ts). What an absent object means is decided here per stream.
 //! Every body is a block (`sys/io/body.rs`) released in the command that
 //! decodes it, unless a store keeps it.
 
 use xpute_guest::ipc::sys::Fd;
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_guest::mem::heap::Block;
 use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 use xpute_kit::collection::list::List;
@@ -17,9 +17,9 @@ use crate::sys::io::body;
 use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::file::{self, Opened, Owner};
-use crate::sys::io::host::Refused;
 use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::{attempt_of, settle, Credit};
+use crate::sys::io::room::Refused;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -27,7 +27,10 @@ use xpute_guest::global::Global;
 /// Assets are opened below the assets' root (sys/io/loader.rs), never here.
 pub fn start(credit: Credit, stream: Stream, subject: u64) {
     let Some(bake) = stream.bake() else { return };
-    let owner = Owner::Fetch { key: credit.key(), at_ms: now() };
+    let owner = Owner::Fetch {
+        key: credit.key(),
+        at_ms: now(),
+    };
     file::open(credit, bake as u32, subject, owner);
 }
 
@@ -51,7 +54,7 @@ pub fn release(block: Option<Block>) {
 pub fn body<'a>((at, bytes): Block) -> &'a [u8] {
     // SAFETY: the block `opened` acquired for this body alone, `bytes` long,
     // not released while the view is read.
-    unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at), bytes as usize) }
+    unsafe { core::slice::from_raw_parts(mem::at::<u8>(at), bytes as usize) }
 }
 
 enum Got {
@@ -89,7 +92,11 @@ static ANSWERED: Global<List<Answered, { MAX_CREDITS as usize }>> = Global::new(
 
 /// How many answers of one of `of` are not yet taken.
 pub fn answered(of: &[Stream]) -> usize {
-    ANSWERED.get(List::new).iter().filter(|a| of.contains(&a.stream)).count()
+    ANSWERED
+        .get(List::new)
+        .iter()
+        .filter(|a| of.contains(&a.stream))
+        .count()
 }
 
 /// The oldest answer of one of `of`, not yet taken. No more are kept than
@@ -135,7 +142,12 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
                 Ok(block) => {
                     // SAFETY: a block just acquired, `n` long, and no one else's;
                     // the arrival holds it until `fetch_task` waits out the turn.
-                    unsafe { file::read(fd, core::slice::from_raw_parts_mut(ptr_at::<u8>(block.0), n as usize)) };
+                    unsafe {
+                        file::read(
+                            fd,
+                            core::slice::from_raw_parts_mut(mem::at::<u8>(block.0), n as usize),
+                        )
+                    };
                     Got::Read(Some(block))
                 }
                 Err(refused) => Got::Refused(refused),
@@ -144,7 +156,11 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
             got
         }
     };
-    arrived().push(Arrival { key, got, net_ms: now() - at_ms });
+    arrived().push(Arrival {
+        key,
+        got,
+        net_ms: now() - at_ms,
+    });
     arrivals().notify();
 }
 
@@ -185,7 +201,13 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         Got::Absent | Got::Read(Some(_)) => {
             // An asset loads through the loader (sys/io/loader.rs), never a fetch: nothing would take its answer.
             xpute_kit::ensure!(stream != Stream::asset, ENOTRECOVERABLE);
-            ANSWERED.get(List::new).push(Answered { key, stream, subject, block, phases });
+            ANSWERED.get(List::new).push(Answered {
+                key,
+                stream,
+                subject,
+                block,
+                phases,
+            });
             request_world_tick();
             return;
         }

@@ -4,14 +4,36 @@
 
 import { assertEquals, assertThrows } from "@std/assert";
 
-import { b64url_to_bytes, b64url_to_uuid, bytes_to_b64url, bytes_to_hex, ct_eq, generate_uuid, hex_to_bytes, is_b64url, uuid_equals, uuid_to_b64url } from "@xpute/kit/codec/encoding.ts";
+import {
+  b64url_to_bytes,
+  b64url_to_uuid,
+  bytes_to_b64url,
+  bytes_to_hex,
+  ct_eq,
+  generate_uuid,
+  hex_to_bytes,
+  is_b64url,
+  uuid_equals,
+  uuid_to_b64url,
+} from "@xpute/kit/codec/encoding.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
 const bytes = (...b: number[]) => new Uint8Array(b);
 
 Deno.test("hex round trips, pads a byte under 0x10, and reads no half a pair", () => {
-  assertEquals(bytes_to_hex(bytes(0, 1, 15, 16, 127, 128, 255)), "00010f107f80ff");
-  assertEquals(Array.from(hex_to_bytes("00010f107f80ff")), [0, 1, 15, 16, 127, 128, 255]);
+  assertEquals(
+    bytes_to_hex(bytes(0, 1, 15, 16, 127, 128, 255)),
+    "00010f107f80ff",
+  );
+  assertEquals(Array.from(hex_to_bytes("00010f107f80ff")), [
+    0,
+    1,
+    15,
+    16,
+    127,
+    128,
+    255,
+  ]);
   assertEquals(bytes_to_hex(bytes()), "");
   assertEquals(hex_to_bytes("").length, 0);
   // Either case reads, and what comes back is the one the encoder writes.
@@ -32,10 +54,16 @@ Deno.test("hex refuses what it cannot read whole rather than taking what it can"
 
 Deno.test("base64url round trips and carries no padding or plus or slash", () => {
   for (const n of [0, 1, 2, 3, 15, 16, 17, 64]) {
-    const b = bytes(...Array.from({ length: n }, (_, i) => (i * 37 + 11) & 0xff));
+    const b = bytes(
+      ...Array.from({ length: n }, (_, i) => (i * 37 + 11) & 0xff),
+    );
     const s = bytes_to_b64url(b);
     assertEquals(is_b64url(s), true, `${s} is not base64url`);
-    assertEquals(Array.from(b64url_to_bytes(s)), Array.from(b), `${n} bytes did not round trip`);
+    assertEquals(
+      Array.from(b64url_to_bytes(s)),
+      Array.from(b),
+      `${n} bytes did not round trip`,
+    );
   }
   // The three characters base64url exists to avoid, none of which a URL or a
   // bucket key may carry.
@@ -59,6 +87,10 @@ Deno.test("ct_eq answers on the bytes and not on where they first differ", () =>
   assertEquals(ct_eq(bytes(1, 2, 3), bytes(1, 2, 3)), true);
   assertEquals(ct_eq(bytes(1, 2, 3), bytes(1, 2, 4)), false);
   assertEquals(ct_eq(bytes(9, 2, 3), bytes(1, 2, 3)), false);
-  assertEquals(ct_eq(bytes(1, 2), bytes(1, 2, 3)), false, "a prefix compared equal");
+  assertEquals(
+    ct_eq(bytes(1, 2), bytes(1, 2, 3)),
+    false,
+    "a prefix compared equal",
+  );
   assertEquals(ct_eq(bytes(), bytes()), true);
 });

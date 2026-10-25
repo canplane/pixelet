@@ -3,7 +3,9 @@
 //! Pipelines made once each. Bind group layouts are shared by their words, so a
 //! bind group made for one pipeline serves every one declaring the same group.
 
-use crate::frame::shader::record::{compute_entry, pipeline as record_of, source, HEAD, PIPELINES, SHADERS};
+use crate::frame::shader::record::{
+    compute_entry, pipeline as record_of, source, HEAD, PIPELINES, SHADERS,
+};
 use crate::gpu::api::{Format, Gpu};
 
 pub const GROUPS: usize = 4;
@@ -61,7 +63,10 @@ impl Pipelines {
 
     fn layout(&mut self, g: &Gpu, entries: &[u32]) -> u32 {
         let key = entries.iter().fold(0xcbf29ce484222325, |k, &w| fold(k, w));
-        if let Some(&(_, id)) = self.layouts[..self.layout_len].iter().find(|(k, _)| *k == key) {
+        if let Some(&(_, id)) = self.layouts[..self.layout_len]
+            .iter()
+            .find(|(k, _)| *k == key)
+        {
             return id;
         }
         xpute_kit::ensure!(self.layout_len < LAYOUTS, ENOSPC, LAYOUTS);

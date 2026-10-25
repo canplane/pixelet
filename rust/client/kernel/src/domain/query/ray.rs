@@ -126,7 +126,10 @@ impl<'a> Query for Walker<'_, 'a> {
 
     /// The child is the one its index's low bits name.
     fn child(&mut self, at: &At, _: Zoom, node: [i32; 3]) -> At {
-        self.world.child(at, (node[0] & 1 | (node[1] & 1) << 1 | (node[2] & 1) << 2) as usize)
+        self.world.child(
+            at,
+            (node[0] & 1 | (node[1] & 1) << 1 | (node[2] & 1) << 2) as usize,
+        )
     }
 
     /// The world's answer (`World::node`), the first lack kept; a node
@@ -134,7 +137,14 @@ impl<'a> Query for Walker<'_, 'a> {
     /// the ray passes within where decor is drawn as held strikes what
     /// stands near it, and a node no block under fills is still gone into
     /// where decor may stand in it, down to the leaf cells.
-    fn node(&mut self, at: &mut At, _: Zoom, _: [i32; 3], asked: [Zoom; 2], t0: f32) -> In<[u32; 2]> {
+    fn node(
+        &mut self,
+        at: &mut At,
+        _: Zoom,
+        _: [i32; 3],
+        asked: [Zoom; 2],
+        t0: f32,
+    ) -> In<[u32; 2]> {
         let (zoom, c) = at.node;
         let t0 = f64::from(t0);
         // What is placed and where the ground stands about it, off what was
@@ -165,7 +175,10 @@ impl<'a> Query for Walker<'_, 'a> {
             Answer::Exact(i) => i,
         };
         self.answered = true;
-        let decor = zoom < GROUND.cell() && self.strike.as_ref().is_some_and(|(_, s)| t0 < s.held && self.world.may_strike(s, at.node, at.handed.shard));
+        let decor = zoom < GROUND.cell()
+            && self.strike.as_ref().is_some_and(|(_, s)| {
+                t0 < s.held && self.world.may_strike(s, at.node, at.handed.shard)
+            });
         match answer.kind {
             // Air coarser than asked, gone into where decor may stand in it.
             Kind::Block if zoom < asked[1] && decor => In {
@@ -201,7 +214,9 @@ impl<'a> World<'a> {
     /// Decor, which is no block, is struck at the leaf cells it passes.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
         let (met, strike) = self.along(ray, detail, Until::Fills, self.strike(ray));
-        let decor = strike.and_then(|s| s.best).filter(|&(d, _)| met.value().flatten().is_none_or(|h: Hit| d < h.t));
+        let decor = strike
+            .and_then(|s| s.best)
+            .filter(|&(d, _)| met.value().flatten().is_none_or(|h: Hit| d < h.t));
         match (decor, met) {
             (Some((d, i)), Answer::Nothing(l)) => Answer::Coarser(Some(decor_hit(ray, d, i)), l),
             (Some((d, i)), met) => met.map(|_| Some(decor_hit(ray, d, i))),
@@ -212,7 +227,13 @@ impl<'a> World<'a> {
     /// The first block along `ray` that `until` stops at, at the zoom `detail`
     /// asks where it meets it (pxl-spec-core `cast::first`), from the ray's
     /// origin, over the world where it stands there (pxl-spec `world::origin`).
-    pub(super) fn along(&self, ray: &Ray, detail: Detail, until: Until, strike: Option<Strike<'a>>) -> (Answer<Option<Hit>>, Option<Strike<'a>>) {
+    pub(super) fn along(
+        &self,
+        ray: &Ray,
+        detail: Detail,
+        until: Until,
+        strike: Option<Strike<'a>>,
+    ) -> (Answer<Option<Hit>>, Option<Strike<'a>>) {
         let mut walker = Walker {
             world: self,
             lack: None,
@@ -266,13 +287,18 @@ impl<'a> World<'a> {
         // The corner's Q3 steps from the origin's unit cell, exact: the roots
         // apart, its place in its root, less the origin's unit cell's there.
         let n = s.node;
-        let steps = |k: usize| (i64::from(n.roots[k]) << 32) + i64::from(n.corner[k]) - i64::from(q[k] as u32 & !0xff);
+        let steps = |k: usize| {
+            (i64::from(n.roots[k]) << 32) + i64::from(n.corner[k]) - i64::from(q[k] as u32 & !0xff)
+        };
         let min: V3 = std::array::from_fn(|k| unit[k] + q3::to_real(steps(k)));
         let axis = s.axis as usize;
         let mut normal = [0.0; 3];
         normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };
         let struck = match answer::placed(s.block[0]) {
-            true => self.objects.placed(zoom, wrap_cell(zoom, c), s.at.handed.placed).map_or(Struck::Objects, |e| Struck::Object(e.id())),
+            true => self
+                .objects
+                .placed(zoom, wrap_cell(zoom, c), s.at.handed.placed)
+                .map_or(Struck::Objects, |e| Struck::Object(e.id())),
             false => Struck::Ground,
         };
         // A block kept short of its cube is the box it is drawn as, about

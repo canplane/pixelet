@@ -24,8 +24,20 @@ fn deque_holds_what_the_record_holds() {
             popped = d.pop_back().map_or("none".to_string(), |x| x.to_string());
         }
         assert_eq!(popped, v.s(&format!("{k}.popped")), "{k}.popped");
-        assert_eq!((d.head, d.len), (v.u32(&format!("{k}.head")), v.u32(&format!("{k}.len"))), "{k}");
-        assert_eq!(d.front().map_or("none".to_string(), |x| x.to_string()), v.s(&format!("{k}.front")), "{k}.front");
-        assert_eq!(d.back().map_or("none".to_string(), |x| x.to_string()), v.s(&format!("{k}.back")), "{k}.back");
+        assert_eq!(
+            (d.head, d.len),
+            (v.u32(&format!("{k}.head")), v.u32(&format!("{k}.len"))),
+            "{k}"
+        );
+        assert_eq!(
+            d.front().map_or("none".to_string(), |x| x.to_string()),
+            v.s(&format!("{k}.front")),
+            "{k}.front"
+        );
+        assert_eq!(
+            d.back().map_or("none".to_string(), |x| x.to_string()),
+            v.s(&format!("{k}.back")),
+            "{k}.back"
+        );
     });
 }

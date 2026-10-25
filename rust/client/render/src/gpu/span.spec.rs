@@ -6,13 +6,14 @@
 // in the order the renderer encodes them, and the kind of frame it made; the profiler records and reports
 // them by these names.
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code
+)]
 
 pub const GPU_SPAN_NAMES: usize = 11;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -50,7 +51,9 @@ impl GpuSpanName {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<GpuSpanName> {
-        GpuSpanName::ALL.into_iter().find(|member| *member as u8 == value)
+        GpuSpanName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -84,6 +87,8 @@ impl FrameKind {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<FrameKind> {
-        FrameKind::ALL.into_iter().find(|member| *member as u8 == value)
+        FrameKind::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }

@@ -29,7 +29,6 @@ struct Applied {
 // How full the rings ran since the stat was last taken (`Door::take_stat`):
 // each figure the most it reached.
 struct DoorStat {
-    // The completion ring's length.
     std::uint32_t cq_peak = 0;
     // The submission ring's length as a drain started: how close it came to full.
     std::uint32_t sq_peak = 0;
@@ -43,12 +42,11 @@ class Door {
   public:
     // `most_signals` is the most one command raises, or the turn once its drain
     // is done: the program's bound.
-    Door(Ring submission, Ring completion, std::uint32_t most_signals) noexcept : sq_(submission), cq_(completion), reserve_(most_signals + 1) {}
+    Door(Ring sq, Ring cq, std::uint32_t most_signals) noexcept : sq_(sq), cq_(cq), reserve_(most_signals + 1) {}
 
-    const Ring &submission() const noexcept { return sq_; }
-    const Ring &completion() const noexcept { return cq_; }
+    const Ring &sq() const noexcept { return sq_; }
+    const Ring &cq() const noexcept { return cq_; }
 
-    // The peaks since the last take, which starts the next from zero.
     DoorStat take_stat() const noexcept { return std::exchange(stat_, {}); }
 
     void post(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result) const noexcept {
@@ -74,15 +72,15 @@ class Door {
         std::uint32_t tail = cq_.tail();
         stat_.sq_peak = std::max(stat_.sq_peak, sq_.len());
         while (has_room()) {
-            std::optional<Ring::Message> m = sq_.peek();
-            if (!m) break;
-            Result<std::span<const std::uint8_t>> pkt = sq_.packet(*m);
-            Applied a = pkt ? apply(m->cmd, *pkt) : Applied{.error = pkt.error().code};
+            std::optional<Frame> f = sq_.peek();
+            if (!f) break;
+            Result<std::span<const std::uint8_t>> pkt = sq_.packet(*f);
+            Applied a = pkt ? apply(f->cmd, *pkt) : Applied{.error = pkt.error().errnum};
             sq_.advance();
             if (a.error != Errno::ok) {
-                post(m->tag, m->cmd, frame::RES, static_cast<std::int32_t>(a.error));
-            } else if (m->flags & frame::ACKREQ) {
-                post(m->tag, m->cmd, frame::RES, a.value);
+                post(f->tag, f->cmd, frame::RES, static_cast<std::int32_t>(a.error));
+            } else if (f->flags & frame::ACKREQ) {
+                post(f->tag, f->cmd, frame::RES, a.value);
             }
         }
         stat_.left_peak = std::max(stat_.left_peak, sq_.len());
@@ -92,7 +90,7 @@ class Door {
     bool pending() const noexcept { return !sq_.empty(); }
 
   private:
-    bool has_room() const noexcept { return cq_.len() + reserve_ <= cq_.capacity(); }
+    bool has_room() const noexcept { return cq_.len() + reserve_ <= cq_.cap(); }
 
     void posted(std::uint32_t cmd, Errno e) const noexcept {
         stat_.cq_peak = std::max(stat_.cq_peak, cq_.len());

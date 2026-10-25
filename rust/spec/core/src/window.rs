@@ -61,7 +61,7 @@ pub const FILL_SHARE_MS: f32 = 4.0;
 pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_SQUARE_MS) as u32;
 
 /// The read-backs a square's cells and its ways' records come back in
-/// (pxl-render gpu/renderer.rs `read_back`): two frames' fills, so one
+/// (pxl-render gpu/ray/ground.rs `read_back`): two frames' fills, so one
 /// frame's mappings are still landing while the next is copied.
 pub const READS: u32 = 2 * HANDED;
 
@@ -81,10 +81,24 @@ pub const FRESH_SHARD: u32 = FRESH_FIRST + 2;
 pub const FRESH_WORDS: u32 = FRESH_SHARD + 1;
 
 /// A fresh square's words (`FRESH_WORDS`), `place` its `place_word`.
-pub const fn fresh(square: u32, place: u32, cell: Zoom, first: [i32; 2], shard: crate::area::Shard) -> [u32; FRESH_WORDS as usize] {
+pub const fn fresh(
+    square: u32,
+    place: u32,
+    cell: Zoom,
+    first: [i32; 2],
+    shard: crate::area::Shard,
+) -> [u32; FRESH_WORDS as usize] {
     let mut w = [0; FRESH_WORDS as usize];
-    (w[FRESH_SQUARE as usize], w[FRESH_PLACE as usize], w[FRESH_CELL as usize]) = (square, place, cell);
-    (w[FRESH_FIRST as usize], w[FRESH_FIRST as usize + 1], w[FRESH_SHARD as usize]) = (first[0] as u32, first[1] as u32, shard.word());
+    (
+        w[FRESH_SQUARE as usize],
+        w[FRESH_PLACE as usize],
+        w[FRESH_CELL as usize],
+    ) = (square, place, cell);
+    (
+        w[FRESH_FIRST as usize],
+        w[FRESH_FIRST as usize + 1],
+        w[FRESH_SHARD as usize],
+    ) = (first[0] as u32, first[1] as u32, shard.word());
     w
 }
 
@@ -123,7 +137,10 @@ pub const fn place_of(w: u32) -> [u32; 2] {
 /// The square a fresh square's first cell (`FRESH_FIRST`) lies in, at its
 /// cells' zoom: what a reader of the handed records finds its slot by.
 pub const fn fresh_square(first: [u32; 2]) -> [i32; 2] {
-    [first[0] as i32 >> SQUARE_SHIFT, first[1] as i32 >> SQUARE_SHIFT]
+    [
+        first[0] as i32 >> SQUARE_SHIFT,
+        first[1] as i32 >> SQUARE_SHIFT,
+    ]
 }
 
 /// How far from its centre a window holds every cell, in its own cells: a
@@ -154,7 +171,10 @@ pub fn slot(q: [i32; 2]) -> u32 {
 /// column, and shifts it to a level's entry as it is.
 pub fn square_of(g: [i32; 2]) -> ([i32; 2], [u32; 2]) {
     let m = (SQUARE - 1) as i32;
-    ([g[0] >> SQUARE_SHIFT, g[1] >> SQUARE_SHIFT], [(g[0] & m) as u32, (g[1] & m) as u32])
+    (
+        [g[0] >> SQUARE_SHIFT, g[1] >> SQUARE_SHIFT],
+        [(g[0] & m) as u32, (g[1] & m) as u32],
+    )
 }
 
 /// Where a square's levels begin among them, in entries: level `j`, from 0,
@@ -231,7 +251,8 @@ pub const WAYS_SQUARE_SEGMENTS: u32 = 1065;
 /// each. None holds more than `WAYS_SQUARE_SEGMENTS` of either.
 pub const LINES_ENTRIES_AT: u32 = crate::ways::HEADER_WORDS + WAYS_BINS;
 pub const LINES_SEGMENTS_AT: u32 = LINES_ENTRIES_AT + WAYS_SQUARE_SEGMENTS.div_ceil(2);
-pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::ways::SEGMENT_WORDS as u32;
+pub const LINES_WORDS: u32 =
+    LINES_SEGMENTS_AT + WAYS_SQUARE_SEGMENTS * crate::ways::SEGMENT_WORDS as u32;
 
 /// The most runs a square's columns read as (`ways::runs`), a bore's
 /// lining among them: the most of the format-12 set (2026-10-18), measured
@@ -284,7 +305,7 @@ pub const fn laid_half(look: u32, gone: u32) -> u32 {
 /// A square's words on a GPU, what outlives its fill, its lanes in order:
 /// its columns, its levels, its cells as laid and its ways' tree's root. The
 /// windows' squares are one storage buffer bound whole, under WebGPU's
-/// floor (pxl-render gpu/renderer.rs `GROUND_BYTES`).
+/// floor (pxl-render gpu/ray/ground.rs `GROUND_BYTES`).
 pub const COLUMNS_AT: u32 = 0;
 pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const LAID_AT: u32 = LEVELS_AT + LEVEL_WORDS;
@@ -381,7 +402,10 @@ fn bin_of(sq: &impl Square, c: [i32; 2]) -> (u32, u32) {
     if !held(c) {
         return (0, 0);
     }
-    let (x, y) = (c[0].clamp(0, SQUARE as i32 - 1) as u32, c[1].clamp(0, SQUARE as i32 - 1) as u32);
+    let (x, y) = (
+        c[0].clamp(0, SQUARE as i32 - 1) as u32,
+        c[1].clamp(0, SQUARE as i32 - 1) as u32,
+    );
     let b = (y >> WAYS_SHIFT) * WAYS_BINS_ACROSS + (x >> WAYS_SHIFT);
     let w = sq.line(crate::ways::HEADER_WORDS + b);
     (w & 0xffff, w >> 16)
@@ -431,7 +455,10 @@ impl<Q: Square> crate::ways::Columns for Q {
     fn center(&self, c: [i32; 2]) -> [f32; 2] {
         let p = self.place();
         let center = crate::lattice::CELL_CENTER;
-        [(p[0] * SQUARE) as f32 + c[0] as f32 + center, (p[1] * SQUARE) as f32 + c[1] as f32 + center]
+        [
+            (p[0] * SQUARE) as f32 + c[0] as f32 + center,
+            (p[1] * SQUARE) as f32 + c[1] as f32 + center,
+        ]
     }
     /// Off its cell as laid (`area::laid`), as a read of it walls it: a
     /// square's first cell lies on a leaf cell's first, so `c` places the
@@ -494,13 +521,21 @@ const FOUND_ZOOM_MASK: u32 = (1 << crate::ZOOM_BITS) - 1;
 /// A `Found`'s word's bits: its berth, here, and its two zooms.
 const FOUND_BITS: u32 = FOUND_CELL_SHIFT + crate::ZOOM_BITS;
 const _: () = assert!(FOUND_BITS <= 32);
-const _: () = assert!(FIRST_CELL >= 2, "a zoom asked is never NONE's, nor one finer");
+const _: () = assert!(
+    FIRST_CELL >= 2,
+    "a zoom asked is never NONE's, nor one finer"
+);
 
 impl Found {
     pub const NONE: Found = Found(0);
 
     const fn of(cell: Zoom, from: Zoom, berth: u32, here: bool) -> Found {
-        Found(cell << FOUND_CELL_SHIFT | from << FOUND_FROM_SHIFT | (here as u32) << FOUND_BERTH_BITS | berth)
+        Found(
+            cell << FOUND_CELL_SHIFT
+                | from << FOUND_FROM_SHIFT
+                | (here as u32) << FOUND_BERTH_BITS
+                | berth,
+        )
     }
     /// The zoom its cells were asked at.
     pub const fn cell(self) -> Zoom {
@@ -550,7 +585,10 @@ pub fn step(w: &impl Squares, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, 
     // answers, or to the first window where it answers none.
     let known = above != Found::NONE && cell >= above.from();
     let (floor, mut f) = if known {
-        (above.cell(), Found::of(cell, above.from(), above.berth(), above.here()))
+        (
+            above.cell(),
+            Found::of(cell, above.from(), above.berth(), above.here()),
+        )
     } else {
         (FIRST_CELL - 1, Found::of(cell, FIRST_CELL, 0, false))
     };
@@ -589,14 +627,24 @@ pub fn cell(w: &impl Squares, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u3
         return (VOID, 0, laid_half(VOID, 0), f);
     }
     let (from, berth, i) = (f.from(), f.berth(), index_of(at));
-    (w.look(from, berth, i), w.column(from, berth, i), w.laid(from, berth, i), f)
+    (
+        w.look(from, berth, i),
+        w.column(from, berth, i),
+        w.laid(from, berth, i),
+        f,
+    )
 }
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
 /// the leaves a leaf's, stepped from `place`, where the column's own cells
 /// were found (`step`), with the area's edge laid on it off the cell as its
 /// fill laid it (`area::laid`); and where it is held.
-pub fn ground(w: &(impl Squares + crate::area::Area), place: Found, zoom: Zoom, b: [i32; 2]) -> (crate::ground::Cell, Found) {
+pub fn ground(
+    w: &(impl Squares + crate::area::Area),
+    place: Found,
+    zoom: Zoom,
+    b: [i32; 2],
+) -> (crate::ground::Cell, Found) {
     let read = held_to(zoom);
     let (word, column, laid, f) = cell(w, place, read, cell_at(zoom, read, b));
     let (top, part) = crate::ground::top(zoom, column_top(column) as f32);
@@ -613,7 +661,9 @@ pub fn ground(w: &(impl Squares + crate::area::Area), place: Found, zoom: Zoom, 
 /// written before: the join of the four under it, each source's its own
 /// (`ground::joined`), as bound words.
 pub fn join(w: &impl Squares, cell: Zoom, berth: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
-    let under = |q: u32| crate::ground::bounds_of(w.level(cell, berth, j - 1, [2 * x + q % 2, 2 * y + q / 2]));
+    let under = |q: u32| {
+        crate::ground::bounds_of(w.level(cell, berth, j - 1, [2 * x + q % 2, 2 * y + q / 2]))
+    };
     let mut b = under(0);
     let mut q = 1;
     while q < 4 {
@@ -657,11 +707,18 @@ pub struct Slot {
     pub ticket: u32,
 }
 
-const _: () = assert!(core::mem::size_of::<Slot>() == 16, "a slot is a row of four words");
+const _: () = assert!(
+    core::mem::size_of::<Slot>() == 16,
+    "a slot is a row of four words"
+);
 
 impl Slot {
     pub const fn absent(square: [i32; 2]) -> Slot {
-        Slot { square, present: 0, ticket: 0 }
+        Slot {
+            square,
+            present: 0,
+            ticket: 0,
+        }
     }
 
     /// The row the buffer's four words hold.
@@ -749,7 +806,10 @@ pub fn fold(w: &impl Squares, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS 
                 [crate::ground::UNBOUNDED; 2]
             }
         } else {
-            unfold(w.joined(cell, joined_index(l - 1, [0, 0]) + 4 * b + k), first)
+            unfold(
+                w.joined(cell, joined_index(l - 1, [0, 0]) + 4 * b + k),
+                first,
+            )
         };
         // Component-wise: a GPU has no array equality. A half not held is
         // none of either source.
@@ -794,13 +854,23 @@ fn held_of(w: &impl Squares, cell: Zoom, g: [i32; 2], l: u32) -> (crate::ground:
     }
     let (q, _) = square_of([wrap_index(cell, g[0]), g[1]]);
     // The node's first square from the window's, X the short way round.
-    let d = [wrap_index(squares_zoom(cell), q[0] - first[0]), q[1] - first[1]];
+    let d = [
+        wrap_index(squares_zoom(cell), q[0] - first[0]),
+        q[1] - first[1],
+    ];
     let (side, across) = (1i32 << l, ACROSS as i32);
     if d[0] >= across || d[1] >= across || d[0] + side <= 0 || d[1] + side <= 0 {
         return ([crate::ground::EMPTY; 2], false);
     }
-    let all = l <= JOINED_LEVELS && d[0] >= 0 && d[1] >= 0 && d[0] + side <= across && d[1] + side <= across;
-    let (level, m) = (if l > JOINED_LEVELS { JOINED_LEVELS } else { l }, (ACROSS - 1) as i32);
+    let all = l <= JOINED_LEVELS
+        && d[0] >= 0
+        && d[1] >= 0
+        && d[0] + side <= across
+        && d[1] + side <= across;
+    let (level, m) = (
+        if l > JOINED_LEVELS { JOINED_LEVELS } else { l },
+        (ACROSS - 1) as i32,
+    );
     let at = [((q[0] & m) as u32) >> level, ((q[1] & m) as u32) >> level];
     let b = unfold(w.joined(cell, joined_index(level, at)), first);
     // A block not held whole may hold some of its squares present, which a
@@ -822,7 +892,12 @@ fn held_of(w: &impl Squares, cell: Zoom, g: [i32; 2], l: u32) -> (crate::ground:
 /// window's zoom; none (`ground::UNBOUNDED`) where nothing bounds it, which
 /// only splits more; false where a window it needs holds none of it, a
 /// lack. The one way a bound over a node is read.
-pub fn bound_over(w: &impl Squares, place: &mut Found, [coarsest, finest]: [Zoom; 2], (zoom, c): (Zoom, [i32; 2])) -> (crate::ground::Bounds, Zoom, bool) {
+pub fn bound_over(
+    w: &impl Squares,
+    place: &mut Found,
+    [coarsest, finest]: [Zoom; 2],
+    (zoom, c): (Zoom, [i32; 2]),
+) -> (crate::ground::Bounds, Zoom, bool) {
     let (top, bottom) = (held_to(finest), held_to(coarsest));
     let (mut b, mut first) = ([crate::ground::EMPTY; 2], top);
     let mut z = top;
@@ -840,7 +915,15 @@ pub fn bound_over(w: &impl Squares, place: &mut Found, [coarsest, finest]: [Zoom
         // none between holds the node's square, so each would read it again.
         let open = b[0][0] <= crate::ground::UNBOUNDED[0] && b[0][1] >= crate::ground::UNBOUNDED[1];
         if open || from <= bottom && all || from == FIRST_CELL {
-            return (if from <= bottom && all || open { b } else { [crate::ground::UNBOUNDED; 2] }, first, true);
+            return (
+                if from <= bottom && all || open {
+                    b
+                } else {
+                    [crate::ground::UNBOUNDED; 2]
+                },
+                first,
+                true,
+            );
         }
         z = from - 1;
     }
@@ -854,9 +937,17 @@ pub fn bound_over(w: &impl Squares, place: &mut Found, [coarsest, finest]: [Zoom
 /// window at `cell` holds of it (`held_of`), and whether it holds all of it
 /// (`bound_over` reads on where it does not). False where no window holds
 /// it, a lack.
-fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> (crate::ground::Bounds, Zoom, bool, bool) {
+fn bounded(
+    w: &impl Squares,
+    place: &mut Found,
+    cell: Zoom,
+    (zoom, c): (Zoom, [i32; 2]),
+) -> (crate::ground::Bounds, Zoom, bool, bool) {
     // The node's first cell at `cell`, or the cell holding it.
-    let g = [crate::index_at(zoom, c[0], cell), crate::index_at(zoom, c[1], cell)];
+    let g = [
+        crate::index_at(zoom, c[0], cell),
+        crate::index_at(zoom, c[1], cell),
+    ];
     if cell > zoom + LEVELS {
         let (b, all) = held_of(w, cell, g, cell - zoom - LEVELS);
         return (b, cell, true, all);
@@ -868,7 +959,12 @@ fn bounded(w: &impl Squares, place: &mut Found, cell: Zoom, (zoom, c): (Zoom, [i
         return ([[0, 0]; 2], from, false, false);
     }
     let (j, at) = entry_at(zoom, from, p);
-    (crate::ground::bounds_of(w.level(from, berth, j, at)), from, true, true)
+    (
+        crate::ground::bounds_of(w.level(from, berth, j, at)),
+        from,
+        true,
+        true,
+    )
 }
 
 /// The level of a square at `from` bounding a node at `zoom`, level 0 a

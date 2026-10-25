@@ -14,7 +14,10 @@ export const enum Boot {
   Stopped = 3,
 }
 
-const store = create(() => ({ boot: Boot.Starting, stop: null as string | null }));
+const store = create(() => ({
+  boot: Boot.Starting,
+  stop: null as string | null,
+}));
 
 export function boot(): void {
   // The locale first: the host's boot messages are in it.
@@ -24,7 +27,9 @@ export function boot(): void {
       console.info("[boot] the kernel started");
       if (__IS_DEV__) installConsole();
       store.setState({ boot: Boot.Started });
-      kernel.on_stop(() => store.setState({ boot: Boot.Stopped, stop: kernel.stop_code() }));
+      kernel.on_stop(() =>
+        store.setState({ boot: Boot.Stopped, stop: kernel.stop_code() })
+      );
     },
     (err) => {
       console.error("[boot] the kernel did not start:", err);

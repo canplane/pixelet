@@ -25,7 +25,9 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::Flags;
 use crate::coverage::{source_of, Coverage, Node};
-use crate::pyramid::{ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet, MANIFEST};
+use crate::pyramid::{
+    ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet, MANIFEST,
+};
 use crate::source;
 use crate::util::git_sha;
 use pxl_spec::bake::published::FORMAT;
@@ -76,7 +78,9 @@ impl Stage {
             Ok(text) => text
                 .lines()
                 .filter(|l| !l.is_empty())
-                .map(|l| Tile::of_name(l).ok_or_else(|| format!("{}: {l}: no tile", path.display())))
+                .map(|l| {
+                    Tile::of_name(l).ok_or_else(|| format!("{}: {l}: no tile", path.display()))
+                })
                 .collect(),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
             Err(e) => Err(io(&path, e)),
@@ -93,25 +97,43 @@ impl Stage {
 
     /// The shards staged whole.
     fn whole(&self) -> Result<Vec<Node>, String> {
-        Ok(Coverage::of_source()?.shards().filter(|s| self.done(&s.name()).exists()).collect())
+        Ok(Coverage::of_source()?
+            .shards()
+            .filter(|s| self.done(&s.name()).exists())
+            .collect())
     }
 
     /// The shards the set holds once what is staged is in: those its
     /// manifest names and those staged whole. None where it holds tiles and
     /// its manifest names no shards, which nothing then knows.
     fn will_hold(&self) -> Result<Option<BTreeSet<Tile>>, String> {
-        let held = match source::manifest(&self.set.root)?.as_ref().map(source::held).transpose()?.flatten() {
+        let held = match source::manifest(&self.set.root)?
+            .as_ref()
+            .map(source::held)
+            .transpose()?
+            .flatten()
+        {
             Some(held) => held,
             None if self.set.by_zoom()?.is_empty() => BTreeSet::new(),
             None => return Ok(None),
         };
-        Ok(Some(held.into_iter().chain(self.whole()?.into_iter().map(shard_tile)).collect()))
+        Ok(Some(
+            held.into_iter()
+                .chain(self.whole()?.into_iter().map(shard_tile))
+                .collect(),
+        ))
     }
 
     /// The fold's unit let go, so a fold runs again from the set as it is.
     fn clear_fold(&self, leaf: Zoom) -> Result<(), String> {
         self.remove_done(FOLD)?;
-        for p in self.stage.by_zoom()?.into_iter().filter(|(z, _)| *z != leaf).flat_map(|(_, v)| v) {
+        for p in self
+            .stage
+            .by_zoom()?
+            .into_iter()
+            .filter(|(z, _)| *z != leaf)
+            .flat_map(|(_, v)| v)
+        {
             self.stage.remove(p)?;
         }
         Ok(())
@@ -119,20 +141,35 @@ impl Stage {
 
     /// The shard's leaves staged anew by `fill`, then its `.done`. A leaf
     /// stage makes any fold stale, so the fold's unit goes first.
-    pub fn leaf<L: Base>(&self, shard: Node, fill: impl FnOnce(&TileSet) -> Result<(), String>) -> Result<(), String> {
+    pub fn leaf<L: Base>(
+        &self,
+        shard: Node,
+        fill: impl FnOnce(&TileSet) -> Result<(), String>,
+    ) -> Result<(), String> {
         let at = shard_tile(shard);
         fs::create_dir_all(&self.stage.root).map_err(|e| io(&self.stage.root, e))?;
         self.not_committing()?;
         self.remove_done(&shard.name())?;
         self.clear_fold(L::LEAF)?;
-        let under = |set: &TileSet| -> Result<Vec<Tile>, String> { Ok(set.by_zoom()?.remove(&L::LEAF).unwrap_or_default().into_iter().filter(|&p| ancestor(p, SHARD_ZOOM) == at).collect()) };
+        let under = |set: &TileSet| -> Result<Vec<Tile>, String> {
+            Ok(set
+                .by_zoom()?
+                .remove(&L::LEAF)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|&p| ancestor(p, SHARD_ZOOM) == at)
+                .collect())
+        };
         for p in under(&self.stage)? {
             self.stage.remove(p)?;
         }
         fill(&self.stage)?;
         let made: FnvHashSet<Tile> = under(&self.stage)?.into_iter().collect();
         let held = under(&self.set)?;
-        self.write_done(&shard.name(), held.into_iter().filter(|p| !made.contains(p)))
+        self.write_done(
+            &shard.name(),
+            held.into_iter().filter(|p| !made.contains(p)),
+        )
     }
 
     /// Folds again what the whole shards change.
@@ -159,7 +196,10 @@ impl Stage {
             gone: leaves_gone.clone(),
         };
         fold(&mut staged, changed, absent, workers)?;
-        self.write_done(FOLD, staged.gone.into_iter().filter(|p| !leaves_gone.contains(p)))
+        self.write_done(
+            FOLD,
+            staged.gone.into_iter().filter(|p| !leaves_gone.contains(p)),
+        )
     }
 
     /// The leaves the whole shards' stages take away.
@@ -177,7 +217,10 @@ impl Stage {
     pub fn commit<L: Base>(&self, workers: usize) -> Result<(), String> {
         if !self.done(COMMIT).exists() {
             if !self.done(FOLD).exists() {
-                return Err(format!("{}: nothing folded; run --stage fold first", self.stage.root.display()));
+                return Err(format!(
+                    "{}: nothing folded; run --stage fold first",
+                    self.stage.root.display()
+                ));
             }
             // The set as it will be, refused before anything moves.
             let whole = self.whole()?;
@@ -196,10 +239,18 @@ impl Stage {
             // the set will hold these, and a commit cut short leaves them said.
             if let Some(held) = self.will_hold()? {
                 let path = self.set.root.join(MANIFEST);
-                let mut manifest = source::manifest(&self.set.root)?.unwrap_or_else(|| serde_json::json!({}));
-                manifest["shard"] = serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
+                let mut manifest =
+                    source::manifest(&self.set.root)?.unwrap_or_else(|| serde_json::json!({}));
+                manifest["shard"] =
+                    serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
-                crate::util::write_atomic(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?.as_bytes()).map_err(|e| io(&path, e))?;
+                crate::util::write_atomic(
+                    &path,
+                    serde_json::to_string_pretty(&manifest)
+                        .map_err(|e| e.to_string())?
+                        .as_bytes(),
+                )
+                .map_err(|e| io(&path, e))?;
             }
             fs::rename(self.done(FOLD), self.done(COMMIT)).map_err(|e| io(&self.done(FOLD), e))?;
         }
@@ -208,7 +259,10 @@ impl Stage {
 
     fn not_committing(&self) -> Result<(), String> {
         match self.done(COMMIT).exists() {
-            true => Err(format!("{}: a commit is begun; finish it with --stage commit", self.stage.root.display())),
+            true => Err(format!(
+                "{}: a commit is begun; finish it with --stage commit",
+                self.stage.root.display()
+            )),
             false => Ok(()),
         }
     }
@@ -216,10 +270,17 @@ impl Stage {
     fn finish_commit<L: Base>(&self) -> Result<(), String> {
         fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
         let staged = self.stage.by_zoom()?;
-        let put = |p: Tile| fs::rename(self.stage.path(p), self.set.path(p)).map_err(|e| io(&self.stage.path(p), e));
+        let put = |p: Tile| {
+            fs::rename(self.stage.path(p), self.set.path(p)).map_err(|e| io(&self.stage.path(p), e))
+        };
         for shard in self.whole()? {
             let at = shard_tile(shard);
-            for &p in staged.get(&L::LEAF).into_iter().flatten().filter(|&&p| ancestor(p, SHARD_ZOOM) == at) {
+            for &p in staged
+                .get(&L::LEAF)
+                .into_iter()
+                .flatten()
+                .filter(|&&p| ancestor(p, SHARD_ZOOM) == at)
+            {
                 put(p)?;
             }
             for p in self.read_done(&shard.name())? {
@@ -227,7 +288,11 @@ impl Stage {
             }
             self.remove_done(&shard.name())?;
         }
-        for &p in staged.iter().filter(|(z, _)| **z != L::LEAF).flat_map(|(_, v)| v) {
+        for &p in staged
+            .iter()
+            .filter(|(z, _)| **z != L::LEAF)
+            .flat_map(|(_, v)| v)
+        {
             put(p)?;
         }
         for p in self.read_done(COMMIT)? {
@@ -246,14 +311,29 @@ impl Stage {
         // A reader starts at the kind's coarsest, so no tile there goes, and
         // none coarser was ever read: a set baked before the fold stopped
         // there still holds them.
-        let skip = if pruned { unasked::<L>(&self.set, L::COARSEST)? } else { FnvHashSet::default() };
-        for p in self.set.by_zoom()?.into_values().flatten().filter(|p| p.zoom >= L::COARSEST && !skip.contains(p)) {
-            fs::hard_link(self.set.path(p), to.join(p.name())).map_err(|e| io(&self.set.path(p), e))?;
+        let skip = if pruned {
+            unasked::<L>(&self.set, L::COARSEST)?
+        } else {
+            FnvHashSet::default()
+        };
+        for p in self
+            .set
+            .by_zoom()?
+            .into_values()
+            .flatten()
+            .filter(|p| p.zoom >= L::COARSEST && !skip.contains(p))
+        {
+            fs::hard_link(self.set.path(p), to.join(p.name()))
+                .map_err(|e| io(&self.set.path(p), e))?;
         }
         // What the copy is, which the set may stop being once it changes again.
         let manifest = self.set.root.join(MANIFEST);
         fs::copy(&manifest, to.join(MANIFEST)).map_err(|e| io(&manifest, e))?;
-        println!("[bake] {}: {} tiles no reader asks for left out", to.display(), skip.len());
+        println!(
+            "[bake] {}: {} tiles no reader asks for left out",
+            to.display(),
+            skip.len()
+        );
         Ok(())
     }
 }
@@ -276,7 +356,12 @@ pub struct Run {
 impl Run {
     pub fn parse(kind: &str) -> Result<Run, String> {
         let coverage = Coverage::of_source()?;
-        let (mut stages, mut named, mut out, mut concurrency) = (Vec::new(), Vec::new(), PathBuf::from(format!("./out/{kind}")), 8);
+        let (mut stages, mut named, mut out, mut concurrency) = (
+            Vec::new(),
+            Vec::new(),
+            PathBuf::from(format!("./out/{kind}")),
+            8,
+        );
         let mut flags = Flags::from_env();
         while let Some(flag) = flags.arg() {
             match flag.as_str() {
@@ -287,11 +372,19 @@ impl Run {
                 other => return Err(format!("unknown flag: {other}")),
             }
         }
-        if let Some(s) = stages.iter().find(|s| !matches!(s.as_str(), "leaf" | "fold" | "commit" | "publish")) {
+        if let Some(s) = stages
+            .iter()
+            .find(|s| !matches!(s.as_str(), "leaf" | "fold" | "commit" | "publish"))
+        {
             return Err(format!("unknown stage: {s}"));
         }
-        if let Some(n) = named.iter().find(|n| !coverage.shards().any(|s| s.name() == **n)) {
-            return Err(format!("{n}: no shard of the coverage (infra/geo/coverage.json)"));
+        if let Some(n) = named
+            .iter()
+            .find(|n| !coverage.shards().any(|s| s.name() == **n))
+        {
+            return Err(format!(
+                "{n}: no shard of the coverage (infra/geo/coverage.json)"
+            ));
         }
         let all = stages.is_empty();
         let has = |s: &str| stages.iter().any(|t| t == s);
@@ -300,7 +393,10 @@ impl Run {
             fold: all || has("fold"),
             commit: all || has("commit"),
             publish: has("publish"),
-            shards: coverage.shards().filter(|s| named.is_empty() || named.contains(&s.name())).collect(),
+            shards: coverage
+                .shards()
+                .filter(|s| named.is_empty() || named.contains(&s.name()))
+                .collect(),
             stage: Stage::of(out),
             concurrency,
         })
@@ -309,26 +405,38 @@ impl Run {
     /// The shards the set holds once what is staged is in: what its fold
     /// reads as baked, and nothing else.
     pub fn baked(&self) -> Result<Coverage, String> {
-        let held = self
-            .stage
-            .will_hold()?
-            .ok_or(format!("{}: its manifest names no shards it holds, so which are baked is unknown", self.stage.set.root.display()))?;
+        let held = self.stage.will_hold()?.ok_or(format!(
+            "{}: its manifest names no shards it holds, so which are baked is unknown",
+            self.stage.set.root.display()
+        ))?;
         Ok(Coverage::of_shards(held))
     }
 
     /// Every stage after the leaves; the set's manifest says what it was
     /// made from once it is committed.
     /// `absent` is asked only by a fold.
-    pub fn finish<L: Base, A: Absent<L>>(&self, absent: impl FnOnce(&Run) -> Result<A, String>, reads: &[&[&str]], pruned: bool) -> Result<(), String> {
+    pub fn finish<L: Base, A: Absent<L>>(
+        &self,
+        absent: impl FnOnce(&Run) -> Result<A, String>,
+        reads: &[&[&str]],
+        pruned: bool,
+    ) -> Result<(), String> {
         if self.fold {
             self.stage.fold::<L>(&absent(self)?, self.concurrency)?;
         }
         if self.commit {
             self.stage.commit::<L>(self.concurrency)?;
-            let mut fields = serde_json::json!({ "source": source_of(reads)?, "format": FORMAT.of(L::LAYER) });
+            let mut fields =
+                serde_json::json!({ "source": source_of(reads)?, "format": FORMAT.of(L::LAYER) });
             // The commit wrote them before it moved anything.
-            if let Some(held) = source::manifest(&self.stage.set.root)?.as_ref().map(source::held).transpose()?.flatten() {
-                fields["shard"] = serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
+            if let Some(held) = source::manifest(&self.stage.set.root)?
+                .as_ref()
+                .map(source::held)
+                .transpose()?
+                .flatten()
+            {
+                fields["shard"] =
+                    serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
             }
             write_manifest(&self.stage.set, L::COARSEST, git_sha().as_deref(), fields)?;
         }

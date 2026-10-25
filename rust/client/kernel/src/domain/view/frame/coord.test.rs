@@ -31,8 +31,15 @@ fn a_canonical_point_comes_back_through_floats() {
         let p = world::at(comps[0], comps[1], comps[2]);
         for near in nears {
             let w = canonical_to_world(&p, near);
-            assert!((w[0] - near).abs() <= ROUND / 2.0, "{n}: {comps:?} unwrapped off {near}");
-            assert_eq!(world_to_canonical_nearest(&w), p, "{n}: {comps:?} near {near}");
+            assert!(
+                (w[0] - near).abs() <= ROUND / 2.0,
+                "{n}: {comps:?} unwrapped off {near}"
+            );
+            assert_eq!(
+                world_to_canonical_nearest(&w),
+                p,
+                "{n}: {comps:?} near {near}"
+            );
         }
     }
 }
@@ -43,6 +50,12 @@ fn x_is_continuous_across_the_seam() {
     let east = world::point(ROUND / 2.0 - 1.0, 0.0, 0.0);
     let west = world::point(-ROUND / 2.0 + 1.0, 0.0, 0.0);
     let eye = ROUND / 2.0;
-    assert_eq!(canonical_to_world(&west, eye)[0] - canonical_to_world(&east, eye)[0], 2.0);
-    assert_eq!(index_of(UNIT_ZOOM, &world_to_canonical(&[eye + 1.0, 0.0, 0.0]))[0], index_of(UNIT_ZOOM, &west)[0]);
+    assert_eq!(
+        canonical_to_world(&west, eye)[0] - canonical_to_world(&east, eye)[0],
+        2.0
+    );
+    assert_eq!(
+        index_of(UNIT_ZOOM, &world_to_canonical(&[eye + 1.0, 0.0, 0.0]))[0],
+        index_of(UNIT_ZOOM, &west)[0]
+    );
 }

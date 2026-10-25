@@ -61,20 +61,31 @@ pub fn fmt_dur(ms: f64) -> String {
 pub fn git_sha() -> Option<String> {
     let index = std::env::temp_dir().join(format!("pxl-bake-index-{}", std::process::id()));
     let git = |args: &[&str]| {
-        let out = Command::new("git").args(args).env("GIT_INDEX_FILE", &index).output().ok()?;
-        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        let out = Command::new("git")
+            .args(args)
+            .env("GIT_INDEX_FILE", &index)
+            .output()
+            .ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
     };
     let head = git(&["rev-parse", "HEAD"])?;
     let tree = git(&["add", "-A"]).and_then(|_| git(&["write-tree"]));
     let _ = std::fs::remove_file(&index);
     match tree {
-        Some(t) if git(&["rev-parse", "HEAD^{tree}"]).as_deref() != Some(t.as_str()) => Some(format!("{head}+{t}")),
+        Some(t) if git(&["rev-parse", "HEAD^{tree}"]).as_deref() != Some(t.as_str()) => {
+            Some(format!("{head}+{t}"))
+        }
         _ => Some(head),
     }
 }
 
 pub fn now_iso8601() -> String {
-    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("after the epoch").as_secs();
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("after the epoch")
+        .as_secs();
     let rem = secs % 86_400;
     let (h, m, s) = (rem / 3600, (rem % 3600) / 60, rem % 60);
     format!("{}T{h:02}:{m:02}:{s:02}.000Z", day_of(secs / 86_400))
@@ -110,7 +121,11 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 
 /// A set's manifest at `path`: `fields`, and what every set says of itself;
 /// `built` is the `git_sha` the bake started at.
-pub fn write_manifest(path: &Path, built: Option<&str>, fields: serde_json::Value) -> Result<(), String> {
+pub fn write_manifest(
+    path: &Path,
+    built: Option<&str>,
+    fields: serde_json::Value,
+) -> Result<(), String> {
     let mut manifest = serde_json::json!({
         "updated_at": now_iso8601(),
         "git_sha": built,
@@ -120,7 +135,11 @@ pub fn write_manifest(path: &Path, built: Option<&str>, fields: serde_json::Valu
     if let (Some(out), serde_json::Value::Object(fields)) = (manifest.as_object_mut(), fields) {
         out.extend(fields);
     }
-    std::fs::write(path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    std::fs::write(
+        path,
+        serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
     println!("[bake] manifest -> {}", path.display());
     Ok(())
 }

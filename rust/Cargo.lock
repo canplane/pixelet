@@ -2139,6 +2139,7 @@ dependencies = [
  "pxl-render",
  "pxl-spec",
  "pxl-spec-core",
+ "xpute-gpu",
  "xpute-guest",
  "xpute-kit",
 ]
@@ -2195,7 +2196,6 @@ dependencies = [
  "libm",
  "pxl-spec-core",
  "serde",
- "serde_json",
  "xpute-kit",
 ]
 
@@ -2230,9 +2230,9 @@ name = "pxl-wasm"
 version = "0.0.0"
 dependencies = [
  "pxl-kernel",
+ "xpute-gpu",
  "xpute-guest",
  "xpute-kit",
- "xpute-link",
 ]
 
 [[package]]
@@ -3640,10 +3640,6 @@ dependencies = [
 
 [[package]]
 name = "xpute-kit"
-version = "0.0.0"
-
-[[package]]
-name = "xpute-link"
 version = "0.0.0"
 
 [[package]]

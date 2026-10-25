@@ -3,49 +3,80 @@
 //! The memory's layout. Its front, below GLOBAL_BASE: the rings'
 //! descriptors, their slot payloads and the directory's page, at fixed
 //! addresses from mem.json. And `.fixed`: which ranges it holds, each sized
-//! by its owner, and the heap after them.
+//! by its owner and handed to it at boot (`install`), and the heap after
+//! them.
 
-use xpute_guest::ipc::door::{DoorLayout, RingLayout};
-use xpute_guest::ipc::ring::{ring_bytes, slots_bytes};
+use xpute_guest::entry::BootInfo;
+use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 
-use crate::sys::mem::section::{fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
-use crate::sys::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};
+use crate::sys::mem::section::{
+    self, fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES,
+};
+use crate::sys::mem::spec::{
+    CQ_CAP, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, SQ_CAP, STACK_BYTES,
+};
 use xpute_guest::mem::section::{Section, PAGE_BYTES};
 
 /// A packet is at most a page; anything larger crosses by address. A page
 /// is also the buddy's smallest block.
 pub const RING_SLOT_BYTES: u32 = PAGE_BYTES;
 
-const SUBMISSION_DESC_AT: u32 = RING_DESC_AT;
-const COMPLETION_DESC_AT: u32 = SUBMISSION_DESC_AT + page_up(ring_bytes(SUBMISSION_CAPACITY));
-const DESC_END: u32 = COMPLETION_DESC_AT + page_up(ring_bytes(COMPLETION_CAPACITY));
+const SQ_DESC_AT: u32 = RING_DESC_AT;
+const CQ_DESC_AT: u32 = SQ_DESC_AT + page_up(ring_bytes(SQ_CAP));
+const DESC_END: u32 = CQ_DESC_AT + page_up(ring_bytes(CQ_CAP));
 
-const SUBMISSION_SLOT_AT: u32 = RING_SLOT_AT;
-const COMPLETION_SLOT_AT: u32 = SUBMISSION_SLOT_AT + slots_bytes(SUBMISSION_CAPACITY, RING_SLOT_BYTES);
-const SLOT_END: u32 = COMPLETION_SLOT_AT + slots_bytes(COMPLETION_CAPACITY, RING_SLOT_BYTES);
+const SQ_SLOT_AT: u32 = RING_SLOT_AT;
+const CQ_SLOT_AT: u32 = SQ_SLOT_AT + slots_bytes(SQ_CAP, RING_SLOT_BYTES);
+const SLOT_END: u32 = CQ_SLOT_AT + slots_bytes(CQ_CAP, RING_SLOT_BYTES);
 
-pub const DOOR_LAYOUT: DoorLayout = DoorLayout {
-    slot_bytes: RING_SLOT_BYTES,
-    submission: RingLayout {
-        capacity: SUBMISSION_CAPACITY,
-        desc_at: SUBMISSION_DESC_AT,
-        slot_at: SUBMISSION_SLOT_AT,
-    },
-    completion: RingLayout {
-        capacity: COMPLETION_CAPACITY,
-        desc_at: COMPLETION_DESC_AT,
-        slot_at: COMPLETION_SLOT_AT,
-    },
-};
+/// The door's two rings, submission and completion, laid out at their
+/// addresses in the module's memory.
+///
+/// # Safety
+/// Once: the ranges are the rings' alone, in memory that never moves and
+/// outlives them.
+pub unsafe fn rings() -> (Ring, Ring) {
+    let mem = xpute_guest::mem::core();
+    // SAFETY: the caller's.
+    unsafe {
+        (
+            Ring::init(
+                mem,
+                SQ_DESC_AT as usize,
+                SQ_CAP,
+                SQ_SLOT_AT,
+                RING_SLOT_BYTES,
+            ),
+            Ring::init(
+                mem,
+                CQ_DESC_AT as usize,
+                CQ_CAP,
+                CQ_SLOT_AT,
+                RING_SLOT_BYTES,
+            ),
+        )
+    }
+}
 
 // The boundaries are chosen constants, not roundings, so page alignment is asserted.
 const _: () = assert!(
-    RING_DESC_AT.is_multiple_of(PAGE_BYTES) && RING_SLOT_AT.is_multiple_of(PAGE_BYTES) && GLOBAL_BASE.is_multiple_of(PAGE_BYTES),
+    RING_DESC_AT.is_multiple_of(PAGE_BYTES)
+        && RING_SLOT_AT.is_multiple_of(PAGE_BYTES)
+        && GLOBAL_BASE.is_multiple_of(PAGE_BYTES),
     "a range begins on a page, so every slot in it begins on one"
 );
-const _: () = assert!(STACK_BYTES <= RING_DESC_AT, "the stack runs into the descriptors");
-const _: () = assert!(DESC_END <= RING_SLOT_AT, "the descriptors run into the payloads");
-const _: () = assert!(SLOT_END <= DIRECTORY_AT, "the payloads run into the directory");
+const _: () = assert!(
+    STACK_BYTES <= RING_DESC_AT,
+    "the stack runs into the descriptors"
+);
+const _: () = assert!(
+    DESC_END <= RING_SLOT_AT,
+    "the descriptors run into the payloads"
+);
+const _: () = assert!(
+    SLOT_END <= DIRECTORY_AT,
+    "the payloads run into the directory"
+);
 const _: () = assert!(
     DIRECTORY_AT.is_multiple_of(PAGE_BYTES) && DIRECTORY_AT + PAGE_BYTES <= GLOBAL_BASE,
     "the directory is a page under the bracket's data"
@@ -67,7 +98,9 @@ pub enum Fixed {
 }
 
 /// None is let go.
-const MODELS_MAX: usize = crate::domain::scene::character::variant::MODELS_MAX + crate::domain::query::decor::asset::MODELS_MAX + crate::domain::scene::environment::cloud::MODELS_MAX;
+const MODELS_MAX: usize = crate::domain::scene::character::variant::MODELS_MAX
+    + crate::domain::query::decor::asset::MODELS_MAX
+    + crate::domain::scene::environment::cloud::MODELS_MAX;
 
 /// The ghost's, the puck's zone, the two debug line sets' (the gizmo's and the
 /// coverage's, `domain/scene.rs` `debug` and `coverage`) and the markers'.
@@ -75,7 +108,8 @@ const SINGLE_UPLOADS: usize = 5;
 
 /// An actor's palette, one for each frame that holds one: the companion's
 /// figures and the display cases.
-const ACTOR_UPLOADS: usize = crate::domain::scene::character::companion::FIGURES + crate::domain::scene::character::preview::CASES_MAX;
+const ACTOR_UPLOADS: usize = crate::domain::scene::character::companion::FIGURES
+    + crate::domain::scene::character::preview::CASES_MAX;
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a
 /// count the structure fixes (the models the catalogs can name, the clouds'
@@ -83,7 +117,10 @@ const ACTOR_UPLOADS: usize = crate::domain::scene::character::companion::FIGURES
 /// renderer's table is a bug, not a load.
 /// The renderer frees a list's uploads before taking its new ones, so it
 /// never holds more.
-pub const MAX_LIVE_UPLOADS: usize = MODELS_MAX + crate::domain::scene::environment::cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
+pub const MAX_LIVE_UPLOADS: usize = MODELS_MAX
+    + crate::domain::scene::environment::cloud::PATCHES_MAX
+    + ACTOR_UPLOADS
+    + SINGLE_UPLOADS;
 
 const FIXED: [u32; 5] = [
     crate::domain::layer::terrain::fixed::TERRAIN_BYTES,
@@ -96,7 +133,9 @@ const FIXED: [u32; 5] = [
 pub const FIXED_BYTES: u32 = xpute_guest::mem::section::span_of(&FIXED, PAGE_BYTES);
 
 const _: () = assert!(
-    REGION_BYTES.is_multiple_of(PAGE_BYTES) && GLOBAL_BASE.is_multiple_of(PAGE_BYTES) && FIXED_BYTES.is_multiple_of(PAGE_BYTES),
+    REGION_BYTES.is_multiple_of(PAGE_BYTES)
+        && GLOBAL_BASE.is_multiple_of(PAGE_BYTES)
+        && FIXED_BYTES.is_multiple_of(PAGE_BYTES),
     "a section begins on a page, so every block in it begins on one"
 );
 
@@ -122,7 +161,7 @@ const fn body_block(stream: crate::sys::io::demand::Stream) -> u64 {
 /// longest other kind, each freed as it is decoded; the ways' pool's
 /// mirror at its cap (domain/layer/terrain/mirror.rs, domain/layer/terrain/param.rs `WAYS_POOL_BYTES`),
 /// the renderer's rooms for the squares' records, every read's at a
-/// square's most (pxl-render gpu/renderer.rs `GroundBuffers::room`), and
+/// square's most (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), and
 /// the profiler's lanes while its setting is on (profiler/record.rs), each
 /// in the buddy's blocks, a power of two. Each is refused past its cap, and
 /// waits or stays absent where the heap refuses it. The rest of the heap
@@ -138,8 +177,12 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    let ways = crate::domain::layer::terrain::mirror::MIRROR_BYTES + pxl_render::gpu::renderer::RECORD_ROOMS_BYTES;
-    slots_bytes(crate::sys::io::param::BODY_SLOTS) + crate::sys::io::param::MAX_CREDITS as u64 * longest + ways + crate::profiler::record::PROFILER_BYTES
+    let ways = crate::domain::layer::terrain::mirror::MIRROR_BYTES
+        + pxl_render::gpu::renderer::RECORD_ROOMS_BYTES;
+    slots_bytes(crate::sys::io::param::BODY_SLOTS)
+        + crate::sys::io::param::MAX_CREDITS as u64 * longest
+        + ways
+        + crate::profiler::record::PROFILER_BYTES
 };
 
 const _: () = assert!(
@@ -156,7 +199,26 @@ pub fn heap_at(data_end: u32) -> u32 {
 /// Asking before boot lays out memory is a bug.
 pub fn range(f: Fixed) -> Section {
     use xpute_kit::status::bug::OrBug;
-    map().or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE).fixed.nth(&FIXED, PAGE_BYTES, f as usize)
+    map()
+        .or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE)
+        .fixed
+        .nth(&FIXED, PAGE_BYTES, f as usize)
+}
+
+/// Lays the memory map and hands each range of `.fixed` to its owner.
+/// Returns where GPU calls are recorded for the host, 0 where the kernel
+/// makes them itself.
+pub fn install(b: &BootInfo) -> u32 {
+    section::set_map(section::lay_out(b.given, b.data_end, FIXED_BYTES));
+    crate::domain::layer::terrain::fixed::RANGE.set(range(Fixed::Terrain));
+    crate::domain::layer::division::RANGE.set(range(Fixed::Division));
+    // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.uploads`, zeroed, each the
+    // renderer's or the host's alone.
+    unsafe {
+        crate::sys::io::host::set_stream(range(Fixed::Host).offset);
+        pxl_render::gpu::upload::set_uploads(range(Fixed::Uploads).offset, MAX_LIVE_UPLOADS);
+        pxl_render::gpu::api::install(range(Fixed::Gpu).offset)
+    }
 }
 
 #[cfg(test)]

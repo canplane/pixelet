@@ -55,7 +55,15 @@ impl Absent<TerrainTile> for Absence {
             Cow::Borrowed(&self.unknown)
         } else {
             let children = p.children().map(|c| self.at(c));
-            Cow::Owned(TerrainTile::fold_tile(p, |q| p.children().iter().position(|&c| c == q).map(|i| children[i].as_ref())).expect("four children fold"))
+            Cow::Owned(
+                TerrainTile::fold_tile(p, |q| {
+                    p.children()
+                        .iter()
+                        .position(|&c| c == q)
+                        .map(|i| children[i].as_ref())
+                })
+                .expect("four children fold"),
+            )
         }
     }
 }

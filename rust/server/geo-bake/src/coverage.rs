@@ -32,7 +32,10 @@ pub const EPS: f64 = units(GROUND.cell());
 /// neighbourhoods, most of its villages, measured 2026-10-08).
 pub const BAKE_REACH: f64 = units(LEAF_ZOOM - 2);
 
-const _: () = assert!(2.0 * units(LEAF_ZOOM) <= BAKE_REACH, "a terrain leaf's 2-ring reads past the bakes' reach");
+const _: () = assert!(
+    2.0 * units(LEAF_ZOOM) <= BAKE_REACH,
+    "a terrain leaf's 2-ring reads past the bakes' reach"
+);
 
 /// How far past its edges a shard holds, in units: the bakes' reach and
 /// `EPS`, so every leaf bakes from its shard alone. A read past `BAKE_REACH` is a
@@ -61,13 +64,20 @@ impl Node {
     pub fn tiles(self, zoom: Zoom) -> Vec<[i32; 2]> {
         let shift = zoom - self.zoom;
         let (n, [x0, y0]) = (1 << shift, first_descendant_of(self.at, shift));
-        (y0..y0 + n).flat_map(|y| (x0..x0 + n).map(move |x| [x, y])).collect()
+        (y0..y0 + n)
+            .flat_map(|y| (x0..x0 + n).map(move |x| [x, y]))
+            .collect()
     }
 
     /// What a shard holds: its rect grown by `SHARD_APRON`.
     pub fn held(self) -> [f64; 4] {
         let [x0, y0, x1, y1] = self.rect();
-        [x0 - SHARD_APRON, y0 - SHARD_APRON, x1 + SHARD_APRON, y1 + SHARD_APRON]
+        [
+            x0 - SHARD_APRON,
+            y0 - SHARD_APRON,
+            x1 + SHARD_APRON,
+            y1 + SHARD_APRON,
+        ]
     }
 }
 
@@ -85,8 +95,11 @@ impl Coverage {
 
     fn derive() -> Result<Coverage, String> {
         let bad = |why: String| format!("infra/geo/coverage.json: {why}");
-        let coverage: serde_json::Value = serde_json::from_str(COVERAGE).map_err(|e| bad(e.to_string()))?;
-        let names = coverage["shards"].as_array().ok_or_else(|| bad("no shards".into()))?;
+        let coverage: serde_json::Value =
+            serde_json::from_str(COVERAGE).map_err(|e| bad(e.to_string()))?;
+        let names = coverage["shards"]
+            .as_array()
+            .ok_or_else(|| bad("no shards".into()))?;
         let shards = names
             .iter()
             .map(|n| {
@@ -123,7 +136,9 @@ impl Coverage {
         if zoom >= SHARD_ZOOM {
             return self.shards.contains(&Self::shard_of(zoom, tile));
         }
-        self.shards.iter().any(|&s| ancestor_of(s, SHARD_ZOOM - zoom) == tile)
+        self.shards
+            .iter()
+            .any(|&s| ancestor_of(s, SHARD_ZOOM - zoom) == tile)
     }
 
     /// Whether every leaf under the tile at `zoom` and `tile` is held.
@@ -131,7 +146,11 @@ impl Coverage {
         if zoom >= SHARD_ZOOM {
             return self.meets(zoom, tile);
         }
-        let under = self.shards.iter().filter(|&&s| ancestor_of(s, SHARD_ZOOM - zoom) == tile).count();
+        let under = self
+            .shards
+            .iter()
+            .filter(|&&s| ancestor_of(s, SHARD_ZOOM - zoom) == tile)
+            .count();
         under == (count(SHARD_ZOOM, zoom) as usize).pow(2)
     }
 
@@ -141,13 +160,23 @@ impl Coverage {
     }
 
     pub fn shards(&self) -> impl Iterator<Item = Node> + '_ {
-        self.shards.iter().map(|&at| Node { zoom: SHARD_ZOOM, at })
+        self.shards.iter().map(|&at| Node {
+            zoom: SHARD_ZOOM,
+            at,
+        })
     }
 
     /// The shard a tile's bake reads: its own, which holds its apron.
     pub fn around(&self, zoom: Zoom, tile: [i32; 2]) -> BTreeSet<Node> {
         let at = Self::shard_of(zoom, tile);
-        self.shards.contains(&at).then_some(Node { zoom: SHARD_ZOOM, at }).into_iter().collect()
+        self.shards
+            .contains(&at)
+            .then_some(Node {
+                zoom: SHARD_ZOOM,
+                at,
+            })
+            .into_iter()
+            .collect()
     }
 }
 
@@ -163,7 +192,10 @@ pub fn tables_of<'a>(reads: &[&[&'a str]]) -> Vec<&'a str> {
             if b[i] == b'\'' {
                 quoted = !quoted;
             } else if !quoted && b[i..].starts_with(b"--") {
-                i += b[i..].iter().position(|&c| c == b'\n').unwrap_or(b.len() - i);
+                i += b[i..]
+                    .iter()
+                    .position(|&c| c == b'\n')
+                    .unwrap_or(b.len() - i);
                 continue;
             } else if !quoted && b[i..].starts_with(b"overture_") && (i == 0 || !word(b[i - 1])) {
                 let end = i + b[i..].iter().position(|&c| !word(c)).unwrap_or(b.len() - i);
@@ -197,10 +229,17 @@ impl Overture {
         let want: BTreeSet<String> = need.iter().map(|n| n.name()).collect();
         let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
         let rows = client
-            .query(&format!("SELECT table_name, shard FROM {CATALOG} WHERE table_name = ANY($1)"), &[&tables])
+            .query(
+                &format!("SELECT table_name, shard FROM {CATALOG} WHERE table_name = ANY($1)"),
+                &[&tables],
+            )
             .map_err(|e| format!("{CATALOG}: {e}: {INGEST}"))?;
         for &table in &tables {
-            let have: BTreeSet<&str> = rows.iter().filter(|r| r.get::<_, &str>(0) == table).map(|r| r.get(1)).collect();
+            let have: BTreeSet<&str> = rows
+                .iter()
+                .filter(|r| r.get::<_, &str>(0) == table)
+                .map(|r| r.get(1))
+                .collect();
             let missing = want.iter().filter(|n| !have.contains(n.as_str())).count();
             let extra = have.iter().filter(|n| !held.contains(**n)).count();
             if missing + extra > 0 {
@@ -220,9 +259,21 @@ impl Overture {
 /// for it, each Overture table with its counts.
 pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Value, String> {
     let tables = tables_of(reads);
-    let text = |client: &mut Client, sql: &str, params: &[&(dyn postgres::types::ToSql + Sync)]| -> Result<Vec<Vec<Option<String>>>, String> {
-        let rows = client.query(sql, params).map_err(|e| format!("{sql}: {e}"))?;
-        Ok(rows.iter().map(|r| (0..r.len()).map(|i| r.get::<_, Option<String>>(i)).collect()).collect())
+    let text = |client: &mut Client,
+                sql: &str,
+                params: &[&(dyn postgres::types::ToSql + Sync)]|
+     -> Result<Vec<Vec<Option<String>>>, String> {
+        let rows = client
+            .query(sql, params)
+            .map_err(|e| format!("{sql}: {e}"))?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                (0..r.len())
+                    .map(|i| r.get::<_, Option<String>>(i))
+                    .collect()
+            })
+            .collect())
     };
     let overture = text(
         client,
@@ -236,7 +287,11 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
         "SELECT version, accessed_at::text, count(*)::text FROM elevation_catalog GROUP BY version, accessed_at ORDER BY version",
         &[],
     )?;
-    let coastline = text(client, "SELECT obj_description(to_regclass('osm_land_polygons'), 'pg_class')", &[])?;
+    let coastline = text(
+        client,
+        "SELECT obj_description(to_regclass('osm_land_polygons'), 'pg_class')",
+        &[],
+    )?;
     Ok(serde_json::json!({ "overture": overture, "elevation": elevation, "coastline": coastline }))
 }
 

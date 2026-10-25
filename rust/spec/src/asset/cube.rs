@@ -31,7 +31,10 @@ pub fn cube_id(cube: Cube) -> AssetId {
 pub fn cube_of(num_id: AssetId) -> Option<Cube> {
     match u8::try_from(num_id) {
         Ok(byte) => Ground::of(byte).map(Cube::Ground),
-        Err(_) => u16::try_from(num_id).ok().and_then(Object::of).map(Cube::Object),
+        Err(_) => u16::try_from(num_id)
+            .ok()
+            .and_then(Object::of)
+            .map(Cube::Object),
     }
 }
 
@@ -44,7 +47,13 @@ pub fn cube_rgb(cube: Cube) -> Option<u32> {
 }
 
 /// The placed colors first, then the palette in paint order.
-pub static ALL_CUBES: LazyLock<Vec<Cube>> = LazyLock::new(|| Object::ALL.into_iter().map(Cube::Object).chain(Ground::ALL.into_iter().map(Cube::Ground)).collect());
+pub static ALL_CUBES: LazyLock<Vec<Cube>> = LazyLock::new(|| {
+    Object::ALL
+        .into_iter()
+        .map(Cube::Object)
+        .chain(Ground::ALL.into_iter().map(Cube::Ground))
+        .collect()
+});
 
 #[cfg(test)]
 #[path = "cube.test.rs"]

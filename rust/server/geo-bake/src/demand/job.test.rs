@@ -8,10 +8,15 @@ use tokio::time::Instant;
 async fn success_and_failure_are_not_reported_as_empty_or_timeout() {
     let mut ok = Command::new("sh");
     ok.args(["-c", "exit 0"]);
-    supervise(ok, Instant::now() + Duration::from_secs(2)).await.unwrap();
+    supervise(ok, Instant::now() + Duration::from_secs(2))
+        .await
+        .unwrap();
     let mut bad = Command::new("sh");
     bad.args(["-c", "exit 1"]);
-    assert!(matches!(supervise(bad, Instant::now() + Duration::from_secs(2)).await, Err(Failure::Bake(_))));
+    assert!(matches!(
+        supervise(bad, Instant::now() + Duration::from_secs(2)).await,
+        Err(Failure::Bake(_))
+    ));
 }
 
 #[test]
@@ -23,7 +28,10 @@ fn complete_artifacts_are_moved_from_staging_and_abandoned_work_is_not_published
     std::fs::create_dir(&stage.0).unwrap();
     write_packet(&stage.0, Some(b"packet")).unwrap();
     stage.publish(&data, "tile").unwrap();
-    assert_eq!(std::fs::read(data.cache.root.join("tile")).unwrap(), b"packet");
+    assert_eq!(
+        std::fs::read(data.cache.root.join("tile")).unwrap(),
+        b"packet"
+    );
     assert!(!stage.0.join("packet").exists());
     write_packet(&stage.0, Some(b"incomplete")).unwrap();
     drop(stage);
@@ -35,7 +43,10 @@ fn complete_artifacts_are_moved_from_staging_and_abandoned_work_is_not_published
 async fn waiting_does_not_renew_the_execution_budget() {
     let command = Command::new("/nonexistent/should-not-start");
     let expired = Instant::now() - Duration::from_secs(1);
-    assert!(matches!(supervise(command, expired).await, Err(Failure::Limited(_))));
+    assert!(matches!(
+        supervise(command, expired).await,
+        Err(Failure::Limited(_))
+    ));
 }
 
 #[tokio::test]

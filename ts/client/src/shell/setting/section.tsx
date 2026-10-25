@@ -3,10 +3,16 @@
 import { useTranslation } from "react-i18next";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 
-import { type Setting, type SettingName, SETTINGS, type SettingSection, settingsIn } from "@/shell/setting/schema.ts";
+import {
+  type Setting,
+  type SettingName,
+  SETTINGS,
+  type SettingSection,
+  settingsIn,
+} from "@/shell/setting/schema.ts";
 import { Section, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
 import { kernel_setting } from "@/abi/shell.ts";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",
@@ -17,7 +23,8 @@ const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
 };
 
 function devOption(setting: Setting, option: string): boolean {
-  return "dev_options" in setting && setting.dev_options.some((o) => o === option);
+  return "dev_options" in setting &&
+    setting.dev_options.some((o) => o === option);
 }
 
 /** Strings come from `settings.<section>.<key>` and, for a choice, `.<option>` under that. */
@@ -28,7 +35,11 @@ export function SettingsSection(props: { section: SettingSection }) {
   if (keys.length === 0) return null;
 
   return (
-    <Section title={t(`settings.${section}.section_title`)} icon={SECTION_ICONS[section]} caption={t(`settings.${section}.section_caption`)}>
+    <Section
+      title={t(`settings.${section}.section_title`)}
+      icon={SECTION_ICONS[section]}
+      caption={t(`settings.${section}.section_caption`)}
+    >
       {keys.map((key) => <SettingControl key={key} name={key} />)}
     </Section>
   );
@@ -58,7 +69,14 @@ function SettingControl(props: { name: SettingName }) {
       );
     case "choice":
       return (
-        <SettingGroup label={t(`${base}.label`)} description={i18n.exists(`${base}.description`) ? t(`${base}.description`) : undefined} cost={cost} dev={dev}>
+        <SettingGroup
+          label={t(`${base}.label`)}
+          description={i18n.exists(`${base}.description`)
+            ? t(`${base}.description`)
+            : undefined}
+          cost={cost}
+          dev={dev}
+        >
           {Object.entries(setting.options).map(([option, number], i) => {
             const devOnly = devOption(setting, option);
             return (__IS_DEV__ || !devOnly) && (

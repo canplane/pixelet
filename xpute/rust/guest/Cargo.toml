@@ -11,8 +11,8 @@ path = "src/lib.rs"
 indexmap.workspace = true
 xpute-kit.workspace = true
 
-# An `as` cast to a pointer is an offset made a pointer; mem/base.rs is the
-# one way to do that.
+# An `as` cast to a pointer is an offset made a pointer; mem.rs (`at`,
+# `Memory::at`) is the one way to do that.
 [lints.clippy]
 ptr_as_ptr = "warn"
 ptr_cast_constness = "warn"

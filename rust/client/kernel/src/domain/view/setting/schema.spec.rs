@@ -23,9 +23,7 @@
 // `index` is a place in a list kept elsewhere — the person and the pet are
 // by theirs in actor.json — and crosses as itself.
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
+// Names as the spec spells them, so one record has one name on every side.
 #![allow(non_camel_case_types)]
 
 /// Which controller makes the camera's pose.
@@ -70,11 +68,17 @@ pub enum OrbitObstacleMode {
 }
 
 impl OrbitObstacleMode {
-    pub const ALL: [OrbitObstacleMode; 3] = [OrbitObstacleMode::through, OrbitObstacleMode::stop, OrbitObstacleMode::climb];
+    pub const ALL: [OrbitObstacleMode; 3] = [
+        OrbitObstacleMode::through,
+        OrbitObstacleMode::stop,
+        OrbitObstacleMode::climb,
+    ];
 
     /// The option a number names, or none for a number the list does not give out.
     pub fn of(number: u32) -> Option<OrbitObstacleMode> {
-        OrbitObstacleMode::ALL.into_iter().find(|o| *o as u32 == number)
+        OrbitObstacleMode::ALL
+            .into_iter()
+            .find(|o| *o as u32 == number)
     }
 }
 
@@ -125,11 +129,17 @@ pub enum ResolutionMode {
 }
 
 impl ResolutionMode {
-    pub const ALL: [ResolutionMode; 3] = [ResolutionMode::auto, ResolutionMode::fixed, ResolutionMode::low];
+    pub const ALL: [ResolutionMode; 3] = [
+        ResolutionMode::auto,
+        ResolutionMode::fixed,
+        ResolutionMode::low,
+    ];
 
     /// The option a number names, or none for a number the list does not give out.
     pub fn of(number: u32) -> Option<ResolutionMode> {
-        ResolutionMode::ALL.into_iter().find(|o| *o as u32 == number)
+        ResolutionMode::ALL
+            .into_iter()
+            .find(|o| *o as u32 == number)
     }
 }
 
@@ -246,7 +256,9 @@ impl SettingKey {
 
     /// The setting a number names, or none for a number the table does not give out.
     pub fn of(number: u32) -> Option<SettingKey> {
-        SettingKey::ALL.into_iter().find(|key| *key as u32 == number)
+        SettingKey::ALL
+            .into_iter()
+            .find(|key| *key as u32 == number)
     }
 
     pub fn kind(self) -> SettingKind {

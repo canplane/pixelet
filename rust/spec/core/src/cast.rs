@@ -97,8 +97,18 @@ impl Ray {
     /// are zeroed together, as `planes` and `past` branch on the one and
     /// multiply by the other.
     pub fn new(direction: [f32; 3], reach: f32) -> Ray {
-        let moves = |d: f32| if libm::fabsf(d) < f32::MIN_POSITIVE { 0.0 } else { d };
-        let direction = [moves(direction[0]), moves(direction[1]), moves(direction[2])];
+        let moves = |d: f32| {
+            if libm::fabsf(d) < f32::MIN_POSITIVE {
+                0.0
+            } else {
+                d
+            }
+        };
+        let direction = [
+            moves(direction[0]),
+            moves(direction[1]),
+            moves(direction[2]),
+        ];
         let inv = |d: f32| if d == 0.0 { 0.0 } else { 1.0 / d };
         Ray {
             direction,
@@ -158,11 +168,18 @@ impl Node {
         let zoom = self.zoom.min(apart.leading_zeros());
         let keep = !under(zoom);
         let node = Node {
-            corner: [self.corner[0] & keep, self.corner[1] & keep, self.corner[2] & keep],
+            corner: [
+                self.corner[0] & keep,
+                self.corner[1] & keep,
+                self.corner[2] & keep,
+            ],
             zoom,
             roots: self.roots,
         };
-        (node, self.roots[0] == roots[0] && self.roots[1] == roots[1] && self.roots[2] == roots[2])
+        (
+            node,
+            self.roots[0] == roots[0] && self.roots[1] == roots[1] && self.roots[2] == roots[2],
+        )
     }
 
     /// The world's node it is from the origin `o`, X named as the world
@@ -170,7 +187,10 @@ impl Node {
     pub fn index(&self, o: [i32; 3]) -> [i32; 3] {
         let r0 = roots_of(o);
         [
-            wrap_index(self.zoom, index_on(r0[0] + self.roots[0], self.corner[0], self.zoom)),
+            wrap_index(
+                self.zoom,
+                index_on(r0[0] + self.roots[0], self.corner[0], self.zoom),
+            ),
             index_on(r0[1] + self.roots[1], self.corner[1], self.zoom),
             index_on(r0[2] + self.roots[2], self.corner[2], self.zoom),
         ]
@@ -195,7 +215,8 @@ fn roots_of(o: [i32; 3]) -> [i32; 3] {
 pub fn point_at(o: [i32; 3], ray: &Ray, t: f32) -> ([u32; 3], [i32; 3]) {
     let og = grid_of(o);
     let on = |a: usize| {
-        let d = libm::floorf(crate::axis(ray.direction, a as u32) * t * (1 << FRAC_W) as f32) as i32;
+        let d =
+            libm::floorf(crate::axis(ray.direction, a as u32) * t * (1 << FRAC_W) as f32) as i32;
         let p = og[a].wrapping_add(d as u32);
         (
             p,
@@ -217,7 +238,8 @@ pub fn point_at(o: [i32; 3], ray: &Ray, t: f32) -> ([u32; 3], [i32; 3]) {
 /// from it: the whole units summed as integers before they are a float, so
 /// a plane is as exact far from the origin's root as in it.
 fn units(p: u32, og: u32, roots: i32) -> f32 {
-    ((p >> FRAC_W) as i32 - (og >> FRAC_W) as i32 + (roots << UNIT_ZOOM)) as f32 + ((p & 0xff) as i32 - (og & 0xff) as i32) as f32 / (1 << FRAC_W) as f32
+    ((p >> FRAC_W) as i32 - (og >> FRAC_W) as i32 + (roots << UNIT_ZOOM)) as f32
+        + ((p & 0xff) as i32 - (og & 0xff) as i32) as f32 / (1 << FRAC_W) as f32
 }
 
 /// A node's side at zoom `z` less one, on the finest grid: the bits under
@@ -234,7 +256,11 @@ fn under(z: Zoom) -> u32 {
 /// in the root `root`: `root · 2^z` and the corner's high bits, no shift
 /// reaching the word's width.
 fn index_on(root: i32, c: u32, z: Zoom) -> i32 {
-    let high = if z >= FINEST_ZOOM { 0 } else { (root << z) as u32 };
+    let high = if z >= FINEST_ZOOM {
+        0
+    } else {
+        (root << z) as u32
+    };
     let low = if z == 0 { 0 } else { c >> (FINEST_ZOOM - z) };
     high.wrapping_add(low) as i32
 }
@@ -264,18 +290,48 @@ fn bounds(n: &Node, og: [u32; 3]) -> ([f32; 3], [f32; 3]) {
         let last = c.wrapping_add(u);
         units(last.wrapping_add(1), og, roots + (last == u32::MAX) as i32)
     };
-    let lo = [units(n.corner[0], og[0], n.roots[0]), units(n.corner[1], og[1], n.roots[1]), units(n.corner[2], og[2], n.roots[2])];
-    let hi = [far(n.corner[0], og[0], n.roots[0]), far(n.corner[1], og[1], n.roots[1]), far(n.corner[2], og[2], n.roots[2])];
+    let lo = [
+        units(n.corner[0], og[0], n.roots[0]),
+        units(n.corner[1], og[1], n.roots[1]),
+        units(n.corner[2], og[2], n.roots[2]),
+    ];
+    let hi = [
+        far(n.corner[0], og[0], n.roots[0]),
+        far(n.corner[1], og[1], n.roots[1]),
+        far(n.corner[2], og[2], n.roots[2]),
+    ];
     (lo, hi)
 }
 
 /// The ray's t at each axis's near and far planes of a node (`planes`),
 /// from `t`.
-fn spans(ray: &Ray, (lo, hi): ([f32; 3], [f32; 3]), t: f32) -> ((f32, f32), (f32, f32), (f32, f32)) {
+fn spans(
+    ray: &Ray,
+    (lo, hi): ([f32; 3], [f32; 3]),
+    t: f32,
+) -> ((f32, f32), (f32, f32), (f32, f32)) {
     (
-        planes(ray.direction[0], ray.inverse[0], lo[0], hi[0], (t, ray.reach)),
-        planes(ray.direction[1], ray.inverse[1], lo[1], hi[1], (t, ray.reach)),
-        planes(ray.direction[2], ray.inverse[2], lo[2], hi[2], (t, ray.reach)),
+        planes(
+            ray.direction[0],
+            ray.inverse[0],
+            lo[0],
+            hi[0],
+            (t, ray.reach),
+        ),
+        planes(
+            ray.direction[1],
+            ray.inverse[1],
+            lo[1],
+            hi[1],
+            (t, ray.reach),
+        ),
+        planes(
+            ray.direction[2],
+            ray.inverse[2],
+            lo[2],
+            hi[2],
+            (t, ray.reach),
+        ),
     )
 }
 
@@ -287,7 +343,10 @@ pub fn holding(o: [i32; 3], ray: &Ray, mut n: Node, t: f32) -> Node {
     let og = grid_of(o);
     loop {
         let (x, y, z) = spans(ray, bounds(&n, og), t);
-        let (t0, t1) = (greater(greater(greater(t, x.0), y.0), z.0), lesser(lesser(lesser(ray.reach, x.1), y.1), z.1));
+        let (t0, t1) = (
+            greater(greater(greater(t, x.0), y.0), z.0),
+            lesser(lesser(lesser(ray.reach, x.1), y.1), z.1),
+        );
         if (t0 <= t && t < t1) || n.zoom == 0 {
             return n;
         }
@@ -319,8 +378,15 @@ pub fn kept_bounds((lo, hi): ([f32; 3], [f32; 3]), block: u32) -> ([f32; 3], [f3
         return (lo, hi);
     }
     let by = 0.5 * (1.0 - side(k));
-    let inset = [(hi[0] - lo[0]) * by, (hi[1] - lo[1]) * by, (hi[2] - lo[2]) * by];
-    ([lo[0] + inset[0], lo[1] + inset[1], lo[2] + inset[2]], [hi[0] - inset[0], hi[1] - inset[1], hi[2] - inset[2]])
+    let inset = [
+        (hi[0] - lo[0]) * by,
+        (hi[1] - lo[1]) * by,
+        (hi[2] - lo[2]) * by,
+    ];
+    (
+        [lo[0] + inset[0], lo[1] + inset[1], lo[2] + inset[2]],
+        [hi[0] - inset[0], hi[1] - inset[1], hi[2] - inset[2]],
+    )
 }
 
 /// The top of the block a stop met, as it is drawn (`kept_bounds`): the
@@ -339,7 +405,10 @@ pub fn top(o: [i32; 3], n: &Node, block: u32) -> (i32, f32) {
 /// is not entered, as the walk has it.
 pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, block: u32) -> (f32, u32, bool) {
     let (x, y, z) = spans(ray, kept_bounds(bounds(n, grid_of(o)), block), 0.0);
-    let (t0, t1) = (greater(greater(greater(0.0, x.0), y.0), z.0), lesser(lesser(lesser(ray.reach, x.1), y.1), z.1));
+    let (t0, t1) = (
+        greater(greater(greater(0.0, x.0), y.0), z.0),
+        lesser(lesser(lesser(ray.reach, x.1), y.1), z.1),
+    );
     let (t, e) = entered(ray, [x.0, y.0, z.0]);
     (t, e, t1 > t0)
 }
@@ -393,7 +462,14 @@ pub trait Query {
     /// What is in the node `node` at `zoom`, `at` what its ancestors handed
     /// it, asked from `far` to `near`, the ray in it from `t0`: the world's
     /// answer (pxl-spec-core `answer`), whichever side reads it.
-    fn node(&mut self, at: &mut Self::At, zoom: Zoom, node: [i32; 3], asked: [Zoom; 2], t0: f32) -> In<[u32; 2]>;
+    fn node(
+        &mut self,
+        at: &mut Self::At,
+        zoom: Zoom,
+        node: [i32; 3],
+        asked: [Zoom; 2],
+        t0: f32,
+    ) -> In<[u32; 2]>;
 }
 
 /// Where a ray stopped: how far, the axis it entered across, the node
@@ -438,8 +514,16 @@ pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 /// planes `lo` and `hi` units from the eye on each axis: its corner
 /// farthest from the eye and its point nearest it.
 fn reach(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
-    let near = [lesser(greater(lo[0], 0.0), hi[0]), lesser(greater(lo[1], 0.0), hi[1]), lesser(greater(lo[2], 0.0), hi[2])];
-    let far = [greater(-lo[0], hi[0]), greater(-lo[1], hi[1]), greater(-lo[2], hi[2])];
+    let near = [
+        lesser(greater(lo[0], 0.0), hi[0]),
+        lesser(greater(lo[1], 0.0), hi[1]),
+        lesser(greater(lo[2], 0.0), hi[2]),
+    ];
+    let far = [
+        greater(-lo[0], hi[0]),
+        greater(-lo[1], hi[1]),
+        greater(-lo[2], hi[2]),
+    ];
     [squared(far), squared(near)]
 }
 
@@ -462,15 +546,37 @@ fn squared(v: [f32; 3]) -> f32 {
 /// The first block `ray` meets within its reach that `until` stops at, at
 /// the zoom `detail` asks where it meets it, from the world's root holding
 /// the origin (`walk`).
-pub fn first<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until) -> Met<Q::At> {
+pub fn first<Q: Query>(
+    q: &mut Q,
+    o: [i32; 3],
+    ray: &Ray,
+    detail: Detail,
+    until: Until,
+) -> Met<Q::At> {
     rooted(q, o, ray, detail, until, &mut ())
 }
 
 /// `walk` from the world's root holding the origin, at 0, leaving its line
 /// to `keep`.
-pub fn rooted<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until, keep: &mut impl Keep<Q::At>) -> Met<Q::At> {
+pub fn rooted<Q: Query>(
+    q: &mut Q,
+    o: [i32; 3],
+    ray: &Ray,
+    detail: Detail,
+    until: Until,
+    keep: &mut impl Keep<Q::At>,
+) -> Met<Q::At> {
     let at = q.root(Node::ROOT.index(o));
-    walk(q, o, ray, detail, until, (Node::ROOT, at, 0.0), &Rooted(at), keep)
+    walk(
+        q,
+        o,
+        ray,
+        detail,
+        until,
+        (Node::ROOT, at, 0.0),
+        &Rooted(at),
+        keep,
+    )
 }
 
 /// What was handed each node over where a walk starts, by its zoom: the
@@ -528,7 +634,16 @@ impl<A: Copy> Keep<A> for () {
 /// ancestor holding the next node, by the highest bit the step changed
 /// (POP), or past a root, in the next root, from its top. One loop.
 #[allow(clippy::too_many_arguments)]
-pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: Until, from: (Node, Q::At, f32), over: &impl Over<Q::At>, keep: &mut impl Keep<Q::At>) -> Met<Q::At> {
+pub fn walk<Q: Query>(
+    q: &mut Q,
+    o: [i32; 3],
+    ray: &Ray,
+    detail: Detail,
+    until: Until,
+    from: (Node, Q::At, f32),
+    over: &impl Over<Q::At>,
+    keep: &mut impl Keep<Q::At>,
+) -> Met<Q::At> {
     let (og, r0) = (grid_of(o), roots_of(o));
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
@@ -545,15 +660,26 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
         let (lo, hi) = bounds(&n, og);
         // The ray's span in it.
         let (x, y, z) = spans(ray, (lo, hi), t);
-        let (t0, t1) = (greater(greater(greater(t, x.0), y.0), z.0), lesser(lesser(lesser(ray.reach, x.1), y.1), z.1));
+        let (t0, t1) = (
+            greater(greater(greater(t, x.0), y.0), z.0),
+            lesser(lesser(lesser(ray.reach, x.1), y.1), z.1),
+        );
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
         if t1 > t0 {
             let e = detail.eye;
-            let reach = reach([lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]], [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]]);
+            let reach = reach(
+                [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
+                [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
+            );
             let i = q.node(&mut at, n.zoom, n.index(o), asked(detail, reach), t0);
             visits += 1;
-            let inside = lo[0] <= 0.0 && 0.0 < hi[0] && lo[1] <= 0.0 && 0.0 < hi[1] && lo[2] <= 0.0 && 0.0 < hi[2];
+            let inside = lo[0] <= 0.0
+                && 0.0 < hi[0]
+                && lo[1] <= 0.0
+                && 0.0 < hi[1]
+                && lo[2] <= 0.0
+                && 0.0 < hi[2];
             let side = hi[0] - lo[0];
             // The planes the ray enters where it stops: the node's, or the
             // box a block keeping less than its cube is.
@@ -564,9 +690,17 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                 // fills (`kept_bounds`): an eye's ray stops where it enters
                 // the box and passes it as air where it misses; a beam ray
                 // stops at its node, as the samples it hands on may meet it.
-                Kind::Block if until == Until::Fills && fills(i.block[0]) && !inside && kept(i.block[0]) < EIGHTHS => {
+                Kind::Block
+                    if until == Until::Fills
+                        && fills(i.block[0])
+                        && !inside
+                        && kept(i.block[0]) < EIGHTHS =>
+                {
                     let (bx, by, bz) = spans(ray, kept_bounds((lo, hi), i.block[0]), t);
-                    let (b0, b1) = (greater(greater(greater(t, bx.0), by.0), bz.0), lesser(lesser(lesser(ray.reach, bx.1), by.1), bz.1));
+                    let (b0, b1) = (
+                        greater(greater(greater(t, bx.0), by.0), bz.0),
+                        lesser(lesser(lesser(ray.reach, bx.1), by.1), bz.1),
+                    );
                     near = [bx.0, by.0, bz.0];
                     if b1 > b0 {
                         Ends::Stop
@@ -606,9 +740,19 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                     let [lo, hi] = slab_of(i.block[0]);
                     let level = |v: i32| {
                         let root = v >> UNIT_ZOOM;
-                        units(((v - (root << UNIT_ZOOM)) as u32) << FRAC_W, og[2], root - r0[2])
+                        units(
+                            ((v - (root << UNIT_ZOOM)) as u32) << FRAC_W,
+                            og[2],
+                            root - r0[2],
+                        )
                     };
-                    let (bottom, top) = planes(ray.direction[2], ray.inverse[2], level(lo), level(hi), (t0, t1));
+                    let (bottom, top) = planes(
+                        ray.direction[2],
+                        ray.inverse[2],
+                        level(lo),
+                        level(hi),
+                        (t0, t1),
+                    );
                     into = until == Until::Air || greater(t0, bottom) < lesser(t1, top);
                     Ends::On
                 }
@@ -618,7 +762,13 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                 // where the ray enters the node, or its block's box
                 // (`entered`).
                 let (t, axis) = entered(ray, near);
-                let stop = Stop { t, axis, node: n, at, block: i.block };
+                let stop = Stop {
+                    t,
+                    axis,
+                    node: n,
+                    at,
+                    block: i.block,
+                };
                 keep.keep(&n, at, &stack);
                 return Met { ends, stop, visits };
             }
@@ -643,7 +793,11 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
             stack[n.zoom as usize] = at;
             let side = |k: bool, c: u32| if k { c | half } else { c };
             n = Node {
-                corner: [side(crossed[0], n.corner[0]), side(crossed[1], n.corner[1]), side(crossed[2], n.corner[2])],
+                corner: [
+                    side(crossed[0], n.corner[0]),
+                    side(crossed[1], n.corner[1]),
+                    side(crossed[2], n.corner[2]),
+                ],
                 zoom: n.zoom + 1,
                 ..n
             };
@@ -660,14 +814,22 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                     block: AIR,
                 };
                 keep.keep(&n, at, &stack);
-                return Met { ends: Ends::On, stop, visits };
+                return Met {
+                    ends: Ends::On,
+                    stop,
+                    visits,
+                };
             }
             // ADVANCE: the corner stepped on the axis the ray leaves by, the
             // first far plane it reaches.
             let e = crossing(ray.direction, [x.1, y.1, z.1], false);
             let up = axis(ray.direction, e) > 0.0;
             let old = axis(n.corner, e);
-            let new = if up { old.wrapping_add(u).wrapping_add(1) } else { old.wrapping_sub(u).wrapping_sub(1) };
+            let new = if up {
+                old.wrapping_add(u).wrapping_add(1)
+            } else {
+                old.wrapping_sub(u).wrapping_sub(1)
+            };
             // Never back: the next node holds where the ray is on the integers,
             // but near an edge another axis's plane, a float product, may
             // fall a last bit before it.
@@ -676,14 +838,22 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                 // Past a root: into the next, from its top, over which nothing
                 // is asked or held.
                 let by = if up { 1 } else { -1 };
-                n.roots = [n.roots[0] + (e == 0) as i32 * by, n.roots[1] + (e == 1) as i32 * by, n.roots[2] + (e == 2) as i32 * by];
+                n.roots = [
+                    n.roots[0] + (e == 0) as i32 * by,
+                    n.roots[1] + (e == 1) as i32 * by,
+                    n.roots[2] + (e == 2) as i32 * by,
+                ];
                 (n.corner, n.zoom, low) = ([0; 3], 0, 0);
                 (at, true)
             } else {
                 // POP: the child, at `l`, of the nearest ancestor holding the next
                 // node, by the highest bit the step changed; each axis's corner
                 // that ancestor's child's.
-                n.corner = [if e == 0 { new } else { n.corner[0] }, if e == 1 { new } else { n.corner[1] }, if e == 2 { new } else { n.corner[2] }];
+                n.corner = [
+                    if e == 0 { new } else { n.corner[0] },
+                    if e == 1 { new } else { n.corner[1] },
+                    if e == 2 { new } else { n.corner[2] },
+                ];
                 let h = 31 - (old ^ new).leading_zeros();
                 let keep = !((1u32 << h) - 1);
                 n.corner = [n.corner[0] & keep, n.corner[1] & keep, n.corner[2] & keep];
@@ -691,13 +861,21 @@ pub fn walk<Q: Query>(q: &mut Q, o: [i32; 3], ray: &Ray, detail: Detail, until: 
                 // What was handed the parent: its stack entry, the walk's
                 // own from where it started down or `over`'s over it.
                 n.zoom = l;
-                let parent = if l > low { stack[(l - 1) as usize] } else { over.over(l - 1) };
+                let parent = if l > low {
+                    stack[(l - 1) as usize]
+                } else {
+                    over.over(l - 1)
+                };
                 low = low.min(l);
                 (parent, false)
             }
         };
         let node = n.index(o);
-        at = if fresh { q.root(node) } else { q.child(&parent, n.zoom, node) };
+        at = if fresh {
+            q.root(node)
+        } else {
+            q.child(&parent, n.zoom, node)
+        };
     }
 }
 
@@ -720,7 +898,14 @@ mod tests {
         type At = ();
         fn root(&mut self, _: [i32; 3]) {}
         fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
-        fn node(&mut self, _: &mut (), zoom: Zoom, node: [i32; 3], _: [Zoom; 2], _: f32) -> In<[u32; 2]> {
+        fn node(
+            &mut self,
+            _: &mut (),
+            zoom: Zoom,
+            node: [i32; 3],
+            _: [Zoom; 2],
+            _: f32,
+        ) -> In<[u32; 2]> {
             let s = UNIT_ZOOM - zoom;
             let over = (0..3).all(|a| TARGET[a] >> s == node[a]);
             match (zoom < UNIT_ZOOM, over) {
@@ -732,7 +917,10 @@ mod tests {
                     kind: Kind::Block,
                     block: [kept_word(stone as u32, self.kept), 0],
                 },
-                _ => In { kind: Kind::Block, block: [AIR, 0] },
+                _ => In {
+                    kind: Kind::Block,
+                    block: [AIR, 0],
+                },
             }
         }
     }
@@ -756,7 +944,10 @@ mod tests {
         for k in 1..=EIGHTHS {
             let (lo, hi) = kept_bounds(([0.0; 3], [1.0; 3]), kept_word(0, k));
             let volume = (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2]);
-            assert!((volume - k as f32 / EIGHTHS as f32).abs() < 1e-6, "{k}: {volume}");
+            assert!(
+                (volume - k as f32 / EIGHTHS as f32).abs() < 1e-6,
+                "{k}: {volume}"
+            );
             // About the cube's center.
             assert!((lo[0] + hi[0] - 1.0).abs() < 1e-6);
         }

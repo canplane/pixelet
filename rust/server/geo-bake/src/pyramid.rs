@@ -97,14 +97,20 @@ impl TileSet {
     pub fn remove(&self, p: Tile) -> Result<(), String> {
         let path = self.path(p);
         match fs::remove_file(&path) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", path.display())),
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                Err(format!("{}: {e}", path.display()))
+            }
             _ => Ok(()),
         }
     }
 
     pub fn read<L: Base>(&self, p: Tile) -> Result<Option<L>, String> {
-        let Some(raw) = self.content(p)? else { return Ok(None) };
-        L::decode(&raw).map(Some).map_err(|e| format!("{}: {e}", self.path(p).display()))
+        let Some(raw) = self.content(p)? else {
+            return Ok(None);
+        };
+        L::decode(&raw)
+            .map(Some)
+            .map_err(|e| format!("{}: {e}", self.path(p).display()))
     }
 
     /// A tile's content, unpacked.
@@ -114,14 +120,18 @@ impl TileSet {
             return Ok(None);
         }
         let stored = fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        unpack(&stored).map(Some).map_err(|e| format!("{}: {e}", path.display()))
+        unpack(&stored)
+            .map(Some)
+            .map_err(|e| format!("{}: {e}", path.display()))
     }
 
     /// Every tile, each zoom's sorted, from one listing: a name's length is its zoom.
     pub fn by_zoom(&self) -> Result<BTreeMap<Zoom, Vec<Tile>>, String> {
         let mut out: BTreeMap<Zoom, Vec<Tile>> = BTreeMap::new();
         if self.root.exists() {
-            for entry in fs::read_dir(&self.root).map_err(|e| format!("{}: {e}", self.root.display()))? {
+            for entry in
+                fs::read_dir(&self.root).map_err(|e| format!("{}: {e}", self.root.display()))?
+            {
                 let name = entry.map_err(|e| e.to_string())?.file_name();
                 if let Some(p) = name.to_str().and_then(Tile::of_name) {
                     out.entry(p.zoom).or_default().push(p);
@@ -134,15 +144,29 @@ impl TileSet {
 }
 
 /// None where it has no child: a parent exists exactly where a child does.
-pub fn fold_parent<'a, L: Base>(parent: Tile, read: impl Fn(Tile) -> Option<&'a L>, absent: &impl Absent<L>) -> Option<L> {
+pub fn fold_parent<'a, L: Base>(
+    parent: Tile,
+    read: impl Fn(Tile) -> Option<&'a L>,
+    absent: &impl Absent<L>,
+) -> Option<L> {
     if parent.children().iter().all(|&k| read(k).is_none()) {
         return None;
     }
-    let filled: FnvHashMap<Tile, Cow<'_, L>> = L::sources(parent).into_iter().filter(|&p| read(p).is_none()).map(|p| (p, absent.at(p))).collect();
-    L::fold_tile(parent, |p| read(p).or_else(|| filled.get(&p).map(|c| c.as_ref())))
+    let filled: FnvHashMap<Tile, Cow<'_, L>> = L::sources(parent)
+        .into_iter()
+        .filter(|&p| read(p).is_none())
+        .map(|p| (p, absent.at(p)))
+        .collect();
+    L::fold_tile(parent, |p| {
+        read(p).or_else(|| filled.get(&p).map(|c| c.as_ref()))
+    })
 }
 
-pub fn fold_stored<L: Base>(set: &TileSet, parent: Tile, absent: &impl Absent<L>) -> Result<Option<L>, String> {
+pub fn fold_stored<L: Base>(
+    set: &TileSet,
+    parent: Tile,
+    absent: &impl Absent<L>,
+) -> Result<Option<L>, String> {
     let mut read = FnvHashMap::default();
     for p in L::sources(parent) {
         if let Some(tile) = set.read::<L>(p)? {
@@ -177,8 +201,12 @@ impl Staged<'_> {
     }
 
     pub fn read<L: Base>(&self, p: Tile) -> Result<Option<L>, String> {
-        let Some(raw) = self.content(p)? else { return Ok(None) };
-        L::decode(&raw).map(Some).map_err(|e| format!("{}: {e}", p.name()))
+        let Some(raw) = self.content(p)? else {
+            return Ok(None);
+        };
+        L::decode(&raw)
+            .map(Some)
+            .map_err(|e| format!("{}: {e}", p.name()))
     }
 
     /// Every tile it may hold, the set's and the stage's, each zoom's
@@ -208,15 +236,28 @@ pub fn ancestor(mut p: Tile, zoom: Zoom) -> Tile {
 /// parent whose content differs is staged, one that folds to none is gone.
 /// `changed` may hold tiles of any zoom, each taken up at its own: one with
 /// no object is changed when what its absence is has.
-pub fn fold<L: Base>(set: &mut Staged<'_>, mut changed: FnvHashSet<Tile>, absent: &impl Absent<L>, workers: usize) -> Result<(), String> {
+pub fn fold<L: Base>(
+    set: &mut Staged<'_>,
+    mut changed: FnvHashSet<Tile>,
+    absent: &impl Absent<L>,
+    workers: usize,
+) -> Result<(), String> {
     for zoom in (L::COARSEST..L::LEAF).rev() {
         if changed.is_empty() {
             break;
         }
-        let below: Vec<Tile> = changed.iter().copied().filter(|c| c.zoom == zoom + 1).collect();
+        let below: Vec<Tile> = changed
+            .iter()
+            .copied()
+            .filter(|c| c.zoom == zoom + 1)
+            .collect();
         let at = std::time::Instant::now();
         let (written, gone) = fold_zoom(set, &readers::<L>(&below), absent, workers)?;
-        println!("[bake/pyramid] z{zoom}: {} tiles changed in {:.1}s", written.len() + gone.len(), at.elapsed().as_secs_f64());
+        println!(
+            "[bake/pyramid] z{zoom}: {} tiles changed in {:.1}s",
+            written.len() + gone.len(),
+            at.elapsed().as_secs_f64()
+        );
         changed.retain(|c| c.zoom <= zoom);
         changed.extend(written.iter().chain(&gone));
         set.gone.extend(gone);
@@ -236,7 +277,10 @@ pub fn unasked<L: Base>(set: &TileSet, top: Zoom) -> Result<FnvHashSet<Tile>, St
             if let std::collections::hash_map::Entry::Vacant(e) = parents.entry(parent) {
                 e.insert(set.read::<L>(parent)?);
             }
-            if parents[&parent].as_ref().is_some_and(|q| !q.occupancy().has_child(p.slot())) {
+            if parents[&parent]
+                .as_ref()
+                .is_some_and(|q| !q.occupancy().has_child(p.slot()))
+            {
                 out.insert(p);
             }
         }
@@ -246,7 +290,12 @@ pub fn unasked<L: Base>(set: &TileSet, top: Zoom) -> Result<FnvHashSet<Tile>, St
 
 /// Measured from disk, not the run: a resumed run that skipped everything
 /// would describe an empty set.
-pub fn write_manifest(set: &TileSet, top: Zoom, built: Option<&str>, layer: serde_json::Value) -> Result<(), String> {
+pub fn write_manifest(
+    set: &TileSet,
+    top: Zoom,
+    built: Option<&str>,
+    layer: serde_json::Value,
+) -> Result<(), String> {
     // The tiles, a zoom at a time; the set is its tiles and the manifest.
     let listed = set.by_zoom()?;
     let (mut objects, mut bytes) = (0u64, 0u64);
@@ -289,21 +338,38 @@ fn readers<L: Base>(below: &[Tile]) -> Vec<Tile> {
 
 /// Folds `targets`, a zoom's parents in rows; returns those staged and those
 /// gone. Each worker keeps only the child rows its current parent row reads.
-fn fold_zoom<L: Base>(set: &Staged<'_>, targets: &[Tile], absent: &impl Absent<L>, workers: usize) -> Result<(Vec<Tile>, Vec<Tile>), String> {
+fn fold_zoom<L: Base>(
+    set: &Staged<'_>,
+    targets: &[Tile],
+    absent: &impl Absent<L>,
+    workers: usize,
+) -> Result<(Vec<Tile>, Vec<Tile>), String> {
     let rows: Vec<&[Tile]> = targets.chunk_by(|a, b| a.at[1] == b.at[1]).collect();
     let band = rows.len().div_ceil(workers.max(1)).max(1);
     let bands = std::thread::scope(|scope| {
-        let handles: Vec<_> = rows.chunks(band).map(|band| scope.spawn(move || fold_band(set, band, absent))).collect();
-        handles.into_iter().map(|h| h.join().expect("a fold worker")).collect::<Result<Vec<_>, _>>()
+        let handles: Vec<_> = rows
+            .chunks(band)
+            .map(|band| scope.spawn(move || fold_band(set, band, absent)))
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("a fold worker"))
+            .collect::<Result<Vec<_>, _>>()
     })?;
-    Ok(bands.into_iter().fold((Vec::new(), Vec::new()), |(mut w, mut g), (bw, bg)| {
-        w.extend(bw);
-        g.extend(bg);
-        (w, g)
-    }))
+    Ok(bands
+        .into_iter()
+        .fold((Vec::new(), Vec::new()), |(mut w, mut g), (bw, bg)| {
+            w.extend(bw);
+            g.extend(bg);
+            (w, g)
+        }))
 }
 
-fn fold_band<L: Base>(set: &Staged<'_>, rows: &[&[Tile]], absent: &impl Absent<L>) -> Result<(Vec<Tile>, Vec<Tile>), String> {
+fn fold_band<L: Base>(
+    set: &Staged<'_>,
+    rows: &[&[Tile]],
+    absent: &impl Absent<L>,
+) -> Result<(Vec<Tile>, Vec<Tile>), String> {
     let mut held: FnvHashMap<Tile, Option<L>> = FnvHashMap::default();
     let (mut written, mut gone) = (Vec::new(), Vec::new());
     for row in rows {
@@ -316,14 +382,20 @@ fn fold_band<L: Base>(set: &Staged<'_>, rows: &[&[Tile]], absent: &impl Absent<L
                 }
             }
             let after = fold_parent(parent, |p| held.get(&p).and_then(Option::as_ref), absent)
-                .map(|t| t.encode(parent).map_err(|e| format!("{}: {e}", parent.name())))
+                .map(|t| {
+                    t.encode(parent)
+                        .map_err(|e| format!("{}: {e}", parent.name()))
+                })
                 .transpose()?;
             if set.content(parent)? == after {
                 continue;
             }
             match &after {
                 Some(raw) => {
-                    set.stage.write(parent, &pack(raw, Level::Stored).map_err(|e| e.to_string())?)?;
+                    set.stage.write(
+                        parent,
+                        &pack(raw, Level::Stored).map_err(|e| e.to_string())?,
+                    )?;
                     written.push(parent);
                 }
                 None => gone.push(parent),

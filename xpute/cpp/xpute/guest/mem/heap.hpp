@@ -1,8 +1,9 @@
 // cpp/xpute/guest/mem/heap.hpp
 
-// Blocks out of the guest's heap. The allocator is installed by the guest
-// (`set_heap`), and `operator new` points at it too, so nothing allocates from
-// memory the guest was not given.
+// Blocks out of the guest's heap, named by offsets in its memory
+// (`mem::core`). The allocator is installed by the guest (`set_heap`), and
+// `operator new` points at it too, so nothing allocates from memory the guest
+// was not given.
 
 #pragma once
 
@@ -11,7 +12,8 @@
 #include <optional>
 #include <utility>
 
-#include "memory.hpp"
+#include "xpute/kit/alloc/slab.hpp"
+#include "xpute/guest/mem.hpp"
 
 namespace xpute {
 
@@ -33,47 +35,55 @@ struct Allocator {
 
 void set_heap(Allocator heap) noexcept;
 
+// One reading of a heap, so compared fields are from one moment.
+struct HeapStat {
+    std::size_t range = 0;
+    // A high-water mark, not a holding.
+    std::size_t used = 0;
+    std::size_t live = 0;
+    std::size_t run = 0;
+    std::size_t slot = 0;
+    // Past the tree's current root the range is untouched rather than listed,
+    // so this is not the free space.
+    std::size_t largest_free = 0;
+    // Moves when a page is released, which is when a request of a page or
+    // more refused before might now be served; a slot returned to a run still
+    // in use does not move it (`SlabMalloc::releases`).
+    std::uint32_t releases = 0;
+    std::uint32_t refusals = 0;
+    std::uint32_t requests = 0;
+
+    bool operator==(const HeapStat &) const = default;
+};
+
+// Reads the slab whose calls the guest installed as its heap (`set_heap`).
+template <Range R> HeapStat heap_stat(const SlabMalloc<R> &a) noexcept {
+    return HeapStat{
+        .range = a.range_bytes(),
+        .used = a.used(),
+        .live = a.live(),
+        .run = a.run_live(),
+        .slot = a.slot_live(),
+        .largest_free = a.largest_free(),
+        .releases = a.releases(),
+        .refusals = a.refusals(),
+        .requests = static_cast<std::uint32_t>(a.pages().allocs()),
+    };
+}
+
 Allocator heap() noexcept;
 
 // None for no room, no allocator, or zero bytes.
-inline std::optional<Block> alloc(Memory mem, std::uint32_t bytes) noexcept {
+inline std::optional<Block> alloc(std::uint32_t bytes) noexcept {
     Allocator h = heap();
     if (bytes == 0 || h.alloc == nullptr) return std::nullopt;
     void *p = h.alloc(bytes, BLOCK_ALIGN);
     if (p == nullptr) return std::nullopt;
-    return Block{mem.off_of(p), bytes};
+    return Block{mem::off_of(p), bytes};
 }
 
-inline void free(Memory mem, Block block) noexcept {
-    heap().free(mem.at(block.at), block.bytes, BLOCK_ALIGN);
+inline void free(Block block) noexcept {
+    heap().free(mem::at(block.at), block.bytes, BLOCK_ALIGN);
 }
-
-// For work that can still fail after taking the block; `keep` hands it on.
-class BlockGuard {
-  public:
-    static std::optional<BlockGuard> alloc(Memory mem, std::uint32_t bytes) noexcept {
-        std::optional<Block> b = xpute::alloc(mem, bytes);
-        if (!b) return std::nullopt;
-        return BlockGuard(mem, *b);
-    }
-
-    BlockGuard(BlockGuard &&o) noexcept : mem_(o.mem_), block_(std::exchange(o.block_, std::nullopt)) {}
-    BlockGuard(const BlockGuard &) = delete;
-    BlockGuard &operator=(const BlockGuard &) = delete;
-    BlockGuard &operator=(BlockGuard &&) = delete;
-    ~BlockGuard() {
-        if (block_) xpute::free(mem_, *block_);
-    }
-
-    const Block &block() const noexcept { return *block_; }
-
-    Block keep() noexcept { return *std::exchange(block_, std::nullopt); }
-
-  private:
-    BlockGuard(Memory mem, Block block) noexcept : mem_(mem), block_(block) {}
-
-    Memory mem_;
-    std::optional<Block> block_;
-};
 
 } // namespace xpute

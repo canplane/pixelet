@@ -17,12 +17,12 @@ XPUTE = Path(__file__).resolve().parent.parent
 
 # Neither written nor compared: build output and lock files, a lock or
 # node_modules/ in any tree, as .gitignore has them.
-UNMANAGED = ["rust/target/", "target/", "rust/Cargo.lock"]
+UNMANAGED = ["rust/target/", "cpp/target/", "ts/target/", "rust/Cargo.lock"]
 UNMANAGED_ANYWHERE = ["deno.lock", "node_modules"]
 
 # Made by the step the C++ tree runs itself, from what git tracks there, and
 # shipped at cpp/amalgamation/ as SQLite ships its two files; here they are
-# build output, under target/.
+# build output, under cpp/target/.
 AMALGAMATION = ["xpute.hpp", "xpute.cpp"]
 
 
@@ -92,7 +92,7 @@ def amalgamation() -> list[File]:
     out = run(["make", "-C", "cpp", "amalgamation"])
     if out.returncode != 0:
         die(f"make -C cpp amalgamation: {out.stderr.decode().strip()}")
-    return [(f"cpp/amalgamation/{name}", (XPUTE / "target/cpp/amalgamation" / name).read_bytes(), False) for name in AMALGAMATION]
+    return [(f"cpp/amalgamation/{name}", (XPUTE / "cpp/target/amalgamation" / name).read_bytes(), False) for name in AMALGAMATION]
 
 
 def present(to: Path) -> list[str]:

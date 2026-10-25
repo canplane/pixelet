@@ -35,16 +35,35 @@ pub struct StarPass {
 impl StarPass {
     /// `air`, the air's entries (gpu/atmosphere.rs `entries`): a star is
     /// dimmed by the air above the eye as its table holds it.
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [Entry; AIR_ENTRIES]) -> StarPass {
+    pub fn new(
+        g: &Gpu,
+        pipelines: &mut Pipelines,
+        frame_buffer: u32,
+        air: [Entry; AIR_ENTRIES],
+    ) -> StarPass {
         let built = pipelines.build(g, PIPELINE_STAR, g.canvas());
-        let uniform = g.buffer(word_bytes(STARS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let stars: Vec<f32> = CATALOG.as_chunks::<RECORD_BYTES>().0.iter().flat_map(star_floats).collect();
-        let catalog = g.buffer(word_bytes(stars.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let uniform = g.buffer(
+            word_bytes(STARS_FLOATS),
+            buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+        );
+        let stars: Vec<f32> = CATALOG
+            .as_chunks::<RECORD_BYTES>()
+            .0
+            .iter()
+            .flat_map(star_floats)
+            .collect();
+        let catalog = g.buffer(
+            word_bytes(stars.len()),
+            buffer_usage::STORAGE | buffer_usage::COPY_DST,
+        );
         g.write_buffer(catalog, 0, bytes(&stars));
         let mut frame = vec![buffer_entry(0, frame_buffer)];
         frame.extend(air.iter().filter(|e| [8, 9, 11].contains(&e.binding)));
         let frame_group = g.bind_group(built.layouts[0], &frame);
-        let group = g.bind_group(built.layouts[1], &[buffer_entry(0, uniform), buffer_entry(1, catalog)]);
+        let group = g.bind_group(
+            built.layouts[1],
+            &[buffer_entry(0, uniform), buffer_entry(1, catalog)],
+        );
         StarPass {
             built,
             frame_group,
@@ -70,7 +89,11 @@ impl StarPass {
         u[SKY..SKY + 12].copy_from_slice(&env[ENV_STARS..ENV_STARS + 12]);
         u[SKY + 12..SKY + 16].copy_from_slice(&[0.0, 0.0, 0.0, 1.0]);
         let css = stage_lane()[STAGE_AT::VIEWPORT];
-        u[DENSITY] = if css > 0.0 { (width as f64 / css) as f32 } else { 1.0 };
+        u[DENSITY] = if css > 0.0 {
+            (width as f64 / css) as f32
+        } else {
+            1.0
+        };
     }
 
     /// `words` written, where the frame's read found them moved.

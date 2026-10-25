@@ -106,7 +106,7 @@ class PacketWriter {
         bool root;
     };
 
-    std::optional<std::uint32_t> spoil(Errno code) noexcept;
+    std::optional<std::uint32_t> spoil(Errno errnum) noexcept;
     std::optional<std::uint32_t> reserve(std::uint32_t unit, std::uint64_t bytes) noexcept;
     PacketWriter &entry(std::optional<std::uint32_t> at, NodeType type) noexcept;
 

@@ -6,13 +6,14 @@
 // its run came to an end, and the phases a run reports its time in. The profiler
 // records and reports them by these names (spec/client/kernel/profiler/profiler.json).
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code
+)]
 
 pub const STREAM_NAMES: usize = 5;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -27,12 +28,20 @@ pub enum StreamName {
 
 impl StreamName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [StreamName; 5] = [StreamName::terrain, StreamName::place, StreamName::division, StreamName::asset, StreamName::earth];
+    pub const ALL: [StreamName; 5] = [
+        StreamName::terrain,
+        StreamName::place,
+        StreamName::division,
+        StreamName::asset,
+        StreamName::earth,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<StreamName> {
-        StreamName::ALL.into_iter().find(|member| *member as u8 == value)
+        StreamName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -52,7 +61,9 @@ impl OutcomeName {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<OutcomeName> {
-        OutcomeName::ALL.into_iter().find(|member| *member as u8 == value)
+        OutcomeName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -68,12 +79,19 @@ pub enum TaskPhaseName {
 
 impl TaskPhaseName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [TaskPhaseName; 4] = [TaskPhaseName::net_ms, TaskPhaseName::bytes, TaskPhaseName::decode_ms, TaskPhaseName::adopt_ms];
+    pub const ALL: [TaskPhaseName; 4] = [
+        TaskPhaseName::net_ms,
+        TaskPhaseName::bytes,
+        TaskPhaseName::decode_ms,
+        TaskPhaseName::adopt_ms,
+    ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<TaskPhaseName> {
-        TaskPhaseName::ALL.into_iter().find(|member| *member as u8 == value)
+        TaskPhaseName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 

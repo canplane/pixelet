@@ -3,7 +3,9 @@
 use xpute_kit::math::scalar::clamp;
 
 use crate::domain::control::camera::controller::look_domain;
-use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MIN_DIST};
+use crate::domain::control::param::{
+    DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MIN_DIST,
+};
 use crate::sys::sched::edge::request_world_tick;
 use xpute_guest::global::Global;
 

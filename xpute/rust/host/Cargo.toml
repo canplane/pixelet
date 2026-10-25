@@ -16,7 +16,7 @@ xpute-guest.workspace = true
 libc = "0.2"
 
 # Each its own process, since a process boots one guest and sets one base
-# (xpute_guest::mem::base): the boot and the guest's thread, and the
+# (xpute_guest::mem): the boot and the guest's thread, and the
 # allocator installed as a test binary's own.
 [[test]]
 name = "native"

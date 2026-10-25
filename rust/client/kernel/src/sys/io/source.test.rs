@@ -17,7 +17,14 @@ fn formats() -> Vec<u32> {
 #[test]
 fn a_source_serves_by_its_shards() {
     let s = parse(4, &formats(), ["0103300", "01033210"]).expect("a declaration the client reads");
-    for served in ["01033", "0103300", "010330012", "010332", "01033210", "010332103"] {
+    for served in [
+        "01033",
+        "0103300",
+        "010330012",
+        "010332",
+        "01033210",
+        "010332103",
+    ] {
         assert!(s.covers(tile(served)), "{served}");
     }
     for beside in ["01032", "0103301", "01033211", "010332110"] {
@@ -34,7 +41,10 @@ fn a_declaration_the_client_cannot_follow_is_refused_whole() {
     let short = &f[..f.len() - 1];
     assert!(parse(4, &unread, []).is_none(), "an unread format");
     assert!(parse(4, short, []).is_none(), "a kind with no format");
-    assert!(parse(4, &f, ["010330012"]).is_none(), "a name finer than a shard");
+    assert!(
+        parse(4, &f, ["010330012"]).is_none(),
+        "a name finer than a shard"
+    );
     assert!(parse(3, &f, []).is_none(), "a zoom above the pyramid");
     assert!(parse(16, &f, []).is_none(), "a zoom below the leaves");
 }

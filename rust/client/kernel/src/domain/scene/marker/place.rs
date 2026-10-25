@@ -58,7 +58,9 @@ pub(super) fn read(square: Square, found: &mut Vec<Place>) {
     } else {
         (first_descendant_of(column, t - z), 1 << (t - z))
     };
-    let tiles = (y0..y0 + n).filter(|y| tile_rows(t).contains(y)).flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y])));
+    let tiles = (y0..y0 + n)
+        .filter(|y| tile_rows(t).contains(y))
+        .flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y])));
     // The square as the world names it, once round the world.
     let named = [wrap_index(z, column[0]), column[1]];
     World::now().places_in(tiles, &mut |src, place, h| {
@@ -99,7 +101,9 @@ pub(super) fn show(read: &mut [Place], eye: V3, tau: Tau, out: &mut Vec<Instance
         let Some(design) = point_of(p.category, p.from, p.name.as_ref(), carto_zoom(cell)) else {
             continue;
         };
-        let Some(top) = top_at(p, GROUND.read_zoom(cell)) else { continue };
+        let Some(top) = top_at(p, GROUND.read_zoom(cell)) else {
+            continue;
+        };
         let stands = p.ground.center(top);
         out.push(Instance {
             key: p.key,

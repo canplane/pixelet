@@ -74,7 +74,10 @@ fn byte_of(x: f64) -> f64 {
     let k = (0..n).find(|&k| x <= KNOTS[k + 1].0).unwrap_or(n - 1);
     let t = (x - KNOTS[k].0) / h[k];
     let (t2, t3) = (t * t, t * t * t);
-    (2.0 * t3 - 3.0 * t2 + 1.0) * KNOTS[k].1 + (t3 - 2.0 * t2 + t) * h[k] * m[k] + (-2.0 * t3 + 3.0 * t2) * KNOTS[k + 1].1 + (t3 - t2) * h[k] * m[k + 1]
+    (2.0 * t3 - 3.0 * t2 + 1.0) * KNOTS[k].1
+        + (t3 - 2.0 * t2 + t) * h[k] * m[k]
+        + (-2.0 * t3 + 3.0 * t2) * KNOTS[k + 1].1
+        + (t3 - t2) * h[k] * m[k + 1]
 }
 
 fn reflectance() -> [f32; 256] {
@@ -96,13 +99,21 @@ fn reflectance() -> [f32; 256] {
 fn shown() -> [f32; 256] {
     core::array::from_fn(|b| {
         let c = b as f64 / 255.0;
-        (if c <= 0.04045 { c / 12.92 } else { libm::pow((c + 0.055) / 1.055, 2.4) }) as f32
+        (if c <= 0.04045 {
+            c / 12.92
+        } else {
+            libm::pow((c + 0.055) / 1.055, 2.4)
+        }) as f32
     })
 }
 
 fn to_srgb(v: f32) -> u8 {
     let v = (v as f64).clamp(0.0, 1.0);
-    let c = if v <= 0.0031308 { 12.92 * v } else { 1.055 * libm::pow(v, 1.0 / 2.4) - 0.055 };
+    let c = if v <= 0.0031308 {
+        12.92 * v
+    } else {
+        1.055 * libm::pow(v, 1.0 / 2.4) - 0.055
+    };
     (c * 255.0).round_ties_even() as u8
 }
 
@@ -134,8 +145,14 @@ impl<const N: usize> Plate<'_, N> {
             let (mid, half) = ((a + b) / 2.0, ((b - a).abs() / 2.0).max(0.5));
             (mid - half, mid + half)
         };
-        let (x0, x1) = span((lng0 + 180.0) / 360.0 * self.width as f64, (lng1 + 180.0) / 360.0 * self.width as f64);
-        let (y0, y1) = span((90.0 - lat1) / 180.0 * self.height as f64, (90.0 - lat0) / 180.0 * self.height as f64);
+        let (x0, x1) = span(
+            (lng0 + 180.0) / 360.0 * self.width as f64,
+            (lng1 + 180.0) / 360.0 * self.width as f64,
+        );
+        let (y0, y1) = span(
+            (90.0 - lat1) / 180.0 * self.height as f64,
+            (90.0 - lat0) / 180.0 * self.height as f64,
+        );
         let mut sum = [0f64; N];
         let mut weight = 0.0;
         for py in y0.floor() as i64..y1.ceil() as i64 {
@@ -156,7 +173,8 @@ impl<const N: usize> Plate<'_, N> {
 
 /// Longitude and latitude, in degrees, of a point of the plane in units.
 fn lng_lat(x: f64, y: f64) -> [f64; 2] {
-    let [lng, lat, _] = epsg4326::from_mercator(&[epsg3857::mer_from_u(x), epsg3857::mer_from_u(y), 0.0]);
+    let [lng, lat, _] =
+        epsg4326::from_mercator(&[epsg3857::mer_from_u(x), epsg3857::mer_from_u(y), 0.0]);
     [lng, lat]
 }
 
@@ -168,11 +186,19 @@ fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Op
             let index = GROUND.cell_index(tx, ty);
             let cell = GROUND.cell_at(tile, index);
             let (base, side) = (cell.base(), cell.side());
-            let (x, y) = (q3::to_real(i64::from(base[0])), q3::to_real(i64::from(base[1])));
+            let (x, y) = (
+                q3::to_real(i64::from(base[0])),
+                q3::to_real(i64::from(base[1])),
+            );
             let ([lng0, lat0], [lng1, lat1]) = (lng_lat(x, y), lng_lat(x + side, y + side));
             let [r, g, b] = day.mean([lng0, lng1], [lat0, lat1]).map(to_srgb);
             let at = index as usize * 4;
-            rgba[at..at + 4].copy_from_slice(&[r, g, b, lights_byte(night.mean([lng0, lng1], [lat0, lat1])[0])]);
+            rgba[at..at + 4].copy_from_slice(&[
+                r,
+                g,
+                b,
+                lights_byte(night.mean([lng0, lng1], [lat0, lat1])[0]),
+            ]);
         }
     }
     let first: [u8; 4] = rgba[..4].try_into().ok()?;
@@ -188,9 +214,15 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
             scope.spawn(move || {
                 for (r, row) in rows.chunks_mut(w * 4).enumerate() {
                     let j = t * h.div_ceil(threads) + r;
-                    let lat = [90.0 - (j + 1) as f64 * 180.0 / h as f64, 90.0 - j as f64 * 180.0 / h as f64];
+                    let lat = [
+                        90.0 - (j + 1) as f64 * 180.0 / h as f64,
+                        90.0 - j as f64 * 180.0 / h as f64,
+                    ];
                     for (i, texel) in row.chunks_mut(4).enumerate() {
-                        let lng = [i as f64 * 360.0 / w as f64 - 180.0, (i + 1) as f64 * 360.0 / w as f64 - 180.0];
+                        let lng = [
+                            i as f64 * 360.0 / w as f64 - 180.0,
+                            (i + 1) as f64 * 360.0 / w as f64 - 180.0,
+                        ];
                         let [r, g, b] = day.mean(lng, lat).map(to_srgb);
                         texel.copy_from_slice(&[r, g, b, lights_byte(night.mean(lng, lat)[0])]);
                     }
@@ -205,14 +237,28 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
     config.lossless = 1;
     // libwebp otherwise rewrites the color under a zero alpha: the unlit Earth.
     config.exact = 1;
-    let encoded = webp::Encoder::from_rgba(&bytes, GLOBAL.0, GLOBAL.1).encode_advanced(&config).map_err(|e| format!("{e:?}"))?;
-    let back = webp::Decoder::new(&encoded).decode().ok_or("the global picture does not decode")?;
+    let encoded = webp::Encoder::from_rgba(&bytes, GLOBAL.0, GLOBAL.1)
+        .encode_advanced(&config)
+        .map_err(|e| format!("{e:?}"))?;
+    let back = webp::Decoder::new(&encoded)
+        .decode()
+        .ok_or("the global picture does not decode")?;
     if *back != bytes[..] {
-        return Err("the global picture does not keep its bytes, which a left-out tile reads".into());
+        return Err(
+            "the global picture does not keep its bytes, which a left-out tile reads".into(),
+        );
     }
     // Packed as every object of the set is, so a version is labeled one way.
-    write_atomic(out, &pack(&encoded, Level::Stored).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    println!("[earth] global -> {} ({} KiB)", out.display(), encoded.len() / 1024);
+    write_atomic(
+        out,
+        &pack(&encoded, Level::Stored).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    println!(
+        "[earth] global -> {} ({} KiB)",
+        out.display(),
+        encoded.len() / 1024
+    );
     Ok(())
 }
 
@@ -252,13 +298,23 @@ fn run() -> Result<(), String> {
     pxl_geo_bake::cli::enter()?;
     let out = PathBuf::from("./out/earth");
     let text = std::fs::read_to_string(SOURCE).map_err(|e| format!("{SOURCE}: {e}"))?;
-    let named: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{SOURCE}: {e}"))?;
-    let day = decode(&source(named["day"].as_str().ok_or(format!("{SOURCE}: no day"))?)?)?.to_rgb8();
+    let named: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("{SOURCE}: {e}"))?;
+    let day = decode(&source(
+        named["day"].as_str().ok_or(format!("{SOURCE}: no day"))?,
+    )?)?
+    .to_rgb8();
     let rows: Vec<Vec<&str>> = named["night"]
         .as_array()
         .ok_or(format!("{SOURCE}: no night"))?
         .iter()
-        .map(|r| r.as_array().into_iter().flatten().filter_map(serde_json::Value::as_str).collect())
+        .map(|r| {
+            r.as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(serde_json::Value::as_str)
+                .collect()
+        })
         .collect();
     let (night, night_width, night_height) = night_mosaic(&rows)?;
     let day_plate = Plate::<3> {
@@ -282,21 +338,33 @@ fn run() -> Result<(), String> {
     }
     // Every tile of the zoom: the Mercator square, one world across and as high.
     let half = (1 << EARTH_ZOOM) / 2;
-    let tiles: Vec<[i32; 2]> = (-half..half).flat_map(|y| (-half..half).map(move |x| [x, y])).collect();
+    let tiles: Vec<[i32; 2]> = (-half..half)
+        .flat_map(|y| (-half..half).map(move |x| [x, y]))
+        .collect();
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
     let written = std::sync::atomic::AtomicU32::new(0);
     let failed = std::sync::Mutex::new(None);
     std::thread::scope(|scope| {
         for t in 0..threads {
-            let (tiles, day, night, out, written, failed) = (&tiles, &day_plate, &night_plate, &out, &written, &failed);
+            let (tiles, day, night, out, written, failed) =
+                (&tiles, &day_plate, &night_plate, &out, &written, &failed);
             scope.spawn(move || {
                 for &[px, py] in tiles.iter().skip(t).step_by(threads) {
-                    let Some(rgba) = tile_texels(px, py, day, night) else { continue };
+                    let Some(rgba) = tile_texels(px, py, day, night) else {
+                        continue;
+                    };
                     let name = tile_at(EARTH_ZOOM, [px, py]).name();
-                    let stored = earth::encode(&rgba).map_err(|e| format!("{e:?}")).and_then(|pkt| pack(&pkt, Level::Stored).map_err(|e| e.to_string()));
-                    match stored.and_then(|b| write_atomic(&out.join(&name), &b).map_err(|e| e.to_string())) {
+                    let stored = earth::encode(&rgba)
+                        .map_err(|e| format!("{e:?}"))
+                        .and_then(|pkt| pack(&pkt, Level::Stored).map_err(|e| e.to_string()));
+                    match stored
+                        .and_then(|b| write_atomic(&out.join(&name), &b).map_err(|e| e.to_string()))
+                    {
                         Ok(()) => drop(written.fetch_add(1, std::sync::atomic::Ordering::Relaxed)),
-                        Err(e) => *failed.lock().unwrap_or_else(|e| e.into_inner()) = Some(format!("{name}: {e}")),
+                        Err(e) => {
+                            *failed.lock().unwrap_or_else(|e| e.into_inner()) =
+                                Some(format!("{name}: {e}"))
+                        }
                     }
                 }
             });
@@ -319,7 +387,8 @@ fn run() -> Result<(), String> {
     }
     std::fs::create_dir_all(&copy).map_err(|e| e.to_string())?;
     for p in set.by_zoom()?.into_values().flatten() {
-        std::fs::hard_link(set.path(p), copy.join(p.name())).map_err(|e| format!("{}: {e}", set.path(p).display()))?;
+        std::fs::hard_link(set.path(p), copy.join(p.name()))
+            .map_err(|e| format!("{}: {e}", set.path(p).display()))?;
     }
     for name in [TILE_SPHERE, MANIFEST] {
         std::fs::copy(out.join(name), copy.join(name)).map_err(|e| e.to_string())?;

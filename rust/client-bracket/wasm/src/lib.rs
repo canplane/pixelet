@@ -6,65 +6,30 @@
 //! the kernel lays out everything inside it on its first turn
 //! (pxl_kernel::sys::mem); the shell reads the directory once, at an address both
 //! sides know, and everything after crosses in that memory
-//! (pxl_kernel::door). What is here is the bracket: what the linker and the
-//! page decide — where the module's own data ends, how much memory it was
-//! given, the allocator over it, the clock — and `interrupt`, the export the
-//! shell rings.
+//! (pxl_kernel::door). The module's form is xpute's (xpute_guest::wasm): the
+//! allocator over the memory, what the module reads of itself, and `intr`,
+//! the export the shell rings. What is here is pixelet's: its numbers, where
+//! its heap begins and the kernel as the entry.
 
 use pxl_kernel::door::layout::heap_at;
-use pxl_kernel::door::Bracket;
-use xpute_guest::mem::heap::{Bounds, Heap, HeapStat};
-use xpute_guest::module::{data_end, given, now, stack_high};
+use pxl_kernel::sys::mem::spec::STACK_BYTES;
+use xpute_guest::entry::BootInfo;
+use xpute_guest::wasm::Plan;
 
-/// Where the module's heap lies: from the page past the last fixed range to
-/// the end of the memory, ascending. Everything before it is settled before
-/// it — the stack, the rings, the linker's data, and `.fixed`.
-struct ModuleBounds;
+// The heap from the page past the last fixed range to the end of the memory:
+// everything before it is settled before it — the stack, the rings, the
+// linker's data, and `.fixed` (door/layout.rs `heap_at`).
+xpute_guest::wasm_abi!(
+    Plan {
+        heap_at,
+        stack_bytes: STACK_BYTES
+    },
+    kernel
+);
 
-impl Bounds for ModuleBounds {
-    fn base() -> usize {
-        heap_at(data_end()) as usize
-    }
-    fn end() -> usize {
-        given() as usize
-    }
-}
-
-/// The module's one allocator (xpute_guest::mem::heap).
-#[global_allocator]
-static ALLOC: Heap<ModuleBounds> = Heap::new();
-
-/// The allocator's reading, for the profiler and the heap's row.
-fn heap_stat() -> HeapStat {
-    xpute_guest::mem::heap::heap_stat(&ALLOC)
-}
-
-/// The browser paces a page's frames to what the GPU finishes, and taking a
-/// canvas's texture never blocks: every frame is admitted.
-fn admit_frame() -> bool {
-    true
-}
-
-/// What this module gives the kernel: the memory the page grew it to, the
-/// linker's end of its data, the page's clock, the allocator and the frames
-/// it admits.
-fn bracket() -> Bracket {
-    let high = stack_high();
-    xpute_kit::ensure!(high == pxl_kernel::sys::mem::spec::STACK_BYTES, ENOTRECOVERABLE, high);
-    let given = given();
-    Bracket {
-        given: given.min(u32::MAX as u64) as u32,
-        data_end: data_end(),
-        clock: now,
-        heap_stat,
-        admit_frame,
-        last_words: None,
-    }
-}
-
-/// The doorbell (pxl_kernel::door::interrupt): a turn with the time it may
-/// take, and when the kernel wants the next.
-#[no_mangle]
-pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
-    pxl_kernel::door::interrupt(quota_ms, bracket)
+/// The kernel's turn (pxl_kernel::door::intr). A page outlives the kernel,
+/// so it has no last words to say; the browser paces its frames, so every
+/// one is admitted (xpute_gpu::admit).
+fn kernel(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
+    pxl_kernel::door::intr(quota_ms, boot_info, None, xpute_gpu::admit::every)
 }

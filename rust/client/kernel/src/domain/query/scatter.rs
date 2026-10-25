@@ -29,7 +29,10 @@ pub(super) struct Asked<'a, 'w> {
 
 impl<'a, 'w> Asked<'a, 'w> {
     pub(super) fn new(world: &'a World<'w>) -> Asked<'a, 'w> {
-        Asked { world, lanes: world.objects.lanes() }
+        Asked {
+            world,
+            lanes: world.objects.lanes(),
+        }
     }
 }
 
@@ -48,12 +51,17 @@ impl Grounds for Asked<'_, '_> {
     }
 
     fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> ((i32, f32), bool) {
-        self.world.footing(cell, g).map_or(((0, 0.0), false), |top| (top, true))
+        self.world
+            .footing(cell, g)
+            .map_or(((0, 0.0), false), |top| (top, true))
     }
 
     /// Void where the world holds nothing there (`World::block`).
     fn block(&mut self, zoom: Zoom, c: [i32; 3]) -> u32 {
-        self.world.block((zoom, c)).value().unwrap_or(u32::from(sentinel::void))
+        self.world
+            .block((zoom, c))
+            .value()
+            .unwrap_or(u32::from(sentinel::void))
     }
 }
 
@@ -82,7 +90,9 @@ pub fn instance(decor: &Decor, g: &Grown) -> Instance {
 
 /// An instance the ground grows as pxl-spec-core's evaluation takes it back.
 pub fn grown_of(i: &Instance) -> Option<Grown> {
-    let Source::Ground([x, y, z]) = i.source else { return None };
+    let Source::Ground([x, y, z]) = i.source else {
+        return None;
+    };
     Some(Grown {
         variant: i.meta.variant,
         turn: i.meta.turn,

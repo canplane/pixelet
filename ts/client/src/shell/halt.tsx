@@ -12,7 +12,9 @@ export function Halt({ of }: { of: string }) {
   const { t } = useTranslation();
   return (
     <View style={styles.cover}>
-      <Text accessibilityRole="header" style={styles.title}>{t(`${of}.title`)}</Text>
+      <Text accessibilityRole="header" style={styles.title}>
+        {t(`${of}.title`)}
+      </Text>
       <Text style={styles.body}>{t(`${of}.body`)}</Text>
     </View>
   );
@@ -26,9 +28,15 @@ export function BlueScreen({ of, code }: { of: string; code: string | null }) {
     <View style={[styles.cover, styles.panic]}>
       <View style={styles.column}>
         <Text style={styles.face}>:(</Text>
-        <Text accessibilityRole="header" style={styles.panicTitle}>{t(`${of}.title`)}</Text>
+        <Text accessibilityRole="header" style={styles.panicTitle}>
+          {t(`${of}.title`)}
+        </Text>
         <Text style={styles.panicBody}>{t(`${of}.body`)}</Text>
-        {code !== null && <Text selectable style={styles.code}>{t("halt.stop_code", { code })}</Text>}
+        {code !== null && (
+          <Text selectable style={styles.code}>
+            {t("halt.stop_code", { code })}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -44,10 +52,20 @@ const styles = StyleSheet.create({
     backgroundColor: color.ground,
   },
   title: { ...textStyle.title2, textAlign: "center", color: LABEL.primary },
-  body: { maxWidth: 384, ...textStyle.body, textAlign: "center", color: LABEL.secondary },
+  body: {
+    maxWidth: 384,
+    ...textStyle.body,
+    textAlign: "center",
+    color: LABEL.secondary,
+  },
   panic: { alignItems: "stretch", backgroundColor: color.panic },
   column: { width: "100%", maxWidth: 480, alignSelf: "center", gap: 16 },
-  face: { fontFamily: textStyle.title2.fontFamily, fontSize: 96, lineHeight: 112, color: color.white },
+  face: {
+    fontFamily: textStyle.title2.fontFamily,
+    fontSize: 96,
+    lineHeight: 112,
+    color: color.white,
+  },
   panicTitle: { ...textStyle.title2, color: color.white },
   panicBody: { ...textStyle.body, color: color.white },
   code: { ...textStyle.footnote, marginTop: 16, color: color.white },

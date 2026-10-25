@@ -7,7 +7,9 @@ use super::tile::{tile_at, Cell, Tile};
 use crate::space::camera::grid::{split_distance, Tau};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{index_of, Zoom};
-use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of};
+use crate::space::hierarchy::tree::{
+    ancestor_of, child_of, first_descendant_of, parent_of, slot_of,
+};
 
 /// A lattice's integer core — its zooms, its cells' indices, the ground's —
 /// is pxl-spec-core's, which a GPU reads tiles by too; placing it in the
@@ -54,11 +56,18 @@ impl Cells for Lattice {
     fn cell_of(self, zoom: Zoom, at: &Q3) -> Cell {
         let zoom = self.cell_zoom(zoom);
         let [x, y, _] = index_of(zoom, at);
-        Cell { lattice: self, zoom, at: [x, y] }
+        Cell {
+            lattice: self,
+            zoom,
+            at: [x, y],
+        }
     }
 
     fn cell_at(self, tile: Tile, index: u32) -> Cell {
-        xpute_kit::ensure!(index < self.tile_cells() * self.tile_cells(), ENOTRECOVERABLE);
+        xpute_kit::ensure!(
+            index < self.tile_cells() * self.tile_cells(),
+            ENOTRECOVERABLE
+        );
         let (zoom, at) = tile.node();
         let [x0, y0] = first_descendant_of(at, self.tile_cell_shamt());
         let [tx, ty] = self.in_tile(index);
@@ -84,7 +93,8 @@ impl Cells for Lattice {
         let n = self.tile_cells() as i32;
         let [x, y] = child_of(self.in_tile(index).map(|v| v as i32), 0);
         let [x0, y0] = [(x % n) as u32, (y % n) as u32];
-        let cells = std::array::from_fn(|q| self.cell_index(x0 + (q & 1) as u32, y0 + (q >> 1) as u32));
+        let cells =
+            std::array::from_fn(|q| self.cell_index(x0 + (q & 1) as u32, y0 + (q >> 1) as u32));
         (slot_of([x / n, y / n]), cells)
     }
 }

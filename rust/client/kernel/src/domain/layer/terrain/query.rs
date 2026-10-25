@@ -37,7 +37,13 @@ impl Residency<TerrainTile> {
     /// (pxl-spec-core `window::step`). Its cells are read at `cell` as the
     /// GPU reads them (pxl-spec-core `window::bound_over`); `line` names the
     /// tile and says whether the window read is its ground's own.
-    pub fn relief(&self, line: &Line, place: &mut Found, node: Node<2>, zooms: [Zoom; 2]) -> Answer<Bounds> {
+    pub fn relief(
+        &self,
+        line: &Line,
+        place: &mut Found,
+        node: Node<2>,
+        zooms: [Zoom; 2],
+    ) -> Answer<Bounds> {
         let (r, from, here) = cells::bound_over(&Windowed, place, zooms, node);
         held(line, from, here, r)
     }
@@ -76,13 +82,29 @@ impl Residency<TerrainTile> {
     }
 
     /// `relief` over `node`'s cells at `cell`, its line walked (`line_walked`).
-    pub fn relief_walked(&self, lines: &mut Lines, place: &mut Found, node: Node<2>, cell: Zoom) -> Answer<Bounds> {
-        self.relief(&self.line_walked(lines, node, cell), place, node, [cell, cell])
+    pub fn relief_walked(
+        &self,
+        lines: &mut Lines,
+        place: &mut Found,
+        node: Node<2>,
+        cell: Zoom,
+    ) -> Answer<Bounds> {
+        self.relief(
+            &self.line_walked(lines, node, cell),
+            place,
+            node,
+            [cell, cell],
+        )
     }
 
     /// `bound`, its line walked (`line_walked`): a walk in key order pays one
     /// look-up a node.
-    pub fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
+    pub fn bound_walked(
+        &self,
+        lines: &mut Lines,
+        node: Node<2>,
+        cell: Zoom,
+    ) -> Answer<Option<Aabb>> {
         self.bound(&self.line_walked(lines, node, cell), node, cell)
     }
 }
@@ -111,7 +133,12 @@ fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
 fn held<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
     match here {
         false => Answer::Nothing(line.tile),
-        true if line.source.is_some_and(|s| from >= GROUND.cell_zoom(s.zoom)) => Answer::Exact(v),
+        true if line
+            .source
+            .is_some_and(|s| from >= GROUND.cell_zoom(s.zoom)) =>
+        {
+            Answer::Exact(v)
+        }
         true => Answer::Coarser(v, line.tile),
     }
 }
@@ -144,21 +171,27 @@ impl Query for Residency<TerrainTile> {
     /// it, holds nothing: known before any of its ground arrives, a shard or
     /// finer, as every reader knows it (pxl-spec-core `area::Shard`); a
     /// coarser node may straddle the area's edge and is read.
-    fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Aabb>> {
+    fn bound<const D: usize>(
+        &self,
+        line: &Line,
+        (zoom, at): Node<D>,
+        cell: Zoom,
+    ) -> Answer<Option<Aabb>> {
         let node = (zoom, [at[0], at[1]]);
         if Shard::UNKNOWN.at(&source::Declared, node).past() {
             return Answer::Exact(None);
         }
         let whole = region((zoom, at));
         let mut place = Found::NONE;
-        self.relief(line, &mut place, node, [cell, cell]).map(|[ground, ways]| {
-            let [lo, hi] = [ground[0].min(ways[0]), ground[1].max(ways[1])];
-            let lo = (f64::from(lo) * units(GROUND.cell()) - units(cell)).max(whole.min[2]);
-            let hi = (f64::from(hi) * units(GROUND.cell())).min(whole.max[2]);
-            (lo <= hi).then(|| Aabb {
-                min: [whole.min[0], whole.min[1], lo],
-                max: [whole.max[0], whole.max[1], hi],
+        self.relief(line, &mut place, node, [cell, cell])
+            .map(|[ground, ways]| {
+                let [lo, hi] = [ground[0].min(ways[0]), ground[1].max(ways[1])];
+                let lo = (f64::from(lo) * units(GROUND.cell()) - units(cell)).max(whole.min[2]);
+                let hi = (f64::from(hi) * units(GROUND.cell())).min(whole.max[2]);
+                (lo <= hi).then(|| Aabb {
+                    min: [whole.min[0], whole.min[1], lo],
+                    max: [whole.max[0], whole.max[1], hi],
+                })
             })
-        })
     }
 }

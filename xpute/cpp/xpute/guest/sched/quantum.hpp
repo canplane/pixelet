@@ -13,11 +13,11 @@ inline constexpr double NO_WAKE = -1.0;
 // Declared by the guest, never chosen by the host.
 struct QuantumPolicy {
     // The frame left unspent for the host's own work and misestimates.
-    double margin_share = 0;
+    double margin_share;
     // The frames a turn that is not interactive may take.
-    double batch_frames = 0;
+    double batch_frames;
     // How long after the last input a turn is still interactive.
-    double settle_ms = 0;
+    double settle_ms;
 
     bool operator==(const QuantumPolicy &) const = default;
 };

@@ -19,7 +19,9 @@ use crate::mesh::paint::palette::{palette, LAYERS};
 pub const LAYER_TEX_SZ: u32 = PACK.cell;
 
 const fn slot_word(top: u32, side: u32, bottom: u32) -> u32 {
-    top << (IMAGE_TOP * SLOT_BITS) | side << (IMAGE_SIDE * SLOT_BITS) | bottom << (IMAGE_BOTTOM * SLOT_BITS)
+    top << (IMAGE_TOP * SLOT_BITS)
+        | side << (IMAGE_SIDE * SLOT_BITS)
+        | bottom << (IMAGE_BOTTOM * SLOT_BITS)
 }
 
 const NO_SLOTS: u32 = slot_word(NO_SLOT, NO_SLOT, NO_SLOT);
@@ -45,7 +47,11 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
             let top = shipped_texture_tile(cube, CubeFace::Top);
             let side = shipped_texture_tile(cube, CubeFace::Side).or(top);
             let bottom = shipped_texture_tile(cube, CubeFace::Bottom).or(top);
-            slot_word(slot_of(&mut slots, top), slot_of(&mut slots, side), slot_of(&mut slots, bottom))
+            slot_word(
+                slot_of(&mut slots, top),
+                slot_of(&mut slots, side),
+                slot_of(&mut slots, bottom),
+            )
         })
         .collect();
     (slots, table)
@@ -69,17 +75,38 @@ impl Pack {
         let (tiles, _) = plan();
         let slots = tiles.len() as u32;
         let levels = mip_levels(LAYER_TEX_SZ, LAYER_TEX_SZ);
-        let usage = texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT;
-        let tex = g.texture(LAYER_TEX_SZ, LAYER_TEX_SZ, slots, Format::rgba8unorm_srgb, levels, usage);
+        let usage = texture_usage::TEXTURE_BINDING
+            | texture_usage::COPY_DST
+            | texture_usage::RENDER_ATTACHMENT;
+        let tex = g.texture(
+            LAYER_TEX_SZ,
+            LAYER_TEX_SZ,
+            slots,
+            Format::rgba8unorm_srgb,
+            levels,
+            usage,
+        );
         let view = g.view(tex, true, 0, levels, 0, slots);
         // Anisotropic 4x: the ground is mostly seen at a grazing angle, where an
         // isotropic mip blurs the tile along the view.
-        let sampler = g.sampler(FilterMode::linear, FilterMode::linear, MipmapFilterMode::linear, AddressMode::repeat, None, 4);
+        let sampler = g.sampler(
+            FilterMode::linear,
+            FilterMode::linear,
+            MipmapFilterMode::linear,
+            AddressMode::repeat,
+            None,
+            4,
+        );
         let blank: Vec<u32> = vec![NO_SLOTS; LAYERS];
-        let table = g.buffer((blank.len() * 4) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let table = g.buffer(
+            (blank.len() * 4) as u32,
+            buffer_usage::STORAGE | buffer_usage::COPY_DST,
+        );
         g.write_buffer(table, 0, bytes(&blank));
         // A chain is under four thirds of its first level.
-        let bytes = (0..levels).map(|level| (LAYER_TEX_SZ >> level).pow(2) * 4 * slots).sum();
+        let bytes = (0..levels)
+            .map(|level| (LAYER_TEX_SZ >> level).pow(2) * 4 * slots)
+            .sum();
         Pack {
             tex,
             view,
@@ -97,11 +124,24 @@ impl Pack {
         if self.loaded {
             return false;
         }
-        let Some(texture) = pack().and_then(|(image, file)| g.image(image, file)) else { return false };
+        let Some(texture) = pack().and_then(|(image, file)| g.image(image, file)) else {
+            return false;
+        };
         let (tiles, table) = plan();
         let encoder = g.encoder();
         for (slot, tile) in tiles.iter().enumerate() {
-            g.copy_texture(encoder, texture, tile.x, tile.y, self.tex, 0, 0, slot as u32, LAYER_TEX_SZ, LAYER_TEX_SZ);
+            g.copy_texture(
+                encoder,
+                texture,
+                tile.x,
+                tile.y,
+                self.tex,
+                0,
+                0,
+                slot as u32,
+                LAYER_TEX_SZ,
+                LAYER_TEX_SZ,
+            );
         }
         g.submit(encoder);
         release(texture);

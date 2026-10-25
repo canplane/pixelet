@@ -29,9 +29,9 @@ export const QUANTUM_SCALE: u32 = 1000 as number;
 /** What an entry's value is. */
 export const key = {
   /** Where the submission ring's words begin. */
-  SUBMISSION: 1 as number,
+  SQ: 1 as number,
   /** Where the completion ring's words begin. */
-  COMPLETION: 2 as number,
+  CQ: 2 as number,
   /** The quantum policy's margin share (sched/quantum.rs), in QUANTUM_SCALE. */
   MARGIN_SHARE: 3 as number,
   /** The quantum policy's batch frames, in QUANTUM_SCALE. */

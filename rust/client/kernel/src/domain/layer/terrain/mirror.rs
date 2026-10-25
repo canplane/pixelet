@@ -17,14 +17,16 @@ const CHUNK_FAMILIES: u32 = 1024;
 const CHUNK_WORDS: usize = (CHUNK_FAMILIES * FAMILY_WORDS) as usize;
 
 /// The families the cap holds.
-const MOST_FAMILIES: u32 = crate::domain::layer::terrain::param::WAYS_POOL_BYTES / (4 * FAMILY_WORDS);
+const MOST_FAMILIES: u32 =
+    crate::domain::layer::terrain::param::WAYS_POOL_BYTES / (4 * FAMILY_WORDS);
 
 /// The mirror at the cap as the heap holds it, in the buddy's blocks: its
 /// chunks, each a power of two, and the list of them
 /// (door/layout.rs `HEAP_FLOWS_BYTES`).
 pub const MIRROR_BYTES: u64 = {
     let chunks = MOST_FAMILIES.div_ceil(CHUNK_FAMILIES) as u64;
-    chunks * (CHUNK_WORDS as u64 * 4).next_power_of_two() + (chunks * size_of::<Box<[u32]>>() as u64).next_power_of_two()
+    chunks * (CHUNK_WORDS as u64 * 4).next_power_of_two()
+        + (chunks * size_of::<Box<[u32]>>() as u64).next_power_of_two()
 };
 /// The chunks, family after family, each its eight heap words then its eight
 /// data words; a family past them reads zero, nothing, as one never laid.
@@ -37,7 +39,7 @@ static MIRROR: Global<Mirror> = Global::new();
 
 /// Why a square's families were not laid: one lies past the pool's cap,
 /// which asking again never changes; or the heap refused a chunk, which a
-/// page given back may (pxl-kernel sys/io/host.rs `Refused`).
+/// page given back may (sys/io/room.rs `Refused`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unlaid {
     Cap,
@@ -57,7 +59,12 @@ impl Mirror {
     /// (domain/layer/terrain/window.rs `landed`).
     pub fn lay(&mut self, records: &[u32]) -> Result<(), Unlaid> {
         let n = records.first().map_or(0, |&n| n.min(SQUARE_FAMILIES));
-        let id = |r: u32| records.get((1 + r * RECORD_WORDS) as usize).copied().unwrap_or(0);
+        let id = |r: u32| {
+            records
+                .get((1 + r * RECORD_WORDS) as usize)
+                .copied()
+                .unwrap_or(0)
+        };
         let most = (0..n).map(id).max().unwrap_or(0);
         self.reach(most)?;
         tree::lay(self, records);
@@ -71,7 +78,12 @@ impl Mirror {
             return Err(Unlaid::Cap);
         }
         let need = (family / CHUNK_FAMILIES + 1) as usize;
-        if need > self.chunks.len() && self.chunks.try_reserve_exact(need - self.chunks.len()).is_err() {
+        if need > self.chunks.len()
+            && self
+                .chunks
+                .try_reserve_exact(need - self.chunks.len())
+                .is_err()
+        {
             return Err(Unlaid::Heap);
         }
         while self.chunks.len() < need {
@@ -95,7 +107,10 @@ impl Mirror {
     /// the data's from 8: its chunk and its index in it.
     fn at(slot: u32, k: u32) -> (usize, usize) {
         let family = slot / 8;
-        ((family / CHUNK_FAMILIES) as usize, ((family % CHUNK_FAMILIES) * FAMILY_WORDS + k + slot % 8) as usize)
+        (
+            (family / CHUNK_FAMILIES) as usize,
+            ((family % CHUNK_FAMILIES) * FAMILY_WORDS + k + slot % 8) as usize,
+        )
     }
 
     fn word(&self, slot: u32, k: u32) -> u32 {

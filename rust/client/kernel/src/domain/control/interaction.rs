@@ -18,8 +18,12 @@ use pxl_spec::space::layer::lattice::GROUND;
 pub use crate::domain::control::cmd::ActiveTool;
 use crate::domain::control::interaction::collision::{anchor_center, object_aabb};
 use crate::domain::control::interaction::collision::{is_placement_blocked, PlacementTool};
-use crate::domain::control::interaction::edit::{place, place_air, place_decor, remove, wait_to_put};
-use crate::domain::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
+use crate::domain::control::interaction::edit::{
+    place, place_air, place_decor, remove, wait_to_put,
+};
+use crate::domain::control::interaction::pick::{
+    ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner,
+};
 use crate::domain::control::navigation::support::stand;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::store::Entry;
@@ -176,7 +180,11 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         // A decor met in front of the pick is what the new cube goes flush
         // against; a scattered one is no entry, so it lands as on the ground.
         let precise_box = resolve_hit_object(&hit).map(|o| object_aabb(&o));
-        hover.coord = Some(world_adjacent_corner(&hit, tool.size(), precise_box.as_ref()));
+        hover.coord = Some(world_adjacent_corner(
+            &hit,
+            tool.size(),
+            precise_box.as_ref(),
+        ));
         return;
     }
 
@@ -191,7 +199,9 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     };
     // A scattered decor is passed through.
     hover.approach = Some(match &struck {
-        Some(Struck::Object(o)) => world_adjacent_corner(&hit, units(GROUND.cell()), Some(&object_aabb(o))),
+        Some(Struck::Object(o)) => {
+            world_adjacent_corner(&hit, units(GROUND.cell()), Some(&object_aabb(o)))
+        }
         Some(Struck::Grown(cell, _)) => base_of(GROUND.cell(), *cell),
         None => world_adjacent_corner(&hit, units(GROUND.cell()), None),
     });
@@ -199,7 +209,10 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         Some(Struck::Object(o)) => (o.corner(), o.zoom),
         Some(Struck::Grown(cell, _)) => (base_of(GROUND.cell(), cell), GROUND.cell()),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
-        None => (world_struck_corner(&hit, units(GROUND.cell())), GROUND.cell()),
+        None => (
+            world_struck_corner(&hit, units(GROUND.cell())),
+            GROUND.cell(),
+        ),
     };
     // Past where the world takes an edit, nothing is pointed at.
     if !World::now().editable(&cube(zoom, index_of(zoom, &corner))) {
@@ -212,7 +225,9 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
 /// A tap at `ndc_x`, `ndc_y` with the tool held, on the world drawn at `drawn`.
 pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     hover_at(ndc_x, ndc_y, drawn);
-    let Some(hovered) = interaction().hover.coord else { return };
+    let Some(hovered) = interaction().hover.coord else {
+        return;
+    };
     let ui = interaction().holding;
     let hover = interaction().hover;
 
@@ -225,9 +240,14 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         Some(PlacementTool::Marker) => wait_to_put(&hovered),
         None if ui.active_tool == ActiveTool::Pointer => {
             // Recenter across the struck face, standing as a pan lands.
-            let Some(approach) = hover.approach else { return };
+            let Some(approach) = hover.approach else {
+                return;
+            };
             let target = stand(&anchor_center(&approach));
-            crate::domain::control::navigation::destination::go_to(target, crate::domain::control::camera::controller::Motion::Smooth);
+            crate::domain::control::navigation::destination::go_to(
+                target,
+                crate::domain::control::camera::controller::Motion::Smooth,
+            );
         }
         // The eraser.
         None => {

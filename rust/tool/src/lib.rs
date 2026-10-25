@@ -15,5 +15,7 @@ use std::path::{Path, PathBuf};
 /// hands each the binary built last, from either.
 pub fn root() -> PathBuf {
     let here = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    here.ancestors().find(|d| d.join("rust/tool/Cargo.toml").is_file()).map_or(here.clone(), Path::to_path_buf)
+    here.ancestors()
+        .find(|d| d.join("rust/tool/Cargo.toml").is_file())
+        .map_or(here.clone(), Path::to_path_buf)
 }

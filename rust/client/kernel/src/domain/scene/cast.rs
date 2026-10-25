@@ -37,7 +37,9 @@ pub fn shards() -> &'static [[i32; 4]] {
         s.clear();
         let nines = crate::sys::io::source::nines();
         let nine = |i: usize| nines.get(i).copied().map_or(0, i32::from);
-        s.extend((0..nines.len().div_ceil(4).max(1)).map(|r| core::array::from_fn(|k| nine(4 * r + k))));
+        s.extend(
+            (0..nines.len().div_ceil(4).max(1)).map(|r| core::array::from_fn(|k| nine(4 * r + k))),
+        );
         *made = declared;
     }
     s
@@ -51,7 +53,16 @@ pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
     lens::gpu_cast(o, lens::tau(), settings_store().ray_steps, &mut words)?;
     let edits = preview::current();
-    let cut = |e: Option<EntryAt>| e.map_or([0, 0, 0, eye::NO_CUT], |e| [e.at()[0] as u32, e.at()[1] as u32, e.at()[2] as u32, e.zoom()]);
+    let cut = |e: Option<EntryAt>| {
+        e.map_or([0, 0, 0, eye::NO_CUT], |e| {
+            [
+                e.at()[0] as u32,
+                e.at()[1] as u32,
+                e.at()[2] as u32,
+                e.zoom(),
+            ]
+        })
+    };
     words[eye::CARVE..eye::CARVE + eye::CUT_WORDS].copy_from_slice(&cut(edits.carve));
     words[eye::HIDE..eye::HIDE + eye::CUT_WORDS].copy_from_slice(&cut(edits.hide));
     Some(words)
@@ -77,12 +88,20 @@ pub fn overwrites() -> Overwrites<'static> {
 /// packets kept for them, and off each void tile, held with none.
 pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::residency();
-    let wanted = |frame| terrain.in_frame(frame).is_some_and(|t| terrain.get(t).is_some() && window::tile_wanted(t));
+    let wanted = |frame| {
+        terrain
+            .in_frame(frame)
+            .is_some_and(|t| terrain.get(t).is_some() && window::tile_wanted(t))
+    };
     kept().send(
         pxl_render::gpu::api::device_generation(),
         &mut |frame, pkt| {
-            let Some(t) = terrain.in_frame(frame) else { return Offered::Taken };
-            let Some(held) = terrain.get(t) else { return Offered::Taken };
+            let Some(t) = terrain.in_frame(frame) else {
+                return Offered::Taken;
+            };
+            let Some(held) = terrain.get(t) else {
+                return Offered::Taken;
+            };
             window::fill(t, Handed::Packet(pkt, held), write)
         },
         &wanted,

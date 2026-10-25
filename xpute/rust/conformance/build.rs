@@ -7,7 +7,7 @@
 mod spec;
 
 fn main() {
-    xpute_link::module(&xpute_link::Module {
+    xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan {
         stack_bytes: spec::STACK_BYTES,
         global_base: None,
         initial_bytes: None,

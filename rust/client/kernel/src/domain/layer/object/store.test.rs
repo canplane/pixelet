@@ -31,12 +31,16 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
         assert!(
             {
                 let held = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
-                held.holds() && !held.folded() && overwrite::value(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
+                held.holds()
+                    && !held.folded()
+                    && overwrite::value(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
             },
             "a cell leaf covers its steps"
         );
         let mut met = Vec::new();
-        store.read((OBJECT_COARSEST, at)).entries(&mut |e| met.push(*e));
+        store
+            .read((OBJECT_COARSEST, at))
+            .entries(&mut |e| met.push(*e));
         assert_eq!(
             met,
             vec![Entry {
@@ -83,7 +87,8 @@ impl Rng {
 /// A node from a unit to a kilometer wide, within `reach` units of the origin.
 fn some_node(rng: &mut Rng, reach: f64) -> Node<3> {
     let zoom: Zoom = rng.pick(&[24, 21, 18, 16, 14]);
-    let at = [0, 1, 2].map(|_| ((rng.next() % (2 * reach as u64)) as f64 - reach).div_euclid(units(zoom)) as i32);
+    let at = [0, 1, 2]
+        .map(|_| ((rng.next() % (2 * reach as u64)) as f64 - reach).div_euclid(units(zoom)) as i32);
     (zoom, at)
 }
 
@@ -137,7 +142,15 @@ fn a_lone_cube_keeps_an_eighth_at_the_first_fold_and_none_at_the_next() {
     let (out, [x, y]) = folded(&[(0, 0, 0, red())], LEAF_ZOOM - 1);
     assert_eq!(out.get(&[x, y, 0]), Some(&(red(), 1)));
     assert!(folded(&[(0, 0, 0, red())], LEAF_ZOOM - 2).0.is_empty());
-    let (out, [x, y]) = folded(&[(0, 0, 0, red()), (1, 0, 0, red()), (0, 1, 0, red()), (1, 1, 0, red())], LEAF_ZOOM - 1);
+    let (out, [x, y]) = folded(
+        &[
+            (0, 0, 0, red()),
+            (1, 0, 0, red()),
+            (0, 1, 0, red()),
+            (1, 1, 0, red()),
+        ],
+        LEAF_ZOOM - 1,
+    );
     assert_eq!(out.get(&[x, y, 0]), Some(&(red(), 4)));
 }
 
@@ -151,7 +164,16 @@ fn a_solid_block_keeps_folding_while_it_fills_its_parent() {
 
 #[test]
 fn air_is_a_value_and_folds_like_one() {
-    let (out, [x, y]) = folded(&[(0, 0, 0, AIR), (1, 0, 0, AIR), (0, 1, 0, AIR), (1, 1, 0, AIR), (0, 0, 1, AIR)], LEAF_ZOOM - 1);
+    let (out, [x, y]) = folded(
+        &[
+            (0, 0, 0, AIR),
+            (1, 0, 0, AIR),
+            (0, 1, 0, AIR),
+            (1, 1, 0, AIR),
+            (0, 0, 1, AIR),
+        ],
+        LEAF_ZOOM - 1,
+    );
     assert_eq!(out.get(&[x, y, 0]), Some(&(AIR, 5)));
 }
 
@@ -176,12 +198,21 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         cube_at(&mut stores[1], turn(at), state);
         cube_at(&mut stores[2], turn(turn(at)), state);
     }
-    let bound = |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).value().flatten();
+    let bound =
+        |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).value().flatten();
     for _ in 0..500 {
         let (zoom, at) = some_node(&mut rng, 200.0);
         let given = bound(&stores[0], (zoom, at));
-        assert_eq!(bound(&stores[1], (zoom, turn(at))), given.map(turn_box), "{at:?} at z{zoom}");
-        assert_eq!(bound(&stores[2], (zoom, turn(turn(at)))), given.map(|b| turn_box(turn_box(b))), "{at:?} at z{zoom}");
+        assert_eq!(
+            bound(&stores[1], (zoom, turn(at))),
+            given.map(turn_box),
+            "{at:?} at z{zoom}"
+        );
+        assert_eq!(
+            bound(&stores[2], (zoom, turn(turn(at)))),
+            given.map(|b| turn_box(turn_box(b))),
+            "{at:?} at z{zoom}"
+        );
     }
 }
 
@@ -191,7 +222,11 @@ fn a_column_reaches_as_far_as_what_is_placed_in_it_wherever_the_walk_last_stood(
     let red = cube_id(Cube::Object(Object::red));
     let mut store = Store::default();
     for _ in 0..300 {
-        let at = [(rng.next() % 64) as i32, (rng.next() % 64) as i32, (rng.next() % 300) as i32 - 150];
+        let at = [
+            (rng.next() % 64) as i32,
+            (rng.next() % 64) as i32,
+            (rng.next() % 300) as i32 - 150,
+        ];
         cube_at(&mut store, at, rng.pick(&[red, red, AIR]));
     }
     // Each leaf's reach along z in the column, as the cube of the column's
@@ -199,7 +234,10 @@ fn a_column_reaches_as_far_as_what_is_placed_in_it_wherever_the_walk_last_stood(
     let reach = |(zoom, [x, y]): Node<2>| {
         let mut z: Option<[f64; 2]> = None;
         store.each(&mut |e| {
-            let (k, at) = (zoom.min(e.zoom), e.at.map(|v| v >> e.zoom.saturating_sub(zoom)));
+            let (k, at) = (
+                zoom.min(e.zoom),
+                e.at.map(|v| v >> e.zoom.saturating_sub(zoom)),
+            );
             if [at[0], at[1]] == [x >> (zoom - k), y >> (zoom - k)] {
                 let s = [f64::from(at[2]) * units(k), f64::from(at[2] + 1) * units(k)];
                 z = Some(z.map_or(s, |z| [z[0].min(s[0]), z[1].max(s[1])]));
@@ -213,9 +251,18 @@ fn a_column_reaches_as_far_as_what_is_placed_in_it_wherever_the_walk_last_stood(
     };
     let mut walk = Walk::default();
     for _ in 0..400 {
-        let zoom = rng.pick(&[UNIT_ZOOM - 6, UNIT_ZOOM - 3, UNIT_ZOOM - 1, UNIT_ZOOM, UNIT_ZOOM + 1]);
+        let zoom = rng.pick(&[
+            UNIT_ZOOM - 6,
+            UNIT_ZOOM - 3,
+            UNIT_ZOOM - 1,
+            UNIT_ZOOM,
+            UNIT_ZOOM + 1,
+        ]);
         let side = 64 >> UNIT_ZOOM.saturating_sub(zoom) << zoom.saturating_sub(UNIT_ZOOM);
-        let node = (zoom, [0, 1].map(|_| (rng.next() % side.max(1) as u64) as i32));
+        let node = (
+            zoom,
+            [0, 1].map(|_| (rng.next() % side.max(1) as u64) as i32),
+        );
         assert_eq!(store.column(&mut walk, node), reach(node), "{node:?}");
     }
 }
@@ -284,9 +331,17 @@ fn a_shard_read_whole_meets_its_leaves() {
         ext: None,
     }]);
     // The node of a whole shard: its tree's root, read through the region.
-    let shard = [at[0] >> (OBJECT_COARSEST - SHARD_ZOOM), at[1] >> (OBJECT_COARSEST - SHARD_ZOOM), 0];
+    let shard = [
+        at[0] >> (OBJECT_COARSEST - SHARD_ZOOM),
+        at[1] >> (OBJECT_COARSEST - SHARD_ZOOM),
+        0,
+    ];
     let mut met = 0;
     store.read((SHARD_ZOOM, shard)).entries(&mut |_| met += 1);
     assert_eq!(met, 1);
-    assert!(store.bounds::<3>((SHARD_ZOOM, shard), SHARD_ZOOM).value().flatten().is_some());
+    assert!(store
+        .bounds::<3>((SHARD_ZOOM, shard), SHARD_ZOOM)
+        .value()
+        .flatten()
+        .is_some());
 }

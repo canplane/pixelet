@@ -1,6 +1,7 @@
 # pxl-geo's image — the world's data server.
 #
-# Build context is the repo root: docker build -f rust/server/geo/Dockerfile .
+# Build context is the repo root, which holds rust/ and xpute/rust/ both
+# (the root's .dockerignore lets in only those): docker build -f rust/server/geo/Dockerfile .
 
 # Must equal rust/rust-toolchain.toml; the build runs under the image's own
 # toolchain (RUSTUP_TOOLCHAIN), so rustup fetches none of the file's targets.

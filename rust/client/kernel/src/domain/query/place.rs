@@ -15,12 +15,20 @@ impl World<'static> {
     /// Each place of each of `tiles`, from the resident tile that says its
     /// ground exactly, with that tile and the place's index in it; nothing
     /// for a tile none says. Siblings' lines step from one another's.
-    pub fn places_in(self, tiles: impl IntoIterator<Item = Tile>, visit: &mut dyn FnMut(Tile, u32, Placed<'static>)) {
+    pub fn places_in(
+        self,
+        tiles: impl IntoIterator<Item = Tile>,
+        visit: &mut dyn FnMut(Tile, u32, Placed<'static>),
+    ) {
         let held: &'static _ = PlaceTile::residency();
         let mut lines = Lines::default();
         for tile in tiles {
-            let Some(src) = held.seek(&mut lines, tile).source else { continue };
-            let Some(places) = held.get(src) else { continue };
+            let Some(src) = held.seek(&mut lines, tile).source else {
+                continue;
+            };
+            let Some(places) = held.get(src) else {
+                continue;
+            };
             for (place, h) in places.iter() {
                 visit(src, place, h);
             }

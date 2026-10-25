@@ -43,7 +43,8 @@ const SPREAD_STEPS: Zoom = 2;
 /// than the camera grid: which zoom of Carto's a place is drawn at there,
 /// and so which categories show, is the tile zoom of the grid's cell
 /// (`Lattice::tile_zoom_of_grid`), past the leaf too.
-pub const PLACE_LATTICE: Lattice = Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i32));
+pub const PLACE_LATTICE: Lattice =
+    Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i32));
 
 /// The cell a place keeps to itself, as a zoom under the tile. Seen at an
 /// icon's own cell, places a few metres apart stood side by side as near as
@@ -52,7 +53,8 @@ const SPACING_STEPS: Zoom = ICON_STEPS - SPREAD_STEPS;
 
 /// The camera grid's cells across the cell a place keeps to itself, which
 /// its name wraps to.
-pub const SPACING_CELLS: u32 = 1 << (PLACE_LATTICE.grid_zoom(LEAF_ZOOM) - LEAF_ZOOM - SPACING_STEPS);
+pub const SPACING_CELLS: u32 =
+    1 << (PLACE_LATTICE.grid_zoom(LEAF_ZOOM) - LEAF_ZOOM - SPACING_STEPS);
 
 /// The coarsest zoom any category is shown from; no tile coarser holds a place.
 pub const PLACE_FIRST: Zoom = {
@@ -73,7 +75,10 @@ pub const PLACE_FIRST: Zoom = {
 // within its leaf alone: a leaf places every zoom inside itself.
 
 // A place stands at its ground leaf cell, an offset in the tile a half-word a lane.
-const _: () = assert!(GROUND.cell() - PLACE_FIRST <= 16, "a tile's ground leaf cells no longer fit a half-word a lane");
+const _: () = assert!(
+    GROUND.cell() - PLACE_FIRST <= 16,
+    "a tile's ground leaf cells no longer fit a half-word a lane"
+);
 
 /// The most a packet takes, a tile past it failing its bake (`encode`): the
 /// set baked 2026-10-17 holds at most 107 KiB.
@@ -90,7 +95,10 @@ pub const fn shown(category: u16) -> Option<Zoom> {
     if category == 0 || category as usize > CATEGORIES.len() {
         return None;
     }
-    let (dot, icon) = (DOT_ZOOM[category as usize - 1], ICON_ZOOM[category as usize - 1]);
+    let (dot, icon) = (
+        DOT_ZOOM[category as usize - 1],
+        ICON_ZOOM[category as usize - 1],
+    );
     match (dot, icon) {
         (0, 0) => None,
         (0, z) | (z, 0) => Some(z as Zoom),
@@ -107,7 +115,10 @@ pub fn symbol_of(category: u16) -> Option<u16> {
 
 /// 0 where the category list has none.
 pub fn category_of(category: &str) -> u16 {
-    CATEGORIES.iter().position(|k| *k == category).map_or(0, |i| i as u16 + 1)
+    CATEGORIES
+        .iter()
+        .position(|k| *k == category)
+        .map_or(0, |i| i as u16 + 1)
 }
 
 /// Strings end to end in one buffer, read by index.
@@ -124,7 +135,9 @@ impl Strings {
     }
 
     pub fn get(&self, i: u32) -> &str {
-        let Some(&end) = self.ends.get(i as usize) else { return "" };
+        let Some(&end) = self.ends.get(i as usize) else {
+            return "";
+        };
         let start = if i == 0 { 0 } else { self.ends[i as usize - 1] };
         &self.bytes[start as usize..end as usize]
     }
@@ -201,11 +214,24 @@ impl PlaceTile {
     pub fn leaf<'a>(tile: Tile, places: impl IntoIterator<Item = (Q3, Place<'a>)>) -> PlaceTile {
         let names: Vec<(Cell, Zoom, String, Place<'a>)> = places
             .into_iter()
-            .filter_map(|(point, place)| Some((GROUND.cell_of(LEAF_ZOOM, &point), shown(place.category)?, cut_name(place.name), place)))
+            .filter_map(|(point, place)| {
+                Some((
+                    GROUND.cell_of(LEAF_ZOOM, &point),
+                    shown(place.category)?,
+                    cut_name(place.name),
+                    place,
+                ))
+            })
             .filter(|(cell, ..)| cell.tile() == tile)
             .collect();
         let mut order: Vec<usize> = (0..names.len()).collect();
-        order.sort_by(|&a, &b| (names[a].1, names[a].3.id, names[a].3.name).cmp(&(names[b].1, names[b].3.id, names[b].3.name)));
+        order.sort_by(|&a, &b| {
+            (names[a].1, names[a].3.id, names[a].3.name).cmp(&(
+                names[b].1,
+                names[b].3.id,
+                names[b].3.name,
+            ))
+        });
         let mut from: Vec<Option<Zoom>> = vec![None; names.len()];
         let mut taken = FnvHashSet::default();
         for zoom in PLACE_FIRST..=PLACE_LAST {
@@ -220,7 +246,10 @@ impl PlaceTile {
         let placed = (0..names.len()).filter_map(|p| {
             let (cell, _, name, place) = &names[p];
             Some(Placed {
-                place: Place { name: name.as_str(), ..*place },
+                place: Place {
+                    name: name.as_str(),
+                    ..*place
+                },
                 from: from[p]?,
                 at: cell.in_tile(),
             })
@@ -250,10 +279,15 @@ pub fn fold(p: Tile, children: [&PlaceTile; 4]) -> PlaceTile {
     for (q, (k, child)) in p.children().into_iter().zip(children).enumerate() {
         let [cx, cy] = k.node().1.map(|v| (v & 1) as u32);
         kept[q] = child.occupancy.bits() != 0 || child.iter().any(|(_, h)| h.from > p.zoom);
-        placed.extend(child.iter().filter(|(_, h)| h.from <= p.zoom).map(|(_, h)| Placed {
-            at: [cx * side + h.at[0], cy * side + h.at[1]],
-            ..h
-        }));
+        placed.extend(
+            child
+                .iter()
+                .filter(|(_, h)| h.from <= p.zoom)
+                .map(|(_, h)| Placed {
+                    at: [cx * side + h.at[0], cy * side + h.at[1]],
+                    ..h
+                }),
+        );
     }
     gathered(placed, Occupancy::of_slots(kept))
 }
@@ -262,7 +296,10 @@ pub fn fold(p: Tile, children: [&PlaceTile; 4]) -> PlaceTile {
 fn gathered<'a>(placed: impl IntoIterator<Item = Placed<'a>>, occupancy: Occupancy) -> PlaceTile {
     let mut placed: Vec<Placed> = placed.into_iter().collect();
     placed.sort_by_key(|h| [h.at[1], h.at[0]]);
-    let mut tile = PlaceTile { occupancy, ..PlaceTile::default() };
+    let mut tile = PlaceTile {
+        occupancy,
+        ..PlaceTile::default()
+    };
     placed.iter().for_each(|h| tile.push(h));
     tile
 }
@@ -272,7 +309,10 @@ fn cut_name(name: &str) -> String {
     match name.char_indices().nth(NAME_CHARS) {
         None => name.into(),
         Some(_) => {
-            let end = name.char_indices().nth(NAME_CHARS - 1).map_or(name.len(), |(at, _)| at);
+            let end = name
+                .char_indices()
+                .nth(NAME_CHARS - 1)
+                .map_or(name.len(), |(at, _)| at);
             format!("{}…", &name[..end])
         }
     }
@@ -297,22 +337,30 @@ pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, MarshalError> {
     encoder().encode(
         &t,
         TreeEncoderOptions {
+            init_cap: super::ENCODE_FROM,
             max_cap: Some(MAX_PACKET_BYTES as u32),
-            ..TreeEncoderOptions::default()
         },
     )
 }
 
 pub fn decode(bytes: &[u8]) -> Result<PlaceTile, MarshalError> {
     let root = TreeReader::new(bytes)?.read_branch()?;
-    let (at, categories, from) = (root.at(0)?.get_array::<u16>()?, root.at(1)?.get_array::<u16>()?, root.at(2)?.get_array::<u8>()?);
+    let (at, categories, from) = (
+        root.at(0)?.get_array::<u16>()?,
+        root.at(1)?.get_array::<u16>()?,
+        root.at(2)?.get_array::<u8>()?,
+    );
     let (ids, names) = (root.at(3)?.get_strs()?, root.at(4)?.get_strs()?);
     let occupancy = occupancy_of(root.at(5)?.get_number()?)?;
     let n = categories.len();
-    if at.len() != 2 * n || from.len() != n || ids.len() as usize != n || names.len() as usize != n {
+    if at.len() != 2 * n || from.len() != n || ids.len() as usize != n || names.len() as usize != n
+    {
         return Err(malformed());
     }
-    let mut tile = PlaceTile { occupancy, ..PlaceTile::default() };
+    let mut tile = PlaceTile {
+        occupancy,
+        ..PlaceTile::default()
+    };
     for i in 0..n {
         tile.push(&Placed {
             place: Place {
@@ -332,10 +380,14 @@ pub fn decode(bytes: &[u8]) -> Result<PlaceTile, MarshalError> {
 /// cell; categories Carto draws; each shown from no sooner than its category and no
 /// later than Carto's last zoom; names whole within `NAME_CHARS`.
 fn validate(tile: &PlaceTile) -> Result<(), MarshalError> {
-    let ascending = tile.at.windows(2).all(|w| [w[0][1], w[0][0]] < [w[1][1], w[1][0]]);
+    let ascending = tile
+        .at
+        .windows(2)
+        .all(|w| [w[0][1], w[0][0]] < [w[1][1], w[1][0]]);
     let bad = |(_, h): (u32, Placed)| {
         let shows = shown(h.place.category);
-        shows.is_none_or(|z| h.from < z || h.from > PLACE_LAST) || h.place.name.chars().nth(NAME_CHARS).is_some()
+        shows.is_none_or(|z| h.from < z || h.from > PLACE_LAST)
+            || h.place.name.chars().nth(NAME_CHARS).is_some()
     };
     if !ascending || tile.iter().any(bad) {
         return Err(malformed());

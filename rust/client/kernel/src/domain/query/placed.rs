@@ -17,7 +17,10 @@ use pxl_spec::bake::constant::EntryAt;
 impl<'a> World<'a> {
     /// What is placed at exactly `at`, air left out.
     pub fn placed(&self, at: EntryAt) -> Option<Entry> {
-        self.objects.read((at.zoom(), at.at())).placed().filter(|e| !object_value_is_air(e.state))
+        self.objects
+            .read((at.zoom(), at.at()))
+            .placed()
+            .filter(|e| !object_value_is_air(e.state))
     }
 
     /// Everything placed whose cube meets `space`, air left out, X in
@@ -34,7 +37,8 @@ impl<'a> World<'a> {
     /// a dig cut finer is held as finely as a cube.
     pub(super) fn finest_in(&self, space: &Aabb) -> Option<Zoom> {
         let mut finest = None;
-        self.objects.entries_in(space, &mut |e| finest = finest.max(Some(e.zoom)));
+        self.objects
+            .entries_in(space, &mut |e| finest = finest.max(Some(e.zoom)));
         finest
     }
 
@@ -53,7 +57,11 @@ impl<'a> World<'a> {
         };
         let mut met = None;
         self.objects.entries_in(&around, &mut |e| {
-            if met.is_none() && !object_value_is_air(e.state) && which(e) && occupies(e).is_some_and(|room| room.shares(*space)) {
+            if met.is_none()
+                && !object_value_is_air(e.state)
+                && which(e)
+                && occupies(e).is_some_and(|room| room.shares(*space))
+            {
                 met = Some(*e);
             }
         });

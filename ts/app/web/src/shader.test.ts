@@ -18,8 +18,11 @@ import { create, globals } from "webgpu";
 const SHADERS = path.join(REPO, "rust/client/render/src/frame/shader");
 
 Deno.test("Tint takes every generated shader", async () => {
-  const modules = fs.readdirSync(SHADERS).filter((f) => f.endsWith(".gen.wgsl")).sort();
-  if (modules.length === 0) throw new Error(`no generated shader under ${SHADERS}`);
+  const modules = fs.readdirSync(SHADERS).filter((f) => f.endsWith(".gen.wgsl"))
+    .sort();
+  if (modules.length === 0) {
+    throw new Error(`no generated shader under ${SHADERS}`);
+  }
 
   Object.assign(globalThis, globals);
   // Held to the end (`void gpu` below): an instance collected while its
@@ -38,15 +41,26 @@ Deno.test("Tint takes every generated shader", async () => {
     }
     device.pushErrorScope("validation");
     const module = device.createShaderModule({ code });
-    const errors = (await module.getCompilationInfo()).messages.filter((m) => m.type === "error");
-    refused.push(...errors.map((m) => `${file}:${m.lineNum}:${m.linePos}: ${m.message}`));
+    const errors = (await module.getCompilationInfo()).messages.filter((m) =>
+      m.type === "error"
+    );
+    refused.push(
+      ...errors.map((m) => `${file}:${m.lineNum}:${m.linePos}: ${m.message}`),
+    );
     // Its errors, as the module's past its compile, the scope's.
-    device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: entry } });
+    device.createComputePipeline({
+      layout: "auto",
+      compute: { module, entryPoint: entry },
+    });
     // A module that does not compile fails its pipeline too: said once.
     const scoped = await device.popErrorScope();
-    if (scoped && errors.length === 0) refused.push(`${file}: ${scoped.message.split("\n")[0]}`);
+    if (scoped && errors.length === 0) {
+      refused.push(`${file}: ${scoped.message.split("\n")[0]}`);
+    }
   }
   device.destroy();
   void gpu;
-  if (refused.length > 0) throw new Error(`refused by Tint:\n${refused.join("\n")}`);
+  if (refused.length > 0) {
+    throw new Error(`refused by Tint:\n${refused.join("\n")}`);
+  }
 });

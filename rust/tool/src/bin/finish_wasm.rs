@@ -47,7 +47,11 @@ fn exported_only(bytes: &[u8], keep: &[String]) -> Result<Vec<u8>, String> {
         let size = leb(bytes, &mut at)? as usize;
         let end = at + size;
         if id != EXPORT_SECTION {
-            out.extend_from_slice(bytes.get(start..end).ok_or("a section past the module's end")?);
+            out.extend_from_slice(
+                bytes
+                    .get(start..end)
+                    .ok_or("a section past the module's end")?,
+            );
             at = end;
             continue;
         }
@@ -55,7 +59,9 @@ fn exported_only(bytes: &[u8], keep: &[String]) -> Result<Vec<u8>, String> {
         for _ in 0..leb(bytes, &mut at)? {
             let from = at;
             let len = leb(bytes, &mut at)? as usize;
-            let name = bytes.get(at..at + len).ok_or("an export name past the module's end")?;
+            let name = bytes
+                .get(at..at + len)
+                .ok_or("an export name past the module's end")?;
             // The name, then its kind byte and its index.
             at += len + 1;
             leb(bytes, &mut at)?;
@@ -84,12 +90,18 @@ fn exported_only(bytes: &[u8], keep: &[String]) -> Result<Vec<u8>, String> {
 fn members() -> Result<Vec<String>, String> {
     let at = pxl_tool::root().join("rust/Cargo.toml");
     let manifest = std::fs::read_to_string(&at).map_err(|e| format!("{}: {e}", at.display()))?;
-    let list = regex::Regex::new(r"(?ms)^\s*members\s*=\s*\[([^\]]*)\]").map_err(|e| e.to_string())?;
+    let list =
+        regex::Regex::new(r"(?ms)^\s*members\s*=\s*\[([^\]]*)\]").map_err(|e| e.to_string())?;
     let comment = regex::Regex::new(r"(?m)#.*$").map_err(|e| e.to_string())?;
     let quoted = regex::Regex::new(r#""([^"]+)""#).map_err(|e| e.to_string())?;
-    let body = list.captures(&manifest).ok_or("rust/Cargo.toml: no workspace members")?;
+    let body = list
+        .captures(&manifest)
+        .ok_or("rust/Cargo.toml: no workspace members")?;
     let body = comment.replace_all(&body[1], "");
-    Ok(quoted.captures_iter(&body).map(|c| format!("{}/src/", &c[1])).collect())
+    Ok(quoted
+        .captures_iter(&body)
+        .map(|c| format!("{}/src/", &c[1]))
+        .collect())
 }
 
 /// Rust embeds caller paths for `#[track_caller]` panics with no stable way
@@ -98,16 +110,24 @@ fn members() -> Result<Vec<String>, String> {
 /// paths in the order they were numbered.
 fn numbered(bytes: &mut [u8]) -> Result<Vec<String>, String> {
     let path = Regex::new(r"(?-u)[A-Za-z0-9_/.-]*\.rs\b").map_err(|e| e.to_string())?;
-    let source_root = Regex::new(r"(?-u)(?:^|[^A-Za-z0-9_])xpute/|/library/|/registry/|^/rustc/|^/rust/deps/|\.rustup/").map_err(|e| e.to_string())?;
+    let source_root = Regex::new(
+        r"(?-u)(?:^|[^A-Za-z0-9_])xpute/|/library/|/registry/|^/rustc/|^/rust/deps/|\.rustup/",
+    )
+    .map_err(|e| e.to_string())?;
     let members = members()?;
-    let found: Vec<(usize, usize)> = path.find_iter(bytes).map(|m| (m.start(), m.end())).collect();
+    let found: Vec<(usize, usize)> = path
+        .find_iter(bytes)
+        .map(|m| (m.start(), m.end()))
+        .collect();
     let mut numbers: Vec<String> = Vec::new();
     for (start, end) in found {
         let text = String::from_utf8_lossy(&bytes[start..end]).into_owned();
         if !text.contains('/') {
             continue;
         }
-        if !source_root.is_match(text.as_bytes()) && !members.iter().any(|m| text.starts_with(m.as_str())) {
+        if !source_root.is_match(text.as_bytes())
+            && !members.iter().any(|m| text.starts_with(m.as_str()))
+        {
             // Never overwrite on a guess: it could be a format string.
             return Err(format!("{text:?} ends in .rs but is under no source root — widen the source roots or leave it alone"));
         }
@@ -131,14 +151,23 @@ fn paths_json(numbers: &[String]) -> String {
     if numbers.is_empty() {
         return "{}\n".into();
     }
-    let rows: Vec<String> = numbers.iter().enumerate().map(|(k, p)| format!("  \"#{k}\": {}", serde_json::Value::from(p.as_str()))).collect();
+    let rows: Vec<String> = numbers
+        .iter()
+        .enumerate()
+        .map(|(k, p)| format!("  \"#{k}\": {}", serde_json::Value::from(p.as_str())))
+        .collect();
     format!("{{\n{}\n}}\n", rows.join(",\n"))
 }
 
 fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let usage = || "usage: finish_wasm exports <module.wasm> <name>... | finish_wasm number <module.wasm> <paths.json>".to_string();
-    let (mode, module) = (args.first().ok_or_else(usage)?, args.get(1).ok_or_else(usage)?);
+    let usage = || {
+        "usage: finish_wasm exports <module.wasm> <name>... | finish_wasm number <module.wasm> <paths.json>".to_string()
+    };
+    let (mode, module) = (
+        args.first().ok_or_else(usage)?,
+        args.get(1).ok_or_else(usage)?,
+    );
     let mut bytes = std::fs::read(module).map_err(|e| format!("{module}: {e}"))?;
     match mode.as_str() {
         "exports" => {

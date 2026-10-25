@@ -36,11 +36,26 @@ function effectAt(level: f64, place: BackingPlace): Effect {
   return "regular";
 }
 
-export function Backing({ fill, material, tint, interactive, place, fade = 1, fadeFrom, transition = SNAP, style, children }: BackingProps) {
+export function Backing(
+  {
+    fill,
+    material,
+    tint,
+    interactive,
+    place,
+    fade = 1,
+    fadeFrom,
+    transition = SNAP,
+    style,
+    children,
+  }: BackingProps,
+) {
   const veil = useVeil(fade, transition, fadeFrom);
 
   const target = effectAt(veil.level, place);
-  const [shown, setShown] = useState<Effect>(fadeFrom === undefined ? target : effectAt(fadeFrom, place));
+  const [shown, setShown] = useState<Effect>(
+    fadeFrom === undefined ? target : effectAt(fadeFrom, place),
+  );
   // A style set before the first layout is installed without animation, so
   // it waits for layout and the transition's delay.
   const [laidOut, setLaidOut] = useState(false);
@@ -61,26 +76,65 @@ export function Backing({ fill, material, tint, interactive, place, fade = 1, fa
     return (
       <Motion {...veil.motion} style={style}>
         <Blur style={[StyleSheet.absoluteFill, round]} />
-        <View style={[StyleSheet.absoluteFill, round, { backgroundColor: alpha(fill as string, material.system) }]} />
+        <View
+          style={[StyleSheet.absoluteFill, round, {
+            backgroundColor: alpha(fill as string, material.system),
+          }]}
+        />
         {children}
       </Motion>
     );
   }
 
-  if (!SYSTEM_BACKING) return <Fill fill={fill} place={place} fade={fade} fadeFrom={fadeFrom} transition={transition} style={style}>{children}</Fill>;
+  if (!SYSTEM_BACKING) {
+    return (
+      <Fill
+        fill={fill}
+        place={place}
+        fade={fade}
+        fadeFrom={fadeFrom}
+        transition={transition}
+        style={style}
+      >
+        {children}
+      </Fill>
+    );
+  }
 
-  const { boxShadow: _shadow, borderWidth: _width, borderColor: _color, flexDirection, alignItems, justifyContent, gap, rowGap, columnGap, ...ground } = StyleSheet.flatten(style) ?? {};
+  const {
+    boxShadow: _shadow,
+    borderWidth: _width,
+    borderColor: _color,
+    flexDirection,
+    alignItems,
+    justifyContent,
+    gap,
+    rowGap,
+    columnGap,
+    ...ground
+  } = StyleSheet.flatten(style) ?? {};
   return (
     <GlassView
       onLayout={laidOut ? undefined : () => setLaidOut(true)}
       style={ground}
-      glassEffectStyle={{ style: shown, animate: true, animationDuration: veil.motion.transition.durationMs / 1000 }}
+      glassEffectStyle={{
+        style: shown,
+        animate: true,
+        animationDuration: veil.motion.transition.durationMs / 1000,
+      }}
       tintColor={tint}
       isInteractive={interactive}
     >
       <Motion
         {...veil.motion}
-        style={[styles.layout, { flexDirection, alignItems, justifyContent, gap, rowGap, columnGap }]}
+        style={[styles.layout, {
+          flexDirection,
+          alignItems,
+          justifyContent,
+          gap,
+          rowGap,
+          columnGap,
+        }]}
       >
         {children}
       </Motion>

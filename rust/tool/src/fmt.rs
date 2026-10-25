@@ -13,7 +13,7 @@ use crate::root;
 pub fn formatted(path: &str, text: String) -> Result<String, String> {
     let mut cmd = if path.ends_with(".rs") {
         let mut c = Command::new("rustfmt");
-        c.args(["--edition", "2021", "--emit", "stdout", "--config-path"]).arg(root().join("rust/rustfmt.toml"));
+        c.args(["--edition", "2021", "--emit", "stdout"]);
         c
     } else if let Some(ext) = [".ts", ".json"].into_iter().find(|e| path.ends_with(e)) {
         let root = root();
@@ -38,10 +38,18 @@ pub fn formatted(path: &str, text: String) -> Result<String, String> {
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("fmt {path}: {e}"))?;
-    child.stdin.take().ok_or("no stdin")?.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+    child
+        .stdin
+        .take()
+        .ok_or("no stdin")?
+        .write_all(text.as_bytes())
+        .map_err(|e| e.to_string())?;
     let out = child.wait_with_output().map_err(|e| e.to_string())?;
     if !out.status.success() {
-        return Err(format!("fmt {path}: {}", String::from_utf8_lossy(&out.stderr)));
+        return Err(format!(
+            "fmt {path}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        ));
     }
     String::from_utf8(out.stdout).map_err(|e| format!("fmt {path}: {e}"))
 }

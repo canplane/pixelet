@@ -51,7 +51,10 @@ pub struct TileFace {
 /// Each slot and the tile it wears; one tile may be several slots'. A slot
 /// naming no catalog type is an error: a renamed type once left its blocks
 /// untextured silently.
-pub fn faces(slots: &[(u32, Slot)], groups: &[(String, Vec<String>)]) -> Result<Vec<TileFace>, String> {
+pub fn faces(
+    slots: &[(u32, Slot)],
+    groups: &[(String, Vec<String>)],
+) -> Result<Vec<TileFace>, String> {
     let mut out = Vec::new();
     for (n, slot) in slots {
         let (face, ty, wanted) = match slot {
@@ -60,7 +63,10 @@ pub fn faces(slots: &[(u32, Slot)], groups: &[(String, Vec<String>)]) -> Result<
             Slot::Bottom { ty } => (Face::Bottom, ty, None),
         };
         let before = out.len();
-        for (group, types) in groups.iter().filter(|(g, _)| wanted.is_none_or(|w| w == *g)) {
+        for (group, types) in groups
+            .iter()
+            .filter(|(g, _)| wanted.is_none_or(|w| w == *g))
+        {
             if types.contains(ty) {
                 out.push(TileFace {
                     group: group.clone(),
@@ -71,7 +77,9 @@ pub fn faces(slots: &[(u32, Slot)], groups: &[(String, Vec<String>)]) -> Result<
             }
         }
         if out.len() == before {
-            return Err(format!("the manifest's {slot:?} is no cube in spec/spec/asset/cube.json"));
+            return Err(format!(
+                "the manifest's {slot:?} is no cube in spec/spec/asset/cube.json"
+            ));
         }
     }
     Ok(out)
@@ -102,8 +110,15 @@ pub fn render_json(rows: &[Row], pack: &Pack) -> String {
     let files: Vec<String> = rows
         .iter()
         .map(|r| {
-            let extent = r.extent.map_or(String::new(), |e| format!(", \"extent\": [{}, {}, {}]", e[0], e[1], e[2]));
-            format!("    {{ \"path\": {}, \"key\": {}, \"bytes\": {}{extent} }}", string(&r.path), string(&r.key), r.bytes)
+            let extent = r.extent.map_or(String::new(), |e| {
+                format!(", \"extent\": [{}, {}, {}]", e[0], e[1], e[2])
+            });
+            format!(
+                "    {{ \"path\": {}, \"key\": {}, \"bytes\": {}{extent} }}",
+                string(&r.path),
+                string(&r.key),
+                r.bytes
+            )
         })
         .collect();
     out.push_str(&files.join(",\n"));
@@ -111,14 +126,30 @@ pub fn render_json(rows: &[Row], pack: &Pack) -> String {
     let _ = writeln!(out, "    \"image\": {},", string(&pack.image));
     let _ = writeln!(out, "    \"cell\": {},", pack.cell);
     let _ = writeln!(out, "    \"columns\": {},", pack.columns);
-    let tiles: Vec<String> = pack.tiles.iter().map(|t| format!("      {}", string(t))).collect();
+    let tiles: Vec<String> = pack
+        .tiles
+        .iter()
+        .map(|t| format!("      {}", string(t)))
+        .collect();
     let _ = writeln!(out, "    \"tiles\": [\n{}\n    ],", tiles.join(",\n"));
-    let means: Vec<String> = pack.means.iter().map(|m| format!("      [{}, {}, {}]", m[0], m[1], m[2])).collect();
+    let means: Vec<String> = pack
+        .means
+        .iter()
+        .map(|m| format!("      [{}, {}, {}]", m[0], m[1], m[2]))
+        .collect();
     let _ = writeln!(out, "    \"means\": [\n{}\n    ],", means.join(",\n"));
     let faces: Vec<String> = pack
         .faces
         .iter()
-        .map(|f| format!("      [{}, {}, {}, {}]", string(&f.group), string(&f.ty), string(f.face.name()), f.tile))
+        .map(|f| {
+            format!(
+                "      [{}, {}, {}, {}]",
+                string(&f.group),
+                string(&f.ty),
+                string(f.face.name()),
+                f.tile
+            )
+        })
         .collect();
     let _ = writeln!(out, "    \"faces\": [\n{}\n    ]", faces.join(",\n"));
     out.push_str("  }\n}\n");

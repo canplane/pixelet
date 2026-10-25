@@ -47,7 +47,7 @@ WASM_OPT = [
 ]
 
 # embassy and critical-section export their `#[no_mangle]` symbols; only these stay.
-EXPORTS = ["interrupt"]
+EXPORTS = ["intr"]
 
 
 class Failed(Exception):

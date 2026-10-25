@@ -64,8 +64,18 @@ impl Lens {
         let forward = unit(n(4))?;
         let right = unit(v3::sub(&n(0), &n(1)))?;
         let up = unit(v3::sub(&n(2), &n(3)))?;
-        let tan = [v3::dot(&n(0), &forward) / v3::dot(&n(0), &right), v3::dot(&n(2), &forward) / v3::dot(&n(2), &up)];
-        tan.iter().all(|t| t.is_finite() && *t > 0.0).then_some(Lens { forward, right, up, tan })
+        let tan = [
+            v3::dot(&n(0), &forward) / v3::dot(&n(0), &right),
+            v3::dot(&n(2), &forward) / v3::dot(&n(2), &up),
+        ];
+        tan.iter()
+            .all(|t| t.is_finite() && *t > 0.0)
+            .then_some(Lens {
+                forward,
+                right,
+                up,
+                tan,
+            })
     }
 }
 
@@ -78,7 +88,12 @@ impl Lens {
 /// the camera grid the cast lays over the screen off them, once. A
 /// ray a drawn pixel, through its middle. The cuts are the scene's. None
 /// without a screen.
-pub fn gpu_cast(o: &Observation, tau: Tau, steps: bool, words: &mut [u32; eye::WORDS]) -> Option<()> {
+pub fn gpu_cast(
+    o: &Observation,
+    tau: Tau,
+    steps: bool,
+    words: &mut [u32; eye::WORDS],
+) -> Option<()> {
     let lens = Lens::of(o)?;
     let q = origin(o.eye[0], o.eye[1], o.eye[2]);
     let w = |v: f64| (v as f32).to_bits();
@@ -94,7 +109,10 @@ pub fn gpu_cast(o: &Observation, tau: Tau, steps: bool, words: &mut [u32; eye::W
     put(eye::RANGE, &asked());
     // The grid off the very f32s the words above hold, so every reader's is
     // this one (pxl-spec-core `beam::Grid`).
-    put(eye::GRID, &beam::Grid::of(lens.tan.map(|t| t as f32), tau.scale() as f32).words());
+    put(
+        eye::GRID,
+        &beam::Grid::of(lens.tan.map(|t| t as f32), tau.scale() as f32).words(),
+    );
     Some(())
 }
 

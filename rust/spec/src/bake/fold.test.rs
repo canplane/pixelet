@@ -23,20 +23,32 @@ fn an_area_keeps_what_fills_half_its_four_and_ties_alternate_corners() {
 /// A leaf whose cell is `f` of it, its own four looks.
 fn plane(f: impl Fn(usize, usize) -> u8) -> Ground {
     Ground {
-        cells: (0..SPAN * SPAN).flat_map(|i| [f(i % SPAN, i / SPAN); 4]).collect::<Vec<_>>().into(),
+        cells: (0..SPAN * SPAN)
+            .flat_map(|i| [f(i % SPAN, i / SPAN); 4])
+            .collect::<Vec<_>>()
+            .into(),
     }
 }
 
 /// Each parent cell's own look, as the zoom of the parent reads it.
 fn fold(children: [&Ground; 4], zoom: Zoom) -> Vec<u8> {
     let four = fold_ground(children, zoom).cells.to_vec();
-    four.chunks(4).map(|q| own(u32::from_le_bytes([q[0], q[1], q[2], q[3]]), GROUND.cell_zoom(zoom)) as u8).collect()
+    four.chunks(4)
+        .map(|q| {
+            own(
+                u32::from_le_bytes([q[0], q[1], q[2], q[3]]),
+                GROUND.cell_zoom(zoom),
+            ) as u8
+        })
+        .collect()
 }
 
 #[test]
 fn a_uniform_tile_folds_to_itself() {
     let p = plane(|_, _| ground::subway);
-    assert!(fold([&p, &p, &p, &p], LEAF_ZOOM - 1).iter().all(|&v| v == ground::subway));
+    assert!(fold([&p, &p, &p, &p], LEAF_ZOOM - 1)
+        .iter()
+        .all(|&v| v == ground::subway));
 }
 
 #[test]
@@ -45,11 +57,22 @@ fn an_area_one_cell_wide_is_a_tie_and_a_dot_goes() {
     // south-west tie child keeps it only where x is even.
     let lot = plane(|x, _| if x == 10 { ground::parking } else { 0 });
     let empty = plane(|_, _| 0);
-    assert_eq!(fold([&lot, &empty, &empty, &empty], LEAF_ZOOM - 1)[5], ground::parking);
+    assert_eq!(
+        fold([&lot, &empty, &empty, &empty], LEAF_ZOOM - 1)[5],
+        ground::parking
+    );
     let odd = plane(|x, _| if x == 11 { ground::parking } else { 0 });
     assert_eq!(fold([&odd, &empty, &empty, &empty], LEAF_ZOOM - 1)[5], 0);
-    let dot = plane(|x, y| if (x, y) == (10, 10) { ground::parking } else { 0 });
-    assert!(fold([&dot, &empty, &empty, &empty], LEAF_ZOOM - 1).iter().all(|&v| v == 0));
+    let dot = plane(|x, y| {
+        if (x, y) == (10, 10) {
+            ground::parking
+        } else {
+            0
+        }
+    });
+    assert!(fold([&dot, &empty, &empty, &empty], LEAF_ZOOM - 1)
+        .iter()
+        .all(|&v| v == 0));
 }
 
 #[test]
@@ -62,7 +85,12 @@ fn a_feature_two_cells_wide_survives_a_fold() {
 
 #[test]
 fn each_child_lands_in_its_own_quarter() {
-    let q = [plane(|_, _| 1), plane(|_, _| 2), plane(|_, _| 3), plane(|_, _| 4)];
+    let q = [
+        plane(|_, _| 1),
+        plane(|_, _| 2),
+        plane(|_, _| 3),
+        plane(|_, _| 4),
+    ];
     let out = fold([&q[0], &q[1], &q[2], &q[3]], 1);
     let half = SPAN / 2;
     assert_eq!(out[0], 1);
@@ -131,7 +159,9 @@ fn elevation_keeps_the_center_sample_convention() {
 #[test]
 fn elevation_reads_the_skirt_from_the_neighbors() {
     // The outermost padding lies four child samples past the block, in the neighbors.
-    let out = fold_grids(|mx, my| 100 * mx.div_euclid(TILE_ELE_SPAN as i64) + my.div_euclid(TILE_ELE_SPAN as i64));
+    let out = fold_grids(|mx, my| {
+        100 * mx.div_euclid(TILE_ELE_SPAN as i64) + my.div_euclid(TILE_ELE_SPAN as i64)
+    });
     assert_eq!(out[0], -101);
     assert_eq!(out[PADDED - 1], 200 - 1);
     assert_eq!(out[(PADDED - 1) * PADDED], -100 + 2);
@@ -141,34 +171,70 @@ fn elevation_reads_the_skirt_from_the_neighbors() {
 fn elevation_rounds_its_halves_to_even() {
     // Rounding half up would drift every fold upward.
     let lows = fold_grids(|mx, _| mx.rem_euclid(2));
-    assert!(lows.iter().all(|&v| v == 0), "0, 1, 0, 1 average to 0.5 and round to 0");
+    assert!(
+        lows.iter().all(|&v| v == 0),
+        "0, 1, 0, 1 average to 0.5 and round to 0"
+    );
     let highs = fold_grids(|mx, _| 1 + mx.rem_euclid(2) * 2);
     assert!(highs.iter().all(|&v| v == 2), "1, 3, 1, 3 average to 2");
     let halves = fold_grids(|mx, _| 2 + mx.rem_euclid(2));
-    assert!(halves.iter().all(|&v| v == 2), "2, 3, 2, 3 average to 2.5 and round to 2");
+    assert!(
+        halves.iter().all(|&v| v == 2),
+        "2, 3, 2, 3 average to 2.5 and round to 2"
+    );
 }
 
 #[test]
 fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
     let (a, b, empty) = (5, 9, 0);
-    assert_eq!(majority([a, empty, empty, empty, empty, empty, empty, empty], GROUND.cell() - 1), empty);
-    assert_eq!(majority([a, a, a, a, empty, empty, empty, empty], GROUND.cell() - 1), a);
-    assert_eq!(majority([empty, a, a, a, a, a, empty, empty], GROUND.cell() - 2), a);
+    assert_eq!(
+        majority(
+            [a, empty, empty, empty, empty, empty, empty, empty],
+            GROUND.cell() - 1
+        ),
+        empty
+    );
+    assert_eq!(
+        majority([a, a, a, a, empty, empty, empty, empty], GROUND.cell() - 1),
+        a
+    );
+    assert_eq!(
+        majority([empty, a, a, a, a, a, empty, empty], GROUND.cell() - 2),
+        a
+    );
     let halves = [a, b, a, b, b, a, b, a];
     assert_eq!(majority(halves, GROUND.cell() - 1), halves[0]);
     assert_eq!(majority(halves, GROUND.cell() - 2), halves[7]);
-    assert_eq!(majority(halves, GROUND.cell() + 1), halves[0], "a side finer than the cell alternates the same way");
+    assert_eq!(
+        majority(halves, GROUND.cell() + 1),
+        halves[0],
+        "a side finer than the cell alternates the same way"
+    );
 }
 
 /// The open ocean: flat water at sea level, no tile.
 fn zero_tile() -> TerrainTile {
     let cells = vec![ground::water; 4 * SPAN * SPAN];
-    TerrainTile::of(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default(), Occupancy::ZERO)
+    TerrainTile::of(
+        vec![0; PADDED * PADDED],
+        Ground {
+            cells: cells.into(),
+        },
+        Default::default(),
+        Occupancy::ZERO,
+    )
 }
 
 /// Zero tiles fold to the zero tile.
 #[test]
 fn the_zero_tile_folds_to_itself() {
     let zero = zero_tile();
-    assert_eq!(fold_terrain(neighborhood(Tile::new(LEAF_ZOOM - 1, [0, 0])).map(|_| Some(&zero)), LEAF_ZOOM - 1).as_ref(), Some(&zero));
+    assert_eq!(
+        fold_terrain(
+            neighborhood(Tile::new(LEAF_ZOOM - 1, [0, 0])).map(|_| Some(&zero)),
+            LEAF_ZOOM - 1
+        )
+        .as_ref(),
+        Some(&zero)
+    );
 }

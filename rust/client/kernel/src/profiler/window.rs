@@ -3,7 +3,9 @@
 //! The profiler's window: recording, and the steps' timing the report reads,
 //! on and off together.
 
-use crate::profiler::record::{profiler_recording_start, profiler_recording_stop, profiler_release};
+use crate::profiler::record::{
+    profiler_recording_start, profiler_recording_stop, profiler_release,
+};
 use crate::sys::sched::tick::{set_step_timing, tick_step_stats_reset};
 
 /// Called with the stored setting the turn the settings are read, a few

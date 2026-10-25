@@ -77,7 +77,10 @@ fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
     if !is_unknown(at) {
         return Answer::Exact(Some(*at));
     }
-    stood().of(world, *at, |w| w.surface_support(at).map(|top| top.map(|top| stand_over(at, top))))
+    stood().of(world, *at, |w| {
+        w.surface_support(at)
+            .map(|top| top.map(|top| stand_over(at, top)))
+    })
 }
 
 /// The floor `center` is drawn on in `world`: its own, or where its height is
@@ -102,7 +105,11 @@ pub fn resolve(at: &Q3, held: V3) -> V3 {
 
 /// A known Z, a fix's altitude, on the floor nearest it once a leaf gives it.
 pub fn nearest(at: &Q3) -> Option<Q3> {
-    World::now().support_nearest(at).exact().flatten().map(|top| stand_over(at, top))
+    World::now()
+        .support_nearest(at)
+        .exact()
+        .flatten()
+        .map(|top| stand_over(at, top))
 }
 
 /// An unknown Z once a leaf gives it.
@@ -137,5 +144,7 @@ pub fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {
     if way == [0.0, 0.0] {
         return *from;
     }
-    World::now().step_slide(from, &to, eye, true).unwrap_or_else(|| unknown_z(&to))
+    World::now()
+        .step_slide(from, &to, eye, true)
+        .unwrap_or_else(|| unknown_z(&to))
 }

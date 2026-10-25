@@ -9,6 +9,7 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
 use pxl_spec::space::coord::mat4::{self, Mat4};
+use pxl_spec::space::coord::q3::{from_real, to_real};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
@@ -106,7 +107,11 @@ pub fn sea_under_eye() -> V3 {
 /// south edge the lattice would hold the eye at it.
 pub fn globe_anchor() -> Option<G4326> {
     let [x, y, _] = view().pose?.eye;
-    Some(epsg4326::from_mercator(&[epsg3857::mer_from_u(nearest(x, 0.0)), epsg3857::mer_from_u(y), 0.0]))
+    Some(epsg4326::from_mercator(&[
+        epsg3857::mer_from_u(nearest(x, 0.0)),
+        epsg3857::mer_from_u(y),
+        0.0,
+    ]))
 }
 
 /// The eye's longitude and latitude, which the sky is seen from: the
@@ -142,7 +147,19 @@ pub fn view_resize(width: f64, height: f64, ratio: f64) {
 /// (`observation::observation`), which is what it was where neither the
 /// pose nor the ground under the eye moved (`observation::turn`), and is
 /// made again where either did.
+///
+/// The eye is held on the steps the cast's rays leave from (pxl-spec
+/// `world::origin`), so the world the rays draw and what is rasterized on
+/// its faces — the puck's zone, the ghosts, the markers' anchors — stand
+/// about one eye. Off them, the rays' eye stood up to a step from the
+/// raster's, past the step back the world's depth is written by
+/// (screen_ray.wgsl `behind`) within ~64 units, and a face and what lay on
+/// it fought.
 pub fn view_compose(pose: Option<ObserverPose>) {
+    let pose = pose.map(|p| ObserverPose {
+        eye: p.eye.map(|v| to_real(from_real(v))),
+        ..p
+    });
     let moved = view().pose != pose;
     crate::domain::view::observation::turn(moved);
     if !moved {
@@ -163,7 +180,12 @@ fn compose() {
     mat4::invert(&mut v.inv_view_matrix, &vm);
     // Reversed depth in floats with the far plane at infinity: one near
     // plane holds every height's precision.
-    mat4::perspective(&mut v.proj, FOV.to_radians(), v.width / v.height, crate::domain::view::param::NEAR);
+    mat4::perspective(
+        &mut v.proj,
+        FOV.to_radians(),
+        v.width / v.height,
+        crate::domain::view::param::NEAR,
+    );
     let proj = v.proj;
     mat4::mul(&mut v.world_view_proj, &proj, &vm);
     let lvp = v.world_view_proj;
@@ -183,7 +205,13 @@ pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, direc
     let mut back = mat4::new();
     mat4::transpose(&mut back, &pose.rotation);
     *origin = pose.eye;
-    mat4::transform_direction(direction, &back, ndc_x * tan * v.width / v.height, ndc_y * tan, -1.0);
+    mat4::transform_direction(
+        direction,
+        &back,
+        ndc_x * tan * v.width / v.height,
+        ndc_y * tan,
+        -1.0,
+    );
 }
 
 /// `ndc` in [−1, 1], y up, as logical pixels from the view's top left.

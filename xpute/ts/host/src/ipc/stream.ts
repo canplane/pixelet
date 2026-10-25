@@ -13,7 +13,12 @@ import { td } from "@xpute/kit/codec/encoding.ts";
 export const END = 0;
 
 /** The words are valid only inside `run`. */
-export function each_record(memory: ArrayBufferLike, at: u32, head: u32, run: (op: u32, w: U32Array, a: u32, n: u32) => void): void {
+export function each_record(
+  memory: ArrayBufferLike,
+  at: u32,
+  head: u32,
+  run: (op: u32, w: U32Array, a: u32, n: u32) => void,
+): void {
   const end = new Uint32Array(memory, at, head)[END];
   if (end === 0) return;
   const w = new Uint32Array(memory, at + 4 * head, end) as U32Array;

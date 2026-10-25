@@ -6,13 +6,14 @@
 // registers them, and the effects a turn runs around them. The profiler records and
 // reports them by these names (spec/client/kernel/profiler/profiler.json).
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code
+)]
 
 pub const STEP_NAMES: usize = 8;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -44,7 +45,9 @@ impl StepName {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<StepName> {
-        StepName::ALL.into_iter().find(|member| *member as u8 == value)
+        StepName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }
 
@@ -84,6 +87,8 @@ impl EffectName {
     /// The member a number names, or none for a number the set does not
     /// give out.
     pub fn of(value: u8) -> Option<EffectName> {
-        EffectName::ALL.into_iter().find(|member| *member as u8 == value)
+        EffectName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == value)
     }
 }

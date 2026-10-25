@@ -15,7 +15,10 @@ interface KeyboardDockProps extends ViewProps {
   onLift: (event: NativeSyntheticEvent<{ lift: number }>) => void;
 }
 
-const KeyboardDock: ComponentType<KeyboardDockProps> = requireNativeView("PxlPlatform", "KeyboardDock");
+const KeyboardDock: ComponentType<KeyboardDockProps> = requireNativeView(
+  "PxlPlatform",
+  "KeyboardDock",
+);
 
 /**
  * A layer standing `inset` above an open keyboard. The native view lifts it
@@ -23,7 +26,9 @@ const KeyboardDock: ComponentType<KeyboardDockProps> = requireNativeView("PxlPla
  * did not match; once still, the lift is laid out here so presses hit-test
  * where the layer is.
  */
-export function AboveKeyboard({ inset, lift = 0, children }: AboveKeyboardProps) {
+export function AboveKeyboard(
+  { inset, lift = 0, children }: AboveKeyboardProps,
+) {
   const rest = bottomRest(bracket.view.useSafeArea(), inset);
   const [applied, setApplied] = useState(0);
   return (

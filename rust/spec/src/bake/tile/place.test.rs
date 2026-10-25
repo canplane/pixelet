@@ -22,7 +22,10 @@ fn called<'a>(name: &'a str, category: &str, id: &'a str) -> Place<'a> {
 }
 
 fn shown_at(tile: &PlaceTile, zoom: Zoom) -> Vec<&str> {
-    tile.iter().filter(|(_, h)| h.from <= zoom).map(|(_, h)| h.place.name).collect()
+    tile.iter()
+        .filter(|(_, h)| h.from <= zoom)
+        .map(|(_, h)| h.place.name)
+        .collect()
 }
 
 #[test]
@@ -40,14 +43,23 @@ fn a_tile_comes_back_as_it_went() {
 
 #[test]
 fn a_kind_carto_draws_no_point_for_is_not_held() {
-    let tile = PlaceTile::leaf(leaf(), [(point(1, 2), called("School", "elementary_school", "1"))]);
+    let tile = PlaceTile::leaf(
+        leaf(),
+        [(point(1, 2), called("School", "elementary_school", "1"))],
+    );
     assert!(tile.is_empty());
 }
 
 #[test]
 fn a_cell_keeps_its_first_by_the_zoom_its_kind_shows_from_then_id() {
     // Sixteen leaf cells apart: one place's cell through Carto's z17, apart from z18.
-    let tile = PlaceTile::leaf(leaf(), [(point(8, 10), called("Cafe", "cafe", "1")), (point(24, 10), called("Hospital", "hospital", "9"))]);
+    let tile = PlaceTile::leaf(
+        leaf(),
+        [
+            (point(8, 10), called("Cafe", "cafe", "1")),
+            (point(24, 10), called("Hospital", "hospital", "9")),
+        ],
+    );
     assert_eq!(shown_at(&tile, 15), ["Hospital"]);
     // The cafe, shown from z17, never takes the hospital's room, though its id is less.
     assert_eq!(shown_at(&tile, 17), ["Hospital"]);
@@ -56,7 +68,13 @@ fn a_cell_keeps_its_first_by_the_zoom_its_kind_shows_from_then_id() {
 
 #[test]
 fn a_parent_is_what_its_children_show_from_its_zoom_on() {
-    let child = PlaceTile::leaf(leaf(), [(point(10, 10), called("Peak", "mountain", "1")), (point(300, 10), called("Cafe", "cafe", "2"))]);
+    let child = PlaceTile::leaf(
+        leaf(),
+        [
+            (point(10, 10), called("Peak", "mountain", "1")),
+            (point(300, 10), called("Cafe", "cafe", "2")),
+        ],
+    );
     let empty = PlaceTile::default();
     let p = leaf().parent();
     let mut children = [&empty; 4];
@@ -72,7 +90,11 @@ fn a_parent_is_what_its_children_show_from_its_zoom_on() {
 fn every_kind_carto_draws_an_icon_for_ships_its_symbol() {
     for category in 1..=CATEGORIES.len() as u16 {
         if ICON_ZOOM[usize::from(category - 1)] != 0 {
-            assert!(symbol_of(category).is_some(), "{} has no symbol shipped", CATEGORIES[usize::from(category - 1)]);
+            assert!(
+                symbol_of(category).is_some(),
+                "{} has no symbol shipped",
+                CATEGORIES[usize::from(category - 1)]
+            );
         }
     }
 }
@@ -80,7 +102,12 @@ fn every_kind_carto_draws_an_icon_for_ships_its_symbol() {
 #[test]
 fn no_grid_cell_reads_a_tile_coarser_than_the_coarsest() {
     use crate::space::layer::tile::TOP_ZOOM;
-    const { assert!(crate::space::layer::lattice::coarsest(GROUND) == TOP_ZOOM, "the ground is read up to the pyramid's top") };
+    const {
+        assert!(
+            crate::space::layer::lattice::coarsest(GROUND) == TOP_ZOOM,
+            "the ground is read up to the pyramid's top"
+        )
+    };
     const {
         assert!(
             crate::space::layer::lattice::coarsest(PLACE_LATTICE) > TOP_ZOOM,

@@ -22,12 +22,21 @@
 //! of its own fields, and is how a block past a slot is laid out. An enum's
 //! `unknown` is the member a number it does not give out reads as; an enum
 //! without one refuses the packet.
+//!
+//! A command taken out leaves its number in the Command table's `$retired`, with
+//! the name it had, and the generator refuses a number given twice or one
+//! retired, so a number an older side still sends never comes to mean another.
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
 // with no signal or no enum read off the wire leaves a writer or a
 // number's check unused.
-#![allow(non_camel_case_types, clippy::type_complexity, unused_imports, dead_code)]
+#![allow(
+    non_camel_case_types,
+    clippy::type_complexity,
+    unused_imports,
+    dead_code
+)]
 
 use core::fmt::Display;
 
@@ -79,16 +88,18 @@ pub enum WorldMinor {
     SNAPSHOT = 0x04,
     SOURCE = 0x05,
     KEPT_EMPTIED = 0x06,
+    VIEW = 0x07,
 }
 
 impl WorldMinor {
-    pub const ALL: [WorldMinor; 6] = [
+    pub const ALL: [WorldMinor; 7] = [
         WorldMinor::BOOT,
         WorldMinor::FRAME,
         WorldMinor::VISIBILITY,
         WorldMinor::SNAPSHOT,
         WorldMinor::SOURCE,
         WorldMinor::KEPT_EMPTIED,
+        WorldMinor::VIEW,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -115,10 +126,11 @@ pub enum InputMinor {
     MARKER_WORDS = 0x0c,
     MARKER_CANCEL = 0x0d,
     MARKER_PUT = 0x0e,
+    LOCATE = 0x0f,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 14] = [
+    pub const ALL: [InputMinor; 15] = [
         InputMinor::RECT,
         InputMinor::POINTER,
         InputMinor::WHEEL,
@@ -133,6 +145,7 @@ impl InputMinor {
         InputMinor::MARKER_WORDS,
         InputMinor::MARKER_CANCEL,
         InputMinor::MARKER_PUT,
+        InputMinor::LOCATE,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -148,27 +161,19 @@ pub enum SensorMinor {
     START = 0x01,
     POSITION = 0x02,
     STOP = 0x03,
-    ERROR = 0x04,
     ORIENTATION = 0x05,
     PERMISSION = 0x06,
-    ENABLE_LOCATION = 0x07,
-    OPEN = 0x08,
-    CLOSE = 0x09,
-    ORIENTATION_LOST = 0x0a,
+    FAILED = 0x0b,
 }
 
 impl SensorMinor {
-    pub const ALL: [SensorMinor; 10] = [
+    pub const ALL: [SensorMinor; 6] = [
         SensorMinor::START,
         SensorMinor::POSITION,
         SensorMinor::STOP,
-        SensorMinor::ERROR,
         SensorMinor::ORIENTATION,
         SensorMinor::PERMISSION,
-        SensorMinor::ENABLE_LOCATION,
-        SensorMinor::OPEN,
-        SensorMinor::CLOSE,
-        SensorMinor::ORIENTATION_LOST,
+        SensorMinor::FAILED,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -203,7 +208,11 @@ pub enum SurfaceMinor {
 }
 
 impl SurfaceMinor {
-    pub const ALL: [SurfaceMinor; 3] = [SurfaceMinor::OPEN, SurfaceMinor::RESIZE, SurfaceMinor::CLOSE];
+    pub const ALL: [SurfaceMinor; 3] = [
+        SurfaceMinor::OPEN,
+        SurfaceMinor::RESIZE,
+        SurfaceMinor::CLOSE,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<SurfaceMinor> {
@@ -271,7 +280,12 @@ pub enum ProfilerMinor {
 }
 
 impl ProfilerMinor {
-    pub const ALL: [ProfilerMinor; 4] = [ProfilerMinor::START, ProfilerMinor::STOP, ProfilerMinor::READ, ProfilerMinor::RINGS];
+    pub const ALL: [ProfilerMinor; 4] = [
+        ProfilerMinor::START,
+        ProfilerMinor::STOP,
+        ProfilerMinor::READ,
+        ProfilerMinor::RINGS,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<ProfilerMinor> {
@@ -292,7 +306,13 @@ pub enum PointerPhase {
 }
 
 impl PointerPhase {
-    pub const ALL: [PointerPhase; 5] = [PointerPhase::Down, PointerPhase::Move, PointerPhase::Up, PointerPhase::Out, PointerPhase::Cancel];
+    pub const ALL: [PointerPhase; 5] = [
+        PointerPhase::Down,
+        PointerPhase::Move,
+        PointerPhase::Up,
+        PointerPhase::Out,
+        PointerPhase::Cancel,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<PointerPhase> {
@@ -331,7 +351,13 @@ pub enum ActiveTool {
 }
 
 impl ActiveTool {
-    pub const ALL: [ActiveTool; 5] = [ActiveTool::Pointer, ActiveTool::Object, ActiveTool::Decor, ActiveTool::Eraser, ActiveTool::Marker];
+    pub const ALL: [ActiveTool; 5] = [
+        ActiveTool::Pointer,
+        ActiveTool::Object,
+        ActiveTool::Decor,
+        ActiveTool::Eraser,
+        ActiveTool::Marker,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<ActiveTool> {
@@ -380,7 +406,9 @@ impl GeolocationErrorCode {
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<GeolocationErrorCode> {
-        GeolocationErrorCode::ALL.into_iter().find(|m| *m as u32 == number)
+        GeolocationErrorCode::ALL
+            .into_iter()
+            .find(|m| *m as u32 == number)
     }
 }
 
@@ -414,11 +442,18 @@ pub enum PermissionAnswer {
 }
 
 impl PermissionAnswer {
-    pub const ALL: [PermissionAnswer; 4] = [PermissionAnswer::Asking, PermissionAnswer::Granted, PermissionAnswer::Denied, PermissionAnswer::Failed];
+    pub const ALL: [PermissionAnswer; 4] = [
+        PermissionAnswer::Asking,
+        PermissionAnswer::Granted,
+        PermissionAnswer::Denied,
+        PermissionAnswer::Failed,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<PermissionAnswer> {
-        PermissionAnswer::ALL.into_iter().find(|m| *m as u32 == number)
+        PermissionAnswer::ALL
+            .into_iter()
+            .find(|m| *m as u32 == number)
     }
 }
 
@@ -436,7 +471,11 @@ pub enum GroundStatus {
 }
 
 impl GroundStatus {
-    pub const ALL: [GroundStatus; 3] = [GroundStatus::Idle, GroundStatus::Loading, GroundStatus::Success];
+    pub const ALL: [GroundStatus; 3] = [
+        GroundStatus::Idle,
+        GroundStatus::Loading,
+        GroundStatus::Success,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<GroundStatus> {
@@ -467,7 +506,9 @@ impl DevicePoseStatus {
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<DevicePoseStatus> {
-        DevicePoseStatus::ALL.into_iter().find(|m| *m as u32 == number)
+        DevicePoseStatus::ALL
+            .into_iter()
+            .find(|m| *m as u32 == number)
     }
 }
 
@@ -539,10 +580,10 @@ pub enum Command {
     SENSOR_POSITION = 0x1202,
     /// An orientation event; a field is absent where the browser gave none.
     SENSOR_ORIENTATION = 0x1205,
-    /// The watch failed and was stopped.
-    SENSOR_ERROR = 0x1204,
-    /// The compass failed and its listener was removed, where the platform says so.
-    SENSOR_ORIENTATION_LOST = 0x120a,
+    /// A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
+    /// or cut off; the compass's, where the platform says so (WORLD_BOOT's
+    /// orientation_silence_is_loss).
+    SENSOR_FAILED = 0x120b,
 
     // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
     /// The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root.
@@ -602,6 +643,10 @@ pub enum Command {
     INPUT_TRACKING = 0x1104,
     /// The compass's press: north up.
     INPUT_COMPASS_RESET = 0x1107,
+    /// The search panel's location card's press: the location asked for. The compass is
+    /// asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
+    /// reads it without the location.
+    INPUT_LOCATE = 0x110f,
     /// A search result: the focus moved there.
     INPUT_GO_TO = 0x1108,
     /// A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
@@ -611,14 +656,10 @@ pub enum Command {
     INPUT_POSE = 0x1109,
     /// The tracker let the camera go: back to the controller it had.
     INPUT_POSE_END = 0x110a,
-    /// The world is on screen and wants the sensors.
-    SENSOR_OPEN = 0x1208,
-    /// The world is gone, and the sensors are let go.
-    SENSOR_CLOSE = 0x1209,
-    /// The search panel's location card: the location asked for. The compass is asked for
-    /// where it is used, entering follow mode (TRACKING), and never alone: nothing reads it
-    /// without the location.
-    SENSOR_ENABLE_LOCATION = 0x1207,
+    /// The shell's world view, up or down: the pair of VISIBILITY, whether the page is seen.
+    /// The kernel watches a sensor only while both hold, the page visible and the world view
+    /// shown; which sensors it watches then is its own (SENSOR_START).
+    WORLD_VIEW = 0x1007,
     /// A fresh recording window.
     PROFILER_START = 0x1901,
     /// The window frozen, so what is exported holds still.
@@ -635,13 +676,12 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 41] = [
+    pub const ALL: [Command; 39] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::SENSOR_POSITION,
         Command::SENSOR_ORIENTATION,
-        Command::SENSOR_ERROR,
-        Command::SENSOR_ORIENTATION_LOST,
+        Command::SENSOR_FAILED,
         Command::WORLD_BOOT,
         Command::WORLD_FRAME,
         Command::WORLD_VISIBILITY,
@@ -666,12 +706,11 @@ impl Command {
         Command::CHAT_SEND,
         Command::INPUT_TRACKING,
         Command::INPUT_COMPASS_RESET,
+        Command::INPUT_LOCATE,
         Command::INPUT_GO_TO,
         Command::INPUT_POSE,
         Command::INPUT_POSE_END,
-        Command::SENSOR_OPEN,
-        Command::SENSOR_CLOSE,
-        Command::SENSOR_ENABLE_LOCATION,
+        Command::WORLD_VIEW,
         Command::PROFILER_START,
         Command::PROFILER_STOP,
         Command::PROFILER_READ,
@@ -703,7 +742,7 @@ pub struct Snapshot<'a> {
     /// Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
     /// has read its kept slot, a few turns from boot.
     pub settings: &'a [u32],
-    /// The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it.
+    /// The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`).
     pub m_per_px: f64,
     /// The division the focus is in and every one above it, broad to narrow; empty
     /// where the focus is in none or the tile it is read out of has not arrived.
@@ -871,9 +910,9 @@ pub struct DivisionPart<'a> {
     pub subtype: u8,
     pub name: &'a dyn Display,
     pub names: &'a dyn Fn(&mut dyn FnMut(&LangName<'_>)),
-    /// Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the
-    /// subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java).
-    pub prominence: u8,
+    /// The view is in far enough for its name to show: as far as Overture's own tiles
+    /// show it from (pxl-spec bake/tile/division.rs `Division::shown_from`).
+    pub shown: bool,
     /// Held by an area the point is in; one without is the nearest found by its point.
     pub area: bool,
 }
@@ -892,7 +931,7 @@ impl DivisionPart<'_> {
                 w.branch(LangName::FIELDS, |w| item.write(w));
             })
         });
-        w.u8(Some(self.prominence));
+        w.bool(Some(self.shown));
         w.bool(Some(self.area));
     }
 }
@@ -1005,17 +1044,26 @@ impl SensorOrientation {
     }
 }
 
-/// Command::SENSOR_ERROR's packet.
+/// Command::SENSOR_FAILED's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct SensorError {
-    pub code: GeolocationErrorCode,
+pub struct SensorFailed {
+    pub sensor: Sensor,
+    /// Geolocation's; orientation gives none today.
+    pub code: Option<GeolocationErrorCode>,
 }
 
-impl SensorError {
-    pub fn read(pkt: &[u8]) -> Result<SensorError, MarshalError> {
+impl SensorFailed {
+    pub fn read(pkt: &[u8]) -> Result<SensorFailed, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SensorError {
-            code: GeolocationErrorCode::of(integer::<u32>(f.at(0)?.get_number()?)?).unwrap_or(GeolocationErrorCode::Other),
+        Ok(SensorFailed {
+            sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            code: match f.at(1)?.opt() {
+                Some(c) => Some(
+                    GeolocationErrorCode::of(integer::<u32>(c.get_number()?)?)
+                        .unwrap_or(GeolocationErrorCode::Other),
+                ),
+                None => None,
+            },
         })
     }
 }
@@ -1031,7 +1079,7 @@ pub struct WorldBoot {
     pub orientation_permission: bool,
     /// A browser's compass talks while the device is still and cannot say it stopped, so
     /// silence is the only sign of loss; a device's speaks only when the heading turns and
-    /// reports a failure itself (SENSOR_ORIENTATION_LOST).
+    /// reports a failure itself (SENSOR_FAILED).
     pub orientation_silence_is_loss: bool,
 }
 
@@ -1090,7 +1138,9 @@ pub struct WorldVisibility {
 impl WorldVisibility {
     pub fn read(pkt: &[u8]) -> Result<WorldVisibility, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldVisibility { visible: f.at(0)?.get_bool()? })
+        Ok(WorldVisibility {
+            visible: f.at(0)?.get_bool()?,
+        })
     }
 }
 
@@ -1146,7 +1196,8 @@ impl SensorPermission {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SensorPermission {
             sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
-            answer: PermissionAnswer::of(integer::<u32>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
+            answer: PermissionAnswer::of(integer::<u32>(f.at(1)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
         })
     }
 }
@@ -1187,8 +1238,10 @@ impl InputPointer {
     pub fn read(pkt: &[u8]) -> Result<InputPointer, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputPointer {
-            phase: PointerPhase::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
-            pointer_type: PointerType::of(integer::<u32>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
+            phase: PointerPhase::of(integer::<u32>(f.at(0)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
+            pointer_type: PointerType::of(integer::<u32>(f.at(1)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
             id: integer::<i32>(f.at(2)?.get_number()?)?,
             button: integer::<i32>(f.at(3)?.get_number()?)?,
             x: finite(f.at(4)?.get_number()?)?,
@@ -1211,7 +1264,8 @@ impl InputHold {
     pub fn read(pkt: &[u8]) -> Result<InputHold, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputHold {
-            tool: ActiveTool::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            tool: ActiveTool::of(integer::<u32>(f.at(0)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
             value: integer::<u32>(f.at(1)?.get_number()?)?,
             tier: integer::<u32>(f.at(2)?.get_number()?)?,
         })
@@ -1227,7 +1281,9 @@ pub struct InputMarkerWords<'a> {
 impl<'a> InputMarkerWords<'a> {
     pub fn read(pkt: &'a [u8]) -> Result<InputMarkerWords<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputMarkerWords { text: f.at(0)?.get_str_ref()? })
+        Ok(InputMarkerWords {
+            text: f.at(0)?.get_str_ref()?,
+        })
     }
 }
 
@@ -1328,7 +1384,8 @@ impl PreviewOpen {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(PreviewOpen {
             surface: integer::<u32>(f.at(0)?.get_number()?)?,
-            group: pxl_spec::asset::actor::Group::of(integer::<u8>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
+            group: pxl_spec::asset::actor::Group::of(integer::<u8>(f.at(1)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
             number: integer::<u8>(f.at(2)?.get_number()?)?,
         })
     }
@@ -1361,7 +1418,10 @@ impl SettingSet {
     pub fn read(pkt: &[u8]) -> Result<SettingSet, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SettingSet {
-            key: crate::domain::view::setting::schema_spec::SettingKey::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            key: crate::domain::view::setting::schema_spec::SettingKey::of(integer::<u32>(
+                f.at(0)?.get_number()?,
+            )?)
+            .ok_or_else(|| unknown())?,
             value: integer::<u32>(f.at(1)?.get_number()?)?,
         })
     }
@@ -1376,7 +1436,9 @@ pub struct ChatSend<'a> {
 impl<'a> ChatSend<'a> {
     pub fn read(pkt: &'a [u8]) -> Result<ChatSend<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(ChatSend { text: f.at(0)?.get_str_ref()? })
+        Ok(ChatSend {
+            text: f.at(0)?.get_str_ref()?,
+        })
     }
 }
 
@@ -1390,7 +1452,8 @@ impl InputTracking {
     pub fn read(pkt: &[u8]) -> Result<InputTracking, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputTracking {
-            tracking: Tracking::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            tracking: Tracking::of(integer::<u32>(f.at(0)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
         })
     }
 }
@@ -1435,6 +1498,21 @@ impl InputPose {
             qy: finite(f.at(4)?.get_number()?)?,
             qz: finite(f.at(5)?.get_number()?)?,
             qw: finite(f.at(6)?.get_number()?)?,
+        })
+    }
+}
+
+/// Command::WORLD_VIEW's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct WorldView {
+    pub shown: bool,
+}
+
+impl WorldView {
+    pub fn read(pkt: &[u8]) -> Result<WorldView, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(WorldView {
+            shown: f.at(0)?.get_bool()?,
         })
     }
 }

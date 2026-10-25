@@ -1,14 +1,14 @@
 # Concurrency Model: why preemptive threading over SAB was abandoned
 
-**2026-07-08**, with confirmations on 2026-08-10 and 2026-08-11 — why the
-WASM + SharedArrayBuffer + preemptive-threading + offscreen-WebGPU direction was
+**2026-07-08**, with confirmations on 2026-08-10 and 2026-08-11 — why the WASM +
+SharedArrayBuffer + preemptive-threading + offscreen-WebGPU direction was
 stopped, and what shape a restart should take instead.
 
 **Status: superseded** by
 [20260912-why-the-destination-is-wasm.md](../20260912-why-the-destination-is-wasm.md)
-— the core is WASM on one cooperative thread; see "Status 2026-09-13" at
-the end. "What a restart should look like" below is the July answer, not
-the current one.
+— the core is WASM on one cooperative thread; see "Status 2026-09-13" at the
+end. "What a restart should look like" below is the July answer, not the current
+one.
 
 ---
 
@@ -53,8 +53,8 @@ ownership zero-copy. Not shared memory, so no COOP/COEP; not structured clone,
 so no copy.
 
 This matters specifically here because **XTP is already an ArrayBuffer-backed
-binary tree** (`packages/xpute/core/src/io/marshal/tree/`) — it fits the transfer
-pattern directly, with no adaptation.
+binary tree** (`packages/xpute/core/src/io/marshal/tree/`) — it fits the
+transfer pattern directly, with no adaptation.
 
 ## What a restart should look like
 
@@ -80,9 +80,9 @@ on both.
 enhancement only" caveat above assumed support for older devices. With the
 support floor set explicitly at 2023-and-later devices on near-current OSes,
 WebGPU is stable enough to depend on — iOS enables it in Safari/WKWebView from
-iOS 18, and Android's System WebView updates through the Play Store independently
-of the OS. **But this changes only feasibility, not scope**: the engineering-effort
-argument below is unaffected by device support.
+iOS 18, and Android's System WebView updates through the Play Store
+independently of the OS. **But this changes only feasibility, not scope**: the
+engineering-effort argument below is unaffected by device support.
 
 ## Re-confirmed 2026-08-10: this is dead for now, and the reason is scale
 
@@ -93,10 +93,10 @@ what Figma or eaglercraft did. That scale does not fit the MVP stage.
 
 **Consequence for the infrastructure built during the WASM era:** XTP and
 `sparse_tree/` are deliberately retained as insurance against a conditional
-restart, even though nothing uses them right now. Their quality was assessed
-and found good — relocatable offsets, WORD alignment, typed-optional
-semantics, zero-copy cursor reads. Until a restart condition actually holds,
-neither trim them nor invest further in them.
+restart, even though nothing uses them right now. Their quality was assessed and
+found good — relocatable offsets, WORD alignment, typed-optional semantics,
+zero-copy cursor reads. Until a restart condition actually holds, neither trim
+them nor invest further in them.
 
 ## Restart conditions and cautions
 
@@ -112,8 +112,8 @@ desktop's multi-process architecture (extension host and friends) depends on
 **real OS processes provided by Electron**, which a browser tab does not have.
 Whether the browser build (vscode.dev) is actually SAB-backed preemptive or
 Figma-style cooperative message-passing needs checking _first_. Assuming
-otherwise repeats exactly the mistake made with Skype and Figma: pattern-matching
-on a reference whose real constraints turned out not to apply.
+otherwise repeats exactly the mistake made with Skype and Figma:
+pattern-matching on a reference whose real constraints turned out not to apply.
 
 **Start from a blank project and move files in one at a time**, rather than
 reshaping this repository in place — porting only the assets that have proven
@@ -122,9 +122,10 @@ shared kit).
 
 ## Related
 
-The retrospective on the folder structure this era produced — and the observation
-that the most design energy went into the layer that needed generalization least
-— is in [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md).
+The retrospective on the folder structure this era produced — and the
+observation that the most design energy went into the layer that needed
+generalization least — is in
+[20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md).
 
 Figma's rendering architecture, looked at directly in 2026-08, is covered in
 [20260816-csr-vs-ssr.md](./20260816-csr-vs-ssr.md#prior-art-figma) — it confirms
@@ -135,9 +136,8 @@ the cooperative-multitasking reading that broke the premise here.
 The restart trigger arrived in a different form than expected. The WASM
 direction is decided again
 ([20260912-why-the-destination-is-wasm.md](../20260912-why-the-destination-is-wasm.md))
-— without SAB or preemptive threads, on one cooperative thread, which is
-what "what a restart should look like" above asked for. The "start from a
-blank project" caution does not carry: the state is being moved into the
-shape the core wants inside this repository, one lane set at a time, so
-the port begins from a client whose memory is already linear rather than
-from a checkpoint.
+— without SAB or preemptive threads, on one cooperative thread, which is what
+"what a restart should look like" above asked for. The "start from a blank
+project" caution does not carry: the state is being moved into the shape the
+core wants inside this repository, one lane set at a time, so the port begins
+from a client whose memory is already linear rather than from a checkpoint.

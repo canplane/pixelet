@@ -14,7 +14,11 @@ fn a_refused_share_is_not_paid_back() {
     let mut a = Anchor::new(0.0, 0.0);
     assert_eq!(drive(&mut a, 5.0, 10.0), 5.0);
     assert_eq!(drive(&mut a, 40.0, 10.0), 10.0, "past the limit");
-    assert_eq!(drive(&mut a, 39.0, 10.0), 9.0, "the move back was spent on the refused share");
+    assert_eq!(
+        drive(&mut a, 39.0, 10.0),
+        9.0,
+        "the move back was spent on the refused share"
+    );
 }
 
 #[test]

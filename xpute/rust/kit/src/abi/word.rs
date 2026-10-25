@@ -11,7 +11,11 @@ pub const fn bit32(shamt: u32) -> u32 {
 }
 
 pub const fn field_mask64(nbit: u32, shamt: u32) -> u64 {
-    let field = if nbit >= 64 { u64::MAX } else { (1u64 << nbit) - 1 };
+    let field = if nbit >= 64 {
+        u64::MAX
+    } else {
+        (1u64 << nbit) - 1
+    };
     if shamt >= 64 {
         0
     } else {
@@ -19,7 +23,11 @@ pub const fn field_mask64(nbit: u32, shamt: u32) -> u64 {
     }
 }
 pub const fn field_mask32(nbit: u32, shamt: u32) -> u32 {
-    let field = if nbit >= 32 { u32::MAX } else { (1u32 << nbit) - 1 };
+    let field = if nbit >= 32 {
+        u32::MAX
+    } else {
+        (1u32 << nbit) - 1
+    };
     if shamt >= 32 {
         0
     } else {

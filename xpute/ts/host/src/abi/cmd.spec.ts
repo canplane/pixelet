@@ -44,6 +44,11 @@ export function encode_nop(to: PacketRoom, value: u32): PacketWriter {
 /** Command.SYS_OPENED's packet, written in place into `to`.
  *
  * @param detail Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on. */
-export function encode_sys_opened(to: PacketRoom, fd: u32, res: i32, detail: u32): PacketWriter {
+export function encode_sys_opened(
+  to: PacketRoom,
+  fd: u32,
+  res: i32,
+  detail: u32,
+): PacketWriter {
   return to.writer(3).u32(fd).i32(res).u32(detail);
 }

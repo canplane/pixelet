@@ -22,7 +22,7 @@ use crate::sys::io::fetch::{answer_settled, answered, body, next_answered, relea
 use crate::sys::io::request::attempt_of;
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::mem::heap::Block;
-use xpute_guest::sched::frame_budget::FrameBudget;
+use xpute_guest::sched::pass::Pass;
 use xpute_kit::status::errno::Errno;
 
 use fnv::FnvHashMap;
@@ -104,7 +104,12 @@ const fn layer<L: Observed>() -> Layer {
 }
 
 /// Every layer on the ground: the one place a stream names its layer.
-const LAYERS: [Layer; 4] = [layer::<TerrainTile>(), layer::<PlaceTile>(), layer::<Earth>(), layer::<DivisionTile>()];
+const LAYERS: [Layer; 4] = [
+    layer::<TerrainTile>(),
+    layer::<PlaceTile>(),
+    layer::<Earth>(),
+    layer::<DivisionTile>(),
+];
 
 /// The layer whose tiles `stream` carries; none for an asset's.
 pub fn of_stream(stream: Stream) -> Option<&'static Layer> {
@@ -152,7 +157,10 @@ impl<L: Observed> Default for Demand<L> {
             floor: Vec::new(),
             gone: Vec::new(),
             moved: false,
-            asks: FnvHashMap::with_capacity_and_hasher(Residency::<L>::FRAMES as usize, Default::default()),
+            asks: FnvHashMap::with_capacity_and_hasher(
+                Residency::<L>::FRAMES as usize,
+                Default::default(),
+            ),
             idled: None,
         }
     }
@@ -167,17 +175,35 @@ impl<L: Observed> Demand<L> {
     /// No object for `p`: the tile over it says its ground; at the layer's top (`Base::top`), `Base::empty`.
     pub fn absent(&mut self, p: Tile) {
         match L::empty() {
-            Some(empty) if L::top().is_some_and(|top| p.zoom <= top) => L::residency().set(p, empty),
+            Some(empty) if L::top().is_some_and(|top| p.zoom <= top) => {
+                L::residency().set(p, empty)
+            }
             _ => L::residency().answer_above(p),
         }
     }
 
-    pub fn admit(&mut self, p: Tile, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
+    pub fn admit(
+        &mut self,
+        p: Tile,
+        receive: impl FnOnce(u32) -> Result<L, Failure>,
+    ) -> Result<(), Failure> {
         // The tile last in view order goes, of two as late the greater.
         let o = self.observation.as_ref();
         let farthest = |tiles: &mut dyn Iterator<Item = Tile>| {
             let mut walked = Walked::default();
-            tiles.max_by_key(|&t| (o.map_or(Order::LAST, |o| crate::domain::view::observation::order_of_tile(o, L::LATTICE, t, &mut walked)), t))
+            tiles.max_by_key(|&t| {
+                (
+                    o.map_or(Order::LAST, |o| {
+                        crate::domain::view::observation::order_of_tile(
+                            o,
+                            L::LATTICE,
+                            t,
+                            &mut walked,
+                        )
+                    }),
+                    t,
+                )
+            })
         };
         L::residency().admit(p, farthest, receive)
     }
@@ -185,7 +211,13 @@ impl<L: Observed> Demand<L> {
     /// Builds the asks for `o`: the estimator's demand, the floor and the
     /// destination's line.
     #[allow(clippy::too_many_arguments)]
-    pub fn observe(&mut self, o: Option<&Observation>, destination: impl Iterator<Item = Tile>, estimator: &ByEye, top: Zoom) {
+    pub fn observe(
+        &mut self,
+        o: Option<&Observation>,
+        destination: impl Iterator<Item = Tile>,
+        estimator: &ByEye,
+        top: Zoom,
+    ) {
         let mut demand = core::mem::take(&mut self.demand);
         let mut asks = core::mem::take(&mut self.asks);
         let ask = |asks: &mut FnvHashMap<Tile, Ask>, p: Tile, a: Ask| {
@@ -194,7 +226,9 @@ impl<L: Observed> Demand<L> {
         // One walk down the pyramid in key order, so each tile's line, its
         // own and the ground's it is ordered by, steps from its neighbour's.
         let (mut lines, mut ground) = (Lines::default(), Walked::default());
-        let mut order = |o: &Observation, p: Tile| crate::domain::view::observation::order_of_tile(o, L::LATTICE, p, &mut ground);
+        let mut order = |o: &Observation, p: Tile| {
+            crate::domain::view::observation::order_of_tile(o, L::LATTICE, p, &mut ground)
+        };
         if let Some(o) = o {
             if matches!(L::ASKS, Asks::View) {
                 estimator.requirements(o, &mut |p| demand.push(p));
@@ -203,9 +237,18 @@ impl<L: Observed> Demand<L> {
             demand.dedup();
             for &p in &demand {
                 let at = L::residency().seek(&mut lines, p).source.unwrap_or(p);
-                ask(&mut asks, at, Ask { why: Why::Demand, order: order(o, p) });
+                ask(
+                    &mut asks,
+                    at,
+                    Ask {
+                        why: Why::Demand,
+                        order: order(o, p),
+                    },
+                );
                 // A line already asked is asked to the top.
-                for q in std::iter::successors(Some(at), |q| (q.zoom > top).then(|| q.parent())).skip(1) {
+                for q in
+                    std::iter::successors(Some(at), |q| (q.zoom > top).then(|| q.parent())).skip(1)
+                {
                     if asks.get(&q).is_some_and(|a| a.why <= Why::Ancestor) {
                         break;
                     }
@@ -225,14 +268,29 @@ impl<L: Observed> Demand<L> {
             for p in asks.keys() {
                 read[p.zoom as usize] += 1;
             }
-            xpute_kit::ensure!(read.iter().all(|&n| n <= Residency::<L>::ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
+            xpute_kit::ensure!(
+                read.iter().all(|&n| n <= Residency::<L>::ZOOM_DEMAND_TILES),
+                ENOTRECOVERABLE,
+                *read.iter().max().unwrap_or(&0)
+            );
             if !matches!(L::ASKS, Asks::Line) {
                 self.floor.clear();
                 floor::floor(o, top, |p| {
                     self.floor.push(p);
-                    ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
+                    ask(
+                        &mut asks,
+                        p,
+                        Ask {
+                            why: Why::Floor,
+                            order: order(o, p),
+                        },
+                    );
                 });
-                xpute_kit::ensure!(self.floor.len() <= floor::tiles(L::LATTICE) as usize, ENOTRECOVERABLE, self.floor.len());
+                xpute_kit::ensure!(
+                    self.floor.len() <= floor::tiles(L::LATTICE) as usize,
+                    ENOTRECOVERABLE,
+                    self.floor.len()
+                );
             }
         }
         // The whole line, not only the finest tile: which one says the ground is
@@ -251,7 +309,12 @@ impl<L: Observed> Demand<L> {
             );
         }
         xpute_kit::ensure!(
-            named <= if matches!(L::ASKS, Asks::Floor) { 0 } else { Residency::<L>::DESTINATION_TILES + L::PINNED },
+            named
+                <= if matches!(L::ASKS, Asks::Floor) {
+                    0
+                } else {
+                    Residency::<L>::DESTINATION_TILES + L::PINNED
+                },
             ENOTRECOVERABLE,
             named
         );
@@ -274,7 +337,12 @@ impl<L: Observed> Demand<L> {
         if let Some(layer) = L::STREAM.bake() {
             let (mut gone, mut lines) = (core::mem::take(&mut self.gone), Lines::default());
             gone.clear();
-            gone.extend(demand.iter().copied().filter(|&p| unanswered(p, &mut lines) && !source::serves(layer, p)));
+            gone.extend(
+                demand
+                    .iter()
+                    .copied()
+                    .filter(|&p| unanswered(p, &mut lines) && !source::serves(layer, p)),
+            );
             for &p in &gone {
                 self.absent(p);
             }
@@ -310,7 +378,10 @@ impl<L: Observed> Demand<L> {
     pub fn step(&mut self, destination: Option<Tile>, pinned: &[Tile], tau: Tau) {
         let Some(top) = L::top() else { return };
         let o = observation().map(|o| match L::TOP {
-            Some(_) => Observation { reach: L::reach(), ..o },
+            Some(_) => Observation {
+                reach: L::reach(),
+                ..o
+            },
             None => o,
         });
         if o.is_none() && destination.is_none() && pinned.is_empty() {
@@ -318,13 +389,28 @@ impl<L: Observed> Demand<L> {
         }
         self.idled = None;
         let tau = if o.is_some() { tau } else { Tau::FINEST };
-        let now = Seen { o, destination, tau };
+        let now = Seen {
+            o,
+            destination,
+            tau,
+        };
         if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
             let line = destination
                 .into_iter()
-                .flat_map(|p| std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent())))
+                .flat_map(|p| {
+                    std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent()))
+                })
                 .chain(pinned.iter().copied());
-            self.observe(o.as_ref(), line, &ByEye { tau, lattice: L::LATTICE, top }, top);
+            self.observe(
+                o.as_ref(),
+                line,
+                &ByEye {
+                    tau,
+                    lattice: L::LATTICE,
+                    top,
+                },
+                top,
+            );
             self.last = Some(now);
         }
         declare(L::STREAM, &self.wants);
@@ -355,7 +441,7 @@ impl<L: Observed> Demand<L> {
 /// tick's budget, so the visible phase's hold on the content share binds it,
 /// and at least one; each fetch settles here. What the pass leaves stays
 /// queued, and a turn is asked for it.
-pub fn admit_arrived(budget: &FrameBudget) {
+pub fn admit_arrived(pass: &Pass) {
     const OF: [Stream; LAYERS.len()] = {
         let mut of = [Stream::asset; LAYERS.len()];
         let mut k = 0;
@@ -365,7 +451,7 @@ pub fn admit_arrived(budget: &FrameBudget) {
         }
         of
     };
-    let pass = budget.run(
+    let stat = pass.run(
         0..answered(&OF),
         |_| {
             let Some(Answered {
@@ -396,7 +482,7 @@ pub fn admit_arrived(budget: &FrameBudget) {
         },
         None,
     );
-    if pass.stopped_early {
+    if stat.stopped_early {
         crate::sys::sched::edge::request_world_tick();
     }
 }

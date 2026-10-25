@@ -27,7 +27,12 @@ fn a_matrix_times_its_inverse_is_the_identity() {
 #[test]
 fn look_at_puts_the_target_on_the_camera_s_z_axis_up_on_y() {
     let mut view = new();
-    look_at(&mut view, v(0.0, -30.0, 40.0), v(0.0, 0.0, 0.0), v(0.0, 0.0, 1.0));
+    look_at(
+        &mut view,
+        v(0.0, -30.0, 40.0),
+        v(0.0, 0.0, 0.0),
+        v(0.0, 0.0, 1.0),
+    );
     let mut target = [0.0; 3];
     transform_point(&mut target, &view, 0.0, 0.0, 0.0);
     assert_almost(target[0], 0.0, 1e-12);
@@ -42,12 +47,21 @@ fn look_at_puts_the_target_on_the_camera_s_z_axis_up_on_y() {
 #[test]
 fn the_frustum_s_planes_hold_the_target_and_reject_what_is_behind_the_eye() {
     let (mut view, mut proj, mut vp) = (new(), new(), new());
-    look_at(&mut view, v(0.0, -30.0, 40.0), v(0.0, 0.0, 0.0), v(0.0, 0.0, 1.0));
+    look_at(
+        &mut view,
+        v(0.0, -30.0, 40.0),
+        v(0.0, 0.0, 0.0),
+        v(0.0, 0.0, 1.0),
+    );
     perspective(&mut proj, core::f64::consts::PI / 3.0, 1.6, 0.1);
     mul(&mut vp, &proj, &view);
     let mut planes = [0.0; 20];
     frustum_planes(&mut planes, &vp);
-    let inside = |x: f64, y: f64, z: f64| (0..20).step_by(4).all(|k| planes[k] * x + planes[k + 1] * y + planes[k + 2] * z + planes[k + 3] >= 0.0);
+    let inside = |x: f64, y: f64, z: f64| {
+        (0..20)
+            .step_by(4)
+            .all(|k| planes[k] * x + planes[k + 1] * y + planes[k + 2] * z + planes[k + 3] >= 0.0)
+    };
     assert!(inside(0.0, 0.0, 0.0));
     assert!(!inside(0.0, -60.0, 80.0));
 }

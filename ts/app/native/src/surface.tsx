@@ -10,9 +10,23 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef, useState } from "react";
-import { AppState, type GestureResponderEvent, type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, StyleSheet, type ViewProps } from "react-native";
+import {
+  AppState,
+  type GestureResponderEvent,
+  type LayoutChangeEvent,
+  type NativeSyntheticEvent,
+  PixelRatio,
+  StyleSheet,
+  type ViewProps,
+} from "react-native";
 
-import type { CaseSurfaceProps, PointerPhase, SurfaceDriver, Viewport, WorldSurfaceProps } from "@pxl/client/bracket.tsx";
+import type {
+  CaseSurfaceProps,
+  PointerPhase,
+  SurfaceDriver,
+  Viewport,
+  WorldSurfaceProps,
+} from "@pxl/client/bracket.tsx";
 
 interface SurfaceProps extends ViewProps {
   surface: u32;
@@ -20,9 +34,15 @@ interface SurfaceProps extends ViewProps {
   onDetach: () => void;
 }
 
-const SurfaceView: ComponentType<SurfaceProps> = requireNativeView("PxlPlatform");
+const SurfaceView: ComponentType<SurfaceProps> = requireNativeView(
+  "PxlPlatform",
+);
 
-function useSurface(driver: SurfaceDriver, key: string, opened?: (surface: u32) => () => void) {
+function useSurface(
+  driver: SurfaceDriver,
+  key: string,
+  opened?: (surface: u32) => () => void,
+) {
   const [handle, setHandle] = useState<u32>(0);
   const size = useRef<Viewport>({ width: 0, height: 0, dpr: PixelRatio.get() });
   const bound = useRef<u32>(0);
@@ -39,7 +59,9 @@ function useSurface(driver: SurfaceDriver, key: string, opened?: (surface: u32) 
   useEffect(() => {
     const surface = driver.open();
     setHandle(surface);
-    const close = surface !== 0 && open.current ? open.current(surface) : () => {};
+    const close = surface !== 0 && open.current
+      ? open.current(surface)
+      : () => {};
     return () => {
       close();
       setHandle(0);
@@ -50,7 +72,11 @@ function useSurface(driver: SurfaceDriver, key: string, opened?: (surface: u32) 
   const props: SurfaceProps = {
     surface: handle,
     onLayout: (e: LayoutChangeEvent) => {
-      size.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height, dpr: PixelRatio.get() };
+      size.current = {
+        width: e.nativeEvent.layout.width,
+        height: e.nativeEvent.layout.height,
+        dpr: PixelRatio.get(),
+      };
       send();
     },
     onAttach: (e) => {
@@ -69,7 +95,10 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
 
   useEffect(() => {
     const close = input.open(() => size.current);
-    const visibility = AppState.addEventListener("change", (state) => input.visible(state === "active"));
+    const visibility = AppState.addEventListener(
+      "change",
+      (state) => input.visible(state === "active"),
+    );
     return () => {
       visibility.remove();
       close();
@@ -83,7 +112,16 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
   };
 
   const touches = (phase: PointerPhase) => (e: GestureResponderEvent) => {
-    for (const t of e.nativeEvent.changedTouches) input.pointer(phase, "touch", Number(t.identifier), 0, t.locationX, t.locationY);
+    for (const t of e.nativeEvent.changedTouches) {
+      input.pointer(
+        phase,
+        "touch",
+        Number(t.identifier),
+        0,
+        t.locationX,
+        t.locationY,
+      );
+    }
   };
 
   return (

@@ -9,13 +9,25 @@ import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
-import type { CaseSurfaceProps, InputDriver, PointerKind, PointerPhase, SurfaceDriver, WorldSurfaceProps } from "@pxl/client/bracket.tsx";
+import type {
+  CaseSurfaceProps,
+  InputDriver,
+  PointerKind,
+  PointerPhase,
+  SurfaceDriver,
+  WorldSurfaceProps,
+} from "@pxl/client/bracket.tsx";
 import * as webgpu from "./webgpu.ts";
 
 /** A wheel line in CSS pixels: a page's default line height. */
 const LINE_PX = 16;
 
-const FILL = { position: "absolute", inset: 0, width: "100%", height: "100%" } as const;
+const FILL = {
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+} as const;
 
 function dpr(): f64 {
   return globalThis.devicePixelRatio || 1;
@@ -39,12 +51,17 @@ function onRatioChange(then: () => void): () => void {
  * sliding drawer passes through. Safari reports no device pixels, so the CSS
  * box times the ratio stands in, and a change of ratio alone is watched for.
  */
-function openSurface(canvas: HTMLCanvasElement, surface: SurfaceDriver): { handle: u32; close: () => void } {
+function openSurface(
+  canvas: HTMLCanvasElement,
+  surface: SurfaceDriver,
+): { handle: u32; close: () => void } {
   const handle = surface.open();
   if (handle === 0) return { handle, close: () => {} };
   webgpu.bind(handle, canvas);
-  const send = (width: u32, height: u32) => surface.size(handle, width, height, dpr());
-  const sendBox = () => send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
+  const send = (width: u32, height: u32) =>
+    surface.size(handle, width, height, dpr());
+  const sendBox = () =>
+    send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
   const observer = new ResizeObserver((entries) => {
     const entry = entries[entries.length - 1];
     const exact = entry.devicePixelContentBoxSize?.[0];
@@ -72,11 +89,17 @@ function openSurface(canvas: HTMLCanvasElement, surface: SurfaceDriver): { handl
 /** A field's own keys, which the shell routes apart. */
 function inField(e: KeyboardEvent): boolean {
   const target = e.target;
-  return target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select") !== null);
+  return target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      target.closest("input, textarea, select") !== null);
 }
 
 function pointerKind(e: PointerEvent): PointerKind {
-  return e.pointerType === "touch" ? "touch" : e.pointerType === "pen" ? "pen" : "mouse";
+  return e.pointerType === "touch"
+    ? "touch"
+    : e.pointerType === "pen"
+    ? "pen"
+    : "mouse";
 }
 
 function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
@@ -85,7 +108,15 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
     const r = canvas.getBoundingClientRect();
     input.rect(r.left, r.top, r.width, r.height);
   };
-  const pointer = (phase: PointerPhase) => (e: PointerEvent) => input.pointer(phase, pointerKind(e), e.pointerId, e.button, e.clientX, e.clientY);
+  const pointer = (phase: PointerPhase) => (e: PointerEvent) =>
+    input.pointer(
+      phase,
+      pointerKind(e),
+      e.pointerId,
+      e.button,
+      e.clientX,
+      e.clientY,
+    );
   const onMove = pointer("move");
   const onUp = pointer("up");
   const onCancel = pointer("cancel");
@@ -97,7 +128,11 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   };
   const onWheel = (e: WheelEvent) => {
     if (e.ctrlKey) e.preventDefault();
-    const per = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? LINE_PX : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? globalThis.innerHeight : 1;
+    const per = e.deltaMode === WheelEvent.DOM_DELTA_LINE
+      ? LINE_PX
+      : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
+      ? globalThis.innerHeight
+      : 1;
     input.wheel(e.deltaY * per);
   };
   const onContextMenu = (e: MouseEvent) => e.preventDefault();
@@ -107,7 +142,10 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   };
   // A composed or shortcut key is the IME's or the browser's; Tab switches the dock mid-word too.
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.repeat || (e.isComposing && e.code !== "Tab") || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (
+      e.repeat || (e.isComposing && e.code !== "Tab") || e.metaKey ||
+      e.ctrlKey || e.altKey
+    ) return;
     if (keyDown(e.code, { inField: inField(e) })) e.preventDefault();
   };
   const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
@@ -169,7 +207,9 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   };
 }
 
-export function World({ surface: driver, input, overMarker }: WorldSurfaceProps) {
+export function World(
+  { surface: driver, input, overMarker }: WorldSurfaceProps,
+) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -184,7 +224,16 @@ export function World({ surface: driver, input, overMarker }: WorldSurfaceProps)
   }, []);
 
   // A marker a tap acts on reads as a link does.
-  return <canvas ref={ref} style={{ ...FILL, touchAction: "none", cursor: overMarker ? "pointer" : undefined }} />;
+  return (
+    <canvas
+      ref={ref}
+      style={{
+        ...FILL,
+        touchAction: "none",
+        cursor: overMarker ? "pointer" : undefined,
+      }}
+    />
+  );
 }
 
 export function Case({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
@@ -196,7 +245,9 @@ export function Case({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
     const canvas = ref.current;
     if (!canvas) return;
     const surface = openSurface(canvas, driver);
-    const close = surface.handle !== 0 ? open.current(surface.handle) : () => {};
+    const close = surface.handle !== 0
+      ? open.current(surface.handle)
+      : () => {};
     return () => {
       close();
       surface.close();

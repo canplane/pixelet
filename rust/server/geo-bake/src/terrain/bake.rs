@@ -27,19 +27,41 @@ pub fn assemble(tile: [i32; 2], surface: Surface, lines: Separation) -> TerrainT
     let mut looks = surface.ground.cells.into_owned();
     let tile = Tile::new(LEAF_ZOOM, tile);
     lay(&lines, Frame::of(tile), &mut looks);
-    terrain::drawn(tile, TerrainTile::leaf(surface.ele, Ground { cells: looks.into() }, lines))
+    terrain::drawn(
+        tile,
+        TerrainTile::leaf(
+            surface.ele,
+            Ground {
+                cells: looks.into(),
+            },
+            lines,
+        ),
+    )
 }
 
 /// `drawn`: the ranges of the tile's ways its lines draw.
 pub fn bake_surface(tile_idx: [i32; 2], source: TileSource, drawn: &[Drawn]) -> Surface {
     let tile_min = epsg3857::get_tile_bbox(LEAF_ZOOM, tile_idx)[0];
     let mut features: Vec<Feature> = Vec::new();
-    features.extend(source.building_rows.iter().flat_map(|row| buildings(row, tile_min)));
-    features.extend(source.parts.iter().flat_map(|row| ways(row, drawn, tile_min)));
+    features.extend(
+        source
+            .building_rows
+            .iter()
+            .flat_map(|row| buildings(row, tile_min)),
+    );
+    features.extend(
+        source
+            .parts
+            .iter()
+            .flat_map(|row| ways(row, drawn, tile_min)),
+    );
     features.extend(source.base_rows.iter().flat_map(|row| bases(row, tile_min)));
 
     let ground = bake_ground(&features, &coast_of(&source.coast_rows, tile_min));
-    Surface { ele: source.ele, ground }
+    Surface {
+        ele: source.ele,
+        ground,
+    }
 }
 
 /// A tile's land against the sea: no coast row is open sea; one whose land
@@ -51,7 +73,15 @@ fn coast_of(rows: &[CoastRow], tile_min: G3857) -> Coast {
         .filter(|row| !row.covers_tile)
         .flat_map(|row| wkb_to_geometries(&row.geom_wkb))
         .filter(|g| !g.points.is_empty())
-        .map(|g| (g.points.iter().map(|&p| at(p)).collect(), g.holes.iter().map(|ring| ring.iter().map(|&p| at(p)).collect()).collect()))
+        .map(|g| {
+            (
+                g.points.iter().map(|&p| at(p)).collect(),
+                g.holes
+                    .iter()
+                    .map(|ring| ring.iter().map(|&p| at(p)).collect())
+                    .collect(),
+            )
+        })
         .collect();
     match (rows.is_empty(), shore.is_empty()) {
         (true, _) => Coast::Sea,

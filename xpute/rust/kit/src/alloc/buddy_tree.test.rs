@@ -58,12 +58,19 @@ fn what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go() 
             continue;
         }
         let at = p as usize;
-        assert!(at >= base && at + size <= end, "a block of {size} at {at:#x} is outside [{base:#x}, {end:#x})");
+        assert!(
+            at >= base && at + size <= end,
+            "a block of {size} at {at:#x} is outside [{base:#x}, {end:#x})"
+        );
         // SAFETY: `size` bytes the allocator just handed out.
         unsafe { core::ptr::write_bytes(p, i as u8, *size) };
         live.push((p, *size, i as u8));
     }
-    assert!(live.len() > 8, "the range served only {} of 24 requests", live.len());
+    assert!(
+        live.len() > 8,
+        "the range served only {} of 24 requests",
+        live.len()
+    );
 
     for (p, size, _) in live.iter().step_by(2) {
         // SAFETY: from this allocator, not yet given back.
@@ -83,7 +90,10 @@ fn what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go() 
     for (p, size, byte) in &live {
         // SAFETY: still live, and `size` bytes long.
         let bytes = unsafe { core::slice::from_raw_parts(*p, *size) };
-        assert!(bytes.iter().all(|b| b == byte), "a block written with {byte:#04x} was written over");
+        assert!(
+            bytes.iter().all(|b| b == byte),
+            "a block written with {byte:#04x} was written over"
+        );
     }
 }
 
@@ -100,7 +110,10 @@ fn two_buddies_freed_are_the_block_they_came_from() {
         heap.free(b, one);
     }
     let both = unsafe { heap.malloc(one * 2) };
-    assert_eq!(both, low, "the pair did not join: {both:?} is not the lower half {low:?}");
+    assert_eq!(
+        both, low,
+        "the pair did not join: {both:?} is not the lower half {low:?}"
+    );
 }
 
 #[test]
@@ -115,13 +128,22 @@ fn a_request_past_the_range_is_refused_and_leaves_what_is_live_alone() {
     let mut served = 1;
     while !unsafe { heap.malloc(one) }.is_null() {
         served += 1;
-        assert!(served <= (1 << (MAX - MIN)) + 1, "the range served more blocks than it holds");
+        assert!(
+            served <= (1 << (MAX - MIN)) + 1,
+            "the range served more blocks than it holds"
+        );
     }
-    assert!(heap.live() <= heap.range_bytes(), "more is live than the range has");
+    assert!(
+        heap.live() <= heap.range_bytes(),
+        "more is live than the range has"
+    );
 
     // SAFETY: still live.
     let bytes = unsafe { core::slice::from_raw_parts(first, one) };
-    assert!(bytes.iter().all(|b| *b == 0x5a), "a refusal wrote over a live block");
+    assert!(
+        bytes.iter().all(|b| *b == 0x5a),
+        "a refusal wrote over a live block"
+    );
 }
 
 #[test]
@@ -137,7 +159,11 @@ fn what_is_freed_is_handed_out_again_rather_than_more_of_the_range() {
         unsafe { heap.free(p, size) };
         let q = unsafe { heap.malloc(size) };
         assert_eq!(q, p, "the same request after the same free moved");
-        assert_eq!(heap.used(), reached, "a reuse reached further into the range");
+        assert_eq!(
+            heap.used(),
+            reached,
+            "a reuse reached further into the range"
+        );
     }
     assert!(heap.releases() >= 8);
 }

@@ -3,7 +3,18 @@
 // Little-endian scalar I/O on a byte stream, with no bounds checks: the caller
 // owns them, and an out-of-range access throws DataView's RangeError.
 
-import type { f32, f64, i16, i32, i64, i8, u16, u32, u64, u8 } from "@xpute/kit/abi/word.ts";
+import type {
+  f32,
+  f64,
+  i16,
+  i32,
+  i64,
+  i8,
+  u16,
+  u32,
+  u64,
+  u8,
+} from "@xpute/kit/abi/word.ts";
 import { U64 } from "@xpute/kit/abi/word.ts";
 import type { Bytes } from "@xpute/kit/abi/array.ts";
 
@@ -56,31 +67,49 @@ export const tell = (s: Stream): i32 => s.off;
 export const len = (s: Stream): i32 => s.view.byteLength;
 export const rem = (s: Stream): i32 => s.view.byteLength - s.off;
 
-export const putu8 = (s: Stream, x: u8): void => s.view.setUint8((s.off += 1) - 1, x);
-export const puti8 = (s: Stream, x: i8): void => s.view.setInt8((s.off += 1) - 1, x);
+export const putu8 = (s: Stream, x: u8): void =>
+  s.view.setUint8((s.off += 1) - 1, x);
+export const puti8 = (s: Stream, x: i8): void =>
+  s.view.setInt8((s.off += 1) - 1, x);
 export const getu8 = (s: Stream): u8 => s.view.getUint8((s.off += 1) - 1);
 export const geti8 = (s: Stream): i8 => s.view.getInt8((s.off += 1) - 1);
 
-export const putu16 = (s: Stream, x: u16): void => s.view.setUint16((s.off += 2) - 2, x, true);
-export const puti16 = (s: Stream, x: i16): void => s.view.setInt16((s.off += 2) - 2, x, true);
-export const getu16 = (s: Stream): u16 => s.view.getUint16((s.off += 2) - 2, true);
-export const geti16 = (s: Stream): i16 => s.view.getInt16((s.off += 2) - 2, true);
+export const putu16 = (s: Stream, x: u16): void =>
+  s.view.setUint16((s.off += 2) - 2, x, true);
+export const puti16 = (s: Stream, x: i16): void =>
+  s.view.setInt16((s.off += 2) - 2, x, true);
+export const getu16 = (s: Stream): u16 =>
+  s.view.getUint16((s.off += 2) - 2, true);
+export const geti16 = (s: Stream): i16 =>
+  s.view.getInt16((s.off += 2) - 2, true);
 
-export const putu32 = (s: Stream, x: u32): void => s.view.setUint32((s.off += 4) - 4, x, true);
-export const puti32 = (s: Stream, x: i32): void => s.view.setInt32((s.off += 4) - 4, x, true);
-export const getu32 = (s: Stream): u32 => s.view.getUint32((s.off += 4) - 4, true);
-export const geti32 = (s: Stream): i32 => s.view.getInt32((s.off += 4) - 4, true);
+export const putu32 = (s: Stream, x: u32): void =>
+  s.view.setUint32((s.off += 4) - 4, x, true);
+export const puti32 = (s: Stream, x: i32): void =>
+  s.view.setInt32((s.off += 4) - 4, x, true);
+export const getu32 = (s: Stream): u32 =>
+  s.view.getUint32((s.off += 4) - 4, true);
+export const geti32 = (s: Stream): i32 =>
+  s.view.getInt32((s.off += 4) - 4, true);
 
-export const putu64 = (s: Stream, x: u64): void => s.view.setBigUint64((s.off += 8) - 8, x, true);
-export const puti64 = (s: Stream, x: i64): void => s.view.setBigInt64((s.off += 8) - 8, x, true);
-export const getu64 = (s: Stream): u64 => s.view.getBigUint64((s.off += 8) - 8, true);
-export const geti64 = (s: Stream): i64 => s.view.getBigInt64((s.off += 8) - 8, true);
+export const putu64 = (s: Stream, x: u64): void =>
+  s.view.setBigUint64((s.off += 8) - 8, x, true);
+export const puti64 = (s: Stream, x: i64): void =>
+  s.view.setBigInt64((s.off += 8) - 8, x, true);
+export const getu64 = (s: Stream): u64 =>
+  s.view.getBigUint64((s.off += 8) - 8, true);
+export const geti64 = (s: Stream): i64 =>
+  s.view.getBigInt64((s.off += 8) - 8, true);
 
-export const putf32 = (s: Stream, x: f32): void => s.view.setFloat32((s.off += 4) - 4, x, true);
-export const getf32 = (s: Stream): f32 => s.view.getFloat32((s.off += 4) - 4, true);
+export const putf32 = (s: Stream, x: f32): void =>
+  s.view.setFloat32((s.off += 4) - 4, x, true);
+export const getf32 = (s: Stream): f32 =>
+  s.view.getFloat32((s.off += 4) - 4, true);
 
-export const putf64 = (s: Stream, x: f64): void => s.view.setFloat64((s.off += 8) - 8, x, true);
-export const getf64 = (s: Stream): f64 => s.view.getFloat64((s.off += 8) - 8, true);
+export const putf64 = (s: Stream, x: f64): void =>
+  s.view.setFloat64((s.off += 8) - 8, x, true);
+export const getf64 = (s: Stream): f64 =>
+  s.view.getFloat64((s.off += 8) - 8, true);
 
 export const U96_SZ: u32 = 12;
 export const U128_SZ: u32 = 16;
@@ -109,7 +138,8 @@ export const getu128 = (s: Stream): [u64, u64] => {
   return [lo, hi];
 };
 
-export const pack96 = (lo: u32, mid: u32, hi: u32): bigint => (U64(BigInt(hi)) << 64n) | (U64(BigInt(mid)) << 32n) | U64(BigInt(lo));
+export const pack96 = (lo: u32, mid: u32, hi: u32): bigint =>
+  (U64(BigInt(hi)) << 64n) | (U64(BigInt(mid)) << 32n) | U64(BigInt(lo));
 
 // Each limb is masked while still a bigint: Number() of a value past 2^53
 // rounds away the low bits before U32 could truncate them.

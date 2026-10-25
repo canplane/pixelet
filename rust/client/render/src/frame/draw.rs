@@ -7,7 +7,7 @@
 use crate::frame::shader::word::DRAW_FLOATS;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 
 /// Upload record: handle, address, byte length, vertex count, index count.
@@ -67,7 +67,10 @@ pub type DrawCensus = [[f64; 2]; DRAW_PIPELINES.len()];
 /// `pipeline`'s place in `DRAW_PIPELINES`; a draw naming another is a bug.
 pub fn census_slot(pipeline: u32) -> usize {
     use xpute_kit::status::bug::OrBug;
-    DRAW_PIPELINES.iter().position(|&p| p == pipeline).or_bug(xpute_kit::status::errno::Errno::EINVAL)
+    DRAW_PIPELINES
+        .iter()
+        .position(|&p| p == pipeline)
+        .or_bug(xpute_kit::status::errno::Errno::EINVAL)
 }
 /// Rewrite record: handle, address, byte offset, length.
 pub const REWRITE_WORDS: usize = 4;
@@ -97,7 +100,9 @@ pub const fn lanes_bytes(live: usize) -> u32 {
 /// as long as the module runs.
 pub unsafe fn set_lanes(at: u32, live: usize) {
     // SAFETY: the caller's range, one lane after another.
-    let lane = |from: usize, words: usize| unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize + from * 4), words) };
+    let lane = |from: usize, words: usize| unsafe {
+        core::slice::from_raw_parts_mut(mem::at::<u32>(at as usize + from * 4), words)
+    };
     let (u, f) = (UPLOAD_WORDS * live, live);
     LANES.set(ListLanes {
         uploads: [lane(0, u), lane(u, u)],
@@ -133,8 +138,13 @@ impl DrawList {
         self.next_handle = self.next_handle.wrapping_add(1).max(1);
         let handle = self.next_handle;
         let lane = &mut lanes().uploads[self.side];
-        xpute_kit::ensure!(self.uploads + UPLOAD_WORDS <= lane.len(), ENOSPC, lane.len());
-        lane[self.uploads..self.uploads + UPLOAD_WORDS].copy_from_slice(&[handle, at, bytes, vertex_cnt, index_cnt]);
+        xpute_kit::ensure!(
+            self.uploads + UPLOAD_WORDS <= lane.len(),
+            ENOSPC,
+            lane.len()
+        );
+        lane[self.uploads..self.uploads + UPLOAD_WORDS]
+            .copy_from_slice(&[handle, at, bytes, vertex_cnt, index_cnt]);
         self.uploads += UPLOAD_WORDS;
         handle
     }
@@ -152,7 +162,10 @@ impl DrawList {
                 k += REWRITE_WORDS;
             }
         }
-        let (uploads, frees) = (&mut lanes().uploads[self.side], &mut lanes().frees[self.side]);
+        let (uploads, frees) = (
+            &mut lanes().uploads[self.side],
+            &mut lanes().frees[self.side],
+        );
         let mut k = 0;
         while k < self.uploads {
             if uploads[k] == handle {
@@ -179,7 +192,13 @@ impl DrawList {
         if handle == 0 {
             return;
         }
-        if let Some(r) = self.rewrites.as_chunks_mut::<REWRITE_WORDS>().0.iter_mut().find(|r| r[0] == handle && r[2] == from) {
+        if let Some(r) = self
+            .rewrites
+            .as_chunks_mut::<REWRITE_WORDS>()
+            .0
+            .iter_mut()
+            .find(|r| r[0] == handle && r[2] == from)
+        {
             (r[1], r[3]) = (at, r[3].max(bytes));
             return;
         }
@@ -193,41 +212,122 @@ impl DrawList {
 
     /// Eye-relative, narrowed to f32 after the subtraction, so precision is finest near the eye.
     pub fn translation(at: V3, eye: V3) -> [f32; 3] {
-        [(at[0] - eye[0]) as f32, (at[1] - eye[1]) as f32, (at[2] - eye[2]) as f32]
+        [
+            (at[0] - eye[0]) as f32,
+            (at[1] - eye[1]) as f32,
+            (at[2] - eye[2]) as f32,
+        ]
     }
 
     /// An actor's draw: a draw_as whose sixth uniform float is the model's scale.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw_scaled(&mut self, pipeline: u32, handle: u32, a: u32, b: u32, translation: [f32; 3], fourth: f32, opacity: f32, scale: f32) {
+    pub fn draw_scaled(
+        &mut self,
+        pipeline: u32,
+        handle: u32,
+        a: u32,
+        b: u32,
+        translation: [f32; 3],
+        fourth: f32,
+        opacity: f32,
+        scale: f32,
+    ) {
         let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
-        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], fourth, opacity, scale, 0.0, 0.0]);
-        self.draws.extend_from_slice(&[handle, a, b, uniform, pipeline]);
+        self.uniforms.extend_from_slice(&[
+            translation[0],
+            translation[1],
+            translation[2],
+            fourth,
+            opacity,
+            scale,
+            0.0,
+            0.0,
+        ]);
+        self.draws
+            .extend_from_slice(&[handle, a, b, uniform, pipeline]);
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn draw_as(&mut self, pipeline: u32, handle: u32, a: u32, b: u32, translation: [f32; 3], fourth: f32, opacity: f32) {
+    pub fn draw_as(
+        &mut self,
+        pipeline: u32,
+        handle: u32,
+        a: u32,
+        b: u32,
+        translation: [f32; 3],
+        fourth: f32,
+        opacity: f32,
+    ) {
         let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
-        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], fourth, opacity, 0.0, 0.0, 0.0]);
-        self.draws.extend_from_slice(&[handle, a, b, uniform, pipeline]);
+        self.uniforms.extend_from_slice(&[
+            translation[0],
+            translation[1],
+            translation[2],
+            fourth,
+            opacity,
+            0.0,
+            0.0,
+            0.0,
+        ]);
+        self.draws
+            .extend_from_slice(&[handle, a, b, uniform, pipeline]);
     }
 
     /// The eighth float pads the record to two vec4s, the one layout a storage
     /// array cannot read two ways.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw_in(&mut self, pipeline: u32, handle: u32, vertex_cnt: u32, index_cnt: u32, translation: [f32; 3], opacity: f32, unit: f32, z_step: f32) {
+    pub fn draw_in(
+        &mut self,
+        pipeline: u32,
+        handle: u32,
+        vertex_cnt: u32,
+        index_cnt: u32,
+        translation: [f32; 3],
+        opacity: f32,
+        unit: f32,
+        z_step: f32,
+    ) {
         let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
-        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], 0.0, opacity, unit, z_step, 0.0]);
-        self.draws.extend_from_slice(&[handle, vertex_cnt, index_cnt, uniform, pipeline]);
+        self.uniforms.extend_from_slice(&[
+            translation[0],
+            translation[1],
+            translation[2],
+            0.0,
+            opacity,
+            unit,
+            z_step,
+            0.0,
+        ]);
+        self.draws
+            .extend_from_slice(&[handle, vertex_cnt, index_cnt, uniform, pipeline]);
     }
 
     /// Words are exact in an f32 up to 2^24.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw_instances(&mut self, pipeline: u32, handle: u32, group: u32, count: u32, lanes: [u32; 3], translation: [f32; 3], opacity: f32) {
+    pub fn draw_instances(
+        &mut self,
+        pipeline: u32,
+        handle: u32,
+        group: u32,
+        count: u32,
+        lanes: [u32; 3],
+        translation: [f32; 3],
+        opacity: f32,
+    ) {
         let [offset, stride, index] = lanes;
         let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
-        self.uniforms
-            .extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, opacity, stride as f32, index as f32, 0.0]);
-        self.draws.extend_from_slice(&[handle, group, count, uniform, pipeline]);
+        self.uniforms.extend_from_slice(&[
+            translation[0],
+            translation[1],
+            translation[2],
+            offset as f32,
+            opacity,
+            stride as f32,
+            index as f32,
+            0.0,
+        ]);
+        self.draws
+            .extend_from_slice(&[handle, group, count, uniform, pipeline]);
     }
 
     /// Uploads, rewrites and frees start fresh, on the lanes' other side;
@@ -264,13 +364,17 @@ impl Held {
         if need > self.bytes {
             self.free(draw);
             let bytes = need.next_power_of_two();
-            let Some((at, bytes)) = alloc(bytes) else { return false };
+            let Some((at, bytes)) = alloc(bytes) else {
+                return false;
+            };
             self.at = at;
             self.bytes = bytes;
         }
         // SAFETY: the block is the heap's, `self.bytes` long, and at least
         // `lane` long.
-        unsafe { core::ptr::copy_nonoverlapping(lane.as_ptr(), ptr_at::<u8>(self.at), lane.len()) };
+        unsafe {
+            core::ptr::copy_nonoverlapping(lane.as_ptr(), mem::at::<u8>(self.at), lane.len())
+        };
         if self.handle == 0 {
             self.handle = draw.upload(self.at as u32, self.bytes, 0, 0);
         } else {

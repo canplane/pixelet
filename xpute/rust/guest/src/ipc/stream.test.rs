@@ -3,7 +3,16 @@
 use super::*;
 
 fn stream(words: usize) -> Stream {
-    Stream::new(Box::leak(vec![0u32; words].into_boxed_slice()), 1)
+    let range = Box::leak(vec![0u32; words].into_boxed_slice());
+    // SAFETY: leaked, so the range outlives the stream.
+    unsafe {
+        Stream::new(
+            Memory::new(range.as_mut_ptr().expose_provenance(), words * WORD),
+            0,
+            words,
+            1,
+        )
+    }
 }
 
 #[test]

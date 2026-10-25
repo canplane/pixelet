@@ -41,7 +41,15 @@ impl Candidates {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn push(&mut self, local_x: f64, local_y: f64, local_z: f64, [w_px, h_px, region_px]: [f64; 3], anchor_px: f64, tiebreak: f64) {
+    pub fn push(
+        &mut self,
+        local_x: f64,
+        local_y: f64,
+        local_z: f64,
+        [w_px, h_px, region_px]: [f64; 3],
+        anchor_px: f64,
+        tiebreak: f64,
+    ) {
         let i = self.count as usize;
         self.count += 1;
         if i >= self.cap() {

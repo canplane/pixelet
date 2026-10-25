@@ -20,10 +20,10 @@ object PxlGuest {
 
   /** A turn of `quotaMs`, and when the kernel wants the next, in ms. The
    * first lays the memory out. */
-  external fun interrupt(quotaMs: Double): Double
+  external fun intr(quotaMs: Double): Double
 
   /** The memory, a direct buffer over the whole region the guest took. */
-  external fun memory(): ByteBuffer
+  external fun mem(): ByteBuffer
 
   /** Whether the device opened; what it is, the kernel reads from the host. */
   external fun gpuOpen(): Boolean

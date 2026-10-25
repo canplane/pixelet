@@ -45,16 +45,16 @@ public class PlatformModule: Module {
 
     // ---- the kernel (platform/guest.ts, gpu.ts) ----
 
-    Function("memory") { () throws -> NativeArrayBuffer in
+    Function("mem") { () throws -> NativeArrayBuffer in
       var bytes: UInt32 = 0
-      guard let at = pxl_memory(&bytes) else { throw MemoryException() }
+      guard let at = xpute_mem(&bytes) else { throw MemoryException() }
       // The region is the guest's for the app's life: nothing is let go when
       // the buffer is.
       return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: Int(bytes)), cleanup: {})
     }
 
-    Function("interrupt") { (quotaMs: Double) -> Double in
-      pxl_interrupt(quotaMs)
+    Function("intr") { (quotaMs: Double) -> Double in
+      xpute_intr(quotaMs)
     }
 
     /// Whether the device opened; what it is, the kernel reads from the host.

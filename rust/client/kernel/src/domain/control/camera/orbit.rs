@@ -13,7 +13,9 @@ use pxl_spec::space::coord::v3::{self, V3};
 use xpute_kit::math::scalar::clamp;
 
 use crate::domain::approach::{approach_angle, approach_vec};
-use crate::domain::control::camera::controller::{camera, focus, focus_world, look_dir, look_domain, set_eye_world};
+use crate::domain::control::camera::controller::{
+    camera, focus, focus_world, look_dir, look_domain, set_eye_world,
+};
 use crate::domain::control::camera::gesture::{spread, Anchor};
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
 use crate::domain::control::navigation::support::target;

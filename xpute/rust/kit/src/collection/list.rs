@@ -93,7 +93,12 @@ impl<T, const N: usize> List<T, N> {
         // Emptied before the drops, so a panic in one leaves nothing twice.
         self.len = 0;
         // SAFETY: the first `len` slots were live, and no longer are counted.
-        unsafe { core::ptr::drop_in_place(core::ptr::slice_from_raw_parts_mut(self.slots.as_mut_ptr().cast::<T>(), len)) };
+        unsafe {
+            core::ptr::drop_in_place(core::ptr::slice_from_raw_parts_mut(
+                self.slots.as_mut_ptr().cast::<T>(),
+                len,
+            ))
+        };
     }
 }
 
@@ -148,6 +153,11 @@ impl<T, const N: usize> Drop for IntoIter<T, N> {
         // The list forgets them all; those not yet read out are dropped here.
         self.list.len = 0;
         // SAFETY: slots `at..len` are live and were not read out.
-        unsafe { core::ptr::drop_in_place(core::ptr::slice_from_raw_parts_mut(self.list.slots.as_mut_ptr().cast::<T>().add(at), len - at)) };
+        unsafe {
+            core::ptr::drop_in_place(core::ptr::slice_from_raw_parts_mut(
+                self.list.slots.as_mut_ptr().cast::<T>().add(at),
+                len - at,
+            ))
+        };
     }
 }

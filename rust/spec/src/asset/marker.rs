@@ -6,7 +6,7 @@
 
 #[path = "marker.spec.rs"]
 mod spec;
-pub use spec::{MARKER_SCALE_STEPS, MARKER_SHOWN_FROM};
+pub use spec::{MARKER_SCALE_STEPS, MARKER_SHOWN_FROM, MARKER_TEXT_CHARS};
 
 use crate::asset::id::{asset_id, AssetId, Kind};
 use crate::bake::constant::EntryAt;

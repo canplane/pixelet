@@ -54,7 +54,10 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
         for foot in feet(zoom) {
             let above = demands(zoom - 1, foot);
             for p in demands(zoom, foot) {
-                assert!(above.contains(&p.parent()), "z{zoom} at {foot:?}: {p:?}'s parent outside");
+                assert!(
+                    above.contains(&p.parent()),
+                    "z{zoom} at {foot:?}: {p:?}'s parent outside"
+                );
             }
         }
     }
@@ -65,7 +68,11 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
 fn the_fault_bound_is_where_a_zoom_ends() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
         let r = demand_reach(GROUND, zoom);
-        assert_eq!(zoom_at(short_of(r)), zoom as i32, "z{zoom} is asked for up to its radius");
+        assert_eq!(
+            zoom_at(short_of(r)),
+            zoom as i32,
+            "z{zoom} is asked for up to its radius"
+        );
         assert_eq!(zoom_at(r), zoom as i32 - 1, "and not at it");
     }
 }
@@ -75,7 +82,9 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
     let mut last = i32::MAX;
     // Inside the world: no cell is coarser than z0's, and none finer than a
     // position names (`FINEST_ZOOM`), even scaled finer by 2^3 below.
-    for r in core::iter::successors(Some(split_distance(FINEST_ZOOM - 3)), |r| Some(r * 1.01)).take_while(|r| r * 32.0 < split_distance(0)) {
+    for r in core::iter::successors(Some(split_distance(FINEST_ZOOM - 3)), |r| Some(r * 1.01))
+        .take_while(|r| r * 32.0 < split_distance(0))
+    {
         let z = zoom_at(r);
         assert!(z <= last, "{r}: z{z} after z{last}");
         last = z;
@@ -84,7 +93,15 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
         }
     }
     for z in TOP_ZOOM as i32..=LEAF_ZOOM as i32 + 3 {
-        assert_eq!(zoom_at(split_distance(GROUND.grid_zoom(z as Zoom))), z, "a zoom begins at its split distance");
-        assert_eq!(zoom_at(short_of(split_distance(GROUND.grid_zoom(z as Zoom - 1)))), z, "and ends where the next coarser begins");
+        assert_eq!(
+            zoom_at(split_distance(GROUND.grid_zoom(z as Zoom))),
+            z,
+            "a zoom begins at its split distance"
+        );
+        assert_eq!(
+            zoom_at(short_of(split_distance(GROUND.grid_zoom(z as Zoom - 1)))),
+            z,
+            "and ends where the next coarser begins"
+        );
     }
 }

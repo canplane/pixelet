@@ -9,13 +9,15 @@
 //! words, then into the room the stream reserved for them, so nothing is
 //! built on the heap first.
 
-use xpute_guest::abi::handle::{handle_slot, HandleTable};
+use xpute_guest::abi::handle::Table;
 use xpute_guest::ipc::stream::{Stream, WORD};
-use xpute_guest::mem::base::off_of_slice;
+use xpute_guest::mem::off_of_slice;
 
 use crate::enums::{
-    AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction, CullMode, FilterMode, FrontFace, IndexFormat, LoadOp, MipmapFilterMode, PrimitiveTopology,
-    QueryType, SamplerBindingType, StencilOperation, StorageTextureAccess, StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat,
+    AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction,
+    CullMode, FilterMode, FrontFace, IndexFormat, LoadOp, MipmapFilterMode, PrimitiveTopology,
+    QueryType, SamplerBindingType, StencilOperation, StorageTextureAccess, StoreOp, TextureAspect,
+    TextureDimension, TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat,
     VertexStepMode,
 };
 use crate::spec::{op, BindingKind, ResourceKind, NONE, SURFACE_PREFERRED};
@@ -80,15 +82,16 @@ fn flag(v: bool) -> u32 {
 fn emit(stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> bool {
     let mut count = Count(0);
     put(&mut count);
-    let Some(w) = stream.reserve(op, count.0) else { return false };
+    let Some(w) = stream.reserve(op, count.0) else {
+        return false;
+    };
     let mut fill = Fill { w, at: 0 };
     put(&mut fill);
     xpute_kit::ensure!(fill.at == count.0, ENOTRECOVERABLE, op);
     true
 }
 
-/// The bytes a record of `op` whose words `put` gives takes of a stream, as
-/// its room is counted: measured as `emit` measures it, its op and count with.
+/// What a record of `op` takes of a stream's room, measured as `emit` writes it.
 fn measured(put: &dyn Fn(&mut dyn Sink)) -> usize {
     let mut count = Count(0);
     put(&mut count);
@@ -163,7 +166,11 @@ pub struct BindGroupLayoutEntry {
 
 #[derive(Clone, Copy)]
 pub enum Resource {
-    Buffer { buffer: Id, offset: u32, size: Option<u32> },
+    Buffer {
+        buffer: Id,
+        offset: u32,
+        size: Option<u32>,
+    },
     Sampler(Id),
     View(Id),
 }
@@ -332,17 +339,30 @@ pub struct RenderPassDescriptor<'a> {
 
 fn timestamps(s: &mut dyn Sink, t: &Option<TimestampWrites>) {
     match t {
-        Some(t) => [t.query_set, opt(t.begin), opt(t.end)].into_iter().for_each(|w| s.word(w)),
+        Some(t) => [t.query_set, opt(t.begin), opt(t.end)]
+            .into_iter()
+            .for_each(|w| s.word(w)),
         None => (0..3).for_each(|_| s.word(NONE)),
     }
 }
 
 fn texture_place(s: &mut dyn Sink, t: &TexelCopyTexture) {
-    [t.texture, t.mip, t.origin[0], t.origin[1], t.origin[2], t.aspect as u32].into_iter().for_each(|w| s.word(w));
+    [
+        t.texture,
+        t.mip,
+        t.origin[0],
+        t.origin[1],
+        t.origin[2],
+        t.aspect as u32,
+    ]
+    .into_iter()
+    .for_each(|w| s.word(w));
 }
 
 fn buffer_layout(s: &mut dyn Sink, b: &TexelCopyBuffer) {
-    [b.buffer, b.offset, b.bytes_per_row, b.rows_per_image].into_iter().for_each(|w| s.word(w));
+    [b.buffer, b.offset, b.bytes_per_row, b.rows_per_image]
+        .into_iter()
+        .for_each(|w| s.word(w));
 }
 
 fn extent(s: &mut dyn Sink, e: [u32; 3]) {
@@ -350,7 +370,14 @@ fn extent(s: &mut dyn Sink, e: [u32; 3]) {
 }
 
 fn stencil_face(s: &mut dyn Sink, f: &StencilFaceState) {
-    [f.compare as u32, f.fail as u32, f.depth_fail as u32, f.pass as u32].into_iter().for_each(|w| s.word(w));
+    [
+        f.compare as u32,
+        f.fail as u32,
+        f.depth_fail as u32,
+        f.pass as u32,
+    ]
+    .into_iter()
+    .for_each(|w| s.word(w));
 }
 
 /// The ops below DESTROY make what lasts until it is destroyed, the objects a
@@ -358,19 +385,15 @@ fn stencil_face(s: &mut dyn Sink, f: &StencilFaceState) {
 /// pass, a surface's current texture).
 pub const OBJECT_OPS: usize = op::DESTROY as usize;
 
-/// The calls, over a table of `N` handles. All-zero bytes are one that has
-/// made nothing, as its table's are an empty table.
+/// The calls, over a table of `N` handles, each holding the op that made it
+/// where what it made lasts, 0 otherwise. All-zero bytes have made nothing.
 pub struct Gpu<const N: usize> {
-    handles: HandleTable<N>,
-    /// The op that made each slot's live object, where it lasts; 0 otherwise.
-    made_by: [u8; N],
+    handles: Table<u8, N>,
     /// The live objects by the op that made them, slot `op`.
     objects: [u32; OBJECT_OPS],
 }
 
-/// Slot `id`'s object let go from the count of what made it.
-fn forget(made_by: &mut [u8], objects: &mut [u32; OBJECT_OPS], id: Id) {
-    let op = core::mem::take(&mut made_by[handle_slot(id) as usize]);
+fn forget(objects: &mut [u32; OBJECT_OPS], op: u8) {
     if op != 0 {
         objects[op as usize] -= 1;
     }
@@ -385,8 +408,7 @@ impl<const N: usize> Default for Gpu<N> {
 impl<const N: usize> Gpu<N> {
     pub const fn new() -> Self {
         Gpu {
-            handles: HandleTable::new(),
-            made_by: [0; N],
+            handles: Table::new(),
             objects: [0; OBJECT_OPS],
         }
     }
@@ -394,16 +416,16 @@ impl<const N: usize> Gpu<N> {
     /// An object's handle, written by `op` as the record's first word; none
     /// where the table is full or the record did not fit.
     fn make(&mut self, stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> Option<Id> {
-        let id = self.handles.acquire()?;
+        let lasts = (op as usize) < OBJECT_OPS;
+        let id = self.handles.insert(if lasts { op as u8 } else { 0 })?;
         if !emit(stream, op, &|s| {
             s.word(id);
             put(s);
         }) {
-            self.handles.release(id);
+            self.handles.remove(id);
             return None;
         }
-        if (op as usize) < OBJECT_OPS {
-            self.made_by[handle_slot(id) as usize] = op as u8;
+        if lasts {
             self.objects[op as usize] += 1;
         }
         Some(id)
@@ -411,15 +433,19 @@ impl<const N: usize> Gpu<N> {
 
     /// `id` let go, where it was live.
     fn release(&mut self, id: Id) -> bool {
-        let live = self.handles.release(id);
-        if live {
-            forget(&mut self.made_by, &mut self.objects, id);
+        let made_by = self.handles.remove(id);
+        if let Some(op) = made_by {
+            forget(&mut self.objects, op);
         }
-        live
+        made_by.is_some()
     }
 
     pub fn buffer(&mut self, stream: &mut Stream, d: &BufferDescriptor) -> Option<Id> {
-        self.make(stream, op::BUFFER, &|s| [d.size, d.usage, flag(d.mapped_at_creation)].into_iter().for_each(|w| s.word(w)))
+        self.make(stream, op::BUFFER, &|s| {
+            [d.size, d.usage, flag(d.mapped_at_creation)]
+                .into_iter()
+                .for_each(|w| s.word(w))
+        })
     }
 
     pub fn texture(&mut self, stream: &mut Stream, d: &TextureDescriptor) -> Option<Id> {
@@ -481,17 +507,50 @@ impl<const N: usize> Gpu<N> {
         self.make(stream, op::SHADER_MODULE, &|s| s.bytes(wgsl.as_bytes()))
     }
 
-    pub fn bind_group_layout(&mut self, stream: &mut Stream, entries: &[BindGroupLayoutEntry]) -> Option<Id> {
+    pub fn bind_group_layout(
+        &mut self,
+        stream: &mut Stream,
+        entries: &[BindGroupLayoutEntry],
+    ) -> Option<Id> {
         self.make(stream, op::BIND_GROUP_LAYOUT, &|s| {
             s.word(entries.len() as u32);
             for e in entries {
                 let (kind, a, b, c) = match e.layout {
-                    BindingLayout::Buffer { ty, dynamic_offset, min_binding_size } => (BindingKind::buffer, ty as u32, flag(dynamic_offset), min_binding_size),
+                    BindingLayout::Buffer {
+                        ty,
+                        dynamic_offset,
+                        min_binding_size,
+                    } => (
+                        BindingKind::buffer,
+                        ty as u32,
+                        flag(dynamic_offset),
+                        min_binding_size,
+                    ),
                     BindingLayout::Sampler(ty) => (BindingKind::sampler, ty as u32, 0, 0),
-                    BindingLayout::Texture { sample, dimension, multisampled } => (BindingKind::texture, sample as u32, dimension as u32, flag(multisampled)),
-                    BindingLayout::StorageTexture { access, format, dimension } => (BindingKind::storage_texture, access as u32, format as u32, dimension as u32),
+                    BindingLayout::Texture {
+                        sample,
+                        dimension,
+                        multisampled,
+                    } => (
+                        BindingKind::texture,
+                        sample as u32,
+                        dimension as u32,
+                        flag(multisampled),
+                    ),
+                    BindingLayout::StorageTexture {
+                        access,
+                        format,
+                        dimension,
+                    } => (
+                        BindingKind::storage_texture,
+                        access as u32,
+                        format as u32,
+                        dimension as u32,
+                    ),
                 };
-                [e.binding, e.visibility, kind as u32, a, b, c].into_iter().for_each(|w| s.word(w));
+                [e.binding, e.visibility, kind as u32, a, b, c]
+                    .into_iter()
+                    .for_each(|w| s.word(w));
             }
         })
     }
@@ -503,21 +562,38 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    pub fn bind_group(&mut self, stream: &mut Stream, layout: Id, entries: &[BindGroupEntry]) -> Option<Id> {
+    pub fn bind_group(
+        &mut self,
+        stream: &mut Stream,
+        layout: Id,
+        entries: &[BindGroupEntry],
+    ) -> Option<Id> {
         self.make(stream, op::BIND_GROUP, &|s| {
-            [layout, entries.len() as u32].into_iter().for_each(|w| s.word(w));
+            [layout, entries.len() as u32]
+                .into_iter()
+                .for_each(|w| s.word(w));
             for e in entries {
                 let (kind, id, offset, size) = match e.resource {
-                    Resource::Buffer { buffer, offset, size } => (ResourceKind::buffer, buffer, offset, opt(size)),
+                    Resource::Buffer {
+                        buffer,
+                        offset,
+                        size,
+                    } => (ResourceKind::buffer, buffer, offset, opt(size)),
                     Resource::Sampler(id) => (ResourceKind::sampler, id, 0, 0),
                     Resource::View(id) => (ResourceKind::texture_view, id, 0, 0),
                 };
-                [e.binding, kind as u32, id, offset, size].into_iter().for_each(|w| s.word(w));
+                [e.binding, kind as u32, id, offset, size]
+                    .into_iter()
+                    .for_each(|w| s.word(w));
             }
         })
     }
 
-    pub fn render_pipeline(&mut self, stream: &mut Stream, d: &RenderPipelineDescriptor) -> Option<Id> {
+    pub fn render_pipeline(
+        &mut self,
+        stream: &mut Stream,
+        d: &RenderPipelineDescriptor,
+    ) -> Option<Id> {
         self.make(stream, op::RENDER_PIPELINE, &|s| {
             s.word(opt(d.layout));
             let v = &d.vertex;
@@ -525,9 +601,13 @@ impl<const N: usize> Gpu<N> {
             s.bytes(v.entry.as_bytes());
             s.word(v.buffers.len() as u32);
             for b in v.buffers {
-                [b.stride, b.step as u32, b.attributes.len() as u32].into_iter().for_each(|w| s.word(w));
+                [b.stride, b.step as u32, b.attributes.len() as u32]
+                    .into_iter()
+                    .for_each(|w| s.word(w));
                 for a in b.attributes {
-                    [a.format as u32, a.offset, a.location].into_iter().for_each(|w| s.word(w));
+                    [a.format as u32, a.offset, a.location]
+                        .into_iter()
+                        .for_each(|w| s.word(w));
                 }
             }
             let p = &d.primitive;
@@ -542,12 +622,24 @@ impl<const N: usize> Gpu<N> {
             .for_each(|w| s.word(w));
             match &d.depth_stencil {
                 Some(ds) => {
-                    [ds.format as u32, flag(ds.depth_write), ds.depth_compare as u32].into_iter().for_each(|w| s.word(w));
+                    [
+                        ds.format as u32,
+                        flag(ds.depth_write),
+                        ds.depth_compare as u32,
+                    ]
+                    .into_iter()
+                    .for_each(|w| s.word(w));
                     stencil_face(s, &ds.stencil_front);
                     stencil_face(s, &ds.stencil_back);
-                    [ds.stencil_read_mask, ds.stencil_write_mask, ds.bias as u32, f(ds.slope_scale), f(ds.clamp)]
-                        .into_iter()
-                        .for_each(|w| s.word(w));
+                    [
+                        ds.stencil_read_mask,
+                        ds.stencil_write_mask,
+                        ds.bias as u32,
+                        f(ds.slope_scale),
+                        f(ds.clamp),
+                    ]
+                    .into_iter()
+                    .for_each(|w| s.word(w));
                 }
                 None => {
                     // Present either way, so the record's shape is fixed.
@@ -556,7 +648,9 @@ impl<const N: usize> Gpu<N> {
                 }
             }
             let m = &d.multisample;
-            [m.count, m.mask, flag(m.alpha_to_coverage)].into_iter().for_each(|w| s.word(w));
+            [m.count, m.mask, flag(m.alpha_to_coverage)]
+                .into_iter()
+                .for_each(|w| s.word(w));
             match &d.fragment {
                 Some(fr) => {
                     s.word(fr.module);
@@ -592,28 +686,52 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    pub fn compute_pipeline(&mut self, stream: &mut Stream, d: &ComputePipelineDescriptor) -> Option<Id> {
+    pub fn compute_pipeline(
+        &mut self,
+        stream: &mut Stream,
+        d: &ComputePipelineDescriptor,
+    ) -> Option<Id> {
         self.make(stream, op::COMPUTE_PIPELINE, &|s| {
-            [opt(d.layout), d.module].into_iter().for_each(|w| s.word(w));
+            [opt(d.layout), d.module]
+                .into_iter()
+                .for_each(|w| s.word(w));
             s.bytes(d.entry.as_bytes());
         })
     }
 
     pub fn query_set(&mut self, stream: &mut Stream, ty: QueryType, count: u32) -> Option<Id> {
-        self.make(stream, op::QUERY_SET, &|s| [ty as u32, count].into_iter().for_each(|w| s.word(w)))
+        self.make(stream, op::QUERY_SET, &|s| {
+            [ty as u32, count].into_iter().for_each(|w| s.word(w))
+        })
     }
 
     pub fn encoder(&mut self, stream: &mut Stream) -> Option<Id> {
         self.make(stream, op::ENCODER, &|_| {})
     }
 
-    pub fn render_pass(&mut self, stream: &mut Stream, encoder: Id, d: &RenderPassDescriptor) -> Option<Id> {
+    pub fn render_pass(
+        &mut self,
+        stream: &mut Stream,
+        encoder: Id,
+        d: &RenderPassDescriptor,
+    ) -> Option<Id> {
         self.make(stream, op::RENDER_PASS, &|s| {
-            [encoder, d.colors.len() as u32].into_iter().for_each(|w| s.word(w));
+            [encoder, d.colors.len() as u32]
+                .into_iter()
+                .for_each(|w| s.word(w));
             for c in d.colors {
-                [c.view, opt(c.resolve), c.load as u32, c.store as u32, f(c.clear[0]), f(c.clear[1]), f(c.clear[2]), f(c.clear[3])]
-                    .into_iter()
-                    .for_each(|w| s.word(w));
+                [
+                    c.view,
+                    opt(c.resolve),
+                    c.load as u32,
+                    c.store as u32,
+                    f(c.clear[0]),
+                    f(c.clear[1]),
+                    f(c.clear[2]),
+                    f(c.clear[3]),
+                ]
+                .into_iter()
+                .for_each(|w| s.word(w));
             }
             match &d.depth_stencil {
                 Some(ds) => [
@@ -639,7 +757,12 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    pub fn compute_pass(&mut self, stream: &mut Stream, encoder: Id, t: &Option<TimestampWrites>) -> Option<Id> {
+    pub fn compute_pass(
+        &mut self,
+        stream: &mut Stream,
+        encoder: Id,
+        t: &Option<TimestampWrites>,
+    ) -> Option<Id> {
         self.make(stream, op::COMPUTE_PASS, &|s| {
             s.word(encoder);
             timestamps(s, t);
@@ -663,23 +786,21 @@ impl<const N: usize> Gpu<N> {
     pub fn commit(&mut self, stream: &mut Stream) -> bool {
         let fit = stream.commit();
         if !fit {
-            let (made_by, objects) = (&mut self.made_by, &mut self.objects);
-            self.handles.rollback(|id| forget(made_by, objects, id));
+            let objects = &mut self.objects;
+            self.handles.rollback(|_, op| forget(objects, op));
         }
         fit
     }
 
-    /// Ends a pass: the host lets it go with the record, and its handle is
-    /// free again, whether or not the record was written, since one dropped
-    /// with its transaction left nothing on the host.
+    /// Ends a pass. Its handle is free whether or not the record was written:
+    /// one dropped with its transaction left nothing on the host.
     pub fn end(&mut self, stream: &mut Stream, pass: Id) -> bool {
         let sent = emit(stream, op::END, &|s| s.word(pass));
         self.release(pass);
         sent
     }
 
-    /// Each encoder finished and submitted, in order, and let go as `end`
-    /// lets a pass go.
+    /// Each encoder finished, submitted in order and let go, as `end` lets a pass go.
     pub fn submit(&mut self, stream: &mut Stream, encoders: &[Id]) -> bool {
         let sent = emit(stream, op::SUBMIT, &|s| {
             s.word(encoders.len() as u32);
@@ -691,20 +812,17 @@ impl<const N: usize> Gpu<N> {
         sent
     }
 
-    /// Lets the object go: the host destroys it, and its handle is free.
     pub fn destroy(&mut self, stream: &mut Stream, id: Id) {
         if self.release(id) {
             emit(stream, op::DESTROY, &|s| s.word(id));
         }
     }
 
-    /// Whether `id` is an object this encoder made and has not let go.
     pub fn live(&self, id: Id) -> bool {
         self.handles.live(id)
     }
 
-    /// The objects this encoder made and has not let go, by the op that made
-    /// them (slot `op`, below DESTROY).
+    /// The live objects by the op that made them (slot `op`, below DESTROY).
     pub fn objects(&self) -> &[u32; OBJECT_OPS] {
         &self.objects
     }
@@ -725,11 +843,13 @@ pub mod call {
     }
 
     pub fn write_buffer(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
-        emit(stream, op::WRITE_BUFFER, &|s| buffer_write(s, buffer, offset, bytes))
+        emit(stream, op::WRITE_BUFFER, &|s| {
+            buffer_write(s, buffer, offset, bytes)
+        })
     }
 
-    /// The bytes `write_buffer` of `bytes` takes of a stream, which
-    /// `Stream::fits` asks of its room: a caller writing several asks once.
+    /// What `write_buffer` takes of a stream's room (`Stream::fits`), so a
+    /// caller writing several asks once.
     pub fn write_buffer_bytes(bytes: &[u8]) -> usize {
         measured(&|s| buffer_write(s, 0, 0, bytes))
     }
@@ -737,7 +857,16 @@ pub mod call {
     /// The bytes read where they lie in the guest's memory when the host
     /// runs the stream, so they must stay until it has.
     pub fn write_buffer_at(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
-        words(stream, op::WRITE_BUFFER_AT, &[buffer, offset, off_of_slice(bytes) as u32, bytes.len() as u32])
+        words(
+            stream,
+            op::WRITE_BUFFER_AT,
+            &[
+                buffer,
+                offset,
+                off_of_slice(bytes) as u32,
+                bytes.len() as u32,
+            ],
+        )
     }
 
     fn texture_write(s: &mut dyn Sink, place: &TexelCopyTexture, layout: [u32; 2], size: [u32; 3]) {
@@ -747,16 +876,21 @@ pub mod call {
     }
 
     /// `layout`: bytes per row, rows per image.
-    pub fn write_texture(stream: &mut Stream, place: &TexelCopyTexture, layout: [u32; 2], size: [u32; 3], bytes: &[u8]) -> bool {
+    pub fn write_texture(
+        stream: &mut Stream,
+        place: &TexelCopyTexture,
+        layout: [u32; 2],
+        size: [u32; 3],
+        bytes: &[u8],
+    ) -> bool {
         emit(stream, op::WRITE_TEXTURE, &|s| {
             texture_write(s, place, layout, size);
             s.bytes(bytes);
         })
     }
 
-    /// The bytes `write_texture` of `bytes` takes of a stream, as
-    /// `write_buffer_bytes` says a buffer's: its words are the same whatever
-    /// the place, the layout and the size.
+    /// As `write_buffer_bytes`: the words are the same whatever the place,
+    /// layout and size.
     pub fn write_texture_bytes(bytes: &[u8]) -> usize {
         let place = TexelCopyTexture {
             texture: 0,
@@ -770,29 +904,73 @@ pub mod call {
         })
     }
 
-    pub fn write_texture_at(stream: &mut Stream, place: &TexelCopyTexture, layout: [u32; 2], size: [u32; 3], bytes: &[u8]) -> bool {
+    pub fn write_texture_at(
+        stream: &mut Stream,
+        place: &TexelCopyTexture,
+        layout: [u32; 2],
+        size: [u32; 3],
+        bytes: &[u8],
+    ) -> bool {
         emit(stream, op::WRITE_TEXTURE_AT, &|s| {
             texture_write(s, place, layout, size);
-            [off_of_slice(bytes) as u32, bytes.len() as u32].into_iter().for_each(|w| s.word(w));
+            [off_of_slice(bytes) as u32, bytes.len() as u32]
+                .into_iter()
+                .for_each(|w| s.word(w));
         })
     }
 
     /// An encoded image (PNG, JPEG, WebP) where it lies in the guest's memory,
     /// decoded into `to`; `word` where `ticket | DONE` lands once it is there.
-    pub fn copy_external_image(stream: &mut Stream, to: &TexelCopyTexture, flip_y: bool, premultiplied: bool, image: &[u8], word: &mut u32, ticket: u32) -> bool {
+    pub fn copy_external_image(
+        stream: &mut Stream,
+        to: &TexelCopyTexture,
+        flip_y: bool,
+        premultiplied: bool,
+        image: &[u8],
+        word: &mut u32,
+        ticket: u32,
+    ) -> bool {
         *word = ticket;
-        let (image_at, word_at) = (off_of_slice(image) as u32, off_of_slice(core::slice::from_ref(word)) as u32);
+        let (image_at, word_at) = (
+            off_of_slice(image) as u32,
+            off_of_slice(core::slice::from_ref(word)) as u32,
+        );
         emit(stream, op::COPY_EXTERNAL_IMAGE, &|s| {
             texture_place(s, to);
-            [flag(flip_y), flag(premultiplied), image_at, image.len() as u32, word_at, ticket].into_iter().for_each(|w| s.word(w));
+            [
+                flag(flip_y),
+                flag(premultiplied),
+                image_at,
+                image.len() as u32,
+                word_at,
+                ticket,
+            ]
+            .into_iter()
+            .for_each(|w| s.word(w));
         })
     }
 
-    pub fn copy_buffer_to_buffer(stream: &mut Stream, encoder: Id, from: (Id, u32), to: (Id, u32), size: u32) -> bool {
-        words(stream, op::COPY_BUFFER_TO_BUFFER, &[encoder, from.0, from.1, to.0, to.1, size])
+    pub fn copy_buffer_to_buffer(
+        stream: &mut Stream,
+        encoder: Id,
+        from: (Id, u32),
+        to: (Id, u32),
+        size: u32,
+    ) -> bool {
+        words(
+            stream,
+            op::COPY_BUFFER_TO_BUFFER,
+            &[encoder, from.0, from.1, to.0, to.1, size],
+        )
     }
 
-    pub fn copy_buffer_to_texture(stream: &mut Stream, encoder: Id, from: &TexelCopyBuffer, to: &TexelCopyTexture, size: [u32; 3]) -> bool {
+    pub fn copy_buffer_to_texture(
+        stream: &mut Stream,
+        encoder: Id,
+        from: &TexelCopyBuffer,
+        to: &TexelCopyTexture,
+        size: [u32; 3],
+    ) -> bool {
         emit(stream, op::COPY_BUFFER_TO_TEXTURE, &|s| {
             s.word(encoder);
             buffer_layout(s, from);
@@ -801,7 +979,13 @@ pub mod call {
         })
     }
 
-    pub fn copy_texture_to_buffer(stream: &mut Stream, encoder: Id, from: &TexelCopyTexture, to: &TexelCopyBuffer, size: [u32; 3]) -> bool {
+    pub fn copy_texture_to_buffer(
+        stream: &mut Stream,
+        encoder: Id,
+        from: &TexelCopyTexture,
+        to: &TexelCopyBuffer,
+        size: [u32; 3],
+    ) -> bool {
         emit(stream, op::COPY_TEXTURE_TO_BUFFER, &|s| {
             s.word(encoder);
             texture_place(s, from);
@@ -810,7 +994,13 @@ pub mod call {
         })
     }
 
-    pub fn copy_texture_to_texture(stream: &mut Stream, encoder: Id, from: &TexelCopyTexture, to: &TexelCopyTexture, size: [u32; 3]) -> bool {
+    pub fn copy_texture_to_texture(
+        stream: &mut Stream,
+        encoder: Id,
+        from: &TexelCopyTexture,
+        to: &TexelCopyTexture,
+        size: [u32; 3],
+    ) -> bool {
         emit(stream, op::COPY_TEXTURE_TO_TEXTURE, &|s| {
             s.word(encoder);
             texture_place(s, from);
@@ -819,12 +1009,34 @@ pub mod call {
         })
     }
 
-    pub fn clear_buffer(stream: &mut Stream, encoder: Id, buffer: Id, offset: u32, size: Option<u32>) -> bool {
-        words(stream, op::CLEAR_BUFFER, &[encoder, buffer, offset, opt(size)])
+    pub fn clear_buffer(
+        stream: &mut Stream,
+        encoder: Id,
+        buffer: Id,
+        offset: u32,
+        size: Option<u32>,
+    ) -> bool {
+        words(
+            stream,
+            op::CLEAR_BUFFER,
+            &[encoder, buffer, offset, opt(size)],
+        )
     }
 
-    pub fn resolve_query_set(stream: &mut Stream, encoder: Id, query_set: Id, first: u32, count: u32, buffer: Id, offset: u32) -> bool {
-        words(stream, op::RESOLVE_QUERY_SET, &[encoder, query_set, first, count, buffer, offset])
+    pub fn resolve_query_set(
+        stream: &mut Stream,
+        encoder: Id,
+        query_set: Id,
+        first: u32,
+        count: u32,
+        buffer: Id,
+        offset: u32,
+    ) -> bool {
+        words(
+            stream,
+            op::RESOLVE_QUERY_SET,
+            &[encoder, query_set, first, count, buffer, offset],
+        )
     }
 
     /// A render or a compute pipeline, as the pass is.
@@ -832,44 +1044,124 @@ pub mod call {
         words(stream, op::SET_PIPELINE, &[pass, pipeline])
     }
 
-    pub fn set_bind_group(stream: &mut Stream, pass: Id, index: u32, group: Id, dynamic_offsets: &[u32]) -> bool {
+    pub fn set_bind_group(
+        stream: &mut Stream,
+        pass: Id,
+        index: u32,
+        group: Id,
+        dynamic_offsets: &[u32],
+    ) -> bool {
         emit(stream, op::SET_BIND_GROUP, &|s| {
-            [pass, index, group, dynamic_offsets.len() as u32].into_iter().for_each(|w| s.word(w));
+            [pass, index, group, dynamic_offsets.len() as u32]
+                .into_iter()
+                .for_each(|w| s.word(w));
             dynamic_offsets.iter().for_each(|o| s.word(*o));
         })
     }
 
-    pub fn set_vertex_buffer(stream: &mut Stream, pass: Id, slot: u32, buffer: Id, offset: u32, size: Option<u32>) -> bool {
-        words(stream, op::SET_VERTEX_BUFFER, &[pass, slot, buffer, offset, opt(size)])
+    pub fn set_vertex_buffer(
+        stream: &mut Stream,
+        pass: Id,
+        slot: u32,
+        buffer: Id,
+        offset: u32,
+        size: Option<u32>,
+    ) -> bool {
+        words(
+            stream,
+            op::SET_VERTEX_BUFFER,
+            &[pass, slot, buffer, offset, opt(size)],
+        )
     }
 
-    pub fn set_index_buffer(stream: &mut Stream, pass: Id, buffer: Id, format: IndexFormat, offset: u32, size: Option<u32>) -> bool {
-        words(stream, op::SET_INDEX_BUFFER, &[pass, buffer, format as u32, offset, opt(size)])
+    pub fn set_index_buffer(
+        stream: &mut Stream,
+        pass: Id,
+        buffer: Id,
+        format: IndexFormat,
+        offset: u32,
+        size: Option<u32>,
+    ) -> bool {
+        words(
+            stream,
+            op::SET_INDEX_BUFFER,
+            &[pass, buffer, format as u32, offset, opt(size)],
+        )
     }
 
     /// `rect`: x, y, width, height; `depth`: min and max.
     pub fn set_viewport(stream: &mut Stream, pass: Id, rect: [f32; 4], depth: [f32; 2]) -> bool {
-        words(stream, op::SET_VIEWPORT, &[pass, f(rect[0]), f(rect[1]), f(rect[2]), f(rect[3]), f(depth[0]), f(depth[1])])
+        words(
+            stream,
+            op::SET_VIEWPORT,
+            &[
+                pass,
+                f(rect[0]),
+                f(rect[1]),
+                f(rect[2]),
+                f(rect[3]),
+                f(depth[0]),
+                f(depth[1]),
+            ],
+        )
     }
 
     pub fn set_scissor(stream: &mut Stream, pass: Id, rect: [u32; 4]) -> bool {
-        words(stream, op::SET_SCISSOR, &[pass, rect[0], rect[1], rect[2], rect[3]])
+        words(
+            stream,
+            op::SET_SCISSOR,
+            &[pass, rect[0], rect[1], rect[2], rect[3]],
+        )
     }
 
     pub fn set_blend_constant(stream: &mut Stream, pass: Id, rgba: [f32; 4]) -> bool {
-        words(stream, op::SET_BLEND_CONSTANT, &[pass, f(rgba[0]), f(rgba[1]), f(rgba[2]), f(rgba[3])])
+        words(
+            stream,
+            op::SET_BLEND_CONSTANT,
+            &[pass, f(rgba[0]), f(rgba[1]), f(rgba[2]), f(rgba[3])],
+        )
     }
 
     pub fn set_stencil_reference(stream: &mut Stream, pass: Id, reference: u32) -> bool {
         words(stream, op::SET_STENCIL_REFERENCE, &[pass, reference])
     }
 
-    pub fn draw(stream: &mut Stream, pass: Id, vertices: u32, instances: u32, first_vertex: u32, first_instance: u32) -> bool {
-        words(stream, op::DRAW, &[pass, vertices, instances, first_vertex, first_instance])
+    pub fn draw(
+        stream: &mut Stream,
+        pass: Id,
+        vertices: u32,
+        instances: u32,
+        first_vertex: u32,
+        first_instance: u32,
+    ) -> bool {
+        words(
+            stream,
+            op::DRAW,
+            &[pass, vertices, instances, first_vertex, first_instance],
+        )
     }
 
-    pub fn draw_indexed(stream: &mut Stream, pass: Id, indices: u32, instances: u32, first_index: u32, base_vertex: i32, first_instance: u32) -> bool {
-        words(stream, op::DRAW_INDEXED, &[pass, indices, instances, first_index, base_vertex as u32, first_instance])
+    pub fn draw_indexed(
+        stream: &mut Stream,
+        pass: Id,
+        indices: u32,
+        instances: u32,
+        first_index: u32,
+        base_vertex: i32,
+        first_instance: u32,
+    ) -> bool {
+        words(
+            stream,
+            op::DRAW_INDEXED,
+            &[
+                pass,
+                indices,
+                instances,
+                first_index,
+                base_vertex as u32,
+                first_instance,
+            ],
+        )
     }
 
     pub fn draw_indirect(stream: &mut Stream, pass: Id, buffer: Id, offset: u32) -> bool {
@@ -881,35 +1173,71 @@ pub mod call {
     }
 
     pub fn dispatch(stream: &mut Stream, pass: Id, workgroups: [u32; 3]) -> bool {
-        words(stream, op::DISPATCH, &[pass, workgroups[0], workgroups[1], workgroups[2]])
+        words(
+            stream,
+            op::DISPATCH,
+            &[pass, workgroups[0], workgroups[1], workgroups[2]],
+        )
     }
 
     pub fn dispatch_indirect(stream: &mut Stream, pass: Id, buffer: Id, offset: u32) -> bool {
         words(stream, op::DISPATCH_INDIRECT, &[pass, buffer, offset])
     }
 
-    /// `buffer`, made MAP_READ | COPY_DST and copied into on an encoder
-    /// submitted before, mapped for reading: `into` the bytes' place in the
-    /// guest's memory, `word` the mapping's own, where `ticket | DONE` lands
-    /// once they are there and the buffer is unmapped again.
-    pub fn map_async(stream: &mut Stream, buffer: Id, offset: u32, into: &mut [u8], word: &mut u32, ticket: u32) -> bool {
+    /// `buffer` (MAP_READ | COPY_DST, copied into by an encoder submitted
+    /// before) read into the guest's memory at `into`; `ticket | DONE` lands
+    /// at `word` once the bytes are there and the buffer is unmapped.
+    pub fn map_async(
+        stream: &mut Stream,
+        buffer: Id,
+        offset: u32,
+        into: &mut [u8],
+        word: &mut u32,
+        ticket: u32,
+    ) -> bool {
         *word = ticket;
         words(
             stream,
             op::MAP_ASYNC,
-            &[buffer, offset, into.len() as u32, off_of_slice(into) as u32, off_of_slice(core::slice::from_ref(word)) as u32, ticket],
+            &[
+                buffer,
+                offset,
+                into.len() as u32,
+                off_of_slice(into) as u32,
+                off_of_slice(core::slice::from_ref(word)) as u32,
+                ticket,
+            ],
         )
     }
 
     /// `ticket | DONE` at `word` once what was submitted before is done.
     pub fn queue_done(stream: &mut Stream, word: &mut u32, ticket: u32) -> bool {
         *word = ticket;
-        words(stream, op::QUEUE_DONE, &[off_of_slice(core::slice::from_ref(word)) as u32, ticket])
+        words(
+            stream,
+            op::QUEUE_DONE,
+            &[off_of_slice(core::slice::from_ref(word)) as u32, ticket],
+        )
     }
 
     /// `format` None for the format the host's surface prefers.
-    pub fn configure(stream: &mut Stream, surface: u32, format: Option<TextureFormat>, usage: u32, alpha: CanvasAlphaMode) -> bool {
-        words(stream, op::CONFIGURE, &[surface, format.map_or(SURFACE_PREFERRED, |f| f as u32), usage, alpha as u32])
+    pub fn configure(
+        stream: &mut Stream,
+        surface: u32,
+        format: Option<TextureFormat>,
+        usage: u32,
+        alpha: CanvasAlphaMode,
+    ) -> bool {
+        words(
+            stream,
+            op::CONFIGURE,
+            &[
+                surface,
+                format.map_or(SURFACE_PREFERRED, |f| f as u32),
+                usage,
+                alpha as u32,
+            ],
+        )
     }
 
     pub fn resize(stream: &mut Stream, surface: u32, size: [u32; 2]) -> bool {
@@ -918,7 +1246,11 @@ pub mod call {
 
     /// Where the host writes the device's limits, features and status.
     pub fn device(stream: &mut Stream, into: &mut [u32]) -> bool {
-        words(stream, op::DEVICE, &[off_of_slice(into) as u32, into.len() as u32])
+        words(
+            stream,
+            op::DEVICE,
+            &[off_of_slice(into) as u32, into.len() as u32],
+        )
     }
 }
 

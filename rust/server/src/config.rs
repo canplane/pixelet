@@ -58,8 +58,15 @@ impl Config {
         let max_body_sz_mb = must_int("MAX_BODY_SZ_MB", 1, 1, 1024)?;
 
         Ok(Config {
-            host: get(&format!("{}_HOST", env.prefix))?.filter(|v| !v.is_empty()).unwrap_or_else(|| "0.0.0.0".to_string()),
-            port: must_int(&format!("{}_PORT", env.prefix), env.default_port as u64, 1, 65535)? as u16,
+            host: get(&format!("{}_HOST", env.prefix))?
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| "0.0.0.0".to_string()),
+            port: must_int(
+                &format!("{}_PORT", env.prefix),
+                env.default_port as u64,
+                1,
+                65535,
+            )? as u16,
             max_body_sz: (max_body_sz_mb as usize) << 20,
             // Required even with nothing mounted under `internal/`.
             admin_token: must("ADMIN_TOKEN")?,

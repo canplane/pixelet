@@ -5,19 +5,19 @@
 # or /opt/wasi-sdk). The library is xpute/, included from this directory by
 # its root ("xpute/kit/status/bug.hpp"); conformance/ is the guest the
 # traces drive, beside it and never shipped. Output goes under
-# ../target/cpp/, where the traces look for the guests; the tests open their
+# target/, where the traces look for the guests; the tests open their
 # golden records from the tree's root. GNU Make 3.81, as macOS ships it, is
 # enough. Run it from cpp/: the paths below are this directory's.
 #
 #   make -C cpp check | test | guest | wasm | amalgamation      (-j for parallel compiles)
 #
 # The amalgamation is the library in two files, xpute.hpp and xpute.cpp
-# (amalgamation.awk), under ../target/cpp/amalgamation/. The guests the
+# (amalgamation.awk), under target/amalgamation/. The guests the
 # traces drive are built from it, so what is traced is what ships; the
 # tests build every file of the tree on its own.
 
 ROOT := ..
-OUT := $(ROOT)/target/cpp
+OUT := target
 AMALGAMATION := $(OUT)/amalgamation
 
 ifeq ($(origin CXX),default)
@@ -39,8 +39,11 @@ PREFIX_MAP := -fmacro-prefix-map=./=cpp/ $(foreach d,xpute conformance,-fmacro-p
 AMALGAMATION_MAP := -fmacro-prefix-map=$(AMALGAMATION)/= -fmacro-prefix-map=$(OUT)/conformance/=cpp/conformance/
 # The guest's stack (spec/conformance/guest.json STACK_BYTES).
 STACK_BYTES := 1048576
+# A module guest's link, as xpute-guest wasm `link` prints it for a Rust
+# one: its memory imported and its stack first; and its exports, the entry
+# the floor names, `intr`, beside the guest's own boot.
 WASM_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-memory -Wl,--stack-first \
-	-Wl,-z,stack-size=$(STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=xpute_conformance_interrupt
+	-Wl,-z,stack-size=$(STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=intr
 
 SOURCES := $(sort $(shell find xpute conformance -name '*.cpp'))
 # What only the tests build: their own files, the runner and the golden reader.
@@ -78,16 +81,16 @@ check: $(TEST_OBJECTS)
 # The tests, and the amalgamation compiled alone, natively and as wasm, into
 # the guests the traces drive.
 test: $(OUT)/test/xpute-test guest wasm
-	cd $(ROOT) && ./target/cpp/test/xpute-test
+	cd $(ROOT) && ./cpp/target/test/xpute-test
 
 guest: $(OUT)/$(LIBRARY)
-	@echo "cpp: target/cpp/$(LIBRARY)"
+	@echo "cpp: cpp/target/$(LIBRARY)"
 
 wasm: wasi $(OUT)/xpute_conformance.wasm
-	@echo "cpp: target/cpp/xpute_conformance.wasm"
+	@echo "cpp: cpp/target/xpute_conformance.wasm"
 
 amalgamation: $(AMALGAMATION)/xpute.hpp $(AMALGAMATION)/xpute.cpp
-	@echo "cpp: target/cpp/amalgamation/xpute.hpp, xpute.cpp"
+	@echo "cpp: cpp/target/amalgamation/xpute.hpp, xpute.cpp"
 
 wasi:
 	@test -x "$(WASI_CXX)" || { echo "cpp: the WASI SDK's clang++ is not at $(WASI_CXX); install the SDK (github.com/WebAssembly/wasi-sdk) at /opt/wasi-sdk, or set WASI_SDK_PATH to where it is" >&2; exit 1; }

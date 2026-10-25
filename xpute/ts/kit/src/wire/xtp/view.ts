@@ -1,42 +1,154 @@
 // @xpute/kit/wire/xtp/view.ts
 
-import type { f32, f64, i16, i32, i64, i8, u16, u32, u64, u8 } from "@xpute/kit/abi/word.ts";
-import { BOOL, F32, F64, I16, I32, I64, I8, U16, U32, U64, U8 } from "@xpute/kit/abi/word.ts";
+import type {
+  f32,
+  f64,
+  i16,
+  i32,
+  i64,
+  i8,
+  u16,
+  u32,
+  u64,
+  u8,
+} from "@xpute/kit/abi/word.ts";
+import {
+  BOOL,
+  F32,
+  F64,
+  I16,
+  I32,
+  I64,
+  I8,
+  U16,
+  U32,
+  U64,
+  U8,
+} from "@xpute/kit/abi/word.ts";
 import { fits_i32, fits_i64 } from "@xpute/kit/abi/word.ts";
-import type { F32Array, F64Array, I16Array, I32Array, I64Array, I8Array, U16Array, U32Array, U64Array, U8Array } from "@xpute/kit/abi/array.ts";
+import type {
+  F32Array,
+  F64Array,
+  I16Array,
+  I32Array,
+  I64Array,
+  I8Array,
+  U16Array,
+  U32Array,
+  U64Array,
+  U8Array,
+} from "@xpute/kit/abi/array.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
 import type { BranchNode, Node, NodeValue } from "./spec.ts";
-import { NIL_NODE, ScalarType, SequenceType, SpecialType, WORD_SZ } from "./spec.ts";
+import {
+  NIL_NODE,
+  ScalarType,
+  SequenceType,
+  SpecialType,
+  WORD_SZ,
+} from "./spec.ts";
 
-const U8_NODE = (u: u8 | null): Node => ({ type: ScalarType.U8, val: u === null ? null : U8(u) });
-const I8_NODE = (i: i8 | null): Node => ({ type: ScalarType.I8, val: i === null ? null : I8(i) });
-const U16_NODE = (u: u16 | null): Node => ({ type: ScalarType.U16, val: u === null ? null : U16(u) });
-const I16_NODE = (i: i16 | null): Node => ({ type: ScalarType.I16, val: i === null ? null : I16(i) });
-const U32_NODE = (u: u32 | null): Node => ({ type: ScalarType.U32, val: u === null ? null : U32(u) });
-const I32_NODE = (i: i32 | null): Node => ({ type: ScalarType.I32, val: i === null ? null : I32(i) });
-const U64_NODE = (u: u64 | null): Node => ({ type: ScalarType.U64, val: u === null ? null : U64(u) });
-const I64_NODE = (i: i64 | null): Node => ({ type: ScalarType.I64, val: i === null ? null : I64(i) });
-const F32_NODE = (f: f32 | null): Node => ({ type: ScalarType.F32, val: f === null ? null : F32(f) });
-const F64_NODE = (f: f64 | null): Node => ({ type: ScalarType.F64, val: f === null ? null : F64(f) });
+const U8_NODE = (u: u8 | null): Node => ({
+  type: ScalarType.U8,
+  val: u === null ? null : U8(u),
+});
+const I8_NODE = (i: i8 | null): Node => ({
+  type: ScalarType.I8,
+  val: i === null ? null : I8(i),
+});
+const U16_NODE = (u: u16 | null): Node => ({
+  type: ScalarType.U16,
+  val: u === null ? null : U16(u),
+});
+const I16_NODE = (i: i16 | null): Node => ({
+  type: ScalarType.I16,
+  val: i === null ? null : I16(i),
+});
+const U32_NODE = (u: u32 | null): Node => ({
+  type: ScalarType.U32,
+  val: u === null ? null : U32(u),
+});
+const I32_NODE = (i: i32 | null): Node => ({
+  type: ScalarType.I32,
+  val: i === null ? null : I32(i),
+});
+const U64_NODE = (u: u64 | null): Node => ({
+  type: ScalarType.U64,
+  val: u === null ? null : U64(u),
+});
+const I64_NODE = (i: i64 | null): Node => ({
+  type: ScalarType.I64,
+  val: i === null ? null : I64(i),
+});
+const F32_NODE = (f: f32 | null): Node => ({
+  type: ScalarType.F32,
+  val: f === null ? null : F32(f),
+});
+const F64_NODE = (f: f64 | null): Node => ({
+  type: ScalarType.F64,
+  val: f === null ? null : F64(f),
+});
 
-const BOOL_NODE = (b: boolean | null): Node => ({ type: ScalarType.BOOL, val: b === null ? null : BOOL(b) });
+const BOOL_NODE = (b: boolean | null): Node => ({
+  type: ScalarType.BOOL,
+  val: b === null ? null : BOOL(b),
+});
 
-const U8_ARRAY_NODE = (arr: U8Array | null): Node => ({ type: SequenceType.U8_ARRAY, val: arr });
-const I8_ARRAY_NODE = (arr: I8Array | null): Node => ({ type: SequenceType.I8_ARRAY, val: arr });
-const U16_ARRAY_NODE = (arr: U16Array | null): Node => ({ type: SequenceType.U16_ARRAY, val: arr });
-const I16_ARRAY_NODE = (arr: I16Array | null): Node => ({ type: SequenceType.I16_ARRAY, val: arr });
-const U32_ARRAY_NODE = (arr: U32Array | null): Node => ({ type: SequenceType.U32_ARRAY, val: arr });
-const I32_ARRAY_NODE = (arr: I32Array | null): Node => ({ type: SequenceType.I32_ARRAY, val: arr });
-const U64_ARRAY_NODE = (arr: U64Array | null): Node => ({ type: SequenceType.U64_ARRAY, val: arr });
-const I64_ARRAY_NODE = (arr: I64Array | null): Node => ({ type: SequenceType.I64_ARRAY, val: arr });
-const F32_ARRAY_NODE = (arr: F32Array | null): Node => ({ type: SequenceType.F32_ARRAY, val: arr });
-const F64_ARRAY_NODE = (arr: F64Array | null): Node => ({ type: SequenceType.F64_ARRAY, val: arr });
+const U8_ARRAY_NODE = (arr: U8Array | null): Node => ({
+  type: SequenceType.U8_ARRAY,
+  val: arr,
+});
+const I8_ARRAY_NODE = (arr: I8Array | null): Node => ({
+  type: SequenceType.I8_ARRAY,
+  val: arr,
+});
+const U16_ARRAY_NODE = (arr: U16Array | null): Node => ({
+  type: SequenceType.U16_ARRAY,
+  val: arr,
+});
+const I16_ARRAY_NODE = (arr: I16Array | null): Node => ({
+  type: SequenceType.I16_ARRAY,
+  val: arr,
+});
+const U32_ARRAY_NODE = (arr: U32Array | null): Node => ({
+  type: SequenceType.U32_ARRAY,
+  val: arr,
+});
+const I32_ARRAY_NODE = (arr: I32Array | null): Node => ({
+  type: SequenceType.I32_ARRAY,
+  val: arr,
+});
+const U64_ARRAY_NODE = (arr: U64Array | null): Node => ({
+  type: SequenceType.U64_ARRAY,
+  val: arr,
+});
+const I64_ARRAY_NODE = (arr: I64Array | null): Node => ({
+  type: SequenceType.I64_ARRAY,
+  val: arr,
+});
+const F32_ARRAY_NODE = (arr: F32Array | null): Node => ({
+  type: SequenceType.F32_ARRAY,
+  val: arr,
+});
+const F64_ARRAY_NODE = (arr: F64Array | null): Node => ({
+  type: SequenceType.F64_ARRAY,
+  val: arr,
+});
 
-const BITSET_NODE = (arr: U8Array | null): Node => ({ type: SequenceType.BITSET, val: arr });
-const STR_NODE = (s: string | null): Node => ({ type: SequenceType.STR, val: s });
-const STRS_NODE = (items: string[] | null): Node => ({ type: SequenceType.STRS, val: items });
+const BITSET_NODE = (arr: U8Array | null): Node => ({
+  type: SequenceType.BITSET,
+  val: arr,
+});
+const STR_NODE = (s: string | null): Node => ({
+  type: SequenceType.STR,
+  val: s,
+});
+const STRS_NODE = (items: string[] | null): Node => ({
+  type: SequenceType.STRS,
+  val: items,
+});
 
 function val_to_node(val: NodeValue<NodeView>): Node {
   if (val instanceof NodeView) return (val.node);
@@ -211,7 +323,9 @@ export class TreeView extends NodeView {
   }
 
   override branch(fn: ((b: BranchView) => void) | null): this {
-    if (fn === null) return this._set_node({ type: SpecialType.BRANCH, val: null });
+    if (fn === null) {
+      return this._set_node({ type: SpecialType.BRANCH, val: null });
+    }
 
     const branch = new BranchViewImpl();
     fn(branch);
@@ -326,7 +440,9 @@ export abstract class BranchView extends NodeView {
   }
 
   override branch(fn: ((b: BranchView) => void) | null): this {
-    if (fn === null) return this._put_node({ type: SpecialType.BRANCH, val: null });
+    if (fn === null) {
+      return this._put_node({ type: SpecialType.BRANCH, val: null });
+    }
 
     const branch = new BranchViewImpl();
     fn(branch);

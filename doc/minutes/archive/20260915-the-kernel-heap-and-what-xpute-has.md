@@ -4,13 +4,13 @@
 `ce65571`, uncommitted work on top) turned out to have replaced the kernel's
 `Vec`/`String` with containers invented for the purpose, not with what
 `crates/xpute/core` already had. Before anything is changed back, this records
-what those containers are, what xpute on `main` has for the same role, and
-how far each reaches, so the next step is decided from the facts. No approach
-is chosen here.
+what those containers are, what xpute on `main` has for the same role, and how
+far each reaches, so the next step is decided from the facts. No approach is
+chosen here.
 
-Baseline: `main` (the checkpoint's parent `d29c3ce` is `main`). Reference
-counts are rust-analyzer's (LSIF index of the workspace), uses only,
-definitions excluded.
+Baseline: `main` (the checkpoint's parent `d29c3ce` is `main`). Reference counts
+are rust-analyzer's (LSIF index of the workspace), uses only, definitions
+excluded.
 
 ## 1. The bottom types: absent from `main`, or different there
 
@@ -35,8 +35,8 @@ definitions excluded.
 | `ChangeLog<A>`                        | xpute `ipc/change.rs`                | different | allocator as a type parameter, revisions in an `IndexedMap` | `ChangeLog` with its internal `Shared` allocator                                                                             | —                                          |
 | `XputeError.message`                  | xpute `sys/error.rs`                 | different | `FixStr<256>` inline message, `of(errno, format_args!)`     | `new(errno, Option<&str>, opts)`                                                                                             | —                                          |
 
-Added after the checkpoint and uncommitted: `InlineVec::insert`/`swap_remove`/`Eq`,
-`Vector::pop`, `KeyHash for FixStr`.
+Added after the checkpoint and uncommitted:
+`InlineVec::insert`/`swap_remove`/`Eq`, `Vector::pop`, `KeyHash for FixStr`.
 
 ## 2. In the checkpoint, absent from `main`, not among the bottom types
 
@@ -97,63 +97,62 @@ Which existing structure is extended for each is not decided here.
 
 ## The removal itself is dropped
 
-Decided the same day, once the question was asked of the heap rather than
-of the containers:
+Decided the same day, once the question was asked of the heap rather than of the
+containers:
 
-- **The Rust heap is already in the core memory.** `pxl-wasm`'s global
-  allocator is xpute's `FixedHeap<ModuleHeap>`, over what is left of the
-  module section after the stack and the data (`__heap_base` to
-  `MODULE_BYTES`, about 31 MB). It never grows the memory; past its range
-  an allocation traps.
-- **It has no GC.** A block is a pop or a push on its size class's free
-  list. The collector stalls on record
-  ([where the allocation goes](./20260910-where-the-allocation-goes.md))
-  are the JavaScript heap's and Blink's, not this one's.
-- **A section fills up just the same.** Moving allocations from the heap
-  into the fixed section changes where exhaustion happens and how it
-  fails (a refusal instead of a trap), not whether. The containers above
-  made it worse on one count: `FixedAlloc` never gives a block back, and
-  the lanes were reserved at their worst case.
-- **No issue gave a reason to remove it.** The one trace is `memory.rs`'s
-  "its heap for as long as the kernel still has one".
+- **The Rust heap is already in the core memory.** `pxl-wasm`'s global allocator
+  is xpute's `FixedHeap<ModuleHeap>`, over what is left of the module section
+  after the stack and the data (`__heap_base` to `MODULE_BYTES`, about 31 MB).
+  It never grows the memory; past its range an allocation traps.
+- **It has no GC.** A block is a pop or a push on its size class's free list.
+  The collector stalls on record
+  ([where the allocation goes](./20260910-where-the-allocation-goes.md)) are the
+  JavaScript heap's and Blink's, not this one's.
+- **A section fills up just the same.** Moving allocations from the heap into
+  the fixed section changes where exhaustion happens and how it fails (a refusal
+  instead of a trap), not whether. The containers above made it worse on one
+  count: `FixedAlloc` never gives a block back, and the lanes were reserved at
+  their worst case.
+- **No issue gave a reason to remove it.** The one trace is `memory.rs`'s "its
+  heap for as long as the kernel still has one".
 
 What stays open is not the heap but the shape of the data: the kernel's
 `Vec`/`String`/`HashMap` came in with the line-by-line translation of the
-TypeScript (`d23ecfe`, `40d76ab`, `b13a0e6`), an object per thing, where
-the move wants lanes and indices. That is done structure by structure,
-from how each is read, not as a sweep over the heap.
+TypeScript (`d23ecfe`, `40d76ab`, `b13a0e6`), an object per thing, where the
+move wants lanes and indices. That is done structure by structure, from how each
+is read, not as a sweep over the heap.
 
 ## The containers are gone
 
-Also the same day. The uncommitted layer on top of the checkpoint was
-discarded, and the checkpoint's own invented types removed by deleting them
-and following the compiler: xpute's `kit/text.rs` (`FixStr`, `Text`) and pxl
-`memory.rs`'s `FixedAlloc`, `FixedVec`, `InlineVec`, `LaneKey`/`LaneMap` and
-`Span`/`TextLane`. Their sites went back to `Vec`, `String` and `BTreeMap`
-(a `BTreeMap` where the walk's order was part of the behavior), and the POI
-index's `SpatialHash` and `IndexedMap` to their default allocator. `Quoted`,
-a formatter rather than a place to keep text, moved into `kit/json.rs`.
+Also the same day. The uncommitted layer on top of the checkpoint was discarded,
+and the checkpoint's own invented types removed by deleting them and following
+the compiler: xpute's `kit/text.rs` (`FixStr`, `Text`) and pxl `memory.rs`'s
+`FixedAlloc`, `FixedVec`, `InlineVec`, `LaneKey`/`LaneMap` and
+`Span`/`TextLane`. Their sites went back to `Vec`, `String` and `BTreeMap` (a
+`BTreeMap` where the walk's order was part of the behavior), and the POI index's
+`SpatialHash` and `IndexedMap` to their default allocator. `Quoted`, a formatter
+rather than a place to keep text, moved into `kit/json.rs`.
 
 Where a capacity carried meaning it stayed as a length check: the ledger's
 rings, a chunk build's decor instances, the scheduler's slots and pages, a
-search's results. Everywhere else, what was refused past a capacity now
-grows; a geocode language tag past sixteen bytes is no longer dropped.
+search's results. Everywhere else, what was refused past a capacity now grows; a
+geocode language tag past sixteen bytes is no longer dropped.
 
 ## Where this stands
 
 **Superseded 2026-09-17** by
-[20260917-the-slab-over-the-buddy.md](./20260917-the-slab-over-the-buddy.md),
-in the one part that has moved.
+[20260917-the-slab-over-the-buddy.md](./20260917-the-slab-over-the-buddy.md), in
+the one part that has moved.
 
 What was found here stands, and is why the removal was dropped: the branch had
-replaced `Vec` and `String` with containers invented for the purpose rather
-than with what `crates/xpute/core` already had, and the counts above are what
-that was decided on. `Quoted` earning its place is the other half of it, and
-the last three copies of a hand-written `json_string` went to it on 09-17.
+replaced `Vec` and `String` with containers invented for the purpose rather than
+with what `crates/xpute/core` already had, and the counts above are what that
+was decided on. `Quoted` earning its place is the other half of it, and the last
+three copies of a hand-written `json_string` went to it on 09-17.
 
 The heap itself is no longer the one described. `FixedHeap` over the module
 section is gone: the module's allocator is a slab of size classes over a buddy
-of 4 KiB pages, over the whole range past the fixed sections. A reader who
-came here from the working rule that names `FixedHeap` should read that
-document for what the heap is now; this one is the record of a branch that was
-not taken, not of the memory as it stands.
+of 4 KiB pages, over the whole range past the fixed sections. A reader who came
+here from the working rule that names `FixedHeap` should read that document for
+what the heap is now; this one is the record of a branch that was not taken, not
+of the memory as it stands.

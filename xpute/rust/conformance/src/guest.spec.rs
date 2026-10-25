@@ -11,12 +11,8 @@
 // A trace names no production number. These are the fixture's, chosen so that a trace
 // can make a turn's output outgrow its room without knowing how a guest reserves it.
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
 /// The room a guest's shared range asks for: the directory, both rings, a stream and its
@@ -25,12 +21,12 @@
 /// stack and data — is the build's, and no number here.
 pub const MEMORY_BYTES: u32 = 262144;
 
-/// Messages the submission ring holds.
-pub const SUBMISSION_CAPACITY: u32 = 16;
+/// Frames the submission ring holds.
+pub const SQ_CAP: u32 = 16;
 
-/// Messages the completion ring holds: fewer than eight commands raising MOST_RAISE
+/// Frames the completion ring holds: fewer than eight commands raising MOST_RAISE
 /// signals each leave, so a trace that sends those makes a turn's output outgrow it.
-pub const COMPLETION_CAPACITY: u32 = 128;
+pub const CQ_CAP: u32 = 128;
 
 /// A ring slot's payload: a packet of one number fits.
 pub const SLOT_BYTES: u32 = 256;
@@ -91,5 +87,8 @@ pub mod cmd {
     pub const SIGNAL: u32 = 4353;
     /// An open answered: tagged with its owner, its result the host's.
     pub const OPENED: u32 = 4354;
-    pub const KEYS: &[&str] = &["OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN", "CLOSE", "SIGNAL", "OPENED"];
+    pub const KEYS: &[&str] = &[
+        "OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN",
+        "CLOSE", "SIGNAL", "OPENED",
+    ];
 }

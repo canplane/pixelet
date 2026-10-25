@@ -10,28 +10,52 @@ const GOLDEN: &str = include_str!("../../../../../spec/golden/wire/xtp/encode.ts
 fn u16_arr<'a>(v: &[u16]) -> Array<'a> {
     Array {
         type_: SequenceType::U16_ARRAY,
-        bytes: v.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>().into(),
+        bytes: v
+            .iter()
+            .flat_map(|x| x.to_le_bytes())
+            .collect::<Vec<u8>>()
+            .into(),
     }
 }
 
 fn i32_arr<'a>(v: &[i32]) -> Array<'a> {
     Array {
         type_: SequenceType::I32_ARRAY,
-        bytes: v.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>().into(),
+        bytes: v
+            .iter()
+            .flat_map(|x| x.to_le_bytes())
+            .collect::<Vec<u8>>()
+            .into(),
     }
 }
 
 fn expected(name: &str) -> String {
-    let v: std::collections::HashMap<&str, &str> = GOLDEN.lines().filter_map(|l| l.split_once('\t')).collect();
-    let k = (0..).find(|k| v.get(format!("{k}.name").as_str()).is_none_or(|n| *n == name)).unwrap();
-    v.get(format!("{k}.packet").as_str()).unwrap_or_else(|| panic!("no vector {name}")).to_string()
+    let v: std::collections::HashMap<&str, &str> =
+        GOLDEN.lines().filter_map(|l| l.split_once('\t')).collect();
+    let k = (0..)
+        .find(|k| {
+            v.get(format!("{k}.name").as_str())
+                .is_none_or(|n| *n == name)
+        })
+        .unwrap();
+    v.get(format!("{k}.packet").as_str())
+        .unwrap_or_else(|| panic!("no vector {name}"))
+        .to_string()
 }
 
 /// `'a` is named so the closure is not asked to work for every lifetime.
 fn encode<'a>(build: impl FnOnce(&mut TreeView<'a>)) -> Vec<u8> {
     let mut t = TreeView::new();
     build(&mut t);
-    TreeEncoder::new().encode(&t, TreeEncoderOptions::default()).unwrap()
+    TreeEncoder::new()
+        .encode(
+            &t,
+            TreeEncoderOptions {
+                init_cap: 1 << 10,
+                max_cap: None,
+            },
+        )
+        .unwrap()
 }
 
 fn check<'a>(name: &str, build: impl FnOnce(&mut TreeView<'a>)) -> Vec<u8> {
@@ -44,15 +68,23 @@ fn check<'a>(name: &str, build: impl FnOnce(&mut TreeView<'a>)) -> Vec<u8> {
 fn a_string_written_from_display_reads_back_where_it_lies() {
     let mut buf = [0xffu8; 128];
     let mut w = PacketWriter::new(&mut buf, 2);
-    w.str_display(format_args!("{}-{}", "héllo", 42)).u32(Some(7));
+    w.str_display(format_args!("{}-{}", "héllo", 42))
+        .u32(Some(7));
     let n = w.finish().unwrap() as usize;
     let branch = TreeReader::new(&buf[..n]).unwrap().read_branch().unwrap();
     assert_eq!(branch.at(0).unwrap().get_str_ref().unwrap(), "héllo-42");
-    assert!(branch.at(1).unwrap().get_str_ref().is_err(), "a number is not a string");
+    assert!(
+        branch.at(1).unwrap().get_str_ref().is_err(),
+        "a number is not a string"
+    );
     let mut small = [0u8; 40];
     let mut w = PacketWriter::new(&mut small, 1);
     w.str_display("far longer than the room that is left");
-    assert_eq!(w.finish(), None, "a string that does not fit spoils the packet");
+    assert_eq!(
+        w.finish().map_err(|e| e.errnum),
+        Err(Errno::EOVERFLOW),
+        "a string that does not fit spoils the packet"
+    );
 }
 
 #[test]
@@ -117,7 +149,11 @@ fn the_encoder_writes_the_bytes_the_typescript_writes() {
         t.u32(None);
     });
     let inner = encode(|t| {
-        t.set(ViewValue::List(vec![ViewValue::I32(1), ViewValue::Str("x".into())])).unwrap();
+        t.set(ViewValue::List(vec![
+            ViewValue::I32(1),
+            ViewValue::Str("x".into()),
+        ]))
+        .unwrap();
     });
     check("graft", |t| {
         t.graft(&inner).unwrap();
@@ -130,8 +166,11 @@ fn a_packet_under_the_cap_is_written_whatever_the_cap() {
     let mut t = TreeView::new();
     t.u8_array(Some(&bytes[..]));
     let options = TreeEncoderOptions {
+        init_cap: 1 << 10,
         max_cap: Some(1500),
-        ..Default::default()
     };
-    assert_eq!(TreeEncoder::new().encode(&t, options).unwrap().len(), 16 + 8 + 1104);
+    assert_eq!(
+        TreeEncoder::new().encode(&t, options).unwrap().len(),
+        16 + 8 + 1104
+    );
 }

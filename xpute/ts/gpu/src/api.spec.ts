@@ -126,7 +126,12 @@ export const op = {
   DEVICE: 48 as number,
 } as const;
 
-export const BINDING_KIND = ["buffer", "sampler", "texture", "storage-texture"] as const;
+export const BINDING_KIND = [
+  "buffer",
+  "sampler",
+  "texture",
+  "storage-texture",
+] as const;
 
 export const RESOURCE_KIND = ["buffer", "sampler", "texture-view"] as const;
 

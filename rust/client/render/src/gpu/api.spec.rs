@@ -6,12 +6,8 @@
 // the renderer writes through xpute's encoder (gpu/api.rs): the stream it writes
 // them into, its pipeline records' codes, and what a surface shows.
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
 /// What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case.

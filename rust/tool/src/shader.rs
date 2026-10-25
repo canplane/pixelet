@@ -78,10 +78,18 @@ pub fn inputs_digest(root: &Path) -> Result<String, String> {
         .output()
         .map_err(|e| format!("git ls-files: {e}"))?;
     if !out.status.success() {
-        return Err(format!("git ls-files: {}", String::from_utf8_lossy(&out.stderr)));
+        return Err(format!(
+            "git ls-files: {}",
+            String::from_utf8_lossy(&out.stderr)
+        ));
     }
     let listed = String::from_utf8(out.stdout).map_err(|e| format!("git ls-files: {e}"))?;
-    let mut inputs: Vec<&str> = listed.lines().filter(|f| [".rs", ".toml", ".lock"].iter().any(|e| f.ends_with(e)) && root.join(f).is_file()).collect();
+    let mut inputs: Vec<&str> = listed
+        .lines()
+        .filter(|f| {
+            [".rs", ".toml", ".lock"].iter().any(|e| f.ends_with(e)) && root.join(f).is_file()
+        })
+        .collect();
     inputs.sort_unstable();
     inputs.dedup();
     let mut hash = Sha256::new();

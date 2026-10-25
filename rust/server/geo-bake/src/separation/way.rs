@@ -17,7 +17,11 @@ impl Polyline {
         let points: Vec<P> = points.into_iter().collect();
         let mut along = vec![0.0; points.len()];
         for i in 1..points.len() {
-            along[i] = along[i - 1] + libm::hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+            along[i] = along[i - 1]
+                + libm::hypot(
+                    points[i][0] - points[i - 1][0],
+                    points[i][1] - points[i - 1][1],
+                );
         }
         Polyline { points, along }
     }
@@ -28,10 +32,17 @@ impl Polyline {
 
     /// The point `d` along it, in DB coordinates.
     pub fn at(&self, d: f64) -> P {
-        let i = self.along.partition_point(|&x| x < d).clamp(1, self.points.len() - 1);
+        let i = self
+            .along
+            .partition_point(|&x| x < d)
+            .clamp(1, self.points.len() - 1);
         let (a, b) = (self.points[i - 1], self.points[i]);
         let seg = self.along[i] - self.along[i - 1];
-        let t = if seg > 0.0 { (d - self.along[i - 1]) / seg } else { 0.0 };
+        let t = if seg > 0.0 {
+            (d - self.along[i - 1]) / seg
+        } else {
+            0.0
+        };
         [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
     }
 }

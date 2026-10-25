@@ -11,15 +11,14 @@ seemed to have nothing to do with each other: the tools under `tool/`, run by
 hand a few times a year, and `@pxl/shared`, the package both ends of the wire
 encoded from.
 
-Both were argued as staying. The tools because their cost is Overture's
-download and `sharp`'s image work rather than the language; `@pxl/shared`
-because the client needs the catalogs it holds. Neither argument survived being
-looked at.
+Both were argued as staying. The tools because their cost is Overture's download
+and `sharp`'s image work rather than the language; `@pxl/shared` because the
+client needs the catalogs it holds. Neither argument survived being looked at.
 
 ## `shared` had stopped meaning anything
 
-The package's name is its purpose: shared between the client and the server.
-It had two jobs and both had already ended.
+The package's name is its purpose: shared between the client and the server. It
+had two jobs and both had already ended.
 
 The first went when the server became Rust — there is no second encoder of the
 wire format to stay in step with. The second was subtler: `@pxl/shared` was the
@@ -41,10 +40,10 @@ Not "is it TypeScript" but:
 | **How the UI arranges it** — a palette's order, a drawer's sections, which tiers a flyout offers | the shell, hand-written, beside the list it is about    |
 
 That line is what made the rest mechanical, and it caught a real inversion:
-`spec/cell/mod.ts` imported `GroundChannelKey` from `bake/format.ts` — the
-cell catalog reading its own channel names out of a binary wire format. The
-names are the catalog's; the _order a drawer shows them in_ is the drawer's.
-Both moved, in opposite directions.
+`spec/cell/mod.ts` imported `GroundChannelKey` from `bake/format.ts` — the cell
+catalog reading its own channel names out of a binary wire format. The names are
+the catalog's; the _order a drawer shows them in_ is the drawer's. Both moved,
+in opposite directions.
 
 ## What each cut found
 
@@ -63,15 +62,15 @@ the identity, so a center near a page boundary could be labeled from the page
 next door.
 
 **One derivation was written twice.** `OBJECT_SIZES` was
-`[U_PER_CELL, U_PER_CELL/2, …]` in both TypeScript and Rust, with the same
-doc comment word for word — both written as a derivation on purpose, which
-makes it arithmetic with two chances to disagree. It is `spec/bake/cell.json`
-now, and `pxl-spec`'s own `CELL_SHAMT` is re-exported from the generated file
-rather than declared beside it.
+`[U_PER_CELL, U_PER_CELL/2, …]` in both TypeScript and Rust, with the same doc
+comment word for word — both written as a derivation on purpose, which makes it
+arithmetic with two chances to disagree. It is `spec/bake/cell.json` now, and
+`pxl-spec`'s own `CELL_SHAMT` is re-exported from the generated file rather than
+declared beside it.
 
 **The rest was the kernel test's fixture.** `encode_terrain` and an empty POI
-page were what the test answers the module's fetches with — it drives the
-module from outside and has nothing else to hand it bytes. Written out in
+page were what the test answers the module's fetches with — it drives the module
+from outside and has nothing else to hand it bytes. Written out in
 `apps/web/src/kernel/fixture.ts` rather than imported, which is what a fixture
 is. Nothing checks it against the Rust and nothing needs to: a page the kernel
 cannot decode is a page it does not draw, so a drifted shape takes the test's
@@ -89,12 +88,12 @@ is making a second copy of something that should not exist. **The tools become
 Rust, and the question disappears.**
 
 And once they are Rust, the bake's own shape applies: a tool is a command line
-over a library function, and the function is the same one everything else
-calls. The Overture ingests went into `pxl-geo-bake` — the crate that bakes
-from the tables they fill — rather than a crate of their own, because the seam
-they had was in the middle of one pipeline. `ingest_places.rs` is 70 lines
-where its TypeScript was 226: the venv handling, the line reader and the flush
-loop were copied into all five.
+over a library function, and the function is the same one everything else calls.
+The Overture ingests went into `pxl-geo-bake` — the crate that bakes from the
+tables they fill — rather than a crate of their own, because the seam they had
+was in the middle of one pipeline. `ingest_places.rs` is 70 lines where its
+TypeScript was 226: the venv handling, the line reader and the flush loop were
+copied into all five.
 
 ## Three float bugs the ingest port found, none of them visible by reading
 
@@ -108,9 +107,9 @@ variant: a missing height is a missing _float_.
 double does not reproduce them. serde_json writes `0.9018452233076095` as
 `0.9018452233076096`: the same double, a different numeric. 1,145 of 10,979
 places differed on `properties` alone. JSON that arrives as text is carried as
-the source's own bytes now (`RawValue`) and parsed by Postgres, and the
-geometry is never parsed at all — it is the largest field, nothing reads into
-it, and a re-rendered coordinate lands an ULP away once projected.
+the source's own bytes now (`RawValue`) and parsed by Postgres, and the geometry
+is never parsed at all — it is the largest field, nothing reads into it, and a
+re-rendered coordinate lands an ULP away once projected.
 
 **serde_json's default float parser is not correctly rounded.**
 
@@ -124,8 +123,8 @@ it, and a re-rendered coordinate lands an ULP away once projected.
 `float_roundtrip` is the feature for exactly this; with it, zero.
 
 All three were found by running both implementations at the same bbox into a
-scratch database and comparing every table column by column with the geometry
-as WKB. Nine tables, 22,411 rows, zero differences in both directions.
+scratch database and comparing every table column by column with the geometry as
+WKB. Nine tables, 22,411 rows, zero differences in both directions.
 
 ## What the image tools cost, measured rather than assumed
 
@@ -133,26 +132,26 @@ The asset tools were expected to change bytes, being a different image library.
 Two of the three did not:
 
 - **The WebP sheet is byte-identical.** sharp reaches libwebp through libvips
-  and the `webp` crate reaches it directly, so the same RGBA at the same
-  quality is the same 407,680 bytes under the same key. The prediction that
-  this would cost one new object was wrong.
-- **The 125 per-file keys were never at risk**, being the sha256 of bytes
-  copied verbatim, and `glb.rs` measures all 58 models to the committed table
-  exactly — a test now rather than a claim.
-- **The icons and the tiles did change**, and the difference was measured
-  rather than eyeballed. The icons differ by a pixel of placement plus about
-  0.65% per channel, because sharp's `trim` is libvips `find_trim` — a
-  composite difference against the background, not a per-channel one — so its
-  box is a pixel wider and everything inside shifts. The tiles differ by at
-  most 2 of 255, mean 0.17, with no placement to shift.
+  and the `webp` crate reaches it directly, so the same RGBA at the same quality
+  is the same 407,680 bytes under the same key. The prediction that this would
+  cost one new object was wrong.
+- **The 125 per-file keys were never at risk**, being the sha256 of bytes copied
+  verbatim, and `glb.rs` measures all 58 models to the committed table exactly —
+  a test now rather than a claim.
+- **The icons and the tiles did change**, and the difference was measured rather
+  than eyeballed. The icons differ by a pixel of placement plus about 0.65% per
+  channel, because sharp's `trim` is libvips `find_trim` — a composite
+  difference against the background, not a per-channel one — so its box is a
+  pixel wider and everything inside shifts. The tiles differ by at most 2 of
+  255, mean 0.17, with no placement to shift.
 
-Matching libvips exactly means reimplementing `find_trim` and its Lanczos,
-which a favicon is not worth. The PNGs come out 30% smaller for the same
-picture. mozjpeg is a dependency because without it the link preview went from
-30 kB to 55.
+Matching libvips exactly means reimplementing `find_trim` and its Lanczos, which
+a favicon is not worth. The PNGs come out 30% smaller for the same picture.
+mozjpeg is a dependency because without it the link preview went from 30 kB
+to 55.
 
-The sixty tiles were re-normalized rather than left for the next pack change,
-so the tree and the tools agree from here: 61 new objects, uploaded before the
+The sixty tiles were re-normalized rather than left for the next pack change, so
+the tree and the tools agree from here: 61 new objects, uploaded before the
 deploy that names them.
 
 ## Where it stands

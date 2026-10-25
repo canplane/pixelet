@@ -90,7 +90,11 @@ pub const SHARD_ZOOM: Zoom = UNIT_ZOOM - HEIGHT_BITS;
 pub fn at<T: Copy + Default>(s: &[T], i: u32) -> T {
     // Debug builds only, as the shader crate's never are.
     #[cfg(debug_assertions)]
-    assert!((i as usize) < s.len(), "read past a buffer: {i} of {}", s.len());
+    assert!(
+        (i as usize) < s.len(),
+        "read past a buffer: {i} of {}",
+        s.len()
+    );
     if (i as usize) < s.len() {
         // SAFETY: just bounded by the slice's own length.
         unsafe { *s.get_unchecked(i as usize) }

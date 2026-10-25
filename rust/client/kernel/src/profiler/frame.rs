@@ -17,7 +17,10 @@ pub const CENSUS_LEN: usize = CENSUS_TAGS;
 
 /// A tag a draw pipeline, in the renderer's order (pxl-render frame/draw.rs
 /// `DRAW_PIPELINES`): a pipeline added without its tag does not compile.
-const _: () = assert!(CENSUS_LEN == DRAW_PIPELINES.len(), "a census tag for every pipeline a draw names");
+const _: () = assert!(
+    CENSUS_LEN == DRAW_PIPELINES.len(),
+    "a census tag for every pipeline a draw names"
+);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

@@ -5,12 +5,8 @@
 // The Earth as the map takes it: Web Mercator's sphere, which every meter the
 // map measures is a meter of (pxl-spec space/coord/adapter/4326.rs).
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
 /// WGS84's semi-major axis, the sphere EPSG:3857 projects.

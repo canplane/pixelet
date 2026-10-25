@@ -82,13 +82,13 @@ pub const fn holds(lines: usize, points: usize) -> bool {
 /// A tile's lines, structure-of-arrays: a lane a line, then a lane a point.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Separation {
-    pub starts: Cow<'static, [u32]>,      // line d is points starts[d]..starts[d + 1]
+    pub starts: Cow<'static, [u32]>, // line d is points starts[d]..starts[d + 1]
     pub points: Cow<'static, [[i16; 2]]>, // centreline, 1/POINT_SCALE tile cell: the source's
-    pub tops: Cow<'static, [i16]>,        // road surface, in leaf cells: solved over many tiles
-    pub width: Cow<'static, [u8]>,        // 1/POINT_SCALE tile cell: the source's
-    pub kind: Cow<'static, [u8]>,         // transport type: the source's class, the slab's material
-    pub form: Cow<'static, [u8]>,         // `Form`: the source's flags
-    pub clear: Cow<'static, [u8]>,        // a bore's clear space over its surface, in leaf cells: solved
+    pub tops: Cow<'static, [i16]>,   // road surface, in leaf cells: solved over many tiles
+    pub width: Cow<'static, [u8]>,   // 1/POINT_SCALE tile cell: the source's
+    pub kind: Cow<'static, [u8]>,    // transport type: the source's class, the slab's material
+    pub form: Cow<'static, [u8]>,    // `Form`: the source's flags
+    pub clear: Cow<'static, [u8]>,   // a bore's clear space over its surface, in leaf cells: solved
     /// The coarsest zoom each point is held at (pxl-spec-core `ways::coarsest`):
     /// what a fold keeps of a line, the bake's alone — no client path folds,
     /// so a client's record holds none (`Lanes::into_room`).
@@ -155,7 +155,13 @@ impl Separation {
     /// about `origin + (i + ½, j + ½) · step` in the tile's cells, a segment
     /// over it where the column's center is within its way's reach of its
     /// box. Row by row, each segment's in turn, in the points' order.
-    pub fn segments_over(&self, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize)) {
+    pub fn segments_over(
+        &self,
+        origin: [f64; 2],
+        step: f64,
+        size: [i64; 2],
+        mut each: impl FnMut(i64, i64, usize),
+    ) {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - f64::from(CELL_CENTER);
         for d in 0..self.starts.len() - 1 {
             let line = self.line(d);
@@ -163,7 +169,10 @@ impl Separation {
             for s in 0..line.points.len().saturating_sub(1) {
                 let (a, b) = (line.point(s), line.point(s + 1));
                 let range = |k: usize| {
-                    let (lo, hi) = (cell(a[k].min(b[k]) - half, k).ceil() as i64, cell(a[k].max(b[k]) + half, k).floor() as i64);
+                    let (lo, hi) = (
+                        cell(a[k].min(b[k]) - half, k).ceil() as i64,
+                        cell(a[k].max(b[k]) + half, k).floor() as i64,
+                    );
                     lo.max(0)..=hi.min(size[k] - 1)
                 };
                 for j in range(1) {
@@ -186,7 +195,10 @@ impl Separation {
     /// line's one before it: a line ends square at its first and last.
     pub fn segment_words(&self, p: usize, continues: bool) -> [u32; ways::SEGMENT_WORDS] {
         let d = self.starts.partition_point(|&s| s as usize <= p) - 1;
-        let (first, last) = (p == self.starts[d] as usize, p + 2 == self.starts[d + 1] as usize);
+        let (first, last) = (
+            p == self.starts[d] as usize,
+            p + 2 == self.starts[d + 1] as usize,
+        );
         let flags = ways::flags(u32::from(self.form[d]), first, last, continues);
         Segment::words(
             [self.points[p], self.points[p + 1]],
@@ -197,7 +209,14 @@ impl Separation {
 
     /// Every line over each column of a grid (`segments_over`), each segment
     /// its own crossing, piers at the stations of the tile at `frame`.
-    pub fn crossing_grid(&self, frame: Frame, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Crossing)) {
+    pub fn crossing_grid(
+        &self,
+        frame: Frame,
+        origin: [f64; 2],
+        step: f64,
+        size: [i64; 2],
+        mut each: impl FnMut(i64, i64, usize, Crossing),
+    ) {
         let stations = frame.stations();
         self.segments_over(origin, step, size, |i, j, p| {
             let at = [i, j].map(|v| v as f64 + f64::from(CELL_CENTER));
@@ -212,14 +231,26 @@ impl Separation {
     /// place in it, with every square of a tile of `side` cells cut `across`
     /// a side, row by row, that its footprint reaches: the one sweep a
     /// window's square's entries and its lines both read.
-    pub fn reaches(&self, side: f64, across: u32, mut each: impl FnMut(usize, usize, &Line<'_>, usize)) {
+    pub fn reaches(
+        &self,
+        side: f64,
+        across: u32,
+        mut each: impl FnMut(usize, usize, &Line<'_>, usize),
+    ) {
         let step = side / f64::from(across);
         let square = |v: f64| ((v / step).floor() as i64).clamp(0, i64::from(across) - 1) as usize;
-        for (d, line) in self.iter().enumerate().filter(|(_, d)| d.form.rises() || d.form.sinks()) {
+        for (d, line) in self
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.form.rises() || d.form.sinks())
+        {
             let half = line.footprint();
             for s in 0..line.points.len().saturating_sub(1) {
                 let (a, b) = (line.point(s), line.point(s + 1));
-                let ([x0, x1], [y0, y1]) = ([a[0].min(b[0]) - half, a[0].max(b[0]) + half], [a[1].min(b[1]) - half, a[1].max(b[1]) + half]);
+                let ([x0, x1], [y0, y1]) = (
+                    [a[0].min(b[0]) - half, a[0].max(b[0]) + half],
+                    [a[1].min(b[1]) - half, a[1].max(b[1]) + half],
+                );
                 if x1 < 0.0 || y1 < 0.0 || x0 > side || y0 > side {
                     continue;
                 }
@@ -266,7 +297,13 @@ impl Line<'_> {
 /// What segment `s` is over the column of side `side` about `at` in its
 /// tile's cells (pxl-spec-core ways.rs `crossing`).
 fn crossing_at(s: &Segment, at: [f64; 2], side: f64, stations: &Stations) -> Option<Crossing> {
-    Some(ways::crossing(s, at.map(|v| v as f32), side as f32, stations)).filter(Crossing::is)
+    Some(ways::crossing(
+        s,
+        at.map(|v| v as f32),
+        side as f32,
+        stations,
+    ))
+    .filter(Crossing::is)
 }
 
 pub fn footprint(width: f64) -> f64 {
@@ -280,7 +317,8 @@ pub fn footprint(width: f64) -> f64 {
 /// line agree point for point.
 pub fn runs_within(points: &[[f64; 2]], reach: f64) -> Vec<[usize; 2]> {
     let (lo, hi) = (-reach, f64::from(TILE_CELLS) + reach);
-    let near = |a: [f64; 2], b: [f64; 2]| (0..2).all(|k| a[k].max(b[k]) >= lo && a[k].min(b[k]) <= hi);
+    let near =
+        |a: [f64; 2], b: [f64; 2]| (0..2).all(|k| a[k].max(b[k]) >= lo && a[k].min(b[k]) <= hi);
     let mut runs = Vec::new();
     let mut start: Option<usize> = None;
     for s in 0..points.len().saturating_sub(1) {
@@ -330,7 +368,15 @@ pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separat
             if ways::vanishes(f32::from(width) / ways::POINT_SCALE) {
                 continue;
             }
-            let up = |i: usize| ([0, 1].map(|a| round(f64::from(i32::from(line.points[i][a]) + q[a]) / 2.0) as i32), line.tops[i], line.coarsest[i]);
+            let up = |i: usize| {
+                (
+                    [0, 1].map(|a| {
+                        round(f64::from(i32::from(line.points[i][a]) + q[a]) / 2.0) as i32
+                    }),
+                    line.tops[i],
+                    line.coarsest[i],
+                )
+            };
             let mut before = None;
             for i in 0..line.points.len() - 1 {
                 let (a, b) = (up(i), up(i + 1));
@@ -393,11 +439,19 @@ impl Folded {
 
     /// `s` after `p` in a copy, of one line where both have the same line.
     fn join(&mut self, p: usize, s: usize) {
-        let same = |a: Folding, b: Folding| (a.width, a.kind, a.form, a.clear) == (b.width, b.kind, b.form, b.clear);
+        let same = |a: Folding, b: Folding| {
+            (a.width, a.kind, a.form, a.clear) == (b.width, b.kind, b.form, b.clear)
+        };
         if !same(self.segments[p], self.segments[s]) {
             return;
         }
-        let one = |slot: &mut usize, v: usize| *slot = if *slot == NO_SEGMENT || *slot == v { v } else { SEGMENTS };
+        let one = |slot: &mut usize, v: usize| {
+            *slot = if *slot == NO_SEGMENT || *slot == v {
+                v
+            } else {
+                SEGMENTS
+            }
+        };
         one(&mut self.next[p], s);
         one(&mut self.prev[s], p);
     }
@@ -413,7 +467,8 @@ impl Folded {
     fn lines(&self, zoom: Zoom) -> Separation {
         let mut out = Builder::default();
         let mut taken = vec![false; self.segments.len()];
-        let heads = (0..self.segments.len()).filter(|&s| self.prev[s] >= SEGMENTS || !self.joined(self.prev[s], s));
+        let heads = (0..self.segments.len())
+            .filter(|&s| self.prev[s] >= SEGMENTS || !self.joined(self.prev[s], s));
         for head in heads.chain(0..self.segments.len()) {
             if taken[head] {
                 continue;
@@ -431,9 +486,18 @@ impl Folded {
             chain.retain(|p| Zoom::from(p.2) <= zoom);
             chain.dedup_by(|p, q| p.0 == q.0);
             let f = self.segments[head];
-            let at: Vec<[f64; 2]> = chain.iter().map(|p| p.0.map(|v| f64::from(v) / POINT_SCALE)).collect();
+            let at: Vec<[f64; 2]> = chain
+                .iter()
+                .map(|p| p.0.map(|v| f64::from(v) / POINT_SCALE))
+                .collect();
             for [a, b] in runs_within(&at, footprint(f64::from(f.width) / POINT_SCALE)) {
-                out.push((a..=b).map(|i| (at[i], chain[i].1, chain[i].2)), f.width, f.kind, Form::of(f.form), f.clear);
+                out.push(
+                    (a..=b).map(|i| (at[i], chain[i].1, chain[i].2)),
+                    f.width,
+                    f.kind,
+                    Form::of(f.form),
+                    f.clear,
+                );
             }
         }
         out.finish()
@@ -455,10 +519,19 @@ pub struct Builder {
 impl Builder {
     /// A line of fewer than two points, or of no width, is dropped; each
     /// point with its surface and the coarsest zoom it is held at.
-    pub fn push(&mut self, points: impl IntoIterator<Item = ([f64; 2], i16, u8)>, width: u8, kind: u8, form: Form, clear: u8) {
+    pub fn push(
+        &mut self,
+        points: impl IntoIterator<Item = ([f64; 2], i16, u8)>,
+        width: u8,
+        kind: u8,
+        form: Form,
+        clear: u8,
+    ) {
         let at = self.points.len();
         for ([x, y], top, coarsest) in points {
-            let q = |v: f64| round(v * POINT_SCALE).clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16;
+            let q = |v: f64| {
+                round(v * POINT_SCALE).clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16
+            };
             self.points.push([q(x), q(y)]);
             self.tops.push(top);
             self.coarsest.push(coarsest);

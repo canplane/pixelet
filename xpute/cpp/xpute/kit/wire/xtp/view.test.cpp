@@ -26,7 +26,7 @@ template <class F> std::string encoded(F &&build, std::uint32_t init = 1024, std
     TreeView<> t;
     build(t);
     auto pkt = encode<std::allocator<std::byte>>(t, TreeEncoderOptions{.init_cap = init, .max_cap = max});
-    if (!pkt) return "errno:" + std::to_string(static_cast<int>(pkt.error().code));
+    if (!pkt) return "errno:" + std::to_string(static_cast<int>(pkt.error().errnum));
     return hex(*pkt);
 }
 

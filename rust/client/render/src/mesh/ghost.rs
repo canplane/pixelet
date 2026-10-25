@@ -19,7 +19,10 @@ const Z_STEPS: f64 = 65535.0;
 /// coordinates.
 pub fn on_whole_units(min: V3) -> (V3, V3) {
     let origin = min.map(f64::floor);
-    (origin, [min[0] - origin[0], min[1] - origin[1], min[2] - origin[2]])
+    (
+        origin,
+        [min[0] - origin[0], min[1] - origin[1], min[2] - origin[2]],
+    )
 }
 
 /// The hover ghost's box at `offset` in its mesh (`on_whole_units`), lit and

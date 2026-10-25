@@ -1,10 +1,10 @@
 # Where the migration moved the files
 
-**2026-09-17** — The Rust core was meant to take the client's TypeScript at
-its paths. It did not everywhere: `crates/pxl/core/src` has a `world/` beside
-`module/world/` with seven names in common, a `bake/` that shares a name and
-not a meaning with `pxl-shared`'s, and single TypeScript files split across
-two or three Rust files in different directories.
+**2026-09-17** — The Rust core was meant to take the client's TypeScript at its
+paths. It did not everywhere: `crates/pxl/core/src` has a `world/` beside
+`module/world/` with seven names in common, a `bake/` that shares a name and not
+a meaning with `pxl-shared`'s, and single TypeScript files split across two or
+three Rust files in different directories.
 
 This records, file by file, where the TypeScript of the last checkpoint before
 the move ended up, what appeared with no TypeScript behind it, and which
@@ -13,14 +13,13 @@ concepts now have two homes. Nothing is moved here.
 ## How it was compared
 
 The source is `origin/checkpoint/20260912-linear-memory`, read with
-`git ls-tree` and `git show` without checking it out. It has no Rust at all.
-The target is the working tree as of `91aa011`.
+`git ls-tree` and `git show` without checking it out. It has no Rust at all. The
+target is the working tree as of `91aa011`.
 
 - A path is the same when `apps/web/src/X.ts(x)` has `crates/pxl/core/src/X.rs`,
   or `packages/pxl/shared/src/X.ts` has `crates/pxl/shared/src/X.rs`. 140 files
   match that way.
-- 57 checkpoint files are still TypeScript at the same path and are not
-  counted.
+- 57 checkpoint files are still TypeScript at the same path and are not counted.
 - For the rest, each TypeScript file's `export`ed function, class, constant and
   type names were snake-cased and looked up among the definitions in
   `crates/pxl/core`, `crates/pxl/shared` and `crates/xpute/core`. The counts
@@ -48,9 +47,9 @@ There was no `apps/web/src/world/`. What was in `module/world/*` and
 | `world/object.rs`                                    | one name from `contract.ts`; none of `compositor.ts`'s names survive               |
 | `world/build.rs`, `debug.rs`, `ghost.rs`, `model.rs` | no source (see below)                                                              |
 
-Seven names exist in both trees: `billboard`, `decor`, `environment`,
-`marker`, `object`, `raycast` and `sched`. `lod` was the eighth and has
-already been folded into `module/world/lod.rs`.
+Seven names exist in both trees: `billboard`, `decor`, `environment`, `marker`,
+`object`, `raycast` and `sched`. `lod` was the eighth and has already been
+folded into `module/world/lod.rs`.
 
 ### `bake/`, from `render/layer/pipeline` and `render/layer/terrain`
 
@@ -74,16 +73,15 @@ nothing to do with either.
 
 ### `render/gpu/`, `render/mesh/`, `render/gltf/`, `render/draw.rs`
 
-The WebGPU renderer that replaced three.js, so mostly new. Two pieces came
-from elsewhere:
+The WebGPU renderer that replaced three.js, so mostly new. Two pieces came from
+elsewhere:
 
 - `render/gpu/layer_table.rs` from `render/tex_array.ts` and
   `render/layer/terrain/shader_meta.ts`
 - `render/gltf/load.rs` from `module/world/gltf_cache.ts`, which moved from
   `module/world` to `render`
 
-`sys/` and `mem/` are this week's kernel sections and not part of the
-migration.
+`sys/` and `mem/` are this week's kernel sections and not part of the migration.
 
 ## Files that moved or were renamed
 
@@ -106,10 +104,10 @@ migration.
 - `module/world/change.rs`: the world's face over xpute's `ipc::change`
 - `module/world/fetch.rs`: the shell's edge of a fetch — the URL, room for the
   body, the status
-- `module/world/frame/view.rs`, `use_view_frame.rs`: the camera and the frame
-  as doubles
-- `module/world/object/material.rs`, `object/teach.rs`, `terrain/teach.rs`:
-  what the kernel is taught once about materials and decor kinds
+- `module/world/frame/view.rs`, `use_view_frame.rs`: the camera and the frame as
+  doubles
+- `module/world/object/material.rs`, `object/teach.rs`, `terrain/teach.rs`: what
+  the kernel is taught once about materials and decor kinds
 - `module/world/terrain/fixed.rs`: `.fixed.terrain`
 - `module/world/sched/report.rs`: the ledger's numbers; the words are still the
   shell's `ledger_report.ts`
@@ -136,8 +134,7 @@ compared, so whether each was replaced or dropped is not established here.
 
 - `render/layer/pipeline/chunk_bucket.ts`, `compositor.ts`, `core_pool.ts`
 - `render/lod_visibility.ts`, `render/scene_depth.ts`
-- `module/world/sched/slab.ts`, `category.ts`, `alloc_probe.ts`,
-  `gpu_timer.ts`
+- `module/world/sched/slab.ts`, `category.ts`, `alloc_probe.ts`, `gpu_timer.ts`
 - `module/world/decor/field.ts`, `module/world/billboard/field.ts`,
   `anchor_occlusion.ts`
 - `module/world/anchor/*`, and the three.js materials under
@@ -157,11 +154,11 @@ compared, so whether each was replaced or dropped is not established here.
 
 ## What was put back
 
-Everything above was folded back the same day, with the TypeScript's paths
-as the starting point — not because they are always right, but because a
-file at its old path is one whose origin reads at a glance, which is what a
-later split into a render crate has to start from. Each file's content was
-compared against the checkpoint's before it moved.
+Everything above was folded back the same day, with the TypeScript's paths as
+the starting point — not because they are always right, but because a file at
+its old path is one whose origin reads at a glance, which is what a later split
+into a render crate has to start from. Each file's content was compared against
+the checkpoint's before it moved.
 
 Files cut into two or three went back whole:
 
@@ -202,27 +199,26 @@ And the files that had only moved:
 | `render/tex_array`                 | `OBJECT_LAYER_IDX`                                      |
 | `module/world/chunk_stage`         | `module/world/core_tick.rs`                             |
 
-Four judgments went into it, where the TypeScript did not settle the
-question:
+Four judgments went into it, where the TypeScript did not settle the question:
 
 - **`world/model.rs` has no TypeScript behind it.** Joints, clips and actors
-  were three.js's. It went into `gltf_cache`, the one file both the
-  characters and the decor load their models through.
+  were three.js's. It went into `gltf_cache`, the one file both the characters
+  and the decor load their models through.
 - **A merge that put two things of one name in a file** renamed the kernel's
-  drawn half: `PuckDraw`, `GhostDraw`, `EnvironmentDraw`. The build's event
-  took the alias it was already imported by, `BuildEvent`.
+  drawn half: `PuckDraw`, `GhostDraw`, `EnvironmentDraw`. The build's event took
+  the alias it was already imported by, `BuildEvent`.
 - **Duplicates kept one copy.** `decor_layer` had two master seeds and two
   density functions of one value and one formula, and kept the TypeScript's
-  names (`DECOR_MASTER_SEED`, `decor_density`); `volume` kept the `u8`
-  sub-cell set and dropped the `u32` one nothing called; `bake/terrain.rs`'s
-  own `PAGE_ELE_SPAN`, `ELE_PAD` and `ELE_PADDED_SPAN` were pxl-shared's
-  values and are now pxl-shared's constants.
+  names (`DECOR_MASTER_SEED`, `decor_density`); `volume` kept the `u8` sub-cell
+  set and dropped the `u32` one nothing called; `bake/terrain.rs`'s own
+  `PAGE_ELE_SPAN`, `ELE_PAD` and `ELE_PADDED_SPAN` were pxl-shared's values and
+  are now pxl-shared's constants.
 - **`space/constant.rs` did not go back to the TypeScript's shape.** The
   TypeScript declared `CHUNK_WORLD_SPAN` in four files and exported only
-  `chunk_range.ts`'s `PAGE_SPAN`; restoring that would restore four copies.
-  The derived spans live in `render/chunk_range.rs`, where the TypeScript
-  exported one of them, `CHUNK_SPAN` is pxl-shared's `CHUNK_CELL_SPAN` again,
-  and `CHUNK_CELLS` is `terrain/adapter.rs`'s own `CHUNK_CELL_SPAN2`, as the
+  `chunk_range.ts`'s `PAGE_SPAN`; restoring that would restore four copies. The
+  derived spans live in `render/chunk_range.rs`, where the TypeScript exported
+  one of them, `CHUNK_SPAN` is pxl-shared's `CHUNK_CELL_SPAN` again, and
+  `CHUNK_CELLS` is `terrain/adapter.rs`'s own `CHUNK_CELL_SPAN2`, as the
   TypeScript had it.
 
 Code nothing reached went with the merges: `mesh_block`'s lanes,
@@ -230,9 +226,9 @@ Code nothing reached went with the merges: `mesh_block`'s lanes,
 
 ## Where it stands
 
-**Done** for the concepts with two homes and the moved files: pxl-core's
-root is `app`, `lib`, `mem`, `module`, `render` and `sys`, and every Rust file
-with a TypeScript source sits at that source's path. What this makes possible and has not been
-done is the reason for it — the drawn halves the merged files now carry
-(the `…Draw` types, and the second half of each file that names one) are
-what a render crate would take back out.
+**Done** for the concepts with two homes and the moved files: pxl-core's root is
+`app`, `lib`, `mem`, `module`, `render` and `sys`, and every Rust file with a
+TypeScript source sits at that source's path. What this makes possible and has
+not been done is the reason for it — the drawn halves the merged files now carry
+(the `…Draw` types, and the second half of each file that names one) are what a
+render crate would take back out.

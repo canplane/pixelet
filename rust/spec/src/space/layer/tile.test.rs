@@ -14,8 +14,16 @@ fn a_cell_is_found_from_its_corner_and_the_cell_over_it_from_the_point() {
     for zoom in [LEAF_ZOOM, LEAF_ZOOM - 3, LEAF_ZOOM - 7] {
         let cell = GROUND.cell_of(zoom, &point);
         assert_eq!(cell.tile_zoom(), zoom);
-        assert_eq!(GROUND.cell_of(zoom, &cell.base()), cell, "a cell is found from its own corner");
-        assert_eq!(cell.up(2), GROUND.cell_of(zoom - 2, &point), "the cell over it");
+        assert_eq!(
+            GROUND.cell_of(zoom, &cell.base()),
+            cell,
+            "a cell is found from its own corner"
+        );
+        assert_eq!(
+            cell.up(2),
+            GROUND.cell_of(zoom - 2, &point),
+            "the cell over it"
+        );
     }
 }
 
@@ -25,7 +33,10 @@ fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {
     let coarse = Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 2);
     let point = base_of(UNIT_ZOOM, [-1234, 5678, 0]);
     for zoom in [LEAF_ZOOM, 13] {
-        let (a, b) = (coarse.cell_of(zoom, &point), GROUND.cell_of(zoom - 2, &point));
+        let (a, b) = (
+            coarse.cell_of(zoom, &point),
+            GROUND.cell_of(zoom - 2, &point),
+        );
         assert_eq!(a.side(), b.side());
         assert_eq!(a.base(), b.base());
         assert_eq!(a.tile().zoom, b.tile().zoom + 2);
@@ -47,8 +58,16 @@ fn a_parent_cell_and_its_child_cells_are_one_relation() {
                 let parent = lattice.parent_cell(q, child);
                 let (slot, cells) = lattice.child_cells(parent);
                 assert_eq!(slot, q, "the cells lie in the child tile the cell does");
-                assert_eq!(cells, [cells[0], cells[0] + 1, cells[0] + n, cells[0] + n + 1], "2×2 cells, row by row");
-                assert!(cells.contains(&child), "{child} folds from the cells at {}", cells[0]);
+                assert_eq!(
+                    cells,
+                    [cells[0], cells[0] + 1, cells[0] + n, cells[0] + n + 1],
+                    "2×2 cells, row by row"
+                );
+                assert!(
+                    cells.contains(&child),
+                    "{child} folds from the cells at {}",
+                    cells[0]
+                );
             }
         }
     }
@@ -60,7 +79,10 @@ fn a_parent_cell_and_its_child_cells_are_one_relation() {
 fn a_point_goes_round_in_x_and_stops_at_the_edge_in_y() {
     use crate::space::coord::world::{self, REACH};
     let half = ROUND / 2.0;
-    assert_eq!(world::point(half + 3.0, REACH.max[1] + 100.0, 0.0), world::point(-half + 3.0, REACH.max[1], 0.0));
+    assert_eq!(
+        world::point(half + 3.0, REACH.max[1] + 100.0, 0.0),
+        world::point(-half + 3.0, REACH.max[1], 0.0)
+    );
     assert_eq!(nearest(-half + 3.0, half - 1.0), half + 3.0);
     assert_eq!(nearest(half - 1.0, -half + 3.0), -half - 1.0);
     for zoom in [TOP_ZOOM, LEAF_ZOOM] {
@@ -111,7 +133,15 @@ fn what_is_not_a_held_tile_s_name_is_refused() {
     assert_eq!(Tile::of_name(""), None);
     assert_eq!(Tile::of_name("4"), None, "a digit is a zoom's two bits");
     assert_eq!(Tile::of_name("13211032031200a"), None);
-    assert_eq!(Tile::of_name("-1321103203120"), None, "the digits carry the sign");
-    assert_eq!(Tile::of_name(&"0".repeat(LEAF_ZOOM as usize + 1)), None, "nothing is finer than a leaf");
+    assert_eq!(
+        Tile::of_name("-1321103203120"),
+        None,
+        "the digits carry the sign"
+    );
+    assert_eq!(
+        Tile::of_name(&"0".repeat(LEAF_ZOOM as usize + 1)),
+        None,
+        "nothing is finer than a leaf"
+    );
     assert_eq!(Tile::of_name("0"), None, "coarser than the top");
 }

@@ -38,8 +38,13 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<(), String> {
     let tiles: Vec<Tile> = set.tiles()?.into_values().flatten().collect();
     let chunk = tiles.len().div_ceil(workers.max(1)).max(1);
     let parts: Vec<Result<Held, String>> = std::thread::scope(|s| {
-        let runs: Vec<_> = tiles.chunks(chunk).map(|part| s.spawn(move || held(set, part))).collect();
-        runs.into_iter().map(|r| r.join().unwrap_or_else(|_| Err("a worker panicked".into()))).collect()
+        let runs: Vec<_> = tiles
+            .chunks(chunk)
+            .map(|part| s.spawn(move || held(set, part)))
+            .collect();
+        runs.into_iter()
+            .map(|r| r.join().unwrap_or_else(|_| Err("a worker panicked".into())))
+            .collect()
     });
     let mut all = Held::default();
     for part in parts {
@@ -49,15 +54,32 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<(), String> {
             all.squares.entry(zoom).or_default().extend(squares);
         }
     }
-    let worst: BTreeMap<Zoom, ([i32; 2], u64)> = all.squares.iter().map(|(&cell, squares)| (cell, most(squares))).collect();
+    let worst: BTreeMap<Zoom, ([i32; 2], u64)> = all
+        .squares
+        .iter()
+        .map(|(&cell, squares)| (cell, most(squares)))
+        .collect();
     let needs = terrain::pool_needs(|cell| worst.get(&cell).map_or(0, |w| w.1), all.taken);
     if needs <= u64::from(POOL_FAMILIES) {
         return Ok(());
     }
-    let (cell, (first, n)) = worst.iter().max_by_key(|(_, w)| w.1).map(|(&c, &w)| (c, w)).unwrap_or((0, ([0; 2], 0)));
+    let (cell, (first, n)) = worst
+        .iter()
+        .max_by_key(|(_, w)| w.1)
+        .map(|(&c, &w)| (c, w))
+        .unwrap_or((0, ([0; 2], 0)));
     let zoom = GROUND.tile_zoom(cell) as Zoom;
     let mut under: Vec<String> = (0..ACROSS as i32 * ACROSS as i32)
-        .map(|k| Tile::new(zoom, [(first[0] + k % ACROSS as i32).div_euclid(SIDE as i32), (first[1] + k / ACROSS as i32).div_euclid(SIDE as i32)]).name())
+        .map(|k| {
+            Tile::new(
+                zoom,
+                [
+                    (first[0] + k % ACROSS as i32).div_euclid(SIDE as i32),
+                    (first[1] + k / ACROSS as i32).div_euclid(SIDE as i32),
+                ],
+            )
+            .name()
+        })
         .collect();
     under.sort_unstable();
     under.dedup();
@@ -73,20 +95,37 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<(), String> {
 /// The squares of `tiles` the set holds, each its tree's families.
 fn held(set: &Staged<'_>, tiles: &[Tile]) -> Result<Held, String> {
     let mut scratch = vec![(0, 0); WAYS_SQUARE_SEGMENTS as usize];
-    let (mut handed, mut lane, mut runs) = (vec![0; HANDED_WORDS as usize], vec![0; SQUARE_WORDS as usize], vec![0; SCRATCH_WORDS as usize]);
+    let (mut handed, mut lane, mut runs) = (
+        vec![0; HANDED_WORDS as usize],
+        vec![0; SQUARE_WORDS as usize],
+        vec![0; SCRATCH_WORDS as usize],
+    );
     // A square's room: the most a build takes, past the family none holds.
     let mut pool = vec![0; 16 * (SQUARE_FAMILIES as usize + 1)];
     let mut out = Held::default();
     for &p in tiles {
-        let Some(tile) = set.read::<TerrainTile>(p)? else { continue };
-        let families = terrain::square_families(p, &tile, &mut scratch, [&mut handed, &mut lane, &mut runs, &mut pool]);
+        let Some(tile) = set.read::<TerrainTile>(p)? else {
+            continue;
+        };
+        let families = terrain::square_families(
+            p,
+            &tile,
+            &mut scratch,
+            [&mut handed, &mut lane, &mut runs, &mut pool],
+        );
         let cell = GROUND.cell_zoom(p.zoom);
         for (k, [taken, held]) in families.into_iter().enumerate() {
             if taken == u32::MAX {
                 return Err(format!("{}: its square {k} takes more than SQUARE_FAMILIES ({SQUARE_FAMILIES}) of its ways' tree's families", p.name()));
             }
-            let at = [p.at[0] * SIDE as i32 + (k as u32 % SIDE) as i32, p.at[1] * SIDE as i32 + (k as u32 / SIDE) as i32];
-            out.squares.entry(cell).or_default().insert(at, u64::from(held));
+            let at = [
+                p.at[0] * SIDE as i32 + (k as u32 % SIDE) as i32,
+                p.at[1] * SIDE as i32 + (k as u32 / SIDE) as i32,
+            ];
+            out.squares
+                .entry(cell)
+                .or_default()
+                .insert(at, u64::from(held));
             out.taken = out.taken.max(u64::from(taken));
         }
     }
@@ -111,5 +150,8 @@ fn most(squares: &FnvHashMap<[i32; 2], u64>) -> ([i32; 2], u64) {
             *placed.entry([x - d, y]).or_default() += n;
         }
     }
-    placed.into_iter().max_by_key(|&(at, n)| (n, std::cmp::Reverse(at))).unwrap_or(([0; 2], 0))
+    placed
+        .into_iter()
+        .max_by_key(|&(at, n)| (n, std::cmp::Reverse(at)))
+        .unwrap_or(([0; 2], 0))
 }

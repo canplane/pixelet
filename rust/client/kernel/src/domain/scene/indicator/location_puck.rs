@@ -35,25 +35,31 @@ struct ZoneSample {
 fn zone_samples() -> impl Iterator<Item = ZoneSample> {
     let range = ZONE_RADIUS_CELL.ceil() as i32;
     let flag = |b: bool| if b { 1.0 } else { 0.0 };
-    (-range..=range).flat_map(move |x| (-range..=range).map(move |y| (x as f64, y as f64))).filter_map(move |(dx, dy)| {
-        let (dx2, dy2) = (dx * dx, dy * dy);
-        if dx2 + dy2 > ZONE_RADIUS2_CELL {
-            return None;
-        }
-        let d_top = dx2 + (dy + 1.0) * (dy + 1.0);
-        let d_bottom = dx2 + (dy - 1.0) * (dy - 1.0);
-        let d_right = (dx + 1.0) * (dx + 1.0) + dy2;
-        let d_left = (dx - 1.0) * (dx - 1.0) + dy2;
-        Some(ZoneSample {
-            off: [dx * units(GROUND.cell()), dy * units(GROUND.cell()), -units(GROUND.cell())],
-            borders: [
-                flag(d_top > ZONE_RADIUS2_CELL),
-                flag(d_bottom > ZONE_RADIUS2_CELL),
-                flag(d_right > ZONE_RADIUS2_CELL),
-                flag(d_left > ZONE_RADIUS2_CELL),
-            ],
+    (-range..=range)
+        .flat_map(move |x| (-range..=range).map(move |y| (x as f64, y as f64)))
+        .filter_map(move |(dx, dy)| {
+            let (dx2, dy2) = (dx * dx, dy * dy);
+            if dx2 + dy2 > ZONE_RADIUS2_CELL {
+                return None;
+            }
+            let d_top = dx2 + (dy + 1.0) * (dy + 1.0);
+            let d_bottom = dx2 + (dy - 1.0) * (dy - 1.0);
+            let d_right = (dx + 1.0) * (dx + 1.0) + dy2;
+            let d_left = (dx - 1.0) * (dx - 1.0) + dy2;
+            Some(ZoneSample {
+                off: [
+                    dx * units(GROUND.cell()),
+                    dy * units(GROUND.cell()),
+                    -units(GROUND.cell()),
+                ],
+                borders: [
+                    flag(d_top > ZONE_RADIUS2_CELL),
+                    flag(d_bottom > ZONE_RADIUS2_CELL),
+                    flag(d_right > ZONE_RADIUS2_CELL),
+                    flag(d_left > ZONE_RADIUS2_CELL),
+                ],
+            })
         })
-    })
 }
 
 /// What grounding the zone is made of, by value: the fix, and where it is
@@ -65,7 +71,9 @@ struct Seen {
 }
 
 pub fn location_puck_step(device_coord: Option<Q3>) {
-    let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else { return };
+    let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else {
+        return;
+    };
     let night = scene.environment.night();
     scene.puck.step(draw, device_coord, night);
 }
@@ -163,7 +171,12 @@ impl LocationPuck {
             let coord = world::point(v[0], v[1], v[2]);
             // An unloaded neighbor tile falls back to the center's height; 0 would sink
             // or launch that instance.
-            let delta_ele = world.surface_support(&coord).value().flatten().unwrap_or(center_pos[2]) - center_pos[2];
+            let delta_ele = world
+                .surface_support(&coord)
+                .value()
+                .flatten()
+                .unwrap_or(center_pos[2])
+                - center_pos[2];
             v3::center(&[off[0], off[1], off[2] + delta_ele], cell)
         };
         for s in zone_samples() {
@@ -172,10 +185,15 @@ impl LocationPuck {
             // bottom never: bit k for face k, in the box's order (+x, -x, +y,
             // -y, +z, -z).
             let side = |k: usize, d: [f64; 2]| {
-                let open = box_at([s.off[0] + d[0] * cell, s.off[1] + d[1] * cell, s.off[2]])[2] < v[2];
+                let open =
+                    box_at([s.off[0] + d[0] * cell, s.off[1] + d[1] * cell, s.off[2]])[2] < v[2];
                 u32::from(open) << k
             };
-            let open = side(0, [1.0, 0.0]) | side(1, [-1.0, 0.0]) | side(2, [0.0, 1.0]) | side(3, [0.0, -1.0]) | 1 << 4;
+            let open = side(0, [1.0, 0.0])
+                | side(1, [-1.0, 0.0])
+                | side(2, [0.0, 1.0])
+                | side(3, [0.0, -1.0])
+                | 1 << 4;
             lane.extend([
                 v[0] as f32,
                 v[1] as f32,
@@ -232,7 +250,9 @@ impl LocationPuck {
     /// frame is asked only for what can be seen to change. Else the beacon
     /// stands at its target and its time holds.
     pub fn tick(&mut self, frame: &Frame) -> bool {
-        let Some(p) = self.zone.as_mut() else { return false };
+        let Some(p) = self.zone.as_mut() else {
+            return false;
+        };
         let dt = frame.delta_s;
         let to = v3::sub(&frame.world_of(p.center), &frame.camera);
         let cell_there = crate::domain::view::lens::cell_there(v3::len(&to));
@@ -261,13 +281,29 @@ impl LocationPuck {
         }
         let center = DrawList::translation(p.center, eye);
         let count = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
-        draw.draw_as(PIPELINE_PUCK_ZONE, self.held.handle, count, 0, center, 0.0, 1.0);
+        draw.draw_as(
+            PIPELINE_PUCK_ZONE,
+            self.held.handle,
+            count,
+            0,
+            center,
+            0.0,
+            1.0,
+        );
         let shown = p.shown.unwrap_or(p.target);
         let beacon = [
             center[0] + shown[0] as f32,
             center[1] + shown[1] as f32,
             center[2] + (BEACON_Z_BIAS + libm::sin(p.time * 2.0) * BEACON_BOB) as f32,
         ];
-        draw.draw_as(PIPELINE_PUCK_BEACON, 0, p.night as u32, 0, beacon, (p.time * 1.2) as f32, 1.0);
+        draw.draw_as(
+            PIPELINE_PUCK_BEACON,
+            0,
+            p.night as u32,
+            0,
+            beacon,
+            (p.time * 1.2) as f32,
+            1.0,
+        );
     }
 }

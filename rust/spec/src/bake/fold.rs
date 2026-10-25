@@ -27,7 +27,12 @@ pub fn fold_ground(children: [&Ground; 4], zoom: Zoom) -> Ground {
         .flat_map(|index| {
             let (q, block) = GROUND.child_cells(index);
             let cells = &children[q].cells;
-            block.map(|i| own(u32::from_le_bytes(core::array::from_fn(|k| cells[4 * i as usize + k])), under) as u8)
+            block.map(|i| {
+                own(
+                    u32::from_le_bytes(core::array::from_fn(|k| cells[4 * i as usize + k])),
+                    under,
+                ) as u8
+            })
         })
         .collect::<Vec<_>>();
     Ground { cells: out.into() }
@@ -44,7 +49,12 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     let (pad, padded) = (ELE_PAD as i64, ELE_PADDED_SPAN as usize);
     let read = |qx: i64, qy: i64, mx: i64, my: i64| -> Option<i64> {
         let grid = around[neighbor_index(qx as i32, qy as i32)]?;
-        Some(grid[ele_index((mx - qx * inner + pad) as u32, (my - qy * inner + pad) as u32)] as i64)
+        Some(
+            grid[ele_index(
+                (mx - qx * inner + pad) as u32,
+                (my - qy * inner + pad) as u32,
+            )] as i64,
+        )
     };
     let of_block = |mx: i64, my: i64| -> Option<i64> {
         let near = |m: i64| m.clamp(-pad, 2 * inner - 1 + pad);
@@ -55,14 +65,17 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     // One child sample by its index across the block (−2·pad .. 2·inner + 2·pad).
     let sample = |mx: i64, my: i64| -> i64 {
         let (qx, qy) = (mx.div_euclid(inner), my.div_euclid(inner));
-        read(qx, qy, mx, my).or_else(|| of_block(mx, my)).unwrap_or(0)
+        read(qx, qy, mx, my)
+            .or_else(|| of_block(mx, my))
+            .unwrap_or(0)
     };
     for sy in 0..padded {
         let iy = sy as i64 - pad;
         for sx in 0..padded {
             let ix = sx as i64 - pad;
             let (mx, my) = (2 * ix, 2 * iy);
-            let sum = sample(mx, my) + sample(mx + 1, my) + sample(mx, my + 1) + sample(mx + 1, my + 1);
+            let sum =
+                sample(mx, my) + sample(mx + 1, my) + sample(mx, my + 1) + sample(mx + 1, my + 1);
             out[ele_index(sx as u32, sy as u32)] = round(sum as f64 / 4.0) as i16;
         }
     }

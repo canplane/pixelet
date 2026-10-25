@@ -7,10 +7,15 @@ import type { SafeArea } from "@pxl/client/bracket.tsx";
 /** `env(safe-area-inset-*)` is only given to a style, so it is read back off an element. */
 function measure(): SafeArea {
   const probe = document.createElement("div");
-  probe.style.cssText = "position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)";
+  probe.style.cssText =
+    "position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)";
   document.body.appendChild(probe);
   const style = getComputedStyle(probe);
-  const area = { top: parseFloat(style.paddingTop) || 0, bottom: parseFloat(style.paddingBottom) || 0, tappable: 0 };
+  const area = {
+    top: parseFloat(style.paddingTop) || 0,
+    bottom: parseFloat(style.paddingBottom) || 0,
+    tappable: 0,
+  };
   probe.remove();
   return area;
 }

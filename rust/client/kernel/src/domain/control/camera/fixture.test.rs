@@ -11,7 +11,11 @@ pub fn place(center: V3, dist: f64, polar: f64, azimuth: f64) {
     orbit().dist = dist;
     let cam = camera();
     (cam.polar, cam.azimuth) = (polar, azimuth);
-    camera_state().intent = Intent { dist, azimuth, polar };
+    camera_state().intent = Intent {
+        dist,
+        azimuth,
+        polar,
+    };
     let e = orbit_eye_offset(dist, polar, azimuth);
     set_eye_world(&v3::add(&center, &e));
 }

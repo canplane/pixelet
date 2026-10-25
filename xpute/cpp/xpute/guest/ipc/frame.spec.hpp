@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/ipc/frame.json — do not edit.
 //
-// A message in a ring (ring.json): four words, a frame. The submitter's tag comes back on
+// A frame in a ring (ring.json): four words. The submitter's tag comes back on
 // the reply; the command shares its word with the flags; a reply carries a value or a
 // negative errno; and a packet, where there is one, lies in the ring's payload slot.
 //

@@ -1,6 +1,6 @@
 // cpp/xpute/kit/abi/cmd.hpp
 
-// `major << 8 | minor` in the 16 bits a message carries.
+// `major << 8 | minor` in the 16 bits a frame carries.
 
 #pragma once
 

@@ -13,7 +13,12 @@ pub unsafe trait Words: Sized {}
 
 pub fn put<T: Words>(out: &mut [f64], at: u32, value: &T) {
     // SAFETY: `Words` guarantees plain f64s laid end to end.
-    let words = unsafe { core::slice::from_raw_parts(std::ptr::from_ref::<T>(value).cast::<f64>(), size_of::<T>() / 8) };
+    let words = unsafe {
+        core::slice::from_raw_parts(
+            std::ptr::from_ref::<T>(value).cast::<f64>(),
+            size_of::<T>() / 8,
+        )
+    };
     let at = at as usize;
     out[at..at + words.len()].copy_from_slice(words);
 }

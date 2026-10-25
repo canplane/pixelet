@@ -1,15 +1,15 @@
 # Cooperative scheduler and the task ledger
 
 **2026-09-09** — the shape of a top-down deferred-work model for the web client:
-one cooperative scheduler (really two, plus one profiler), driven by a
-read-only instrument that exists so optimization decisions can be made on
-measurement rather than code-reading.
+one cooperative scheduler (really two, plus one profiler), driven by a read-only
+instrument that exists so optimization decisions can be made on measurement
+rather than code-reading.
 
-**Status: built** — the tick, the ledger and the priority order, since
-moved into the kernel; the worker was built, measured and not taken ("The
-worker's case", below). The sections below are the record in the order it
-happened. Their "main-thread only, no WASM" framing, the guardrail included,
-predates [20260912-why-the-destination-is-wasm.md](../20260912-why-the-destination-is-wasm.md),
+**Status: built** — the tick, the ledger and the priority order, since moved
+into the kernel; the worker was built, measured and not taken ("The worker's
+case", below). The sections below are the record in the order it happened. Their
+"main-thread only, no WASM" framing, the guardrail included, predates
+[20260912-why-the-destination-is-wasm.md](../20260912-why-the-destination-is-wasm.md),
 which put the core in WASM on the same cooperative thread.
 
 ---
@@ -80,14 +80,15 @@ rule: **the mental model — task, category, priority, budget, ledger schema,
 overlay — is designed once, now, to be identical before and after the migration.
 Only the executor implementation changes.**
 
-- **A category-A task is a black box with a serializable contract:** `(input
-  payload) → (output payload)`, payload transferable-friendly (typed arrays, not
-  live object graphs). Today `run(input)` is a plain inline call inside the frame
-  budget; post-migration the same task is `postMessage`'d to a worker with a
-  transfer list and its result returns the same way. The scheduler's view —
-  enqueue, priority, completion signal, latency accounting — is unchanged. The
-  mobile-perf doc already notes `page_to_chunks` / `dense_ele` /
-  `decode_ground_rgba` are exactly this shape (typed arrays in and out, no
+- **A category-A task is a black box with a serializable contract:**
+  `(input
+  payload) → (output payload)`, payload transferable-friendly (typed
+  arrays, not live object graphs). Today `run(input)` is a plain inline call
+  inside the frame budget; post-migration the same task is `postMessage`'d to a
+  worker with a transfer list and its result returns the same way. The
+  scheduler's view — enqueue, priority, completion signal, latency accounting —
+  is unchanged. The mobile-perf doc already notes `page_to_chunks` / `dense_ele`
+  / `decode_ground_rgba` are exactly this shape (typed arrays in and out, no
   Three.js/DOM); holding every category-A task to that contract from the start
   makes the migration a transport swap.
 
@@ -149,18 +150,21 @@ measurement.
 
 **The repo already has a proof of this workflow.**
 [20260810-mobile-and-perf-targets.md](./20260810-mobile-and-perf-targets.md)'s
-two bottlenecks were _found by measuring_ and "superseded an earlier
-speculative list." A hand-installed `PerformanceObserver({entryTypes:
-['longtask']})` cross-checked against `performance.getEntriesByType('resource')`
-timestamps produced the finding: _four of five captured long tasks (57–122 ms)
-landed within ~50 ms of a tile network-response batch completing_ — which
-localized the cost to the synchronous `set_tile → page_to_chunks → dense_ele →
-decode_ground_rgba → texture creation` chain inside React's commit phase, and
-named the fix (move those three pure functions to a plain worker). Bottleneck A
-there is still open.
+two bottlenecks were _found by measuring_ and "superseded an earlier speculative
+list." A hand-installed `PerformanceObserver({entryTypes:
+['longtask']})`
+cross-checked against `performance.getEntriesByType('resource')` timestamps
+produced the finding: _four of five captured long tasks (57–122 ms) landed
+within ~50 ms of a tile network-response batch completing_ — which localized the
+cost to the synchronous
+`set_tile → page_to_chunks → dense_ele →
+decode_ground_rgba → texture creation`
+chain inside React's commit phase, and named the fix (move those three pure
+functions to a plain worker). Bottleneck A there is still open.
 
 The ledger is that ad-hoc technique made permanent and always-on — so nobody has
-to re-install a longtask observer and eyeball resource timings by hand each time.
+to re-install a longtask observer and eyeball resource timings by hand each
+time.
 
 ## What makes a profiler decision-grade rather than decorative
 
@@ -278,25 +282,26 @@ static labels live next to each task category's registration.
 
 1. **Task ledger — observability only.** Every existing work site reports
    `ledger.begin(category, id)` / `ledger.end(...)` plus `performance.now()`
-   wrappers. Ring buffer of the last N frames: `{frame_ms, budget_used,
-   per_category_ms, started/completed, queue_depths, inflight, dropped}` plus the
-   per-frame GPU gauge fields (`renderer.info` counts, rAF interval, pixel load —
-   see "The GPU half is a per-frame gauge"). Dev overlay: stacked frame-time
-   bars, queue depths, per-category p50/p95 latency, 60 fps reference line.
-   `scheduler_peak_stats` folds in as a degenerate case (it records only the
-   maxes). Zero behavior change. ~1–2 days.
+   wrappers. Ring buffer of the last N frames:
+   `{frame_ms, budget_used,
+   per_category_ms, started/completed, queue_depths, inflight, dropped}`
+   plus the per-frame GPU gauge fields (`renderer.info` counts, rAF interval,
+   pixel load — see "The GPU half is a per-frame gauge"). Dev overlay: stacked
+   frame-time bars, queue depths, per-category p50/p95 latency, 60 fps reference
+   line. `scheduler_peak_stats` folds in as a degenerate case (it records only
+   the maxes). Zero behavior change. ~1–2 days.
 
    _Done, including the fold-in:_ chunk_stage no longer keeps its own peak
    object. It reports each frame's raw numbers (LOD counts included) and the
    ledger keeps **both** views — the ~4s ring for the shape of a stutter, and
-   `ledger_frame_peak()` for one noticed too late to still be in the ring,
-   which is the reason that object existed. `__PXL_RENDER_STATS__` keeps its
-   exact shape (it is read from the console and scraped off the canvas
-   dataset) and now derives `scheduler_peak` from the ledger. The cumulative
-   sub-operation counters (`lod_build`, `mesh_mount`, `commit_step`,
-   `render_call`, `compositor`) stay where they are on purpose: they count
-   calls across a session, not per-frame values, and forcing them into
-   `FrameSample` would bloat the ring for a different kind of measurement.
+   `ledger_frame_peak()` for one noticed too late to still be in the ring, which
+   is the reason that object existed. `__PXL_RENDER_STATS__` keeps its exact
+   shape (it is read from the console and scraped off the canvas dataset) and
+   now derives `scheduler_peak` from the ledger. The cumulative sub-operation
+   counters (`lod_build`, `mesh_mount`, `commit_step`, `render_call`,
+   `compositor`) stay where they are on purpose: they count calls across a
+   session, not per-frame values, and forcing them into `FrameSample` would
+   bloat the ring for a different kind of measurement.
 
 2. **Findings doc from the ledger.** Run it, capture traces during pan/zoom
    storms, produce a ranked list of what's worth fixing. _This_ is what
@@ -306,23 +311,23 @@ static labels live next to each task category's registration.
    ceiling (~4–6) + `AbortController`-on-stale, shared by terrain and POI;
    geocode/search fold in later (they already carry signals). Fed from a single
    "current demand set" effect rather than each subsystem's own `useEffect` +
-   module `pending` Set. Derives `map_status` from one in-flight count — retiring
-   the `pending_page_demands.size` heuristic and its "newer batch stomps SUCCESS"
-   hazard (`use_tile_fetcher.ts`).
+   module `pending` Set. Derives `map_status` from one in-flight count —
+   retiring the `pending_page_demands.size` heuristic and its "newer batch
+   stomps SUCCESS" hazard (`use_tile_fetcher.ts`).
 
-4. **Unified CPU task scheduler (category A).** Split in two once it was
-   clear only half of it needs a working render:
-   - **4a — the kernel.** `sched/frame_budget.ts`'s `run_under_budget`: run
-     an ordered list of steps until a wall-time budget or a step cap, with
-     forward progress guaranteed (the first step that does work always runs,
-     so one expensive item can never permanently starve the queue) and a
-     falsy step counting for nothing. Eligibility and ordering stay with each
-     caller — those are domain work. Unit-testable, no render needed.
-     `chunk_stage.tsx`'s recheck and commit loops are its first consumers, so
-     it never existed without one.
+4. **Unified CPU task scheduler (category A).** Split in two once it was clear
+   only half of it needs a working render:
+   - **4a — the kernel.** `sched/frame_budget.ts`'s `run_under_budget`: run an
+     ordered list of steps until a wall-time budget or a step cap, with forward
+     progress guaranteed (the first step that does work always runs, so one
+     expensive item can never permanently starve the queue) and a falsy step
+     counting for nothing. Eligibility and ordering stay with each caller —
+     those are domain work. Unit-testable, no render needed. `chunk_stage.tsx`'s
+     recheck and commit loops are its first consumers, so it never existed
+     without one.
    - **4b — the integration.** Pool the per-pass budgets into one frame-wide
-     allowance, and move the `set_tile` commit cascade onto it. A real
-     behavior change; needs a render to tune and verify against.
+     allowance, and move the `set_tile` commit cascade onto it. A real behavior
+     change; needs a render to tune and verify against.
 
    (Tile _decode_ was on this list until it was measured at 0.6 ms; see the
    second finding below.)
@@ -345,9 +350,10 @@ doc still come before step 4.
 
 What landed, in `apps/web/src/modules/world/sched/`:
 
-- **`demand.ts`** — the category-B task contract: `{ key, category, priority,
-  run(signal) }`. `run` owns the fetch and its store write; the scheduler never
-  touches a store.
+- **`demand.ts`** — the category-B task contract:
+  `{ key, category, priority,
+  run(signal) }`. `run` owns the fetch and its
+  store write; the scheduler never touches a store.
 - **`fetch_scheduler.ts`** — `fetch_sync(category, demands)` replaces one
   category's wishlist; `MAX_INFLIGHT = 6` global quota; anything dropped from a
   category's wishlist is aborted (in flight) or forgotten (queued). `pump()`
@@ -371,17 +377,18 @@ Side effect: the POI in-flight-fetch gap that opened this whole discussion
 `fetch_sync("poi", [])`, and the scheduler's yield aborts whatever was in
 flight. No bespoke `AbortController` on POI, as decided.
 
-Priorities as shipped: terrain `chebyshev_dist * 2`, POI `chebyshev_dist * 2 +
-1` (POI one step behind terrain at equal distance, since a badge grounds against
-its page's terrain), device-pinned terrain page `1_000` (loads, but never jumps
-the line). Geocode `-5` and search `-10` were folded in afterward, both single
-slot — see below.
+Priorities as shipped: terrain `chebyshev_dist * 2`, POI
+`chebyshev_dist * 2 +
+1` (POI one step behind terrain at equal distance, since a
+badge grounds against its page's terrain), device-pinned terrain page `1_000`
+(loads, but never jumps the line). Geocode `-5` and search `-10` were folded in
+afterward, both single slot — see below.
 
 ## Update 2026-09-09: the ledger's first real finding
 
-Everything above is the instrument. This is the first thing it caught, and it
-is recorded here because the loop it closes — measure, find, fix, re-measure —
-is the whole point of building it.
+Everything above is the instrument. This is the first thing it caught, and it is
+recorded here because the loop it closes — measure, find, fix, re-measure — is
+the whole point of building it.
 
 `ledger_report_text()` printed, right next to each other:
 
@@ -396,19 +403,19 @@ priority **2** ran with essentially no wait. Priority was inverted in practice.
 **Cause.** `fetch_sync` pumped synchronously. `MapScene` calls
 `useTileFetcher()` before `usePoiFetcher()`, so terrain's nine demands were
 admitted and filled all six quota slots before POI had submitted anything at
-all. Priority can only order the _queue_; it cannot preempt a request already
-in flight. So submission order silently beat it — and nothing about the
-priority numbers was wrong.
+all. Priority can only order the _queue_; it cannot preempt a request already in
+flight. So submission order silently beat it — and nothing about the priority
+numbers was wrong.
 
-**Fix.** Coalesce the pump to one per tick (`queueMicrotask`). Every `sync()`
-in the same tick lands first, and the single pump that follows picks the top
+**Fix.** Coalesce the pump to one per tick (`queueMicrotask`). Every `sync()` in
+the same tick lands first, and the single pump that follows picks the top
 `MAX_INFLIGHT` across all categories. The diff half of `sync()` stays
 synchronous: dropping and aborting superseded demands must not wait.
 
 Rejected alternatives: reserving slots per category (invents a second policy
 knob next to priority, for a problem priority already expresses), and merging
-the fetchers into one "current demand set" effect (couples two subsystems to
-fix a scheduling artifact).
+the fetchers into one "current demand set" effect (couples two subsystems to fix
+a scheduling artifact).
 
 **Re-measured**, same cold load:
 
@@ -421,9 +428,9 @@ terrain:6359575375446016  p2   q7.9
 terrain:6360674886942720  p2   q7.9
 ```
 
-The six admitted slots are now strictly the six highest-priority demands
-across every category. Locked in by a test ("a later category submitting in
-the same tick still wins on priority").
+The six admitted slots are now strictly the six highest-priority demands across
+every category. Locked in by a test ("a later category submitting in the same
+tick still wins on priority").
 
 **The generalizable part:** a quota that saturates within one tick makes
 submission order, not priority, the real scheduler. Worth remembering when the
@@ -446,8 +453,8 @@ terrain  network  n=9   p50 428.4  p95 618.7 ms
 over an already-shaped ArrayBuffer, so this is what it should cost, but it was
 being assumed expensive. 99.8% of a terrain demand's run is network. POI's
 `JSON.parse` is 2.2 ms on a ~114 KB page (295 KB worst case). Both categories
-are network-bound end to end, and the static labels in `categories.ts` now
-carry these numbers instead of a guess.
+are network-bound end to end, and the static labels in `categories.ts` now carry
+these numbers instead of a guess.
 
 **What this retires.** The planned "#9 — split terrain decode out of the fetch
 demand into a category-A task" is dropped: there is 0.6 ms to split. The
@@ -465,10 +472,10 @@ it. That is the thing #8 has to generalize and the worker migration has to
 absorb — not decode.
 
 **Caveat on the numbers.** `net_ms` here is `deno task dev:remote`, so it
-includes a local vite proxy hop plus WAN to the published deployment; a CDN
-edge would be far lower. `decode_ms` is local CPU and honest regardless, and
-the conclusion survives an order of magnitude of network improvement (0.6 ms
-against 32 ms is still 2%).
+includes a local vite proxy hop plus WAN to the published deployment; a CDN edge
+would be far lower. `decode_ms` is local CPU and honest regardless, and the
+conclusion survives an order of magnitude of network improvement (0.6 ms against
+32 ms is still 2%).
 
 ## Update 2026-09-09: what the instrument actually found
 
@@ -502,10 +509,10 @@ imperative regardless.
 
 **2. Zoom-out stalls seconds — garbage collection. Resolved.**
 
-Closing the last instrumentation gaps settled it. `render_ms` had been reading
-0 because the post-processing composer renders through its own `useFrame` and
-never touches the wrapped `gl.render`; `task_ms` (measured in a microtask, so
-it sees the whole rAF task including that render) and `gpu_ms` (a real
+Closing the last instrumentation gaps settled it. `render_ms` had been reading 0
+because the post-processing composer renders through its own `useFrame` and
+never touches the wrapped `gl.render`; `task_ms` (measured in a microtask, so it
+sees the whole rAF task including that render) and `gpu_ms` (a real
 `EXT_disjoint_timer_query_webgl2`) replaced the guesswork:
 
 ```
@@ -515,24 +522,23 @@ t+40.73  dt 1736 = task 25.3 + offthread 1710   gpu  22.7   Δheap  +565MB
 t+42.07  dt 1339 = task 43.1 + offthread 1296   gpu  22.7   Δheap -1379MB
 ```
 
-Neither the main thread (15 ms) nor the GPU (58 ms) is doing the eight
-seconds. And off-thread time tracks allocation volume, nothing else:
+Neither the main thread (15 ms) nor the GPU (58 ms) is doing the eight seconds.
+And off-thread time tracks allocation volume, nothing else:
 
 ```
 offthread > 100ms  (n= 17)   mean Δheap  +86.2 MB
 offthread <= 20ms  (n=831)   mean Δheap   -3.6 MB
 ```
 
-Heap swings between 1.4 GB and 4.3 GB, with seven collections over 300 MB
-(worst −2160 MB). Eighteen frames account for 72% of the window's wall time.
+Heap swings between 1.4 GB and 4.3 GB, with seven collections over 300 MB (worst
+−2160 MB). Eighteen frames account for 72% of the window's wall time.
 
 What allocates that much with `mount 0`, `rerender 0`? `geometries` churns
 ±30–50 every frame (971 → 1000 → 1015 → 1029 → 1042 → 1085 → 1061) as LOD
 transitions rebuild chunk geometry. Building the typed arrays is cheap —
-`commit_ms` stays at 4–10 ms — but the garbage is not, and the ~730-deep
-pending backlog keeps feeding it. (The correlation is measured; attributing
-the allocation specifically to chunk rebuilds is read off that `geometries`
-churn.)
+`commit_ms` stays at 4–10 ms — but the garbage is not, and the ~730-deep pending
+backlog keeps feeding it. (The correlation is measured; attributing the
+allocation specifically to chunk rebuilds is read off that `geometries` churn.)
 
 **3. Steady state is GPU-bound — now measured, not inferred.**
 
@@ -554,8 +560,8 @@ still the right move, but the honest accounting is:
   from React.
 - it is nonetheless the _prerequisite_ for fixing 2: geometry is currently
   created inside `ChunkMesh`'s `useLayoutEffect`, so its lifetime is React's.
-  Owning that lifetime imperatively is what makes buffer reuse possible at
-  all, and reuse — not a faster rebuild — is what removes the garbage.
+  Owning that lifetime imperatively is what makes buffer reuse possible at all,
+  and reuse — not a faster rebuild — is what removes the garbage.
 - it does nothing for **3**, which is a separate GPU-side conversation.
 
 **Already fixed or ruled out:** the scheduler pass (4711 ms → bounded), tile
@@ -570,29 +576,29 @@ the garbage. Two lifetimes hide inside `bake_chunk_mesh`, and only one of them
 is what `ds/arena.ts` already serves:
 
 - **Scratch, dies at the end of the call.** `surviving` (one `{cx, cy, run}`
-  object per surviving run) and `per_cell` (`res^2` arrays plus an object per
-  Z bucket). Small objects in bulk — the kind the collector must trace, not
-  just free. This is exactly Arena/Vector's shape and now uses them: a
+  object per surviving run) and `per_cell` (`res^2` arrays plus an object per Z
+  bucket). Small objects in bulk — the kind the collector must trace, not just
+  free. This is exactly Arena/Vector's shape and now uses them: a
   `Vector(Uint32Array)` of (cx, cy, run index) triples, and one `Arena` of
   bucket accumulators whose per-cell ranges are contiguous because a cell is
-  filled before the next one starts, so `CELL_RANGE` holds (start, count) and
-  no per-cell container exists at all. `emit_box` also took its box min/size
-  and taps as scalars rather than tuples — two throwaway arrays per box, at
+  filled before the next one starts, so `CELL_RANGE` holds (start, count) and no
+  per-cell container exists at all. `emit_box` also took its box min/size and
+  taps as scalars rather than tuples — two throwaway arrays per box, at
   thousands of boxes per chunk.
 
 - **Retained, dies with its owner, in no particular order.** The eight typed
-  arrays a baked mesh hands to `BufferGeometry`. Tempting to call these
-  scratch too ("three.js copies them on upload"), but it does not: upload is
-  lazy, on first draw, so a frustum-culled chunk holds them for many frames,
-  a context loss needs them again, and `visibility` is written for the whole
-  life of the geometry by the LOD blend. Unordered death is the one shape a
-  bump allocator structurally cannot reclaim.
+  arrays a baked mesh hands to `BufferGeometry`. Tempting to call these scratch
+  too ("three.js copies them on upload"), but it does not: upload is lazy, on
+  first draw, so a frustum-culled chunk holds them for many frames, a context
+  loss needs them again, and `visibility` is written for the whole life of the
+  geometry by the LOD blend. Unordered death is the one shape a bump allocator
+  structurally cannot reclaim.
 
-So the second lifetime got `ds/pool.ts`: power-of-two size classes, a free
-list per class, no splitting and no coalescing, and a hard reserved-bytes
-ceiling above which a released block goes back to the collector instead of
-being retained. All eight spans of a mesh are views into **one** block, since
-they share a lifetime exactly — eight allocations bought nothing.
+So the second lifetime got `ds/pool.ts`: power-of-two size classes, a free list
+per class, no splitting and no coalescing, and a hard reserved-bytes ceiling
+above which a released block goes back to the collector instead of being
+retained. All eight spans of a mesh are views into **one** block, since they
+share a lifetime exactly — eight allocations bought nothing.
 
 **Why not a buddy allocator.** A buddy allocator is a size-class pool _plus_
 migration of bytes between classes. The migration buys bounded residency when
@@ -600,26 +606,26 @@ the class mix shifts; it does not lower churn, and churn is what the 8.4s was.
 The ceiling bounds residency without it. The contract is deliberately
 blocks-and-handles rather than raw views precisely so splitting/merging can be
 added later behind `acquire`/`release` without touching a consumer — if
-per-class idle residency ever shows up in the ledger's own `pool` row as a
-real cost, which is the condition to check before building it.
+per-class idle residency ever shows up in the ledger's own `pool` row as a real
+cost, which is the condition to check before building it.
 
 **Ownership.** A mesh is owned twice and the two owners die independently:
-`chunk_stage.tsx`'s per-chunk LOD cache, and the mounted geometry rendering
-it. `recheck()` prunes the cache on frustum exit while the same tier is still
-on screen, so "the cache dropped it" cannot mean "the block is free" — hence
-`rc` on `BuiltChunkMesh` (`Rc<MeshBlock>` in the Rust reading, not a novelty).
-Geometry disposal moved into `ChunkMesh`'s effect cleanup alongside the
-release, because the GPU buffers and the block have to be surrendered in the
-same step, and only the cleanup runs on a real unmount — where the previous
-"replace, then dispose the previous one" shape leaked the last geometry.
+`chunk_stage.tsx`'s per-chunk LOD cache, and the mounted geometry rendering it.
+`recheck()` prunes the cache on frustum exit while the same tier is still on
+screen, so "the cache dropped it" cannot mean "the block is free" — hence `rc`
+on `BuiltChunkMesh` (`Rc<MeshBlock>` in the Rust reading, not a novelty).
+Geometry disposal moved into `ChunkMesh`'s effect cleanup alongside the release,
+because the GPU buffers and the block have to be surrendered in the same step,
+and only the cleanup runs on a real unmount — where the previous "replace, then
+dispose the previous one" shape leaked the last geometry.
 
 **Rust/WASM.** `Vec<u8>` slabs with per-class free lists is the same shape;
 under WASM, where linear memory grows and never shrinks, the reserved ceiling
 stops being a nicety and becomes the whole point. The pool introduces exactly
-one new failure mode — a view outliving its release, which is silent
-corruption rather than a stale read — so `pool.ts` carries a `poison` option
-(off by default: it is a memset per release, which would distort the very
-storm being measured) and a double-release guard that is always on.
+one new failure mode — a view outliving its release, which is silent corruption
+rather than a stale read — so `pool.ts` carries a `poison` option (off by
+default: it is a memset per release, which would distort the very storm being
+measured) and a double-release guard that is always on.
 
 The ledger gained a `pool live/rsv hit` row for this. Reading it against
 `heap_mb`: `live` tracking the visible chunk count while `reserved` stays flat
@@ -628,38 +634,38 @@ defeated, by class thrash or by the ceiling.
 
 ## Update 2026-09-09: what it took to actually land, and the numbers
 
-The GC finding took four attempts to fix, and three of them failed for the
-same reason. Recorded here because the reason is not about allocators.
+The GC finding took four attempts to fix, and three of them failed for the same
+reason. Recorded here because the reason is not about allocators.
 
 **The pool never engaged.** Its ceiling counted borrowed bytes, and a full
-frustum legitimately holds ~600MB of live chunk geometry, so every release
-took the eviction path — the pool switched itself off exactly under the load
-it exists for. Measured hit rate 13-36%. Borrowed bytes are not a surplus to
+frustum legitimately holds ~600MB of live chunk geometry, so every release took
+the eviction path — the pool switched itself off exactly under the load it
+exists for. Measured hit rate 13-36%. Borrowed bytes are not a surplus to
 reclaim; only the idle surplus is.
 
-**Per-class free lists were the wrong allocator, and the argument against
-buddy was wrong.** "This workload does not migrate between size classes" was
-false by construction: dropping a chunk's fine LOD tier and asking for a
-coarse one in the same breath frees a large block and requests a small one,
-and a zoom back in does the reverse. The free lists sat full of blocks
-exactly one order above every request. Splitting fixes one direction and
-merging the other; needing both is what makes it a buddy allocator rather
-than a pool with a hack in it. A one-class upward reach was tried first and
-is strictly worse than either alternative.
+**Per-class free lists were the wrong allocator, and the argument against buddy
+was wrong.** "This workload does not migrate between size classes" was false by
+construction: dropping a chunk's fine LOD tier and asking for a coarse one in
+the same breath frees a large block and requests a small one, and a zoom back in
+does the reverse. The free lists sat full of blocks exactly one order above
+every request. Splitting fixes one direction and merging the other; needing both
+is what makes it a buddy allocator rather than a pool with a hack in it. A
+one-class upward reach was tried first and is strictly worse than either
+alternative.
 
-**Pooling was unsafe while React owned mesh lifetime.** A chunk mesh had
-three owners — the LOD cache, the layout naming it, and the mounted geometry
-— and React decides _later_ when a layout mounts, so all three lifetimes were
-deferred by an unknown amount. Three reference-counting bugs came out of the
-windows between them: a build during render (StrictMode's setup/cleanup/setup
-replay dropped the last reference to meshes the pending mount then retained),
-a layout that named meshes it did not hold, and an unmount teardown with no
-setup. Each fix was real and each was followed by another, because the class
-of bug is "an owner whose lifetime someone else decides", not any one
-instance of it. Recycling was switched off (one flag, not a revert) and the
-chunk layer went imperative: `chunk_node.ts`, a plain object with a group, a
-dispose, and a commit that attaches geometry in the same call. Two owners,
-both mutated synchronously, no window.
+**Pooling was unsafe while React owned mesh lifetime.** A chunk mesh had three
+owners — the LOD cache, the layout naming it, and the mounted geometry — and
+React decides _later_ when a layout mounts, so all three lifetimes were deferred
+by an unknown amount. Three reference-counting bugs came out of the windows
+between them: a build during render (StrictMode's setup/cleanup/setup replay
+dropped the last reference to meshes the pending mount then retained), a layout
+that named meshes it did not hold, and an unmount teardown with no setup. Each
+fix was real and each was followed by another, because the class of bug is "an
+owner whose lifetime someone else decides", not any one instance of it.
+Recycling was switched off (one flag, not a revert) and the chunk layer went
+imperative: `chunk_node.ts`, a plain object with a group, a dispose, and a
+commit that attaches geometry in the same call. Two owners, both mutated
+synchronously, no window.
 
 Then recycling went back on. Measured, same zoom-out:
 
@@ -671,19 +677,19 @@ Then recycling went back on. Measured, same zoom-out:
 | Δheap on a committing frame | +4.28MB      | **+1.43MB**      |
 | Δheap on a quiet frame      | +0.18MB      | **+0.03MB**      |
 
-The multi-second stalls are gone. What was bought with churn is residency:
-the pool now holds ~1.8GB steadily (439MB live, ~1.4GB idle) because buddy
-regions are only reclaimed when _fully_ empty, and one live block strands a
-256MB region. That is the standard pooling trade and the right side of it,
-but it is a number to keep in view.
+The multi-second stalls are gone. What was bought with churn is residency: the
+pool now holds ~1.8GB steadily (439MB live, ~1.4GB idle) because buddy regions
+are only reclaimed when _fully_ empty, and one live block strands a 256MB
+region. That is the standard pooling trade and the right side of it, but it is a
+number to keep in view.
 
-**Method note.** Three of these rounds cost a measure/report cycle each
-because the fix was landed and measured one step at a time. That was the
-wrong instinct: the instrument's job is to say _where_ to look, and it had
-already said so. The rule for next time is the one that finally worked —
-land the whole change, then measure once — and the corollary that a
-measurement of a mechanism that was never actually enabled (the bypassed
-pool, the ceiling-disabled pool) is not evidence about that mechanism.
+**Method note.** Three of these rounds cost a measure/report cycle each because
+the fix was landed and measured one step at a time. That was the wrong instinct:
+the instrument's job is to say _where_ to look, and it had already said so. The
+rule for next time is the one that finally worked — land the whole change, then
+measure once — and the corollary that a measurement of a mechanism that was
+never actually enabled (the bypassed pool, the ceiling-disabled pool) is not
+evidence about that mechanism.
 
 **Also found, unrelated:** `deno check` reports green off a warm cache.
 `deno check --reload` finds 77 pre-existing errors, all R3F JSX intrinsics
@@ -692,36 +698,35 @@ rest are still there and the task cannot be trusted until they are dealt with.
 
 ## Update 2026-09-09: the rest of it, and what the instrument was for
 
-Four more changes after the imperative conversion, each one found by the
-ledger rather than by reading code. Recorded mostly for the pattern.
+Four more changes after the imperative conversion, each one found by the ledger
+rather than by reading code. Recorded mostly for the pattern.
 
 **Faces nothing can see.** Every cube emitted all five or six of its faces
-regardless of its neighbors, so a flat plateau baked four hidden faces per
-cell. Culling a face when a neighboring column spans the run's whole z
-range keeps **23-24%** of the faces on real terrain — measured identically
-across three sessions, which is what a workload-normalized counter is for.
-A run-level occlusion test already existed and had fired **zero times in
-half a million runs**: its condition was strictly narrower, and narrower in
-the wrong direction, since it refused to consider chunk-edge columns at all.
+regardless of its neighbors, so a flat plateau baked four hidden faces per cell.
+Culling a face when a neighboring column spans the run's whole z range keeps
+**23-24%** of the faces on real terrain — measured identically across three
+sessions, which is what a workload-normalized counter is for. A run-level
+occlusion test already existed and had fired **zero times in half a million
+runs**: its condition was strictly narrower, and narrower in the wrong
+direction, since it refused to consider chunk-edge columns at all.
 
-**Column runs.** `MeshRun[][]` was 4096 arrays plus an object per run,
-retained per chunk. Packed into parallel spans over one pooled block: 17
-bytes a run against a hundred, one allocation against ten thousand.
+**Column runs.** `MeshRun[][]` was 4096 arrays plus an object per run, retained
+per chunk. Packed into parallel spans over one pooled block: 17 bytes a run
+against a hundred, one allocation against ten thousand.
 
 **Region size.** Buddy reclaims a region only when it is fully empty, so at
-256MB one surviving chunk held a quarter-gigabyte hostage — 339MB live
-against 1502MB idle. Face culling shrank the largest block, so the region
-shrank with it. `max_block_bytes` now reports the number the next choice
-should be made from, rather than the last guess.
+256MB one surviving chunk held a quarter-gigabyte hostage — 339MB live against
+1502MB idle. Face culling shrank the largest block, so the region shrank with
+it. `max_block_bytes` now reports the number the next choice should be made
+from, rather than the last guess.
 
-**The band pool.** The one that mattered. Heap was growing 188MB/s while
-the chunk layer retained almost nothing, so it was transient, and the
-retention counters that proved it also refuted the guess that came with
-them — decor, the "likely culprit", was three orders of magnitude too
-small. `MAX_POOLED_BANDS` was **2**. A band is 1.31MB and a composite makes
-several, so the first two came from the pool and every one after was a
-fresh pair of typed arrays. Correct when compositing was rare; at ~80 chunk
-scans a second it _was_ the allocation.
+**The band pool.** The one that mattered. Heap was growing 188MB/s while the
+chunk layer retained almost nothing, so it was transient, and the retention
+counters that proved it also refuted the guess that came with them — decor, the
+"likely culprit", was three orders of magnitude too small. `MAX_POOLED_BANDS`
+was **2**. A band is 1.31MB and a composite makes several, so the first two came
+from the pool and every one after was a fresh pair of typed arrays. Correct when
+compositing was rare; at ~80 chunk scans a second it _was_ the allocation.
 
 |                    | start of the day                  | now                   |
 | ------------------ | --------------------------------- | --------------------- |
@@ -732,193 +737,183 @@ scans a second it _was_ the allocation.
 | faces emitted      | all of them                       | **23%**               |
 
 **What the instrument actually did.** It never measured "GC" or "React". It
-measured one thing — `dt - task_ms`, whether a frame's time was inside the
-main thread's own task or outside it — and that split excluded half the
-search space on the first look: an 8.4s frame with `task 15.3ms` cannot be
-the scheduler, the build, or the mounting, because all of those are inside.
-Everything after was narrowing. Four hypotheses formed by reading code were
-refuted by it (decode cost, a double render, mount storms, re-renders), and
-so was the last guess in this list. The lesson is not "instrument GC" but
-"find a cheap axis that is exclusive, and let it delete half the space".
+measured one thing — `dt - task_ms`, whether a frame's time was inside the main
+thread's own task or outside it — and that split excluded half the search space
+on the first look: an 8.4s frame with `task 15.3ms` cannot be the scheduler, the
+build, or the mounting, because all of those are inside. Everything after was
+narrowing. Four hypotheses formed by reading code were refuted by it (decode
+cost, a double render, mount storms, re-renders), and so was the last guess in
+this list. The lesson is not "instrument GC" but "find a cheap axis that is
+exclusive, and let it delete half the space".
 
 The counters that earned their keep have a shape in common: they are
-_normalised_ (faces kept as a ratio, cost per bake, cost per thousand runs)
-or they _name a specific owner_ (what the pool holds, what a chunk retains,
-how often a band was reused). Absolute per-window totals were the ones that
-kept failing to settle arguments, because they mix how much work a window
-happened to contain with what one unit of it costs.
+_normalised_ (faces kept as a ratio, cost per bake, cost per thousand runs) or
+they _name a specific owner_ (what the pool holds, what a chunk retains, how
+often a band was reused). Absolute per-window totals were the ones that kept
+failing to settle arguments, because they mix how much work a window happened to
+contain with what one unit of it costs.
 
 ## Resolved 2026-09-12: one on-screen chunk could wait sixteen seconds
 
-In a zoomed-out session with
-500–590 chunks in the frustum and the view moving almost the whole time,
-the ledger's `oldest_visible_ms` rose by exactly 1000 ms per second from
-t = 3 s to the end, reaching 15 994 ms: one pending chunk on screen was
-passed over for the entire session while the pending count stayed between
-230 and 760 and bakes ran at 119/s during the backlog. An earlier session's
-window peak read 17 180 ms, so it predates the core-memory work that session
-tested. The rate says the scheduler is working; the monotonic wait says its
-order can starve one chunk indefinitely — the unified priority
+In a zoomed-out session with 500–590 chunks in the frustum and the view moving
+almost the whole time, the ledger's `oldest_visible_ms` rose by exactly 1000 ms
+per second from t = 3 s to the end, reaching 15 994 ms: one pending chunk on
+screen was passed over for the entire session while the pending count stayed
+between 230 and 760 and bakes ran at 119/s during the backlog. An earlier
+session's window peak read 17 180 ms, so it predates the core-memory work that
+session tested. The rate says the scheduler is working; the monotonic wait says
+its order can starve one chunk indefinitely — the unified priority
 (`holds_slot`, `in_frustum`, `lead_distance2`) has no aging term, so a chunk
-that is always slightly farther from the lead point than whatever keeps
-arriving never reaches the front while the view keeps moving. Trace:
+that is always slightly farther from the lead point than whatever keeps arriving
+never reaches the front while the view keeps moving. Trace:
 pxl-ledger-2026-09-11T14-35-25-187Z.json.
 
-Fixed with aging (`sched/priority.ts`'s `AGE_HALF_MS`), the textbook cure
-for starvation under a static priority: every 500 ms a pending item waits
-halves its effective distance from the lead point, so one k times farther
-than a fresh arrival overtakes it after log2(k) half-lives — two seconds at
-sixteen times, the overlay's `STARVED_MS`. Items that began waiting together
-age alike, so a jump or a load still fills nearest-first. Aging reorders
-within a tier and never across one: slot holders still go first and an
-off-screen release still cannot pass a visible build, so releases can in
-principle still wait out an endless stream of on-screen work — accepted, as
-before, since what they cost is memory the pool can spare. The comparator
-takes `now` once per sort, so its keys hold still while a sort runs.
+Fixed with aging (`sched/priority.ts`'s `AGE_HALF_MS`), the textbook cure for
+starvation under a static priority: every 500 ms a pending item waits halves its
+effective distance from the lead point, so one k times farther than a fresh
+arrival overtakes it after log2(k) half-lives — two seconds at sixteen times,
+the overlay's `STARVED_MS`. Items that began waiting together age alike, so a
+jump or a load still fills nearest-first. Aging reorders within a tier and never
+across one: slot holders still go first and an off-screen release still cannot
+pass a visible build, so releases can in principle still wait out an endless
+stream of on-screen work — accepted, as before, since what they cost is memory
+the pool can spare. The comparator takes `now` once per sort, so its keys hold
+still while a sort runs.
 
 Reviewed alongside, the ledger's three readers: the overlay and the report
 reduced frames through `summary.ts` already, but the side counters the report
-prints (faces, bands, build and scan cost, badge builds, placement runs,
-atlas repacks, index rebuilds) counted from load, so after a restart they
-carried every earlier window beside frames that did not; they are now read
-as differences from the window's start (`log.ts`'s `window_counters`). The
-pool's hit share was likewise since load and is now a difference over the
-window's frames. The overlay reduced the whole task and long-frame rings on
-each repaint, the cost the frame rows had already been cut from; all three
-now read its last ten seconds. The trace builds a frame's args once for both
-the counter track and the worst-frame spans.
+prints (faces, bands, build and scan cost, badge builds, placement runs, atlas
+repacks, index rebuilds) counted from load, so after a restart they carried
+every earlier window beside frames that did not; they are now read as
+differences from the window's start (`log.ts`'s `window_counters`). The pool's
+hit share was likewise since load and is now a difference over the window's
+frames. The overlay reduced the whole task and long-frame rings on each repaint,
+the cost the frame rows had already been cut from; all three now read its last
+ten seconds. The trace builds a frame's args once for both the counter track and
+the worst-frame spans.
 
 ## Update 2026-09-13: the stats blob is gone
 
-`__PXL_RENDER_STATS__` and the canvas `dataset` copy were removed. Nothing
-read them once the report existed: the overlay and `__pxl_ledger_log` print
-the same numbers with a window around them, and a blob rewritten every
-frame — a JSON stringify of a dozen sub-objects — was itself a per-frame
-cost paid for a reading nobody took. What only fed the blob went with it:
-`mesh_mount_stats`, `mesh_unmount_stats`, `commit_step_stats` and their
-`performance.now()` pairs in the attach and commit paths. The counters the
-report does print stay (`lod_build_stats`, `occlusion_stats`, the band
-pool, the badge pipeline), and `coarse_instance_stats`, which had only the
-blob, is now a line of the report. `ledger_frame_peak()` stays: the report
-prints it.
+`__PXL_RENDER_STATS__` and the canvas `dataset` copy were removed. Nothing read
+them once the report existed: the overlay and `__pxl_ledger_log` print the same
+numbers with a window around them, and a blob rewritten every frame — a JSON
+stringify of a dozen sub-objects — was itself a per-frame cost paid for a
+reading nobody took. What only fed the blob went with it: `mesh_mount_stats`,
+`mesh_unmount_stats`, `commit_step_stats` and their `performance.now()` pairs in
+the attach and commit paths. The counters the report does print stay
+(`lod_build_stats`, `occlusion_stats`, the band pool, the badge pipeline), and
+`coarse_instance_stats`, which had only the blob, is now a line of the report.
+`ledger_frame_peak()` stays: the report prints it.
 
-The console stream (`ledger_set_logging`) is no longer a setting of its
-own. It is a button on the overlay, beside report and trace, since a
-stream is something one turns on while looking at the panel, and the
-one `show_ledger` setting is what opens the panel.
+The console stream (`ledger_set_logging`) is no longer a setting of its own. It
+is a button on the overlay, beside report and trace, since a stream is something
+one turns on while looking at the panel, and the one `show_ledger` setting is
+what opens the panel.
 
 ## Update 2026-09-13: the axis has a precondition, and a phone showed it
 
-Four ledger reports from an iPhone (dpr 2, no GPU timer, no LoAF, no
-longtask) were read in a row, and the first reading was wrong in the way
-this document warns about: `task 7 + offthread 279` on a still frame was
-called GPU, then GC. The A/B settled it — decor off cut triangles 58% and
-moved nothing; POI off took dt p95 from 222 to 54 ms. The 250 ms was
-main-thread work that the tick never sees: POI's placement (a React
-effect on an epoch), its badge canvases, and the atlas upload three does
-at render. `dt − task` excludes half the space only when every piece of
-main-thread work is inside the task; work outside it is indistinguishable
-from the GPU and the collector, and on iOS there is no second instrument
-to tell them apart. The category-A contract already said this work belongs
-under the budget — "billboard canvas building" is on the list by name —
-so the finding is not a new rule but the old one unmet, and the fix is the
-one planned: POI under the tick (BACKLOG, P1).
+Four ledger reports from an iPhone (dpr 2, no GPU timer, no LoAF, no longtask)
+were read in a row, and the first reading was wrong in the way this document
+warns about: `task 7 + offthread 279` on a still frame was called GPU, then GC.
+The A/B settled it — decor off cut triangles 58% and moved nothing; POI off took
+dt p95 from 222 to 54 ms. The 250 ms was main-thread work that the tick never
+sees: POI's placement (a React effect on an epoch), its badge canvases, and the
+atlas upload three does at render. `dt − task` excludes half the space only when
+every piece of main-thread work is inside the task; work outside it is
+indistinguishable from the GPU and the collector, and on iOS there is no second
+instrument to tell them apart. The category-A contract already said this work
+belongs under the budget — "billboard canvas building" is on the list by name —
+so the finding is not a new rule but the old one unmet, and the fix is the one
+planned: POI under the tick (BACKLOG, P1).
 
-The tick's steps are named now and the report prints each one's mean and
-max (`steps` line). Its first reading named a step that runs under the
-budget and does not yield: `content/poi_index` at a mean of 1.5 ms and a
-max of 45, because its unit of work is a page and forward progress runs
-the first unit whole. A budgeted phase is only as cooperative as the
-granularity of its steps; the phase total could not show that, and the
-step table can. Monitor-side only — the scheduler still knows one number.
+The tick's steps are named now and the report prints each one's mean and max
+(`steps` line). Its first reading named a step that runs under the budget and
+does not yield: `content/poi_index` at a mean of 1.5 ms and a max of 45, because
+its unit of work is a page and forward progress runs the first unit whole. A
+budgeted phase is only as cooperative as the granularity of its steps; the phase
+total could not show that, and the step table can. Monitor-side only — the
+scheduler still knows one number.
 
-The steady state, once loading is done, is fine on that phone: dt p50 15
-ms on a 13 ms display, the tick 5 ms, the interaction phase 3. What the
-phone exposed is where the instrument was blind, not where the scheduler
-was slow.
+The steady state, once loading is done, is fine on that phone: dt p50 15 ms on a
+13 ms display, the tick 5 ms, the interaction phase 3. What the phone exposed is
+where the instrument was blind, not where the scheduler was slow.
 
 ## Update 2026-09-13, evening: what the phone reads now
 
-Seven reports later, same phone, same spot: dt p50 17 ms on a 16 ms
-display, the frame's task 2 ms, offthread 15 — which at that task length
-is the vsync wait, not work. Missed moving frames 39% to 13%. The
-render-path bisect (a dev setting that leaves out the composer's MSAA or
-the composer itself) moved p50 by a millisecond and the missed share by
-five points; the pixel pipeline stays.
+Seven reports later, same phone, same spot: dt p50 17 ms on a 16 ms display, the
+frame's task 2 ms, offthread 15 — which at that task length is the vsync wait,
+not work. Missed moving frames 39% to 13%. The render-path bisect (a dev setting
+that leaves out the composer's MSAA or the composer itself) moved p50 by a
+millisecond and the missed share by five points; the pixel pipeline stays.
 
-What did it, each measured by the step table or the census before and
-after: POI's placement, index sweep and badge uploads brought under the
-tick as bounded units with a content share of the budget they cannot be
-denied; the badges as one instanced quad (draws 120–212 to 35); the
-companion's surface probe replaced by one column scan and cached; the
-placement's greedy pass cut into ranges; a candidate's width estimated
-rather than measured. None of it was found by reading code. Each was the
-largest number in a report, and each report was taken after the previous
-fix landed whole.
+What did it, each measured by the step table or the census before and after:
+POI's placement, index sweep and badge uploads brought under the tick as bounded
+units with a content share of the budget they cannot be denied; the badges as
+one instanced quad (draws 120–212 to 35); the companion's surface probe replaced
+by one column scan and cached; the placement's greedy pass cut into ranges; a
+candidate's width estimated rather than measured. None of it was found by
+reading code. Each was the largest number in a report, and each report was taken
+after the previous fix landed whole.
 
-The instrument grew two things on the way, both monitor-side: named
-steps with their own mean and max, which is what turned "the content
-phase is slow" into "the sweep's unit is a page", and per-job waits for
-the content steps, which is what showed a placement taking forty frames
-under a load and justified the share. The scheduler still knows one
-number.
+The instrument grew two things on the way, both monitor-side: named steps with
+their own mean and max, which is what turned "the content phase is slow" into
+"the sweep's unit is a page", and per-job waits for the content steps, which is
+what showed a placement taking forty frames under a load and justified the
+share. The scheduler still knows one number.
 
 ## The worker's case, 2026-09-13
 
 A cooperative scheduler and a worker are not alternatives. The scheduler
-interleaves work that can yield — every unit smaller than the budget, so
-several kinds of work share a frame without a stall; POI was that, and
-cutting it into units solved it without a thread. A worker adds a core
-for work that is heavy in total, whether or not it yields.
+interleaves work that can yield — every unit smaller than the budget, so several
+kinds of work share a frame without a stall; POI was that, and cutting it into
+units solved it without a thread. A worker adds a core for work that is heavy in
+total, whether or not it yields.
 
-**Corrected 2026-09-13.** This section first said the chunk bake could
-not yield — "one mesher call … forward progress runs the unit whole, so
-the frame is lost by construction". That was wrong when written. The
-stepped bake (`begin_bake`/`step_bake`, eight rows or 512 boxes a step)
-landed in d331d94 on 2026-09-12, before the phone reading, and
-`chunk_node.advance_bake` yields between steps under the budget. The
-number cited for it, `commit/bake 21.6 ms`, is `commit_ms / bakes` in
-`sched/summary.ts`: a bake's commit time summed across the frames it took,
-not one stall. What the reading does show is the load: while terrain fills
-in, the bake and the scan take the main thread's budget from everything
-else. So the worker's case is throughput and the main thread's share, not
-an uncuttable unit — and it is to be confirmed on the phone rather than
+**Corrected 2026-09-13.** This section first said the chunk bake could not yield
+— "one mesher call … forward progress runs the unit whole, so the frame is lost
+by construction". That was wrong when written. The stepped bake
+(`begin_bake`/`step_bake`, eight rows or 512 boxes a step) landed in d331d94 on
+2026-09-12, before the phone reading, and `chunk_node.advance_bake` yields
+between steps under the budget. The number cited for it, `commit/bake 21.6 ms`,
+is `commit_ms / bakes` in `sched/summary.ts`: a bake's commit time summed across
+the frames it took, not one stall. What the reading does show is the load: while
+terrain fills in, the bake and the scan take the main thread's budget from
+everything else. So the worker's case is throughput and the main thread's share,
+not an uncuttable unit — and it is to be confirmed on the phone rather than
 assumed, with the stepped path and the worker behind one setting, and the
 longest single step recorded, since the maxima below (64–112 ms) were not
-attributed to a step. If one step is that long, cutting it finer comes
-before the worker.
+attributed to a step. If one step is that long, cutting it finer comes before
+the worker.
 
-What the numbers say about the value. In the steady state, once loading
-is done, the bake barely runs: `visible/chunks` 0.7–2.9 ms a frame, the
-task 2 ms, the frame at the display rate; a worker changes nothing there.
-While terrain is filling in — first load, a zoom out, a new area — the
-step averages 8.7 ms with maxima of 64–112, 252 of 740 frames overran,
-and dt p50 was 29 ms; most of the phone's missed frames are in that
-window, and it is the window a user sees most. With the scan and the bake
-off the thread, what remains in the visible phase is the recheck (2 ms)
-and the attach (commit p95 9–14 ms), so the task's p95 in that window
-should fall from 33–48 ms to about 10. The desktop does not need it: the
-same unit is 3 ms there.
+What the numbers say about the value. In the steady state, once loading is done,
+the bake barely runs: `visible/chunks` 0.7–2.9 ms a frame, the task 2 ms, the
+frame at the display rate; a worker changes nothing there. While terrain is
+filling in — first load, a zoom out, a new area — the step averages 8.7 ms with
+maxima of 64–112, 252 of 740 frames overran, and dt p50 was 29 ms; most of the
+phone's missed frames are in that window, and it is the window a user sees most.
+With the scan and the bake off the thread, what remains in the visible phase is
+the recheck (2 ms) and the attach (commit p95 9–14 ms), so the task's p95 in
+that window should fall from 33–48 ms to about 10. The desktop does not need it:
+the same unit is 3 ms there.
 
-What it costs: a copy in (the run set, ~100 KB a chunk; the terrain page
-once, kept in the worker) and a copy out (the mesh, ~1 MB), memcpy-scale
-and off the thread; and a frame or two of latency on each chunk, which
-changes when a chunk appears, not how many frames it takes. The phone's
-cores are there.
+What it costs: a copy in (the run set, ~100 KB a chunk; the terrain page once,
+kept in the worker) and a copy out (the mesh, ~1 MB), memcpy-scale and off the
+thread; and a frame or two of latency on each chunk, which changes when a chunk
+appears, not how many frames it takes. The phone's cores are there.
 
-What does not change: the model. The main thread stays the scheduler; the
-bake job stays a Demand with a priority, a budget and an abort; `run`
-borrows a slab, fills it, posts it, and copies the result back — the
-"executor swap under a fixed model" this document reserved, with the
-little memory (`sched/slabs.ts`) already holding the ownership record.
-Not everything moves: only what cannot yield and is heavy, which today is
-the bake. Placement and sweep stay cooperative.
+What does not change: the model. The main thread stays the scheduler; the bake
+job stays a Demand with a priority, a budget and an abort; `run` borrows a slab,
+fills it, posts it, and copies the result back — the "executor swap under a
+fixed model" this document reserved, with the little memory (`sched/slabs.ts`)
+already holding the ownership record. Not everything moves: only what cannot
+yield and is heavy, which today is the bake. Placement and sweep stay
+cooperative.
 
-**Measured 2026-09-13, and not taken.** The case above was written before
-the phone reading. The longest stepped step on the phone was 6.0 ms; while
-terrain filled in the main-thread task p95 was the same on both paths and
-the stepped path finished more bakes in fewer frames. The numbers and what
-was not measured are in
+**Measured 2026-09-13, and not taken.** The case above was written before the
+phone reading. The longest stepped step on the phone was 6.0 ms; while terrain
+filled in the main-thread task p95 was the same on both paths and the stepped
+path finished more bakes in fewer frames. The numbers and what was not measured
+are in
 [experiment/20260913-bake-worker-on-the-phone.md](../experiment/20260913-bake-worker-on-the-phone.md);
 the worker path was retired with the TypeScript bake on 2026-09-14.
 
@@ -967,6 +962,6 @@ the engine-scale rewrite that
 - [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md) —
   why over-investing in the runtime/network layer is the specific historical
   mistake this must not repeat.
-- [20260907-world-rendering-tiers.md](../20260907-world-rendering-tiers.md) — the
-  billboard tier (POI, chat bubbles) whose canvas-build cost is a category-A
+- [20260907-world-rendering-tiers.md](../20260907-world-rendering-tiers.md) —
+  the billboard tier (POI, chat bubbles) whose canvas-build cost is a category-A
   task.

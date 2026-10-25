@@ -9,7 +9,9 @@
 //! "The query between them"): each source answers from its own level of
 //! detail, and what it holds stays behind it.
 
-use crate::answer::{cover, eighths, fills, kept_word, slab_of, slab_word, In, Kind, ANY, PLACED_BLOCK};
+use crate::answer::{
+    cover, eighths, fills, kept_word, slab_of, slab_word, In, Kind, ANY, PLACED_BLOCK,
+};
 use crate::area::Shard;
 use crate::caves::Cave;
 use crate::ground::{self, Held, VOID};
@@ -41,7 +43,13 @@ impl At {
     /// Its words: its caves, what is placed, its shard, where its ground's
     /// cells were held, its ways' cursor.
     pub const fn words(&self) -> [u32; AT_WORDS as usize] {
-        [self.cave.word(), self.placed.word(), self.shard.word(), self.ground.word(), self.ways.word()]
+        [
+            self.cave.word(),
+            self.placed.word(),
+            self.shard.word(),
+            self.ground.word(),
+            self.ways.word(),
+        ]
     }
 
     /// `words`'s `At`.
@@ -128,19 +136,37 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     let (cave, put, shard) = (at.cave, at.placed, at.shard);
     let (place, trail) = (&mut at.ground, &mut at.ways);
     let block = zoom >= near || zoom >= LEAF_CELL && overwrite::whole(put, carve, zoom, c);
-    let over = overwrite::over(lanes, put, carve, hide, zoom, c, if block { zoom } else { near });
+    let over = overwrite::over(
+        lanes,
+        put,
+        carve,
+        hide,
+        zoom,
+        c,
+        if block { zoom } else { near },
+    );
     // The four looks a filling block of what is placed is drawn by, a byte
     // each (`ground::word`): only the ground's looks, a placed cube of a
     // look, fit; one past a byte, an object's, is drawn by its value.
     let laid = || {
-        let four = if fills(over.block) { overwrite::looks(lanes, put, hide, zoom, c, over.block) } else { [0; 4] };
+        let four = if fills(over.block) {
+            overwrite::looks(lanes, put, hide, zoom, c, over.block)
+        } else {
+            [0; 4]
+        };
         let bytes = four[0] < 256 && four[1] < 256 && four[2] < 256 && four[3] < 256;
-        [PLACED_BLOCK | over.block, if bytes { ground::word(four) } else { 0 }]
+        [
+            PLACED_BLOCK | over.block,
+            if bytes { ground::word(four) } else { 0 },
+        ]
     };
     // Filling its cube whole, what is placed is the block, whatever is
     // under it.
     if over.says == BLOCK && over.fill == FULL {
-        return In { kind: Kind::Block, block: laid() };
+        return In {
+            kind: Kind::Block,
+            block: laid(),
+        };
     }
     // Where what is placed splits the node, where along z it may fill.
     let (placed, splits) = if over.says == SPLIT {
@@ -150,7 +176,10 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     };
     let before = *place;
     let (i, cell, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], block);
-    if place.from() != before.from() || place.berth() != before.berth() || place.here() != before.here() {
+    if place.from() != before.from()
+        || place.berth() != before.berth()
+        || place.here() != before.here()
+    {
         *trail = if place.here() {
             overwrite::cursor(pool, squares.root(place.from(), place.berth()), zoom, c)
         } else {
@@ -166,7 +195,10 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     if block {
         // Where the ground is not held, the lack, unless what is placed
         // keeps a block there alone.
-        let lacks = In { kind: i.kind, block: [i.block, 0] };
+        let lacks = In {
+            kind: i.kind,
+            block: [i.block, 0],
+        };
         if i.kind == Kind::Lacks && over.says != BLOCK {
             return lacks;
         }
@@ -177,7 +209,11 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         // (`answer::eighths`), its look the kind most of that is.
         let mut value = if i.kind == Kind::Block { i.block } else { VOID };
         let mut fill = if fills(value) { cell.cover(c[2]) } else { 0 };
-        let mut four = if fills(value) { ground::word(cell.four(zoom, value)) } else { 0 };
+        let mut four = if fills(value) {
+            ground::word(cell.four(zoom, value))
+        } else {
+            0
+        };
         if way != VOID {
             // A way's look four times where one wrote it, whatever its value.
             let w = crate::ways::tree::read(way);
@@ -200,11 +236,21 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         }
         let block = if kept == 0 {
             // Nothing kept: air, what is placed's where it is air.
-            [if over.says == BLOCK && over.block == AIR { PLACED_BLOCK | AIR } else { VOID }, 0]
+            [
+                if over.says == BLOCK && over.block == AIR {
+                    PLACED_BLOCK | AIR
+                } else {
+                    VOID
+                },
+                0,
+            ]
         } else {
             [kept_word(value, kept), four]
         };
-        return In { kind: Kind::Block, block };
+        return In {
+            kind: Kind::Block,
+            block,
+        };
     }
     // Coarser, what is placed splits it where it may fill, and the ways
     // what the ground leaves air where they may; a split's slab is every
@@ -212,9 +258,16 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
     // (`ground::slab`, unbounded where it lacks) and the ways' (`ways::slab`).
     let ways = crate::ways::slab(bound, [ground::coarsest(zoom, far), near]);
     let fill = ground::meets(ways, (zoom, c[2]), near);
-    let kind = if splits || i.kind == Kind::Block && fill { Kind::Split } else { i.kind };
+    let kind = if splits || i.kind == Kind::Block && fill {
+        Kind::Split
+    } else {
+        i.kind
+    };
     if kind != Kind::Split {
-        return In { kind, block: [i.block, 0] };
+        return In {
+            kind,
+            block: [i.block, 0],
+        };
     }
     let own = match i.kind {
         Kind::Split => slab_of(i.block),
@@ -222,5 +275,8 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         _ => ground::EMPTY,
     };
     let joined = ground::join(ground::join(own, ways), placed);
-    In { kind, block: [slab_word(joined), 0] }
+    In {
+        kind,
+        block: [slab_word(joined), 0],
+    }
 }

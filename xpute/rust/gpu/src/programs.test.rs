@@ -70,7 +70,10 @@ pub const PROGRAMS: [Program; 6] = [
         name: "add_arrays",
         encode: add_arrays,
     },
-    Program { name: "triangle", encode: triangle },
+    Program {
+        name: "triangle",
+        encode: triangle,
+    },
     Program {
         name: "indexed_instanced",
         encode: indexed_instanced,
@@ -240,9 +243,15 @@ fn add_arrays(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     let pl = gpu.pipeline_layout(s, &[bgl]).unwrap();
     let res = |binding, buffer| BindGroupEntry {
         binding,
-        resource: Resource::Buffer { buffer, offset: 0, size: None },
+        resource: Resource::Buffer {
+            buffer,
+            offset: 0,
+            size: None,
+        },
     };
-    let bg = gpu.bind_group(s, bgl, &[res(0, a), res(1, b), res(2, c)]).unwrap();
+    let bg = gpu
+        .bind_group(s, bgl, &[res(0, a), res(1, b), res(2, c)])
+        .unwrap();
     let p = gpu
         .compute_pipeline(
             s,
@@ -284,7 +293,11 @@ fn triangle(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
             s,
             &RenderPipelineDescriptor {
                 layout: None,
-                vertex: VertexState { module: m, entry: "vs", buffers: &[] },
+                vertex: VertexState {
+                    module: m,
+                    entry: "vs",
+                    buffers: &[],
+                },
                 primitive: PRIMITIVE,
                 depth_stencil: None,
                 multisample: MULTISAMPLE_NONE,
@@ -311,7 +324,10 @@ fn indexed_instanced(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn
     let (t, v) = target(gpu, s);
     // Two vertices before the quad's, which the base vertex skips.
     let corners = le_f32(&[9.0, 9.0, 9.0, 9.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
-    let indices: Vec<u8> = [0u16, 1, 2, 2, 1, 3].iter().flat_map(|i| i.to_le_bytes()).collect();
+    let indices: Vec<u8> = [0u16, 1, 2, 2, 1, 3]
+        .iter()
+        .flat_map(|i| i.to_le_bytes())
+        .collect();
     // Each: its offset (two f32), its colour (unorm8x4); the first is skipped.
     let places: [([f32; 2], [u8; 4]); 5] = [
         ([0.0, 0.0], [1, 2, 3, 4]),
@@ -320,7 +336,10 @@ fn indexed_instanced(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn
         ([0.25, -0.75], [10, 20, 30, 255]),
         ([0.375, 0.5], [200, 100, 50, 255]),
     ];
-    let instances: Vec<u8> = places.iter().flat_map(|(o, c)| le_f32(o).into_iter().chain(c.iter().copied())).collect();
+    let instances: Vec<u8> = places
+        .iter()
+        .flat_map(|(o, c)| le_f32(o).into_iter().chain(c.iter().copied()))
+        .collect();
     let buffer = |gpu: &mut Encoder, s: &mut Stream, usage, bytes: &[u8]| {
         let b = gpu
             .buffer(
@@ -335,7 +354,11 @@ fn indexed_instanced(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn
         call::write_buffer(s, b, 0, bytes);
         b
     };
-    let (vb, ib, inst) = (buffer(gpu, s, B::VERTEX, &corners), buffer(gpu, s, B::INDEX, &indices), buffer(gpu, s, B::VERTEX, &instances));
+    let (vb, ib, inst) = (
+        buffer(gpu, s, B::VERTEX, &corners),
+        buffer(gpu, s, B::INDEX, &indices),
+        buffer(gpu, s, B::VERTEX, &instances),
+    );
     let m = gpu
         .shader_module(
             s,
@@ -514,7 +537,11 @@ fn sampled_image(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
             s,
             &RenderPipelineDescriptor {
                 layout: Some(pl),
-                vertex: VertexState { module: m, entry: "vs", buffers: &[] },
+                vertex: VertexState {
+                    module: m,
+                    entry: "vs",
+                    buffers: &[],
+                },
                 primitive: PRIMITIVE,
                 depth_stencil: None,
                 multisample: MULTISAMPLE_NONE,
@@ -579,14 +606,26 @@ fn timestamps(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
         },
     };
     let bgl = gpu
-        .bind_group_layout(s, &[entry(0, BufferBindingType::read_only_storage), entry(1, BufferBindingType::storage)])
+        .bind_group_layout(
+            s,
+            &[
+                entry(0, BufferBindingType::read_only_storage),
+                entry(1, BufferBindingType::storage),
+            ],
+        )
         .unwrap();
     let pl = gpu.pipeline_layout(s, &[bgl]).unwrap();
     let res = |binding, buffer| BindGroupEntry {
         binding,
-        resource: Resource::Buffer { buffer, offset: 0, size: None },
+        resource: Resource::Buffer {
+            buffer,
+            offset: 0,
+            size: None,
+        },
     };
-    let bg = gpu.bind_group(s, bgl, &[res(0, times), res(1, out)]).unwrap();
+    let bg = gpu
+        .bind_group(s, bgl, &[res(0, times), res(1, out)])
+        .unwrap();
     let idle = gpu
         .compute_pipeline(
             s,
@@ -674,7 +713,11 @@ fn dropped_transaction(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Tu
             bgl,
             &[BindGroupEntry {
                 binding: 0,
-                resource: Resource::Buffer { buffer: out, offset: 0, size: None },
+                resource: Resource::Buffer {
+                    buffer: out,
+                    offset: 0,
+                    size: None,
+                },
             }],
         )
         .unwrap();

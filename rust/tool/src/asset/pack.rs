@@ -73,8 +73,10 @@ pub struct Item {
 }
 
 pub fn load(raw: &Path, content: &Path) -> Result<Vec<Item>, String> {
-    let text = std::fs::read_to_string(raw.join("manifest.json")).map_err(|e| format!("manifest.json: {e}"))?;
-    let manifest: Manifest = serde_json::from_str(&text).map_err(|e| format!("manifest.json: {e}"))?;
+    let text = std::fs::read_to_string(raw.join("manifest.json"))
+        .map_err(|e| format!("manifest.json: {e}"))?;
+    let manifest: Manifest =
+        serde_json::from_str(&text).map_err(|e| format!("manifest.json: {e}"))?;
 
     let mut items = Vec::new();
     let mut push = |label: String, slot: Slot, e: &Entry| {
@@ -102,14 +104,29 @@ pub fn load(raw: &Path, content: &Path) -> Result<Vec<Item>, String> {
     }
     // A side and a bottom come together (Minecraft's grass block): a side alone
     // leaves the cells below the surface nothing right to wear.
-    if let Some(ty) = manifest.ground.side.keys().find(|ty| !manifest.ground.bottom.contains_key(*ty)) {
-        return Err(format!("manifest.json: ground.side.{ty} has no ground.bottom.{ty}"));
+    if let Some(ty) = manifest
+        .ground
+        .side
+        .keys()
+        .find(|ty| !manifest.ground.bottom.contains_key(*ty))
+    {
+        return Err(format!(
+            "manifest.json: ground.side.{ty} has no ground.bottom.{ty}"
+        ));
     }
     for (ty, entry) in &manifest.ground.side {
-        push(format!("ground.side.{ty}"), Slot::Side { ty: ty.clone() }, entry);
+        push(
+            format!("ground.side.{ty}"),
+            Slot::Side { ty: ty.clone() },
+            entry,
+        );
     }
     for (ty, entry) in &manifest.ground.bottom {
-        push(format!("ground.bottom.{ty}"), Slot::Bottom { ty: ty.clone() }, entry);
+        push(
+            format!("ground.bottom.{ty}"),
+            Slot::Bottom { ty: ty.clone() },
+            entry,
+        );
     }
     for (ty, entry) in &manifest.object {
         push(
@@ -167,7 +184,11 @@ fn hex_to_rgb(hex: &str) -> Option<[u8; 3]> {
     if h.len() < 6 {
         return None;
     }
-    Some([u8::from_str_radix(&h[0..2], 16).ok()?, u8::from_str_radix(&h[2..4], 16).ok()?, u8::from_str_radix(&h[4..6], 16).ok()?])
+    Some([
+        u8::from_str_radix(&h[0..2], 16).ok()?,
+        u8::from_str_radix(&h[2..4], 16).ok()?,
+        u8::from_str_radix(&h[4..6], 16).ok()?,
+    ])
 }
 
 /// Makes every alpha 255, flattening over the manifest's `paletteHex`, or the
@@ -211,25 +232,49 @@ fn lab_of(rgb: [u8; 3]) -> [f64; 3] {
     let x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.950_47;
     let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
     let z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.088_83;
-    let f = |t: f64| if t > 0.008_856 { libm::cbrt(t) } else { 7.787 * t + 16.0 / 116.0 };
-    [116.0 * f(y) - 16.0, 500.0 * (f(x) - f(y)), 200.0 * (f(y) - f(z))]
+    let f = |t: f64| {
+        if t > 0.008_856 {
+            libm::cbrt(t)
+        } else {
+            7.787 * t + 16.0 / 116.0
+        }
+    };
+    [
+        116.0 * f(y) - 16.0,
+        500.0 * (f(x) - f(y)),
+        200.0 * (f(y) - f(z)),
+    ]
 }
 
 fn rgb_of([l, a, b]: [f64; 3]) -> [u8; 3] {
     let fy = (l + 16.0) / 116.0;
     let (fx, fz) = (fy + a / 500.0, fy - b / 200.0);
-    let g = |t: f64| if t * t * t > 0.008_856 { t * t * t } else { (t - 16.0 / 116.0) / 7.787 };
+    let g = |t: f64| {
+        if t * t * t > 0.008_856 {
+            t * t * t
+        } else {
+            (t - 16.0 / 116.0) / 7.787
+        }
+    };
     let (x, y, z) = (g(fx) * 0.950_47, g(fy), g(fz) * 1.088_83);
-    [3.2406 * x - 1.5372 * y - 0.4986 * z, -0.9689 * x + 1.8758 * y + 0.0415 * z, 0.0557 * x - 0.2040 * y + 1.0570 * z].map(|c| linear_to_srgb(c.clamp(0.0, 1.0)))
+    [
+        3.2406 * x - 1.5372 * y - 0.4986 * z,
+        -0.9689 * x + 1.8758 * y + 0.0415 * z,
+        0.0557 * x - 0.2040 * y + 1.0570 * z,
+    ]
+    .map(|c| linear_to_srgb(c.clamp(0.0, 1.0)))
 }
 
 /// A top as it ships: its PNG with its colors drawn toward its look's, so the
 /// pack and every other reader of the tile show one image.
 pub fn toward_carto_png(png: &[u8], carto: u32) -> Result<Vec<u8>, String> {
-    let mut img = image::load_from_memory(png).map_err(|e| e.to_string())?.to_rgba8();
+    let mut img = image::load_from_memory(png)
+        .map_err(|e| e.to_string())?
+        .to_rgba8();
     toward_carto(&mut img, carto);
     let mut out = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| e.to_string())?;
+    img.write_to(&mut out, image::ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
     Ok(out.into_inner())
 }
 
@@ -237,11 +282,18 @@ pub fn toward_carto_png(png: &[u8], carto: u32) -> Result<Vec<u8>, String> {
 /// no farther than `TOWARD_CARTO` from `carto`: its pattern, the pixels'
 /// differences, is left as painted. A tile already that close is left alone.
 fn toward_carto(img: &mut RgbaImage, carto: u32) {
-    let labs: Vec<[f64; 3]> = img.pixels().map(|p| lab_of([p.0[0], p.0[1], p.0[2]])).collect();
+    let labs: Vec<[f64; 3]> = img
+        .pixels()
+        .map(|p| lab_of([p.0[0], p.0[1], p.0[2]]))
+        .collect();
     let n = labs.len() as f64;
     let mean: [f64; 3] = core::array::from_fn(|k| labs.iter().map(|p| p[k]).sum::<f64>() / n);
     let target = lab_of([(carto >> 16) as u8, (carto >> 8) as u8, carto as u8]);
-    let d = libm::sqrt((0..3).map(|k| (target[k] - mean[k]) * (target[k] - mean[k])).sum());
+    let d = libm::sqrt(
+        (0..3)
+            .map(|k| (target[k] - mean[k]) * (target[k] - mean[k]))
+            .sum(),
+    );
     if d <= TOWARD_CARTO {
         return;
     }
@@ -284,7 +336,11 @@ fn srgb_to_linear(v: u8) -> f64 {
 }
 
 fn linear_to_srgb(c: f64) -> u8 {
-    let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * libm::pow(c, 1.0 / 2.4) - 0.055 };
+    let s = if c <= 0.003_130_8 {
+        c * 12.92
+    } else {
+        1.055 * libm::pow(c, 1.0 / 2.4) - 0.055
+    };
     (s * 255.0).round_ties_even().clamp(0.0, 255.0) as u8
 }
 
@@ -293,20 +349,34 @@ fn linear_to_srgb(c: f64) -> u8 {
 pub fn compose(tiles: &[(String, &[u8])]) -> Result<Image, String> {
     let rows = tiles.len().div_ceil(COLUMNS as usize) as u32;
     // Opaque black, so an uncovered cell is visible rather than blended.
-    let mut laid = RgbaImage::from_pixel(COLUMNS * TILE_SIZE, rows.max(1) * TILE_SIZE, image::Rgba([0, 0, 0, 255]));
+    let mut laid = RgbaImage::from_pixel(
+        COLUMNS * TILE_SIZE,
+        rows.max(1) * TILE_SIZE,
+        image::Rgba([0, 0, 0, 255]),
+    );
     let mut means = Vec::with_capacity(tiles.len());
 
     for (n, (tile, bytes)) in tiles.iter().enumerate() {
-        let img = image::load_from_memory(bytes).map_err(|e| format!("{tile}: {e}"))?.to_rgba8();
+        let img = image::load_from_memory(bytes)
+            .map_err(|e| format!("{tile}: {e}"))?
+            .to_rgba8();
         if img.width() != TILE_SIZE || img.height() != TILE_SIZE {
-            return Err(format!("{tile} is {}x{}, not {TILE_SIZE} square", img.width(), img.height()));
+            return Err(format!(
+                "{tile} is {}x{}, not {TILE_SIZE} square",
+                img.width(),
+                img.height()
+            ));
         }
-        let (x, y) = ((n as u32 % COLUMNS) * TILE_SIZE, (n as u32 / COLUMNS) * TILE_SIZE);
+        let (x, y) = (
+            (n as u32 % COLUMNS) * TILE_SIZE,
+            (n as u32 / COLUMNS) * TILE_SIZE,
+        );
         means.push(mean_of(&img));
         image::imageops::replace(&mut laid, &img, x as i64, y as i64);
     }
 
-    let encoded = webp::Encoder::from_rgba(laid.as_raw(), laid.width(), laid.height()).encode(QUALITY);
+    let encoded =
+        webp::Encoder::from_rgba(laid.as_raw(), laid.width(), laid.height()).encode(QUALITY);
     Ok(Image {
         bytes: encoded.to_vec(),
         tiles: tiles.iter().map(|(t, _)| t.clone()).collect(),

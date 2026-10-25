@@ -91,7 +91,10 @@ pub struct Ask {
 
 impl Ask {
     /// A want with no place in the view, ordered by its stream alone.
-    pub const PLAIN: Ask = Ask { why: Why::Demand, order: Order::LAST };
+    pub const PLAIN: Ask = Ask {
+        why: Why::Demand,
+        order: Order::LAST,
+    };
 
     /// The stronger reason and the earlier place, taken separately: how a tile
     /// is held says nothing of when the view needs it.
@@ -112,19 +115,31 @@ pub struct Order {
 }
 
 impl Order {
-    pub const LAST: Order = Order { seen: false, near: f64::INFINITY };
+    pub const LAST: Order = Order {
+        seen: false,
+        near: f64::INFINITY,
+    };
 
-    pub const FIRST: Order = Order { seen: true, near: 0.0 };
+    pub const FIRST: Order = Order {
+        seen: true,
+        near: 0.0,
+    };
 
     pub fn of(o: &Observation, b: &Aabb) -> Order {
         let m = o.measure(b);
-        Order { seen: m.seen, near: m.near }
+        Order {
+            seen: m.seen,
+            near: m.near,
+        }
     }
 }
 
 impl Ord for Order {
     fn cmp(&self, other: &Order) -> Ordering {
-        other.seen.cmp(&self.seen).then(self.near.total_cmp(&other.near))
+        other
+            .seen
+            .cmp(&self.seen)
+            .then(self.near.total_cmp(&other.near))
     }
 }
 

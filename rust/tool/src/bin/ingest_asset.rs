@@ -29,7 +29,11 @@ fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(),
             walk(&path, base, out)?;
             continue;
         }
-        let rel = path.strip_prefix(base).map_err(|e| e.to_string())?.to_string_lossy().replace('\\', "/");
+        let rel = path
+            .strip_prefix(base)
+            .map_err(|e| e.to_string())?
+            .to_string_lossy()
+            .replace('\\', "/");
         if rel.ends_with(".glb") || rel.ends_with(".png") || rel.ends_with(".webp") {
             out.push((rel, path));
         }
@@ -81,7 +85,9 @@ fn run() -> Result<(), String> {
     let toward: BTreeMap<String, u32> = slots
         .iter()
         .filter_map(|i| match &i.slot {
-            pack::Slot::Top { group, ty } if group == "ground" && i.palette_hex.is_some() => carto.get(ty).map(|&c| (format!("cube/{}", i.file), c)),
+            pack::Slot::Top { group, ty } if group == "ground" && i.palette_hex.is_some() => {
+                carto.get(ty).map(|&c| (format!("cube/{}", i.file), c))
+            }
             _ => None,
         })
         .collect();
@@ -92,12 +98,18 @@ fn run() -> Result<(), String> {
     for (rel, path) in &files {
         let read = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
         let bytes = match toward.get(rel) {
-            Some(&color) => pack::toward_carto_png(&read, color).map_err(|e| format!("{rel}: {e}"))?,
+            Some(&color) => {
+                pack::toward_carto_png(&read, color).map_err(|e| format!("{rel}: {e}"))?
+            }
             None => read,
         };
         let is_model = rel.ends_with(".glb");
         let name = named(rel, &bytes);
-        let extent = if is_model { Some(glb::extent(&bytes).map_err(|e| format!("{rel}: {e}"))?) } else { None };
+        let extent = if is_model {
+            Some(glb::extent(&bytes).map_err(|e| format!("{rel}: {e}"))?)
+        } else {
+            None
+        };
 
         std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
         std::fs::write(out_dir.join(&name), &bytes).map_err(|e| e.to_string())?;
@@ -116,28 +128,47 @@ fn run() -> Result<(), String> {
 
     let tiles: Vec<String> = rows
         .iter()
-        .filter(|r| r.path.ends_with(".png") && (r.path.starts_with("cube/terrain/") || r.path.starts_with("cube/block/")))
+        .filter(|r| {
+            r.path.ends_with(".png")
+                && (r.path.starts_with("cube/terrain/") || r.path.starts_with("cube/block/"))
+        })
         .map(|r| r.path.clone())
         .collect();
     let mut tile_slots = Vec::new();
     for (n, t) in tiles.iter().enumerate() {
-        let worn = slots.iter().filter(|i| format!("cube/{}", i.file) == *t).map(|i| (n as u32, i.slot.clone()));
+        let worn = slots
+            .iter()
+            .filter(|i| format!("cube/{}", i.file) == *t)
+            .map(|i| (n as u32, i.slot.clone()));
         let before = tile_slots.len();
         tile_slots.extend(worn);
         if tile_slots.len() == before {
             return Err(format!("{t} has no entry in asset/raw/cube/manifest.json"));
         }
     }
-    if let Some(i) = slots.iter().find(|i| !tiles.contains(&format!("cube/{}", i.file))) {
-        return Err(format!("{} names {}, which is not under asset/content/cube", i.label, i.file));
+    if let Some(i) = slots
+        .iter()
+        .find(|i| !tiles.contains(&format!("cube/{}", i.file)))
+    {
+        return Err(format!(
+            "{} names {}, which is not under asset/content/cube",
+            i.label, i.file
+        ));
     }
     let faces = table::faces(&tile_slots, &pxl_tool::spec::asset::catalog()?)?;
-    let composed = pack::compose(&tiles.iter().map(|t| (t.clone(), shipped[t].as_slice())).collect::<Vec<_>>())?;
+    let composed = pack::compose(
+        &tiles
+            .iter()
+            .map(|t| (t.clone(), shipped[t].as_slice()))
+            .collect::<Vec<_>>(),
+    )?;
     // The sheet ships as a file of the table, at the path the cube kind's
     // definition names, which no file under asset/content/ may take.
     let image = pxl_tool::spec::asset::pack_path()?;
     if rows.iter().any(|r| r.path == image) {
-        return Err(format!("{image}, the texture pack's path, is a file under asset/content/ too"));
+        return Err(format!(
+            "{image}, the texture pack's path, is a file under asset/content/ too"
+        ));
     }
     let image_name = named(&image, &composed.bytes);
     std::fs::write(out_dir.join(&image_name), &composed.bytes).map_err(|e| e.to_string())?;
@@ -161,14 +192,27 @@ fn run() -> Result<(), String> {
 
     // Carto's symbols, which the client draws from its own binary rather than fetches.
     let symbols = symbol::symbols(&raw_dir.join("place/symbol"))?;
-    let masks: Vec<u8> = symbols.iter().flat_map(|s| s.mask.iter().copied()).collect();
-    std::fs::write(root.join("rust/spec/src/asset/symbol.mask"), &masks).map_err(|e| e.to_string())?;
-    write_formatted(&root.join("rust/spec/src/asset/symbol.spec.rs"), &symbol::render_rs(&symbols))?;
-    write_formatted(&root.join("ts/client/src/shell/search/place-symbol.ts"), &symbol::render_ts(&symbols))?;
+    let masks: Vec<u8> = symbols
+        .iter()
+        .flat_map(|s| s.mask.iter().copied())
+        .collect();
+    std::fs::write(root.join("rust/spec/src/asset/symbol.mask"), &masks)
+        .map_err(|e| e.to_string())?;
+    write_formatted(
+        &root.join("rust/spec/src/asset/symbol.spec.rs"),
+        &symbol::render_rs(&symbols),
+    )?;
+    write_formatted(
+        &root.join("ts/client/src/shell/search/place-symbol.ts"),
+        &symbol::render_ts(&symbols),
+    )?;
 
     // What the code is generated from: the host's table, the pack's layout
     // and the catalog.
-    write_formatted(&root.join("spec/spec/asset/ingested.json"), &table::render_json(&rows, &laid))?;
+    write_formatted(
+        &root.join("spec/spec/asset/ingested.json"),
+        &table::render_json(&rows, &laid),
+    )?;
     pxl_tool::spec::generate(true)?;
 
     println!(

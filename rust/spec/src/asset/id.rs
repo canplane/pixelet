@@ -31,5 +31,7 @@ impl Kind {
 /// The kind an id is of; none past a u16 or for a kind the layout does not
 /// give out.
 pub fn kind_of(id: AssetId) -> Option<Kind> {
-    u16::try_from(id).ok().and_then(|v| Kind::of((v >> SHAPE_BITS) as u8))
+    u16::try_from(id)
+        .ok()
+        .and_then(|v| Kind::of((v >> SHAPE_BITS) as u8))
 }

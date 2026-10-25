@@ -22,7 +22,18 @@ Deno.test("tlv computes what the typescript computes", async () => {
   w.u8(200).i8(-3).u16(65535).i16(-2).u32(4000000000).i32(-7);
   w.u64(1n << 63n).i64(-(1n << 40n)).f32(0.25).f64(-1.5).bool(true);
   w.str("€€").bytes(new Uint8Array([9, 8, 7]));
-  w.write_all([true, 5, -2147483648, 2147483648, 9007199254740991, 1.5, NaN, -(1n << 63n), "s", new Uint8Array([1])]);
+  w.write_all([
+    true,
+    5,
+    -2147483648,
+    2147483648,
+    9007199254740991,
+    1.5,
+    NaN,
+    -(1n << 63n),
+    "s",
+    new Uint8Array([1]),
+  ]);
   const packet = w.finish();
 
   assertEquals(bytes_to_hex(packet), v.s("packet"));
@@ -42,7 +53,7 @@ Deno.test("tlv computes what the typescript computes", async () => {
       for (const _ of r) n++;
       stop = r.end() ?? "none";
     } catch (err) {
-      stop = `errno:${(err as FaultError).errno ?? Errno.OK}`;
+      stop = `errno:${(err as FaultError).errnum ?? Errno.OK}`;
     }
     assertEquals(`${n}:${stop}`, v.s(`end.${k}.read`), `end.${k}`);
   }
@@ -53,7 +64,7 @@ Deno.test("tlv computes what the typescript computes", async () => {
   try {
     new TlvReader(hex_to_bytes(v.s("huge.packet"))).read_all();
   } catch (err) {
-    huge = `errno:${(err as FaultError).errno ?? Errno.OK}`;
+    huge = `errno:${(err as FaultError).errnum ?? Errno.OK}`;
   }
   assertEquals(huge, v.s("huge.read"));
 });

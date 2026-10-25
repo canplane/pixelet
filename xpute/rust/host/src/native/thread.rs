@@ -41,9 +41,21 @@ impl Drop for Held {
 /// The handoff, refused where taking it would wait for itself: on the guest's
 /// thread, or on one that holds it. A poisoned lock is still whole.
 fn handoff() -> Held {
-    assert!(!on_marked_thread(), "a call into the guest from its own thread would wait for itself");
-    assert!(!HOLDING.with(Cell::get), "a call into the guest inside another on the same thread would wait for itself");
-    let held = Held(HANDOFF.get().expect("the guest is booted").lock().unwrap_or_else(PoisonError::into_inner));
+    assert!(
+        !on_marked_thread(),
+        "a call into the guest from its own thread would wait for itself"
+    );
+    assert!(
+        !HOLDING.with(Cell::get),
+        "a call into the guest inside another on the same thread would wait for itself"
+    );
+    let held = Held(
+        HANDOFF
+            .get()
+            .expect("the guest is booted")
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner),
+    );
     HOLDING.with(|h| h.set(true));
     held
 }
@@ -64,11 +76,13 @@ pub fn start(name: &'static str, stack_bytes: usize, first: impl FnOnce() + Send
             }
         })
         .expect("the system would not start the guest's thread");
-    assert!(HANDOFF.set(Mutex::new(Handoff { jobs, done })).is_ok(), "the guest's thread is started once");
+    assert!(
+        HANDOFF.set(Mutex::new(Handoff { jobs, done })).is_ok(),
+        "the guest's thread is started once"
+    );
     run(first);
 }
 
-/// `f` on the guest's thread, returned once it has run.
 pub fn run<R: Send>(f: impl FnOnce() -> R + Send) -> R {
     let h = handoff();
     let mut f = Some(f);

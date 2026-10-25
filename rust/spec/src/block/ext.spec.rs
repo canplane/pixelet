@@ -7,13 +7,14 @@
 // extensions in a pool of its own; a leaf names its record by its place there,
 // or none. Which class an id is of is the catalog's (pxl-spec block/ext.rs).
 
-// Casing here is the spec's and not Rust's: a name is spelled as the JSON
-// spells it, so that one record is indexed by one name on both sides. To
-// case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code
+)]
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -35,6 +36,3 @@ impl Class {
 pub mod CLASS {
     pub const marker_text: u8 = 0;
 }
-
-/// The most a marker's words may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most.
-pub const MARKER_TEXT_CHARS: u32 = 40;

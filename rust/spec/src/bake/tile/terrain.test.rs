@@ -20,8 +20,22 @@ impl Rng {
 fn lines(rng: &mut Rng) -> Separation {
     let mut separation = separation::Builder::default();
     for _ in 0..3 {
-        let points: Vec<([f64; 2], i16, u8)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16, rng.next() as u8)).collect();
-        separation.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, separation::Form::of((rng.next() % 3) as u8), rng.next() as u8);
+        let points: Vec<([f64; 2], i16, u8)> = (0..4)
+            .map(|_| {
+                (
+                    [(rng.next() % 600) as f64, (rng.next() % 600) as f64],
+                    rng.next() as i16,
+                    rng.next() as u8,
+                )
+            })
+            .collect();
+        separation.push(
+            points,
+            1 + (rng.next() % 200) as u8,
+            rng.next() as u8,
+            separation::Form::of((rng.next() % 3) as u8),
+            rng.next() as u8,
+        );
     }
     separation.finish()
 }
@@ -31,7 +45,14 @@ fn tile(seed: u64) -> TerrainTile {
     let mut rng = Rng(SplitMix64::new(seed));
     let ele: Vec<i16> = (0..ELE_LANE).map(|_| rng.next() as i16).collect();
     let cells: Vec<GroundId> = (0..LOOK_LANE).map(|_| rng.next() as GroundId).collect();
-    TerrainTile::of(ele, Ground { cells: cells.into() }, lines(&mut rng), Occupancy::of_bits(0b10101).unwrap())
+    TerrainTile::of(
+        ele,
+        Ground {
+            cells: cells.into(),
+        },
+        lines(&mut rng),
+        Occupancy::of_bits(0b10101).unwrap(),
+    )
 }
 
 fn room() -> separation::Room {
@@ -51,7 +72,11 @@ fn room() -> separation::Room {
 fn the_formats_write_and_read_what_the_record_holds() {
     let tile = tile(0x9e37_79b9_7f4a_7c15);
     let terrain = encode(&tile).unwrap();
-    assert_eq!(decode(&terrain).unwrap(), tile, "a tile reads back as it was written");
+    assert_eq!(
+        decode(&terrain).unwrap(),
+        tile,
+        "a tile reads back as it was written"
+    );
     // On the CPU its lines, but for what only a bake reads: a fold's
     // coarsest zooms and a grid sweep's boxes.
     let resident = decode_into(&terrain, room()).unwrap();
@@ -67,7 +92,9 @@ fn the_formats_write_and_read_what_the_record_holds() {
 #[test]
 fn a_tile_at_its_room_is_the_most_a_packet_takes() {
     use separation::{MAX_LINES, MAX_POINTS};
-    let starts: Vec<u32> = (0..=MAX_LINES).map(|d| (d * MAX_POINTS / MAX_LINES) as u32).collect();
+    let starts: Vec<u32> = (0..=MAX_LINES)
+        .map(|d| (d * MAX_POINTS / MAX_LINES) as u32)
+        .collect();
     let full = Separation {
         starts: starts.into(),
         points: vec![[0; 2]; MAX_POINTS].into(),
@@ -78,10 +105,18 @@ fn a_tile_at_its_room_is_the_most_a_packet_takes() {
         clear: vec![0; MAX_LINES].into(),
         coarsest: vec![0; MAX_POINTS].into(),
     };
-    let tile = TerrainTile { separation: full, ..tile(7) };
+    let tile = TerrainTile {
+        separation: full,
+        ..tile(7)
+    };
     assert_eq!(encode(&tile).unwrap().len(), MAX_PACKET_BYTES);
-    let earth = crate::bake::tile::earth::encode(&vec![0; crate::bake::tile::earth::EARTH_BYTES]).unwrap();
-    assert_eq!(earth.len(), crate::bake::tile::earth::PACKET_BYTES, "and an Earth tile is as long as its texels say");
+    let earth =
+        crate::bake::tile::earth::encode(&vec![0; crate::bake::tile::earth::EARTH_BYTES]).unwrap();
+    assert_eq!(
+        earth.len(),
+        crate::bake::tile::earth::PACKET_BYTES,
+        "and an Earth tile is as long as its texels say"
+    );
 }
 
 #[test]
@@ -100,11 +135,26 @@ fn an_occupancy_is_a_tile_and_its_children_or_nothing() {
         if let Some(o) = Occupancy::of_bits(bits) {
             assert_eq!(o.bits(), bits);
             let children: [bool; 4] = std::array::from_fn(|q| o.has_child(q));
-            assert!(o.is_tile() || !children.contains(&true), "{bits:#b}: a child under the zero tile");
+            assert!(
+                o.is_tile() || !children.contains(&true),
+                "{bits:#b}: a child under the zero tile"
+            );
         }
     }
-    let of = |tiles: [bool; 4]| Occupancy::of_children(tiles.map(|p| if p { Occupancy::LEAF } else { Occupancy::ZERO }));
-    assert_eq!(of([false; 4]), Occupancy::ZERO, "a parent of the zero tile alone is the zero tile");
+    let of = |tiles: [bool; 4]| {
+        Occupancy::of_children(tiles.map(|p| if p { Occupancy::LEAF } else { Occupancy::ZERO }))
+    };
+    assert_eq!(
+        of([false; 4]),
+        Occupancy::ZERO,
+        "a parent of the zero tile alone is the zero tile"
+    );
     let some = of([true, false, true, false]);
-    assert!(some.is_tile() && some.has_child(0) && !some.has_child(1) && some.has_child(2) && !some.has_child(3));
+    assert!(
+        some.is_tile()
+            && some.has_child(0)
+            && !some.has_child(1)
+            && some.has_child(2)
+            && !some.has_child(3)
+    );
 }

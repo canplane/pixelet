@@ -184,7 +184,10 @@ pub struct Cut {
 }
 
 impl Cut {
-    pub const NONE: Cut = Cut { zoom: Zoom::MAX, at: [0; 3] };
+    pub const NONE: Cut = Cut {
+        zoom: Zoom::MAX,
+        at: [0; 3],
+    };
 }
 
 /// The node `at` of `zoom` as the tree is cut: X counted from the round's
@@ -216,7 +219,11 @@ fn of(lanes: &impl Lanes, slot: u32, zoom: Zoom) -> Held {
 /// asks this once, at its root.
 pub fn cursor(lanes: &impl Lanes, root: u32, zoom: Zoom, at: [i32; 3]) -> Held {
     let p = path(zoom, at);
-    let mut held = of(lanes, root + slot_of([p[0] >> zoom, p[1] >> zoom, p[2] >> zoom]), 0);
+    let mut held = of(
+        lanes,
+        root + slot_of([p[0] >> zoom, p[1] >> zoom, p[2] >> zoom]),
+        0,
+    );
     let mut z = 0;
     while z < zoom && held.folded() {
         z += 1;
@@ -231,7 +238,11 @@ pub fn cursor(lanes: &impl Lanes, root: u32, zoom: Zoom, at: [i32; 3]) -> Held {
 /// own slot.
 pub fn child(lanes: &impl Lanes, parent: Held, zoom: Zoom, at: [i32; 3]) -> Held {
     if parent.folded() {
-        of(lanes, (lanes.heap(parent.slot()) & !BRANCH) + slot_of(at), zoom)
+        of(
+            lanes,
+            (lanes.heap(parent.slot()) & !BRANCH) + slot_of(at),
+            zoom,
+        )
     } else {
         parent
     }
@@ -249,7 +260,10 @@ fn holds(cut: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
         return false;
     }
     let s = zoom - cut.zoom;
-    let (a, c) = (path(cut.zoom, [at[0] >> s, at[1] >> s, at[2] >> s]), path(cut.zoom, cut.at));
+    let (a, c) = (
+        path(cut.zoom, [at[0] >> s, at[1] >> s, at[2] >> s]),
+        path(cut.zoom, cut.at),
+    );
     a[0] == c[0] && a[1] == c[1] && a[2] == c[2]
 }
 
@@ -260,7 +274,11 @@ fn holds(cut: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
 /// every layer together (`answer::cover`, `answer::eighths`). `hide`, a
 /// preview's left-out leaf, is left out where it is the leaf itself.
 pub fn value(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
-    let word = if held.holds() { lanes.data(held.slot()) } else { VOID };
+    let word = if held.holds() {
+        lanes.data(held.slot())
+    } else {
+        VOID
+    };
     let v = if !held.holds() {
         VOID
     } else if !held.folded() {
@@ -301,13 +319,24 @@ pub fn filled(lanes: &impl Lanes, held: Held) -> u32 {
 /// is its value four times, as a ground leaf's cell is. Each child is read
 /// at its own index under `hide`, as `v` was, so a leaf a preview leaves
 /// out shows in no quarter.
-pub fn looks(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3], v: u32) -> [u32; 4] {
+pub fn looks(
+    lanes: &impl Lanes,
+    held: Held,
+    hide: Cut,
+    zoom: Zoom,
+    at: [i32; 3],
+    v: u32,
+) -> [u32; 4] {
     if !held.folded() {
         return [v; 4];
     }
     let base = lanes.heap(held.slot()) & !BRANCH;
     let shows = |k: u32| {
-        let child = [2 * at[0] + (k & 1) as i32, 2 * at[1] + (k >> 1 & 1) as i32, 2 * at[2] + (k >> 2) as i32];
+        let child = [
+            2 * at[0] + (k & 1) as i32,
+            2 * at[1] + (k >> 1 & 1) as i32,
+            2 * at[2] + (k >> 2) as i32,
+        ];
         let c = value(lanes, of(lanes, base + k, zoom + 1), hide, zoom + 1, child);
         (c, c != VOID && c != AIR)
     };
@@ -355,13 +384,33 @@ pub struct Over {
 /// block at any zoom asked (`blocks_by`), else a split. A preview's cut and
 /// its left-out leaf only make air, so where nothing placed fills, what is
 /// under answers and splits where it fills.
-pub fn over(lanes: &impl Lanes, held: Held, carve: Cut, hide: Cut, zoom: Zoom, at: [i32; 3], near: Zoom) -> Over {
+pub fn over(
+    lanes: &impl Lanes,
+    held: Held,
+    carve: Cut,
+    hide: Cut,
+    zoom: Zoom,
+    at: [i32; 3],
+    near: Zoom,
+) -> Over {
     if zoom < near {
-        let says = if blocks_by(lanes, held, near - zoom) { SPLIT } else { UNDER };
-        return Over { says, block: VOID, fill: 0 };
+        let says = if blocks_by(lanes, held, near - zoom) {
+            SPLIT
+        } else {
+            UNDER
+        };
+        return Over {
+            says,
+            block: VOID,
+            fill: 0,
+        };
     }
     let carved = holds(carve, zoom, at);
-    let v = if carved { AIR } else { value(lanes, held, hide, zoom, at) };
+    let v = if carved {
+        AIR
+    } else {
+        value(lanes, held, hide, zoom, at)
+    };
     let says = if v == VOID { UNDER } else { BLOCK };
     Over {
         says,
@@ -403,7 +452,14 @@ pub fn slab(lanes: &impl Lanes, held: Held, zoom: Zoom, at: [i32; 3]) -> [i32; 2
         }
         k += 1;
     }
-    [if under { bottom } else { bottom + side / 2 }, if over { bottom + side } else { bottom + side / 2 }]
+    [
+        if under { bottom } else { bottom + side / 2 },
+        if over {
+            bottom + side
+        } else {
+            bottom + side / 2
+        },
+    ]
 }
 
 /// Whether anything placed under the node holding `held` may be a block at
@@ -426,7 +482,11 @@ fn blocks_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
     if !held.folded() {
         return voxel(low(word));
     }
-    let eighth = if 3 * d + 3 < 16 { FULL >> (3 * d + 3) } else { 0 };
+    let eighth = if 3 * d + 3 < 16 {
+        FULL >> (3 * d + 3)
+    } else {
+        0
+    };
     high(word) + 2 > eighth
 }
 

@@ -52,8 +52,16 @@ pub fn tile() -> Option<Tile> {
 
 /// Only the exact ground puts it; a coarser tile over it is not its ground.
 pub fn destination_step() {
-    let Some((at, motion)) = *destination() else { return };
-    let Some(to) = (if is_unknown(&at) { exact(&at) } else { nearest(&at) }) else { return };
+    let Some((at, motion)) = *destination() else {
+        return;
+    };
+    let Some(to) = (if is_unknown(&at) {
+        exact(&at)
+    } else {
+        nearest(&at)
+    }) else {
+        return;
+    };
     *destination() = None;
     put_center(to, motion);
 }

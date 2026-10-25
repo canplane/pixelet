@@ -34,7 +34,9 @@ export function Modals() {
 
   const onClose = closeModal;
   return (
-    <PanelPresence.Provider value={{ open: asked !== null, gone: () => setShown(null) }}>
+    <PanelPresence.Provider
+      value={{ open: asked !== null, gone: () => setShown(null) }}
+    >
       {shown === "settings" && <SettingsModal onClose={onClose} />}
       {shown === "drawer" && <DrawerModal onClose={onClose} />}
       {shown === "search" && <SearchModal onClose={onClose} />}

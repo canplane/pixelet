@@ -56,7 +56,12 @@ pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {
     };
     let about = (columns.min[0] + columns.max[0]) / 2.0;
     let c = changed();
-    let mut regions = c.ground.iter().chain(layer).map(|t| t.region()).chain(c.written.iter().copied());
+    let mut regions = c
+        .ground
+        .iter()
+        .chain(layer)
+        .map(|t| t.region())
+        .chain(c.written.iter().copied());
     regions.any(|r| nearest_box(&r, about).shares(columns))
 }
 
@@ -70,8 +75,14 @@ impl Columns {
     /// The cells of `zoom` the box from `a` to `b` lies in, read.
     pub(super) fn read(&self, a: [f64; 2], b: [f64; 2], zoom: Zoom) {
         let side = units(zoom);
-        let [lo, hi] = [[0, 1].map(|k| a[k].min(b[k])), [0, 1].map(|k| a[k].max(b[k]))];
-        self.join([lo.map(|v| libm::floor(v / side) * side), hi.map(|v| (libm::floor(v / side) + 1.0) * side)]);
+        let [lo, hi] = [
+            [0, 1].map(|k| a[k].min(b[k])),
+            [0, 1].map(|k| a[k].max(b[k])),
+        ];
+        self.join([
+            lo.map(|v| libm::floor(v / side) * side),
+            hi.map(|v| (libm::floor(v / side) + 1.0) * side),
+        ]);
     }
 
     /// The columns `cells` read too, put on the lap of the first.
@@ -80,7 +91,10 @@ impl Columns {
             None => cells,
             Some(c) => {
                 let dx = nearest(cells[0][0], c[0][0]) - cells[0][0];
-                [[c[0][0].min(cells[0][0] + dx), c[0][1].min(cells[0][1])], [c[1][0].max(cells[1][0] + dx), c[1][1].max(cells[1][1])]]
+                [
+                    [c[0][0].min(cells[0][0] + dx), c[0][1].min(cells[0][1])],
+                    [c[1][0].max(cells[1][0] + dx), c[1][1].max(cells[1][1])],
+                ]
             }
         };
         self.0.set(Some(joined));
@@ -111,7 +125,11 @@ impl<K: PartialEq, A: Copy> Asked<K, A> {
     /// Let go where a change touched its columns: looked at every frame
     /// turn, so it sees each change once (`within`).
     pub fn kept(&mut self) {
-        if self.0.as_ref().is_some_and(|&(_, columns, _)| within(columns, &[])) {
+        if self
+            .0
+            .as_ref()
+            .is_some_and(|&(_, columns, _)| within(columns, &[]))
+        {
             self.0 = None;
         }
     }

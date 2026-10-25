@@ -20,10 +20,16 @@ export default {
     icon,
     platforms: ["ios", "android"],
     ios: { bundleIdentifier: "me.plei.pixelet" },
-    android: { package: "me.plei.pixelet", adaptiveIcon: { foregroundImage: icon } },
+    android: {
+      package: "me.plei.pixelet",
+      adaptiveIcon: { foregroundImage: icon },
+    },
     plugins: [
       ["expo-horizon-core", { supportedDevices: "quest3|quest3s" }],
-      ["expo-horizon-location", { locationWhenInUsePermission: "pixelet shows you where you are on the map, and what you build stands there." }],
+      ["expo-horizon-location", {
+        locationWhenInUsePermission:
+          "pixelet shows you where you are on the map, and what you build stands there.",
+      }],
       "./plugin/prebuilt-flavor.ts",
       "./plugin/android-build.ts",
       "./plugin/ios-build.ts",

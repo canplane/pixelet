@@ -8,20 +8,28 @@ use pxl_spec::asset::cube::cube_id;
 use pxl_spec::asset::decor_num_id;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::zoom::units;
 use xpute_kit::wire::xtp::PacketWriter;
 
-use crate::domain::control::camera::controller::{dist, focus, Motion};
+use crate::domain::control::camera::controller::{dist, Motion};
 use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::Tracking;
-use crate::domain::control::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, Message, OrientationState, Snapshot};
+use crate::domain::control::cmd::{
+    CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState,
+    LonLat, Message, OrientationState, Snapshot,
+};
 use crate::domain::control::interaction::{holding, Holding};
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::follow_mode::{following, set_following};
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::sensor::device_orientation::{orientation_close, request_orientation};
-use crate::domain::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
-use crate::domain::control::sensor::reading::{device_location_store, device_orientation_store, Pose};
+use crate::domain::control::sensor::geolocation::{
+    geolocation_close, geolocation_open, start_watching,
+};
+use crate::domain::control::sensor::reading::{
+    device_location_store, device_orientation_store, Pose,
+};
 use crate::domain::layer::division::{named, naming};
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, CASES_MAX};
@@ -35,8 +43,10 @@ use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::status::errno::Errno;
 
 /// The focus's division and each above it, broad to narrow. Every language
-/// is sent, so switching language re-reads rather than refetches.
-fn division_parts(at: Option<(Tile, u32)>, each: &mut dyn FnMut(&DivisionPart<'_>)) {
+/// is sent, so switching language re-reads rather than refetches. A name
+/// shows where a logical pixel, `u_per_px` wide, is no wider than a cell at
+/// the zoom it shows from (`Division::shown_from`).
+fn division_parts(at: Option<(Tile, u32)>, u_per_px: f64, each: &mut dyn FnMut(&DivisionPart<'_>)) {
     let Some(at) = at else { return };
     named(at, |part| {
         let names = |each: &mut dyn FnMut(&LangName<'_>)| {
@@ -48,7 +58,7 @@ fn division_parts(at: Option<(Tile, u32)>, each: &mut dyn FnMut(&DivisionPart<'_
             subtype: part.subtype as u8,
             name: &part.name,
             names: &names,
-            prominence: part.prominence,
+            shown: u_per_px <= units(part.shown_from()),
             area: part.area,
         });
     });
@@ -75,7 +85,8 @@ pub struct Shown {
     /// By each setting's number, a retired number's 0; none until they are
     /// read, as the shell holds none before its first snapshot.
     settings: Option<[u32; SettingKey::SLOTS]>,
-    m_per_px: f64,
+    /// The view's scale at the focus, as the units a logical pixel spans.
+    u_per_px: f64,
     division: Option<(Tile, u32)>,
     previews: ([u32; CASES_MAX], usize),
     stall: Option<Message>,
@@ -120,7 +131,7 @@ fn shown() -> Shown {
             }
             by_number
         }),
-        m_per_px: m_per_px(),
+        u_per_px: units_per_px_at(dist()),
         division: focus.and_then(|at| naming(&at)),
         previews,
         stall: stall(),
@@ -148,7 +159,10 @@ impl Sent {
     /// What the snapshot is made of now, where it moved since it was last
     /// sent; taken as sent.
     pub fn moved(&mut self) -> Option<Shown> {
-        let (now, (_, words)) = (shown(), crate::domain::control::interaction::edit::marker_waiting());
+        let (now, (_, words)) = (
+            shown(),
+            crate::domain::control::interaction::edit::marker_waiting(),
+        );
         if self.shown == Some(now) && self.words == words {
             return None;
         }
@@ -169,9 +183,14 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
             is_off_center: shown.is_off_center,
             center: shown.focus.map(|c| {
                 let g = epsg4326::unproject(&c);
-                LonLat { lon: g[0], lat: g[1] }
+                LonLat {
+                    lon: g[0],
+                    lat: g[1],
+                }
             }),
-            outside: shown.focus.is_some_and(|c| crate::sys::io::source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))),
+            outside: shown.focus.is_some_and(|c| {
+                crate::sys::io::source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))
+            }),
         },
         location: LocationState {
             status: shown.location.0.status(),
@@ -200,15 +219,15 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
         zooming: shown.zooming,
         over_marker: shown.over_marker,
         settings: shown.settings.as_ref().map_or(&[], |s| s),
-        m_per_px: shown.m_per_px,
-        division: &|each| division_parts(shown.division, each),
+        m_per_px: m_per_px(shown.u_per_px, shown.focus),
+        division: &|each| division_parts(shown.division, shown.u_per_px, each),
         previews: &shown.previews.0[..shown.previews.1],
         kept_refused: &shown.kept_refused.0[..shown.kept_refused.1],
         stall: shown.stall,
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);
-    w.finish()
+    w.fitted()
 }
 
 /// The shell decides which of the three from the state it drew the button
@@ -238,7 +257,10 @@ pub fn tracking_action(tracking: Tracking) {
 
 /// A search's place: a view far out comes in.
 pub fn go_to_degrees(lon: f64, lat: f64) {
-    crate::domain::control::navigation::destination::go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
+    crate::domain::control::navigation::destination::go_on_ground(
+        epsg4326::project(&[lon, lat, 0.0]),
+        Motion::Snap,
+    );
     crate::domain::control::camera::controller::come_in_to_default();
 }
 
@@ -270,9 +292,9 @@ fn stall() -> Option<Message> {
     }
 }
 
-/// The view's scale at the focus, as the meters a logical pixel spans;
-/// 0 where the camera stands at the center: no distance, no scale.
-fn m_per_px() -> f64 {
-    let y_u = focus().map_or(0.0, |c| q3::to_real(i64::from(c[1])));
-    units_per_px_at(dist()) / epsg3857::u_per_m(y_u)
+/// The view's scale at the focus, `u_per_px`, as the meters a logical pixel
+/// spans; 0 where the camera stands at the center: no distance, no scale.
+fn m_per_px(u_per_px: f64, focus: Option<Q3>) -> f64 {
+    let y_u = focus.map_or(0.0, |c| q3::to_real(i64::from(c[1])));
+    u_per_px / epsg3857::u_per_m(y_u)
 }

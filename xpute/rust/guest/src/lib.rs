@@ -5,9 +5,9 @@
 
 pub mod abi;
 pub mod clock;
+pub mod entry;
 pub mod global;
 pub mod ipc;
 pub mod mem;
-#[cfg(target_arch = "wasm32")]
-pub mod module;
 pub mod sched;
+pub mod wasm;

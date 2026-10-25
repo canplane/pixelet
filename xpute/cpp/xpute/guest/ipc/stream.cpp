@@ -24,8 +24,9 @@ std::uint32_t Stream::open(std::uint32_t op, std::uint32_t n, std::source_locati
 }
 
 std::optional<std::uint32_t> Stream::reserve(std::uint32_t op, std::uint32_t n, std::source_location from) noexcept {
-    if (mark_ && (spilled_ || std::uint64_t{left()} < (std::uint64_t{2} + n) * WORD)) {
-        spilled_ = true;
+    if (mark_.state == Mark::spilled) return std::nullopt;
+    if (mark_.state == Mark::open && std::uint64_t{left()} < (std::uint64_t{2} + n) * WORD) {
+        mark_.state = Mark::spilled;
         return std::nullopt;
     }
     return open(op, n, from);

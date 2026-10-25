@@ -42,7 +42,10 @@ pub fn off_center_step() {
     let off = OFF_CENTER.get(|| false);
     // Horizontal only: the fix's Z is GPS altitude and the center's a floor, and
     // their mismatch could hold it off-center forever.
-    match (crate::domain::control::camera::controller::focus(), device_coord()) {
+    match (
+        crate::domain::control::camera::controller::focus(),
+        device_coord(),
+    ) {
         (Some(center), Some(device)) => {
             // X the short way across the antimeridian.
             let [dx, dy, _] = world::between(&center, &device).map(q3::to_real);

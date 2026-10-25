@@ -67,7 +67,9 @@ export class Golden {
   bytes(key: string): U8Array {
     const text = this.s(key);
     const out = new Uint8Array(text.length / 2);
-    for (let i = 0; i < out.length; i++) out[i] = parseInt(text.slice(i * 2, i * 2 + 2), 16);
+    for (let i = 0; i < out.length; i++) {
+      out[i] = parseInt(text.slice(i * 2, i * 2 + 2), 16);
+    }
     return out;
   }
 

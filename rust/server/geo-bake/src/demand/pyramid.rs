@@ -14,7 +14,13 @@ use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 
-pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, name: &str, top: Zoom) -> Result<Option<String>, Failure> {
+pub(super) async fn resolve(
+    data: Arc<Dataset>,
+    runner: Arc<Runner>,
+    kind: Kind,
+    name: &str,
+    top: Zoom,
+) -> Result<Option<String>, Failure> {
     let p = Tile::of_name(name).ok_or(Failure::BadName)?;
     if p.zoom < top {
         return Err(Failure::Unavailable);
@@ -26,7 +32,13 @@ pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind,
     Ok(Some(p.name()))
 }
 
-fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, asked: bool) -> Pin<Box<dyn Future<Output = Result<(), Failure>> + Send>> {
+fn bake_missing(
+    data: Arc<Dataset>,
+    runner: Arc<Runner>,
+    kind: Kind,
+    p: Tile,
+    asked: bool,
+) -> Pin<Box<dyn Future<Output = Result<(), Failure>> + Send>> {
     Box::pin(async move {
         let d = data.clone();
         data.cache
@@ -36,9 +48,12 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, as
                 }
                 if p.zoom < kind.leaf() {
                     for below in (d.sources)(p) {
-                        tokio::time::timeout_at(lease.deadline, bake_missing(d.clone(), runner.clone(), kind, below, false))
-                            .await
-                            .map_err(|_| Failure::Limited("demand dependency deadline"))??;
+                        tokio::time::timeout_at(
+                            lease.deadline,
+                            bake_missing(d.clone(), runner.clone(), kind, below, false),
+                        )
+                        .await
+                        .map_err(|_| Failure::Limited("demand dependency deadline"))??;
                     }
                 }
                 let job = Job::Tile {
@@ -52,10 +67,26 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, as
     })
 }
 
-pub(super) fn execute<L: Base>(p: Tile, cache: &Path, out: &Path, leaf: impl FnOnce() -> Result<Option<L>, String>, absent: &impl Absent<L>) -> Result<(), String> {
-    let tile = if p.zoom == L::LEAF { leaf()? } else { fold_stored(&TileSet::new(cache), p, absent)? };
+pub(super) fn execute<L: Base>(
+    p: Tile,
+    cache: &Path,
+    out: &Path,
+    leaf: impl FnOnce() -> Result<Option<L>, String>,
+    absent: &impl Absent<L>,
+) -> Result<(), String> {
+    let tile = if p.zoom == L::LEAF {
+        leaf()?
+    } else {
+        fold_stored(&TileSet::new(cache), p, absent)?
+    };
     let packet = tile
-        .map(|tile| pack(&tile.encode(p).map_err(|e| format!("{}: {e}", p.name()))?, Level::Live).map_err(|e| e.to_string()))
+        .map(|tile| {
+            pack(
+                &tile.encode(p).map_err(|e| format!("{}: {e}", p.name()))?,
+                Level::Live,
+            )
+            .map_err(|e| e.to_string())
+        })
         .transpose()?;
     job::write_packet(out, packet.as_deref())
 }

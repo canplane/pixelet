@@ -24,7 +24,10 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
     ];
     let (mut position, mut uv, mut index) = ([0.0; 72], [0.0; 48], [0u32; 36]);
     for (f, [n, u, w]) in faces.iter().enumerate() {
-        for (c, (a, b)) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)].into_iter().enumerate() {
+        for (c, (a, b)) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+            .into_iter()
+            .enumerate()
+        {
             let k = f * 4 + c;
             for x in 0..3 {
                 position[k * 3 + x] = n[x] * 0.5 + u[x] * (a - 0.5) + w[x] * (b - 0.5);
@@ -81,7 +84,10 @@ pub struct PuckPass {
 }
 
 fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
-    let id = g.buffer(buffer_size(data.len() as u32), usage | buffer_usage::COPY_DST);
+    let id = g.buffer(
+        buffer_size(data.len() as u32),
+        usage | buffer_usage::COPY_DST,
+    );
     g.write_buffer(id, 0, data);
     id
 }
@@ -92,7 +98,13 @@ fn zones<'a>(draws: &Draws<'a>) -> impl Iterator<Item = &'a [u32; DRAW_WORDS]> +
 }
 
 impl PuckPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [Entry; AIR_ENTRIES], align: u32) -> PuckPass {
+    pub fn new(
+        g: &Gpu,
+        pipelines: &mut Pipelines,
+        frame_buffer: u32,
+        air: [Entry; AIR_ENTRIES],
+        align: u32,
+    ) -> PuckPass {
         let zone = pipelines.build(g, PIPELINE_PUCK_ZONE, g.canvas());
         let beacon = pipelines.build(g, PIPELINE_PUCK_BEACON, g.canvas());
         let (box_p, box_uv, box_i) = box_lanes();
@@ -121,18 +133,38 @@ impl PuckPass {
     /// Each draw's uniform in a slot of its own, written once before the
     /// pass where the lists it is made from `moved`; and every upload group
     /// the zones will bind, so drawing makes nothing that outlives its frame.
-    pub fn prepare(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], moved: bool, uploads: &mut Uploads) {
+    pub fn prepare(
+        &mut self,
+        g: &Gpu,
+        draws: &Draws,
+        uniforms: &[f32],
+        moved: bool,
+        uploads: &mut Uploads,
+    ) {
         let c = self.color;
         let put = |buf: &mut [u8], (d, night): (&[u32; DRAW_WORDS], f32)| {
             let u = uniform_of(uniforms, d);
-            buf[..DRAW_BYTES as usize].copy_from_slice(bytes(&[u[0], u[1], u[2], u[3], c[0], c[1], c[2], night]));
+            buf[..DRAW_BYTES as usize]
+                .copy_from_slice(bytes(&[u[0], u[1], u[2], u[3], c[0], c[1], c[2], night]));
         };
         let beacons = draws.of(PIPELINE_PUCK_BEACON);
-        self.beacon_uniforms
-            .write(g, self.beacon.layouts[1], beacons.len() as u32, beacons.map(|d| (d, d[1] as f32)), moved, put);
+        self.beacon_uniforms.write(
+            g,
+            self.beacon.layouts[1],
+            beacons.len() as u32,
+            beacons.map(|d| (d, d[1] as f32)),
+            moved,
+            put,
+        );
         let zones = zones(draws);
-        self.zone_uniforms
-            .write(g, self.zone.layouts[1], zones.clone().count() as u32, zones.clone().map(|d| (d, 0.0)), moved, put);
+        self.zone_uniforms.write(
+            g,
+            self.zone.layouts[1],
+            zones.clone().count() as u32,
+            zones.clone().map(|d| (d, 0.0)),
+            moved,
+            put,
+        );
         for d in zones {
             uploads.group(g, d[0]);
         }
@@ -141,7 +173,9 @@ impl PuckPass {
     /// The pipeline, the frame's group and the octahedron bound once; a
     /// draw binds its uniform's slot alone.
     pub fn draw_beacon(&self, g: &Gpu, pass: u32, draws: &Draws) {
-        let Some(slots) = self.beacon_uniforms.slots() else { return };
+        let Some(slots) = self.beacon_uniforms.slots() else {
+            return;
+        };
         let count = draws.of(PIPELINE_PUCK_BEACON).len() as u32;
         if count == 0 {
             return;
@@ -161,7 +195,9 @@ impl PuckPass {
     /// its uniform's slot and its upload alone. A zone whose upload is not on
     /// the device yet is passed over.
     pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &Draws, uploads: &mut Uploads) {
-        let Some(slots) = self.zone_uniforms.slots() else { return };
+        let Some(slots) = self.zone_uniforms.slots() else {
+            return;
+        };
         if zones(draws).next().is_none() {
             return;
         }
@@ -171,7 +207,9 @@ impl PuckPass {
         g.set_vertex_buffer(pass, 1, self.box_uv, 0, 0);
         g.set_index_buffer(pass, self.box_index, 0, 0);
         for (k, d) in zones(draws).enumerate() {
-            let Some(upload) = uploads.group(g, d[0]) else { continue };
+            let Some(upload) = uploads.group(g, d[0]) else {
+                continue;
+            };
             let (group, offset) = slots.at(k as u32);
             g.set_bind_group(pass, 1, group, &[offset]);
             g.set_bind_group(pass, 2, upload, &[]);

@@ -70,7 +70,10 @@ pub struct FramesSection {
     pub last: FrameSample,
 }
 
-const _: () = assert!(SUMMARY::frames::last + FRAME::WORDS <= SUMMARY::frames::WORDS, "the last frame runs past the summary's frames section");
+const _: () = assert!(
+    SUMMARY::frames::last + FRAME::WORDS <= SUMMARY::frames::WORDS,
+    "the last frame runs past the summary's frames section"
+);
 
 words!(FramesSection, SUMMARY::frames::WORDS,
     present => SUMMARY::frames::present, n => SUMMARY::frames::n, seconds => SUMMARY::frames::seconds,

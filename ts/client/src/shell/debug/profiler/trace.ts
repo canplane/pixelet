@@ -9,11 +9,17 @@
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
-import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
+import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/deploy.ts";
 
-import { type Frame, isList, LANES, LIST_NAMES } from "./lane.ts";
+import {
+  type Frame,
+  is_list,
+  LANES,
+  profiler_frames,
+  profiler_tasks,
+} from "@/abi/profiler.ts";
+import { LIST_NAMES } from "./lane.ts";
 import { failText } from "./report.ts";
-import { profilerRingsRead } from "./view.ts";
 import { longFramesSince } from "./long-frame.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { bracket } from "@/bracket.tsx";
@@ -38,17 +44,35 @@ interface TraceEvent {
 const us = (ms: f64) => round(ms * 1000);
 const fixedN = (n: number, d: number) => +fixed(n, d);
 
-function event(name: string, cat: string, ph: string, ts: f64, dur: f64 | null, tid: u32, args?: Args): TraceEvent {
-  return { name, cat, ph, ts, ...(dur === null ? {} : { dur }), pid: PID, tid, ...(args ? { args } : {}) };
+function event(
+  name: string,
+  cat: string,
+  ph: string,
+  ts: f64,
+  dur: f64 | null,
+  tid: u32,
+  args?: Args,
+): TraceEvent {
+  return {
+    name,
+    cat,
+    ph,
+    ts,
+    ...(dur === null ? {} : { dur }),
+    pid: PID,
+    tid,
+    ...(args ? { args } : {}),
+  };
 }
 
-const threadName = (tid: u32, name: string) => event("thread_name", "__metadata", "M", 0, null, tid, { name });
+const threadName = (tid: u32, name: string) =>
+  event("thread_name", "__metadata", "M", 0, null, tid, { name });
 
 /** A frame's lanes as the counter track's arguments. */
 function frameArgs(f: Frame): Args {
   const args: Args = {};
   for (const { name } of LANES) {
-    if (!isList(name)) {
+    if (!is_list(name)) {
       args[name] = fixedN(f[name], 2);
       continue;
     }
@@ -58,14 +82,19 @@ function frameArgs(f: Frame): Args {
         args[`census_${names[i]}_draws`] = d;
         args[`census_${names[i]}_tris`] = t;
       });
-    } else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixedN(v, 2)));
+    } else {f[name].forEach((
+        v,
+        i,
+      ) => (args[`${name}_${names[i]}`] = fixedN(v, 2))
+      );}
   }
   // Vsync wait, compositor, GPU, GC, the shell's glue.
   return args;
 }
 
 function profilerTraceJson(): string {
-  const { frames, tasks } = profilerRingsRead();
+  const frames = profiler_frames();
+  const tasks = profiler_tasks();
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
@@ -81,7 +110,9 @@ function profilerTraceJson(): string {
     // The outcome is the event's category, and the detail is in `fail`'s text.
     const args: Args = {
       priority: r.priority,
-      queuedMs: r.start_ms === null ? null : fixedN(r.start_ms - r.enqueue_ms, 1),
+      queuedMs: r.start_ms === null
+        ? null
+        : fixedN(r.start_ms - r.enqueue_ms, 1),
       ranMs: r.start_ms === null ? null : fixedN(r.end_ms - r.start_ms, 1),
     };
     if (r.fail !== 0) {
@@ -89,7 +120,17 @@ function profilerTraceJson(): string {
       if (r.at !== null) args.at = r.at;
     }
     for (const [k, v] of r.phases) args[k] = v;
-    events.push(event(`${r.stream}:${r.subject}`, `task,${r.outcome}`, "X", us(r.enqueue_ms), us(Math.max(0, r.end_ms - r.enqueue_ms)), tid, args));
+    events.push(
+      event(
+        `${r.stream}:${r.subject}`,
+        `task,${r.outcome}`,
+        "X",
+        us(r.enqueue_ms),
+        us(Math.max(0, r.end_ms - r.enqueue_ms)),
+        tid,
+        args,
+      ),
+    );
   }
 
   // ---- per-frame counters (Perfetto graphs these) ----
@@ -97,9 +138,20 @@ function profilerTraceJson(): string {
     events.push(threadName(TID_FRAMES, "frames"));
     for (const f of frames) {
       const ts = us(f.t);
-      events.push(event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)));
+      events.push(
+        event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)),
+      );
       // The record is taken as the stage ends, and the tick ran just before it.
-      events.push(event("tick", "frame", "X", ts - us(f.stage_ms + f.tick_ms), us(f.tick_ms), TID_FRAMES));
+      events.push(
+        event(
+          "tick",
+          "frame",
+          "X",
+          ts - us(f.stage_ms + f.tick_ms),
+          us(f.tick_ms),
+          TID_FRAMES,
+        ),
+      );
     }
   }
 
@@ -107,21 +159,47 @@ function profilerTraceJson(): string {
   if (longs.length > 0) {
     events.push(threadName(TID_LONG, "long frames"));
     for (const l of longs) {
-      const args = { blockingMs: fixedN(l.blockingMs, 1), scriptMs: fixedN(l.scriptMs, 1), renderMs: fixedN(l.renderMs, 1) };
-      events.push(event(`${l.source} ${fixed(l.durationMs, 0)}ms`, l.source, "X", us(l.t), us(l.durationMs), TID_LONG, args));
+      const args = {
+        blockingMs: fixedN(l.blockingMs, 1),
+        scriptMs: fixedN(l.scriptMs, 1),
+        renderMs: fixedN(l.renderMs, 1),
+      };
+      events.push(
+        event(
+          `${l.source} ${fixed(l.durationMs, 0)}ms`,
+          l.source,
+          "X",
+          us(l.t),
+          us(l.durationMs),
+          TID_LONG,
+          args,
+        ),
+      );
     }
   }
 
-  return JSON.stringify({ traceEvents: events, displayTimeUnit: "ms", metadata: { build_number: BUILD_NUMBER, build_id: BUILD_ID, build_time: BUILD_TIME } });
+  return JSON.stringify({
+    traceEvents: events,
+    displayTimeUnit: "ms",
+    metadata: {
+      build_number: BUILD_NUMBER,
+      build_id: BUILD_ID,
+      build_time: BUILD_TIME,
+    },
+  });
 }
 
 export async function profilerTraceSave(): Promise<string> {
   const json = profilerTraceJson();
   const mb = `${fixed(json.length / 1e6, 1)} MB`;
-  const name = `pxl-profiler-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  const name = `pxl-profiler-${
+    new Date().toISOString().replace(/[:.]/g, "-")
+  }.json`;
   try {
     await bracket.share.save(name, json, "application/json");
-    console.log(`[profiler] trace saved as ${name} · ${mb} — open it at ui.perfetto.dev`);
+    console.log(
+      `[profiler] trace saved as ${name} · ${mb} — open it at ui.perfetto.dev`,
+    );
     return `trace saved · ${mb}`;
   } catch (err) {
     console.log(`[profiler] trace built (${mb}) but saving it failed:`, err);

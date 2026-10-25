@@ -9,8 +9,29 @@
 // Equal values are equal bytes only under a schema that fixes each type: 1 may
 // be written as a U8, a U32 or an F64.
 
-import type { f32, f64, i16, i32, i64, i8, primitive, u16, u32, u64, u8 } from "@xpute/kit/abi/word.ts";
-import { I32_MAX, I32_MIN, I64_MAX, I64_MIN, U16_SZ, U32_SZ, U64_SZ, U8_SZ } from "@xpute/kit/abi/word.ts";
+import type {
+  f32,
+  f64,
+  i16,
+  i32,
+  i64,
+  i8,
+  primitive,
+  u16,
+  u32,
+  u64,
+  u8,
+} from "@xpute/kit/abi/word.ts";
+import {
+  I32_MAX,
+  I32_MIN,
+  I64_MAX,
+  I64_MIN,
+  U16_SZ,
+  U32_SZ,
+  U64_SZ,
+  U8_SZ,
+} from "@xpute/kit/abi/word.ts";
 import type { Bytes } from "@xpute/kit/abi/array.ts";
 import * as encoding from "@xpute/kit/codec/encoding.ts";
 import type { Stream } from "@xpute/kit/wire/scalar.ts";
@@ -56,14 +77,21 @@ export class TlvWriter {
 
   private _ensure(size: u32) {
     if (this._stream.off + size > this._buf.byteLength) {
-      const new_cap: u32 = Math.max(this._buf.byteLength * 2, this._stream.off + size);
+      const new_cap: u32 = Math.max(
+        this._buf.byteLength * 2,
+        this._stream.off + size,
+      );
       const new_buf: Bytes = new Uint8Array(new_cap);
       new_buf.set(this._buf);
       this._buf = new_buf;
 
       // The stream holds the buffer, so it must be rebound to the new one.
       this._stream.buf = this._buf;
-      this._stream.view = new DataView(this._buf.buffer, this._buf.byteOffset, this._buf.byteLength);
+      this._stream.view = new DataView(
+        this._buf.buffer,
+        this._buf.byteOffset,
+        this._buf.byteLength,
+      );
     }
   }
 
@@ -352,7 +380,9 @@ export class TlvReader implements Iterable<TlvValue> {
   private _str(): string {
     const len = this._u32();
     this._need(len);
-    const s: string = encoding.td.decode(this._buf.subarray(this._stream.off, this._stream.off + len));
+    const s: string = encoding.td.decode(
+      this._buf.subarray(this._stream.off, this._stream.off + len),
+    );
     this._stream.off += len;
     return s;
   }

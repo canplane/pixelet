@@ -4,7 +4,7 @@
 //! the scratch block a pass puts them in.
 
 use pxl_spec::space::coord::mat4::Mat4;
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -41,7 +41,7 @@ impl Scratch {
             (self.at, self.bytes) = alloc(size).or_bug(Errno::ENOMEM);
         }
         // SAFETY: a heap block this scratch holds alone, at least `bytes` long.
-        unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(self.at), bytes as usize) }
+        unsafe { core::slice::from_raw_parts_mut(mem::at::<u8>(self.at), bytes as usize) }
     }
 
     pub fn free(&mut self) {

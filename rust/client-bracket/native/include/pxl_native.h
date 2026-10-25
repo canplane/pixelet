@@ -4,20 +4,22 @@
 // declared for its Swift: the module map beside this makes it
 // `import PxlNative`. Whatever reaches the guest runs on the guest's own
 // thread while the caller waits (xpute-host native `Guest::run`), so the
-// caller may be any thread, one call at a time.
+// caller may be any thread, one call at a time. The first two are xpute's,
+// under the names the floor gives them (xpute-host native `native_abi!`);
+// the rest are the app's.
 
 #pragma once
 
 #include <stddef.h>
 #include <stdint.h>
 
-// The doorbell: a turn of quota_ms, and when the kernel wants the next, in ms
-// (xpute_guest::sched::quantum). The first lays the memory out.
-double pxl_interrupt(double quota_ms);
+// The entry, the doorbell: a turn of quota_ms, and when the kernel wants the
+// next, in ms (xpute_guest::sched::quantum). The first lays the memory out.
+double xpute_intr(double quota_ms);
 
 // The memory: its first byte, with its bytes written through `bytes` (which
 // may be null) — what the shell reads the directory and the rings through.
-uint8_t *pxl_memory(uint32_t *bytes);
+uint8_t *xpute_mem(uint32_t *bytes);
 
 // Opens the device: 0 when it is open, -1 when the system has none. What it
 // is, the kernel reads from the block its first call asks the host for.

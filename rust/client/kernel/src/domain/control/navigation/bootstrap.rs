@@ -22,7 +22,8 @@ fn fallback_seed() -> Q3 {
 /// to the bit.
 fn is_at(a: &Q3, b: &Q3) -> bool {
     let cell = 1i64 << FRAC_W;
-    (i64::from(a[0]) - i64::from(b[0])).abs() < cell && (i64::from(a[1]) - i64::from(b[1])).abs() < cell
+    (i64::from(a[0]) - i64::from(b[0])).abs() < cell
+        && (i64::from(a[1]) - i64::from(b[1])).abs() < cell
 }
 
 struct Bootstrap {
@@ -50,7 +51,8 @@ pub fn map_bootstrap_step() {
     };
     // A real fix landing after the fallback takes over; a place asked for
     // and not yet put, a search's or a pinned eye's, is not replaced.
-    if center.is_none_or(|c| is_at(&c, &fallback)) && pending().is_none_or(|p| is_at(&p, &fallback)) {
+    if center.is_none_or(|c| is_at(&c, &fallback)) && pending().is_none_or(|p| is_at(&p, &fallback))
+    {
         go_to_ground(seed, Motion::Snap);
     }
 }

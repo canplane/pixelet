@@ -111,7 +111,11 @@ impl Sun {
             crate::eye::SLOPE_BIAS * if i > j { i } else { j }
         };
         Sun {
-            first: [w[0] - ax * x[0] - ay * y[0], w[1] - ax * x[1] - ay * y[1], w[2] - ax * x[2] - ay * y[2]],
+            first: [
+                w[0] - ax * x[0] - ay * y[0],
+                w[1] - ax * x[1] - ay * y[1],
+                w[2] - ax * x[2] - ay * y[2],
+            ],
             reach,
             across,
             down,
@@ -124,7 +128,10 @@ impl Sun {
 
     /// The kept corner that keeps nothing: a box a side on from `corner`'s.
     pub fn none(corner: [i32; 2], size: u32) -> [i32; 2] {
-        [corner[0].wrapping_add(size as i32), corner[1].wrapping_add(size as i32)]
+        [
+            corner[0].wrapping_add(size as i32),
+            corner[1].wrapping_add(size as i32),
+        ]
     }
 
     /// The box's texel a slot of the map holds, `size` a power of two its
@@ -137,7 +144,12 @@ impl Sun {
     /// Whether box texel `p`'s world texel lay in the box the map was last
     /// cast at, so its slot holds it.
     pub fn kept(&self, size: u32, p: [u32; 2]) -> bool {
-        let within = |k: usize| (self.corner[k].wrapping_add(p[k] as i32).wrapping_sub(self.kept[k]) as u32) < size;
+        let within = |k: usize| {
+            (self.corner[k]
+                .wrapping_add(p[k] as i32)
+                .wrapping_sub(self.kept[k]) as u32)
+                < size
+        };
         within(0) && within(1)
     }
 
@@ -150,7 +162,11 @@ impl Sun {
         }
         let t = q as f32 / DEPTH_ONE as f32 * self.reach;
         let e = detail.eye;
-        let v = [e[0] - self.dir[0] * t, e[1] - self.dir[1] * t, e[2] - self.dir[2] * t];
+        let v = [
+            e[0] - self.dir[0] * t,
+            e[1] - self.dir[1] * t,
+            e[2] - self.dir[2] * t,
+        ];
         detail.at(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
     }
 
@@ -180,7 +196,12 @@ impl Sun {
     /// holds its world texel (`kept`): the run lies in the kept box on
     /// each axis.
     pub fn tile_kept(&self, size: u32, p: [u32; 2]) -> bool {
-        let within = |k: usize| (self.corner[k].wrapping_add(p[k] as i32).wrapping_sub(self.kept[k]) as u32) <= size - TILE;
+        let within = |k: usize| {
+            (self.corner[k]
+                .wrapping_add(p[k] as i32)
+                .wrapping_sub(self.kept[k]) as u32)
+                <= size - TILE
+        };
         within(0) && within(1)
     }
 
@@ -199,7 +220,10 @@ impl Sun {
         }
         let side = (TILE - 1) as f32;
         let (i, j) = (p[0] as f32, p[1] as f32);
-        let t = [held.near as f32 / DEPTH_ONE as f32 * self.reach, held.far as f32 / DEPTH_ONE as f32 * self.reach];
+        let t = [
+            held.near as f32 / DEPTH_ONE as f32 * self.reach,
+            held.far as f32 / DEPTH_ONE as f32 * self.reach,
+        ];
         let pad = 1.0 / (1u32 << FRAC_W) as f32;
         // The stops' box along each of the box's own axes, through the eye:
         // how near and how far it lies along each, squared.
@@ -207,7 +231,11 @@ impl Sun {
             let l = length(axis);
             let u = [axis[0] / l, axis[1] / l, axis[2] / l];
             let base = dot(self.first, u) + i * dot(self.across, u) + j * dot(self.down, u);
-            let (a, b, w) = (side * dot(self.across, u), side * dot(self.down, u), dot(self.dir, u));
+            let (a, b, w) = (
+                side * dot(self.across, u),
+                side * dot(self.down, u),
+                dot(self.dir, u),
+            );
             let (c, d) = (t[0] * w, t[1] * w);
             let lo = base + least(a) + least(b) + least(c - d) + d;
             let hi = base + most(a) + most(b) + most(c - d) + d;
@@ -281,7 +309,11 @@ impl Held {
         Held {
             near: if q < self.near { q } else { self.near },
             far: if q > self.far { q } else { self.far },
-            zoom: if self.zoom == NO_ZOOM || self.zoom == z { z } else { MIXED },
+            zoom: if self.zoom == NO_ZOOM || self.zoom == z {
+                z
+            } else {
+                MIXED
+            },
             reach,
         }
     }
@@ -305,7 +337,13 @@ impl Sun {
 
     /// The sun its words lay (`words`).
     pub fn of_words(w: &[u32; crate::eye::SUN_WORDS]) -> Sun {
-        let v = |k: usize| [f32::from_bits(w[k]), f32::from_bits(w[k + 1]), f32::from_bits(w[k + 2])];
+        let v = |k: usize| {
+            [
+                f32::from_bits(w[k]),
+                f32::from_bits(w[k + 1]),
+                f32::from_bits(w[k + 2]),
+            ]
+        };
         Sun {
             first: v(0),
             reach: f32::from_bits(w[3]),
@@ -381,7 +419,14 @@ pub fn over(o: [i32; 3], dir: [f32; 3], t: f32, node: [i32; 2], zoom: Zoom) -> b
 /// and Y, least and most, in units (`Sun::tile_rays`), passes over the
 /// node (`over`) within `t` units along `dir`: one does where the ray from
 /// `o` passes over the node widened by as much the other way.
-pub fn over_any(o: [i32; 3], off: [[f32; 2]; 2], dir: [f32; 3], t: f32, [x, y]: [i32; 2], zoom: Zoom) -> bool {
+pub fn over_any(
+    o: [i32; 3],
+    off: [[f32; 2]; 2],
+    dir: [f32; 3],
+    t: f32,
+    [x, y]: [i32; 2],
+    zoom: Zoom,
+) -> bool {
     if zoom == 0 {
         return true;
     }
@@ -418,10 +463,23 @@ pub fn over_any(o: [i32; 3], off: [[f32; 2]; 2], dir: [f32; 3], t: f32, [x, y]: 
 pub fn ray(eye: [i32; 3], s: &Sun, p: [u32; 2]) -> ([i32; 3], Ray, [f32; 3]) {
     let (i, j) = (p[0] as f32, p[1] as f32);
     let step = (1u32 << FRAC_W) as f32;
-    let steps = |k: usize| libm::rintf((s.first[k] + i * s.across[k] + j * s.down[k]) * step) as i32;
+    let steps =
+        |k: usize| libm::rintf((s.first[k] + i * s.across[k] + j * s.down[k]) * step) as i32;
     let q = [steps(0), steps(1), steps(2)];
-    let from = [-(q[0] as f32) / step, -(q[1] as f32) / step, -(q[2] as f32) / step];
-    ([eye[0].wrapping_add(q[0]), eye[1].wrapping_add(q[1]), eye[2].wrapping_add(q[2])], Ray::new(s.dir, s.reach), from)
+    let from = [
+        -(q[0] as f32) / step,
+        -(q[1] as f32) / step,
+        -(q[2] as f32) / step,
+    ];
+    (
+        [
+            eye[0].wrapping_add(q[0]),
+            eye[1].wrapping_add(q[1]),
+            eye[2].wrapping_add(q[2]),
+        ],
+        Ray::new(s.dir, s.reach),
+        from,
+    )
 }
 
 /// The depth a texel's walk `met` leaves in the map: where it stopped
@@ -446,7 +504,16 @@ mod tests {
     /// A box 4 units a side and 8 deep, looking straight down from 4 up,
     /// two texels a side.
     fn down() -> Sun {
-        Sun::of([[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, -8.0], [0.0, 0.0, 4.0]], 2, [0, 0])
+        Sun::of(
+            [
+                [2.0, 0.0, 0.0],
+                [0.0, 2.0, 0.0],
+                [0.0, 0.0, -8.0],
+                [0.0, 0.0, 4.0],
+            ],
+            2,
+            [0, 0],
+        )
     }
 
     /// A walk that stopped `t` along its ray on a face across `axis`, or went on.
@@ -454,7 +521,13 @@ mod tests {
         let node = crate::cast::Node::ROOT;
         Met {
             ends,
-            stop: crate::cast::Stop { t, axis, node, at: (), block: [0; 2] },
+            stop: crate::cast::Stop {
+                t,
+                axis,
+                node,
+                at: (),
+                block: [0; 2],
+            },
             visits: 0,
         }
     }
@@ -485,10 +558,22 @@ mod tests {
         // The sun 45 degrees over x: a top face changes a texel's side in
         // depth across a texel, which is pushed back `SLOPE_BIAS` times.
         let r = core::f32::consts::FRAC_1_SQRT_2;
-        let s = Sun::of([[2.0 * r, 0.0, 2.0 * r], [0.0, 2.0, 0.0], [8.0 * r, 0.0, -8.0 * r], [0.0, 0.0, 4.0]], 2048, [0, 0]);
+        let s = Sun::of(
+            [
+                [2.0 * r, 0.0, 2.0 * r],
+                [0.0, 2.0, 0.0],
+                [8.0 * r, 0.0, -8.0 * r],
+                [0.0, 0.0, 4.0],
+            ],
+            2048,
+            [0, 0],
+        );
         let texel = 4.0 / 2048.0;
         let d = depth(&s, &met(Ends::Stop, 2.0, 2));
-        assert!((d - (0.25 + crate::eye::SLOPE_BIAS * texel / 8.0)).abs() < 1e-6, "{d}");
+        assert!(
+            (d - (0.25 + crate::eye::SLOPE_BIAS * texel / 8.0)).abs() < 1e-6,
+            "{d}"
+        );
     }
 
     #[test]
@@ -496,7 +581,11 @@ mod tests {
         // The same box: a top face's depth deepens a texel's side a texel
         // across, toward the sun's going, and not at all down.
         let r = core::f32::consts::FRAC_1_SQRT_2;
-        let (across, down, deep) = ([4.0 * r / 2048.0, 0.0, 4.0 * r / 2048.0], [0.0, -4.0 / 2048.0, 0.0], [8.0 * r, 0.0, -8.0 * r]);
+        let (across, down, deep) = (
+            [4.0 * r / 2048.0, 0.0, 4.0 * r / 2048.0],
+            [0.0, -4.0 / 2048.0, 0.0],
+            [8.0 * r, 0.0, -8.0 * r],
+        );
         let [i, j] = slope([0.0, 0.0, 1.0], across, down, deep);
         assert!((i - 4.0 / 2048.0 / 8.0).abs() < 1e-9 && j == 0.0, "{i} {j}");
         // A step along any plane, back down its slope, is on it again: any
@@ -531,7 +620,16 @@ mod tests {
 
     #[test]
     fn a_slot_holds_its_world_texel_wherever_the_box_lies() {
-        let mut s = Sun::of([[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, -8.0], [0.0, 0.0, 4.0]], 8, [-3, 5]);
+        let mut s = Sun::of(
+            [
+                [2.0, 0.0, 0.0],
+                [0.0, 2.0, 0.0],
+                [0.0, 0.0, -8.0],
+                [0.0, 0.0, 4.0],
+            ],
+            8,
+            [-3, 5],
+        );
         // World texel 0 across, -3 + 3, lies in slot 0; 5 down, in slot 5.
         assert_eq!(s.texel(8, [0, 5]), [3, 0]);
         assert!(!s.kept(8, [3, 0]), "nothing is kept at first");
@@ -555,7 +653,10 @@ mod tests {
         let w = s.word(far, 0.25);
         assert!(s.stands(far, w));
         // The eye come up to the stop asks it finer.
-        let near = Detail { eye: [0.0, 0.0, 2.0], ..far };
+        let near = Detail {
+            eye: [0.0, 0.0, 2.0],
+            ..far
+        };
         assert!(!s.stands(near, w));
         // A walk that stopped at nothing stands wherever the eye is.
         assert!(s.stands(near, s.word(far, 1.0)));
@@ -571,7 +672,10 @@ mod tests {
         assert!(!over(o, dir, 5.0, [-1, 0], unit), "behind its start");
         assert!(!over(o, dir, 5.0, [2, 1], unit), "beside it");
         // Straight down, only the node under it.
-        assert!(over(o, [0.0, 0.0, -1.0], 5.0, [0, 0], unit) && !over(o, [0.0, 0.0, -1.0], 5.0, [1, 0], unit));
+        assert!(
+            over(o, [0.0, 0.0, -1.0], 5.0, [0, 0], unit)
+                && !over(o, [0.0, 0.0, -1.0], 5.0, [1, 0], unit)
+        );
         // A node as wide as half the world holds it wherever it is.
         assert!(over([i32::MAX - 5, 0, 0], dir, 5.0, [1, 0], 1));
     }
@@ -594,7 +698,11 @@ mod tests {
         };
         let (mut judged, mut whole, mut met) = (0, 0, 0);
         for trial in 0..400 {
-            let w = [next() * 40.0 - 20.0, next() * 40.0 - 20.0, 60.0 + next() * 40.0];
+            let w = [
+                next() * 40.0 - 20.0,
+                next() * 40.0 - 20.0,
+                60.0 + next() * 40.0,
+            ];
             let mut sun = Sun::of([x, y, z, w], size, [3, -5]);
             sun.kept = sun.corner;
             let detail = Detail {
@@ -620,11 +728,18 @@ mod tests {
                     eye: [from[0] + shift[0], from[1] + shift[1], from[2] + shift[2]],
                     ..detail
                 };
-                let d = if trial % 7 == 0 && k % 5 == 0 { 1.0 } else { d0 + next() * 0.02 };
+                let d = if trial % 7 == 0 && k % 5 == 0 {
+                    1.0
+                } else {
+                    d0 + next() * 0.02
+                };
                 words[k as usize] = sun.word(at, d);
                 held = held.with(words[k as usize]);
             }
-            let node = [(next() * 80.0 - 40.0) as i32 + 1000 / 256, (next() * 80.0 - 40.0) as i32 - 2000 / 256];
+            let node = [
+                (next() * 80.0 - 40.0) as i32 + 1000 / 256,
+                (next() * 80.0 - 40.0) as i32 - 2000 / 256,
+            ];
             let stands = sun.tile_stands(detail, p, held);
             let (o, off) = sun.tile_rays(eye, p);
             let reach = held.reach as f32 / DEPTH_ONE as f32 * sun.reach;
@@ -632,13 +747,28 @@ mod tests {
             for k in 0..TILE * TILE {
                 let q = [p[0] + k % TILE, p[1] + k / TILE];
                 let (o, _, from) = ray(eye, &sun, q);
-                let at = Detail { eye: from, ..detail };
+                let at = Detail {
+                    eye: from,
+                    ..detail
+                };
                 let word = words[k as usize];
                 if stands {
-                    assert!(sun.stands(at, word), "trial {trial}: slot {k} walks in a tile judged to stand");
+                    assert!(
+                        sun.stands(at, word),
+                        "trial {trial}: slot {k} walks in a tile judged to stand"
+                    );
                 }
-                if over(o, sun.dir, depth_of(word) * sun.reach, node, crate::UNIT_ZOOM) {
-                    assert!(passes, "trial {trial}: slot {k} passes over a node its tile's rays miss");
+                if over(
+                    o,
+                    sun.dir,
+                    depth_of(word) * sun.reach,
+                    node,
+                    crate::UNIT_ZOOM,
+                ) {
+                    assert!(
+                        passes,
+                        "trial {trial}: slot {k} passes over a node its tile's rays miss"
+                    );
                     met += 1;
                 }
             }
@@ -646,7 +776,10 @@ mod tests {
             whole += u32::from(stands);
         }
         // Enough of either kind to have judged the bound.
-        assert!(judged > 200 && whole > 20 && whole < judged - 20 && met > 50, "{judged} {whole} {met}");
+        assert!(
+            judged > 200 && whole > 20 && whole < judged - 20 && met > 50,
+            "{judged} {whole} {met}"
+        );
         // A tile at the box's edge straddles it; one in the kept box is kept.
         let mut sun = Sun::of([x, y, z, [0.0; 3]], size, [3, -5]);
         assert!(!sun.tile_texel(size, [0, 0]).1);

@@ -9,7 +9,12 @@ use pxl_spec_core::overwrite::Lanes;
 
 /// A tile as `hold` takes it: a cell's own look and its height, row by row
 /// from its first, and its lines.
-pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, pxl_spec::bake::separation::Separation);
+pub(crate) type HeldTile = (
+    Tile,
+    Vec<GroundId>,
+    Vec<i16>,
+    pxl_spec::bake::separation::Separation,
+);
 
 /// What `hold` leaves held: the squares' words up to their last that is
 /// not zero, the pool's families taken as records (pxl-spec-core
@@ -39,7 +44,11 @@ fn mirrored(records: &[u32]) {
     for families in records.chunks((SQUARE_FAMILIES * RECORD_WORDS) as usize) {
         let mut laid = vec![(families.len() / RECORD_WORDS as usize) as u32];
         laid.extend_from_slice(families);
-        assert_eq!(m.lay(&laid), Ok(()), "the test's pool past the mirror's cap");
+        assert_eq!(
+            m.lay(&laid),
+            Ok(()),
+            "the test's pool past the mirror's cap"
+        );
     }
 }
 
@@ -53,11 +62,16 @@ fn mirrored(records: &[u32]) {
 /// (`BUILT`); each hold is its own copy, whatever a test does to it.
 pub(crate) fn hold(centre: [f64; 2], held: &[HeldTile]) {
     let mut built = BUILT.lock().unwrap_or_else(|e| e.into_inner());
-    let k = match built.iter().position(|((c, h), _)| *c == centre && h.as_slice() == held) {
+    let k = match built
+        .iter()
+        .position(|((c, h), _)| *c == centre && h.as_slice() == held)
+    {
         Some(k) => k,
         None => {
             let records = build(centre, held);
-            let upto = |words: &[u32]| words[..words.iter().rposition(|&w| w != 0).map_or(0, |i| i + 1)].to_vec();
+            let upto = |words: &[u32]| {
+                words[..words.iter().rposition(|&w| w != 0).map_or(0, |i| i + 1)].to_vec()
+            };
             let b = Built {
                 cells: upto(planes().cells),
                 records,
@@ -103,7 +117,11 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             continue;
         }
         let first = window::origin(cell, cell_at(cell, centre));
-        w.slots[(SQUARES + win) as usize] = Slot { square: first, present: 1, ticket: 0 };
+        w.slots[(SQUARES + win) as usize] = Slot {
+            square: first,
+            present: 1,
+            ticket: 0,
+        };
         for s in 0..SLOTS {
             w.slots[(win * SLOTS + s) as usize].square = wanted(cell, first, s);
         }
@@ -115,7 +133,8 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             continue;
         }
         let (t, place) = tile_of(cell, square);
-        let Some((_, looks_of, heights, separation)) = held.iter().find(|(p, _, _, _)| *p == t) else {
+        let Some((_, looks_of, heights, separation)) = held.iter().find(|(p, _, _, _)| *p == t)
+        else {
             continue;
         };
         let side = GROUND.tile_cells();
@@ -123,17 +142,41 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             let [x, y] = window::of_index(k);
             ((place[1] * SQUARE + y) * side + place[0] * SQUARE + x) as usize
         };
-        let (mut segments, mut lines) = (vec![(0, 0); window::WAYS_SQUARE_SEGMENTS as usize], vec![0; window::LINES_WORDS as usize]);
-        let n = pxl_spec::bake::tile::terrain::square_lines(t, separation, place, &mut segments, &mut lines);
+        let (mut segments, mut lines) = (
+            vec![(0, 0); window::WAYS_SQUARE_SEGMENTS as usize],
+            vec![0; window::LINES_WORDS as usize],
+        );
+        let n = pxl_spec::bake::tile::terrain::square_lines(
+            t,
+            separation,
+            place,
+            &mut segments,
+            &mut lines,
+        );
         let laid = pxl_spec::bake::tile::terrain::Laid {
             cell,
             place,
             lines: &lines[..n],
             looks: |k: u32| word([u32::from(looks_of[at(k)]); 4]),
-            height: |c: [i32; 2]| i32::from(heights[at(window::index_of([c[0].clamp(0, SQUARE as i32 - 1) as u32, c[1].clamp(0, SQUARE as i32 - 1) as u32]))]),
+            height: |c: [i32; 2]| {
+                i32::from(
+                    heights[at(window::index_of([
+                        c[0].clamp(0, SQUARE as i32 - 1) as u32,
+                        c[1].clamp(0, SQUARE as i32 - 1) as u32,
+                    ]))],
+                )
+            },
         };
-        let (mut lane, mut scratch) = (vec![0u32; window::SQUARE_WORDS as usize], vec![0u32; pxl_spec_core::ways::tree::SCRATCH_WORDS as usize]);
-        fill_columns(&laid, |k| i32::from(heights[at(k)]), &mut lane, &mut scratch);
+        let (mut lane, mut scratch) = (
+            vec![0u32; window::SQUARE_WORDS as usize],
+            vec![0u32; pxl_spec_core::ways::tree::SCRATCH_WORDS as usize],
+        );
+        fill_columns(
+            &laid,
+            |k| i32::from(heights[at(k)]),
+            &mut lane,
+            &mut scratch,
+        );
         for k in 0..window::LAID_WORDS {
             let half = |j: u32| window::laid_half(u32::from(looks_of[at(2 * k + j)]), 0);
             lane[(window::LAID_AT + k) as usize] = half(0) | half(1) << 16;
@@ -141,7 +184,17 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         for j in 0..=LEVELS {
             for y in 0..SQUARE >> j {
                 for x in 0..SQUARE >> j {
-                    pxl_spec_core::fill::level(&mut lane, 0, &pxl_spec_core::fill::Scratch { words: &scratch, at: 0 }, cell, j, [x, y]);
+                    pxl_spec_core::fill::level(
+                        &mut lane,
+                        0,
+                        &pxl_spec_core::fill::Scratch {
+                            words: &scratch,
+                            at: 0,
+                        },
+                        cell,
+                        j,
+                        [x, y],
+                    );
                 }
             }
         }
@@ -178,7 +231,12 @@ fn build(centre: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
 /// `lane`; and its spans and those beside it off its lines (`ways::around`)
 /// read along z as runs (`ways::runs`), into its `scratch` from its first,
 /// none past `RUNS_SQUARE`.
-fn fill_columns(sq: &impl window::Square, top: impl Fn(u32) -> i32, lane: &mut [u32], scratch: &mut [u32]) {
+fn fill_columns(
+    sq: &impl window::Square,
+    top: impl Fn(u32) -> i32,
+    lane: &mut [u32],
+    scratch: &mut [u32],
+) {
     use pxl_spec_core::window::{COLUMNS_AT, FIRSTS_AT, RUNS_AT, RUNS_SQUARE};
     let mut runs = 0;
     for i in 0..SQUARE_CELLS {
@@ -207,7 +265,11 @@ fn lay(w: &mut Windows, eye: [f64; 2], focus: [f64; 2]) {
             Centre::Destination => continue,
         };
         let first = window::origin(cell, cell_at(cell, p));
-        w.slots[(SQUARES + win) as usize] = Slot { square: first, present: 1, ticket: 0 };
+        w.slots[(SQUARES + win) as usize] = Slot {
+            square: first,
+            present: 1,
+            ticket: 0,
+        };
         for s in 0..SLOTS {
             w.slots[(win * SLOTS + s) as usize].square = wanted(cell, first, s);
         }
@@ -248,13 +310,21 @@ fn a_square_two_windows_want_is_held_once() {
     WINDOWS_STATE.set(fresh());
     let w = windows();
     lay(w, leaf(CENTRE), leaf(CENTRE));
-    assert_eq!(w.berths.iter().filter(|b| !b.is_free()).count(), (EYE_WINDOWS * SLOTS) as usize, "the focus's windows take no berth");
+    assert_eq!(
+        w.berths.iter().filter(|b| !b.is_free()).count(),
+        (EYE_WINDOWS * SLOTS) as usize,
+        "the focus's windows take no berth"
+    );
     for focus in EYE_WINDOWS..EYE_WINDOWS + 2 {
         let cell = layout(focus).1;
         let eye = cell - FIRST_CELL;
         for s in 0..SLOTS {
             assert_eq!(want(w, focus, s), want(w, eye, s));
-            assert_eq!(berth_of(w, cell, want(w, focus, s)), Some(eye * SLOTS + s), "in the eye's own berth");
+            assert_eq!(
+                berth_of(w, cell, want(w, focus, s)),
+                Some(eye * SLOTS + s),
+                "in the eye's own berth"
+            );
         }
     }
     land_all(w);
@@ -284,11 +354,20 @@ fn a_square_one_window_leaves_is_kept_while_another_wants_it() {
     assert_eq!(held_at(w, LEAF_CELL), (SLOTS + window::ACROSS) as usize);
     for s in 0..SLOTS {
         let q = want(w, focus, s);
-        assert!(Windowed.present(LEAF_CELL, q).1, "the focus's squares stay present");
+        assert!(
+            Windowed.present(LEAF_CELL, q).1,
+            "the focus's squares stay present"
+        );
         assert!(w.slots[(focus * SLOTS + s) as usize].holds(q));
     }
-    let new: Vec<u32> = (0..SLOTS).filter(|&s| !w.slots[(eye * SLOTS + s) as usize].holds(want(w, eye, s))).collect();
-    assert_eq!(new.len(), window::ACROSS as usize, "the eye's new column alone is absent");
+    let new: Vec<u32> = (0..SLOTS)
+        .filter(|&s| !w.slots[(eye * SLOTS + s) as usize].holds(want(w, eye, s)))
+        .collect();
+    assert_eq!(
+        new.len(),
+        window::ACROSS as usize,
+        "the eye's new column alone is absent"
+    );
     for &s in &new {
         let b = berth_of(w, LEAF_CELL, want(w, eye, s)).unwrap();
         assert!(
@@ -300,9 +379,16 @@ fn a_square_one_window_leaves_is_kept_while_another_wants_it() {
     land_all(w);
     lay(w, leaf(CENTRE), leaf(CENTRE));
     for s in 0..SLOTS {
-        assert!(w.slots[(eye * SLOTS + s) as usize].holds(want(w, eye, s)), "not filled again");
+        assert!(
+            w.slots[(eye * SLOTS + s) as usize].holds(want(w, eye, s)),
+            "not filled again"
+        );
     }
-    assert_eq!(held_at(w, LEAF_CELL), SLOTS as usize, "the column no window wants is given up");
+    assert_eq!(
+        held_at(w, LEAF_CELL),
+        SLOTS as usize,
+        "the column no window wants is given up"
+    );
 }
 
 #[test]
@@ -310,10 +396,17 @@ fn windows_apart_hold_their_squares_in_their_own_berths() {
     let _g = crate::sys::serial();
     WINDOWS_STATE.set(fresh());
     let w = windows();
-    lay(w, leaf(CENTRE), leaf([CENTRE[0] + 100.0 * f64::from(SQUARE), CENTRE[1]]));
+    lay(
+        w,
+        leaf(CENTRE),
+        leaf([CENTRE[0] + 100.0 * f64::from(SQUARE), CENTRE[1]]),
+    );
     for win in 0..EYE_WINDOWS + 2 {
         for s in 0..SLOTS {
-            assert_eq!(berth_of(w, layout(win).1, want(w, win, s)), Some(win * SLOTS + s));
+            assert_eq!(
+                berth_of(w, layout(win).1, want(w, win, s)),
+                Some(win * SLOTS + s)
+            );
         }
     }
 }
@@ -332,7 +425,10 @@ fn a_landing_shows_in_every_window_wanting_the_square() {
         show(w, i);
     }
     landed(b, 6, Landing::Refused);
-    assert_eq!(w.berths[b as usize].ticket, 7, "another fill's landing lays nothing");
+    assert_eq!(
+        w.berths[b as usize].ticket, 7,
+        "another fill's landing lays nothing"
+    );
     landed(b, 7, Landing::Built(&[0]));
     for win in [eye, focus] {
         let row = w.slots[(win * SLOTS) as usize];
@@ -346,15 +442,21 @@ fn a_landing_shows_in_every_window_wanting_the_square() {
     };
     let far = leaf([CENTRE[0] + 100.0 * f64::from(SQUARE), CENTRE[1]]);
     lay(w, leaf(CENTRE), far);
-    assert_eq!(w.berths[b as usize].ticket, REFUSED, "the eye still wants it");
-    assert!(!berth_wants(w, tile_of(LEAF_CELL, q).0, b), "nor is its tile kept for it");
+    assert_eq!(
+        w.berths[b as usize].ticket, REFUSED,
+        "the eye still wants it"
+    );
+    assert!(
+        !berth_wants(w, tile_of(LEAF_CELL, q).0, b),
+        "nor is its tile kept for it"
+    );
     lay(w, far, far);
     assert_eq!(berth_of(w, LEAF_CELL, q), None);
 }
 
 #[test]
 fn a_square_waiting_on_the_heap_is_handed_again_once_a_page_is_given_back() {
-    use crate::sys::io::host::set_heap_stat;
+    use crate::sys::boot::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_guest::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);
@@ -373,14 +475,27 @@ fn a_square_waiting_on_the_heap_is_handed_again_once_a_page_is_given_back() {
     (w.berths[b as usize].ticket, w.heap) = (WAITING, Some(Refused::now()));
     assert!(!wake(w), "no page given back: it waits");
     lay(w, leaf(CENTRE), leaf(CENTRE));
-    assert_eq!(w.berths[b as usize].ticket, WAITING, "unhanded while it waits");
-    assert!(!berth_wants(w, tile_of(LEAF_CELL, q).0, b), "nor its tile kept for it");
+    assert_eq!(
+        w.berths[b as usize].ticket, WAITING,
+        "unhanded while it waits"
+    );
+    assert!(
+        !berth_wants(w, tile_of(LEAF_CELL, q).0, b),
+        "nor its tile kept for it"
+    );
     RELEASES.fetch_add(1, Ordering::Relaxed);
     assert!(wake(w) && w.heap.is_none());
     berth(w, false);
-    assert!(w.berths[b as usize].is_absent() && berth_wants(w, tile_of(LEAF_CELL, q).0, b), "absent, to be handed again");
+    assert!(
+        w.berths[b as usize].is_absent() && berth_wants(w, tile_of(LEAF_CELL, q).0, b),
+        "absent, to be handed again"
+    );
     for win in [eye, focus] {
-        assert_eq!(w.slots[(win * SLOTS) as usize].ticket, 0, "its rows show it");
+        assert_eq!(
+            w.slots[(win * SLOTS) as usize].ticket,
+            0,
+            "its rows show it"
+        );
     }
     set_heap_stat(HeapStat::default);
 }

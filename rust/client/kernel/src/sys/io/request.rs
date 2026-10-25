@@ -22,13 +22,13 @@ use crate::profiler::record::profiler_record;
 use crate::profiler::task::TaskRow;
 use crate::sys::io::demand::{Ask, Phases, Stream};
 use crate::sys::io::failure::{Ended, Failure};
-use crate::sys::io::host::Refused;
 use crate::sys::io::policy::Policy;
+use crate::sys::io::room::Refused;
 use crate::sys::load::LOAD_FILES;
 use fnv::FnvHashMap;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::off_of_slice;
+use xpute_guest::mem::off_of_slice;
 use xpute_kit::math::rng::derive_seed_u64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -205,7 +205,8 @@ impl<S: Serve> RequestScheduler<S> {
             serve,
             desired: vec![Wanted::NONE; desired].into_boxed_slice(),
             held: [0; Stream::ALL.len()],
-            merged: vec![Wanted::NONE; bounds.iter().copied().max().unwrap_or(0)].into_boxed_slice(),
+            merged: vec![Wanted::NONE; bounds.iter().copied().max().unwrap_or(0)]
+                .into_boxed_slice(),
             attempt: [None; MAX_CREDITS as usize],
             generation: [0; MAX_CREDITS as usize],
             credits: 0,
@@ -233,7 +234,10 @@ impl<S: Serve> RequestScheduler<S> {
     }
 
     fn find(&self, stream: Stream, subject: u64) -> Option<usize> {
-        self.run(stream).binary_search_by_key(&subject, |w| w.subject).ok().map(|k| self.first(stream) + k)
+        self.run(stream)
+            .binary_search_by_key(&subject, |w| w.subject)
+            .ok()
+            .map(|k| self.first(stream) + k)
     }
 
     /// The want at `i` of `stream`'s run gone, the rest of the run closing up.
@@ -245,11 +249,16 @@ impl<S: Serve> RequestScheduler<S> {
 
     fn slot_of(&self, key: u64) -> Option<usize> {
         let (slot, generation) = ((key >> 32) as usize, key as u32);
-        (self.generation.get(slot) == Some(&generation) && self.attempt.get(slot).is_some_and(Option::is_some)).then_some(slot)
+        (self.generation.get(slot) == Some(&generation)
+            && self.attempt.get(slot).is_some_and(Option::is_some))
+        .then_some(slot)
     }
 
     fn attempting(&self, stream: Stream, subject: u64) -> bool {
-        self.attempt.iter().flatten().any(|a| a.stream == stream && a.subject == subject)
+        self.attempt
+            .iter()
+            .flatten()
+            .any(|a| a.stream == stream && a.subject == subject)
     }
 
     /// Replaces one stream's wants with `wanted`, by subject: one walk of
@@ -257,7 +266,11 @@ impl<S: Serve> RequestScheduler<S> {
     /// producers say everything every turn. A kept subject keeps its enqueue
     /// time and retry wait; a repeated subject is one want, the later ask.
     pub fn declare(&mut self, stream: Stream, wanted: &[(u64, Ask)], at: f64) {
-        xpute_kit::ensure!(wanted.windows(2).all(|p| p[0].0 <= p[1].0), ENOTRECOVERABLE, stream as u32);
+        xpute_kit::ensure!(
+            wanted.windows(2).all(|p| p[0].0 <= p[1].0),
+            ENOTRECOVERABLE,
+            stream as u32
+        );
         let (first, bound) = (self.first(stream), self.bounds[stream as usize]);
         let run = &self.desired[first..first + self.held[stream as usize]];
         let (mut k, mut n) = (0, 0);
@@ -293,8 +306,17 @@ impl<S: Serve> RequestScheduler<S> {
     /// `stream`'s requests waiting for a credit and out on one. For a
     /// report only, never for deciding what to want.
     pub fn stream_counts(&self, stream: Stream) -> (u32, u32) {
-        let out = self.attempt.iter().flatten().filter(|a| a.stream == stream).count() as u32;
-        let waiting = self.run(stream).iter().filter(|w| !self.attempting(stream, w.subject)).count() as u32;
+        let out = self
+            .attempt
+            .iter()
+            .flatten()
+            .filter(|a| a.stream == stream)
+            .count() as u32;
+        let waiting = self
+            .run(stream)
+            .iter()
+            .filter(|w| !self.attempting(stream, w.subject))
+            .count() as u32;
         (waiting, out)
     }
 
@@ -322,7 +344,11 @@ impl<S: Serve> RequestScheduler<S> {
         if self.given_up || at < self.held_until {
             return;
         }
-        let room = if self.failing.is_some() { 1 } else { self.credits as usize };
+        let room = if self.failing.is_some() {
+            1
+        } else {
+            self.credits as usize
+        };
         let mut ready = core::mem::take(&mut self.ready);
         ready.clear();
         for s in Stream::ALL {
@@ -358,7 +384,8 @@ impl<S: Serve> RequestScheduler<S> {
             enqueue_ms: w.enqueue_ms,
             start_ms: at,
         });
-        self.started.push((key_of(slot, self.generation[slot]), stream, w.subject));
+        self.started
+            .push((key_of(slot, self.generation[slot]), stream, w.subject));
     }
 
     /// Ends the slot's attempt; its key is spent, so whatever the host still
@@ -390,7 +417,8 @@ impl<S: Serve> RequestScheduler<S> {
     /// Whether `stream`'s want of `subject` waits on its object, which
     /// failed: it is not asked again while it is wanted.
     pub fn object_failed(&self, stream: Stream, subject: u64) -> bool {
-        self.find(stream, subject).is_some_and(|i| matches!(self.desired[i].wait, Wait::Object))
+        self.find(stream, subject)
+            .is_some_and(|i| matches!(self.desired[i].wait, Wait::Object))
     }
 
     pub fn attempt_of(&self, key: u64) -> Option<(Stream, u64)> {
@@ -400,7 +428,9 @@ impl<S: Serve> RequestScheduler<S> {
 
     /// An answer ends the want; a failure holds it back.
     pub fn settle(&mut self, key: u64, ended: Ended, phases: Option<Phases>, at: f64) {
-        let Some(slot) = self.slot_of(key) else { return };
+        let Some(slot) = self.slot_of(key) else {
+            return;
+        };
         let a = self.end(slot);
         let want = self.find(a.stream, a.subject);
         match ended {
@@ -436,12 +466,12 @@ impl<S: Serve> RequestScheduler<S> {
         let wait = match self.serve.blame(failure) {
             Blame::Object => Wait::Object,
             Blame::Network => {
-                self.failing = Some(failure.errno);
+                self.failing = Some(failure.errnum);
                 self.held_until = at + self.serve.backoff(1, seed).unwrap_or(0.0);
                 return;
             }
             Blame::Server => {
-                self.failing = Some(failure.errno);
+                self.failing = Some(failure.errnum);
                 if started_ms <= self.struck_ms {
                     return;
                 }
@@ -490,7 +520,7 @@ fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
         };
         match ended {
             Ended::Failed(fail) => {
-                row.fail = f64::from(fail.errno as i32);
+                row.fail = f64::from(fail.errnum as i32);
                 row.detail = fail.detail as f64;
             }
             Ended::Refused(_) => row.fail = f64::from(Errno::ENOMEM as i32),
@@ -518,7 +548,10 @@ static FILES: Global<FnvHashMap<usize, Box<str>>> = Global::new();
 /// A location's file name lies outside kernel memory on a device, so rows
 /// name a heap copy; the names are few and kept for good.
 fn file_in_memory(file: &'static str) -> &'static str {
-    FILES.get(FnvHashMap::default).entry(file.as_ptr().addr()).or_insert_with(|| file.into())
+    FILES
+        .get(FnvHashMap::default)
+        .entry(file.as_ptr().addr())
+        .or_insert_with(|| file.into())
 }
 
 static SCHED: Global<RequestScheduler<Policy>> = Global::new();

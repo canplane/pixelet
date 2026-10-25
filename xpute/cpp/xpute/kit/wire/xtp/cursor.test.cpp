@@ -38,7 +38,7 @@ std::string js_number(double x) {
 }
 
 std::string errno_of(const Error &e) {
-    return "errno:" + std::to_string(static_cast<int>(e.code));
+    return "errno:" + std::to_string(static_cast<int>(e.errnum));
 }
 
 template <class T> std::string elements(const Array &a) {
@@ -195,7 +195,7 @@ XPUTE_TEST(xtp_a_packet_reads_back_what_was_written) {
     XPUTE_CHECK(!root.at(5)->get_array<std::uint32_t>().ok());
     XPUTE_CHECK(!root.at_branch(4)->at(1)->get_number().ok());
     XPUTE_CHECK_EQ(root.at_branch(4)->at(1)->get_i64().value(), -2, "a 64-bit integer");
-    XPUTE_CHECK_EQ(root.at(6).error().code, Errno::efault, "past the last child");
+    XPUTE_CHECK_EQ(root.at(6).error().errnum, Errno::efault, "past the last child");
 
     std::array<std::uint8_t, 64> one{};
     PacketWriter n(one);
@@ -204,7 +204,7 @@ XPUTE_TEST(xtp_a_packet_reads_back_what_was_written) {
     Cursor absent = nulls.at(0).value();
     XPUTE_CHECK(absent.is_null());
     XPUTE_CHECK(!absent.opt());
-    XPUTE_CHECK_EQ(absent.as_branch().error().code, Errno::efault, "an absent node is no branch");
+    XPUTE_CHECK_EQ(absent.as_branch().error().errnum, Errno::efault, "an absent node is no branch");
 }
 
 XPUTE_TEST(xtp_a_packet_reads_wherever_it_lies) {

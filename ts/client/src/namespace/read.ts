@@ -9,11 +9,15 @@
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
-import { online } from "@/host/online.ts";
+import { online } from "@/namespace/online.ts";
 import { bracket } from "@/bracket.tsx";
 
 /** The object at `url`, whole; `name` is what a warning calls it. */
-export async function get(url: string, name: string, signal: AbortSignal): Promise<U8Array> {
+export async function get(
+  url: string,
+  name: string,
+  signal: AbortSignal,
+): Promise<U8Array> {
   let res: Response;
   let body: U8Array;
   try {
@@ -22,14 +26,23 @@ export async function get(url: string, name: string, signal: AbortSignal): Promi
   } catch (err) {
     // TypeError covers offline, DNS, CORS and refused alike, so only the
     // browser's own word says offline; the rest is the server's.
-    if (!signal.aborted) console.warn(`[read] ${name}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
+    if (!signal.aborted) {
+      console.warn(
+        `[read] ${name}: ${
+          err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+        }`,
+      );
+    }
     throw new FileError(online() ? Errno.EIO : Errno.ENETUNREACH);
   }
   if (res.status === 204) throw new FileError(Errno.ENOENT);
   if (!res.ok) {
     console.warn(`[read] ${name}: HTTP ${res.status}`);
     // A key that names nothing is the object's failure; any other, the server's.
-    throw new FileError(res.status === 404 ? Errno.ENXIO : Errno.EACCES, res.status);
+    throw new FileError(
+      res.status === 404 ? Errno.ENXIO : Errno.EACCES,
+      res.status,
+    );
   }
   return body;
 }

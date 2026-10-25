@@ -20,8 +20,8 @@
 fn air_column(c: vec2u, d: f32) -> vec4f {
   let n = f32(AIR_FROXELS);
   let span = air_span_of(textureLoad(air_volume, vec3u(c, AIR_FROXELS), 0).xy);
-  let z = air_z(span, d);
-  return textureSampleLevel(air_volume, atmos_sampler, vec3f((vec2f(c) + 0.5) / n, (0.5 + z * (n - 1.0)) / (n + 1.0)), 0.0);
+  let k = air_slice(span, d);
+  return textureSampleLevel(air_volume, atmos_sampler, vec3f((vec2f(c) + 0.5) / n, (0.5 + k) / (n + 1.0)), 0.0);
 }
 
 // The volume at `uv` across, `d` units from the eye: the four columns about
