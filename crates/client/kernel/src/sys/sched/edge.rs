@@ -8,7 +8,7 @@ use xpute_guest::sched::edge::Edge;
 use xpute_guest::global::Global;
 
 /// The kernel's tasks: the four that run for good (`world_tasks`) and one for
-/// each file in flight, a load's model and its image (sys/io/load.rs
+/// each file in flight, a load's model and its image (sys/io/loader.rs
 /// `arrival`); an executor sizes its pool by it.
 pub const TASKS: usize = 4 + crate::sys::load::LOAD_FILES;
 

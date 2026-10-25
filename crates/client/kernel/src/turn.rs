@@ -322,7 +322,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let after_tick = now();
     // The turn's one pump, after every producer has spoken: the effects, the
     // tick's tile streams (`demand_tick`), and the assets asked for by either.
-    crate::sys::io::request::declare(crate::sys::io::demand::Stream::asset, crate::sys::io::load::load_wants());
+    crate::sys::io::request::declare(crate::sys::io::demand::Stream::asset, crate::sys::io::loader::load_wants());
     pump();
     crate::domain::scene::stage::stage_write();
     crate::domain::scene::stage::stage_render(crate::domain::view::frame::resolution::Pace {

@@ -52,7 +52,7 @@
     },
     "ASSET": {
       "$value": 257,
-      "$doc": ["The shipped assets; a path is a load's number in decimal (sys/io/load.rs)."]
+      "$doc": ["The shipped assets; a path is a load's number in decimal (sys/io/loader.rs)."]
     }
   },
   "SPHERE": {

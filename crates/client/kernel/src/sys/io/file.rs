@@ -359,7 +359,7 @@ pub fn opened(fd: Fd, res: i32, detail: u32) {
     }
     match owner {
         Owner::Fetch { key, at_ms } => crate::sys::io::fetch::opened(fd, key, at_ms, opened),
-        Owner::Load { key } => crate::sys::io::load::opened(fd, key, opened),
+        Owner::Load { key } => crate::sys::io::loader::opened(fd, key, opened),
         Owner::Kept(kept) => kept_opened(kept, fd, opened),
         Owner::Write => {}
     }

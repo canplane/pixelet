@@ -10,7 +10,7 @@ use crate::domain::query::model::variant_spec::IDLE_CLIP;
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
 use crate::kernel;
 use crate::laid;
-use crate::sys::io::load::load_image;
+use crate::sys::io::loader::load_image;
 use crate::sys::load::Load;
 use crate::sys::sched::edge::request_world_tick;
 use crate::sys::sched::tick::TickContext;

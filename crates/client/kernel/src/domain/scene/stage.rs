@@ -32,7 +32,7 @@ use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
 use crate::kernel;
 use crate::profiler::report::set_host_frame;
-use crate::sys::io::load::load_image;
+use crate::sys::io::loader::load_image;
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
 use crate::sys::sched::edge::request_world_tick;
@@ -166,7 +166,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         request_world_tick();
     }
     // An image whose texture the frame took needs its file no more.
-    pxl_render::gpu::api::take_landed(crate::sys::io::load::image_landed);
+    pxl_render::gpu::api::take_landed(crate::sys::io::loader::image_landed);
     // What the renderer holds, drawn this frame or not.
     let held = pxl_render::gpu::api::gpu().map_or([0; OBJECT_OPS], |g| *g.objects());
     let objects: [f64; OBJECT_OPS - 1] = core::array::from_fn(|k| f64::from(held[k + 1]));

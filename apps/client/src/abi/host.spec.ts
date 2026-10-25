@@ -37,7 +37,7 @@ export const op = {
 export const root = {
   /** The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice. */
   STORAGE: 256 as number,
-  /** The shipped assets; a path is a load's number in decimal (sys/io/load.rs). */
+  /** The shipped assets; a path is a load's number in decimal (sys/io/loader.rs). */
   ASSET: 257 as number,
 } as const;
 

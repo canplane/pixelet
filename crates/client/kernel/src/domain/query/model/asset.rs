@@ -18,7 +18,7 @@ use xpute_guest::mem::base::ptr_at;
 
 use crate::laid;
 use crate::sys::io::host::Refused;
-use crate::sys::io::load::load_gltf;
+use crate::sys::io::loader::load_gltf;
 use crate::sys::load::Load;
 
 #[derive(Clone, Debug, PartialEq)]

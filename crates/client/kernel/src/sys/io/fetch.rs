@@ -24,7 +24,7 @@ use crate::sys::sched::edge::{request_world_tick, world_edge};
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-/// Assets are opened below the assets' root (sys/io/load.rs), never here.
+/// Assets are opened below the assets' root (sys/io/loader.rs), never here.
 pub fn start(credit: Credit, stream: Stream, subject: u64) {
     let Some(bake) = stream.bake() else { return };
     let owner = Owner::Fetch { key: credit.key(), at_ms: now() };
@@ -183,7 +183,7 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     let fail = match got {
         // Taken by its owner, which settles it; and a turn asked, so one takes it.
         Got::Absent | Got::Read(Some(_)) => {
-            // An asset loads through io/load, never a fetch: nothing would take its answer.
+            // An asset loads through the loader (sys/io/loader.rs), never a fetch: nothing would take its answer.
             xpute_kit::ensure!(stream != Stream::asset, ENOTRECOVERABLE);
             ANSWERED.get(List::new).push(Answered { key, stream, subject, block, phases });
             request_world_tick();

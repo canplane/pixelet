@@ -43,7 +43,7 @@ pub mod op {
 pub mod root {
     /// The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice.
     pub const STORAGE: u32 = 256;
-    /// The shipped assets; a path is a load's number in decimal (sys/io/load.rs).
+    /// The shipped assets; a path is a load's number in decimal (sys/io/loader.rs).
     pub const ASSET: u32 = 257;
 }
 

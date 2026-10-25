@@ -215,7 +215,7 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
     // the commands, as a device answering again among them asks that block anew.
     if pxl_render::gpu::api::take_device_lost() {
         pxl_render::gpu::renderer::gpu_lost();
-        crate::sys::io::load::images_lost();
+        crate::sys::io::loader::images_lost();
     }
     door().drain(|number, pkt| apply::apply(s, number, pkt));
     let drained = now();
@@ -286,8 +286,8 @@ fn post_shell(s: &mut State) {
     take_started(|credit, stream, subject| match stream.bake() {
         Some(_) => crate::sys::io::fetch::start(credit, stream, subject),
         None => {
-            if let Some((_, load)) = crate::sys::io::load::of_subject(subject) {
-                crate::sys::io::load::open_asset(credit, load);
+            if let Some((_, load)) = crate::sys::io::loader::of_subject(subject) {
+                crate::sys::io::loader::open_asset(credit, load);
             }
         }
     });
@@ -297,7 +297,7 @@ fn post_shell(s: &mut State) {
     take_stops(|key| stops.push(key));
     for key in stops {
         if !crate::sys::io::fetch::cancel(key) {
-            crate::sys::io::load::cancel_asset(key);
+            crate::sys::io::loader::cancel_asset(key);
         }
     }
 }

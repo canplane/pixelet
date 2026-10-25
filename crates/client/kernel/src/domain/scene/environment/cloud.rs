@@ -32,7 +32,7 @@ use crate::domain::view::frame::pose::{km_per_u, units_per_px_at};
 use crate::domain::view::observation::eye;
 use crate::domain::view::setting::store::settings_store;
 use crate::kernel;
-use crate::sys::io::load::load_image;
+use crate::sys::io::loader::load_image;
 use crate::sys::load::Load;
 
 const VARIANTS: [Asset; 3] = [Asset::sky_cloud_cumulus_1_glb, Asset::sky_cloud_cumulus_2_glb, Asset::sky_cloud_stratus_glb];

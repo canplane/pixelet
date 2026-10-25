@@ -20,7 +20,7 @@ use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::setting::store::settings_store;
 use crate::kernel;
 use crate::laid;
-use crate::sys::io::load::load_image;
+use crate::sys::io::loader::load_image;
 use crate::sys::load::Load;
 use crate::sys::sched::edge::wake_at;
 use crate::sys::sched::tick::TickContext;

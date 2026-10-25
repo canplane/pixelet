@@ -1,4 +1,4 @@
-// pxl-kernel/sys/io/load.rs
+// pxl-kernel/sys/io/loader.rs
 
 //! Shared loading of models and images, so each asset is fetched and parsed
 //! at most once. An asset is a want in the request scheduler like a tile, sharing

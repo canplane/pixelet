@@ -8,7 +8,7 @@ use pxl_spec::asset::ingested::Asset;
 use xpute_guest::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::domain::query::model::asset::{model_of, model_refusal_over};
-use crate::sys::io::load::{load_image, take_settled};
+use crate::sys::io::loader::{load_image, take_settled};
 use crate::sys::load::Load;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::block::decor::{Decor, DECORS};
