@@ -4,7 +4,7 @@ import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { alpha, chrome, color, hairline, textScale, textStyle, weight } from "@/shell/ui/theme.ts";
+import { alpha, color, hairline, textScale, textStyle, weight } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { CharacterPreview } from "./preview.tsx";
 import { kernel_setting } from "@/abi/shell.ts";
@@ -13,13 +13,14 @@ import { type CharacterVariant, type Gender, genderOf, GENDERS, personVariant, p
 import { LABEL } from "@/shell/ui/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shell/ui/panel.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
+import { touchReach } from "@/shell/ui/touch.ts";
 
 // The chip one sees is 32; a press lands on 44, a box laid out around it (doc/minutes/20260928-three-sizes-of-a-control.md).
 const CHIP_HEIGHT = 32;
 const PREVIEW = 96;
 const CHIP_GAP_X = 8;
-const CHIP_GAP_Y = chrome.target - CHIP_HEIGHT;
-const CHIP_REACH = { paddingHorizontal: CHIP_GAP_X / 2, paddingVertical: CHIP_GAP_Y / 2 };
+const CHIP_GAP_Y = 2 * touchReach(CHIP_HEIGHT);
+const CHIP_REACH = { paddingHorizontal: CHIP_GAP_X / 2, paddingVertical: touchReach(CHIP_HEIGHT) };
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (

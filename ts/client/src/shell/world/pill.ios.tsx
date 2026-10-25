@@ -12,7 +12,8 @@ import { LayoutAnimation, type LayoutAnimationConfig, StyleSheet, View } from "r
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Backing } from "@/shell/ui/backing.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
-import { type PillProps, touchReach } from "./pill.tsx";
+import type { PillProps } from "./pill.tsx";
+import { touchReach } from "@/shell/ui/touch.ts";
 
 // Everything the default has, but what this file draws itself.
 export * from "./pill.tsx";

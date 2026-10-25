@@ -61,7 +61,7 @@ seen, not written in the HIG, which states only the 44 target.
 - Every gap between two controls is `chrome.controlGap` (8), and a sheet's
   controls stand 16 from its edges.
 - A press wider than what one sees is a box laid out around it (a chip, the
-  search field's clear, a toast; a pill's is pill.tsx `touchReach`), never a
+  search field's clear, a toast; a pill's is ui/touch.ts `touchReach`), never a
   `hitSlop`: react-native-web honors `hitSlop` only on the old Touchable, so
   on the page a `Pressable`'s or a `View`'s landed on the shape alone, and a
   32 chip took 32.

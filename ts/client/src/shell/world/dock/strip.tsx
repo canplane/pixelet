@@ -17,7 +17,7 @@ import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { alpha, chrome, color } from "@/shell/ui/theme.ts";
 import { openModal } from "@/shell/modal.tsx";
-import { holdTool, useInHand, useUiStore } from "@/shell/store/dock.ts";
+import { holdTool, useDockStore, useInHand } from "@/shell/store/dock.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { type Cube, cubeId } from "@/shell/catalog/asset/mod.ts";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/shell/catalog/asset/swatch.tsx";
@@ -101,10 +101,10 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
 
 function SwatchButton({ cube, sizes }: { cube: Cube; sizes: Omit<SizeGesture, "tap"> }) {
   const { t } = useTranslation();
-  const selectCube = useUiStore.getState().selectCube;
+  const selectCube = useDockStore.getState().selectCube;
   const selected = useInHand({ tool: ActiveTool.Object, cube });
   const ref = useRef<View | null>(null);
-  const swatchCue = useUiStore((s) => s.swatchCue);
+  const swatchCue = useDockStore((s) => s.swatchCue);
   useEffect(() => {
     if (swatchCue.cube === cube && ref.current) sizes.cue(ref.current, swatchCue.open);
   }, [swatchCue]);
@@ -129,7 +129,7 @@ function SwatchButton({ cube, sizes }: { cube: Cube; sizes: Omit<SizeGesture, "t
 
 function DecorIconButton({ kind }: { kind: u8 }) {
   const { t } = useTranslation();
-  const selectDecor = useUiStore.getState().selectDecor;
+  const selectDecor = useDockStore.getState().selectDecor;
   const active = useInHand({ tool: ActiveTool.Decor, kind });
 
   return (
@@ -145,7 +145,7 @@ function DecorIconButton({ kind }: { kind: u8 }) {
 
 function MarkerButton() {
   const { t } = useTranslation();
-  const selectMarker = useUiStore.getState().selectMarker;
+  const selectMarker = useDockStore.getState().selectMarker;
   const active = useInHand({ tool: ActiveTool.Marker });
 
   return (
@@ -177,7 +177,7 @@ function ToolButton({ label, glyph, active, onPress }: { label: string; glyph: G
 export function Strip({ span, scrolls, sizes }: { span: f64; scrolls: boolean; sizes: Omit<SizeGesture, "tap"> }) {
   const { t } = useTranslation();
   const activeTool = useKernel((s) => s.holding.tool);
-  const recentPicks = useUiStore((s) => s.recentPicks);
+  const recentPicks = useDockStore((s) => s.recentPicks);
 
   return (
     <View style={[styles.strip, { maxWidth: span }]}>

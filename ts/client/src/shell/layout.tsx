@@ -10,7 +10,7 @@ import { Modals } from "./modal.tsx";
 import { BlueScreen, Halt } from "./halt.tsx";
 import { messageKey } from "@/shell/locale/message-key.ts";
 import { KeyboardAway } from "@/shell/ui/keyboard.tsx";
-import { DockMode, useUiStore } from "@/shell/store/dock.ts";
+import { DockMode, useDockStore } from "@/shell/store/dock.ts";
 import { useGpu, useKernel } from "@/shell/store/watch.ts";
 
 /** What ends the app before it ran, said in place of it: no GPU to start with, or a kernel that never started. */
@@ -41,7 +41,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   if (halt !== null) return <Halt of={halt} />;
   return (
     // A touch elsewhere puts the typing away with the keyboard.
-    <KeyboardAway onAway={() => useUiStore.getState().setDockMode(DockMode.Palette)}>
+    <KeyboardAway onAway={() => useDockStore.getState().setDockMode(DockMode.Palette)}>
       <View style={styles.page}>{boot === Boot.Started && children}</View>
       <Modals />
     </KeyboardAway>

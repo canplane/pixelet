@@ -19,12 +19,7 @@ import type { BackingPlace } from "@/shell/ui/backing.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP, type Transition } from "@/shell/ui/motion/transition.ts";
 import { useVeil } from "@/shell/ui/motion/veil.ts";
-import { chrome } from "@/shell/ui/theme.ts";
-
-/** A box around it, not `hitSlop`, which react-native-web does not honor. */
-export function touchReach(height: f64): f64 {
-  return Math.max(0, (chrome.target - height) / 2);
-}
+import { touchReach } from "@/shell/ui/touch.ts";
 
 export interface PillProps {
   x: f64;

@@ -13,7 +13,7 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { kernel_keys } from "@/abi/shell.ts";
 import { closeModal, modalOpen, openModal } from "@/shell/modal.tsx";
-import { holdTool, RECENT_PICKS, useUiStore } from "@/shell/store/dock.ts";
+import { holdTool, RECENT_PICKS, useDockStore } from "@/shell/store/dock.ts";
 
 const MOVE: Record<string, [i32, i32]> = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] };
 
@@ -44,7 +44,7 @@ function sendMove(): void {
 }
 
 function pickSlot(slot: number): void {
-  const { recentPicks, selectCube, selectDecor, selectMarker, cueSwatch } = useUiStore.getState();
+  const { recentPicks, selectCube, selectDecor, selectMarker, cueSwatch } = useDockStore.getState();
   const pick = recentPicks[slot];
   if (pick.tool === ActiveTool.Decor) return selectDecor(pick.kind);
   if (pick.tool === ActiveTool.Marker) return selectMarker();
@@ -61,7 +61,7 @@ export function keyDown(code: string, { inField }: { inField: boolean }): boolea
   }
   if (modalOpen()) return false;
   if (code === "Tab") {
-    useUiStore.getState().switchDockMode();
+    useDockStore.getState().switchDockMode();
     return true;
   }
   if (inField) return false;
@@ -74,7 +74,7 @@ export function keyDown(code: string, { inField }: { inField: boolean }): boolea
     return true;
   }
   if (code in SIZE) {
-    useUiStore.getState().stepSize(SIZE[code]);
+    useDockStore.getState().stepSize(SIZE[code]);
     return true;
   }
   if (code in MOVE) {

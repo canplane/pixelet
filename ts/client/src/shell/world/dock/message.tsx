@@ -15,7 +15,7 @@ import { putKeyboardAway } from "@/shell/ui/keyboard.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { TextField } from "@/shell/ui/text-field.tsx";
 import { chrome, color, disabledContent } from "@/shell/ui/theme.ts";
-import { cancelMarker, chatFits, DockMode, draftMarkerWords, markerTextFits, putMarker, useUiStore } from "@/shell/store/dock.ts";
+import { cancelMarker, chatFits, DockMode, draftMarkerWords, markerTextFits, putMarker, useDockStore } from "@/shell/store/dock.ts";
 import { kernel_snapshot } from "@/abi/shell.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 import { SLOT } from "./strip.tsx";
@@ -24,7 +24,7 @@ import { SLOT } from "./strip.tsx";
 export function useMessage(mode: DockMode) {
   // A marker waiting for its words turns the message card to wording it.
   const wording = useKernel((s) => s.holding.marker);
-  const appendChatLine = useUiStore.getState().appendChatLine;
+  const appendChatLine = useDockStore.getState().appendChatLine;
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<TextInput | null>(null);
@@ -43,7 +43,7 @@ export function useMessage(mode: DockMode) {
   // then on are the field's, sent as typed; done, the field is the chat's again.
   useEffect(() => {
     setMessageText(wording ? kernel_snapshot().holding.words : "");
-    if (wording) useUiStore.getState().setDockMode(DockMode.Message);
+    if (wording) useDockStore.getState().setDockMode(DockMode.Message);
   }, [wording]);
 
   function changeText(text: string) {
@@ -65,7 +65,7 @@ export function useMessage(mode: DockMode) {
       }
       putMarker();
       // Put up, the palette comes back for the next.
-      useUiStore.getState().setDockMode(DockMode.Palette);
+      useDockStore.getState().setDockMode(DockMode.Palette);
     }, FADE.durationMs);
   }
 

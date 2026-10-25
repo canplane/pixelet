@@ -28,6 +28,7 @@ import { useCenterCoordinates, useDivisionLabel } from "@/shell/division/focus.t
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "./fetch.ts";
 import { fixed } from "@/shell/fixed.ts";
+import { touchReach } from "@/shell/ui/touch.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 const DEBOUNCE_MS = 300;
@@ -259,7 +260,7 @@ const styles = StyleSheet.create({
   clearReach: {
     width: chrome.target,
     height: chrome.target,
-    marginHorizontal: -(chrome.target - CLEAR) / 2,
+    marginHorizontal: -touchReach(CLEAR),
     alignItems: "center",
     justifyContent: "center",
   },

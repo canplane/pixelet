@@ -137,7 +137,7 @@ export function holdTier(tier: u32): void {
 
 const stored = load();
 
-export const useUiStore = create<DockState>()((set) => ({
+export const useDockStore = create<DockState>()((set) => ({
   recentPicks: stored.picks,
   selectCube: (cube) => {
     kernel_hold(ActiveTool.Object, cube, kernel_snapshot().holding.tier);
@@ -162,7 +162,7 @@ export const useUiStore = create<DockState>()((set) => ({
     const h = kernel_snapshot().holding;
     if (h.tool !== ActiveTool.Object) return;
     holdTier(Math.min(OBJECT_TIERS - 1, Math.max(0, h.tier + delta)));
-    useUiStore.getState().cueSwatch(h.cube, true);
+    useDockStore.getState().cueSwatch(h.cube, true);
   },
 
   chatLines: [],
@@ -207,6 +207,6 @@ export function useInHand(pick: RecentPick): boolean {
   });
 }
 
-useUiStore.subscribe((s, prev) => {
+useDockStore.subscribe((s, prev) => {
   if (s.recentPicks !== prev.recentPicks) save(s);
 });
