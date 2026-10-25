@@ -12,6 +12,12 @@ resolver = "2"
 members = ["kit", "guest", "host", "gpu", "link", "conformance"]
 
 [workspace.dependencies]
+# The workspace's own crates, each by its path once, so a crate names another
+# by name.
+xpute-kit = { path = "kit" }
+xpute-guest = { path = "guest" }
+xpute-host = { path = "host" }
+xpute-link = { path = "link" }
 # A set whose position is the value: insert appends, swap_remove moves the
 # last entry into the hole, and a caller keeps its own lanes at the same
 # positions.

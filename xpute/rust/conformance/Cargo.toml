@@ -12,9 +12,9 @@ path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-xpute-kit = { path = "../kit" }
-xpute-guest = { path = "../guest" }
+xpute-kit.workspace = true
+xpute-guest.workspace = true
 
 # Its link flags as a module (build.rs).
 [build-dependencies]
-xpute-link = { path = "../link" }
+xpute-link.workspace = true

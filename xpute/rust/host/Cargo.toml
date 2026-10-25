@@ -8,7 +8,7 @@ publish.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-xpute-guest = { path = "../guest" }
+xpute-guest.workspace = true
 
 # The core memory a native host reserves, mapped from the system
 # (src/native/reserve.rs). `native` is unix's alone.
