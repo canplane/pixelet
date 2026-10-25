@@ -505,7 +505,7 @@ impl Query for Store {
     /// zoom that hold anything, joined: a cube is its own, whole where it
     /// holds, and a column (a node over the ground's two axes) the cubes of
     /// it that hold (`column`). Its readers tell apart no finer than the
-    /// node (pxl-kernel domain/view/observation.rs `cubes`, `order_of_tile`).
+    /// node (pxl-kernel domain/view/observation.rs `squares`, `order_of_tile`).
     fn bound<const D: usize>(&self, held: &Held, node: Node<D>, _: Zoom) -> Answer<Option<Aabb>> {
         Answer::Exact(match D {
             3 => held.holds().then(|| region(node)),

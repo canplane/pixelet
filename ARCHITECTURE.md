@@ -264,7 +264,7 @@ Decor is grown and drawn on the GPU each frame, a thread a candidate, never stor
 
 A **marker** is what is drawn flat to the camera, a billboard, from a design on the sheet: a place, a pin someone put up, or the chat's line. Each source reads its own, and one arrangement draws them together (`domain/scene/marker/arrangement.rs`). The places and the pins are read over the windows' squares, each standing at its cell's center on the surface drawn there; the chat's line is read from no square, and hangs in its speaker's frame, over the person's head.
 
-A place is the place layer's marker (`domain/scene/marker/place.rs`). Each cube in view reads its place tiles and shows what Carto shows at the zoom drawn there: a dot or an icon, named from its kind's label zoom (`domain/scene/marker/place.rs` `point_of`). A place stands on what a ray down its cell meets first, and where nothing is drawn there is no place. A tap on one is the place's before the ground's.
+A place is the place layer's marker (`domain/scene/marker/place.rs`). Each square in view reads its place tiles, and each place shows what Carto shows at the zoom the camera grid's cell where it stands is: a dot or an icon, named from its kind's label zoom (`domain/scene/marker/place.rs` `point_of`). A place stands on what a ray down its cell meets first at the detail drawn there, and where nothing is drawn there is no place. A tap on one is the place's before the ground's.
 
 ---
 
