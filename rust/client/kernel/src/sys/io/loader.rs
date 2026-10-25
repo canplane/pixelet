@@ -5,7 +5,9 @@
 //! its credits, and stays wanted until it arrives.
 //!
 //! A read that did not arrive is retried, and one the heap refused room for
-//! is asked again once the heap gives some back; bytes that do not parse are
+//! waits, as a tile's body does, until the heap gives some back (the request
+//! scheduler's `Wait::Room`): its bytes are taken when the open answers, and
+//! its descriptor closed there with its credit. Bytes that do not parse are
 //! final, since asking again returns the same bytes. An image is its file's
 //! bytes, handed to the renderer under the asset's number, which makes its
 //! texture on whatever device there is (pxl-render `Gpu::image`), and let
@@ -20,7 +22,6 @@ use xpute_guest::sched::edge::{next_turn, yield_if_spent};
 use crate::sys::io::demand::Ask;
 use crate::sys::io::failure::Ended;
 use crate::sys::io::file::{self, Opened, Owner};
-use crate::sys::io::host::Refused;
 use crate::sys::io::host_spec::{root, SPHERE};
 use crate::sys::io::request::{attempt_of, settle, Credit};
 use crate::sys::io::source;
@@ -37,11 +38,8 @@ use xpute_kit::status::errno::Errno;
 /// model was re-read 38 times, once a turn, for as long as its parse took.
 enum Entry {
     Pending,
-    /// Its file in its arrival's task, being read.
+    /// Its bytes in its arrival's task, being taken in.
     Arrived,
-    /// The heap refused its bytes room: a wait, not a failure, so it is
-    /// pending again once the heap gives some back (`load_wants`).
-    Refused(Refused),
     /// A parsed model.
     Model(Rc<Gltf>),
     /// An image's bytes, sized by its header, until its texture lands.
@@ -122,23 +120,12 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
             if load == Load::Sphere && source::top().is_none() {
                 continue;
             }
-            if pending(l.at(kind, n)) {
+            if matches!(l.at(kind, n), Some(Entry::Pending)) {
                 l.wants.push((subject_of(kind, load), Ask::PLAIN));
             }
         }
     }
     &l.wants
-}
-
-/// Whether a load is wanted: pending, or refused by a heap that has since
-/// given room back.
-fn pending(entry: &mut Option<Entry>) -> bool {
-    if let Some(Entry::Refused(refused)) = entry {
-        if refused.over() {
-            *entry = Some(Entry::Pending);
-        }
-    }
-    matches!(entry, Some(Entry::Pending))
 }
 
 /// The credit ends when the host reports; parsing afterwards does not hold it.
@@ -169,16 +156,29 @@ pub fn cancel_asset(key: u64) -> bool {
     true
 }
 
+/// The open answered: its bytes taken now, as a tile's body is
+/// (sys/io/fetch.rs `opened`), and its descriptor closed with its credit;
+/// where the heap refuses them room, the want waits for room.
 pub fn opened(fd: u32, key: u64, opened: Opened) {
     let Opened::Bytes(n) = opened else {
         load_rejected(key, Ended::Failed(opened.failure()));
         return;
     };
-    let Some((kind, load)) = ended(key, Ended::Ok) else {
+    let Some(what) = attempt_of(key).and_then(|(_, subject)| of_subject(subject)) else {
         file::close(fd);
+        settle(key, Ended::Ok, None);
         return;
     };
-    arrive(kind, load.number() as usize, fd, n);
+    // SAFETY: the bytes are filled from the next turn on, and the arrival
+    // reads them only after it.
+    match unsafe { file::read_whole(fd, n) } {
+        Ok(bytes) => {
+            settle(key, Ended::Ok, None);
+            let (kind, load) = what;
+            arrive(kind, load.number() as usize, bytes);
+        }
+        Err(refused) => settle(key, Ended::Refused(refused), None),
+    }
 }
 
 /// An image's bytes, read: kept, where a header gives its size
@@ -208,32 +208,24 @@ pub fn images_lost() {
     }
 }
 
-/// A file opened, read in its own task: no arrival waits on another's
+/// A file's bytes, taken in by its own task: no arrival waits on another's
 /// parse or landing. Where the turn's quota is spent before the tasks run, as
 /// it is while the frame outweighs its share, each task advances a step a
 /// turn, so k arrivals advance k steps, not one.
-fn arrive(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
+fn arrive(kind: LoadKind, n: usize, bytes: Vec<u8>) {
     *loader().at(kind, n) = Some(Entry::Arrived);
     // The pool holds a task for each kind of every load (TASKS), and each
     // has one file in flight at most, so there is always room.
-    let spawned = xpute_guest::sched::task::spawn(arrival(kind, n, fd, bytes), crate::sys::sched::edge::TaskPriority::Arrival as u8);
+    let spawned = xpute_guest::sched::task::spawn(arrival(kind, n, bytes), crate::sys::sched::edge::TaskPriority::Arrival as u8);
     xpute_kit::ensure!(spawned, ENOSPC, n);
 }
 
 /// An asset file arrived, read whole: a model parsed, an image kept until
 /// its texture lands.
-async fn arrival(kind: LoadKind, n: usize, fd: u32, bytes: u32) {
-    yield_if_spent(world_edge).await;
-    // SAFETY: `buf` is held across the turn the host fills it in.
-    let buf = match unsafe { file::read_whole(fd, bytes) } {
-        Ok(buf) => buf,
-        Err(refused) => {
-            *loader().at(kind, n) = Some(Entry::Refused(refused));
-            return;
-        }
-    };
+async fn arrival(kind: LoadKind, n: usize, buf: Vec<u8>) {
     // In once the host has run the turn's records.
     next_turn(world_edge).await;
+    yield_if_spent(world_edge).await;
     if kind == LoadKind::Image {
         image_arrived(n, buf);
         return;
