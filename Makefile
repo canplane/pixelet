@@ -42,7 +42,7 @@ check-rules:
 check-spec:
 	+cd rust && cargo spec
 check-build:
-	deno task --cwd ts/server/edge check:build
+	./script/deploy.py --dry-run
 check-xpute:
 	$(MAKE) -C xpute check
 

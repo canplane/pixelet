@@ -208,7 +208,7 @@ out[0-9]*/
 
 # wrangler's local scratch: its simulated R2/KV, build state and temporaries.
 ts/server/edge/.wrangler/
-# The page's bundle, staged beside the Worker that serves it (script/stage.sh).
+# The page's bundle, staged beside the Worker that serves it (script/deploy.py).
 ts/server/edge/dist/
 
 # What a device posts to the dev server's /__console, for reading with tail.

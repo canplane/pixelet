@@ -4,18 +4,21 @@
 # ts/app/web/vite.config.ts `buildNumber`).
 #
 # The deployment runs across the trees, so it is the repository's: the
-# page's bundle, built and staged beside the Worker (ts/server/edge
-# script/stage.sh); the panics' path table, kept in the bucket (r2.py); the
-# Worker, published by its own package (its `deploy` task, wrangler); and
-# the site read back. Everything that can fail before the Worker goes out
-# runs before it, so a failure says truly what was published, and the last
-# step is the publish itself.
+# page's bundle, built by the page (its `build` task) and copied beside the
+# Worker, where wrangler.jsonc `assets` serves it; the panics' path table,
+# kept in the bucket (r2.py); the Worker, published by wrangler; and the site
+# read back. Everything that can fail before the Worker goes out runs before
+# it, so a failure says truly what was published, and the last step is the
+# publish itself. `--dry-run` makes what a deploy makes, the bundle and the
+# Worker as wrangler bundles it, and publishes nothing: a type-check can pass
+# where wrangler's resolver fails, as it did on 10-23.
 #
-#   ./script/deploy.py
+#   ./script/deploy.py [--dry-run]
 
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import urllib.request
@@ -25,6 +28,8 @@ import r2
 
 REPO = Path(__file__).resolve().parent.parent
 EDGE = REPO / "ts/server/edge"
+WEB = REPO / "ts/app/web"
+DRY = "--dry-run" in sys.argv[1:]
 NUMBER = os.environ.get("PXL_BUILD_NUMBER")
 # The panics' `#n` → path table the page's build wrote beside its guest.
 PATHS = REPO / "ts/app/web/src/guest.paths.json"
@@ -72,7 +77,15 @@ status = subprocess.run(["git", "status", "--porcelain"], cwd=EDGE, capture_outp
 if status.returncode == 0 and status.stdout.strip():
     print(f"[deploy] the tree is not clean, so the build id will say -dirty:\n{status.stdout.strip()}", flush=True)
 
-step("build", [str(EDGE / "script/stage.sh")])
+step("build", ["deno", "task", "--cwd", str(WEB), "build"])
+# A fresh copy every time, so what is checked or deployed is never a bundle
+# left from before.
+shutil.rmtree(EDGE / "dist", ignore_errors=True)
+shutil.copytree(WEB / "dist", EDGE / "dist")
+
+if DRY:
+    step("the Worker as wrangler bundles it", [*r2.WRANGLER, "deploy", "--dry-run", "--outdir", ".wrangler/dry-run"])
+    sys.exit(0)
 
 # The `#n` → path table for this build's panics, kept beside the build log,
 # never served. Before the publish: a table for a build that then failed to
@@ -86,7 +99,7 @@ if NUMBER:
         sys.exit(1)
 
 print("[deploy] publish", flush=True)
-published = subprocess.run(["deno", "task", "--cwd", str(EDGE), "deploy"]).returncode
+published = subprocess.run([*r2.WRANGLER, "deploy"], cwd=EDGE).returncode
 if published != 0:
     # wrangler can fail after the Worker went out (a route, a domain), so what
     # landed is read off the site, not off its exit.

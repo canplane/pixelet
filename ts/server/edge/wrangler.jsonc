@@ -49,7 +49,7 @@
   },
 
   // The page's bundle, built by the web app and staged here before a deploy
-  // (script/stage.sh), so this config names nothing outside its package.
+  // (script/deploy.py), so this config names nothing outside its package.
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
