@@ -37,7 +37,7 @@ Everything else is written into the memory while a turn runs. The host's command
 
 Golden records under `spec/golden/` hold the languages to each other wherever bytes cross.
 
-`guest` and `host` are the arrangement above, named by the end each is. They are the two ends of one thing, not two implementations of it: a module on one side with nothing facing it is not a gap to fill, and what the two owe each other is not matching module lists but matching formats. The guest end exists in more than one language, and those are one end, so they match as `kit` does.
+`guest` and `host` are the arrangement above, named by the end each is. They are the two ends of one thing, not two implementations of it: a module on one side with nothing facing it is not a gap to fill, and what the two owe each other is not matching module lists but matching formats. The guest end exists in more than one language, and those are one end, so they match as `kit` does. So does the host end, in TypeScript and in Rust, and those differ by what each platform needs, not by role: TypeScript's reserves a module's memory, rings the doorbell, answers the system calls and paces the quantum; Rust's hosts a guest linked into its own native program, reserving the memory there, running the guest on a thread of its own, and keeping the guest's blocks in its memory.
 
 ```text
 rust/kit  ·  ts/kit  ·  cpp/kit                the same kit, in each language
