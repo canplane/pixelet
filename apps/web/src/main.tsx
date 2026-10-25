@@ -6,7 +6,7 @@
  */
 
 import { StrictMode } from "react";
-import { AppRegistry, type RootTag } from "react-native";
+import { createRoot } from "react-dom/client";
 
 import * as bracket from "@pxl/client/bracket.tsx";
 import * as locale from "@pxl/client/shell/locale/i18n.ts";
@@ -17,8 +17,6 @@ import { page } from "@/bracket.ts";
 import { whatIsMissing } from "@/webgpu.ts";
 import "@pxl/client/shell/style/index.css";
 
-const ROOT = "pixelet";
-
 if (import.meta.env.DEV) (await import("@/remote-console.ts")).install();
 
 bracket.set(page);
@@ -28,14 +26,13 @@ try {
   if (missing) locale.boot();
   else boot();
 
-  const container = document.getElementById("root");
-  if (!container) throw new Error("web: missing root container: #root");
-  AppRegistry.registerComponent(ROOT, () => () => (
+  const root = document.getElementById("root");
+  if (!root) throw new Error("web: missing root container: #root");
+  createRoot(root).render(
     <StrictMode>
       {missing ? <Halt of={`halt.${missing}`} /> : <AppRouter />}
-    </StrictMode>
-  ));
-  AppRegistry.runApplication(ROOT, { rootTag: container as unknown as RootTag, initialProps: {} });
+    </StrictMode>,
+  );
 } catch (err) {
   console.error("[web] failed to start:", err);
 }
