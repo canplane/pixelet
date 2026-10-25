@@ -8,10 +8,15 @@
 mod spec;
 pub use spec::{MARKER_SCALE_STEPS, MARKER_SHOWN_FROM};
 
+use crate::asset::id::{asset_id, AssetId, Kind};
 use crate::bake::constant::EntryAt;
 use crate::space::camera::grid::CHUNK_STEPS;
 use crate::space::coord::zoom::Zoom;
 use crate::space::hierarchy::tree::ancestor_of;
+
+/// The one marker a placement puts up: the pin, which its shape does not
+/// tell apart from another's.
+pub const MARKER: AssetId = asset_id(Kind::marker, 0);
 
 /// A mark's cell: 16 pixels of the web map's 256-pixel tile, four zooms
 /// finer than the tile, the cell Carto keeps its 14-pixel icons apart in.

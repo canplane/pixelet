@@ -226,7 +226,7 @@ fn words(text: &str) -> Option<Ext> {
 
 #[test]
 fn a_leaf_keeps_its_words_and_an_erase_frees_them() {
-    use pxl_spec::block::object::MARKER;
+    use pxl_spec::asset::marker::MARKER;
     let mut store = Store::default();
     let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
     store.write([Write {
@@ -255,7 +255,7 @@ fn a_leaf_keeps_its_words_and_an_erase_frees_them() {
 
 #[test]
 fn eight_markers_filling_a_cell_stay_eight() {
-    use pxl_spec::block::object::MARKER;
+    use pxl_spec::asset::marker::MARKER;
     let mut store = Store::default();
     let parent = [4, 4, 2];
     let writes: Vec<Write> = (0..8)
