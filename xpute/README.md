@@ -41,13 +41,42 @@ Golden records under `spec/golden/` hold the languages to each other wherever by
 
 ```text
 rust/kit  ·  ts/kit  ·  cpp/kit                the same kit, in each language
-rust/guest  ·  cpp/guest  ·  ts/host           the guest end, in each language · the host end
+rust/guest  ·  cpp/guest  ·  ts/host           the guest end, in each language · the host end in TypeScript
+rust/host                                      the host end in Rust, for a guest linked into the host's own native program
 rust/gpu  ·  ts/gpu  ·  cpp/gpu                WebGPU's calls, which a guest writes and a host runs; ts/gpu/script runs the web host's test in Chrome
 rust/link                                      how a Rust guest's build script links it as a WebAssembly module
 rust/conformance  ·  cpp/conformance           a guest in each, and the contract's traces
 ts/conformance                                 the host that runs the traces against them
 script                                         the repository's own scripts, reading none of the trees' code; never shipped
 spec                                           numbers all of them are generated from
+```
+
+## Embedding a guest
+
+A guest built as a **WebAssembly module** links through `rust/link`, one call in its `build.rs`, and reads what the module itself says through `xpute_guest::module`. The host hands it its memory and rings its export (`rust/conformance` is one, whole):
+
+```rust
+// build.rs
+fn main() {
+    xpute_link::module(&xpute_link::Module::default()); // memory imported, a 1 MiB stack first
+}
+```
+
+A guest **linked into a native program** is booted there by `rust/host`'s `native`: the program declares the allocator, boots once with its numbers, and writes its C ABI under its own prefix over the `Guest` boot returns, one line each (`rust/host/examples/native.rs`, which `make check` compiles and `make test` runs as a doc test):
+
+```rust
+#[global_allocator]
+static ALLOC: native::Alloc = native::Alloc;
+
+fn guest() -> native::Guest {
+    static GUEST: OnceLock<native::Guest> = OnceLock::new();
+    *GUEST.get_or_init(|| native::boot(&native::Plan::new(16 << 20, 1 << 16))) // memory, heap_at
+}
+
+#[no_mangle]
+pub extern "C" fn demo_interrupt(quota_ms: f64) -> f64 {
+    guest().run(move || my_guest::interrupt(quota_ms))
+}
 ```
 
 ## What it leaves to whoever uses it
