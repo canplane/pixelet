@@ -32,7 +32,7 @@ pub use query::Query;
 pub enum Asks {
     /// The floor alone.
     Floor,
-    /// A destination's line alone.
+    /// A line alone, the division layer's focus's (`division::line`).
     Line,
     /// The floor, a destination's line and the view's misses with theirs.
     View,
