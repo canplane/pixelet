@@ -5,7 +5,8 @@ import { assertEquals } from "@std/assert";
 import type { BaseLayer } from "@/config/published.spec.ts";
 import { tile_url } from "@/config/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
-import { declaration, tile_name, tile_object } from "./tile.ts";
+import { declaration } from "./source.ts";
+import { tile_name, tile_object } from "./tile.ts";
 import FIXTURE from "./tile.fixture.json" with { type: "json" };
 
 const DECLARED = declaration(JSON.stringify(FIXTURE.source))!;

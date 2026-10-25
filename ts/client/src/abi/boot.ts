@@ -15,7 +15,7 @@ import type { SysHost } from "@xpute/host/ipc/sys.ts";
 import { Command, encode_world_boot, encode_world_kept_emptied, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/abi/cmd.spec.ts";
 import { declare_source } from "@/namespace/source.ts";
 import { bind_roots, commit_root, open_root } from "@/namespace/roots.ts";
-import { kept_refused, migrate_kept } from "@/namespace/storage.ts";
+import { follow_refused, migrate } from "@/namespace/storage.ts";
 import { GUEST, GUEST_DOORBELL, HOST, open_host } from "@/host/mem.ts";
 import { DESKTOP_BYTES, DIRECTORY_AT, PHONE_BYTES, REGION_BYTES } from "@/abi/mem/mem.spec.ts";
 import { key } from "@/abi/directory.spec.ts";
@@ -52,7 +52,7 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
       const { at, len } = read_world_snapshot(f!);
       set_snapshot(bytes_at(GUEST.memory, at, len));
       // Sent after the completion ring is read: the doorbell refuses a write while it reads.
-      kept_refused(kernel_snapshot().kept_refused, (slot) => queueMicrotask(() => HOST.send(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(GUEST_DOORBELL, slot))));
+      follow_refused(kernel_snapshot().kept_refused, (slot) => queueMicrotask(() => HOST.send(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(GUEST_DOORBELL, slot))));
       return;
     }
     case Command.SENSOR_START:
@@ -84,7 +84,7 @@ export async function boot(): Promise<void> {
   bracket.gpu.boot({ ready: () => HOST.send(Command.GPU_READY), state: (state) => set_gpu(GPU_STATE[state]), wake: () => HOST.strobe.request() });
   bracket.online.watch(set_online);
   // Before the kernel opens its kept slots, which it does from WORLD_BOOT on.
-  migrate_kept();
+  migrate();
   const pkt = encode_world_boot(GUEST_DOORBELL, __IS_DEV__, bracket.sensor.geo.has, bracket.sensor.orient.has, bracket.sensor.orient.gated, bracket.sensor.orient.silence);
   const booted = GUEST_DOORBELL.call(Command.WORLD_BOOT, pkt, (result) => result);
   if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);

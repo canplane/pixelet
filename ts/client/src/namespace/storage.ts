@@ -1,14 +1,11 @@
 // @pxl/client/namespace/storage.ts
 
 /**
- * STORAGE's backend: the kernel's kept slots as the client holds them, in the
- * platform's storage (host.json `kept`). The kernel opens a slot by its
- * number and reads it only where it is of the slot's format, refusing
- * anything else and writing nothing over it; which storage key a slot is,
- * what becomes of a file it refused, and how a file kept before the slots
- * carries over are decided here. Nothing kept is dropped: a refused file is
- * set aside under a key of its own, and the copy read back, before its slot
- * is emptied.
+ * STORAGE's backend: the kernel's kept slots (host.json `kept`) in the
+ * platform's storage. The kernel refuses a file not of its slot's format and
+ * writes nothing over it; here is decided each slot's key, what becomes of a
+ * refused file, and what carries over from before the slots. Nothing kept is
+ * dropped: a refused file is set aside, and read back, before its slot empties.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -25,6 +22,9 @@ export interface Storage {
   get(key: string): string | null;
   set(key: string, value: string): void;
 }
+
+/** The bracket's, read at each call: the bracket is set after this loads. */
+const STORAGE: Storage = { get: (key) => bracket.storage.get(key), set: (key, value) => bracket.storage.set(key, value) };
 
 const KEYS: ReadonlyMap<u32, string> = new Map([
   [kept.SETTINGS, "pxl:kept:settings"],
@@ -43,12 +43,11 @@ const SETTINGS_BEFORE = "pxl:settings";
 const OBJECTS_BEFORE = "pxl:object:v15";
 const OBJECTS_BEFORE_FORMAT = 15;
 
-/** Fills a slot that holds nothing yet from what was kept before it, once:
- * a slot is never written here again once it holds anything. The settings
- * carry over as they are, and the kernel refuses the JSON (and it is set
- * aside), so they reset once; the objects carry over with their format put
- * before them. What was kept before stays where it was. */
-export function migrate(s: Storage): void {
+/** Before the kernel reads a slot: an empty slot is filled from what was kept
+ * before it, once, and that is left where it was. The settings carry over as
+ * they are, so the kernel refuses the JSON and they reset once; the objects
+ * with their format put before them. */
+export function migrate(s: Storage = STORAGE): void {
   carry(s, kept.SETTINGS, SETTINGS_BEFORE, (text) => text);
   carry(s, kept.OBJECTS, OBJECTS_BEFORE, (text) => formatted(OBJECTS_BEFORE_FORMAT, text));
 }
@@ -102,7 +101,7 @@ const emptying = new Set<u32>();
 
 /** The snapshot's `kept_refused`: each slot set aside once, and the kernel
  * told it is empty (`emptied`). */
-export function follow_refused(refused: readonly u32[], s: Storage, emptied: (slot: u32) => void): void {
+export function follow_refused(refused: readonly u32[], emptied: (slot: u32) => void, s: Storage = STORAGE): void {
   for (const slot of emptying) if (!refused.includes(slot)) emptying.delete(slot);
   for (const slot of refused) {
     if (emptying.has(slot) || !set_aside(s, slot, Date.now())) continue;
@@ -110,8 +109,6 @@ export function follow_refused(refused: readonly u32[], s: Storage, emptied: (sl
     emptied(slot);
   }
 }
-
-const STORAGE: Storage = { get: (key) => bracket.storage.get(key), set: (key, value) => bracket.storage.set(key, value) };
 
 /** STORAGE's object `number` is a kept slot, under the key `kept_key` gives it. */
 function storage_key(number: bigint): string {
@@ -122,22 +119,12 @@ function storage_key(number: bigint): string {
 
 /** STORAGE's object `number`, whole; ENOENT where nothing is kept. */
 export function open_storage(number: bigint): U8Array {
-  const value = bracket.storage.get(storage_key(number));
+  const value = STORAGE.get(storage_key(number));
   if (value === null) throw new FileError(Errno.ENOENT);
   return te.encode(value);
 }
 
 /** What the kernel wrote to STORAGE's object `number`, kept whole. */
 export function commit_storage(number: bigint, bytes: U8Array): void {
-  bracket.storage.set(storage_key(number), td.decode(bytes));
-}
-
-/** Before the kernel reads a slot: what was kept before the slots carried over, once. */
-export function migrate_kept(): void {
-  migrate(STORAGE);
-}
-
-/** The snapshot's refused slots, each set aside and emptied, the kernel told (`emptied`). */
-export function kept_refused(slots: readonly u32[], emptied: (slot: u32) => void): void {
-  follow_refused(slots, STORAGE, emptied);
+  STORAGE.set(storage_key(number), td.decode(bytes));
 }

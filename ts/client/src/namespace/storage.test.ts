@@ -61,10 +61,10 @@ Deno.test("set_aside - storage that refuses the copy keeps the slot as it was", 
 Deno.test("follow_refused - each refused slot is set aside and emptied once", () => {
   const s = storage({ "pxl:kept:settings": '{"ao":"screen"}' });
   const told: number[] = [];
-  follow_refused([kept.SETTINGS], s, (slot) => told.push(slot));
-  follow_refused([kept.SETTINGS], s, (slot) => told.push(slot));
+  follow_refused([kept.SETTINGS], (slot) => told.push(slot), s);
+  follow_refused([kept.SETTINGS], (slot) => told.push(slot), s);
   assertEquals(told, [kept.SETTINGS]);
   assertEquals(s.map.get("pxl:kept:settings"), "");
-  follow_refused([], s, (slot) => told.push(slot));
+  follow_refused([], (slot) => told.push(slot), s);
   assertEquals(told, [kept.SETTINGS]);
 });

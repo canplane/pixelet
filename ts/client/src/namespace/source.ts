@@ -1,12 +1,11 @@
 // @pxl/client/namespace/source.ts
 
 /**
- * The tile source's declaration (script/publish.py writes the bucket's), asked of the
- * tile root until it answers: the published bake's out of the bucket, or a dev
- * tile server's. It is read here once: the kernel is handed what is its own,
- * the top zoom, each kind's format and the shards (WORLD_SOURCE), and observes
- * nothing until then; the versions stay here, for the objects the bakes'
- * roots are bound to (tile.ts) and for what the settings show.
+ * The tile source's declaration (the bucket's, which script/publish.py writes,
+ * or a dev tile server's), asked until it answers and read once. The kernel is
+ * handed its own part, the top zoom, the formats and the shards
+ * (WORLD_SOURCE), and observes nothing before; the versions stay here, for the
+ * bakes' objects (tile.ts) and the settings.
  */
 
 import { Command, encode_world_source } from "@/abi/cmd.spec.ts";
@@ -14,8 +13,48 @@ import { TILE_SOURCE_ROUTE } from "@/config/route.ts";
 import { GUEST_DOORBELL, HOST } from "@/host/mem.ts";
 import { online, when_online } from "@/host/online.ts";
 import { BASE_LAYERS, type BaseLayer } from "@/config/published.spec.ts";
-import { type Declaration, declaration } from "@/namespace/tile.ts";
 import { bracket } from "@/bracket.tsx";
+
+/** What of a declaration this side reads: the top zoom and each kind's
+ * format, for the kernel; each kind's version, and a shard's own. */
+export interface Declaration {
+  top_zoom: number;
+  format: Record<BaseLayer, number>;
+  version: Record<BaseLayer, string>;
+  shard: Record<string, { version?: Partial<Record<BaseLayer, string>> }>;
+}
+
+/** A version is one segment of a URL, so a tile's name stays under it (pxl-spec bake/source.rs `is_version`). */
+const VERSION = /^[A-Za-z0-9._-]{1,32}$/;
+
+/** The declaration's text, where every kind has a version and every version
+ * is a URL's segment, the top zoom and each kind's format are u32s, and the
+ * shards are named; none where it is not, and the kernel, never handed it,
+ * observes nothing. Which zooms, formats and shard names it follows is the
+ * kernel's to refuse (pxl-kernel sys/io/source.rs). */
+export function declaration(text: string): Declaration | null {
+  let d: unknown;
+  try {
+    d = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const versions = (v: unknown, every: boolean) =>
+    typeof v === "object" && v !== null &&
+    Object.entries(v).every(([k, s]) => (BASE_LAYERS as readonly string[]).includes(k) && typeof s === "string" && VERSION.test(s)) &&
+    (!every || BASE_LAYERS.every((k) => k in v));
+  if (typeof d !== "object" || d === null || !("version" in d) || !versions(d.version, true)) return null;
+  const whole = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 0xffffffff;
+  if (!("top_zoom" in d) || !whole(d.top_zoom)) return null;
+  if (!("format" in d) || typeof d.format !== "object" || d.format === null || !BASE_LAYERS.every((k) => whole((d.format as Record<string, unknown>)[k]))) return null;
+  if (!("shard" in d)) return null;
+  const shard = d.shard;
+  if (typeof shard !== "object" || shard === null || Array.isArray(shard)) return null;
+  for (const s of Object.values(shard)) {
+    if (typeof s !== "object" || s === null || ("version" in s && !versions(s.version, false))) return null;
+  }
+  return d as Declaration;
+}
 
 /** Where the declaration stands: asked, failing (refused or unanswered, and asked again), refused for good (one this client cannot read), or declared. */
 export const enum Source {
