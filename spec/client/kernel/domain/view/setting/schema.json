@@ -19,7 +19,7 @@
     "`$retired`, and the generator refuses a number given twice or one",
     "retired, so a number stored or sent never comes to mean another. An",
     "`index` is a place in a list kept elsewhere — the person and the pet are",
-    "by theirs in variant.json — and crosses as itself."
+    "by theirs in actor.json — and crosses as itself."
   ],
   "RESOLUTION_MODES": {
     "$value": { "auto": 0, "fixed": 1, "low": 2 },
@@ -269,8 +269,8 @@
       "default": false,
       "section": "debug"
     },
-    "person": { "number": 17, "kind": "index", "default": { "$value": 1, "$type": "u8", "$doc": ["female-2, by its number in variant.json's person keys."] }, "section": "character" },
-    "pet": { "number": 18, "kind": "index", "default": { "$value": 5, "$type": "u8", "$doc": ["chick, by its number in variant.json's pet keys."] }, "section": "character" },
+    "person": { "number": 17, "kind": "index", "default": { "$value": 1, "$type": "u8", "$doc": ["female-2, by its number in actor.json's person keys."] }, "section": "character" },
+    "pet": { "number": 18, "kind": "index", "default": { "$value": 5, "$type": "u8", "$doc": ["chick, by its number in actor.json's pet keys."] }, "section": "character" },
     "ray_steps": {
       "number": 19,
       "$doc": [

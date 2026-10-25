@@ -21,7 +21,7 @@
 // `$retired`, and the generator refuses a number given twice or one
 // retired, so a number stored or sent never comes to mean another. An
 // `index` is a place in a list kept elsewhere — the person and the pet are
-// by theirs in variant.json — and crosses as itself.
+// by theirs in actor.json — and crosses as itself.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To

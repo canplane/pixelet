@@ -1,11 +1,11 @@
 // @pxl/client/shell/character/variant.ts
 
-/** The playable characters from variant.json. Persons are split by gender for the picker. */
+/** The playable characters from actor.json. Persons are split by gender for the picker. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import { SETTINGS } from "@/shell/setting/schema.ts";
-import { Group, groups, PERSON_GENDER_PREFIXES } from "./variant.spec.ts";
+import { Group, groups, PERSON_GENDER_PREFIXES } from "@/catalog/asset/actor.spec.ts";
 
 export interface CharacterVariant {
   group: u32;

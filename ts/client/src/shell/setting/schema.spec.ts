@@ -21,7 +21,7 @@
 // `$retired`, and the generator refuses a number given twice or one
 // retired, so a number stored or sent never comes to mean another. An
 // `index` is a place in a list kept elsewhere — the person and the pet are
-// by theirs in variant.json — and crosses as itself.
+// by theirs in actor.json — and crosses as itself.
 
 export const SETTINGS = {
   /** Ground color from the art pack (four taps of the layer array per

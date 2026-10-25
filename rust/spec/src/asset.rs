@@ -2,8 +2,8 @@
 
 //! The content library: every asset the catalog declares
 //! (`spec/spec/asset/`), each a definition of a kind — the cubes and their
-//! colors, the decors, the marker — numbered by its id, its kind over its
-//! shape (`id`), and the shipped files a definition references
+//! colors, the decors, the marker, the actors — numbered by its id, its kind
+//! over its shape (`id`), and the shipped files a definition references
 //! (`ingested`). The texture pack is the cube kind's: which of its tiles a
 //! cube wears on each face. A cube with no image still draws as its catalog
 //! color.
@@ -12,6 +12,8 @@
 
 use std::sync::LazyLock;
 
+#[path = "asset/actor.spec.rs"]
+pub mod actor;
 #[path = "asset/color.spec.rs"]
 pub mod color;
 pub mod cube;

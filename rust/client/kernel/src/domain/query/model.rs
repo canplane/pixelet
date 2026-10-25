@@ -26,6 +26,3 @@ static DRAW_LIST: Global<DrawList> = Global::new();
 pub fn draw_list() -> &'static mut DrawList {
     DRAW_LIST.get(DrawList::default)
 }
-/// The characters a player can be, by their models (variant.json).
-#[path = "model/variant.spec.rs"]
-pub mod variant_spec;

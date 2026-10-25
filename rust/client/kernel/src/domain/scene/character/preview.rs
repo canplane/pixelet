@@ -9,7 +9,6 @@
 use crate::domain::query::model::asset::{model_of, ModelHandle};
 use crate::domain::query::model::draw_list;
 use crate::domain::query::model::registry::Models;
-use crate::domain::query::model::variant_spec::IDLE_CLIP;
 use crate::domain::scene::actor::{Actor, Pose};
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
 use crate::domain::scene::frame::Frame;
@@ -19,6 +18,7 @@ use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::draw::DrawList;
+use pxl_spec::asset::actor::IDLE_CLIP;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 

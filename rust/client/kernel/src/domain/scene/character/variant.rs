@@ -1,11 +1,12 @@
 // pxl-kernel/domain/scene/character/variant.rs
 
-//! The characters a player can be, as variant.json lists them.
+//! The characters a player can be, as the actor kind's catalog lists them
+//! (`spec/spec/asset/actor.json`).
 
 use pxl_spec::asset::ingested::Asset;
 
-use crate::domain::query::model::variant_spec::groups::{person, pet};
-pub use crate::domain::query::model::variant_spec::Group;
+use pxl_spec::asset::actor::groups::{person, pet};
+pub use pxl_spec::asset::actor::Group;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CharacterVariant {

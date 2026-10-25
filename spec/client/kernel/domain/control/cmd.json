@@ -39,10 +39,10 @@
     },
     {
       "name": "CharacterGroup",
-      "rs": "crate::domain::query::model::variant_spec::Group",
+      "rs": "pxl_spec::asset::actor::Group",
       "repr": "u8",
       "$doc": [
-        "variant.json's group, by its number."
+        "actor.json's group, by its number."
       ]
     }
   ],
