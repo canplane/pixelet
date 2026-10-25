@@ -30,6 +30,10 @@ surfaces was drafted and aborted the day before
 - **A road tunnel** is as deep as its cover asks, and the ways at grade
   leading to a portal sink into it, cutting the ground (a grade line), so
   the bore starts at depth.
+
+  > Since 2026-10-25: an approach is a grade line only where it sinks, to
+  > the cell where it is back at grade; past that it is a way at grade,
+  > which the ground paints.
 - **A rail tunnel** runs at a fixed depth under the terrain; a subway is a
   tunnel wherever it is no bridge.
 - **`layer`** is the source's `level_rules`, for height and order alike, as
@@ -97,16 +101,26 @@ draws nothing that is not in use.
   whose rings cut it in different places solve it differently: one cell of
   one seam of nine pages at Namsan.
 
-  > Since fixed (2026-10-25): a road tunnel is read whole, with the ground
-  > within its approaches' reach of each portal, and a page solves every
-  > road tunnel whose portal lies within that reach of it and every road
-  > tunnel or deck an end of one lies on; it keeps the stretch in its ring.
-  > A rail tunnel is the ring's still, a depth under the ground cell by cell.
-  > Measured at the seams, where a line crosses the edge two pages share:
-  > at Namsan, 0 of 49 tunnel crossings differ (4 did, by up to 4 cells); at
-  > Bukak (126.9845 37.6025), 2 of 6 differ by 1 and 2 cells (4 did, by up
-  > to 14), where a bridge's ramp takes a tunnel's approach in one page and
-  > not in the other: the bridges are the ring's.
+  > Since fixed (2026-10-25). The pages did not differ for want of seeing:
+  > two neighbours both see the cells where they meet. They differed because
+  > the bore's floor was drawn from where each ring cut it: the straight run
+  > between its two ends, a cut one among them, and its one valley, the
+  > lowest point of the stretch it saw. A cut lies a tile from every cell
+  > its page draws, so a floor that leans on nothing further than a tile is
+  > the same in both. A bore no longer than a tile stays Arnis's, since
+  > every page that draws any of it holds all of it. A longer one's floor is
+  > the highest under its cover by its drop that rises at most 2% from the
+  > lowest such floor within a tile, raised to whichever portal its page
+  > sees, with no one valley: the straight run between its portals is not a
+  > ring's to know, and is not looked for past it, which would cost every
+  > page reads it is not owed (`pxl-geo-bake separation/arnis.rs`, the
+  > module's rules). It stands up to 2% above that straight run where it is
+  > furthest from low cover: `c739a673…` runs from 39 up to 42 and down to
+  > 27 where Arnis runs from 39 to 28. A road tunnel whose end lies along
+  > another stays at depth there, as at an end the two share. Measured at
+  > the seams, where a line crosses the edge two pages share: at Namsan 0 of
+  > 49 tunnel crossings differ (4 did, by up to 4 cells), and at Bukak
+  > (126.9845 37.6025) 0 of 6 (4 did, by up to 14).
 
 It is the page bake's solve (`pxl-geo-bake separation/arnis.rs`); the
 earlier one and the structures it kept between pages are gone.

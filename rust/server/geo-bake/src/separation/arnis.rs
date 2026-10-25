@@ -25,18 +25,34 @@
 //! terrain. Arnis's numbers are metres (a block a metre upright on the Earth,
 //! as its celestial bodies say) taken into the tile's cells, half to even.
 //! What is read is the tile and as much of its 1-ring as the structures
-//! touching it reach, and no further, but for a road tunnel: it is read
-//! whole, with the ground its approaches can sink into about each portal, so
-//! every tile it crosses solves it alike and keeps the stretch in its ring.
+//! touching it reach, and no further.
+//!
+//! The 1-ring is the most a tile may consult, not what it must: nothing is
+//! read past it, and nothing reads all of it where less will do. A tile draws
+//! only itself (`terrain/pipeline/separation.rs` keeps what lies in it), so
+//! what it computes past what bears on its own cells is spent for nothing. Two
+//! rules follow, and a change here keeps both:
+//!
+//! - Where the ring cuts a piece is no end of it. A cut lies a tile from every
+//!   cell its tile draws, so a height that leans on nothing further than a
+//!   tile comes out the same in two neighbours, who both see the cells where
+//!   they meet; a height drawn from the cut, or from anything only the whole
+//!   piece shows (its lowest point, the straight run between its portals),
+//!   comes out different, and their tiles step at the seam.
+//! - What only the whole piece can answer is not answered by reading past the
+//!   ring for it, which costs every tile reads it is not owed. A tile that
+//!   cannot see it does without it, by a rule that leans on what it sees
+//!   (a long bore, `road_tunnels`).
 
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::{footprint as line_reach, Form, STACKED_DECK_HEADROOM_M};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer};
+use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec_core::ways;
 use xpute_kit::math::scalar::round;
 
@@ -80,6 +96,9 @@ const TUNNEL_RAMP_RUN: i32 = 3;
 const TUNNEL_LAYER_DROP_M: f64 = 7.0;
 const TUNNEL_MAX_LAYERS_BELOW: i64 = 8;
 const TUNNEL_APPROACH_WAYS: usize = 8;
+/// Ours, not Arnis's: the steepest a bore longer than a tile rises from the lowest floor near it
+/// (`road_tunnels`): 2%, which a road tunnel is built within.
+const TUNNEL_FAR_GRADE: f64 = 0.02;
 const RAIL_TUNNEL_DEPTH_M: f64 = 3.0;
 const RAIL_INTERIOR_HEIGHT_M: f64 = 4.0;
 /// A block, as a length: what Arnis adds or takes by one.
@@ -111,23 +130,20 @@ struct Source {
     by_end: FnvHashMap<End, Vec<PartId>>,
     /// Every way by its two ends.
     way_ends: FnvHashMap<End, Vec<PartId>>,
-    /// How far about a road tunnel's portal its approaches can sink, in DB
-    /// coordinates: the ground read there whatever the ring.
-    portal_reach: f64,
+    /// The pieces read since the scope last looked.
+    fresh: Vec<PartId>,
 }
 
-/// A piece, and once wanted its samples a cell apart along its way: inside
-/// the ring, or along all of it where it is read whole (`whole`).
+/// A piece, and once wanted its samples a cell apart along its way inside the ring.
 struct Sampled {
     piece: Piece,
     n: usize,
     samples: Option<BTreeMap<usize, ([f64; 2], i32)>>,
 }
 
-/// Whether a piece is read whole: a road tunnel, whose depth is one solve
-/// over its length and its portals, so no ring may cut it. A rail tunnel
-/// keeps a depth under the ground at each cell, and a bridge is the ring's.
-fn whole(piece: &Piece) -> bool {
+/// Whether a piece is a road tunnel: one Arnis bores as deep as its cover
+/// asks, where a rail tunnel keeps a depth under the ground.
+fn road_tunnel(piece: &Piece) -> bool {
     piece.form == Form::Tunnel && piece.way.subtype != "rail"
 }
 
@@ -143,9 +159,6 @@ struct Run {
     ends: [End; 2],
     /// Whether an end is where the ring cut the piece.
     clipped: [bool; 2],
-    /// The stretches of its cells inside the ring, which the tile keeps: all
-    /// of it but where it is read whole.
-    shown: Vec<[usize; 2]>,
     /// Every node it passes, ends included.
     nodes: Vec<End>,
     half: i32,
@@ -161,8 +174,8 @@ impl Run {
 
 /// A way at grade made to stand off it, a bridge's ramp or a tunnel's
 /// approach: a grade line at `points`, which ends where the way does at
-/// either end `ends` says (`coarsest`).
-fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2]) -> (Line, Drawn) {
+/// either end `ends` says (`coarsest`), drawing `range` of its segment.
+fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2], range: [f64; 2]) -> (Line, Drawn) {
     (
         Line {
             subtype: way.row.subtype.clone(),
@@ -175,7 +188,7 @@ fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2]) -> (Line, Drawn) {
         },
         Drawn {
             gers_id: way.row.gers_id.clone(),
-            range: way.row.span,
+            range,
         },
     )
 }
@@ -204,76 +217,70 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         pieces: BTreeMap::new(),
         by_end: FnvHashMap::default(),
         way_ends: FnvHashMap::default(),
-        // the most a portal's approaches run (`road_tunnels`' budget, at the most layers below), and a cell
-        portal_reach: mer_from_u(
-            f64::from((units.c(TUNNEL_COVER_DROP_M) + TUNNEL_MAX_LAYERS_BELOW as i32 * units.c(TUNNEL_LAYER_DROP_M)) * TUNNEL_RAMP_RUN + 1) * CELL_U,
-        ),
+        fresh: Vec::new(),
     };
     src.load(r, tile)?;
-    let own = [[pmin[0], pmin[1]], [pmax[0], pmax[1]]];
-    // a road tunnel whose portal lies within its approaches' reach of the tile sinks ways the tile
-    // draws, so the ring's tiles that near are read for one
-    let near = grown(own, src.portal_reach);
-    let [a, b] = [tile_of(near[0]), tile_of(near[1])];
-    for y in a[1].min(b[1])..=a[1].max(b[1]) {
-        for x in a[0].min(b[0])..=a[0].max(b[0]) {
-            src.load(r, [x, y])?;
-        }
-    }
-    let portal_near = |s: &Sampled| {
-        let p = &s.piece.way.points;
-        whole(&s.piece) && [p[0], p[p.len() - 1]].iter().any(|e| (0..2).all(|k| near[0][k] <= e[k] && e[k] <= near[1][k]))
-    };
 
     // ---- the structures the tile holds and every one they reach: shared ends, decks
     // beside or across them; each read as far as the ring ----
+    let own = [[pmin[0], pmin[1]], [pmax[0], pmax[1]]];
+    let mut queue: Vec<PartId> = src.pieces.iter().filter(|(_, s)| s.piece.touches(own)).map(|(id, _)| id.clone()).collect();
+    // a tile no structure touches has nothing to solve
+    if queue.is_empty() {
+        return Ok(Solved::default());
+    }
     let reach = mer_from_u(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
-    let mut scope: BTreeSet<PartId> = src.pieces.iter().filter(|(_, s)| s.piece.touches(own) || portal_near(s)).map(|(id, _)| id.clone()).collect();
-    // to a fixed point: a tile read late can hold what one looked at early stands beside
-    loop {
-        let before = (scope.len(), src.loaded.len());
-        for id in scope.clone() {
-            src.sample(r, &id)?;
-            let s = &src.pieces[&id];
-            scope.extend(s.piece.way.ends.iter().flat_map(|e| src.by_end.get(e).into_iter().flatten().cloned()).collect::<Vec<_>>());
-            if whole(&s.piece) {
-                // what an end of it lies on, at that one's end or along it: a deck its portal opens
-                // on, or a road tunnel it runs on in
-                let ends = &s.piece.way.ends;
-                scope.extend(
-                    src.pieces
-                        .iter()
-                        .filter(|(_, o)| (o.piece.form == Form::Bridge || whole(&o.piece)) && o.piece.way.points.iter().any(|p| ends.contains(&End::at([p[0], p[1]]))))
-                        .map(|(id, _)| id.clone())
-                        .collect::<Vec<_>>(),
-                );
-            }
-            if s.piece.form == Form::Bridge {
-                let b = grown(bbox_of(s), reach);
-                scope.extend(
-                    src.pieces
-                        .iter()
-                        .filter(|(_, o)| o.piece.form == Form::Bridge && o.piece.touches(b))
-                        .map(|(id, _)| id.clone())
-                        .collect::<Vec<_>>(),
-                );
+    // each piece is looked at once, against the pieces read so far; a piece a later read brings in
+    // is held against what was looked at before it (`seen`), so no pass is repeated
+    let lies_on = |o: &Piece, ends: &FnvHashSet<End>| (o.form == Form::Bridge || road_tunnel(o)) && o.way.points.iter().any(|p| ends.contains(&End::at([p[0], p[1]])));
+    let mut scope: BTreeSet<PartId> = BTreeSet::new();
+    let (mut seen_ends, mut seen_portals, mut seen_decks): (FnvHashSet<End>, FnvHashSet<End>, Vec<[[f64; 2]; 2]>) = Default::default();
+    src.fresh.clear();
+    while let Some(id) = queue.pop() {
+        if !scope.insert(id.clone()) {
+            continue;
+        }
+        src.sample(r, &id)?;
+        let s = &src.pieces[&id];
+        let mut reached: Vec<PartId> = s.piece.way.ends.iter().flat_map(|e| src.by_end.get(e).into_iter().flatten().cloned()).collect();
+        seen_ends.extend(s.piece.way.ends.iter().cloned());
+        if road_tunnel(&s.piece) {
+            // what an end of it lies on, at that one's end or along it: a deck its portal opens
+            // on, or a road tunnel it runs on in
+            let ends: FnvHashSet<End> = s.piece.way.ends.iter().cloned().collect();
+            reached.extend(src.pieces.iter().filter(|(_, o)| lies_on(&o.piece, &ends)).map(|(id, _)| id.clone()));
+            seen_portals.extend(ends);
+        }
+        if s.piece.form == Form::Bridge {
+            let b = grown(bbox_of(s), reach);
+            reached.extend(src.pieces.iter().filter(|(_, o)| o.piece.form == Form::Bridge && o.piece.touches(b)).map(|(id, _)| id.clone()));
+            seen_decks.push(b);
+        }
+        // a tile read late can hold what one looked at early meets or stands beside
+        for f in std::mem::take(&mut src.fresh) {
+            let o = &src.pieces[&f].piece;
+            if o.way.ends.iter().any(|e| seen_ends.contains(e)) || (o.form == Form::Bridge && seen_decks.iter().any(|&b| o.touches(b))) || lies_on(o, &seen_portals) {
+                reached.push(f);
             }
         }
-        if (scope.len(), src.loaded.len()) == before {
-            break;
-        }
+        queue.extend(reached.into_iter().filter(|q| !scope.contains(q)));
     }
     let runs = runs_of(&src, &scope, lo);
-    let obstacles = Obstacles::of(&src, [lo, hi], units);
+    // what a deck must clear, only where there is a deck
+    let obstacles = if runs.iter().any(|r| r.piece.form == Form::Bridge) {
+        Obstacles::of(&src, [lo, hi], units)
+    } else {
+        Obstacles::none()
+    };
     let mut lines: Vec<(Line, Drawn)> = Vec::new();
 
     // ---- road bridges, lower first; rail bridges over them; then the tunnels ----
     let solved = bridges(&src, &runs, &obstacles, units, &mut lines);
     for (q, ys) in &solved.ys {
-        lines.extend(kept(&runs[*q], ys, [0, ys.len() - 1], Form::Bridge, 0));
+        lines.push(part_of(&runs[*q], ys, [0, ys.len() - 1], Form::Bridge, 0));
     }
     for (q, ys) in rail_bridges(&runs, &obstacles, &solved.separation, units) {
-        lines.extend(kept(&runs[q], &ys, [0, ys.len() - 1], Form::Bridge, 0));
+        lines.push(part_of(&runs[q], &ys, [0, ys.len() - 1], Form::Bridge, 0));
     }
     let ceiling = (units.c(TUNNEL_CEIL_OFFSET_M) - units.c(BLOCK_M)).clamp(0, 255) as u8;
     for (q, ys, covered) in road_tunnels(&src, &runs, &solved, units, &mut lines) {
@@ -297,14 +304,14 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
                 Bore::Open => (Form::Tunnel, u8::MAX),
                 Bore::Raised => (Form::Approach, 0),
             };
-            lines.extend(kept(r, &ys, stretch, form, clear));
+            lines.push(part_of(r, &ys, stretch, form, clear));
         }
     }
     for q in (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Tunnel && runs[q].rail()) {
         // the floor under the interior, under the ceiling, under the cover (Arnis `generate_rail_tunnel_shell`)
         let depth = units.c(RAIL_TUNNEL_DEPTH_M + RAIL_INTERIOR_HEIGHT_M + BLOCK_M);
         let ys: Vec<i32> = runs[q].terrain.iter().map(|t| t - depth).collect();
-        lines.extend(kept(&runs[q], &ys, [0, ys.len() - 1], Form::Tunnel, units.c(RAIL_INTERIOR_HEIGHT_M).clamp(0, 255) as u8));
+        lines.push(part_of(&runs[q], &ys, [0, ys.len() - 1], Form::Tunnel, units.c(RAIL_INTERIOR_HEIGHT_M).clamp(0, 255) as u8));
     }
     let mut out = Solved::default();
     for (line, drawn) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
@@ -340,18 +347,9 @@ impl Source {
         self.loaded.contains(&tile_of(p))
     }
 
-    /// Reads a tile of the ring once; a tile past it is read only for a piece
-    /// read whole (`read`).
+    /// Reads a tile of the ring once; a tile past it is never read.
     fn load(&mut self, r: &mut Reader<impl Store>, p: [i32; 2]) -> Result<(), String> {
-        if !self.ring.contains(&p) {
-            return Ok(());
-        }
-        self.read(r, p)
-    }
-
-    /// Reads a tile once, in the ring or past it.
-    fn read(&mut self, r: &mut Reader<impl Store>, p: [i32; 2]) -> Result<(), String> {
-        if self.loaded.contains(&p) {
+        if !self.ring.contains(&p) || self.loaded.contains(&p) {
             return Ok(());
         }
         self.loaded.insert(p);
@@ -369,6 +367,7 @@ impl Source {
                     self.by_end.entry(e.clone()).or_default().push(id.clone());
                 }
                 let n = libm::ceil(piece.way.length() / step).max(1.0) as usize;
+                self.fresh.push(id.clone());
                 self.pieces.insert(id, Sampled { piece, n, samples: None });
             }
             if let Some(way) = Way::of(s.clone()) {
@@ -389,23 +388,19 @@ impl Source {
         Ok(())
     }
 
-    /// A piece's cells inside the ring, or all of them where it is read whole,
-    /// the tiles its footprint reaches read first. A piece read whole has the
-    /// ground about each portal read too, as far as its approaches can sink,
-    /// so the ring decides none of its solve.
+    /// A piece's cells inside the ring, the tiles its footprint reaches read first.
     fn sample(&mut self, r: &mut Reader<impl Store>, id: &PartId) -> Result<(), String> {
         let s = &self.pieces[id];
         if s.samples.is_some() {
             return Ok(());
         }
-        let all = whole(&s.piece);
         let step = mer_from_u(CELL_U);
         let line = Polyline::of(s.piece.way.points.iter().map(|p| [p[0], p[1]]));
         let length = s.piece.way.length();
         let reach = mer_from_u((line_reach(s.piece.width() / CELL_U) + 16.0) * CELL_U);
         let at: Vec<(usize, [f64; 2])> = (0..=s.n)
             .map(|k| (k, line.at((k as f64 * step).min(length))))
-            .filter(|(_, p)| all || self.ring.contains(&tile_of(*p)))
+            .filter(|(_, p)| self.ring.contains(&tile_of(*p)))
             .collect();
         let mut wanted: BTreeSet<[i32; 2]> = BTreeSet::new();
         for (_, p) in &at {
@@ -415,22 +410,9 @@ impl Source {
         }
         for e in [s.piece.way.points[0], s.piece.way.points[s.piece.way.points.len() - 1]] {
             wanted.insert(tile_of([e[0], e[1]]));
-            if all {
-                let d = self.portal_reach;
-                let [a, b] = [tile_of([e[0] - d, e[1] - d]), tile_of([e[0] + d, e[1] + d])];
-                for y in a[1].min(b[1])..=a[1].max(b[1]) {
-                    for x in a[0].min(b[0])..=a[0].max(b[0]) {
-                        wanted.insert([x, y]);
-                    }
-                }
-            }
         }
         for p in wanted {
-            if all {
-                self.read(r, p)?;
-            } else {
-                self.load(r, p)?;
-            }
+            self.load(r, p)?;
         }
         let ts = sample_cells(&self.ground, &at.iter().map(|a| a.1).collect::<Vec<_>>())?;
         self.pieces.get_mut(id).expect("a piece read").samples = Some(at.into_iter().zip(ts).map(|((k, p), t)| (k, (p, t))).collect());
@@ -438,8 +420,7 @@ impl Source {
     }
 }
 
-/// Each piece in scope as its stretches inside the ring, or as one run where
-/// it is read whole, its stretches inside the ring the ones kept.
+/// Each piece in scope as its stretches inside the ring.
 fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run> {
     let mut out = Vec::new();
     for id in scope {
@@ -459,33 +440,17 @@ fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run>
             }
             let at: Vec<[f64; 2]> = (k0..=k1).map(|k| samples[&k].0).collect();
             let terrain: Vec<i32> = (k0..=k1).map(|k| samples[&k].1).collect();
+            // a run's end the ring cut (`End::Ring`) marks where this tile stops looking, never an
+            // end of the piece: nothing joins there, and no height may be drawn from it (the module's
+            // rules)
             let clipped = [k0 != 0, k1 != s.n];
             let cut = |k: usize| End::Ring(id.clone(), k as u64);
             let ends = [
                 if clipped[0] { cut(k0) } else { s.piece.way.ends[0].clone() },
                 if clipped[1] { cut(k1) } else { s.piece.way.ends[1].clone() },
             ];
-            let all = whole(&s.piece);
-            let mut nodes: Vec<End> = s.piece.way.points.iter().map(|p| [p[0], p[1]]).filter(|&p| all || src.inside(p)).map(End::at).collect();
+            let mut nodes: Vec<End> = s.piece.way.points.iter().map(|p| [p[0], p[1]]).filter(|&p| src.inside(p)).map(End::at).collect();
             nodes.extend(ends.iter().cloned());
-            let shown = if all {
-                let inside: Vec<bool> = at.iter().map(|&p| src.inside(p)).collect();
-                let mut shown = Vec::new();
-                let mut j = 0;
-                while j < inside.len() {
-                    let from = j;
-                    while j < inside.len() && inside[j] {
-                        j += 1;
-                    }
-                    if j > from + 1 {
-                        shown.push([from, j - 1]);
-                    }
-                    j += 1;
-                }
-                shown
-            } else {
-                vec![[0, k1 - k0]]
-            };
             out.push(Run {
                 piece: s.piece.clone(),
                 k0,
@@ -494,7 +459,6 @@ fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run>
                 terrain,
                 ends,
                 clipped,
-                shown,
                 nodes,
                 half: ways::half_cells((s.piece.width() / CELL_U) as f32),
                 width_u: s.piece.width(),
@@ -552,6 +516,15 @@ struct Obstacles {
 
 impl Obstacles {
     /// Each segment cut to the ring `[origin, far]`, its nodes those in it.
+    /// Nothing to clear: where no deck is solved.
+    fn none() -> Obstacles {
+        Obstacles {
+            list: Vec::new(),
+            buckets: FnvHashMap::default(),
+            bucket: 1.0,
+        }
+    }
+
     fn of(src: &Source, [origin, far]: [[f64; 2]; 2], units: Units) -> Obstacles {
         let cell = |p: [f64; 2]| [u_from_mer(p[0] - origin[0]) / CELL_U, u_from_mer(p[1] - origin[1]) / CELL_U];
         let mut out = Obstacles {
@@ -692,6 +665,17 @@ fn parallel(a: f64, b: f64) -> bool {
         diff = 360.0 - diff;
     }
     diff <= DUAL_CARRIAGEWAY_HEADING_TOLERANCE_DEG || (180.0 - diff).abs() <= DUAL_CARRIAGEWAY_HEADING_TOLERANCE_DEG
+}
+
+/// The box about cells.
+fn cells_box(cells: &[[f64; 2]]) -> [[f64; 2]; 2] {
+    let mut b = [[f64::INFINITY; 2], [f64::NEG_INFINITY; 2]];
+    for c in cells {
+        for k in 0..2 {
+            (b[0][k], b[1][k]) = (b[0][k].min(c[k]), b[1][k].max(c[k]));
+        }
+    }
+    b
 }
 
 fn lateral(p: [f64; 2], r: &Run) -> f64 {
@@ -841,9 +825,15 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
             }
         }
     }
+    // two decks whose cells lie further apart than any deck beside another (`side_by_side`'s
+    // farthest) are not weighed
+    let boxes: Vec<[[f64; 2]; 2]> = road.iter().map(|&q| cells_box(&runs[q].cell)).collect();
+    let reach = |q: usize| f64::from(ways::reach((runs[q].width_u / CELL_U) as f32));
+    let farthest = |a: usize, b: usize| (reach(a) + reach(b) + f64::from(units.c(SIDE_DECK_EDGE_GAP_M))).max(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M)));
     for i in 0..road.len() {
         for j in i + 1..road.len() {
-            if uf.find(i) != uf.find(j) && side_by_side(&runs[road[i]], &runs[road[j]], units) {
+            let apart = (0..2).map(|k| (boxes[j][0][k] - boxes[i][1][k]).max(boxes[i][0][k] - boxes[j][1][k])).fold(0.0, f64::max);
+            if apart <= farthest(road[i], road[j]) && uf.find(i) != uf.find(j) && side_by_side(&runs[road[i]], &runs[road[j]], units) {
                 uf.union(i, j);
             }
         }
@@ -1072,6 +1062,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                     .map(|(k, p)| [p[0], p[1], round(f64::from(deck_y) + f64::from(ground - deck_y) * k as f64 / denom)])
                     .collect(),
                 [true, true],
+                way.row.span,
             ));
         }
 
@@ -1256,7 +1247,7 @@ struct Claim {
 fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lines: &mut Vec<(Line, Drawn)>) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
     let ramp_ways = &bridges.ramp_ways;
     let tunnels: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Tunnel && !runs[q].rail()).collect();
-    // a node two tunnels share stays at depth; a road tunnel is read whole, so no ring cuts one
+    // a node two tunnels share, or an end the ring cut, stays at depth
     let mut owner: FnvHashMap<&End, PartId> = FnvHashMap::default();
     let mut shared: FnvHashSet<&End> = FnvHashSet::default();
     for &q in &tunnels {
@@ -1273,7 +1264,7 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
             }
         }
     }
-    let internal = |q: usize, e: usize| shared.contains(&runs[q].ends[e]);
+    let internal = |q: usize, e: usize| runs[q].clipped[e] || shared.contains(&runs[q].ends[e]);
     let layer_extra = |r: &Run| (-(r.piece.way.tags.level.unwrap_or(0) + 1)).clamp(0, TUNNEL_MAX_LAYERS_BELOW) as i32 * units.c(TUNNEL_LAYER_DROP_M);
 
     // ---- a portal on a road deck, at its end or along it, opens at the deck's height there, where Arnis
@@ -1305,15 +1296,22 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
             .get(part)
             .filter(|w| !w.row.tags.bridge && !w.row.tags.tunnel && w.row.subtype == "road" && !ramp_ways.contains(part))
     };
-    let ways_len = |part: &PartId| cells_along(&src.ways[part].line.points).len() as i32;
-    // a way's cells from the end it is entered at, as far as its ground is held, and whether it goes on past
-    let in_ring = |part: &PartId, from_start: bool| {
-        let mut cells = cells_along(&src.ways[part].line.points);
-        if !from_start {
-            cells.reverse();
+    let step = mer_from_u(CELL_U);
+    // a way's last cell as `cells_along` counts them
+    let last_cell = |part: &PartId| libm::ceil(src.ways[part].line.length() / step).max(1.0) as i32;
+    // a way's cells from the end it is entered at, as far as its ground is held and no further than
+    // `cap`, which is all a descent can use, and whether it stops short of its far end
+    let in_ring = |part: &PartId, from_start: bool, cap: i32| {
+        let (line, last) = (&src.ways[part].line, last_cell(part));
+        let mut n = 0;
+        while n <= last && n < cap {
+            let k = if from_start { n } else { last - n };
+            if !src.held(line.at((f64::from(k) * step).min(line.length()))) {
+                break;
+            }
+            n += 1;
         }
-        let n = cells.iter().take_while(|&&p| src.held(p)).count();
-        (n as i32, n < cells.len())
+        (n, n <= last)
     };
     let mut claims: BTreeMap<PartId, Vec<Claim>> = BTreeMap::new();
     let mut drops: FnvHashMap<End, i32> = FnvHashMap::default();
@@ -1352,7 +1350,8 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
                 loop {
                     let w = &src.ways[&part];
                     let at_start = w.row.ends[0] == at;
-                    let (len, leaves) = in_ring(&part, at_start);
+                    // past the budget no cell changes the descent: `avail` is as much as it needs
+                    let (len, leaves) = in_ring(&part, at_start, budget - dist + 1);
                     chain.push((part.clone(), at_start, dist, len));
                     taken.insert(part.clone());
                     dist += len - 1;
@@ -1379,7 +1378,7 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
             }
             let run = (avail / drop).clamp(1, TUNNEL_RAMP_RUN);
             for (part, at_start, d0, _) in branches.into_iter().flatten() {
-                let last = ways_len(&part) - 1;
+                let last = last_cell(&part);
                 let c = claims.entry(part).or_default();
                 if c.len() < 2 {
                     c.push(Claim {
@@ -1393,28 +1392,48 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
         }
     }
     for (part, cs) in &claims {
-        let w = &src.ways[part];
-        let cells = cells_along(&w.line.points);
-        // each stretch of it whose ground is held, the cells past it not read
-        let mut k = 0;
-        while k < cells.len() {
-            let from = k;
-            while k < cells.len() && src.held(cells[k]) {
+        let (w, last) = (&src.ways[part], last_cell(part));
+        let along = |k: i32| (f64::from(k) * step).min(w.line.length());
+        // where it descends, within a claim's drop of its anchor, to the cell either side where it is
+        // back at grade; past that it is a way at grade, the ground's to paint
+        let mut spans: Vec<[i32; 2]> = cs
+            .iter()
+            .map(|c| [(c.anchor - c.drop * c.run).max(0), (c.anchor + c.drop * c.run).min(last)])
+            .filter(|[a, b]| a < b)
+            .collect();
+        spans.sort_unstable();
+        let mut merged: Vec<[i32; 2]> = Vec::new();
+        for [a, b] in spans {
+            match merged.last_mut() {
+                Some(m) if a <= m[1] => m[1] = m[1].max(b),
+                _ => merged.push([a, b]),
+            }
+        }
+        for [a, b] in merged {
+            // each stretch of it whose ground is held, the cells past it not read
+            let mut k = a;
+            while k <= b {
+                let from = k;
+                let mut cells = Vec::new();
+                while k <= b && src.held(w.line.at(along(k))) {
+                    cells.push(w.line.at(along(k)));
+                    k += 1;
+                }
+                if cells.len() >= 2 {
+                    if let Ok(terrain) = sample_cells(&src.ground, &cells) {
+                        let points = (from..k)
+                            .zip(cells.iter().zip(&terrain))
+                            .map(|(k, (p, &t))| {
+                                let drop = cs.iter().map(|c| c.drop - (k - c.anchor).abs() / c.run).max().unwrap_or(0).max(0);
+                                [p[0], p[1], f64::from(t - drop)]
+                            })
+                            .collect();
+                        let fraction = |k: i32| w.row.span[0] + along(k) / w.row.segment_length;
+                        lines.push(graded(w, points, [from == 0, k - 1 == last], [fraction(from), fraction(k - 1)]));
+                    }
+                }
                 k += 1;
             }
-            if k - from >= 2 {
-                if let Ok(terrain) = sample_cells(&src.ground, &cells[from..k]) {
-                    let points = (from..k)
-                        .zip(&terrain)
-                        .map(|(k, &t)| {
-                            let drop = cs.iter().map(|c| c.drop - (k as i32 - c.anchor).abs() / c.run).max().unwrap_or(0).max(0);
-                            [cells[k][0], cells[k][1], f64::from(t - drop)]
-                        })
-                        .collect();
-                    lines.push(graded(w, points, [from == 0, k == cells.len()]));
-                }
-            }
-            k += 1;
         }
     }
 
@@ -1446,21 +1465,42 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
         let drop_cover = units.c(TUNNEL_COVER_DROP_M) + layer_extra(r);
         let start_drop = if internal_s { 0 } else { drops.get(&r.ends[0]).copied().unwrap_or(0) };
         let end_drop = if internal_e { 0 } else { drops.get(&r.ends[1]).copied().unwrap_or(0) };
+        // A bore no longer than a tile is Arnis's: under the straight run between its portals, at most
+        // as high as its cover leaves room for, in one valley. Every tile that draws any of it holds
+        // all of it in its ring, so all of them solve it alike.
+        //
+        // A longer one is not: a tile that draws it may see neither portal, and the straight run
+        // between them is not a ring's to know. Its ring cuts it, and where the ring cuts is no end of
+        // it, nor a height to draw a line from: two neighbours cut it in different places, and a
+        // floor that leaned on the cut would differ where they meet, though both see the cells there.
+        // So the floor of a long bore leans on nothing further than a tile (`TILE_CELLS`) from each
+        // cell, which every ring holds about what its tile draws: the highest floor under the cover by
+        // its drop that rises from the lowest such floor within a tile at `TUNNEL_FAR_GRADE` at most
+        // (`envelope`), raised to whichever portal it sees. Reading past the ring to find the portals
+        // instead costs every tile reads it is not owed, and is not done.
+        let long = libm::ceil(r.piece.way.length() / step) > f64::from(TILE_CELLS);
         let denom = last.max(1) as f64;
         let grade = |i: usize| round(f64::from(gs) + f64::from(ge - gs) * i as f64 / denom) as i32;
+        let floor = if long {
+            let room: Vec<i32> = cover.iter().map(|c| c - drop_cover).collect();
+            envelope(&room, TUNNEL_FAR_GRADE, TILE_CELLS as usize).into_iter().map(|y| round(y) as i32).collect()
+        } else {
+            (0..n).map(|i| grade(i).min(cover[i] - drop_cover)).collect::<Vec<i32>>()
+        };
         // the ground caps the bore, but where a deck's portal holds it over the ground, ramping down from
-        // the deck, and no higher than the straight run between the portals, so it meets the other one
+        // the deck, and in a short bore no higher than the straight run between the portals, so it meets
+        // the other one
         let over = |i: usize| {
             [deck_s.map(|d| d - i as i32 / TUNNEL_RAMP_RUN), deck_e.map(|d| d - (last - i) as i32 / TUNNEL_RAMP_RUN)]
                 .into_iter()
                 .flatten()
                 .max()
-                .map_or(r.terrain[i], |held| r.terrain[i].max(held.min(grade(i))))
+                .map_or(r.terrain[i], |held| r.terrain[i].max(if long { held } else { held.min(grade(i)) }))
         };
         // as deep as cover asks, ramping down from whatever the portals reached
         let mut ys: Vec<i32> = (0..n)
             .map(|i| {
-                let desired = grade(i).min(cover[i] - drop_cover);
+                let desired = floor[i];
                 let ramp_s = if internal_s { i32::MIN } else { gs - start_drop - i as i32 / TUNNEL_RAMP_RUN };
                 let ramp_e = if internal_e { i32::MIN } else { ge - end_drop - (last - i) as i32 / TUNNEL_RAMP_RUN };
                 desired.max(ramp_s.max(ramp_e)).min(over(i))
@@ -1475,8 +1515,8 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
             }
         };
         cap(&mut ys);
-        // one valley, not several
-        if let Some(m) = (0..n).min_by_key(|&i| ys[i]) {
+        // one valley, not several, in a short bore: the lowest point of a long one is not a ring's to know
+        if let Some(m) = (0..n).filter(|_| !long).min_by_key(|&i| ys[i]) {
             for i in 1..=m {
                 ys[i] = ys[i].min(ys[i - 1]);
             }
@@ -1517,6 +1557,33 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
     out
 }
 
+/// For each cell `i`, the least over the cells `j` within `w` of it of
+/// `room[j] + grade · |i − j|`: the highest floor at most `room` everywhere
+/// that rises no faster than `grade` a cell, leaning on nothing further than
+/// `w`. Two passes, each a sliding minimum, so a cell costs the same whatever `w`.
+fn envelope(room: &[i32], grade: f64, w: usize) -> Vec<f64> {
+    let n = room.len();
+    let mut out = vec![f64::INFINITY; n];
+    for reverse in [false, true] {
+        // along the pass, `t` from where it starts: the least of room[j] − grade·t_j over the window, plus grade·t
+        let mut window: VecDeque<(usize, f64)> = VecDeque::new();
+        for t in 0..n {
+            let i = if reverse { n - 1 - t } else { t };
+            let v = f64::from(room[i]) - grade * t as f64;
+            while window.back().is_some_and(|&(_, b)| b >= v) {
+                window.pop_back();
+            }
+            window.push_back((t, v));
+            while window.front().is_some_and(|&(s, _)| s + w < t) {
+                window.pop_front();
+            }
+            let least = window.front().map_or(v, |&(_, b)| b);
+            out[i] = out[i].min(least + grade * t as f64);
+        }
+    }
+    out
+}
+
 /// What a bore's cell is: under cover, open to the sky, or held over the
 /// ground by a deck's portal.
 #[derive(Clone, Copy, PartialEq)]
@@ -1540,24 +1607,9 @@ fn split_by<T: Copy + PartialEq>(cells: &[T]) -> Vec<([usize; 2], T)> {
     out
 }
 
-/// Cells `a..=b` of a run as lines of `form` (`part_of`), one for each
-/// stretch of them the tile keeps (`Run::shown`); where the ring cuts one, its
-/// end is no end of the way's line.
-fn kept(r: &Run, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -> Vec<(Line, Drawn)> {
-    let last = r.at.len() - 1;
-    r.shown
-        .iter()
-        .filter_map(|&[s0, s1]| {
-            let (a, b) = (a.max(s0), b.min(s1));
-            let cut = [a == s0 && (s0 != 0 || r.clipped[0]), b == s1 && (s1 != last || r.clipped[1])];
-            (b > a).then(|| part_of(r, ys, [a, b], form, clear, cut))
-        })
-        .collect()
-}
-
-/// Cells `a..=b` of a run as a line at heights `ys`: the piece's vertices and
-/// where the slope bends, no more. An end `cut` is where only a cut ends it.
-fn part_of(r: &Run, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8, cut: [bool; 2]) -> (Line, Drawn) {
+/// Cells `a..=b` of a run as a line of `form` at heights `ys`: the piece's
+/// vertices and where the slope bends, no more.
+fn part_of(r: &Run, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -> (Line, Drawn) {
     let step = mer_from_u(CELL_U);
     let along = |k: usize| ((r.k0 + k) as f64 * step).min(r.piece.way.length());
     let mut keep: Vec<(f64, [f64; 2], f64)> = Vec::new();
@@ -1585,13 +1637,14 @@ fn part_of(r: &Run, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8, cut: 
     keep.dedup_by(|x, y| x.0 == y.0);
     let fraction = |d: f64| r.piece.way.span[0] + d / r.piece.way.segment_length;
     let points: Vec<[f64; 3]> = keep.iter().map(|(_, p, z)| [p[0], p[1], *z]).collect();
+    let last = r.at.len() - 1;
     (
         Line {
             subtype: r.piece.way.subtype.clone(),
             class: r.piece.way.class.clone(),
             width_u: r.width_u,
             form,
-            coarsest: super::coarsest(&points, [!cut[0], !cut[1]]),
+            coarsest: super::coarsest(&points, [!(a == 0 && r.clipped[0]), !(b == last && r.clipped[1])]),
             points,
             clear,
         },
