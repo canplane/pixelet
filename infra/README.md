@@ -32,8 +32,8 @@ infra/
 pxl-api owns db-main and probes it at boot, but no route reads it yet
 ([the server in Rust](../doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md));
 pxl-geo reads db-geo through `DB_GEO_URL`. All spatial data is EPSG:3857.
-Passwords and `ADMIN_TOKEN` come from `.env` only, and production's are its
-own.
+Passwords come from `infra/local/.env` and `ADMIN_TOKEN` from
+`rust/server/.env` only, and production's are its own (`infra/prod/.env`).
 
 **Never `down -v` db-geo** (`pixelet-db-geo`): its volume is a
 multi-gigabyte PostGIS dataset, hours of ingest to fill again.
@@ -112,7 +112,7 @@ Dump with the local container's own `pg_dump`, since a newer host one writes
 a format production's Postgres 16 cannot restore:
 
 ```sh
-set -a; . ./.env; set +a
+set -a; . ./infra/local/.env; set +a
 docker exec pixelet-db-geo pg_dump --format=custom --no-owner \
   -U "$DB_GEO_USER" -d "$DB_GEO_NAME" \
   -t overture_places -t overture_division_areas -t overture_divisions > overture.dump

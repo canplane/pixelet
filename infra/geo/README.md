@@ -63,14 +63,14 @@ column a reader filters on is generated from `properties`.
 ```sh
 rustup toolchain install nightly        # ingest.rs is a cargo script
 
-docker compose -f infra/local/docker-compose.yml --env-file .env up -d db-geo
+docker compose -f infra/local/docker-compose.yml up -d db-geo
 
 ./infra/geo/overture/ingest.rs [--type <type>]… [--shard <name>]… [--whole]
 ./infra/geo/elevation/ingest.sh
 ./infra/geo/coastline/ingest.sh
 ```
 
-Each reads the repository's `.env`; no source needs a key. Every tool they
+Each reads `infra/local/.env`; no source needs a key. Every tool they
 run — GDAL, PostGIS's raster loader, psql, Overture's CLI — is `tools/`'s
 image's, which `tools/run` builds from its Dockerfile before each call, so
 the host needs Docker and cargo alone. Ubuntu 24.04's are PostgreSQL 16 and

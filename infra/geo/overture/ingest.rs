@@ -683,12 +683,12 @@ fn pinned(field: &str) -> Result<String, String> {
     let meta: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     meta["pin"][field].as_str().map(str::to_string).ok_or_else(|| format!("{}: no pin.{field}", path.display()))
 }
-/// `DB_GEO_URL` from the environment, or `.env` with its `${...}` expanded.
+/// `DB_GEO_URL` from the environment, or infra/local/.env with its `${...}` expanded.
 fn db_geo_url() -> Result<String, String> {
     if let Ok(url) = std::env::var("DB_GEO_URL") {
         return Ok(url);
     }
-    let dotenv = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.env");
+    let dotenv = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../local/.env");
     let text = std::fs::read_to_string(&dotenv).map_err(|_| format!("env:DB_GEO_URL:missing, and no {}", dotenv.display()))?;
     let mut vars: HashMap<&str, &str> = HashMap::new();
     for line in text.lines() {

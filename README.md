@@ -79,8 +79,10 @@ One format was made here: **XTP**, xpute's relocatable binary tree, read without
 git clone git@github.com:canplane/pixelet.git
 cd pixelet
 
-cp .env.example .env
 cp ts/app/web/.env.example ts/app/web/.env
+# for the databases and the servers, below:
+cp infra/local/.env.example infra/local/.env
+cp rust/server/.env.example rust/server/.env
 
 deno task dev
 ```
@@ -98,7 +100,7 @@ A personal, uncommitted variant takes a `.local.` infix (`*.local.skill.md`, `.a
 The tiles come three ways, named as a bakery's bread is: delivered, from the oven, or off the shelf. `dev` has them delivered: every server route is proxied to the live deployment, so no Docker, database or server process is needed. That is the way in for most work, and the wrong way for bake work: a published tile prefix never changes, so the proxy would keep serving the tiles that are already live rather than the ones just baked. For that, start the databases and run the whole stack, which bakes each tile when it is first asked for:
 
 ```bash
-docker compose --env-file .env -f infra/local/docker-compose.yml up -d
+docker compose -f infra/local/docker-compose.yml up -d
 deno task dev:oven
 ```
 

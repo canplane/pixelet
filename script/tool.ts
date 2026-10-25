@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run -A
 // The binaries that make the repository's data, by what they do and what they
 // make: each its crate, its profile, and whether it reads the databases'
-// addresses from ./.env. The arguments after the name go to the binary.
+// addresses from infra/local/.env. The arguments after the name go to the binary.
 //
 //   ./script/tool.ts bake <terrain|place|division|earth|star|geoid> [args…]
 //   ./script/tool.ts download <pack|moon|earth|star>
@@ -11,7 +11,7 @@ interface Tool {
   bin: string;
   /** `server` where a debug build is felt on every tile; `release` for one long run. */
   profile?: "server" | "release";
-  /** Reads db-geo, so runs under ./.env's variables. */
+  /** Reads db-geo, so runs under infra/local/.env's variables. */
   env?: boolean;
 }
 

@@ -18,7 +18,7 @@ REPO_ROOT="$(cd "$ELEV_ROOT/../../.." && pwd)"
 WARPED_DIR="$ELEV_ROOT/warped"
 TOOLS="$REPO_ROOT/infra/geo/tools/run"
 
-set -a; . "$REPO_ROOT/.env"; set +a
+set -a; . "$REPO_ROOT/infra/local/.env"; set +a
 psql_geo() { "$TOOLS" psql "$DB_GEO_URL" -v ON_ERROR_STOP=1 "$@"; }
 
 SOURCE="$ELEV_ROOT/source.json"

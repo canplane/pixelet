@@ -28,7 +28,7 @@ sets and are not published. The kinds `script/tool.ts` takes are its header's.
 The bakes read the geo database directly:
 
 ```bash
-docker compose -f infra/local/docker-compose.yml --env-file .env up -d
+docker compose -f infra/local/docker-compose.yml up -d
 ```
 
 A missing or partial table is an ingest's job, not a bake's: the bake refuses
