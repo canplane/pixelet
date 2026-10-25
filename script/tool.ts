@@ -7,6 +7,8 @@
 //   ./script/tool.ts bake <terrain|place|division|earth|star|geoid> [args…]
 //   ./script/tool.ts download <pack|moon|earth|star>
 //   ./script/tool.ts serve <geo|api|tile> [args…]
+//   ./script/tool.ts ingest asset      after any change under asset/content/
+//   ./script/tool.ts render brand      when ts/client/brand's symbol changes
 //
 // Built from rust/, where rustup reads the workspace's toolchain, and run
 // from the repository's root, where a binary's ./out and its environment's
@@ -18,6 +20,8 @@ interface Tool {
   /** `server` where a debug build is felt on every tile; `release` for one long run. */
   profile?: "server" | "release";
   features?: string;
+  /** Given before the caller's own. */
+  args?: string[];
   /** Reads db-geo or is a server, so runs under script/with-env.sh's variables. */
   env?: boolean;
 }
@@ -36,6 +40,14 @@ const TOOLS: Record<string, Record<string, Tool>> = {
     moon: { crate: "pxl-tool", bin: "download_moon" },
     earth: { crate: "pxl-tool", bin: "download_earth" },
     star: { crate: "pxl-tool", bin: "download_star" },
+  },
+  ingest: {
+    asset: { crate: "pxl-tool", bin: "ingest_asset" },
+  },
+  // The symbol's outline both apps bundle; the page's icons are made by its
+  // build (ts/app/web build:brand).
+  render: {
+    brand: { crate: "pxl-tool", bin: "render_brand", args: ["--symbol"] },
   },
   serve: {
     geo: { crate: "pxl-geo", bin: "pxl-geo", profile: "server", env: true },
@@ -68,6 +80,7 @@ if (!exe) {
   console.error(`[tool] cargo built no ${tool.bin}`);
   Deno.exit(1);
 }
-const [cmd, ...rest] = tool.env ? ["./script/with-env.sh", exe, ...args] : [exe, ...args];
+const given = [...(tool.args ?? []), ...args];
+const [cmd, ...rest] = tool.env ? ["./script/with-env.sh", exe, ...given] : [exe, ...given];
 const run = await new Deno.Command(cmd, { args: rest, cwd: root, stdin: "inherit", stdout: "inherit", stderr: "inherit" }).output();
 Deno.exit(run.code);

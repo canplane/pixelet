@@ -6,7 +6,7 @@
 //! The printed mean reflectance must equal sky.wgsl's MOON_MAP_MEAN.
 //! Credit: NASA's Scientific Visualization Studio.
 //!
-//!   deno task download moon
+//!   ./script/tool.ts download moon
 
 use std::process::ExitCode;
 

@@ -11,7 +11,7 @@ arrived. What the bucket holds, and how the Worker serves it, is
 [bake-tiles](../bake-tiles/SKILL.md).
 
 The versions the client requests are the bucket's `source`, which
-`deno task publish` alone writes and the client reads at boot, so a publish is
+`./ts/app/web/script/publish.ts` alone writes and the client reads at boot, so a publish is
 never a commit or a deploy. An object's name carries no extension, so **its
 content-type and content-encoding are stored with it at upload**: a manual
 upload must set both.
@@ -40,21 +40,21 @@ terrain version is every tile, so a few in a month is past it. Before an upload
 and after:
 
 ```bash
-deno task usage     # Class A this month against the million
+./script/usage.ts     # Class A this month against the million
 ```
 
 and set the object count `publish` prints against what is left. Deleting an
 old version is free.
 
 ```bash
-deno task bake <kind> --stage publish    # terrain, place or division
-deno task publish <kind>
+./script/tool.ts bake <kind> --stage publish    # terrain, place or division
+./ts/app/web/script/publish.ts <kind>
 ```
 
 `publish` names the version, uploads the copy with the manifest's
 content-encoding, checks the stored count, then writes `source`.
-`deno task publish serve <kind> <version>` serves a version the bucket holds
-again, which is how to go back; `deno task publish override <shard> <kind>
+`./ts/app/web/script/publish.ts serve <kind> <version>` serves a version the bucket holds
+again, which is how to go back; `./ts/app/web/script/publish.ts override <shard> <kind>
 <version>` serves a version for one shard and the tiles under it, `-` dropping
 it.
 
@@ -68,15 +68,15 @@ error to repair.
 ### Earth
 
 ```bash
-deno task download earth
-deno task bake earth
-deno task publish earth
+./script/tool.ts download earth
+./script/tool.ts bake earth
+./ts/app/web/script/publish.ts earth
 ```
 
 ### Assets
 
 ```bash
-deno task ingest:asset
+./script/tool.ts ingest asset
 # -> ./out/asset/<sha256>.<ext>, and regenerates rust/spec/src/asset/ingested.spec.rs
 #    and ts/client/src/catalog/asset/ingested.spec.ts
 
@@ -109,7 +109,7 @@ served bytes, and CI runs it after every deploy; run it by hand after a
 publish, which is not a deploy:
 
 ```bash
-deno task smoke https://plei.me
+./ts/app/web/script/smoke.ts https://plei.me
 ```
 
 It fails on a tile packed twice (the Worker's `Response` lost

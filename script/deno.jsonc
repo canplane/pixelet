@@ -7,7 +7,6 @@
 
   "imports": {
     "@std/path": "jsr:@std/path@^1",
-    "@std/jsonc": "jsr:@std/jsonc@^1",
 
     // Dawn, the WebGPU Chrome runs, for the generated kernels' compile (shader-wgsl.ts).
     "webgpu": "npm:webgpu@0.6.2"

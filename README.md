@@ -84,7 +84,7 @@ cp ts/app/web/.env.example ts/app/web/.env
 cp infra/local/.env.example infra/local/.env
 cp rust/server/.env.example rust/server/.env
 
-deno task dev
+make dev
 ```
 
 The agent instructions are [AGENTS.md](./AGENTS.md) and the procedures [.agents/skills/](./.agents/skills/), kept vendor-neutral. An assistant's own directory is gitignored; link it at them once per checkout:
@@ -101,39 +101,41 @@ The tiles come three ways, named as a bakery's bread is: delivered, from the ove
 
 ```bash
 docker compose -f infra/local/docker-compose.yml up -d
-deno task dev:oven
+make dev-oven
 ```
 
-`dev:shelf` is the same stack with the tiles taken from the last bakes under `./out` and nothing baked on demand: what a publish of them would show, before it is uploaded. `preview:oven` and `preview:shelf` are the two over the production bundle.
+`dev-shelf` is the same stack with the tiles taken from the last bakes under `./out` and nothing baked on demand: what a publish of them would show, before it is uploaded. `preview-oven` and `preview-shelf` are the two over the production bundle.
 
-| Task                             | Description                                                                                                                                                                                                                                                      |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deno task dev`                  | The client alone, every route delivered by the live deployment                                                                                                                                                                                                   |
-| `deno task dev:oven`             | The client and the three servers it talks to, each tile baked when first asked for                                                                                                                                                                               |
-| `deno task dev:geo`              | pxl-geo only (`/geo`)                                                                                                                                                                                                                                            |
-| `deno task dev:api`              | pxl-api only (`/api`)                                                                                                                                                                                                                                            |
-| `deno task dev:shelf`            | `dev:oven`, with the tiles taken from the last bakes under `./out`                                                                                                                                                                                               |
-| `deno task dev:tile`             | The dev tile server, baking each tile out of the source when missed                                                                                                                                                                                              |
-| `deno task preview`              | The production bundle, served locally, data from the live deployment                                                                                                                                                                                             |
-| `deno task preview:{oven,shelf}` | The production bundle over `dev:oven`'s or `dev:shelf`'s servers                                                                                                                                                                                                 |
-| `deno task clear:oven`           | Empty `dev:oven`'s cache, after a re-ingest or a bake change                                                                                                                                                                                                     |
-| `deno task clear:shelf [kind…]`  | Delete the named kinds' sets under `./out` (all three when none), to bake them from nothing                                                                                                                                                                      |
-| `deno task build:wasm`           | Build the guest module into `ts/app/web/src/guest.wasm`                                                                                                                                                                                                          |
-| `deno task dev:native`           | Metro, for the device app                                                                                                                                                                                                                                        |
-| `deno task bake <kind> [args…]`  | Make a kind's data (`script/tool.ts`): `terrain`, `place`, `division` from db-geo into `./out/<kind>/`; `earth` from `infra/earth/` into `./out/earth/`; `star` into the renderer's `bright-star.bin`; `geoid <egm2008-5.pgm>` into `spec/spec/space/geoid.json` |
-| `deno task download <what>`      | Fetch a source a tool reads: `pack`, the texture pack's; `moon`; `earth`                                                                                                                                                                                         |
-| `deno task ingest:asset`         | Hash `asset/content/` into `./out/asset`, compose the texture pack, regenerate the asset tables                                                                                                                                                                  |
-| `deno task render:brand`         | The symbol's outline both apps bundle, from `ts/client/brand/`; the page's icons and link preview are made by its build                                                                                                                                          |
-| `deno task spec`                 | Generate Rust and TypeScript from the JSON under `spec/`                                                                                                                                                                                                         |
-| `deno task usage`                | What the deployment has used of its free allowances, before a publish                                                                                                                                                                                            |
-| `deno task publish`              | Declare in the bucket which baked version of each kind clients read; nothing in the tree changes and nothing is deployed                                                                                                                                         |
-| `deno task deploy`               | Build the client and publish it with the Cloudflare Worker; CI runs it, after the checks and tests run here ([deploy skill](./.agents/skills/deploy/SKILL.md))                                                                                                   |
-| `deno task smoke <url>`          | What a deployment must answer, against a running one                                                                                                                                                                                                             |
-| `deno task check`                | Everything: format, rules, types, clippy, the device, the C++, the files made from `spec/`                                                                                                                                                                       |
-| `deno task check:<tree>`         | One tree's: `doc`, `script`, `ts`, `rust`, `xpute`; or the rules, the files made from `spec/`, and `build`, what ships as a deploy makes it                                                                                                                      |
-| `deno task check:diff`           | `check` and `test` over the working tree's changes                                                                                                                                                                                                               |
-| `deno task test`                 | Every test, every workspace member                                                                                                                                                                                                                               |
-| `deno task lint` / `fmt`         | Lint / format                                                                                                                                                                                                                                                    |
+What runs across the trees is the Makefile's (`make -j8 check`, its trees in parallel); a script that runs alone is run by its path.
+
+| Target                                | Description                                                                                                                                                    |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make dev`                            | The client alone, every route delivered by the live deployment                                                                                                 |
+| `make dev-oven`                       | The client and the three servers it talks to, each tile baked when first asked for                                                                             |
+| `make dev-shelf`                      | `dev-oven`, with the tiles taken from the last bakes under `./out`                                                                                             |
+| `make preview`                        | The production bundle, served locally, data from the live deployment                                                                                           |
+| `make preview-oven` / `preview-shelf` | The production bundle over `dev-oven`'s or `dev-shelf`'s servers                                                                                               |
+| `make dev-native`                     | Metro, for the device app                                                                                                                                      |
+| `make spec`                           | Generate Rust and TypeScript from the JSON under `spec/`                                                                                                       |
+| `make deploy`                         | Build the client and publish it with the Cloudflare Worker; CI runs it, after the checks and tests run here ([deploy skill](./.agents/skills/deploy/SKILL.md)) |
+| `make -j8 check`                      | Everything: format, rules, types, clippy, the device, the C++, the files made from `spec/`, the build as a deploy makes it                                     |
+| `make check-<tree>`                   | One tree's: `doc`, `script`, `ts`, `rust`, `xpute`; or `rules`, `spec`, the files made from it, and `build`, what ships                                        |
+| `make -j8 test`                       | Every test: `test-ts`, `test-rust`, `test-xpute`                                                                                                               |
+| `make lint` / `fmt`                   | Lint / format, each tree's                                                                                                                                     |
+
+| Script                                    | Description                                                                                                                                                                                                                                   |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `./script/tool.ts serve <geo\|api\|tile>` | One server: pxl-geo (`/geo`), pxl-api (`/api`), or the dev tile server, baking each tile out of the source when missed                                                                                                                        |
+| `./script/tool.ts bake <kind> [args…]`    | Make a kind's data: `terrain`, `place`, `division` from db-geo into `./out/<kind>/`; `earth` from `infra/earth/` into `./out/earth/`; `star` into the renderer's `bright-star.bin`; `geoid <egm2008-5.pgm>` into `spec/spec/space/geoid.json` |
+| `./script/tool.ts download <what>`        | Fetch a source a tool reads: `pack`, the texture pack's; `moon`; `earth`; `star`                                                                                                                                                              |
+| `./script/tool.ts ingest asset`           | Hash `asset/content/` into `./out/asset`, compose the texture pack, regenerate the asset tables                                                                                                                                               |
+| `./script/tool.ts render brand`           | The symbol's outline both apps bundle, from `ts/client/brand/`; the page's icons and link preview are made by its build                                                                                                                       |
+| `./script/usage.ts`                       | What the deployment has used of its free allowances, before a publish                                                                                                                                                                         |
+| `./ts/app/web/script/publish.ts`          | Declare in the bucket which baked version of each kind clients read; nothing in the tree changes and nothing is deployed                                                                                                                      |
+| `./ts/app/web/script/smoke.ts <url>`      | What a deployment must answer, against a running one                                                                                                                                                                                          |
+| `./script/check-diff.ts`                  | `check` and `test` over the working tree's changes                                                                                                                                                                                            |
+
+The oven's cache and the shelf's sets are files under `./out`, emptied by hand after a re-ingest or a bake change: `rm -rf out/oven`, or `rm -rf out/<kind> out/<kind>.stage out/<kind>.publish` to bake a kind from nothing.
 
 db-geo is filled by each source's `ingest` under `infra/geo/`, run by path as [infra/geo/README.md](./infra/geo/README.md) says: they make a database's state rather than a file the tree keeps.
 
@@ -143,7 +145,7 @@ A development page puts two things in the browser console once the kernel has bo
 
 ### On a device
 
-`ts/app/native` is the device's app: a React Native app, through Expo, that bundles the client, links the kernel in and takes every route from the live deployment. Its bracket is `src/` and the native module under `modules/platform/`. Its native projects are generated by `expo prebuild` from `app.json`, the config plugins and the module under `modules/platform/`, and are not kept. The kernel is built with the app, by a step of its native build (`ts/app/native/script/build-native.ts`): a Debug build's with the kernel's dev settings, a Release build's without, as a deployed page's is. `deno task dev:native` runs Metro, which a Debug build loads its bundle from. Setting a machine up, building, installing and what has gone wrong are the [device-build skill](./.agents/skills/device-build/SKILL.md).
+`ts/app/native` is the device's app: a React Native app, through Expo, that bundles the client, links the kernel in and takes every route from the live deployment. Its bracket is `src/` and the native module under `modules/platform/`. Its native projects are generated by `expo prebuild` from `app.json`, the config plugins and the module under `modules/platform/`, and are not kept. The kernel is built with the app, by a step of its native build (`ts/app/native/script/build-native.ts`): a Debug build's with the kernel's dev settings, a Release build's without, as a deployed page's is. `make dev-native` runs Metro, which a Debug build loads its bundle from. Setting a machine up, building, installing and what has gone wrong are the [device-build skill](./.agents/skills/device-build/SKILL.md).
 
 ---
 
@@ -232,7 +234,7 @@ A crate's root holds its modules, the directories sorted by kind and the one-fil
 
 A leaf sits under its lowest reader: the settings under `view`, the models and decor under `query`, the markers under `scene`, and each tuned number in a `param` beside the lowest part that reads it.
 
-One gitignored tree holds what the tree makes: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and under it `out/oven/` is what `dev:oven` bakes on demand, deleted at no cost. Scratch — logs, probes, diffs — goes in `tmp/`, which ignores itself, and is deleted when done. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
+One gitignored tree holds what the tree makes: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and under it `out/oven/` is what `dev-oven` bakes on demand, deleted at no cost. Scratch — logs, probes, diffs — goes in `tmp/`, which ignores itself, and is deleted when done. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 
 The casing in the tree is not mixed by accident, and React is the line. Below the shell — Rust, the xpute packages, the client's host, abi, namespace and config (`ts/client/src/{host,abi,namespace,config}/`), the brackets and the boot — the code shares one `snake_case` vocabulary across the boundary, a word under its namespace where it can be one: `len`, `new_len`, `bracket.gpu.boot`. What is below hands the shell a value and a way to watch it (`watch_snapshot`, `watch_gpu`), never a hook. The shell, the catalog it shows and the scripts are `camelCase`, as TypeScript is, and React's hooks and components keep React's names wherever they sit (`shell/store/system.ts` wraps what is below). A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
@@ -242,7 +244,7 @@ The casing in the tree is not mixed by accident, and React is the line. Below th
 
 [AGENTS.md](./AGENTS.md) is how to work in the tree, [doc/backlog.md](./doc/backlog.md) what is queued next, and [doc/minutes/](./doc/minutes/) why things went the way they did.
 
-`xpute/` is xpute's repository root, developed here and copied out byte for byte by `xpute/script/export.ts` (`deno task export:xpute`): [xpute/README.md](./xpute/README.md) and [xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) are the system under the application — its memory, rings, turn, handles, contract and wire formats — with `xpute/LICENSE` and `xpute/THIRD_PARTY_NOTICES.md` beside them. Nothing under it names pixelet.
+`xpute/` is xpute's repository root, developed here and copied out byte for byte by `xpute/script/export.ts`: [xpute/README.md](./xpute/README.md) and [xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) are the system under the application — its memory, rings, turn, handles, contract and wire formats — with `xpute/LICENSE` and `xpute/THIRD_PARTY_NOTICES.md` beside them. Nothing under it names pixelet.
 
 ---
 

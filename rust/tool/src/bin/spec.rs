@@ -2,8 +2,8 @@
 
 //! Every file generated from `spec/`, written or checked.
 //!
-//!   deno task spec          # write every generated file
-//!   deno task check:spec    # fail where one on disk is not what its JSON writes
+//!   make spec          # write every generated file
+//!   make check-spec    # fail where one on disk is not what its JSON writes
 
 use std::process::ExitCode;
 use std::thread;
@@ -42,7 +42,7 @@ fn run() -> Result<(), String> {
     let stale: Vec<&str> = stale.iter().map(|o| o.path.as_str()).collect();
     if !stale.is_empty() {
         for s in &stale {
-            eprintln!("spec: {s} is not what its JSON writes — run `deno task spec`");
+            eprintln!("spec: {s} is not what its JSON writes — run `make spec`");
         }
         return Err(format!("{} stale", stale.len()));
     }

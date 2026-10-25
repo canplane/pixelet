@@ -155,7 +155,7 @@ async function upload(record: Served, kind: string): Promise<Kind> {
   try {
     Deno.statSync(dir);
   } catch {
-    die(`${kind}: no ${dir}: run \`deno task bake ${kind}\` (with \`--stage publish\` where it has stages)`);
+    die(`${kind}: no ${dir}: run \`./script/tool.ts bake ${kind}\` (with \`--stage publish\` where it has stages)`);
   }
   // What the version is, fixed with it: the copy as its own manifest says.
   const manifest = JSON.parse(Deno.readTextFileSync(`${dir}/${MANIFEST}`));

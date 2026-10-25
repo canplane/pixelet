@@ -16,7 +16,7 @@
 //
 // The numbers are not decided here either. They are mem.json's, included
 // below rather than copied (pxl-tool/bin/spec.rs writes sys/mem/mem.spec.rs;
-// `deno task check:spec` fails where what is on disk is not what the JSON
+// `make check-spec` fails where what is on disk is not what the JSON
 // writes).
 
 #[path = "../../client/kernel/src/sys/mem/mem.spec.rs"]

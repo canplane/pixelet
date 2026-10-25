@@ -18,7 +18,7 @@ uncommitted change in what ships — the checks read the working tree, and in
 a shared tree another session's edits are in it:
 
 ```bash
-deno task check && deno task test
+make -j8 check && make -j8 test
 ```
 
 Push only if both pass:
@@ -29,17 +29,17 @@ git push origin main:deploy        # --force once main has been rewritten
 
 What `check` runs, a task a tree, side by side:
 
-- `check:doc` — the documents' format.
-- `check:script` — the repository's scripts: format, lint, types.
-- `check:ts` — the TypeScript workspace: format, lint, and the types of
+- `check-doc` — the documents' format.
+- `check-script` — the repository's scripts: format, lint, types.
+- `check-ts` — the TypeScript workspace: format, lint, and the types of
   the page, the device's modules, the Worker and their scripts.
-- `check:rust` — `cargo fmt`, and clippy over the module in both builds,
+- `check-rust` — `cargo fmt`, and clippy over the module in both builds,
   the servers, the tests' code, the bakes and the tools, and both device
   targets.
-- `check:rules` and `check:spec` — the tree's own rules, and the files made
+- `check-rules` and `check-spec` — the tree's own rules, and the files made
   from `spec/` matching it.
-- `check:build` — the bundle and the Worker built as a deploy builds them.
-- `check:xpute` — xpute's own workspace.
+- `check-build` — the bundle and the Worker built as a deploy builds them.
+- `check-xpute` — xpute's own workspace.
 
 `test` is every workspace's tests: the client's, xpute's (its C++ guest
 built for wasm among them) and the crates'.
@@ -53,7 +53,7 @@ A `deploy-web` that fails at `wrangler deploy` says in its last line whether
 plei.me serves the build anyway (wrangler can fail after the Worker went
 out), and `record` logs it so.
 
-While working, `deno task check:diff` runs the checks and tests of what the
+While working, `./script/check-diff.ts` runs the checks and tests of what the
 working tree's changes reach. Before a deploy it is the whole `check` and
 `test`, never the narrowed one.
 
@@ -74,8 +74,8 @@ The client and the servers are already out, and `record` logs the build with
 what the smoke found. Ask again from here:
 
 ```bash
-deno task smoke https://plei.me
-deno task smoke https://api.plei.me --origin    # the VM alone, past the edge
+./ts/app/web/script/smoke.ts https://plei.me
+./ts/app/web/script/smoke.ts https://api.plei.me --origin    # the VM alone, past the edge
 ```
 
 A `/geo/search` 521 that passes on asking again was the stack still

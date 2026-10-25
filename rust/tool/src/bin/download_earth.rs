@@ -1,9 +1,9 @@
 // pxl-tool/bin/download_earth.rs
 
 //! The Earth's picture as NASA gives it, each file `infra/earth/source.json`
-//! names fetched into `infra/earth/raw/`, for `deno task bake earth`.
+//! names fetched into `infra/earth/raw/`, for `./script/tool.ts bake earth`.
 //!
-//!   deno task download earth
+//!   ./script/tool.ts download earth
 
 use std::process::ExitCode;
 

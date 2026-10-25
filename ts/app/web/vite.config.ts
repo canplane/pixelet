@@ -259,7 +259,7 @@ function constEnum(roots: string[]): Plugin {
   };
 }
 
-// Where `deno task dev` points when nothing overrides it: the project's
+// Where `make dev` points when nothing overrides it: the project's
 // own published deployment. VITE_REMOTE_ORIGIN overrides it, and
 // .env.example carries this same value, so the origin is changed there;
 // this constant is only for a checkout that has not copied .env.example to
@@ -444,12 +444,12 @@ export default defineConfig(({ mode }) => {
   const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;
 
   //   delivery (default) — an already-published deployment, so no local
-  //                          API, database or Docker. `deno task dev`, and
+  //                          API, database or Docker. `make dev`, and
   //                          what a deployed build is.
   //   oven               — the servers above, baking on demand.
-  //                          `deno task dev:oven`.
+  //                          `make dev-oven`.
   //   shelf              — the same, the tiles from the last bakes under
-  //                          ./out. `deno task dev:shelf`.
+  //                          ./out. `make dev-shelf`.
   const devSource = env.VITE_DEV_SOURCE || "delivery";
   const delivery = devSource === "delivery";
 
@@ -473,7 +473,7 @@ export default defineConfig(({ mode }) => {
   ]));
 
   return {
-    // Root `deno task dev:oven` runs the three servers and this in one
+    // Root `make dev-oven` runs the three servers and this in one
     // terminal, and Vite's default clearScreen would wipe the whole of it —
     // the servers' output too — on every restart or error.
     clearScreen: false,

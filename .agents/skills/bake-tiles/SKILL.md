@@ -12,12 +12,12 @@ ARCHITECTURE.md's "Making the data"; getting a set into the bucket is
 ## The bakes
 
 ```bash
-deno task bake terrain    # Overture buildings/transportation/base, GEDTM30
-deno task bake place      # Overture places
-deno task bake division   # Overture divisions, leaves at z12
-deno task download earth && deno task bake earth   # the Earth's picture, out/earth/
-deno task bake star       # the Yale catalog's stars (deno task download star first)
-deno task bake geoid egm2008-5.pgm   # EGM2008, into spec/spec/space/geoid.json
+./script/tool.ts bake terrain    # Overture buildings/transportation/base, GEDTM30
+./script/tool.ts bake place      # Overture places
+./script/tool.ts bake division   # Overture divisions, leaves at z12
+./script/tool.ts download earth && ./script/tool.ts bake earth   # the Earth's picture, out/earth/
+./script/tool.ts bake star       # the Yale catalog's stars (./script/tool.ts download star first)
+./script/tool.ts bake geoid egm2008-5.pgm   # EGM2008, into spec/spec/space/geoid.json
 ```
 
 The first four write a tile set, `out/<kind>/`; star and geoid are not tile
@@ -42,11 +42,11 @@ A bake changes its set only through `out/<kind>.stage/`, a shard at a time:
 `leaf` (the named shards' leaves), then `fold`, then `commit`; `publish`, only
 when named, makes `out/<kind>.publish/` for an upload. Every stage can stop and
 run again, and `commit` refuses to run before `fold`. A change of source, code
-or coverage is a purge: `deno task clear:shelf <kind>`, then bake every shard.
+or coverage is a purge: `rm -rf out/<kind> out/<kind>.stage out/<kind>.publish`, then bake every shard.
 
 ```bash
-deno task bake terrain --shard 01033210 --stage leaf
-deno task bake terrain --stage fold --stage commit
+./script/tool.ts bake terrain --shard 01033210 --stage leaf
+./script/tool.ts bake terrain --stage fold --stage commit
 ```
 
 | Flag                | Meaning                                                                       |
@@ -63,7 +63,7 @@ deno task bake terrain --stage fold --stage commit
 2. **Terrain: spot-check against the dev tile server, at more than one zoom.**
    It bakes a missed tile with the same functions, but packs at zstd's quick
    level, so compare the decompressed packets, not the objects. Run
-   `deno task dev:tile` — not `dev`, which proxies every route to the live
+   `./script/tool.ts serve tile` — not `dev`, which proxies every route to the live
    deployment:
 
    ```bash
@@ -85,10 +85,10 @@ deno task bake terrain --stage fold --stage commit
 ## Versions
 
 **Every bake is a new version name**, whatever made it, and a published version
-is never rewritten: going back is `deno task publish serve <kind> <version>`.
+is never rewritten: going back is `./ts/app/web/script/publish.ts serve <kind> <version>`.
 Only a change to how the client reads a tile — its format in `pxl-spec bake/` —
 bumps the kind's `FORMAT` (`spec/spec/bake/published.json`).
 
 The dev tile server keeps what it baked on demand under `out/oven/` across
-restarts. After a re-ingest or a bake change, run `deno task clear:oven`, or it
+restarts. After a re-ingest or a bake change, run `rm -rf out/oven`, or it
 serves the old tiles.

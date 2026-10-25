@@ -643,8 +643,8 @@ In development the same bake runs on demand, every layer the same way (`demand/p
 
 | Task        | Tiles                         |
 | ----------- | ----------------------------- |
-| `dev:oven`  | baked on demand               |
-| `dev:shelf` | the last bakes                |
+| `dev-oven`  | baked on demand               |
+| `dev-shelf` | the last bakes                |
 | `dev`       | from the published deployment |
 
 ## Publishing
@@ -653,7 +653,7 @@ A version reaches the client through one private bucket that only the Worker rea
 
 ## Catalogs and assets
 
-Everything a build ships is decided at build time, as JSON under `spec/`, from the commands and catalogs to the settings schema and the published versions. `pxl-tool` writes a Rust module from each file, and a TypeScript one where the shell reads it; `check:spec` fails when the tree disagrees.
+Everything a build ships is decided at build time, as JSON under `spec/`, from the commands and catalogs to the settings schema and the published versions. `pxl-tool` writes a Rust module from each file, and a TypeScript one where the shell reads it; `check-spec` fails when the tree disagrees.
 
 A catalog is never sent, because both sides compile it. Where bytes cross, as a tile or a saved blob, the layout is the model's, and the version is in a tile's URL, which the client picks from the declaration, or a kept file's format byte.
 

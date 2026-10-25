@@ -136,7 +136,7 @@ sql psql -v ON_ERROR_STOP=1 -c "ANALYZE overture_places; ANALYZE overture_divisi
 rm ~/overture.dump
 ```
 
-`deno task smoke https://api.plei.me --origin` checks the result.
+`./ts/app/web/script/smoke.ts https://api.plei.me --origin` checks the result.
 
 ## 4. Cloudflare
 
@@ -155,7 +155,7 @@ free plan, which fails closed at 100k requests a day, so no read can bill.
 A paid Workers plan, the `r2.dev` URL or a custom domain on the bucket breaks
 that ([deployment hosting](../doc/minutes/20260816-deployment-hosting.md)).
 Writes are outside it, and nothing configures a spending cap: a publish is a
-pyramid's worth of Class A operations, so `deno task usage` comes before one.
+pyramid's worth of Class A operations, so `./script/usage.ts` comes before one.
 
 The bucket, `pixelet-tiles`, holds everything the client fetches that is not the app itself:
 
@@ -169,7 +169,7 @@ The bucket, `pixelet-tiles`, holds everything the client fetches that is not the
 | `source`                | the source's declaration, JSON                  | fixed name               | mutable; written by `publish`, `no-cache`, revalidated each boot |
 | `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's number job, never by hand     |
 | `_meta/build-log.jsonl` | a line a published build                        | fixed name               | appended by CI's `record` (`script/build-log.ts`)                |
-| `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number             | written by `deno task deploy` under a build number; never served |
+| `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number             | written by `make deploy` under a build number; never served      |
 
 A tile's name is its Morton key, so the same name under two kinds is the same ground, and one prefix is one region across every kind at every zoom. Every object is uploaded `public, max-age=31536000, immutable`, so a new version is a new prefix and no cache needs purging.
 
@@ -178,13 +178,13 @@ answers `/tile/*`, under its path less the root, and `/asset/*`, under its
 path; `/geo/*` and `/api/*` go to `GEO_ORIGIN` and `API_ORIGIN` unchanged.
 No path is rewritten anywhere. A route outside a root is unreachable in
 production — the app's fallback answers it with `index.html`, which looks
-like the app loading, not like a missing route. Locally `deno task dev:oven`
+like the app loading, not like a missing route. Locally `make dev-oven`
 runs pxl-geo on 3000, the tile server on 3001 and pxl-api on 3002, and the
 dev proxy splits on the same roots.
 
 **Deploying the client** is CI's (§5); by hand it is the script CI runs.
-Neither checks or tests anything, so first `deno task check` and
-`deno task test` pass over the commit
+Neither checks or tests anything, so first `make -j8 check` and
+`make -j8 test` pass over the commit
 ([the deploy skill](../.agents/skills/deploy/SKILL.md)), and the servers it
 talks to are already deployed (§3), since a new client against an old server
 is the direction that breaks. A hand deploy takes no number and goes out
@@ -192,9 +192,9 @@ unnumbered.
 
 ```sh
 wrangler login           # once a machine
-deno task check && deno task test
-deno task deploy         # build, publish
-deno task smoke https://plei.me
+make -j8 check && make -j8 test
+make deploy         # build, publish
+./ts/app/web/script/smoke.ts https://plei.me
 ```
 
 A deploy uploads only
@@ -210,7 +210,7 @@ skill's "Verify what is served".
 never on main: main carries work between machines, compiling or not. A push
 that changes only markdown runs nothing, and a dispatch against any other ref
 does nothing. **Publishing is `git push origin main:deploy`**, forced once
-main has been rewritten, after `deno task check` and `deno task test` pass
+main has been rewritten, after `make -j8 check` and `make -j8 test` pass
 here: CI checks and tests nothing
 ([the deploy skill](../.agents/skills/deploy/SKILL.md)). Why each job is as
 it is lives in the workflow's comments.
@@ -219,8 +219,8 @@ it is lives in the workflow's comments.
 | :-------------- | :-------------------- | :------------------------------------------------------------------------------------------------------ |
 | `number`        | every push to deploy  | takes a build number                                                                                    |
 | `deploy-server` | after `number`        | ssh, `infra/prod/deploy.sh`: reset to the run's commit, `docker compose up -d --build --force-recreate` |
-| `deploy-web`    | after `deploy-server` | `deno task deploy` under the build number: builds, keeps the panic paths, publishes                     |
-| `smoke`         | after both deployed   | `deno task smoke https://plei.me`                                                                       |
+| `deploy-web`    | after `deploy-server` | `make deploy` under the build number: builds, keeps the panic paths, publishes                          |
+| `smoke`         | after both deployed   | `./ts/app/web/script/smoke.ts https://plei.me`                                                          |
 | `record`        | after either deployed | appends the build to the log                                                                            |
 
 A deploy is whole: the client and the servers go out from the one commit,

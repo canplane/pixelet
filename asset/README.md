@@ -27,12 +27,12 @@ asset/
 ## What to run, and when
 
 Each is a binary of `pxl-tool` (`rust/tool`), run by a task, and
-`deno task check` clippies and tests every one with the rest.
+`make -j8 check` clippies and tests every one with the rest.
 
 ### After changing anything under `content/`
 
 ```sh
-deno task ingest:asset
+./script/tool.ts ingest asset
 ```
 
 It copies every file to `./out/asset/<sha256>.<ext>`, composes the texture
@@ -50,7 +50,7 @@ bucket is a 404 on the live site. Uploading is the `publish-bucket` skill.
 ### After changing which texture pack is used
 
 ```sh
-deno task download pack
+./script/tool.ts download pack
 ```
 
 It fetches each entry of `raw/cube/manifest.json` into `raw/cube/` at source
@@ -62,7 +62,7 @@ Run the ingest afterward: the sheet's key changes with any tile.
 ### After changing the Moon's map
 
 ```sh
-deno task download moon
+./script/tool.ts download moon
 ```
 
 It fetches the CGI Moon Kit's 1K color map into `raw/sky/moon/`, cuts the near

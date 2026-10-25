@@ -200,7 +200,7 @@ jobs:
         # deploy.ts says `published`: true once wrangler finishes, and where it
         # fails, whether the site serves this build all the same.
         id: deploy
-        run: deno task deploy
+        run: make deploy
 
   # What plei.me answers is the two deploys composed, so it is asked once both
   # have settled rather than from inside either. One of its checks,
@@ -219,7 +219,7 @@ jobs:
         with:
           deno-version-file: .tool-versions
       - name: Smoke-test the published routes
-        run: deno task smoke https://plei.me
+        run: ./ts/app/web/script/smoke.ts https://plei.me
 
   # The one thing the repository could not answer about itself: what went out
   # in a given build. The counter is an object in the bucket and deliberately

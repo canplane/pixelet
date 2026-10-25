@@ -12,14 +12,14 @@ until it is prebuilt. Each platform's build runs
 builds it ahead.
 
 A **Release** build embeds the JavaScript bundle and runs without Metro. A
-**Debug** build loads it from Metro (`deno task dev:native`) on port 8081, and
+**Debug** build loads it from Metro (`make dev-native`) on port 8081, and
 only one Metro can hold the port — check that the running one serves the tree
 you mean before trusting what a Debug build shows.
 
 Before a Release, bring the build number up to date:
 
 ```bash
-deno task sync:build-number
+make sync-build-number
 ```
 
 ## iOS
