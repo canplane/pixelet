@@ -3,7 +3,7 @@
   // client, the shell and the host the same files on a page and on a device,
   // and each app, a bracket, that bundles it (app/web, app/native). A
   // package's own scripts sit beside its src/ (build/, app/web/script/).
-  // What runs across the languages is the repository root's (../deno.jsonc).
+  // What runs across the languages is the repository root's (../Makefile).
   "workspace": [
     "client",
     // What the bundlers and the build scripts read the workspace through:
