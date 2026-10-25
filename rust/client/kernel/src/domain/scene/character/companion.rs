@@ -130,7 +130,7 @@ impl Figure {
         if self.held.is_some() {
             return;
         }
-        let (Some(model), Some(_)) = (model_of(variant.model, Some(variant.height_u)), load_image(Load::Asset(variant.skin))) else {
+        let (Some(model), Some(_)) = (model_of(variant.model, Some(variant.height_u)), load_image(Load::File(variant.skin))) else {
             return;
         };
         let Some(Some(actor)) = section::map().map(|_| Actor::new(draw_list(), crate::domain::query::model::models(), model.model)) else {
@@ -415,7 +415,7 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, (u32, &'static [u8]))> {
     [&c.person, &c.pet]
         .into_iter()
         .flatten()
-        .filter_map(|w| Some((w.held.as_ref()?.model.model, load_image(Load::Asset(w.variant.skin))?)))
+        .filter_map(|w| Some((w.held.as_ref()?.model.model, load_image(Load::File(w.variant.skin))?)))
 }
 
 /// `world`'s step-slide from `from`, its floor at `stands`, toward `to`:

@@ -5,7 +5,7 @@
 //! (`domain/query/decor/strike.rs`) and the renderer read the same mesh. A
 //! skin is the load cache's (`load_image`), asked of it where read.
 
-use pxl_spec::asset::ingested::Asset;
+use pxl_spec::asset::ingested::File;
 
 use crate::domain::query::model::asset::{model_of, registered};
 use crate::sys::io::loader::load_image;
@@ -13,8 +13,8 @@ use crate::sys::load::Load;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_spec::asset::decor::{Decor, DECORS};
 
-/// One per asset: two decors naming the same model reach one (`model_of`).
-pub const MODELS_MAX: usize = Asset::ALL.len();
+/// One per file: two decors naming the same model reach one (`model_of`).
+pub const MODELS_MAX: usize = File::ALL.len();
 
 /// Asks for each variant's model, a turn's effect: registers the first one
 /// that has landed and is not registered yet, and asks another turn for the
@@ -34,5 +34,5 @@ pub fn decor_model(decor: &Decor, variant: usize) -> Option<u32> {
 /// A variant's skin as the renderer takes it (`load_image`); none while it
 /// loads.
 pub fn decor_skin(decor: &Decor, variant: usize) -> Option<(u32, &'static [u8])> {
-    load_image(Load::Asset(decor.variants.get(variant)?.skin))
+    load_image(Load::File(decor.variants.get(variant)?.skin))
 }

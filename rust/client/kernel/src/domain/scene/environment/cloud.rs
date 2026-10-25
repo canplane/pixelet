@@ -16,7 +16,7 @@ use fnv::FnvHashMap;
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
-use pxl_spec::asset::ingested::Asset;
+use pxl_spec::asset::ingested::File;
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
@@ -39,7 +39,7 @@ use crate::sys::io::loader::load_image;
 use crate::sys::load::Load;
 
 /// Its models, a cloud each one of them.
-const VARIANTS: [Asset; cumulus::models.len()] = cumulus::models;
+const VARIANTS: [File; cumulus::models.len()] = cumulus::models;
 
 pub const MODELS_MAX: usize = VARIANTS.len();
 
@@ -103,19 +103,19 @@ fn clouds() -> &'static mut Clouds {
 /// Each variant's draw group: its mesh, 0 while it loads, its skin and its extent.
 pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<pxl_render::gpu::api::Image>, [f32; 3])> {
     let models = crate::domain::query::model::models();
-    let skin = load_image(Load::Asset(cumulus::skin));
-    clouds().models.iter().zip(VARIANTS).enumerate().map(move |(k, (m, asset))| {
+    let skin = load_image(Load::File(cumulus::skin));
+    clouds().models.iter().zip(VARIANTS).enumerate().map(move |(k, (m, file))| {
         let mesh = m.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle);
-        (FIRST_GROUP + k, mesh, skin, extent(asset).map(|e| e as f32))
+        (FIRST_GROUP + k, mesh, skin, extent(file).map(|e| e as f32))
     })
 }
 
-fn extent(asset: Asset) -> [f64; 3] {
-    asset.ingested().extent.unwrap_or([0.0; 3])
+fn extent(file: File) -> [f64; 3] {
+    file.ingested().extent.unwrap_or([0.0; 3])
 }
 
-fn widest(asset: Asset) -> f64 {
-    extent(asset).into_iter().fold(0.0, f64::max)
+fn widest(file: File) -> f64 {
+    extent(file).into_iter().fold(0.0, f64::max)
 }
 
 /// The layer's height over the datum, in units, as the sky draws it.
@@ -151,9 +151,9 @@ pub fn clouds_shown() -> f64 {
 pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     let c = clouds();
     c.seen = f64::INFINITY;
-    for (slot, asset) in c.models.iter_mut().zip(VARIANTS) {
+    for (slot, file) in c.models.iter_mut().zip(VARIANTS) {
         if slot.is_none() {
-            *slot = model_of(asset, None).map(|h| h.model);
+            *slot = model_of(file, None).map(|h| h.model);
         }
     }
     let Some(eye) = eye() else { return };
@@ -267,10 +267,10 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
         let jitter = [hash(SALT + 1), hash(SALT + 2)];
         let local = [(f64::from(i) + 0.25 + 0.5 * jitter[0]) * CELL, (f64::from(j) + 0.25 + 0.5 * jitter[1]) * CELL];
         let variant = ((hash(SALT + 4) * VARIANTS.len() as f64) as usize).min(VARIANTS.len() - 1);
-        let asset = VARIANTS[variant];
+        let file = VARIANTS[variant];
         let width = WIDTH[0] + (WIDTH[1] - WIDTH[0]) * hash(SALT + 3);
-        let scale = width / widest(asset);
-        let height = extent(asset)[2] * scale;
+        let scale = width / widest(file);
+        let height = extent(file)[2] * scale;
         Some(Cloud {
             variant,
             local,
@@ -288,7 +288,7 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
 fn built(b: &Block) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     // SAFETY: the block's bytes, held until it goes, which is after this turn reads them.
     let words: &[u32] = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(b.at as usize), b.bytes as usize / 4) };
-    lane::groups(words).zip(VARIANTS).flat_map(move |((first, n), asset)| {
+    lane::groups(words).zip(VARIANTS).flat_map(move |((first, n), file)| {
         let lane = GroupLanes {
             first: first as usize,
             count: n as usize,
@@ -296,8 +296,8 @@ fn built(b: &Block) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
         (0..n as usize).map(move |i| {
             let at = |k: usize| f64::from(f32::from_bits(words[lane.f32_at(k, i)]));
             let scale = at(4);
-            let side = widest(asset) * scale / 2.0;
-            ([at(0), at(1), at(2)], [side, side, extent(asset)[2] * scale / 2.0])
+            let side = widest(file) * scale / 2.0;
+            ([at(0), at(1), at(2)], [side, side, extent(file)[2] * scale / 2.0])
         })
     })
 }

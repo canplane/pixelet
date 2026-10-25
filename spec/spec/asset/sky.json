@@ -11,11 +11,11 @@
       "Quaternius, CC0."
     ],
     "models": {
-      "$type": "crate::asset::ingested::Asset",
+      "$type": "crate::asset::ingested::File",
       "$value": ["sky/cloud/cumulus_1.glb", "sky/cloud/cumulus_2.glb", "sky/cloud/stratus.glb"]
     },
     "skin": {
-      "$type": "crate::asset::ingested::Asset",
+      "$type": "crate::asset::ingested::File",
       "$value": "sky/cloud/white.png"
     }
   },
@@ -24,7 +24,7 @@
       "The Moon's near side, the picture the sky draws it with (NASA)."
     ],
     "picture": {
-      "$type": "crate::asset::ingested::Asset",
+      "$type": "crate::asset::ingested::File",
       "$value": "sky/moon.png"
     }
   }

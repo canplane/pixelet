@@ -564,7 +564,7 @@ fn ground_looks() -> Result<Vec<(String, u32)>, String> {
 /// (how the ground grows each one, its looks, its boxes), in pxl-spec its
 /// models over that row.
 fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec<String>), String> {
-    const ASSET: &str = "crate::asset::ingested::Asset";
+    const FILE: &str = "crate::asset::ingested::File";
     let scatter = spec.get("scatter").ok_or(format!("{DECOR_JSON}: no scatter"))?;
     let whole = |key: &str| {
         scatter
@@ -621,7 +621,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             match (v.str_at("model"), v.str_at("skin"), size.flatten()) {
                 (Some(m), Some(s), Some(size)) if size.iter().all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u16::MAX)) => {
                     sizes.push(format!("[{}]", size.iter().map(|&n| js_num(n)).collect::<Vec<_>>().join(", ")));
-                    models.push(format!("Variant {{ model: {ASSET}::{}, skin: {ASSET}::{} }}", rs_ident(m), rs_ident(s)));
+                    models.push(format!("Variant {{ model: {FILE}::{}, skin: {FILE}::{} }}", rs_ident(m), rs_ident(s)));
                 }
                 _ => return Err(at("variants")),
             }
@@ -737,8 +737,8 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         "/// A model and its pack's colormap.",
         "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
         "pub struct Variant {",
-        "    pub model: crate::asset::ingested::Asset,",
-        "    pub skin: crate::asset::ingested::Asset,",
+        "    pub model: crate::asset::ingested::File,",
+        "    pub skin: crate::asset::ingested::File,",
         "}",
         "",
         "/// A decor: its id, its row (how the ground grows it and the boxes its",

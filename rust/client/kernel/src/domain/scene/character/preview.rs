@@ -98,7 +98,7 @@ pub fn preview_step(ctx: &mut TickContext) {
             case.model = model_of(case.variant.model, Some(case.variant.height_u));
         }
         if case.actor.is_none() {
-            if let (Some(model), Some(_)) = (&case.model, load_image(Load::Asset(case.variant.skin))) {
+            if let (Some(model), Some(_)) = (&case.model, load_image(Load::File(case.variant.skin))) {
                 let id = model.model;
                 case.actor = section::map().and_then(|_| Actor::new(draw_list(), crate::domain::query::model::models(), id));
                 if let (Some(actor), true) = (case.actor.as_mut(), IDLE_CLIP < model.clip_count) {
@@ -150,5 +150,5 @@ pub fn preview_rows() -> impl Iterator<Item = (u32, u32, (u32, &'static [u8]))> 
     let c: &'static _ = cases();
     c.cases
         .iter()
-        .filter_map(|case| Some((case.id, case.actor.as_ref()?.palette(), load_image(Load::Asset(case.variant.skin))?)))
+        .filter_map(|case| Some((case.id, case.actor.as_ref()?.palette(), load_image(Load::File(case.variant.skin))?)))
 }

@@ -131,8 +131,8 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         decor: &decor,
         skins: &skins[..skin_cnt],
         cases: &cases[..case_cnt],
-        pack: || load_image(Load::Asset(pxl_spec::asset::ingested::PACK.image)),
-        moon: || load_image(Load::Asset(pxl_spec::asset::sky::moon::picture)),
+        pack: || load_image(Load::File(pxl_spec::asset::ingested::PACK.image)),
+        moon: || load_image(Load::File(pxl_spec::asset::sky::moon::picture)),
         earth: || load_image(EARTH),
         earth_tiles: EarthTiles {
             window,

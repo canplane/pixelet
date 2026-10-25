@@ -18,15 +18,15 @@
 /// cloud one of its models (pxl-kernel domain/scene/environment/cloud.rs).
 /// Quaternius, CC0.
 pub mod cumulus {
-    pub const models: [crate::asset::ingested::Asset; 3] = [
-        crate::asset::ingested::Asset::sky_cloud_cumulus_1_glb,
-        crate::asset::ingested::Asset::sky_cloud_cumulus_2_glb,
-        crate::asset::ingested::Asset::sky_cloud_stratus_glb,
+    pub const models: [crate::asset::ingested::File; 3] = [
+        crate::asset::ingested::File::sky_cloud_cumulus_1_glb,
+        crate::asset::ingested::File::sky_cloud_cumulus_2_glb,
+        crate::asset::ingested::File::sky_cloud_stratus_glb,
     ];
-    pub const skin: crate::asset::ingested::Asset = crate::asset::ingested::Asset::sky_cloud_white_png;
+    pub const skin: crate::asset::ingested::File = crate::asset::ingested::File::sky_cloud_white_png;
 }
 
 /// The Moon's near side, the picture the sky draws it with (NASA).
 pub mod moon {
-    pub const picture: crate::asset::ingested::Asset = crate::asset::ingested::Asset::sky_moon_png;
+    pub const picture: crate::asset::ingested::File = crate::asset::ingested::File::sky_moon_png;
 }

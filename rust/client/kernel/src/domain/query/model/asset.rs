@@ -11,7 +11,7 @@ use fnv::FnvHashMap;
 
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
 use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
-use pxl_spec::asset::ingested::Asset;
+use pxl_spec::asset::ingested::File;
 use pxl_spec::space::coord::mat4;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
@@ -35,40 +35,40 @@ const IDENTITY: [f32; 16] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1
 /// A model as registered, or as the heap refused it room.
 type Registration = Result<ModelHandle, Refused>;
 
-/// Each asset by the height it was asked at, its bits.
-static REGISTERED: Global<Vec<(Asset, Option<u64>, Registration)>> = Global::new();
+/// Each file by the height it was asked at, its bits.
+static REGISTERED: Global<Vec<(File, Option<u64>, Registration)>> = Global::new();
 
-/// `asset` registered `height_u` units tall, or at its own size when None,
+/// `file` registered `height_u` units tall, or at its own size when None,
 /// once. None while it loads, and while the heap refuses it room: a refusal
 /// is a wait, not a failure, asked again once the heap gives some back.
-pub fn model_of(asset: Asset, height_u: Option<f64>) -> Option<ModelHandle> {
+pub fn model_of(file: File, height_u: Option<f64>) -> Option<ModelHandle> {
     let (registered, key) = (REGISTERED.get(Vec::new), height_u.map(f64::to_bits));
-    let at = row_of(asset, height_u);
+    let at = row_of(file, height_u);
     match at.map(|at| &registered[at].2) {
         Some(Ok(handle)) => return Some(handle.clone()),
         Some(Err(refused)) if !refused.over() => return None,
         _ => {}
     }
-    let gltf = load_gltf(Load::Asset(asset))?;
+    let gltf = load_gltf(Load::File(file))?;
     let entry = register_model(&gltf, height_u).ok_or_else(Refused::now);
     match at {
         Some(at) => registered[at].2 = entry.clone(),
-        None => registered.push((asset, key, entry.clone())),
+        None => registered.push((file, key, entry.clone())),
     }
     entry.ok()
 }
 
-/// `asset` as `model_of` registered it at `height_u`, asking nothing: what a
+/// `file` as `model_of` registered it at `height_u`, asking nothing: what a
 /// reader that must not load, such as the query, finds; none while it is
 /// not registered.
-pub fn registered(asset: Asset, height_u: Option<f64>) -> Option<ModelHandle> {
-    REGISTERED.get(Vec::new)[row_of(asset, height_u)?].2.clone().ok()
+pub fn registered(file: File, height_u: Option<f64>) -> Option<ModelHandle> {
+    REGISTERED.get(Vec::new)[row_of(file, height_u)?].2.clone().ok()
 }
 
-/// Where `asset` at `height_u` is in the table, once asked.
-fn row_of(asset: Asset, height_u: Option<f64>) -> Option<usize> {
+/// Where `file` at `height_u` is in the table, once asked.
+fn row_of(file: File, height_u: Option<f64>) -> Option<usize> {
     let key = height_u.map(f64::to_bits);
-    REGISTERED.get(Vec::new).iter().position(|(a, h, _)| *a == asset && *h == key)
+    REGISTERED.get(Vec::new).iter().position(|(a, h, _)| *a == file && *h == key)
 }
 
 /// At its own size when `height_u` is None; None when it has no mesh or the

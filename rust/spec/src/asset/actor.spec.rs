@@ -97,21 +97,21 @@ pub mod groups {
             pub const male_5: u8 = 10;
             pub const male_6: u8 = 11;
         }
-        pub const models: [crate::asset::ingested::Asset; 12] = [
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_female_a_glb,
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_female_b_glb,
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_female_c_glb,
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_female_d_glb,
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_female_e_glb,
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_female_f_glb,
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_male_a_glb,
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_male_b_glb,
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_male_c_glb,
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_male_d_glb,
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_male_e_glb,
-            crate::asset::ingested::Asset::actor_kenney_mini_characters_male_f_glb,
+        pub const models: [crate::asset::ingested::File; 12] = [
+            crate::asset::ingested::File::actor_kenney_mini_characters_female_a_glb,
+            crate::asset::ingested::File::actor_kenney_mini_characters_female_b_glb,
+            crate::asset::ingested::File::actor_kenney_mini_characters_female_c_glb,
+            crate::asset::ingested::File::actor_kenney_mini_characters_female_d_glb,
+            crate::asset::ingested::File::actor_kenney_mini_characters_female_e_glb,
+            crate::asset::ingested::File::actor_kenney_mini_characters_female_f_glb,
+            crate::asset::ingested::File::actor_kenney_mini_characters_male_a_glb,
+            crate::asset::ingested::File::actor_kenney_mini_characters_male_b_glb,
+            crate::asset::ingested::File::actor_kenney_mini_characters_male_c_glb,
+            crate::asset::ingested::File::actor_kenney_mini_characters_male_d_glb,
+            crate::asset::ingested::File::actor_kenney_mini_characters_male_e_glb,
+            crate::asset::ingested::File::actor_kenney_mini_characters_male_f_glb,
         ];
-        pub const skin: crate::asset::ingested::Asset = crate::asset::ingested::Asset::actor_kenney_mini_characters_colormap_png;
+        pub const skin: crate::asset::ingested::File = crate::asset::ingested::File::actor_kenney_mini_characters_colormap_png;
         /// The catch-up/preview move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
@@ -212,33 +212,33 @@ pub mod groups {
             pub const polar: u8 = 22;
             pub const tiger: u8 = 23;
         }
-        pub const models: [crate::asset::ingested::Asset; 24] = [
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_beaver_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_bee_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_bunny_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_cat_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_caterpillar_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_chick_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_cow_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_crab_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_deer_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_dog_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_elephant_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_fish_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_fox_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_giraffe_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_hog_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_koala_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_lion_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_monkey_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_panda_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_parrot_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_penguin_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_pig_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_polar_glb,
-            crate::asset::ingested::Asset::actor_kenney_cube_pets_tiger_glb,
+        pub const models: [crate::asset::ingested::File; 24] = [
+            crate::asset::ingested::File::actor_kenney_cube_pets_beaver_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_bee_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_bunny_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_cat_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_caterpillar_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_chick_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_cow_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_crab_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_deer_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_dog_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_elephant_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_fish_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_fox_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_giraffe_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_hog_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_koala_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_lion_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_monkey_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_panda_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_parrot_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_penguin_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_pig_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_polar_glb,
+            crate::asset::ingested::File::actor_kenney_cube_pets_tiger_glb,
         ];
-        pub const skin: crate::asset::ingested::Asset = crate::asset::ingested::Asset::actor_kenney_cube_pets_colormap_png;
+        pub const skin: crate::asset::ingested::File = crate::asset::ingested::File::actor_kenney_cube_pets_colormap_png;
         /// The catch-up/preview move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".

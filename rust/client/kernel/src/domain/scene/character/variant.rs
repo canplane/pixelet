@@ -3,7 +3,7 @@
 //! The characters a player can be, as the actor kind's catalog lists them
 //! (`spec/spec/asset/actor.json`).
 
-use pxl_spec::asset::ingested::Asset;
+use pxl_spec::asset::ingested::File;
 
 use pxl_spec::asset::actor::groups::{person, pet};
 pub use pxl_spec::asset::actor::Group;
@@ -13,8 +13,8 @@ pub struct CharacterVariant {
     pub group: Group,
     /// As the settings store holds it.
     pub number: u8,
-    pub model: Asset,
-    pub skin: Asset,
+    pub model: File,
+    pub skin: File,
     /// The on-screen height in units: a cell for the person, a quarter for the pet.
     pub height_u: f64,
     /// The walk clip, by its animation's index.
