@@ -9,10 +9,10 @@
 // order. pxl-spec asset/decor.spec.rs adds their models over each row.
 #![allow(non_camel_case_types)]
 
-/// The Poisson process every decor is scattered by: a block of `block` cells a
+/// The Poisson process every decor is scattered by: a patch of `patch` cells a
 /// side at the zoom its candidates are born at, a zoom keeping one in `kept`
 /// of the next finer's.
-pub const BLOCK: u32 = 16;
+pub const PATCH: u32 = 16;
 pub const KEPT: u32 = 4;
 
 /// The most variants a decor has.
@@ -29,7 +29,7 @@ pub enum Orientation {
     along_transport,
 }
 
-/// A block's Poisson count as thresholds on a u32 draw: the k-th is
+/// A patch's Poisson count as thresholds on a u32 draw: the k-th is
 /// ⌈P(N ≤ k) · 2^32⌉, as many as fall under 2^32, and a draw bears as many as
 /// it reaches (pxl-spec-core scatter.rs `Counts::of`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,7 +48,7 @@ pub struct Decor {
     pub value: u32,
     /// Its scatter: changing it reshuffles every one the ground grows.
     pub seed: u32,
-    /// A block's counts, born at the top zoom and born finer.
+    /// A patch's counts, born at the top zoom and born finer.
     pub counts: [Counts; 2],
     pub orientation: Orientation,
     /// The looks it may stand on, a bit each.

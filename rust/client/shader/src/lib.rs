@@ -25,7 +25,7 @@ use pxl_spec_core::ground;
 use pxl_spec_core::lattice::GROUND;
 use pxl_spec_core::overwrite::{self, Cut, Lanes};
 use pxl_spec_core::ways;
-use pxl_spec_core::scatter::{self, drawn, Grounds, SQUARE_BLOCKS, SQUARE_GROWN};
+use pxl_spec_core::scatter::{self, drawn, Grounds, SQUARE_GROWN, SQUARE_PATCHES};
 use pxl_spec_core::window::{self, Squares, FIRST_CELL, SLOTS, SQUARE, SQUARE_CELLS, SQUARE_SHIFT, SQUARE_WORDS};
 use pxl_spec_core::window::Found;
 use pxl_spec_core::world::At;
@@ -1842,8 +1842,8 @@ pub fn decor_mark_cs(
 }
 
 /// Decor the ground grows in a slot `decor_mark_cs` listed, one candidate a
-/// thread: `x` its index in its block, `y` the block among those meeting the
-/// slot's square (pxl-spec-core `scatter::block_of`), `z` the slot and decor
+/// thread: `x` its index in its patch, `y` the patch among those meeting the
+/// slot's square (pxl-spec-core `scatter::patch_of`), `z` the slot and decor
 /// listed. Each one that stands, stands on its cell and grows there
 /// (`scatter::stands`, `grown`) is added to the slot's records
 /// (`scatter::record_at`), naming the slot's window zoom, the one it is
@@ -1866,7 +1866,7 @@ pub fn decor_cs(
     let listed = at(grows, scatter::GROWS_AT + id.z);
     let (square, j) = (listed & 0xffff, listed >> 16);
     let cell = window::eye_cell(square / SLOTS);
-    if id.x >= COUNTS as u32 || id.y >= SQUARE_BLOCKS {
+    if id.x >= COUNTS as u32 || id.y >= SQUARE_PATCHES {
         return;
     }
     let held = at(window, square);
@@ -2037,19 +2037,19 @@ pub fn decor_place_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] grown: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] regions: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] block: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] instances: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] window: &[IVec4],
 ) {
     let (first, count) = records(grown, window, group.x);
     let mut k = lane.x;
     while k < count {
-        place_one(params, rows, grown, regions, block, scatter::record_at(first + k).0 as usize);
+        place_one(params, rows, grown, regions, instances, scatter::record_at(first + k).0 as usize);
         k += RECORD_LANES;
     }
 }
 
 /// `decor_place_cs` for the record at word `i`.
-fn place_one(params: &[u32], rows: &[Decor], grown: &[u32], regions: &mut [u32], block: &mut [u32], i: usize) {
+fn place_one(params: &[u32], rows: &[Decor], grown: &[u32], regions: &mut [u32], instances: &mut [u32], i: usize) {
     if i + 4 >= grown.len() {
         return;
     }
@@ -2062,7 +2062,7 @@ fn place_one(params: &[u32], rows: &[Decor], grown: &[u32], regions: &mut [u32],
     let slot = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut regions[(drawn::REGIONS + region) as usize], 1) };
     let (decor, variant, turn, _) = scatter::record_of(w);
     let [across, deep, _] = rows[decor as usize].cells(variant, turn);
-    let room = block.len() as u32 / (drawn::LANES + 1);
+    let room = patch.len() as u32 / (drawn::LANES + 1);
     if slot >= room {
         return;
     }
@@ -2074,10 +2074,10 @@ fn place_one(params: &[u32], rows: &[Decor], grown: &[u32], regions: &mut [u32],
     let sink = grown[i + 4] as f32 / (1 << pxl_spec_core::FRAC_W) as f32;
     let z = (grown[i + 3] as i32).wrapping_sub(params[anchor + 2] as i32) as f32 - sink;
     let (room, slot) = (room as usize, slot as usize);
-    block[slot] = x.to_bits();
-    block[room + slot] = y.to_bits();
-    block[2 * room + slot] = z.to_bits();
-    block[3 * room + slot] = ((turn % 4) as f32 * core::f32::consts::FRAC_PI_2).to_bits();
-    block[4 * room + slot] = 1.0f32.to_bits();
-    block[drawn::LANES as usize * room + slot] = slot as u32;
+    instances[slot] = x.to_bits();
+    instances[room + slot] = y.to_bits();
+    instances[2 * room + slot] = z.to_bits();
+    instances[3 * room + slot] = ((turn % 4) as f32 * core::f32::consts::FRAC_PI_2).to_bits();
+    instances[4 * room + slot] = 1.0f32.to_bits();
+    instances[drawn::LANES as usize * room + slot] = slot as u32;
 }

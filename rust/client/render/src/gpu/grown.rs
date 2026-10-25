@@ -14,7 +14,7 @@
 
 use pxl_spec_core::decor::{COUNTS, DECORS};
 use pxl_spec_core::eye;
-use pxl_spec_core::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
+use pxl_spec_core::scatter::{self, drawn, GROUPS, SQUARE_PATCHES};
 
 use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::record::compute;
@@ -246,7 +246,7 @@ impl Grown {
             g.write_buffer(self.marks, 0, bytes(&[u32::from(self.stale), grows.filled, self.marked as u32, 0]));
             g.write_buffer(self.marks, scatter::MARKS_AT * 4, bytes(self.held[..self.marked].as_flattened()));
             let w = compute::DECOR_WORKGROUP;
-            g.write_buffer(self.grows, 0, bytes(&[(COUNTS as u32).div_ceil(w[0]), SQUARE_BLOCKS.div_ceil(w[1]), 0, 0]));
+            g.write_buffer(self.grows, 0, bytes(&[(COUNTS as u32).div_ceil(w[0]), SQUARE_PATCHES.div_ceil(w[1]), 0, 0]));
         }
         let p = &mut self.placed;
         p.begin();

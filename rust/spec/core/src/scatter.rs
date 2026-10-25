@@ -1,11 +1,11 @@
 // pxl-spec-core/scatter.rs
 
 //! gpu-portable: decor the ground grows on its own, never stored. A Poisson
-//! process on the leaf cell lattice, never a grid: a block at zoom m bears a
+//! process on the leaf cell lattice, never a grid: a patch at zoom m bears a
 //! count of candidates born there, each at a uniform leaf cell, and a
 //! candidate born at m stands at every zoom from m finer, so a cell at any
-//! zoom holds the decor's density. Every draw is a u32 off one stream a block
-//! (xpute-kit `SplitMix32`), seeded by the decor's seed and the block
+//! zoom holds the decor's density. Every draw is a u32 off one stream a patch
+//! (xpute-kit `SplitMix32`), seeded by the decor's seed and the patch
 //! (`node_seed`), so every reader of a cell, either side, draws the same.
 //!
 //! Where a candidate stands, which way it faces and whether its footing
@@ -18,14 +18,14 @@ use crate::answer::value;
 use crate::cast::Detail;
 use crate::caves::node_seed;
 use crate::cube::{sentinel, Ground};
-use crate::decor::{Counts, Decor, Orientation, BLOCK, DECORS};
+use crate::decor::{Counts, Decor, Orientation, DECORS, PATCH};
 use crate::lattice::GROUND;
 use crate::overwrite::{self, Lanes, PLACED};
 use crate::window::{EYE_WINDOWS, SLOTS, SQUARE_SHIFT};
 use crate::{wrap_index, Zoom, FRAC_W, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
-const BLOCK_SHIFT: u32 = BLOCK.trailing_zeros();
-const _: () = assert!(BLOCK.is_power_of_two(), "a block's side is a power of two, so a uniform cell in it is a draw's top bits");
+const PATCH_SHIFT: u32 = PATCH.trailing_zeros();
+const _: () = assert!(PATCH.is_power_of_two(), "a patch's side is a power of two, so a uniform cell in it is a draw's top bits");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Candidate {
@@ -49,27 +49,27 @@ impl Counts {
     }
 }
 
-/// The block of `decor`'s process at `born` with index `b`: its seed, and its
+/// The patch of `decor`'s process at `born` with index `b`: its seed, and its
 /// side in leaf cells as a shift.
-fn block_seed(decor: &Decor, born: Zoom, b: [i32; 2]) -> (u32, u32) {
-    (node_seed(decor.seed, (born, b)), BLOCK_SHIFT + GROUND.finest_in(born).trailing_zeros())
+fn patch_seed(decor: &Decor, born: Zoom, b: [i32; 2]) -> (u32, u32) {
+    (node_seed(decor.seed, (born, b)), PATCH_SHIFT + GROUND.finest_in(born).trailing_zeros())
 }
 
 /// Every candidate of `decor` born at `zoom` or coarser in `[min, max)`
-/// (leaf cells), block by block, coarsest first.
+/// (leaf cells), patch by patch, coarsest first.
 pub fn each_candidate(decor: &Decor, zoom: Zoom, [min, max]: [[i32; 2]; 2], mut each: impl FnMut(Candidate)) {
     let top = TOP_ZOOM;
     let mut born = zoom + 1;
     while born > top {
         born -= 1;
-        let (_, shift) = block_seed(decor, born, [0, 0]);
+        let (_, shift) = patch_seed(decor, born, [0, 0]);
         let counts = &decor.counts[usize::from(born != top)];
         let mut by = min[1] >> shift;
         while by <= (max[1] - 1) >> shift {
             let mut bx = min[0] >> shift;
             while bx <= (max[0] - 1) >> shift {
-                let (block, _) = block_seed(decor, born, [bx, by]);
-                let mut draws = SplitMix32::new(block);
+                let (seed, _) = patch_seed(decor, born, [bx, by]);
+                let mut draws = SplitMix32::new(seed);
                 let n = counts.of(draws.next_u32());
                 let mut i = 0;
                 while i < n {
@@ -79,7 +79,7 @@ pub fn each_candidate(decor: &Decor, zoom: Zoom, [min, max]: [[i32; 2]; 2], mut 
                         each(Candidate {
                             cell: [x, y],
                             born,
-                            seed: derive_seed_u32(block, i),
+                            seed: derive_seed_u32(seed, i),
                         });
                     }
                     i += 1;
@@ -91,15 +91,15 @@ pub fn each_candidate(decor: &Decor, zoom: Zoom, [min, max]: [[i32; 2]; 2], mut 
     }
 }
 
-/// The `n`-th block meeting `[min, max)` (leaf cells) of those born at
+/// The `n`-th patch meeting `[min, max)` (leaf cells) of those born at
 /// `zoom` or coarser, the finest born first: its zoom and index; false past
 /// the last.
-pub fn block_of(zoom: Zoom, [min, max]: [[i32; 2]; 2], n: u32) -> (Zoom, [i32; 2], bool) {
+pub fn patch_of(zoom: Zoom, [min, max]: [[i32; 2]; 2], n: u32) -> (Zoom, [i32; 2], bool) {
     let top = TOP_ZOOM;
     let (mut born, mut n) = (zoom + 1, n);
     while born > top {
         born -= 1;
-        let shift = BLOCK_SHIFT + GROUND.finest_in(born).trailing_zeros();
+        let shift = PATCH_SHIFT + GROUND.finest_in(born).trailing_zeros();
         let first = [min[0] >> shift, min[1] >> shift];
         let across = [((max[0] - 1) >> shift) - first[0] + 1, ((max[1] - 1) >> shift) - first[1] + 1];
         let count = (across[0] * across[1]) as u32;
@@ -111,23 +111,23 @@ pub fn block_of(zoom: Zoom, [min, max]: [[i32; 2]; 2], n: u32) -> (Zoom, [i32; 2
     (top, [0, 0], false)
 }
 
-/// The most blocks `block_of` names over a window's square at any zoom: a
+/// The most patches `patch_of` names over a window's square at any zoom: a
 /// square at the leaves, its side `window::SQUARE` leaf cells, aligned to
-/// it, so a block as wide or wider holds it whole.
-pub const SQUARE_BLOCKS: u32 = {
+/// it, so a patch as wide or wider holds it whole.
+pub const SQUARE_PATCHES: u32 = {
     let side = crate::window::SQUARE_SHIFT;
     let (mut born, mut sum) = (LEAF_ZOOM + 1, 0);
     while born > TOP_ZOOM {
         born -= 1;
-        let shift = BLOCK_SHIFT + GROUND.finest_in(born).trailing_zeros();
+        let shift = PATCH_SHIFT + GROUND.finest_in(born).trailing_zeros();
         let across = if side > shift { 1 << (side - shift) } else { 1 };
         sum += across * across;
     }
     sum
 };
 
-/// The most decor one square grows, every decor's together: a block bears no more
-/// than its counts' thresholds, and no more blocks than `SQUARE_BLOCKS`
+/// The most decor one square grows, every decor's together: a patch bears no more
+/// than its counts' thresholds, and no more patches than `SQUARE_PATCHES`
 /// meet a square.
 pub const SQUARE_GROWN: u32 = {
     let (mut sum, mut k) = (0, 0);
@@ -136,7 +136,7 @@ pub const SQUARE_GROWN: u32 = {
         sum += if top.len > finer.len { top.len } else { finer.len };
         k += 1;
     }
-    sum * SQUARE_BLOCKS
+    sum * SQUARE_PATCHES
 };
 
 const _: () = assert!(size_of::<Decor>().is_multiple_of(4), "a row is whole words, as a GPU reads the table");
@@ -279,7 +279,7 @@ pub fn first_group(rows: &[Decor], decor: u32) -> u32 {
 
 /// How the GPU draws what it grows: each record sized for the screen, a
 /// model or a sprite, into its group's region, models at `2·group` and
-/// sprites past it; the regions laid end to end in one decor block, in the
+/// sprites past it; the regions laid end to end in the decor's instances, in the
 /// layout the decor and impostor shaders read (lanes x, y, z, spin, scale,
 /// `DRAWN_LANES` a slot, then the index list), each region's draw a set of
 /// indirect args.
@@ -337,16 +337,16 @@ pub mod drawn {
     }
 }
 
-/// Candidate `i` of the `n`-th block meeting `region` (`block_of`); false
-/// unless the block bears one that many and it lies in `region`.
+/// Candidate `i` of the `n`-th patch meeting `region` (`patch_of`); false
+/// unless the patch bears one that many and it lies in `region`.
 pub fn candidate_of(decor: &Decor, zoom: Zoom, region: [[i32; 2]; 2], n: u32, i: u32) -> (Candidate, bool) {
     const NONE: Candidate = Candidate { cell: [0; 2], born: 0, seed: 0 };
-    let (born, b, here) = block_of(zoom, region, n);
+    let (born, b, here) = patch_of(zoom, region, n);
     if !here {
         return (NONE, false);
     }
-    let (block, shift) = block_seed(decor, born, b);
-    let mut draws = SplitMix32::new(block);
+    let (seed, shift) = patch_seed(decor, born, b);
+    let mut draws = SplitMix32::new(seed);
     if i >= decor.counts[usize::from(born != TOP_ZOOM)].of(draws.next_u32()) {
         return (NONE, false);
     }
@@ -362,7 +362,7 @@ pub fn candidate_of(decor: &Decor, zoom: Zoom, region: [[i32; 2]; 2], n: u32, i:
     let c = Candidate {
         cell: [x, y],
         born,
-        seed: derive_seed_u32(block, i),
+        seed: derive_seed_u32(seed, i),
     };
     (c, min[0] <= x && x < max[0] && min[1] <= y && y < max[1])
 }

@@ -30,11 +30,11 @@
   "meta": { "variant": "u32", "turn": "u32", "scale": "f64" },
   "scatter": {
     "$doc": [
-      "The Poisson process every decor is scattered by: a block of `block` cells a",
+      "The Poisson process every decor is scattered by: a patch of `patch` cells a",
       "side at the zoom its candidates are born at, a zoom keeping one in `kept`",
       "of the next finer's."
     ],
-    "block": 16,
+    "patch": 16,
     "kept": 4
   },
   "decors": {

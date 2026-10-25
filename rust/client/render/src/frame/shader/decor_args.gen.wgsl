@@ -3,7 +3,7 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: c90cec6be31da9d9aacca7d64d84070ae7b20e365cc2c6d5fbbc77121818d3ed
+// Inputs: dd7be7a5245f25e54b21c581a3d0bb083772364c13c33211ebc79620ea557f22
 struct type_2 {
     member: array<u32>,
 }

@@ -2,13 +2,13 @@
 
 //! Instances as lanes, in the layout the decor and impostor shaders read
 //! (pxl-spec-core scatter.rs `drawn`), as the CPU writes them: the clouds'
-//! blocks (domain/scene/environment/cloud.rs) and the ghost's one decor
-//! (domain/scene/indicator/ghost.rs). A block is its group count, each
+//! patches (domain/scene/environment/cloud.rs) and the ghost's one decor
+//! (domain/scene/indicator/ghost.rs). Each is its group count, each
 //! group's instance count, then each group's lanes, then the index list.
 
 use pxl_spec_core::scatter::drawn::LANES;
 
-/// A group's lanes in a block: `drawn::LANES` f32 lanes (x, y, z, spin,
+/// A group's lanes in one: `drawn::LANES` f32 lanes (x, y, z, spin,
 /// scale), then byte flags padded to a word.
 #[derive(Clone, Copy)]
 pub struct GroupLanes {
@@ -31,7 +31,7 @@ impl GroupLanes {
     }
 }
 
-/// Each group's first lane word and count, from the block's header.
+/// Each group's first lane word and count, from its header.
 pub fn groups(words: &[u32]) -> impl Iterator<Item = (u32, u32)> + '_ {
     let groups = words.first().map_or(0, |&g| g as usize);
     let mut at = 1 + groups;
