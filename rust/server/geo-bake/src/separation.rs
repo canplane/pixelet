@@ -2,11 +2,11 @@
 
 //! Bridges and tunnels: what a tile's bridges and tunnels are, read from the
 //! source, and the lines the bake stores for them, solved as Arnis solves
-//! them (`separation/arnis.rs`).
+//! them (`separation/solve.rs`).
 
-pub mod arnis;
 pub mod elevation;
 pub mod piece;
+pub mod solve;
 pub mod source;
 pub mod way;
 
@@ -20,7 +20,7 @@ use crate::terrain::repository::TerrainRepository;
 use crate::terrain::CELL_U;
 use source::Store;
 
-pub use arnis::solve_tile;
+pub use solve::solve_tile;
 
 /// What the solve leaves a tile: its lines, and the ranges of ways they draw,
 /// which the ground leaves unpainted. One solve makes both, so the road
