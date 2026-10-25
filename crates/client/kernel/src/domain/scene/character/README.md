@@ -8,7 +8,7 @@ few and each is distinct. This directory holds every one of them:
 
 - the companion, the person and the pet at the focus (`companion.rs`
   `Figure`), placed each tick in the interaction phase
-  (`../../turn.rs` `companion_tick`);
+  (`../../../turn.rs` `companion_tick`);
 - the variant picker's display cases, a character idling in its case's own
   canvas (`preview.rs`).
 
@@ -17,7 +17,7 @@ in the scene's own tick (`../../scene.rs`).
 
 The person's chat line is not an actor. It is a billboard hung from the
 point over the person's head that the companion hands down (`speak_from`),
-shown by its own rule (`../../billboard/chat.rs` `hangs`) and laid out with
+shown by its own rule (`../billboard/chat.rs` `hangs`) and laid out with
 the markers (`../place.rs`).
 
 The folder is `character/`, not `actors/`, because "Character" is already

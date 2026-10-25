@@ -37,7 +37,7 @@ impl Bounds for ModuleBounds {
     }
 }
 
-/// The module's one allocator (pxl_kernel::sys::mem::heap).
+/// The module's one allocator (xpute_guest::mem::heap).
 #[global_allocator]
 static ALLOC: Heap<ModuleBounds> = Heap::new();
 
