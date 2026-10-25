@@ -1,7 +1,9 @@
 // pxl-tool/fmt.rs
 
 //! Generated files are written as the formatters leave them, since `deno fmt
-//! --check` and `cargo fmt --check` are gates.
+//! --check` and `cargo fmt --check` are gates: each by the config of the tree
+//! it lies in, found from the file up, as that tree's own check reads it. A
+//! file under no tree's config is written as generated.
 
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -14,8 +16,18 @@ pub fn formatted(path: &str, text: String) -> Result<String, String> {
         c.args(["--edition", "2021", "--emit", "stdout", "--config-path"]).arg(root().join("rust/rustfmt.toml"));
         c
     } else if let Some(ext) = [".ts", ".json"].into_iter().find(|e| path.ends_with(e)) {
+        let root = root();
+        let file = root.join(path);
+        let Some(tree) = file
+            .ancestors()
+            .skip(1)
+            .take_while(|d| d.starts_with(&root))
+            .find(|d| d.join("deno.jsonc").exists() || d.join("deno.json").exists())
+        else {
+            return Ok(text);
+        };
         let mut c = Command::new("deno");
-        c.args(["fmt", "--ext", &ext[1..], "-"]).current_dir(root());
+        c.args(["fmt", "--ext", &ext[1..], "-"]).current_dir(tree);
         c
     } else {
         return Ok(text);

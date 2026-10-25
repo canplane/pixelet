@@ -29,7 +29,6 @@ git push origin main:deploy        # --force once main has been rewritten
 
 What `check` runs, a task a tree, side by side:
 
-- `check-doc` — the documents' format.
 - `check-script` — the repository's scripts: format, lint, types.
 - `check-ts` — the TypeScript workspace: format, lint, and the types of
   the page, the device's modules, the Worker and their scripts.

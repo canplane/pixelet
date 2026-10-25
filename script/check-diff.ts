@@ -126,11 +126,11 @@ if (fmtRust.length) runs.push({ label: "cargo fmt", argv: ["cargo", "fmt", "--ch
 cargo("lint-");
 if (under("spec/") || changed.some((path) => path.includes(".spec.")) || touched.has("pxl-tool")) task("check-spec");
 if (under("ts/client/") || under("ts/app/web/") || under("ts/server/edge/") || under("xpute/ts/") || touched.has("pxl-wasm")) task("check-build");
-// Each formatted file under the root that formats it: ts/ and script/ their own, the documents the root's.
-const formatted = present.filter((path) => /\.(ts|tsx|js|json|jsonc|md)$/.test(path) && !path.startsWith("xpute/"));
-for (const tree of ["ts/", "script/", ""]) {
-  const own = formatted.filter((path) => path.startsWith(tree) && (tree !== "" || !/^(ts|script)\//.test(path)));
-  if (own.length) runs.push({ label: `fmt ${tree || "doc"}`, argv: ["deno", "fmt", "--check", ...own.map((path) => path.slice(tree.length))], cwd: join(root, tree) });
+// Each formatted file under the tree that formats it, ts/ and script/ by their own configs; what lies outside the trees is not formatted.
+const formatted = present.filter((path) => /\.(ts|tsx|js|json|jsonc|md)$/.test(path));
+for (const tree of ["ts/", "script/"]) {
+  const own = formatted.filter((path) => path.startsWith(tree));
+  if (own.length) runs.push({ label: `fmt ${tree}`, argv: ["deno", "fmt", "--check", ...own.map((path) => path.slice(tree.length))], cwd: join(root, tree) });
 }
 task("check-rules");
 if (xpute) task("check-xpute");

@@ -5,9 +5,9 @@
 # commands as aliases in rust/.cargo/config.toml, and xpute/ a project of its
 # own (xpute/Makefile). Here is a target a tree for each verb, the aggregates
 # over them, and what runs across them: the generated code, the dev servers
-# and the deploy. The documents, spec/, infra/ and asset/ are formatted by
-# deno fmt under deno.jsonc. A script that runs alone is run by its path, not
-# from here (README.md, Commands). GNU Make 3.81 is enough.
+# and the deploy. Only code is formatted, each tree's by its own formatter;
+# the documents and data outside the trees are not. A script that runs alone
+# is run by its path, not from here (README.md, Commands). GNU Make 3.81 is enough.
 #
 #   make -j8 check | test | fmt | lint
 #   make check-ts, make test-rust, ...   one tree's
@@ -16,9 +16,9 @@
 # With -j the trees run in parallel; xpute's make and cargo share its job
 # slots ($(MAKE), and + before cargo).
 
-.PHONY: check check-doc check-script check-ts check-rust check-rules check-spec check-build check-xpute \
+.PHONY: check check-script check-ts check-rust check-rules check-spec check-build check-xpute \
 	test test-ts test-rust test-xpute \
-	fmt fmt-doc fmt-script fmt-ts fmt-rust \
+	fmt fmt-script fmt-ts fmt-rust \
 	lint lint-script lint-ts \
 	spec dev dev-oven dev-shelf dev-native preview preview-oven preview-shelf \
 	serve-geo serve-api serve-tile serve-shelf web-oven web-shelf web-preview-oven web-preview-shelf \
@@ -28,9 +28,7 @@
 # since CI checks nothing (.agents/skills/deploy/SKILL.md). `check-build` is
 # what ships, made as a deploy makes it without publishing: the client's
 # bundle and the Worker beside it.
-check: check-doc check-script check-ts check-rust check-rules check-spec check-build check-xpute
-check-doc:
-	deno fmt --check
+check: check-script check-ts check-rust check-rules check-spec check-build check-xpute
 check-script:
 	deno task --cwd script check
 check-ts:
@@ -57,9 +55,7 @@ test-rust:
 test-xpute:
 	$(MAKE) -C xpute test
 
-fmt: fmt-doc fmt-script fmt-ts fmt-rust
-fmt-doc:
-	deno fmt
+fmt: fmt-script fmt-ts fmt-rust
 fmt-script:
 	deno task --cwd script fmt
 fmt-ts:
