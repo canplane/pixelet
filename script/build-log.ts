@@ -7,8 +7,6 @@
 //   ./script/build-log.ts                      every build, newest first
 //   ./script/build-log.ts --record 18 --web --server --smoke success     append one (CI)
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
-
 const BUCKET = "pixelet-tiles";
 const KEY = "_meta/build-log.jsonl";
 const CACHE = new URL("../apps/client/.build_number", import.meta.url);
@@ -16,7 +14,7 @@ const CACHE = new URL("../apps/client/.build_number", import.meta.url);
 type Smoke = "pass" | "fail";
 
 interface Entry {
-  n: u32;
+  n: number;
   sha: string;
   at: string;
   web: boolean;
@@ -75,7 +73,7 @@ async function read(): Promise<{ raw: string; entries: Entry[] }> {
   return { raw, entries };
 }
 
-async function record(n: u32, web: boolean, server: boolean, smoke: Smoke | null): Promise<void> {
+async function record(n: number, web: boolean, server: boolean, smoke: Smoke | null): Promise<void> {
   const sha = git(["rev-parse", "HEAD"]) ?? die("not a git checkout; nothing to record");
   const { raw, entries } = await read();
   // A re-run finds its own record already there.

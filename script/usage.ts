@@ -5,9 +5,6 @@
 //
 //   ./script/usage.ts
 
-import type { f64, u32 } from "@xpute/kit/abi/word.ts";
-import { round } from "@xpute/kit/math/scalar.ts";
-
 const WORKER = "pixelet";
 const BUCKET = "pixelet-tiles";
 const SERVER = "pixelet-prod";
@@ -89,9 +86,9 @@ interface Analytics {
   data: {
     viewer: {
       accounts: {
-        workersInvocationsAdaptive: { sum: { requests: u32; errors: u32 }; dimensions: { date: string } }[];
-        r2OperationsAdaptiveGroups: { sum: { requests: u32 }; dimensions: { actionType: string } }[];
-        r2StorageAdaptiveGroups: { max: { objectCount: u32; payloadSize: f64; metadataSize: f64 } }[];
+        workersInvocationsAdaptive: { sum: { requests: number; errors: number }; dimensions: { date: string } }[];
+        r2OperationsAdaptiveGroups: { sum: { requests: number }; dimensions: { actionType: string } }[];
+        r2StorageAdaptiveGroups: { max: { objectCount: number; payloadSize: number; metadataSize: number } }[];
       }[];
     };
   };
@@ -112,9 +109,9 @@ const QUERY = `query($account: String!, $worker: String!, $bucket: String!, $mon
 }`;
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
-const count = (n: f64) => round(n).toLocaleString("en-US");
-const share = (n: f64, of: f64) => `${((100 * n) / of).toFixed(1)}%`;
-const gb = (bytes: f64) => `${(bytes / 1e9).toFixed(2)} GB`;
+const count = (n: number) => Math.round(n).toLocaleString("en-US");
+const share = (n: number, of: number) => `${((100 * n) / of).toFixed(1)}%`;
+const gb = (bytes: number) => `${(bytes / 1e9).toFixed(2)} GB`;
 
 async function cloudflareUsage(): Promise<void> {
   const auth = await token();
@@ -159,16 +156,16 @@ async function cloudflareUsage(): Promise<void> {
 }
 
 interface Server {
-  outgoing_traffic: f64 | null;
-  ingoing_traffic: f64 | null;
-  included_traffic: f64;
+  outgoing_traffic: number | null;
+  ingoing_traffic: number | null;
+  included_traffic: number;
   server_type: { name: string };
 }
 
 async function hetznerUsage(): Promise<void> {
   const s = JSON.parse(await run("hcloud", ["server", "describe", SERVER, "-o", "json"])) as Server;
   const out = s.outgoing_traffic ?? 0;
-  const gib = (bytes: f64) => `${(bytes / 2 ** 30).toFixed(2)} GiB`;
+  const gib = (bytes: number) => `${(bytes / 2 ** 30).toFixed(2)} GiB`;
   console.log(`\nHetzner '${SERVER}' (${s.server_type.name}) — this billing period`);
   console.log(`  outgoing  ${gib(out).padStart(11)}  ${share(out, s.included_traffic).padStart(6)} of ${gib(s.included_traffic)}`);
   console.log(`  incoming  ${gib(s.ingoing_traffic ?? 0).padStart(11)}`);
