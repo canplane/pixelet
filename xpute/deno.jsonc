@@ -5,13 +5,16 @@
   // rust/ as Cargo's, its commands as aliases in rust/.cargo/config.toml, and
   // cpp/ built by script/cpp.ts. What is here is the documents and the spec,
   // formatted below, and the order of a test: the traces run against the
-  // guests the Rust and the C++ build first.
+  // guests build:guests makes first.
   "workspace": [],
   "exclude": ["ts/", "script/"],
 
   "tasks": {
     "check": "deno fmt --check && deno task --cwd script check && deno task --cwd ts check && ./script/cpp.ts check && cd rust && cargo fmt --all --check && cargo lint",
-    "test": "deno task --cwd ts test && ./script/cpp.ts test && ./script/cpp.ts guest && ./script/cpp.ts wasm && cd rust && cargo test --all && cargo guest && cargo guest-wasm && cd .. && deno task --cwd ts test:conformance",
+    "test": "deno task --cwd ts test && ./script/cpp.ts test && cd rust && cargo test --all && cd .. && deno task build:guests && deno task --cwd ts test:conformance",
+    // The one thing xpute builds: the guest the contract's traces drive, in
+    // Rust and in C++, each a native library and a WebAssembly module.
+    "build:guests": "./script/cpp.ts guest && ./script/cpp.ts wasm && cd rust && cargo guest && cargo guest-wasm",
     // What needs a GPU: the native host on wgpu, and the web host in Chrome (script/web-gpu.ts).
     "test:gpu": "./script/web-gpu.ts && cd rust && cargo test-gpu",
     "fmt": "deno fmt && deno task --cwd script fmt && deno task --cwd ts fmt && cd rust && cargo fmt --all",
