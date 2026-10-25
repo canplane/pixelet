@@ -37,11 +37,6 @@ host/guest boundary's words; `ARCHITECTURE.md` is what the system is.
   (`ts/app/native/script/build-native.ts`, `ts/server/edge/script/stage.ts`).
 - cargo runs from `rust/`, where rustup reads `rust-toolchain.toml`: the
   root's tasks as `cd rust && cargo <alias>` (`rust/.cargo/config.toml`).
-- A session builds into a target of its own, named by the session id its
-  environment carries: every cargo or make that compiles Rust runs with
-  `CARGO_TARGET_DIR=<repo>/rust/target/session/$CLAUDE_CODE_SESSION_ID`,
-  so sessions sharing the checkout never hand each other a binary.
-
 ## Files
 
 - A source file opens with its own path as a comment: a crate's name and
