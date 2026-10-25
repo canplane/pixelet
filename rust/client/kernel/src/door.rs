@@ -204,7 +204,7 @@ fn lay_out(b: &Bracket) -> u32 {
     // renderer's or the host's alone.
     unsafe {
         crate::sys::io::host::set_host_stream(fixed_at(layout::Fixed::Host));
-        pxl_render::gpu::upload::set_uploads(fixed_at(layout::Fixed::Uploads), layout::UPLOAD_SLOTS);
+        pxl_render::gpu::upload::set_uploads(fixed_at(layout::Fixed::Uploads), layout::MAX_LIVE_UPLOADS);
         pxl_render::gpu::api::install(fixed_at(layout::Fixed::Gpu))
     }
 }

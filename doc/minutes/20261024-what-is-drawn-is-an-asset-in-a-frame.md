@@ -166,6 +166,13 @@ wants.
 
    > Since fixed: `SINGLE_BLOCKS` is 5, one for each owner
    > (`door/layout.rs`). The top still sums its owners' bounds by name.
+   >
+   > Settled (2026-10-26): the sum stays the top's, which wires everything
+   > and is the one place that knows every owner. What hid the miscount was
+   > the check, not the sum: the upload table refused only past half its
+   > slots, a power of two at least twice the bound, so an owner left out of
+   > the sum fit in the rounding. It now refuses past the summed bound itself
+   > (pxl-render `gpu/upload.rs` `insert`, the bound `set_uploads` is given).
 
 ## What it asks, in order
 

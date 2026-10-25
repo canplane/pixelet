@@ -83,14 +83,12 @@ const ACTOR_UPLOADS: usize = crate::domain::scene::character::companion::FIGURES
 /// renderer's table is a bug, not a load.
 /// The renderer frees a list's uploads before taking its new ones, so it
 /// never holds more.
-const MAX_LIVE_UPLOADS: usize = MODELS_MAX + crate::domain::scene::environment::cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
-
-pub const UPLOAD_SLOTS: usize = pxl_render::gpu::upload::upload_slots(MAX_LIVE_UPLOADS);
+pub const MAX_LIVE_UPLOADS: usize = MODELS_MAX + crate::domain::scene::environment::cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
 
 const FIXED: [u32; 5] = [
     crate::domain::layer::terrain::fixed::TERRAIN_BYTES,
     crate::domain::layer::division::DIVISION_BYTES,
-    pxl_render::gpu::upload::uploads_bytes(UPLOAD_SLOTS),
+    pxl_render::gpu::upload::uploads_bytes(MAX_LIVE_UPLOADS),
     pxl_render::api_spec::stream::BYTES,
     crate::sys::io::host_spec::stream::BYTES,
 ];

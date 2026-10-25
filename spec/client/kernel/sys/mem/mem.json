@@ -128,7 +128,7 @@
       "constants), so a terrain grown past a phone fails to build; and at boot",
       "against where it actually started and what the device actually gave.",
       "",
-      "256 MiB. The fixed ranges take 79.13 MiB, the terrain's 65.66 MiB of",
+      "256 MiB. The fixed ranges take 79.04 MiB, the terrain's 65.66 MiB of",
       "them, and the module's data ends at about 10.5 MiB (`__data_end` in a",
       "build), which leaves the phone 422.4 in practice, so there are 166 MiB of",
       "headroom over the guarantee (2026-10-24).",

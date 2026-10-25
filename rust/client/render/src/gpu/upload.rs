@@ -53,7 +53,7 @@ const EMPTY: u32 = 0;
 
 /// A power of two so a position wraps by masking, at least twice `live` so
 /// open addressing never fills past half.
-pub const fn upload_slots(live: usize) -> usize {
+const fn slots_of(live: usize) -> usize {
     (2 * live).next_power_of_two()
 }
 
@@ -68,6 +68,8 @@ pub struct Uploads {
     index_cnt: &'static mut [u32],
     buffer: &'static mut [u32],
     group: &'static mut [u32],
+    /// The most the owners can hold live (kernel door/layout.rs `MAX_LIVE_UPLOADS`).
+    live: u32,
     pub(crate) count: u32,
     pub(crate) bytes: u64,
     missing: u32,
@@ -88,17 +90,16 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 /// Handle, address, length, the two counts, buffer, group.
 const UPLOAD_LANES: usize = 7;
 
-/// The table's lanes, then the draw list's (frame/draw.rs `lanes_bytes`),
-/// room for the most uploads live, half the slots.
-pub const fn uploads_bytes(slots: usize) -> u32 {
-    (UPLOAD_LANES * slots * 4) as u32 + crate::frame::draw::lanes_bytes(slots / 2)
+/// The table's lanes for `live` uploads, then the draw list's (frame/draw.rs `lanes_bytes`).
+pub const fn uploads_bytes(live: usize) -> u32 {
+    (UPLOAD_LANES * slots_of(live) * 4) as u32 + crate::frame::draw::lanes_bytes(live)
 }
 
 /// # Safety
-/// `at` must address `uploads_bytes(slots)`, 4-aligned and zeroed, the
+/// `at` must address `uploads_bytes(live)`, 4-aligned and zeroed, the
 /// renderer's alone for as long as the module runs.
-pub unsafe fn set_uploads(at: u32, slots: usize) {
-    xpute_kit::ensure!(slots.is_power_of_two(), EINVAL, slots);
+pub unsafe fn set_uploads(at: u32, live: usize) {
+    let slots = slots_of(live);
     // SAFETY: the caller's range, one lane of `slots` words after another.
     let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize + k * slots * 4), slots) };
     UPLOADS.set(Uploads {
@@ -109,13 +110,14 @@ pub unsafe fn set_uploads(at: u32, slots: usize) {
         index_cnt: lane(4),
         buffer: lane(5),
         group: lane(6),
+        live: live as u32,
         count: 0,
         bytes: 0,
         missing: 0,
         layout: 0,
     });
     // SAFETY: the range's rest past the table, the lists' alone.
-    unsafe { crate::frame::draw::set_lanes(at + (UPLOAD_LANES * slots * 4) as u32, slots / 2) };
+    unsafe { crate::frame::draw::set_lanes(at + (UPLOAD_LANES * slots * 4) as u32, live) };
 }
 
 fn home(handle: u32, slots: usize) -> usize {
@@ -176,8 +178,8 @@ impl Uploads {
 
     pub(crate) fn insert(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32, vertex_cnt: u32, index_cnt: u32) {
         self.remove(handle);
-        // Slots are twice the most uploads the owners can hold, so this is that bound broken.
-        xpute_kit::ensure!((self.count as usize) < self.handle.len() / 2, ENOTRECOVERABLE, self.handle.len() / 2);
+        // The owners' summed bound itself, not the slots' rounded half, so an owner left out of it shows.
+        xpute_kit::ensure!(self.count < self.live, ENOTRECOVERABLE, self.live);
         let mut i = home(handle, self.handle.len());
         while self.handle[i] != EMPTY {
             i = (i + 1) & (self.handle.len() - 1);
