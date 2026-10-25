@@ -3,8 +3,7 @@
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import type { SurfaceDriver } from "@/bracket.tsx";
 import { Command, encode_surface_close, encode_surface_open, encode_surface_resize } from "@/abi/cmd.spec.ts";
-import { GUEST_DOORBELL } from "@/host/mem.ts";
-import { send_next } from "@/host/sched.ts";
+import { GUEST_DOORBELL, HOST } from "@/host/mem.ts";
 
 /** 0 when the kernel has none left. */
 export function surface_open(role: u32): u32 {
@@ -12,7 +11,7 @@ export function surface_open(role: u32): u32 {
 }
 
 export function surface_size(surface: u32, width: u32, height: u32, dpr: f64): void {
-  send_next(Command.SURFACE_RESIZE, encode_surface_resize(GUEST_DOORBELL, surface, width, height, dpr));
+  HOST.send(Command.SURFACE_RESIZE, encode_surface_resize(GUEST_DOORBELL, surface, width, height, dpr));
 }
 
 export function surface_close(surface: u32): void {

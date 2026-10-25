@@ -5,8 +5,7 @@ import { FaultError } from "@xpute/kit/status/error.ts";
 import type { Errno } from "@xpute/kit/status/errno.spec.ts";
 import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/abi/cmd.spec.ts";
-import { GUEST, GUEST_DOORBELL } from "@/host/mem.ts";
-import { ring_now, send_input } from "@/host/sched.ts";
+import { GUEST, GUEST_DOORBELL, HOST } from "@/host/mem.ts";
 import { bracket } from "@/bracket.tsx";
 
 export { kernel_snapshot } from "@/abi/snapshot.ts";
@@ -18,16 +17,16 @@ export async function kernel_tracking(tracking: Tracking): Promise<void> {
     console.error("[orientation] could not start the sensor.");
     return;
   }
-  send_input(Command.INPUT_TRACKING, encode_input_tracking(GUEST_DOORBELL, tracking));
+  HOST.input(Command.INPUT_TRACKING, encode_input_tracking(GUEST_DOORBELL, tracking));
 }
 
 /** A command of the kernel's, rung at once with no quota. */
 export function kernel_command(cmd: Command, pkt?: PacketWriter): void {
-  ring_now(cmd, pkt);
+  HOST.now(cmd, pkt);
 }
 
 export function kernel_setting(key: u32, value: u32): void {
-  ring_now(Command.SETTING_SET, encode_setting_set(GUEST_DOORBELL, key, value));
+  HOST.now(Command.SETTING_SET, encode_setting_set(GUEST_DOORBELL, key, value));
 }
 
 /** Where the shell writes a command's packet (`encode_*`), in place: the
@@ -40,12 +39,12 @@ export function kernel_fits(pkt: PacketWriter): boolean {
 }
 
 export function kernel_enable_location(): void {
-  ring_now(Command.SENSOR_ENABLE_LOCATION);
+  HOST.now(Command.SENSOR_ENABLE_LOCATION);
 }
 
 /** The kernel's memory, where a call leaves its reply; a view of it holds until the next turn. */
 export function kernel_memory(): ArrayBuffer {
-  return GUEST.buffer;
+  return GUEST.memory;
 }
 
 /** A command answered inside the call: the address of its reply in `kernel_memory()`. */

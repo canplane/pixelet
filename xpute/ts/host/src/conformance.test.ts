@@ -20,6 +20,7 @@ import * as frame from "@xpute/host/ipc/frame.ts";
 import { Ring } from "@xpute/host/ipc/ring.ts";
 import { each_record } from "@xpute/host/ipc/stream.ts";
 import { cmd, key, MEMORY_BYTES } from "@xpute/host/conformance.spec.ts";
+import type { Guest } from "@xpute/host/host.ts";
 
 const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
 /** A relative CARGO_TARGET_DIR is cargo's, which the root's tasks run from rust/. */
@@ -39,14 +40,13 @@ const MODULE_BYTES = 4 << 20;
 
 const MODULE_IMPORTS = ["env.memory", "env.now"];
 
-interface Guest {
-  memory: ArrayBuffer;
+/** A guest as the host holds it, and the offset its boot answered. */
+interface Opened extends Guest {
   directory_at: number;
-  interrupt(quota_ms: number): number;
 }
 
 interface Opener {
-  open(): Guest;
+  open(): Opened;
   close(): void;
 }
 
@@ -118,7 +118,7 @@ class Host {
   private readonly stream_at: number;
   private readonly writer = new PacketWriter();
 
-  constructor(private readonly guest: Guest) {
+  constructor(private readonly guest: Opened) {
     const mem = guest.memory;
     this.directory = new Directory(mem, guest.directory_at);
     this.reserved = new Uint32Array(mem, guest.directory_at, 4)[3];

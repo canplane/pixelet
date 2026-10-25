@@ -35,5 +35,5 @@ export async function open(plan: Plan): Promise<Guest> {
     webgpu.run(buffer, gpu, plan.gpu_head);
     return wake;
   };
-  return { buffer, interrupt };
+  return { memory: buffer, interrupt };
 }

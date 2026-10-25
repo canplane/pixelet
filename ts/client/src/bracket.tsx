@@ -9,7 +9,7 @@
 import type { ComponentType } from "react";
 
 import type { f32, f64, i32, u32 } from "@xpute/kit/abi/word.ts";
-import type { Guest } from "@/host/module.ts";
+import type { Guest } from "@xpute/host/host.ts";
 
 export type { Guest };
 

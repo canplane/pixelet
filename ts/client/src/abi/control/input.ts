@@ -19,8 +19,7 @@ import {
   PointerType,
 } from "@/abi/cmd.spec.ts";
 import { bracket, type PointerKind, type PointerPhase as PlacePhase, type Viewport } from "@/bracket.tsx";
-import { GUEST_DOORBELL } from "@/host/mem.ts";
-import { request_frame, ring_now, send_input, strobe } from "@/host/sched.ts";
+import { GUEST_DOORBELL, HOST } from "@/host/mem.ts";
 
 /** Asked every frame, so a resize needs no event of its own. */
 let driver: (() => Viewport) | null = null;
@@ -39,15 +38,15 @@ export function submit_frame(grant: Grant): void {
 }
 
 export function kernel_pointer(phase: PointerPhase, pointer_type: PointerType, id: i32, button: i32, x: f64, y: f64): void {
-  send_input(Command.INPUT_POINTER, encode_input_pointer(GUEST_DOORBELL, phase, pointer_type, id, button, x, y));
+  HOST.input(Command.INPUT_POINTER, encode_input_pointer(GUEST_DOORBELL, phase, pointer_type, id, button, x, y));
 }
 
 export function kernel_wheel(delta_y: f64): void {
-  send_input(Command.INPUT_WHEEL, encode_input_wheel(GUEST_DOORBELL, delta_y));
+  HOST.input(Command.INPUT_WHEEL, encode_input_wheel(GUEST_DOORBELL, delta_y));
 }
 
 export function kernel_keys(x: i32, y: i32): void {
-  send_input(Command.INPUT_KEYS, encode_input_keys(GUEST_DOORBELL, x, y));
+  HOST.input(Command.INPUT_KEYS, encode_input_keys(GUEST_DOORBELL, x, y));
 }
 
 export function kernel_rect(left: f64, top: f64, width: f64, height: f64): void {
@@ -55,18 +54,18 @@ export function kernel_rect(left: f64, top: f64, width: f64, height: f64): void 
 }
 
 export function kernel_hold(tool: ActiveTool, value: u32, tier: u32): void {
-  send_input(Command.INPUT_HOLD, encode_input_hold(GUEST_DOORBELL, tool, value, tier));
+  HOST.input(Command.INPUT_HOLD, encode_input_hold(GUEST_DOORBELL, tool, value, tier));
 }
 
 export function kernel_open(viewport: () => Viewport): () => void {
   driver = viewport;
-  ring_now(Command.SENSOR_OPEN);
-  strobe.start();
+  HOST.now(Command.SENSOR_OPEN);
+  HOST.strobe.start();
   const unfollow = bracket.sensor.follow();
   return () => {
     unfollow();
-    strobe.stop();
-    ring_now(Command.SENSOR_CLOSE);
+    HOST.strobe.stop();
+    HOST.now(Command.SENSOR_CLOSE);
     driver = null;
   };
 }
@@ -76,9 +75,9 @@ export function kernel_visible(visible: boolean): void {
   GUEST_DOORBELL.send(0, Command.WORLD_VISIBILITY, encode_world_visibility(GUEST_DOORBELL, visible));
   GUEST_DOORBELL.ring(0);
   if (visible) {
-    strobe.start();
-    request_frame();
-  } else strobe.stop();
+    HOST.strobe.start();
+    HOST.strobe.request();
+  } else HOST.strobe.stop();
 }
 
 /** A place's pointer phase, as the kernel numbers it. */

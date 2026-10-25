@@ -16,7 +16,7 @@ import { Command, encode_world_boot, encode_world_kept_emptied, read_sensor_star
 import { declare_source } from "@/namespace/source.ts";
 import { bind_roots, commit_root, open_root } from "@/namespace/roots.ts";
 import { kept_refused, migrate_kept, read_kept } from "@/namespace/storage.ts";
-import { GUEST, GUEST_DOORBELL, load_guest } from "@/host/mem.ts";
+import { GUEST, GUEST_DOORBELL, HOST, open_host } from "@/host/mem.ts";
 import { kept } from "@/abi/host.spec.ts";
 import { DESKTOP_BYTES, DIRECTORY_AT, PHONE_BYTES, REGION_BYTES } from "@/abi/mem/mem.spec.ts";
 import { key } from "@/abi/directory.spec.ts";
@@ -24,13 +24,11 @@ import { stream } from "@/abi/render/gpu/api.spec.ts";
 import { SENSOR_HEARD } from "@/abi/control/sensor.ts";
 import { submit_frame } from "@/abi/control/input.ts";
 import { text_call } from "@/abi/text.ts";
-import { start_sys } from "@/host/sys.ts";
 import { BUILD_NUMBER } from "@/config/deploy.ts";
 import { bytes_at } from "@/host/module.ts";
 import { bracket, type Plan } from "@/bracket.tsx";
 import { GPU_STATE, set_gpu } from "@/host/gpu.ts";
 import { set_online } from "@/host/online.ts";
-import { request_frame, send_next, start_sched, strobe } from "@/host/sched.ts";
 import { kernel_snapshot, set_snapshot } from "@/abi/snapshot.ts";
 
 let code: string | null = null;
@@ -53,9 +51,9 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
     case Command.WORLD_SNAPSHOT: {
       // Too large for a ring frame; valid until the kernel writes the next, a turn away.
       const { at, len } = read_world_snapshot(f!);
-      set_snapshot(bytes_at(GUEST.buffer, at, len));
+      set_snapshot(bytes_at(GUEST.memory, at, len));
       // Sent after the completion ring is read: the doorbell refuses a write while it reads.
-      kept_refused(kernel_snapshot().kept_refused, (slot) => queueMicrotask(() => send_next(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(GUEST_DOORBELL, slot))));
+      kept_refused(kernel_snapshot().kept_refused, (slot) => queueMicrotask(() => HOST.send(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(GUEST_DOORBELL, slot))));
       return;
     }
     case Command.SENSOR_START:
@@ -72,7 +70,6 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
 
 /** Called once from shell/boot.ts, so boot order is explicit, not import order. */
 export async function boot(): Promise<void> {
-  start_sys({ open: open_root, commit: commit_root, program: text_call, abort });
   // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
   const plan: Plan = {
     bytes: bracket.device.handheld ? PHONE_BYTES : DESKTOP_BYTES,
@@ -81,12 +78,11 @@ export async function boot(): Promise<void> {
     gpu_stream: key.GPU_STREAM,
     gpu_head: stream.HEAD,
   };
-  await load_guest(plan);
+  await open_host(plan, { open: open_root, commit: commit_root, program: text_call, abort }, submit_frame);
   bind_roots();
-  start_sched(submit_frame);
   bracket.sensor.hear(SENSOR_HEARD);
   GUEST_DOORBELL.signal = on_signal;
-  bracket.gpu.boot({ ready: () => send_next(Command.GPU_READY), state: (state) => set_gpu(GPU_STATE[state]), wake: request_frame });
+  bracket.gpu.boot({ ready: () => HOST.send(Command.GPU_READY), state: (state) => set_gpu(GPU_STATE[state]), wake: () => HOST.strobe.request() });
   bracket.online.watch(set_online);
   const packet = (settings: string) =>
     encode_world_boot(
@@ -112,7 +108,7 @@ export async function boot(): Promise<void> {
 /** `listener` hears the kernel stop for good: its turns end with it. */
 export function on_stop(listener: () => void): void {
   GUEST_DOORBELL.stopped = () => {
-    strobe.stop();
+    HOST.strobe.stop();
     listener();
   };
 }

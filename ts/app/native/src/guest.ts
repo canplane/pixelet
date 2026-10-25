@@ -11,5 +11,5 @@ import { PLATFORM } from "./module.ts";
 export function open(): Promise<Guest> {
   const buffer = PLATFORM.memory();
   PLATFORM.interrupt(0);
-  return Promise.resolve({ buffer, interrupt: (quota_ms: f64) => PLATFORM.interrupt(quota_ms) });
+  return Promise.resolve({ memory: buffer, interrupt: (quota_ms: f64) => PLATFORM.interrupt(quota_ms) });
 }

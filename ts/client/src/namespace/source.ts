@@ -11,8 +11,7 @@
 
 import { Command, encode_world_source } from "@/abi/cmd.spec.ts";
 import { TILE_SOURCE_ROUTE } from "@/config/route.ts";
-import { GUEST_DOORBELL } from "@/host/mem.ts";
-import { send_next } from "@/host/sched.ts";
+import { GUEST_DOORBELL, HOST } from "@/host/mem.ts";
 import { online, when_online } from "@/host/online.ts";
 import { BASE_LAYERS, type BaseLayer } from "@/config/published.spec.ts";
 import { type Declaration, declaration } from "@/namespace/tile.ts";
@@ -99,7 +98,7 @@ export async function declare_source(): Promise<void> {
     set(Source.Refused);
     return;
   }
-  send_next(Command.WORLD_SOURCE, pkt);
+  HOST.send(Command.WORLD_SOURCE, pkt);
   declared = read;
   shown = BASE_LAYERS.map((kind) => ({ kind, version: read.version[kind] }));
   set(Source.Declared);

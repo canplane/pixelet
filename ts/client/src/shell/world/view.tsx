@@ -8,7 +8,6 @@ import { bracket, type InputDriver } from "@/bracket.tsx";
 import { kernel_open, kernel_rect, kernel_visible, kernel_wheel, POINTER_KIND, POINTER_PHASE } from "@/abi/control/input.ts";
 import { surface_role } from "@/abi/render/gpu/api.spec.ts";
 import { surface_driver } from "@/abi/render/surface.ts";
-import { request_frame } from "@/host/sched.ts";
 import { keyDown, keyUp, releaseKeys } from "@/shell/store/keyboard.ts";
 import { releasePointers, worldPointer } from "@/shell/store/pointer.ts";
 import { Corner } from "./corner.tsx";
@@ -24,6 +23,7 @@ import { TopOverlays } from "./overlay/top.tsx";
 import { DOCK_HEIGHT } from "./overlay/dock.tsx";
 import { ToastController } from "./toast-controller.tsx";
 import { useKernel } from "@/shell/store/system.ts";
+import { HOST } from "@/host/mem.ts";
 
 const TOAST_LIFT_PX = chrome.inset + 20;
 
@@ -44,7 +44,7 @@ const INPUT: InputDriver = {
   releaseKeys,
   releasePointers,
   visible: kernel_visible,
-  requestFrame: request_frame,
+  requestFrame: () => HOST.strobe.request(),
 };
 
 /** Alone, so a marker under the pointer re-renders only the surface. */

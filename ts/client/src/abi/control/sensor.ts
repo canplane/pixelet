@@ -6,8 +6,7 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_position, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/abi/cmd.spec.ts";
 import type { SensorHeard } from "@/bracket.tsx";
-import { GUEST_DOORBELL } from "@/host/mem.ts";
-import { ring_now, send_next } from "@/host/sched.ts";
+import { GUEST_DOORBELL, HOST } from "@/host/mem.ts";
 
 /** A device reading the device could not give — NaN, an infinity — is sent as none. */
 function given(n: number | null): number | null {
@@ -15,23 +14,23 @@ function given(n: number | null): number | null {
 }
 
 function kernel_position(lon: f64, lat: f64, altitude: f64 | null, accuracy: f64 | null, course: f64 | null): void {
-  send_next(Command.SENSOR_POSITION, encode_sensor_position(GUEST_DOORBELL, lon, lat, given(altitude), given(accuracy), given(course)));
+  HOST.send(Command.SENSOR_POSITION, encode_sensor_position(GUEST_DOORBELL, lon, lat, given(altitude), given(accuracy), given(course)));
 }
 
 function kernel_position_error(code: GeolocationErrorCode): void {
-  send_next(Command.SENSOR_ERROR, encode_sensor_error(GUEST_DOORBELL, code));
+  HOST.send(Command.SENSOR_ERROR, encode_sensor_error(GUEST_DOORBELL, code));
 }
 
 function kernel_orientation(webkit_compass_heading: f64 | null, alpha: f64 | null, beta: f64 | null, gamma: f64 | null): void {
-  send_next(Command.SENSOR_ORIENTATION, encode_sensor_orientation(GUEST_DOORBELL, given(webkit_compass_heading), given(alpha), given(beta), given(gamma)));
+  HOST.send(Command.SENSOR_ORIENTATION, encode_sensor_orientation(GUEST_DOORBELL, given(webkit_compass_heading), given(alpha), given(beta), given(gamma)));
 }
 
 function kernel_orientation_lost(): void {
-  ring_now(Command.SENSOR_ORIENTATION_LOST);
+  HOST.now(Command.SENSOR_ORIENTATION_LOST);
 }
 
 function kernel_permission(sensor: Sensor, answer: PermissionAnswer): void {
-  send_next(Command.SENSOR_PERMISSION, encode_sensor_permission(GUEST_DOORBELL, sensor, answer));
+  HOST.send(Command.SENSOR_PERMISSION, encode_sensor_permission(GUEST_DOORBELL, sensor, answer));
 }
 
 const ERROR = {

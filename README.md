@@ -158,7 +158,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 │   │   ├── brand/            #     the icons and symbol both apps and the shell draw
 │   │   └── src/
 │   │       ├── bracket.tsx   #     what the client asks of the place it runs in
-│   │       ├── host/         #     the host, which runs the kernel: module, mem, sched, sys; the GPU and the network
+│   │       ├── host/         #     the host, which runs the kernel: xpute's host mounted on it (mem); the GPU and the network
 │   │       ├── abi/          #     the kernel's commands, snapshot, text calls and boot, its specs generated
 │   │       ├── namespace/    #     what each root is bound to: tiles, assets, storage, the source
 │   │       ├── shell/        #     the UI: frame, world, settings, search, debug, ui kit (pill.ios.tsx beside pill.tsx), locale
