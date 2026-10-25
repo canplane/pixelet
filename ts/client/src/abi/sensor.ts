@@ -6,7 +6,7 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Command, encode_sensor_failed, encode_sensor_orientation, encode_sensor_permission, encode_sensor_position, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/abi/cmd.spec.ts";
 import type { SensorHeard } from "@/bracket.tsx";
-import { GUEST_DOORBELL, HOST } from "@/host/mount.ts";
+import { HOST } from "@/host/mount.ts";
 
 /** A device reading the device could not give — NaN, an infinity — is sent as none. */
 function given(n: number | null): number | null {
@@ -14,24 +14,24 @@ function given(n: number | null): number | null {
 }
 
 function kernel_position(lon: f64, lat: f64, altitude: f64 | null, accuracy: f64 | null, course: f64 | null): void {
-  HOST.send(Command.SENSOR_POSITION, encode_sensor_position(GUEST_DOORBELL, lon, lat, given(altitude), given(accuracy), given(course)));
+  HOST.send(Command.SENSOR_POSITION, encode_sensor_position(HOST.doorbell, lon, lat, given(altitude), given(accuracy), given(course)));
 }
 
 function kernel_position_error(code: GeolocationErrorCode): void {
-  HOST.send(Command.SENSOR_FAILED, encode_sensor_failed(GUEST_DOORBELL, Sensor.Geolocation, code));
+  HOST.send(Command.SENSOR_FAILED, encode_sensor_failed(HOST.doorbell, Sensor.Geolocation, code));
 }
 
 function kernel_orientation(webkit_compass_heading: f64 | null, alpha: f64 | null, beta: f64 | null, gamma: f64 | null): void {
-  HOST.send(Command.SENSOR_ORIENTATION, encode_sensor_orientation(GUEST_DOORBELL, given(webkit_compass_heading), given(alpha), given(beta), given(gamma)));
+  HOST.send(Command.SENSOR_ORIENTATION, encode_sensor_orientation(HOST.doorbell, given(webkit_compass_heading), given(alpha), given(beta), given(gamma)));
 }
 
 /** The compass gives no code for its failure. */
 function kernel_orientation_lost(): void {
-  HOST.now(Command.SENSOR_FAILED, encode_sensor_failed(GUEST_DOORBELL, Sensor.Orientation, null));
+  HOST.now(Command.SENSOR_FAILED, encode_sensor_failed(HOST.doorbell, Sensor.Orientation, null));
 }
 
 function kernel_permission(sensor: Sensor, answer: PermissionAnswer): void {
-  HOST.send(Command.SENSOR_PERMISSION, encode_sensor_permission(GUEST_DOORBELL, sensor, answer));
+  HOST.send(Command.SENSOR_PERMISSION, encode_sensor_permission(HOST.doorbell, sensor, answer));
 }
 
 const ERROR = {

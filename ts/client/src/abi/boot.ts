@@ -16,7 +16,7 @@ import { Command, encode_world_boot, encode_world_kept_emptied, encode_world_sou
 import { declare_source } from "@/namespace/source.ts";
 import { namespace } from "@/namespace/roots.ts";
 import { follow_refused, migrate } from "@/namespace/storage.ts";
-import { GUEST, GUEST_DOORBELL, HOST, open_host } from "@/host/mount.ts";
+import { HOST, open_host } from "@/host/mount.ts";
 import { DESKTOP_BYTES, DIRECTORY_AT, PHONE_BYTES, REGION_BYTES } from "./mem.spec.ts";
 import { key } from "@/abi/directory.spec.ts";
 import { stream } from "./gpu.spec.ts";
@@ -49,9 +49,9 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
     case Command.WORLD_SNAPSHOT: {
       // Too large for a ring frame; valid until the kernel writes the next, a turn away.
       const { at, len } = read_world_snapshot(f!);
-      set_snapshot(new Uint8Array(GUEST.memory, at, len));
+      set_snapshot(new Uint8Array(HOST.guest.memory, at, len));
       // Sent after the completion ring is read: the doorbell refuses a write while it reads.
-      follow_refused(kernel_snapshot().kept_refused, (slot) => queueMicrotask(() => HOST.send(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(GUEST_DOORBELL, slot))));
+      follow_refused(kernel_snapshot().kept_refused, (slot) => queueMicrotask(() => HOST.send(Command.WORLD_KEPT_EMPTIED, encode_world_kept_emptied(HOST.doorbell, slot))));
       return;
     }
     case Command.SENSOR_START:
@@ -68,8 +68,8 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
 
 /** The source's declaration to the kernel, refused where it is more than a command carries. */
 function send_source(top_zoom: number, formats: number[], shards: string[]): boolean {
-  const pkt = encode_world_source(GUEST_DOORBELL, top_zoom, formats, shards);
-  if (!GUEST_DOORBELL.fits(pkt)) return false;
+  const pkt = encode_world_source(HOST.doorbell, top_zoom, formats, shards);
+  if (!HOST.doorbell.fits(pkt)) return false;
   HOST.send(Command.WORLD_SOURCE, pkt);
   return true;
 }
@@ -87,13 +87,13 @@ export async function boot(): Promise<void> {
   const ns = namespace();
   await open_host(plan, { open: ns.open, commit: ns.commit, program: text_call, abort }, submit_frame);
   bracket.sensor.hear(SENSOR_HEARD);
-  GUEST_DOORBELL.signal = on_signal;
+  HOST.doorbell.signal = on_signal;
   bracket.gpu.boot({ ready: () => HOST.send(Command.GPU_READY), state: (state) => set_gpu(GPU_STATE[state]), wake: () => HOST.strobe.request() });
   bracket.online.watch(set_online);
   // Before the kernel opens its kept slots, which it does from WORLD_BOOT on.
   migrate();
-  const pkt = encode_world_boot(GUEST_DOORBELL, __IS_DEV__, bracket.sensor.geo.has, bracket.sensor.orient.has, bracket.sensor.orient.gated, bracket.sensor.orient.silence);
-  const booted = GUEST_DOORBELL.call(Command.WORLD_BOOT, pkt, (result) => result);
+  const pkt = encode_world_boot(HOST.doorbell, __IS_DEV__, bracket.sensor.geo.has, bracket.sensor.orient.has, bracket.sensor.orient.gated, bracket.sensor.orient.silence);
+  const booted = HOST.doorbell.call(Command.WORLD_BOOT, pkt, (result) => result);
   if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
   void declare_source(send_source);
@@ -101,7 +101,7 @@ export async function boot(): Promise<void> {
 
 /** `listener` hears the kernel stop for good: its turns end with it. */
 export function on_stop(listener: () => void): void {
-  GUEST_DOORBELL.stopped = () => {
+  HOST.doorbell.stopped = () => {
     HOST.strobe.stop();
     listener();
   };

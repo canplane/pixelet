@@ -20,22 +20,22 @@ import { OUTCOME_NAMES, STREAM_NAMES, TASK_PHASE_NAMES } from "@/abi/demand.spec
 import { FRAME, READ, RINGS, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WAKES, WORST } from "@/abi/profiler.spec.ts";
 import { STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
-import { GUEST, GUEST_DOORBELL } from "@/host/mount.ts";
+import { HOST } from "@/host/mount.ts";
 
 const WORD = 8;
 
 /** A command answered inside the call: the address of its reply in the kernel's memory. */
 function call(cmd: Command, pkt: PacketWriter | null = null): u32 {
-  return GUEST_DOORBELL.call(cmd, pkt, (at) => {
+  return HOST.doorbell.call(cmd, pkt, (at) => {
     // A refusal is -errno, never an address.
     if (at < 0) throw new FaultError(-at as Errno);
     return at >>> 0;
   });
 }
 
-const words = (at: u32, n: u32) => new Float64Array(GUEST.memory, at, n);
-const u32s = (at: u32, n: u32) => new Uint32Array(GUEST.memory, at, n);
-const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${td.decode(new Uint8Array(GUEST.memory, file, bytes))}:${line}`;
+const words = (at: u32, n: u32) => new Float64Array(HOST.guest.memory, at, n);
+const u32s = (at: u32, n: u32) => new Uint32Array(HOST.guest.memory, at, n);
+const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${td.decode(new Uint8Array(HOST.guest.memory, file, bytes))}:${line}`;
 
 /** The lanes that are lists: a word a name, a census entry two (its draws and
  * triangles). The names are their owners', and shown by the shell. */
@@ -232,7 +232,7 @@ function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
 
 /** The summary's words as PROFILER_READ lays them out over `window_ms`. */
 function summary_words(window_ms: f64 | null): F64Array {
-  const r = u32s(call(Command.PROFILER_READ, encode_profiler_read(GUEST_DOORBELL, window_ms)), READ.WORDS);
+  const r = u32s(call(Command.PROFILER_READ, encode_profiler_read(HOST.doorbell, window_ms)), READ.WORDS);
   return words(r[READ.summary_at], r[READ.summary_words]);
 }
 
@@ -284,7 +284,7 @@ export function profiler_tasks(last: u32 | null = null): TaskRecord[] {
   const at = ring + from * TASK.WORDS * WORD;
   const count = held - from;
   const w = words(at, count * TASK.WORDS);
-  const subjects = new BigUint64Array(GUEST.memory, at, count * TASK.WORDS);
+  const subjects = new BigUint64Array(HOST.guest.memory, at, count * TASK.WORDS);
   return Array.from({ length: count }, (_, i) => {
     const o = i * TASK.WORDS;
     const phase_count = w[o + TASK.phase_count];

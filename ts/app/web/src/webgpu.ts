@@ -14,7 +14,8 @@ import { GpuHost } from "@xpute/gpu/host.ts";
 import { DEV_BUNDLE } from "./bundle.ts";
 
 let host: GpuHost | null = null;
-/** The kernel's memory, which the host reads the stream from and writes answers into. */
+/** The kernel's memory, which the host reads the stream from and writes
+ * answers into; given once by the guest's open (guest.ts), as it never moves. */
 let memory: ArrayBuffer | null = null;
 /** A canvas transfers once: an effect mounted again is handed the same one. */
 const transferred = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
@@ -48,8 +49,8 @@ async function look(): Promise<Missing | null> {
 }
 
 /** False where no adapter answered. What the device is, the kernel reads from
- * the block its first call asks the host for. */
-/** `wake`: what a completion calls to ask the turn that reads it (xpute GpuHost). */
+ * the block its first call asks the host for. `wake` is what a completion
+ * calls to ask the turn that reads it (@xpute/gpu/host.ts `GpuHost`). */
 export async function acquire(lost: () => void, wake: () => void): Promise<boolean> {
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   if (!adapter) return false;
@@ -104,8 +105,11 @@ export function unbind(handle: u32): void {
   host?.unbind(handle);
 }
 
-/** With no device the records are dropped: the kernel remakes everything on the next one. */
-export function run(of: ArrayBuffer, at: u32, head: u32): void {
+export function take(of: ArrayBuffer): void {
   memory = of;
+}
+
+/** With no device the records are dropped: the kernel remakes everything on the next one. */
+export function run(at: u32, head: u32): void {
   host?.run(at, head);
 }

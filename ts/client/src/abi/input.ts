@@ -20,7 +20,7 @@ import {
   PointerType,
 } from "@/abi/cmd.spec.ts";
 import { bracket, type PointerKind, type PointerPhase as PlacePhase, type Viewport } from "@/bracket.tsx";
-import { GUEST_DOORBELL, HOST } from "@/host/mount.ts";
+import { HOST } from "@/host/mount.ts";
 
 /** Asked every frame, so a resize needs no event of its own. */
 let driver: (() => Viewport) | null = null;
@@ -32,46 +32,46 @@ export function submit_frame(grant: Grant): void {
   const { width: w, height: h } = driver();
   const width = Math.max(1, w);
   const height = Math.max(1, h);
-  GUEST_DOORBELL.send(0, Command.WORLD_FRAME, encode_world_frame(GUEST_DOORBELL, width, height, grant.refresh_ms, grant.paced_ms, grant.interactive, bracket.origin.credits, Date.now()));
+  HOST.doorbell.send(0, Command.WORLD_FRAME, encode_world_frame(HOST.doorbell, width, height, grant.refresh_ms, grant.paced_ms, grant.interactive, bracket.origin.credits, Date.now()));
 }
 
 export function kernel_pointer(phase: PointerPhase, pointer_type: PointerType, id: i32, button: i32, x: f64, y: f64): void {
-  HOST.input(Command.INPUT_POINTER, encode_input_pointer(GUEST_DOORBELL, phase, pointer_type, id, button, x, y));
+  HOST.input(Command.INPUT_POINTER, encode_input_pointer(HOST.doorbell, phase, pointer_type, id, button, x, y));
 }
 
 export function kernel_wheel(delta_y: f64): void {
-  HOST.input(Command.INPUT_WHEEL, encode_input_wheel(GUEST_DOORBELL, delta_y));
+  HOST.input(Command.INPUT_WHEEL, encode_input_wheel(HOST.doorbell, delta_y));
 }
 
 export function kernel_keys(x: i32, y: i32): void {
-  HOST.input(Command.INPUT_KEYS, encode_input_keys(GUEST_DOORBELL, x, y));
+  HOST.input(Command.INPUT_KEYS, encode_input_keys(HOST.doorbell, x, y));
 }
 
 export function kernel_rect(left: f64, top: f64, width: f64, height: f64): void {
-  GUEST_DOORBELL.send(0, Command.INPUT_RECT, encode_input_rect(GUEST_DOORBELL, left, top, width, height));
+  HOST.doorbell.send(0, Command.INPUT_RECT, encode_input_rect(HOST.doorbell, left, top, width, height));
 }
 
 export function kernel_hold(tool: ActiveTool, value: u32, tier: u32): void {
-  HOST.input(Command.INPUT_HOLD, encode_input_hold(GUEST_DOORBELL, tool, value, tier));
+  HOST.input(Command.INPUT_HOLD, encode_input_hold(HOST.doorbell, tool, value, tier));
 }
 
 export function kernel_open(viewport: () => Viewport): () => void {
   driver = viewport;
-  HOST.now(Command.WORLD_VIEW, encode_world_view(GUEST_DOORBELL, true));
+  HOST.now(Command.WORLD_VIEW, encode_world_view(HOST.doorbell, true));
   HOST.strobe.start();
   const unfollow = bracket.sensor.follow();
   return () => {
     unfollow();
     HOST.strobe.stop();
-    HOST.now(Command.WORLD_VIEW, encode_world_view(GUEST_DOORBELL, false));
+    HOST.now(Command.WORLD_VIEW, encode_world_view(HOST.doorbell, false));
     driver = null;
   };
 }
 
 /** Rung at once with no quota: a hidden page gets no frame, and this is the last sure moment for a save. */
 export function kernel_visible(visible: boolean): void {
-  GUEST_DOORBELL.send(0, Command.WORLD_VISIBILITY, encode_world_visibility(GUEST_DOORBELL, visible));
-  GUEST_DOORBELL.ring(0);
+  HOST.doorbell.send(0, Command.WORLD_VISIBILITY, encode_world_visibility(HOST.doorbell, visible));
+  HOST.doorbell.ring(0);
   if (visible) {
     HOST.strobe.start();
     HOST.strobe.request();
