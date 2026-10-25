@@ -12,11 +12,11 @@ doctest = false
 base64.workspace = true
 fnv.workspace = true
 libm.workspace = true
-xpute-guest = { path = "../../../xpute/rust/guest" }
-xpute-kit = { path = "../../../xpute/rust/kit" }
-pxl-spec = { path = "../../spec" }
-pxl-spec-core = { path = "../../spec/core" }
-pxl-render = { path = "../render" }
+xpute-guest.workspace = true
+xpute-kit = { workspace = true, features = ["std"] }
+pxl-spec.workspace = true
+pxl-spec-core.workspace = true
+pxl-render.workspace = true
 # The executor the door polls the kernel's tasks on inside a turn
 # (door/executor.rs). No platform feature: the pender is the kernel's own, and
 # the platform one for wasm brings wasm-bindgen.

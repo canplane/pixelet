@@ -15,10 +15,10 @@ serve = ["dep:axum", "dep:tokio", "dep:pxl-server"]
 [dependencies]
 fnv.workspace = true
 libm.workspace = true
-pxl-geo-spec = { path = "../geo-spec" }
-pxl-spec = { path = "../../spec", features = ["serde"] }
-pxl-spec-core = { path = "../../spec/core" }
-xpute-kit = { path = "../../../xpute/rust/kit" }
+pxl-geo-spec.workspace = true
+pxl-spec = { workspace = true, features = ["serde"] }
+pxl-spec-core.workspace = true
+xpute-kit = { workspace = true, features = ["std"] }
 # Blocking: the pack and rasterize are `Rc`-backed, so a page is one non-`Send`
 # call, and each worker is a thread with its own connection.
 postgres = { version = "0.19", features = ["with-serde_json-1"] }
@@ -34,7 +34,7 @@ serde = { version = "1", features = ["derive"] }
 # 227 of 10,979 longitudes by an ULP.
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 axum = { version = "0.8", optional = true }
-pxl-server = { path = "..", optional = true }
+pxl-server = { workspace = true, optional = true }
 tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "sync", "process", "time"], optional = true }
 
 # Declared because a feature gates it; the other bins are found in src/bin/.

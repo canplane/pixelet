@@ -58,6 +58,21 @@ base64 = "0.23"
 # What a test reads a golden packet's bytes back as.
 hex = "0.4"
 
+# The workspace's own crates and xpute's, each by its path once, so a crate
+# names another by name. pxl-kernel and xpute-kit default to nothing here: a
+# crate that wants their defaults says so.
+xpute-kit = { path = "../xpute/rust/kit", default-features = false }
+xpute-guest = { path = "../xpute/rust/guest" }
+xpute-gpu = { path = "../xpute/rust/gpu" }
+xpute-host = { path = "../xpute/rust/host" }
+xpute-link = { path = "../xpute/rust/link" }
+pxl-spec-core = { path = "spec/core" }
+pxl-spec = { path = "spec" }
+pxl-render = { path = "client/render" }
+pxl-kernel = { path = "client/kernel", default-features = false }
+pxl-server = { path = "server" }
+pxl-geo-spec = { path = "server/geo-spec" }
+
 # The client's crates name the kernel's memory by offsets from one base
 # (xpute-guest mem/base.rs), and an offset cast straight to a pointer
 # reads the wrong memory wherever the base is not 0 — on a device, where the

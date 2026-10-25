@@ -16,15 +16,15 @@ doctest = false
 
 [dependencies]
 fnv.workspace = true
-xpute-kit = { path = "../../../xpute/rust/kit" }
-xpute-guest = { path = "../../../xpute/rust/guest" }
+xpute-kit = { workspace = true, features = ["std"] }
+xpute-guest.workspace = true
 # The kernel's memory, its thread and the allocator over both (src/lib.rs).
-xpute-host = { path = "../../../xpute/rust/host" }
-pxl-kernel = { path = "../../client/kernel", default-features = false }
-pxl-render = { path = "../../client/render" }
+xpute-host.workspace = true
+pxl-kernel.workspace = true
+pxl-render.workspace = true
 # The host that runs the renderer's stream on the device after each turn
 # (src/surface.rs), as the page's runs it on WebGPU.
-xpute-gpu = { path = "../../../xpute/rust/gpu", features = ["host"] }
+xpute-gpu = { workspace = true, features = ["host"] }
 # The device, and the view's layer or window made a surface on
 # (src/surface.rs).
 # Metal on an iPhone, Vulkan on Android; each backend compiles to nothing on

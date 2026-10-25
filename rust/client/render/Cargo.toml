@@ -11,21 +11,21 @@ doctest = false
 [dependencies]
 fnv.workspace = true
 libm.workspace = true
-xpute-guest = { path = "../../../xpute/rust/guest" }
-xpute-kit = { path = "../../../xpute/rust/kit" }
-pxl-spec = { path = "../../spec" }
+xpute-guest.workspace = true
+xpute-kit = { workspace = true, features = ["std"] }
+pxl-spec.workspace = true
 # The GPU's decor pass's bounds and the record it writes (gpu/renderer.rs),
 # and the cloud field the sheets lie on (gpu/cloud.rs).
-pxl-spec-core = { path = "../../spec/core" }
+pxl-spec-core.workspace = true
 
 # WebGPU's calls written into a stream (gpu/api.rs): xpute's encoder, which
 # the page's host and the device app's run alike.
-xpute-gpu = { path = "../../../xpute/rust/gpu" }
+xpute-gpu.workspace = true
 
 [build-dependencies]
 # The zooms the screen's rays are painted by (build.rs `lattice.wgsl`), and
 # the cloud field's hash (`cloud_hash.wgsl`).
-pxl-spec-core = { path = "../../spec/core" }
+pxl-spec-core.workspace = true
 # Every shader validated, and what its stages read, as it is built (build.rs `assemble`).
 naga = { version = "30", features = ["wgsl-in"] }
 

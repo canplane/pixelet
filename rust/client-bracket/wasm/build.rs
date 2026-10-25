@@ -14,12 +14,12 @@
 // end below, or the two would drift apart silently and the linker would write
 // `.data` over a ring.
 //
-// The numbers are not decided here either. They are mem.json's, included
-// below rather than copied (pxl-tool/bin/spec.rs writes sys/mem/mem.spec.rs;
-// `make check-spec` fails where what is on disk is not what the JSON
-// writes).
+// The numbers are not decided here either. They are mem.json's, which
+// pxl-tool/bin/spec.rs writes beside this script as it writes the kernel's
+// sys/mem/mem.spec.rs (`make check-spec` fails where what is on disk is not
+// what the JSON writes).
 
-#[path = "../../client/kernel/src/sys/mem/mem.spec.rs"]
+#[path = "mem.spec.rs"]
 mod spec;
 
 use spec::{DESKTOP_BYTES, GLOBAL_BASE, PHONE_BYTES, STACK_BYTES};
@@ -39,5 +39,5 @@ fn main() {
         initial_bytes: Some(MIN_MEMORY_BYTES),
     });
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=../../client/kernel/src/sys/mem/mem.spec.rs");
+    println!("cargo:rerun-if-changed=mem.spec.rs");
 }

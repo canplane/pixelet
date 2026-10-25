@@ -10,7 +10,7 @@ doctest = false
 
 [dependencies]
 # Its seeds alone, `no_std`.
-xpute-kit = { path = "../../../xpute/rust/kit", default-features = false }
+xpute-kit.workspace = true
 libm.workspace = true
 
 [lints]

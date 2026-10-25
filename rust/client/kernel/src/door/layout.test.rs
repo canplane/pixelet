@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn mem_json_states_the_fixed_ranges_and_the_heap_flows_as_they_are() {
-    let note = include_str!("../../../../../spec/client/kernel/sys/mem/mem.json");
+    let note = include_str!(concat!(env!("PXL_REPO"), "/spec/client/kernel/sys/mem/mem.json"));
     let mib = |bytes: u64| format!("{:.2} MiB", bytes as f64 / f64::from(1u32 << 20));
     let figures = [
         ("the fixed ranges", u64::from(FIXED_BYTES)),

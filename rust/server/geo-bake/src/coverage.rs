@@ -15,7 +15,7 @@ use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of, region}
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-const COVERAGE: &str = include_str!("../../../../infra/geo/coverage.json");
+const COVERAGE: &str = include_str!(concat!(env!("PXL_REPO"), "/infra/geo/coverage.json"));
 
 /// A shard, by its index at `SHARD_ZOOM`.
 pub type Shard = [i32; 2];

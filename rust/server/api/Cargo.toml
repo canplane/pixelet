@@ -10,6 +10,6 @@ path = "src/main.rs"
 
 [dependencies]
 axum = "0.8"
-pxl-server = { path = ".." }
-pxl-spec = { path = "../../spec" }
+pxl-server.workspace = true
+pxl-spec.workspace = true
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
