@@ -60,12 +60,12 @@ a size and a color, and the platform draws the whole line: `fillText` on a
 page, CoreText's `CTLine` on iOS. Kerning, ligatures, joining, bidi, fallback
 and emoji are the platform engine's, the quality a page's labels already
 had, on every target alike. A text too wide for its box is broken into lines
-by the shell, measuring with the same platform (`apps/client/src/abi/text.ts`
+by the shell, measuring with the same platform (`ts/client/src/abi/text.ts`
 `line_ends`), and the kernel asks for each line's pixels
 (`pxl-kernel sys/io/text.rs`, host.json's `TEXT_LAYOUT` and `TEXT_RASTER`).
 
 > Since moved: the lines are broken in the client's `abi/`, which answers
-> the kernel's own calls (`apps/client/src/abi/text.ts` `line_ends`), not
+> the kernel's own calls (`ts/client/src/abi/text.ts` `line_ends`), not
 > by the shell, which is the UI alone.
 
 The cost is reuse: "Gangnam Station" and "Gangnam-gu Office" share no

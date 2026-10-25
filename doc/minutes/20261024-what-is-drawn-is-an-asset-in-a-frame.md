@@ -64,7 +64,7 @@ wants.
   (`domain/scene/character/preview.rs`).
 - **The socket.** The kernel opens an asset on the `ASSET` root by a number
   (`sys/io/loader.rs`), and the host's backend reads the bytes that number is
-  (`apps/client/src/namespace/asset.ts` `read_asset`).
+  (`ts/client/src/namespace/asset.ts` `read_asset`).
 
 ## Where it does not
 

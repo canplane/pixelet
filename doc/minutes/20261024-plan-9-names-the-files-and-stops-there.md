@@ -25,7 +25,7 @@ Plan 9's text is a convention, not its design: its own `/dev/draw` is a
 binary protocol written to a file. Without the text, three things are left:
 a name a resource is found by, four verbs every resource shares, and a
 namespace a parent composes. The question is which of pixelet's commands
-want them (apps/client/src/abi/cmd.spec.ts `Command`).
+want them (ts/client/src/abi/cmd.spec.ts `Command`).
 
 | Kind                    | Commands                                                        | As a file                                                                       |
 | ----------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------- |

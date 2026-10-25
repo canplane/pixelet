@@ -162,8 +162,8 @@ range. `--global-base` is how it is told where its own data may begin, and the
 same arithmetic has to produce that flag and the addresses the code uses —
 which is why both come out of one file of numbers,
 `spec/client/kernel/sys/mem/mem.json`: its generated `sys/mem/mem.spec.rs` is what
-`crates/client-bracket/wasm/build.rs` emits as the link argument and what
-`crates/client/kernel/src/door/layout.rs` lays the rings from. There is no
+`rust/client-bracket/wasm/build.rs` emits as the link argument and what
+`rust/client/kernel/src/door/layout.rs` lays the rings from. There is no
 second place to get them wrong.
 
 The map as the code now holds it (mem.json, door/layout.rs; a descriptor
@@ -196,7 +196,7 @@ resident. The exception this repository has already met is accounting rather
 than residency: JavaScriptCore reports the whole reservation as the page's
 JavaScript memory — a Safari heap timeline read it as one `ArrayBuffer` —
 which is why a phone is given 512 MiB and not 1 GiB (mem.json `PHONE_BYTES`,
-`apps/client/src/abi/boot.ts`). The reservation did not change here, so neither does
+`ts/client/src/abi/boot.ts`). The reservation did not change here, so neither does
 that.
 
 **The stack stays at the bottom, and that is the only guard there is.** rustc

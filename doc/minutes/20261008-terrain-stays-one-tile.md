@@ -3,11 +3,11 @@
 **2026-10-08**
 
 A terrain tile keeps its ground, elevation, decks and bores, and index
-together, one object a node (`crates/spec/src/bake/tile/terrain.rs`
+together, one object a node (`rust/spec/src/bake/tile/terrain.rs`
 `TerrainTile`, which since 2026-10-23 holds no index, only which children
 are tiles beside them). It is not torn into a pyramid per channel, and it is
 not made sparse, a child kept only where it says more than its parent.
-Places and divisions are sparse (`crates/server/geo-bake/src/pyramid.rs`
+Places and divisions are sparse (`rust/server/geo-bake/src/pyramid.rs`
 `unasked`, left out where they are published); terrain is not.
 
 ## The question
@@ -52,7 +52,7 @@ that is worth what it costs.
     down.
 - **Channels kept apart in the build only, packed into one tile to publish.**
   Its one gain, refolding a channel alone, is already had: the fold is per
-  channel inside one function (`crates/spec/src/bake/fold.rs`
+  channel inside one function (`rust/spec/src/bake/fold.rs`
   `fold_terrain`), and a bake folds again only what its shards change,
   tile by tile (`pyramid.rs` `fold`). Set aside as state with no use.
 
@@ -61,7 +61,7 @@ that is worth what it costs.
 The leaf is baked as it was; the pyramid over it is one tile a node, folded
 by `fold_terrain`, every zoom down to the leaves; a shard baked beside the
 others folds again only what it changes
-(`crates/server/geo-bake/src/tile/shard.rs`).
+(`rust/server/geo-bake/src/tile/shard.rs`).
 
 Asked again if re-uploading the whole terrain for a change that only
 repaints becomes the measured bottleneck.

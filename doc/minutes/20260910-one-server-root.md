@@ -89,11 +89,11 @@ per-route rewrite left in the dev proxy.
 > Superseded. Now `/geo/*` goes to pxl-geo and `/api/*` to pxl-api, both
 > relayed by the Worker; `/tile/*` and `/asset/*` are served from the bucket;
 > everything else is app assets. `run_worker_first` lists the four roots
-> (`apps/web/wrangler.jsonc`), and pxl-tool (`crates/tool/src/bin/spec.rs`)
+> (`ts/server/edge/wrangler.jsonc`), and pxl-tool (`rust/tool/src/bin/spec.rs`)
 > writes the roots and branches from `spec/spec/route.json` into
-> `apps/client/src/config/route.spec.ts`,
-> `apps/web/cloudflare-worker/route.spec.ts` and
-> `crates/spec/src/route.spec.rs`. `apps/api`, `src/lib/env/routes.ts`, `/io`
+> `ts/client/src/config/route.spec.ts`,
+> `ts/server/edge/route.spec.ts` and
+> `rust/spec/src/route.spec.rs`. `apps/api`, `src/lib/env/routes.ts`, `/io`
 > and `SOCKET_PATH` are gone.
 
     /api/tiles/<kind>/<version>/<page>   published bakes, bucket-served

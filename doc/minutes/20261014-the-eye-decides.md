@@ -49,7 +49,7 @@ what stands on it. In the same weeks coordinates became relative to the eye
 
 A chunk meshed whole draws what no eye can see. A heightfield chunk `n`
 cells a side has a surface of about `n²` faces. Caves are hash-drawn
-pockets through the ground (`crates/spec/core/src/caves.rs`), and their walls
+pockets through the ground (`rust/spec/core/src/caves.rs`), and their walls
 grow with the volume, toward `n³`. A camera on the surface sees almost none
 of them, and the chunk drew them all.
 
@@ -70,7 +70,7 @@ whole-chunk build. Casting a ray a pixel drops the second.
 
 **14 October** (`5bdc893dc` and the decision above). A ray a pixel on the
 GPU, with nothing turned back into geometry. The descent is one source,
-`crates/spec/core/src/cast.rs`, compiled for the CPU and through rust-gpu to
+`rust/spec/core/src/cast.rs`, compiled for the CPU and through rust-gpu to
 WGSL. The camera grid still chooses the zoom a ray asks at each distance,
 so the resolution rule did not change; only the number of rays did. A
 pixel is not the final form of the rule, only its finest setting: one ray a
@@ -164,7 +164,7 @@ for voxels can cast into the voxel hierarchy directly.
 A ray here does what a ray does in a bounding volume hierarchy (BVH): it
 asks a node whether anything under it is filled, passes it whole if not,
 and descends into the children it meets, nearest first
-(`crates/spec/core/src/cast.rs`). Three things make up that hierarchy, and none
+(`rust/spec/core/src/cast.rs`). Three things make up that hierarchy, and none
 is built while drawing.
 
 - **The tree** is the zooms: eight children a node, an octree whose nodes
@@ -173,11 +173,11 @@ is built while drawing.
   lowest and highest it draws over a column, read from a square's levels,
   which the GPU folds over the square's columns as it lands, each coarser
   level the join of the one under it (`bound_cs`;
-  `crates/spec/core/src/window.rs` `bound_over`, `crates/spec/core/src/ground.rs`
+  `rust/spec/core/src/window.rs` `bound_over`, `rust/spec/core/src/ground.rs`
   `relief`). Outside this is called a
   min-max (or maximum) mipmap, the usual structure for casting rays at a
   heightmap. The kernel's query carries a box a node
-  (`crates/client/kernel/src/domain/layer/query.rs` `Query::bounds`), as a BVH does.
+  (`rust/client/kernel/src/domain/layer/query.rs` `Query::bounds`), as a BVH does.
 - **The content** is the pyramid's tiles, folded at each zoom, which answer
   what a block is where a ray stops.
 
@@ -196,7 +196,7 @@ What the rays need was then streamed the way GigaVoxels streams it: the
 tiles a descent lacked were part of the observation, and demand followed
 them (`view/sight.rs`, since removed). That no longer holds: demand is a
 function of the eye alone, never of what the rays met
-(`crates/client/kernel/src/domain/view/observation.rs` `ByEye`).
+(`rust/client/kernel/src/domain/view/observation.rs` `ByEye`).
 
 ## Where it points
 
@@ -224,8 +224,8 @@ the rays already play to the rays alone.
 
 - _Which tiles matter._ Fetching then followed the rays' lacks (now the
   eye alone, above), but evicting ranks tiles by whether a box around each
-  is in the frustum and by distance (`crates/client/kernel/src/sys/io/demand.rs`
-  `Order`, through `crates/spec/src/space/camera/eye.rs` `measure`). A tile
+  is in the frustum and by distance (`rust/client/kernel/src/sys/io/demand.rs`
+  `Order`, through `rust/spec/src/space/camera/eye.rs` `measure`). A tile
   behind a mountain is in the frustum and no ray reads it. GigaVoxels marks
   what the rays read and evicts what they did not; here the descent already
   counts the nodes it asks about (`c44070e06`). The same order also ranks
@@ -239,7 +239,7 @@ the rays already play to the rays alone.
   only pages of data and rays. Done but for the rung: a chunk draws
   nothing, and is now only the address by which what stands in the world,
   decor and places, is gathered about the eye
-  (`crates/client/kernel/src/domain/chunk.rs`, `domain/view/observation.rs` `cubes`).
+  (`rust/client/kernel/src/domain/chunk.rs`, `domain/view/observation.rs` `cubes`).
 
 **The floor.** Below these, five things remain, and removing any one brings
 its problem back: the tree, or the cost is linear in the world; the bound,
@@ -252,11 +252,11 @@ detail and visibility must be solved apart.
 and stay inside this structure on three conditions. It must stay inside the
 cells it is registered in, or a ray passing the part outside never learns
 it is there; a decor model can be larger than its box today
-(`crates/spec/src/block.rs` `Decor::reach`). A ray must not stop at its cell
+(`rust/spec/src/block.rs` `Decor::reach`). A ray must not stop at its cell
 as if the cell were full, or the ground behind shows a cell-shaped hole;
-decor already leaves its cell empty (`crates/spec/core/src/answer.rs`
+decor already leaves its cell empty (`rust/spec/core/src/answer.rs`
 `fills`). And the fold must say what it is
 at a zoom whose block is larger than it. Within those, a mesh is a block of
 an intricate shape. Decor today is not inside the rays: the GPU grows it and
 draws it as a model or a sprite beside them
-(`crates/client/render/src/gpu/grown.rs`).
+(`rust/client/render/src/gpu/grown.rs`).

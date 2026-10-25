@@ -114,7 +114,7 @@ disturbing it, since there is then no server-side path at all.
 > History: this list and the next name the TypeScript client of this date.
 > `CORE_POOL`, `BuddyAllocator`, `gltf_cache.ts`, `render/scene_depth.ts`
 > and `billboard/anchor_occlusion.ts` are gone with it; the client is the
-> Rust under `crates/client/` (`kernel`, `render`, `shader`).
+> Rust under `rust/client/` (`kernel`, `render`, `shader`).
 
 - The wire format, per XTP above.
 - The state layout, per the linear-memory checklist.

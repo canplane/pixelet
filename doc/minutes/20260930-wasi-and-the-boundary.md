@@ -67,7 +67,7 @@ of guest: its linker and libc++ are what a C++ guest needs, and a guest that
 calls nothing of the OS imports nothing of WASI. The C++ guest is built so,
 by the SDK's clang with `--target=wasm32-wasip1` (xpute/cpp/Makefile), and
 its module imports `env.memory` and `env.now` alone, as the Rust guest's does
-(xpute/ts/conformance/src/trace.test.ts `MODULE_IMPORTS`).
+(xpute/ts/host/src/conformance.test.ts `MODULE_IMPORTS`).
 
 ## What was decided
 

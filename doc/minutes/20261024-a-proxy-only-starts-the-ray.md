@@ -27,7 +27,7 @@ any name.
 
 1. **The proxy holds no fact of its own.** Its shape comes from what already
    bounds the world: the ground's per-square height bounds the eye's windows
-   already hold (`bound_cs`, the levels of crates/spec/core/src/window.rs),
+   already hold (`bound_cs`, the levels of rust/spec/core/src/window.rs),
    and the objects' tree's nodes that hold something. Nothing is baked,
    meshed or cached for the proxy.
 2. **It is made on the GPU each frame, from those bounds as they stand.**
@@ -45,7 +45,7 @@ any name.
 ## What it would replace
 
 A ray's start is set today by three passes over a buffer sized by the screen
-(crates/spec/core/src/beam.rs): beam rays at the camera grid's corners
+(rust/spec/core/src/beam.rs): beam rays at the camera grid's corners
 (`beam_cs`), a start for each cell off them (`cells_cs`), and samples a quarter
 cell apart that pixels take their block from (`sample_cs`). That buffer is
 the one that met the 128 MiB per-binding floor on a 4K surface. A depth a
@@ -59,7 +59,7 @@ Each of these holds whether or not the proxy is taken, because the ray stays
 what decides the pixel. They are in:
 
 - a block's face bits asked of the query once a block, by the sample that
-  stops on it (crates/spec/core/src/faces.rs);
+  stops on it (rust/spec/core/src/faces.rs);
 - the camera grid computed once a frame and handed to the GPU in the eye's
   words (`beam::Grid`);
 - the per-pixel miss list gone: a pixel that missed says so in its own ray

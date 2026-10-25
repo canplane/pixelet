@@ -6,8 +6,8 @@ which parts of the current architecture had to change to make that true.
 > Mechanical details below (table names, route paths, env vars like
 > `VITE_TILE_BASE_URL`, `apps/api`, `/tiles/v1`, the `_ocean` fallback,
 > gzip) reflect this doc's own date and have since moved —
-> `spec/spec/route.json`, `apps/web/wrangler.jsonc`,
-> `apps/web/cloudflare-worker/index.ts` and `infra/README.md` are current.
+> `spec/spec/route.json`, `ts/server/edge/wrangler.jsonc`,
+> `ts/server/edge/index.ts` and `infra/README.md` are current.
 > The reasoning (pre-baked tiles, object storage, one-Worker-one-origin)
 > still holds for what the bucket serves; this note exists so the paths
 > below aren't mistaken for current.
@@ -40,7 +40,7 @@ once, offline, and served as a static file. That collapses the deployment from
 
 > Superseded in part: tiles are still baked and served from the bucket, now
 > by the Rust bakes (`bake_terrain`, `bake_place`, `bake_division` in
-> `crates/server/geo-bake/src/bin/`), but search and the application are
+> `rust/server/geo-bake/src/bin/`), but search and the application are
 > served live behind the same Worker — see the note at the top.
 
 The whole coverage area is baked once by an offline tool
@@ -60,8 +60,8 @@ what you actually want.
 
 > Superseded: there is no `_ocean` object now. A page a version leaves out
 > is answered `204` by the Worker (`left()` in
-> `apps/web/cloudflare-worker/index.ts`), and the client reads a 204 as no
-> object (`apps/client/src/namespace/read.ts`); 404 stays for a key that
+> `ts/server/edge/index.ts`), and the client reads a 204 as no
+> object (`ts/client/src/namespace/read.ts`); 404 stays for a key that
 > names nothing.
 
 Classifying the coverage bbox against `osm_coastline_polygons` (the same
@@ -105,8 +105,8 @@ so a 404 there is a genuine failure and must keep surfacing as one.
 
 > Superseded: `__TILE_BASE_URL__` is gone, and `VITE_TILE_BASE_URL` now
 > only points the dev server's proxy at a local tile server
-> (`apps/web/vite.config.ts`). Tile URLs are `/tile/<kind>/<version>/<name>`
-> (`tileUrl` in `apps/client/src/config/route.ts`), and which version is
+> (`ts/app/web/vite.config.ts`). Tile URLs are `/tile/<kind>/<version>/<name>`
+> (`tileUrl` in `ts/client/src/config/route.ts`), and which version is
 > served is the bucket's `source` declaration (`spec/spec/bake/published.json`).
 > Immutable versions, never overwritten in place, still hold.
 
@@ -133,9 +133,9 @@ dataset re-baked a handful of times a year needs.
 ### 4. Objects are stored pre-gzipped
 
 > Superseded: objects are stored zstd now (`CONTENT_ENCODING` in
-> `crates/server/geo-bake/src/util.rs`; see
+> `rust/server/geo-bake/src/util.rs`; see
 > [compression by traffic](./20260913-compression-by-traffic.md)). The
-> upload takes the encoding from the bake's manifest (`apps/web/script/publish.ts`).
+> upload takes the encoding from the bake's manifest (`ts/app/web/script/publish.ts`).
 
 Object stores don't compress on the fly. Each tile is gzipped at bake time and
 uploaded with `content-type: application/octet-stream` +
@@ -379,7 +379,7 @@ A miss is a billed class-B operation, so without this anyone can walk
 prober which guesses had the right shape, and the client cannot act on the
 difference anyway.
 
-> Since then: the shape is `KEY_RE` in `apps/web/cloudflare-worker/index.ts`,
+> Since then: the shape is `KEY_RE` in `ts/server/edge/index.ts`,
 > and a well-shaped page key with no object answers 204 (`left()`), not 404.
 
 ### On its own domain — and what that took (2026-08-17)
@@ -476,7 +476,7 @@ in the first place.
 
 ### Uploading
 
-> Now `apps/web/script/publish.ts`: `aws s3 sync` against R2's S3 endpoint, with the
+> Now `ts/app/web/script/publish.ts`: `aws s3 sync` against R2's S3 endpoint, with the
 > `content-encoding` and `content-type` taken from the bake's manifest.
 
 43,506 objects rules out `wrangler r2 object put`, which handles one object per
@@ -511,9 +511,9 @@ rather than a code change — it is a door left open, not one to walk through
 now.
 
 > Placed objects are now the kernel's kept slot `kept::OBJECTS` below its
-> `STORAGE` root (`crates/client/kernel/src/sys/io/host.spec.rs`); the page
+> `STORAGE` root (`rust/client/kernel/src/sys/io/host.spec.rs`); the page
 > keeps each slot in `localStorage` under its key, `pxl:kept:objects` for
-> this one (`kept_key` in `apps/client/src/namespace/storage.ts`), the
+> this one (`kept_key` in `ts/client/src/namespace/storage.ts`), the
 > device app in the platform's preferences.
 
 **Placed objects stay in `localStorage`.** Nothing is shared between visitors;
@@ -530,7 +530,7 @@ pipeline itself (OSM policy, POI ranking, PostGIS SQL, quantization) lives in
 `apps/api` and never leaves the server, and the baked binaries don't give it up.
 
 > The bake pipeline no longer lives in `apps/api`, which is gone: it is
-> `crates/server/geo-bake`, and still never deployed.
+> `rust/server/geo-bake`, and still never deployed.
 
 **API hardening remains parked.** Rate limiting, timeouts, and circuit breaking
 were judged out of scope (see project notes). They're moot for the static
@@ -540,13 +540,13 @@ any future non-static path.
 
 ## Deploying it: what actually broke
 
-> The Worker is `apps/web/cloudflare-worker/index.ts` now, and
+> The Worker is `ts/server/edge/index.ts` now, and
 > `run_worker_first` claims four roots, `["/geo/*", "/api/*", "/tile/*",
-> "/asset/*"]` (`apps/web/wrangler.jsonc`, written from
+> "/asset/*"]` (`ts/server/edge/wrangler.jsonc`, written from
 > `spec/spec/route.json`). The reasoning below holds.
 
 The shape that shipped is one Cloudflare Worker serving both the built app and
-the tiles (`apps/web/wrangler.jsonc`, `apps/web/worker/index.ts`), so tiles live
+the tiles (`ts/server/edge/wrangler.jsonc`, `apps/web/worker/index.ts`), so tiles live
 under `/tiles/` on the app's own hostname and are same-origin by construction.
 Two settings make that work together, and both matter:
 
@@ -594,7 +594,7 @@ the wire did.
 > Since replaced: the cache stores the packed bytes with their encoding
 > parked on `x-pxl-stored-encoding` (`STORED_ENCODING`), and `serve()` puts
 > it back with `encodeBody: "manual"` on both paths out
-> (`apps/web/cloudflare-worker/index.ts`).
+> (`ts/server/edge/index.ts`).
 
 Putting the Cache API in front of R2 — the cost control described below —
 reintroduced the identical failure on cache hits alone. A tile stored at 34,261
@@ -655,13 +655,13 @@ attribution link in the license section.
 > Since superseded: Nominatim is not called; reverse geocoding is baked
 > (the divisions bake), and the coordinate that leaves the client now is
 > forward search's `near`, sent to the project's own `/geo/search`
-> (`fetchSearch` in `apps/client/src/shell/search/repository.ts`). The
+> (`fetchSearch` in `ts/client/src/shell/search/repository.ts`). The
 > settings this paragraph lists are now `pxl:lang`, `pxl:ui_hotbar` and the
 > kernel's two kept slots, the settings and the placed objects
 > (`pxl:kept:settings`, `pxl:kept:objects`;
-> `apps/client/src/namespace/storage.ts`). pxl-api is deployed and its
+> `ts/client/src/namespace/storage.ts`). pxl-api is deployed and its
 > `/api/internal` is behind the admin token (`API_INTERNAL`,
-> `crates/server/api/src/main.rs`).
+> `rust/server/api/src/main.rs`).
 
 **Location is the sensitive surface here.** The only personal data
 leaving the client is the map-center coordinate sent to Nominatim — rounded to
@@ -679,14 +679,14 @@ through the Worker ("What actually bounds the spend", above).
 ## Changes this produced
 
 > History: `apps/api` and every file below it are gone, and the client is
-> `apps/client`; none of these paths is current.
+> `ts/client`; none of these paths is current.
 
 | File                                                     | Change                                                                    |
 | -------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `apps/api/src/modules/world/terrain/source.ts`           | new — tile assembly extracted so offline bake and live API share one path |
 | `apps/api/src/modules/world/terrain/service.ts`          | uses the extracted source instead of its own copy                         |
 | `apps/api/src/bake/terrain/tools/bake_tiles.ts`          | new — classify, bake, gzip, resumable, writes a manifest                  |
-| `apps/web/vite.config.ts`                                | reads `VITE_TILE_BASE_URL` → `__TILE_BASE_URL__`                          |
-| `apps/web/@types/index.d.ts`                             | declares the new build constant                                           |
-| `apps/web/.env.example`                                  | documents the tile origin and its versioning rule                         |
+| `ts/app/web/vite.config.ts`                              | reads `VITE_TILE_BASE_URL` → `__TILE_BASE_URL__`                          |
+| `ts/app/web/@types/index.d.ts`                           | declares the new build constant                                           |
+| `ts/app/web/.env.example`                                | documents the tile origin and its versioning rule                         |
 | `apps/web/src/modules/world/terrain/use_tile_fetcher.ts` | tile-origin URL builder + 404 → shared ocean tile                         |
