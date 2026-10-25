@@ -77,8 +77,9 @@ pub fn serves(layer: BaseLayer, p: Tile) -> bool {
 }
 
 /// Whether the ground at `[x, y]`, in units, is past the service area: the
-/// source is declared and serves no shard over its leaf. The one judgement of
-/// where the area ends, for what is drawn, walked, edited and said alike.
+/// source is declared and serves no shard over its leaf. What the shell is
+/// told of the focus (shell.rs `outside`); a walk or an edit asks
+/// domain/query/limit.rs `within`, which keeps off the area's edge as well.
 pub fn past_at([x, y]: [f64; 2]) -> bool {
     let leaf = GROUND.cell_of(LEAF_ZOOM, &world::point(x, y, 0.0)).tile().at;
     area::past(&Declared, leaf)
