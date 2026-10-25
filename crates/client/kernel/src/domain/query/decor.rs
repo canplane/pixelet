@@ -435,7 +435,7 @@ impl<'a> World<'a> {
 }
 
 /// The box a decor thing claims.
-pub fn claim(i: &Instance) -> Option<Aabb> {
+pub(super) fn claim(i: &Instance) -> Option<Aabb> {
     let Meta::Decor(m) = i.meta;
     Some(Decor::of(DecorId::of(i.id)?).claim(i.at, &m))
 }
