@@ -15,7 +15,7 @@ import { kernel_command, kernel_room } from "@/abi/shell.ts";
 import type { CharacterVariant } from "./variant.ts";
 import { chrome } from "@/shell/ui/theme.ts";
 import { bracket } from "@/bracket.tsx";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 const CASE = surface_driver(surface_role.CASE);
 

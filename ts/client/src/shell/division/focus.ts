@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { LonLat } from "@/abi/cmd.spec.ts";
 import { assembleLabel, primaryLanguage } from "./label.ts";
 import { fixed } from "@/shell/fixed.ts";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 /** The focus's division, assembled per snapshot, so a language switch needs no refetch; the
  * kernel says which of its names the view is in far enough to show. */

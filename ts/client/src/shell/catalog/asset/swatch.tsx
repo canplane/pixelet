@@ -10,7 +10,7 @@ import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { asset_url } from "@/namespace/route.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { bracket } from "@/bracket.tsx";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 function cubeTextureUrl(cube: Cube): string | null {
   const key = shippedTopTextureKey(cubeId(cube));

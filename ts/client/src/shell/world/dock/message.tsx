@@ -15,9 +15,9 @@ import { putKeyboardAway } from "@/shell/ui/keyboard.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { TextField } from "@/shell/ui/text-field.tsx";
 import { chrome, color, disabledContent } from "@/shell/ui/theme.ts";
-import { cancelMarker, chatFits, DockMode, draftMarkerWords, markerTextFits, putMarker, useUiStore } from "@/shell/store/ui.ts";
+import { cancelMarker, chatFits, DockMode, draftMarkerWords, markerTextFits, putMarker, useUiStore } from "@/shell/store/dock.ts";
 import { kernel_snapshot } from "@/abi/shell.ts";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 import { SLOT } from "./strip.tsx";
 
 /** The field's words and its sending, kept by the dock whether or not its cards are drawn yet. */

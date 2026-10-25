@@ -9,7 +9,7 @@ import { textStyle } from "@/shell/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/deploy.ts";
 import { format } from "@/abi/host.spec.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
-import { useSourceVersions } from "@/shell/store/system.ts";
+import { useSourceVersions } from "@/shell/store/watch.ts";
 
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
 

@@ -12,7 +12,7 @@ import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
 import { kernel_pointer } from "@/abi/input.ts";
 import { putKeyboardAway } from "@/shell/ui/keyboard.tsx";
-import { DockMode, useUiStore } from "@/shell/store/ui.ts";
+import { DockMode, useUiStore } from "@/shell/store/dock.ts";
 
 /** The pointers spent putting the typing away. */
 const spent = new Set<i32>();

@@ -28,7 +28,7 @@ import { useCenterCoordinates, useDivisionLabel } from "@/shell/division/focus.t
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "./fetch.ts";
 import { fixed } from "@/shell/fixed.ts";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 const DEBOUNCE_MS = 300;
 

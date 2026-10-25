@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
-import { useUiStore } from "@/shell/store/ui.ts";
+import { useUiStore } from "@/shell/store/dock.ts";
 import { cornerCard } from "@/shell/ui/corner-card.ts";
 import { alpha, color, textStyle, weight } from "@/shell/ui/theme.ts";
 import { textEdge } from "@/shell/ui/typeface.ts";

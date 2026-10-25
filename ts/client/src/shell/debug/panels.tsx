@@ -10,7 +10,7 @@ import { Fold } from "./fold.tsx";
 import { GizmoLegend } from "./gizmo-legend.tsx";
 import { ProfilerPanel } from "./profiler.tsx";
 import { ViewPanel } from "./view.tsx";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 const PANEL = {
   view: ViewPanel,

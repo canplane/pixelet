@@ -8,7 +8,7 @@ import { Dim } from "@/shell/ui/motion/veil.ts";
 import { DIM } from "@/shell/ui/motion/transition.ts";
 import { touches } from "@/shell/ui/touch.ts";
 import { bracket } from "@/bracket.tsx";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 /**
  * On a desktop, the chrome dims and takes no clicks while the map is dragged:

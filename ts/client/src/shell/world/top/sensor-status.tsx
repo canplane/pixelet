@@ -10,7 +10,7 @@ import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { haloGap, HaloIcon } from "./halo.tsx";
 import { color } from "@/shell/ui/theme.ts";
 import { bracket } from "@/bracket.tsx";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 const LOOK: Record<DevicePoseStatus, { color: string; presence: f64 }> = {
   [DevicePoseStatus.Idle]: { color: color.white, presence: 0.35 },

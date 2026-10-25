@@ -1,6 +1,7 @@
-// @pxl/client/shell/store/system.ts
+// @pxl/client/shell/store/watch.ts
 
-/** What the shell reads of the system below it: the kernel's snapshot, the host's GPU and network, the source's versions. */
+/** A hook for each watch the layers below hand the shell (`watch_snapshot`, `watch_gpu`, `watch_online`,
+ * `watch_source`): the kernel's snapshot, the GPU's and the network's state, the source's versions. */
 
 import { useSyncExternalStore } from "react";
 

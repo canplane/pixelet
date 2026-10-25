@@ -6,7 +6,7 @@ import { SETTINGS } from "@/shell/setting/schema.ts";
 import { Fold, useOpenFold } from "./fold.tsx";
 import { ProfilerView } from "./profiler/gauge.tsx";
 import { useProfilerView } from "./profiler/poll.ts";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 export function ViewPanel() {
   const show = useKernel((s) => s.settings[SETTINGS.view.key] === 1);

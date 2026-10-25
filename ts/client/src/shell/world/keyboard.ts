@@ -13,7 +13,7 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { kernel_keys } from "@/abi/shell.ts";
 import { closeModal, modalOpen, openModal } from "@/shell/modal.tsx";
-import { holdTool, RECENT_PICKS, useUiStore } from "@/shell/store/ui.ts";
+import { holdTool, RECENT_PICKS, useUiStore } from "@/shell/store/dock.ts";
 
 const MOVE: Record<string, [i32, i32]> = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] };
 

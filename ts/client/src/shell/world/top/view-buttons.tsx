@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { kernel_setting } from "@/abi/shell.ts";
 import { SETTINGS } from "@/shell/setting/schema.ts";
 import { ButtonStack } from "./button-stack.tsx";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 const MODE = SETTINGS.camera_mode;
 const FREE = MODE.options.free;

@@ -17,11 +17,11 @@ import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { alpha, chrome, color } from "@/shell/ui/theme.ts";
 import { openModal } from "@/shell/modal.tsx";
-import { holdTool, useInHand, useUiStore } from "@/shell/store/ui.ts";
+import { holdTool, useInHand, useUiStore } from "@/shell/store/dock.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { type Cube, cubeId } from "@/shell/catalog/asset/mod.ts";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/shell/catalog/asset/swatch.tsx";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 /** A page's browser pans the strip, and holds and drags up reach the view's own gesture; on a device the responder system shares the finger. */
 const PAN_X: ViewStyle = Platform.OS === "web" ? ({ touchAction: "pan-x" } as ViewStyle) : {};

@@ -6,7 +6,7 @@ import { StyleSheet, View } from "react-native";
 import type { f64, u8 } from "@xpute/kit/abi/word.ts";
 import { allCubes, type Cube, cubeId, cubeSection, decorIds, decorSection } from "@/shell/catalog/asset/mod.ts";
 
-import { useInHand, useUiStore } from "@/shell/store/ui.ts";
+import { useInHand, useUiStore } from "@/shell/store/dock.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { Panel } from "@/shell/ui/panel.tsx";
 import { PanelTabs } from "@/shell/ui/panel-tabs.tsx";
@@ -16,7 +16,7 @@ import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { CharacterPicker } from "@/shell/drawer/character/picker.tsx";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel } from "@/shell/catalog/asset/swatch.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 import { Grid, Item, itemOf, mark } from "./grid.tsx";
 import { NameTipLayer } from "./name-tip.tsx";
 

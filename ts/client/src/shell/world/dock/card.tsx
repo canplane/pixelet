@@ -11,7 +11,7 @@ import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SETTLE } from "@/shell/ui/motion/transition.ts";
 import { touches } from "@/shell/ui/touch.ts";
 import { chrome, shadow } from "@/shell/ui/theme.ts";
-import type { DockMode } from "@/shell/store/ui.ts";
+import type { DockMode } from "@/shell/store/dock.ts";
 import { Pill } from "@/shell/world/pill.tsx";
 import { cardPose, peekBelow } from "@/shell/world/deck.ts";
 

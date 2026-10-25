@@ -11,7 +11,7 @@ import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { keepKeyboard } from "@/shell/ui/keyboard.tsx";
 import { chrome, color } from "@/shell/ui/theme.ts";
-import { DockMode, useUiStore } from "@/shell/store/ui.ts";
+import { DockMode, useUiStore } from "@/shell/store/dock.ts";
 import { deckSwipe } from "@/shell/world/deck.ts";
 import { Card, DOCK_HEIGHT } from "./card.tsx";
 import { SizeFlyout, Sizes, useFlyout } from "./flyout.tsx";

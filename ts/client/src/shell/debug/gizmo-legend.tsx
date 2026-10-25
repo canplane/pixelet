@@ -12,7 +12,7 @@ import { SETTINGS } from "@/shell/setting/schema.ts";
 import { gauge, Head } from "./profiler/gauge.tsx";
 import { Fold } from "./fold.tsx";
 import { coverage, frame } from "@/abi/gizmo.spec.ts";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 interface Look {
   rgb: number;

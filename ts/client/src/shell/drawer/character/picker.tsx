@@ -12,7 +12,7 @@ import { SETTINGS } from "@/shell/setting/schema.ts";
 import { type CharacterVariant, type Gender, genderOf, GENDERS, personVariant, personVariantsOf, PET_VARIANTS, petVariant } from "./variant.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shell/ui/panel.tsx";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 // The chip one sees is 32; a press lands on 44, a box laid out around it (doc/minutes/20260928-three-sizes-of-a-control.md).
 const CHIP_HEIGHT = 32;

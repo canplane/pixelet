@@ -20,7 +20,7 @@ import { BusyDim } from "@/shell/world/busy-dim.tsx";
 import { useChromeTop } from "@/shell/world/chrome.ts";
 import { CircularButton } from "@/shell/ui/circular-button.tsx";
 import { bracket } from "@/bracket.tsx";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 export function TopOverlays() {
   const { t } = useTranslation();

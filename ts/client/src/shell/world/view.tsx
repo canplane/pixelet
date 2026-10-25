@@ -22,7 +22,7 @@ import { Dock } from "./dock/dock.tsx";
 import { TopOverlays } from "@/shell/world/top/top.tsx";
 import { DOCK_HEIGHT } from "./dock/card.tsx";
 import { ToastController } from "@/shell/world/toast/controller.tsx";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 const TOAST_LIFT_PX = chrome.inset + 20;
 

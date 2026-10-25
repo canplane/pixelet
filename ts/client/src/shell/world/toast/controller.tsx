@@ -9,7 +9,7 @@ import { Gpu } from "@/abi/gpu.ts";
 import { Source } from "@/namespace/source.ts";
 
 import { toastDismiss, toastShow, ToastTone } from "./store.ts";
-import { useGpu, useKernel, useOnline, useSource } from "@/shell/store/system.ts";
+import { useGpu, useKernel, useOnline, useSource } from "@/shell/store/watch.ts";
 
 /** Each report's toast; of one tone, by rank: a cause before what it holds
  * up, the device's before the server's, the world's before a sensor's. */

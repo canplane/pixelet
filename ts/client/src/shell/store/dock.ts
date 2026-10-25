@@ -1,4 +1,7 @@
-// @pxl/client/shell/store/ui.ts
+// @pxl/client/shell/store/dock.ts
+
+/** The dock's own state, which the kernel does not keep (the hotbar's picks, the chat's lines, the
+ * dock's mode and its swatch cue), and the commands the dock sends: what is held, a chat line, a marker. */
 
 import { create } from "zustand";
 
@@ -10,7 +13,7 @@ import { MARKER_TEXT_CHARS } from "@/shell/catalog/asset/marker.spec.ts";
 import { kernel_command, kernel_fits, kernel_hold, kernel_room, kernel_snapshot } from "@/abi/shell.ts";
 import { OBJECT_TIERS } from "@/shell/world/object.spec.ts";
 import { bracket } from "@/bracket.tsx";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 interface ChatLine {
   id: number;
@@ -49,7 +52,7 @@ export const enum DockMode {
 }
 
 /** What the pointer holds is the kernel's; the shell says what changes and reads it back. */
-interface UiState {
+interface DockState {
   // Advanced only by selectCube/selectDecor, which also switch the tool.
   recentPicks: RecentPick[];
   selectCube: (cube: Cube) => void;
@@ -114,7 +117,7 @@ function load(): Stored {
   return { picks };
 }
 
-function save(s: UiState): void {
+function save(s: DockState): void {
   bracket.storage.set(STORAGE_KEY, JSON.stringify({ picks: s.recentPicks } satisfies Stored));
 }
 
@@ -134,7 +137,7 @@ export function holdTier(tier: u32): void {
 
 const stored = load();
 
-export const useUiStore = create<UiState>()((set) => ({
+export const useUiStore = create<DockState>()((set) => ({
   recentPicks: stored.picks,
   selectCube: (cube) => {
     kernel_hold(ActiveTool.Object, cube, kernel_snapshot().holding.tier);

@@ -12,7 +12,7 @@ import { ButtonStack } from "./button-stack.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
 import { SETTLE } from "@/shell/ui/motion/transition.ts";
 import { chrome, color } from "@/shell/ui/theme.ts";
-import { useKernel } from "@/shell/store/system.ts";
+import { useKernel } from "@/shell/store/watch.ts";
 
 /** MKUserTrackingButton's glyphs. */
 const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
