@@ -54,7 +54,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     // Every root, so none is answered by the static-asset fallback with
     // index.html, which reads as the app loading rather than as no route.
-    let wrangler_path = "ts/app/web/wrangler.jsonc";
+    let wrangler_path = "ts/server/edge/wrangler.jsonc";
     let wrangler = std::fs::read_to_string(root().join(wrangler_path)).map_err(|e| format!("{wrangler_path}: {e}"))?;
     let claim = Regex::new(r#""run_worker_first"\s*:\s*\[[^\]]*\]"#).map_err(|e| e.to_string())?;
     if !claim.is_match(&wrangler) {
@@ -126,7 +126,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     ts.extend(ts_doc(&[sphere_doc.to_string()], ""));
     ts.extend([format!("export const TILE_SPHERE = {};", json_str(sphere)), String::new()]);
 
-    let mut worker = head("@pxl/web/cloudflare-worker/route.spec.ts");
+    let mut worker = head("@pxl/edge/route.spec.ts");
     worker.extend(
         [
             "// The Worker is bundled for the Workers runtime rather than from src/, so it",
@@ -149,7 +149,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     Ok(vec![
         Output::new("rust/spec/src/route.spec.rs", rs.join("\n")),
         Output::new("ts/client/src/config/route.spec.ts", ts.join("\n")),
-        Output::new("ts/app/web/cloudflare-worker/route.spec.ts", worker.join("\n")),
+        Output::new("ts/server/edge/route.spec.ts", worker.join("\n")),
         Output::new(wrangler_path, wrangler),
     ])
 }

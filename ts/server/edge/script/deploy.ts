@@ -1,16 +1,19 @@
 #!/usr/bin/env -S deno run -A
 // Builds and publishes the client and its Worker under `PXL_BUILD_NUMBER`
 // from CI. Without a number it publishes unnumbered (`#<last>-<id>`,
-// vite.config.ts `buildNumber`).
+// ts/app/web/vite.config.ts `buildNumber`).
 //
 // Everything that can fail before the Worker goes out runs before it, so a
 // failure says truly what was published, and the last step is the publish
 // itself.
 //
-//   ./script/deploy.ts   (from ts/app/web)
+//   ./script/deploy.ts   (from ts/server/edge)
+
+import { WORKSPACE } from "@pxl/client/script/import-map.ts";
 
 const number = Deno.env.get("PXL_BUILD_NUMBER");
-const PATHS = new URL("../src/guest.paths.json", import.meta.url);
+/** The panics' `#n` → path table the page's build wrote beside its guest. */
+const PATHS = `${WORKSPACE}/app/web/src/guest.paths.json`;
 const BUILT = new URL("../dist/index.html", import.meta.url);
 /** The custom domain the Worker answers on (wrangler.jsonc `routes`). */
 const SITE = "https://plei.me";
@@ -54,13 +57,13 @@ const status = new Deno.Command("git", { args: ["status", "--porcelain"], stdout
 const unclean = status.success ? new TextDecoder().decode(status.stdout).trim() : "";
 if (unclean !== "") console.log(`[deploy] the tree is not clean, so the build id will say -dirty:\n${unclean}`);
 
-await step("build", "deno", ["task", "build"], number ? { PXL_BUILD_NUMBER: number } : {});
+await step("build", "deno", ["run", "-A", new URL("stage.ts", import.meta.url).pathname], number ? { PXL_BUILD_NUMBER: number } : {});
 
 // The `#n` → path table for this build's panics, kept beside the build log,
 // never served. Before the publish: a table for a build that then failed to
 // go out is harmless, a live build without one is not.
 if (number) {
-  await step("keep the paths", "deno", wrangler("r2", "object", "put", `pixelet-tiles/_meta/paths/${number}.json`, "--remote", "--file", PATHS.pathname, "--content-type", "application/json"));
+  await step("keep the paths", "deno", wrangler("r2", "object", "put", `pixelet-tiles/_meta/paths/${number}.json`, "--remote", "--file", PATHS, "--content-type", "application/json"));
 }
 
 console.log("[deploy] publish");

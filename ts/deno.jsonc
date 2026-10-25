@@ -8,7 +8,9 @@
     "client",
     "app/web",
     // A package.json member: Expo and Metro find packages the npm way.
-    "app/native"
+    "app/native",
+    // The Worker in front of it all, beside the servers in rust/server/.
+    "server/edge"
   ],
   "nodeModulesDir": "auto",
 
@@ -16,7 +18,7 @@
   "exclude": ["**/.vite/", "**/dist/", "**/node_modules/"],
 
   "tasks": {
-    "check": "deno task --cwd app/web check && deno task --cwd app/native check && deno check app/web/script/*.ts",
+    "check": "deno task --cwd app/web check && deno task --cwd app/native check && deno task --cwd server/edge check && deno check app/web/script/*.ts server/edge/script/*.ts",
     "test": "deno task --cwd client test",
     "fmt": "deno fmt",
     "lint": "deno lint"

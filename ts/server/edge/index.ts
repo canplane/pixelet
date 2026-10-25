@@ -1,4 +1,4 @@
-// @pxl/web/cloudflare-worker/index.ts
+// @pxl/edge/index.ts
 
 /**
  * Cloudflare Worker that serves the app, its baked pages and assets, and
@@ -12,11 +12,10 @@
  * CORS policy exists to configure or get wrong — see
  * doc/minutes/20260816-deployment-hosting.md.
  *
- * Lives outside src/ deliberately: this is the only server-side code in the
- * deployment, it targets the Workers runtime rather than the browser, and
- * `deno task check` covers src/ only. The handful of platform types it needs
- * are declared inline rather than pulling in @cloudflare/workers-types for
- * one file.
+ * A package of its own beside the servers (ts/server/edge): the only
+ * server-side code in the deployment, for the Workers runtime rather than
+ * the browser. The handful of platform types it needs are declared inline
+ * rather than pulling in @cloudflare/workers-types for one file.
  */
 
 type R2Object = {
@@ -63,7 +62,7 @@ export type Env = {
 };
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_OBJECT, TILE_PREFIX, TILE_SPHERE } from "./route.spec.ts";
-import { BASE_LAYERS } from "@pxl/client/config/published.spec.ts";
+import { BASE_LAYERS } from "./published.spec.ts";
 
 /**
  * Object keys this Worker is willing to ask R2 for, by shape alone, so what

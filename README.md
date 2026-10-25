@@ -162,11 +162,12 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 │   │       ├── shell/        #     the UI: frame, world, settings, search, debug, ui kit (pill.ios.tsx beside pill.tsx), locale
 │   │       ├── catalog/      #     the data screens show (cells, assets)
 │   │       └── config/       #     deployment config and routes
-│   └── app/                  #   each app, a bracket that bundles the client
-│       ├── web/              #     the page's: its entry, its bracket (src/), its build, deploy, publish and smoke (script/), the Cloudflare Worker
-│       └── native/           #     the device's, through Expo and Metro
-│           ├── src/          #       its entry and its bracket: what the app gives the client, through its native module
-│           └── modules/      #       platform/, its native half: one module, the views, the linked kernel
+│   ├── app/                  #   each app, a bracket that bundles the client
+│   │   ├── web/              #     the page's: its entry, its bracket (src/), its build, publish and smoke (script/)
+│   │   └── native/           #     the device's, through Expo and Metro
+│   │       ├── src/          #       its entry and its bracket: what the app gives the client, through its native module
+│   │       └── modules/      #       platform/, its native half: one module, the views, the linked kernel
+│   └── server/edge/          #   the Cloudflare Worker that serves it all, and its deploy (script/)
 ├── rust/                     # The Rust workspace, grouped by where a crate runs
 │   ├── spec/                 #   pxl-spec: the model every crate shares
 │   │   └── core/             #     pxl-spec-core: what the CPU and the GPU compute alike
@@ -196,24 +197,25 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 
 **What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the servers, the bakes and the asset ingest compile the model, so they are crates; the Overture and elevation ingests put a provider's data into Postgres sharing nothing with the model, so they are scripts under `infra/geo/`. The client is TypeScript because it decides nothing about the world; what it needs of the model — catalogs, ABI enums, routes — is generated into `ts/client/src/**/*.spec.ts` from the same JSON the Rust is generated from.
 
-| Crate / package | What it is                                                                                                                                                               |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pxl-spec`      | The model: the position, the zooms and lattices, the asset catalog, the command numbers, the tile formats, the asset tables. One implementation.                         |
-| `pxl-spec-core` | The part of the model the GPU computes too, one source for both: the zooms' cells, the caves, the ground, the decor it grows, the world's one query and a ray's descent. |
-| `pxl-render`    | The view: glTF, the marker sheet, the draw list, the shaders, the renderer. It knows no kernel.                                                                          |
-| `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                                                    |
-| `pxl-shader`    | `pxl-spec-core` as the GPU's compute entries, built to WGSL through rust-gpu by `script/shader-wgsl.ts` and checked in beside the renderer's shaders.                    |
-| `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                                               |
-| `pxl-native`    | The guest on a device: a static library behind one C header (`include/pxl_native.h`), over xpute's native host, which runs every call on a thread of its own.            |
-| `ts/client`     | The client, the same in both apps: the host, the kernel's vocabulary and boot, the roots' backends and the shell, handed what its place gives (`src/bracket.tsx`).       |
-| `ts/app/web`    | The page's app: its entry; its bracket, what a browser tab gives the client and the guest module it instantiates; and the Cloudflare Worker that serves it all.          |
-| `ts/app/native` | The device's app: its entry, and its bracket, what the app gives the client through its native module, which links the kernel.                                           |
-| `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                                                              |
-| `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                                                 |
-| `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                                                               |
-| `pxl-api`       | The application's server.                                                                                                                                                |
-| `pxl-geo-bake`  | The bakes — terrain, place, division, earth — and, behind a feature, the dev tile server.                                                                                |
-| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables; generates code from `spec/`; bakes the stars, the Moon, the brand.                                  |
+| Crate / package  | What it is                                                                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pxl-spec`       | The model: the position, the zooms and lattices, the asset catalog, the command numbers, the tile formats, the asset tables. One implementation.                                |
+| `pxl-spec-core`  | The part of the model the GPU computes too, one source for both: the zooms' cells, the caves, the ground, the decor it grows, the world's one query and a ray's descent.        |
+| `pxl-render`     | The view: glTF, the marker sheet, the draw list, the shaders, the renderer. It knows no kernel.                                                                                 |
+| `pxl-kernel`     | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                                                           |
+| `pxl-shader`     | `pxl-spec-core` as the GPU's compute entries, built to WGSL through rust-gpu by `script/shader-wgsl.ts` and checked in beside the renderer's shaders.                           |
+| `pxl-wasm`       | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                                                      |
+| `pxl-native`     | The guest on a device: a static library behind one C header (`include/pxl_native.h`), over xpute's native host, which runs every call on a thread of its own.                   |
+| `ts/client`      | The client, the same in both apps: the host, the kernel's vocabulary and boot, the roots' backends and the shell, handed what its place gives (`src/bracket.tsx`).              |
+| `ts/app/web`     | The page's app: its entry; its bracket, what a browser tab gives the client and the guest module it instantiates.                                                               |
+| `ts/app/native`  | The device's app: its entry, and its bracket, what the app gives the client through its native module, which links the kernel.                                                  |
+| `ts/server/edge` | The Cloudflare Worker in front of it all: the page's bundle, the bucket's objects, and `/geo` and `/api` relayed to the servers; its deploy stages the page's bundle beside it. |
+| `pxl-server`     | What both servers need before answering: the environment, the database pool, the gate over internal routes.                                                                     |
+| `pxl-geo-spec`   | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                                                        |
+| `pxl-geo`        | The world's server: forward search, the one route that queries a database at request time.                                                                                      |
+| `pxl-api`        | The application's server.                                                                                                                                                       |
+| `pxl-geo-bake`   | The bakes — terrain, place, division, earth — and, behind a feature, the dev tile server.                                                                                       |
+| `pxl-tool`       | Hashes `asset/` into the bucket's shape and writes the asset tables; generates code from `spec/`; bakes the stars, the Moon, the brand.                                         |
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat. The kernel's are named as the chain is:
 

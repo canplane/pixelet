@@ -190,7 +190,7 @@ jobs:
 
       # Builds under the number taken, so the bundle carries it from its
       # build, then keeps the panic paths and publishes.
-      # ts/app/web/script/deploy.ts is the same script a hand deploy runs; a
+      # ts/server/edge/script/deploy.ts is the same script a hand deploy runs; a
       # hand deploy just has no number to give it.
       - name: Deploy
         env:

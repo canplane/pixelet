@@ -41,16 +41,7 @@
       "dependencies": ["build:wasm:published", "build:brand"]
     },
 
-    // Builds the client and publishes it with the Worker, under the build
-    // number CI took — see script/deploy.ts. wrangler runs through Deno,
-    // not npx, since it wants a newer Node than a system may have.
-    "deploy": "deno run -A script/deploy.ts",
-
-    "check": "deno check src/main.tsx cloudflare-worker/index.ts",
-    // What a deploy makes, made without publishing: the bundle, and the
-    // Worker as wrangler bundles it beside that: a type-check can pass where
-    // wrangler's resolver fails, as it did on 10-23. No credentials.
-    "check:build": { "command": "deno run -A --node-modules-dir=auto npm:wrangler deploy --dry-run --outdir .wrangler/dry-run", "dependencies": ["build"] }
+    "check": "deno check src/main.tsx"
   },
 
   "compilerOptions": {

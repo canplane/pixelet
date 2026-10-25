@@ -23,6 +23,13 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     ts.push(format!("export const BASE_LAYERS = [{}] as const;", list(&|k| json_str(k))));
     ts.extend(["".to_string(), "export type BaseLayer = typeof BASE_LAYERS[number];".into()]);
 
+    // The Worker's own: it is bundled for the Workers runtime, apart from the
+    // client, so it reads a copy beside it written from the same JSON.
+    let mut edge = vec!["// @pxl/edge/published.spec.ts".to_string()];
+    edge.extend(head.iter().cloned());
+    edge.push("/** The base layers, each a kind a baked page is published under. */".into());
+    edge.push(format!("export const BASE_LAYERS = [{}] as const;", list(&|k| json_str(k))));
+
     let mut rs = vec!["// pxl-spec/bake/published.spec.rs".to_string()];
     rs.extend(head);
     rs.extend(rs_doc(&format_doc, "", "///"));
@@ -75,6 +82,7 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     rs.extend(["        }", "    }", "}"].map(String::from));
     Ok(vec![
         Output::new("ts/client/src/config/published.spec.ts", file(&ts)),
+        Output::new("ts/server/edge/published.spec.ts", file(&edge)),
         Output::new("rust/spec/src/bake/published.spec.rs", file(&rs)),
     ])
 }

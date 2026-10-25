@@ -58,13 +58,13 @@
     // bundle and the Worker's, as a deploy makes them) and is what its JSON
     // writes, and the scripts a deploy runs type-check.
     "check": "deno task check:style && deno task check:ship && deno task check:native && deno task check:host && deno task check:xpute",
-    "check:ship": "deno task check:web && deno task check:script && deno task check:rust && deno task check:spec && deno task --cwd ts/app/web check:build",
+    "check:ship": "deno task check:web && deno task check:script && deno task check:rust && deno task check:spec && deno task --cwd ts/server/edge check:build",
     "check:style": "deno task check:fmt && deno task check:rules && deno task lint",
     "check:diff": "./script/check-diff.ts",
     "check:fmt": "deno fmt --check && deno task --cwd ts fmt --check && deno task --cwd script fmt --check && cargo fmt --manifest-path rust/Cargo.toml --all --check",
     "check:web": "deno task --cwd ts/app/web check",
     // The tree's own scripts, which `deno run` runs unchecked.
-    "check:script": "deno task --cwd script check && deno check --config ts/deno.jsonc ts/app/web/script/*.ts",
+    "check:script": "deno task --cwd script check && deno check --config ts/deno.jsonc ts/app/web/script/*.ts ts/server/edge/script/*.ts",
     // check:web never reaches the device's own modules.
     "check:native": "deno task --cwd ts/app/native check && cargo clippy --manifest-path rust/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path rust/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings",
     "check:xpute": "make -C xpute -j8 check",
@@ -84,7 +84,7 @@
     "fmt": "deno fmt && deno task --cwd ts fmt && deno task --cwd script fmt",
 
     // The deployment. Does not upload what the bucket holds.
-    "deploy": "deno task --cwd ts/app/web deploy",
+    "deploy": "deno task --cwd ts/server/edge deploy",
     // Against a running deployment, not a checkout.
     "smoke": "./ts/app/web/script/smoke.ts",
     // Reads with wrangler's login and hcloud's context.

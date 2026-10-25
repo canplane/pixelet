@@ -1,17 +1,13 @@
 {
   // Cloudflare Worker that serves both the built app and its terrain tiles.
-  // Deployed by `deno task deploy` (ts/app/web/script/deploy.ts): build, then
+  // Deployed by `deno task deploy` (ts/server/edge/script/deploy.ts): build, then
   // wrangler through Deno.
   //
   // `name` becomes the *.workers.dev subdomain; a custom domain is attached
   // in the dashboard afterward. Rationale for this shape — one Worker, one
   // origin, no CORS — is in doc/minutes/20260816-deployment-hosting.md.
   "name": "pixelet",
-  "main": "cloudflare-worker/index.ts",
-  // The client's one file the Worker reads, by the name the import maps give
-  // it: wrangler's bundler reads no import map, and its alias matches a whole
-  // specifier, not a prefix.
-  "alias": { "@pxl/client/config/published.spec.ts": "../../client/src/config/published.spec.ts" },
+  "main": "index.ts",
 
   // The demo answers on its own hostname, not on *.workers.dev. That is not
   // cosmetic: WAF and rate-limiting rules attach to a zone, and a workers.dev
@@ -52,6 +48,8 @@
     "API_ORIGIN": "https://api.plei.me"
   },
 
+  // The page's bundle, built by the web app and staged here before a deploy
+  // (script/stage.ts), so this config names nothing outside its package.
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
