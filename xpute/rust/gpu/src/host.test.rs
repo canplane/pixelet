@@ -13,8 +13,19 @@ fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     (adapter, device, queue)
 }
 
-fn host(adapter: &wgpu::Adapter, device: &wgpu::Device, queue: &wgpu::Queue) -> GpuHost {
-    GpuHost::new(adapter.clone(), device.clone(), queue.clone(), wgpu::TextureFormat::Bgra8Unorm, ConfigureAt::Here, || {})
+/// A test's plan: `frame_latency` frames, and a chunk as large as the
+/// largest write a record makes.
+fn plan(frame_latency: u32) -> Plan {
+    Plan {
+        preferred: wgpu::TextureFormat::Bgra8Unorm,
+        configure_at: ConfigureAt::Here,
+        frame_latency,
+        upload_chunk_bytes: 1 << 16,
+    }
+}
+
+fn host(adapter: &wgpu::Adapter, device: &wgpu::Device, queue: &wgpu::Queue, frame_latency: u32) -> GpuHost {
+    GpuHost::new(adapter.clone(), device.clone(), queue.clone(), plan(frame_latency), || {})
 }
 
 /// Each host counts its own frames: one at its latency holds back no other,
@@ -22,7 +33,7 @@ fn host(adapter: &wgpu::Adapter, device: &wgpu::Device, queue: &wgpu::Queue) -> 
 #[test]
 fn each_host_paces_its_own_frames() {
     let (adapter, device, queue) = device();
-    let (mut busy, mut other) = (host(&adapter, &device, &queue).with_frame_latency(1), host(&adapter, &device, &queue));
+    let (mut busy, mut other) = (host(&adapter, &device, &queue, 1), host(&adapter, &device, &queue, 2));
     assert!(busy.admit());
     busy.present();
     assert!(!busy.admit(), "its one frame is unfinished");
@@ -50,7 +61,7 @@ fn a_frame_ends_whether_its_callback_is_called_or_let_go() {
 #[test]
 fn a_gone_devices_frames_are_released() {
     let (adapter, device, queue) = device();
-    let mut h = host(&adapter, &device, &queue).with_frame_latency(1);
+    let mut h = host(&adapter, &device, &queue, 1);
     let count = h.unfinished.clone();
     assert!(h.admit());
     h.present();
@@ -82,7 +93,7 @@ fn every_record_reads_back_its_bytes_on_a_device() {
             let input = g.bytes(&key);
             memory[input_at as usize..input_at as usize + input.len()].copy_from_slice(&input);
         }
-        let mut host = GpuHost::new(adapter.clone(), device.clone(), queue.clone(), wgpu::TextureFormat::Bgra8Unorm, ConfigureAt::Here, || {});
+        let mut host = GpuHost::new(adapter.clone(), device.clone(), queue.clone(), plan(2), || {});
         g.each(&format!("{p}.turn"), |turn| {
             let words = g.bytes(turn);
             memory[..words.len()].copy_from_slice(&words);

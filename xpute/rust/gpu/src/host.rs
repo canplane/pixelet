@@ -312,14 +312,6 @@ impl Frame {
     }
 }
 
-/// The frames a surface may have drawn and not yet finished on the GPU unless
-/// the program says otherwise (`GpuHost::with_frame_latency`): what it is
-/// configured to queue (`desired_maximum_frame_latency`), and what
-/// `GpuHost::admit` lets stand. A surface keeps one texture more than this,
-/// so with this many unfinished one is still free, and taking it never
-/// blocks the thread that turns the guest.
-pub const FRAME_LATENCY: u32 = 2;
-
 /// One frame admitted and not yet done, counted in its host's count from
 /// when it is handed to the queue until the queue's callback that holds it
 /// ends: called once the work is done, or let go uncalled, as wgpu lets go
@@ -352,6 +344,28 @@ pub enum ConfigureAt {
     Elsewhere(fn()),
 }
 
+/// The program's numbers and choices, which the host runs by: none of them
+/// is the host's to pick, so each is said.
+#[derive(Clone, Copy)]
+pub struct Plan {
+    /// The surface format SURFACE_PREFERRED names and DEVICE tells the guest,
+    /// as the web's `getPreferredCanvasFormat`: what the platform shows best.
+    pub preferred: wgpu::TextureFormat,
+    /// Where a surface may be configured.
+    pub configure_at: ConfigureAt,
+    /// The frames admitted and not yet finished on the GPU at once, which
+    /// `GpuHost::admit` lets stand and each surface is configured to queue
+    /// (`desired_maximum_frame_latency`): the program's lag behind its input
+    /// against how busy it keeps the GPU. At least one. A surface keeps one
+    /// texture more than this, so with this many unfinished one is still
+    /// free, and taking it never blocks the thread that turns the guest.
+    pub frame_latency: u32,
+    /// The chunk the host stages buffer writes in (`wgpu::util::StagingBelt`),
+    /// each mapped once and reused: as large as the writes the program's
+    /// frames make, since a larger write takes a chunk of its own.
+    pub upload_chunk_bytes: u64,
+}
+
 pub struct GpuHost {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
@@ -360,8 +374,7 @@ pub struct GpuHost {
     objects: Vec<Option<Object>>,
     /// At the number the program binds each by, as objects at their slots.
     surfaces: Vec<Surface>,
-    /// The surface format the device prefers, which SURFACE_PREFERRED names
-    /// and DEVICE tells the guest, as the web's getPreferredCanvasFormat.
+    /// The surface format SURFACE_PREFERRED names (`Plan::preferred`).
     preferred: wgpu::TextureFormat,
     configure_at: ConfigureAt,
     /// Where the guest asked the device's block written, for its status.
@@ -384,7 +397,7 @@ pub struct GpuHost {
     /// each frame's callback (`Unfinished`), which wgpu boxes: a block a
     /// frame, beside the box it makes of any callback.
     unfinished: Arc<AtomicU32>,
-    /// The frames it lets stand unfinished (`FRAME_LATENCY` unless said).
+    /// The frames it lets stand unfinished (`Plan::frame_latency`).
     frame_latency: u32,
     /// Every buffer write goes through the belt, whose chunks are mapped once
     /// and reused, into `uploads`, which goes ahead of whatever is submitted
@@ -393,13 +406,8 @@ pub struct GpuHost {
     uploads: Option<wgpu::CommandEncoder>,
 }
 
-/// A mesh, the largest write a frame makes, is about a MiB; larger writes take
-/// a chunk of their own.
-const BELT_CHUNK_BYTES: u64 = 1 << 20;
-
 impl GpuHost {
-    /// `preferred` the surface format the platform shows best, `configure_at`
-    /// where its surfaces may be configured. `wake` asks the platform's loop
+    /// Runs by the program's `plan`. `wake` asks the platform's loop
     /// for a turn, from any thread: a completion is written into the guest's
     /// memory only at a turn's poll, so whoever learns of one between turns
     /// asks for it, as an executor's pender asks for a poll
@@ -409,10 +417,8 @@ impl GpuHost {
     /// for a loss of the device's (`Unknown`), and for its destruction or drop
     /// by its owner (`Destroyed`), which is no loss; the host tells the guest
     /// in its block at the next turn's edge and asks for that turn.
-    ///
-    /// It paces its frames to `FRAME_LATENCY` unless the program says
-    /// otherwise (`with_frame_latency`).
-    pub fn new(adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue, preferred: wgpu::TextureFormat, configure_at: ConfigureAt, wake: fn()) -> GpuHost {
+    pub fn new(adapter: wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue, plan: Plan, wake: fn()) -> GpuHost {
+        assert!(plan.frame_latency >= 1, "[gpu] a frame latency of {}", plan.frame_latency);
         let gone = Arc::new(AtomicBool::new(false));
         let lost = gone.clone();
         device.set_device_lost_callback(move |reason, _| {
@@ -423,14 +429,14 @@ impl GpuHost {
         });
         GpuHost {
             adapter,
-            belt: wgpu::util::StagingBelt::new(device.clone(), BELT_CHUNK_BYTES),
+            belt: wgpu::util::StagingBelt::new(device.clone(), plan.upload_chunk_bytes),
             device,
             queue,
             names: Names::new(),
             objects: Vec::new(),
             surfaces: Vec::new(),
-            preferred,
-            configure_at,
+            preferred: plan.preferred,
+            configure_at: plan.configure_at,
             block: None,
             gone,
             pending: Vec::new(),
@@ -440,19 +446,9 @@ impl GpuHost {
             finished: Vec::new(),
             admitted: false,
             unfinished: Arc::new(AtomicU32::new(0)),
-            frame_latency: FRAME_LATENCY,
+            frame_latency: plan.frame_latency,
             uploads: None,
         }
-    }
-
-    /// Paced to `frames` admitted and unfinished at once, and each surface
-    /// configured to queue as many, where `FRAME_LATENCY` is the default: the
-    /// program's choice of lag behind its input against how busy the GPU is
-    /// kept. At least one.
-    pub fn with_frame_latency(mut self, frames: u32) -> GpuHost {
-        assert!(frames >= 1, "[gpu] a frame latency of {frames}");
-        self.frame_latency = frames;
-        self
     }
 
     /// The window's surface for the guest's `surface`, configured as the

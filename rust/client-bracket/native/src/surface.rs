@@ -18,8 +18,8 @@ use std::ffi::c_void;
 #[cfg(target_vendor = "apple")]
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use pxl_render::api_spec::stream;
-use xpute_gpu::host::{ConfigureAt, GpuHost};
+use pxl_render::api_spec::{device as numbers, stream};
+use xpute_gpu::host::{ConfigureAt, GpuHost, Plan};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_host::mem::Memory;
@@ -37,6 +37,15 @@ const CONFIGURE_SURFACES: ConfigureAt = ConfigureAt::Here;
 const PREFERRED: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
 #[cfg(not(target_vendor = "apple"))]
 const PREFERRED: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+
+/// What the host runs by: the renderer's numbers (spec/client/render/gpu/api.json
+/// `device`) and the platform's surface.
+const PLAN: Plan = Plan {
+    preferred: PREFERRED,
+    configure_at: CONFIGURE_SURFACES,
+    frame_latency: numbers::FRAME_LATENCY,
+    upload_chunk_bytes: numbers::UPLOAD_CHUNK_BYTES as u64,
+};
 
 struct Device {
     instance: wgpu::Instance,
@@ -122,7 +131,7 @@ fn open() -> bool {
     })) else {
         return false;
     };
-    let host = GpuHost::new(adapter, device, queue, PREFERRED, CONFIGURE_SURFACES, wake);
+    let host = GpuHost::new(adapter, device, queue, PLAN, wake);
     DEVICE.set(Some(Device { instance, host, bound: Vec::new() }));
     true
 }

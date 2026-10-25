@@ -43,6 +43,22 @@ pub mod stream {
     pub const RESERVE: u32 = 1048576;
 }
 
+/// What a device's GPU host runs the renderer's stream by (xpute-gpu host
+/// `Plan`), which pxl-native hands it; a page's browser paces its frames and
+/// stages its writes itself.
+pub mod device {
+    /// The frames drawn and not yet finished on the GPU at once: a turn draws only
+    /// while fewer are (xpute-gpu host `GpuHost::admit`), and a surface queues as
+    /// many. Two, as wgpu configures a surface by default
+    /// (`Surface::get_default_config`): one frame's lag behind the input, with the
+    /// GPU kept busy while the next is drawn.
+    pub const FRAME_LATENCY: u32 = 2;
+    /// The chunk the host stages buffer writes in, each mapped once and reused: a
+    /// mesh, the largest write a frame makes, is about a MiB, and a larger write
+    /// takes a chunk of its own.
+    pub const UPLOAD_CHUNK_BYTES: u32 = 1048576;
+}
+
 /// A pipeline record's codes (frame/shader/record.rs, expanded into xpute's
 /// descriptors by gpu/api.rs), and HEAD, the words it opens with before its
 /// vertex buffers. Then: the topology, the cull mode, the depth compare under
