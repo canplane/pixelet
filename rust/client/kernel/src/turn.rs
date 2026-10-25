@@ -30,7 +30,7 @@ use crate::domain::scene::character::companion::{companion_step, CompanionProps}
 use crate::domain::scene::environment::environment_step;
 use crate::domain::scene::indicator::location_puck::location_puck_step;
 use crate::domain::scene::scene;
-use crate::domain::scene::stage::{take_draw, visible_step};
+use crate::domain::scene::stage::visible_step;
 use crate::domain::view::demand::Observed as _;
 use crate::profiler::report::{profiler_frame, FrameTurn};
 use crate::sys::sched::edge::{request_world_tick, world_edge};
@@ -331,7 +331,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
         stage_ms: done - after_tick,
         task_ms: done - t0,
     });
-    if report.invalidated || take_draw() {
+    if report.invalidated {
         request_world_tick();
     }
     report

@@ -201,24 +201,9 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     );
 }
 
-struct Pass {
-    draw: bool,
-}
-
-static PASS: Global<Pass> = Global::new();
-
-fn pass() -> &'static mut Pass {
-    PASS.get(|| Pass { draw: false })
-}
-
-pub fn take_draw() -> bool {
-    core::mem::take(&mut pass().draw)
-}
-
 /// The scene's turn, `focus` and `heading` the camera's as the turn hands
 /// them (pxl-kernel turn.rs `scene_tick`), for the world gizmo.
 pub fn visible_step(ctx: &mut TickContext, focus: Option<pxl_spec::space::coord::q3::Q3>, heading: Option<f64>) {
-    let c = pass();
     let v = view();
 
     let anchor = sea_under_eye();
@@ -259,7 +244,6 @@ pub fn visible_step(ctx: &mut TickContext, focus: Option<pxl_spec::space::coord:
     crate::domain::scene::marker::step(ctx, &frame);
     crate::domain::scene::marker::draw(draw_list(), frame.eye);
     if draw {
-        c.draw = true;
         ctx.invalidate();
     }
 }
