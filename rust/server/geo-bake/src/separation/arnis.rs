@@ -59,7 +59,7 @@ use xpute_kit::math::scalar::round;
 use crate::segment::{End, PartId, Segment};
 use crate::separation::elevation::{sample_cells, tile_of};
 use crate::separation::piece::{piece_of, Piece};
-use crate::separation::source::{ring, Store};
+use crate::separation::source::{portals_in, ring, Store};
 use crate::separation::way::{Polyline, Way};
 use crate::separation::{Drawn, Line, Reader, Solved};
 use crate::terrain::pipeline::overture::policy::waterway_width;
@@ -224,8 +224,32 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     // ---- the structures the tile holds and every one they reach: shared ends, decks
     // beside or across them; each read as far as the ring ----
     let own = [[pmin[0], pmin[1]], [pmax[0], pmax[1]]];
-    let mut queue: Vec<PartId> = src.pieces.iter().filter(|(_, s)| s.piece.touches(own)).map(|(id, _)| id.clone()).collect();
-    // a tile no structure touches has nothing to solve
+    // a road tunnel whose portal lies within its approaches' reach of the tile sinks ways the tile
+    // draws, whether or not it touches the tile: the tunnels about the tile are asked for alone, as far
+    // as the deepest one's approaches run, a reach well inside the ring, and only about a portal that
+    // near are the ring's tiles read, as far as its approaches run
+    let reach_of = |level: i64| mer_from_u(f64::from(tunnel_drop(level, units) * TUNNEL_RAMP_RUN) * CELL_U);
+    let off = |p: [f64; 2]| {
+        let d = [0, 1].map(|k| (own[0][k] - p[k]).max(p[k] - own[1][k]).max(0.0));
+        libm::hypot(d[0], d[1])
+    };
+    for p in portals_in(r.client, grown(own, reach_of(-(TUNNEL_MAX_LAYERS_BELOW + 1))))? {
+        let d = reach_of(p.level);
+        if off(p.at) <= d {
+            let [a, b] = [tile_of([p.at[0] - d, p.at[1] - d]), tile_of([p.at[0] + d, p.at[1] + d])];
+            for y in a[1].min(b[1])..=a[1].max(b[1]) {
+                for x in a[0].min(b[0])..=a[0].max(b[0]) {
+                    src.load(r, [x, y])?;
+                }
+            }
+        }
+    }
+    let portal_near = |s: &Sampled| {
+        let p = &s.piece.way.points;
+        road_tunnel(&s.piece) && [p[0], p[p.len() - 1]].iter().any(|e| off([e[0], e[1]]) <= reach_of(s.piece.way.tags.level.unwrap_or(0)))
+    };
+    let mut queue: Vec<PartId> = src.pieces.iter().filter(|(_, s)| s.piece.touches(own) || portal_near(s)).map(|(id, _)| id.clone()).collect();
+    // a tile no structure touches nor sinks into has nothing to solve
     if queue.is_empty() {
         return Ok(Solved::default());
     }
@@ -1244,6 +1268,12 @@ struct Claim {
     run: i32,
 }
 
+/// How far under its cover a road tunnel at `level` is bored, and so how far its portals' approaches
+/// sink, in cells: Arnis's cover drop, and a layer's drop for each layer below the first.
+fn tunnel_drop(level: i64, units: Units) -> i32 {
+    units.c(TUNNEL_COVER_DROP_M) + (-(level + 1)).clamp(0, TUNNEL_MAX_LAYERS_BELOW) as i32 * units.c(TUNNEL_LAYER_DROP_M)
+}
+
 fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lines: &mut Vec<(Line, Drawn)>) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
     let ramp_ways = &bridges.ramp_ways;
     let tunnels: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Tunnel && !runs[q].rail()).collect();
@@ -1265,7 +1295,7 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
         }
     }
     let internal = |q: usize, e: usize| runs[q].clipped[e] || shared.contains(&runs[q].ends[e]);
-    let layer_extra = |r: &Run| (-(r.piece.way.tags.level.unwrap_or(0) + 1)).clamp(0, TUNNEL_MAX_LAYERS_BELOW) as i32 * units.c(TUNNEL_LAYER_DROP_M);
+    let drop_of = |r: &Run| tunnel_drop(r.piece.way.tags.level.unwrap_or(0), units);
 
     // ---- a portal on a road deck, at its end or along it, opens at the deck's height there, where Arnis
     // leaves it at the terrain under the deck: the bore ramps down from it, with no approach to sink ----
@@ -1317,7 +1347,7 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
     let mut drops: FnvHashMap<End, i32> = FnvHashMap::default();
     for &q in &tunnels {
         let r = &runs[q];
-        let want = units.c(TUNNEL_COVER_DROP_M) + layer_extra(r);
+        let want = drop_of(r);
         let walking = is_pedestrian(r.piece.way.class.as_deref().unwrap_or(""));
         for e in 0..2 {
             let node = &r.ends[e];
@@ -1462,7 +1492,7 @@ fn road_tunnels(src: &Source, runs: &[Run], bridges: &Bridges, units: Units, lin
         let deck_s = if internal_s { None } else { deck.get(&r.ends[0]).copied() };
         let deck_e = if internal_e { None } else { deck.get(&r.ends[1]).copied() };
         let (gs, ge) = (deck_s.unwrap_or(r.terrain[0]), deck_e.unwrap_or(r.terrain[last]));
-        let drop_cover = units.c(TUNNEL_COVER_DROP_M) + layer_extra(r);
+        let drop_cover = drop_of(r);
         let start_drop = if internal_s { 0 } else { drops.get(&r.ends[0]).copied().unwrap_or(0) };
         let end_drop = if internal_e { 0 } else { drops.get(&r.ends[1]).copied().unwrap_or(0) };
         // A bore no longer than a tile is Arnis's: under the straight run between its portals, at most

@@ -10,9 +10,20 @@ use std::path::Path;
 use postgres::types::ToSql;
 use pxl_spec::space::coord::adapter::epsg3857;
 
+use pxl_spec::bake::separation::Form;
+
 use crate::segment::Segment;
+use crate::separation::piece::piece_of;
 use crate::terrain::repository::TerrainRepository;
 use crate::util::{pack, unpack, write_atomic, Level};
+
+/// A road tunnel's end: where a portal may open, and the tunnel's level, which
+/// sets how far its approaches can sink (`portals_in`).
+#[derive(Clone, Copy)]
+pub struct Portal {
+    pub at: [f64; 2],
+    pub level: i64,
+}
 
 /// The tables the solve's queries name, for the catalog.
 pub const READS: [&str; 2] = ["FROM overture_transportation", "FROM overture_base_water"];
@@ -49,6 +60,19 @@ impl TileRows {
 
     pub fn ele(&self) -> &[i16] {
         &self.ele
+    }
+
+    /// Both ends of every road tunnel among its ways (`piece_of`).
+    pub fn portals(&self) -> Vec<Portal> {
+        self.ways
+            .iter()
+            .filter_map(piece_of)
+            .filter(|p| p.form == Form::Tunnel && p.way.subtype != "rail")
+            .flat_map(|p| {
+                let (pts, level) = (&p.way.points, p.way.tags.level.unwrap_or(0));
+                [pts[0], pts[pts.len() - 1]].map(|q| Portal { at: [q[0], q[1]], level })
+            })
+            .collect()
     }
 }
 
@@ -104,6 +128,27 @@ impl Store for Walk {
         self.held.insert(tile, rows.clone());
         Ok(rows)
     }
+}
+
+/// The ways a road tunnel may be among, whatever else is there.
+const TUNNELS_SQL: &str = concat!(
+    "SELECT ",
+    crate::segment_columns!(),
+    " FROM overture_transportation t WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857) AND t.road_flags::text LIKE '%is_tunnel%'"
+);
+
+/// The portals of the road tunnels in `[lo, hi]`, DB coordinates: a narrow
+/// read of the tunnels alone, so a solve learns whether a neighbour's tunnel
+/// opens near its tile before it reads the neighbour.
+pub fn portals_in(client: &mut Client, [lo, hi]: [[f64; 2]; 2]) -> Result<Vec<Portal>, String> {
+    let env: [&(dyn ToSql + Sync); 4] = [&lo[0], &lo[1], &hi[0], &hi[1]];
+    let rows = client.query(TUNNELS_SQL, &env).map_err(|e| e.to_string())?;
+    Ok(TileRows {
+        ways: rows.iter().flat_map(Segment::of).collect(),
+        water: Vec::new(),
+        ele: Vec::new(),
+    }
+    .portals())
 }
 
 /// A tile's rows from `memo` when read before, else from the DB into it.
