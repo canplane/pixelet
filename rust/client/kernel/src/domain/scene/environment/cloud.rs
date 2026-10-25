@@ -1,15 +1,15 @@
 // pxl-kernel/domain/scene/environment/cloud.rs
 
-//! The cumulus, the sky kind's (`spec/spec/asset/sky.json` `cumulus`), drawn
-//! as decor is and held as decor is not. It claims no cell,
-//! so nothing is built around it and a tower stands through it; it is no
-//! layer and no window's square holds it. It is laid on the field's own map, which the
-//! wind carries (`pxl-spec-core cloud.rs` `drift`): a block of cells there
-//! is built once and drawn moved, each instance a model, a sprite or nothing
-//! by its size on the screen (`present_block`), by the tiers the GPU draws
-//! decor by, one rule (pxl-spec-core scatter.rs `drawn::tier`). A block is
-//! laid in the lanes the decor and impostor shaders read
-//! (domain/scene/lane.rs).
+//! The cumulus, the sky kind's (`spec/spec/asset/sky.json` `cumulus`),
+//! drawn as decor is and held as decor is not. It claims no cell, so
+//! nothing is built around it and a tower stands through it; it is no layer
+//! and no window's square holds it. It is laid on the field's own map,
+//! which the wind carries (`pxl-spec-core cloud.rs` `drift`): a block of
+//! cells there is built once and drawn moved, each instance a model, a
+//! sprite or nothing by its size on the screen (`present_block`), by the
+//! tiers the GPU draws decor by, one rule (pxl-spec-core scatter.rs
+//! `drawn::tier`). A block is laid in the lanes the decor and impostor
+//! shaders read (domain/scene/lane.rs).
 
 use fnv::FnvHashMap;
 

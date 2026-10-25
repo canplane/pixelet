@@ -166,12 +166,13 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
     (q3::to_real(i64::from(base[0])), q3::to_real(i64::from(base[1])), units(zoom))
 }
 
-/// The goal, as the markers' squares cut the ground (domain/view/observation.rs
-/// `squares`): each eye window's squares, finest first, a square where the
-/// zoom its nearest point asks (`Tau::cell_at`, about the eye's height, as a
-/// ray's descent asks) is its window's or finer, within the reach, and not
-/// wholly under the finer window's squares, which are read there instead; none coarser than the source's top, which nothing asks
-/// for. A piece is drawn where its square is present, or where a coarser
+/// The goal, as the markers' squares cut the ground
+/// (domain/view/observation.rs `squares`): each eye window's squares,
+/// finest first, a square where the zoom its nearest point asks
+/// (`Tau::cell_at`, about the eye's height, as a ray's descent asks) is its
+/// window's or finer, within the reach, and not wholly under the finer
+/// window's squares, which are read there instead; none coarser than the
+/// source's top, which nothing asks for. A piece is drawn where its square is present, or where a coarser
 /// window's square is, which the cast reads in its place (pxl-spec-core
 /// `window::step`): from the floor where that square's tile is the floor's
 /// alone. One not drawn is marked by its line: no tile on it, only the
