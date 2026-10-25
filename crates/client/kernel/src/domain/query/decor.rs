@@ -17,8 +17,8 @@ pub mod strike;
 
 use pxl_spec::space::layer::lattice::{demand_reach, Cells};
 
-use pxl_spec::block::decor::{Decor, DECORS};
-use pxl_spec::block::DecorId;
+use pxl_spec::asset::decor::{Decor, DECORS};
+use pxl_spec::asset::DecorId;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;

@@ -4,8 +4,8 @@
 //! scaled into the model's frame, met against its triangles. Before its model
 //! arrives it is not drawn, and nothing strikes it.
 
-use pxl_spec::block::decor::{Decor, DECORS};
-use pxl_spec::block::DecorId;
+use pxl_spec::asset::decor::{Decor, DECORS};
+use pxl_spec::asset::DecorId;
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem::base::ptr_at;
 

@@ -8,8 +8,8 @@ pub mod edit;
 pub mod ghost;
 pub mod pick;
 
-use pxl_spec::block::object::Cube;
-use pxl_spec::block::{cube, DecorId};
+use pxl_spec::asset::cube::Cube;
+use pxl_spec::asset::{cube, DecorId};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3;

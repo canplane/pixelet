@@ -138,8 +138,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             Ok(Some(0))
         }
         Command::INPUT_HOLD => {
-            use pxl_spec::block::object::cube_of;
-            use pxl_spec::block::DecorId;
+            use pxl_spec::asset::cube::cube_of;
+            use pxl_spec::asset::DecorId;
             let p = abi::InputHold::read(packet(pkt)?)?;
             let mut holding = holding();
             holding.active_tool = p.tool;

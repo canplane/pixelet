@@ -5,9 +5,9 @@
 //! eraser is over. What it looks like, its color, its texture and what stands
 //! in for a decor not yet loaded, is the scene's (`domain/scene/indicator/ghost.rs`).
 
-use pxl_spec::block::decor::Decor;
-use pxl_spec::block::object::{cube_of, Cube};
-use pxl_spec::block::DecorId;
+use pxl_spec::asset::cube::{cube_of, Cube};
+use pxl_spec::asset::decor::Decor;
+use pxl_spec::asset::DecorId;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
@@ -18,7 +18,7 @@ use crate::domain::control::interaction::edit::{pending, restores_scattered, Pen
 use crate::domain::control::interaction::{holding, hover, ActiveTool};
 use crate::domain::layer::instance::Meta;
 use crate::domain::layer::object::meta::user_decor_pick;
-use crate::domain::layer::object::store::Block;
+use crate::domain::layer::object::store::Asset;
 use crate::domain::query::changed::Asked;
 use crate::domain::query::World;
 use xpute_guest::global::Global;
@@ -85,23 +85,23 @@ pub fn ghost() -> Ghost {
         _ => None,
     };
 
-    let cube: Option<Cube> = match (active_tool, hovered_object.map(|o| o.block())) {
+    let cube: Option<Cube> = match (active_tool, hovered_object.map(|o| o.asset())) {
         (ActiveTool::Pointer | ActiveTool::Decor, _) => None,
-        (_, Some(Block::Cube { cube })) => Some(cube),
+        (_, Some(Asset::Cube { cube })) => Some(cube),
         (ActiveTool::Object, _) => Some(ui.object_cube),
         _ => carved_style_cube,
     };
 
-    let decor_id = match (active_tool, hovered_object.map(|o| o.block())) {
+    let decor_id = match (active_tool, hovered_object.map(|o| o.asset())) {
         (ActiveTool::Decor, _) => Some(ui.decor_id),
-        (_, Some(Block::Decor { decor_id })) => Some(decor_id),
+        (_, Some(Asset::Decor { decor_id })) => Some(decor_id),
         _ => None,
     };
     let decor = decor_id.map(Decor::of);
 
     let decor_corner = match (active_tool, &hovered_object) {
         (ActiveTool::Decor, _) => hovered,
-        (_, Some(o)) if matches!(o.block(), Block::Decor { .. }) => Some(o.corner()),
+        (_, Some(o)) if matches!(o.asset(), Asset::Decor { .. }) => Some(o.corner()),
         _ => None,
     };
     // Placing back an erased scattered decor restores that instance; the ghost

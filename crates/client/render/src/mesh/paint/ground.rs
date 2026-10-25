@@ -4,8 +4,8 @@
 //! texture layer as the catalog's painter teaches them (object.rs), a ground
 //! look's and a placed cube of that look's one entry.
 
-use pxl_spec::block::color;
-use pxl_spec::block::cube::sentinel;
+use pxl_spec::asset::color;
+use pxl_spec::asset::cube::sentinel;
 
 use crate::frame::shader::word::NO_LAYER;
 use crate::look::color::linear;

@@ -12,10 +12,10 @@
 use crate::space::layer::lattice::Cells;
 use fnv::FnvHashSet;
 
+use crate::asset::marker::MARK_STEPS;
 use crate::asset::symbol::SYMBOLS;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
 use crate::bake::tile::{occupancy_of, Occupancy};
-use crate::block::object::MARK_STEPS;
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{Lattice, GROUND};

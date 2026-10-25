@@ -341,7 +341,7 @@ pub fn runs_fit(tile: Tile, held: &TerrainTile) -> Result<(), ([u32; 2], [u32; 2
 }
 
 // Made on first use: a constant array of zeros would ship in the module's data.
-static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> = std::sync::LazyLock::new(|| vec![crate::block::cube::sentinel::void; GROUND_LANE]);
+static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> = std::sync::LazyLock::new(|| vec![crate::asset::cube::sentinel::void; GROUND_LANE]);
 
 impl TerrainTile {
     /// Where the source has nothing at all, as a client holds it: void

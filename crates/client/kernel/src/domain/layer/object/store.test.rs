@@ -1,6 +1,6 @@
 // pxl-kernel/domain/layer/object/store.test.rs
 
-use pxl_spec::block::cube::Object;
+use pxl_spec::asset::cube::Object;
 use pxl_spec::space::coord::zoom::UNIT_ZOOM;
 use pxl_spec::space::layer::lattice::GROUND;
 
@@ -10,8 +10,8 @@ use pxl_spec::space::hierarchy::morton::child_cube;
 
 use super::*;
 use crate::domain::layer::Query;
+use pxl_spec::asset::cube::{cube_id, Cube};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
-use pxl_spec::block::object::{cube_id, Cube};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use pxl_spec_core::overwrite::{self, Cut};
 use xpute_kit::math::rng::SplitMix64;

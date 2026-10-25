@@ -1,7 +1,7 @@
-// @pxl/client/catalog/block/mod.ts
+// @pxl/client/catalog/asset/mod.ts
 
 /**
- * The cell catalog as the shell shows it. Cubes and decor are held by the
+ * The asset catalog as the shell shows it. Cubes and decor are held by the
  * kernel's numbers; names are looked up only for display.
  */
 

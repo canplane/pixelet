@@ -13,8 +13,8 @@ use pxl_render::gpu::api::bytes;
 use pxl_render::look::color::indicator;
 use pxl_render::mesh::ghost::{on_whole_units, write_lone_box};
 use pxl_render::mesh::paint::object::PAINTER;
-use pxl_spec::block::decor::Decor;
-use pxl_spec::block::object::{cube_id, cube_rgb, Cube};
+use pxl_spec::asset::cube::{cube_id, cube_rgb, Cube};
+use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::coord::v3::V3;
 
 use crate::domain::query::decor::asset::decor_assets_for;

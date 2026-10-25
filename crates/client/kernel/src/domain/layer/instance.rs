@@ -4,7 +4,7 @@
 //! its id is its kind over its shape (the block catalog's), and `meta` is what
 //! its class carries. The ground grows its own; an object's is the placement's.
 
-use pxl_spec::block::decor::DecorMeta;
+use pxl_spec::asset::decor::DecorMeta;
 use pxl_spec::space::coord::v3::V3;
 
 use pxl_spec::bake::constant::EntryAt;

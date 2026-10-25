@@ -122,12 +122,12 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
     let json = bare_keys.replace_all(&json, "$1:");
     let json = close_brace.replace_all(&json, ",\n$1}");
     let json = close_bracket.replace_all(&json, ",\n$1]");
-    let mut ts = vec!["// @pxl/client/catalog/block/color.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/catalog/asset/color.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     ts.extend([String::new(), format!("export default {json};")]);
 
     let types = read(CUBE_JSON)?;
-    let mut rs = vec!["// pxl-spec/block/color.spec.rs".to_string()];
+    let mut rs = vec!["// pxl-spec/asset/color.spec.rs".to_string()];
     rs.extend(head);
     rs.push(String::new());
     rs.extend(casing_note());
@@ -173,8 +173,8 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
         rs.extend(["    }", "}"].map(String::from));
     }
     Ok(vec![
-        Output::new("apps/client/src/catalog/block/color.spec.ts", file(&ts)),
-        Output::new("crates/spec/src/block/color.spec.rs", file(&rs)),
+        Output::new("apps/client/src/catalog/asset/color.spec.ts", file(&ts)),
+        Output::new("crates/spec/src/asset/color.spec.rs", file(&rs)),
     ])
 }
 
@@ -255,7 +255,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     };
 
     // TS
-    let mut ts = vec!["// @pxl/client/catalog/block/cube.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/catalog/asset/cube.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     // Every placeable cube under its heading: the ground's looks, and the colors past a ground byte.
     let cube_sections: Vec<(&str, &Entry)> = sectioned(&ground).chain(sectioned(&object).filter(|(_, e)| is_color(e))).collect();
@@ -445,7 +445,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "}".into(),
     ]);
     Ok(vec![
-        Output::new("apps/client/src/catalog/block/cube.spec.ts", file(&ts)),
+        Output::new("apps/client/src/catalog/asset/cube.spec.ts", file(&ts)),
         Output::new("crates/spec/core/src/cube.spec.rs", file(&unwrapped(rs, "pub mod cubes {"))),
     ])
 }
@@ -485,14 +485,14 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
         .unwrap_or_default();
     let (portable, table) = decor_table(&spec, &ground_looks()?)?;
 
-    let mut ts = vec!["// @pxl/client/catalog/block/decor.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/catalog/asset/decor.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     ts.extend(doc.iter().map(|l| format!("// {l}")));
     ts.push("export const decor = {".into());
     ts.extend(entries.iter().map(|(k, v)| format!("  {k}: {v},")));
     ts.extend(["} as const satisfies Record<string, number>;", "", "export type DecorId = keyof typeof decor;"].map(String::from));
 
-    let mut rs = vec!["// pxl-spec/block/decor.spec.rs".to_string()];
+    let mut rs = vec!["// pxl-spec/asset/decor.spec.rs".to_string()];
     rs.extend(head.iter().cloned());
     rs.extend(doc.iter().map(|l| format!("// {l}")));
     rs.push("//".into());
@@ -534,15 +534,15 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
         [
             "// The decors as the GPU reads them too: how the ground grows each one, the",
             "// looks it stands on and the boxes its variants claim, in the catalog's",
-            "// order. pxl-spec block/decor.spec.rs adds their models over each row.",
+            "// order. pxl-spec asset/decor.spec.rs adds their models over each row.",
             "#![allow(non_camel_case_types)]",
         ]
         .map(String::from),
     );
     row.extend(portable);
     Ok(vec![
-        Output::new("apps/client/src/catalog/block/decor.spec.ts", file(&ts)),
-        Output::new("crates/spec/src/block/decor.spec.rs", file(&unwrapped(rs, "pub mod decors {"))),
+        Output::new("apps/client/src/catalog/asset/decor.spec.ts", file(&ts)),
+        Output::new("crates/spec/src/asset/decor.spec.rs", file(&unwrapped(rs, "pub mod decors {"))),
         Output::new("crates/spec/core/src/decor.spec.rs", file(&row)),
     ])
 }

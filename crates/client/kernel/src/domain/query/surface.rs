@@ -31,7 +31,7 @@ impl World<'_> {
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(pxl_spec_core::SEA_LEVEL),
-                block: pxl_spec::block::cube::sentinel::unknown,
+                block: pxl_spec::asset::cube::sentinel::unknown,
             }));
         }
         let side = units(cell);

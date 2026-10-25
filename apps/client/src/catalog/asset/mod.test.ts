@@ -1,4 +1,4 @@
-// @pxl/client/catalog/block/mod.test.ts
+// @pxl/client/catalog/asset/mod.test.ts
 
 import { assert } from "@std/assert";
 

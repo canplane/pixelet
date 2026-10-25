@@ -3,11 +3,11 @@
 //! Every color a cell can be, numbered once. Object colors follow the ground
 //! layers, so one number reaches both.
 
+use pxl_spec::asset::cube::cube_rgb;
+use pxl_spec::asset::cube::{Cube, ALL_CUBES};
+use pxl_spec::asset::cube::{Ground, Object};
 use pxl_spec::asset::ingested::CubeFace;
 use pxl_spec::asset::shipped_tile_mean;
-use pxl_spec::block::cube::{Ground, Object};
-use pxl_spec::block::object::cube_rgb;
-use pxl_spec::block::object::{Cube, ALL_CUBES};
 use std::sync::LazyLock;
 
 /// The texture array's layers, one a placeable cube in the catalog's order, so

@@ -3,12 +3,13 @@
 //! The object store's records as blocks: the materials their values are
 //! drawn as, by the catalog.
 
-use pxl_spec::block::cube;
-use pxl_spec::block::object::{cube_id, decor_ids, decor_num_id, ALL_CUBES};
+use pxl_spec::asset::cube;
+use pxl_spec::asset::cube::{cube_id, ALL_CUBES};
+use pxl_spec::asset::{decor_ids, decor_num_id};
 
 use crate::mesh::paint::palette::rgb255;
 use crate::mesh::paint::palette::LAYER_IDX;
-use pxl_spec::block::object::{cube_rgb, Cube};
+use pxl_spec::asset::cube::{cube_rgb, Cube};
 use std::sync::LazyLock;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;

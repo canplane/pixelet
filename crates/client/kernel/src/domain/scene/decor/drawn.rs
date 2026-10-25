@@ -9,7 +9,7 @@
 //! were written in, where what the ground grows may have changed.
 
 use pxl_render::gpu::grown::DecorFrame;
-use pxl_spec::block::decor::DECORS;
+use pxl_spec::asset::decor::DECORS;
 use pxl_spec::space::camera::grid::{split_distance, target_cell_px, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;

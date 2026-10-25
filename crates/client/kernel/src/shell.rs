@@ -4,7 +4,8 @@
 //! only when changed) and the commands it applies to the stores.
 
 use crate::domain::layer::Base as _;
-use pxl_spec::block::object::{cube_id, decor_num_id};
+use pxl_spec::asset::cube::cube_id;
+use pxl_spec::asset::decor_num_id;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
 use xpute_kit::wire::xtp::PacketWriter;

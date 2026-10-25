@@ -166,8 +166,7 @@ pub fn render_rs(rows: &[Row], pack: &Pack) -> String {
 
 #![allow(non_camel_case_types)]
 
-use crate::block::cube;
-use crate::block::object::Cube;
+use crate::asset::cube::{self, Cube};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]

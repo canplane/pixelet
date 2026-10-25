@@ -8,11 +8,12 @@ use crate::domain::control::interaction::{holding, hover, ActiveTool};
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
 use crate::domain::layer::object::size::MARKER_ZOOM;
-use crate::domain::layer::object::store::Block;
+use crate::domain::layer::object::store::Asset;
+use pxl_spec::asset::cube::{cube_id, Cube};
+use pxl_spec::asset::decor_num_id;
+use pxl_spec::asset::{cube, DecorId};
 use pxl_spec::block::ext::MARKER_TEXT_CHARS;
-use pxl_spec::block::object::{cube_id, decor_num_id, Cube};
 use pxl_spec::block::object::{object_value_is_marker, MARKER};
-use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
@@ -26,8 +27,8 @@ use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::object::store::{apply, Entry, Write, AIR, VOID};
 use crate::domain::query::World;
+use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::block::decor::Decor;
 
 /// Whether air is written where `at` is: a carve of the ground, or what was
 /// placed there taken back.
@@ -235,10 +236,10 @@ pub fn pending_step() -> RenderEdits {
     };
     // The real object's hide lands a tick or more after the ghost, accepted.
     let hidden = object.filter(|_| active_tool == ActiveTool::Eraser);
-    let block = hidden.map(|o| o.block());
+    let asset = hidden.map(|o| o.asset());
     let edits = RenderEdits {
         hide: hidden.map(|o| o.id()),
-        hide_in: (!matches!(block, Some(Block::Decor { .. })), !matches!(block, Some(Block::Cube { .. }))),
+        hide_in: (!matches!(asset, Some(Asset::Decor { .. })), !matches!(asset, Some(Asset::Cube { .. }))),
         // The never-written AIR entry injected into the drawn build where
         // the eraser hovers bare terrain: what is one voxel below shows
         // through the ghost.

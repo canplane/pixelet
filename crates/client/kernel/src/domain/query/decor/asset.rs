@@ -11,7 +11,7 @@ use crate::domain::query::model::asset::{model_of, model_refusal_over};
 use crate::sys::io::loader::{load_image, take_settled};
 use crate::sys::load::Load;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
-use pxl_spec::block::decor::{Decor, DECORS};
+use pxl_spec::asset::decor::{Decor, DECORS};
 use xpute_guest::global::Global;
 
 #[derive(Clone)]

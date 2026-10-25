@@ -3,8 +3,9 @@
 //! What a placed thing carries beyond its value: decor's variant and heading,
 //! seeded by where it is placed, its one stable identity.
 
-use pxl_spec::block::decor::Decor;
-use pxl_spec::block::object::{decor_id_from_num, object_value_is_decor};
+use pxl_spec::asset::decor::Decor;
+use pxl_spec::asset::decor_id_from_num;
+use pxl_spec::block::object::object_value_is_decor;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{index_of, UNIT_ZOOM};
 use pxl_spec_core::scatter::placed_pose;

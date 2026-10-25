@@ -3,10 +3,10 @@
 // The query's laws over a leaf tile's four children folded into their
 // parent as the bake folds them, and objects written into a store.
 
+use pxl_spec::asset::cube::{self, ground, sentinel};
+use pxl_spec::asset::cube::{cube_id, Cube};
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::Ground;
-use pxl_spec::block::cube::{self, ground, sentinel};
-use pxl_spec::block::object::{cube_id, Cube};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 
 use super::*;

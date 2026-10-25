@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { f64, u8 } from "@xpute/kit/abi/word.ts";
-import { allCubes, type Cube, cubeId, cubeSection, decorIds, decorSection } from "@/catalog/block/mod.ts";
+import { allCubes, type Cube, cubeId, cubeSection, decorIds, decorSection } from "@/catalog/asset/mod.ts";
 
 import { useInHand, useUiStore } from "@/shell/store/ui.ts";
 import { useKernel } from "@/abi/snapshot.ts";
@@ -17,7 +17,7 @@ import { Segmented } from "@/shell/ui/segmented.tsx";
 import { chrome, color, hairline, textStyle } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { CharacterPicker } from "@/shell/character/picker.tsx";
-import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/block/swatch.tsx";
+import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/asset/swatch.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 
 /** Each section's items, in the catalog's order. */

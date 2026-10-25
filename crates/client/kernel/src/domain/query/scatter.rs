@@ -8,8 +8,8 @@
 //! (`World::footing`), and which way it faces and whether it grows the
 //! world's blocks about it (pxl-spec-core `scatter::stand`, `grows`).
 
-use pxl_spec::block::cube::sentinel;
-use pxl_spec::block::decor::Decor;
+use pxl_spec::asset::cube::sentinel;
+use pxl_spec::asset::decor::Decor;
 use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;

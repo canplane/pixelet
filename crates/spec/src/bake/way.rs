@@ -8,7 +8,7 @@ use fnv::FnvHashMap;
 
 use super::separation::{Form, Separation};
 use super::tile::terrain::GroundId;
-use crate::block::cube::{sentinel, Ground};
+use crate::asset::cube::{sentinel, Ground};
 use crate::procedural::Frame;
 use crate::space::layer::lattice::TILE_CELLS;
 

@@ -1,16 +1,152 @@
 // pxl-spec/asset.rs
 
-//! The shipped assets, and the texture pack: which of its tiles a cube
-//! wears on each face. A type with no image still draws as its catalog color.
+//! The content library: every asset the catalog declares
+//! (`spec/spec/asset/`), each a definition of a kind — the cubes and their
+//! colors, the decors, the marker — numbered by its id, its kind over its
+//! shape (`id`), and the shipped files a definition references
+//! (`ingested`). The texture pack is the cube kind's: which of its tiles a
+//! cube wears on each face. A cube with no image still draws as its catalog
+//! color.
 
+#![allow(non_upper_case_globals)]
+
+use std::sync::LazyLock;
+
+#[path = "asset/color.spec.rs"]
+pub mod color;
+pub mod cube;
+#[path = "asset/decor.spec.rs"]
+pub mod decor;
+pub mod id;
 #[path = "asset/ingested.spec.rs"]
 pub mod ingested;
+pub mod marker;
 pub mod star;
 #[path = "asset/symbol.spec.rs"]
 pub mod symbol;
 
-use crate::block::object::Cube;
+pub use decor::DecorId;
+pub use id::AssetId;
+
+use crate::space::coord::aabb::Aabb;
+use crate::space::coord::zoom::units;
+use cube::Cube;
 use ingested::{CubeFace, PACK};
+
+/// A catalog color, packed `0xRRGGBB` by the generator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Swatch {
+    pub rgb: u32,
+}
+
+impl Swatch {
+    pub const fn new(rgb: u32) -> Swatch {
+        Swatch { rgb }
+    }
+}
+
+impl decor::Variant {
+    /// The largest dimension of its model, in units; NaN is kept rather than
+    /// dropped, so a model the ingest could not measure is never taken for none.
+    pub fn extent(&self) -> f64 {
+        self.model.ingested().extent.unwrap_or([0.0; 3]).into_iter().fold(0.0, largest)
+    }
+}
+
+impl decor::Decor {
+    /// What a placed one is stored as.
+    pub const fn value(&self) -> u16 {
+        self.id as u16
+    }
+
+    /// The largest over every variant's model, in units.
+    pub fn extent(&self) -> f64 {
+        self.variants.iter().map(decor::Variant::extent).fold(0.0, largest)
+    }
+
+    /// How far any variant's box, or its model about the box's middle, reaches
+    /// from the box's min corner however it turns, in units.
+    pub fn reach(&self) -> f64 {
+        let cell = units(self.row.cell_zoom());
+        let reach = |(v, size): (&decor::Variant, &[u32; 3])| {
+            let [ex, ey, ez] = v.model.ingested().extent.unwrap_or([0.0; 3]);
+            let [x, y, z] = size.map(|n| f64::from(n) * cell);
+            let (across, up) = (x.max(y).max(ex).max(ey), z.max(ez));
+            libm::sqrt(2.0 * across * across + up * up)
+        };
+        self.variants.iter().zip(&self.row.sizes).map(reach).fold(0.0, largest)
+    }
+
+    /// The sides of `variant`'s box turned `turn`, in units.
+    fn sides(&self, variant: u32, turn: u32) -> [f64; 3] {
+        self.row.cells(variant, turn).map(|n| f64::from(n) * units(self.row.cell_zoom()))
+    }
+
+    /// `variant` turned `turn` with its box's min corner at `corner`, in
+    /// units: where it stands, its base's middle, which its model's origin is
+    /// put at, and what it carries at `scale`.
+    pub fn stand(&self, corner: [f64; 3], variant: u32, turn: u32, scale: f64) -> ([f64; 3], decor::DecorMeta) {
+        let [x, y, _] = self.sides(variant, turn);
+        let at = [corner[0] + x / 2.0, corner[1] + y / 2.0, corner[2]];
+        (at, decor::DecorMeta { variant, turn, scale })
+    }
+
+    /// The box one standing at `at`, carrying `m`, claims: every cell in it is its.
+    pub fn claim(&self, at: [f64; 3], m: &decor::DecorMeta) -> Aabb {
+        let [x, y, z] = self.sides(m.variant, m.turn);
+        let min = [at[0] - x / 2.0, at[1] - y / 2.0, at[2]];
+        Aabb {
+            min,
+            max: [min[0] + x, min[1] + y, min[2] + z],
+        }
+    }
+
+    /// Where its variants are numbered from: the variants of the decors before it.
+    pub fn first_group(&self) -> u32 {
+        decor::DECORS.iter().take_while(|d| d.id != self.id).map(|d| d.row.variants).sum()
+    }
+
+    /// The generator writes one entry a decor, so every id has one.
+    pub fn of(id: DecorId) -> &'static decor::Decor {
+        use xpute_kit::status::bug::OrBug;
+        decor::DECORS.iter().find(|d| d.id == id).or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE)
+    }
+}
+
+impl decor::DecorMeta {
+    /// Its heading in radians.
+    pub fn spin(&self) -> f64 {
+        f64::from(self.turn % 4) * core::f64::consts::FRAC_PI_2
+    }
+}
+
+fn largest(a: f64, b: f64) -> f64 {
+    if a.is_nan() || b.is_nan() {
+        f64::NAN
+    } else {
+        a.max(b)
+    }
+}
+
+/// A decor's asset id, what a placed one is stored as.
+pub fn decor_num_id(id: DecorId) -> AssetId {
+    id as u32
+}
+
+/// The decor an asset id of the decor kind names.
+pub fn decor_id_from_num(num_id: AssetId) -> DecorId {
+    match u16::try_from(num_id).ok().and_then(DecorId::of) {
+        Some(id) => id,
+        None => xpute_kit::bug!(ENOTRECOVERABLE, num_id),
+    }
+}
+
+/// In numeric order.
+pub static decor_ids: LazyLock<Vec<DecorId>> = LazyLock::new(|| {
+    let mut ids = DecorId::ALL.to_vec();
+    ids.sort_by_key(|id| *id as u16);
+    ids
+});
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TileOrigin {

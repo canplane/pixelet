@@ -47,7 +47,7 @@ fn a_line_is_kept_up_the_pyramid_by_its_width_alone() {
 
 #[test]
 fn each_form_is_drawn_from_its_surface() {
-    use crate::block::cube::ground as t;
+    use crate::asset::cube::ground as t;
     let over = |form: Form, top: f32| Crossing {
         low: top,
         top,

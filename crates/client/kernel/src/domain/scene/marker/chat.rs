@@ -7,7 +7,7 @@
 
 use std::rc::Rc;
 
-use pxl_spec::block::object::marker_shows;
+use pxl_spec::asset::marker::marker_shows;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;

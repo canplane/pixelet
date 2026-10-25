@@ -13,9 +13,10 @@
 
 use xpute_guest::global::Global;
 
+use pxl_spec::asset::cube::{cube_of, Cube};
+use pxl_spec::asset::{cube, decor_id_from_num, AssetId, DecorId};
 use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
-use pxl_spec::block::object::{cube_of, decor_id_from_num, object_value_is_decor, object_value_is_marker, Cube};
-use pxl_spec::block::{cube, DecorId};
+use pxl_spec::block::object::{object_value_is_decor, object_value_is_marker};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_cell};
@@ -33,8 +34,9 @@ use pxl_spec::block::ext::class_of;
 use pxl_spec::block::volume::fold;
 use pxl_spec_core::overwrite::{self, path, Held};
 
+/// The asset a placed block is, by its kind.
 #[derive(Clone, Debug, PartialEq)]
-pub enum Block {
+pub enum Asset {
     Cube { cube: Cube },
     Decor { decor_id: DecorId },
     Marker,
@@ -46,7 +48,7 @@ pub enum Block {
 pub struct Entry {
     pub zoom: Zoom,
     pub at: [i32; 3],
-    pub state: u32,
+    pub state: AssetId,
     pub ext: u16,
 }
 
@@ -68,15 +70,15 @@ impl Entry {
     }
 
     /// What it is, by its kind; not for air, which is the eraser's mark.
-    pub fn block(&self) -> Block {
+    pub fn asset(&self) -> Asset {
         if object_value_is_marker(self.state) {
-            Block::Marker
+            Asset::Marker
         } else if object_value_is_decor(self.state) {
-            Block::Decor {
+            Asset::Decor {
                 decor_id: decor_id_from_num(self.state),
             }
         } else {
-            Block::Cube {
+            Asset::Cube {
                 // Every value the store writes is one the catalog gives out.
                 cube: cube_of(self.state).or_bug(Errno::ENOTRECOVERABLE),
             }
@@ -113,8 +115,8 @@ pub fn take_written(out: &mut Vec<Aabb>) {
     core::mem::swap(out, WRITTEN.get(Vec::new));
 }
 
-pub const VOID: u32 = cube::sentinel::void as u32;
-pub const AIR: u32 = cube::object::air as u32;
+pub const VOID: AssetId = cube::sentinel::void as u32;
+pub const AIR: AssetId = cube::object::air as u32;
 const _: () = assert!(VOID == 0);
 
 /// What a tree's leaf holds: the catalog value, and its record's handle.
@@ -186,13 +188,13 @@ pub(crate) fn tree_key(zoom: Zoom, at: [i32; 3]) -> u128 {
 #[derive(Clone, Debug)]
 pub struct Write {
     pub key: u128,
-    pub id: u32,
+    pub id: AssetId,
     pub ext: Option<Ext>,
 }
 
 impl Write {
     /// `id` at the cube `at` names.
-    pub fn at(at: EntryAt, id: u32) -> Write {
+    pub fn at(at: EntryAt, id: AssetId) -> Write {
         Write {
             key: key(at.zoom(), at.at()),
             id,

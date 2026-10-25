@@ -1,10 +1,10 @@
-// @pxl/client/catalog/block/swatch.tsx
+// @pxl/client/catalog/asset/swatch.tsx
 
 import { Image, type StyleProp, View, type ViewStyle } from "react-native";
 
 import type { u8 } from "@xpute/kit/abi/word.ts";
-import type { DecorId } from "@/catalog/block/decor.spec.ts";
-import { type Cube, cubeHex, cubeId, decorName } from "@/catalog/block/mod.ts";
+import type { DecorId } from "@/catalog/asset/decor.spec.ts";
+import { type Cube, cubeHex, cubeId, decorName } from "@/catalog/asset/mod.ts";
 import { shippedTopTextureKey } from "@/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { ORIGIN } from "@/bracket.tsx";

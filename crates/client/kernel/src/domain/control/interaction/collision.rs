@@ -1,7 +1,7 @@
 // pxl-kernel/domain/control/interaction/collision.rs
 
-use pxl_spec::block::decor::Decor;
-use pxl_spec::block::DecorId;
+use pxl_spec::asset::decor::Decor;
+use pxl_spec::asset::DecorId;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
@@ -11,7 +11,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use crate::domain::control::interaction::{ActiveTool, Holding};
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::layer::object::size::{object_zoom_of, MARKER_ZOOM};
-use crate::domain::layer::object::store::{Block, Entry};
+use crate::domain::layer::object::store::{Asset, Entry};
 use crate::domain::query::World;
 
 /// What a placing tool puts down, each in the cube of its zoom.
@@ -89,7 +89,7 @@ pub fn is_placement_blocked(tool: PlacementTool, corner: &Q3) -> bool {
         min: [room.min[0], room.min[1], room.min[2] - units(GROUND.cell())],
         max: [room.max[0], room.max[1], room.min[2]],
     };
-    let on_instance = || world.placed_sharing(&under, |e| e.block() == Block::Marker).is_some() || world.placed_claim(&under).is_some() || world.grown_claim(&under).is_some();
+    let on_instance = || world.placed_sharing(&under, |e| e.asset() == Asset::Marker).is_some() || world.placed_claim(&under).is_some() || world.grown_claim(&under).is_some();
     taken || !matches!(tool, PlacementTool::Object(_)) && on_instance()
 }
 
