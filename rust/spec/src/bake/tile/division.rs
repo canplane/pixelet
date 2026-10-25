@@ -18,6 +18,7 @@ use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
 use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::division::Subtype;
+use crate::space::coord::adapter::epsg3857::cell_zoom_of;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec_core::ground::majority;
@@ -60,6 +61,23 @@ pub struct DivisionTile {
     pub cells: Cow<'static, [u32]>,
     pub divisions: Vec<Division>,
     pub occupancy: Occupancy,
+}
+
+impl Division {
+    /// The zoom its name shows from, as Overture's own tiles place it
+    /// (overture-tiles `profiles/Divisions.java`): a web map's zoom by its
+    /// prominence where it has one, else by its subtype, whose pixel is the
+    /// cell at the zoom returned (`epsg3857::cell_zoom_of`).
+    pub fn shown_from(&self) -> Zoom {
+        let web = match (self.prominence, self.subtype) {
+            (1.., _) => (100u8.saturating_sub(self.prominence) / 5 + 1).min(10),
+            (0, Subtype::Country | Subtype::Dependency) => 0,
+            (0, Subtype::Region) => 4,
+            (0, Subtype::County) => 8,
+            (0, _) => 10,
+        };
+        cell_zoom_of(i32::from(web))
+    }
 }
 
 impl DivisionTile {
@@ -324,3 +342,7 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
         occupancy: Occupancy::of_slots(kept),
     }
 }
+
+#[cfg(test)]
+#[path = "division.test.rs"]
+mod test;

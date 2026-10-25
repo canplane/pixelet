@@ -375,7 +375,7 @@ export interface Snapshot {
   /** Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
    * has read its kept slot, a few turns from boot. */
   settings: u32[];
-  /** The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it. */
+  /** The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`). */
   m_per_px: f64;
   /** The division the focus is in and every one above it, broad to narrow; empty
    * where the focus is in none or the tile it is read out of has not arrived. */
@@ -488,15 +488,15 @@ export interface DivisionPart {
   subtype: u8;
   name: string;
   names: LangName[];
-  /** Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the
-   * subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java). */
-  prominence: u8;
+  /** The view is in far enough for its name to show: as far as Overture's own tiles
+   * show it from (pxl-spec bake/tile/division.rs `Division::shown_from`). */
+  shown: boolean;
   /** Held by an area the point is in; one without is the nearest found by its point. */
   area: boolean;
 }
 
 export function read_division_part(b: BranchCursor): DivisionPart {
-  return { subtype: b.at(0).get<u8>(), name: b.at(1).get<string>(), names: list(b.at_branch(2), read_lang_name), prominence: b.at(3).get<u8>(), area: b.at(4).get<boolean>() };
+  return { subtype: b.at(0).get<u8>(), name: b.at(1).get<string>(), names: list(b.at_branch(2), read_lang_name), shown: b.at(3).get<boolean>(), area: b.at(4).get<boolean>() };
 }
 
 export interface LangName {

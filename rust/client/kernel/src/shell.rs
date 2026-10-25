@@ -8,9 +8,10 @@ use pxl_spec::asset::cube::cube_id;
 use pxl_spec::asset::decor_num_id;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::zoom::units;
 use xpute_kit::wire::xtp::PacketWriter;
 
-use crate::domain::control::camera::controller::{dist, focus, Motion};
+use crate::domain::control::camera::controller::{dist, Motion};
 use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::Tracking;
@@ -35,8 +36,10 @@ use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::status::errno::Errno;
 
 /// The focus's division and each above it, broad to narrow. Every language
-/// is sent, so switching language re-reads rather than refetches.
-fn division_parts(at: Option<(Tile, u32)>, each: &mut dyn FnMut(&DivisionPart<'_>)) {
+/// is sent, so switching language re-reads rather than refetches. A name
+/// shows where a logical pixel, `u_per_px` wide, is no wider than a cell at
+/// the zoom it shows from (`Division::shown_from`).
+fn division_parts(at: Option<(Tile, u32)>, u_per_px: f64, each: &mut dyn FnMut(&DivisionPart<'_>)) {
     let Some(at) = at else { return };
     named(at, |part| {
         let names = |each: &mut dyn FnMut(&LangName<'_>)| {
@@ -48,7 +51,7 @@ fn division_parts(at: Option<(Tile, u32)>, each: &mut dyn FnMut(&DivisionPart<'_
             subtype: part.subtype as u8,
             name: &part.name,
             names: &names,
-            prominence: part.prominence,
+            shown: u_per_px <= units(part.shown_from()),
             area: part.area,
         });
     });
@@ -75,7 +78,8 @@ pub struct Shown {
     /// By each setting's number, a retired number's 0; none until they are
     /// read, as the shell holds none before its first snapshot.
     settings: Option<[u32; SettingKey::SLOTS]>,
-    m_per_px: f64,
+    /// The view's scale at the focus, as the units a logical pixel spans.
+    u_per_px: f64,
     division: Option<(Tile, u32)>,
     previews: ([u32; CASES_MAX], usize),
     stall: Option<Message>,
@@ -120,7 +124,7 @@ fn shown() -> Shown {
             }
             by_number
         }),
-        m_per_px: m_per_px(),
+        u_per_px: units_per_px_at(dist()),
         division: focus.and_then(|at| naming(&at)),
         previews,
         stall: stall(),
@@ -200,8 +204,8 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
         zooming: shown.zooming,
         over_marker: shown.over_marker,
         settings: shown.settings.as_ref().map_or(&[], |s| s),
-        m_per_px: shown.m_per_px,
-        division: &|each| division_parts(shown.division, each),
+        m_per_px: m_per_px(shown.u_per_px, shown.focus),
+        division: &|each| division_parts(shown.division, shown.u_per_px, each),
         previews: &shown.previews.0[..shown.previews.1],
         kept_refused: &shown.kept_refused.0[..shown.kept_refused.1],
         stall: shown.stall,
@@ -270,9 +274,9 @@ fn stall() -> Option<Message> {
     }
 }
 
-/// The view's scale at the focus, as the meters a logical pixel spans;
-/// 0 where the camera stands at the center: no distance, no scale.
-fn m_per_px() -> f64 {
-    let y_u = focus().map_or(0.0, |c| q3::to_real(i64::from(c[1])));
-    units_per_px_at(dist()) / epsg3857::u_per_m(y_u)
+/// The view's scale at the focus, `u_per_px`, as the meters a logical pixel
+/// spans; 0 where the camera stands at the center: no distance, no scale.
+fn m_per_px(u_per_px: f64, focus: Option<Q3>) -> f64 {
+    let y_u = focus.map_or(0.0, |c| q3::to_real(i64::from(c[1])));
+    u_per_px / epsg3857::u_per_m(y_u)
 }

@@ -1457,7 +1457,7 @@
           "name": "m_per_px",
           "type": "f64",
           "$doc": [
-            "The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it."
+            "The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`)."
           ]
         },
         {
@@ -1655,11 +1655,11 @@
           "list": true
         },
         {
-          "name": "prominence",
-          "type": "u8",
+          "name": "shown",
+          "type": "bool",
           "$doc": [
-            "Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the",
-            "subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java)."
+            "The view is in far enough for its name to show: as far as Overture's own tiles",
+            "show it from (pxl-spec bake/tile/division.rs `Division::shown_from`)."
           ]
         },
         {

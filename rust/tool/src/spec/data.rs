@@ -39,7 +39,7 @@ const DATA_SPECS: [DataSpec; 26] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
-        ts: Some("ts/client/src/config/earth.spec.ts"),
+        ts: None,
         rs: Some("rust/spec/src/space/coord/earth.spec.rs"),
         rs_also: &[],
         module: Some("spec"),

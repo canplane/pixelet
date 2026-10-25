@@ -13,7 +13,7 @@ import { KEEPS_KEYBOARD } from "@/shell/ui/keyboard.tsx";
 import { TextField } from "@/shell/ui/text-field.tsx";
 import { chrome, color, textScale, textStyle, weight } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
-import { Command, DevicePoseStatus, encode_input_go_to, type LonLat } from "@/abi/cmd.spec.ts";
+import { Command, DevicePoseStatus, encode_input_go_to } from "@/abi/cmd.spec.ts";
 import { kernel_command, kernel_room, kernel_snapshot } from "@/abi/shell.ts";
 import { LABEL, STATUS } from "@/shell/ui/palette.ts";
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
@@ -27,23 +27,10 @@ import { assembleLabel, type DivisionPart, localName, primaryLanguage } from "@/
 import { useCenterCoordinates, useDivisionLabel } from "@/shell/division/focus.ts";
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "./fetch.ts";
-import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { useKernel } from "@/shell/store/system.ts";
 
 const DEBOUNCE_MS = 300;
-
-const DEG_TO_RAD = Math.PI / 180;
-
-/** Great-circle meters, not world units scaled: Mercator stretches a meter
- * by 1/cos(latitude), 1.26x at Seoul. */
-function groundDistanceM(a: LonLat, b: LonLat): f64 {
-  const lat1 = a.lat * DEG_TO_RAD, lat2 = b.lat * DEG_TO_RAD;
-  const dlat = lat2 - lat1;
-  const dlon = (b.lon - a.lon) * DEG_TO_RAD;
-  const h = Math.sin(dlat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dlon / 2) ** 2;
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
-}
 
 function formatDistance(m: f64): string {
   if (m < 1000) return `${round(m)}m`;
@@ -157,12 +144,11 @@ function MapCenter() {
   );
 }
 
-/** Distances and the focus's country are taken where the query ran, so they
- * agree with the API's order while the camera drifts. */
+/** The focus's country is taken where the query ran, as the API measured each
+ * result's distance from, so both agree with its order while the camera drifts. */
 interface Found {
   query: string;
   results: SearchResult[];
-  origin: LonLat | null;
   home: string | null;
 }
 
@@ -172,7 +158,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   const lang = primaryLanguage(i18n.language);
 
   const [query, setQuery] = useState("");
-  const [found, setFound] = useState<Found>({ query: "", results: [], origin: null, home: null });
+  const [found, setFound] = useState<Found>({ query: "", results: [], home: null });
   const q = query.trim();
   const results = q === "" ? [] : found.results;
   const loading = q !== "" && found.query !== q;
@@ -185,8 +171,8 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
       const near = snapshot.focus.center ?? undefined;
       const home = snapshot.division.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY)?.name ?? null;
       fetchSearch(q, { near, signal: controller.signal })
-        .then((results) => controller.signal.aborted || setFound({ query: q, results, origin: near ?? null, home }))
-        .catch(() => controller.signal.aborted || setFound({ query: q, results: [], origin: null, home: null }));
+        .then((results) => controller.signal.aborted || setFound({ query: q, results, home }))
+        .catch(() => controller.signal.aborted || setFound({ query: q, results: [], home: null }));
     }, DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
@@ -200,7 +186,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   }
 
   function distanceOf(result: SearchResult): string | null {
-    return found.origin === null ? null : formatDistance(groundDistanceM(found.origin, { lon: result.lon, lat: result.lat }));
+    return result.distance_m === null ? null : formatDistance(result.distance_m);
   }
 
   return (

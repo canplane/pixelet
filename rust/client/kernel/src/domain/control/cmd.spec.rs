@@ -703,7 +703,7 @@ pub struct Snapshot<'a> {
     /// Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
     /// has read its kept slot, a few turns from boot.
     pub settings: &'a [u32],
-    /// The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it.
+    /// The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`).
     pub m_per_px: f64,
     /// The division the focus is in and every one above it, broad to narrow; empty
     /// where the focus is in none or the tile it is read out of has not arrived.
@@ -871,9 +871,9 @@ pub struct DivisionPart<'a> {
     pub subtype: u8,
     pub name: &'a dyn Display,
     pub names: &'a dyn Fn(&mut dyn FnMut(&LangName<'_>)),
-    /// Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the
-    /// subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java).
-    pub prominence: u8,
+    /// The view is in far enough for its name to show: as far as Overture's own tiles
+    /// show it from (pxl-spec bake/tile/division.rs `Division::shown_from`).
+    pub shown: bool,
     /// Held by an area the point is in; one without is the nearest found by its point.
     pub area: bool,
 }
@@ -892,7 +892,7 @@ impl DivisionPart<'_> {
                 w.branch(LangName::FIELDS, |w| item.write(w));
             })
         });
-        w.u8(Some(self.prominence));
+        w.bool(Some(self.shown));
         w.bool(Some(self.area));
     }
 }

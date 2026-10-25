@@ -8,6 +8,7 @@ use tokio_postgres::types::ToSql;
 use tokio_postgres::Row;
 
 use pxl_spec::division::DivisionPart;
+use pxl_spec::space::coord::adapter::epsg4326;
 
 use crate::division;
 use crate::search::endpoint::Near;
@@ -94,6 +95,13 @@ pub struct SearchResult {
     pub context: Vec<DivisionPart>,
     pub lon: f64,
     pub lat: f64,
+    /// The ground meters from `near` (`epsg4326::dist`); null without one.
+    pub distance_m: Option<f64>,
+}
+
+/// The ground meters from `near` to `lon`, `lat`.
+fn distance_m(near: Option<&Near>, lon: f64, lat: f64) -> Option<f64> {
+    near.map(|n| epsg4326::dist(&[n.lon, n.lat, 0.0], &[lon, lat, 0.0]))
 }
 
 struct PlaceRow {
@@ -174,6 +182,7 @@ pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -
             context,
             lon: r.lon,
             lat: r.lat,
+            distance_m: distance_m(near, r.lon, r.lat),
         });
     }
 
@@ -193,6 +202,7 @@ pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -
         context,
         lon: r.lon,
         lat: r.lat,
+        distance_m: distance_m(near, r.lon, r.lat),
     });
 
     Ok(division_results.into_iter().chain(place_results).take(limit as usize).collect())
