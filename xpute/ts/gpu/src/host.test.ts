@@ -60,11 +60,14 @@ function guard(): void {
   host.bind(old, context("old"));
   host.bind(newer, context("newer"));
   assertEquals(released, ["old"], "the slot's old context let go as the newer took it");
+  assert(!host.bind(old, context("late")), "an old handle's late bind takes nothing back");
+  assertEquals(released, ["old"]);
   assert(!host.unbind(old), "an old handle unbinds nothing");
   assertEquals(released, ["old"]);
   assert(host.unbind(newer), "the newer handle unbinds its own");
   assertEquals(released, ["old", "newer"]);
   assert(!host.unbind(newer), "and only once");
+  assert(!host.bind(old, context("late")), "the slot remembers the newer after it is let go");
 }
 
 const outcome = await replay().then(guard).then(() => "ok", (e: unknown) => (e instanceof Error ? `${e.message}\n${e.stack}` : String(e)));

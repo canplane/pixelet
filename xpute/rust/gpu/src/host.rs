@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use serde::de::value::{Error as NameError, StrDeserializer};
 use serde::de::{DeserializeOwned, IntoDeserializer};
-use xpute_guest::abi::handle::handle_slot;
+use xpute_guest::abi::handle::{handle_slot, SLOT_BITS};
 use xpute_host::mem::Memory;
 
 use crate::enums::{
@@ -273,6 +273,9 @@ struct Surface {
     /// outlives a handle, so letting an old one go must not take the one
     /// bound since (`GpuHost::unbind`).
     handle: u32,
+    /// The newest handle bound here, kept after it is let go: an older one's
+    /// bind, from a view that still holds it, is refused (`GpuHost::bind`).
+    seen: u32,
     /// This turn's texture, the same to every CURRENT of the turn.
     frame: Option<Frame>,
     /// The texture drawn where the window gives none, kept until what is
@@ -302,6 +305,7 @@ impl Default for Surface {
             size: [1, 1],
             bound: None,
             handle: 0,
+            seen: 0,
             frame: None,
             unshown: None,
         }
@@ -470,6 +474,11 @@ pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
     Ok(Opened { instance, adapter, device, queue })
 }
 
+/// Whether `a`'s generation is behind `b`'s, generations wrapping in 16 bits.
+fn older(a: u32, b: u32) -> bool {
+    (((a >> SLOT_BITS) as u16).wrapping_sub((b >> SLOT_BITS) as u16) as i16) < 0
+}
+
 pub struct GpuHost {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
@@ -560,11 +569,13 @@ impl GpuHost {
     /// The window's surface `s` for the guest's surface `handle`
     /// (`slot | generation << 16`, the contract's), configured as the guest
     /// asked once it is (`configure_at`), at the size it last gave: the guest
-    /// names it by its slot. It takes the slot from whatever was bound there.
-    pub fn bind(&mut self, handle: u32, s: wgpu::Surface<'static>) {
-        let slot = self.claim(handle);
+    /// names it by its slot. It takes the slot from whatever was bound there,
+    /// unless a newer handle has bound it since: whether it was bound.
+    pub fn bind(&mut self, handle: u32, s: wgpu::Surface<'static>) -> bool {
+        let Some(slot) = self.claim(handle) else { return false };
         self.surface(slot).bound = Some(Bound { surface: s, stale: true });
         self.want_configured(slot);
+        true
     }
 
     /// Lets `handle`'s surface go, if it is still the one bound under its
@@ -580,11 +591,17 @@ impl GpuHost {
         true
     }
 
-    /// `handle` made the one bound under its slot: the slot.
-    fn claim(&mut self, handle: u32) -> u32 {
+    /// `handle` made the one bound under its slot: the slot, or none where
+    /// the slot has seen a newer handle.
+    fn claim(&mut self, handle: u32) -> Option<u32> {
         let slot = handle_slot(handle);
-        self.surface(slot).handle = handle;
-        slot
+        let s = self.surface(slot);
+        if s.seen != 0 && older(handle, s.seen) {
+            return None;
+        }
+        s.seen = handle;
+        s.handle = handle;
+        Some(slot)
     }
 
     /// `handle`'s slot, if `handle` is the one bound there, which then holds none.

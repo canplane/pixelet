@@ -77,18 +77,21 @@ fn a_gone_devices_frames_are_released() {
 /// newer one unbinds its own, once. A window's surface needs a window, so
 /// the slot is claimed as `bind` claims it, without one.
 #[test]
-fn an_old_handle_unbinds_no_newer_surface() {
+fn an_old_handle_binds_and_unbinds_no_newer_surface() {
     let (adapter, device, queue) = device();
     let mut h = host(&adapter, &device, &queue, 2);
     // Slot 3, generations 1 and 2 (`slot | generation << 16`).
     let (old, newer) = (3 | (1 << 16), 3 | (2 << 16));
     assert!(!h.unbind(old), "nothing is bound");
-    assert_eq!(h.claim(old), 3);
-    assert_eq!(h.claim(newer), 3, "the newer takes the slot");
+    assert_eq!(h.claim(old), Some(3));
+    assert_eq!(h.claim(newer), Some(3), "the newer takes the slot");
+    assert_eq!(h.claim(old), None, "an old handle's late bind takes nothing back");
+    assert_eq!(h.claim(newer), Some(3), "the newer binds again");
     assert!(!h.unbind(old), "an old handle unbinds nothing");
     assert_eq!(h.surfaces[3].handle, newer);
     assert!(h.unbind(newer), "the newer unbinds its own");
     assert!(!h.unbind(newer), "and only once");
+    assert_eq!(h.claim(old), None, "the slot remembers the newer after it is let go");
     assert!(!h.unbind(0), "0 is never a handle");
 }
 

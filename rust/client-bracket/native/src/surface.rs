@@ -171,14 +171,16 @@ pub(crate) unsafe fn bind(handle: u32, made: impl FnOnce() -> wgpu::SurfaceTarge
         let Some(d) = device() else { return -2 };
         // SAFETY: the caller's target, kept until the surface is unbound.
         let Ok(surface) = (unsafe { d.instance.create_surface_unsafe(made()) }) else { return -3 };
-        d.host.bind(handle, surface);
+        if !d.host.bind(handle, surface) {
+            return -4;
+        }
         0
     })
 }
 
 /// Binds the kernel's surface `handle` to `layer`, a view's `CAMetalLayer`: 0
 /// when bound, -2 when no device is open, -3 when the system would not make a
-/// surface of the layer.
+/// surface of the layer, -4 when a newer handle has bound its slot since.
 ///
 /// # Safety
 /// `layer` is a live `CAMetalLayer`, which its view keeps until it has

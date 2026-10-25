@@ -116,6 +116,11 @@ class Words {
   }
 }
 
+/** Whether `a`'s generation is behind `b`'s, generations wrapping in 16 bits. */
+function older(a: u32, b: u32): boolean {
+  return (((a >>> 16) - (b >>> 16)) & 0xffff) >= 0x8000;
+}
+
 export class GpuHost {
   private readonly objects: (GpuObject | undefined)[] = [];
   /** What a record's call takes, refilled each time rather than made: WebGPU
@@ -135,6 +140,8 @@ export class GpuHost {
   private readonly finished: GPUCommandBuffer[] = [];
   /** At the slot the guest names each by, with the guest's handle bound there. */
   private readonly surfaces = new Map<u32, { handle: u32; context: GPUCanvasContext }>();
+  /** Each slot's newest handle, kept after it is let go: an older one's bind is refused. */
+  private readonly seen = new Map<u32, u32>();
   /** Where the guest asked the device's block written, for its status. */
   private block: { address: u32; words: u32 } | undefined;
 
@@ -156,13 +163,18 @@ export class GpuHost {
    * The canvas's `context` for the guest's surface `handle`
    * (`slot | generation << 16`, the contract's), which the guest names by its
    * slot in CONFIGURE, RESIZE and CURRENT. It takes the slot from whatever
-   * was bound there, whose context is let go.
+   * was bound there, whose context is let go, unless a newer handle has bound
+   * it since: whether it was bound.
    */
-  bind(handle: u32, context: GPUCanvasContext): void {
+  bind(handle: u32, context: GPUCanvasContext): boolean {
     const slot = handle_slot(handle);
+    const seen = this.seen.get(slot);
+    if (seen !== undefined && older(handle, seen)) return false;
+    this.seen.set(slot, handle);
     const was = this.surfaces.get(slot);
     if (was && was.context !== context) was.context.unconfigure();
     this.surfaces.set(slot, { handle, context });
+    return true;
   }
 
   /**

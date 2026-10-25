@@ -30,7 +30,8 @@ void pxl_wake_on(void (*f)(void));
 
 // Binds the kernel's surface `handle` to `layer`, a view's CAMetalLayer,
 // which the view keeps until it has unbound it: 0, or -2 when no device is
-// open, -3 when the system would not make a surface of the layer.
+// open, -3 when the system would not make a surface of the layer, -4 when a
+// newer handle has bound its slot since.
 int32_t pxl_surface_bind(uint32_t handle, void *layer);
 // Lets `handle`'s layer go, if it is still the one bound under its slot.
 void pxl_surface_unbind(uint32_t handle);
