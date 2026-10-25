@@ -2062,7 +2062,7 @@ fn place_one(params: &[u32], rows: &[Decor], grown: &[u32], regions: &mut [u32],
     let slot = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut regions[(drawn::REGIONS + region) as usize], 1) };
     let (decor, variant, turn, _) = scatter::record_of(w);
     let [across, deep, _] = rows[decor as usize].cells(variant, turn);
-    let room = patch.len() as u32 / (drawn::LANES + 1);
+    let room = instances.len() as u32 / (drawn::LANES + 1);
     if slot >= room {
         return;
     }
