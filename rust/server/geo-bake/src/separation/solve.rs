@@ -38,7 +38,7 @@
 //! - What only the whole piece can answer is not answered by reading past the
 //!   ring for it, which costs every tile reads it is not owed. A tile that
 //!   cannot see it does without it, by a rule that leans on what it sees
-//!   (a long bore, `tunnel::road_bores`; a deck, `bridge::deck_block`).
+//!   (a long bore, `tunnel::road_bores`; a deck, `bridge::deck_panel`).
 //!
 //! Arnis is where this solve started, not a bound on it: where its answer
 //! needs a structure whole, the ring wins and the answer is reworked.
