@@ -253,11 +253,10 @@ impl Figure {
 
         let floor = drawn_floor(&mut self.drawn, at, *stands, p);
         let Some(held) = &mut self.held else { return };
-        let scale = crate::domain::query::model::models().get(held.model.model).map_or(1.0, |m| m.scale());
         self.pose = Some(Pose {
             at: [at[0], at[1], floor],
             rotation_z: self.heading as f32,
-            scale,
+            scale: held.model.scale,
         });
         let clip = if is_walking { variant.move_clip } else { IDLE_CLIP };
         if self.actor_clip != Some(clip) {

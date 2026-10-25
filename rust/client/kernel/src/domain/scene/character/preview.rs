@@ -109,7 +109,7 @@ pub fn preview_step(ctx: &mut TickContext) {
         let (Some(_), Some(model)) = (&case.actor, &case.model) else { continue };
         case.spin += SPIN_RATE_RAD_S * ctx.delta;
         // The model as registered, the variant's height tall, at one unit.
-        let scale = crate::domain::query::model::models().get(model.model).map_or(1.0, |m| m.scale()) / case.variant.height_u as f32;
+        let scale = model.scale / case.variant.height_u as f32;
         case.pose = Some(Pose {
             at,
             rotation_z: case.spin as f32,

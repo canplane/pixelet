@@ -26,6 +26,8 @@ pub struct ModelHandle {
     pub model: u32,
     /// One per animation in file order, so a clip's number is its animation's index.
     pub clip_count: u32,
+    /// What it is drawn at to stand the height it was registered at.
+    pub scale: f32,
 }
 
 const IDENTITY: [f32; 16] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
@@ -40,9 +42,8 @@ static REGISTERED: Global<Vec<(Asset, Option<u64>, Registration)>> = Global::new
 /// once. None while it loads, and while the heap refuses it room: a refusal
 /// is a wait, not a failure, asked again once the heap gives some back.
 pub fn model_of(asset: Asset, height_u: Option<f64>) -> Option<ModelHandle> {
-    let key = height_u.map(f64::to_bits);
-    let registered = REGISTERED.get(Vec::new);
-    let at = registered.iter().position(|(a, h, _)| *a == asset && *h == key);
+    let (registered, key) = (REGISTERED.get(Vec::new), height_u.map(f64::to_bits));
+    let at = row_of(asset, height_u);
     match at.map(|at| &registered[at].2) {
         Some(Ok(handle)) => return Some(handle.clone()),
         Some(Err(refused)) if !refused.over() => return None,
@@ -61,8 +62,13 @@ pub fn model_of(asset: Asset, height_u: Option<f64>) -> Option<ModelHandle> {
 /// reader that must not load, such as the query, finds; none while it is
 /// not registered.
 pub fn registered(asset: Asset, height_u: Option<f64>) -> Option<ModelHandle> {
+    REGISTERED.get(Vec::new)[row_of(asset, height_u)?].2.clone().ok()
+}
+
+/// Where `asset` at `height_u` is in the table, once asked.
+fn row_of(asset: Asset, height_u: Option<f64>) -> Option<usize> {
     let key = height_u.map(f64::to_bits);
-    REGISTERED.get(Vec::new).iter().find(|(a, h, _)| *a == asset && *h == key).and_then(|(_, _, entry)| entry.clone().ok())
+    REGISTERED.get(Vec::new).iter().position(|(a, h, _)| *a == asset && *h == key)
 }
 
 /// At its own size when `height_u` is None; None when it has no mesh or the
@@ -235,6 +241,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
         Some(ModelHandle {
             model,
             clip_count: gltf.animations.len() as u32,
+            scale,
         })
     })
 }
