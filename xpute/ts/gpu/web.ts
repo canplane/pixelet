@@ -5,11 +5,12 @@
 // page posts its outcome back. No Chrome, or no WebGPU in it, fails: a
 // device without WebGPU is not one xpute runs on.
 //
-//   ./script/web-gpu.ts          ($CHROME names the browser's binary)
+//   deno task --cwd ts test:gpu:web          ($CHROME names the browser's binary)
 
 import { dirname, fromFileUrl, join } from "@std/path";
 
-const ROOT = join(dirname(fromFileUrl(import.meta.url)), "..");
+/** xpute's root, two up: the spec it serves and the target it bundles into. */
+const ROOT = join(dirname(fromFileUrl(import.meta.url)), "../..");
 const TEST = "ts/gpu/src/host.test.ts";
 const BUNDLE = join(ROOT, "target/web-gpu/host.test.js");
 const CHROME = Deno.env.get("CHROME") ?? (Deno.build.os === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");

@@ -8,10 +8,12 @@
   "nodeModulesDir": "auto",
 
   "tasks": {
-    "check": "deno fmt --check && deno lint && deno check kit/src/**/*.ts && deno check host/src/**/*.ts && deno check gpu/src/**/*.ts && deno check conformance/src/**/*.ts",
+    "check": "deno fmt --check && deno lint && deno check kit/src/**/*.ts && deno check host/src/**/*.ts && deno check gpu/src/**/*.ts gpu/web.ts && deno check conformance/src/**/*.ts",
     "test": "deno test -A kit/src && deno test -A host/src",
     // The traces run against guests the root's test builds first.
     "test:conformance": "deno test -A conformance/src",
+    // The web host's test where it runs, in Chrome (gpu/web.ts).
+    "test:gpu:web": "./gpu/web.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },

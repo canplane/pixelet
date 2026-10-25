@@ -1,7 +1,7 @@
 {
-  // The repository's own scripts, each standing alone: the web GPU test in
-  // Chrome and the export. A root of its own, beside the trees it runs over,
-  // in the Deno the TypeScript tree needs anyway.
+  // The repository's own scripts, each standing alone and reading none of
+  // the trees' code: the export. A root of its own, beside the trees it runs
+  // over, in the Deno the TypeScript tree needs anyway.
   "workspace": [],
 
   "imports": {
