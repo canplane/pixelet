@@ -12,12 +12,17 @@ import { ProfilerPanel } from "./profiler.tsx";
 import { ViewPanel } from "./view.tsx";
 import { useKernel } from "@/shell/store/system.ts";
 
-const PANEL: Partial<Record<SettingName, ComponentType>> = {
+const PANEL = {
   view: ViewPanel,
   profiler: ProfilerPanel,
   world_gizmo: GizmoLegend,
   camera_gizmo: CameraGizmo,
-};
+} satisfies Partial<Record<SettingName, ComponentType>>;
+
+/** A debug setting that has a panel, which its fold is named by (fold.tsx). */
+export type PanelName = keyof typeof PANEL;
+
+const isPanel = (name: SettingName): name is PanelName => Object.hasOwn(PANEL, name);
 
 /** Nothing to say yet: the grid is on screen. */
 function CameraGizmo() {
@@ -27,12 +32,12 @@ function CameraGizmo() {
 
 /** Whether any panel is up, so the corner is the window's. */
 export function useDebugWindow(): boolean {
-  return useKernel((s) => settingsIn("debug").some((name) => PANEL[name] !== undefined && s.settings[SETTINGS[name].key] === 1));
+  return useKernel((s) => settingsIn("debug").some((name) => isPanel(name) && s.settings[SETTINGS[name].key] === 1));
 }
 
 export function DebugPanels() {
-  return settingsIn("debug").map((name) => {
+  return settingsIn("debug").filter(isPanel).map((name) => {
     const Panel = PANEL[name];
-    return Panel && <Panel key={name} />;
+    return <Panel key={name} />;
   });
 }
