@@ -10,26 +10,34 @@ A kind of thing is drawn wholly on one side. The GPU's rays find the world's blo
 
 pixelet is an application over [xpute](./xpute/ARCHITECTURE.md): a Rust kernel that runs as xpute's guest, the TypeScript around it, and Rust servers and bakes that share the kernel's model. The memory, the rings and the turn are xpute's and described there; this document is what pixelet builds on them.
 
-The kernel is one order of dependency, a DAG rather than a pipeline: an edge may skip a step but never points up, and a reader reaches what it reads directly. The eye asks what it can tell apart, and the question goes down through the scene, the cubes about the eye, the view, the query and the layers to the reads that bring a tile in. Each answer comes back up the same way, and nothing names what is above it. The figure is a map; each name in it is defined where its part begins.
+The kernel is one order of dependency, a DAG rather than a pipeline: an edge may skip a step but never points up, and a reader reaches what it reads directly. Its folders are that order (`crates/client/kernel/src/`). The top wires everything. The domain, the world and the eye, is two heads, the scene and control, over one trunk, the view, the query and the layers, and neither head names the other. What all of it stands on, the reads, the turn's mechanics and the memory, is the system below it. The eye asks what it can tell apart, and the question goes down from a head through the trunk to the reads that bring a tile in. Each answer comes back up the same way, and nothing names what is above it. A leaf sits under its lowest reader, so its edges point down too. The figure is a map; each name in it is defined where its part begins.
 
 ```text
-  turn · door · shell   wire everything; nothing below names them
-  ──────────────────────────────────────────────────────────────
-  control ──▶ view      moves the eye; the turn hands on the rest
+  turn · door · shell   the top: wires everything; nothing below names it
+  ──────────────────────────────────────────────────────────────────────
+  domain/               the world and the eye, two heads over one trunk
 
-  asks                                                           answers
-    │   scene  what this frame draws             domain/scene/      ▲
-    │   chunk  a cube about the eye, by address  domain/chunk.rs    │
-    │   view   the pose, the lens, demand        domain/view/       │
-    │   query  the only seam                     domain/query.rs    │
-    │   layer  the base and the object           domain/layer/      │
-    ▼   io     reads, credits, the host's end    sys/io/            │
+  asks                                                         answers
+    │   scene/     a head: what this frame draws                  ▲
+    │   control/   a head: moves the eye, asks the query          │
+    │   chunk.rs   a cube about the eye, by address, for now      │
+    │   view/      the trunk: the pose, the lens, demand          │
+    │   query/     the trunk: the only seam                       │
+    │   layer/     the trunk: the base and the object             │
+  ──┼─────────────────────────────────────────────────────────────┼─────
+  sys/                  what all of it stands on                  │
+    ▼   io/        reads, credits, the host's end                 │
+        sched/     a turn's edge and its phases
+        mem/       the core memory's sections
+        load.rs    what the kernel loads, which io and sched read
 
-  leaves   settings, models, decor, billboards, under their readers
-  beside   the profiler: reads anything; no decision reads it
+  leaves   under their lowest reader: the settings in view/, the models
+           and decor in query/, the billboards in scene/, each knob in
+           a param.rs beside the lowest part that reads it
+  beside   profiler/: reads anything; no decision reads it
 ```
 
-The parts follow that order. **The world** is what the kernel carries: sizes, positions, layers and what fills a block. **The eye** goes from the eye down to the layers. **Drawing** is the last step up, from the eye's rays and the kernel's list to a frame. **Below the view** is what all of it stands on: the reads, the turn, the memory. **Making the data** is a chain of its own, run ahead of the view, that ends where the view reads.
+The parts follow that order. **The world** is what the kernel carries: sizes, positions, layers and what fills a block. **The eye** goes from the eye down to the layers. **Drawing** is the last step up, from the eye's rays and the kernel's list to a frame. **Below the view** is what all of it stands on, `sys/` and the top that wires it: the reads, the turn, the memory. **Making the data** is a chain of its own, run ahead of the view, that ends where the view reads.
 
 ---
 
@@ -393,7 +401,7 @@ Five debug settings show what the view does, drawn from what the frame already h
 
 # Below the view
 
-This part is what the view stands on: how what it asks for arrives, what it costs in time and memory, and how a failure leaves what is drawn alone. None of it names anything above it: a layer asks io for a tile, and io never asks what the tile is for.
+This part is what the view stands on, `sys/`, and the top that wires the kernel to its host: how what it asks for arrives, what it costs in time and memory, and how a failure leaves what is drawn alone. Nothing in `sys/` names anything above it: a layer asks io for a tile, and io never asks what the tile is for.
 
 ## The kernel, its host, its brackets and the client
 
