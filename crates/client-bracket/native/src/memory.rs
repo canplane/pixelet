@@ -3,8 +3,8 @@
 //! The kernel's memory on a device: one region taken from the system at the
 //! first request and never given back, the base every address the kernel
 //! names is an offset from (xpute_guest::mem::base), and the allocator over
-//! it — the slab over a buddy the module has (pxl-wasm), so a `Vec` the kernel
-//! hands the shell lies in the memory the shell reads.
+//! it — xpute's slab over a buddy (xpute_guest::mem::heap), so a `Vec` the
+//! kernel hands the shell lies in the memory the shell reads.
 //!
 //! Unlike the module's, this allocator is the whole library's, and the
 //! library runs on more threads than the kernel's: an image decoded off it,

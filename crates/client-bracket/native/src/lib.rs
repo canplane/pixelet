@@ -1,10 +1,10 @@
 // pxl-native/lib.rs
 
-//! The kernel on a device: pxl-kernel linked into the app, where pxl-wasm
-//! instantiates it in a page. The same door (pxl_kernel::door) behind a
-//! different bracket — the memory is a region this library takes from the
-//! system (memory.rs), the clock is the device's, and the calls the renderer
-//! records are run on wgpu by xpute's host inside this library (surface.rs).
+//! The kernel on a device: pxl-kernel linked into the app. Its door
+//! (pxl_kernel::door) behind this bracket — the memory is a region this
+//! library takes from the system (memory.rs), the clock is the device's, and
+//! the calls the renderer records are run on wgpu by xpute's host inside this
+//! library (surface.rs).
 //!
 //! Called from the app through the C ABI (include/pxl_native.h), one call at
 //! a time, and run on the kernel's own thread (thread.rs) — the single
