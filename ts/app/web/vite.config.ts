@@ -242,10 +242,9 @@ function constEnum(roots: string[]): Plugin {
       const struck: string[] = [];
       for (const [name, members] of bound) {
         if (!out.includes(name)) continue;
-        // Whole names only: a member that is a prefix of another — a table
-        // read before SENSOR_ENABLE became SENSOR_ENABLE_LOCATION — would
-        // otherwise leave `7444_LOCATION` for the parser instead of a name
-        // the stale check below can say.
+        // Whole names only: a member that is a prefix of another, as
+        // INPUT_POSE is of INPUT_POSE_END, would otherwise leave `4361_END`
+        // for the parser instead of a name the stale check below can say.
         out = out.replace(new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"), (whole, key: string) => (members.has(key) ? literal(members.get(key)!) : whole));
         struck.push(name);
       }

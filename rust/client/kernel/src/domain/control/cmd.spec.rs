@@ -79,16 +79,18 @@ pub enum WorldMinor {
     SNAPSHOT = 0x04,
     SOURCE = 0x05,
     KEPT_EMPTIED = 0x06,
+    VIEW = 0x07,
 }
 
 impl WorldMinor {
-    pub const ALL: [WorldMinor; 6] = [
+    pub const ALL: [WorldMinor; 7] = [
         WorldMinor::BOOT,
         WorldMinor::FRAME,
         WorldMinor::VISIBILITY,
         WorldMinor::SNAPSHOT,
         WorldMinor::SOURCE,
         WorldMinor::KEPT_EMPTIED,
+        WorldMinor::VIEW,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -115,10 +117,11 @@ pub enum InputMinor {
     MARKER_WORDS = 0x0c,
     MARKER_CANCEL = 0x0d,
     MARKER_PUT = 0x0e,
+    LOCATE = 0x0f,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 14] = [
+    pub const ALL: [InputMinor; 15] = [
         InputMinor::RECT,
         InputMinor::POINTER,
         InputMinor::WHEEL,
@@ -133,6 +136,7 @@ impl InputMinor {
         InputMinor::MARKER_WORDS,
         InputMinor::MARKER_CANCEL,
         InputMinor::MARKER_PUT,
+        InputMinor::LOCATE,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -148,27 +152,19 @@ pub enum SensorMinor {
     START = 0x01,
     POSITION = 0x02,
     STOP = 0x03,
-    ERROR = 0x04,
     ORIENTATION = 0x05,
     PERMISSION = 0x06,
-    ENABLE_LOCATION = 0x07,
-    OPEN = 0x08,
-    CLOSE = 0x09,
-    ORIENTATION_LOST = 0x0a,
+    FAILED = 0x0b,
 }
 
 impl SensorMinor {
-    pub const ALL: [SensorMinor; 10] = [
+    pub const ALL: [SensorMinor; 6] = [
         SensorMinor::START,
         SensorMinor::POSITION,
         SensorMinor::STOP,
-        SensorMinor::ERROR,
         SensorMinor::ORIENTATION,
         SensorMinor::PERMISSION,
-        SensorMinor::ENABLE_LOCATION,
-        SensorMinor::OPEN,
-        SensorMinor::CLOSE,
-        SensorMinor::ORIENTATION_LOST,
+        SensorMinor::FAILED,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -539,10 +535,10 @@ pub enum Command {
     SENSOR_POSITION = 0x1202,
     /// An orientation event; a field is absent where the browser gave none.
     SENSOR_ORIENTATION = 0x1205,
-    /// The watch failed and was stopped.
-    SENSOR_ERROR = 0x1204,
-    /// The compass failed and its listener was removed, where the platform says so.
-    SENSOR_ORIENTATION_LOST = 0x120a,
+    /// A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
+    /// or cut off; the compass's, where the platform says so (WORLD_BOOT's
+    /// orientation_silence_is_loss).
+    SENSOR_FAILED = 0x120b,
 
     // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
     /// The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root.
@@ -602,6 +598,10 @@ pub enum Command {
     INPUT_TRACKING = 0x1104,
     /// The compass's press: north up.
     INPUT_COMPASS_RESET = 0x1107,
+    /// The search panel's location card's press: the location asked for. The compass is
+    /// asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
+    /// reads it without the location.
+    INPUT_LOCATE = 0x110f,
     /// A search result: the focus moved there.
     INPUT_GO_TO = 0x1108,
     /// A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
@@ -611,14 +611,10 @@ pub enum Command {
     INPUT_POSE = 0x1109,
     /// The tracker let the camera go: back to the controller it had.
     INPUT_POSE_END = 0x110a,
-    /// The world is on screen and wants the sensors.
-    SENSOR_OPEN = 0x1208,
-    /// The world is gone, and the sensors are let go.
-    SENSOR_CLOSE = 0x1209,
-    /// The search panel's location card: the location asked for. The compass is asked for
-    /// where it is used, entering follow mode (TRACKING), and never alone: nothing reads it
-    /// without the location.
-    SENSOR_ENABLE_LOCATION = 0x1207,
+    /// The shell's world view, up or down: the pair of VISIBILITY, whether the page is seen.
+    /// The kernel watches a sensor only while both hold, the page visible and the world view
+    /// shown; which sensors it watches then is its own (SENSOR_START).
+    WORLD_VIEW = 0x1007,
     /// A fresh recording window.
     PROFILER_START = 0x1901,
     /// The window frozen, so what is exported holds still.
@@ -635,13 +631,12 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 41] = [
+    pub const ALL: [Command; 39] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::SENSOR_POSITION,
         Command::SENSOR_ORIENTATION,
-        Command::SENSOR_ERROR,
-        Command::SENSOR_ORIENTATION_LOST,
+        Command::SENSOR_FAILED,
         Command::WORLD_BOOT,
         Command::WORLD_FRAME,
         Command::WORLD_VISIBILITY,
@@ -666,12 +661,11 @@ impl Command {
         Command::CHAT_SEND,
         Command::INPUT_TRACKING,
         Command::INPUT_COMPASS_RESET,
+        Command::INPUT_LOCATE,
         Command::INPUT_GO_TO,
         Command::INPUT_POSE,
         Command::INPUT_POSE_END,
-        Command::SENSOR_OPEN,
-        Command::SENSOR_CLOSE,
-        Command::SENSOR_ENABLE_LOCATION,
+        Command::WORLD_VIEW,
         Command::PROFILER_START,
         Command::PROFILER_STOP,
         Command::PROFILER_READ,
@@ -1005,17 +999,23 @@ impl SensorOrientation {
     }
 }
 
-/// Command::SENSOR_ERROR's packet.
+/// Command::SENSOR_FAILED's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct SensorError {
-    pub code: GeolocationErrorCode,
+pub struct SensorFailed {
+    pub sensor: Sensor,
+    /// Geolocation's; orientation gives none today.
+    pub code: Option<GeolocationErrorCode>,
 }
 
-impl SensorError {
-    pub fn read(pkt: &[u8]) -> Result<SensorError, MarshalError> {
+impl SensorFailed {
+    pub fn read(pkt: &[u8]) -> Result<SensorFailed, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SensorError {
-            code: GeolocationErrorCode::of(integer::<u32>(f.at(0)?.get_number()?)?).unwrap_or(GeolocationErrorCode::Other),
+        Ok(SensorFailed {
+            sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            code: match f.at(1)?.opt() {
+                Some(c) => Some(GeolocationErrorCode::of(integer::<u32>(c.get_number()?)?).unwrap_or(GeolocationErrorCode::Other)),
+                None => None,
+            },
         })
     }
 }
@@ -1031,7 +1031,7 @@ pub struct WorldBoot {
     pub orientation_permission: bool,
     /// A browser's compass talks while the device is still and cannot say it stopped, so
     /// silence is the only sign of loss; a device's speaks only when the heading turns and
-    /// reports a failure itself (SENSOR_ORIENTATION_LOST).
+    /// reports a failure itself (SENSOR_FAILED).
     pub orientation_silence_is_loss: bool,
 }
 
@@ -1436,6 +1436,19 @@ impl InputPose {
             qz: finite(f.at(5)?.get_number()?)?,
             qw: finite(f.at(6)?.get_number()?)?,
         })
+    }
+}
+
+/// Command::WORLD_VIEW's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct WorldView {
+    pub shown: bool,
+}
+
+impl WorldView {
+    pub fn read(pkt: &[u8]) -> Result<WorldView, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(WorldView { shown: f.at(0)?.get_bool()? })
     }
 }
 

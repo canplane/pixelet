@@ -118,7 +118,7 @@ function LocateCard() {
   return (
     <AboveKeyboard inset={PANEL_EDGE}>
       <Backing fill={color.ground} place={BackingPlace.OnSheet} interactive style={styles.locateCard}>
-        <Pressable onPress={() => kernel_command(Command.SENSOR_ENABLE_LOCATION)} accessibilityRole="button" style={styles.locateRow}>
+        <Pressable onPress={() => kernel_command(Command.INPUT_LOCATE)} accessibilityRole="button" style={styles.locateRow}>
           <Glyph glyph="location" size={chrome.glyph} color={poseColor(location)} />
           <Text numberOfLines={1} maxFontSizeMultiplier={textScale.chrome} style={styles.locateLabel}>{t("world.sensors.label")}</Text>
           <Text maxFontSizeMultiplier={textScale.chrome} style={styles.locateAction}>{t("world.sensors.turn_on")}</Text>

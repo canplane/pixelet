@@ -4,7 +4,7 @@
  * heard, in its words (bracket.tsx `SensorHeard`), sent as the kernel numbers it. */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_position, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/abi/cmd.spec.ts";
+import { Command, encode_sensor_failed, encode_sensor_orientation, encode_sensor_permission, encode_sensor_position, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/abi/cmd.spec.ts";
 import type { SensorHeard } from "@/bracket.tsx";
 import { GUEST_DOORBELL, HOST } from "@/host/mount.ts";
 
@@ -18,15 +18,16 @@ function kernel_position(lon: f64, lat: f64, altitude: f64 | null, accuracy: f64
 }
 
 function kernel_position_error(code: GeolocationErrorCode): void {
-  HOST.send(Command.SENSOR_ERROR, encode_sensor_error(GUEST_DOORBELL, code));
+  HOST.send(Command.SENSOR_FAILED, encode_sensor_failed(GUEST_DOORBELL, Sensor.Geolocation, code));
 }
 
 function kernel_orientation(webkit_compass_heading: f64 | null, alpha: f64 | null, beta: f64 | null, gamma: f64 | null): void {
   HOST.send(Command.SENSOR_ORIENTATION, encode_sensor_orientation(GUEST_DOORBELL, given(webkit_compass_heading), given(alpha), given(beta), given(gamma)));
 }
 
+/** The compass gives no code for its failure. */
 function kernel_orientation_lost(): void {
-  HOST.now(Command.SENSOR_ORIENTATION_LOST);
+  HOST.now(Command.SENSOR_FAILED, encode_sensor_failed(GUEST_DOORBELL, Sensor.Orientation, null));
 }
 
 function kernel_permission(sensor: Sensor, answer: PermissionAnswer): void {

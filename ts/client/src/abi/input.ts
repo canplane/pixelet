@@ -14,6 +14,7 @@ import {
   encode_input_rect,
   encode_input_wheel,
   encode_world_frame,
+  encode_world_view,
   encode_world_visibility,
   PointerPhase,
   PointerType,
@@ -56,13 +57,13 @@ export function kernel_hold(tool: ActiveTool, value: u32, tier: u32): void {
 
 export function kernel_open(viewport: () => Viewport): () => void {
   driver = viewport;
-  HOST.now(Command.SENSOR_OPEN);
+  HOST.now(Command.WORLD_VIEW, encode_world_view(GUEST_DOORBELL, true));
   HOST.strobe.start();
   const unfollow = bracket.sensor.follow();
   return () => {
     unfollow();
     HOST.strobe.stop();
-    HOST.now(Command.SENSOR_CLOSE);
+    HOST.now(Command.WORLD_VIEW, encode_world_view(GUEST_DOORBELL, false));
     driver = null;
   };
 }

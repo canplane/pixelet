@@ -217,8 +217,13 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             geolocation::geolocation_fix(p.lon, p.lat, p.altitude, p.accuracy.unwrap_or(f64::INFINITY), p.course);
             Ok(Some(0))
         }
-        Command::SENSOR_ERROR => {
-            geolocation::geolocation_error(abi::SensorError::read(packet(pkt)?)?.code);
+        Command::SENSOR_FAILED => {
+            let p = abi::SensorFailed::read(packet(pkt)?)?;
+            match p.sensor {
+                // A failure the platform named no cause for is Other's.
+                abi::Sensor::Geolocation => geolocation::geolocation_error(p.code.unwrap_or(abi::GeolocationErrorCode::Other)),
+                abi::Sensor::Orientation => device_orientation::orientation_lost(),
+            }
             Ok(Some(0))
         }
         Command::SENSOR_ORIENTATION => {
@@ -227,10 +232,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let within = |v: Option<f64>, half: f64| v.is_none_or(|v| (-half..=half).contains(&v));
             refuse_unless(bearing(p.webkit_compass_heading) && bearing(p.alpha) && within(p.beta, 180.0) && within(p.gamma, 90.0), Errno::EINVAL)?;
             device_orientation::orientation_event(p.webkit_compass_heading, p.alpha, p.beta, p.gamma);
-            Ok(Some(0))
-        }
-        Command::SENSOR_ORIENTATION_LOST => {
-            device_orientation::orientation_lost();
             Ok(Some(0))
         }
         Command::SENSOR_PERMISSION => {
@@ -255,16 +256,16 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             }
             Ok(Some(0))
         }
-        Command::SENSOR_ENABLE_LOCATION => {
+        Command::INPUT_LOCATE => {
             ui::location_enable();
             applied(s)
         }
-        Command::SENSOR_OPEN => {
-            ui::sensors_open();
-            applied(s)
-        }
-        Command::SENSOR_CLOSE => {
-            ui::sensors_close();
+        Command::WORLD_VIEW => {
+            if abi::WorldView::read(packet(pkt)?)?.shown {
+                ui::sensors_open();
+            } else {
+                ui::sensors_close();
+            }
             applied(s)
         }
         Command::GPU_READY => {

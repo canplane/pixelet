@@ -29,7 +29,7 @@ want them (ts/client/src/abi/cmd.spec.ts `Command`).
 
 | Kind                    | Commands                                                        | As a file                                                                       |
 | ----------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Opened, used and closed | `SURFACE_*`, `PREVIEW_*`, `SENSOR_OPEN` / `CLOSE`, `PROFILER_*` | Fits, but a handle or the subject already names each; a path finds nothing more |
+| Opened, used and closed | `SURFACE_*`, `PREVIEW_*`, `WORLD_VIEW`, `PROFILER_*`            | Fits, but a handle or the subject already names each; a path finds nothing more |
 | The turn's edges        | `WORLD_BOOT`, `WORLD_FRAME`, `WORLD_VISIBILITY`                 | A clock, not a file                                                             |
 | What the UI asks        | `INPUT_*`, `SETTING_SET`, `CHAT_SEND`                           | A write to a `ctl` file: the same command with a path in front                  |
 | Readings                | `SENSOR_POSITION`, `SENSOR_ORIENTATION`, `WORLD_SNAPSHOT`       | A `read`, which loses that each replaces the last                               |
