@@ -13,6 +13,8 @@ so none of it waits:
 - No holds. A path is never reserved, and another session's announced work
   is no reason to stop yours.
 - Commit on main and push.
+- When two collide, the one whose session id (`$CLAUDE_CODE_SESSION_ID`)
+  sorts first resolves it.
 
 Sharing one checkout must not make the sessions queue anywhere else, so
 each builds into a target of its own, named by its session id. A shared
