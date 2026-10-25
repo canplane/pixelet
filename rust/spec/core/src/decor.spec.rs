@@ -9,15 +9,15 @@
 // order. pxl-spec asset/decor.spec.rs adds their models over each row.
 #![allow(non_camel_case_types)]
 
-/// The Poisson process every kind is scattered by: a block of `block` cells a
+/// The Poisson process every decor is scattered by: a block of `block` cells a
 /// side at the zoom its candidates are born at, a zoom keeping one in `kept`
 /// of the next finer's.
 pub const BLOCK: u32 = 16;
 pub const KEPT: u32 = 4;
 
-/// The most variants a kind has.
+/// The most variants a decor has.
 pub const VARIANTS: usize = 9;
-/// The most thresholds a kind's counts hold.
+/// The most thresholds a decor's counts hold.
 pub const COUNTS: usize = 36;
 
 /// How a decor the ground grows faces: any way, or along the road or rail its
@@ -56,7 +56,7 @@ pub struct Decor {
     /// Its cell: a unit's zoom, this many coarser.
     pub scale_steps: i32,
     pub variants: u32,
-    /// Each variant's box, in its kind's cells; none past `variants`.
+    /// Each variant's box, in its decor's cells; none past `variants`.
     pub sizes: [[u32; 3]; VARIANTS],
 }
 

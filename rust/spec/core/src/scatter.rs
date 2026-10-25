@@ -4,8 +4,8 @@
 //! process on the leaf cell lattice, never a grid: a block at zoom m bears a
 //! count of candidates born there, each at a uniform leaf cell, and a
 //! candidate born at m stands at every zoom from m finer, so a cell at any
-//! zoom holds the kind's density. Every draw is a u32 off one stream a block
-//! (xpute-kit `SplitMix32`), seeded by the kind's seed and the block
+//! zoom holds the decor's density. Every draw is a u32 off one stream a block
+//! (xpute-kit `SplitMix32`), seeded by the decor's seed and the block
 //! (`node_seed`), so every reader of a cell, either side, draws the same.
 //!
 //! Where a candidate stands, which way it faces and whether its footing
@@ -126,7 +126,7 @@ pub const SQUARE_BLOCKS: u32 = {
     sum
 };
 
-/// The most decor of every kind one square grows: a block bears no more
+/// The most decor one square grows, every decor's together: a block bears no more
 /// than its counts' thresholds, and no more blocks than `SQUARE_BLOCKS`
 /// meet a square.
 pub const SQUARE_GROWN: u32 = {
@@ -198,8 +198,8 @@ pub const BOXES: u32 = EDITS + 4;
 pub const MARKS_AT: u32 = 4;
 pub const MARKS_WORDS: u32 = MARKS_AT + 4 * BOXES;
 /// What `decor_mark_cs` writes and `decor_cs` is dispatched by: its
-/// workgroups across, up and the slot-kinds listed, a pad, then the list,
-/// a slot and its kind (`<< 16`) each, in no order.
+/// workgroups across, up and the slot-decor pairs listed, a pad, then the list,
+/// a slot and its decor (`<< 16`) each, in no order.
 pub const GROWS_AT: u32 = 4;
 
 /// The words of what `decor_mark_cs` lists.
@@ -243,20 +243,20 @@ pub fn beside(cell: Zoom, a: [i32; 2], b: [i32; 2]) -> bool {
 pub const PLACED_AT: Zoom = 0;
 const _: () = assert!(crate::window::FIRST_CELL > PLACED_AT);
 
-/// A record's first word: its kind and variant, a byte each, its turn in
+/// A record's first word: its decor and variant, a byte each, its turn in
 /// quarters, and the window zoom it was grown at, the one it is drawn at
 /// where the rays ask it (`drawn_at`), `PLACED_AT` for placed decor; past
 /// them, once sized, its region (`drawn::REGION_SHIFT`).
-pub const fn record_word(kind: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
-    kind | variant << 8 | turn << 16 | cell << 18
+pub const fn record_word(decor: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
+    decor | variant << 8 | turn << 16 | cell << 18
 }
 
-/// A record's kind, variant, turn and zoom (`record_word`).
+/// A record's decor, variant, turn and zoom (`record_word`).
 pub const fn record_of(w: u32) -> (u32, u32, u32, Zoom) {
     (w & 0xff, (w >> 8) & 0xff, (w >> 16) & 3, (w >> 18) & ((1 << crate::ZOOM_BITS) - 1))
 }
 
-/// Every variant of every kind, numbered kind by kind in the catalog's
+/// Every variant of every decor, numbered decor by decor in the catalog's
 /// order: a decor's draw group (`first_group`).
 pub const GROUPS: u32 = {
     let (mut sum, mut k) = (0, 0);
@@ -267,10 +267,10 @@ pub const GROUPS: u32 = {
     sum
 };
 
-/// The draw group of `rows`' kind `kind`'s first variant.
-pub fn first_group(rows: &[Decor], kind: u32) -> u32 {
+/// The draw group of `rows`' decor `decor`'s first variant.
+pub fn first_group(rows: &[Decor], decor: u32) -> u32 {
     let (mut first, mut k) = (0, 0);
-    while k < kind {
+    while k < decor {
         first += rows[k as usize].variants;
         k += 1;
     }
@@ -289,7 +289,7 @@ pub mod drawn {
     pub const REGIONS: u32 = 2 * GROUPS;
     /// A record drawn as nothing.
     pub const NONE: u32 = 0xff;
-    /// What a record's first word holds past its kind, variant and turn:
+    /// What a record's first word holds past its decor, variant and turn:
     /// its region, once sized.
     pub const REGION_SHIFT: u32 = 24;
     pub const LANES: u32 = 5;
@@ -388,7 +388,7 @@ fn mul_hi(a: u32, b: u32) -> u32 {
 }
 
 /// The variant a candidate draws, its seed's first draw: uniform over the
-/// kind's.
+/// decor's.
 pub fn variant_of(decor: &Decor, draws: &mut SplitMix32) -> u32 {
     mul_hi(draws.next_u32(), decor.variants)
 }
@@ -655,7 +655,7 @@ pub fn row_of(rows: &[Decor], value: u32) -> (u32, bool) {
 }
 
 /// How far before a box's min corner, in unit cells, a placed decor's corner
-/// may lie and its box still meet it: any kind's widest side and tallest
+/// may lie and its box still meet it: any decor's widest side and tallest
 /// box, less one.
 const CLAIM_REACH: [i32; 3] = {
     let (mut wide, mut tall, mut k) = (1, 1, 0);

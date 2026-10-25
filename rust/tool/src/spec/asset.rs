@@ -652,9 +652,9 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         format!("pub const BLOCK: u32 = {block};"),
         format!("pub const KEPT: u32 = {kept};"),
         String::new(),
-        "/// The most variants a kind has.".into(),
+        "/// The most variants a decor has.".into(),
         format!("pub const VARIANTS: usize = {variants_max};"),
-        "/// The most thresholds a kind's counts hold.".into(),
+        "/// The most thresholds a decor's counts hold.".into(),
         format!("pub const COUNTS: usize = {counts_max};"),
     ]);
     portable.extend(
@@ -696,7 +696,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    /// Its cell: a unit's zoom, this many coarser.",
             "    pub scale_steps: i32,",
             "    pub variants: u32,",
-            "    /// Each variant's box, in its kind's cells; none past `variants`.",
+            "    /// Each variant's box, in its decor's cells; none past `variants`.",
             "    pub sizes: [[u32; 3]; VARIANTS],",
             "}",
             "",

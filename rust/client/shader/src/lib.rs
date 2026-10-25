@@ -1765,9 +1765,9 @@ pub fn ways_freed_cs(
 }
 
 /// The eye's slots whose decor grows again this frame, a thread a slot,
-/// listed with each kind shown at the slot's window zoom for `decor_cs`
+/// listed with each decor shown at the slot's window zoom for `decor_cs`
 /// (pxl-spec-core `scatter::GROWS_AT`): bit `zoom − FIRST_CELL` of its
-/// `shown` word set, the kinds the catalog's rows as handed (`rows`);
+/// `shown` word set, the decors the catalog's rows as handed (`rows`);
 /// its count the dispatch's: every one where `marks` asks it, decor having
 /// been off, else one whose
 /// square its records were not grown for (`scatter::grown_for`), beside a
@@ -1775,7 +1775,7 @@ pub fn ways_freed_cs(
 /// by a box (`scatter::meets`):
 /// an edit, or a preview's cut as it was or is. A listed slot's head is
 /// laid anew, its count none.
-/// Whether kind `j` is shown at the window zoom `cell`: bit `cell −
+/// Whether decor `j` is shown at the window zoom `cell`: bit `cell −
 /// FIRST_CELL` of its `shown` word, at a leaf's cells or coarser.
 fn shown_at(shown: &[u32], j: u32, cell: u32) -> bool {
     cell <= LEAF_CELL && at(shown, j) >> (cell - FIRST_CELL) & 1 != 0
@@ -1829,9 +1829,9 @@ pub fn decor_mark_cs(
     put(records, h + 1, q[0] as u32);
     put(records, h + 2, q[1] as u32);
     put(records, h + 3, 1);
-    let kinds = rows.len() as u32;
+    let decors = rows.len() as u32;
     let mut j = 0;
-    while j < kinds {
+    while j < decors {
         if shown_at(shown, j, cell) {
             // SAFETY: an atomic add on the list's count, the dispatch's z.
             let n = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut grows[2], 1) };
@@ -1843,11 +1843,11 @@ pub fn decor_mark_cs(
 
 /// Decor the ground grows in a slot `decor_mark_cs` listed, one candidate a
 /// thread: `x` its index in its block, `y` the block among those meeting the
-/// slot's square (pxl-spec-core `scatter::block_of`), `z` the slot and kind
+/// slot's square (pxl-spec-core `scatter::block_of`), `z` the slot and decor
 /// listed. Each one that stands, stands on its cell and grows there
 /// (`scatter::stands`, `grown`) is added to the slot's records
 /// (`scatter::record_at`), naming the slot's window zoom, the one it is
-/// drawn at where the rays ask it (`decor_count_cs`); only a kind shown at
+/// drawn at where the rays ask it (`decor_count_cs`); only a decor shown at
 /// that zoom is listed (`decor_mark_cs`). What it grows is the windows'
 /// squares', the ways over them and what is placed alone, never the eye's.
 #[spirv(compute(threads(8, 8, 1)))]
@@ -1864,7 +1864,7 @@ pub fn decor_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] pool: &[u32],
 ) {
     let listed = at(grows, scatter::GROWS_AT + id.z);
-    let (square, kind) = (listed & 0xffff, listed >> 16);
+    let (square, j) = (listed & 0xffff, listed >> 16);
     let cell = window::eye_cell(square / SLOTS);
     if id.x >= COUNTS as u32 || id.y >= SQUARE_BLOCKS {
         return;
@@ -1889,7 +1889,7 @@ pub fn decor_cs(
         },
         rows,
     };
-    let decor = &rows[kind as usize];
+    let decor = &rows[j as usize];
     let zoom = GROUND.read_zoom(cell);
     let (c, here) = scatter::candidate_of(decor, zoom, region, id.y, id.x);
     if !here || !scatter::stands(decor, zoom, &c) {
@@ -1903,7 +1903,7 @@ pub fn decor_cs(
     let n = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut out[scatter::head_at(square) as usize], 1) };
     let i = scatter::record_at(square * SQUARE_GROWN + n).0 as usize;
     if n < SQUARE_GROWN && i + 4 < out.len() {
-        out[i] = scatter::record_word(kind, g.variant, g.turn, cell);
+        out[i] = scatter::record_word(j, g.variant, g.turn, cell);
         out[i + 1] = g.at[0] as u32;
         out[i + 2] = g.at[1] as u32;
         out[i + 3] = g.at[2] as u32;
@@ -1968,13 +1968,13 @@ fn count_one(eye: &Eye, params: &[u32], rows: &[Decor], grown: &mut [u32], regio
         return;
     }
     let w = grown[i];
-    let (kind, variant, _, cell) = scatter::record_of(w);
+    let (decor, variant, _, cell) = scatter::record_of(w);
     let corner = [grown[i + 1] as i32, grown[i + 2] as i32, grown[i + 3] as i32];
     let (origin, detail) = eye_origin(eye);
     // Its distance once, for the zoom it is drawn at and its size.
     let d2 = scatter::distance2(origin, corner);
     let here = cell == scatter::PLACED_AT || scatter::drawn_at(detail, d2, cell);
-    let group = scatter::first_group(rows, kind) + variant;
+    let group = scatter::first_group(rows, decor) + variant;
     let hide = drawn::HIDE as usize;
     let hidden = params[hide + 3] != 0 && corner[0] == params[hide] as i32 && corner[1] == params[hide + 1] as i32 && corner[2] == params[hide + 2] as i32;
     let d = spirv_std::num_traits::Float::sqrt(d2);
@@ -2060,8 +2060,8 @@ fn place_one(params: &[u32], rows: &[Decor], grown: &[u32], regions: &mut [u32],
     }
     // SAFETY: an atomic add on the region's next slot, a word of the buffer.
     let slot = unsafe { spirv_std::arch::atomic_i_add::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(&mut regions[(drawn::REGIONS + region) as usize], 1) };
-    let (kind, variant, turn, _) = scatter::record_of(w);
-    let [across, deep, _] = rows[kind as usize].cells(variant, turn);
+    let (decor, variant, turn, _) = scatter::record_of(w);
+    let [across, deep, _] = rows[decor as usize].cells(variant, turn);
     let room = block.len() as u32 / (drawn::LANES + 1);
     if slot >= room {
         return;
