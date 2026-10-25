@@ -27,7 +27,7 @@ use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, CASES_MAX};
 use crate::domain::scene::stage::screen_drawn;
 use crate::domain::view::frame::pose::units_per_px_at;
-use crate::domain::view::setting::store::{settings_store, SettingKey};
+use crate::domain::view::setting::store::{settings_loaded, settings_store, SettingKey};
 use crate::sys::io::file::{self, Kept};
 use crate::turn::world_platform;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -72,8 +72,9 @@ pub struct Shown {
     camera_busy: bool,
     zooming: bool,
     over_marker: bool,
-    /// By each setting's number, a retired number's 0.
-    settings: [u32; SettingKey::SLOTS],
+    /// By each setting's number, a retired number's 0; none until they are
+    /// read, as the shell holds none before its first snapshot.
+    settings: Option<[u32; SettingKey::SLOTS]>,
     m_per_px: f64,
     division: Option<(Tile, u32)>,
     previews: ([u32; CASES_MAX], usize),
@@ -112,13 +113,13 @@ fn shown() -> Shown {
         camera_busy: dragging(),
         zooming: crate::domain::control::camera::controller::zooming(),
         over_marker: crate::door::over_marker(),
-        settings: {
+        settings: settings_loaded().then(|| {
             let mut by_number = [0; SettingKey::SLOTS];
             for key in SettingKey::ALL {
                 by_number[key as usize] = settings.get(key);
             }
             by_number
-        },
+        }),
         m_per_px: m_per_px(),
         division: focus.and_then(|at| naming(&at)),
         previews,
@@ -198,7 +199,7 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
         camera_busy: shown.camera_busy,
         zooming: shown.zooming,
         over_marker: shown.over_marker,
-        settings: &shown.settings,
+        settings: shown.settings.as_ref().map_or(&[], |s| s),
         m_per_px: shown.m_per_px,
         division: &|each| division_parts(shown.division, each),
         previews: &shown.previews.0[..shown.previews.1],

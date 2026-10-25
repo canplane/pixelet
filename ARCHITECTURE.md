@@ -535,7 +535,7 @@ The shell reads the kernel through one **snapshot**, replaced whole after a turn
 
 - the focus, whether the view shows ground there yet, and whether it has wandered from the device or past the service area;
 - the state of the device's location and heading, the camera's azimuth, whether it follows the device, and whether it is dragged or zooming;
-- the companion's readiness, the tool held and a marker waiting for its words, the display cases, and the settings by their numbers;
+- the companion's readiness, the tool held and a marker waiting for its words, the display cases, and the settings by their numbers once their slot is read;
 - the meters a pixel spans at the focus, the divisions it is in, whether the pointer is over a marker, the kept slots it refused, and a server's stall.
 
 What is rounded or timed for presentation, such as a scale bar's length or a toast, is the shell's.

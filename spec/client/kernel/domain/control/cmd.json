@@ -782,7 +782,7 @@
           "name": "WORLD_BOOT",
           "value": 4097,
           "$doc": [
-            "The kernel's start: what the platform is, and what it was handed to start with."
+            "The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root."
           ],
           "packet": [
             {
@@ -814,15 +814,6 @@
                 "A browser's compass talks while the device is still and cannot say it stopped, so",
                 "silence is the only sign of loss; a device's speaks only when the heading turns and",
                 "reports a failure itself (SENSOR_ORIENTATION_LOST)."
-              ]
-            },
-            {
-              "name": "settings",
-              "type": "str",
-              "$doc": [
-                "What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file",
-                "(host.json's `kept.SETTINGS`), handed over unread as a process is handed its environment,",
-                "which the kernel reads and from then on writes itself."
               ]
             }
           ]
@@ -1202,7 +1193,8 @@
           "name": "SETTING_SET",
           "value": 5633,
           "$doc": [
-            "A setting set from the sheet or the character picker."
+            "A setting set from the sheet or the character picker; EAGAIN until the kernel has read the",
+            "kept settings, which would be read over it."
           ],
           "packet": [
             {
@@ -1457,7 +1449,8 @@
           "type": "u32",
           "list": true,
           "$doc": [
-            "Every setting's value by its SettingKey, as SETTING_SET carries one."
+            "Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel",
+            "has read its kept slot, a few turns from boot."
           ]
         },
         {
@@ -1489,8 +1482,9 @@
           "type": "u32",
           "list": true,
           "$doc": [
-            "The kept slots (host.json's `kept`) whose file is not of the slot's format: the kernel",
-            "read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says the slot is empty."
+            "The kept slots (host.json's `kept`) whose file is not of the slot's format, or too large for",
+            "any heap: the kernel read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says",
+            "the slot is empty."
           ]
         },
         {

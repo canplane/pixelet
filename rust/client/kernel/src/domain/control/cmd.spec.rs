@@ -545,7 +545,7 @@ pub enum Command {
     SENSOR_ORIENTATION_LOST = 0x120a,
 
     // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
-    /// The kernel's start: what the platform is, and what it was handed to start with.
+    /// The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root.
     WORLD_BOOT = 0x1001,
     /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
@@ -593,7 +593,8 @@ pub enum Command {
     /// A character drawn alone into a surface the shell handed over, as the picker shows it.
     PREVIEW_OPEN = 0x1801,
     PREVIEW_CLOSE = 0x1802,
-    /// A setting set from the sheet or the character picker.
+    /// A setting set from the sheet or the character picker; EAGAIN until the kernel has read the
+    /// kept settings, which would be read over it.
     SETTING_SET = 0x1601,
     /// A line the player said, shown over the character.
     CHAT_SEND = 0x1701,
@@ -699,7 +700,8 @@ pub struct Snapshot<'a> {
     pub zooming: bool,
     /// The pointer is over a marker a tap would act on with the tool held: a place to go to, or a pin to erase or word.
     pub over_marker: bool,
-    /// Every setting's value by its SettingKey, as SETTING_SET carries one.
+    /// Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
+    /// has read its kept slot, a few turns from boot.
     pub settings: &'a [u32],
     /// The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it.
     pub m_per_px: f64,
@@ -708,8 +710,9 @@ pub struct Snapshot<'a> {
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
-    /// The kept slots (host.json's `kept`) whose file is not of the slot's format: the kernel
-    /// read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says the slot is empty.
+    /// The kept slots (host.json's `kept`) whose file is not of the slot's format, or too large for
+    /// any heap: the kernel read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says
+    /// the slot is empty.
     pub kept_refused: &'a [u32],
     /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say.
     pub stall: Option<Message>,
@@ -1019,7 +1022,7 @@ impl SensorError {
 
 /// Command::WORLD_BOOT's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct WorldBoot<'a> {
+pub struct WorldBoot {
     /// A development build, which offers the settings schema.json marks `dev`.
     pub development: bool,
     pub geolocation: bool,
@@ -1030,14 +1033,10 @@ pub struct WorldBoot<'a> {
     /// silence is the only sign of loss; a device's speaks only when the heading turns and
     /// reports a failure itself (SENSOR_ORIENTATION_LOST).
     pub orientation_silence_is_loss: bool,
-    /// What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
-    /// (host.json's `kept.SETTINGS`), handed over unread as a process is handed its environment,
-    /// which the kernel reads and from then on writes itself.
-    pub settings: &'a str,
 }
 
-impl<'a> WorldBoot<'a> {
-    pub fn read(pkt: &'a [u8]) -> Result<WorldBoot<'a>, MarshalError> {
+impl WorldBoot {
+    pub fn read(pkt: &[u8]) -> Result<WorldBoot, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(WorldBoot {
             development: f.at(0)?.get_bool()?,
@@ -1045,7 +1044,6 @@ impl<'a> WorldBoot<'a> {
             orientation: f.at(2)?.get_bool()?,
             orientation_permission: f.at(3)?.get_bool()?,
             orientation_silence_is_loss: f.at(4)?.get_bool()?,
-            settings: f.at(5)?.get_str_ref()?,
         })
     }
 }

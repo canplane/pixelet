@@ -132,11 +132,6 @@ export function commit_storage(number: bigint, bytes: U8Array): void {
   bracket.storage.set(storage_key(number), td.decode(bytes));
 }
 
-/** A kept slot's text, or null where none is kept. */
-export function read_kept(slot: u32): string | null {
-  return bracket.storage.get(storage_key(BigInt(slot)));
-}
-
 /** Before the kernel reads a slot: what was kept before the slots carried over, once. */
 export function migrate_kept(): void {
   migrate(STORAGE);

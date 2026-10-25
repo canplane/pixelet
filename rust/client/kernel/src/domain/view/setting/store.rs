@@ -83,21 +83,72 @@ static SETTINGS_STORE: Global<Settings> = Global::new();
 /// of changes costs the host stream one file, whatever their number.
 static UNKEPT: Global<bool> = Global::new();
 
-/// A refused slot holds its changes until the host empties it.
-pub fn settings_keep_step() {
-    if !file::refused(Kept::Settings) && core::mem::take(UNKEPT.get(|| false)) {
-        file::write_kept(Kept::Settings, &settings_store().kept());
+/// The store against its kept slot, opened on the storage root as the
+/// objects' is (domain/layer/object/repository.rs). Until the slot is read
+/// the store holds the defaults and nothing is written over it.
+#[derive(Clone, Copy, PartialEq)]
+enum Load {
+    Asked,
+    /// What it held, or nothing: written from now on.
+    Loaded,
+    /// Refused (sys/io/file.rs `refused`): the defaults, and not written
+    /// over until the host sets it aside and empties the slot.
+    Refused,
+    /// There and not readable here otherwise: the defaults, and never
+    /// written over this session.
+    Unreadable,
+}
+
+static LOAD: Global<Load> = Global::new();
+
+fn load() -> &'static mut Load {
+    LOAD.get(|| Load::Asked)
+}
+
+/// Asks for the slot, at boot.
+pub fn settings_open() {
+    *load() = Load::Asked;
+    file::open_kept(Kept::Settings);
+}
+
+/// The slot was read, whatever it held: from here the store is what this
+/// session has, and what waits on it may start.
+pub fn settings_loaded() -> bool {
+    *load() != Load::Asked
+}
+
+/// True the turn the slot is read. What is not offered, unknown or invalid
+/// stays at the default, as does every setting where the slot cannot be read.
+pub fn settings_load_step() -> bool {
+    if settings_loaded() {
+        return false;
+    }
+    let Some(kept) = file::take_kept(Kept::Settings) else { return false };
+    let (s, now) = match kept {
+        KeptFile::Bytes(bytes) => (read_kept(&bytes), Load::Loaded),
+        KeptFile::None => (Settings::DEFAULT, Load::Loaded),
+        KeptFile::Unreadable if file::refused(Kept::Settings) => (Settings::DEFAULT, Load::Refused),
+        KeptFile::Unreadable => (Settings::DEFAULT, Load::Unreadable),
+    };
+    SETTINGS_STORE.set(s);
+    UNKEPT.set(false);
+    *load() = now;
+    true
+}
+
+/// The host set a refused slot's file aside and emptied it: the store, with
+/// what changed meanwhile, is written from the next keep on.
+pub fn settings_emptied() {
+    if *load() == Load::Refused {
+        *load() = Load::Loaded;
     }
 }
 
-/// What is not offered, unknown or invalid stays at the default, as does
-/// every setting where the slot is refused, which is then not written over.
-pub fn settings_load(kept: &str) {
-    let s = match file::kept_of(Kept::Settings, kept.as_bytes()) {
-        KeptFile::Bytes(bytes) => read_kept(&bytes),
-        KeptFile::None | KeptFile::Unreadable => Settings::DEFAULT,
-    };
-    SETTINGS_STORE.set(s);
+/// Only a slot read is written; a refused or unreadable one holds its changes.
+pub fn settings_keep_step() {
+    if *load() == Load::Loaded && core::mem::take(UNKEPT.get(|| false)) {
+        file::write_kept(Kept::Settings, &settings_store().kept());
+    }
 }
 
 /// A number no setting has is passed over, as is a value its setting cannot

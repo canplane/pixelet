@@ -256,7 +256,7 @@ export const enum Command {
 
   // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
 
-  /** The kernel's start: what the platform is, and what it was handed to start with. */
+  /** The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root. */
   WORLD_BOOT = 0x1001,
   /** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
    * phases on what is left of the quota, the fetches within the credits. The turn leaves
@@ -305,7 +305,8 @@ export const enum Command {
   /** A character drawn alone into a surface the shell handed over, as the picker shows it. */
   PREVIEW_OPEN = 0x1801,
   PREVIEW_CLOSE = 0x1802,
-  /** A setting set from the sheet or the character picker. */
+  /** A setting set from the sheet or the character picker; EAGAIN until the kernel has read the
+   * kept settings, which would be read over it. */
   SETTING_SET = 0x1601,
   /** A line the player said, shown over the character. */
   CHAT_SEND = 0x1701,
@@ -371,7 +372,8 @@ export interface Snapshot {
   zooming: boolean;
   /** The pointer is over a marker a tap would act on with the tool held: a place to go to, or a pin to erase or word. */
   over_marker: boolean;
-  /** Every setting's value by its SettingKey, as SETTING_SET carries one. */
+  /** Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
+   * has read its kept slot, a few turns from boot. */
   settings: u32[];
   /** The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it. */
   m_per_px: f64;
@@ -380,8 +382,9 @@ export interface Snapshot {
   division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
-  /** The kept slots (host.json's `kept`) whose file is not of the slot's format: the kernel
-   * read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says the slot is empty. */
+  /** The kept slots (host.json's `kept`) whose file is not of the slot's format, or too large for
+   * any heap: the kernel read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says
+   * the slot is empty. */
   kept_refused: u32[];
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say. */
   stall: Message | null;
@@ -542,8 +545,7 @@ export function encode_sensor_error(to: PacketRoom, code: GeolocationErrorCode):
  *
  * @param development A development build, which offers the settings schema.json marks `dev`.
  * @param orientation_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
- * @param orientation_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ORIENTATION_LOST).
- * @param settings What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file (host.json's `kept.SETTINGS`), handed over unread as a process is handed its environment, which the kernel reads and from then on writes itself. */
+ * @param orientation_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ORIENTATION_LOST). */
 export function encode_world_boot(
   to: PacketRoom,
   development: boolean,
@@ -551,9 +553,8 @@ export function encode_world_boot(
   orientation: boolean,
   orientation_permission: boolean,
   orientation_silence_is_loss: boolean,
-  settings: string,
 ): PacketWriter {
-  return to.writer(6).bool(development).bool(geolocation).bool(orientation).bool(orientation_permission).bool(orientation_silence_is_loss).str(settings);
+  return to.writer(5).bool(development).bool(geolocation).bool(orientation).bool(orientation_permission).bool(orientation_silence_is_loss);
 }
 
 /** Command.WORLD_FRAME's packet, written in place into `to`.

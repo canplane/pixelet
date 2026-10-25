@@ -49,7 +49,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     use crate::domain::control::camera::input::{camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel};
     use crate::domain::control::interaction::{hold, holding};
     use crate::domain::control::sensor::{device_orientation, geolocation};
-    use crate::domain::view::setting::store::{settings_load, settings_store, SettingKey};
+    use crate::domain::view::setting::store::{settings_loaded, settings_open, settings_store, SettingKey};
     use crate::profiler::window::{profiler_follow, profiler_window_start, profiler_window_stop};
     use crate::shell as ui;
     use crate::sys::sched::edge::request_world_tick;
@@ -91,8 +91,9 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                     silence_is_loss: p.orientation_silence_is_loss,
                 },
             });
-            settings_load(p.settings);
-            profiler_follow(settings_store().profiler);
+            // Both kept slots, read from a turn on: what waits on the settings,
+            // the profiler and the snapshot's, starts once they are in (turn.rs).
+            settings_open();
             crate::domain::layer::object::repository::open();
             // The shell holds the kernel's state from its first render on.
             applied(s)
@@ -109,8 +110,9 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             file::emptied(kept);
             // The settings write what they hold from the next keep on; the
             // objects are read again, empty, and saved from then on.
-            if kept == Kept::Objects {
-                crate::domain::layer::object::repository::open();
+            match kept {
+                Kept::Settings => crate::domain::view::setting::store::settings_emptied(),
+                Kept::Objects => crate::domain::layer::object::repository::open(),
             }
             Ok(Some(0))
         }
@@ -294,6 +296,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::SETTING_SET => {
             let p = abi::SettingSet::read(packet(pkt)?)?;
+            // A change before the slot is read would be read over.
+            refuse_unless(settings_loaded(), Errno::EAGAIN)?;
             let changed = settings_store().set_setting(p.key, p.value);
             refuse_unless(changed.is_some(), Errno::EINVAL)?;
             if changed == Some(true) && p.key == SettingKey::profiler {

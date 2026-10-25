@@ -205,6 +205,12 @@ pub fn world_turn() -> f64 {
     let at = now();
     let platform = world_platform();
     let mut worst = (0.0f64, None);
+    // First, so the turn they are read in is the first to see them.
+    effect!(worst, settings, {
+        if crate::domain::view::setting::store::settings_load_step() {
+            crate::profiler::window::profiler_follow(crate::domain::view::setting::store::settings_store().profiler);
+        }
+    });
     effect!(worst, navigation, off_center_step());
     effect!(worst, bootstrap, map_bootstrap_step());
     effect!(worst, orientation, orientation_watchdog_step(platform.orientation));
