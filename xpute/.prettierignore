@@ -1,3 +1,0 @@
-# Prettier formats nothing here: code is formatted by its tree's own
-# formatter (deno fmt, rustfmt), and the rest by no one.
-*

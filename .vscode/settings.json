@@ -27,9 +27,9 @@
 
   // Code is formatted on save by its tree's formatter, Deno's under each
   // tree's config and rustfmt by rust-analyzer; the documents and the data
-  // are formatted by no one, so no other formatter takes them on save
-  // (.prettierignore).
+  // are formatted by no one, so no other formatter takes them on save.
   "editor.formatOnSave": true,
+  "prettier.enable": false,
   "[markdown]": { "editor.formatOnSave": false },
   "[yaml]": { "editor.formatOnSave": false },
   "[xml]": { "editor.formatOnSave": false },
