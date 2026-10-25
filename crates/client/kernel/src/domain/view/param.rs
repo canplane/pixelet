@@ -11,10 +11,10 @@ pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 // ---- the drawn resolution ----
 
 /// Device pixels per CSS pixel the world is drawn at: the display's, no
-/// finer than labels' sheets are drawn, so a label is never shown smaller
+/// finer than markers' sheets are drawn, so a marker is never shown smaller
 /// than drawn, and under load a share of them (domain/view/frame/resolution.rs).
 pub const RESOLUTION_MAX: f64 = pxl_spec::space::camera::grid::RATIO_MAX;
-const _: () = assert!(RESOLUTION_MAX <= pxl_render::gpu::sheet::SHEET_SCALE, "a label's sheet is drawn at least as fine as the world");
+const _: () = assert!(RESOLUTION_MAX <= pxl_render::gpu::sheet::SHEET_SCALE, "a marker's sheet is drawn at least as fine as the world");
 
 /// The least share of the display's pixels, each way, the world is drawn at.
 pub const SCALE_MIN: f64 = 0.5;

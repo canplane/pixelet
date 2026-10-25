@@ -197,7 +197,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 
 | Crate / package | What it is                                                                                                                                                               |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pxl-spec`      | The model: the position, the zooms and lattices, the block catalog, the command numbers, the tile formats, the asset tables. One implementation.                         |
+| `pxl-spec`      | The model: the position, the zooms and lattices, the asset catalog, the command numbers, the tile formats, the asset tables. One implementation.                         |
 | `pxl-spec-core` | The part of the model the GPU computes too, one source for both: the zooms' cells, the caves, the ground, the decor it grows, the world's one query and a ray's descent. |
 | `pxl-render`    | The view: glTF, the marker sheet, the draw list, the shaders, the renderer. It knows no kernel.                                                                          |
 | `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                                                    |
