@@ -90,7 +90,7 @@ public class PlatformModule: Module {
       UserDefaults.standard.set(value, forKey: key)
     }
 
-    // ---- the clipboard (platform/save.ts) ----
+    // ---- the clipboard (src/share.ts) ----
     //
     // The general pasteboard, as a page's navigator.clipboard is the
     // browser's; React Native's JavaScript has none of its own.

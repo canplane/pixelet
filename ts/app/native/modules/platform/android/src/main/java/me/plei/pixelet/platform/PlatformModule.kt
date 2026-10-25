@@ -76,7 +76,7 @@ class PlatformModule : Module() {
       preferences().edit().putString(key, value).apply()
     }
 
-    // ---- the clipboard (platform/save.ts) ----
+    // ---- the clipboard (src/share.ts) ----
 
     Function("clipboardSet") { text: String ->
       val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
