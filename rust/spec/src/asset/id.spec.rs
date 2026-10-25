@@ -6,9 +6,11 @@
 // `id >> SHAPE_BITS` is the kind, the low bits the shape. The kind is what an
 // asset is drawn and struck as, and what its metadata is: a cube a meshed box
 // with none, decor a model with a variant, heading and scale, a marker drawn
-// flat to the camera from a design, as the pin someone puts up at a place.
-// A block, the instance standing in a cell of the world's grid, is stored
-// as its asset's id (pxl-spec block/object.rs).
+// flat to the camera from a design, as the pin someone puts up at a place,
+// an actor a person or a pet, a model with clips, and sky what hangs in the
+// sky, the clouds. A block, the instance standing in a cell of the world's
+// grid, is stored as its asset's id (pxl-spec block/object.rs); an actor
+// or the sky stands in no cell, so neither is ever a block.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
@@ -26,11 +28,13 @@ pub enum Kind {
     cube = 0,
     decor = 1,
     marker = 2,
+    actor = 3,
+    sky = 4,
 }
 
 impl Kind {
     /// Every member, in the JSON's own order.
-    pub const ALL: [Kind; 3] = [Kind::cube, Kind::decor, Kind::marker];
+    pub const ALL: [Kind; 5] = [Kind::cube, Kind::decor, Kind::marker, Kind::actor, Kind::sky];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
@@ -43,4 +47,6 @@ pub mod KIND {
     pub const cube: u16 = 0;
     pub const decor: u16 = 1;
     pub const marker: u16 = 2;
+    pub const actor: u16 = 3;
+    pub const sky: u16 = 4;
 }

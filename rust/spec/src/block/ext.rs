@@ -14,6 +14,6 @@ use crate::asset::id::{kind_of, AssetId, Kind};
 pub fn class_of(id: AssetId) -> Option<Class> {
     match kind_of(id)? {
         Kind::marker => Some(Class::marker_text),
-        Kind::cube | Kind::decor => None,
+        Kind::cube | Kind::decor | Kind::actor | Kind::sky => None,
     }
 }
