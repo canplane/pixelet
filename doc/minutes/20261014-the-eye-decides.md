@@ -177,7 +177,7 @@ is built while drawing.
   `relief`). Outside this is called a
   min-max (or maximum) mipmap, the usual structure for casting rays at a
   heightmap. The kernel's query carries a box a node
-  (`crates/client/kernel/src/layer/query.rs` `Query::bounds`), as a BVH does.
+  (`crates/client/kernel/src/domain/layer/query.rs` `Query::bounds`), as a BVH does.
 - **The content** is the pyramid's tiles, folded at each zoom, which answer
   what a block is where a ray stops.
 
@@ -196,7 +196,7 @@ What the rays need was then streamed the way GigaVoxels streams it: the
 tiles a descent lacked were part of the observation, and demand followed
 them (`view/sight.rs`, since removed). That no longer holds: demand is a
 function of the eye alone, never of what the rays met
-(`crates/client/kernel/src/view/observation.rs` `ByEye`).
+(`crates/client/kernel/src/domain/view/observation.rs` `ByEye`).
 
 ## Where it points
 
@@ -215,12 +215,16 @@ that, each step measured alone and reverted if it does not pay. If the whole doe
 the retreat is the first middle road, chunks chosen by rays, from
 `checkpoint/20261012-eye-axis` with the runs gone.
 
+> Since a square's columns are filled on the GPU as it lands (pxl-shader
+> `heights_cs`), a step reads its cell's column, and no longer reads a
+> tile's samples or runs the bicubic again.
+
 **Two reductions in view.** Neither adds a mechanism; each hands a role
 the rays already play to the rays alone.
 
 - _Which tiles matter._ Fetching then followed the rays' lacks (now the
   eye alone, above), but evicting ranks tiles by whether a box around each
-  is in the frustum and by distance (`crates/client/kernel/src/io/demand.rs`
+  is in the frustum and by distance (`crates/client/kernel/src/sys/io/demand.rs`
   `Order`, through `crates/spec/src/space/camera/eye.rs` `measure`). A tile
   behind a mountain is in the frustum and no ray reads it. GigaVoxels marks
   what the rays read and evicts what they did not; here the descent already
@@ -235,7 +239,7 @@ the rays already play to the rays alone.
   only pages of data and rays. Done but for the rung: a chunk draws
   nothing, and is now only the address by which what stands in the world,
   decor and places, is gathered about the eye
-  (`crates/client/kernel/src/chunk.rs`, `view/observation.rs` `cubes`).
+  (`crates/client/kernel/src/domain/chunk.rs`, `domain/view/observation.rs` `cubes`).
 
 **The floor.** Below these, five things remain, and removing any one brings
 its problem back: the tree, or the cost is linear in the world; the bound,

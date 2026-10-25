@@ -49,6 +49,11 @@ Corner occlusion and the screen-space one scale the light a surface takes,
 the sun's included: no shadow is drawn by default, and the corner is the cue
 it leaves. Neither touches the air in front, and neither tints.
 
+> Since changed: both tint. The corners darken toward a warm brown
+> (`frame/shader/screen_ray.wgsl` `AO_TINT`), and N8AO is applied as a warm
+> dark tint (`gpu/ao.rs`). They are now two modes of one setting, corner by
+> default (spec/client/kernel/domain/view/setting/schema.json `AO_MODES`).
+
 The sun's shadow map stays a development setting: it costs a geometry pass a
 phone does not have to spare, and a matte world reads fine without it. Where it
 is on, it is pushed back by its slope to the sun (`record.rs` `depth_only`),

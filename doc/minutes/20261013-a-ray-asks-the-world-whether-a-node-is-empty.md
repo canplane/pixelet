@@ -104,6 +104,12 @@ node fills, from what each source already keeps, with nothing new stored:
   objects.
 - **Objects**: no record of the objects' pyramid at the node.
 
+> Since changed for separation: whether anything under a node fills is no
+> longer read off the ways' fold, as for the objects, but by a bound of
+> their own, joined apart from the ground's (pxl-spec-core `ways::slab`).
+> What a node is still comes from a tree of the placed tree's shape, built
+> on the GPU a square at a time (pxl-spec-core `ways/tree.rs`).
+
 ## What goes
 
 Every observation that stands in for the rays: the screen's patches and

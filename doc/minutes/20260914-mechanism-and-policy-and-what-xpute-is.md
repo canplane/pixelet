@@ -46,6 +46,11 @@ there is a layer:
 xpute       mechanism / substrate
 ```
 
+> Since renamed: `xpute-core` is now `xpute-kit`, the generic code, with
+> `xpute-guest` and the TypeScript host as the arrangement's two ends, all
+> under `xpute/`; `pxl-core` became `pxl-kernel` and `pxl-render`
+> (`crates/client/kernel`, `crates/client/render`).
+
 xpute's return is not the old general runtime restored; it is the
 mechanisms that proved themselves under pixelet's workload, pulled down one
 layer.
@@ -55,7 +60,7 @@ layer.
 Think of it as an OS, not as a web page. On the web the central scheduler
 is JavaScript because nothing else can be; natively it would be Rust. So
 xpute's mechanisms live on both sides, the same file in each language
-(`packages/xpute/core/src/sched`, `crates/xpute/core/src/sched`), and each
+(`xpute/ts/host/src/sched`, `xpute/rust/guest/src/sched`), and each
 side uses the half it runs.
 
 ```
@@ -68,6 +73,17 @@ guest scheduler     inside the guest: its phases in priority order on the
 pass                one list of steps within a phase's share
                                                          sched/frame_budget
 ```
+
+> Since split by end: the two are no longer one file in each language. The
+> host's half is TypeScript (`xpute/ts/host/src/sched`, the quantum and the
+> strobe) and the guest's is Rust and C++ (`xpute/rust/guest/src/sched`,
+> `xpute/cpp/guest/sched`, the tick, the pass, the tasks and what it
+> declares of its quantum). `sys/memory`, `sys/slab` and `sched/io` are
+> gone: the host reserves the memory in
+> `xpute/ts/host/src/mem/reserve.ts`, the slab is kit's
+> (`xpute/rust/kit/src/alloc/slab.rs`), and the I/O queue is the kernel's
+> (`crates/client/kernel/src/sys/io`). The boot block's quantum words are
+> entries of the directory (`xpute/rust/guest/src/ipc/directory.rs`).
 
 The inside knows little of the outside. A turn is a strobe with a hint of
 how long it should take; the guest takes what waits on its fixed submission
@@ -110,7 +126,7 @@ but no published account of its scheduler was at hand to compare.
 may sit on it later, and even then as middleware at most — not xpute's
 substance. xpute is the cooperative resource runtime and the primitive
 kit — scheduler, memory, IPC, containers — and a name from the other side
-appearing under `crates/xpute/core` is a layer violation.
+appearing under `xpute/` is a layer violation.
 
 ## Is there a JavaScript xpute?
 
@@ -235,3 +251,9 @@ implemented.
   checkpoint — a second, non-spatial workload — is recognized when it
   comes, after the WASM move is done and the boundary has been corrected
   by use.
+
+> Since opened: xpute carries an MIT license (`xpute/LICENSE`), and
+> `xpute/script/export.ts` copies what git tracks under `xpute/` into its
+> own repository. Its scope is not the `ds/`, `ipc/`, `memory/`, `sched/`
+> proposed above but `kit` and the two ends, `guest` and `host`
+> (`xpute/README.md`).

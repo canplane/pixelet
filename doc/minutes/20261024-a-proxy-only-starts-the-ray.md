@@ -102,9 +102,9 @@ the first the largest:
    takes one of `SCALE_STEPS` steps down to `SCALE_MIN`, a step up held
    until `SCALE_UP_WINDOWS` windows in a row would fit it and no window
    judged for `SCALE_SETTLE_WINDOWS` after a change (pxl-kernel
-   view/frame/resolution.rs, param/view.rs)._ Out of a tenth of its
+   domain/view/frame/resolution.rs, domain/view/param.rs)._ Out of a tenth of its
    budget, the scale moves by the square root of the ratio, between half and
-   whole, in no steps (pxl-kernel view/frame/resolution.rs), and each move
+   whole, in no steps (pxl-kernel domain/view/frame/resolution.rs), and each move
    lays every pixel anew. Engines that scale by load hold small changes back
    and wait frames between changes, and upscale over time to hide them.
 3. **Lines and silhouettes are point-sampled**, one sample at a pixel's

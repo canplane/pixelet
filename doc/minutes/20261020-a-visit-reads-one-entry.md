@@ -228,6 +228,10 @@ The E120 eye's rays were walked on the CPU over the r12 tiles
 `near` the walk asks, and `far` at the node's farthest point from the eye.
 Neither the log nor the probe was kept.
 
+> Since renamed: `cast::start` and `cast::first_from` are gone; a walk
+> from the world's root is `cast::first` (pxl-spec-core cast.rs, over
+> `cast::walk`).
+
 - **The walk matches the GPU's.** A ray visits 18.00 nodes on average,
   where the GPU's cast decodes 18.0 at E120 (the same walk log).
 - **The table is small.** A frame's 146,351,342 visits read 68,677

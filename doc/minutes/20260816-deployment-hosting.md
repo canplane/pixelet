@@ -61,7 +61,7 @@ what you actually want.
 > Superseded: there is no `_ocean` object now. A page a version leaves out
 > is answered `204` by the Worker (`left()` in
 > `apps/web/cloudflare-worker/index.ts`), and the client reads a 204 as no
-> object (`apps/client/src/kernel/io/read.ts`); 404 stays for a key that
+> object (`apps/client/src/namespace/read.ts`); 404 stays for a key that
 > names nothing.
 
 Classifying the coverage bbox against `osm_coastline_polygons` (the same
@@ -135,7 +135,7 @@ dataset re-baked a handful of times a year needs.
 > Superseded: objects are stored zstd now (`CONTENT_ENCODING` in
 > `crates/server/geo-bake/src/util.rs`; see
 > [compression by traffic](./20260913-compression-by-traffic.md)). The
-> upload takes the encoding from the bake's manifest (`script/publish.ts`).
+> upload takes the encoding from the bake's manifest (`apps/web/script/publish.ts`).
 
 Object stores don't compress on the fly. Each tile is gzipped at bake time and
 uploaded with `content-type: application/octet-stream` +
@@ -418,6 +418,9 @@ diffed, reviewed, or restored from this repository.
 | Rules → Redirect Rules         | `www -> apex (301)`              | Dynamic, `concat("https://plei.me", http.request.uri.path)`, preserve query |
 | Security → WAF → Rate limiting | `Throttle /tiles/* per IP`       | 100 requests / 10 seconds, block                                            |
 
+> Since then the tile root is `/tile` (`spec/spec/route.json`), so a rule
+> on `/tiles/*` matches nothing; the dashboard rule has to name `/tile/*`.
+
 Two of those have a reason that is not obvious from the setting itself.
 
 **The dummy A record.** Cloudflare only receives traffic for hostnames it has
@@ -473,7 +476,7 @@ in the first place.
 
 ### Uploading
 
-> Now `script/publish.ts`: `aws s3 sync` against R2's S3 endpoint, with the
+> Now `apps/web/script/publish.ts`: `aws s3 sync` against R2's S3 endpoint, with the
 > `content-encoding` and `content-type` taken from the bake's manifest.
 
 43,506 objects rules out `wrangler r2 object put`, which handles one object per
@@ -507,11 +510,11 @@ being used. `VITE_GEOCODE_BASE_URL` exists to make that swap a config change
 rather than a code change — it is a door left open, not one to walk through
 now.
 
-> Placed objects are now the kernel's file `OBJECTS_PATH` below its
-> `STORAGE` root (`crates/client/kernel/src/abi/host.spec.rs`); the page
-> keeps each such file in `localStorage` under `pxl:` and its path
-> (`storage_key` in `apps/client/src/kernel/host.ts`), the device app in the
-> platform's preferences.
+> Placed objects are now the kernel's kept slot `kept::OBJECTS` below its
+> `STORAGE` root (`crates/client/kernel/src/sys/io/host.spec.rs`); the page
+> keeps each slot in `localStorage` under its key, `pxl:kept:objects` for
+> this one (`kept_key` in `apps/client/src/namespace/storage.ts`), the
+> device app in the platform's preferences.
 
 **Placed objects stay in `localStorage`.** Nothing is shared between visitors;
 each browser sees only its own edits. Correct for a demo, and it's what makes
@@ -654,9 +657,11 @@ attribution link in the license section.
 > forward search's `near`, sent to the project's own `/geo/search`
 > (`fetchSearch` in `apps/client/src/shell/search/repository.ts`). The
 > settings this paragraph lists are now `pxl:lang`, `pxl:ui_hotbar` and the
-> kernel's `settings` and `object/v15` files (`pxl:settings`,
-> `pxl:object:v15`). pxl-api is deployed and its `/api/internal` is behind
-> the admin token (`API_INTERNAL`, `crates/server/api/src/main.rs`).
+> kernel's two kept slots, the settings and the placed objects
+> (`pxl:kept:settings`, `pxl:kept:objects`;
+> `apps/client/src/namespace/storage.ts`). pxl-api is deployed and its
+> `/api/internal` is behind the admin token (`API_INTERNAL`,
+> `crates/server/api/src/main.rs`).
 
 **Location is the sensitive surface here.** The only personal data
 leaving the client is the map-center coordinate sent to Nominatim — rounded to

@@ -65,7 +65,7 @@ channel beside the contract, and a second clock beside `now`; a browser
 would need a shim to answer them. The WASI SDK builds C++ for the same kind
 of guest: its linker and libc++ are what a C++ guest needs, and a guest that
 calls nothing of the OS imports nothing of WASI. The C++ guest is built so,
-by the SDK's clang with `--target=wasm32-wasip1` (xpute/script/cpp.ts), and
+by the SDK's clang with `--target=wasm32-wasip1` (xpute/cpp/Makefile), and
 its module imports `env.memory` and `env.now` alone, as the Rust guest's does
 (xpute/ts/conformance/src/trace.test.ts `MODULE_IMPORTS`).
 

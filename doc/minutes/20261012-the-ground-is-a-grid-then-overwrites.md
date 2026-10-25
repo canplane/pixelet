@@ -6,7 +6,7 @@
 invariant hold** (pxl-spec-core world.rs `node`). No mesher is left: the
 screen's rays are cast on the GPU and paint the block each stops at
 (pxl-render frame/shader/paint.wgsl), and a chunk is an address only
-(pxl-kernel chunk.rs), so what this says of making chunks is superseded
+(pxl-kernel domain/chunk.rs), so what this says of making chunks is superseded
 ("What is drawn").
 
 ## The structure

@@ -46,7 +46,7 @@ The icon is Carto's SVG, rasterized into an atlas by the asset pipeline and
 filled with its row's color. The label is the place's `names.primary`, which
 is what Carto's `name` is, in Carto's text style but a marker's font, so the
 world has one size of text: a halo, set under the icon (`text-dy`), wrapped
-at the cell a place keeps to itself (below; `pxl-kernel scene/place.rs`
+at the cell a place keeps to itself (below; `pxl-kernel domain/scene/marker/arrangement.rs`
 `spacing_px`), where it was first six em, twice Carto's, which broke a
 Korean name of five syllables in two, in its row's label color. A map label
 is Carto's, so it is not translated; the address line the shell writes from
@@ -130,8 +130,12 @@ Places and the markers someone puts up stay one billboard pass — gathered,
 culled to the screen, drawn far to near, tapped — since a billboard is a
 behavior. What each draws is its own sheet: a marker its words, as now; a
 place Carto's icon and label. A place's count badge goes; markers crowded
-in one marker's cell keep theirs (`pxl-kernel billboard/badge.rs`
-`Label::Count`).
+in one marker's cell keep theirs (`pxl-kernel domain/scene/marker/pin.rs`
+`count`).
+
+> Since renamed: the billboard is the **marker** now, one pass over places,
+> pins and the chat's line (`pxl-kernel domain/scene/marker/arrangement.rs`),
+> and a crowded cell's count is shown on a pin's pill.
 
 ## What goes
 

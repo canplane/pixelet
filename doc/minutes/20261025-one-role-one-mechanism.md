@@ -43,12 +43,12 @@ texture pack's load number, `variant.json`) are left out.
 4. **Tile reads and asset reads part after the open.** A tile's body refused
    room is held as a want (`Wait::Room`); an asset's credit is settled when
    the open answers, its bytes taken later in a task, a refusal kept in the
-   loader's own state (`io/load.rs`). An asset's descriptor so outlives its
+   loader's own state (`sys/io/loader.rs`). An asset's descriptor so outlives its
    credit, though the file table is sized one descriptor a credit. One
    mechanism: an asset takes its body in `opened` as a tile does.
 5. **Registering a model once its glTF lands: two paths.** Decor has its own
-   effect, task, settle flag and handle table (`decor/assets.rs`,
-   `io/load.rs`, `model/asset.rs` `model_refusal_over`); everyone else polls
+   effect, task, settle flag and handle table (`query/decor/asset.rs`,
+   `sys/io/loader.rs`, `model/asset.rs` `model_refusal_over`); everyone else polls
    `model_of`. One mechanism: `model_of` as the only table and wake.
 6. **A tile's name and version written again in the client.** Morton's
    name, the finest-shard rule and which kinds are sharded are re-implemented

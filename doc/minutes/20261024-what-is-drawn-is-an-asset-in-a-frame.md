@@ -55,20 +55,20 @@ wants.
   about the eye (pxl-render `frame/draw.rs` `draw_scaled`, `draw_as`,
   `draw_instances`).
 - **Models** are registered once and played by the actors and stood by decor
-  alike (`model.rs`).
+  alike (`domain/query/model.rs`).
 - **The cumulus** is drawn on the wind's moving field and held as decor is
-  not (`scene/environment/cloud.rs`).
+  not (`domain/scene/environment/cloud.rs`).
 - **The ghost** is a cube's look or a decor's model in the pointer's frame
-  (`scene/indicator/ghost.rs`).
+  (`domain/scene/indicator/ghost.rs`).
 - **A preview's case** draws an actor into its own canvas
-  (`scene/character/preview.rs`).
+  (`domain/scene/character/preview.rs`).
 - **The socket.** The kernel opens an asset on the `ASSET` root by a number
-  (`io/load.rs`), and the host's backend reads the bytes that number is
-  (`apps/client/src/host/io/asset.ts` `read_asset`).
+  (`sys/io/loader.rs`), and the host's backend reads the bytes that number is
+  (`apps/client/src/namespace/asset.ts` `read_asset`).
 
 ## Where it does not
 
-1. **Markers** (`scene/place.rs`, `billboard/badge.rs`).
+1. **Markers** (`domain/scene/marker/`).
    - The collector names every kind it shows, `Label { Place, Marker, Count,
      Chat }`, and decides for each:
      - the pins' clustering by marker cell (`markers`, and `step` where a
@@ -80,48 +80,60 @@ wants.
      a pin's address (`EntryAt`, its cube at its zoom) and a cluster's cell.
      One design is so painted once per position.
    - A count is the pin's design with a number in it and its colors swapped
-     (pxl-render `gpu/pass/badges.rs` `labeled_pill`, `count_pill`), made a
+     (pxl-render `gpu/pass/marker.rs` `labeled_pill`, `count_pill`), made a
      kind of its own in `Label`, `DrawSpec` and `Thing`.
+
+   > Since the marker work: no `Label` and no count kind remain. The
+   > arrangement asks every source's `Instance` alike, by its holder's `Key`
+   > (`domain/scene/marker/arrangement.rs`), and a design is found by what
+   > it paints, painted once however many show it (`design.rs`). A count is
+   > a pin's pill in its colors turned over (`pin.rs`, pxl-render
+   > `gpu/sheet/shelf.rs` `Paint::Pill`), the clustering the pins' own rule
+   > (`block/marker.json`, `marker_cell`), and the chat line shows by its
+   > own rule (`chat.rs` `hangs`).
 2. **The chat line is in no frame.** Each tick the companion computes the
-   point over its person's head and hands it over (`scene/character/
+   point over its person's head and hands it over (`domain/scene/character/
    companion.rs` `speak_from`). The person, the pet and the line each carry a
    world position the companion works out.
-3. **An actor's instances are in one shared table**, `scene/actor.rs`
+3. **An actor's instances are in one shared table**, `domain/scene/actor.rs`
    `Actors`, sized by its users' bounds (`ACTORS_MAX`, `CASES_MAX`), beside
-   `scene/character/`. Playing clips is the actor kind's behaviour, and a
+   `domain/scene/character/`. Playing clips is the actor kind's behaviour, and a
    clip's time and palette are an instance's, held by its frame.
 4. **A preview's case registers its model again** at one unit tall
-   (`scene/character/preview.rs`): a scale, which is an instance's pose,
+   (`domain/scene/character/preview.rs`): a scale, which is an instance's pose,
    made a second asset.
 5. **The clouds are declared nowhere.** Their three models and their skin
-   are written in the kernel (`scene/environment/cloud.rs` `VARIANTS`,
+   are written in the kernel (`domain/scene/environment/cloud.rs` `VARIANTS`,
    `SKIN`), with no id and no catalog entry, and drawn with decor's draw
-   groups and its by-size draw (`scene/decor/cell.rs`, which only the clouds
+   groups and its by-size draw (`domain/scene/decor/cell.rs`, which only the clouds
    use). They are the sky kind's.
 6. **The kernel knows which assets exist.** The number the socket takes is
    an index into the file table compiled into the kernel (`pxl-spec
    asset/ingested.spec.rs` `Asset`, 163 files, which also holds the word
    asset for files alone), and what each file is for is compiled in beside
    it:
-   - the actors: `spec/client/kernel/model/variant.json`, paired to files
-     in `scene/character/variant.rs`, apart from the block catalog, and
+   - the actors: `spec/client/kernel/domain/query/model/variant.json`, paired to files
+     in `domain/scene/character/variant.rs`, apart from the block catalog, and
      named for its entries rather than its subject;
    - the decors: `spec/spec/block/decor.json`;
    - the clouds: written in the kernel.
 
-   The texture pack is one past the table's end (`asset.rs` `Load::Pack`,
+   The texture pack is one past the table's end (`sys/load.rs` `Load::Pack`,
    and `load === KEYS.length` on the host's side). The table's counts size
    the memory at build time (`door/layout.rs`).
 7. **Control asks by kind** where it asks what a block occupies or hides:
-   `control/interaction/collision.rs` (markers), `edit.rs` (`hide_in`), and
+   `domain/control/interaction/collision.rs` (markers), `edit.rs` (`hide_in`), and
    `ghost.rs` (`Ghost::Box` or `Ghost::Decor`), and `turn.rs` turns each
    `Ghost` into a call of its own. Whether each is a question the child
    should answer is open.
 8. **The top sums its owners' bounds by name** (`door/layout.rs`
    `MODELS_MAX`, `SINGLE_BLOCKS`). `SINGLE_BLOCKS` is 4 for five owners — the
-   ghost, the puck, two debug line sets (`scene.rs` `debug`, `coverage`) and
-   the billboards — and the doubling in render's `blocks.rs` `block_slots`
+   ghost, the puck, two debug line sets (`domain/scene.rs` `debug`, `coverage`) and
+   the billboards — and the doubling in render's `gpu/block.rs` `block_slots`
    hides it.
+
+   > Since fixed: `SINGLE_BLOCKS` is 5, one for each owner
+   > (`door/layout.rs`). The top still sums its owners' bounds by name.
 
 ## What it asks, in order
 
@@ -208,6 +220,6 @@ kernel/src/
   files they reference, unless that half becomes buffers uploaded at boot.
 - **Bounds at boot.** `.fixed`'s block slots and render's draw groups are
   sized at build time today; whether they can be laid after the catalog is
-  read is to be checked against `mem/section.rs`.
+  read is to be checked against `sys/mem/section.rs`.
 - **The spec tree.** `spec/spec/block/` holds the one catalog; whether it
   becomes `spec/spec/asset/`, and what the file table is named then.

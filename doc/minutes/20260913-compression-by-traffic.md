@@ -167,7 +167,7 @@ write and read one format (RFC 8878), so the bake compresses with `libzstd`
 (the `zstd` crate), which alone has the high levels, and whichever decoder
 the host builds with reads it; a native kernel can take `libzstd` too.
 Streaming decode buys nothing either way: the kernel reads a body whole
-(then `body_read`; now the host's `get` in `apps/client/src/kernel/io/read.ts`
+(then `body_read`; now `get` in `apps/client/src/namespace/read.ts`
 reads it with `arrayBuffer()`).
 
 ### Decided for now
@@ -227,7 +227,7 @@ stays where a page is packed while someone waits for it.
 > No longer applies: every bake writes zstd, and the bake reads zstd
 > alone (`unpack` in `crates/server/geo-bake/src/util.rs`), so there is no
 > mixed bucket to tell apart and no `encoding_of`. What stands is that the
-> upload takes the encoding from the manifest (`script/publish.ts`).
+> upload takes the encoding from the manifest (`apps/web/script/publish.ts`).
 
 **One label per object, and the bytes decide it.** An object's encoding is
 metadata its upload sets, so gzip and zstd versions can share the bucket and
@@ -284,11 +284,17 @@ cache can read is one it normalizes, and it stores the decoded body.
 `Content-Encoding` it does not know passes the bytes through undecoded rather
 than saying anything, so a body that still begins with a compression magic is
 one the transport did not decode — a fact about the browser, found on the one
-side that can see it (`packed` in `apps/client/src/kernel/io/read.ts`). The
+side that can see it (`packed` in `apps/client/src/namespace/tile.ts`). The
 bake once made the same judgment on the other side of the wire (`geo-bake
 util.rs`'s `encoding_of`, since gone). Such a body is not handed to the
 kernel, which would spend a heap block and fail in its decoder far from the
 cause; the notice goes up and every later read is settled without being made.
+
+> Since: each read is still made and its body checked. A still-packed one
+> fails as `EBADMSG`, which the kernel blames on that object alone (`blame`
+> in `crates/client/kernel/src/sys/io/policy.rs`), so it is not asked again
+> while it is wanted and every other read goes ahead
+> (`crates/client/kernel/src/sys/io/request.rs`).
 
 The decoded copy the edge makes for a client that did not offer zstd is
 therefore still made, and still cached. Nothing in a Worker prevents it. What
@@ -299,7 +305,7 @@ brotli q11 at 4.2 KB against zstd -22's 4.3, so the gap buys nothing in size;
 what it buys is decode, 0.34 ms a page against 0.69. Nothing in this tree
 decodes, though — the transport does, in the browser's own network stack, off
 the main thread, and at most sixteen reads are out at once (`MAX_CREDITS` in
-`crates/client/kernel/src/param/io.rs`). The difference lands outside the
+`crates/client/kernel/src/sys/io/param.rs`). The difference lands outside the
 kernel's quota and outside the bill alike.
 
 What keeps zstd is the host after this one. OkHttp takes gzip and nothing

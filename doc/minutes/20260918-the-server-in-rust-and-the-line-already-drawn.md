@@ -211,6 +211,12 @@ pxl-spec ─────┼── pxl-geo        db-geo (three)        resident
 
 No edges between the three; each sees only `pxl-spec`. One database each.
 
+> Since shared: the servers have a crate in common besides `pxl-spec`.
+> `pxl-server` (`crates/server/src`) holds what `pxl-geo` and `pxl-api`
+> share because each is a server, the env, the pool, the internal-route
+> gate and the serve loop, and `serve_tiles` takes it under `serve`. Each
+> still has one database.
+
 **`pxl-geo-bake` rather than `pxl-bake`:** it says what it bakes, and it says
 that `geo` and `geo-bake` are the resident and offline halves of one data
 domain. The asset ingest is also a bake and is not geo — it stays in Deno, so
@@ -273,6 +279,11 @@ compile to WASM and every byte ships. serde, axum, tokio and the Postgres
 client go in `pxl-geo` and `pxl-geo-bake` only. Adding serde to `pxl-spec`
 because a response type is convenient is the erosion AGENTS.md warns about,
 billed to the client's bundle.
+
+> Since changed: `pxl-spec` has an optional `serde` feature for the shapes
+> both servers answer with (`crates/spec/Cargo.toml`), which `pxl-geo` and
+> `pxl-geo-bake` turn on and the kernel does not, so the client's bundle
+> carries none of it. `xpute-core` is `xpute-kit` now.
 
 ## The URL roots
 
@@ -591,6 +602,10 @@ what a divergence in the category table or the ladders would cost is a place
 drawing different icons in two parts of the UI, which is why those are still
 shared.
 
+> Since shared: one `DivisionPart` in `pxl-spec`, behind its `serde`
+> feature (`crates/spec/src/division.rs`), carries `approx` and leaves it out
+> when false; no server defines its own.
+
 ## The category table is generated now, and checked against the theme
 
 > Since changed: the places' categories are
@@ -676,6 +691,10 @@ the compose file's own network and without TLS, so there is no certificate to
 verify. Built and run for real against the live database before this was
 written — 160 MB on `debian:trixie-slim` with ca-certificates, 51 MB without
 either.
+
+> Since moved: the image is built from `crates/server/geo/Dockerfile`, and
+> pxl-api's from `crates/server/api/Dockerfile`
+> (`infra/prod/docker-compose.yml`).
 
 **db-main is out of the server's environment.** It stays provisioned and
 running, because the application server will own it; nothing reads it until

@@ -1,7 +1,7 @@
 # The ground is a Carto palette
 
 **2026-10-05** — decided in the conversation; built on the `carto-standard`
-branch.
+branch, since merged into `main`.
 
 pixelet is a paint canvas in the shape of the world, so what a ground cell
 needs to say is which color of block stands there, not what the land is used
@@ -79,8 +79,14 @@ other does. Inside the coverage a page with no object is open sea, since only
 a page with nothing drawn in it is left unbaked; a coarser one is the fold of
 those under it, so absence folds as every page does and no shared ocean page
 is baked or published (`geo-bake terrain/absent.rs`). Whether a page has
-arrived is the query's to say (pxl-kernel `query.rs`, pxl-spec-core
+arrived is the query's to say (pxl-kernel `domain/query.rs`, pxl-spec-core
 `answer.rs` `Kind::Lacks`), never a cell's.
+
+> Superseded. Now past the coverage is `unknown`, not `void`, as the note
+> above says: it gives no surface and nothing is placed there, so an object
+> no longer stands past the coverage. `void` is only nothing painted
+> (spec/spec/block/cube.json `sentinel`). Inside the coverage a missing page
+> is still open sea.
 
 The ground is the palette's subset an object can also be: placing a block of
 forest stores the forest's number, so a terrain-styled cube needs no encoding

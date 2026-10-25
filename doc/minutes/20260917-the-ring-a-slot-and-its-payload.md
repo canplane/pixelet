@@ -11,6 +11,12 @@ sit, and what happens when one fills.
 
 Nothing here is new prior art. It is the prior art on file, applied.
 
+> Since resized: the numbers below are that day's. The rings' depths, the
+> addresses and the map have changed since, and
+> `spec/client/kernel/sys/mem/mem.json` holds the current ones, with the map
+> in ARCHITECTURE.md's "The memory map". The shape this records, a slot and
+> its payload, still holds.
+
 ## What was wrong, three faces of one thing
 
 A ring was one block: a header, `capacity` messages, and a bump area for the
@@ -107,7 +113,7 @@ command.
 
 _Superseded: there are two rings and no spill, and the completion ring is
 twice the submission's — `SUBMISSION_CAPACITY` 2,048, `COMPLETION_CAPACITY`
-4,096 (spec/client/kernel/mem/mem.json), since a turn answers what it was sent
+4,096 (spec/client/kernel/sys/mem/mem.json), since a turn answers what it was sent
 and raises its own signals besides._
 
 **The depth is 2,048 and the three are equal.** io_uring's default is CQ twice
@@ -155,7 +161,7 @@ The linker owns the bottom of the memory, so it has to be kept out of the
 range. `--global-base` is how it is told where its own data may begin, and the
 same arithmetic has to produce that flag and the addresses the code uses —
 which is why both come out of one file of numbers,
-`spec/client/kernel/mem/mem.json`: its generated `mem/mem.spec.rs` is what
+`spec/client/kernel/sys/mem/mem.json`: its generated `sys/mem/mem.spec.rs` is what
 `crates/client-bracket/wasm/build.rs` emits as the link argument and what
 `crates/client/kernel/src/door/layout.rs` lays the rings from. There is no
 second place to get them wrong.
@@ -181,7 +187,7 @@ past .fixed                    end           heap
 
 Two ranges that grow without moving each other: the rings have everything
 under 32 MiB and the module's data everything over it. `.fixed` begins at the
-first page past the module's data (pxl-kernel mem/section.rs `fixed_at`) and
+first page past the module's data (pxl-kernel sys/mem/section.rs `fixed_at`) and
 the heap past it.
 
 **The slack under the directory, about 6 MiB, costs address space, not RAM.**
@@ -190,7 +196,7 @@ resident. The exception this repository has already met is accounting rather
 than residency: JavaScriptCore reports the whole reservation as the page's
 JavaScript memory — a Safari heap timeline read it as one `ArrayBuffer` —
 which is why a phone is given 512 MiB and not 1 GiB (mem.json `PHONE_BYTES`,
-`apps/web/src/guest.ts`). The reservation did not change here, so neither does
+`apps/client/src/abi/boot.ts`). The reservation did not change here, so neither does
 that.
 
 **The stack stays at the bottom, and that is the only guard there is.** rustc
@@ -209,7 +215,7 @@ gives it up.
 
 _Superseded in its particulars: of the commands below only `WORLD_SNAPSHOT`
 is left, a block the kernel holds named by address and length
-(spec/client/kernel/abi/cmd.json); `FETCH_BODY`, `VOLUME_READ`,
+(spec/client/kernel/domain/control/cmd.json); `FETCH_BODY`, `VOLUME_READ`,
 `OBJECT_COLUMNS`, `LOAD_UPDATE` and `REPLY_BYTES` are gone, and a reply is the
 completion's result word (xpute-guest ipc/door.rs `Door::drain`)._
 

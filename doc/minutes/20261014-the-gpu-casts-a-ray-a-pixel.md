@@ -12,7 +12,7 @@ resolution is the display's times a scale the load sets by default: one of
 last; where the GPU's time is read, a window over its budget by more than
 `SCALE_BAND` steps down at once, and a step up waits until the step above
 fits for `SCALE_UP_WINDOWS` windows in a row (pxl-kernel
-view/frame/resolution.rs, param/view.rs); the frame is upscaled within
+domain/view/frame/resolution.rs, domain/view/param.rs); the frame is upscaled within
 itself. The `rays` setting below is gone, and the overwrites
 run on the GPU (One kind, one side).
 
