@@ -30,12 +30,16 @@ interface Abort {
   b: bigint;
 }
 
-export interface SysHost {
+export interface Fs {
   /** The file at `path` below `root`, whole, or a FileError; `signal` is
    * aborted when the guest closes it first. */
   open(root: u32, path: string, signal: AbortSignal): U8Array | Promise<U8Array>;
+  /** All a file opened for writing was given, once it is closed. */
   commit(root: u32, path: string, bytes: U8Array): void;
-  opened(fd: u32, res: i32, detail: u32): void;
+}
+
+export interface SysHost {
+  fs: Fs;
   abort(report: Abort): void;
   /** A call of the program's own: its number, the record's words, and where
    * its arguments begin in them. */
@@ -55,44 +59,11 @@ function walks_down(path: string): boolean {
   return path.split("/").every((name) => name !== "" && name !== "." && name !== "..");
 }
 
-function open_file(files: Sys, host: SysHost, fd: u32, root: u32, flags: u32, path: string): void {
-  const file: File = { root, path, controller: new AbortController(), bytes: null, written: null };
-  files.open.set(fd, file);
-  // An answer is a submission, and a full ring rings a turn that would
-  // overwrite the records this run is still reading, so answers wait until it ends.
-  const answer = (res: i32, detail: u32) => {
-    if (files.open.get(fd) !== file) return;
-    if (res < 0) files.open.delete(fd);
-    host.opened(fd, res, detail);
-  };
-  const failed = (err: unknown) => {
-    if (!(err instanceof FileError)) console.warn(`[xpute/sys] open ${root}/${path}: ${err instanceof Error ? err.message : String(err)}`);
-    const [errnum, detail] = err instanceof FileError ? [err.errnum, err.detail] : [Errno.EIO, 0];
-    answer(errnum, detail);
-  };
-  const read = (bytes: U8Array) => {
-    if (files.open.get(fd) !== file) return;
-    file.bytes = bytes;
-    answer(bytes.byteLength, 0);
-  };
-  if (!walks_down(path)) return queueMicrotask(() => failed(new FileError(Errno.EACCES)));
-  if (flags === flag.O_WRONLY) {
-    file.written = [];
-    return queueMicrotask(() => answer(0, 0));
-  }
-  let got: U8Array | Promise<U8Array>;
-  try {
-    got = host.open(root, path, file.controller.signal);
-  } catch (err) {
-    return queueMicrotask(() => failed(err));
-  }
-  Promise.resolve(got).then(read, failed);
-}
-
 export class Sys {
-  readonly open = new Map<u32, File>();
+  readonly files = new Map<u32, File>();
 
-  constructor(private readonly host: SysHost) {}
+  /** `opened` answers an open: a size, or an errno and the host's detail. */
+  constructor(private readonly host: SysHost, private readonly opened: (fd: u32, res: i32, detail: u32) => void) {}
 
   run(memory: ArrayBuffer, at: u32): void {
     each_record(memory, at, HEAD, this.record);
@@ -101,26 +72,26 @@ export class Sys {
   private readonly record = (code: u32, w: U32Array, a: u32): void => {
     switch (code) {
       case op.OPENAT:
-        open_file(this, this.host, w[a], w[a + 1], w[a + 2], text_of(w, a + 3));
+        this.openat(w[a], w[a + 1], w[a + 2], text_of(w, a + 3));
         break;
       case op.READ: {
-        const bytes = this.open.get(w[a])?.bytes;
+        const bytes = this.files.get(w[a])?.bytes;
         if (!bytes) throw new InvariantError(Errno.EBADF);
         const len = Math.min(w[a + 2], bytes.byteLength);
         new Uint8Array(w.buffer, w[a + 1], len).set(bytes.subarray(0, len));
         break;
       }
       case op.WRITE: {
-        const written = this.open.get(w[a])?.written;
+        const written = this.files.get(w[a])?.written;
         if (!written) throw new InvariantError(Errno.EBADF);
         // A copy: the guest keeps the range only until its next turn.
         written.push(new Uint8Array(w.buffer, w[a + 1], w[a + 2]).slice());
         break;
       }
       case op.CLOSE: {
-        const file = this.open.get(w[a]);
+        const file = this.files.get(w[a]);
         if (!file) break;
-        this.open.delete(w[a]);
+        this.files.delete(w[a]);
         file.controller.abort();
         if (file.written) {
           const whole = new Uint8Array(file.written.reduce((n, b) => n + b.byteLength, 0));
@@ -129,7 +100,7 @@ export class Sys {
             whole.set(b, off);
             off += b.byteLength;
           }
-          this.host.commit(file.root, file.path, whole);
+          this.host.fs.commit(file.root, file.path, whole);
         }
         break;
       }
@@ -143,4 +114,38 @@ export class Sys {
         this.host.program(code, w, a);
     }
   };
+
+  private openat(fd: u32, root: u32, flags: u32, path: string): void {
+    const file: File = { root, path, controller: new AbortController(), bytes: null, written: null };
+    this.files.set(fd, file);
+    // An answer is a submission, and a full ring rings a turn that would
+    // overwrite the records this run is still reading, so answers wait until it ends.
+    const answer = (res: i32, detail: u32) => {
+      if (this.files.get(fd) !== file) return;
+      if (res < 0) this.files.delete(fd);
+      this.opened(fd, res, detail);
+    };
+    const failed = (err: unknown) => {
+      if (!(err instanceof FileError)) console.warn(`[xpute/sys] open ${root}/${path}: ${err instanceof Error ? err.message : String(err)}`);
+      const [errnum, detail] = err instanceof FileError ? [err.errnum, err.detail] : [Errno.EIO, 0];
+      answer(errnum, detail);
+    };
+    const read = (bytes: U8Array) => {
+      if (this.files.get(fd) !== file) return;
+      file.bytes = bytes;
+      answer(bytes.byteLength, 0);
+    };
+    if (!walks_down(path)) return queueMicrotask(() => failed(new FileError(Errno.EACCES)));
+    if (flags === flag.O_WRONLY) {
+      file.written = [];
+      return queueMicrotask(() => answer(0, 0));
+    }
+    let got: U8Array | Promise<U8Array>;
+    try {
+      got = this.host.fs.open(root, path, file.controller.signal);
+    } catch (err) {
+      return queueMicrotask(() => failed(err));
+    }
+    Promise.resolve(got).then(read, failed);
+  }
 }

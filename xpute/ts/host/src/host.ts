@@ -28,7 +28,7 @@ export interface Guest {
 /** What the program mounts its guest with. */
 export interface Plan {
   directory_at: u32;
-  sys: Omit<SysHost, "opened">;
+  sys: SysHost;
   /** Fills the rings before each frame the strobe grants is rung. */
   submit(grant: Grant, delta_s: f64): void;
   next_frame(run: (now: f64) => void): void;
@@ -64,7 +64,7 @@ export function mount(guest: Guest, plan: Plan): Host {
     doorbell.send(0, cmd, pkt);
     strobe.request();
   };
-  const sys = new Sys({ ...plan.sys, opened: (fd, res, detail) => send(Command.SYS_OPENED, encode_sys_opened(doorbell, fd, res, detail)) });
+  const sys = new Sys(plan.sys, (fd, res, detail) => send(Command.SYS_OPENED, encode_sys_opened(doorbell, fd, res, detail)));
   return {
     guest,
     directory,

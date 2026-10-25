@@ -8,7 +8,7 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Golden } from "@xpute/kit/golden.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { END } from "./stream.ts";
-import { FileError, Sys, type SysHost } from "./sys.ts";
+import { FileError, type Fs, Sys } from "./sys.ts";
 import { flag, HEAD, op } from "./sys.spec.ts";
 
 const SCRATCH = 1 << 15;
@@ -51,7 +51,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
   const failing = new Map<string, (err: FileError) => void>();
   const answers: [number, number][] = [];
   const commits = new Map<string, string>();
-  const host: SysHost = {
+  const fs: Fs = {
     open: (root, path) => {
       const key = `${root} ${path}`;
       const b = kept.get(key);
@@ -60,11 +60,8 @@ async function run(g: Golden, scenario: string): Promise<void> {
       return hex(b);
     },
     commit: (root, path, bytes) => void commits.set(`${root} ${path}`, new TextDecoder().decode(bytes)),
-    opened: (fd, res) => void answers.push([fd, res]),
-    abort: () => {},
-    program: () => {},
   };
-  const sys = new Sys(host);
+  const sys = new Sys({ fs, abort: () => {}, program: () => {} }, (fd, res) => void answers.push([fd, res]));
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   const steps: string[] = [];
