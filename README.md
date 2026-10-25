@@ -229,7 +229,7 @@ A leaf sits under its lowest reader: the settings under `view`, the models and d
 
 One gitignored tree holds what the tree makes: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and under it `out/oven/` is what `dev:oven` bakes on demand, deleted at no cost. Scratch — logs, probes, diffs — goes in `tmp/`, which ignores itself, and is deleted when done. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 
-The casing in the tree is not mixed by accident. Rust, the xpute packages and the client's host, abi and namespace (`apps/client/src/{host,abi,namespace}/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The shell, the brackets' TypeScript and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
+The casing in the tree is not mixed by accident. The system's code — Rust, the xpute packages, the client's host, abi and namespace (`apps/client/src/{host,abi,namespace}/`), the brackets and the boot — shares one `snake_case` vocabulary across the boundary, a word under its namespace where it can be one: `len`, `new_len`, `bracket.gpu.boot`. The shell and the scripts are `camelCase`, as TypeScript is, and React's hooks and components keep React's names wherever they sit. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
 ---
 
