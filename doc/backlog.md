@@ -18,19 +18,22 @@ Nothing now.
 
 ## P2
 
-- **A query language over what is drawn, for an agent to read.** An agent
-  debugging the view reads the profiler panel off a screenshot: small
-  text misread, past frames gone, and a hole's cause guessed from its color
-  (the bedrock folded black under far faces, 2026-10-12). A query asked of
-  the running kernel and answered as text — what a screen point draws (its
-  lane cell, the block's zoom and node, the tile window it was read from,
-  its bound, the column's blocks), the drawn blocks matching a condition —
-  would let it read the state instead. The AI DSL experiment could start here. First see what
-  the profiler's report already gives
-  (`apps/client/src/shell/debug/profiler/report.ts`).
+Nothing now.
 
 ## Parked, with the reason on file
 
+- **A query over what is drawn, for an agent to read.** An agent debugging
+  the view guesses a pixel's cause from its color in a screenshot. The
+  profiler's half is answered: the console's `pxl.profiler.report()` gives
+  its window as text (`apps/client/src/shell/debug/console.ts`). What a
+  screen point draws is not: the block its ray met, with its face, zoom and
+  distance, and where that block was read from, asked of the running page
+  and answered as text. The answer is the GPU's, the ray's words read back
+  (`pxl-spec-core ray.rs`), since the CPU's `first_hit`
+  (`pxl-kernel domain/query/ray.rs`) can disagree where the samples miss a
+  thin face ([20261024-a-proxy-only-starts-the-ray.md](./minutes/20261024-a-proxy-only-starts-the-ray.md)).
+  Answering it might be where a language for agents to query the view
+  starts. Not urgent: no debugging under way needs it.
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
   program WASI's calls translated into the contract's requests, which is what
   would let an existing program in. Not without one to build it against;
