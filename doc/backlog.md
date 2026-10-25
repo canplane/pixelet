@@ -14,7 +14,13 @@ Nothing now.
 
 ## P1
 
-Nothing now.
+- **The proxy, measured as one cast with each pixel's own walk.** Boxes
+  rasterized from the bounds the GPU already holds start each pixel's ray,
+  and every pixel walks its own from there, with no samples' answer; taken
+  if that cast is under the one as built (p95 62.5 ms, about four times the
+  16.7 ms gate), and with it the shimmer's first cause and the sun's map
+  are answered —
+  [20261024-a-proxy-only-starts-the-ray.md](./minutes/20261024-a-proxy-only-starts-the-ray.md).
 
 ## P2
 
