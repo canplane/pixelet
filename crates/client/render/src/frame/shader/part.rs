@@ -1,4 +1,4 @@
-// pxl-render/frame/shader/parts.rs
+// pxl-render/frame/shader/part.rs
 
 //! Every shader by its number, and its parts in order: compiled into the
 //! crate for its numbers, and read by build.rs, which assembles each
@@ -124,7 +124,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
     lit!["paint", "box"],
     // SHADER_DECOR
-    lit!["place", "instances", "decor"],
+    lit!["place", "instance", "decor"],
     // SHADER_SKINNED
     lit!["place", "skinned"],
     // SHADER_PUCK_ZONE
@@ -134,11 +134,11 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MARKER
     &["frame", "encode", "marker", "marker_sprite"],
     // SHADER_SKY
-    air!["frame", "encode", "finish", "dither"; "atmos_air", "atmos_ground", "sky_words", "sky"],
+    air!["frame", "encode", "finish", "dither"; "atmos_air", "atmos_ground", "sky_word", "sky"],
     // SHADER_DEBUG
     &["frame", "encode", "debug"],
     // SHADER_MIPS
-    &["mips"],
+    &["mip"],
     // SHADER_AO_DOWNSAMPLE
     &["frame", "ao_view", "ao_downsample"],
     // SHADER_AO_SAMPLE
@@ -182,15 +182,15 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_exposure",
     ],
     // SHADER_STARS
-    &["frame", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "stars"],
+    &["frame", "encode", "atmos_medium", "atmos_bind", "atmos_lut", "star"],
     // SHADER_CLOUDS
-    air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "sky_words", "clouds"],
+    air!["frame", "encode", "finish", "cloud_hash", "noise"; "atmos_ground", "cloud_tile", "cloud_field", "sky_word", "cloud"],
     // SHADER_CLOUD_FIELD
     &["cloud_hash", "noise", "cloud_tile", "atmos_pass", "cloud_bake"],
     // SHADER_SHEET
     &["sheet"],
     // SHADER_IMPOSTOR
-    lit!["instances", "impostor"],
+    lit!["instance", "impostor"],
     // SHADER_IMPOSTOR_BAKE
     &["impostor_bake"],
     // SHADER_ATMOS_IRRADIANCE
@@ -198,7 +198,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MARKER_REGION
     &["frame", "encode", "marker", "marker_region"],
     // SHADER_SCREEN_RAYS
-    lit!["lattice", "ray", "eye", "paint", "screen_rays", "screen_lit"],
+    lit!["lattice", "ray", "eye", "paint", "screen_ray", "screen_lit"],
     // SHADER_CAST
     &["cast.gen"],
     // SHADER_BOUND
@@ -230,7 +230,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_light",
         "atmos_ground",
         "atmos_view",
-        "sky_words",
+        "sky_word",
         "atmos_froxel",
     ],
     // SHADER_WAYS_FREE
@@ -256,7 +256,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_SUN_MARK
     &["sun_mark.gen"],
     // SHADER_SCREEN_DEPTH
-    lit!["lattice", "ray", "eye", "paint", "screen_rays", "screen_depth"],
+    lit!["lattice", "ray", "eye", "paint", "screen_ray", "screen_depth"],
     // SHADER_CAMERA_GRID
-    &["frame", "encode", "sky_words", "camera_grid"],
+    &["frame", "encode", "sky_word", "camera_grid"],
 ];

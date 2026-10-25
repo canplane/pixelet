@@ -1,4 +1,4 @@
-// pxl-render/frame/shader/screen_rays.wgsl
+// pxl-render/frame/shader/screen_ray.wgsl
 
 // The eye's rays (pxl-spec-core `ray`), a drawn pixel each: each pixel
 // the face its ray entered, painted by paint.wgsl's `paint`, as the ghost's

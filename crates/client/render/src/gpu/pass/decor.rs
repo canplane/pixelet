@@ -9,7 +9,7 @@ use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
 
 use crate::gpu::api::{Gpu, Image};
-use crate::gpu::blocks::{Blocks, Draws};
+use crate::gpu::block::{Blocks, Draws};
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::model::{bind_mesh, draw_models, put_instances, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES};

@@ -5,11 +5,11 @@
 pub mod ao;
 pub mod api;
 pub mod atmosphere;
-pub mod blocks;
-pub mod clouds;
+pub mod block;
+pub mod cloud;
 pub mod grown;
 pub mod image_map;
-pub mod layers;
+pub mod pack;
 pub mod pass;
 pub mod pipeline;
 pub mod put;
@@ -19,6 +19,6 @@ pub mod shadow;
 pub mod sheet;
 #[path = "gpu/span.spec.rs"]
 pub mod span_spec;
-pub mod stars;
+pub mod star;
 pub mod surface;
 pub mod text;

@@ -1,4 +1,4 @@
-// pxl-render/frame/shader/words.rs
+// pxl-render/frame/shader/word.rs
 
 //! What the host lays out and the shaders read, stated once: compiled into
 //! the crate, and read by build.rs, which hands each to every shader
@@ -112,7 +112,7 @@ uniform! {
 pub const FRAME_FLOATS: usize = floats(frame::FIELDS);
 
 uniform! {
-    /// The sky's own (sky_words.wgsl): the ray through each point of the
+    /// The sky's own (sky_word.wgsl): the ray through each point of the
     /// screen (gpu/renderer.rs `put_ray`), the celestial pole, and whether
     /// the Moon's face has arrived.
     sky {
@@ -168,7 +168,7 @@ uniform! {
 pub const ATMOS_FLOATS: usize = floats(atmos::FIELDS);
 
 uniform! {
-    /// The cloud sheets' (clouds.wgsl, gpu/clouds.rs); their ray is the sky's.
+    /// The cloud sheets' (cloud.wgsl, gpu/cloud.rs); their ray is the sky's.
     clouds {
         /// How much of the clouds the kernel shows (pxl-kernel
         /// domain/scene/environment/cloud.rs `clouds_shown`).
@@ -177,7 +177,7 @@ uniform! {
         REACH: F32 = 1,
         /// The lattice's units around; the cells the wind has moved it
         /// under the map; the field's lattice unit the eye is over and its
-        /// share of one (gpu/clouds.rs `field`).
+        /// share of one (gpu/cloud.rs `field`).
         COUNT: U32 = 2,
         DRIFT: Vec2 = 4,
         BASE: Vec2u = 6,
@@ -187,7 +187,7 @@ uniform! {
 pub const CLOUDS_FLOATS: usize = floats(clouds::FIELDS);
 
 uniform! {
-    /// The stars' (stars.wgsl, gpu/stars.rs).
+    /// The stars' (star.wgsl, gpu/star.rs).
     stars {
         VIEW_PROJ: Mat4 = 0,
         SKY: Mat4 = 16,
@@ -207,7 +207,7 @@ pub const UNIFORMS: [(&str, &[Field]); 5] = [
     (stars::NAME, stars::FIELDS),
 ];
 
-/// The cloud sheets' tile (gpu/clouds.rs), one fetch a pixel and a mip chain
+/// The cloud sheets' tile (gpu/cloud.rs), one fetch a pixel and a mip chain
 /// in place of eight octaves of hashes: 32 lattice units is about 250 km,
 /// further than the layer is drawn, and the lattice wraps with the tile.
 pub const CLOUD_TILE_UNITS: u32 = 32;

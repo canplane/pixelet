@@ -1,4 +1,4 @@
-// pxl-kernel/domain/query/decor/assets.rs
+// pxl-kernel/domain/query/decor/asset.rs
 
 //! Every decor's loaded models. A model is registered with the scheduler
 //! as it arrives, so the pick (`domain/query/decor/strike.rs`) and the renderer read the

@@ -1,4 +1,4 @@
-// pxl-render/gpu/stars.rs
+// pxl-render/gpu/star.rs
 
 //! The Yale Bright Star Catalog (Hoffleit and Warren 1991, CDS V/50), drawn
 //! after the sky as one instanced strip. Direction, flux and color are computed
@@ -9,8 +9,8 @@ use pxl_spec::asset::star::{self, RECORD_BYTES};
 use pxl_spec::space::coord::mat4::Mat4;
 
 use crate::frame::shader::record::PIPELINE_STARS;
-use crate::frame::shader::words::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
-use crate::frame::shader::words::STARS_FLOATS;
+use crate::frame::shader::word::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
+use crate::frame::shader::word::STARS_FLOATS;
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, word_bytes, Entry, Gpu};
 use crate::gpu::atmosphere::AIR_ENTRIES;
@@ -18,7 +18,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::look::environment::{ENV_SKY, ENV_STARS};
 
-const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-stars.bin");
+const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-star.bin");
 /// Direction and flux, then color and padding.
 const STAR_FLOATS: usize = 8;
 

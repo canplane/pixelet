@@ -7,7 +7,7 @@
 use pxl_spec::block::color;
 use pxl_spec::block::cube::sentinel;
 
-use crate::frame::shader::words::NO_LAYER;
+use crate::frame::shader::word::NO_LAYER;
 use crate::look::color::linear;
 use crate::mesh::paint::object::PAINTER;
 use crate::mesh::paint::palette::{layer_mean, rgb255};
@@ -15,7 +15,7 @@ use crate::mesh::paint::palette::{layer_mean, rgb255};
 /// The ground's bytes, which every value under them is one of.
 const BYTES: usize = u8::MAX as usize + 1;
 
-/// Each value's look as a ray's pixel paints it (frame/shader/screen_rays.wgsl
+/// Each value's look as a ray's pixel paints it (frame/shader/screen_ray.wgsl
 /// `drawn`), by value alone, whichever source holds it
 /// (doc/minutes/20261005-the-ground-is-a-carto-palette.md, "One value
 /// space"), four words, its colours in linear light, which a pixel lights

@@ -1,4 +1,4 @@
-// pxl-render/gpu/blocks.rs
+// pxl-render/gpu/block.rs
 
 //! The draw list's blocks on the device by the list's handle, and its
 //! records by pipeline, as the renderer and its passes read them.

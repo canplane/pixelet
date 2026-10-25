@@ -15,7 +15,7 @@ xpute-guest = { path = "../../../xpute/rust/guest" }
 xpute-kit = { path = "../../../xpute/rust/kit" }
 pxl-spec = { path = "../../spec" }
 # The GPU's decor pass's bounds and the record it writes (gpu/renderer.rs),
-# and the cloud field the sheets lie on (gpu/clouds.rs).
+# and the cloud field the sheets lie on (gpu/cloud.rs).
 pxl-spec-core = { path = "../../spec/core" }
 
 # WebGPU's calls written into a stream (gpu/api.rs): xpute's encoder, which

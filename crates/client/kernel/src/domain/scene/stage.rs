@@ -20,7 +20,7 @@ use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_spec::asset::ingested::Asset;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
-use crate::domain::query::decor::assets::decor_assets;
+use crate::domain::query::decor::asset::decor_assets;
 use crate::domain::query::model::draw_list;
 use crate::domain::scene::character::companion::companion_skins;
 use crate::domain::scene::character::preview::preview_rows;

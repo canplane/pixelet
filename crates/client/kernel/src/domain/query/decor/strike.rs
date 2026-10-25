@@ -10,7 +10,7 @@ use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem::base::ptr_at;
 
 use crate::domain::layer::instance::{Instance, Meta};
-use crate::domain::query::decor::assets::decor_assets_for;
+use crate::domain::query::decor::asset::decor_assets_for;
 use crate::domain::query::model::registry::Models;
 
 /// How far any decor, its box or its model, reaches from its box's min corner.

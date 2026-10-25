@@ -1,5 +1,5 @@
 // Decor: instanced variant models, each instance read from the decor block
-// (instances.wgsl).
+// (instance.wgsl).
 
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;

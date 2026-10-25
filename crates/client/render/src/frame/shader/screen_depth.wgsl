@@ -1,5 +1,5 @@
 // The screen's depth alone, for the occlusion's prepass (gpu/ao.rs): each
-// pixel's face where its ray met it (screen_rays.wgsl `pixel_ray`), the
+// pixel's face where its ray met it (screen_ray.wgsl `pixel_ray`), the
 // depth the lit pass draws it at less the step it lays it back by, so the
 // ground darkens where it folds as what is drawn on it does.
 

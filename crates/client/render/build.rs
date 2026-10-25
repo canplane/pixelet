@@ -4,12 +4,12 @@
 
 use std::path::Path;
 
-#[path = "src/frame/shader/parts.rs"]
+#[path = "src/frame/shader/part.rs"]
 #[allow(dead_code)]
-mod parts;
-#[path = "src/frame/shader/words.rs"]
+mod part;
+#[path = "src/frame/shader/word.rs"]
 #[allow(dead_code)]
-mod words;
+mod word;
 
 fn main() {
     let dir = Path::new("src/frame/shader");
@@ -102,7 +102,7 @@ fn main() {
     std::fs::write(Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("compute.rs"), compute(dir)).expect("the compute layouts");
     assemble(&out);
     println!("cargo:rerun-if-changed=src/frame/shader");
-    println!("cargo:rerun-if-changed=src/frame/shader/words.rs");
+    println!("cargo:rerun-if-changed=src/frame/shader/word.rs");
 }
 
 /// WGSL has no string literals, so `//` always starts a comment. Lines are never
@@ -172,10 +172,10 @@ fn compute(dir: &Path) -> String {
     out
 }
 
-/// What the host lays out and every shader reads (frame/shader/words.rs), as
+/// What the host lays out and every shader reads (frame/shader/word.rs), as
 /// WGSL: a uniform's floats as its vec4s.
 fn words() -> String {
-    use words::*;
+    use word::*;
     let vec4s = |name: &str, floats: usize| {
         assert!(floats.is_multiple_of(4), "{name} is whole vec4s");
         format!("const {name}_VEC4S: u32 = {}u;\n", floats / 4)
@@ -201,12 +201,12 @@ fn words() -> String {
 }
 
 /// Each field's accessor of the uniform whose words `text` binds
-/// (`<uniform>_words`, frame/shader/words.rs `UNIFORMS`): the field read off
+/// (`<uniform>_words`, frame/shader/word.rs `UNIFORMS`): the field read off
 /// its vec4s where the host wrote it, never as a struct, which lost Safari's
 /// WebGPU its GPU process. Each field is checked to lie within its vec4s and
 /// apart from the others.
 fn accessors(text: &str) -> String {
-    use words::{floats, Kind, UNIFORMS};
+    use word::{floats, Kind, UNIFORMS};
     let mut out = String::new();
     for (uniform, fields) in UNIFORMS {
         let words = format!("{uniform}_words");
@@ -242,7 +242,7 @@ fn accessors(text: &str) -> String {
     out
 }
 
-/// Every shader assembled from its parts (parts.rs `PARTS`), validated as
+/// Every shader assembled from its parts (part.rs `PARTS`), validated as
 /// WebGPU takes it, every capability off; written where record.rs `source`
 /// includes it; and which stages read each of its bindings, read off its
 /// entry points (`STAGES`, in OUT_DIR), which every pipeline's groups take their
@@ -252,7 +252,7 @@ fn assemble(out: &Path) {
     let read = |name: &str| std::fs::read_to_string(out.join(format!("{name}.wgsl"))).unwrap_or_else(|e| panic!("{name}.wgsl: {e}"));
     let constant = read("constant");
     let (mut sources, mut stages) = (String::new(), String::new());
-    for (kind, parts) in parts::PARTS.iter().enumerate() {
+    for (kind, parts) in part::PARTS.iter().enumerate() {
         let generated = parts.len() == 1 && parts[0].ends_with(".gen");
         let mut text = if generated { String::new() } else { constant.clone() + "\n" };
         for part in parts.iter() {
@@ -293,7 +293,7 @@ fn assemble(out: &Path) {
     let root = out.parent().expect("OUT_DIR");
     std::fs::write(
         root.join("sources.rs"),
-        format!("/// Shader `kind` as build.rs assembled and validated it (parts.rs).\npub fn source(kind: u32) -> &'static str {{\n    match kind {{\n{sources}        _ => \"\",\n    }}\n}}\n"),
+        format!("/// Shader `kind` as build.rs assembled and validated it (part.rs).\npub fn source(kind: u32) -> &'static str {{\n    match kind {{\n{sources}        _ => \"\",\n    }}\n}}\n"),
     )
     .expect("the shaders' sources");
     std::fs::write(

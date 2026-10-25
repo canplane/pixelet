@@ -19,8 +19,8 @@ use pxl_spec_core::sun::{self, Sun};
 use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_SUN_MAP};
-use crate::frame::shader::words::frame::VIEW_PROJ;
-use crate::frame::shader::words::FRAME_FLOATS;
+use crate::frame::shader::word::frame::VIEW_PROJ;
+use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, Stamp};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;

@@ -14,7 +14,7 @@
 // Column `c` of the volume `d` units from the eye, as deep as its own span
 // puts it (atmos_froxel.wgsl `column_span`): Hillaire 2020's
 // aerial-perspective volume, 32 a side and 32 deep, as Unreal's
-// SkyAtmosphere lays it out (frame/shader/words.rs `AIR_FROXELS`), its
+// SkyAtmosphere lays it out (frame/shader/word.rs `AIR_FROXELS`), its
 // slices' texels at depths 0 to 1 of the span and the span in the slice past
 // them.
 fn air_column(c: vec2u, d: f32) -> vec4f {

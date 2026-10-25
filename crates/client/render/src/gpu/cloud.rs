@@ -1,4 +1,4 @@
-// pxl-render/gpu/clouds.rs
+// pxl-render/gpu/cloud.rs
 
 //! The cloud sheets, altocumulus and cirrus, laid over the world's pass, both
 //! reading the cloud field (`pxl-spec-core cloud.rs`) as a tile baked once
@@ -8,11 +8,11 @@
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::frame::shader::words::clouds::{BASE, COUNT, DRIFT, FRAC, REACH, SHOWN};
-use crate::frame::shader::words::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS};
+use crate::frame::shader::word::clouds::{BASE, COUNT, DRIFT, FRAC, REACH, SHOWN};
+use crate::frame::shader::word::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load};
 use crate::gpu::atmosphere::AIR_ENTRIES;
-use crate::gpu::layers::{mip_levels, Mips};
+use crate::gpu::pack::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::look::environment::{ENV_AIR, ENV_SKY};
 use pxl_spec::space::coord::world::EXTENT;

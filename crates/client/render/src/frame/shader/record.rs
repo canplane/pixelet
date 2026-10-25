@@ -2,10 +2,10 @@
 
 //! Shaders and their pipeline records (lanes, bind groups, primitive, depth and
 //! blend state) as one source the host turns into WebGPU or wgpu descriptors.
-//! build.rs assembles and validates every shader (parts.rs), and reads off it
+//! build.rs assembles and validates every shader (part.rs), and reads off it
 //! the stages each pipeline's groups are seen from.
 
-pub use crate::frame::shader::parts::*;
+pub use crate::frame::shader::part::*;
 
 /// A compute shader's one entry point, as its source names it.
 pub fn compute_entry(kind: u32) -> &'static str {
@@ -345,11 +345,11 @@ const BOX_GROUP: [[u32; 2]; 19] = and(LIT_FRAME, [[3, STORAGE], [4, TEXTURE_ARRA
 /// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`),
 /// and its block: one layout each wherever a draw binds them, so a group
 /// one owner makes binds in every pipeline that names them (gpu/grown.rs,
-/// gpu/blocks.rs).
+/// gpu/block.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
 const BLOCK: [[u32; 2]; 1] = [[0, STORAGE]];
 /// A block's group as every pipeline binding one lays it out, which the
-/// draw list's blocks are grouped in (gpu/blocks.rs `Blocks::group`).
+/// draw list's blocks are grouped in (gpu/block.rs `Blocks::group`).
 pub const BLOCK_LAYOUT: [u32; 3] = [BLOCK[0][0], seen(&BLOCK, BLOCK[0][0]), BLOCK[0][1]];
 
 const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &BLOCK];
@@ -383,7 +383,7 @@ const fn plan_of(id: u32) -> Plan {
     match id {
         PIPELINE_DECOR => plan(lit(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS),
         // What is laid on the world's faces draws at its own depth: the
-        // world's stands behind it (screen_rays.wgsl `behind`).
+        // world's stands behind it (screen_ray.wgsl `behind`).
         PIPELINE_GHOST_BOX => plan(blended(SHADER_BOX, CULL_BACK), &BOX_LANES, &[&BOX_GROUP]),
         PIPELINE_GHOST_DECOR => plan(blended(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS),
         // Back faces culled: drawn both sides, a closed body's inner faces fight its

@@ -12,7 +12,7 @@
 //! (spec/spec/block/decor.json): their models as they arrive (`assets`),
 //! and a decor thing struck by its model (`strike`).
 
-pub mod assets;
+pub mod asset;
 pub mod strike;
 
 use pxl_spec::space::layer::lattice::{demand_reach, Cells};

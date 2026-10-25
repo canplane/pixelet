@@ -84,7 +84,7 @@ impl OrbitObstacleMode {
 ///   corner — the screen pass's own: the floor along a cube and the inside
 ///            of a corner, where a neighbouring pixel's face rises in front
 ///            of the pixel's own plane within a block or two of it
-///            (crates/client/render/src/frame/shader/screen_rays.wgsl).
+///            (crates/client/render/src/frame/shader/screen_ray.wgsl).
 ///            A few taps of the rays a pixel, behind a uniform.
 ///   screen — N8AO
 ///            (crates/client/render/src/gpu/ao.rs): the world's depth drawn
@@ -166,7 +166,7 @@ pub enum SettingKey {
     /// the one to reach for before any shading term.
     decor = 1,
     /// The cumulus' models and the altocumulus and cirrus sheets
-    /// (crates/client/kernel/src/domain/scene/environment/cloud.rs, crates/client/render/src/gpu/clouds.rs).
+    /// (crates/client/kernel/src/domain/scene/environment/cloud.rs, crates/client/render/src/gpu/cloud.rs).
     /// Med as decor is: models in view, and a pass over the screen for the sheets.
     clouds = 2,
     /// The places' markers over the world, from the published places tiles.
@@ -212,7 +212,7 @@ pub enum SettingKey {
     camera_gizmo = 16,
     person = 17,
     pet = 18,
-    /// Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (crates/client/render/src/frame/shader/screen_rays.wgsl).
+    /// Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (crates/client/render/src/frame/shader/screen_ray.wgsl).
     ray_steps = 19,
 }
 

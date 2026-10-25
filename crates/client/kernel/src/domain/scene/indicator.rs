@@ -4,7 +4,7 @@
 
 pub mod camera_gizmo;
 pub mod coverage_gizmo;
-pub mod debug_lines;
+pub mod debug_line;
 pub mod frame_gizmo;
 pub mod ghost;
 #[path = "indicator/gizmo.spec.rs"]

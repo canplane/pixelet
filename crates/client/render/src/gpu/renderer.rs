@@ -22,10 +22,10 @@ use crate::frame::shader::record::{
     PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_PREPASS, PIPELINE_SCREEN_RAYS, PIPELINE_SKY, SHADER_BEAM, SHADER_BOUND, SHADER_CAST, SHADER_CELLS, SHADER_FORGET, SHADER_HEIGHTS, SHADER_JOINED, SHADER_MISS,
     SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK, SHADER_WAYS, SHADER_WAYS_FREE, SHADER_WAYS_FREED, SHADER_WAYS_TREE,
 };
-use crate::frame::shader::words::frame::{
+use crate::frame::shader::word::frame::{
     CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN_AO, SHADOW_RIM, SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
-use crate::frame::shader::words::{sky, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
+use crate::frame::shader::word::{sky, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{
@@ -33,11 +33,11 @@ use crate::gpu::api::{
     write_buffer_bytes, Device, Entry, Format, Gpu, Image, Load, Stamp, DONE, UNIFORM_ALIGN_MAX,
 };
 use crate::gpu::atmosphere::{Atmosphere, Upload, AIR_ENTRIES};
-use crate::gpu::blocks::{blocks, Blocks, Draws};
-use crate::gpu::clouds::CloudPass;
+use crate::gpu::block::{blocks, Blocks, Draws};
+use crate::gpu::cloud::CloudPass;
 use crate::gpu::grown::{DecorFrame, Drawn, Grown, Grows};
 use crate::gpu::image_map::ImageMap;
-use crate::gpu::layers::{Layers, Mips};
+use crate::gpu::pack::{Layers, Mips};
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
 use crate::gpu::pass::marker::MarkerPass;
@@ -49,7 +49,7 @@ use crate::gpu::put::put_mat;
 use crate::gpu::read::Read;
 use crate::gpu::shadow::{self, Shadow};
 use crate::gpu::sheet::shelf::Sheet;
-use crate::gpu::stars::StarPass;
+use crate::gpu::star::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_STARS, ENV_SUN};

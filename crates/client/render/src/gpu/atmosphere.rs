@@ -19,12 +19,12 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use xpute_guest::mem::base::off_of;
 
-use crate::frame::shader::words::atmos::{
+use crate::frame::shader::word::atmos::{
     BOTTOM_RADIUS, CAMERA_ALTITUDE, CITY_LIGHT, EARTH_REACH, EARTH_TILES, EARTH_WINDOW, EXPOSURE, GROUND_ALBEDO, KM_PER_U, LAND_ALTITUDE_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT, MIE_SCATTERING,
     MOON_COLOR, MOON_DIR, MOON_LIGHT, NIGHT_SKY, NIGHT_STOPS, OZONE_ABSORPTION, OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING, SHOWN_FALL, SUN_ANGULAR_RADIUS, SUN_DIR,
     TOP_RADIUS,
 };
-use crate::frame::shader::words::{AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS};
+use crate::frame::shader::word::{AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE};
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Built, Pipelines};

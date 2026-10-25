@@ -4,6 +4,6 @@
 //! pipeline layout cannot disagree.
 
 pub mod floor;
-pub mod parts;
+pub mod part;
 pub mod record;
-pub mod words;
+pub mod word;

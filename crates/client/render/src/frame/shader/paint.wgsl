@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/paint.wgsl
 
 // What a block's face is painted, wherever it is drawn from: the ghost's
-// boxes (box.wgsl) and the screen's rays (screen_rays.wgsl) both fill a
+// boxes (box.wgsl) and the screen's rays (screen_ray.wgsl) both fill a
 // `Surface` and call `paint`, so the two cannot paint one face differently.
 // Its swatch or its layers' four taps, darkened by its own edges as much as its
 // caller says, lit by `shade`: a block is painted from its own words.
@@ -12,7 +12,7 @@
 @group(0) @binding(6) var layer_sampler: sampler;
 
 // NO_LAYER, a layer past the last, means the vertex color; the slots'
-// words are frame/shader/words.rs's.
+// words are frame/shader/word.rs's.
 
 // A face's outward normal by its number, 2·axis plus one down the axis, the
 // order of a ray's face (pxl-spec-core ray.rs).

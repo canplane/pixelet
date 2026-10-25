@@ -1,6 +1,6 @@
 // Decor instances too small on screen for their model, drawn as quads turned
 // to the eye about the world's up, each instance read from the decor block
-// (instances.wgsl).
+// (instance.wgsl).
 
 @group(2) @binding(0) var sprites: texture_2d_array<f32>;
 @group(2) @binding(1) var sprite_sampler: sampler;

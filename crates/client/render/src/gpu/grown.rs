@@ -19,7 +19,7 @@ use pxl_spec_core::scatter::{self, drawn, GROUPS, SQUARE_BLOCKS};
 use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::record::compute;
 use crate::frame::shader::record::{SHADER_GROWN, SHADER_GROWN_ARGS, SHADER_GROWN_COUNT, SHADER_GROWN_MARK, SHADER_GROWN_PLACE};
-use crate::frame::shader::words::DRAW_FLOATS;
+use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, bytes, release, word_bytes, Gpu};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;

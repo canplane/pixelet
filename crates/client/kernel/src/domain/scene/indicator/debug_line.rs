@@ -1,4 +1,4 @@
-// pxl-kernel/domain/scene/indicator/debug_lines.rs
+// pxl-kernel/domain/scene/indicator/debug_line.rs
 
 //! Line segments for the dev gizmos, and the faces between them: a face hides
 //! the gizmo lines behind it and draws nothing, so the gizmos occlude one

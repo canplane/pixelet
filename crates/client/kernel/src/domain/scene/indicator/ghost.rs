@@ -8,7 +8,7 @@
 
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR};
 use pxl_render::frame::shader::record::BOX_WORDS;
-use pxl_render::frame::shader::words::NO_LAYER;
+use pxl_render::frame::shader::word::NO_LAYER;
 use pxl_render::gpu::api::bytes;
 use pxl_render::look::color::indicator;
 use pxl_render::mesh::ghost::{on_whole_units, write_lone_box};
@@ -17,7 +17,7 @@ use pxl_spec::block::decor::Decor;
 use pxl_spec::block::object::{cube_id, cube_rgb, Cube};
 use pxl_spec::space::coord::v3::V3;
 
-use crate::domain::query::decor::assets::decor_assets_for;
+use crate::domain::query::decor::asset::decor_assets_for;
 use crate::domain::view::setting::store::settings_store;
 
 pub const GHOST_OPACITY: f32 = 0.5;

@@ -1,6 +1,6 @@
 // The atmosphere as a medium. Distances are km; a point is (r, mu) as Bruneton writes them.
 
-// Its words' fields and accessors are frame/shader/words.rs `atmos`'s, which
+// Its words' fields and accessors are frame/shader/word.rs `atmos`'s, which
 // build.rs writes here.
 @group(0) @binding(8) var<uniform> atmos_words: array<vec4f, ATMOS_VEC4S>;
 

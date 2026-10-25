@@ -7,7 +7,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_guest::global::Global;
 
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
-use crate::frame::shader::words::DRAW_FLOATS;
+use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{buffer_entry, buffer_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes, Entry, Gpu, Image};
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -187,10 +187,10 @@ impl DrawUniforms {
 }
 
 /// A draw's uniform, a slot of `DrawUniforms` each: what every model pass
-/// writes and its shader reads (frame/shader/words.rs `DRAW_FLOATS`).
+/// writes and its shader reads (frame/shader/word.rs `DRAW_FLOATS`).
 pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
 
-/// A decor draw's uniform as instances.wgsl's `Draw` reads it, for the
+/// A decor draw's uniform as instance.wgsl's `Draw` reads it, for the
 /// model tier and the impostors both: translation, first lane word,
 /// stride, opacity, `third`, index list's first word. `third` is decor's
 /// padding or the impostor's sprite layer.

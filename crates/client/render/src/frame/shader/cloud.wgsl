@@ -4,7 +4,7 @@
 // from below they fill only the sky, from above they cover everything, so a
 // peak above a sheet is wrong either way.
 
-// Its words' fields and accessors are frame/shader/words.rs `clouds`'s,
+// Its words' fields and accessors are frame/shader/word.rs `clouds`'s,
 // which build.rs writes here; a ray is the sky's (`sky_ray`).
 @group(0) @binding(1) var<uniform> clouds_words: array<vec4f, CLOUDS_VEC4S>;
 @group(0) @binding(2) var cloud_tile: texture_2d<f32>;

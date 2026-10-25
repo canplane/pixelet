@@ -57,7 +57,7 @@ export const SETTINGS = {
     cost: "med",
   },
   /** The cumulus' models and the altocumulus and cirrus sheets
-   * (crates/client/kernel/src/domain/scene/environment/cloud.rs, crates/client/render/src/gpu/clouds.rs).
+   * (crates/client/kernel/src/domain/scene/environment/cloud.rs, crates/client/render/src/gpu/cloud.rs).
    * Med as decor is: models in view, and a pass over the screen for the sheets. */
   clouds: {
     key: 2 as number,
@@ -215,7 +215,7 @@ export const SETTINGS = {
     default: 5 as number,
     section: "character",
   },
-  /** Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (crates/client/render/src/frame/shader/screen_rays.wgsl). */
+  /** Each ray's pixel coloured by the nodes its own walk asked the world from its cell's start, as the frame casts it, on one fixed log ramp up to 1024; grey where it showed a sample's block and walked nothing (crates/client/render/src/frame/shader/screen_ray.wgsl). */
   ray_steps: {
     key: 19 as number,
     kind: "toggle",
@@ -260,7 +260,7 @@ export const SETTINGS_SHIPPED = {
     cost: "med",
   },
   /** The cumulus' models and the altocumulus and cirrus sheets
-   * (crates/client/kernel/src/domain/scene/environment/cloud.rs, crates/client/render/src/gpu/clouds.rs).
+   * (crates/client/kernel/src/domain/scene/environment/cloud.rs, crates/client/render/src/gpu/cloud.rs).
    * Med as decor is: models in view, and a pass over the screen for the sheets. */
   clouds: {
     key: 2 as number,

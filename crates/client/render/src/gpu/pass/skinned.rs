@@ -8,7 +8,7 @@ use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::PIPELINE_SKINNED_DEPTH;
 
 use crate::gpu::api::{bytes, Gpu, Image};
-use crate::gpu::blocks::Blocks;
+use crate::gpu::block::Blocks;
 use crate::gpu::pass::model::{draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
 

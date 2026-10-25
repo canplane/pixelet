@@ -67,7 +67,7 @@ pub enum Fixed {
 }
 
 /// None is let go.
-const MODELS_MAX: usize = crate::domain::scene::character::variant::MODELS_MAX + crate::domain::query::decor::assets::MODELS_MAX + crate::domain::scene::environment::cloud::MODELS_MAX;
+const MODELS_MAX: usize = crate::domain::scene::character::variant::MODELS_MAX + crate::domain::query::decor::asset::MODELS_MAX + crate::domain::scene::environment::cloud::MODELS_MAX;
 
 /// The ghost's, the puck's zone, the two debug line sets' (the gizmo's and the
 /// coverage's, `domain/scene.rs` `debug` and `coverage`) and the markers'.
@@ -81,12 +81,12 @@ const SINGLE_BLOCKS: usize = 5;
 /// holds more.
 const MAX_LIVE_BLOCKS: usize = MODELS_MAX + crate::domain::scene::environment::cloud::BLOCKS_MAX + crate::domain::scene::actor::ACTORS_MAX + SINGLE_BLOCKS;
 
-pub const BLOCK_SLOTS: usize = pxl_render::gpu::blocks::block_slots(MAX_LIVE_BLOCKS);
+pub const BLOCK_SLOTS: usize = pxl_render::gpu::block::block_slots(MAX_LIVE_BLOCKS);
 
 const FIXED: [u32; 5] = [
     crate::domain::layer::terrain::fixed::TERRAIN_BYTES,
     crate::domain::layer::division::DIVISION_BYTES,
-    pxl_render::gpu::blocks::blocks_bytes(BLOCK_SLOTS),
+    pxl_render::gpu::block::blocks_bytes(BLOCK_SLOTS),
     pxl_render::api_spec::stream::BYTES,
     crate::sys::io::host_spec::stream::BYTES,
 ];

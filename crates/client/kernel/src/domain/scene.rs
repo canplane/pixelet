@@ -22,7 +22,7 @@ use crate::domain::query::model::registry::Models;
 use crate::domain::scene::actor::Actors;
 use crate::domain::scene::environment::EnvironmentDraw;
 use crate::domain::scene::frame::Frame;
-use crate::domain::scene::indicator::debug_lines::DebugLines;
+use crate::domain::scene::indicator::debug_line::DebugLines;
 use crate::domain::scene::indicator::ghost::GhostDraw;
 use crate::domain::scene::indicator::location_puck::LocationPuck;
 

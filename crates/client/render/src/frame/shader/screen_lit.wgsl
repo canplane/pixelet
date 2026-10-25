@@ -1,5 +1,5 @@
 // The screen pass's lit pixel: the face its ray met, painted and lit, at
-// the depth `behind` it (screen_rays.wgsl `pixel_ray`).
+// the depth `behind` it (screen_ray.wgsl `pixel_ray`).
 
 @fragment
 fn fs(v: VertexOut) -> FragOut {

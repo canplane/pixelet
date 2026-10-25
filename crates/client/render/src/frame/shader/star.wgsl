@@ -1,7 +1,7 @@
 // Yale Bright Star Catalog stars as quads at infinity, dimmed by the air. Added
 // after the encode, which a point this small cannot tell apart.
 
-// Its words' fields and accessors are frame/shader/words.rs `stars`'s, which
+// Its words' fields and accessors are frame/shader/word.rs `stars`'s, which
 // build.rs writes here. The viewport and the up are the frame's, the Moon
 // the air's.
 @group(1) @binding(0) var<uniform> stars_words: array<vec4f, STARS_VEC4S>;

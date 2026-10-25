@@ -24,7 +24,7 @@ use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 
 use crate::domain::layer::earth::Earth;
-use crate::domain::query::decor::assets::decor_assets_wanted;
+use crate::domain::query::decor::asset::decor_assets_wanted;
 use crate::domain::query::model::draw_list;
 use crate::domain::scene::character::companion::{companion_step, CompanionProps};
 use crate::domain::scene::environment::environment_step;
@@ -171,7 +171,7 @@ fn world_tasks() {
     use xpute_guest::sched::task::spawn;
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::sys::io::fetch::fetch_task(), Arrival as u8)
-        && spawn(crate::domain::query::decor::assets::decor_asset_task(), Background as u8)
+        && spawn(crate::domain::query::decor::asset::decor_asset_task(), Background as u8)
         && spawn(crate::domain::layer::object::repository::task(), Background as u8);
     if !spawned {
         std::process::abort();

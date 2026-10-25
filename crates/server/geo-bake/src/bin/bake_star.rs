@@ -2,7 +2,7 @@
 
 //! The night sky's stars from the Yale Bright Star Catalog (V/50, CDS), as
 //! `deno task download star` keeps it in `asset/raw/sky/star/`, into the
-//! records pxl-render's gpu/stars.rs reads (pxl-spec asset/star.rs),
+//! records pxl-render's gpu/star.rs reads (pxl-spec asset/star.rs),
 //! brightest first.
 //!
 //!   deno task bake star
@@ -16,7 +16,7 @@ use pxl_spec::asset::star::{record, Star, RECORD_BYTES};
 
 /// The catalog as pxl-tool bin/download_star.rs keeps it.
 const SOURCE: &str = "asset/raw/sky/star/catalog.gz";
-const OUT: &str = "crates/client/render/src/frame/shader/bright-stars.bin";
+const OUT: &str = "crates/client/render/src/frame/shader/bright-star.bin";
 const SOLAR_BV: f64 = 0.65;
 
 fn catalog() -> Result<String, String> {

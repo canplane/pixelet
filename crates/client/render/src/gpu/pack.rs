@@ -1,4 +1,4 @@
-// pxl-render/gpu/layers.rs
+// pxl-render/gpu/pack.rs
 
 //! The texture pack as one 2D array texture with its mip chain, and the table
 //! mapping a layer's top, side and bottom to array slots. A slot is a distinct
@@ -6,7 +6,7 @@
 //! pack ships nothing for takes none and reads as the box's color.
 //! Without the mip chain the far ground crawls as the camera moves.
 
-use crate::frame::shader::words::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
+use crate::frame::shader::word::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
 use pxl_spec::asset::ingested::{CubeFace, PACK};
 use pxl_spec::asset::{shipped_texture_tile, TileOrigin};
 

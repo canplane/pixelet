@@ -4,7 +4,7 @@
 //! A free cancels its block's pending upload and rewrites: the block may be
 //! reused before the list runs.
 
-use crate::frame::shader::words::DRAW_FLOATS;
+use crate::frame::shader::word::DRAW_FLOATS;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
@@ -24,7 +24,7 @@ pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
 /// uniform carries the group's first lane word, stride and index-list start.
 pub const PIPELINE_DECOR: u32 = 0;
 /// Half transparent, at the depth of the faces it lies on, which stand
-/// behind it (screen_rays.wgsl `behind`).
+/// behind it (screen_ray.wgsl `behind`).
 pub const PIPELINE_GHOST_BOX: u32 = 1;
 pub const PIPELINE_GHOST_DECOR: u32 = 2;
 /// Position 3, normal 3, UV 2, joints 4 (u32), weights 4; indices follow the vertex lanes.
@@ -73,7 +73,7 @@ pub fn census_slot(pipeline: u32) -> usize {
 pub const REWRITE_WORDS: usize = 4;
 
 /// The uploads' and the frees' lanes in `.fixed.blocks` (pxl-render
-/// gpu/blocks.rs `set_blocks`), each twice, the one written and the one
+/// gpu/block.rs `set_blocks`), each twice, the one written and the one
 /// the renderer took: room for as many records as blocks live, since a
 /// turn's uploads become live blocks and its frees were.
 struct ListLanes {
