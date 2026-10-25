@@ -230,10 +230,15 @@ function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
   return out;
 }
 
+/** The summary's words as PROFILER_READ lays them out over `window_ms`. */
+function summary_words(window_ms: f64 | null): F64Array {
+  const r = u32s(call(Command.PROFILER_READ, encode_profiler_read(GUEST_DOORBELL, window_ms)), READ.WORDS);
+  return words(r[READ.summary_at], r[READ.summary_words]);
+}
+
 /** The summary over the last `window_ms`, or the whole recording at null. */
 export function profiler_summary(window_ms: f64 | null): Summary {
-  const r = u32s(call(Command.PROFILER_READ, encode_profiler_read(GUEST_DOORBELL, window_ms)), READ.WORDS);
-  const s = words(r[READ.summary_at], r[READ.summary_words]);
+  const s = summary_words(window_ms);
   const R = SUMMARY.rec;
   return {
     rec: { recording: s[R.AT + R.recording] !== 0, elapsed_ms: s[R.AT + R.elapsed_ms], truncated: s[R.AT + R.truncated] !== 0 },
@@ -242,6 +247,12 @@ export function profiler_summary(window_ms: f64 | null): Summary {
     steps: steps_at(s),
     view: section(s, SUMMARY.view),
   };
+}
+
+/** The summary's view alone, read over no window: the view is the same at any
+ * window (SUMMARY.view), and an empty one folds no frame or task. */
+export function profiler_view(): Summary["view"] {
+  return section(summary_words(0), SUMMARY.view);
 }
 
 /** The rings as they lie, each its address and count, with nothing reduced. */

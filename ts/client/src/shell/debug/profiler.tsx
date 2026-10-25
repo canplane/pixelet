@@ -15,7 +15,8 @@ import { gauge, ProfilerGauge, ProfilerRec } from "./profiler/gauge.tsx";
 import { Fold, HINT_INK } from "./fold.tsx";
 import { n1 } from "./profiler/lane.ts";
 import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
-import { fps, type Gauge, profilerGaugeRead, profilerReportRead } from "./profiler/view.ts";
+import { fps, profilerReportRead } from "./profiler/view.ts";
+import { LIVE_WINDOW_MS, useProfilerGauge } from "./profiler/poll.ts";
 import { installLongFrameObservers, longFramesClear } from "./profiler/long-frame.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command } from "@/abi/cmd.spec.ts";
@@ -85,11 +86,6 @@ function PanelButton({ label, hint, tint = Tint.Plain, onPress, onHint, disabled
   );
 }
 
-const POLL_MS = 500;
-
-/** Folding every frame since load on each repaint grew into a 60 ms task. */
-const LIVE_WINDOW_MS = 10_000;
-
 const SAID_MS = 2500;
 
 function restartWindow(): void {
@@ -101,16 +97,8 @@ export function ProfilerPanel() {
   const show = useKernel((s) => s.settings[SETTINGS.profiler.key] === 1);
   const [hint, setHint] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
-  const [g, setG] = useState<Gauge | null>(null);
-
   // Read while shown, folded or not: the title carries the fps.
-  useEffect(() => {
-    if (!show) return;
-    const read = () => setG(profilerGaugeRead(LIVE_WINDOW_MS));
-    read();
-    const id = setInterval(read, POLL_MS);
-    return () => clearInterval(id);
-  }, [show]);
+  const g = useProfilerGauge(show);
 
   useEffect(() => {
     if (said === null) return;
