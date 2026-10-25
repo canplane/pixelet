@@ -341,12 +341,53 @@ impl Drop for Unfinished {
 }
 
 /// Where a stale surface is configured: configuring one sets its layer's
-/// properties, which some platforms allow on one thread alone. `Elsewhere`
-/// asks for it there, where the caller then runs `configure_surfaces`.
+/// properties, which some platforms allow on one thread alone.
 #[derive(Clone, Copy)]
 pub enum ConfigureAt {
+    /// On the thread that runs the stream, as the stream asks.
     Here,
+    /// Wherever `ask` sends it, from where `configure_surfaces` is then run.
     Elsewhere(fn()),
+    /// On the main thread, which Core Animation sets a layer's properties on:
+    /// the main queue is asked to run `configure` (libdispatch's
+    /// `dispatch_async_f`), which runs `configure_surfaces` while nothing
+    /// else uses the host — for a host that runs beside a native guest,
+    /// inside the guest's `while_idle` (xpute-host native `Guest`). Asked
+    /// again before it has run, it configures nothing twice, since only a
+    /// stale surface is configured.
+    #[cfg(target_vendor = "apple")]
+    Main(fn()),
+}
+
+impl ConfigureAt {
+    /// Asks for a configuring where it is not here.
+    fn ask(self) {
+        match self {
+            ConfigureAt::Here => {}
+            ConfigureAt::Elsewhere(ask) => ask(),
+            #[cfg(target_vendor = "apple")]
+            ConfigureAt::Main(configure) => on_main(configure),
+        }
+    }
+}
+
+/// Asks the main queue to run `f` once, and returns at once.
+#[cfg(target_vendor = "apple")]
+fn on_main(f: fn()) {
+    use core::ffi::c_void;
+    unsafe extern "C" {
+        /// What `dispatch_get_main_queue()`, a header's inline, returns.
+        static _dispatch_main_q: c_void;
+        fn dispatch_async_f(queue: *const c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
+    }
+    extern "C" fn work(context: *mut c_void) {
+        // SAFETY: the `fn()` `on_main` was given, carried as the context.
+        let f = unsafe { core::mem::transmute::<*mut c_void, fn()>(context) };
+        f();
+    }
+    // SAFETY: libdispatch's main queue, which lives as long as the process;
+    // the context is a function's address, which `work` alone reads.
+    unsafe { dispatch_async_f(&raw const _dispatch_main_q, core::ptr::with_exposed_provenance_mut(f as usize), work) };
 }
 
 /// The program's numbers and choices, which the host runs by: none of them
@@ -543,9 +584,7 @@ impl GpuHost {
                 wgpu::CurrentSurfaceTexture::Success(f) => return Frame::Shown(f),
                 wgpu::CurrentSurfaceTexture::Suboptimal(f) => {
                     b.stale = true;
-                    if let ConfigureAt::Elsewhere(ask) = self.configure_at {
-                        ask();
-                    }
+                    self.configure_at.ask();
                     return Frame::Shown(f);
                 }
                 wgpu::CurrentSurfaceTexture::Outdated if !asked => {
@@ -599,7 +638,7 @@ impl GpuHost {
         s.frame = None;
         match self.configure_at {
             ConfigureAt::Here => self.configure_surfaces(),
-            ConfigureAt::Elsewhere(ask) => ask(),
+            elsewhere => elsewhere.ask(),
         }
     }
 

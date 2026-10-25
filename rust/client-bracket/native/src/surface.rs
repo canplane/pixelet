@@ -27,7 +27,7 @@ use crate::on_kernel;
 
 /// An iPhone's layer is the main thread's, an Android window anyone's.
 #[cfg(target_vendor = "apple")]
-const CONFIGURE_SURFACES: ConfigureAt = ConfigureAt::Elsewhere(configure_on_main);
+const CONFIGURE_SURFACES: ConfigureAt = ConfigureAt::Main(configure);
 #[cfg(not(target_vendor = "apple"))]
 const CONFIGURE_SURFACES: ConfigureAt = ConfigureAt::Here;
 
@@ -57,23 +57,15 @@ fn device() -> Option<&'static mut Device> {
     DEVICE.get(|| None).as_mut()
 }
 
-/// Asks the main queue to configure what is stale, once the kernel is idle;
-/// asking again before it has run configures nothing twice.
+/// What is stale configured, on the main thread (xpute-gpu host
+/// `ConfigureAt::Main`), once the kernel is idle.
 #[cfg(target_vendor = "apple")]
-fn configure_on_main() {
-    unsafe extern "C" {
-        static _dispatch_main_q: c_void;
-        fn dispatch_async_f(queue: *const c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
-    }
-    extern "C" fn work(_: *mut c_void) {
-        crate::guest().while_idle(|| {
-            if let Some(d) = device() {
-                d.host.configure_surfaces();
-            }
-        });
-    }
-    // SAFETY: libdispatch's main queue, which lives as long as the process.
-    unsafe { dispatch_async_f(&raw const _dispatch_main_q, core::ptr::null_mut(), work) };
+fn configure() {
+    crate::guest().while_idle(|| {
+        if let Some(d) = device() {
+            d.host.configure_surfaces();
+        }
+    });
 }
 
 /// What Swift gave to be called for a turn (`pxl_wake_on`), as an address.
