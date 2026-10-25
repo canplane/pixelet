@@ -10,7 +10,7 @@
 use pxl_render::frame::draw::{DrawList, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::coord::v3::{self, V3};
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 
 use crate::domain::query::model::registry::{blend, Models};
@@ -58,7 +58,7 @@ impl Actor {
         let (palette_at, palette_bytes) = alloc(palette_bytes)?;
         // SAFETY: the block just acquired; identity joints until the first tick.
         unsafe {
-            let p = core::slice::from_raw_parts_mut(ptr_at::<f32>(palette_at), palette_bytes as usize / 4);
+            let p = core::slice::from_raw_parts_mut(mem::at::<f32>(palette_at), palette_bytes as usize / 4);
             p.fill(0.0);
             for j in 0..joints.max(1) {
                 for d in 0..4 {
@@ -168,7 +168,7 @@ impl Actor {
             }
         }
         // SAFETY: the actor's own palette block, one mat4 a joint.
-        let palette = unsafe { core::slice::from_raw_parts_mut(ptr_at::<f32>(self.palette_at), joints * 16) };
+        let palette = unsafe { core::slice::from_raw_parts_mut(mem::at::<f32>(self.palette_at), joints * 16) };
         m.palette(&self.local, &mut self.global, palette);
         draw.rewrite(self.palette_handle, self.palette_at as u32, self.palette_bytes);
         moves

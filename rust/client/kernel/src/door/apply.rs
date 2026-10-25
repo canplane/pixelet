@@ -7,7 +7,7 @@ use crate::domain::control::cmd::{self as abi, Command};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::Q3;
 use xpute_guest::abi::cmd as xpute_cmd;
-use xpute_guest::mem::base::{off_of, off_of_slice};
+use xpute_guest::mem::{off_of, off_of_slice};
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 

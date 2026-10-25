@@ -16,14 +16,13 @@ use crate::domain::control::cmd::{Command, Sensor, SensorStartSignal, WorldSnaps
 use crate::profiler::record::profiler_record_turn;
 use crate::profiler::spec::Wake;
 use crate::sys::mem::section;
-use layout::DOOR_LAYOUT;
 use xpute_guest::clock::now;
 use xpute_guest::global::{off_marked_thread, Global};
 use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_guest::ipc::door::{Door, DoorStat};
 use xpute_guest::ipc::ring::Ring;
-use xpute_guest::mem::base::{off_of, off_of_slice, ptr_at};
 use xpute_guest::mem::heap::HeapStat;
+use xpute_guest::mem::{self, off_of, off_of_slice};
 use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::wire::xtp::PacketWriter;
@@ -57,9 +56,9 @@ static DOOR: Global<Door> = Global::new();
 
 fn door() -> &'static Door {
     DOOR.get(|| {
-        // SAFETY: the module's memory, which never moves and outlives the door;
-        // the ranges are the layout's alone.
-        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, SIGNALS) }
+        // SAFETY: once, the door's first use; the ranges are the layout's alone.
+        let (sq, cq) = unsafe { layout::rings() };
+        Door::new(sq, cq, SIGNALS)
     })
 }
 
@@ -76,10 +75,10 @@ const SIGNALS: u32 = Sensor::ALL.len() as u32 + 1;
 
 // The shell reads the completion ring dry before it rings, so a ring with
 // room for a reply to every submission and the door's reserve past the last
-// (`Door::init`, SIGNALS + 1) never stops a drain partway (mem.json
+// (`Door::new`, SIGNALS + 1) never stops a drain partway (mem.json
 // COMPLETION_CAPACITY).
 const _: () = assert!(
-    DOOR_LAYOUT.submission.capacity + SIGNALS < DOOR_LAYOUT.completion.capacity,
+    crate::sys::mem::spec::SUBMISSION_CAPACITY + SIGNALS < crate::sys::mem::spec::COMPLETION_CAPACITY,
     "a full submission ring's replies and the turn's signals do not fit the completion ring"
 );
 
@@ -182,8 +181,7 @@ fn boot(b: &Bracket) {
     ];
     // SAFETY: the page at DIRECTORY_AT, kept clear of the rings and the
     // bracket's data; the directory's alone.
-    let words = unsafe { &mut *ptr_at::<[u32; directory_words(DIRECTORY_ENTRIES)]>(crate::sys::mem::spec::DIRECTORY_AT as usize) };
-    write_directory(words, &entries);
+    unsafe { write_directory(mem::core(), crate::sys::mem::spec::DIRECTORY_AT as usize, directory_words(DIRECTORY_ENTRIES), &entries) };
 }
 
 fn fixed_at(f: layout::Fixed) -> u32 {

@@ -21,7 +21,7 @@ fn terrain_and_earth_bodies_share_a_run_until_it_is_full_and_it_goes_once_the_la
 
     for (k, &(at, n)) in out.iter().enumerate() {
         // SAFETY: `n` bytes of a slot just taken.
-        unsafe { core::ptr::write_bytes(xpute_guest::mem::base::ptr_at::<u8>(at), k as u8, n as usize) };
+        unsafe { core::ptr::write_bytes(xpute_guest::mem::at::<u8>(at), k as u8, n as usize) };
     }
     let released = releases();
     let freed = out.remove(1);
@@ -33,7 +33,7 @@ fn terrain_and_earth_bodies_share_a_run_until_it_is_full_and_it_goes_once_the_la
     assert_eq!(runs(), before + 2);
     for (k, &(at, n)) in out.iter().enumerate().skip(1) {
         // SAFETY: still out, `n` bytes long.
-        let bytes = unsafe { core::slice::from_raw_parts(xpute_guest::mem::base::ptr_at::<u8>(at), n as usize) };
+        let bytes = unsafe { core::slice::from_raw_parts(xpute_guest::mem::at::<u8>(at), n as usize) };
         assert!(bytes.iter().all(|&b| b == (k + 1) as u8), "a body was written over by its neighbors");
     }
 

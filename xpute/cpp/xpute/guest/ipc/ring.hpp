@@ -10,7 +10,7 @@
 
 #include "xpute/kit/status/errno.spec.hpp"
 #include "xpute/kit/status/error.hpp"
-#include "xpute/guest/mem/memory.hpp"
+#include "xpute/guest/mem.hpp"
 #include "frame.hpp"
 #include "ring.spec.hpp"
 

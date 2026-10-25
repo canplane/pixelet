@@ -32,7 +32,7 @@ fn the_memory_is_aligned_zero_and_the_base() {
     let (at, bytes) = guest().memory();
     assert_eq!(bytes, MEMORY_BYTES as usize);
     assert!(at.as_ptr().addr().is_multiple_of(PAGE_BYTES as usize));
-    let base = guest().run(xpute_guest::mem::base::base);
+    let base = guest().run(|| xpute_guest::mem::core().base());
     assert_eq!(base, at.as_ptr().addr());
     // SAFETY: the reserved memory, mapped for the process; nothing else reads
     // its last page here.
@@ -111,7 +111,7 @@ fn a_call_from_the_guests_own_thread_is_refused() {
 #[test]
 fn the_base_is_the_guests_thread_to_set() {
     guest();
-    assert!(std::panic::catch_unwind(|| xpute_guest::mem::base::set_base(0, 0)).is_err());
+    assert!(std::panic::catch_unwind(|| unsafe { xpute_guest::mem::set(0, 0) }).is_err());
 }
 
 #[test]

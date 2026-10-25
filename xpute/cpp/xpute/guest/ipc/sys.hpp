@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "xpute/kit/status/errno.spec.hpp"
-#include "xpute/guest/mem/memory.hpp"
+#include "xpute/guest/mem.hpp"
 #include "stream.hpp"
 #include "sys.spec.hpp"
 

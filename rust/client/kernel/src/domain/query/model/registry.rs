@@ -6,7 +6,7 @@
 //! joints at a clip's time and writes their palette for whatever plays it.
 
 use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS};
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_guest::mem::heap::alloc;
 
 /// Translation, rotation; anything else is scale.
@@ -249,7 +249,7 @@ impl Models {
         let Some(m) = self.models.get_mut(model as usize) else { return };
         m.scale = scale;
         m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.index_cnt);
-        let positions = core::slice::from_raw_parts(ptr_at::<f32>(m.at), m.vertex_cnt as usize * 3);
+        let positions = core::slice::from_raw_parts(mem::at::<f32>(m.at), m.vertex_cnt as usize * 3);
         m.radius = positions.as_chunks::<3>().0.iter().map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).fold(0.0f32, f32::max).sqrt();
         let n = m.parent.len();
         let mut placed = vec![false; n];

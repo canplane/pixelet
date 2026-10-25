@@ -9,7 +9,7 @@ use fnv::FnvHashMap;
 
 use pxl_render::gpu::sheet::SHEET_SCALE;
 use pxl_render::gpu::text::{raster_box, Font, Raster};
-use xpute_guest::mem::base::off_of_slice;
+use xpute_guest::mem::off_of_slice;
 
 use crate::sys::io::host::{host_offer, turn};
 use crate::sys::io::host_spec::op;

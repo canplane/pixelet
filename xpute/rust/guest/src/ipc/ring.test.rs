@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::ipc::frame;
+use crate::mem::Memory;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 fn ring(capacity: u32, slot: u32) -> (Ring, Box<[u8]>) {
@@ -9,7 +10,7 @@ fn ring(capacity: u32, slot: u32) -> (Ring, Box<[u8]>) {
     let mut buf = vec![0u8; (slot_base + slots_bytes(capacity, slot)) as usize].into_boxed_slice();
     // SAFETY: the buffer outlives the ring — both are returned together and
     // the caller holds them for the test.
-    let r = unsafe { Ring::init(buf.as_mut_ptr(), 8, capacity, slot_base, slot) };
+    let r = unsafe { Ring::init(Memory::new(buf.as_mut_ptr().expose_provenance(), buf.len()), 8, capacity, slot_base, slot) };
     (r, buf)
 }
 

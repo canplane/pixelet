@@ -10,7 +10,7 @@ use xpute_guest::mem::heap::HeapStat;
 
 use xpute_guest::ipc::stream::WORD;
 use xpute_guest::ipc::sys::{descriptor_turn_bytes, Sys};
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::file::{Kept, PATH_BYTES};
@@ -31,8 +31,7 @@ pub(crate) fn sys() -> Option<&'static mut Sys> {
 /// long as the module runs.
 pub unsafe fn set_host_stream(at: u32) {
     // SAFETY: the caller's range.
-    let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize), stream::BYTES as usize / WORD) };
-    SYS.set(Some(Sys::new(words)));
+    SYS.set(Some(unsafe { Sys::new(mem::core(), at as usize, stream::BYTES as usize / WORD) }));
 }
 
 pub fn host_rise() {

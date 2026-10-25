@@ -5,8 +5,7 @@
 //! addresses from mem.json. And `.fixed`: which ranges it holds, each sized
 //! by its owner, and the heap after them.
 
-use xpute_guest::ipc::door::{DoorLayout, RingLayout};
-use xpute_guest::ipc::ring::{ring_bytes, slots_bytes};
+use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 
 use crate::sys::mem::section::{fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
 use crate::sys::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};
@@ -24,19 +23,22 @@ const SUBMISSION_SLOT_AT: u32 = RING_SLOT_AT;
 const COMPLETION_SLOT_AT: u32 = SUBMISSION_SLOT_AT + slots_bytes(SUBMISSION_CAPACITY, RING_SLOT_BYTES);
 const SLOT_END: u32 = COMPLETION_SLOT_AT + slots_bytes(COMPLETION_CAPACITY, RING_SLOT_BYTES);
 
-pub const DOOR_LAYOUT: DoorLayout = DoorLayout {
-    slot_bytes: RING_SLOT_BYTES,
-    submission: RingLayout {
-        capacity: SUBMISSION_CAPACITY,
-        desc_at: SUBMISSION_DESC_AT,
-        slot_at: SUBMISSION_SLOT_AT,
-    },
-    completion: RingLayout {
-        capacity: COMPLETION_CAPACITY,
-        desc_at: COMPLETION_DESC_AT,
-        slot_at: COMPLETION_SLOT_AT,
-    },
-};
+/// The door's two rings, submission and completion, laid out at their
+/// addresses in the module's memory.
+///
+/// # Safety
+/// Once: the ranges are the rings' alone, in memory that never moves and
+/// outlives them.
+pub unsafe fn rings() -> (Ring, Ring) {
+    let mem = xpute_guest::mem::core();
+    // SAFETY: the caller's.
+    unsafe {
+        (
+            Ring::init(mem, SUBMISSION_DESC_AT as usize, SUBMISSION_CAPACITY, SUBMISSION_SLOT_AT, RING_SLOT_BYTES),
+            Ring::init(mem, COMPLETION_DESC_AT as usize, COMPLETION_CAPACITY, COMPLETION_SLOT_AT, RING_SLOT_BYTES),
+        )
+    }
+}
 
 // The boundaries are chosen constants, not roundings, so page alignment is asserted.
 const _: () = assert!(

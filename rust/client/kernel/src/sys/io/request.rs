@@ -28,7 +28,7 @@ use crate::sys::load::LOAD_FILES;
 use fnv::FnvHashMap;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::off_of_slice;
+use xpute_guest::mem::off_of_slice;
 use xpute_kit::math::rng::derive_seed_u64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;

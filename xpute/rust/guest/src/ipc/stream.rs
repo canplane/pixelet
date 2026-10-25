@@ -8,6 +8,8 @@
 //!   1…     the user's
 //!   head…  op, n, n words; …   bytes go as their count, then padded to a word
 
+use crate::mem::Memory;
+
 pub const END: usize = 0;
 
 /// A stream word's bytes.
@@ -28,7 +30,9 @@ pub const fn record_bytes(args: usize, bytes: Option<usize>) -> usize {
 }
 
 pub struct Stream {
-    words: &'static mut [u32],
+    mem: Memory,
+    at: usize,
+    words: usize,
     head: usize,
     len: usize,
     /// Where an open transaction began, and whether a record past the range
@@ -38,29 +42,43 @@ pub struct Stream {
 }
 
 impl Stream {
-    /// A new stream has published nothing, whatever the range held.
-    pub fn new(words: &'static mut [u32], head: usize) -> Stream {
-        xpute_kit::ensure!(head > END && head < words.len(), EINVAL);
-        words[END] = 0;
-        Stream {
+    /// The `words` at `at` in `mem`. A new stream has published nothing,
+    /// whatever the range held.
+    ///
+    /// # Safety
+    /// The range stays valid, unmoved and the stream's alone (the host reads
+    /// it between turns) for as long as the stream is used.
+    pub unsafe fn new(mem: Memory, at: usize, words: usize, head: usize) -> Stream {
+        xpute_kit::ensure!(head > END && head < words, EINVAL);
+        let s = Stream {
+            mem,
+            at,
             words,
             head,
             len: 0,
             mark: None,
             spilled: false,
-        }
+        };
+        s.words()[END] = 0;
+        s
+    }
+
+    #[allow(clippy::mut_from_ref)]
+    fn words(&self) -> &mut [u32] {
+        // SAFETY: the range `new` was given, as its contract requires.
+        unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u32>(self.at), self.words) }
     }
 
     pub fn head(&self) -> &[u32] {
-        &self.words[..self.head]
+        &self.words()[..self.head]
     }
 
     pub fn left(&self) -> usize {
-        (self.words.len() - self.head - self.len) * WORD
+        (self.words - self.head - self.len) * WORD
     }
 
     pub fn publish(&mut self) {
-        self.words[END] = self.len as u32;
+        self.words()[END] = self.len as u32;
         self.len = 0;
     }
 
@@ -75,9 +93,9 @@ impl Stream {
     #[track_caller]
     pub fn open(&mut self, op: u32, n: usize) -> &mut [u32] {
         let at = self.head + self.len;
-        xpute_kit::ensure!(at + 2 + n <= self.words.len(), ENOSPC, self.words.len() * 4);
+        xpute_kit::ensure!(at + 2 + n <= self.words, ENOSPC, self.words * 4);
         self.len += 2 + n;
-        let w = &mut self.words[at..at + 2 + n];
+        let w = &mut self.words()[at..at + 2 + n];
         w[0] = op;
         w[1] = n as u32;
         &mut w[2..]

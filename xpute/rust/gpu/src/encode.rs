@@ -11,7 +11,7 @@
 
 use xpute_guest::abi::handle::{handle_slot, HandleTable};
 use xpute_guest::ipc::stream::{Stream, WORD};
-use xpute_guest::mem::base::off_of_slice;
+use xpute_guest::mem::off_of_slice;
 
 use crate::enums::{
     AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction, CullMode, FilterMode, FrontFace, IndexFormat, LoadOp, MipmapFilterMode, PrimitiveTopology,

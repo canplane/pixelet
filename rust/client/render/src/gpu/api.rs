@@ -22,7 +22,7 @@ use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, STATUS, TEXTURE_USAGE};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_guest::ipc::stream::{Stream, WORD};
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -247,7 +247,7 @@ fn state() -> &'static mut State {
 fn head(k: usize) -> &'static mut u32 {
     let at = state().at as usize + k * WORD;
     // SAFETY: a word of the stream's head, the kernel's and the host's alone.
-    unsafe { &mut *ptr_at::<u32>(at) }
+    unsafe { &mut *mem::at::<u32>(at) }
 }
 
 /// The encoder's bytes at the range's end, a word-multiple of 8.
@@ -261,14 +261,14 @@ pub unsafe fn install(at: u32) -> u32 {
     let words = (stream::BYTES as usize - ENCODER_BYTES) / WORD;
     // SAFETY: the caller's range: the stream, then the encoder, which zeroed
     // bytes are an empty one of, aligned as the range is.
-    let (words, encoder) = unsafe {
+    let (stream, encoder) = unsafe {
         (
-            core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize), words),
-            &mut *ptr_at::<Encoder<OBJECTS>>(at as usize + stream::BYTES as usize - ENCODER_BYTES),
+            Stream::new(mem::core(), at as usize, words, HEAD),
+            &mut *mem::at::<Encoder<OBJECTS>>(at as usize + stream::BYTES as usize - ENCODER_BYTES),
         )
     };
     STATE.set(Some(State {
-        stream: Stream::new(words, HEAD),
+        stream,
         encoder,
         at,
         in_frame: false,
@@ -327,7 +327,7 @@ pub fn device_answered() {
     *head(DEVICE_AT + DEVICE_WORDS - 1) = 0;
     let at = s.at as usize + DEVICE_AT * WORD;
     // SAFETY: the head's block, the host's to write.
-    let block = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at), DEVICE_WORDS) };
+    let block = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), DEVICE_WORDS) };
     call::device(&mut s.stream, block);
     s.asked = true;
 }
@@ -964,8 +964,8 @@ impl Gpu {
             // SAFETY: the head's ticks and their word, the host's to write.
             let (ticks, word) = unsafe {
                 (
-                    core::slice::from_raw_parts_mut(ptr_at::<u8>(at), 2 * SPANS * 8),
-                    &mut *ptr_at::<u32>(s.at as usize + STAMPS_WORD_AT * WORD),
+                    core::slice::from_raw_parts_mut(mem::at::<u8>(at), 2 * SPANS * 8),
+                    &mut *mem::at::<u32>(s.at as usize + STAMPS_WORD_AT * WORD),
                 )
             };
             call::map_async(&mut s.stream, mapped, 0, ticks, word, 1);
@@ -1046,7 +1046,7 @@ impl Gpu {
     pub fn map_read(&self, id: Id, offset: u32, length: u32, address: u32, word: &mut u32, ticket: u32) {
         // SAFETY: the kernel's own range, which it asked to be written and
         // does not read while the mapping is out.
-        let into = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(address as usize), length as usize) };
+        let into = unsafe { core::slice::from_raw_parts_mut(mem::at::<u8>(address as usize), length as usize) };
         call::map_async(&mut self.s().stream, id, offset, into, word, ticket);
     }
 }

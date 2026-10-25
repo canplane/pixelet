@@ -14,7 +14,8 @@ fn every_program_writes_the_words_its_record_holds() {
     let [region, stream_words, head] = ["region", "stream.words", "stream.head"].map(|k| g.u32(k) as usize);
     let memory: &'static mut [u32] = Vec::leak(vec![0; region / 4]);
     let base = memory.as_mut_ptr().cast::<u8>();
-    xpute_guest::mem::base::set_base(base as usize, region);
+    // SAFETY: leaked, so it lives as long as the process.
+    unsafe { xpute_guest::mem::set(base.expose_provenance(), region) };
     let names: Vec<&str> = PROGRAMS.iter().map(|p| p.name).collect();
     let mut recorded = Vec::new();
     g.each("program", |k| recorded.push(g.s(k)));
@@ -35,7 +36,7 @@ fn every_program_writes_the_words_its_record_holds() {
             readback: g.u32("readback.at") as usize,
         };
         // SAFETY: as `bytes`.
-        let mut stream = Stream::new(unsafe { core::slice::from_raw_parts_mut(base.cast::<u32>(), stream_words) }, head);
+        let mut stream = unsafe { Stream::new(xpute_guest::mem::core(), 0, stream_words, head) };
         let mut turn = 0;
         (p.encode)(&mut Encoder::new(), &mut stream, &at, &mut |s: &mut Stream| {
             s.publish();

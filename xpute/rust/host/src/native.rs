@@ -48,7 +48,8 @@ pub fn boot(plan: &Plan) -> Guest {
     let clock = plan.clock;
     thread::start(plan.thread_name, plan.stack_bytes, move || {
         xpute_guest::global::mark_thread();
-        xpute_guest::mem::base::set_base(core.at, core.bytes);
+        // SAFETY: the region was reserved for the process's life.
+        unsafe { xpute_guest::mem::set(core.at, core.bytes) };
         xpute_guest::clock::set_clock(clock);
     });
     Guest { _booted: () }

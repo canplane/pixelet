@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <span>
 
-#include "xpute/guest/mem/memory.hpp"
+#include "xpute/guest/mem.hpp"
 #include "xpute/guest/sched/quantum.hpp"
 #include "directory.spec.hpp"
 

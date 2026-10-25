@@ -13,21 +13,6 @@ use xpute_kit::wire::xtp::PacketWriter;
 use crate::ipc::frame;
 use crate::ipc::ring::Ring;
 
-pub struct RingLayout {
-    pub capacity: u32,
-    pub desc_at: u32,
-    pub slot_at: u32,
-}
-
-pub struct DoorLayout {
-    pub slot_bytes: u32,
-    pub submission: RingLayout,
-    pub completion: RingLayout,
-}
-
-/// Answers the packet's length, or none when it did not fit a slot.
-pub type Write<'a> = &'a dyn Fn(&mut [u8]) -> Option<u32>;
-
 /// None for an unknown command, which replies ENOSYS.
 pub type Applied = Result<Option<i32>, MarshalError>;
 
@@ -52,18 +37,13 @@ pub struct Door {
 }
 
 impl Door {
-    /// # Safety
-    /// `mem` stays valid and never moves for as long as the door is used, and
-    /// the ranges `layout` names are the door's alone. `most_signals` is the most
-    /// one command raises, or the turn once its drain is done: the program's bound.
-    pub unsafe fn init(mem: *mut u8, layout: &DoorLayout, most_signals: u32) -> Door {
-        let ring = |r: &RingLayout| {
-            // SAFETY: the caller's memory and ranges.
-            unsafe { Ring::init(mem, r.desc_at, r.capacity, r.slot_at, layout.slot_bytes) }
-        };
+    /// Over the two rings whoever laid them out built, the door's alone.
+    /// `most_signals` is the most one command raises, or the turn once its
+    /// drain is done: the program's bound.
+    pub fn new(submission: Ring, completion: Ring, most_signals: u32) -> Door {
         Door {
-            sq: ring(&layout.submission),
-            cq: ring(&layout.completion),
+            sq: submission,
+            cq: completion,
             reserve: most_signals + 1,
             stat: Cell::default(),
         }
@@ -88,27 +68,27 @@ impl Door {
         &self.cq
     }
 
-    pub fn post(&self, tag: u32, cmd: u32, flags: u32, result: i32, write: Option<Write<'_>>) {
-        let e = match write {
-            Some(w) => self.cq.push_in_place(tag, cmd, flags, result, w),
-            None => self.cq.push(tag, cmd, flags, None, result),
-        };
+    pub fn post(&self, tag: u32, cmd: u32, flags: u32, result: i32) {
+        self.posted(cmd, self.cq.push(tag, cmd, flags, None, result));
+    }
+
+    /// `write` fills the slot's payload and answers the packet's length, or
+    /// none when it did not fit.
+    pub fn post_in_place(&self, tag: u32, cmd: u32, flags: u32, result: i32, write: impl FnOnce(&mut [u8]) -> Option<u32>) {
+        self.posted(cmd, self.cq.push_in_place(tag, cmd, flags, result, write));
+    }
+
+    fn posted(&self, cmd: u32, e: Errno) {
         self.keep(|s| s.cq_peak = s.cq_peak.max(self.cq.len()));
         xpute_kit::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
     pub fn raise(&self, cmd: u32, count: u32, f: impl Fn(&mut PacketWriter)) {
-        self.post(
-            0,
-            cmd,
-            0,
-            0,
-            Some(&|out: &mut [u8]| {
-                let mut w = PacketWriter::new(out, count);
-                f(&mut w);
-                w.finish()
-            }),
-        );
+        self.post_in_place(0, cmd, 0, 0, |out: &mut [u8]| {
+            let mut w = PacketWriter::new(out, count);
+            f(&mut w);
+            w.finish()
+        });
     }
 
     /// An unapplied command can wait in the submission ring; what it would
@@ -147,7 +127,7 @@ impl Door {
             };
             self.sq.advance();
             if flags & frame::ACKREQ != 0 || result.is_err() {
-                self.post(tag, number, frame::RES, result.unwrap_or_else(|errno| errno), None);
+                self.post(tag, number, frame::RES, result.unwrap_or_else(|errno| errno));
             }
         }
         self.keep(|s| s.left_peak = s.left_peak.max(self.sq.len()));

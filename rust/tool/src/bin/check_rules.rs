@@ -15,7 +15,7 @@ use pxl_tool::shader::{generated, inputs_digest, INPUTS};
 use regex::Regex;
 
 /// The crates that address the core memory by offset, where an offset becomes
-/// a pointer only through `xpute_guest::mem::base::ptr_at`.
+/// a pointer only through `xpute_guest::mem::at` or `Memory::at`.
 const OFFSET_CRATES: [&str; 6] = [
     "xpute/rust/guest/src/",
     "xpute/rust/host/src/",
@@ -71,7 +71,7 @@ fn run() -> Result<Vec<String>, String> {
     for f in files.iter().filter(|f| f.ends_with(".rs") && OFFSET_CRATES.iter().any(|c| f.starts_with(c))) {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
             if !comment.is_match(line) && cast.is_match(line) {
-                problems.push(format!("{f}:{}: casts to a pointer where an offset goes through mem::base::ptr_at: {}", n + 1, line.trim()));
+                problems.push(format!("{f}:{}: casts to a pointer where an offset goes through mem::at or Memory::at: {}", n + 1, line.trim()));
             }
         }
     }

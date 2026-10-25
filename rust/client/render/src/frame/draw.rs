@@ -7,7 +7,7 @@
 use crate::frame::shader::word::DRAW_FLOATS;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 
 /// Upload record: handle, address, byte length, vertex count, index count.
@@ -97,7 +97,7 @@ pub const fn lanes_bytes(live: usize) -> u32 {
 /// as long as the module runs.
 pub unsafe fn set_lanes(at: u32, live: usize) {
     // SAFETY: the caller's range, one lane after another.
-    let lane = |from: usize, words: usize| unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize + from * 4), words) };
+    let lane = |from: usize, words: usize| unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at as usize + from * 4), words) };
     let (u, f) = (UPLOAD_WORDS * live, live);
     LANES.set(ListLanes {
         uploads: [lane(0, u), lane(u, u)],
@@ -270,7 +270,7 @@ impl Held {
         }
         // SAFETY: the block is the heap's, `self.bytes` long, and at least
         // `lane` long.
-        unsafe { core::ptr::copy_nonoverlapping(lane.as_ptr(), ptr_at::<u8>(self.at), lane.len()) };
+        unsafe { core::ptr::copy_nonoverlapping(lane.as_ptr(), mem::at::<u8>(self.at), lane.len()) };
         if self.handle == 0 {
             self.handle = draw.upload(self.at as u32, self.bytes, 0, 0);
         } else {

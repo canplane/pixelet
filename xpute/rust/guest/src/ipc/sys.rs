@@ -10,7 +10,7 @@ use core::panic::Location;
 use xpute_kit::status::errno::Errno;
 
 use crate::ipc::stream::{record_bytes, Stream};
-use crate::mem::base::off_of_slice;
+use crate::mem::{off_of_slice, Memory};
 
 #[path = "sys.spec.rs"]
 pub mod spec;
@@ -37,10 +37,14 @@ pub struct Sys {
 }
 
 impl Sys {
-    /// `words` is the range the directory names under SYS.
-    pub fn new(words: &'static mut [u32]) -> Sys {
+    /// The `words` at `at` in `mem`: the range the directory names under SYS.
+    ///
+    /// # Safety
+    /// As `Stream::new`.
+    pub unsafe fn new(mem: Memory, at: usize, words: usize) -> Sys {
         Sys {
-            stream: Stream::new(words, spec::HEAD as usize),
+            // SAFETY: the caller's range.
+            stream: unsafe { Stream::new(mem, at, words, spec::HEAD as usize) },
             held: Vec::new(),
         }
     }

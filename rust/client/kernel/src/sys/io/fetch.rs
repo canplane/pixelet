@@ -7,7 +7,7 @@
 //! decodes it, unless a store keeps it.
 
 use xpute_guest::ipc::sys::Fd;
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_guest::mem::heap::Block;
 use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 use xpute_kit::collection::list::List;
@@ -51,7 +51,7 @@ pub fn release(block: Option<Block>) {
 pub fn body<'a>((at, bytes): Block) -> &'a [u8] {
     // SAFETY: the block `opened` acquired for this body alone, `bytes` long,
     // not released while the view is read.
-    unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at), bytes as usize) }
+    unsafe { core::slice::from_raw_parts(mem::at::<u8>(at), bytes as usize) }
 }
 
 enum Got {
@@ -135,7 +135,7 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
                 Ok(block) => {
                     // SAFETY: a block just acquired, `n` long, and no one else's;
                     // the arrival holds it until `fetch_task` waits out the turn.
-                    unsafe { file::read(fd, core::slice::from_raw_parts_mut(ptr_at::<u8>(block.0), n as usize)) };
+                    unsafe { file::read(fd, core::slice::from_raw_parts_mut(mem::at::<u8>(block.0), n as usize)) };
                     Got::Read(Some(block))
                 }
                 Err(refused) => Got::Refused(refused),

@@ -11,14 +11,8 @@ use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
 use super::frame::{self, cmd_of, cmd_word, flags_of};
+use crate::mem::Memory;
 use spec::{CAPACITY, HEAD, HEADER_WORDS, SLOT_BASE, SLOT_BYTES, TAIL};
-
-/// Arithmetic on the address, not the pointer: the base may be wasm address
-/// 0, where `ptr::add` is UB, and a release build once dropped the capacity
-/// word for it, reading back a ring of capacity 0.
-fn at_of<T>(mem: *mut u8, off: usize) -> *mut T {
-    core::ptr::with_exposed_provenance_mut(mem.expose_provenance() + off)
-}
 
 pub const fn ring_bytes(capacity: u32) -> u32 {
     (HEADER_WORDS + capacity * frame::WORDS) * 4
@@ -41,8 +35,8 @@ fn packet_bytes(u8: &[u8], at: usize) -> u64 {
 
 #[derive(Clone)]
 pub struct Ring {
-    mem: *mut u8,
-    at: u32,
+    mem: Memory,
+    at: usize,
     pub capacity: u32,
     pub slot_bytes: u32,
     mask: u32,
@@ -51,10 +45,11 @@ pub struct Ring {
 
 impl Ring {
     /// # Safety
-    /// `mem` must stay valid, and never move, for as long as the ring is used.
-    pub unsafe fn new(mem: *mut u8, at: u32) -> Ring {
-        let head = unsafe { core::slice::from_raw_parts(at_of::<u32>(mem, at as usize), HEADER_WORDS as usize) };
-        let capacity = head[CAPACITY as usize];
+    /// The ring's words at `at` and its slots in `mem` must stay valid, and
+    /// never move, for as long as the ring is used.
+    pub unsafe fn new(mem: Memory, at: usize) -> Ring {
+        let header = |word: u32| mem.word(at + 4 * word as usize);
+        let capacity = header(CAPACITY);
         if !capacity.is_power_of_two() {
             xpute_kit::bug!(EINVAL, capacity, at);
         }
@@ -62,9 +57,9 @@ impl Ring {
             mem,
             at,
             capacity,
-            slot_bytes: head[SLOT_BYTES as usize],
+            slot_bytes: header(SLOT_BYTES),
             mask: capacity - 1,
-            slot_base: head[SLOT_BASE as usize],
+            slot_base: header(SLOT_BASE),
         }
     }
 
@@ -72,18 +67,18 @@ impl Ring {
     pub fn words(&self) -> &mut [u32] {
         // SAFETY: the memory outlives the ring, and each side writes only its
         // own words.
-        unsafe { core::slice::from_raw_parts_mut(at_of::<u32>(self.mem, self.at as usize), ring_bytes(self.capacity) as usize / 4) }
+        unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u32>(self.at), ring_bytes(self.capacity) as usize / 4) }
     }
 
     #[allow(clippy::mut_from_ref)]
     fn slots(&self) -> &mut [u8] {
         // SAFETY: as `words`.
-        unsafe { core::slice::from_raw_parts_mut(at_of::<u8>(self.mem, self.slot_base as usize), slots_bytes(self.capacity, self.slot_bytes) as usize) }
+        unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u8>(self.slot_base as usize), slots_bytes(self.capacity, self.slot_bytes) as usize) }
     }
 
     /// # Safety
     /// As `new`.
-    pub unsafe fn init(mem: *mut u8, at: u32, capacity: u32, slot_base: u32, slot_bytes: u32) -> Ring {
+    pub unsafe fn init(mem: Memory, at: usize, capacity: u32, slot_base: u32, slot_bytes: u32) -> Ring {
         if !capacity.is_power_of_two() {
             xpute_kit::bug!(EINVAL, capacity);
         }
@@ -92,11 +87,11 @@ impl Ring {
         }
         // SAFETY: the caller's memory, as `new` requires.
         unsafe {
-            core::slice::from_raw_parts_mut(at_of::<u8>(mem, at as usize), ring_bytes(capacity) as usize).fill(0);
-            let head = core::slice::from_raw_parts_mut(at_of::<u32>(mem, at as usize), HEADER_WORDS as usize);
-            head[CAPACITY as usize] = capacity;
-            head[SLOT_BYTES as usize] = slot_bytes;
-            head[SLOT_BASE as usize] = slot_base;
+            core::slice::from_raw_parts_mut(mem.at::<u8>(at), ring_bytes(capacity) as usize).fill(0);
+            let set_header = |word: u32, w: u32| mem.set_word(at + 4 * word as usize, w);
+            set_header(CAPACITY, capacity);
+            set_header(SLOT_BYTES, slot_bytes);
+            set_header(SLOT_BASE, slot_base);
             Ring::new(mem, at)
         }
     }
@@ -219,7 +214,7 @@ impl Ring {
         }
         let bytes = bytes as usize;
         // SAFETY: the memory `new` was given, as its contract requires.
-        Ok(Some(unsafe { core::slice::from_raw_parts(at_of::<u8>(self.mem, self.slot_base as usize + off), bytes) }))
+        Ok(Some(unsafe { core::slice::from_raw_parts(self.mem.at::<u8>(self.slot_base as usize + off), bytes) }))
     }
 
     pub fn advance(&self) {

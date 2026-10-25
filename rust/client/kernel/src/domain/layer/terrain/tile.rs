@@ -16,7 +16,7 @@ use pxl_spec::bake::separation;
 use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::Tile;
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_guest::mem::heap::Block;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -130,7 +130,7 @@ unsafe fn room_of(record: u32) -> separation::Room {
         let at = RANGE.get().at(at, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
         // SAFETY: the lane is kernel memory at its own size, never freed, and
         // the caller's contract makes it this tile's alone.
-        unsafe { core::slice::from_raw_parts_mut(ptr_at::<T>(at), SEPARATION_LANES[K].0) }
+        unsafe { core::slice::from_raw_parts_mut(mem::at::<T>(at), SEPARATION_LANES[K].0) }
     }
     // SAFETY: as this function's.
     unsafe {

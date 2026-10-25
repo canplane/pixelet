@@ -17,7 +17,7 @@ use crate::frame::shader::record::{
 };
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use xpute_guest::mem::base::off_of;
+use xpute_guest::mem::off_of;
 
 use crate::frame::shader::word::atmos::{
     BOTTOM_RADIUS, CAMERA_ALTITUDE, CITY_LIGHT, EARTH_REACH, EARTH_TILES, EARTH_WINDOW, EXPOSURE, GROUND_ALBEDO, KM_PER_U, LAND_ALTITUDE_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT, MIE_SCATTERING,

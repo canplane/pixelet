@@ -22,6 +22,7 @@
 #include "xpute/guest/ipc/ring.hpp"
 #include "xpute/guest/ipc/stream.hpp"
 #include "xpute/guest/ipc/sys.hpp"
+#include "xpute/guest/mem.hpp"
 #include "xpute/guest/mem/section.hpp"
 #include "guest.spec.hpp"
 
@@ -229,21 +230,21 @@ extern "C" std::uint32_t xpute_conformance_boot(void) {
     std::uint32_t range = range_at();
     // A range past the memory's end is a host that sized it for another guest.
     ensure(std::uint64_t{range} + MEMORY_BYTES <= std::uint64_t{__builtin_wasm_memory_size(0)} * 65536, Errno::enomem, range);
-    return boot(Memory(0), range, host_now);
+    return boot(mem::core(), range, host_now);
 }
 
 extern "C" double xpute_conformance_interrupt(double) {
-    return interrupt(Memory(0), range_at());
+    return interrupt(mem::core(), range_at());
 }
 
 #else
 
-extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now) {
-    return boot(Memory(reinterpret_cast<std::uintptr_t>(mem), MEMORY_BYTES), 0, now);
-}
+// The memory a native host hands over, MEMORY_BYTES from `mem`; the guest
+// allocates from the process, so nothing reads the ambient one.
+Memory given(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEMORY_BYTES); }
 
-extern "C" double xpute_conformance_interrupt(std::uint8_t *mem, double) {
-    return interrupt(Memory(reinterpret_cast<std::uintptr_t>(mem), MEMORY_BYTES), 0);
-}
+extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now) { return boot(given(mem), 0, now); }
+
+extern "C" double xpute_conformance_interrupt(std::uint8_t *mem, double) { return interrupt(given(mem), 0); }
 
 #endif

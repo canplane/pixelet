@@ -22,7 +22,7 @@ use pxl_spec_core::window::{self, CellsBack, FreshSquare, Slot, Squares, EYE_WIN
 use pxl_spec_core::wrap_index;
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::off_of_slice;
+use xpute_guest::mem::off_of_slice;
 use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;

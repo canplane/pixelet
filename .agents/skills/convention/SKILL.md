@@ -73,7 +73,7 @@ The core memory is addressed by offset:
 
 - In the crates that do (xpute's guest and host, the kernel, the renderer,
   the kernel's two brackets — pxl-tool `bin/check_rules.rs` `OFFSET_CRATES`), an offset
-  becomes a pointer only through `xpute_guest::mem::base::ptr_at`, never
+  becomes a pointer only through `xpute_guest::mem::at` or `Memory::at`, never
   `as *const` or `as *mut`.
 
 One dependency has one place:

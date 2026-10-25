@@ -4,16 +4,17 @@
 //! guest, so one host drives both; `boot` answers the directory's offset.
 //! Natively the host hands it a region and a clock; as wasm it imports its
 //! memory and `env.now`, and its range starts past what the linker placed.
-//! Pointers are made from addresses: `ptr::add` from wasm's base 0 is UB.
+//! Its parts are laid over that memory by offset (`Memory`).
 
 use xpute_guest::abi::cmd::{Command, SysOpened};
 use xpute_guest::abi::handle::HandleTable;
 use xpute_guest::ipc::directory::{directory_words, spec::key, write_directory};
-use xpute_guest::ipc::door::{Applied, Door, DoorLayout, RingLayout};
+use xpute_guest::ipc::door::{Applied, Door};
 use xpute_guest::ipc::file::Files;
-use xpute_guest::ipc::ring::{ring_bytes, slots_bytes};
+use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_guest::ipc::stream::Stream;
 use xpute_guest::ipc::sys::Sys;
+use xpute_guest::mem::Memory;
 use xpute_guest::sched::quantum::NO_WAKE;
 use xpute_kit::math::scalar::round;
 use xpute_kit::status::errno::Errno;
@@ -61,47 +62,37 @@ struct State {
     mark: f64,
 }
 
-fn at<T>(mem: *mut u8, off: u32) -> *mut T {
-    core::ptr::with_exposed_provenance_mut(mem.expose_provenance() + off as usize)
-}
-
 /// Every offset written is the memory's, so `range` is added to each.
 ///
 /// # Safety
 /// The range is `spec::MEMORY_BYTES` inside the memory, which outlives the
 /// guest, and nothing else writes it while a call runs.
-unsafe fn boot(mem: *mut u8, range: u32, now: Now) -> u32 {
-    let layout = DoorLayout {
-        slot_bytes: spec::SLOT_BYTES,
-        submission: RingLayout {
-            capacity: spec::SUBMISSION_CAPACITY,
-            desc_at: range + SUBMISSION_DESC_AT,
-            slot_at: range + SUBMISSION_SLOT_AT,
-        },
-        completion: RingLayout {
-            capacity: spec::COMPLETION_CAPACITY,
-            desc_at: range + COMPLETION_DESC_AT,
-            slot_at: range + COMPLETION_SLOT_AT,
-        },
-    };
+unsafe fn boot(mem: Memory, range: u32, now: Now) -> u32 {
+    let at = |off: u32| (range + off) as usize;
     // SAFETY: the caller's memory; the ranges are the layout's.
-    let (door, stream, sys, directory) = unsafe {
+    let (sq, cq, stream, sys) = unsafe {
         (
-            Door::init(mem, &layout, spec::MOST_RAISE),
-            Stream::new(core::slice::from_raw_parts_mut(at::<u32>(mem, range + STREAM_AT), spec::STREAM_WORDS as usize), 1),
-            Sys::new(core::slice::from_raw_parts_mut(at::<u32>(mem, range + SYS_AT), spec::SYS_WORDS as usize)),
-            core::slice::from_raw_parts_mut(at::<u32>(mem, range + DIRECTORY_AT), directory_words(4)),
+            Ring::init(mem, at(SUBMISSION_DESC_AT), spec::SUBMISSION_CAPACITY, range + SUBMISSION_SLOT_AT, spec::SLOT_BYTES),
+            Ring::init(mem, at(COMPLETION_DESC_AT), spec::COMPLETION_CAPACITY, range + COMPLETION_SLOT_AT, spec::SLOT_BYTES),
+            Stream::new(mem, at(STREAM_AT), spec::STREAM_WORDS as usize, 1),
+            Sys::new(mem, at(SYS_AT), spec::SYS_WORDS as usize),
         )
     };
-    write_directory(
-        directory,
-        &[
-            (key::SUBMISSION, range + SUBMISSION_DESC_AT),
-            (key::COMPLETION, range + COMPLETION_DESC_AT),
-            (spec::key::STREAM, range + STREAM_AT),
-            (key::SYS, range + SYS_AT),
-        ],
-    );
+    let door = Door::new(sq, cq, spec::MOST_RAISE);
+    // SAFETY: as above.
+    unsafe {
+        write_directory(
+            mem,
+            at(DIRECTORY_AT),
+            directory_words(4),
+            &[
+                (key::SUBMISSION, range + SUBMISSION_DESC_AT),
+                (key::COMPLETION, range + COMPLETION_DESC_AT),
+                (spec::key::STREAM, range + STREAM_AT),
+                (key::SYS, range + SYS_AT),
+            ],
+        )
+    };
     let guest = Guest {
         door,
         state: State {
@@ -115,15 +106,15 @@ unsafe fn boot(mem: *mut u8, range: u32, now: Now) -> u32 {
     };
     // SAFETY: the state's range is the layout's, inside the memory and on
     // the state's alignment (the asserts above).
-    unsafe { at::<Guest>(mem, range + STATE_AT).write(guest) };
+    unsafe { mem.at::<Guest>(at(STATE_AT)).write(guest) };
     range + DIRECTORY_AT
 }
 
 /// # Safety
 /// `boot` laid a guest out there.
-unsafe fn interrupt(mem: *mut u8, range: u32) -> f64 {
+unsafe fn interrupt(mem: Memory, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
-    let Guest { door, state } = unsafe { &mut *at::<Guest>(mem, range + STATE_AT) };
+    let Guest { door, state } = unsafe { &mut *mem.at::<Guest>((range + STATE_AT) as usize) };
     state.sys.rise();
     door.drain(|cmd, pkt| apply(door, state, cmd, pkt));
     state.stream.publish();
@@ -142,7 +133,7 @@ unsafe fn interrupt(mem: *mut u8, range: u32) -> f64 {
 #[no_mangle]
 pub unsafe extern "C" fn xpute_conformance_boot(mem: *mut u8, now: Now) -> u32 {
     // SAFETY: the caller's memory, the range from its start.
-    unsafe { boot(mem, 0, now) }
+    unsafe { boot(given(mem), 0, now) }
 }
 
 /// # Safety
@@ -151,7 +142,14 @@ pub unsafe extern "C" fn xpute_conformance_boot(mem: *mut u8, now: Now) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn xpute_conformance_interrupt(mem: *mut u8, _quota_ms: f64) -> f64 {
     // SAFETY: the caller's memory, booted.
-    unsafe { interrupt(mem, 0) }
+    unsafe { interrupt(given(mem), 0) }
+}
+
+/// The memory a native host hands over, `spec::MEMORY_BYTES` from `mem`.
+#[cfg(not(target_arch = "wasm32"))]
+fn given(mem: *mut u8) -> Memory {
+    // SAFETY: the host hands over `spec::MEMORY_BYTES` from `mem`, kept for the guest's life.
+    unsafe { Memory::new(mem.expose_provenance(), spec::MEMORY_BYTES as usize) }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -190,13 +188,13 @@ mod module {
         xpute_kit::ensure!(range as u64 + spec::MEMORY_BYTES as u64 <= given(), ENOMEM, range);
         // SAFETY: the module's memory, from address 0, and the range inside
         // it past what the linker placed.
-        unsafe { boot(core::ptr::null_mut(), range, now) }
+        unsafe { boot(xpute_guest::mem::core(), range, now) }
     }
 
     #[no_mangle]
     pub extern "C" fn xpute_conformance_interrupt(_quota_ms: f64) -> f64 {
         // SAFETY: the module's memory, booted.
-        unsafe { interrupt(core::ptr::null_mut(), range_at()) }
+        unsafe { interrupt(xpute_guest::mem::core(), range_at()) }
     }
 }
 
@@ -219,7 +217,7 @@ fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Appli
                 return Err(MarshalError::new(Errno::EINVAL));
             }
             for k in 0..n {
-                door.post(k, spec::cmd::SIGNAL, 0, 0, None);
+                door.post(k, spec::cmd::SIGNAL, 0, 0);
             }
             Ok(Some(n as i32))
         }
@@ -240,7 +238,7 @@ fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Appli
         c if c == Command::SYS_OPENED as u32 => {
             let answer = SysOpened::read(pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?)?;
             if let Some(&owner) = files.owner(answer.fd) {
-                door.post(owner, spec::cmd::OPENED, 0, answer.res, None);
+                door.post(owner, spec::cmd::OPENED, 0, answer.res);
             }
             Ok(Some(0))
         }

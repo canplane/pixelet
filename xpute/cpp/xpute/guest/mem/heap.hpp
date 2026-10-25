@@ -1,8 +1,9 @@
 // cpp/xpute/guest/mem/heap.hpp
 
-// Blocks out of the guest's heap. The allocator is installed by the guest
-// (`set_heap`), and `operator new` points at it too, so nothing allocates from
-// memory the guest was not given.
+// Blocks out of the guest's heap, named by offsets in its memory
+// (`mem::core`). The allocator is installed by the guest (`set_heap`), and
+// `operator new` points at it too, so nothing allocates from memory the guest
+// was not given.
 
 #pragma once
 
@@ -11,7 +12,7 @@
 #include <optional>
 #include <utility>
 
-#include "memory.hpp"
+#include "xpute/guest/mem.hpp"
 
 namespace xpute {
 
@@ -36,33 +37,33 @@ void set_heap(Allocator heap) noexcept;
 Allocator heap() noexcept;
 
 // None for no room, no allocator, or zero bytes.
-inline std::optional<Block> alloc(Memory mem, std::uint32_t bytes) noexcept {
+inline std::optional<Block> alloc(std::uint32_t bytes) noexcept {
     Allocator h = heap();
     if (bytes == 0 || h.alloc == nullptr) return std::nullopt;
     void *p = h.alloc(bytes, BLOCK_ALIGN);
     if (p == nullptr) return std::nullopt;
-    return Block{mem.off_of(p), bytes};
+    return Block{mem::off_of(p), bytes};
 }
 
-inline void free(Memory mem, Block block) noexcept {
-    heap().free(mem.at(block.at), block.bytes, BLOCK_ALIGN);
+inline void free(Block block) noexcept {
+    heap().free(mem::at(block.at), block.bytes, BLOCK_ALIGN);
 }
 
 // For work that can still fail after taking the block; `keep` hands it on.
 class BlockGuard {
   public:
-    static std::optional<BlockGuard> alloc(Memory mem, std::uint32_t bytes) noexcept {
-        std::optional<Block> b = xpute::alloc(mem, bytes);
+    static std::optional<BlockGuard> alloc(std::uint32_t bytes) noexcept {
+        std::optional<Block> b = xpute::alloc(bytes);
         if (!b) return std::nullopt;
-        return BlockGuard(mem, *b);
+        return BlockGuard(*b);
     }
 
-    BlockGuard(BlockGuard &&o) noexcept : mem_(o.mem_), block_(std::exchange(o.block_, std::nullopt)) {}
+    BlockGuard(BlockGuard &&o) noexcept : block_(std::exchange(o.block_, std::nullopt)) {}
     BlockGuard(const BlockGuard &) = delete;
     BlockGuard &operator=(const BlockGuard &) = delete;
     BlockGuard &operator=(BlockGuard &&) = delete;
     ~BlockGuard() {
-        if (block_) xpute::free(mem_, *block_);
+        if (block_) xpute::free(*block_);
     }
 
     const Block &block() const noexcept { return *block_; }
@@ -70,9 +71,8 @@ class BlockGuard {
     Block keep() noexcept { return *std::exchange(block_, std::nullopt); }
 
   private:
-    BlockGuard(Memory mem, Block block) noexcept : mem_(mem), block_(block) {}
+    explicit BlockGuard(Block block) noexcept : block_(block) {}
 
-    Memory mem_;
     std::optional<Block> block_;
 };
 

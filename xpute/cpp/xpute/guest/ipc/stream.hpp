@@ -11,7 +11,7 @@
 #include <source_location>
 #include <span>
 
-#include "xpute/guest/mem/memory.hpp"
+#include "xpute/guest/mem.hpp"
 
 namespace xpute {
 

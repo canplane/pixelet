@@ -7,7 +7,7 @@
 use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec::asset::DecorId;
 use pxl_spec::space::coord::v3::{self, V3};
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 
 use crate::domain::layer::instance::Instance;
 use crate::domain::query::decor::asset::decor_model;
@@ -29,9 +29,9 @@ pub fn strike(models: &Models, i: &Instance, o: V3, d: V3, limit: f64) -> Option
     // SAFETY: the model's block, positions first, indices past the vertex words.
     let (positions, indices) = unsafe {
         (
-            core::slice::from_raw_parts(ptr_at::<f32>(mesh.at), mesh.vertex_cnt as usize * 3),
+            core::slice::from_raw_parts(mem::at::<f32>(mesh.at), mesh.vertex_cnt as usize * 3),
             core::slice::from_raw_parts(
-                (ptr_at::<u32>(mesh.at)).add(mesh.vertex_cnt as usize * pxl_render::frame::draw::MODEL_VERTEX_WORDS as usize),
+                (mem::at::<u32>(mesh.at)).add(mesh.vertex_cnt as usize * pxl_render::frame::draw::MODEL_VERTEX_WORDS as usize),
                 mesh.index_cnt as usize,
             ),
         )

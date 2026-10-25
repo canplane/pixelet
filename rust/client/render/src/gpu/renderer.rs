@@ -10,7 +10,7 @@ use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world;
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::off_of;
+use xpute_guest::mem::off_of;
 
 use crate::api_spec::surface_role;
 use crate::frame::draw::{

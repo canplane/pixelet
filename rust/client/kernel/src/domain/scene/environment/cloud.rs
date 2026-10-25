@@ -23,7 +23,7 @@ use pxl_spec::space::coord::world::nearest;
 use pxl_spec_core::cloud::{drift, lattice_hash, CUMULUS_KM, WIND};
 use pxl_spec_core::scatter::drawn;
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::frame_budget::FrameBudget;
 
@@ -287,7 +287,7 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
 /// extent. The field's hash is asked once a patch, where it is built.
 fn built(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     // SAFETY: the patch's bytes, held until it goes, which is after this turn reads them.
-    let words: &[u32] = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(b.at as usize), b.bytes as usize / 4) };
+    let words: &[u32] = unsafe { core::slice::from_raw_parts(mem::at::<u32>(b.at as usize), b.bytes as usize / 4) };
     lane::groups(words).zip(VARIANTS).flat_map(move |((first, n), file)| {
         let lane = GroupLanes {
             first: first as usize,
@@ -319,7 +319,7 @@ fn build(key: [i64; 2], base: f64, lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()], 
     let index = (words * 4) as u32;
     let (at, bytes) = alloc(index + instances as u32 * 4)?;
     // SAFETY: a heap block of the bytes asked for, this patch's until given back.
-    let out: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at), bytes as usize / 4) };
+    let out: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), bytes as usize / 4) };
     out[0] = lanes.len() as u32;
     let mut first = header;
     for (g, l) in lanes.iter().enumerate() {
@@ -371,7 +371,7 @@ fn present_patch(draw: &mut DrawList, b: &Shown, translation: [f32; 3], eye: V3,
     let nearest = v3::len(&[gap(x0, x0 + b.side, eye[0]), gap(y0, y0 + b.side, eye[1]), gap(zlo, zhi, eye[2])]).max(1e-3);
     let farthest = v3::len(&[reach(x0, x0 + b.side, eye[0]), reach(y0, y0 + b.side, eye[1]), reach(zlo, zhi, eye[2])]).max(1e-3);
     // SAFETY: the patch's bytes, `bytes` long, its owner's to write past `index`.
-    let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(b.at as usize), b.bytes as usize / 4) };
+    let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(b.at as usize), b.bytes as usize / 4) };
     let (lanes_of, list) = words.split_at_mut(b.index as usize / 4);
     let (mut at, mut changed) = (0usize, false);
     for ((offset, count), (group, (extent, [least, most]))) in lane::groups(lanes_of).zip(groups) {

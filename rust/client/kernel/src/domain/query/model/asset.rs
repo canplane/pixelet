@@ -13,7 +13,7 @@ use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
 use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4;
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 
 use crate::sys::io::host::Refused;
 use crate::sys::io::loader::{load_gltf, load_of};
@@ -125,7 +125,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
         let (model, block) = models.new_model(vertex_cnt, index_cnt, joint_cnt)?;
         let n = (vertex_cnt * MODEL_VERTEX_WORDS + index_cnt) as usize;
         // SAFETY: the model's block, `n` words, ours until sealed.
-        let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), n) };
+        let words = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(block), n) };
         let lane = |k: usize| k * vertex_cnt as usize;
         let put_f = |words: &mut [u32], at: usize, v: f32| words[at] = v.to_bits();
 

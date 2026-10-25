@@ -4,7 +4,7 @@
 //! records by pipeline, as the renderer and its passes read them.
 
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem;
 
 use crate::frame::draw::DRAW_WORDS;
 use crate::frame::shader::record::{PIPELINES, UPLOAD_LAYOUT};
@@ -84,7 +84,7 @@ pub(crate) fn buffer_size(len: u32) -> u32 {
 
 fn memory(at: u32, n: u32) -> &'static [u8] {
     // SAFETY: a heap block the draw list named, live until its free is listed.
-    unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at as usize), n as usize) }
+    unsafe { core::slice::from_raw_parts(mem::at::<u8>(at as usize), n as usize) }
 }
 
 /// Handle, address, length, the two counts, buffer, group.
@@ -101,7 +101,7 @@ pub const fn uploads_bytes(live: usize) -> u32 {
 pub unsafe fn set_uploads(at: u32, live: usize) {
     let slots = slots_of(live);
     // SAFETY: the caller's range, one lane of `slots` words after another.
-    let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize + k * slots * 4), slots) };
+    let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at as usize + k * slots * 4), slots) };
     UPLOADS.set(Uploads {
         handle: lane(0),
         at: lane(1),

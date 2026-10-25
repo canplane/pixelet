@@ -10,6 +10,7 @@ pub mod spec;
 
 use xpute_kit::math::scalar::round;
 
+use crate::mem::Memory;
 use crate::sched::quantum::QuantumPolicy;
 
 /// A key (`spec::key`, or one the program numbers with `key::PROGRAM` set)
@@ -20,12 +21,18 @@ pub const fn directory_words(entries: usize) -> usize {
     spec::HEAD as usize + 2 * entries
 }
 
-/// A key may appear once, so no two readers can pick different values.
-pub fn write_directory(words: &mut [u32], entries: &[Entry]) {
-    xpute_kit::ensure!(directory_words(entries.len()) <= words.len(), ENOSPC, entries.len());
+/// Into the `words` at `at` in `mem`. A key may appear once, so no two
+/// readers can pick different values.
+///
+/// # Safety
+/// The range is valid and nothing else holds it while the directory is written.
+pub unsafe fn write_directory(mem: Memory, at: usize, words: usize, entries: &[Entry]) {
+    xpute_kit::ensure!(directory_words(entries.len()) <= words, ENOSPC, entries.len());
     for (i, (key, _)) in entries.iter().enumerate() {
         xpute_kit::ensure!(entries[..i].iter().all(|(k, _)| k != key), EINVAL, *key);
     }
+    // SAFETY: the caller's range.
+    let words = unsafe { core::slice::from_raw_parts_mut(mem.at::<u32>(at), words) };
     words[..spec::HEAD as usize].copy_from_slice(&[spec::MAGIC, spec::VERSION, entries.len() as u32, 0]);
     for (i, (key, value)) in entries.iter().enumerate() {
         let at = spec::HEAD as usize + 2 * i;
