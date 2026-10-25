@@ -61,16 +61,18 @@ The line is drawn in the same place every time: xpute carries the mechanism, and
 
 ## Running it
 
-Deno 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target, a C++20 compiler as `c++` or `$CXX`, and the [WASI SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or `$WASI_SDK_PATH`, for the C++ guest built as a WebAssembly module.
+Deno 2.x, a Rust toolchain with the `wasm32-unknown-unknown` target, a C++20 compiler as `c++` or `$CXX`, GNU Make, and the [WASI SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or `$WASI_SDK_PATH`, for the C++ guest built as a WebAssembly module.
 
 ```sh
 deno task check   # deno fmt --check, deno lint, deno check, cargo fmt --check, clippy, the C++ compiled
 deno task test    # deno test, cargo test and the C++ tests, the golden records included,
-                  # then the traces run against every guest, native and WebAssembly
-deno task build:guests  # the guest the traces drive, in Rust and C++, native and WebAssembly; test builds it first
+                  # and the traces against every guest, native and WebAssembly, once build has made them
+deno task build   # the guest the traces drive, in Rust and C++, native and WebAssembly; test builds it first
 deno task test:gpu  # the GPU hosts against golden/gpu: the native one on wgpu, the web one in Chrome (installed, or $CHROME)
 deno task lint    # deno lint
 ```
+
+Each runs every tree's own task in parallel; `check:ts`, `check:cpp`, `check:rust` and the like run one tree's, as `deno task --cwd ts`, `make -C cpp` and `cargo` in `rust/` do.
 
 ## License
 

@@ -3,7 +3,7 @@
 /**
  * Runs the traces under spec/conformance/ against every guest, Rust or
  * C++, native or WebAssembly, through this runtime's host. Build the guests
- * first: Cargo for Rust, script/cpp.ts for C++.
+ * first (`deno task build`): Cargo for Rust, cpp/Makefile for C++.
  */
 
 import { assert, assertEquals, assertNotEquals } from "@std/assert";

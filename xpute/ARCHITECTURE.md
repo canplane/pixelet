@@ -261,7 +261,7 @@ The implementations do not all stand in the same relation, and which relation de
 
 `kit` asks nothing of a program: link it and call it. `guest` and `host` ask it to run xpute's way — memory granted once, work in turns, I/O by asking.
 
-C++ is an implementation beside the Rust, not a port of it: written from the contract and the formats, built by the platform's compiler (`script/cpp.ts`), and held by the same records and traces. That is its point — what guests agree on is what the boundary shows, not what one was copied from. Where it differs, the language is why:
+C++ is an implementation beside the Rust, not a port of it: written from the contract and the formats, built by the platform's compiler (`cpp/Makefile`), and held by the same records and traces. That is its point — what guests agree on is what the boundary shows, not what one was copied from. Where it differs, the language is why:
 
 - it writes the codecs its standard library lacks;
 - its XTP reads a packet without allocating, handing back views;

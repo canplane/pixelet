@@ -1,7 +1,7 @@
 // xpute-conformance/build.rs
 
 // As wasm the memory is imported. The stack is the target's default 1 MiB,
-// written down so the C++ build (script/cpp.ts) can match it.
+// written down so the C++ build (cpp/Makefile) can match it.
 
 const STACK_BYTES: u32 = 1 << 20;
 

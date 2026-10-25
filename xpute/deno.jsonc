@@ -3,22 +3,47 @@
 
   // Routes only. Each tree is a root of its own: ts/ and script/ as Deno's,
   // rust/ as Cargo's, its commands as aliases in rust/.cargo/config.toml, and
-  // cpp/ built by script/cpp.ts. What is here is the documents and the spec,
-  // formatted below, and the order of a test: the traces run against the
-  // guests build:guests makes first.
+  // cpp/ as Make's (cpp/Makefile). What is here is the documents and the spec,
+  // formatted below, a task a tree for each verb, and the aggregates over
+  // them, run in parallel; the one order said is the traces' after the
+  // guests they drive.
   "workspace": [],
   "exclude": ["ts/", "script/"],
 
   "tasks": {
-    "check": "deno fmt --check && deno task --cwd script check && deno task --cwd ts check && ./script/cpp.ts check && cd rust && cargo fmt --all --check && cargo lint",
-    "test": "deno task --cwd ts test && ./script/cpp.ts test && cd rust && cargo test --all && cd .. && deno task build:guests && deno task --cwd ts test:conformance",
+    "check": { "dependencies": ["check:doc", "check:script", "check:ts", "check:cpp", "check:rust"] },
+    "check:doc": "deno fmt --check",
+    "check:script": "deno task --cwd script check",
+    "check:ts": "deno task --cwd ts check",
+    "check:cpp": "make -C cpp -j8 check",
+    "check:rust": "cd rust && cargo fmt --all --check && cargo lint",
+
     // The one thing xpute builds: the guest the contract's traces drive, in
     // Rust and in C++, each a native library and a WebAssembly module.
-    "build:guests": "./script/cpp.ts guest && ./script/cpp.ts wasm && cd rust && cargo guest && cargo guest-wasm",
-    // What needs a GPU: the native host on wgpu, and the web host in Chrome (script/web-gpu.ts).
-    "test:gpu": "./script/web-gpu.ts && cd rust && cargo test-gpu",
-    "fmt": "deno fmt && deno task --cwd script fmt && deno task --cwd ts fmt && cd rust && cargo fmt --all",
-    "lint": "deno task --cwd script lint && deno task --cwd ts lint",
+    "build": { "dependencies": ["build:cpp", "build:rust"] },
+    "build:cpp": "make -C cpp -j8 guest wasm",
+    "build:rust": "cd rust && cargo guest && cargo guest-wasm",
+
+    "test": { "dependencies": ["test:ts", "test:cpp", "test:rust", "test:conformance"] },
+    "test:ts": "deno task --cwd ts test",
+    "test:cpp": "make -C cpp -j8 test",
+    "test:rust": "cd rust && cargo test --all",
+    "test:conformance": { "command": "deno task --cwd ts test:conformance", "dependencies": ["build"] },
+    // What needs a GPU: the web host in Chrome (script/web-gpu.ts), and the native one on wgpu.
+    "test:gpu": { "dependencies": ["test:gpu:web", "test:gpu:native"] },
+    "test:gpu:web": "./script/web-gpu.ts",
+    "test:gpu:native": "cd rust && cargo test-gpu",
+
+    "fmt": { "dependencies": ["fmt:doc", "fmt:script", "fmt:ts", "fmt:rust"] },
+    "fmt:doc": "deno fmt",
+    "fmt:script": "deno task --cwd script fmt",
+    "fmt:ts": "deno task --cwd ts fmt",
+    "fmt:rust": "cd rust && cargo fmt --all",
+
+    "lint": { "dependencies": ["lint:script", "lint:ts"] },
+    "lint:script": "deno task --cwd script lint",
+    "lint:ts": "deno task --cwd ts lint",
+
     "export": "./script/export.ts"
   },
 
