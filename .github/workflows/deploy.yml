@@ -81,9 +81,9 @@ jobs:
     name: take the next build number
     if: github.ref == 'refs/heads/deploy'
     runs-on: ubuntu-latest
-    # The take writes the counter back only over the version it read, so two
-    # takes never share a number (script/build-log.py). deploy-web is in the
-    # same group, so a deploy push queues behind the one in front of it.
+    # One holder of the counter at a time: the take is read-add-write and two
+    # runs holding it together would take the same number. deploy-web is in
+    # the same group, so a deploy push queues behind the one in front of it.
     concurrency:
       group: build-counter
       cancel-in-progress: false
@@ -93,6 +93,11 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
+
+      # wrangler, the bucket's CLI, runs on Deno (script/r2.py).
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version-file: ts/.tool-versions
 
       - name: Take the next build number
         id: number
@@ -246,10 +251,10 @@ jobs:
     # went out, and the one most worth finding in the log later.
     if: ${{ !cancelled() && (needs.deploy-web.outputs.published == 'true' || needs.deploy-server.outputs.rebuilt == 'true') }}
     runs-on: ubuntu-latest
-    # R2 has no append, so the write is read-add-write as the counter's is,
-    # over the version read; the group only keeps two runs from retrying
-    # against each other. Its own group rather than the counter's: a run may
-    # record while the next one is already being numbered.
+    # R2 has no append, so the write is read-add-write as the counter's is, and
+    # this is what keeps two of them from losing a line. Its own group rather
+    # than the counter's: a run may record while the next one is already being
+    # numbered.
     concurrency:
       group: build-log
       cancel-in-progress: false
@@ -260,6 +265,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version-file: ts/.tool-versions
 
       - name: Append this build to the log
         env:

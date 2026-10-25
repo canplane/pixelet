@@ -3,9 +3,8 @@
 # number is the official count, one object in the bucket, so no history
 # rewrite renumbers it and it is never reset; the log records commit
 # subjects, since main's history is rewritten and a sha may stop resolving.
-# Both are read and written back only over the version read (r2.py `put`
-# `if_match`), so a take or a record that another came between reads again
-# rather than losing a number or a line.
+# Each is read, added to and written back whole, since R2 has no append; the
+# workflow's concurrency groups keep two takes, or two records, apart.
 #
 #   ./script/build-log.py                      every build, newest first
 #   ./script/build-log.py --take               the next build number, taken (CI)
@@ -27,9 +26,6 @@ ROOT = Path(__file__).resolve().parent.parent
 KEY = "_meta/build-log.jsonl"
 COUNTER = "_meta/build-counter"
 CACHE = ROOT / "ts/client/.build_number"
-# Tries a write over the version read before giving up: each failed one means
-# another took or recorded in between.
-TRIES = 5
 
 
 def die(message: str):
@@ -50,34 +46,33 @@ def git(*args: str) -> str | None:
     return out.stdout.strip() if out.returncode == 0 else None
 
 
-def fetched(key: str) -> tuple[str, str]:
-    """The object's text and its ETag. A missing one is refused: treating it
-    as empty would overwrite the log, or restart the count."""
+def fetched(key: str) -> str:
+    """The object's text. A missing one is refused: treating it as empty would
+    overwrite the log, or restart the count."""
     try:
         got = r2.get(key)
     except r2.Unreachable as e:
         die(str(e))
     if got is None:
         die(f"no {key} in {r2.BUCKET}, and an empty one is not assumed; put one there by hand to start it")
-    return got[0].decode(), got[1]
+    return got.decode()
 
 
 def take() -> None:
     """The next build number, taken off the counter and printed."""
-    for _ in range(TRIES):
-        raw, etag = fetched(COUNTER)
-        current = raw.strip()
-        if not current.isdigit():
-            die(f"the counter holds {json.dumps(current[:40])}, not a count; no number was taken")
-        n = int(current) + 1
-        if r2.put(COUNTER, f"{n}\n".encode(), "text/plain", if_match=etag):
-            print(n)
-            return
-    die(f"the counter moved under {TRIES} takes in a row; no number was taken")
+    current = fetched(COUNTER).strip()
+    if not current.isdigit():
+        die(f"the counter holds {json.dumps(current[:40])}, not a count; no number was taken")
+    n = int(current) + 1
+    try:
+        r2.put(COUNTER, f"{n}\n".encode(), "text/plain")
+    except r2.Unreachable as e:
+        die(f"{e}; #{n} was not taken and the next build would reuse it")
+    print(n)
 
 
-def read() -> tuple[str, str, list[dict]]:
-    raw, etag = fetched(KEY)
+def read() -> tuple[str, list[dict]]:
+    raw = fetched(KEY)
     entries = []
     for line in raw.split("\n"):
         if not line.strip():
@@ -89,28 +84,24 @@ def read() -> tuple[str, str, list[dict]]:
     # Refreshes the gitignored cache of the last published number.
     if entries:
         CACHE.write_text(f"{entries[-1]['n']}\n")
-    return raw, etag, entries
+    return raw, entries
 
 
 def record(n: int, web: bool, server: bool, smoke: str | None) -> None:
     sha = git("rev-parse", "HEAD") or die("not a git checkout; nothing to record")
-    for _ in range(TRIES):
-        raw, etag, entries = read()
-        # A re-run finds its own record already there.
-        if any(e["n"] == n for e in entries):
-            print(f"#{n} is already recorded")
-            return
-        entry = line_for(n, sha, entries, web, server, smoke)
-        body = raw if raw.endswith("\n") or raw == "" else raw + "\n"
-        body += json.dumps(entry, separators=(",", ":"), ensure_ascii=False) + "\n"
-        try:
-            landed = r2.put(KEY, body.encode(), "application/x-ndjson", if_match=etag)
-        except r2.Unreachable as e:
-            die(f"{e}; #{n} went out and is not recorded")
-        if landed:
-            print(f"#{n} recorded: {len(entry['commits'])} commit(s) from {sha[:8]}")
-            return
-    die(f"the log moved under {TRIES} writes in a row; #{n} went out and is not recorded")
+    raw, entries = read()
+    # A re-run finds its own record already there.
+    if any(e["n"] == n for e in entries):
+        print(f"#{n} is already recorded")
+        return
+    entry = line_for(n, sha, entries, web, server, smoke)
+    body = raw if raw.endswith("\n") or raw == "" else raw + "\n"
+    body += json.dumps(entry, separators=(",", ":"), ensure_ascii=False) + "\n"
+    try:
+        r2.put(KEY, body.encode(), "application/x-ndjson")
+    except r2.Unreachable as e:
+        die(f"{e}; #{n} went out and is not recorded")
+    print(f"#{n} recorded: {len(entry['commits'])} commit(s) from {sha[:8]}")
 
 
 def line_for(n: int, sha: str, entries: list[dict], web: bool, server: bool, smoke: str | None) -> dict:
@@ -153,7 +144,7 @@ elif args[:1] == ["--record"]:
     at = args.index("--smoke") if "--smoke" in args else -1
     record(n, "--web" in args, "--server" in args, smoke_of(args[at + 1] if 0 <= at < len(args) - 1 else None))
 elif not args:
-    _, _, entries = read()
+    _, entries = read()
     for entry in reversed(entries):
         show(entry)
 else:

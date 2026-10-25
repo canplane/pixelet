@@ -28,7 +28,7 @@ aws configure --profile r2          # region: auto
 aws configure set endpoint_url https://<account_id>.r2.cloudflarestorage.com --profile r2
 ```
 
-`publish.py` and the build log (`script/r2.py`) use exactly that profile;
+`publish.py` uses exactly that profile, since a set is too many objects to put one by one;
 `$R2`, where set, stands in for its endpoint. A manual `aws s3 sync` needs
 `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` too, since the CLI's checksum
 headers are refused by R2; `publish.py` sets it for itself.

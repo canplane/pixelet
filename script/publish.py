@@ -32,7 +32,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import r2
 
 REPO = Path(__file__).resolve().parent.parent
 BUCKET = "pixelet-tiles"
@@ -57,7 +56,11 @@ def tile_object(version, name):
 
 
 def endpoint():
-    return r2.profile_endpoint() or die("no endpoint for the `r2` profile: set its endpoint_url, or export $R2 (publish-bucket)")
+    """The bucket's S3 endpoint: `$R2` where it is set, else the `r2` profile's own `endpoint_url`."""
+    if os.environ.get("R2"):
+        return os.environ["R2"]
+    got = subprocess.run(["aws", "configure", "get", "endpoint_url", "--profile", "r2"], capture_output=True, text=True)
+    return got.stdout.strip() or die("no endpoint for the `r2` profile: set its endpoint_url, or export $R2 (publish-bucket)")
 
 
 def aws(args, inherit=False, none=False):
