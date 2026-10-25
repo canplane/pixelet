@@ -6,6 +6,12 @@
     "marker is drawn as its own design (pxl-spec asset/marker.rs",
     "`marker_cell`). Per id where the kind comes to hold more than one shape."
   ],
+  "MARKER_TEXT_CHARS": {
+    "$value": 40,
+    "$type": "u32",
+    "$doc": ["The most a marker's words may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most."]
+  },
+
   "MARKER_SHOWN_FROM": {
     "$value": 19,
     "$type": "u8",

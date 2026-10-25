@@ -16,6 +16,9 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
+/// The most a marker's words may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most.
+pub const MARKER_TEXT_CHARS: u32 = 40;
+
 /// The coarsest camera grid cell a marker shows at: z19, 32 of them across
 /// a z14 tile, the zoom OpenMapTiles' `poi` layer holds every point at
 /// (layers/poi/poi.yaml). What someone puts up, by the cells of the square

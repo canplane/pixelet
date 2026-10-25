@@ -35,6 +35,3 @@ impl Class {
 pub mod CLASS {
     pub const marker_text: u8 = 0;
 }
-
-/// The most a marker's words may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most.
-pub const MARKER_TEXT_CHARS: u32 = 40;

@@ -12,7 +12,7 @@ use pxl_spec::asset::cube::{cube_id, Cube};
 use pxl_spec::asset::decor_num_id;
 use pxl_spec::asset::marker::MARKER;
 use pxl_spec::asset::{cube, DecorId};
-use pxl_spec::block::ext::MARKER_TEXT_CHARS;
+use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
 use pxl_spec::block::object::object_value_is_marker;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;

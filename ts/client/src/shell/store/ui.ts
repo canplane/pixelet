@@ -6,7 +6,7 @@ import type { i32, u16, u32 } from "@xpute/kit/abi/word.ts";
 import { cube } from "@/catalog/asset/cube.spec.ts";
 import { allCubes, type Cube, decorIds } from "@/catalog/asset/mod.ts";
 import { ActiveTool, Command, encode_chat_send, encode_input_marker_words } from "@/abi/cmd.spec.ts";
-import { MARKER_TEXT_CHARS } from "@/catalog/block/ext.spec.ts";
+import { MARKER_TEXT_CHARS } from "@/catalog/asset/marker.spec.ts";
 import { kernel_command, kernel_fits, kernel_hold, kernel_room, kernel_snapshot } from "@/abi/shell.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { bracket } from "@/bracket.tsx";

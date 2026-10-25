@@ -6,7 +6,7 @@
 
 #[path = "ext.spec.rs"]
 mod spec;
-pub use spec::{Class, MARKER_TEXT_CHARS};
+pub use spec::Class;
 
 use crate::asset::id::{kind_of, AssetId, Kind};
 
