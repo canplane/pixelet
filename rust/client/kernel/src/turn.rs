@@ -70,23 +70,8 @@ fn companion_props() -> Option<CompanionProps> {
 
 /// The tool's ghost, drawn by the scene.
 fn ghost_step() {
-    use crate::domain::control::interaction::ghost::{ghost, Ghost};
-    let changed = section::map().map(|_| (scene(), draw_list())).map(|(scene, draw)| match ghost() {
-        Ghost::None => scene.ghost.clear(draw),
-        Ghost::Decor {
-            at,
-            decor,
-            variant,
-            rotation,
-            scale,
-            stand_in,
-        } => {
-            let stand_in = stand_in.map(|b| (b.at, b.size, b.cube, b.erase));
-            scene.ghost.set_decor(draw, at, decor, variant, rotation as f32, scale as f32, stand_in)
-        }
-        Ghost::Box(b) => scene.ghost.set_box(draw, b.at, b.size, b.cube, b.erase),
-    });
-    if changed == Some(true) {
+    use crate::domain::control::interaction::ghost::ghost;
+    if section::map().is_some_and(|_| scene().ghost.set(draw_list(), &ghost())) {
         request_world_tick();
     }
 }

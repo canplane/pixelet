@@ -2,14 +2,15 @@
 
 //! The ghost the tool held shows under the pointer: the decor a placement
 //! would stand or bring back, the box it would fill or carve, or what the
-//! eraser is over. What it looks like, its color, its texture and what stands
-//! in for a decor not yet loaded, is the scene's (`domain/scene/indicator/ghost.rs`).
+//! eraser is over (`Ghost`, an edit not yet made, beside the others in
+//! domain/layer/object/preview.rs). What it looks like, its color, its
+//! texture and what stands in for a decor not yet loaded, is the scene's
+//! (`domain/scene/indicator/ghost.rs`).
 
 use pxl_spec::asset::cube::{cube_of, Cube};
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::DecorId;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -18,39 +19,11 @@ use crate::domain::control::interaction::edit::{pending, restores_scattered, Pen
 use crate::domain::control::interaction::{holding, hover, ActiveTool};
 use crate::domain::layer::instance::Meta;
 use crate::domain::layer::object::meta::user_decor_pick;
+pub use crate::domain::layer::object::preview::{Ghost, GhostBox};
 use crate::domain::layer::object::store::Asset;
 use crate::domain::query::changed::Asked;
 use crate::domain::query::World;
 use xpute_guest::global::Global;
-
-/// What the pointer's tool would show where it is: nothing, a decor
-/// instance, or a box, drawn half transparent by the scene.
-pub enum Ghost {
-    None,
-    /// `decor`'s `variant`, its base at `at` in the world's frame. `stand_in`
-    /// is the box a placement would show in its place, none for an instance
-    /// the world already holds.
-    Decor {
-        at: V3,
-        decor: &'static Decor,
-        variant: u32,
-        rotation: f64,
-        scale: f64,
-        stand_in: Option<GhostBox>,
-    },
-    Box(GhostBox),
-}
-
-/// A box the tool would fill or carve: its corner in the world's frame, its
-/// edge, the cube it would be or carve (none where there is no one cube), and
-/// whether the eraser holds it.
-#[derive(Clone, Copy)]
-pub struct GhostBox {
-    pub at: V3,
-    pub size: f64,
-    pub cube: Option<Cube>,
-    pub erase: bool,
-}
 
 /// The look of the ground the eraser would carve, of the hovered point:
 /// asked again only where the hover moved or a change touched its column.

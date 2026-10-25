@@ -1,11 +1,15 @@
 // pxl-kernel/domain/layer/object/preview.rs
 
 //! An edit not yet made, as what it changes in what is drawn: the pointer
-//! decides it, the world as drawn composes it (`World::previewing`); and a
-//! marker waiting for its words, drawn with the words it has so far.
+//! decides it, the world as drawn composes it (`World::previewing`); the
+//! ghost it shows under the pointer (`Ghost`); and a marker waiting for its
+//! words, drawn with the words it has so far.
 
 use crate::sys::sched::edge::request_world_tick;
+use pxl_spec::asset::cube::Cube;
+use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 
 /// What the eraser's preview changes in what is drawn only: every mechanic
@@ -38,6 +42,39 @@ pub fn set(edits: RenderEdits) -> Option<RenderEdits> {
 /// The preview in force.
 pub fn current() -> RenderEdits {
     *PREVIEW.get(RenderEdits::default)
+}
+
+/// What the pointer's tool would show where it is: nothing, a decor
+/// instance, or a box, an instance in the pointer's frame. The tool decides
+/// it (pxl-kernel domain/control/interaction/ghost.rs `ghost`), and the scene
+/// draws it half transparent as its kind is drawn
+/// (domain/scene/indicator/ghost.rs `GhostDraw::set`).
+#[derive(Clone, Copy)]
+pub enum Ghost {
+    None,
+    /// `decor`'s `variant`, its base at `at` in the world's frame. `stand_in`
+    /// is the box a placement would show in its place, none for an instance
+    /// the world already holds.
+    Decor {
+        at: V3,
+        decor: &'static Decor,
+        variant: u32,
+        rotation: f64,
+        scale: f64,
+        stand_in: Option<GhostBox>,
+    },
+    Box(GhostBox),
+}
+
+/// A box the tool would fill or carve: its corner in the world's frame, its
+/// edge, the cube it would be or carve (none where there is no one cube), and
+/// whether the eraser holds it.
+#[derive(Clone, Copy)]
+pub struct GhostBox {
+    pub at: V3,
+    pub size: f64,
+    pub cube: Option<Cube>,
+    pub erase: bool,
 }
 
 /// A marker the tool left waiting for its words, at a place free or holding

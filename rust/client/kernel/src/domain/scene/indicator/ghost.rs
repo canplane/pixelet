@@ -2,9 +2,10 @@
 
 //! The ghost, half transparent: a box the box shader unfolds
 //! (pxl-render `mesh::ghost`), or one decor instance drawn by decor's. What it
-//! shows is the tool's (`domain/control/interaction/ghost.rs`); how it looks is
-//! decided here: a box's color and texture, and the box that stands in for a
-//! decor until it can be drawn as itself.
+//! shows is the tool's (`domain/control/interaction/ghost.rs`), handed over as
+//! an instance in the pointer's frame (`Ghost`); how each kind of it is drawn
+//! is decided here: a box's color and texture, and the box that stands in for
+//! a decor until it can be drawn as itself.
 
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR};
 use pxl_render::frame::shader::record::BOX_WORDS;
@@ -13,10 +14,11 @@ use pxl_render::gpu::api::bytes;
 use pxl_render::look::color::indicator;
 use pxl_render::mesh::ghost::{on_whole_units, write_lone_box};
 use pxl_render::mesh::paint::object::PAINTER;
-use pxl_spec::asset::cube::{cube_id, cube_rgb, Cube};
+use pxl_spec::asset::cube::{cube_id, cube_rgb};
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::coord::v3::V3;
 
+use crate::domain::layer::object::preview::{Ghost, GhostBox};
 use crate::domain::query::decor::asset::decor_assets_for;
 use crate::domain::view::setting::store::settings_store;
 
@@ -40,11 +42,28 @@ pub struct GhostDraw {
 }
 
 impl GhostDraw {
-    /// A box at `at`, `size` on an edge, painted as `cube` paints where
-    /// textures are on, else untextured in its color, or where there is no
-    /// cube in the indicator's (`ERASE` for the eraser's, else `ACTION`).
-    /// Whether what is drawn changed.
-    pub fn set_box(&mut self, draw: &mut DrawList, at: V3, size: f64, cube: Option<Cube>, erase: bool) -> bool {
+    /// What the tool shows, drawn as its kind is. Whether what is drawn
+    /// changed.
+    pub fn set(&mut self, draw: &mut DrawList, ghost: &Ghost) -> bool {
+        match *ghost {
+            Ghost::None => self.clear(draw),
+            Ghost::Decor {
+                at,
+                decor,
+                variant,
+                rotation,
+                scale,
+                stand_in,
+            } => self.set_decor(draw, at, decor, variant, rotation as f32, scale as f32, stand_in),
+            Ghost::Box(b) => self.set_box(draw, b),
+        }
+    }
+
+    /// A box at its corner, its size on an edge, painted as its cube paints
+    /// where textures are on, else untextured in its color, or where there
+    /// is no cube in the indicator's (`ERASE` for the eraser's, else
+    /// `ACTION`). Whether what is drawn changed.
+    fn set_box(&mut self, draw: &mut DrawList, GhostBox { at, size, cube, erase }: GhostBox) -> bool {
         let state = cube.filter(|_| settings_store().textures).map_or(0, cube_id);
         let rgb = cube.and_then(cube_rgb).unwrap_or(if erase { indicator::ERASE } else { indicator::ACTION });
         let (rgb, layer) = PAINTER.look_of(state).unwrap_or(([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8));
@@ -67,14 +86,13 @@ impl GhostDraw {
 
     /// `decor`'s `variant`, its base at `at`. An untextured white silhouette
     /// reads as a glitch, so until the variant's model and skin both arrive
-    /// `stand_in`'s box (`set_box`'s corner, edge, cube and eraser) is drawn
-    /// instead; with none, the instance is the world's own and drawn as it
-    /// is. Whether what is drawn changed.
+    /// `stand_in`'s box is drawn instead; with none, the instance is the
+    /// world's own and drawn as it is. Whether what is drawn changed.
     #[allow(clippy::too_many_arguments)]
-    pub fn set_decor(&mut self, draw: &mut DrawList, at: V3, decor: &Decor, variant: u32, rotation: f32, scale: f32, stand_in: Option<(V3, f64, Option<Cube>, bool)>) -> bool {
+    fn set_decor(&mut self, draw: &mut DrawList, at: V3, decor: &Decor, variant: u32, rotation: f32, scale: f32, stand_in: Option<GhostBox>) -> bool {
         let ready = || decor_assets_for(decor).is_some_and(|a| a.models.get(variant as usize).is_some_and(Option::is_some) && a.skin(variant as usize).is_some());
-        if let Some((at, size, cube, erase)) = stand_in.filter(|_| !ready()) {
-            return self.set_box(draw, at, size, cube, erase);
+        if let Some(b) = stand_in.filter(|_| !ready()) {
+            return self.set_box(draw, b);
         }
         let group = decor.first_group() + variant;
         let shape = Shape::Decor {
