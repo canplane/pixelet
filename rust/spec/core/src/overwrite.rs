@@ -2,11 +2,11 @@
 
 //! gpu-portable: what is placed, as a descent asks it — the objects' one
 //! tree (pxl-kernel domain/layer/object/store.rs), read where it lives: two lanes
-//! of a word a slot, `heap` a branch's children's block with `BRANCH` set or
+//! of a word a slot, `heap` a branch's children's octet with `BRANCH` set or
 //! 0 for a leaf, and `data` a leaf's value and its record's handle, or a
 //! branch's fold, the kind most of its fill is and the share filled. The
-//! root's block holds the nodes of zoom 0, and a node's slot in its parent's
-//! block is its index's low bits (`path`). A descent hands each node what its
+//! root's octet holds the nodes of zoom 0, and a node's slot in its parent's
+//! octet is its index's low bits (`path`). A descent hands each node what its
 //! parent found (`Held`), so a node is one look-up.
 //!
 //! What is placed is the last layer the ground decision lays
@@ -17,10 +17,10 @@
 use crate::cube::{object, sentinel, Ground, Object};
 use crate::Zoom;
 
-/// A slot's heap word when it is a branch, its children's block under it.
+/// A slot's heap word when it is a branch, its children's octet under it.
 pub const BRANCH: u32 = 1 << 31;
 
-/// The block of the root what is placed is under.
+/// The octet of the root what is placed is under.
 pub const PLACED: u32 = 0;
 
 /// A cube filled whole, as a fold's share counts it: a share is in 2⁻¹⁵ of
@@ -194,7 +194,7 @@ pub fn path(zoom: Zoom, at: [i32; 3]) -> [i32; 3] {
     [at[0] & (1u32 << zoom).wrapping_sub(1) as i32, at[1], at[2]]
 }
 
-/// A node's slot in its parent's block: X's low bit, then Y's, then Z's.
+/// A node's slot in its parent's octet: X's low bit, then Y's, then Z's.
 fn slot_of(at: [i32; 3]) -> u32 {
     (at[0] & 1 | (at[1] & 1) << 1 | (at[2] & 1) << 2) as u32
 }
@@ -211,7 +211,7 @@ fn of(lanes: &impl Lanes, slot: u32, zoom: Zoom) -> Held {
 }
 
 /// What the node `at` of `zoom` holds with nothing over it known: down from
-/// the root whose block is `root` to its own slot, or to the leaf over it, a
+/// the root whose octet is `root` to its own slot, or to the leaf over it, a
 /// `child` a zoom, the one step every descent of the tree takes. A descent
 /// asks this once, at its root.
 pub fn cursor(lanes: &impl Lanes, root: u32, zoom: Zoom, at: [i32; 3]) -> Held {
