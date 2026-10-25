@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # What the deployment has used against its free allowances: R2's writes and
 # Hetzner traffic, which the free Workers plan does not bound. Uses
-# wrangler's credential and hcloud's active context; wrangler runs from the
-# edge's package, so ts/deno.lock pins it.
+# wrangler's credential and hcloud's active context, both programs on the
+# PATH.
 #
 #   ./script/usage.py
 
@@ -22,8 +22,7 @@ signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 WORKER = "pixelet"
 BUCKET = "pixelet-tiles"
 SERVER = "pixelet-prod"
-EDGE = Path(__file__).resolve().parent.parent / "ts/server/edge"
-WRANGLER = ["deno", "run", "-A", "--node-modules-dir=auto", "npm:wrangler"]
+WRANGLER = ["wrangler"]
 
 WORKER_REQUESTS_PER_DAY = 100_000
 R2_STORAGE_BYTES = 10e9
@@ -76,7 +75,7 @@ def run(cmd: list[str], cwd: Path | None = None) -> str:
 def token() -> str:
     if set_ := os.environ.get("CLOUDFLARE_API_TOKEN"):
         return set_
-    out = run([*WRANGLER, "auth", "token", "--json"], cwd=EDGE)
+    out = run([*WRANGLER, "auth", "token", "--json"])
     return json.loads(out[out.index("{") :]).get("token") or die("wrangler has no credential: run `wrangler login`")
 
 

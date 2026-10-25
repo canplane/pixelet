@@ -67,6 +67,8 @@ env:
   # letters it assigns is the optimizer's own business — so the version is
   # pinned rather than taken from apt, where it also lags by years.
   BINARYEN_VERSION: "132"
+  # Cloudflare's CLI, pinned as the other tools a step installs are.
+  WRANGLER_VERSION: "4.123.0"
   # A runner's build is thrown away: debuginfo and incremental state were
   # most of a 5 GB cache that took four minutes to unpack.
   CARGO_INCREMENTAL: "0"
@@ -95,9 +97,9 @@ jobs:
           ref: ${{ github.sha }}
 
       # wrangler, the bucket's CLI, runs on Deno (script/r2.py).
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version-file: ts/.tool-versions
+      # wrangler, Cloudflare's CLI, a program the steps call as any other.
+      - name: Install wrangler
+        run: npm install --global "wrangler@${WRANGLER_VERSION}"
 
       - name: Take the next build number
         id: number
@@ -185,6 +187,10 @@ jobs:
         with:
           deno-version-file: ts/.tool-versions
 
+      # wrangler, Cloudflare's CLI, a program the steps call as any other.
+      - name: Install wrangler
+        run: npm install --global "wrangler@${WRANGLER_VERSION}"
+
       # Its own cargo cache: the module and what builds it.
       - uses: ./.github/actions/toolchain
         with:
@@ -266,9 +272,9 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version-file: ts/.tool-versions
+      # wrangler, Cloudflare's CLI, a program the steps call as any other.
+      - name: Install wrangler
+        run: npm install --global "wrangler@${WRANGLER_VERSION}"
 
       - name: Append this build to the log
         env:
