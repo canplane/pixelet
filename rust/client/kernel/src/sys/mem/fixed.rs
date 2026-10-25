@@ -37,6 +37,11 @@ impl Held {
     }
 }
 
+/// `count` of `size` bytes, rounded up to a whole cache line, as a lane is laid.
+pub const fn lane_bytes(count: usize, size: usize) -> u32 {
+    ((count * size).div_ceil(64) * 64) as u32
+}
+
 /// `n` of `T` from `off` into `s`. Sizes are fixed at compile time, so out
 /// of bounds or misaligned is a bug, not a refusal.
 ///

@@ -27,7 +27,7 @@ static DIVISION: Global<Residency<DivisionTile>> = Global::new();
 pub static RANGE: crate::sys::mem::fixed::Held = crate::sys::mem::fixed::Held::new();
 
 /// A record's cells, a word each, on a whole cache line.
-const RECORD_BYTES: u32 = ((CELLS * 4).div_ceil(64) * 64) as u32;
+const RECORD_BYTES: u32 = crate::sys::mem::fixed::lane_bytes(CELLS, 4);
 
 /// A record a frame, end to end.
 pub const DIVISION_BYTES: u32 = Residency::<DivisionTile>::FRAMES * RECORD_BYTES;
