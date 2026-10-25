@@ -1,9 +1,11 @@
 // pxl-kernel/domain/layer/query.rs
 
-//! The query: the only place a layer's storage shape is known
+//! The query: the form the terrain and the object store share, the only
+//! place either's storage shape is known
 //! (doc/minutes/archive/20260928-what-is-drawn-is-what-the-screen-covers.md, "The
 //! query"). It is asked of a node of the one hierarchy, a cube by its zoom
-//! and index, the same of every layer; how a layer answers is its own. It
+//! and index, the same of both; how each answers is its own, and each is
+//! read as itself: places, divisions and the Earth answer none. It
 //! knows nothing of the view: what node is asked, and how fine its cells, are
 //! said by the asker. Neither form fetches, holds or asks for anything: an
 //! answer is exact, coarser with the tile it lacked, or nothing and that tile.
@@ -22,7 +24,7 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use super::answer::Answer;
 
-/// A layer's answers, by the node asked.
+/// The terrain's or the object store's answers, by the node asked.
 pub trait Query {
     /// What a descent carries from a node to its children.
     type Cursor: Copy;

@@ -184,7 +184,7 @@ Height is not special: the distance is to the block met, every axis alike. The r
 
 ## The query, the only seam
 
-The query is the only place a layer's shape is known. Every layer answers one question of a node, a tile or a cube, at a cell zoom the asker states (`domain/layer/query.rs` `Query`).
+The query is the only place a layer's shape is known. The terrain and the object store answer one question of a node, a tile or a cube, at a cell zoom the asker states, in the form they share (`domain/layer/query.rs` `Query`); places, divisions and the Earth answer none.
 
 - Its **bound** is nothing known, empty, or inside a conservative box.
 - A descent carries a **cursor** from a node to its children, so each step is answered from its parent and never again from the top.
