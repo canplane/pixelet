@@ -2,8 +2,9 @@
 
 //! Display cases for the variant picker: a character idling and spinning in
 //! place, drawn into the case's own canvas from far below the world. A case
-//! is a frame, holding its actor's instance. The model is registered again
-//! at one unit tall, since the cases compare silhouettes, not scale.
+//! is a frame, holding its actor's instance: the variant's one registered
+//! model, which the instance scales to one unit tall, since the cases
+//! compare silhouettes, not scale.
 
 use crate::domain::query::model::asset::{model_of, ModelHandle};
 use crate::domain::query::model::draw_list;
@@ -94,7 +95,7 @@ pub fn preview_step(ctx: &mut TickContext) {
     let mut turned = false;
     for case in &mut c.cases {
         if case.model.is_none() {
-            case.model = model_of(case.variant.model, Some(1.0));
+            case.model = model_of(case.variant.model, Some(case.variant.height_u));
         }
         if case.actor.is_none() {
             if let (Some(model), Some(_)) = (&case.model, load_image(Load::Asset(case.variant.skin))) {
@@ -107,7 +108,8 @@ pub fn preview_step(ctx: &mut TickContext) {
         }
         let (Some(_), Some(model)) = (&case.actor, &case.model) else { continue };
         case.spin += SPIN_RATE_RAD_S * ctx.delta;
-        let scale = crate::domain::query::model::models().get(model.model).map_or(1.0, |m| m.scale());
+        // The model as registered, the variant's height tall, at one unit.
+        let scale = crate::domain::query::model::models().get(model.model).map_or(1.0, |m| m.scale()) / case.variant.height_u as f32;
         case.pose = Some(Pose {
             at,
             rotation_z: case.spin as f32,
@@ -141,11 +143,12 @@ pub fn preview_draw(draw: &mut DrawList, models: &Models, eye: V3) {
     }
 }
 
-/// (case, model, skin image), the image as the loader has it now.
+/// (case, its actor's palette, skin image), the image as the loader has it
+/// now: the palette names the case's own draw, as its model is the
+/// companion's too.
 pub fn preview_rows() -> impl Iterator<Item = (u32, u32, (u32, &'static [u8]))> {
     let c: &'static _ = cases();
-    c.cases.iter().filter_map(|case| match (&case.model, &case.actor) {
-        (Some(model), Some(_)) => Some((case.id, model.model, load_image(Load::Asset(case.variant.skin))?)),
-        _ => None,
-    })
+    c.cases
+        .iter()
+        .filter_map(|case| Some((case.id, case.actor.as_ref()?.palette(), load_image(Load::Asset(case.variant.skin))?)))
 }

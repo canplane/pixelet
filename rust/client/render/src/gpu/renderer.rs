@@ -93,6 +93,8 @@ pub struct FrameInput<'a> {
     /// 0 while it loads.
     pub decor: &'a [(u32, Option<Image>, Extent)],
     pub skins: &'a [(u32, Image)],
+    /// Each display case: its surface, its actor's palette, which names its
+    /// draw, and the skin.
     pub cases: &'a [(u32, u32, Image)],
     /// The texture pack's image; none while it loads.
     pub pack: fn() -> Option<Image>,
@@ -2182,12 +2184,14 @@ impl Renderer {
         (kind, stat)
     }
 
-    /// The cases drawn this frame: a surface still a case, and its actor's draw.
+    /// The cases drawn this frame: a surface still a case, its actor's model
+    /// and its draw, found by the palette that is the case's alone, since
+    /// another actor may play the same model.
     fn cases<'a, 'd>(draws: &'a Draws<'d>, cases: &'a [(u32, u32, Image)]) -> impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])> + 'a {
-        cases.iter().filter_map(move |&(id, model, image)| {
+        cases.iter().filter_map(move |&(id, palette, image)| {
             surface(id).filter(|s| s.role == surface_role::CASE)?;
-            let own = draws.of(PIPELINE_SKINNED).find(|d| d[2] == model)?;
-            Some((id, model, image, own))
+            let own = draws.of(PIPELINE_SKINNED).find(|d| d[1] == palette)?;
+            Some((id, own[2], image, own))
         })
     }
 
