@@ -26,7 +26,7 @@ FLAGS := -std=c++20 -fno-exceptions -fno-rtti -ffp-contract=off -Wall -Wextra -W
 # A source names itself as the root sees it (cpp/kit/...), in __FILE__ and
 # what a failed test prints, though it is compiled from here.
 PREFIX_MAP := $(foreach d,kit guest gpu conformance,-fmacro-prefix-map=$(d)/=cpp/$(d)/)
-# 1 MiB, the Rust build's number.
+# 1 MiB, the Rust build's number (xpute-link's STACK_BYTES).
 STACK_BYTES := 1048576
 WASM_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-memory -Wl,--stack-first \
 	-Wl,-z,stack-size=$(STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=xpute_conformance_interrupt

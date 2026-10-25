@@ -1,7 +1,14 @@
 // xpute-link/lib.rs
 
 //! How a guest built as one WebAssembly module is linked, for its build
-//! script. Cargo applies a `rustc-link-arg` only to the package whose script
+//! script:
+//!
+//! ```
+//! // a guest's build.rs, in its `main`
+//! xpute_link::module(&xpute_link::Module::default());
+//! ```
+//!
+//! Cargo applies a `rustc-link-arg` only to the package whose script
 //! prints it, so each guest's `build.rs` calls `module` with its own numbers.
 //!
 //! What is the same for every module guest: the host hands it its memory, so
@@ -17,6 +24,9 @@
 /// A WebAssembly page, the unit a memory is declared in.
 pub const PAGE_BYTES: u32 = 1 << 16;
 
+/// The stack a module has unless it says otherwise: rustc's own for wasm32.
+pub const STACK_BYTES: u32 = 1 << 20;
+
 /// A module guest's numbers.
 pub struct Module {
     /// The stack's size (`-z stack-size`), placed first (`--stack-first`).
@@ -27,6 +37,18 @@ pub struct Module {
     /// The least memory the module instantiates in (`--initial-memory`), so a
     /// host that hands it less fails at once. Whole pages.
     pub initial_bytes: Option<u32>,
+}
+
+impl Default for Module {
+    /// A stack of `STACK_BYTES`, the linker's data where it puts it, and no
+    /// floor but the data's.
+    fn default() -> Module {
+        Module {
+            stack_bytes: STACK_BYTES,
+            global_base: None,
+            initial_bytes: None,
+        }
+    }
 }
 
 /// Prints `m`'s link arguments, and nothing when the target is not wasm32,
