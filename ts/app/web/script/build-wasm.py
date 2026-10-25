@@ -5,6 +5,7 @@
 #   ./script/build-wasm.py [--published]
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -12,7 +13,18 @@ import tempfile
 from pathlib import Path
 
 WEB = Path(__file__).resolve().parent.parent
-REPO = Path(subprocess.run(["git", "-C", str(WEB), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip())
+def workspace_of(start):
+    """The TypeScript workspace over `start`: the nearest directory up whose
+    deno.jsonc lists members, as Deno itself finds it. The repository holds
+    it, so this works in a tree copied without .git."""
+    for d in [start, *start.parents]:
+        f = d / "deno.jsonc"
+        if f.is_file() and re.search(r'"workspace":\s*\[\s*"', f.read_text()):
+            return d
+    sys.exit(f"no TypeScript workspace over {start}")
+
+
+REPO = workspace_of(WEB).parent
 RUST = REPO / "rust"
 TARGET = "wasm32-unknown-unknown"
 # Cargo's own rule: CARGO_TARGET_DIR, else the workspace's target/.

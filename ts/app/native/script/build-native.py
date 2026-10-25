@@ -22,15 +22,30 @@
 # deploy, with the kernel's `dev` feature off, so an app built for release
 # carries the kernel a deployed page does; any other configuration keeps its
 # dev settings.
+#
+# Xcode and Gradle name no Python of their own, so this runs under the
+# system's python3, which on macOS is 3.9: it keeps to what 3.9 reads.
 
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent
-RUST = Path(subprocess.run(["git", "-C", str(APP), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()) / "rust"
+def workspace_of(start):
+    """The TypeScript workspace over `start`: the nearest directory up whose
+    deno.jsonc lists members, as Deno itself finds it. The repository holds
+    it, so this works in a tree copied without .git."""
+    for d in [start, *start.parents]:
+        f = d / "deno.jsonc"
+        if f.is_file() and re.search(r'"workspace":\s*\[\s*"', f.read_text()):
+            return d
+    sys.exit(f"no TypeScript workspace over {start}")
+
+
+RUST = workspace_of(APP).parent / "rust"
 
 
 def fail(message):
